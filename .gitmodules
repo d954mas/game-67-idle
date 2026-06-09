@@ -1,0 +1,3 @@
+[submodule "external/neotolis-engine"]
+	path = external/neotolis-engine
+	url = https://github.com/d954mas/neotolis-engine.git

@@ -1,0 +1,10 @@
+build/
+tmp/
+.cache/
+.vs/
+.vscode/.cmake/
+compile_commands.json
+*.user
+*.suo
+*.ntpack
+src/generated/*.h

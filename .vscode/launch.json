@@ -1,0 +1,69 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Native Debug (PC)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/game_67_idle/native-debug/game_67_idle.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "Build: native debug"
+        },
+        {
+            "name": "Native Release (PC)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/game_67_idle/native-release/game_67_idle.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "Release: native PC"
+        },
+        {
+            "name": "Web Debug (Chrome)",
+            "type": "pwa-chrome",
+            "request": "launch",
+            "url": "http://localhost:8080/index.html",
+            "webRoot": "${workspaceFolder}/build/game_67_idle/wasm-debug",
+            "preLaunchTask": "Web: serve debug"
+        },
+        {
+            "name": "Web Release (Chrome)",
+            "type": "pwa-chrome",
+            "request": "launch",
+            "url": "http://localhost:8081/index.html",
+            "webRoot": "${workspaceFolder}/build/game_67_idle/wasm-release",
+            "preLaunchTask": "Web: serve release"
+        },
+        {
+            "name": "Build Pack Debug",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tools/builder/native-debug/build_game_67_idle_pack.exe",
+            "args": ["${workspaceFolder}/build/game_67_idle"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "Build: pack builder debug"
+        },
+        {
+            "name": "Build Pack Release",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/tools/builder/native-release/build_game_67_idle_pack.exe",
+            "args": ["${workspaceFolder}/build/game_67_idle"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "preLaunchTask": "Build: pack builder release"
+        }
+    ]
+}

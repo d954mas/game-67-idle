@@ -1,0 +1,195 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "native-debug",
+            "displayName": "Native Debug",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/_cmake/native-debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_STANDARD": "17",
+                "CMAKE_C_STANDARD_REQUIRED": "ON",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "NT_UI_DEBUG_TOOLS": "ON"
+            }
+        },
+        {
+            "name": "native-release",
+            "displayName": "Native Release",
+            "inherits": "native-debug",
+            "binaryDir": "${sourceDir}/build/_cmake/native-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "NT_UI_DEBUG_TOOLS": "OFF"
+            }
+        },
+        {
+            "name": "native-debug-test",
+            "displayName": "Native Debug Test (FULL asserts)",
+            "inherits": "native-debug",
+            "binaryDir": "${sourceDir}/build/_cmake/native-debug-test",
+            "cacheVariables": {
+                "NT_ASSERT_MODE": "2"
+            }
+        },
+        {
+            "name": "wasm-debug",
+            "displayName": "WASM Debug",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/_cmake/wasm-debug",
+            "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "CMAKE_C_STANDARD": "17",
+                "CMAKE_C_STANDARD_REQUIRED": "ON",
+                "NT_ASSERT_MODE": "2",
+                "NT_UI_DEBUG_TOOLS": "ON"
+            }
+        },
+        {
+            "name": "wasm-release",
+            "displayName": "WASM Release",
+            "inherits": "wasm-debug",
+            "binaryDir": "${sourceDir}/build/_cmake/wasm-release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "NT_ASSERT_MODE": "1",
+                "NT_UI_DEBUG_TOOLS": "OFF"
+            }
+        },
+        {
+            "name": "wasm-debug-paired",
+            "displayName": "WASM Debug Paired",
+            "inherits": "wasm-debug",
+            "binaryDir": "${sourceDir}/build/_cmake/wasm-debug-paired",
+            "cacheVariables": {
+                "NT_WASM_SIMD_WASM_PATH": "index_simd.wasm"
+            }
+        },
+        {
+            "name": "wasm-debug-simd",
+            "displayName": "WASM Debug SIMD",
+            "inherits": "wasm-debug",
+            "binaryDir": "${sourceDir}/build/_cmake/wasm-debug-simd",
+            "cacheVariables": {
+                "NT_WASM_ENABLE_SIMD": "ON"
+            }
+        },
+        {
+            "name": "wasm-release-paired",
+            "displayName": "WASM Release Paired",
+            "inherits": "wasm-release",
+            "binaryDir": "${sourceDir}/build/_cmake/wasm-release-paired",
+            "cacheVariables": {
+                "NT_WASM_SIMD_WASM_PATH": "index_simd.wasm"
+            }
+        },
+        {
+            "name": "wasm-release-simd",
+            "displayName": "WASM Release SIMD",
+            "inherits": "wasm-release",
+            "binaryDir": "${sourceDir}/build/_cmake/wasm-release-simd",
+            "cacheVariables": {
+                "NT_WASM_ENABLE_SIMD": "ON"
+            }
+        },
+        {
+            "name": "wasm-analysis",
+            "displayName": "WASM Analysis",
+            "inherits": "wasm-release",
+            "binaryDir": "${sourceDir}/build/_cmake/wasm-analysis",
+            "cacheVariables": {
+                "NT_WASM_ANALYSIS": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "native-debug",
+            "displayName": "Build all native debug targets",
+            "configurePreset": "native-debug"
+        },
+        {
+            "name": "game-native-debug",
+            "displayName": "Game: Native Debug",
+            "configurePreset": "native-debug",
+            "targets": ["game_67_idle"]
+        },
+        {
+            "name": "native-release",
+            "displayName": "Build all native release targets",
+            "configurePreset": "native-release"
+        },
+        {
+            "name": "game-native-release",
+            "displayName": "Game: Native Release",
+            "configurePreset": "native-release",
+            "targets": ["game_67_idle"]
+        },
+        {
+            "name": "pack-native-debug",
+            "displayName": "Pack: Native Debug",
+            "configurePreset": "native-debug",
+            "targets": ["game_67_idle_pack"]
+        },
+        {
+            "name": "pack-native-release",
+            "displayName": "Pack: Native Release",
+            "configurePreset": "native-release",
+            "targets": ["game_67_idle_pack"]
+        },
+        {
+            "name": "native-debug-test",
+            "configurePreset": "native-debug-test"
+        },
+        {
+            "name": "wasm-debug",
+            "displayName": "Build all WASM debug targets",
+            "configurePreset": "wasm-debug"
+        },
+        {
+            "name": "game-wasm-debug",
+            "displayName": "Game: WASM Debug",
+            "configurePreset": "wasm-debug",
+            "targets": ["game_67_idle"]
+        },
+        {
+            "name": "wasm-release",
+            "displayName": "Build all WASM release targets",
+            "configurePreset": "wasm-release"
+        },
+        {
+            "name": "game-wasm-release",
+            "displayName": "Game: WASM Release",
+            "configurePreset": "wasm-release",
+            "targets": ["game_67_idle"]
+        },
+        {
+            "name": "wasm-debug-paired",
+            "configurePreset": "wasm-debug-paired"
+        },
+        {
+            "name": "wasm-debug-simd",
+            "configurePreset": "wasm-debug-simd"
+        },
+        {
+            "name": "wasm-release-paired",
+            "configurePreset": "wasm-release-paired"
+        },
+        {
+            "name": "wasm-release-simd",
+            "configurePreset": "wasm-release-simd"
+        },
+        {
+            "name": "wasm-analysis",
+            "configurePreset": "wasm-analysis"
+        }
+    ]
+}
