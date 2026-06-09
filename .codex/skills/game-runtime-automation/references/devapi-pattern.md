@@ -19,27 +19,70 @@ Response fields:
 Use `request_id` only for request/response correlation. Widget/entity ids inside `params` should be stable strings.
 `request_id` may be a number or string; return it unchanged.
 
-Minimum endpoints:
+## Command Registry
+
+The runtime command registry is the source of truth. Register each command once with its handler and metadata; do not keep a separate JSON command database unless it generates the runtime registry.
+
+Minimum command descriptor:
+
+```c
+typedef struct nt_devapi_command_desc {
+    const char *method;          /* "ui.click" */
+    const char *layer;           /* "engine" or "game" */
+    const char *summary;
+    const char *params_shape;
+    const char *result_shape;
+    const char *frame_behavior;  /* read, enqueue input, wait barrier, capture */
+    const char *side_effects;    /* none, input, frame_wait, capture */
+    nt_devapi_handler_fn handler;
+    void *user;
+} nt_devapi_command_desc;
+```
+
+Discovery commands:
+
+```json
+{"request_id":1,"method":"endpoints","params":{}}
+{"request_id":2,"method":"command.describe","params":{"method":"ui.click"}}
+{"request_id":3,"method":"command.describe_all","params":{}}
+{"request_id":4,"method":"features","params":{}}
+```
+
+`endpoints` should be cheap and return at least `method`, `layer`, and `summary`.
+`command.describe` should return the full descriptor for one command, including `params_shape`, `result_shape`, `frame_behavior`, and `side_effects`.
+
+Agents should use this order:
+
+1. call `endpoints`;
+2. call `command.describe` for commands they will use;
+3. use `frame_behavior` to decide whether `frame.wait` is needed;
+4. use `side_effects` to distinguish read-only commands from input/capture/wait commands;
+5. inspect C code only if metadata is missing or runtime behavior disagrees with the descriptor.
+
+Use build/runtime policy as an allow-list. If a command appears in `endpoints`, it should work in that build. Disabled or unavailable modules should normally omit their commands.
+
+Common endpoints:
 
 ```json
 {"request_id":1,"method":"ping","params":{}}
 {"request_id":2,"method":"endpoints","params":{}}
-{"request_id":3,"method":"view","params":{}}
-{"request_id":4,"method":"frame.current","params":{}}
-{"request_id":5,"method":"frame.wait","params":{"frames":1}}
-{"request_id":6,"method":"ui.tree","params":{}}
-{"request_id":7,"method":"ui.element","params":{"id":"upgrade.button"}}
-{"request_id":8,"method":"ui.click","params":{"id":"upgrade.button"}}
-{"request_id":9,"method":"ui.drag","params":{"id":"inventory.item.sword","to_id":"equipment.weapon","frames":8}}
-{"request_id":10,"method":"ui.scroll","params":{"id":"inventory.list","dx":0,"dy":-480,"frames":6}}
-{"request_id":11,"method":"input.gesture","params":{"type":"drag","from_x":100,"from_y":200,"to_x":300,"to_y":200,"frames":8}}
-{"request_id":12,"method":"game.state","params":{}}
-{"request_id":13,"method":"input.key","params":{"key":"D","mode":"tap"}}
-{"request_id":14,"method":"input.move","params":{"x":480,"y":320}}
-{"request_id":15,"method":"input.click","params":{"x":480,"y":320,"button":"left"}}
-{"request_id":16,"method":"input.pointer","params":{"phase":"down","x":480,"y":320,"button":"left"}}
-{"request_id":17,"method":"input.wheel","params":{"x":480,"y":320,"dx":0,"dy":-120}}
-{"request_id":18,"method":"input.button","params":{"button":"left","state":"down"}}
+{"request_id":3,"method":"command.describe","params":{"method":"ui.tree"}}
+{"request_id":4,"method":"view","params":{}}
+{"request_id":5,"method":"frame.current","params":{}}
+{"request_id":6,"method":"frame.wait","params":{"frames":1}}
+{"request_id":7,"method":"ui.tree","params":{}}
+{"request_id":8,"method":"ui.element","params":{"id":"upgrade.button"}}
+{"request_id":9,"method":"ui.click","params":{"id":"upgrade.button"}}
+{"request_id":10,"method":"ui.drag","params":{"id":"inventory.item.sword","to_id":"equipment.weapon","frames":8}}
+{"request_id":11,"method":"ui.scroll","params":{"id":"inventory.list","dx":0,"dy":-480,"frames":6}}
+{"request_id":12,"method":"input.gesture","params":{"type":"drag","from_x":100,"from_y":200,"to_x":300,"to_y":200,"frames":8}}
+{"request_id":13,"method":"game.state","params":{}}
+{"request_id":14,"method":"input.key","params":{"key":"D","mode":"tap"}}
+{"request_id":15,"method":"input.move","params":{"x":480,"y":320}}
+{"request_id":16,"method":"input.click","params":{"x":480,"y":320,"button":"left"}}
+{"request_id":17,"method":"input.pointer","params":{"phase":"down","x":480,"y":320,"button":"left"}}
+{"request_id":18,"method":"input.wheel","params":{"x":480,"y":320,"dx":0,"dy":-120}}
+{"request_id":19,"method":"input.button","params":{"button":"left","state":"down"}}
 ```
 
 Keep commands deterministic and frame-aware. Apply synthetic input after the engine polls real input for the frame.
@@ -101,7 +144,7 @@ Minimum temporary adapter:
 - return role, text, parent id, children, state flags, and bounds in framebuffer coordinates;
 - implement `ui.click` and `ui.scroll` through `input.click` and `input.wheel` semantics.
 
-Recommended UI node shape:
+Minimum UI node contract:
 
 ```json
 {
@@ -116,6 +159,8 @@ Recommended UI node shape:
   "children": []
 }
 ```
+
+This is a minimum contract, not a frozen final schema. The exact current shape should be discoverable through `command.describe` for `ui.tree` and `ui.element`.
 
 `ui.tree` should return enough data for a bot to choose and click a target without extra round trips. `ui.element` should return the same core fields for one id, plus any future detail fields.
 
