@@ -22,6 +22,16 @@ Use this skill to let an agent observe, drive, and verify a running game.
 11. Do not enable automation in release builds unless explicitly requested by project policy.
 12. Validate with native desktop/PC builds first. Run WASM/web checks only when explicitly requested or when the task targets web behavior.
 
+## Project Scaffold
+
+Keep reusable automation in the game project, not inside this skill:
+
+- `tools/devapi/devapi_client.py`: shared runtime client.
+- `tools/devapi/scenarios/`: reusable bots and regression scenarios.
+- `build/captures/`: ignored screenshots, recordings, and smoke logs.
+
+When starting a new game, create this structure from the skill rules and adapt only the project-specific commands.
+
 ## Temporary Adapters
 
 If the engine lacks automation features, add a game-local adapter behind a build flag. Keep it isolated so it can be deleted when the engine provides the same API.

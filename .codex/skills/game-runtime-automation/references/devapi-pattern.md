@@ -197,6 +197,8 @@ Use semantic actions only inside a game project when they make bots clearer. Kee
 
 ## Bot Scripts
 
+Store reusable project automation under `tools/devapi/scenarios/`. Keep scripts small and composable. Repeated manual checks should become scenarios.
+
 Bots should:
 
 1. launch a fresh game with automation enabled, unless the script explicitly asks to attach to an existing process;
@@ -215,6 +217,7 @@ Prefer a shared client/harness over per-script socket code. A good client should
 - `step(method, params, wait_frames=1)` as `act -> frame.wait -> observe`;
 - small helpers such as `key_tap`, `click_ui`, `scroll_ui`, `gesture`.
 - capture helpers such as `capture_screenshot` and `record_gameplay` that call project tools after frame sync.
+- optional recording helpers such as `start_recording` and `stop` for evidence capture.
 
 For deterministic tests, fail when the requested port is already occupied instead of silently attaching to stale state. Keep attach/reuse behavior as an explicit option for manual debugging.
 
@@ -251,6 +254,15 @@ Bot harnesses can wrap those scripts directly:
 with running_game(port=9123) as game:
     game.key_tap("D")
     path = game.capture_screenshot("build/captures/after_key.png", wait_frames=2)
+```
+
+For controlled recording, use a context manager so exceptions stop the recorder. Always pass or keep default hard limits (`max_seconds`, `max_megabytes`) so an orphaned recorder cannot fill the disk:
+
+```python
+with running_game(port=9123) as game:
+    with game.start_recording("build/captures/check.mp4", x=0, y=0, width=1280, height=720, max_seconds=60, max_megabytes=512):
+        game.click_ui("test.button", wait_frames=2)
+        game.wait_frames(30)
 ```
 
 Only add `capture.screenshot` / `capture.record_*` protocol endpoints when the engine can capture its own framebuffer. Until then, keep capture as an external evidence tool so the DevAPI remains focused on runtime state and input.

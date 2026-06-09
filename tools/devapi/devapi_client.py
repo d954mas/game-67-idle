@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import socket
 import subprocess
 import time
+import atexit
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterable
@@ -17,6 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 NATIVE_DEBUG_EXE = os.path.join(ROOT, "build", "game_67_idle", "native-debug", "game_67_idle.exe")
 CAPTURE_SCREEN_SCRIPT = os.path.join(ROOT, "tools", "devapi", "capture_screen.ps1")
 RECORD_SCREEN_SCRIPT = os.path.join(ROOT, "tools", "devapi", "record_screen_ffmpeg.ps1")
+ACTIVE_RECORDINGS: list["DevApiRecording"] = []
 
 
 class DevApiError(RuntimeError):
@@ -150,9 +153,84 @@ class DevApiClient:
             self.wait_frames(wait_frames)
         return run_record_gameplay(output=output, seconds=seconds, framerate=framerate, x=x, y=y, width=width, height=height)
 
+    def start_recording(
+        self,
+        output: str = "build/captures/gameplay.mp4",
+        framerate: int = 30,
+        x: int = 0,
+        y: int = 0,
+        width: int = 0,
+        height: int = 0,
+        max_seconds: int = 60,
+        max_megabytes: int = 512,
+        wait_frames: int = 1,
+    ) -> "DevApiRecording":
+        if wait_frames > 0:
+            self.wait_frames(wait_frames)
+        return start_recording(output=output, framerate=framerate, x=x, y=y, width=width, height=height, max_seconds=max_seconds, max_megabytes=max_megabytes)
+
+
+@dataclass
+class DevApiRecording:
+    output: str
+    process: subprocess.Popen
+
+    def __enter__(self) -> "DevApiRecording":
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        if exc_type is None:
+            self.stop()
+            return
+        try:
+            self.stop()
+        except Exception:
+            pass
+
+    def stop(self, timeout: float = 5.0) -> str:
+        if self.process.poll() is None:
+            try:
+                if self.process.stdin is not None:
+                    self.process.stdin.write(b"q\n")
+                    self.process.stdin.flush()
+                    self.process.stdin.close()
+            except OSError:
+                pass
+            try:
+                self.process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+                    self.process.wait(timeout=timeout)
+        if self in ACTIVE_RECORDINGS:
+            ACTIVE_RECORDINGS.remove(self)
+        if not os.path.exists(self.output) or os.path.getsize(self.output) <= 0:
+            raise DevApiError(f"recording was not written: {self.output}")
+        return self.output
+
+
+def stop_active_recordings() -> None:
+    for recording in list(ACTIVE_RECORDINGS):
+        try:
+            recording.stop(timeout=2.0)
+        except Exception:
+            pass
+
+
+atexit.register(stop_active_recordings)
+
 
 def resolve_output_path(output: str) -> str:
     return output if os.path.isabs(output) else os.path.join(ROOT, output)
+
+
+def ensure_output_dir(output: str) -> str:
+    path = resolve_output_path(output)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return path
 
 
 def run_powershell_script(script: str, args: list[str]) -> str:
@@ -207,6 +285,61 @@ def run_record_gameplay(
         ],
     )
     return resolve_output_path(output)
+
+
+def start_recording(
+    output: str = "build/captures/gameplay.mp4",
+    framerate: int = 30,
+    x: int = 0,
+    y: int = 0,
+    width: int = 0,
+    height: int = 0,
+    max_seconds: int = 60,
+    max_megabytes: int = 512,
+) -> DevApiRecording:
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg is None:
+        raise DevApiError("ffmpeg is not available in PATH")
+    out_path = ensure_output_dir(output)
+    if width <= 0 or height <= 0:
+        raise DevApiError("start_recording requires explicit x/y/width/height; use record_gameplay for full-screen fixed-duration recording")
+    if max_seconds <= 0:
+        raise DevApiError("start_recording requires max_seconds > 0")
+    if max_megabytes <= 0:
+        raise DevApiError("start_recording requires max_megabytes > 0")
+    max_bytes = max_megabytes * 1024 * 1024
+    process = subprocess.Popen(
+        [
+            ffmpeg,
+            "-y",
+            "-f",
+            "gdigrab",
+            "-framerate",
+            str(framerate),
+            "-offset_x",
+            str(x),
+            "-offset_y",
+            str(y),
+            "-video_size",
+            f"{width}x{height}",
+            "-i",
+            "desktop",
+            "-t",
+            str(max_seconds),
+            "-fs",
+            str(max_bytes),
+            "-pix_fmt",
+            "yuv420p",
+            out_path,
+        ],
+        cwd=ROOT,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    recording = DevApiRecording(output=out_path, process=process)
+    ACTIVE_RECORDINGS.append(recording)
+    return recording
 
 
 def connect_existing(port: int = 9123, timeout: float = 8.0) -> DevApiClient | None:
