@@ -8,6 +8,12 @@ option(NT_NO_WERROR "Disable -Werror for Neotolis targets." OFF)
 option(GAME_ENABLE_BASISU_RUNTIME "Link Basis Universal runtime transcoder into the game executable." OFF)
 set(NT_BASISU ${GAME_ENABLE_BASISU_RUNTIME} CACHE BOOL "Link Basis Universal transcoder for GPU texture compression" FORCE)
 
+set(GAME_DEVAPI_DEFAULT OFF)
+if(NOT EMSCRIPTEN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(GAME_DEVAPI_DEFAULT ON)
+endif()
+option(GAME_DEVAPI_ENABLED "Enable temporary game-side devapi TCP command bus." ${GAME_DEVAPI_DEFAULT})
+
 if(EMSCRIPTEN)
     if(NT_WASM_ANALYSIS)
         set(_nt_wasm_tier "analysis")
@@ -39,6 +45,41 @@ set(GAME_TARGET game_67_idle)
 set(GAME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/build/game_67_idle/${NT_PRESET_NAME}")
 set(GAME_PACK_DIR "${CMAKE_SOURCE_DIR}/build/game_67_idle")
 
+if(GAME_DEVAPI_ENABLED)
+    add_library(game_cjson STATIC
+        external/cjson/cJSON.c
+        external/cjson/cJSON.h
+    )
+    target_include_directories(game_cjson SYSTEM PUBLIC external/cjson)
+
+    add_library(game_devapi STATIC
+        src/devapi/nt_devapi.c
+        src/devapi/nt_devapi_net.c
+        src/devapi/nt_devapi.h
+    )
+    target_include_directories(game_devapi PUBLIC src)
+    target_link_libraries(game_devapi
+        PUBLIC
+            nt_input
+            nt_entity
+            nt_transform_comp
+            nt_drawable_comp
+            game_cjson
+        PRIVATE
+            nt_log
+    )
+    target_compile_definitions(game_devapi PUBLIC NT_DEVAPI_ENABLED=1)
+    if(WIN32)
+        target_link_libraries(game_devapi PRIVATE ws2_32)
+    endif()
+    nt_set_warning_flags(game_devapi)
+    nt_set_sanitizer_flags(game_devapi)
+else()
+    add_library(game_devapi INTERFACE)
+    target_include_directories(game_devapi INTERFACE src external/cjson)
+    target_compile_definitions(game_devapi INTERFACE NT_DEVAPI_ENABLED=0)
+endif()
+
 add_executable(${GAME_TARGET} src/main.c)
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core
@@ -51,6 +92,7 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_entity
     nt_transform_comp
     nt_drawable_comp
+    game_devapi
 )
 
 if(EMSCRIPTEN)

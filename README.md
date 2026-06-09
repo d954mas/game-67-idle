@@ -92,3 +92,38 @@ CMake Tools also has explicit build presets:
 - `pack-native-release`
 - `game-wasm-debug`
 - `game-wasm-release`
+
+## DevAPI Bot Harness
+
+Native debug builds can expose a local JSON-lines DevAPI for bots and smoke
+tests:
+
+```powershell
+build/game_67_idle/native-debug/game_67_idle.exe --devapi 9123
+```
+
+Useful tools:
+
+```powershell
+py -3.12 tools/devapi/smoke_test.py 9123
+py -3.12 tools/devapi/bot_demo.py 9123
+py -3.12 tools/devapi/capture_demo.py 9123
+py -3.12 tools/devapi/devapi_cli.py 9123 game.state
+```
+
+Bots should use `tools/devapi/devapi_client.py` and keep their loop explicit:
+
+```python
+from devapi_client import running_game
+
+with running_game(port=9123) as game:
+    state = game.observe()
+    state = game.key_tap("D")
+    state = game.scroll_ui("scene.viewport", dy=-120)
+    screenshot = game.capture_screenshot("build/captures/check.png")
+```
+
+The protocol is frame-aware. Prefer ordered batches like
+`input -> frame.wait -> game.state` instead of sleeping.
+Recording is also available through `game.record_gameplay(...)` when `ffmpeg`
+is installed.

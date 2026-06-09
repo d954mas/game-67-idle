@@ -1,0 +1,4 @@
+interface:
+  display_name: "Game Design Steward"
+  short_description: "Maintain game design docs and decisions."
+  default_prompt: "Use this skill to update or reason about game design, lore, economy, balance, and open questions."

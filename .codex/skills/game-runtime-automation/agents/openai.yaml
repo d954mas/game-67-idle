@@ -1,0 +1,4 @@
+interface:
+  display_name: "Game Runtime Automation"
+  short_description: "Drive games with bots, input, captures"
+  default_prompt: "Use $game-runtime-automation to add a small game automation harness with input emulation and visual capture."

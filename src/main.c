@@ -1,6 +1,7 @@
 #include "app/nt_app.h"
 #include "core/nt_core.h"
 #include "core/nt_platform.h"
+#include "devapi/nt_devapi.h"
 #include "drawable_comp/nt_drawable_comp.h"
 #include "entity/nt_entity.h"
 #include "graphics/nt_gfx.h"
@@ -11,6 +12,9 @@
 #include "window/nt_window.h"
 
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef NT_PLATFORM_WEB
 #include "platform/web/nt_platform_web.h"
@@ -40,6 +44,9 @@ static float s_cam_dist = 6.0F;
 static int s_current_shape;
 static int s_render_mode;
 static bool s_grabbed;
+#ifndef NT_PLATFORM_WEB
+static bool s_devapi_started;
+#endif
 
 static const float s_shape_colors[SHAPE_COUNT][4] = {
     {0.1F, 0.8F, 1.0F, 1.0F},
@@ -50,6 +57,73 @@ static const float s_shape_colors[SHAPE_COUNT][4] = {
 
 static const float s_wire_color[4] = {0.0F, 0.0F, 0.0F, 1.0F};
 static const float s_shape_y = ROOM_H * 0.5F;
+
+#if NT_DEVAPI_ENABLED
+static const char *shape_name(int shape) {
+    static const char *names[SHAPE_COUNT] = {"cube", "sphere", "cylinder", "capsule"};
+    return (shape >= 0 && shape < SHAPE_COUNT) ? names[shape] : "unknown";
+}
+
+static const char *render_mode_name(int mode) {
+    static const char *names[MODE_COUNT] = {"solid_wire", "solid", "wire"};
+    return (mode >= 0 && mode < MODE_COUNT) ? names[mode] : "unknown";
+}
+
+static bool parse_devapi_port(int argc, char **argv, uint16_t *out_port) {
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--devapi") == 0) {
+            long port = 9123;
+            if (i + 1 < argc && argv[i + 1][0] != '-') {
+                port = strtol(argv[i + 1], NULL, 10);
+            }
+            if (port <= 0 || port > 65535) {
+                port = 9123;
+            }
+            *out_port = (uint16_t)port;
+            return true;
+        }
+        if (strncmp(argv[i], "--devapi=", 9) == 0) {
+            long port = strtol(argv[i] + 9, NULL, 10);
+            if (port <= 0 || port > 65535) {
+                port = 9123;
+            }
+            *out_port = (uint16_t)port;
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool ep_game_state(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)params;
+    (void)error;
+    (void)error_cap;
+    (void)user;
+    float *pos = nt_transform_comp_position(s_shape_entity);
+    float *scale = nt_transform_comp_scale(s_shape_entity);
+    cJSON *obj = cJSON_CreateObject();
+    cJSON_AddStringToObject(obj, "shape", shape_name(s_current_shape));
+    cJSON_AddNumberToObject(obj, "shape_index", s_current_shape);
+    cJSON_AddStringToObject(obj, "render_mode", render_mode_name(s_render_mode));
+    cJSON_AddNumberToObject(obj, "camera_distance", (double)s_cam_dist);
+    cJSON_AddBoolToObject(obj, "grabbed", s_grabbed);
+    cJSON_AddNumberToObject(obj, "time", (double)g_nt_app.time);
+    cJSON_AddNumberToObject(obj, "frame", (double)g_nt_app.frame);
+
+    cJSON *shape_pos = cJSON_AddArrayToObject(obj, "shape_pos");
+    cJSON_AddItemToArray(shape_pos, cJSON_CreateNumber((double)pos[0]));
+    cJSON_AddItemToArray(shape_pos, cJSON_CreateNumber((double)pos[1]));
+    cJSON_AddItemToArray(shape_pos, cJSON_CreateNumber((double)pos[2]));
+
+    cJSON *shape_scale = cJSON_AddArrayToObject(obj, "shape_scale");
+    cJSON_AddItemToArray(shape_scale, cJSON_CreateNumber((double)scale[0]));
+    cJSON_AddItemToArray(shape_scale, cJSON_CreateNumber((double)scale[1]));
+    cJSON_AddItemToArray(shape_scale, cJSON_CreateNumber((double)scale[2]));
+
+    *result = obj;
+    return true;
+}
+#endif
 
 static void draw_room(void) {
     float hw = ROOM_W * 0.5F;
@@ -205,6 +279,12 @@ static void set_shape_color(void) {
 static void frame(void) {
     nt_window_poll();
     nt_input_poll();
+    nt_devapi_set_frame(g_nt_app.frame);
+    nt_devapi_set_view((float)g_nt_window.fb_width, (float)g_nt_window.fb_height, (float)g_nt_window.width, (float)g_nt_window.height);
+    nt_devapi_clear_ui_elements();
+    nt_devapi_register_ui_element("scene.viewport", "Scene viewport", 0.0F, 0.0F, (float)g_nt_window.fb_width, (float)g_nt_window.fb_height);
+    nt_devapi_net_poll();
+    nt_devapi_apply_pending();
 
     float dt = g_nt_app.dt;
 
@@ -305,7 +385,7 @@ static void frame(void) {
     nt_window_swap_buffers();
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     nt_engine_config_t config = {0};
     config.app_name = "game_67_idle";
     config.version = 1;
@@ -339,9 +419,26 @@ int main(void) {
     set_shape_scale();
     set_shape_color();
 
+#if NT_DEVAPI_ENABLED
+    uint16_t devapi_port = 0;
+    if (parse_devapi_port(argc, argv, &devapi_port)) {
+        nt_devapi_init();
+        nt_devapi_register_builtins();
+        nt_devapi_register("game.state", ep_game_state, NULL);
+        s_devapi_started = nt_devapi_net_start(devapi_port);
+    }
+#else
+    (void)argc;
+    (void)argv;
+#endif
+
     nt_app_run(frame);
 
 #ifndef NT_PLATFORM_WEB
+    if (s_devapi_started) {
+        nt_devapi_net_stop();
+    }
+    nt_devapi_shutdown();
     nt_drawable_comp_shutdown();
     nt_transform_comp_shutdown();
     nt_entity_shutdown();
@@ -353,4 +450,3 @@ int main(void) {
 #endif
     return 0;
 }
-

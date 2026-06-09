@@ -8,3 +8,5 @@ compile_commands.json
 *.suo
 *.ntpack
 src/generated/*.h
+__pycache__/
+*.pyc

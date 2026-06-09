@@ -26,6 +26,46 @@
             "problemMatcher": []
         },
         {
+            "label": "Run: native debug + devapi",
+            "type": "shell",
+            "command": "${workspaceFolder}/build/game_67_idle/native-debug/game_67_idle.exe --devapi 9123",
+            "dependsOn": "Build: native debug",
+            "problemMatcher": []
+        },
+        {
+            "label": "DevAPI: smoke test",
+            "type": "shell",
+            "command": "py -3.12 tools/devapi/smoke_test.py 9123",
+            "dependsOn": "Build: native debug",
+            "problemMatcher": []
+        },
+        {
+            "label": "DevAPI: bot demo",
+            "type": "shell",
+            "command": "py -3.12 tools/devapi/bot_demo.py 9123",
+            "dependsOn": "Build: native debug",
+            "problemMatcher": []
+        },
+        {
+            "label": "DevAPI: capture demo",
+            "type": "shell",
+            "command": "py -3.12 tools/devapi/capture_demo.py 9123 build/captures/devapi_capture_demo.png",
+            "dependsOn": "Build: native debug",
+            "problemMatcher": []
+        },
+        {
+            "label": "Capture: desktop screenshot",
+            "type": "shell",
+            "command": "powershell -ExecutionPolicy Bypass -File tools/devapi/capture_screen.ps1 build/captures/screenshot.png",
+            "problemMatcher": []
+        },
+        {
+            "label": "Capture: desktop recording",
+            "type": "shell",
+            "command": "powershell -ExecutionPolicy Bypass -File tools/devapi/record_screen_ffmpeg.ps1 build/captures/gameplay.mp4",
+            "problemMatcher": []
+        },
+        {
             "label": "CMake: configure native release",
             "type": "shell",
             "command": "cmake --preset native-release",
