@@ -1,0 +1,532 @@
+#!/usr/bin/env python3
+"""Generate the supported game state C API from state/game_state.schema.json."""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[2]
+SCHEMA_PATH = ROOT / "state" / "game_state.schema.json"
+OUT_DIR = ROOT / "src" / "generated"
+HEADER_PATH = OUT_DIR / "game_state.h"
+SOURCE_PATH = OUT_DIR / "game_state.c"
+DEVAPI_SOURCE_PATH = OUT_DIR / "game_state_devapi.c"
+SCHEMA_HEADER_PATH = OUT_DIR / "game_state_schema.gen.h"
+SOURCE_TEMPLATE_PATH = Path(__file__).with_name("game_state.c.in")
+
+REQUIRED_FIELDS = {
+    "shape_index",
+    "render_mode_index",
+    "camera_distance",
+    "test_ui_clicks",
+    "test_label_text",
+    "test_button_text",
+    "settings.master_volume",
+    "settings.sfx_volume",
+    "tutorial.done",
+    "wallet.soft",
+    "wallet.hard",
+    "items",
+    "inventory.item_ids",
+    "equipment.hand_item_id",
+}
+
+SCALAR_TYPES = {"bool", "int", "float", "string", "string?", "enum"}
+
+
+def c_ident(value: str) -> str:
+    value = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", value)
+    ident = re.sub(r"[^a-zA-Z0-9]+", "_", value).strip("_").lower()
+    if not ident:
+        raise SystemExit(f"cannot make C identifier from {value!r}")
+    if ident[0].isdigit():
+        ident = "_" + ident
+    return ident
+
+
+def c_macro(value: str) -> str:
+    return c_ident(value).upper()
+
+
+def load_schema() -> dict[str, Any]:
+    with SCHEMA_PATH.open("r", encoding="utf-8") as f:
+        schema = json.load(f)
+    if schema.get("schema") != "game_67_idle.state":
+        raise SystemExit("schema id must be game_67_idle.state")
+    if schema.get("document") != "game":
+        raise SystemExit("document must be game")
+    if schema.get("version") != 1:
+        raise SystemExit("this generator supports version 1")
+    if not isinstance(schema.get("string_max"), int) or schema["string_max"] < 2:
+        raise SystemExit("string_max must be an integer >= 2")
+    if not isinstance(schema.get("fields"), list):
+        raise SystemExit("fields must be a list")
+    paths = {field.get("path") for field in schema["fields"] if isinstance(field, dict)}
+    missing = sorted(REQUIRED_FIELDS - paths)
+    if missing:
+        raise SystemExit("schema missing required fields: " + ", ".join(missing))
+    validate_supported_shape(schema)
+    return schema
+
+
+def validate_supported_shape(schema: dict[str, Any]) -> None:
+    reserved_ids = set()
+    reserved_paths = set()
+    for item in schema.get("reserved", []):
+        if not isinstance(item, dict) or not isinstance(item.get("id"), int) or not isinstance(item.get("path"), str):
+            raise SystemExit("reserved entries must include integer id and string path")
+        reserved_ids.add(item["id"])
+        reserved_paths.add(item["path"])
+
+    enums = schema.get("enums", {})
+    if not isinstance(enums, dict):
+        raise SystemExit("enums must be an object")
+    for name, values in enums.items():
+        if not isinstance(name, str) or not isinstance(values, list) or not values:
+            raise SystemExit("enum values must be non-empty arrays")
+        if any(not isinstance(value, str) or not value for value in values):
+            raise SystemExit(f"enum {name} contains a bad value")
+
+    collections = schema.get("collections", {})
+    for key in ("items_max", "inventory_item_ids_max"):
+        if not isinstance(collections.get(key), int) or collections[key] <= 0:
+            raise SystemExit(f"collections.{key} must be a positive integer")
+
+    item = schema.get("types", {}).get("ItemInstance")
+    if not isinstance(item, dict) or item.get("kind") != "object":
+        raise SystemExit("types.ItemInstance object is required")
+    item_fields = item.get("fields", [])
+    item_paths = {field.get("path") for field in item_fields if isinstance(field, dict)}
+    if item_paths != {"def_id", "count", "level", "durability"}:
+        raise SystemExit("types.ItemInstance currently supports def_id/count/level/durability")
+    validate_field_ids("types.ItemInstance", item_fields, reserved_ids, reserved_paths)
+
+    validate_field_ids("fields", schema["fields"], reserved_ids, reserved_paths)
+    for field in schema["fields"]:
+        if not isinstance(field, dict):
+            raise SystemExit("field entries must be objects")
+        path = field.get("path")
+        typ = field.get("type")
+        if not isinstance(path, str) or not path:
+            raise SystemExit("field path must be a non-empty string")
+        if typ not in SCALAR_TYPES and typ not in {"map<string,ItemInstance>", "list<string>"}:
+            raise SystemExit(f"unsupported field type for {path}: {typ}")
+        if typ == "enum" and field.get("enum") not in enums:
+            raise SystemExit(f"{path} references unknown enum")
+        if typ in {"map<string,ItemInstance>", "list<string>"}:
+            if not isinstance(field.get("max_count"), int) or field["max_count"] <= 0:
+                raise SystemExit(f"{path} must declare positive max_count")
+        if typ in {"string", "string?"}:
+            if not isinstance(field.get("max_length"), int) or field["max_length"] <= 0 or field["max_length"] >= schema["string_max"]:
+                raise SystemExit(f"{path} must declare max_length from 1 to string_max-1")
+
+
+def validate_field_ids(scope: str, fields: list[Any], reserved_ids: set[int], reserved_paths: set[str]) -> None:
+    seen_ids: dict[int, str] = {}
+    seen_paths: set[str] = set()
+    for field in fields:
+        if not isinstance(field, dict):
+            raise SystemExit(f"{scope} entries must be objects")
+        path = field.get("path")
+        field_id = field.get("id")
+        if not isinstance(path, str) or not path:
+            raise SystemExit(f"{scope} field path must be a non-empty string")
+        if not isinstance(field_id, int) or field_id <= 0:
+            raise SystemExit(f"{path} must declare a positive integer id")
+        if path in reserved_paths:
+            raise SystemExit(f"{path} is reserved and cannot be reused")
+        if field_id in reserved_ids:
+            raise SystemExit(f"{path} uses reserved id {field_id}")
+        if path in seen_paths:
+            raise SystemExit(f"duplicate field path {path}")
+        if field_id in seen_ids:
+            raise SystemExit(f"duplicate field id {field_id}: {seen_ids[field_id]} and {path}")
+        seen_paths.add(path)
+        seen_ids[field_id] = path
+
+
+def field_c_type(field: dict[str, Any]) -> str:
+    typ = field["type"]
+    if typ == "bool":
+        return "bool"
+    if typ == "int":
+        return "int"
+    if typ == "float":
+        return "float"
+    if typ == "enum":
+        return "int"
+    if typ == "string":
+        return "char"
+    if typ == "string?":
+        return "optional_string"
+    raise AssertionError(typ)
+
+
+def default_enum_macro(enum_name: str, value: str) -> str:
+    return f"GAME_STATE_{c_macro(enum_name)}_{c_macro(value)}"
+
+
+def render_enum(enum_name: str, values: list[str]) -> str:
+    type_name = f"GameState{enum_name}"
+    lines = [f"typedef enum {type_name} {{"]
+    for i, value in enumerate(values):
+        suffix = f" = {i}" if i == 0 else ""
+        lines.append(f"    GAME_STATE_{c_macro(enum_name)}_{c_macro(value)}{suffix},")
+    lines.append(f"    GAME_STATE_{c_macro(enum_name)}_COUNT,")
+    lines.append(f"}} {type_name};")
+    return "\n".join(lines)
+
+
+def render_state_struct(schema: dict[str, Any]) -> str:
+    lines = ["typedef struct GameState {"]
+    for field in schema["fields"]:
+        path = field["path"]
+        typ = field["type"]
+        name = c_ident(path)
+        if typ in {"map<string,ItemInstance>", "list<string>"}:
+            continue
+        if typ == "string":
+            lines.append(f"    char {name}[GAME_STATE_STRING_MAX];")
+        elif typ == "string?":
+            lines.append(f"    bool has_{name};")
+            lines.append(f"    char {name}[GAME_STATE_STRING_MAX];")
+        else:
+            lines.append(f"    {field_c_type(field)} {name};")
+    lines.append("    GameItemInstance items[GAME_STATE_MAX_ITEMS];")
+    lines.append("    char inventory_item_ids[GAME_STATE_MAX_INVENTORY_ITEM_IDS][GAME_STATE_STRING_MAX];")
+    lines.append("    int inventory_item_ids_count;")
+    lines.append("} GameState;")
+    return "\n".join(lines)
+
+
+def render_header(schema: dict[str, Any]) -> str:
+    enums = schema["enums"]
+    collections = schema["collections"]
+    enum_blocks = "\n\n".join(render_enum(name, values) for name, values in enums.items())
+    return f"""#ifndef GAME_STATE_GENERATED_H
+#define GAME_STATE_GENERATED_H
+
+/* Generated by tools/state_codegen/generate_state.py from state/game_state.schema.json. */
+
+#include <stdbool.h>
+#include <stddef.h>
+
+#include "cJSON.h"
+
+#define GAME_STATE_SCHEMA_ID "{schema["schema"]}"
+#define GAME_STATE_DOCUMENT "{schema["document"]}"
+#define GAME_STATE_VERSION {schema["version"]}
+#define GAME_STATE_STRING_MAX {schema["string_max"]}
+#define GAME_STATE_MAX_ITEMS {collections["items_max"]}
+#define GAME_STATE_MAX_INVENTORY_ITEM_IDS {collections["inventory_item_ids_max"]}
+
+{enum_blocks}
+
+typedef struct GameItemInstance {{
+    bool used;
+    char instance_id[GAME_STATE_STRING_MAX];
+    char def_id[GAME_STATE_STRING_MAX];
+    int count;
+    int level;
+    float durability;
+}} GameItemInstance;
+
+{render_state_struct(schema)}
+
+typedef bool (*game_state_changed_fn)(const char *path, void *user, char *error, int error_cap);
+
+extern GameState g_game_state;
+
+const char *game_state_shape_name(int value);
+const char *game_state_render_mode_name(int value);
+
+void game_state_init_defaults(GameState *state);
+void game_state_init(void);
+void game_state_set_changed_callback(game_state_changed_fn callback, void *user);
+bool game_state_validate(const GameState *state, char *error, int error_cap);
+void game_state_mark_dirty(void);
+bool game_state_is_dirty(void);
+void game_state_clear_dirty(void);
+
+cJSON *game_state_schema_json(void);
+cJSON *game_state_to_json(const GameState *state);
+cJSON *game_state_get_path_json(const GameState *state, const char *path, char *error, int error_cap);
+bool game_state_set_path_json(GameState *state, const char *path, const cJSON *value, char *error, int error_cap);
+bool game_state_patch_json(GameState *state, const cJSON *values, char *error, int error_cap);
+bool game_state_from_json(GameState *state, const cJSON *json, char *error, int error_cap);
+
+char *game_state_save_json_string(const GameState *state, char *error, int error_cap);
+bool game_state_load_json_string(GameState *state, const char *data, char *error, int error_cap);
+bool game_state_save(const GameState *state, const char *path, char *error, int error_cap);
+bool game_state_load(GameState *state, const char *path, char *error, int error_cap);
+bool game_state_reset(GameState *state, char *error, int error_cap);
+
+#if NT_DEVAPI_ENABLED
+void game_state_register_devapi(void);
+#endif
+
+#endif
+"""
+
+
+def render_schema_header(schema: dict[str, Any]) -> str:
+    canonical = json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
+    return (
+        "#ifndef GAME_STATE_SCHEMA_GEN_H\n"
+        "#define GAME_STATE_SCHEMA_GEN_H\n\n"
+        "/* Generated by tools/state_codegen/generate_state.py from state/game_state.schema.json. */\n"
+        f"#define GAME_STATE_SCHEMA_JSON {json.dumps(canonical)}\n\n"
+        "#endif\n"
+    )
+
+
+def render_devapi_source(schema: dict[str, Any]) -> str:
+    doc = schema["document"]
+    return f"""#include "generated/game_state.h"
+
+#if NT_DEVAPI_ENABLED
+
+/* Generated by tools/state_codegen/generate_state.py from state/game_state.schema.json. */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "devapi/nt_devapi.h"
+#include "game_storage.h"
+
+static bool check_doc(const cJSON *params, char *error, int error_cap) {{
+    const cJSON *doc = cJSON_GetObjectItemCaseSensitive(params, "doc");
+    if (!doc || (cJSON_IsString(doc) && strcmp(doc->valuestring, "{doc}") == 0)) {{
+        return true;
+    }}
+    (void)snprintf(error, (size_t)error_cap, "%s", "unsupported state document");
+    return false;
+}}
+
+static bool ep_game_state_schema(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+    (void)user;
+    if (!check_doc(params, error, error_cap)) {{
+        return false;
+    }}
+    *result = game_state_schema_json();
+    return true;
+}}
+
+static bool ep_game_state_get(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+    (void)user;
+    if (!check_doc(params, error, error_cap)) {{
+        return false;
+    }}
+    const cJSON *path = cJSON_GetObjectItemCaseSensitive(params, "path");
+    const char *state_path = cJSON_IsString(path) ? path->valuestring : "";
+    cJSON *value = game_state_get_path_json(&g_game_state, state_path, error, error_cap);
+    if (!value) {{
+        return false;
+    }}
+    *result = value;
+    return true;
+}}
+
+static bool ep_game_state_set(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+    (void)user;
+    if (!check_doc(params, error, error_cap)) {{
+        return false;
+    }}
+    const cJSON *path = cJSON_GetObjectItemCaseSensitive(params, "path");
+    const cJSON *value = cJSON_GetObjectItemCaseSensitive(params, "value");
+    if (!cJSON_IsString(path) || !value) {{
+        (void)snprintf(error, (size_t)error_cap, "%s", "path and value are required");
+        return false;
+    }}
+    cJSON *values = cJSON_CreateObject();
+    cJSON *copy = cJSON_Duplicate(value, true);
+    if (!values || !copy) {{
+        cJSON_Delete(values);
+        cJSON_Delete(copy);
+        (void)snprintf(error, (size_t)error_cap, "%s", "failed to copy state value");
+        return false;
+    }}
+    cJSON_AddItemToObject(values, path->valuestring, copy);
+    bool ok = game_state_patch_json(&g_game_state, values, error, error_cap);
+    cJSON_Delete(values);
+    if (!ok) {{
+        return false;
+    }}
+    *result = game_state_to_json(&g_game_state);
+    return true;
+}}
+
+static bool ep_game_state_patch(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+    (void)user;
+    if (!check_doc(params, error, error_cap)) {{
+        return false;
+    }}
+    const cJSON *values = cJSON_GetObjectItemCaseSensitive(params, "values");
+    if (!cJSON_IsObject(values)) {{
+        (void)snprintf(error, (size_t)error_cap, "%s", "values object is required");
+        return false;
+    }}
+    if (!game_state_patch_json(&g_game_state, values, error, error_cap)) {{
+        return false;
+    }}
+    *result = game_state_to_json(&g_game_state);
+    return true;
+}}
+
+static bool ep_game_state_save(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+    (void)user;
+    if (!check_doc(params, error, error_cap)) {{
+        return false;
+    }}
+    cJSON *obj = cJSON_CreateObject();
+    const cJSON *unsafe_path = cJSON_GetObjectItemCaseSensitive(params, "unsafe_path");
+    if (cJSON_IsString(unsafe_path)) {{
+        if (!game_state_save(&g_game_state, unsafe_path->valuestring, error, error_cap)) {{
+            cJSON_Delete(obj);
+            return false;
+        }}
+        cJSON_AddStringToObject(obj, "unsafe_path", unsafe_path->valuestring);
+        *result = obj;
+        return true;
+    }}
+
+    const cJSON *key = cJSON_GetObjectItemCaseSensitive(params, "key");
+    if (!cJSON_IsString(key)) {{
+        cJSON_Delete(obj);
+        (void)snprintf(error, (size_t)error_cap, "%s", "key is required");
+        return false;
+    }}
+    char *data = game_state_save_json_string(&g_game_state, error, error_cap);
+    if (!data) {{
+        cJSON_Delete(obj);
+        return false;
+    }}
+    if (!game_storage_save_json(key->valuestring, GAME_STATE_DOCUMENT, data, error, error_cap)) {{
+        cJSON_free(data);
+        cJSON_Delete(obj);
+        return false;
+    }}
+    cJSON_free(data);
+    char resolved[256];
+    if (game_storage_resolve_key(key->valuestring, GAME_STATE_DOCUMENT, resolved, (int)sizeof(resolved), NULL, 0)) {{
+        cJSON_AddStringToObject(obj, "resolved", resolved);
+    }}
+    cJSON_AddStringToObject(obj, "key", key->valuestring);
+    cJSON_AddStringToObject(obj, "doc", GAME_STATE_DOCUMENT);
+    *result = obj;
+    return true;
+}}
+
+static bool ep_game_state_load(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+    (void)user;
+    if (!check_doc(params, error, error_cap)) {{
+        return false;
+    }}
+    const cJSON *unsafe_path = cJSON_GetObjectItemCaseSensitive(params, "unsafe_path");
+    if (cJSON_IsString(unsafe_path)) {{
+        if (!game_state_load(&g_game_state, unsafe_path->valuestring, error, error_cap)) {{
+            return false;
+        }}
+        *result = game_state_to_json(&g_game_state);
+        return true;
+    }}
+
+    const cJSON *key = cJSON_GetObjectItemCaseSensitive(params, "key");
+    if (!cJSON_IsString(key)) {{
+        (void)snprintf(error, (size_t)error_cap, "%s", "key is required");
+        return false;
+    }}
+    char *data = NULL;
+    if (!game_storage_load_json(key->valuestring, GAME_STATE_DOCUMENT, &data, error, error_cap)) {{
+        return false;
+    }}
+    bool ok = game_state_load_json_string(&g_game_state, data, error, error_cap);
+    free(data);
+    if (!ok) {{
+        return false;
+    }}
+    *result = game_state_to_json(&g_game_state);
+    return true;
+}}
+
+static bool ep_game_state_reset(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+    (void)params;
+    (void)user;
+    if (!check_doc(params, error, error_cap)) {{
+        return false;
+    }}
+    if (!game_state_reset(&g_game_state, error, error_cap)) {{
+        return false;
+    }}
+    *result = game_state_to_json(&g_game_state);
+    return true;
+}}
+
+void game_state_register_devapi(void) {{
+    nt_devapi_register("game.state.schema", ep_game_state_schema, NULL);
+    nt_devapi_register("game.state.get", ep_game_state_get, NULL);
+    nt_devapi_register("game.state.set", ep_game_state_set, NULL);
+    nt_devapi_register("game.state.patch", ep_game_state_patch, NULL);
+    nt_devapi_register("game.state.save", ep_game_state_save, NULL);
+    nt_devapi_register("game.state.load", ep_game_state_load, NULL);
+    nt_devapi_register("game.state.reset", ep_game_state_reset, NULL);
+}}
+
+#endif
+"""
+
+
+def render_source(schema: dict[str, Any]) -> str:
+    if not SOURCE_TEMPLATE_PATH.exists():
+        raise SystemExit(f"missing source template: {SOURCE_TEMPLATE_PATH.relative_to(ROOT)}")
+    text = SOURCE_TEMPLATE_PATH.read_text(encoding="utf-8")
+    if "Generated by tools/state_codegen/generate_state.py" not in text:
+        text = text.replace(
+            '#include "generated/game_state_schema.gen.h"\n',
+            '#include "generated/game_state_schema.gen.h"\n\n'
+            '/* Generated by tools/state_codegen/generate_state.py from state/game_state.schema.json. */\n',
+            1,
+        )
+    if "GAME_STATE_SCHEMA_ID" not in text or "game_state_from_json" not in text:
+        raise SystemExit("source template does not look like a game state implementation")
+    for field in schema["fields"]:
+        path = field["path"]
+        if path not in text and c_ident(path) not in text:
+            raise SystemExit(f"source template does not cover schema field: {path}")
+    return text
+
+
+def write_if_changed(path: Path, text: str) -> bool:
+    old = path.read_text(encoding="utf-8") if path.exists() else None
+    if old == text:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return True
+
+
+def main() -> int:
+    schema = load_schema()
+    changed = []
+    if write_if_changed(HEADER_PATH, render_header(schema)):
+        changed.append(HEADER_PATH)
+    if write_if_changed(SOURCE_PATH, render_source(schema)):
+        changed.append(SOURCE_PATH)
+    if write_if_changed(SCHEMA_HEADER_PATH, render_schema_header(schema)):
+        changed.append(SCHEMA_HEADER_PATH)
+    if write_if_changed(DEVAPI_SOURCE_PATH, render_devapi_source(schema)):
+        changed.append(DEVAPI_SOURCE_PATH)
+    if changed:
+        for path in changed:
+            print(f"generated {path.relative_to(ROOT)}")
+    else:
+        print("state generated files are up to date")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

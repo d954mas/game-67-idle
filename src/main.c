@@ -4,6 +4,9 @@
 #include "devapi/nt_devapi.h"
 #include "drawable_comp/nt_drawable_comp.h"
 #include "entity/nt_entity.h"
+#include "game_storage.h"
+#include "game_state_actions.h"
+#include "generated/game_state.h"
 #include "graphics/nt_gfx.h"
 #include "input/nt_input.h"
 #include "math/nt_math.h"
@@ -45,6 +48,21 @@
 #define TEST_UI_BUTTON_Y 80.0F
 #define TEST_UI_BUTTON_W 168.0F
 #define TEST_UI_BUTTON_H 42.0F
+#define SETTINGS_BUTTON_W 132.0F
+#define SETTINGS_BUTTON_H 42.0F
+#define SETTINGS_BUTTON_MARGIN 24.0F
+#define SETTINGS_MODAL_W 460.0F
+#define SETTINGS_MODAL_H 280.0F
+#define SETTINGS_CLOSE_W 42.0F
+#define SETTINGS_CLOSE_H 34.0F
+#define SETTINGS_SLIDER_X_OFFSET 76.0F
+#define SETTINGS_SLIDER_W 308.0F
+#define SETTINGS_SLIDER_H 34.0F
+#define SETTINGS_SLIDER_MASTER_Y_OFFSET 104.0F
+#define SETTINGS_SLIDER_SFX_Y_OFFSET 176.0F
+#define GAME_STORAGE_NAMESPACE "game_67_idle"
+#define GAME_STORAGE_NATIVE_ROOT "build/saves"
+#define GAME_AUTOSAVE_KEY "autosave"
 
 enum { SHAPE_CUBE = 0, SHAPE_SPHERE, SHAPE_CYLINDER, SHAPE_CAPSULE, SHAPE_COUNT };
 enum { MODE_SOLID_WIRE = 0, MODE_SOLID, MODE_WIRE, MODE_COUNT };
@@ -52,13 +70,15 @@ enum { MODE_SOLID_WIRE = 0, MODE_SOLID, MODE_WIRE, MODE_COUNT };
 static nt_entity_t s_shape_entity;
 static float s_vel_yaw;
 static float s_vel_pitch;
-static float s_cam_dist = 6.0F;
-static int s_current_shape;
-static int s_render_mode;
 static bool s_grabbed;
-static int s_test_ui_clicks;
-static char s_test_label_text[64] = "Label: waiting";
-static char s_test_button_text[64] = "Click me";
+static bool s_settings_open;
+static int s_active_settings_slider;
+static bool s_fresh_state;
+static bool s_autosave_disabled;
+static bool s_autosave_ready;
+static bool s_autosave_load_done;
+static bool s_autosave_sync_pending;
+static bool s_autosave_sync_failed;
 #ifndef NT_PLATFORM_WEB
 static bool s_devapi_started;
 #endif
@@ -73,17 +93,99 @@ static const float s_shape_colors[SHAPE_COUNT][4] = {
 static const float s_wire_color[4] = {0.0F, 0.0F, 0.0F, 1.0F};
 static const float s_shape_y = ROOM_H * 0.5F;
 
+static void set_shape_scale(void);
+static void set_shape_color(void);
+
+static bool has_arg(int argc, char **argv, const char *name) {
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], name) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void autosave_init(bool fresh_state, bool disabled) {
+    s_fresh_state = fresh_state;
+    s_autosave_disabled = disabled;
+    s_autosave_load_done = fresh_state;
+    if (disabled) {
+        s_autosave_ready = false;
+        s_autosave_sync_pending = false;
+        s_autosave_sync_failed = false;
+        return;
+    }
+#ifdef NT_PLATFORM_WEB
+    s_autosave_ready = true;
+    s_autosave_sync_pending = false;
+    s_autosave_sync_failed = false;
+#else
+    s_autosave_ready = true;
+    s_autosave_sync_pending = false;
+    s_autosave_sync_failed = false;
+#endif
+}
+
+static void autosave_try_load(void) {
+    if (s_autosave_disabled) {
+        return;
+    }
+    if (!s_autosave_ready || s_autosave_load_done) {
+        return;
+    }
+    s_autosave_load_done = true;
+    if (s_fresh_state || game_state_is_dirty()) {
+        return;
+    }
+    char error[128] = {0};
+    char *data = NULL;
+    if (!game_storage_load_json(GAME_AUTOSAVE_KEY, GAME_STATE_DOCUMENT, &data, error, (int)sizeof(error))) {
+        return;
+    }
+    if (game_state_load_json_string(&g_game_state, data, error, (int)sizeof(error))) {
+        game_state_clear_dirty();
+        set_shape_scale();
+        set_shape_color();
+    }
+    free(data);
+}
+
+static void autosave_flush_if_dirty(void) {
+    if (s_autosave_disabled) {
+        return;
+    }
+    autosave_try_load();
+    if (!s_autosave_ready || s_autosave_sync_pending || !game_state_is_dirty()) {
+        return;
+    }
+    char error[128] = {0};
+#ifdef NT_PLATFORM_WEB
+    char *data = game_state_save_json_string(&g_game_state, error, (int)sizeof(error));
+    if (!data) {
+        return;
+    }
+    if (!game_storage_save_json(GAME_AUTOSAVE_KEY, GAME_STATE_DOCUMENT, data, error, (int)sizeof(error))) {
+        cJSON_free(data);
+        s_autosave_sync_failed = true;
+        return;
+    }
+    cJSON_free(data);
+    s_autosave_sync_failed = false;
+#else
+    char *data = game_state_save_json_string(&g_game_state, error, (int)sizeof(error));
+    if (!data) {
+        return;
+    }
+    if (!game_storage_save_json(GAME_AUTOSAVE_KEY, GAME_STATE_DOCUMENT, data, error, (int)sizeof(error))) {
+        cJSON_free(data);
+        return;
+    }
+    cJSON_free(data);
+#endif
+    game_state_clear_dirty();
+}
+
 #if NT_DEVAPI_ENABLED
-static const char *shape_name(int shape) {
-    static const char *names[SHAPE_COUNT] = {"cube", "sphere", "cylinder", "capsule"};
-    return (shape >= 0 && shape < SHAPE_COUNT) ? names[shape] : "unknown";
-}
-
-static const char *render_mode_name(int mode) {
-    static const char *names[MODE_COUNT] = {"solid_wire", "solid", "wire"};
-    return (mode >= 0 && mode < MODE_COUNT) ? names[mode] : "unknown";
-}
-
 static bool parse_devapi_port(int argc, char **argv, uint16_t *out_port) {
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--devapi") == 0) {
@@ -116,17 +218,14 @@ static bool ep_game_state(const cJSON *params, cJSON **result, char *error, int 
     (void)user;
     float *pos = nt_transform_comp_position(s_shape_entity);
     float *scale = nt_transform_comp_scale(s_shape_entity);
-    cJSON *obj = cJSON_CreateObject();
-    cJSON_AddStringToObject(obj, "shape", shape_name(s_current_shape));
-    cJSON_AddNumberToObject(obj, "shape_index", s_current_shape);
-    cJSON_AddStringToObject(obj, "render_mode", render_mode_name(s_render_mode));
-    cJSON_AddNumberToObject(obj, "camera_distance", (double)s_cam_dist);
+    cJSON *obj = game_state_to_json(&g_game_state);
     cJSON_AddBoolToObject(obj, "grabbed", s_grabbed);
-    cJSON_AddStringToObject(obj, "test_label_text", s_test_label_text);
-    cJSON_AddStringToObject(obj, "test_button_text", s_test_button_text);
-    cJSON_AddNumberToObject(obj, "test_ui_clicks", s_test_ui_clicks);
     cJSON_AddNumberToObject(obj, "time", (double)g_nt_app.time);
     cJSON_AddNumberToObject(obj, "frame", (double)g_nt_app.frame);
+    cJSON_AddBoolToObject(obj, "state_dirty", game_state_is_dirty());
+    cJSON_AddBoolToObject(obj, "autosave_ready", s_autosave_ready);
+    cJSON_AddBoolToObject(obj, "autosave_sync_pending", s_autosave_sync_pending);
+    cJSON_AddBoolToObject(obj, "autosave_sync_failed", s_autosave_sync_failed);
 
     cJSON *shape_pos = cJSON_AddArrayToObject(obj, "shape_pos");
     cJSON_AddItemToArray(shape_pos, cJSON_CreateNumber((double)pos[0]));
@@ -139,6 +238,16 @@ static bool ep_game_state(const cJSON *params, cJSON **result, char *error, int 
     cJSON_AddItemToArray(shape_scale, cJSON_CreateNumber((double)scale[2]));
 
     *result = obj;
+    return true;
+}
+
+static bool on_game_state_changed(const char *path, void *user, char *error, int error_cap) {
+    (void)path;
+    (void)user;
+    (void)error;
+    (void)error_cap;
+    set_shape_scale();
+    set_shape_color();
     return true;
 }
 #endif
@@ -209,10 +318,10 @@ static void draw_shape(void) {
     const float *col = nt_drawable_comp_color(s_shape_entity);
     float *scale = nt_transform_comp_scale(s_shape_entity);
 
-    bool draw_solid = (s_render_mode == MODE_SOLID_WIRE) || (s_render_mode == MODE_SOLID);
-    bool draw_wire = (s_render_mode == MODE_SOLID_WIRE) || (s_render_mode == MODE_WIRE);
+    bool draw_solid = (g_game_state.render_mode_index == MODE_SOLID_WIRE) || (g_game_state.render_mode_index == MODE_SOLID);
+    bool draw_wire = (g_game_state.render_mode_index == MODE_SOLID_WIRE) || (g_game_state.render_mode_index == MODE_WIRE);
 
-    switch (s_current_shape) {
+    switch (g_game_state.shape_index) {
     case SHAPE_CUBE: {
         float size[3] = {scale[0], scale[1], scale[2]};
         if (draw_solid) {
@@ -270,7 +379,7 @@ static void apply_rotation(float yaw, float pitch) {
 
 static void set_shape_scale(void) {
     float *scale = nt_transform_comp_scale(s_shape_entity);
-    switch (s_current_shape) {
+    switch (g_game_state.shape_index) {
     case SHAPE_CUBE:
         glm_vec3_copy((vec3){1.5F, 1.5F, 1.5F}, scale);
         break;
@@ -290,17 +399,59 @@ static void set_shape_scale(void) {
 }
 
 static void set_shape_color(void) {
-    const float *src = s_shape_colors[s_current_shape];
+    const float *src = s_shape_colors[g_game_state.shape_index];
     nt_drawable_comp_set_color(s_shape_entity, src[0], src[1], src[2], src[3]);
 }
 
 static bool point_in_rect(float px, float py, float x, float y, float w, float h) { return px >= x && px <= x + w && py >= y && py <= y + h; }
 
+static float clamp01(float value) {
+    if (value < 0.0F) {
+        return 0.0F;
+    }
+    if (value > 1.0F) {
+        return 1.0F;
+    }
+    return value;
+}
+
+static float settings_button_x(void) { return (float)g_nt_window.fb_width - SETTINGS_BUTTON_MARGIN - SETTINGS_BUTTON_W; }
+static float settings_button_y(void) { return SETTINGS_BUTTON_MARGIN; }
+static float settings_modal_x(void) { return ((float)g_nt_window.fb_width - SETTINGS_MODAL_W) * 0.5F; }
+static float settings_modal_y(void) { return ((float)g_nt_window.fb_height - SETTINGS_MODAL_H) * 0.5F; }
+static float settings_slider_x(void) { return settings_modal_x() + SETTINGS_SLIDER_X_OFFSET; }
+static float settings_master_slider_y(void) { return settings_modal_y() + SETTINGS_SLIDER_MASTER_Y_OFFSET; }
+static float settings_sfx_slider_y(void) { return settings_modal_y() + SETTINGS_SLIDER_SFX_Y_OFFSET; }
+
+static void set_master_volume_from_x(float x) {
+    char error[128] = {0};
+    float volume = clamp01((x - settings_slider_x()) / SETTINGS_SLIDER_W);
+    (void)game_state_action_set_master_volume(&g_game_state, volume, error, (int)sizeof(error));
+}
+
+static void set_sfx_volume_from_x(float x) {
+    char error[128] = {0};
+    float volume = clamp01((x - settings_slider_x()) / SETTINGS_SLIDER_W);
+    (void)game_state_action_set_sfx_volume(&g_game_state, volume, error, (int)sizeof(error));
+}
+
 static void register_test_ui(void) {
+    char text[64];
     nt_devapi_register_ui_element("scene.viewport", "Scene viewport", 0.0F, 0.0F, (float)g_nt_window.fb_width, (float)g_nt_window.fb_height);
     nt_devapi_register_ui_node("test.ui", "", "panel", "Test UI", "", TEST_UI_X, TEST_UI_Y, TEST_UI_W, TEST_UI_H, true, true);
-    nt_devapi_register_ui_node("test.label", "test.ui", "label", "Test Label", s_test_label_text, TEST_UI_LABEL_X, TEST_UI_LABEL_Y, TEST_UI_LABEL_W, TEST_UI_LABEL_H, true, false);
-    nt_devapi_register_ui_node("test.button", "test.ui", "button", "Test Button", s_test_button_text, TEST_UI_BUTTON_X, TEST_UI_BUTTON_Y, TEST_UI_BUTTON_W, TEST_UI_BUTTON_H, true, true);
+    nt_devapi_register_ui_node("test.label", "test.ui", "label", "Test Label", g_game_state.test_label_text, TEST_UI_LABEL_X, TEST_UI_LABEL_Y, TEST_UI_LABEL_W, TEST_UI_LABEL_H, true, false);
+    nt_devapi_register_ui_node("test.button", "test.ui", "button", "Test Button", g_game_state.test_button_text, TEST_UI_BUTTON_X, TEST_UI_BUTTON_Y, TEST_UI_BUTTON_W, TEST_UI_BUTTON_H, true, true);
+    nt_devapi_register_ui_node("settings.open", "", "button", "Settings", "Settings", settings_button_x(), settings_button_y(), SETTINGS_BUTTON_W, SETTINGS_BUTTON_H, true, true);
+    if (!s_settings_open) {
+        return;
+    }
+    nt_devapi_register_ui_node("settings.overlay", "", "overlay", "Settings Overlay", "", 0.0F, 0.0F, (float)g_nt_window.fb_width, (float)g_nt_window.fb_height, true, true);
+    nt_devapi_register_ui_node("settings.modal", "settings.overlay", "dialog", "Settings", "", settings_modal_x(), settings_modal_y(), SETTINGS_MODAL_W, SETTINGS_MODAL_H, true, true);
+    nt_devapi_register_ui_node("settings.close", "settings.modal", "button", "Close", "X", settings_modal_x() + SETTINGS_MODAL_W - SETTINGS_CLOSE_W - 18.0F, settings_modal_y() + 18.0F, SETTINGS_CLOSE_W, SETTINGS_CLOSE_H, true, true);
+    (void)snprintf(text, sizeof(text), "%.2f", (double)g_game_state.settings_master_volume);
+    nt_devapi_register_ui_node("settings.master_volume", "settings.modal", "slider", "Master Volume", text, settings_slider_x(), settings_master_slider_y(), SETTINGS_SLIDER_W, SETTINGS_SLIDER_H, true, true);
+    (void)snprintf(text, sizeof(text), "%.2f", (double)g_game_state.settings_sfx_volume);
+    nt_devapi_register_ui_node("settings.sfx_volume", "settings.modal", "slider", "SFX Volume", text, settings_slider_x(), settings_sfx_slider_y(), SETTINGS_SLIDER_W, SETTINGS_SLIDER_H, true, true);
 }
 
 static void update_test_ui_interaction(void) {
@@ -312,9 +463,112 @@ static void update_test_ui_interaction(void) {
     if (!point_in_rect(px, py, TEST_UI_BUTTON_X, TEST_UI_BUTTON_Y, TEST_UI_BUTTON_W, TEST_UI_BUTTON_H)) {
         return;
     }
-    s_test_ui_clicks++;
-    (void)snprintf(s_test_label_text, sizeof(s_test_label_text), "Label: clicked %d", s_test_ui_clicks);
-    (void)snprintf(s_test_button_text, sizeof(s_test_button_text), "Clicked %d", s_test_ui_clicks);
+    char error[128] = {0};
+    (void)game_state_action_test_ui_click(&g_game_state, error, (int)sizeof(error));
+}
+
+static bool update_settings_ui_interaction(void) {
+    const float px = g_nt_input.pointers[0].x;
+    const float py = g_nt_input.pointers[0].y;
+    const float open_x = settings_button_x();
+    const float open_y = settings_button_y();
+    const float modal_x = settings_modal_x();
+    const float modal_y = settings_modal_y();
+    const float close_x = modal_x + SETTINGS_MODAL_W - SETTINGS_CLOSE_W - 18.0F;
+    const float close_y = modal_y + 18.0F;
+    bool blocks_scene = s_settings_open || point_in_rect(px, py, open_x, open_y, SETTINGS_BUTTON_W, SETTINGS_BUTTON_H);
+
+    if (nt_input_key_is_pressed(NT_KEY_S)) {
+        s_settings_open = !s_settings_open;
+        s_active_settings_slider = 0;
+        return true;
+    }
+    if (nt_input_mouse_is_released(NT_BUTTON_LEFT)) {
+        s_active_settings_slider = 0;
+    }
+    if (nt_input_mouse_is_pressed(NT_BUTTON_LEFT) && point_in_rect(px, py, open_x, open_y, SETTINGS_BUTTON_W, SETTINGS_BUTTON_H)) {
+        s_settings_open = true;
+        return true;
+    }
+    if (!s_settings_open) {
+        return blocks_scene;
+    }
+    if (nt_input_mouse_is_pressed(NT_BUTTON_LEFT) && point_in_rect(px, py, close_x, close_y, SETTINGS_CLOSE_W, SETTINGS_CLOSE_H)) {
+        s_settings_open = false;
+        s_active_settings_slider = 0;
+        return true;
+    }
+    if (nt_input_mouse_is_pressed(NT_BUTTON_LEFT) && point_in_rect(px, py, settings_slider_x(), settings_master_slider_y(), SETTINGS_SLIDER_W, SETTINGS_SLIDER_H)) {
+        s_active_settings_slider = 1;
+    } else if (nt_input_mouse_is_pressed(NT_BUTTON_LEFT) && point_in_rect(px, py, settings_slider_x(), settings_sfx_slider_y(), SETTINGS_SLIDER_W, SETTINGS_SLIDER_H)) {
+        s_active_settings_slider = 2;
+    }
+    if (nt_input_mouse_is_down(NT_BUTTON_LEFT)) {
+        if (s_active_settings_slider == 1) {
+            set_master_volume_from_x(px);
+        } else if (s_active_settings_slider == 2) {
+            set_sfx_volume_from_x(px);
+        }
+    }
+    return blocks_scene;
+}
+
+static void draw_screen_rect(float x, float y, float w, float h, const float color[4]) {
+    float px = x + (w * 0.5F);
+    float py = (float)g_nt_window.fb_height - y - (h * 0.5F);
+    float pos[3] = {px, py, 0.0F};
+    float size[2] = {w, h};
+    nt_shape_renderer_rect(pos, size, color);
+}
+
+static void draw_screen_rect_wire(float x, float y, float w, float h, const float color[4]) {
+    float px = x + (w * 0.5F);
+    float py = (float)g_nt_window.fb_height - y - (h * 0.5F);
+    float pos[3] = {px, py, 0.0F};
+    float size[2] = {w, h};
+    nt_shape_renderer_rect_wire(pos, size, color);
+}
+
+static void draw_slider(float x, float y, float w, float value, const float accent[4]) {
+    const float track_col[4] = {0.18F, 0.20F, 0.24F, 1.0F};
+    const float knob_col[4] = {0.94F, 0.96F, 0.90F, 1.0F};
+    draw_screen_rect(x, y + 14.0F, w, 6.0F, track_col);
+    draw_screen_rect(x, y + 14.0F, w * clamp01(value), 6.0F, accent);
+    draw_screen_rect(x + (w * clamp01(value)) - 7.0F, y + 5.0F, 14.0F, 24.0F, knob_col);
+}
+
+static void draw_settings_ui(void) {
+    mat4 ortho;
+    float cam_pos[3] = {0.0F, 0.0F, 1.0F};
+    glm_ortho(0.0F, (float)g_nt_window.fb_width, 0.0F, (float)g_nt_window.fb_height, -1.0F, 1.0F, ortho);
+    nt_shape_renderer_set_vp((float *)ortho);
+    nt_shape_renderer_set_cam_pos(cam_pos);
+    nt_shape_renderer_set_depth(false);
+
+    const float button_col[4] = {0.14F, 0.32F, 0.42F, 1.0F};
+    const float button_wire[4] = {0.55F, 0.88F, 0.92F, 1.0F};
+    draw_screen_rect(settings_button_x(), settings_button_y(), SETTINGS_BUTTON_W, SETTINGS_BUTTON_H, button_col);
+    draw_screen_rect_wire(settings_button_x(), settings_button_y(), SETTINGS_BUTTON_W, SETTINGS_BUTTON_H, button_wire);
+
+    if (!s_settings_open) {
+        return;
+    }
+
+    const float overlay_col[4] = {0.02F, 0.02F, 0.025F, 0.82F};
+    const float modal_col[4] = {0.08F, 0.09F, 0.11F, 1.0F};
+    const float modal_wire[4] = {0.76F, 0.80F, 0.68F, 1.0F};
+    const float close_col[4] = {0.42F, 0.14F, 0.16F, 1.0F};
+    const float accent_master[4] = {0.20F, 0.78F, 0.66F, 1.0F};
+    const float accent_sfx[4] = {0.92F, 0.58F, 0.22F, 1.0F};
+    float modal_x = settings_modal_x();
+    float modal_y = settings_modal_y();
+
+    draw_screen_rect(0.0F, 0.0F, (float)g_nt_window.fb_width, (float)g_nt_window.fb_height, overlay_col);
+    draw_screen_rect(modal_x, modal_y, SETTINGS_MODAL_W, SETTINGS_MODAL_H, modal_col);
+    draw_screen_rect_wire(modal_x, modal_y, SETTINGS_MODAL_W, SETTINGS_MODAL_H, modal_wire);
+    draw_screen_rect(modal_x + SETTINGS_MODAL_W - SETTINGS_CLOSE_W - 18.0F, modal_y + 18.0F, SETTINGS_CLOSE_W, SETTINGS_CLOSE_H, close_col);
+    draw_slider(settings_slider_x(), settings_master_slider_y(), SETTINGS_SLIDER_W, g_game_state.settings_master_volume, accent_master);
+    draw_slider(settings_slider_x(), settings_sfx_slider_y(), SETTINGS_SLIDER_W, g_game_state.settings_sfx_volume, accent_sfx);
 }
 
 static void frame(void) {
@@ -326,22 +580,27 @@ static void frame(void) {
     register_test_ui();
     nt_devapi_net_poll();
     nt_devapi_apply_pending();
+    autosave_try_load();
 
     float dt = g_nt_app.dt;
     update_test_ui_interaction();
+    bool ui_blocks_pointer = update_settings_ui_interaction();
 
     if (nt_input_key_is_pressed(NT_KEY_A)) {
-        s_current_shape = (s_current_shape + SHAPE_COUNT - 1) % SHAPE_COUNT;
+        char error[128] = {0};
+        (void)game_state_action_shape_prev(&g_game_state, error, (int)sizeof(error));
         set_shape_scale();
         set_shape_color();
     }
     if (nt_input_key_is_pressed(NT_KEY_D)) {
-        s_current_shape = (s_current_shape + 1) % SHAPE_COUNT;
+        char error[128] = {0};
+        (void)game_state_action_shape_next(&g_game_state, error, (int)sizeof(error));
         set_shape_scale();
         set_shape_color();
     }
     if (nt_input_key_is_pressed(NT_KEY_W)) {
-        s_render_mode = (s_render_mode + 1) % MODE_COUNT;
+        char error[128] = {0};
+        (void)game_state_action_render_mode_next(&g_game_state, error, (int)sizeof(error));
     }
     if (nt_input_key_is_pressed(NT_KEY_R)) {
         glm_quat_identity(nt_transform_comp_rotation(s_shape_entity));
@@ -351,12 +610,17 @@ static void frame(void) {
     }
 #ifndef NT_PLATFORM_WEB
     if (nt_input_key_is_pressed(NT_KEY_ESCAPE)) {
-        nt_app_quit();
+        if (s_settings_open) {
+            s_settings_open = false;
+            s_active_settings_slider = 0;
+        } else {
+            nt_app_quit();
+        }
     }
 #endif
 
-    if (nt_input_mouse_is_down(NT_BUTTON_LEFT)) {
-        s_grabbed = true;
+    s_grabbed = nt_input_mouse_is_down(NT_BUTTON_LEFT) && !ui_blocks_pointer;
+    if (s_grabbed) {
         float dx = g_nt_input.pointers[0].dx;
         float dy = g_nt_input.pointers[0].dy;
         float new_yaw = dx * MOUSE_SENS;
@@ -375,19 +639,14 @@ static void frame(void) {
         if (fabsf(s_vel_pitch) < VEL_THRESHOLD) {
             s_vel_pitch = 0;
         }
-    } else if (!s_grabbed) {
+    } else {
         apply_rotation(AUTO_SPIN_SPEED * dt, 0);
     }
 
     float wheel = g_nt_input.pointers[0].wheel_dy;
     if (fabsf(wheel) > 0.001F) {
-        s_cam_dist += wheel * ZOOM_SPEED;
-        if (s_cam_dist < ZOOM_MIN) {
-            s_cam_dist = ZOOM_MIN;
-        }
-        if (s_cam_dist > ZOOM_MAX) {
-            s_cam_dist = ZOOM_MAX;
-        }
+        char error[128] = {0};
+        (void)game_state_action_camera_zoom(&g_game_state, wheel, ZOOM_SPEED, error, (int)sizeof(error));
     }
 
     nt_transform_comp_update();
@@ -397,7 +656,7 @@ static void frame(void) {
         aspect = (float)g_nt_window.fb_width / (float)g_nt_window.fb_height;
     }
 
-    vec3 eye = {0, s_shape_y + 0.5F, s_cam_dist};
+    vec3 eye = {0, s_shape_y + 0.5F, g_game_state.camera_distance};
     vec3 center = {0, s_shape_y, 0};
     vec3 up = {0, 1, 0};
 
@@ -421,10 +680,13 @@ static void frame(void) {
     draw_shape();
 
     nt_shape_renderer_flush();
+    draw_settings_ui();
+    nt_shape_renderer_flush();
     nt_gfx_end_pass();
     nt_gfx_end_frame();
 
     nt_window_swap_buffers();
+    autosave_flush_if_dirty();
 }
 
 int main(int argc, char **argv) {
@@ -446,27 +708,33 @@ int main(int argc, char **argv) {
     nt_entity_init(&(nt_entity_desc_t){.max_entities = 64});
     nt_transform_comp_init(&(nt_transform_comp_desc_t){.capacity = 64});
     nt_drawable_comp_init(&(nt_drawable_comp_desc_t){.capacity = 64});
+    game_state_init();
+    game_storage_init(&(GameStorageConfig){
+        .namespace_name = GAME_STORAGE_NAMESPACE,
+        .native_root = GAME_STORAGE_NATIVE_ROOT,
+    });
 
     s_shape_entity = nt_entity_create();
     nt_transform_comp_add(s_shape_entity);
     nt_transform_comp_position(s_shape_entity)[1] = s_shape_y;
     nt_drawable_comp_add(s_shape_entity);
 
+    set_shape_scale();
+    set_shape_color();
+    autosave_init(has_arg(argc, argv, "--fresh-state"), has_arg(argc, argv, "--disable-autosave"));
+
 #ifdef NT_PLATFORM_WEB
     nt_platform_web_loading_complete();
 #endif
 
-    s_current_shape = SHAPE_CUBE;
-    s_render_mode = MODE_SOLID_WIRE;
-    set_shape_scale();
-    set_shape_color();
-
 #if NT_DEVAPI_ENABLED
+    game_state_set_changed_callback(on_game_state_changed, NULL);
     uint16_t devapi_port = 0;
     if (parse_devapi_port(argc, argv, &devapi_port)) {
         nt_devapi_init();
         nt_devapi_register_builtins();
         nt_devapi_register("game.state", ep_game_state, NULL);
+        game_state_register_devapi();
         s_devapi_started = nt_devapi_net_start(devapi_port);
     }
 #else

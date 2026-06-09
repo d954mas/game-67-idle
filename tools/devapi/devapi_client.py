@@ -353,7 +353,7 @@ def connect_existing(port: int = 9123, timeout: float = 8.0) -> DevApiClient | N
 
 
 @contextmanager
-def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE, reuse_existing: bool = False):
+def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE, reuse_existing: bool = False, fresh_state: bool = True, autosave_enabled: bool = False):
     proc = None
     client = None
     if reuse_existing:
@@ -366,7 +366,12 @@ def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE, reuse_existing: 
     if client is None:
         if not os.path.exists(exe):
             raise DevApiError(f"build native debug first: {exe}")
-        proc = subprocess.Popen([exe, "--devapi", str(port)], cwd=ROOT)
+        args = [exe, "--devapi", str(port)]
+        if fresh_state:
+            args.append("--fresh-state")
+        if not autosave_enabled:
+            args.append("--disable-autosave")
+        proc = subprocess.Popen(args, cwd=ROOT)
         client = connect_existing(port=port)
     if client is None:
         raise DevApiError("no devapi connection")

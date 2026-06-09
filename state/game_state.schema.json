@@ -1,0 +1,48 @@
+{
+  "schema": "game_67_idle.state",
+  "document": "game",
+  "lifetime": "persistent_profile",
+  "version": 1,
+  "string_max": 64,
+  "reserved": [
+    {"id": 99, "path": "grabbed", "reason": "runtime input telemetry, not persistent state"}
+  ],
+  "collections": {
+    "items_max": 32,
+    "inventory_item_ids_max": 32
+  },
+  "enums": {
+    "Shape": ["cube", "sphere", "cylinder", "capsule"],
+    "RenderMode": ["solid_wire", "solid", "wire"]
+  },
+  "fields": [
+    {"path": "shape_index", "id": 1, "type": "enum", "enum": "Shape", "default": "cube", "devapi": "read_write"},
+    {"path": "render_mode_index", "id": 2, "type": "enum", "enum": "RenderMode", "default": "solid_wire", "devapi": "read_write"},
+    {"path": "camera_distance", "id": 3, "type": "float", "default": 6.0, "min": 2.5, "max": 10.0, "devapi": "read_write"},
+    {"path": "test_ui_clicks", "id": 4, "type": "int", "default": 0, "min": 0, "max": 1000000, "devapi": "read_write"},
+    {"path": "test_label_text", "id": 5, "type": "string", "default": "Label: waiting", "max_length": 63, "devapi": "read_write"},
+    {"path": "test_button_text", "id": 6, "type": "string", "default": "Click me", "max_length": 63, "devapi": "read_write"},
+    {"path": "settings.master_volume", "id": 7, "type": "float", "default": 0.75, "min": 0.0, "max": 1.0, "devapi": "read_write"},
+    {"path": "settings.sfx_volume", "id": 8, "type": "float", "default": 0.80, "min": 0.0, "max": 1.0, "devapi": "read_write"},
+    {"path": "tutorial.done", "id": 9, "type": "bool", "default": false, "devapi": "read_write"},
+    {"path": "wallet.soft", "id": 10, "type": "int", "default": 0, "min": 0, "max": 2147483647, "devapi": "read_write"},
+    {"path": "wallet.hard", "id": 11, "type": "int", "default": 0, "min": 0, "max": 2147483647, "devapi": "read_write"},
+    {"path": "items", "id": 12, "type": "map<string,ItemInstance>", "max_count": 32, "devapi": "read_write"},
+    {"path": "inventory.item_ids", "id": 13, "type": "list<string>", "max_count": 32, "ref": "items", "devapi": "read_write"},
+    {"path": "equipment.hand_item_id", "id": 14, "type": "string?", "default": null, "max_length": 63, "ref": "items", "devapi": "read_write"}
+  ],
+  "types": {
+    "ItemInstance": {
+      "kind": "object",
+      "fields": [
+        {"path": "def_id", "id": 1, "type": "string", "max_length": 63},
+        {"path": "count", "id": 2, "type": "int", "default": 1, "min": 1, "max": 999999},
+        {"path": "level", "id": 3, "type": "int", "default": 1, "min": 1, "max": 9999},
+        {"path": "durability", "id": 4, "type": "float", "default": 1.0, "min": 0.0, "max": 1.0}
+      ]
+    }
+  },
+  "migrations": [
+    {"from": 0, "to": 1, "function": "game_state_migrate_v0_to_v1"}
+  ]
+}

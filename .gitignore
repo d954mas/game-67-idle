@@ -8,5 +8,7 @@ compile_commands.json
 *.suo
 *.ntpack
 src/generated/*.h
+!src/generated/game_state.h
+!src/generated/game_state_schema.gen.h
 __pycache__/
 *.pyc

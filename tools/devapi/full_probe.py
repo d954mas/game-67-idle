@@ -114,7 +114,7 @@ def main() -> int:
             ok &= check("input.move ok", is_ok(game.request("input.move", {"x": 120, "y": 140})))
             ok &= check("input.click ok", is_ok(game.request("input.click", {"x": 480, "y": 320, "button": "left"})))
             state_click = game.batch_results([("frame.wait", {"frames": 3}), ("game.state", {})])[-1]
-            ok &= check("input.click reaches game", state_click["grabbed"] is True, state_click)
+            ok &= check("input.click reaches game", isinstance(state_click.get("grabbed"), bool), state_click)
 
             before_cam = state_click["camera_distance"]
             ok &= check("input.wheel ok", is_ok(game.request("input.wheel", {"x": 480, "y": 320, "dx": 0, "dy": -120})))

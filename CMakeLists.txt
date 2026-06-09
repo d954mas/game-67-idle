@@ -3,6 +3,7 @@ project(game_67_idle LANGUAGES C)
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 option(NT_NO_WERROR "Disable -Werror for Neotolis targets." OFF)
 option(GAME_ENABLE_BASISU_RUNTIME "Link Basis Universal runtime transcoder into the game executable." OFF)
@@ -45,17 +46,66 @@ set(GAME_TARGET game_67_idle)
 set(GAME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/build/game_67_idle/${NT_PRESET_NAME}")
 set(GAME_PACK_DIR "${CMAKE_SOURCE_DIR}/build/game_67_idle")
 
-if(GAME_DEVAPI_ENABLED)
-    add_library(game_cjson STATIC
-        external/cjson/cJSON.c
-        external/cjson/cJSON.h
-    )
-    target_include_directories(game_cjson SYSTEM PUBLIC external/cjson)
+add_library(game_cjson STATIC
+    external/cjson/cJSON.c
+    external/cjson/cJSON.h
+)
+target_include_directories(game_cjson SYSTEM PUBLIC external/cjson)
 
+set(GAME_STATE_SCHEMA "${CMAKE_SOURCE_DIR}/state/game_state.schema.json")
+set(GAME_STATE_CODEGEN "${CMAKE_SOURCE_DIR}/tools/state_codegen/generate_state.py")
+set(GAME_STATE_SOURCE_TEMPLATE "${CMAKE_SOURCE_DIR}/tools/state_codegen/game_state.c.in")
+set(GAME_STATE_GENERATED_HEADER "${CMAKE_SOURCE_DIR}/src/generated/game_state.h")
+set(GAME_STATE_GENERATED_SOURCE "${CMAKE_SOURCE_DIR}/src/generated/game_state.c")
+set(GAME_STATE_GENERATED_DEVAPI_SOURCE "${CMAKE_SOURCE_DIR}/src/generated/game_state_devapi.c")
+set(GAME_STATE_GENERATED_SCHEMA_HEADER "${CMAKE_SOURCE_DIR}/src/generated/game_state_schema.gen.h")
+
+add_custom_command(
+    OUTPUT
+        "${GAME_STATE_GENERATED_HEADER}"
+        "${GAME_STATE_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_DEVAPI_SOURCE}"
+        "${GAME_STATE_GENERATED_SCHEMA_HEADER}"
+    COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_CODEGEN}"
+    DEPENDS
+        "${GAME_STATE_SCHEMA}"
+        "${GAME_STATE_CODEGEN}"
+        "${GAME_STATE_SOURCE_TEMPLATE}"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    COMMENT "Generating game state sources"
+    VERBATIM
+)
+add_custom_target(game_state_codegen
+    DEPENDS
+        "${GAME_STATE_GENERATED_HEADER}"
+        "${GAME_STATE_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_DEVAPI_SOURCE}"
+        "${GAME_STATE_GENERATED_SCHEMA_HEADER}"
+)
+
+add_library(game_state STATIC
+    src/game_storage.c
+    src/game_storage.h
+    src/game_state_actions.c
+    src/game_state_actions.h
+    "${GAME_STATE_GENERATED_SOURCE}"
+    src/generated/game_state.h
+    src/generated/game_state_schema.gen.h
+    state/migrations/v0_to_v1.c
+)
+add_dependencies(game_state game_state_codegen)
+target_include_directories(game_state PUBLIC src external/cjson)
+target_link_libraries(game_state PUBLIC game_cjson)
+target_compile_definitions(game_state PUBLIC NT_DEVAPI_ENABLED=$<BOOL:${GAME_DEVAPI_ENABLED}> PRIVATE _CRT_SECURE_NO_WARNINGS)
+nt_set_warning_flags(game_state)
+nt_set_sanitizer_flags(game_state)
+
+if(GAME_DEVAPI_ENABLED)
     add_library(game_devapi STATIC
         src/devapi/nt_devapi.c
         src/devapi/nt_devapi_net.c
         src/devapi/nt_devapi.h
+        "${GAME_STATE_GENERATED_DEVAPI_SOURCE}"
     )
     target_include_directories(game_devapi PUBLIC src)
     target_link_libraries(game_devapi
@@ -65,6 +115,7 @@ if(GAME_DEVAPI_ENABLED)
             nt_transform_comp
             nt_drawable_comp
             game_cjson
+            game_state
         PRIVATE
             nt_log
     )
@@ -93,6 +144,7 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_transform_comp
     nt_drawable_comp
     game_devapi
+    game_state
 )
 
 if(EMSCRIPTEN)
