@@ -37,7 +37,10 @@ class DevApiClient:
         self.next_request_id = 1
 
     def close(self) -> None:
-        self.sock.close()
+        try:
+            self.file.close()
+        finally:
+            self.sock.close()
 
     def raw(self, payload: Any) -> Any:
         self.file.write((json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8"))
@@ -153,13 +156,17 @@ def resolve_output_path(output: str) -> str:
 
 
 def run_powershell_script(script: str, args: list[str]) -> str:
-    completed = subprocess.run(
-        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, *args],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        completed = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, *args],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
+        raise DevApiError(f"{os.path.basename(script)} failed: {detail.strip()}") from exc
     return completed.stdout.strip()
 
 
@@ -213,9 +220,16 @@ def connect_existing(port: int = 9123, timeout: float = 8.0) -> DevApiClient | N
 
 
 @contextmanager
-def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE):
+def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE, reuse_existing: bool = False):
     proc = None
-    client = connect_existing(port=port, timeout=0.5)
+    client = None
+    if reuse_existing:
+        client = connect_existing(port=port, timeout=0.5)
+    else:
+        existing = connect_existing(port=port, timeout=0.1)
+        if existing is not None:
+            existing.close()
+            raise DevApiError(f"devapi port {port} is already in use; stop the old game or pass reuse_existing=True")
     if client is None:
         if not os.path.exists(exe):
             raise DevApiError(f"build native debug first: {exe}")

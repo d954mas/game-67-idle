@@ -40,6 +40,13 @@
             "problemMatcher": []
         },
         {
+            "label": "DevAPI: full probe",
+            "type": "shell",
+            "command": "py -3.12 tools/devapi/full_probe.py 9123",
+            "dependsOn": "Build: native debug",
+            "problemMatcher": []
+        },
+        {
             "label": "DevAPI: bot demo",
             "type": "shell",
             "command": "py -3.12 tools/devapi/bot_demo.py 9123",

@@ -34,8 +34,11 @@ def main() -> int:
             ui_tree = bus.request("ui.tree")
             ui_ids = [item.get("id") for item in ui_tree.get("result", [])]
             ok &= check("ui tree exposes viewport", "scene.viewport" in ui_ids, ui_tree)
+            ok &= check("ui tree exposes test ui", all(item in ui_ids for item in ("test.ui", "test.label", "test.button")), ui_tree)
             viewport = bus.request("ui.element", {"id": "scene.viewport"})
             ok &= check("ui element uses string id", viewport.get("result", {}).get("id") == "scene.viewport", viewport)
+            button0 = bus.request("ui.element", {"id": "test.button"}).get("result", {})
+            ok &= check("ui button text initial", button0.get("role") == "button" and button0.get("text") == "Click me", button0)
 
             state0 = bus.observe()
             ok &= check("state shape", state0.get("shape") == "cube", state0)
@@ -66,8 +69,15 @@ def main() -> int:
             state4 = bus.click_ui("scene.viewport", wait_frames=2)
             ok &= check("ui click reaches game input", state4.get("grabbed") is True, state4)
 
+            state_button = bus.click_ui("test.button", wait_frames=2)
+            button1 = bus.request("ui.element", {"id": "test.button"}).get("result", {})
+            label1 = bus.request("ui.element", {"id": "test.label"}).get("result", {})
+            ok &= check("ui button click changes button text", button1.get("text") == "Clicked 1", button1)
+            ok &= check("ui button click changes label text", label1.get("text") == "Label: clicked 1", label1)
+            ok &= check("state exposes ui text", state_button.get("test_button_text") == "Clicked 1" and state_button.get("test_label_text") == "Label: clicked 1", state_button)
+
             state5 = bus.scroll_ui("scene.viewport", dy=-120)
-            ok &= check("ui scroll changes camera", state5.get("camera_distance") != state4.get("camera_distance"), f"{state4.get('camera_distance')} -> {state5.get('camera_distance')}")
+            ok &= check("ui scroll changes camera", state5.get("camera_distance") != state_button.get("camera_distance"), f"{state_button.get('camera_distance')} -> {state5.get('camera_distance')}")
 
             state6 = bus.gesture("scroll", {"x": 480, "y": 320, "dy": 120})
             ok &= check("gesture scroll changes camera", state6.get("camera_distance") != state5.get("camera_distance"), f"{state5.get('camera_distance')} -> {state6.get('camera_distance')}")

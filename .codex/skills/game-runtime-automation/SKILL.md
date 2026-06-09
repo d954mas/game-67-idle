@@ -26,6 +26,9 @@ Use this skill to let an agent observe, drive, and verify a running game.
    - `input.key`
    - `input.move`
    - `input.click`
+   - `input.pointer`
+   - `input.wheel`
+   - `input.button`
    - a game-specific `game.state` or equivalent
 4. Keep reusable automation at the low-level device/input/frame/capture layer.
 5. Add semantic `action.*` endpoints only as game-local convenience wrappers.
@@ -33,6 +36,7 @@ Use this skill to let an agent observe, drive, and verify a running game.
 7. Add bots as scripts that perform observe -> act -> observe and exit nonzero on failure.
 8. Capture evidence after interactions: screenshots for visual checks, short recordings for timing/animation issues.
 9. Do not enable automation in release builds unless explicitly requested.
+10. Prefer native desktop/PC validation for speed. Run WASM/web checks only when explicitly requested or when the task targets web behavior.
 
 ## Temporary Adapters
 

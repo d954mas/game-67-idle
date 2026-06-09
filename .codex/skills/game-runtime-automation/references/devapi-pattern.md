@@ -43,10 +43,12 @@ Minimum endpoints:
 ```
 
 Keep commands deterministic and frame-aware. Apply synthetic input after the engine polls real input for the frame.
+Reject commands before mutating runtime state when their event queues do not have enough capacity. A failed command must not leave a partial key-down, pointer-down, drag, or wheel event behind.
 
 ## Ordered Batches and Frame Sync
 
 Batch requests must execute in order. `frame.wait` is a barrier: commands after it run only after the target frame is reached, and the batch response is returned after all commands complete.
+Cap wait lengths and gesture frame counts. Long waits should fail fast with a structured error instead of blocking the command queue indefinitely.
 
 ```json
 [
@@ -96,8 +98,26 @@ Minimum temporary adapter:
 
 - expose `scene.viewport` as a stable root element when no real UI tree exists;
 - keep ids as strings;
-- return bounds in framebuffer coordinates;
+- return role, text, parent id, children, state flags, and bounds in framebuffer coordinates;
 - implement `ui.click` and `ui.scroll` through `input.click` and `input.wheel` semantics.
+
+Recommended UI node shape:
+
+```json
+{
+  "id": "shop.buy_1",
+  "parent_id": "shop.panel",
+  "role": "button",
+  "label": "Buy button",
+  "text": "Buy",
+  "bounds": {"x": 10, "y": 20, "w": 120, "h": 40},
+  "visible": true,
+  "enabled": true,
+  "children": []
+}
+```
+
+`ui.tree` should return enough data for a bot to choose and click a target without extra round trips. `ui.element` should return the same core fields for one id, plus any future detail fields.
 
 Stable id rule:
 
@@ -134,7 +154,7 @@ Use semantic actions only inside a game project when they make bots clearer. Kee
 
 Bots should:
 
-1. connect or launch the game with automation enabled;
+1. launch a fresh game with automation enabled, unless the script explicitly asks to attach to an existing process;
 2. call `ping` and `endpoints`;
 3. read state;
 4. issue one input/action;
@@ -150,6 +170,8 @@ Prefer a shared client/harness over per-script socket code. A good client should
 - `step(method, params, wait_frames=1)` as `act -> frame.wait -> observe`;
 - small helpers such as `key_tap`, `click_ui`, `scroll_ui`, `gesture`.
 - capture helpers such as `capture_screenshot` and `record_gameplay` that call project tools after frame sync.
+
+For deterministic tests, fail when the requested port is already occupied instead of silently attaching to stale state. Keep attach/reuse behavior as an explicit option for manual debugging.
 
 Keep conditional logic in bot scripts:
 

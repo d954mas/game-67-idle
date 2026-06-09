@@ -21,6 +21,10 @@
 #define GAME_DEVAPI_MAX_UI_ELEMENTS 64
 #define GAME_DEVAPI_UI_ID_MAX 64
 #define GAME_DEVAPI_UI_LABEL_MAX 96
+#define GAME_DEVAPI_UI_ROLE_MAX 32
+#define GAME_DEVAPI_UI_TEXT_MAX 128
+#define GAME_DEVAPI_MAX_ACTION_FRAMES 120
+#define GAME_DEVAPI_MAX_WAIT_FRAMES 600
 
 typedef struct {
     const char *name;
@@ -66,11 +70,16 @@ typedef struct {
 
 typedef struct {
     char id[GAME_DEVAPI_UI_ID_MAX];
+    char parent_id[GAME_DEVAPI_UI_ID_MAX];
+    char role[GAME_DEVAPI_UI_ROLE_MAX];
     char label[GAME_DEVAPI_UI_LABEL_MAX];
+    char text[GAME_DEVAPI_UI_TEXT_MAX];
     float x;
     float y;
     float w;
     float h;
+    bool visible;
+    bool enabled;
 } ui_element_t;
 
 static endpoint_t s_eps[GAME_DEVAPI_MAX_ENDPOINTS];
@@ -90,13 +99,6 @@ static int s_pointer_event_count;
 static float s_mx;
 static float s_my;
 static uint8_t s_btn_mask;
-static uint8_t s_click;
-static uint8_t s_click_btn;
-static bool s_ptr_engaged;
-static bool s_ptr_active;
-static bool s_wheel_pending;
-static float s_wheel_dx;
-static float s_wheel_dy;
 static request_group_t s_groups[GAME_DEVAPI_MAX_GROUPS];
 static int s_group_head;
 static int s_group_count;
@@ -131,7 +133,34 @@ static bool copy_fixed(char *dst, int dst_cap, const char *src) {
     if (!dst || dst_cap <= 0 || !src || !src[0]) {
         return false;
     }
+    if (strlen(src) >= (size_t)dst_cap) {
+        return false;
+    }
     (void)snprintf(dst, (size_t)dst_cap, "%s", src);
+    return true;
+}
+
+static bool copy_text_fixed(char *dst, int dst_cap, const char *src) {
+    if (!dst || dst_cap <= 0 || !src) {
+        return false;
+    }
+    if (strlen(src) >= (size_t)dst_cap) {
+        return false;
+    }
+    (void)snprintf(dst, (size_t)dst_cap, "%s", src);
+    return true;
+}
+
+static bool clamp_frame_count(const cJSON *params, const char *name, int fallback, int max_value, int *out, char *error, int error_cap) {
+    double value = param_number(params, name, (double)fallback);
+    if (value < 1.0) {
+        value = 1.0;
+    }
+    if (value > (double)max_value) {
+        set_error(error, error_cap, "frame count too large");
+        return false;
+    }
+    *out = (int)value;
     return true;
 }
 
@@ -207,22 +236,50 @@ void nt_devapi_set_frame(uint64_t frame) { s_frame = frame; }
 
 void nt_devapi_clear_ui_elements(void) { s_ui_element_count = 0; }
 
-bool nt_devapi_register_ui_element(const char *id, const char *label, float x, float y, float w, float h) {
+bool nt_devapi_register_ui_node(const char *id, const char *parent_id, const char *role, const char *label, const char *text, float x, float y, float w, float h, bool visible, bool enabled) {
     if (s_ui_element_count >= GAME_DEVAPI_MAX_UI_ELEMENTS || !id || !id[0] || w < 0.0F || h < 0.0F) {
         return false;
+    }
+    if (strlen(id) >= GAME_DEVAPI_UI_ID_MAX || (parent_id && strlen(parent_id) >= GAME_DEVAPI_UI_ID_MAX) || (role && strlen(role) >= GAME_DEVAPI_UI_ROLE_MAX) ||
+        (label && strlen(label) >= GAME_DEVAPI_UI_LABEL_MAX) || (text && strlen(text) >= GAME_DEVAPI_UI_TEXT_MAX)) {
+        return false;
+    }
+    for (int i = 0; i < s_ui_element_count; i++) {
+        if (strcmp(s_ui_elements[i].id, id) == 0) {
+            return false;
+        }
     }
     ui_element_t *element = &s_ui_elements[s_ui_element_count++];
     if (!copy_fixed(element->id, (int)sizeof(element->id), id)) {
         s_ui_element_count--;
         return false;
     }
-    (void)snprintf(element->label, sizeof(element->label), "%s", label ? label : "");
+    if (!copy_text_fixed(element->parent_id, (int)sizeof(element->parent_id), parent_id ? parent_id : "")) {
+        s_ui_element_count--;
+        return false;
+    }
+    if (!copy_text_fixed(element->role, (int)sizeof(element->role), role ? role : "node")) {
+        s_ui_element_count--;
+        return false;
+    }
+    if (!copy_text_fixed(element->label, (int)sizeof(element->label), label ? label : "")) {
+        s_ui_element_count--;
+        return false;
+    }
+    if (!copy_text_fixed(element->text, (int)sizeof(element->text), text ? text : "")) {
+        s_ui_element_count--;
+        return false;
+    }
     element->x = x;
     element->y = y;
     element->w = w;
     element->h = h;
+    element->visible = visible;
+    element->enabled = enabled;
     return true;
 }
+
+bool nt_devapi_register_ui_element(const char *id, const char *label, float x, float y, float w, float h) { return nt_devapi_register_ui_node(id, NULL, "region", label, label, x, y, w, h, true, true); }
 
 bool nt_devapi_register(const char *name, nt_devapi_handler_fn fn, void *user) {
     if (!name || !fn || s_ep_count >= GAME_DEVAPI_MAX_ENDPOINTS) {
@@ -255,8 +312,52 @@ static bool enqueue_pointer_event(const pointer_event_t *event) {
     return true;
 }
 
+static bool has_key_event_capacity(int count) { return count >= 0 && s_key_event_count <= GAME_DEVAPI_MAX_KEY_EVENTS - count; }
+
+static bool has_pointer_event_capacity(int count) { return count >= 0 && s_pointer_event_count <= GAME_DEVAPI_MAX_POINTER_EVENTS - count; }
+
 static uint8_t button_mask(uint8_t button) {
     return button < NT_BUTTON_MAX ? (uint8_t)(1U << button) : (uint8_t)0;
+}
+
+static pointer_event_t mouse_event(pointer_event_kind_t kind, float x, float y, uint8_t buttons_mask, uint64_t frame) {
+    pointer_event_t event = {
+        .frame = frame,
+        .kind = kind,
+        .id = 0,
+        .x = x,
+        .y = y,
+        .pointer_type = (uint8_t)NT_POINTER_MOUSE,
+        .buttons_mask = buttons_mask,
+    };
+    return event;
+}
+
+static bool enqueue_mouse_move(float x, float y, uint8_t buttons_mask) {
+    pointer_event_t event = mouse_event(POINTER_EVENT_MOVE, x, y, buttons_mask, s_frame);
+    return enqueue_pointer_event(&event);
+}
+
+static bool enqueue_mouse_click(float x, float y, uint8_t button, int frames) {
+    if (!has_pointer_event_capacity(2)) {
+        return false;
+    }
+    const uint8_t click_mask = button_mask(button);
+    pointer_event_t down = mouse_event(POINTER_EVENT_DOWN, x, y, (uint8_t)(s_btn_mask | click_mask), s_frame);
+    pointer_event_t up = mouse_event(POINTER_EVENT_MOVE, x, y, (uint8_t)(s_btn_mask & (uint8_t)~click_mask), s_frame + (uint64_t)frames);
+    (void)enqueue_pointer_event(&down);
+    (void)enqueue_pointer_event(&up);
+    return true;
+}
+
+static bool enqueue_mouse_wheel(float x, float y, float dx, float dy) {
+    if (!has_pointer_event_capacity(1)) {
+        return false;
+    }
+    pointer_event_t event = mouse_event(POINTER_EVENT_WHEEL, x, y, s_btn_mask, s_frame);
+    event.wheel_dx = dx;
+    event.wheel_dy = dy;
+    return enqueue_pointer_event(&event);
 }
 
 static void apply_pointer_event(const pointer_event_t *event) {
@@ -311,31 +412,6 @@ void nt_devapi_apply_pending(void) {
         }
     }
     s_pointer_event_count = write;
-
-    if (!s_ptr_engaged) {
-        return;
-    }
-    uint8_t mask = s_btn_mask;
-    if (s_click == 1) {
-        mask |= (uint8_t)(1U << s_click_btn);
-    }
-    if (!s_ptr_active) {
-        nt_input_pointer_down(0, s_mx, s_my, 1.0F, (uint8_t)NT_POINTER_MOUSE, mask);
-        s_ptr_active = true;
-    } else {
-        nt_input_pointer_move(0, s_mx, s_my, 1.0F, (uint8_t)NT_POINTER_MOUSE, mask);
-    }
-    if (s_click == 1) {
-        s_click = 2;
-    } else if (s_click == 2) {
-        s_click = 0;
-    }
-    if (s_wheel_pending) {
-        nt_input_wheel(s_wheel_dx, s_wheel_dy);
-        s_wheel_dx = 0.0F;
-        s_wheel_dy = 0.0F;
-        s_wheel_pending = false;
-    }
 }
 
 static bool ep_ping(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
@@ -435,13 +511,29 @@ static const ui_element_t *find_ui_element(const char *id) {
 static cJSON *ui_element_json(const ui_element_t *element) {
     cJSON *obj = cJSON_CreateObject();
     cJSON_AddStringToObject(obj, "id", element->id);
+    cJSON_AddStringToObject(obj, "parent_id", element->parent_id);
+    cJSON_AddStringToObject(obj, "role", element->role);
     cJSON_AddStringToObject(obj, "label", element->label);
+    cJSON_AddStringToObject(obj, "text", element->text);
     cJSON_AddNumberToObject(obj, "x", (double)element->x);
     cJSON_AddNumberToObject(obj, "y", (double)element->y);
     cJSON_AddNumberToObject(obj, "w", (double)element->w);
     cJSON_AddNumberToObject(obj, "h", (double)element->h);
     cJSON_AddNumberToObject(obj, "center_x", (double)(element->x + (element->w * 0.5F)));
     cJSON_AddNumberToObject(obj, "center_y", (double)(element->y + (element->h * 0.5F)));
+    cJSON_AddBoolToObject(obj, "visible", element->visible);
+    cJSON_AddBoolToObject(obj, "enabled", element->enabled);
+    cJSON *bounds = cJSON_AddObjectToObject(obj, "bounds");
+    cJSON_AddNumberToObject(bounds, "x", (double)element->x);
+    cJSON_AddNumberToObject(bounds, "y", (double)element->y);
+    cJSON_AddNumberToObject(bounds, "w", (double)element->w);
+    cJSON_AddNumberToObject(bounds, "h", (double)element->h);
+    cJSON *children = cJSON_AddArrayToObject(obj, "children");
+    for (int i = 0; i < s_ui_element_count; i++) {
+        if (strcmp(s_ui_elements[i].parent_id, element->id) == 0) {
+            cJSON_AddItemToArray(children, cJSON_CreateString(s_ui_elements[i].id));
+        }
+    }
     return obj;
 }
 
@@ -485,9 +577,14 @@ static bool ep_ui_click(const cJSON *params, cJSON **result, char *error, int er
     if (!resolve_ui_point(params, &s_mx, &s_my, error, error_cap)) {
         return false;
     }
-    s_click_btn = button_from_name(param_string(params, "button", "left"));
-    s_click = 1;
-    s_ptr_engaged = true;
+    int frames = 0;
+    if (!clamp_frame_count(params, "frames", 1, GAME_DEVAPI_MAX_ACTION_FRAMES, &frames, error, error_cap)) {
+        return false;
+    }
+    if (!enqueue_mouse_click(s_mx, s_my, button_from_name(param_string(params, "button", "left")), frames)) {
+        set_error(error, error_cap, "pointer event queue full");
+        return false;
+    }
     *result = cJSON_CreateObject();
     return true;
 }
@@ -497,10 +594,10 @@ static bool ep_ui_scroll(const cJSON *params, cJSON **result, char *error, int e
     if (!resolve_ui_point(params, &s_mx, &s_my, error, error_cap)) {
         return false;
     }
-    s_ptr_engaged = true;
-    s_wheel_dx += (float)param_number(params, "dx", 0.0);
-    s_wheel_dy += (float)param_number(params, "dy", 0.0);
-    s_wheel_pending = true;
+    if (!enqueue_mouse_wheel(s_mx, s_my, (float)param_number(params, "dx", 0.0), (float)param_number(params, "dy", 0.0))) {
+        set_error(error, error_cap, "pointer event queue full");
+        return false;
+    }
     *result = cJSON_CreateObject();
     return true;
 }
@@ -528,17 +625,18 @@ static bool ep_ui_drag(const cJSON *params, cJSON **result, char *error, int err
         to_y += (float)param_number(params, "to_offset_y", 0.0);
     }
 
-    int frames = (int)param_number(params, "frames", 8.0);
-    if (frames < 1) {
-        frames = 1;
+    int frames = 0;
+    if (!clamp_frame_count(params, "frames", 8, GAME_DEVAPI_MAX_ACTION_FRAMES, &frames, error, error_cap)) {
+        return false;
+    }
+    if (!has_pointer_event_capacity(frames + 2)) {
+        set_error(error, error_cap, "pointer event queue full");
+        return false;
     }
     uint8_t btn = button_from_name(param_string(params, "button", "left"));
     uint8_t mask = button_mask(btn);
     pointer_event_t event = {.frame = s_frame, .kind = POINTER_EVENT_DOWN, .id = 0, .x = from_x, .y = from_y, .pointer_type = (uint8_t)NT_POINTER_MOUSE, .buttons_mask = mask};
-    if (!enqueue_pointer_event(&event)) {
-        set_error(error, error_cap, "pointer event queue full");
-        return false;
-    }
+    (void)enqueue_pointer_event(&event);
     for (int i = 1; i <= frames; i++) {
         float t = (float)i / (float)frames;
         event.frame = s_frame + (uint64_t)i;
@@ -546,18 +644,12 @@ static bool ep_ui_drag(const cJSON *params, cJSON **result, char *error, int err
         event.x = from_x + ((to_x - from_x) * t);
         event.y = from_y + ((to_y - from_y) * t);
         event.buttons_mask = mask;
-        if (!enqueue_pointer_event(&event)) {
-            set_error(error, error_cap, "pointer event queue full");
-            return false;
-        }
+        (void)enqueue_pointer_event(&event);
     }
     event.frame = s_frame + (uint64_t)frames + 1U;
     event.kind = POINTER_EVENT_UP;
     event.buttons_mask = 0;
-    if (!enqueue_pointer_event(&event)) {
-        set_error(error, error_cap, "pointer event queue full");
-        return false;
-    }
+    (void)enqueue_pointer_event(&event);
     *result = cJSON_CreateObject();
     return true;
 }
@@ -571,29 +663,31 @@ static bool ep_input_key(const cJSON *params, cJSON **result, char *error, int e
     }
     const char *mode = param_string(params, "mode", "tap");
     if (strcmp(mode, "down") == 0) {
-        s_held[key] = true;
         if (!enqueue_key_event(key, true, s_frame)) {
             set_error(error, error_cap, "key event queue full");
             return false;
         }
+        s_held[key] = true;
     } else if (strcmp(mode, "up") == 0) {
-        s_held[key] = false;
-        s_key_next_frame[key] = s_frame;
         if (!enqueue_key_event(key, false, s_frame)) {
             set_error(error, error_cap, "key event queue full");
             return false;
         }
+        s_held[key] = false;
+        s_key_next_frame[key] = s_frame;
     } else if (strcmp(mode, "tap") == 0) {
-        int hold_frames = (int)param_number(params, "hold_frames", 1.0);
-        if (hold_frames < 1) {
-            hold_frames = 1;
+        int hold_frames = 0;
+        if (!clamp_frame_count(params, "hold_frames", 1, GAME_DEVAPI_MAX_WAIT_FRAMES, &hold_frames, error, error_cap)) {
+            return false;
         }
-        uint64_t down_frame = s_key_next_frame[key] > s_frame ? s_key_next_frame[key] : s_frame;
-        uint64_t up_frame = down_frame + (uint64_t)hold_frames;
-        if (!enqueue_key_event(key, true, down_frame) || !enqueue_key_event(key, false, up_frame)) {
+        if (!has_key_event_capacity(2)) {
             set_error(error, error_cap, "key event queue full");
             return false;
         }
+        uint64_t down_frame = s_key_next_frame[key] > s_frame ? s_key_next_frame[key] : s_frame;
+        uint64_t up_frame = down_frame + (uint64_t)hold_frames;
+        (void)enqueue_key_event(key, true, down_frame);
+        (void)enqueue_key_event(key, false, up_frame);
         s_key_next_frame[key] = up_frame + 1U;
     } else {
         set_error(error, error_cap, "invalid key mode");
@@ -604,25 +698,29 @@ static bool ep_input_key(const cJSON *params, cJSON **result, char *error, int e
 }
 
 static bool ep_input_move(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
-    (void)error;
-    (void)error_cap;
     (void)user;
     s_mx = (float)param_number(params, "x", (double)s_mx);
     s_my = (float)param_number(params, "y", (double)s_my);
-    s_ptr_engaged = true;
+    if (!enqueue_mouse_move(s_mx, s_my, s_btn_mask)) {
+        set_error(error, error_cap, "pointer event queue full");
+        return false;
+    }
     *result = cJSON_CreateObject();
     return true;
 }
 
 static bool ep_input_click(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
-    (void)error;
-    (void)error_cap;
     (void)user;
     s_mx = (float)param_number(params, "x", (double)s_mx);
     s_my = (float)param_number(params, "y", (double)s_my);
-    s_click_btn = button_from_name(param_string(params, "button", "left"));
-    s_click = 1;
-    s_ptr_engaged = true;
+    int frames = 0;
+    if (!clamp_frame_count(params, "frames", 1, GAME_DEVAPI_MAX_ACTION_FRAMES, &frames, error, error_cap)) {
+        return false;
+    }
+    if (!enqueue_mouse_click(s_mx, s_my, button_from_name(param_string(params, "button", "left")), frames)) {
+        set_error(error, error_cap, "pointer event queue full");
+        return false;
+    }
     *result = cJSON_CreateObject();
     return true;
 }
@@ -661,15 +759,13 @@ static bool ep_input_pointer(const cJSON *params, cJSON **result, char *error, i
 }
 
 static bool ep_input_wheel(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
-    (void)error;
-    (void)error_cap;
     (void)user;
     s_mx = (float)param_number(params, "x", (double)(s_fb_w * 0.5F));
     s_my = (float)param_number(params, "y", (double)(s_fb_h * 0.5F));
-    s_ptr_engaged = true;
-    s_wheel_dx += (float)param_number(params, "dx", 0.0);
-    s_wheel_dy += (float)param_number(params, "dy", 0.0);
-    s_wheel_pending = true;
+    if (!enqueue_mouse_wheel(s_mx, s_my, (float)param_number(params, "dx", 0.0), (float)param_number(params, "dy", 0.0))) {
+        set_error(error, error_cap, "pointer event queue full");
+        return false;
+    }
     *result = cJSON_CreateObject();
     return true;
 }
@@ -680,12 +776,16 @@ static bool ep_input_gesture(const cJSON *params, cJSON **result, char *error, i
     uint32_t id = (uint32_t)param_number(params, "id", 0.0);
     uint8_t btn = button_from_name(param_string(params, "button", "left"));
     uint8_t mask = button_mask(btn);
-    int frames = (int)param_number(params, "frames", 1.0);
-    if (frames < 1) {
-        frames = 1;
+    int frames = 0;
+    if (!clamp_frame_count(params, "frames", 1, GAME_DEVAPI_MAX_ACTION_FRAMES, &frames, error, error_cap)) {
+        return false;
     }
 
     if (strcmp(type, "tap") == 0) {
+        if (!has_pointer_event_capacity(2)) {
+            set_error(error, error_cap, "pointer event queue full");
+            return false;
+        }
         float x = (float)param_number(params, "x", (double)(s_fb_w * 0.5F));
         float y = (float)param_number(params, "y", (double)(s_fb_h * 0.5F));
         pointer_event_t down = {.frame = s_frame, .kind = POINTER_EVENT_DOWN, .id = id, .x = x, .y = y, .pointer_type = (uint8_t)NT_POINTER_MOUSE, .buttons_mask = mask};
@@ -693,20 +793,19 @@ static bool ep_input_gesture(const cJSON *params, cJSON **result, char *error, i
         up.frame = s_frame + (uint64_t)frames;
         up.kind = POINTER_EVENT_UP;
         up.buttons_mask = 0;
-        if (!enqueue_pointer_event(&down) || !enqueue_pointer_event(&up)) {
+        (void)enqueue_pointer_event(&down);
+        (void)enqueue_pointer_event(&up);
+    } else if (strcmp(type, "drag") == 0) {
+        if (!has_pointer_event_capacity(frames + 2)) {
             set_error(error, error_cap, "pointer event queue full");
             return false;
         }
-    } else if (strcmp(type, "drag") == 0) {
         float from_x = (float)param_number(params, "from_x", (double)(s_fb_w * 0.5F));
         float from_y = (float)param_number(params, "from_y", (double)(s_fb_h * 0.5F));
         float to_x = (float)param_number(params, "to_x", (double)from_x);
         float to_y = (float)param_number(params, "to_y", (double)from_y);
         pointer_event_t event = {.frame = s_frame, .kind = POINTER_EVENT_DOWN, .id = id, .x = from_x, .y = from_y, .pointer_type = (uint8_t)NT_POINTER_MOUSE, .buttons_mask = mask};
-        if (!enqueue_pointer_event(&event)) {
-            set_error(error, error_cap, "pointer event queue full");
-            return false;
-        }
+        (void)enqueue_pointer_event(&event);
         for (int i = 1; i <= frames; i++) {
             float t = (float)i / (float)frames;
             event.frame = s_frame + (uint64_t)i;
@@ -714,19 +813,17 @@ static bool ep_input_gesture(const cJSON *params, cJSON **result, char *error, i
             event.x = from_x + ((to_x - from_x) * t);
             event.y = from_y + ((to_y - from_y) * t);
             event.buttons_mask = mask;
-            if (!enqueue_pointer_event(&event)) {
-                set_error(error, error_cap, "pointer event queue full");
-                return false;
-            }
+            (void)enqueue_pointer_event(&event);
         }
         event.frame = s_frame + (uint64_t)frames + 1U;
         event.kind = POINTER_EVENT_UP;
         event.buttons_mask = 0;
-        if (!enqueue_pointer_event(&event)) {
+        (void)enqueue_pointer_event(&event);
+    } else if (strcmp(type, "scroll") == 0) {
+        if (!has_pointer_event_capacity(1)) {
             set_error(error, error_cap, "pointer event queue full");
             return false;
         }
-    } else if (strcmp(type, "scroll") == 0) {
         pointer_event_t event = {
             .frame = s_frame,
             .kind = POINTER_EVENT_WHEEL,
@@ -738,10 +835,7 @@ static bool ep_input_gesture(const cJSON *params, cJSON **result, char *error, i
             .pointer_type = (uint8_t)NT_POINTER_MOUSE,
             .buttons_mask = 0,
         };
-        if (!enqueue_pointer_event(&event)) {
-            set_error(error, error_cap, "pointer event queue full");
-            return false;
-        }
+        (void)enqueue_pointer_event(&event);
     } else {
         set_error(error, error_cap, "invalid gesture type");
         return false;
@@ -755,7 +849,7 @@ static bool ep_input_button(const cJSON *params, cJSON **result, char *error, in
     (void)user;
     uint8_t btn = button_from_name(param_string(params, "button", "left"));
     const char *state = param_string(params, "state", "down");
-    uint8_t bit = (uint8_t)(1U << btn);
+    uint8_t bit = button_mask(btn);
     if (strcmp(state, "down") == 0) {
         s_btn_mask |= bit;
     } else if (strcmp(state, "up") == 0) {
@@ -764,7 +858,10 @@ static bool ep_input_button(const cJSON *params, cJSON **result, char *error, in
         set_error(error, error_cap, "invalid button state");
         return false;
     }
-    s_ptr_engaged = true;
+    if (!enqueue_mouse_move(s_mx, s_my, s_btn_mask)) {
+        set_error(error, error_cap, "pointer event queue full");
+        return false;
+    }
     *result = cJSON_CreateObject();
     return true;
 }
@@ -862,7 +959,26 @@ static cJSON *dispatch_request_now(const cJSON *request) {
 }
 
 static int write_error_response(const char *message, char *out, int out_cap) {
-    return snprintf(out, (size_t)out_cap, "{\"ok\":false,\"error\":\"%s\"}", message);
+    cJSON *response = cJSON_CreateObject();
+    if (!response) {
+        return snprintf(out, (size_t)out_cap, "{\"ok\":false,\"error\":\"allocation failed\"}");
+    }
+    cJSON_AddBoolToObject(response, "ok", false);
+    cJSON_AddStringToObject(response, "error", message);
+    char *printed = cJSON_PrintUnformatted(response);
+    cJSON_Delete(response);
+    if (!printed) {
+        return snprintf(out, (size_t)out_cap, "{\"ok\":false,\"error\":\"print failed\"}");
+    }
+    int len = (int)strlen(printed);
+    if (len >= out_cap) {
+        cJSON_free(printed);
+        return snprintf(out, (size_t)out_cap, "{\"ok\":false,\"error\":\"response too large\"}");
+    }
+    memcpy(out, printed, (size_t)len);
+    out[len] = '\0';
+    cJSON_free(printed);
+    return len;
 }
 
 static void free_group(request_group_t *group) {
@@ -890,7 +1006,7 @@ static bool append_group_response(request_group_t *group, cJSON *response) {
 
 static char *dup_cstr(const char *s) {
     size_t len = strlen(s) + 1U;
-    char *copy = (char *)malloc(len);
+    char *copy = (char *)cJSON_malloc(len);
     if (copy) {
         memcpy(copy, s, len);
     }
@@ -899,7 +1015,6 @@ static char *dup_cstr(const char *s) {
 
 static bool push_ready_response(cJSON *response) {
     if (s_ready_count >= GAME_DEVAPI_MAX_READY_RESPONSES) {
-        cJSON_Delete(response);
         return false;
     }
     char *printed = cJSON_PrintUnformatted(response);
@@ -950,6 +1065,11 @@ static bool process_frame_wait(request_group_t *group, const cJSON *request) {
             group->request_index++;
             return true;
         }
+        if (frames_value > (double)GAME_DEVAPI_MAX_WAIT_FRAMES) {
+            append_group_response(group, make_error_response(request, "frames too large"));
+            group->request_index++;
+            return true;
+        }
         group->wait_until_frame = s_frame + (uint64_t)frames_value;
         group->waiting = true;
     }
@@ -983,7 +1103,10 @@ static void process_groups(void) {
         if (!response) {
             response = group->is_batch ? cJSON_CreateArray() : make_error_response(NULL, "empty request");
         }
-        (void)push_ready_response(response);
+        if (!push_ready_response(response)) {
+            group->response = response;
+            return;
+        }
         free_group(group);
         s_group_head = (s_group_head + 1) % GAME_DEVAPI_MAX_GROUPS;
         s_group_count--;
@@ -1061,6 +1184,22 @@ int nt_devapi_poll_response(char *out, int out_cap) {
     return pop_ready_response(out, out_cap);
 }
 
+void nt_devapi_cancel_pending(void) {
+    for (int i = 0; i < GAME_DEVAPI_MAX_GROUPS; i++) {
+        free_group(&s_groups[i]);
+    }
+    for (int i = 0; i < GAME_DEVAPI_MAX_READY_RESPONSES; i++) {
+        if (s_ready_responses[i]) {
+            cJSON_free(s_ready_responses[i]);
+            s_ready_responses[i] = NULL;
+        }
+    }
+    s_group_head = 0;
+    s_group_count = 0;
+    s_ready_head = 0;
+    s_ready_count = 0;
+}
+
 void nt_devapi_init(void) {
     s_ep_count = 0;
     s_frame = 0;
@@ -1068,13 +1207,9 @@ void nt_devapi_init(void) {
     memset(s_key_next_frame, 0, sizeof(s_key_next_frame));
     s_key_event_count = 0;
     s_pointer_event_count = 0;
+    s_mx = 0.0F;
+    s_my = 0.0F;
     s_btn_mask = 0;
-    s_click = 0;
-    s_ptr_engaged = false;
-    s_ptr_active = false;
-    s_wheel_pending = false;
-    s_wheel_dx = 0.0F;
-    s_wheel_dy = 0.0F;
     memset(s_groups, 0, sizeof(s_groups));
     s_group_head = 0;
     s_group_count = 0;

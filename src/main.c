@@ -33,6 +33,18 @@
 #define ZOOM_SPEED 0.01F
 #define FOV_DEG 70.0F
 #define VEL_THRESHOLD 0.0001F
+#define TEST_UI_X 24.0F
+#define TEST_UI_Y 24.0F
+#define TEST_UI_W 260.0F
+#define TEST_UI_H 116.0F
+#define TEST_UI_LABEL_X 40.0F
+#define TEST_UI_LABEL_Y 42.0F
+#define TEST_UI_LABEL_W 228.0F
+#define TEST_UI_LABEL_H 28.0F
+#define TEST_UI_BUTTON_X 40.0F
+#define TEST_UI_BUTTON_Y 80.0F
+#define TEST_UI_BUTTON_W 168.0F
+#define TEST_UI_BUTTON_H 42.0F
 
 enum { SHAPE_CUBE = 0, SHAPE_SPHERE, SHAPE_CYLINDER, SHAPE_CAPSULE, SHAPE_COUNT };
 enum { MODE_SOLID_WIRE = 0, MODE_SOLID, MODE_WIRE, MODE_COUNT };
@@ -44,6 +56,9 @@ static float s_cam_dist = 6.0F;
 static int s_current_shape;
 static int s_render_mode;
 static bool s_grabbed;
+static int s_test_ui_clicks;
+static char s_test_label_text[64] = "Label: waiting";
+static char s_test_button_text[64] = "Click me";
 #ifndef NT_PLATFORM_WEB
 static bool s_devapi_started;
 #endif
@@ -107,6 +122,9 @@ static bool ep_game_state(const cJSON *params, cJSON **result, char *error, int 
     cJSON_AddStringToObject(obj, "render_mode", render_mode_name(s_render_mode));
     cJSON_AddNumberToObject(obj, "camera_distance", (double)s_cam_dist);
     cJSON_AddBoolToObject(obj, "grabbed", s_grabbed);
+    cJSON_AddStringToObject(obj, "test_label_text", s_test_label_text);
+    cJSON_AddStringToObject(obj, "test_button_text", s_test_button_text);
+    cJSON_AddNumberToObject(obj, "test_ui_clicks", s_test_ui_clicks);
     cJSON_AddNumberToObject(obj, "time", (double)g_nt_app.time);
     cJSON_AddNumberToObject(obj, "frame", (double)g_nt_app.frame);
 
@@ -276,17 +294,41 @@ static void set_shape_color(void) {
     nt_drawable_comp_set_color(s_shape_entity, src[0], src[1], src[2], src[3]);
 }
 
+static bool point_in_rect(float px, float py, float x, float y, float w, float h) { return px >= x && px <= x + w && py >= y && py <= y + h; }
+
+static void register_test_ui(void) {
+    nt_devapi_register_ui_element("scene.viewport", "Scene viewport", 0.0F, 0.0F, (float)g_nt_window.fb_width, (float)g_nt_window.fb_height);
+    nt_devapi_register_ui_node("test.ui", "", "panel", "Test UI", "", TEST_UI_X, TEST_UI_Y, TEST_UI_W, TEST_UI_H, true, true);
+    nt_devapi_register_ui_node("test.label", "test.ui", "label", "Test Label", s_test_label_text, TEST_UI_LABEL_X, TEST_UI_LABEL_Y, TEST_UI_LABEL_W, TEST_UI_LABEL_H, true, false);
+    nt_devapi_register_ui_node("test.button", "test.ui", "button", "Test Button", s_test_button_text, TEST_UI_BUTTON_X, TEST_UI_BUTTON_Y, TEST_UI_BUTTON_W, TEST_UI_BUTTON_H, true, true);
+}
+
+static void update_test_ui_interaction(void) {
+    if (!nt_input_mouse_is_pressed(NT_BUTTON_LEFT)) {
+        return;
+    }
+    const float px = g_nt_input.pointers[0].x;
+    const float py = g_nt_input.pointers[0].y;
+    if (!point_in_rect(px, py, TEST_UI_BUTTON_X, TEST_UI_BUTTON_Y, TEST_UI_BUTTON_W, TEST_UI_BUTTON_H)) {
+        return;
+    }
+    s_test_ui_clicks++;
+    (void)snprintf(s_test_label_text, sizeof(s_test_label_text), "Label: clicked %d", s_test_ui_clicks);
+    (void)snprintf(s_test_button_text, sizeof(s_test_button_text), "Clicked %d", s_test_ui_clicks);
+}
+
 static void frame(void) {
     nt_window_poll();
     nt_input_poll();
     nt_devapi_set_frame(g_nt_app.frame);
     nt_devapi_set_view((float)g_nt_window.fb_width, (float)g_nt_window.fb_height, (float)g_nt_window.width, (float)g_nt_window.height);
     nt_devapi_clear_ui_elements();
-    nt_devapi_register_ui_element("scene.viewport", "Scene viewport", 0.0F, 0.0F, (float)g_nt_window.fb_width, (float)g_nt_window.fb_height);
+    register_test_ui();
     nt_devapi_net_poll();
     nt_devapi_apply_pending();
 
     float dt = g_nt_app.dt;
+    update_test_ui_interaction();
 
     if (nt_input_key_is_pressed(NT_KEY_A)) {
         s_current_shape = (s_current_shape + SHAPE_COUNT - 1) % SHAPE_COUNT;

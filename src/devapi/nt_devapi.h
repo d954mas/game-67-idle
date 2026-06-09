@@ -39,11 +39,13 @@ void nt_devapi_shutdown(void);
 bool nt_devapi_register(const char *name, nt_devapi_handler_fn fn, void *user);
 int nt_devapi_submit(const char *line, char *out, int out_cap);
 int nt_devapi_poll_response(char *out, int out_cap);
+void nt_devapi_cancel_pending(void);
 
 void nt_devapi_set_frame(uint64_t frame);
 void nt_devapi_set_view(float fb_w, float fb_h, float logical_w, float logical_h);
 void nt_devapi_clear_ui_elements(void);
 bool nt_devapi_register_ui_element(const char *id, const char *label, float x, float y, float w, float h);
+bool nt_devapi_register_ui_node(const char *id, const char *parent_id, const char *role, const char *label, const char *text, float x, float y, float w, float h, bool visible, bool enabled);
 void nt_devapi_register_builtins(void);
 
 /* Call after nt_input_poll() and after nt_devapi_net_poll(). */
@@ -74,6 +76,7 @@ static inline int nt_devapi_poll_response(char *out, int out_cap) {
     (void)out_cap;
     return 0;
 }
+static inline void nt_devapi_cancel_pending(void) {}
 static inline void nt_devapi_set_frame(uint64_t frame) { (void)frame; }
 static inline void nt_devapi_set_view(float fb_w, float fb_h, float logical_w, float logical_h) {
     (void)fb_w;
@@ -89,6 +92,20 @@ static inline bool nt_devapi_register_ui_element(const char *id, const char *lab
     (void)y;
     (void)w;
     (void)h;
+    return false;
+}
+static inline bool nt_devapi_register_ui_node(const char *id, const char *parent_id, const char *role, const char *label, const char *text, float x, float y, float w, float h, bool visible, bool enabled) {
+    (void)id;
+    (void)parent_id;
+    (void)role;
+    (void)label;
+    (void)text;
+    (void)x;
+    (void)y;
+    (void)w;
+    (void)h;
+    (void)visible;
+    (void)enabled;
     return false;
 }
 static inline void nt_devapi_register_builtins(void) {}
