@@ -1,0 +1,226 @@
+{
+  "version": "0.1",
+  "scope": "P0 GDD risks before real web/mobile playtest",
+  "risks": [
+    {
+      "id": "r_67_not_understood",
+      "severity": "high",
+      "owner": "design",
+      "statement": "Children 5-7 may not understand X/67 as the main progress without explanation.",
+      "detection": [
+        "first understood goal is not 67",
+        "child cannot explain 67 as funny power rank after session",
+        "confusion_count increases around top label"
+      ],
+      "mitigation": [
+        "keep X/67 above hero always visible",
+        "show 67/67 -> 1/67 intro",
+        "use first status-up animation at 2/67",
+        "ask post-session question from playtest_script.md"
+      ],
+      "sourceDocs": [
+        "open_questions.md",
+        "data/ui_flow.json",
+        "playtest_script.md",
+        "mobile_web_ux_spec.md"
+      ],
+      "gateRefs": [
+        "Gate 3. Mobile UX",
+        "Gate 4. First 5 Minutes",
+        "Gate 9.1. Playtest Matrix"
+      ]
+    },
+    {
+      "id": "r_67_gesture_not_readable",
+      "severity": "high",
+      "owner": "art_ui",
+      "statement": "67 gesture may be treated as a random click animation instead of the core meme action.",
+      "detection": [
+        "child does not repeat or notice gesture",
+        "first_click screenshot does not show hands clearly",
+        "player reaches progress through idle/deals but ignores main action"
+      ],
+      "mitigation": [
+        "make Сделать 67 the largest action",
+        "attach first_click screenshot state to main screen",
+        "reuse gesture in status-up, events and mini-final",
+        "validate asset coverage for hands_seesaw_67"
+      ],
+      "sourceDocs": [
+        "data/ui_flow.json",
+        "data/asset_manifest.json",
+        "visual_contract.md",
+        "prototype_mvp_spec.md"
+      ],
+      "gateRefs": [
+        "Gate 1. Scope Lock",
+        "Gate 3. Mobile UX",
+        "Gate 4. First 5 Minutes"
+      ]
+    },
+    {
+      "id": "r_deals_read_as_child_labor",
+      "severity": "high",
+      "owner": "content",
+      "statement": "Дела/jobs may read as child labor if labels or scenes become too realistic.",
+      "detection": [
+        "parent content concern mentions work/labor",
+        "player-facing UI uses Работа or Смена",
+        "deal scenes imply adult job pressure"
+      ],
+      "mitigation": [
+        "use player-facing label Дела",
+        "keep tasks playful and short",
+        "forbidden copy validator blocks risky words",
+        "parent note explains safe framing"
+      ],
+      "sourceDocs": [
+        "p0_ui_copy.md",
+        "content_matrix.md",
+        "parent_playtest_note.md",
+        "tools/validate_copy.mjs"
+      ],
+      "gateRefs": [
+        "Gate 8. Child-Safe Content",
+        "Gate 9. Store/Web Readiness"
+      ]
+    },
+    {
+      "id": "r_0600_tone_too_anxious",
+      "severity": "medium",
+      "owner": "content",
+      "statement": "06:00/night light meme may read as anxious or adult drama instead of harmless meme.",
+      "detection": [
+        "parent concern flags night/alarm tone",
+        "child describes event as scary",
+        "event modal body feels too long or dramatic"
+      ],
+      "mitigation": [
+        "frame as Ночник 06:00",
+        "keep modal body under 2 short lines",
+        "avoid ночевка, бедность, кризис",
+        "use visible safe reward after choice"
+      ],
+      "sourceDocs": [
+        "data/balance.json",
+        "content_matrix.md",
+        "compliance_checklist.md",
+        "playtest_script.md"
+      ],
+      "gateRefs": [
+        "Gate 8. Child-Safe Content",
+        "Gate 9.1. Playtest Matrix"
+      ]
+    },
+    {
+      "id": "r_low_engagement_stalls",
+      "severity": "high",
+      "owner": "balance",
+      "statement": "Low-engagement players may stall below meaningful progress and leave before understanding the loop.",
+      "detection": [
+        "low-engagement sim reaches below 10/67",
+        "no affordable action for more than 90 seconds",
+        "child stops interacting for 20 seconds"
+      ],
+      "mitigation": [
+        "keep first purchase <= 30 seconds",
+        "keep first status-up <= 90 seconds",
+        "use nextGoalTemplates after every purchase",
+        "simulate active and low-engagement routes"
+      ],
+      "sourceDocs": [
+        "data/balance.json",
+        "tools/simulate_balance.mjs",
+        "runtime_test_plan.md",
+        "playtest_acceptance_gates.md"
+      ],
+      "gateRefs": [
+        "Gate 2. Balance",
+        "Gate 4. First 5 Minutes",
+        "Gate 5. Full 30-Minute Route"
+      ]
+    },
+    {
+      "id": "r_locked_cards_confuse",
+      "severity": "medium",
+      "owner": "ui",
+      "statement": "Locked cards may show too many requirements and make the next action unclear.",
+      "detection": [
+        "child taps locked/irrelevant UI 5+ times",
+        "locked card shows multiple conditions",
+        "player asks what to do"
+      ],
+      "mitigation": [
+        "use requirementPriority",
+        "use lockedHints",
+        "show one next step only",
+        "place training shortcut near locked deal"
+      ],
+      "sourceDocs": [
+        "data/balance.json",
+        "data/ui_flow.json",
+        "mobile_web_ux_spec.md",
+        "playtest_script.md"
+      ],
+      "gateRefs": [
+        "Gate 3. Mobile UX",
+        "Gate 4. First 5 Minutes"
+      ]
+    },
+    {
+      "id": "r_privacy_release_mode_misconfigured",
+      "severity": "critical",
+      "owner": "release",
+      "statement": "External child test may accidentally run with analytics, links or SDKs enabled before review.",
+      "detection": [
+        "analyticsEnabled true by default",
+        "unknown SDK inventory",
+        "hosting logs unreviewed",
+        "parent note missing"
+      ],
+      "mitigation": [
+        "release_readiness requires safe flags",
+        "analytics_events forbids personal payload fields",
+        "parent note attached before invite",
+        "validate_release_readiness before sharing link"
+      ],
+      "sourceDocs": [
+        "data/release_readiness.json",
+        "data/analytics_events.json",
+        "parent_playtest_note.md",
+        "compliance_checklist.md"
+      ],
+      "gateRefs": [
+        "Gate 7. Analytics",
+        "Gate 9. Store/Web Readiness",
+        "Gate 10. Go / No-Go"
+      ]
+    },
+    {
+      "id": "r_fake_shots_not_replaced",
+      "severity": "medium",
+      "owner": "qa",
+      "statement": "Fake shots may be mistaken for runtime evidence if real build screenshots are not captured before playtest.",
+      "detection": [
+        "no tmp screenshots for target viewports",
+        "runtime_test_plan evidence missing",
+        "fakeshots.html still treated as final proof"
+      ],
+      "mitigation": [
+        "store temporary audit screenshots in tmp",
+        "replace fake shots with real screenshots after runtime prototype",
+        "Gate 9 requires screenshots before wider playtest"
+      ],
+      "sourceDocs": [
+        "fakeshots.html",
+        "runtime_test_plan.md",
+        "open_questions.md",
+        "data/ui_flow.json"
+      ],
+      "gateRefs": [
+        "Gate 3. Mobile UX",
+        "Gate 9. Store/Web Readiness"
+      ]
+    }
+  ]
+}

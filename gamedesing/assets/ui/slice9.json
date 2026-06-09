@@ -1,0 +1,135 @@
+{
+  "version": "0.1",
+  "assets": {
+    "ui_button_primary_9s.png": {
+      "component": "button",
+      "file": "assets/ui/ui_button_primary_9s.png",
+      "width": 192,
+      "height": 96,
+      "border": 24,
+      "insets": {
+        "left": 24,
+        "right": 24,
+        "top": 24,
+        "bottom": 24
+      }
+    },
+    "ui_button_secondary_9s.png": {
+      "component": "button",
+      "file": "assets/ui/ui_button_secondary_9s.png",
+      "width": 192,
+      "height": 96,
+      "border": 24,
+      "insets": {
+        "left": 24,
+        "right": 24,
+        "top": 24,
+        "bottom": 24
+      }
+    },
+    "ui_panel_dark_9s.png": {
+      "component": "panel",
+      "file": "assets/ui/ui_panel_dark_9s.png",
+      "width": 256,
+      "height": 256,
+      "border": 32,
+      "insets": {
+        "left": 32,
+        "right": 32,
+        "top": 32,
+        "bottom": 32
+      }
+    },
+    "ui_card_default_9s.png": {
+      "component": "card",
+      "file": "assets/ui/ui_card_default_9s.png",
+      "width": 256,
+      "height": 160,
+      "border": 28,
+      "insets": {
+        "left": 28,
+        "right": 28,
+        "top": 28,
+        "bottom": 28
+      }
+    },
+    "ui_card_locked_9s.png": {
+      "component": "card",
+      "file": "assets/ui/ui_card_locked_9s.png",
+      "width": 256,
+      "height": 160,
+      "border": 28,
+      "insets": {
+        "left": 28,
+        "right": 28,
+        "top": 28,
+        "bottom": 28
+      }
+    },
+    "ui_modal_9s.png": {
+      "component": "modal",
+      "file": "assets/ui/ui_modal_9s.png",
+      "width": 320,
+      "height": 240,
+      "border": 36,
+      "insets": {
+        "left": 36,
+        "right": 36,
+        "top": 36,
+        "bottom": 36
+      }
+    },
+    "ui_badge_power_9s.png": {
+      "component": "badge",
+      "file": "assets/ui/ui_badge_power_9s.png",
+      "width": 160,
+      "height": 88,
+      "border": 24,
+      "insets": {
+        "left": 24,
+        "right": 24,
+        "top": 24,
+        "bottom": 24
+      }
+    },
+    "ui_pill_resource_9s.png": {
+      "component": "pill",
+      "file": "assets/ui/ui_pill_resource_9s.png",
+      "width": 160,
+      "height": 72,
+      "border": 22,
+      "insets": {
+        "left": 22,
+        "right": 22,
+        "top": 22,
+        "bottom": 22
+      }
+    },
+    "ui_tab_9s.png": {
+      "component": "tab",
+      "file": "assets/ui/ui_tab_9s.png",
+      "width": 128,
+      "height": 80,
+      "border": 22,
+      "insets": {
+        "left": 22,
+        "right": 22,
+        "top": 22,
+        "bottom": 22
+      }
+    },
+    "ui_progress_frame_9s.png": {
+      "component": "progress",
+      "file": "assets/ui/ui_progress_frame_9s.png",
+      "width": 256,
+      "height": 40,
+      "border": 16,
+      "insets": {
+        "left": 16,
+        "right": 16,
+        "top": 16,
+        "bottom": 16
+      }
+    }
+  }
+}

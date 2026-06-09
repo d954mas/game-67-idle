@@ -1,0 +1,373 @@
+{
+  "version": "0.1",
+  "layoutTargets": [
+    "360x640",
+    "390x844",
+    "desktop_portrait_frame"
+  ],
+  "globalRules": {
+    "mobileFirst": true,
+    "primaryActionMinHeightPx": 72,
+    "bottomTabMinHeightPx": 56,
+    "cardTapTargetMinPx": 48,
+    "minCriticalTextPx": 13,
+    "maxPlayerFacingLineChars": 42,
+    "analyticsEventOnTabOpen": "tab_opened",
+    "noHoverOnlyInteractions": true
+  },
+  "tabs": [
+    {
+      "id": "city",
+      "label": "Город",
+      "screenId": "city"
+    },
+    {
+      "id": "deals",
+      "label": "Дела",
+      "screenId": "deals"
+    },
+    {
+      "id": "upgrades",
+      "label": "Улучшения",
+      "screenId": "upgrades"
+    },
+    {
+      "id": "home",
+      "label": "Дом",
+      "screenId": "home"
+    }
+  ],
+  "flow": [
+    {
+      "from": "intro",
+      "to": "main",
+      "trigger": "intro_complete_or_skip"
+    },
+    {
+      "from": "main",
+      "to": "city",
+      "trigger": "open_tab_city"
+    },
+    {
+      "from": "main",
+      "to": "deals",
+      "trigger": "open_tab_deals"
+    },
+    {
+      "from": "main",
+      "to": "upgrades",
+      "trigger": "open_tab_upgrades"
+    },
+    {
+      "from": "main",
+      "to": "home",
+      "trigger": "open_tab_home"
+    },
+    {
+      "from": "city",
+      "to": "deals",
+      "trigger": "district_deep_link"
+    },
+    {
+      "from": "any",
+      "to": "event_modal",
+      "trigger": "triggerEvent_effect"
+    },
+    {
+      "from": "any",
+      "to": "offline_modal",
+      "trigger": "offline_reward_available"
+    },
+    {
+      "from": "event_modal",
+      "to": "mini_final",
+      "trigger": "finalReady_true_and_status_15"
+    }
+  ],
+  "screens": [
+    {
+      "id": "intro",
+      "kind": "overlay",
+      "requiredComponents": [
+        "67_to_1_transition",
+        "banana_strawberry_podstava",
+        "skip_after_2_seconds"
+      ],
+      "playerActions": [
+        {
+          "id": "skip_intro",
+          "label": "Пропустить",
+          "analyticsEvent": "intro_seen"
+        }
+      ],
+      "acceptance": [
+        "shows 67/67 -> 1/67",
+        "max 2 short text lines",
+        "ends with pulsing Сделать 67"
+      ]
+    },
+    {
+      "id": "main",
+      "kind": "base",
+      "requiredComponents": [
+        "top_stats_bar",
+        "power_label_above_hero",
+        "hero_stage",
+        "reaction_bubble",
+        "big_do_67_button",
+        "next_goal_card",
+        "active_deal_timer_if_any",
+        "bottom_tabs"
+      ],
+      "playerActions": [
+        {
+          "id": "do67",
+          "label": "Сделать 67",
+          "balanceActivityId": "do_67",
+          "analyticsEvent": "activity_used"
+        },
+        {
+          "id": "open_tab",
+          "label": "Открыть вкладку",
+          "analyticsEvent": "tab_opened"
+        }
+      ],
+      "acceptance": [
+        "first click possible within 5 seconds",
+        "primary action remains usable while deal timer runs",
+        "first affordable upgrade highlighted at 5 memeCoins"
+      ],
+      "screenshotId": "first_screen",
+      "states": [
+        {
+          "id": "first_click",
+          "trigger": "do67_first_time",
+          "requiredComponents": [
+            "hands_67_gesture",
+            "plus_one_coin_pop",
+            "banana_reaction"
+          ],
+          "screenshotId": "first_click"
+        },
+        {
+          "id": "status_up",
+          "trigger": "status_changed_to_2",
+          "requiredComponents": [
+            "power_label_2_67",
+            "cap_visible_on_hero",
+            "status_flash_67"
+          ],
+          "screenshotId": "status_up"
+        }
+      ]
+    },
+    {
+      "id": "city",
+      "kind": "tab",
+      "requiredComponents": [
+        "district_grid",
+        "one_lock_reason_per_locked_district",
+        "district_scene_thumbnail",
+        "deal_deep_link"
+      ],
+      "rendersBalanceCollections": [
+        "cityDistricts"
+      ],
+      "playerActions": [
+        {
+          "id": "open_deal_from_district",
+          "label": "К делу",
+          "targetScreen": "deals",
+          "analyticsEvent": "tab_opened"
+        }
+      ],
+      "acceptance": [
+        "4 district cards are visible",
+        "locked card shows exactly one next step",
+        "unlocked district links to relevant deal/training"
+      ],
+      "screenshotId": "city_map"
+    },
+    {
+      "id": "deals",
+      "kind": "tab",
+      "requiredComponents": [
+        "active_deal_timer_pinned",
+        "available_deals",
+        "locked_deals",
+        "training_shortcuts",
+        "claim_reward_button"
+      ],
+      "rendersBalanceCollections": [
+        "jobs",
+        "training"
+      ],
+      "playerActions": [
+        {
+          "id": "start_job",
+          "label": "Начать дело",
+          "analyticsEvent": "job_started"
+        },
+        {
+          "id": "claim_job",
+          "label": "Забрать награду",
+          "analyticsEvent": "job_completed"
+        },
+        {
+          "id": "start_training",
+          "label": "Прокачать навык"
+        }
+      ],
+      "acceptance": [
+        "only one active deal in P0",
+        "timer remains visible",
+        "reward visibly flies into meme-coins"
+      ],
+      "screenshotId": "deals_timer"
+    },
+    {
+      "id": "upgrades",
+      "kind": "tab",
+      "requiredComponents": [
+        "affordable_first_list",
+        "locked_below",
+        "cost_label",
+        "one_line_effect",
+        "67_badge_for_status_up"
+      ],
+      "rendersBalanceCollections": [
+        "upgrades"
+      ],
+      "playerActions": [
+        {
+          "id": "buy_upgrade",
+          "label": "Купить",
+          "analyticsEvent": "upgrade_bought"
+        }
+      ],
+      "acceptance": [
+        "every card has cost and visibleResult",
+        "status-up plays X/67 animation",
+        "newly affordable card pulses once"
+      ],
+      "screenshotId": "first_purchase"
+    },
+    {
+      "id": "home",
+      "kind": "tab",
+      "requiredComponents": [
+        "current_home_visual",
+        "current_transport_visual",
+        "housing_cards",
+        "transport_cards",
+        "post_mvp_car_lock"
+      ],
+      "rendersBalanceCollections": [
+        "housing",
+        "transport"
+      ],
+      "playerActions": [
+        {
+          "id": "buy_housing",
+          "label": "Улучшить дом"
+        },
+        {
+          "id": "buy_transport",
+          "label": "Взять транспорт"
+        }
+      ],
+      "acceptance": [
+        "home growth is visible in top half",
+        "67-тачка does not increase P0 status",
+        "post-MVP dream appears only after mini-final"
+      ],
+      "screenshotId": "home_growth"
+    },
+    {
+      "id": "event_modal",
+      "kind": "modal",
+      "requiredComponents": [
+        "event_title",
+        "short_body",
+        "two_choice_buttons",
+        "visible_choice_reward"
+      ],
+      "rendersBalanceCollections": [
+        "events"
+      ],
+      "playerActions": [
+        {
+          "id": "choose_event",
+          "label": "Выбрать",
+          "analyticsEvent": "event_choice"
+        }
+      ],
+      "acceptance": [
+        "background clicking is paused",
+        "close only after choice",
+        "every choice gives visible reward"
+      ],
+      "screenshotId": "event"
+    },
+    {
+      "id": "offline_modal",
+      "kind": "modal",
+      "requiredComponents": [
+        "offline_reward_summary",
+        "claim_reward_button",
+        "cap_30_min_note"
+      ],
+      "playerActions": [
+        {
+          "id": "claim_offline",
+          "label": "Забрать"
+        }
+      ],
+      "acceptance": [
+        "appears once on return",
+        "offline cap is 30 minutes",
+        "offline cannot trigger final completion"
+      ]
+    },
+    {
+      "id": "mini_final",
+      "kind": "modal",
+      "requiredComponents": [
+        "hero_15_67",
+        "team_67_shared_gesture",
+        "banana_reaction",
+        "future_67_67_goal",
+        "play_more_button",
+        "reset_for_playtest_button"
+      ],
+      "playerActions": [
+        {
+          "id": "play_more",
+          "label": "Играть дальше"
+        },
+        {
+          "id": "reset_for_playtest",
+          "label": "Сбросить для теста",
+          "analyticsEvent": "session_end"
+        }
+      ],
+      "acceptance": [
+        "triggers only after final event path",
+        "shows dream 67/67",
+        "reset remains available for repeated tests"
+      ],
+      "screenshotId": "mini_final"
+    }
+  ],
+  "requiredScreenshotIds": [
+    "first_screen",
+    "first_click",
+    "first_purchase",
+    "status_up",
+    "city_map",
+    "deals_timer",
+    "event",
+    "home_growth",
+    "mini_final"
+  ]
+}

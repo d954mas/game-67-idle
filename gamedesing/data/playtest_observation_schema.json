@@ -1,0 +1,216 @@
+{
+  "version": "0.1",
+  "scope": "Manual observation log for supervised P0 playtest",
+  "privacy": {
+    "doNotCollect": [
+      "child_name",
+      "exact_age",
+      "email",
+      "phone",
+      "address",
+      "geolocation",
+      "photo",
+      "audio",
+      "video",
+      "free_text_from_child"
+    ],
+    "groupOnly": [
+      "age_group_5_7",
+      "age_group_8_10"
+    ]
+  },
+  "fields": [
+    {
+      "id": "session_id",
+      "type": "string",
+      "required": true,
+      "description": "Anonymous test session id."
+    },
+    {
+      "id": "build",
+      "type": "string",
+      "required": true,
+      "description": "Prototype build version."
+    },
+    {
+      "id": "device",
+      "type": "enum",
+      "required": true,
+      "values": [
+        "web_360x640",
+        "web_390x844",
+        "desktop_portrait_frame",
+        "mobile_store_internal"
+      ]
+    },
+    {
+      "id": "age_group",
+      "type": "enum",
+      "required": true,
+      "values": [
+        "5_7",
+        "8_10"
+      ]
+    },
+    {
+      "id": "guardian_present",
+      "type": "boolean",
+      "required": true
+    },
+    {
+      "id": "analytics_enabled",
+      "type": "boolean",
+      "required": true,
+      "expectedDefault": false
+    },
+    {
+      "id": "first_click_seconds",
+      "type": "number",
+      "required": true,
+      "targetMax": 10
+    },
+    {
+      "id": "first_clicked_element",
+      "type": "string",
+      "required": true,
+      "allowedExamples": [
+        "do67_button",
+        "bottom_tab_city",
+        "upgrade_card",
+        "locked_card",
+        "other"
+      ]
+    },
+    {
+      "id": "first_purchase_seconds",
+      "type": "number",
+      "required": true,
+      "targetMax": 30
+    },
+    {
+      "id": "first_status_up_seconds",
+      "type": "number",
+      "required": true,
+      "targetMax": 90
+    },
+    {
+      "id": "confusion_count",
+      "type": "number",
+      "required": true,
+      "targetMax": 2
+    },
+    {
+      "id": "reached_status",
+      "type": "number",
+      "required": true,
+      "targetMinActive": 15,
+      "targetMinLowEngagement": 10
+    },
+    {
+      "id": "final_reached",
+      "type": "boolean",
+      "required": true
+    },
+    {
+      "id": "understood_67",
+      "type": "boolean",
+      "required": true,
+      "description": "Moderator marks true if child can explain 67 as funny power rank."
+    },
+    {
+      "id": "noticed_67_gesture",
+      "type": "boolean",
+      "required": true
+    },
+    {
+      "id": "used_deals",
+      "type": "boolean",
+      "required": true
+    },
+    {
+      "id": "parent_concern_category",
+      "type": "enum",
+      "required": true,
+      "values": [
+        "none",
+        "privacy",
+        "tone",
+        "work_framing",
+        "readability",
+        "other"
+      ]
+    },
+    {
+      "id": "best_reaction_category",
+      "type": "enum",
+      "required": true,
+      "values": [
+        "67_gesture",
+        "banana",
+        "strawberry",
+        "status_up",
+        "home_growth",
+        "mini_final",
+        "none"
+      ]
+    },
+    {
+      "id": "fix_next_category",
+      "type": "enum",
+      "required": true,
+      "values": [
+        "balance",
+        "ui_hint",
+        "copy",
+        "gesture_animation",
+        "privacy_release",
+        "performance",
+        "none"
+      ]
+    }
+  ],
+  "derivedFlags": [
+    {
+      "id": "first_click_late",
+      "rule": "first_click_seconds > 10"
+    },
+    {
+      "id": "first_purchase_late",
+      "rule": "first_purchase_seconds > 30"
+    },
+    {
+      "id": "first_status_up_late",
+      "rule": "first_status_up_seconds > 90"
+    },
+    {
+      "id": "high_confusion",
+      "rule": "confusion_count >= 3"
+    },
+    {
+      "id": "core_meme_not_read",
+      "rule": "understood_67 == false || noticed_67_gesture == false"
+    }
+  ],
+  "rollupTargets": [
+    {
+      "id": "first_click_within_10s",
+      "passRateMin": 0.8
+    },
+    {
+      "id": "first_purchase_within_30s",
+      "passRateMin": 0.7
+    },
+    {
+      "id": "first_status_up_within_90s",
+      "passRateMin": 0.6
+    },
+    {
+      "id": "understood_67",
+      "passRateMin": 0.7
+    },
+    {
+      "id": "parent_concern_none_or_minor",
+      "passRateMin": 0.8
+    }
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "version": "0.1",
+  "target": "p0_web_mobile",
+  "rules": {
+    "format": "png_or_webp",
+    "maxTextureSize": 2048,
+    "mobileFirst": true,
+    "fallbackAllowed": true,
+    "style": "bright meme toy-like, readable silhouettes, no realistic hardship"
+  },
+  "gddSiteArt": [
+    {
+      "id": "generated_comeback_keyart",
+      "path": "art/generated-67-comeback-keyart.png",
+      "usage": "visual GDD hero and lore anchor",
+      "intent": "show the lost drama clearly: 67/67 at the top, Banana and Strawberry betrayal, stripped down to 1/67"
+    },
+    {
+      "id": "generated_gameplay_fakeshot",
+      "path": "art/generated-67-gameplay-fakeshot.png",
+      "usage": "visual GDD gameplay fake shot",
+      "intent": "show the actual playable loop surface: 1/67 badge, big 67 gesture button, resources, jobs, upgrades, home and tabs"
+    },
+    {
+      "id": "generated_life_sim_progression",
+      "path": "art/generated-67-life-sim-progression.png",
+      "usage": "visual GDD life-sim progression",
+      "intent": "show growth through starter room, kiosk job, upgraded home, transport, team and mini business"
+    },
+    {
+      "id": "generated_asset_sheet",
+      "path": "art/generated-67-asset-sheet.png",
+      "usage": "visual development and asset direction",
+      "intent": "show reusable game art pieces: hero stages, Banana, Strawberry, 67 coin, gesture, home, transport and kiosk"
+    },
+    {
+      "id": "runtime_composed_screen",
+      "path": "assets/generated/runtime_composed_screen.png",
+      "usage": "runtime art proof",
+      "intent": "show a game screen composed from separate generated runtime assets, not a fake shot"
+    },
+    {
+      "id": "runtime_asset_pack_preview",
+      "path": "assets/generated/runtime_asset_pack_preview.png",
+      "usage": "runtime art bible preview",
+      "intent": "show game-ready generated PNGs for characters, UI sprites and backgrounds"
+    },
+    {
+      "id": "life_sim_progression_board",
+      "path": "art/gdd-life-sim-progression.png",
+      "usage": "visual GDD progression section",
+      "intent": "show life-sim growth through room, city, deal, transport, base and 67/67 dream"
+    },
+    {
+      "id": "game_fakeshot_board",
+      "path": "art/gdd-game-fakeshot-board.png",
+      "usage": "visual GDD fake shots section",
+      "intent": "show four game-like P0 screens: main, city, deals, home/transport"
+    },
+    {
+      "id": "ui_kit_slice9_board",
+      "path": "art/gdd-ui-kit-slice9-board.png",
+      "usage": "visual GDD UI bible section",
+      "intent": "show reusable component style for buttons, panels, cards, badges, tabs and progress bars"
+    }
+  ],
+  "hero": [
+    { "id": "hero_base_1", "status": 1, "fallback": "simple rounded hero body, no face detail required" },
+    { "id": "hero_cap_2", "status": 2, "fallback": "cap layer on hero_base_1" },
+    { "id": "hero_kiosk_3", "status": 3, "fallback": "hero_base_1 + sticker/bag prop" },
+    { "id": "hero_helper_6", "status": 6, "fallback": "hero_base_1 + mini_helper companion" },
+    { "id": "hero_team_10", "status": 10, "fallback": "hero_base_1 + team silhouettes" },
+    { "id": "hero_final_15", "status": 15, "fallback": "hero_base_1 + badge flash + team silhouettes" }
+  ],
+  "npc": [
+    { "id": "banana_normal", "fallback": "yellow rounded banana card with sunglasses" },
+    { "id": "banana_confused", "fallback": "banana_normal + shake/tilt lines" },
+    { "id": "strawberry_secret", "fallback": "red strawberry icon with wink" }
+  ],
+  "visualStages": [
+    { "id": "start_yard", "asset": "bg_start_yard", "fallback": "dark green yard gradient + hero center" },
+    { "id": "cap", "asset": "prop_cap_67", "fallback": "yellow cap layer above hero" },
+    { "id": "safe_sleep", "asset": "bg_safe_sleep", "fallback": "warm corner + night light 06:00" },
+    { "id": "poster_room", "asset": "bg_poster_room", "fallback": "wall panel + poster 67" },
+    { "id": "mini_hq", "asset": "bg_mini_hq", "fallback": "brighter base + table/sign 67" },
+    { "id": "scooter", "asset": "prop_scooter", "fallback": "small scooter prop near hero" },
+    { "id": "old_bike", "asset": "prop_old_bike", "fallback": "bike prop near hero" },
+    { "id": "mini_tycoon", "asset": "dream_car_67", "fallback": "67-car silhouette for post-MVP dream" }
+  ],
+  "companions": [
+    { "id": "mini_helper", "asset": "companion_mini_helper", "fallback": "small green helper blob near hero" },
+    { "id": "team_67", "asset": "companion_team_67", "fallback": "2-3 teammate silhouettes behind hero" }
+  ],
+  "animations": [
+    { "id": "hands_seesaw_67", "frames": "2-8", "fallback": "two hand blocks move up/down" },
+    { "id": "speech_burst_67", "frames": "2-6", "fallback": "text bubble 67 pop" },
+    { "id": "badge_flash_67", "frames": "4-8", "fallback": "yellow radial flash" },
+    { "id": "banana_twitch", "frames": "2-4", "fallback": "banana card shifts x twice" },
+    { "id": "strawberry_wink", "frames": "2-4", "fallback": "strawberry icon blink" },
+    { "id": "goal_spark", "frames": "2-4", "fallback": "spark on next goal card" },
+    { "id": "hands_speedup", "frames": "2-6", "fallback": "faster hand loop" },
+    { "id": "hero_pop", "frames": "2-5", "fallback": "hero scale pop" },
+    { "id": "map_ping", "frames": "2-6", "fallback": "district card pulse" },
+    { "id": "deal_stamp", "frames": "2-5", "fallback": "stamp text 'Дело сделано'" },
+    { "id": "team_peek", "frames": "2-6", "fallback": "team silhouettes slide in" }
+  ],
+  "icons": [
+    { "id": "meme_coin", "fallback": "yellow coin with 67" },
+    { "id": "status_67", "fallback": "rounded badge X/67" },
+    { "id": "click_power", "fallback": "hand icon" },
+    { "id": "income_per_second", "fallback": "coin stream icon" },
+    { "id": "coolness", "fallback": "sunglasses/star icon" },
+    { "id": "hands_skill", "fallback": "two hands icon" },
+    { "id": "mind_skill", "fallback": "lightbulb 67 icon" },
+    { "id": "style_skill", "fallback": "cap/sticker icon" },
+    { "id": "business_skill", "fallback": "small stand icon" },
+    { "id": "comfort", "fallback": "home corner icon" },
+    { "id": "locked", "fallback": "lock icon" },
+    { "id": "new_unlocked", "fallback": "spark icon" }
+  ],
+  "districtBackgrounds": [
+    { "id": "yard_1", "asset": "district_yard_1", "fallback": "yard card with green background" },
+    { "id": "meme_kiosk", "asset": "district_meme_kiosk", "fallback": "kiosk card with sticker 67" },
+    { "id": "school_yard", "asset": "district_school_yard", "fallback": "school yard card, no real school branding" },
+    { "id": "mini_business", "asset": "district_mini_business", "fallback": "stand/card with team 67" }
+  ],
+  "fakeShots": [
+    { "id": "first_screen", "source": "fakeshots.html#01", "fallback": "render CSS fake shot" },
+    { "id": "first_click", "source": "fakeshots.html#02", "fallback": "render CSS fake shot" },
+    { "id": "first_purchase", "source": "fakeshots.html#03", "fallback": "render CSS fake shot" },
+    { "id": "status_up", "source": "fakeshots.html#04", "fallback": "render CSS fake shot" },
+    { "id": "city_map", "source": "fakeshots.html#05", "fallback": "render CSS fake shot" },
+    { "id": "deals_timer", "source": "fakeshots.html#06", "fallback": "render CSS fake shot" },
+    { "id": "event_modal", "source": "fakeshots.html#07", "fallback": "render CSS fake shot" },
+    { "id": "home_growth", "source": "fakeshots.html#08", "fallback": "render CSS fake shot" },
+    { "id": "mini_final", "source": "fakeshots.html#09", "fallback": "render CSS fake shot" }
+  ]
+}

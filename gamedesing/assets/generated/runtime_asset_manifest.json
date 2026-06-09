@@ -1,0 +1,175 @@
+{
+  "version": "0.2",
+  "styleReference": "art/generated-67-gameplay-fakeshot.png",
+  "sourceSheets": "local generation artifacts; ignored by git under gamedesing/assets/generated/source/",
+  "runtimeCategories": {
+    "characters": [
+      {
+        "id": "hero_1_67",
+        "file": "assets/generated/characters/hero_1_67.png",
+        "width": 193,
+        "height": 453,
+        "transparent": true
+      },
+      {
+        "id": "hero_3_67_cap",
+        "file": "assets/generated/characters/hero_3_67_cap.png",
+        "width": 187,
+        "height": 457,
+        "transparent": true
+      },
+      {
+        "id": "hero_7_67_scooter",
+        "file": "assets/generated/characters/hero_7_67_scooter.png",
+        "width": 251,
+        "height": 468,
+        "transparent": true
+      },
+      {
+        "id": "hero_15_67_leader",
+        "file": "assets/generated/characters/hero_15_67_leader.png",
+        "width": 227,
+        "height": 466,
+        "transparent": true
+      },
+      {
+        "id": "banana_rival",
+        "file": "assets/generated/characters/banana_rival.png",
+        "width": 251,
+        "height": 440,
+        "transparent": true
+      },
+      {
+        "id": "strawberry_secret",
+        "file": "assets/generated/characters/strawberry_secret.png",
+        "width": 243,
+        "height": 368,
+        "transparent": true
+      }
+    ],
+    "heroBodyVariants": [
+      {
+        "id": "hero_1_67_body",
+        "file": "assets/generated/characters/hero_1_67_body.png",
+        "width": 193,
+        "height": 361,
+        "transparent": true,
+        "derivedFrom": "hero_1_67",
+        "note": "body-only sprite; render X/67 badge separately in runtime"
+      },
+      {
+        "id": "hero_3_67_cap_body",
+        "file": "assets/generated/characters/hero_3_67_cap_body.png",
+        "width": 187,
+        "height": 365,
+        "transparent": true,
+        "derivedFrom": "hero_3_67_cap",
+        "note": "body-only sprite; render X/67 badge separately in runtime"
+      },
+      {
+        "id": "hero_7_67_scooter_body",
+        "file": "assets/generated/characters/hero_7_67_scooter_body.png",
+        "width": 251,
+        "height": 376,
+        "transparent": true,
+        "derivedFrom": "hero_7_67_scooter",
+        "note": "body-only sprite; render X/67 badge separately in runtime"
+      },
+      {
+        "id": "hero_15_67_leader_body",
+        "file": "assets/generated/characters/hero_15_67_leader_body.png",
+        "width": 227,
+        "height": 374,
+        "transparent": true,
+        "derivedFrom": "hero_15_67_leader",
+        "note": "body-only sprite; render X/67 badge separately in runtime"
+      }
+    ],
+    "ui": [
+      {
+        "id": "button_67_gesture",
+        "file": "assets/generated/ui/button_67_gesture.png",
+        "width": 346,
+        "height": 363,
+        "transparent": true
+      },
+      {
+        "id": "badge_power_1_67",
+        "file": "assets/generated/ui/badge_power_1_67.png",
+        "width": 372,
+        "height": 221,
+        "transparent": true
+      },
+      {
+        "id": "pill_coin_plus",
+        "file": "assets/generated/ui/pill_coin_plus.png",
+        "width": 365,
+        "height": 172,
+        "transparent": true
+      },
+      {
+        "id": "pill_tap_plus_1",
+        "file": "assets/generated/ui/pill_tap_plus_1.png",
+        "width": 363,
+        "height": 166,
+        "transparent": true
+      },
+      {
+        "id": "card_job_kiosk",
+        "file": "assets/generated/ui/card_job_kiosk.png",
+        "width": 351,
+        "height": 280,
+        "transparent": true
+      },
+      {
+        "id": "card_upgrade_tap",
+        "file": "assets/generated/ui/card_upgrade_tap.png",
+        "width": 352,
+        "height": 280,
+        "transparent": true
+      },
+      {
+        "id": "tab_city",
+        "file": "assets/generated/ui/tab_city.png",
+        "width": 356,
+        "height": 244,
+        "transparent": true
+      },
+      {
+        "id": "tab_home",
+        "file": "assets/generated/ui/tab_home.png",
+        "width": 356,
+        "height": 244,
+        "transparent": true
+      }
+    ],
+    "backgrounds": [
+      {
+        "id": "bg_starter_room_yard",
+        "file": "assets/generated/backgrounds/bg_starter_room_yard.png",
+        "width": 673,
+        "height": 753,
+        "transparent": false
+      },
+      {
+        "id": "bg_meme_kiosk_job",
+        "file": "assets/generated/backgrounds/bg_meme_kiosk_job.png",
+        "width": 681,
+        "height": 754,
+        "transparent": false
+      },
+      {
+        "id": "bg_upgraded_home_business",
+        "file": "assets/generated/backgrounds/bg_upgraded_home_business.png",
+        "width": 676,
+        "height": 753,
+        "transparent": false
+      }
+    ]
+  },
+  "integrationNotes": [
+    "Use backgrounds as full-screen scene art behind UI.",
+    "Use character PNGs as sprite layers centered in scene.",
+    "Use UI PNGs as direct runtime sprites for P0; replace text with engine-rendered labels later if localization is needed."
+  ]
+}

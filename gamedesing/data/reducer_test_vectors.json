@@ -1,0 +1,112 @@
+{
+  "version": "0.1",
+  "balanceVersion": "0.5",
+  "description": "Machine-readable reducer/action acceptance vectors for P0 prototype implementation.",
+  "vectors": [
+    {
+      "id": "do67_first_click",
+      "action": { "type": "do67" },
+      "given": { "memeCoins": 0, "clickPower": 1, "coolness": 0 },
+      "expect": {
+        "memeCoins": 1,
+        "powerLabel": "1/67",
+        "analytics": ["activity_used"]
+      }
+    },
+    {
+      "id": "buy_first_upgrade",
+      "action": { "type": "buyUpgrade", "upgradeId": "meme_coin_bag" },
+      "given": { "memeCoins": 5, "ownedUpgrades": [] },
+      "expect": {
+        "memeCoins": 0,
+        "clickPower": 2,
+        "ownedUpgradesIncludes": ["meme_coin_bag"],
+        "analytics": ["upgrade_bought"]
+      }
+    },
+    {
+      "id": "buy_clean_cap_status_up",
+      "action": { "type": "buyUpgrade", "upgradeId": "clean_cap" },
+      "given": { "memeCoins": 80, "ownedUpgrades": [] },
+      "expect": {
+        "memeCoins": 0,
+        "status": 2,
+        "powerLabel": "2/67",
+        "visualStage": "cap",
+        "ownedUpgradesIncludes": ["clean_cap"],
+        "analytics": ["upgrade_bought", "status_changed"]
+      }
+    },
+    {
+      "id": "locked_kiosk_helper_blocked_by_status",
+      "action": { "type": "startJob", "jobId": "kiosk_helper" },
+      "given": { "status": 2, "handsSkill": 0 },
+      "expect": {
+        "blocked": true,
+        "lockedHint": "Нужно 3/67",
+        "activeJob": null
+      }
+    },
+    {
+      "id": "start_and_claim_first_deal",
+      "actions": [
+        { "type": "startJob", "jobId": "collect_meme_coins" },
+        { "type": "claimJob", "jobId": "collect_meme_coins" }
+      ],
+      "given": { "memeCoins": 0 },
+      "expect": {
+        "memeCoins": 15,
+        "activeJob": null,
+        "analytics": ["job_started", "job_completed"]
+      }
+    },
+    {
+      "id": "choose_banana_find_sign",
+      "action": { "type": "chooseEvent", "eventId": "banana_sign", "choiceId": "find_sign" },
+      "given": { "status": 2, "memeCoins": 0, "seenEvents": [] },
+      "expect": {
+        "status": 3,
+        "powerLabel": "3/67",
+        "memeCoins": 60,
+        "seenEventsIncludes": ["banana_sign"],
+        "analytics": ["event_choice", "status_changed"]
+      }
+    },
+    {
+      "id": "final_choice_show_badge_sets_ready",
+      "action": { "type": "chooseEvent", "eventId": "final_banana_scheme", "choiceId": "show_badge" },
+      "given": { "status": 13, "memeCoins": 0, "finalReady": false, "seenEvents": [] },
+      "expect": {
+        "status": 15,
+        "powerLabel": "15/67",
+        "finalReady": true,
+        "seenEventsIncludes": ["final_banana_scheme"],
+        "analytics": ["event_choice", "status_changed", "final_15_reached"]
+      }
+    },
+    {
+      "id": "final_choice_call_team_sets_ready",
+      "action": { "type": "chooseEvent", "eventId": "final_banana_scheme", "choiceId": "call_team" },
+      "given": { "status": 14, "memeCoins": 0, "finalReady": false, "seenEvents": [] },
+      "expect": {
+        "status": 15,
+        "powerLabel": "15/67",
+        "memeCoins": 400,
+        "finalReady": true,
+        "seenEventsIncludes": ["final_banana_scheme"],
+        "analytics": ["event_choice", "status_changed", "final_15_reached"]
+      }
+    },
+    {
+      "id": "post_mvp_car_does_not_raise_status",
+      "action": { "type": "buyTransport", "transportId": "car_67" },
+      "given": { "status": 15, "memeCoins": 3200, "ownedTransport": [] },
+      "expect": {
+        "status": 15,
+        "powerLabel": "15/67",
+        "visualStage": "mini_tycoon",
+        "ownedTransportIncludes": ["car_67"]
+      }
+    }
+  ]
+}

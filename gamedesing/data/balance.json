@@ -1,0 +1,1339 @@
+{
+  "version": "0.5",
+  "audience": "children_5_10",
+  "prototypeMinutes": 30,
+  "primaryTargets": [
+    "mobile_portrait",
+    "web"
+  ],
+  "devHarness": [
+    "pc_native",
+    "desktop_browser"
+  ],
+  "statusRange": {
+    "start": 1,
+    "mvpTarget": 15,
+    "finalTarget": 67,
+    "mvpCap": 15
+  },
+  "economyRules": {
+    "clickReward": {
+      "type": "resource",
+      "resource": "clickPower"
+    },
+    "incomeTickSeconds": 1,
+    "offlineCapSeconds": 1800,
+    "offlineCompletionCanTriggerFinal": false,
+    "firstPurchaseTargetSeconds": 30,
+    "firstStatusUpTargetSeconds": 90
+  },
+  "resources": [
+    {
+      "id": "memeCoins",
+      "label": "Мем-коины",
+      "kind": "currency",
+      "uiPriority": 1
+    },
+    {
+      "id": "status",
+      "label": "Сила X/67",
+      "kind": "primary_progress",
+      "uiPriority": 0
+    },
+    {
+      "id": "clickPower",
+      "label": "Сила клика",
+      "kind": "active_power",
+      "uiPriority": 2
+    },
+    {
+      "id": "incomePerSecond",
+      "label": "Доход/сек",
+      "kind": "idle_income",
+      "uiPriority": 3
+    },
+    {
+      "id": "coolness",
+      "label": "Крутость",
+      "kind": "unlock_stat",
+      "uiPriority": 4
+    },
+    {
+      "id": "handsSkill",
+      "label": "Руки",
+      "kind": "skill",
+      "uiPriority": 5
+    },
+    {
+      "id": "mindSkill",
+      "label": "Ум",
+      "kind": "skill",
+      "uiPriority": 6
+    },
+    {
+      "id": "styleSkill",
+      "label": "Стиль",
+      "kind": "skill",
+      "uiPriority": 7
+    },
+    {
+      "id": "businessSkill",
+      "label": "Бизнес",
+      "kind": "skill",
+      "uiPriority": 8
+    },
+    {
+      "id": "comfort",
+      "label": "Комфорт",
+      "kind": "life_stat",
+      "uiPriority": 9
+    }
+  ],
+  "initialState": {
+    "memeCoins": 0,
+    "status": 1,
+    "powerLabel": "1/67",
+    "clickPower": 1,
+    "incomePerSecond": 0,
+    "coolness": 0,
+    "handsSkill": 0,
+    "mindSkill": 0,
+    "styleSkill": 0,
+    "businessSkill": 0,
+    "comfort": 0,
+    "workSpeedBonus": 0,
+    "gestureLevel": 1,
+    "screenCompanion": null,
+    "visualStage": "start_yard",
+    "finalReady": false,
+    "ownedHousing": [
+      "yard_corner"
+    ],
+    "ownedTransport": [],
+    "unlockedActivities": [
+      "do_67"
+    ]
+  },
+  "milestones": [
+    {
+      "status": 1,
+      "powerLabel": "1/67",
+      "minuteTarget": 0,
+      "title": "Обнулили мем"
+    },
+    {
+      "status": 2,
+      "powerLabel": "2/67",
+      "minuteTarget": 2,
+      "title": "Первая кепка"
+    },
+    {
+      "status": 3,
+      "powerLabel": "3/67",
+      "minuteTarget": 5,
+      "title": "Киоск мемов открыт"
+    },
+    {
+      "status": 6,
+      "powerLabel": "6/67",
+      "minuteTarget": 12,
+      "title": "Банан напрягся"
+    },
+    {
+      "status": 10,
+      "powerLabel": "10/67",
+      "minuteTarget": 20,
+      "title": "Мини-бизнес открыт"
+    },
+    {
+      "status": 15,
+      "powerLabel": "15/67",
+      "minuteTarget": 30,
+      "title": "Город снова заметил 67"
+    }
+  ],
+  "activities": [
+    {
+      "id": "do_67",
+      "label": "Сделать 67",
+      "unlock": {
+        "status": 1
+      },
+      "input": "big_button_or_space",
+      "animation": "hands_seesaw_67",
+      "effects": [
+        {
+          "type": "addFromResource",
+          "target": "memeCoins",
+          "resource": "clickPower",
+          "multiplier": 1
+        },
+        {
+          "type": "chanceAdd",
+          "target": "coolness",
+          "value": 1,
+          "chance": 0.12
+        }
+      ],
+      "visibleResult": {
+        "text": "Герой делает 67-жест, над ним вспыхивает +мем-коин.",
+        "animation": "hands_seesaw_67",
+        "reaction": "Банан дернулся."
+      }
+    },
+    {
+      "id": "shout_67",
+      "label": "Крикнуть 67",
+      "unlock": {
+        "status": 3
+      },
+      "input": "button",
+      "animation": "speech_burst_67",
+      "effects": [
+        {
+          "type": "addFromResource",
+          "target": "memeCoins",
+          "resource": "clickPower",
+          "multiplier": 2
+        },
+        {
+          "type": "chanceAdd",
+          "target": "coolness",
+          "value": 1,
+          "chance": 0.2
+        }
+      ],
+      "visibleResult": {
+        "text": "Пузырь речи 67 летит к Банану, счетчик монет прыгает сильнее.",
+        "animation": "speech_burst_67",
+        "reaction": "Клубника подмигнула."
+      }
+    },
+    {
+      "id": "show_badge",
+      "label": "Показать значок",
+      "unlock": {
+        "upgrade": "gold_badge"
+      },
+      "input": "button",
+      "animation": "badge_flash_67",
+      "effects": [
+        {
+          "type": "addFromResource",
+          "target": "memeCoins",
+          "resource": "clickPower",
+          "multiplier": 4
+        }
+      ],
+      "visibleResult": {
+        "text": "Значок 67 светится, команда реагирует на героя.",
+        "animation": "badge_flash_67",
+        "reaction": "Команда 67 смотрит."
+      }
+    }
+  ],
+  "cityDistricts": [
+    {
+      "id": "yard_1",
+      "title": "Двор 1/67",
+      "unlock": {
+        "status": 1
+      },
+      "jobs": [
+        "collect_meme_coins"
+      ],
+      "training": [
+        "train_hands"
+      ]
+    },
+    {
+      "id": "meme_kiosk",
+      "title": "Киоск мемов",
+      "unlock": {
+        "status": 3
+      },
+      "jobs": [
+        "kiosk_helper"
+      ],
+      "training": [
+        "train_style"
+      ]
+    },
+    {
+      "id": "school_yard",
+      "title": "Школьный двор",
+      "unlock": {
+        "status": 6
+      },
+      "jobs": [
+        "sticker_runner"
+      ],
+      "training": [
+        "train_mind"
+      ]
+    },
+    {
+      "id": "mini_business",
+      "title": "Мини-бизнес",
+      "unlock": {
+        "status": 10
+      },
+      "jobs": [
+        "meme_stand_owner"
+      ],
+      "training": [
+        "train_business"
+      ]
+    }
+  ],
+  "jobs": [
+    {
+      "id": "collect_meme_coins",
+      "title": "Сбор мем-коинов",
+      "district": "yard_1",
+      "durationSeconds": 10,
+      "requirements": {},
+      "effects": [
+        {
+          "type": "add",
+          "target": "memeCoins",
+          "value": 15
+        }
+      ],
+      "visibleResult": {
+        "text": "Таймер дела висит сверху, герой собирает мем-коины у базы.",
+        "scene": "yard_coin_run",
+        "after": "Карточка “Что изменилось”: +15 мем-коинов."
+      }
+    },
+    {
+      "id": "kiosk_helper",
+      "title": "Помочь у киоска",
+      "district": "meme_kiosk",
+      "durationSeconds": 25,
+      "requirements": {
+        "status": 3,
+        "handsSkill": 1
+      },
+      "requirementPriority": [
+        "status",
+        "handsSkill"
+      ],
+      "lockedHints": [
+        {
+          "target": "status",
+          "text": "Нужно 3/67"
+        },
+        {
+          "target": "handsSkill",
+          "text": "Нужно Руки 1"
+        }
+      ],
+      "effects": [
+        {
+          "type": "add",
+          "target": "memeCoins",
+          "value": 60
+        },
+        {
+          "type": "add",
+          "target": "handsSkill",
+          "value": 1
+        }
+      ],
+      "visibleResult": {
+        "text": "У киоска появляется стикер 67, герой получает первый понятный навык Руки.",
+        "scene": "kiosk_sticker_help",
+        "after": "Киоск стал ярче."
+      }
+    },
+    {
+      "id": "sticker_runner",
+      "title": "Доставка наклеек 67",
+      "district": "school_yard",
+      "durationSeconds": 40,
+      "requirements": {
+        "status": 6,
+        "styleSkill": 1,
+        "ownedTransport": "old_bike"
+      },
+      "requirementPriority": [
+        "status",
+        "styleSkill",
+        "ownedTransport"
+      ],
+      "lockedHints": [
+        {
+          "target": "status",
+          "text": "Нужно 6/67"
+        },
+        {
+          "target": "styleSkill",
+          "text": "Нужно Стиль 1"
+        },
+        {
+          "target": "ownedTransport",
+          "text": "Нужен Старый велик"
+        }
+      ],
+      "effects": [
+        {
+          "type": "add",
+          "target": "memeCoins",
+          "value": 120
+        },
+        {
+          "type": "add",
+          "target": "styleSkill",
+          "value": 1
+        }
+      ],
+      "visibleResult": {
+        "text": "Герой едет на велике со стикерами 67, район оживает.",
+        "scene": "sticker_delivery",
+        "after": "На карте появляется след наклеек."
+      }
+    },
+    {
+      "id": "meme_stand_owner",
+      "title": "Мем-стенд команды",
+      "district": "mini_business",
+      "durationSeconds": 60,
+      "requirements": {
+        "status": 10,
+        "businessSkill": 2
+      },
+      "requirementPriority": [
+        "status",
+        "businessSkill"
+      ],
+      "lockedHints": [
+        {
+          "target": "status",
+          "text": "Нужно 10/67"
+        },
+        {
+          "target": "businessSkill",
+          "text": "Нужно Бизнес 2"
+        }
+      ],
+      "effects": [
+        {
+          "type": "add",
+          "target": "memeCoins",
+          "value": 300
+        },
+        {
+          "type": "add",
+          "target": "incomePerSecond",
+          "value": 8
+        }
+      ],
+      "visibleResult": {
+        "text": "Мем-стенд команды начинает приносить доход/сек.",
+        "scene": "meme_stand_income",
+        "after": "Команда 67 появилась рядом."
+      }
+    }
+  ],
+  "training": [
+    {
+      "id": "train_hands",
+      "title": "Тренировать руки",
+      "durationSeconds": 15,
+      "cost": 20,
+      "effects": [
+        {
+          "type": "add",
+          "target": "handsSkill",
+          "value": 1
+        }
+      ],
+      "visibleResult": {
+        "text": "Руки героя повторяют 67-жест быстрее.",
+        "scene": "hands_training",
+        "after": "Открывается подсказка к делу у киоска."
+      }
+    },
+    {
+      "id": "train_style",
+      "title": "Прокачать стиль",
+      "durationSeconds": 20,
+      "cost": 50,
+      "effects": [
+        {
+          "type": "add",
+          "target": "styleSkill",
+          "value": 1
+        }
+      ],
+      "visibleResult": {
+        "text": "На герое появляется стильная поза 67.",
+        "scene": "style_pose",
+        "after": "Банан реагирует сильнее."
+      }
+    },
+    {
+      "id": "train_mind",
+      "title": "Прокачать ум",
+      "durationSeconds": 25,
+      "cost": 80,
+      "effects": [
+        {
+          "type": "add",
+          "target": "mindSkill",
+          "value": 1
+        }
+      ],
+      "visibleResult": {
+        "text": "Над героем появляется лампочка 67.",
+        "scene": "mind_spark",
+        "after": "Открываются более умные задания."
+      }
+    },
+    {
+      "id": "train_business",
+      "title": "Прокачать бизнес",
+      "durationSeconds": 35,
+      "cost": 180,
+      "effects": [
+        {
+          "type": "add",
+          "target": "businessSkill",
+          "value": 1
+        }
+      ],
+      "visibleResult": {
+        "text": "Герой ставит маленькую табличку команды 67.",
+        "scene": "business_plan",
+        "after": "Мем-стенд становится ближе."
+      }
+    }
+  ],
+  "housing": [
+    {
+      "id": "yard_corner",
+      "title": "Дворовая база",
+      "cost": 0,
+      "visualStage": "start_yard",
+      "effects": [],
+      "visibleResult": {
+        "text": "Стартовая дворовая база видна за героем.",
+        "scene": "start_yard",
+        "after": "Игрок понимает, откуда начинается путь."
+      }
+    },
+    {
+      "id": "mattress_67",
+      "title": "Уютный угол 67",
+      "cost": 120,
+      "visualStage": "safe_sleep",
+      "effects": [
+        {
+          "type": "setMax",
+          "target": "comfort",
+          "value": 1
+        }
+      ],
+      "visibleResult": {
+        "text": "Появляется уютный угол 67 и ночной свет.",
+        "scene": "safe_sleep",
+        "after": "Дом стал теплее."
+      }
+    },
+    {
+      "id": "poster_room",
+      "title": "Комната с плакатом 67",
+      "cost": 450,
+      "visualStage": "poster_room",
+      "effects": [
+        {
+          "type": "setMax",
+          "target": "comfort",
+          "value": 2
+        },
+        {
+          "type": "add",
+          "target": "coolness",
+          "value": 1
+        }
+      ],
+      "visibleResult": {
+        "text": "На стене появляется плакат 67.",
+        "scene": "poster_room",
+        "after": "Крутость получила видимый плакат."
+      }
+    },
+    {
+      "id": "mini_hq_67",
+      "title": "Мини-штаб 67",
+      "cost": 1600,
+      "visualStage": "mini_hq",
+      "effects": [
+        {
+          "type": "setMax",
+          "target": "comfort",
+          "value": 4
+        },
+        {
+          "type": "add",
+          "target": "incomePerSecond",
+          "value": 5
+        }
+      ],
+      "visibleResult": {
+        "text": "База превращается в мини-штаб 67.",
+        "scene": "mini_hq",
+        "after": "Дом начинает давать доход."
+      }
+    }
+  ],
+  "transport": [
+    {
+      "id": "scooter",
+      "title": "Самокат",
+      "cost": 250,
+      "unlock": {
+        "status": 3
+      },
+      "visualStage": "scooter",
+      "effects": [
+        {
+          "type": "add",
+          "target": "workSpeedBonus",
+          "value": 0.1
+        }
+      ],
+      "visibleResult": {
+        "text": "Самокат стоит рядом с героем, дела идут быстрее.",
+        "scene": "scooter",
+        "after": "Таймер дел визуально ускоряется."
+      }
+    },
+    {
+      "id": "old_bike",
+      "title": "Старый велик",
+      "cost": 900,
+      "unlock": {
+        "status": 6
+      },
+      "visualStage": "old_bike",
+      "effects": [
+        {
+          "type": "unlock",
+          "target": "job",
+          "id": "sticker_runner"
+        }
+      ],
+      "visibleResult": {
+        "text": "Старый велик открывает доставку наклеек.",
+        "scene": "old_bike",
+        "after": "На карте доступен школьный двор."
+      }
+    },
+    {
+      "id": "car_67",
+      "title": "67-тачка",
+      "cost": 3200,
+      "unlock": {
+        "status": 15
+      },
+      "postMvp": true,
+      "visualStage": "mini_tycoon",
+      "effects": [
+        {
+          "type": "set",
+          "target": "visualStage",
+          "value": "mini_tycoon"
+        }
+      ],
+      "visibleResult": {
+        "text": "67-тачка появляется только после mini-final как мечта следующей версии.",
+        "scene": "mini_tycoon",
+        "after": "Игрок видит путь к 67/67."
+      }
+    }
+  ],
+  "upgrades": [
+    {
+      "id": "meme_coin_bag",
+      "title": "Пакет для мем-коинов",
+      "cost": 5,
+      "unlock": {
+        "status": 1
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "clickPower",
+          "value": 1
+        }
+      ],
+      "visibleResult": {
+        "text": "Появляется пакет для мем-коинов, клик дает больше.",
+        "scene": "coin_bag",
+        "after": "Next goal: Купи Кепку 67."
+      }
+    },
+    {
+      "id": "clean_cap",
+      "title": "Кепка 67",
+      "cost": 80,
+      "unlock": {
+        "status": 1
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "status",
+          "value": 1
+        },
+        {
+          "type": "set",
+          "target": "visualStage",
+          "value": "cap"
+        }
+      ],
+      "visibleResult": {
+        "text": "Герой надевает Кепку 67, число вспыхивает 2/67.",
+        "scene": "cap",
+        "after": "Первый status-up физически виден."
+      }
+    },
+    {
+      "id": "sticker_67",
+      "title": "Наклейка 67",
+      "cost": 40,
+      "unlock": {
+        "status": 2
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "incomePerSecond",
+          "value": 1
+        },
+        {
+          "type": "add",
+          "target": "status",
+          "value": 1
+        }
+      ],
+      "visibleResult": {
+        "text": "Стикер 67 появляется на базе, доход/сек становится видимым.",
+        "scene": "sticker_income",
+        "after": "Монеты капают сами."
+      }
+    },
+    {
+      "id": "gesture_training",
+      "title": "Тренировка 67-жеста",
+      "cost": 60,
+      "unlock": {
+        "status": 3
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "coolness",
+          "value": 1
+        },
+        {
+          "type": "add",
+          "target": "clickPower",
+          "value": 1
+        },
+        {
+          "type": "add",
+          "target": "status",
+          "value": 1
+        },
+        {
+          "type": "set",
+          "target": "gestureLevel",
+          "value": 2
+        }
+      ],
+      "visibleResult": {
+        "text": "67-жест становится быстрее и ярче.",
+        "scene": "gesture_level_2",
+        "after": "Крутость открыла новую реакцию."
+      }
+    },
+    {
+      "id": "mini_helper",
+      "title": "Мини-помощник",
+      "cost": 85,
+      "unlock": {
+        "status": 3
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "incomePerSecond",
+          "value": 3
+        },
+        {
+          "type": "set",
+          "target": "screenCompanion",
+          "value": "mini_helper"
+        }
+      ],
+      "visibleResult": {
+        "text": "Мини-помощник появляется рядом с героем.",
+        "scene": "mini_helper",
+        "after": "Idle-доход виден через помощника."
+      }
+    },
+    {
+      "id": "poster_room_upgrade",
+      "title": "Плакат 67",
+      "cost": 220,
+      "unlock": {
+        "status": 4
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "status",
+          "value": 2
+        },
+        {
+          "type": "triggerEvent",
+          "id": "banana_sign"
+        }
+      ],
+      "visibleResult": {
+        "text": "Плакат 67 запускает событие с Бананом.",
+        "scene": "poster_banana_sign",
+        "after": "Банан спрятал табличку."
+      }
+    },
+    {
+      "id": "alarm_0600",
+      "title": "Ночник 06:00",
+      "cost": 320,
+      "unlock": {
+        "status": 6
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "coolness",
+          "value": 2
+        },
+        {
+          "type": "triggerEvent",
+          "id": "alarm_0600_event"
+        }
+      ],
+      "visibleResult": {
+        "text": "Ночник 06:00 мигает на фоне.",
+        "scene": "night_light_0600",
+        "after": "Событие 06:00 открылось."
+      }
+    },
+    {
+      "id": "fast_sneakers",
+      "title": "Кроссовки клика",
+      "cost": 480,
+      "unlock": {
+        "status": 6
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "clickPower",
+          "value": 5
+        }
+      ],
+      "visibleResult": {
+        "text": "Кроссовки оставляют след 67 при клике.",
+        "scene": "fast_sneakers",
+        "after": "Активный клик стал заметно быстрее."
+      }
+    },
+    {
+      "id": "strawberry_secret_upgrade",
+      "title": "Клубничный секрет",
+      "cost": 650,
+      "unlock": {
+        "status": 7
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "coolness",
+          "value": 3
+        },
+        {
+          "type": "add",
+          "target": "status",
+          "value": 1
+        },
+        {
+          "type": "triggerEvent",
+          "id": "strawberry_secret"
+        }
+      ],
+      "visibleResult": {
+        "text": "Клубника появляется с маленькой запиской 67.",
+        "scene": "strawberry_note",
+        "after": "Секрет стал событием."
+      }
+    },
+    {
+      "id": "meme_stand",
+      "title": "Мемный стенд",
+      "cost": 900,
+      "unlock": {
+        "status": 8
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "incomePerSecond",
+          "value": 8
+        },
+        {
+          "type": "add",
+          "target": "status",
+          "value": 2
+        },
+        {
+          "type": "add",
+          "target": "businessSkill",
+          "value": 1
+        }
+      ],
+      "visibleResult": {
+        "text": "Мемный стенд появляется в городе и дает доход/сек.",
+        "scene": "meme_stand",
+        "after": "Город выглядит богаче."
+      }
+    },
+    {
+      "id": "gold_badge",
+      "title": "Золотой значок 67",
+      "cost": 1250,
+      "unlock": {
+        "status": 10
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "status",
+          "value": 3
+        },
+        {
+          "type": "unlock",
+          "target": "activity",
+          "id": "show_badge"
+        }
+      ],
+      "visibleResult": {
+        "text": "Золотой значок 67 открывает действие “Показать значок”.",
+        "scene": "gold_badge",
+        "after": "Новое действие в главной зоне."
+      }
+    },
+    {
+      "id": "small_fireplace",
+      "title": "Светящийся угол 67",
+      "cost": 1700,
+      "unlock": {
+        "status": 10
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "incomePerSecond",
+          "value": 12
+        },
+        {
+          "type": "add",
+          "target": "coolness",
+          "value": 2
+        }
+      ],
+      "visibleResult": {
+        "text": "Светящийся угол 67 делает базу теплее.",
+        "scene": "glowing_corner",
+        "after": "Комфорт и крутость видны в доме."
+      }
+    },
+    {
+      "id": "team_67",
+      "title": "Команда 67",
+      "cost": 2400,
+      "unlock": {
+        "status": 11
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "incomePerSecond",
+          "value": 20
+        },
+        {
+          "type": "add",
+          "target": "businessSkill",
+          "value": 1
+        },
+        {
+          "type": "set",
+          "target": "screenCompanion",
+          "value": "team_67"
+        }
+      ],
+      "visibleResult": {
+        "text": "Команда 67 появляется за героем.",
+        "scene": "team_67",
+        "after": "Финал стал близко."
+      }
+    },
+    {
+      "id": "comeback_poster",
+      "title": "Плакат Я вернусь",
+      "cost": 3200,
+      "unlock": {
+        "status": 12
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "status",
+          "value": 1
+        },
+        {
+          "type": "add",
+          "target": "coolness",
+          "value": 2
+        }
+      ],
+      "visibleResult": {
+        "text": "Плакат “Я вернусь” висит в штабе 67.",
+        "scene": "comeback_poster",
+        "after": "Подготовка к mini-final."
+      }
+    },
+    {
+      "id": "first_fan",
+      "title": "Первый фанат 67",
+      "cost": 4300,
+      "unlock": {
+        "status": 13
+      },
+      "effects": [
+        {
+          "type": "add",
+          "target": "status",
+          "value": 1
+        },
+        {
+          "type": "triggerEvent",
+          "id": "final_banana_scheme"
+        }
+      ],
+      "visibleResult": {
+        "text": "Первый фанат 67 запускает финальное событие.",
+        "scene": "first_fan",
+        "after": "Mini-final готов."
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": "banana_sign",
+      "title": "Банан спрятал табличку 67",
+      "body": "Клубника шепчет: Банан запутался от твоего 67-жеста.",
+      "choices": [
+        {
+          "id": "do_gesture",
+          "label": "Сделать 67-жест",
+          "effects": [
+            {
+              "type": "add",
+              "target": "status",
+              "value": 1
+            }
+          ],
+          "visibleResult": {
+            "text": "Герой делает новый 67-жест, табличка сама подсвечивается.",
+            "reaction": "Банан дернулся."
+          }
+        },
+        {
+          "id": "find_sign",
+          "label": "Найти табличку",
+          "effects": [
+            {
+              "type": "add",
+              "target": "status",
+              "value": 1
+            },
+            {
+              "type": "add",
+              "target": "memeCoins",
+              "value": 60
+            }
+          ],
+          "visibleResult": {
+            "text": "Герой находит табличку и получает монеты.",
+            "reaction": "Клубника показывает на знак."
+          }
+        }
+      ],
+      "visibleResult": {
+        "text": "Событие меняет сцену, реакцию персонажей и следующую цель."
+      }
+    },
+    {
+      "id": "alarm_0600_event",
+      "title": "06:00 на ночнике",
+      "body": "Ночник мигает смешным числом. 67 не спит.",
+      "choices": [
+        {
+          "id": "stop_alarm",
+          "label": "Нажать стоп",
+          "effects": [
+            {
+              "type": "add",
+              "target": "memeCoins",
+              "value": 100
+            }
+          ],
+          "visibleResult": {
+            "text": "Ночник перестает мигать и выдает мем-коины.",
+            "reaction": "06:00 стало смешным числом."
+          }
+        },
+        {
+          "id": "say_67",
+          "label": "Сказать 67",
+          "effects": [
+            {
+              "type": "add",
+              "target": "coolness",
+              "value": 1
+            }
+          ],
+          "visibleResult": {
+            "text": "Герой говорит 67, вокруг ночника вспыхивает контур.",
+            "reaction": "Крутость стала видимой."
+          }
+        }
+      ],
+      "visibleResult": {
+        "text": "Событие меняет сцену, реакцию персонажей и следующую цель."
+      }
+    },
+    {
+      "id": "strawberry_secret",
+      "title": "Клубника знает секрет",
+      "body": "Банан запутался, когда сила над тобой растет.",
+      "choices": [
+        {
+          "id": "write_secret",
+          "label": "Записать секрет",
+          "effects": [
+            {
+              "type": "add",
+              "target": "coolness",
+              "value": 2
+            }
+          ],
+          "visibleResult": {
+            "text": "Секрет превращается в стикер на базе.",
+            "reaction": "Клубника подмигнула."
+          }
+        },
+        {
+          "id": "shout_67",
+          "label": "Крикнуть 67",
+          "effects": [
+            {
+              "type": "add",
+              "target": "memeCoins",
+              "value": 150
+            }
+          ],
+          "visibleResult": {
+            "text": "Крик 67 дает монеты и короткий экранный взрыв.",
+            "reaction": "Банан запутался."
+          }
+        }
+      ],
+      "visibleResult": {
+        "text": "Событие меняет сцену, реакцию персонажей и следующую цель."
+      }
+    },
+    {
+      "id": "final_banana_scheme",
+      "title": "Банан снова мутит схему",
+      "body": "Команда 67 готова. Сделайте общий 67-жест.",
+      "choices": [
+        {
+          "id": "show_badge",
+          "label": "Показать значок 67",
+          "effects": [
+            {
+              "type": "add",
+              "target": "status",
+              "value": 2
+            },
+            {
+              "type": "set",
+              "target": "finalReady",
+              "value": true
+            }
+          ],
+          "visibleResult": {
+            "text": "Значок 67 светится, сила доходит до 15/67.",
+            "reaction": "Команда делает общий жест."
+          }
+        },
+        {
+          "id": "call_team",
+          "label": "Позвать команду",
+          "effects": [
+            {
+              "type": "add",
+              "target": "status",
+              "value": 1
+            },
+            {
+              "type": "add",
+              "target": "memeCoins",
+              "value": 400
+            },
+            {
+              "type": "set",
+              "target": "finalReady",
+              "value": true
+            }
+          ],
+          "visibleResult": {
+            "text": "Команда выходит на экран и помогает дойти до 15/67.",
+            "reaction": "Все делают 67-жест."
+          }
+        }
+      ],
+      "visibleResult": {
+        "text": "Событие меняет сцену, реакцию персонажей и следующую цель."
+      }
+    }
+  ],
+  "reactionPool": [
+    "+1 мем-коин",
+    "67 слышит шаги",
+    "Банан напрягся",
+    "Клубника делает вид, что не знает",
+    "Сила растет",
+    "До 67 еще ближе",
+    "Команда 67 смотрит"
+  ],
+  "requiredAnalyticsEvents": [
+    "session_start",
+    "first_click",
+    "activity_used",
+    "upgrade_bought",
+    "status_changed",
+    "job_started",
+    "job_completed",
+    "event_seen",
+    "event_choice",
+    "final_15_reached",
+    "session_end"
+  ],
+  "microReactions": [
+    {
+      "id": "banana_twitch",
+      "trigger": "every_30_60_seconds_active",
+      "text": "Банан дернулся.",
+      "animation": "banana_twitch"
+    },
+    {
+      "id": "strawberry_wink",
+      "trigger": "after_3_clicks_without_purchase",
+      "text": "Клубника подмигнула.",
+      "animation": "strawberry_wink"
+    },
+    {
+      "id": "closer_to_67",
+      "trigger": "next_goal_progress",
+      "text": "До 67 ближе.",
+      "animation": "goal_spark"
+    },
+    {
+      "id": "hands_faster",
+      "trigger": "clickPower_up",
+      "text": "Жест стал быстрее.",
+      "animation": "hands_speedup"
+    },
+    {
+      "id": "new_look",
+      "trigger": "visualStage_changed",
+      "text": "Герой выглядит сильнее.",
+      "animation": "hero_pop"
+    },
+    {
+      "id": "district_ping",
+      "trigger": "district_unlocked",
+      "text": "Новый район заметил 67.",
+      "animation": "map_ping"
+    },
+    {
+      "id": "deal_done",
+      "trigger": "job_completed",
+      "text": "Дело сделано.",
+      "animation": "deal_stamp"
+    },
+    {
+      "id": "team_watch",
+      "trigger": "status_10_plus",
+      "text": "Команда 67 смотрит.",
+      "animation": "team_peek"
+    }
+  ],
+  "nextGoalTemplates": [
+    {
+      "id": "collect_first_coins",
+      "text": "Собери 5 мем-коинов",
+      "progressSource": "memeCoins",
+      "target": 5
+    },
+    {
+      "id": "buy_first_upgrade",
+      "text": "Купи Пакет для мем-коинов",
+      "targetId": "meme_coin_bag"
+    },
+    {
+      "id": "buy_cap",
+      "text": "Купи Кепку 67",
+      "targetId": "clean_cap"
+    },
+    {
+      "id": "open_kiosk",
+      "text": "Дойди до 3/67 и открой Киоск",
+      "progressSource": "status",
+      "target": 3
+    },
+    {
+      "id": "start_deal",
+      "text": "Запусти одно Дело",
+      "targetAction": "start_job"
+    },
+    {
+      "id": "train_for_lock",
+      "text": "Прокачай нужный навык",
+      "targetAction": "start_training"
+    },
+    {
+      "id": "reach_mini_final",
+      "text": "Дойди до 15/67",
+      "progressSource": "status",
+      "target": 15
+    }
+  ]
+}

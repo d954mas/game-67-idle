@@ -1,5 +1,6 @@
 build/
 tmp/
+gamedesing/assets/generated/source/
 .cache/
 .vs/
 .vscode/.cmake/

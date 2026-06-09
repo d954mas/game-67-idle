@@ -1,0 +1,163 @@
+{
+  "version": "0.1",
+  "scope": "P0 supervised web/mobile playtest for children 5-10",
+  "sourceRefs": [
+    {
+      "id": "ftc_coppa_rule",
+      "label": "FTC COPPA Rule",
+      "url": "https://www.ftc.gov/legal-library/browse/rules/childrens-online-privacy-protection-rule-coppa"
+    },
+    {
+      "id": "ftc_coppa_faq",
+      "label": "FTC COPPA FAQ",
+      "url": "https://www.ftc.gov/business-guidance/resources/complying-coppa-frequently-asked-questions"
+    },
+    {
+      "id": "google_play_families",
+      "label": "Google Play Families Policy",
+      "url": "https://support.google.com/googleplay/android-developer/answer/9893335"
+    },
+    {
+      "id": "apple_app_review",
+      "label": "Apple App Review Guidelines",
+      "url": "https://developer.apple.com/app-store/review/guidelines/"
+    }
+  ],
+  "releaseModes": [
+    {
+      "id": "internal_web_supervised",
+      "label": "Internal supervised web test",
+      "allowed": true,
+      "requiredBeforeInvite": [
+        "parent_note_attached",
+        "analytics_off_by_default",
+        "child_test_safe_mode",
+        "reset_progress_visible",
+        "no_ads_iap_account_chat_free_text",
+        "hosting_logs_reviewed",
+        "retention_period_defined",
+        "delete_reset_path_defined"
+      ],
+      "evidence": [
+        "runtime_smoke_log",
+        "mobile_360_screenshot",
+        "mobile_390_screenshot",
+        "desktop_portrait_screenshot",
+        "validator_output",
+        "parent_invite_copy"
+      ]
+    },
+    {
+      "id": "mobile_store_internal_test",
+      "label": "Mobile store internal test",
+      "allowed": true,
+      "requiredBeforeInvite": [
+        "all_internal_web_requirements",
+        "sdk_inventory_reviewed",
+        "age_rating_questionnaire_prepared",
+        "child_directed_declaration_reviewed",
+        "privacy_policy_draft_reviewed",
+        "external_links_reviewed"
+      ],
+      "evidence": [
+        "store_build_version",
+        "sdk_inventory",
+        "privacy_policy_draft",
+        "age_rating_notes",
+        "platform_review_notes"
+      ]
+    },
+    {
+      "id": "public_web_link",
+      "label": "Public web link",
+      "allowed": false,
+      "requiredBeforeInvite": [
+        "public_privacy_policy_reviewed",
+        "server_data_map_reviewed",
+        "guardian_notice_flow_reviewed",
+        "contact_delete_path_live",
+        "third_party_services_reviewed"
+      ],
+      "evidence": [
+        "public_policy_url",
+        "data_map",
+        "hosting_log_policy",
+        "support_contact"
+      ]
+    }
+  ],
+  "implementationFlags": [
+    {
+      "id": "child_test_safe",
+      "requiredValue": true
+    },
+    {
+      "id": "analyticsEnabled",
+      "requiredValue": false
+    },
+    {
+      "id": "adsEnabled",
+      "requiredValue": false
+    },
+    {
+      "id": "iapEnabled",
+      "requiredValue": false
+    },
+    {
+      "id": "accountEnabled",
+      "requiredValue": false
+    },
+    {
+      "id": "chatEnabled",
+      "requiredValue": false
+    },
+    {
+      "id": "freeTextEnabled",
+      "requiredValue": false
+    },
+    {
+      "id": "externalLinksEnabled",
+      "requiredValue": false
+    }
+  ],
+  "requiredEvidenceFiles": [
+    {
+      "id": "validator_output",
+      "store": "tmp",
+      "description": "Output from all design/data validators."
+    },
+    {
+      "id": "runtime_log",
+      "store": "tmp",
+      "description": "Smoke test and 30-minute route runtime notes."
+    },
+    {
+      "id": "screenshots",
+      "store": "tmp",
+      "description": "Desktop/mobile screenshots before replacing fake shots."
+    },
+    {
+      "id": "playtest_findings",
+      "store": "gamedesing",
+      "description": "Final learnings in playtest_review_round_XX.md."
+    },
+    {
+      "id": "playtest_observation_log",
+      "store": "tmp",
+      "description": "Per-session observation rows following data/playtest_observation_schema.json."
+    }
+  ],
+  "noGoIf": [
+    "analytics_sends_before_guardian_notice",
+    "ads_iap_or_rewarded_video_present",
+    "free_text_or_chat_enabled",
+    "account_or_contact_collection_present",
+    "sdk_inventory_unknown",
+    "hosting_logs_unreviewed",
+    "parent_note_missing",
+    "reset_progress_missing",
+    "build_cannot_reach_15_67",
+    "mobile_baseline_fails",
+    "forbidden_player_text_present"
+  ]
+}

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Game 67 Idle - Fake Shots</title>
+    <link rel="stylesheet" href="site.css">
+  </head>
+  <body class="fakeshots-page">
+    <nav class="nav nav--static" aria-label="Разделы GDD">
+      <a href="index.html">GDD</a>
+      <a href="editor.html">Editor</a>
+    </nav>
+    <section class="band fake-shots" id="fakeshots">
+        <div class="section-head section-head--wide">
+          <p class="eyebrow">Fake shots board</p>
+          <h2>9 fake shots life sim прототипа</h2>
+          <p>Это рабочие состояния UI про жизнь героя: где он проснулся, куда пошел, какое дело сделал, какой навык вырос и что изменилось в доме.</p>
+        </div>
+
+        <figure class="picture-board picture-board--compact">
+          <img src="art/gdd-game-fakeshot-board.png" alt="Четыре фейкшота игры 67: главный экран, город, дело у киоска, дом и транспорт">
+          <figcaption>
+            Общий визуальный ориентир игры: сначала `67/67 -> предали -> 1/67`, затем главный экран, город, дела и дом.
+          </figcaption>
+        </figure>
+
+        <div class="shot-grid shot-grid--board">
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>01</span>
+              <strong>Первый экран: утро</strong>
+            </header>
+            <div class="phone-ui">
+              <div class="shot-top">
+                <span>1/67</span>
+                <span>0 коинов</span>
+                <span>+0/сек</span>
+              </div>
+              <div class="shot-stage shot-stage--home-morning">
+                <div class="power-badge shot-power">1/67</div>
+                <div class="room-line">
+                  <span class="room-item room-item--mat"></span>
+                  <span class="room-item room-item--lamp">06:00</span>
+                  <span class="room-item room-item--box">67?</span>
+                </div>
+                <div class="sprite sprite--hero"></div>
+                <p class="next-goal">Собери 5 мем-коинов на первый выход</p>
+                <button class="big-action">Сделать 67</button>
+                <p class="shot-reaction">Герой встал, число над ним живет</p>
+              </div>
+              <div class="shot-tabs">
+                <span class="active">Город</span>
+                <span>Дела</span>
+                <span>Улучшения</span>
+                <span>Дом</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>02</span>
+              <strong>Первый клик: 67-жест</strong>
+            </header>
+            <div class="phone-ui">
+              <div class="shot-stage shot-stage--gesture">
+                <div class="gesture-hands">
+                  <i></i>
+                  <b>67</b>
+                  <i></i>
+                </div>
+                <p class="floating-reward">+1 мем-коин / +Руки</p>
+                <button class="big-action">Сделать 67</button>
+                <p class="shot-reaction">Жест руками - активность, эмоция и мини-анимация</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>03</span>
+              <strong>Первая покупка: быт</strong>
+            </header>
+            <div class="upgrade-list phone-panel">
+              <h3>Жизнь героя</h3>
+              <div class="next-goal">Купи Пакет для мем-коинов</div>
+              <div class="upgrade-row upgrade-row--buy">
+                <strong>Пакет для первого выхода</strong>
+                <span>5</span>
+                <small>Клик станет +2. Пакет появится в комнате и на спрайте.</small>
+              </div>
+              <div class="life-mini-scene">
+                <span>Комната</span><b>+</b><span>Предмет</span><b>+</b><span>Новый вид</span>
+              </div>
+              <div class="change-card">Что изменилось: герой выглядит собраннее</div>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>04</span>
+              <strong>Status-up: уровень жизни</strong>
+            </header>
+            <div class="shot-stage shot-stage--levelup">
+              <div class="power-badge shot-power">2/67</div>
+              <div class="sprite sprite--hero sprite--cap"></div>
+              <div class="status-strip">
+                <span>Дом +1</span>
+                <span>Руки +1</span>
+                <span>Кепка 67</span>
+              </div>
+              <p class="next-goal">Кепка 67 на герое</p>
+              <p class="shot-reaction">Сила вспыхнула, новый район стал ближе.</p>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>05</span>
+              <strong>Город: маршрут дня</strong>
+            </header>
+            <div class="city-map phone-panel">
+              <h3>Город</h3>
+              <div class="city-route">
+                <span class="route-node route-node--active">Дом</span>
+                <i></i>
+                <span class="route-node route-node--active">Двор</span>
+                <i></i>
+                <span class="route-node">Киоск</span>
+                <i></i>
+                <span class="route-node route-node--locked">Бизнес</span>
+              </div>
+              <button class="district active">Двор 1/67 <em>К делу</em></button>
+              <button class="district">Киоск мемов <em>3/67</em></button>
+              <button class="district locked">Школьный двор <em>Нужно 6/67</em></button>
+              <p>Карта показывает место, маршрут и причину блокировки.</p>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>06</span>
+              <strong>Дело в таймере: район</strong>
+            </header>
+            <div class="work-screen phone-panel">
+              <h3>Дела</h3>
+              <div class="active-timer">Помочь у киоска: 6 сек</div>
+              <div class="job-progress"><span style="width: 62%"></span></div>
+              <button class="big-action big-action--small">Сделать 67</button>
+              <div class="job-card">
+                <strong>Помощь у киоска</strong>
+                <small>Награда: +15 мем-коинов, +Ум</small>
+                <button>Забрать награду</button>
+              </div>
+              <div class="routine-row"><span>Дом</span><span>Город</span><span>Награда</span></div>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>07</span>
+              <strong>Навык и Событие</strong>
+            </header>
+            <div class="event-card phone-panel">
+              <div class="npc-row"><span>Банан</span><span>Клубника</span></div>
+              <h3>Тренировка 67-жеста</h3>
+              <div class="skill-bars">
+                <label>Руки <span style="width: 74%"></span></label>
+                <label>Стиль <span style="width: 42%"></span></label>
+                <label>Бизнес <span style="width: 24%"></span></label>
+              </div>
+              <p>Клубника дает секрет: жест открывает новое дело и реакцию Банана.</p>
+              <button>Сделать 67-жест <small>+Сила</small></button>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>08</span>
+              <strong>Дом растет</strong>
+            </header>
+            <div class="home-screen phone-panel">
+              <h3>Дом и транспорт</h3>
+              <div class="home-visual">
+                <div class="home-box">Дворовая база</div>
+                <div class="home-box home-box--warm">Уютный угол 67</div>
+              </div>
+              <div class="transport-row">
+                <span>Пешком</span>
+                <span>Самокат</span>
+                <span class="locked">67-тачка</span>
+              </div>
+              <p>Дом и транспорт меняют фон сцены, скорость дел и ощущение становления.</p>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>09</span>
+              <strong>Mini-final: новая жизнь</strong>
+            </header>
+            <div class="shot-stage shot-stage--final">
+              <div class="power-badge shot-power">15/67</div>
+              <div class="team-row">
+                <div class="sprite sprite--hero sprite--cap"></div>
+                <div class="team-dot"></div>
+                <div class="team-dot"></div>
+              </div>
+              <div class="final-life">
+                <span>Комната</span>
+                <span>Стенд</span>
+                <span>Команда</span>
+              </div>
+              <button class="big-action">Общий 67-жест</button>
+              <p class="next-goal">Мечта: 67/67</p>
+            </div>
+          </article>
+        </div>
+      </section>
+  </body>
+</html>

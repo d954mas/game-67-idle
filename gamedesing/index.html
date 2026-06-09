@@ -1,0 +1,898 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Game 67 Idle - Visual GDD</title>
+    <link rel="stylesheet" href="site.css">
+  </head>
+  <body>
+    <header class="hero" id="top">
+      <img class="hero__image" src="art/generated-67-comeback-keyart.png" alt="Сгенерированный игровой key art: герой был 67/67, Банан и Клубника предали, герой начинает с 1/67">
+      <div class="hero__shade"></div>
+      <nav class="nav" aria-label="Разделы GDD">
+        <a href="#concept">Концепт</a>
+        <a href="#actual-gdd">GDD</a>
+        <a href="#game-pictures">Картинки</a>
+        <a href="#lore">Лор</a>
+        <a href="#loop">Core loop</a>
+        <a href="#systems">Системы</a>
+        <a href="#ui-kit">UI Kit</a>
+        <a href="#life-sim">Life sim</a>
+        <a href="#fakeshots">Fake shots</a>
+        <a href="#mvp">MVP</a>
+        <a href="editor.html">Editor</a>
+      </nav>
+      <div class="hero__content">
+        <p class="eyebrow">Visual GDD v0.3 / ЦА 5-10</p>
+        <h1>67</h1>
+        <p class="hero__lead">
+          Ты был на вершине `67/67`. Тебя предали, мем обнулили до `1/67`.
+          Теперь это life sim про становление: город, дела, навыки, дом,
+          транспорт и путь обратно к `67/67`.
+        </p>
+        <div class="hero__stats" aria-label="Ключевые метрики концепта">
+          <span><strong>5-10</strong> лет</span>
+          <span><strong>30</strong> минут</span>
+          <span><strong>X/67</strong> над спрайтом</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="band intro" id="concept">
+        <div class="section-head">
+          <p class="eyebrow">Концепт</p>
+          <h2>Не просто копить. Жить путь наверх.</h2>
+        </div>
+        <div class="intro__grid">
+          <article class="signal-card signal-card--gold">
+            <span class="signal-card__number">67</span>
+            <h3>Мем и ранг</h3>
+            <p>`67` - знак крутости. Ребенок видит его в UI, над героем,
+              в наградах, реакциях и финальной цели.</p>
+          </article>
+          <article class="signal-card signal-card--red">
+            <span class="signal-card__number">1</span>
+            <h3>Предали и обнулили</h3>
+            <p>Герой был `67/67`, но Банан намутил подставу, Клубника знает
+              секрет, и число над героем падает до `1/67`.</p>
+          </article>
+          <article class="signal-card signal-card--green">
+            <span class="signal-card__number">+</span>
+            <h3>Становление</h3>
+            <p>Каждый этап меняет жизнь героя: новая привычка, район, навык,
+              дом, транспорт, команда и число над спрайтом.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band actual-gdd" id="actual-gdd">
+        <div class="section-head section-head--wide">
+          <p class="eyebrow">Актуальный GDD / source of truth</p>
+          <h2>Сайт показывает текущий P0, а не отдельный концепт</h2>
+          <p>
+            Канон на 2026-06-09: `prototype_mvp_spec.md v0.2`,
+            `data/balance.json v0.5`, `data/ui_flow.json v0.1`,
+            `prototype_build_handoff.md` и `handoff_status.md`.
+          </p>
+        </div>
+        <div class="truth-grid">
+          <article>
+            <strong>Цель P0</strong>
+            <p>30 минут активной игры после падения: `67/67 -> 1/67`, цель прототипа `15/67`, мечта после mini-final `67/67`.</p>
+          </article>
+          <article>
+            <strong>Платформы</strong>
+            <p>Mobile portrait `360x640` как baseline, web playable. PC/native только dev harness для скриншотов, input-emulation и QA.</p>
+          </article>
+          <article>
+            <strong>Экраны</strong>
+            <p>Intro, Main, `Город`, `Дела`, `Улучшения`, `Дом`, Event modal, Offline modal, Mini-final.</p>
+          </article>
+          <article>
+            <strong>Вкладки P0</strong>
+            <p>Ровно 4 bottom tabs: `Город`, `Дела`, `Улучшения`, `Дом`. Отдельной вкладки `Мемы` в P0 нет.</p>
+          </article>
+          <article>
+            <strong>Системы</strong>
+            <p>`Сила X/67`, мем-коины, клик, доход/сек, крутость, 4 навыка, комфорт, дом, транспорт, события, save/offline.</p>
+          </article>
+          <article>
+            <strong>Current No-Go</strong>
+            <p>External playtest еще нельзя: нет runtime build, real screenshots, runtime QA evidence, parent invite evidence и observation rows.</p>
+          </article>
+        </div>
+        <div class="truth-links">
+          <a class="doc-link" href="prototype_mvp_spec.md">MVP spec</a>
+          <a class="doc-link" href="prototype_build_handoff.md">Build handoff</a>
+          <a class="doc-link" href="handoff_status.md">Handoff status</a>
+          <a class="doc-link" href="data/balance.json">Balance JSON</a>
+          <a class="doc-link" href="data/ui_flow.json">UI flow JSON</a>
+        </div>
+      </section>
+
+      <section class="band game-pictures" id="game-pictures">
+        <div class="section-head section-head--wide">
+          <p class="eyebrow">Картинки игры</p>
+          <h2>Fake shots как кадры реального P0</h2>
+          <p>
+            Драма должна читаться до экономики: герой был `67/67`, его предали,
+            он стартует с `1/67`, а дальше игрок видит город, дела, дом и рост.
+          </p>
+        </div>
+        <div class="fall-board" aria-label="Сториборд падения героя с 67/67 до 1/67">
+          <article class="fall-card fall-card--top">
+            <span class="fall-badge">67/67</span>
+            <h3>Был на вершине</h3>
+            <p>Город знает героя. Над спрайтом максимальный мем-ранг.</p>
+          </article>
+          <article class="fall-card fall-card--betrayal">
+            <span class="fall-clock">06:00</span>
+            <h3>Предали</h3>
+            <p>Банан мутит схему, Клубника знает секрет, табличка 67 треснула.</p>
+          </article>
+          <article class="fall-card fall-card--one">
+            <span class="fall-badge fall-badge--one">1/67</span>
+            <h3>Все с единицы</h3>
+            <p>Комната, первая кнопка `Сделать 67`, путь обратно уже виден.</p>
+          </article>
+        </div>
+        <figure class="picture-board">
+          <img src="art/generated-67-gameplay-fakeshot.png" alt="Сгенерированный фейкшот игры 67: герой 1/67, большая кнопка 67-жеста, работы, апгрейды и вкладки">
+          <figcaption>
+            Сгенерированный игровой фейкшот P0: `1/67` над героем, большая
+            кнопка 67-жеста, ресурсы, дела, апгрейды, дом и вкладки. Точные
+            русские тексты берутся из `p0_ui_copy.md`, картинка задает арт-качество.
+          </figcaption>
+        </figure>
+        <div class="picture-strip">
+          <article>
+            <strong>Главный экран</strong>
+            <p>Комната, герой `1/67`, большая кнопка 67-жеста, монеты и вкладки.</p>
+          </article>
+          <article>
+            <strong>Город</strong>
+            <p>Карта маршрута: дом, двор, киоск, закрытые районы и цель дня.</p>
+          </article>
+          <article>
+            <strong>Дела</strong>
+            <p>Активность у киоска, прогресс-бар, награда и навыки.</p>
+          </article>
+          <article>
+            <strong>Дом</strong>
+            <p>Комфорт, предметы, транспорт и locked `67/67` как дальняя мечта.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band power-ui">
+        <div class="section-head">
+          <p class="eyebrow">Главная механика UI</p>
+          <h2>`67` как уровень силы над спрайтом</h2>
+          <p>
+            Берем язык мемных реклам про бандитов, город и стратегию: над
+            персонажем висит число силы. Ребенок видит рост без объяснений.
+          </p>
+        </div>
+        <div class="power-stage" aria-label="Макет уровня силы над спрайтами">
+          <article class="power-fighter power-fighter--hero">
+            <div class="power-badge">15/67</div>
+            <div class="sprite sprite--hero"></div>
+            <h3>Игрок</h3>
+            <p>Сила растет после апгрейдов и событий.</p>
+          </article>
+          <div class="versus">></div>
+          <article class="power-fighter">
+            <div class="power-badge power-badge--enemy">6</div>
+            <div class="sprite sprite--banana"></div>
+            <h3>Банан</h3>
+            <p>Соперник ниже уровнем, значит игрок победил.</p>
+          </article>
+          <div class="power-note">
+            <strong>Правило:</strong> `X/67` над героем крупнее всех ресурсов.
+            Это главный прогресс, а монетки только помогают числу расти.
+          </div>
+        </div>
+      </section>
+
+      <section class="band audience">
+        <div class="section-head">
+          <p class="eyebrow">ЦА 5-10 лет</p>
+          <h2>Понятно без объяснений</h2>
+        </div>
+        <div class="audience-grid">
+          <article>
+            <h3>Большие кнопки</h3>
+            <p>Главное действие видно сразу. Нажатие в первые 5 секунд.</p>
+          </article>
+          <article>
+            <h3>Короткие тексты</h3>
+            <p>1-2 строки, простые слова, смешная реакция после покупки.</p>
+          </article>
+          <article>
+            <h3>Частые награды</h3>
+            <p>Первая покупка до 30 секунд, первый статус-ап до 2 минут.</p>
+          </article>
+          <article>
+            <h3>Без взрослой драмы</h3>
+            <p>Не взрослая драма, а подстава, мем-коины и возвращение крутости.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band visual-progress">
+        <div class="section-head">
+          <p class="eyebrow">Визуальная лестница</p>
+          <h2>От обнуления до легенды</h2>
+        </div>
+        <figure class="progress-art">
+          <img src="art/generated-67-life-sim-progression.png" alt="Сгенерированный life-sim путь героя: комната 1/67, киоск 3/67, дом 7/67, бизнес 15/67 и мечта 67">
+          <figcaption>
+            Герой должен меняться через жизнь: сначала угол и `1/67`, потом район,
+            дело, транспорт, база, команда и далекая мечта `67/67`.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="band lore" id="lore">
+        <div class="section-head section-head--wide">
+          <p class="eyebrow">Лор</p>
+          <h2>Был 67/67. Предали. Начал с 1/67.</h2>
+          <p>
+            Это главная драматургия проекта. До интро герой уже был легендой:
+            деньги, связи, город и максимальный ранг `67/67`. В 06:00 Банан
+            мутит схему, Клубника знает секрет, табличка 67 ломается, и игрок
+            просыпается с `1/67`. Смысл игры - вернуть свое, но через жизнь,
+            дела и становление.
+          </p>
+        </div>
+
+        <figure class="lore-art lore-art--safe">
+          <div class="lore-safe-scene" role="img" aria-label="Мемная безопасная сцена: комната героя, ночник 06:00, Банан, Клубника и табличка 67">
+            <div class="safe-room">
+              <span class="safe-clock">06:00</span>
+              <span class="safe-bed">После подставы</span>
+              <span class="safe-sign">67/67</span>
+              <span class="safe-hero">1/67</span>
+              <span class="safe-banana">Банан предал</span>
+              <span class="safe-berry">Клубника знает</span>
+            </div>
+          </div>
+          <figcaption>
+            Внутренний лорный реф: не просто “проснулся слабым”, а был наверху,
+            получил подставу, потерял `67/67` и начинает возвращение с `1/67`.
+          </figcaption>
+        </figure>
+
+        <div class="lore-board" aria-label="Сториборд предательства">
+          <article class="lore-step">
+            <div class="lore-step__mark lore-step__mark--gold">67</div>
+            <h3>Вершина</h3>
+            <p>Герой при деньгах, связях и имени. Его называют не по имени, а по
+              уровню: `67`.</p>
+          </article>
+          <article class="lore-step">
+            <div class="fruit-scene" aria-hidden="true">
+              <span class="banana"></span>
+              <span class="berry"></span>
+            </div>
+            <h3>Подстава</h3>
+            <p>Банан и Клубника становятся символами сделки, слуха и личного
+              мемного обнуления.</p>
+          </article>
+          <article class="lore-step">
+            <div class="clock-mark">06:00</div>
+            <h3>Обнуление</h3>
+            <p>Ночник `06:00` и странная схема. Сила падает `67/67 -> 1/67`.</p>
+          </article>
+          <article class="lore-step">
+            <div class="lore-step__mark lore-step__mark--red">1</div>
+            <h3>Обнуление</h3>
+            <p>Игрок стартует с мемной подставы, но первая кнопка уже формулирует цель:
+              подняться.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band loop" id="loop">
+        <div class="section-head">
+          <p class="eyebrow">Core loop</p>
+          <h2>День героя: город, дело, награда, апгрейд жизни</h2>
+        </div>
+        <div class="loop-diagram" aria-label="Схема основного цикла">
+          <div class="loop-node">Выбрать район</div>
+          <div class="loop-arrow"></div>
+          <div class="loop-node">Сделать дело</div>
+          <div class="loop-arrow"></div>
+          <div class="loop-node">Получить коин/опыт</div>
+          <div class="loop-arrow"></div>
+          <div class="loop-node">Улучшить дом/скилл</div>
+          <div class="loop-arrow"></div>
+          <div class="loop-node loop-node--final">Сила X/67 растет</div>
+        </div>
+      </section>
+
+      <section class="band gameplay-map">
+        <div class="section-head">
+          <p class="eyebrow">Геймплей</p>
+          <h2>Что игрок делает в life sim</h2>
+        </div>
+        <div class="gameplay-grid">
+          <article>
+            <span>1</span>
+            <h3>Выбирает место в городе</h3>
+            <p>Двор, киоск, учебный двор, мини-бизнес. На карте видно, куда герой идет.</p>
+          </article>
+          <article>
+            <span>2</span>
+            <h3>Запускает дело</h3>
+            <p>Короткий таймер: помочь у киоска, разнести наклейки, собрать заказ, потренировать 67-жест.</p>
+          </article>
+          <article>
+            <span>3</span>
+            <h3>Качает навыки</h3>
+            <p>Руки, Ум, Стиль, Бизнес открывают дела, районы, предметы дома и транспорт.</p>
+          </article>
+          <article>
+            <span>4</span>
+            <h3>Меняет уровень жизни</h3>
+            <p>Фон героя растет: угол, комната, база, штаб; рядом появляется самокат, велик, 67-тачка.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band ui-kit" id="ui-kit">
+        <div class="section-head section-head--wide">
+          <p class="eyebrow">UI Bible / Components</p>
+          <h2>Переиспользуемый UI на slice9</h2>
+          <p>
+            P0 нельзя собирать из одноразовых картинок. Кнопки, карточки,
+            панели, модалки, плашки `X/67`, progress bars и tabs должны быть
+            компонентами с reusable states и 9-slice рамками.
+          </p>
+        </div>
+        <figure class="picture-board">
+          <img src="art/gdd-ui-kit-slice9-board.png" alt="UI kit игры 67: кнопки, панели, карточки, бейджи, progress bars и tabs">
+          <figcaption>
+            Визуальный reference для `ui_bible.md`. Это не финальная нарезка,
+            а направление формы, цвета и читаемости для будущих slice9 exports.
+          </figcaption>
+        </figure>
+        <figure class="picture-board asset-pack-board">
+          <img src="assets/generated/runtime_composed_screen.png" alt="Игровой экран, собранный из готовых generated runtime ассетов">
+          <figcaption>
+            Runtime proof: этот экран собран из отдельных PNG в
+            `assets/generated/`, а не из фейкшота. Так должен выглядеть первый
+            экран после встраивания ассетов в игру.
+          </figcaption>
+        </figure>
+        <figure class="picture-board asset-pack-board">
+          <img src="assets/generated/runtime_asset_pack_preview.png" alt="Готовый generated runtime art pack игры 67: персонажи, UI и фоны">
+          <figcaption>
+            Готовая generated art-библия для встраивания: персонажи без фона,
+            UI-спрайты, фоны и source sheets. Полная визуальная страница:
+            `art_bible.html`.
+          </figcaption>
+        </figure>
+        <figure class="picture-board asset-pack-board">
+          <img src="art/generated-67-asset-sheet.png" alt="Сгенерированный asset sheet игры 67: стадии героя, Банан, Клубника, монета, жест 67, дом, транспорт и киоск">
+          <figcaption>
+            Сгенерированный visual development sheet для будущей нарезки:
+            стадии героя `1/67 -> 15/67`, Банан, Клубника, монета, жест `67`,
+            дом, транспорт и киоск. Техническая decomposed-нарезка лежит ниже в
+            `assets/asset_pack_manifest.json`.
+          </figcaption>
+        </figure>
+        <figure class="picture-board asset-pack-board">
+          <img src="assets/asset_pack_preview.png" alt="Технический decomposed asset pack игры 67: slice9 UI, иконки, персонажи, фоны и FX">
+          <figcaption>
+            Техническая нарезка P0 для проверки структуры: PNG, 9-slice
+            метаданные, reusable категории и валидатор. Использовать как контракт
+            для сборки, а generated asset sheet выше - как арт-качество.
+          </figcaption>
+        </figure>
+        <div class="truth-links">
+          <a class="doc-link" href="ui_bible.md">UI Bible</a>
+          <a class="doc-link" href="art_bible.html">Runtime Art Bible</a>
+          <a class="doc-link" href="assets/generated/runtime_asset_manifest.json">Runtime asset manifest</a>
+          <a class="doc-link" href="game_implementation_plan.md">Implementation plan</a>
+          <a class="doc-link" href="data/ui_components.json">UI components JSON</a>
+          <a class="doc-link" href="assets/asset_pack_manifest.json">Ready asset manifest</a>
+          <a class="doc-link" href="assets/ui/slice9.json">Ready slice9 JSON</a>
+          <a class="doc-link" href="screen_mockups_spec.md">Screen mockups spec</a>
+          <a class="doc-link" href="asset_generation_brief.md">Asset generation brief</a>
+          <a class="doc-link" href="dev_design_handoff_plan.md">Dev/Design plan</a>
+        </div>
+      </section>
+
+      <section class="band life-sim" id="life-sim">
+        <div class="section-head">
+          <p class="eyebrow">Life simulator слой</p>
+          <h2>Город, дела, навыки, дом и транспорт</h2>
+          <p>
+            Ближе к Life Simulator: игрок видит не склад апгрейдов, а жизнь героя.
+            Утро дома, выход в район, дело с таймером, прокачка навыка, покупка
+            предмета, новый транспорт и более уверенный спрайт.
+          </p>
+        </div>
+        <div class="life-grid">
+          <article>
+            <h3>Город</h3>
+            <p>4 района прототипа: Двор `1/67`, Киоск мемов, Школьный двор,
+              Мини-бизнес.</p>
+          </article>
+          <article>
+            <h3>Дела</h3>
+            <p>Сцены с таймером: сбор мем-коинов, помощь у киоска, разнос
+              наклеек, свой стенд, мини-бизнес.</p>
+          </article>
+          <article>
+            <h3>Навыки</h3>
+            <p>Руки, Ум, Стиль, Бизнес. Навыки открывают новые дела и
+              апгрейды.</p>
+          </article>
+          <article>
+            <h3>Жизнь</h3>
+            <p>Дом и транспорт растут визуально: матрас, комната, штаб, самокат,
+              велик, `67-тачка`.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band fake-shots" id="fakeshots">
+        <div class="section-head section-head--wide">
+          <p class="eyebrow">Fake shots board</p>
+          <h2>9 fake shots life sim прототипа</h2>
+          <p>Это рабочие состояния UI про жизнь героя: где он проснулся, куда пошел, какое дело сделал, какой навык вырос и что изменилось в доме.</p>
+        </div>
+
+        <figure class="picture-board picture-board--compact">
+          <img src="art/gdd-game-fakeshot-board.png" alt="Сводная доска фейкшотов UI игры 67">
+          <figcaption>Сначала общий визуальный вайб игры, ниже - разбор 9 конкретных UI-состояний.</figcaption>
+        </figure>
+
+        <div class="shot-grid shot-grid--board">
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>01</span>
+              <strong>Первый экран: утро</strong>
+            </header>
+            <div class="phone-ui">
+              <div class="shot-top">
+                <span>1/67</span>
+                <span>0 коинов</span>
+                <span>+0/сек</span>
+              </div>
+              <div class="shot-stage shot-stage--home-morning">
+                <div class="power-badge shot-power">1/67</div>
+                <div class="room-line">
+                  <span class="room-item room-item--mat"></span>
+                  <span class="room-item room-item--lamp">06:00</span>
+                  <span class="room-item room-item--box">67?</span>
+                </div>
+                <div class="sprite sprite--hero"></div>
+                <p class="next-goal">Собери 5 мем-коинов на первый выход</p>
+                <button class="big-action">Сделать 67</button>
+                <p class="shot-reaction">Герой встал, число над ним живет</p>
+              </div>
+              <div class="shot-tabs">
+                <span class="active">Город</span>
+                <span>Дела</span>
+                <span>Улучшения</span>
+                <span>Дом</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>02</span>
+              <strong>Первый клик: 67-жест</strong>
+            </header>
+            <div class="phone-ui">
+              <div class="shot-stage shot-stage--gesture">
+                <div class="gesture-hands">
+                  <i></i>
+                  <b>67</b>
+                  <i></i>
+                </div>
+                <p class="floating-reward">+1 мем-коин / +Руки</p>
+                <button class="big-action">Сделать 67</button>
+                <p class="shot-reaction">Жест руками - активность, эмоция и мини-анимация</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>03</span>
+              <strong>Первая покупка: быт</strong>
+            </header>
+            <div class="upgrade-list phone-panel">
+              <h3>Жизнь героя</h3>
+              <div class="next-goal">Купи Пакет для мем-коинов</div>
+              <div class="upgrade-row upgrade-row--buy">
+                <strong>Пакет для первого выхода</strong>
+                <span>5</span>
+                <small>Клик станет +2. Пакет появится в комнате и на спрайте.</small>
+              </div>
+              <div class="life-mini-scene">
+                <span>Комната</span><b>+</b><span>Предмет</span><b>+</b><span>Новый вид</span>
+              </div>
+              <div class="change-card">Что изменилось: герой выглядит собраннее</div>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>04</span>
+              <strong>Status-up: уровень жизни</strong>
+            </header>
+            <div class="shot-stage shot-stage--levelup">
+              <div class="power-badge shot-power">2/67</div>
+              <div class="sprite sprite--hero sprite--cap"></div>
+              <div class="status-strip">
+                <span>Дом +1</span>
+                <span>Руки +1</span>
+                <span>Кепка 67</span>
+              </div>
+              <p class="next-goal">Кепка 67 на герое</p>
+              <p class="shot-reaction">Сила вспыхнула, новый район стал ближе.</p>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>05</span>
+              <strong>Город: маршрут дня</strong>
+            </header>
+            <div class="city-map phone-panel">
+              <h3>Город</h3>
+              <div class="city-route">
+                <span class="route-node route-node--active">Дом</span>
+                <i></i>
+                <span class="route-node route-node--active">Двор</span>
+                <i></i>
+                <span class="route-node">Киоск</span>
+                <i></i>
+                <span class="route-node route-node--locked">Бизнес</span>
+              </div>
+              <button class="district active">Двор 1/67 <em>К делу</em></button>
+              <button class="district">Киоск мемов <em>3/67</em></button>
+              <button class="district locked">Школьный двор <em>Нужно 6/67</em></button>
+              <p>Карта показывает место, маршрут и причину блокировки.</p>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>06</span>
+              <strong>Дело в таймере: район</strong>
+            </header>
+            <div class="work-screen phone-panel">
+              <h3>Дела</h3>
+              <div class="active-timer">Помочь у киоска: 6 сек</div>
+              <div class="job-progress"><span style="width: 62%"></span></div>
+              <button class="big-action big-action--small">Сделать 67</button>
+              <div class="job-card">
+                <strong>Помощь у киоска</strong>
+                <small>Награда: +15 мем-коинов, +Ум</small>
+                <button>Забрать награду</button>
+              </div>
+              <div class="routine-row"><span>Дом</span><span>Город</span><span>Награда</span></div>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>07</span>
+              <strong>Навык и Событие</strong>
+            </header>
+            <div class="event-card phone-panel">
+              <div class="npc-row"><span>Банан</span><span>Клубника</span></div>
+              <h3>Тренировка 67-жеста</h3>
+              <div class="skill-bars">
+                <label>Руки <span style="width: 74%"></span></label>
+                <label>Стиль <span style="width: 42%"></span></label>
+                <label>Бизнес <span style="width: 24%"></span></label>
+              </div>
+              <p>Клубника дает секрет: жест открывает новое дело и реакцию Банана.</p>
+              <button>Сделать 67-жест <small>+Сила</small></button>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>08</span>
+              <strong>Дом растет</strong>
+            </header>
+            <div class="home-screen phone-panel">
+              <h3>Дом и транспорт</h3>
+              <div class="home-visual">
+                <div class="home-box">Дворовая база</div>
+                <div class="home-box home-box--warm">Уютный угол 67</div>
+              </div>
+              <div class="transport-row">
+                <span>Пешком</span>
+                <span>Самокат</span>
+                <span class="locked">67-тачка</span>
+              </div>
+              <p>Дом и транспорт меняют фон сцены, скорость дел и ощущение становления.</p>
+            </div>
+          </article>
+
+          <article class="game-shot phone-shot">
+            <header class="shot-title">
+              <span>09</span>
+              <strong>Mini-final: новая жизнь</strong>
+            </header>
+            <div class="shot-stage shot-stage--final">
+              <div class="power-badge shot-power">15/67</div>
+              <div class="team-row">
+                <div class="sprite sprite--hero sprite--cap"></div>
+                <div class="team-dot"></div>
+                <div class="team-dot"></div>
+              </div>
+              <div class="final-life">
+                <span>Комната</span>
+                <span>Стенд</span>
+                <span>Команда</span>
+              </div>
+              <button class="big-action">Общий 67-жест</button>
+              <p class="next-goal">Мечта: 67/67</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="band influence">
+        <div class="section-head">
+          <p class="eyebrow">Причинность</p>
+          <h2>Что на что влияет</h2>
+        </div>
+        <div class="influence-table" role="table" aria-label="Что на что влияет">
+          <div role="row">
+            <strong>Сделать 67</strong>
+            <span>+мем-коины, шанс +крутость</span>
+            <em>ускоряет первые покупки</em>
+          </div>
+          <div role="row">
+            <strong>Мем-коины</strong>
+            <span>покупают апгрейды</span>
+            <em>дают силу, доход/сек, новые действия</em>
+          </div>
+          <div role="row">
+            <strong>Сила X/67</strong>
+            <span>открывает этапы становления</span>
+            <em>меняет вид героя и соперников</em>
+          </div>
+          <div role="row">
+            <strong>Крутость</strong>
+            <span>открывает мемы и реакции</span>
+            <em>делает события выгоднее</em>
+          </div>
+          <div role="row">
+            <strong>Доход/сек</strong>
+            <span>копит мем-коины без клика</span>
+            <em>держит idle-ощущение</em>
+          </div>
+          <div role="row">
+            <strong>Дела</strong>
+            <span>дают мем-коины и опыт навыка</span>
+            <em>создает ощущение жизни в городе</em>
+          </div>
+          <div role="row">
+            <strong>Навыки</strong>
+            <span>открывают дела и районы</span>
+            <em>делают становление управляемым</em>
+          </div>
+          <div role="row">
+            <strong>Дом и транспорт</strong>
+            <span>дают комфорт, скорость, доступ</span>
+            <em>визуально показывают рост героя</em>
+          </div>
+        </div>
+      </section>
+
+      <section class="band ux-map">
+        <div class="section-head">
+          <p class="eyebrow">UI/UX карта</p>
+          <h2>Путь экранов прототипа</h2>
+        </div>
+        <div class="ux-flow">
+          <div>Интро `67/67 -> 1/67`</div>
+          <span></span>
+          <div>Главный экран</div>
+          <span></span>
+          <div>Карта города</div>
+          <span></span>
+          <div>Город</div>
+          <span></span>
+          <div>Дела/учеба</div>
+          <span></span>
+          <div>Дом/транспорт</div>
+          <span></span>
+          <div>Мем-событие</div>
+        </div>
+      </section>
+
+      <section class="band timeline-30">
+        <div class="section-head">
+          <p class="eyebrow">30 минут</p>
+          <h2>Дуга первого прототипа</h2>
+        </div>
+        <div class="minute-grid">
+          <article>
+            <strong>0-2</strong>
+            <h3>Понять кнопку</h3>
+            <p>`67/67 -> 1/67`, Банан мутит, большая кнопка `Сделать 67`.</p>
+          </article>
+          <article>
+            <strong>2-7</strong>
+            <h3>Первые покупки</h3>
+            <p>Пакет, кепка, наклейка `67`. Сила до `3/67`.</p>
+          </article>
+          <article>
+            <strong>7-15</strong>
+            <h3>Idle включился</h3>
+            <p>Команда 67, тележка мемов, ночник `06:00`. Сила до `6/67`.</p>
+          </article>
+          <article>
+            <strong>15-23</strong>
+            <h3>Мем-события</h3>
+            <p>Клубничный секрет, стенд мемов, значок. Сила до `10/67`.</p>
+          </article>
+          <article>
+            <strong>23-30</strong>
+            <h3>Мини-финал</h3>
+            <p>Камин, команда `67`, первый фанат. Финал: `15/67`.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band status-map">
+        <div class="section-head">
+          <p class="eyebrow">Прогресс</p>
+          <h2>Статус растет слоями</h2>
+        </div>
+        <div class="status-chart" aria-label="Карта прогресса статуса">
+          <div class="status-chart__track"></div>
+          <div class="status-point status-point--one" style="--x: 2%">
+            <span>1</span>
+            <strong>1/67</strong>
+          </div>
+          <div class="status-point" style="--x: 10%">
+            <span>6</span>
+            <strong>6/67</strong>
+          </div>
+          <div class="status-point" style="--x: 22%">
+            <span>15</span>
+            <strong>15/67</strong>
+          </div>
+          <div class="status-point" style="--x: 60%">
+            <span>40</span>
+            <strong>Предприниматель</strong>
+          </div>
+          <div class="status-point status-point--sixty-seven" style="--x: 98%">
+            <span>67</span>
+            <strong>Легенда</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="band systems" id="systems">
+        <div class="section-head">
+          <p class="eyebrow">Системы</p>
+          <h2>Ресурсы и статы P0</h2>
+          <p>
+            В верхнем UI всегда главные: `Сила X/67`, мем-коины, клик и доход/сек.
+            Остальные статы открывают дела, районы, дом и транспорт.
+          </p>
+        </div>
+        <div class="systems__grid">
+          <article class="system-card">
+            <h3>Мем-коины</h3>
+            <div class="bar" style="--value: 82%"><span></span></div>
+            <p>Главная валюта. Получается кликами и пассивным доходом.</p>
+          </article>
+          <article class="system-card">
+            <h3>Сила X/67</h3>
+            <div class="bar bar--red" style="--value: 58%"><span></span></div>
+            <p>Главное число над спрайтом. Цель прототипа: `15/67`.</p>
+          </article>
+          <article class="system-card">
+            <h3>Крутость</h3>
+            <div class="bar bar--yellow" style="--value: 66%"><span></span></div>
+            <p>Открывает мем-события, реакции и смешные фразы.</p>
+          </article>
+          <article class="system-card">
+            <h3>Доход/сек</h3>
+            <div class="bar bar--green" style="--value: 74%"><span></span></div>
+            <p>Idle-ощущение: игра сама помогает, но клики ускоряют.</p>
+          </article>
+          <article class="system-card system-card--meme">
+            <h3>Навыки</h3>
+            <div class="bar bar--gold" style="--value: 70%"><span></span></div>
+            <p>Руки, Ум, Стиль, Бизнес. Открывают дела, районы и события.</p>
+          </article>
+          <article class="system-card">
+            <h3>Комфорт</h3>
+            <div class="bar" style="--value: 52%"><span></span></div>
+            <p>Life stat для дома, транспорта и ощущения роста уровня жизни.</p>
+          </article>
+          <article class="system-card system-card--meme">
+            <h3>67-жест</h3>
+            <div class="bar bar--gold" style="--value: 100%"><span></span></div>
+            <p>Активность руками, анимация, мемная реакция и главный крючок игры.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band economy">
+        <div class="section-head">
+          <p class="eyebrow">Баланс MVP</p>
+          <h2>Первые награды должны быть частыми</h2>
+        </div>
+        <div class="economy__grid">
+          <figure class="curve">
+            <svg viewBox="0 0 720 320" role="img" aria-label="Кривая роста дохода и цены апгрейдов">
+              <path class="curve__grid" d="M60 40H680M60 100H680M60 160H680M60 220H680M60 280H680"></path>
+              <path class="curve__axis" d="M60 20V280H700"></path>
+              <path class="curve__income" d="M70 270 C150 246, 210 230, 290 195 S430 124, 510 78 S640 34, 690 28"></path>
+              <path class="curve__cost" d="M70 276 C170 270, 270 250, 370 210 S560 112, 690 42"></path>
+              <text x="72" y="308">0 мин</text>
+              <text x="612" y="308">30 мин</text>
+              <text x="82" y="52">доход</text>
+              <text x="540" y="120">стоимость</text>
+            </svg>
+            <figcaption>Ориентир: сила `15/67` за 30 минут активной игры.</figcaption>
+          </figure>
+          <div class="mvp-list" id="mvp">
+            <h3>MVP-версия</h3>
+            <ul>
+              <li>Сила над спрайтом `1/67 -> 15/67`</li>
+              <li>Мем-коины, крутость, доход/сек</li>
+              <li>Большая кнопка и 4 вкладки: `Город`, `Дела`, `Улучшения`, `Дом`</li>
+              <li>15 смешных апгрейдов</li>
+              <li>4 района, 4 дела, 4 обучения, дом и транспорт</li>
+              <li>4 события про Банана, Клубнику и ночник `06:00`</li>
+              <li>Пассивный доход, сохранение и offline progress</li>
+            </ul>
+            <a class="doc-link" href="prototype_mvp_spec.md">Открыть source of truth MVP</a>
+            <a class="doc-link" href="prototype_build_handoff.md">Открыть build handoff</a>
+            <a class="doc-link" href="playtest_acceptance_gates.md">Открыть playtest gates</a>
+            <a class="doc-link" href="prototype_30min_plan.md">Открыть полный план</a>
+            <a class="doc-link" href="data/balance.json">Открыть баланс JSON</a>
+            <p class="check-command">Проверка: <code>node gamedesing/tools/validate_gdd.mjs</code></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="band references">
+        <div class="section-head">
+          <p class="eyebrow">Референсы</p>
+          <h2>Что берем из жанра</h2>
+        </div>
+        <div class="refs-grid">
+          <article>
+            <h3>Life idle</h3>
+            <p>Берем структуру вкладок, но упрощаем до действий, улучшений и мемов.</p>
+          </article>
+          <article>
+            <h3>Life-sim путь наверх</h3>
+            <p>Берем понятный рост снизу вверх, но в мягкой мемной подаче для детей.</p>
+          </article>
+          <article>
+            <h3>Clicker / incremental</h3>
+            <p>Берем большую кнопку, быстрые награды и доход в секунду.</p>
+          </article>
+          <article>
+            <h3>Наше отличие</h3>
+            <p>Не взрослый успех, а смешное возвращение силы `67/67`.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

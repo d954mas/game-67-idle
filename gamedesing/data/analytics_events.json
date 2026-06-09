@@ -1,0 +1,356 @@
+{
+  "version": "0.1",
+  "mode": {
+    "defaultExternalChildTest": "analytics_off",
+    "enabledOnlyAfter": "guardian_notice_and_consent",
+    "sessionId": "anonymous_random_per_test_session",
+    "forbiddenPayloadFields": [
+      "name",
+      "age",
+      "exact_age",
+      "email",
+      "phone",
+      "geolocation",
+      "location",
+      "ip",
+      "advertising_id",
+      "ad_id",
+      "free_text",
+      "photo",
+      "audio",
+      "video"
+    ]
+  },
+  "commonParams": [
+    {
+      "id": "session_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "id": "build",
+      "type": "string",
+      "required": true
+    },
+    {
+      "id": "platform",
+      "type": "enum",
+      "values": [
+        "web",
+        "mobile",
+        "desktop_harness"
+      ],
+      "required": true
+    },
+    {
+      "id": "session_seconds",
+      "type": "number",
+      "required": true
+    },
+    {
+      "id": "analytics_enabled",
+      "type": "boolean",
+      "required": true
+    }
+  ],
+  "events": [
+    {
+      "id": "session_start",
+      "requiredForP0": true,
+      "when": "start or restored session begins",
+      "params": [
+        {
+          "id": "layout",
+          "type": "enum",
+          "values": [
+            "360x640",
+            "390x844",
+            "desktop_portrait_frame",
+            "other"
+          ],
+          "required": true
+        },
+        {
+          "id": "child_test_safe",
+          "type": "boolean",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "intro_seen",
+      "requiredForP0": false,
+      "when": "intro sequence appears",
+      "params": [
+        {
+          "id": "skipped",
+          "type": "boolean",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "first_click",
+      "requiredForP0": true,
+      "when": "first gameplay click/tap",
+      "params": [
+        {
+          "id": "seconds_from_start",
+          "type": "number",
+          "required": true
+        },
+        {
+          "id": "element_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "activity_used",
+      "requiredForP0": true,
+      "when": "any activity button is used",
+      "params": [
+        {
+          "id": "activity_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "id": "reward_meme_coins",
+          "type": "number",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "upgrade_seen",
+      "requiredForP0": false,
+      "when": "upgrade card becomes visible",
+      "params": [
+        {
+          "id": "upgrade_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "id": "state",
+          "type": "enum",
+          "values": [
+            "locked",
+            "affordable",
+            "owned"
+          ],
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "upgrade_bought",
+      "requiredForP0": true,
+      "when": "upgrade is purchased",
+      "params": [
+        {
+          "id": "upgrade_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "id": "cost",
+          "type": "number",
+          "required": true
+        },
+        {
+          "id": "status_before",
+          "type": "number",
+          "required": true
+        },
+        {
+          "id": "status_after",
+          "type": "number",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "status_changed",
+      "requiredForP0": true,
+      "when": "X/67 changes",
+      "params": [
+        {
+          "id": "from",
+          "type": "number",
+          "required": true
+        },
+        {
+          "id": "to",
+          "type": "number",
+          "required": true
+        },
+        {
+          "id": "source",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "job_started",
+      "requiredForP0": true,
+      "when": "deal timer starts",
+      "params": [
+        {
+          "id": "job_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "id": "district_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "id": "duration_seconds",
+          "type": "number",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "job_completed",
+      "requiredForP0": true,
+      "when": "deal reward is claimed",
+      "params": [
+        {
+          "id": "job_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "id": "duration_seconds",
+          "type": "number",
+          "required": true
+        },
+        {
+          "id": "reward_meme_coins",
+          "type": "number",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "district_unlocked",
+      "requiredForP0": false,
+      "when": "new district becomes available",
+      "params": [
+        {
+          "id": "district_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "id": "status",
+          "type": "number",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "event_seen",
+      "requiredForP0": true,
+      "when": "event modal appears",
+      "params": [
+        {
+          "id": "event_id",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "event_choice",
+      "requiredForP0": true,
+      "when": "event choice is selected",
+      "params": [
+        {
+          "id": "event_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "id": "choice_id",
+          "type": "string",
+          "required": true
+        },
+        {
+          "id": "visible_reward",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "tab_opened",
+      "requiredForP0": false,
+      "when": "bottom tab is opened",
+      "params": [
+        {
+          "id": "tab_id",
+          "type": "enum",
+          "values": [
+            "city",
+            "deals",
+            "upgrades",
+            "home"
+          ],
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "final_15_reached",
+      "requiredForP0": true,
+      "when": "mini-final is shown",
+      "params": [
+        {
+          "id": "route",
+          "type": "enum",
+          "values": [
+            "first_choices",
+            "second_choices",
+            "mixed"
+          ],
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "session_end",
+      "requiredForP0": true,
+      "when": "session closes or test ends",
+      "params": [
+        {
+          "id": "status",
+          "type": "number",
+          "required": true
+        },
+        {
+          "id": "meme_coins",
+          "type": "number",
+          "required": true
+        },
+        {
+          "id": "reason",
+          "type": "enum",
+          "values": [
+            "closed",
+            "reset",
+            "moderator_stop",
+            "crash"
+          ],
+          "required": true
+        }
+      ]
+    }
+  ]
+}

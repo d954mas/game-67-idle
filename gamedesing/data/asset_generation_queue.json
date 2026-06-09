@@ -1,0 +1,163 @@
+{
+  "version": "0.1",
+  "rules": {
+    "temporaryOutputDir": "tmp/",
+    "finalAssetRoot": "gamedesing/assets/",
+    "noTinyTextInGeneratedImages": true,
+    "childSafe": true,
+    "style": "bright child-safe meme life-sim mobile game, toy-like 3D cartoon, readable silhouettes, gold 67 accent",
+    "story": "67/67 at the top -> betrayed by Banana/Strawberry meme setup -> restart at 1/67 -> comeback through city, deals, skills, home and transport"
+  },
+  "batches": [
+    {
+      "id": "ui_slice9_p0",
+      "priority": 1,
+      "owner": "designer",
+      "outputDir": "gamedesing/assets/ui/",
+      "items": [
+        {
+          "id": "ui_button_primary_9s",
+          "targetFile": "ui_button_primary_9s.png",
+          "slice9": { "sourceSize": [192, 96], "border": 24 },
+          "prompt": "Gold primary mobile game button frame, toy-like 3D, thick rounded corners, simple stretchable center, 67 accent, no text, no icon, no watermark."
+        },
+        {
+          "id": "ui_button_secondary_9s",
+          "targetFile": "ui_button_secondary_9s.png",
+          "slice9": { "sourceSize": [192, 96], "border": 24 },
+          "prompt": "Blue secondary mobile game button frame, toy-like 3D, thick rounded corners, simple stretchable center, no text, no icon, no watermark."
+        },
+        {
+          "id": "ui_panel_dark_9s",
+          "targetFile": "ui_panel_dark_9s.png",
+          "slice9": { "sourceSize": [256, 256], "border": 32 },
+          "prompt": "Dark reusable mobile game panel frame, soft beveled border, stretchable center, child-safe 67 game style, no text, no icon."
+        },
+        {
+          "id": "ui_card_default_9s",
+          "targetFile": "ui_card_default_9s.png",
+          "slice9": { "sourceSize": [256, 160], "border": 28 },
+          "prompt": "Reusable upgrade/deal card frame for mobile game, rounded toy-like border, warm dark fill, stretchable center, no text."
+        },
+        {
+          "id": "ui_card_locked_9s",
+          "targetFile": "ui_card_locked_9s.png",
+          "slice9": { "sourceSize": [256, 160], "border": 28 },
+          "prompt": "Locked card frame for mobile game, greyed toy-like border, small lock icon area but no text, stretchable center."
+        },
+        {
+          "id": "ui_modal_9s",
+          "targetFile": "ui_modal_9s.png",
+          "slice9": { "sourceSize": [320, 240], "border": 36 },
+          "prompt": "Event modal frame for child-safe mobile game, thick rounded border, simple cream center, decorative 67 corners, no text."
+        },
+        {
+          "id": "ui_badge_power_9s",
+          "targetFile": "ui_badge_power_9s.png",
+          "slice9": { "sourceSize": [160, 88], "border": 24 },
+          "prompt": "Power badge frame for X/67 label, gold and cream toy-like border, speech-bubble bottom notch, no text."
+        },
+        {
+          "id": "ui_progress_frame_9s",
+          "targetFile": "ui_progress_frame_9s.png",
+          "slice9": { "sourceSize": [256, 40], "border": 16 },
+          "prompt": "Reusable progress bar frame, dark rounded capsule with bright border, stretchable center, no text."
+        }
+      ]
+    },
+    {
+      "id": "characters_p0",
+      "priority": 2,
+      "owner": "designer",
+      "outputDir": "gamedesing/assets/characters/",
+      "items": [
+        {
+          "id": "hero_base_1",
+          "targetFile": "hero_base_1.png",
+          "prompt": "Child-friendly cartoon boy hero for mobile game, start state 1/67, blue jacket, determined comeback pose, full body, transparent-ready clean background, no text except optional 67 on shirt."
+        },
+        {
+          "id": "hero_cap_2",
+          "targetFile": "hero_cap_2.png",
+          "prompt": "Same cartoon boy hero with 67 cap, more confident, full body, mobile game sprite style, no extra text."
+        },
+        {
+          "id": "hero_final_15",
+          "targetFile": "hero_final_15.png",
+          "prompt": "Same cartoon boy hero at 15/67, confident pose with team energy and gold 67 badge glow, child-safe mobile game sprite, no tiny text."
+        },
+        {
+          "id": "banana_confused",
+          "targetFile": "banana_confused.png",
+          "prompt": "Funny banana NPC rival, confused reaction, sunglasses askew, child-safe meme style, no menace, no text."
+        },
+        {
+          "id": "strawberry_secret",
+          "targetFile": "strawberry_secret.png",
+          "prompt": "Funny strawberry NPC who knows a secret, playful wink, child-safe, no romance framing, mobile game sprite."
+        }
+      ]
+    },
+    {
+      "id": "backgrounds_p0",
+      "priority": 3,
+      "owner": "designer",
+      "outputDir": "gamedesing/assets/backgrounds/",
+      "items": [
+        {
+          "id": "bg_safe_sleep",
+          "targetFile": "bg_safe_sleep.png",
+          "prompt": "Small warm room background after meme betrayal, morning 06:00 mood, visible city path outside window, child-safe, no grim hardship, no text."
+        },
+        {
+          "id": "district_yard_1",
+          "targetFile": "district_yard_1.png",
+          "prompt": "Cute neighborhood yard district for mobile life-sim, playground/courtyard, route path, bright child-safe colors, no branding, no text."
+        },
+        {
+          "id": "district_meme_kiosk",
+          "targetFile": "district_meme_kiosk.png",
+          "prompt": "Cute meme kiosk district for child-safe mobile game, small stand with stickers and 67 motif, bright city background, no readable text."
+        },
+        {
+          "id": "district_mini_business",
+          "targetFile": "district_mini_business.png",
+          "prompt": "Small mini-business stand district, hero comeback vibe, toy-like mobile game background, gold 67 accents, no readable text."
+        }
+      ]
+    },
+    {
+      "id": "mockups_p0",
+      "priority": 4,
+      "owner": "designer",
+      "outputDir": "gamedesing/art/mockups/",
+      "items": [
+        {
+          "id": "mock_01_intro_fall_67_to_1",
+          "targetFile": "mock_01_intro_fall_67_to_1.png",
+          "prompt": "Mobile portrait fake screenshot storyboard intro: 67/67 at top, Banana/Strawberry trick, 06:00, restart at 1/67, big 67 hand gesture button, child-safe."
+        },
+        {
+          "id": "mock_02_main_first_screen",
+          "targetFile": "mock_02_main_first_screen.png",
+          "prompt": "Mobile portrait fake screenshot main screen: hero in room with 1/67 badge, big 67 gesture button, meme coin top stat, bottom tabs city deals upgrades home."
+        },
+        {
+          "id": "mock_05_city_map",
+          "targetFile": "mock_05_city_map.png",
+          "prompt": "Mobile portrait fake screenshot city map: route from home to yard to kiosk to locked mini business, hero marker, bright child-safe game UI."
+        },
+        {
+          "id": "mock_06_deals_timer",
+          "targetFile": "mock_06_deals_timer.png",
+          "prompt": "Mobile portrait fake screenshot deals screen: kiosk activity timer, progress bar, reward coins, skills icons, big 67 gesture button still visible."
+        },
+        {
+          "id": "mock_08_home_growth",
+          "targetFile": "mock_08_home_growth.png",
+          "prompt": "Mobile portrait fake screenshot home screen: room upgrade, scooter transport, comfort meter, 67/67 dream car locked, child-safe mobile UI."
+        }
+      ]
+    }
+  ]
+}

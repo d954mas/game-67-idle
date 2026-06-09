@@ -1,0 +1,244 @@
+{
+  "version": "0.1",
+  "source": "implementation_backlog.md",
+  "tasks": [
+    {
+      "id": "p0_project_shell",
+      "phase": 0,
+      "title": "Project shell",
+      "dependsOn": [],
+      "sourceDocs": [
+        "prototype_technical_blueprint.md",
+        "data/release_readiness.json"
+      ],
+      "deliverables": [
+        "web app opens",
+        "mobile portrait frame centered on desktop",
+        "reset progress visible",
+        "child_test_safe default"
+      ],
+      "acceptance": [
+        "load to first clickable UI under 5 seconds",
+        "analytics disabled by default",
+        "no ads/IAP/account/chat/free text"
+      ],
+      "validators": [
+        "validate_technical_blueprint",
+        "validate_release_readiness"
+      ]
+    },
+    {
+      "id": "p1_core_state_reducer",
+      "phase": 1,
+      "title": "Core state and reducer",
+      "dependsOn": [
+        "p0_project_shell"
+      ],
+      "sourceDocs": [
+        "data/balance.json",
+        "data/reducer_test_vectors.json",
+        "prototype_build_handoff.md"
+      ],
+      "deliverables": [
+        "GameState",
+        "generic effects",
+        "requirements",
+        "status cap 15/67",
+        "finalReady choices"
+      ],
+      "acceptance": [
+        "reducer vectors pass",
+        "unknown effect/target throws in dev",
+        "buying every balance item does not crash"
+      ],
+      "validators": [
+        "validate_gdd",
+        "validate_reducer_vectors",
+        "simulate_balance"
+      ]
+    },
+    {
+      "id": "p2_main_screen",
+      "phase": 2,
+      "title": "Main screen",
+      "dependsOn": [
+        "p1_core_state_reducer"
+      ],
+      "sourceDocs": [
+        "data/ui_flow.json",
+        "data/balance.json",
+        "p0_ui_copy.md",
+        "visual_contract.md"
+      ],
+      "deliverables": [
+        "hero stage",
+        "X/67 above hero",
+        "meme-coins and income",
+        "Сделать 67 button",
+        "next goal",
+        "micro-reactions"
+      ],
+      "acceptance": [
+        "first click obvious within 5 seconds",
+        "first purchase possible within 30 seconds",
+        "main action usable during deal timer"
+      ],
+      "validators": [
+        "validate_ui_flow",
+        "validate_copy",
+        "validate_assets"
+      ]
+    },
+    {
+      "id": "p3_tabs",
+      "phase": 3,
+      "title": "P0 tabs",
+      "dependsOn": [
+        "p2_main_screen"
+      ],
+      "sourceDocs": [
+        "data/ui_flow.json",
+        "data/balance.json",
+        "mobile_web_ux_spec.md"
+      ],
+      "deliverables": [
+        "Город",
+        "Дела",
+        "Улучшения",
+        "Дом",
+        "locked one-step hints",
+        "deal deep-links"
+      ],
+      "acceptance": [
+        "exactly 4 bottom tabs",
+        "locked cards show one next step",
+        "all balance collections render"
+      ],
+      "validators": [
+        "validate_ui_flow",
+        "validate_gdd"
+      ]
+    },
+    {
+      "id": "p4_events_final",
+      "phase": 4,
+      "title": "Events and mini-final",
+      "dependsOn": [
+        "p3_tabs"
+      ],
+      "sourceDocs": [
+        "data/balance.json",
+        "data/ui_flow.json",
+        "lore.md"
+      ],
+      "deliverables": [
+        "4 events",
+        "2 choices per event",
+        "visible choice rewards",
+        "mini-final 15/67"
+      ],
+      "acceptance": [
+        "first-choice route reaches 15/67",
+        "second-choice route reaches 15/67",
+        "mini-final shows team gesture and 67/67 dream"
+      ],
+      "validators": [
+        "simulate_balance",
+        "validate_gdd",
+        "validate_ui_flow"
+      ]
+    },
+    {
+      "id": "p5_save_offline_analytics",
+      "phase": 5,
+      "title": "Save, offline and analytics",
+      "dependsOn": [
+        "p4_events_final"
+      ],
+      "sourceDocs": [
+        "prototype_build_handoff.md",
+        "data/analytics_events.json",
+        "data/release_readiness.json",
+        "runtime_test_plan.md"
+      ],
+      "deliverables": [
+        "local save",
+        "offline modal",
+        "reset",
+        "analytics stub",
+        "privacy-safe default flags"
+      ],
+      "acceptance": [
+        "offline cap 30 minutes",
+        "offline never completes final",
+        "analytics disabled by default",
+        "payloads match analytics contract"
+      ],
+      "validators": [
+        "validate_analytics",
+        "validate_release_readiness"
+      ]
+    },
+    {
+      "id": "p6_visual_qa",
+      "phase": 6,
+      "title": "Visual QA and screenshots",
+      "dependsOn": [
+        "p5_save_offline_analytics"
+      ],
+      "sourceDocs": [
+        "data/asset_manifest.json",
+        "data/ui_flow.json",
+        "fakeshots.html",
+        "visual_contract.md"
+      ],
+      "deliverables": [
+        "9 screenshot states",
+        "360x640 QA",
+        "390x844 QA",
+        "desktop portrait QA",
+        "asset fallbacks"
+      ],
+      "acceptance": [
+        "no horizontal scroll",
+        "tap targets pass",
+        "text does not overlap",
+        "motion is short and non-flashing"
+      ],
+      "validators": [
+        "validate_site",
+        "validate_assets",
+        "validate_ui_flow"
+      ]
+    },
+    {
+      "id": "p7_external_playtest_ready",
+      "phase": 7,
+      "title": "External P0 playtest ready",
+      "dependsOn": [
+        "p6_visual_qa"
+      ],
+      "sourceDocs": [
+        "playtest_acceptance_gates.md",
+        "playtest_script.md",
+        "parent_playtest_note.md",
+        "data/release_readiness.json"
+      ],
+      "deliverables": [
+        "parent note",
+        "moderator script",
+        "release evidence",
+        "no P0 blocker in open_questions"
+      ],
+      "acceptance": [
+        "Gates 1-10 pass",
+        "can run 5-8 child/guardian sessions",
+        "evidence saved to tmp or final review docs"
+      ],
+      "validators": [
+        "validate_build_readiness",
+        "validate_release_readiness"
+      ]
+    }
+  ]
+}
