@@ -169,6 +169,85 @@ def default_enum_macro(enum_name: str, value: str) -> str:
     return f"GAME_STATE_{c_macro(enum_name)}_{c_macro(value)}"
 
 
+def field_by_path(fields: list[dict[str, Any]], path: str) -> dict[str, Any]:
+    for field in fields:
+        if field["path"] == path:
+            return field
+    raise SystemExit(f"schema missing field {path}")
+
+
+def c_float(value: Any) -> str:
+    text = f"{float(value):.8g}"
+    if "." not in text and "e" not in text and "E" not in text:
+        text += ".0"
+    return f"{text}F"
+
+
+def c_int(value: Any) -> str:
+    if not isinstance(value, int):
+        raise SystemExit(f"expected integer value, got {value!r}")
+    return str(value)
+
+
+def c_string(value: Any) -> str:
+    if not isinstance(value, str):
+        raise SystemExit(f"expected string value, got {value!r}")
+    return json.dumps(value)
+
+
+def render_state_constants(schema: dict[str, Any]) -> str:
+    fields = schema["fields"]
+    item_fields = schema["types"]["ItemInstance"]["fields"]
+    shape = field_by_path(fields, "shape_index")
+    render_mode = field_by_path(fields, "render_mode_index")
+    camera = field_by_path(fields, "camera_distance")
+    clicks = field_by_path(fields, "test_ui_clicks")
+    label = field_by_path(fields, "test_label_text")
+    button = field_by_path(fields, "test_button_text")
+    master = field_by_path(fields, "settings.master_volume")
+    sfx = field_by_path(fields, "settings.sfx_volume")
+    wallet_soft = field_by_path(fields, "wallet.soft")
+    wallet_hard = field_by_path(fields, "wallet.hard")
+    item_count = field_by_path(item_fields, "count")
+    item_level = field_by_path(item_fields, "level")
+    item_durability = field_by_path(item_fields, "durability")
+    return "\n".join(
+        [
+            f"#define GAME_STATE_SHAPE_INDEX_DEFAULT {default_enum_macro(shape['enum'], shape['default'])}",
+            f"#define GAME_STATE_RENDER_MODE_INDEX_DEFAULT {default_enum_macro(render_mode['enum'], render_mode['default'])}",
+            f"#define GAME_STATE_CAMERA_DISTANCE_DEFAULT {c_float(camera['default'])}",
+            f"#define GAME_STATE_CAMERA_DISTANCE_MIN {c_float(camera['min'])}",
+            f"#define GAME_STATE_CAMERA_DISTANCE_MAX {c_float(camera['max'])}",
+            f"#define GAME_STATE_TEST_UI_CLICKS_DEFAULT {c_int(clicks['default'])}",
+            f"#define GAME_STATE_TEST_UI_CLICKS_MIN {c_int(clicks['min'])}",
+            f"#define GAME_STATE_TEST_UI_CLICKS_MAX {c_int(clicks['max'])}",
+            f"#define GAME_STATE_TEST_LABEL_TEXT_DEFAULT {c_string(label['default'])}",
+            f"#define GAME_STATE_TEST_BUTTON_TEXT_DEFAULT {c_string(button['default'])}",
+            f"#define GAME_STATE_SETTINGS_MASTER_VOLUME_DEFAULT {c_float(master['default'])}",
+            f"#define GAME_STATE_SETTINGS_MASTER_VOLUME_MIN {c_float(master['min'])}",
+            f"#define GAME_STATE_SETTINGS_MASTER_VOLUME_MAX {c_float(master['max'])}",
+            f"#define GAME_STATE_SETTINGS_SFX_VOLUME_DEFAULT {c_float(sfx['default'])}",
+            f"#define GAME_STATE_SETTINGS_SFX_VOLUME_MIN {c_float(sfx['min'])}",
+            f"#define GAME_STATE_SETTINGS_SFX_VOLUME_MAX {c_float(sfx['max'])}",
+            f"#define GAME_STATE_WALLET_SOFT_DEFAULT {c_int(wallet_soft['default'])}",
+            f"#define GAME_STATE_WALLET_SOFT_MIN {c_int(wallet_soft['min'])}",
+            f"#define GAME_STATE_WALLET_SOFT_MAX {c_int(wallet_soft['max'])}",
+            f"#define GAME_STATE_WALLET_HARD_DEFAULT {c_int(wallet_hard['default'])}",
+            f"#define GAME_STATE_WALLET_HARD_MIN {c_int(wallet_hard['min'])}",
+            f"#define GAME_STATE_WALLET_HARD_MAX {c_int(wallet_hard['max'])}",
+            f"#define GAME_STATE_ITEM_COUNT_DEFAULT {c_int(item_count['default'])}",
+            f"#define GAME_STATE_ITEM_COUNT_MIN {c_int(item_count['min'])}",
+            f"#define GAME_STATE_ITEM_COUNT_MAX {c_int(item_count['max'])}",
+            f"#define GAME_STATE_ITEM_LEVEL_DEFAULT {c_int(item_level['default'])}",
+            f"#define GAME_STATE_ITEM_LEVEL_MIN {c_int(item_level['min'])}",
+            f"#define GAME_STATE_ITEM_LEVEL_MAX {c_int(item_level['max'])}",
+            f"#define GAME_STATE_ITEM_DURABILITY_DEFAULT {c_float(item_durability['default'])}",
+            f"#define GAME_STATE_ITEM_DURABILITY_MIN {c_float(item_durability['min'])}",
+            f"#define GAME_STATE_ITEM_DURABILITY_MAX {c_float(item_durability['max'])}",
+        ]
+    )
+
+
 def render_enum(enum_name: str, values: list[str]) -> str:
     type_name = f"GameState{enum_name}"
     lines = [f"typedef enum {type_name} {{"]
@@ -222,6 +301,8 @@ def render_header(schema: dict[str, Any]) -> str:
 #define GAME_STATE_STRING_MAX {schema["string_max"]}
 #define GAME_STATE_MAX_ITEMS {collections["items_max"]}
 #define GAME_STATE_MAX_INVENTORY_ITEM_IDS {collections["inventory_item_ids_max"]}
+
+{render_state_constants(schema)}
 
 {enum_blocks}
 

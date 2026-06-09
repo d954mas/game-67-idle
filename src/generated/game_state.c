@@ -223,13 +223,16 @@ const char *game_state_render_mode_name(int value) {
 
 void game_state_init_defaults(GameState *state) {
     memset(state, 0, sizeof(*state));
-    state->shape_index = GAME_STATE_SHAPE_CUBE;
-    state->render_mode_index = GAME_STATE_RENDER_MODE_SOLID_WIRE;
-    state->camera_distance = 6.0F;
-    (void)copy_text(state->test_label_text, sizeof(state->test_label_text), "Label: waiting");
-    (void)copy_text(state->test_button_text, sizeof(state->test_button_text), "Click me");
-    state->settings_master_volume = 0.75F;
-    state->settings_sfx_volume = 0.80F;
+    state->shape_index = GAME_STATE_SHAPE_INDEX_DEFAULT;
+    state->render_mode_index = GAME_STATE_RENDER_MODE_INDEX_DEFAULT;
+    state->camera_distance = GAME_STATE_CAMERA_DISTANCE_DEFAULT;
+    state->test_ui_clicks = GAME_STATE_TEST_UI_CLICKS_DEFAULT;
+    (void)copy_text(state->test_label_text, sizeof(state->test_label_text), GAME_STATE_TEST_LABEL_TEXT_DEFAULT);
+    (void)copy_text(state->test_button_text, sizeof(state->test_button_text), GAME_STATE_TEST_BUTTON_TEXT_DEFAULT);
+    state->settings_master_volume = GAME_STATE_SETTINGS_MASTER_VOLUME_DEFAULT;
+    state->settings_sfx_volume = GAME_STATE_SETTINGS_SFX_VOLUME_DEFAULT;
+    state->wallet_soft = GAME_STATE_WALLET_SOFT_DEFAULT;
+    state->wallet_hard = GAME_STATE_WALLET_HARD_DEFAULT;
 }
 
 void game_state_init(void) {
@@ -278,20 +281,21 @@ bool game_state_validate(const GameState *state, char *error, int error_cap) {
         set_error(error, error_cap, "render_mode_index out of range");
         return false;
     }
-    if (state->camera_distance < 2.5F || state->camera_distance > 10.0F) {
+    if (state->camera_distance < GAME_STATE_CAMERA_DISTANCE_MIN || state->camera_distance > GAME_STATE_CAMERA_DISTANCE_MAX) {
         set_error(error, error_cap, "camera_distance out of range");
         return false;
     }
-    if (state->test_ui_clicks < 0 || state->test_ui_clicks > 1000000) {
+    if (state->test_ui_clicks < GAME_STATE_TEST_UI_CLICKS_MIN || state->test_ui_clicks > GAME_STATE_TEST_UI_CLICKS_MAX) {
         set_error(error, error_cap, "test_ui_clicks out of range");
         return false;
     }
-    if (state->settings_master_volume < 0.0F || state->settings_master_volume > 1.0F ||
-        state->settings_sfx_volume < 0.0F || state->settings_sfx_volume > 1.0F) {
+    if (state->settings_master_volume < GAME_STATE_SETTINGS_MASTER_VOLUME_MIN || state->settings_master_volume > GAME_STATE_SETTINGS_MASTER_VOLUME_MAX ||
+        state->settings_sfx_volume < GAME_STATE_SETTINGS_SFX_VOLUME_MIN || state->settings_sfx_volume > GAME_STATE_SETTINGS_SFX_VOLUME_MAX) {
         set_error(error, error_cap, "settings volume out of range");
         return false;
     }
-    if (state->wallet_soft < 0 || state->wallet_hard < 0) {
+    if (state->wallet_soft < GAME_STATE_WALLET_SOFT_MIN || state->wallet_soft > GAME_STATE_WALLET_SOFT_MAX ||
+        state->wallet_hard < GAME_STATE_WALLET_HARD_MIN || state->wallet_hard > GAME_STATE_WALLET_HARD_MAX) {
         set_error(error, error_cap, "wallet value out of range");
         return false;
     }
@@ -318,7 +322,9 @@ bool game_state_validate(const GameState *state, char *error, int error_cap) {
             set_error(error, error_cap, "item id is empty");
             return false;
         }
-        if (item->count < 1 || item->count > 999999 || item->level < 1 || item->level > 9999 || item->durability < 0.0F || item->durability > 1.0F) {
+        if (item->count < GAME_STATE_ITEM_COUNT_MIN || item->count > GAME_STATE_ITEM_COUNT_MAX ||
+            item->level < GAME_STATE_ITEM_LEVEL_MIN || item->level > GAME_STATE_ITEM_LEVEL_MAX ||
+            item->durability < GAME_STATE_ITEM_DURABILITY_MIN || item->durability > GAME_STATE_ITEM_DURABILITY_MAX) {
             set_error(error, error_cap, "item value out of range");
             return false;
         }
@@ -415,9 +421,9 @@ static GameItemInstance *alloc_item(GameState *state, const char *instance_id) {
                 state->items[i].used = false;
                 return NULL;
             }
-            state->items[i].count = 1;
-            state->items[i].level = 1;
-            state->items[i].durability = 1.0F;
+            state->items[i].count = GAME_STATE_ITEM_COUNT_DEFAULT;
+            state->items[i].level = GAME_STATE_ITEM_LEVEL_DEFAULT;
+            state->items[i].durability = GAME_STATE_ITEM_DURABILITY_DEFAULT;
             return &state->items[i];
         }
     }
@@ -436,9 +442,9 @@ static bool set_item_from_json(GameItemInstance *item, const cJSON *json, char *
         set_error(error, error_cap, "item def_id is required");
         return false;
     }
-    return read_int_range(json, "count", 1, 999999, &item->count, error, error_cap) &&
-           read_int_range(json, "level", 1, 9999, &item->level, error, error_cap) &&
-           read_float_range(json, "durability", 0.0F, 1.0F, &item->durability, error, error_cap);
+    return read_int_range(json, "count", GAME_STATE_ITEM_COUNT_MIN, GAME_STATE_ITEM_COUNT_MAX, &item->count, error, error_cap) &&
+           read_int_range(json, "level", GAME_STATE_ITEM_LEVEL_MIN, GAME_STATE_ITEM_LEVEL_MAX, &item->level, error, error_cap) &&
+           read_float_range(json, "durability", GAME_STATE_ITEM_DURABILITY_MIN, GAME_STATE_ITEM_DURABILITY_MAX, &item->durability, error, error_cap);
 }
 
 static bool set_items_from_json(GameState *state, const cJSON *json, char *error, int error_cap) {
@@ -641,7 +647,7 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
             return false;
         }
         float camera = (float)value->valuedouble;
-        if (camera < 2.5F || camera > 10.0F) {
+        if (camera < GAME_STATE_CAMERA_DISTANCE_MIN || camera > GAME_STATE_CAMERA_DISTANCE_MAX) {
             set_error(error, error_cap, "camera_distance out of range");
             return false;
         }
@@ -650,7 +656,7 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
     }
     if (strcmp(path, "test_ui_clicks") == 0) {
         int clicks = 0;
-        if (!parse_int_value(value, 0, 1000000, &clicks, error, error_cap)) {
+        if (!parse_int_value(value, GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &clicks, error, error_cap)) {
             return false;
         }
         state->test_ui_clicks = clicks;
@@ -671,8 +677,12 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
         return true;
     }
     if (strcmp(path, "settings.master_volume") == 0 || strcmp(path, "settings.sfx_volume") == 0) {
-        if (!cJSON_IsNumber(value) || value->valuedouble < 0.0 || value->valuedouble > 1.0) {
-            set_error(error, error_cap, "settings volume expects number in range 0..1");
+        if (!cJSON_IsNumber(value) ||
+            (strcmp(path, "settings.master_volume") == 0 &&
+             (value->valuedouble < (double)GAME_STATE_SETTINGS_MASTER_VOLUME_MIN || value->valuedouble > (double)GAME_STATE_SETTINGS_MASTER_VOLUME_MAX)) ||
+            (strcmp(path, "settings.sfx_volume") == 0 &&
+             (value->valuedouble < (double)GAME_STATE_SETTINGS_SFX_VOLUME_MIN || value->valuedouble > (double)GAME_STATE_SETTINGS_SFX_VOLUME_MAX))) {
+            set_error(error, error_cap, "settings volume out of range");
             return false;
         }
         if (strcmp(path, "settings.master_volume") == 0) {
@@ -692,12 +702,15 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
     }
     if (strcmp(path, "wallet.soft") == 0 || strcmp(path, "wallet.hard") == 0) {
         int amount = 0;
-        if (!parse_int_value(value, 0, 2147483647, &amount, error, error_cap)) {
-            return false;
-        }
         if (strcmp(path, "wallet.soft") == 0) {
+            if (!parse_int_value(value, GAME_STATE_WALLET_SOFT_MIN, GAME_STATE_WALLET_SOFT_MAX, &amount, error, error_cap)) {
+                return false;
+            }
             state->wallet_soft = amount;
         } else {
+            if (!parse_int_value(value, GAME_STATE_WALLET_HARD_MIN, GAME_STATE_WALLET_HARD_MAX, &amount, error, error_cap)) {
+                return false;
+            }
             state->wallet_hard = amount;
         }
         return true;
@@ -741,18 +754,18 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
             }
         } else if (strcmp(field, "count") == 0) {
             int count = 0;
-            if (!parse_int_value(value, 1, 999999, &count, error, error_cap)) {
+            if (!parse_int_value(value, GAME_STATE_ITEM_COUNT_MIN, GAME_STATE_ITEM_COUNT_MAX, &count, error, error_cap)) {
                 return false;
             }
             item->count = count;
         } else if (strcmp(field, "level") == 0) {
             int level = 0;
-            if (!parse_int_value(value, 1, 9999, &level, error, error_cap)) {
+            if (!parse_int_value(value, GAME_STATE_ITEM_LEVEL_MIN, GAME_STATE_ITEM_LEVEL_MAX, &level, error, error_cap)) {
                 return false;
             }
             item->level = level;
         } else if (strcmp(field, "durability") == 0) {
-            if (!cJSON_IsNumber(value) || value->valuedouble < 0.0 || value->valuedouble > 1.0) {
+            if (!cJSON_IsNumber(value) || value->valuedouble < (double)GAME_STATE_ITEM_DURABILITY_MIN || value->valuedouble > (double)GAME_STATE_ITEM_DURABILITY_MAX) {
                 set_error(error, error_cap, "durability out of range");
                 return false;
             }
@@ -825,16 +838,16 @@ bool game_state_from_json(GameState *state, const cJSON *json, char *error, int 
         !read_enum(json, "shape", k_shape_names, GAME_STATE_SHAPE_COUNT, &next.shape_index, error, error_cap) ||
         !read_enum(json, "render_mode_index", k_render_mode_names, GAME_STATE_RENDER_MODE_COUNT, &next.render_mode_index, error, error_cap) ||
         !read_enum(json, "render_mode", k_render_mode_names, GAME_STATE_RENDER_MODE_COUNT, &next.render_mode_index, error, error_cap) ||
-        !read_float_range(json, "camera_distance", 2.5F, 10.0F, &next.camera_distance, error, error_cap) ||
-        !read_int_range(json, "test_ui_clicks", 0, 1000000, &next.test_ui_clicks, error, error_cap) ||
+        !read_float_range(json, "camera_distance", GAME_STATE_CAMERA_DISTANCE_MIN, GAME_STATE_CAMERA_DISTANCE_MAX, &next.camera_distance, error, error_cap) ||
+        !read_int_range(json, "test_ui_clicks", GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &next.test_ui_clicks, error, error_cap) ||
         !read_string(json, "test_label_text", next.test_label_text, sizeof(next.test_label_text), error, error_cap) ||
         !read_string(json, "test_button_text", next.test_button_text, sizeof(next.test_button_text), error, error_cap)) {
         return false;
     }
 
     const cJSON *settings = object_item(json, "settings");
-    if (settings && (!read_float_range(settings, "master_volume", 0.0F, 1.0F, &next.settings_master_volume, error, error_cap) ||
-                     !read_float_range(settings, "sfx_volume", 0.0F, 1.0F, &next.settings_sfx_volume, error, error_cap))) {
+    if (settings && (!read_float_range(settings, "master_volume", GAME_STATE_SETTINGS_MASTER_VOLUME_MIN, GAME_STATE_SETTINGS_MASTER_VOLUME_MAX, &next.settings_master_volume, error, error_cap) ||
+                     !read_float_range(settings, "sfx_volume", GAME_STATE_SETTINGS_SFX_VOLUME_MIN, GAME_STATE_SETTINGS_SFX_VOLUME_MAX, &next.settings_sfx_volume, error, error_cap))) {
         return false;
     }
     const cJSON *tutorial = object_item(json, "tutorial");
@@ -842,8 +855,8 @@ bool game_state_from_json(GameState *state, const cJSON *json, char *error, int 
         return false;
     }
     const cJSON *wallet = object_item(json, "wallet");
-    if (wallet && (!read_int_range(wallet, "soft", 0, 2147483647, &next.wallet_soft, error, error_cap) ||
-                   !read_int_range(wallet, "hard", 0, 2147483647, &next.wallet_hard, error, error_cap))) {
+    if (wallet && (!read_int_range(wallet, "soft", GAME_STATE_WALLET_SOFT_MIN, GAME_STATE_WALLET_SOFT_MAX, &next.wallet_soft, error, error_cap) ||
+                   !read_int_range(wallet, "hard", GAME_STATE_WALLET_HARD_MIN, GAME_STATE_WALLET_HARD_MAX, &next.wallet_hard, error, error_cap))) {
         return false;
     }
     const cJSON *items = object_item(json, "items");

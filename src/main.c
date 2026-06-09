@@ -583,8 +583,10 @@ static void frame(void) {
     autosave_try_load();
 
     float dt = g_nt_app.dt;
-    update_test_ui_interaction();
     bool ui_blocks_pointer = update_settings_ui_interaction();
+    if (!ui_blocks_pointer) {
+        update_test_ui_interaction();
+    }
 
     if (nt_input_key_is_pressed(NT_KEY_A)) {
         char error[128] = {0};

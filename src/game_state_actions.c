@@ -58,11 +58,11 @@ bool game_state_action_camera_zoom(GameState *state, float wheel_delta, float zo
     }
     float old = state->camera_distance;
     state->camera_distance += wheel_delta * zoom_speed;
-    if (state->camera_distance < 2.5F) {
-        state->camera_distance = 2.5F;
+    if (state->camera_distance < GAME_STATE_CAMERA_DISTANCE_MIN) {
+        state->camera_distance = GAME_STATE_CAMERA_DISTANCE_MIN;
     }
-    if (state->camera_distance > 10.0F) {
-        state->camera_distance = 10.0F;
+    if (state->camera_distance > GAME_STATE_CAMERA_DISTANCE_MAX) {
+        state->camera_distance = GAME_STATE_CAMERA_DISTANCE_MAX;
     }
     return validate_after_action(state, state->camera_distance != old, error, error_cap);
 }
@@ -72,7 +72,7 @@ bool game_state_action_test_ui_click(GameState *state, char *error, int error_ca
         set_error(error, error_cap, "state is null");
         return false;
     }
-    if (state->test_ui_clicks >= 1000000) {
+    if (state->test_ui_clicks >= GAME_STATE_TEST_UI_CLICKS_MAX) {
         set_error(error, error_cap, "test_ui_clicks limit reached");
         return false;
     }
@@ -82,12 +82,12 @@ bool game_state_action_test_ui_click(GameState *state, char *error, int error_ca
     return validate_after_action(state, true, error, error_cap);
 }
 
-static float clamp01(float value) {
-    if (value < 0.0F) {
-        return 0.0F;
+static float clamp_range(float value, float min_value, float max_value) {
+    if (value < min_value) {
+        return min_value;
     }
-    if (value > 1.0F) {
-        return 1.0F;
+    if (value > max_value) {
+        return max_value;
     }
     return value;
 }
@@ -97,7 +97,7 @@ bool game_state_action_set_master_volume(GameState *state, float volume, char *e
         set_error(error, error_cap, "state is null");
         return false;
     }
-    float next = clamp01(volume);
+    float next = clamp_range(volume, GAME_STATE_SETTINGS_MASTER_VOLUME_MIN, GAME_STATE_SETTINGS_MASTER_VOLUME_MAX);
     bool changed = state->settings_master_volume != next;
     state->settings_master_volume = next;
     return validate_after_action(state, changed, error, error_cap);
@@ -108,7 +108,7 @@ bool game_state_action_set_sfx_volume(GameState *state, float volume, char *erro
         set_error(error, error_cap, "state is null");
         return false;
     }
-    float next = clamp01(volume);
+    float next = clamp_range(volume, GAME_STATE_SETTINGS_SFX_VOLUME_MIN, GAME_STATE_SETTINGS_SFX_VOLUME_MAX);
     bool changed = state->settings_sfx_volume != next;
     state->settings_sfx_volume = next;
     return validate_after_action(state, changed, error, error_cap);
