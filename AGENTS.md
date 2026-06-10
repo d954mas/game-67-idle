@@ -8,6 +8,7 @@
 - Universal reusable design knowledge lives in `gamedesing/knowledge/`. Current-game design decisions, state, balance, copy, lore, and implementation notes stay in the regular GDD files under `gamedesing/`.
 - Reusable project skills live in `.codex/skills/`; keep them generic enough to reuse in other games.
 - Project-specific operational state for agents lives in `agent_docs/`. Before non-trivial work, read `agent_docs/README.md`; update `agent_docs/project_state.md` after meaningful verified iterations or target changes.
+- For non-trivial gameplay/UI/visual/balance/content iterations, use `agent_docs/iteration_cycle.md` as the project-specific adapter for the reusable iteration workflow.
 
 ## Direction
 

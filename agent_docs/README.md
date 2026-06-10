@@ -9,7 +9,8 @@ Before non-trivial work:
 1. Read `AGENTS.md`.
 2. Read `agent_docs/project_state.md`.
 3. For gameplay/UI/runtime work, read `agent_docs/playtest_harness.md`.
-4. Use the relevant reusable project skills for general workflow rules.
+4. For non-trivial game iterations, read `agent_docs/iteration_cycle.md`.
+5. Use the relevant reusable project skills for general workflow rules.
 
 Reusable workflow belongs in `.codex/skills/`.
 Project-specific facts, commands, constraints, current state, and repo traps belong in `agent_docs/project_state.md`.

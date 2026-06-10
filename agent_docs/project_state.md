@@ -26,6 +26,7 @@ Latest tooling checkpoint:
 - Native DevAPI runs now write stdout/stderr launch logs under `build/logs/`.
 - `tools/devapi/agent_playtest.py` is the default agent-friendly native playtest harness for fast gameplay/UI/runtime iterations.
 - Latest verified harness run: `py -3.12 tools\devapi\agent_playtest.py 9123 --full-loop` passed on 2026-06-10.
+- `agent_docs/iteration_cycle.md` is the project-specific adapter for the reusable game iteration workflow.
 
 ## How To Run And Validate
 
@@ -71,6 +72,7 @@ DevAPI scripts that use `tools/devapi/devapi_client.py::running_game()` print th
 
 ## Evidence Rules
 
+- For non-trivial gameplay/UI/visual/balance/content iterations, use `agent_docs/iteration_cycle.md`.
 - For gameplay/UI/runtime iterations, run the agent playtest harness before ad hoc runtime debugging.
 - For gameplay/UI work, prefer native smoke plus framebuffer capture.
 - A screenshot file existing is not enough; use the existing capture path that runs pixel-health.
