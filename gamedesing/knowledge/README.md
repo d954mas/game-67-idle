@@ -54,3 +54,13 @@ section, then use [Design Review](design_review.md) before implementation handof
 - Link related knowledge files instead of duplicating sections.
 - Keep external links in a `References` section.
 - Split a file when one topic starts hiding another topic.
+
+## Contribution Rules
+
+- Add a new file only when an existing file would become less readable.
+- Add a rule only if it can change a design decision, review finding, or validation step.
+- Keep project-specific examples out; use neutral examples or placeholders.
+- If a playtest finding is project-specific, write it in the project GDD first.
+- Promote a playtest finding into this folder only when it becomes reusable across games.
+- New files should include: `Goal`, practical checklist, anti-patterns, validation, and links.
+- Prefer one strong page over many shallow pages.
