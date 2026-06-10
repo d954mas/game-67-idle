@@ -32,6 +32,9 @@ balance JSON, UI flow, or first playable slice mechanics.
 For visual GDD websites or editor surfaces, load
 `references/web-gdd-site-playbook.md` when building or revising a design site,
 local web server, editable docs surface, or visual documentation page.
+For final review, load `references/quality-review-playbook.md` before claiming
+a GDD pipeline task is done, especially after visual, website, data, or handoff
+changes.
 
 ## Non-Negotiables
 
@@ -315,6 +318,8 @@ A visual/art task is done only when the correct tier is satisfied:
 ## Validation
 
 Run the narrowest useful checks first:
+Use `references/quality-review-playbook.md` for product-level review before
+final response or commit.
 
 - GDD/data changes: `node gamedesing/tools/validate_all.mjs` if available.
 - Generated art pack: validate files, manifest paths, PNG dimensions, transparency where expected.
@@ -348,8 +353,9 @@ Before commit:
 
 1. Check `git status --short --ignored --ignore-submodules=all`.
 2. Confirm no `tmp/`, generated source sheets, raw rejected images, build outputs, or screenshots evidence are staged.
-3. Commit durable docs/data/final assets only.
-4. Use a commit message that names the deliverable, not the activity.
+3. Run the quality review checklist when the deliverable is more than a small text edit.
+4. Commit durable docs/data/final assets only.
+5. Use a commit message that names the deliverable, not the activity.
 
 ## Stop Conditions
 
