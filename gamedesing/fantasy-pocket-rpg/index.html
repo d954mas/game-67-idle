@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fantasy Pocket RPG - Visual GDD</title>
+    <link rel="stylesheet" href="site.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <strong>Fantasy Pocket RPG</strong>
+        <span>Visual GDD</span>
+      </div>
+      <nav aria-label="GDD sections">
+        <a href="#gameplay">Gameplay</a>
+        <a href="#economy">Economy</a>
+        <a href="#uiux">UI/UX</a>
+        <a href="#handoff">Handoff</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="overview" id="overview">
+        <div class="overview-copy">
+          <p class="eyebrow">Current gate: visual GDD review</p>
+          <h1>Compact fantasy RPG: explore, survive, return to camp, prepare, go deeper.</h1>
+          <p>
+            Это не база и не Skyrim-клон. Первый slice доказывает короткую RPG-экспедицию:
+            карта провинции, руины, выбор/бой, лут, безопасный лагерь, крафт/отдых/диалог и новый маршрут.
+          </p>
+          <div class="pill-row">
+            <span>Mobile + PC</span>
+            <span>2-5 min session</span>
+            <span>Camp supports exploration</span>
+          </div>
+        </div>
+
+        <article class="game-screen primary-shot" aria-label="Ruins encounter fake shot">
+          <img src="art/fake-shot-ruins-background.png" alt="Generated fantasy ruins encounter background" />
+          <div class="hud top-hud">
+            <span>HP 30/30</span>
+            <span>Resolve 10</span>
+            <span>Supplies 3</span>
+            <span>Gold 12</span>
+          </div>
+          <div class="quest-card">
+            <b>Missing Scout</b>
+            <span>Search the standing stones near Moss-Covered Ruins.</span>
+          </div>
+          <div class="choice-panel">
+            <button>Search Stones</button>
+            <button>Approach Ruins</button>
+            <button class="locked">Camp locked: unsafe</button>
+          </div>
+          <div class="result-toast">Found Herbs +2 · Dragon Omen +1</div>
+        </article>
+      </section>
+
+      <section class="section-grid" id="concept">
+        <article>
+          <h2>Design Pillars</h2>
+          <ul class="tight-list">
+            <li><b>Big adventure in short sessions:</b> one useful RPG beat in 2-5 minutes.</li>
+            <li><b>Exploration first:</b> camp is rest/craft/talk/level, not base management.</li>
+            <li><b>Premium clarity:</b> readable fantasy UI, visible cause and reward.</li>
+          </ul>
+        </article>
+        <article>
+          <h2>No-Go</h2>
+          <ul class="tight-list">
+            <li>No settlement rooms, workers, construction timers.</li>
+            <li>No full open-world production scope for P0.</li>
+            <li>No dragon gacha or MMO clutter.</li>
+            <li>No copied Elder Scrolls/D&D/Fallout lore or iconography.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="gameplay">
+        <div class="section-head">
+          <p class="eyebrow">First playable slice</p>
+          <h2>What The Player Does</h2>
+        </div>
+        <div class="loop-strip">
+          <span>Choose route</span>
+          <span>Encounter</span>
+          <span>Fight / check</span>
+          <span>Loot</span>
+          <span>Camp prep</span>
+          <span>Unlock route</span>
+        </div>
+        <div class="timeline">
+          <article>
+            <b>First 30 seconds</b>
+            <p>Map shows Old Road, resources, quest. Player taps Travel and enters ruins encounter.</p>
+          </article>
+          <article>
+            <b>First reward</b>
+            <p>Search action gives Herbs +2 and Dragon Omen +1. Feedback is visible immediately.</p>
+          </article>
+          <article>
+            <b>First camp</b>
+            <p>After danger is cleared, camp unlocks: Rest, Craft, Level, Talk, Leave.</p>
+          </article>
+          <article>
+            <b>First unlock</b>
+            <p>Trail Herbalist I improves potion healing. Hunter's Ford appears on the map.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="fake-shot-row" id="visual">
+        <article class="game-screen">
+          <img src="art/camp-preparation-background.png" alt="Generated safe camp preparation background" />
+          <div class="hud top-hud camp-hud">
+            <span>HP 18/30</span>
+            <span>Supplies 2</span>
+            <span>Herbs 2</span>
+            <span>Omen 1/10</span>
+          </div>
+          <div class="camp-actions">
+            <button>Rest</button>
+            <button>Craft Draught</button>
+            <button>Talk Scout</button>
+            <button>Leave Camp</button>
+          </div>
+          <div class="upgrade-card">
+            <b>Trail Herbalist I</b>
+            <span>Minor Healing Draught: Heal 10 -> 15</span>
+          </div>
+        </article>
+        <article class="visual-notes">
+          <h2>Visual Proof Tier</h2>
+          <p>
+            Текущий tier: fake-shot. Это готовое визуальное направление для review:
+            generated backgrounds + HTML/CSS UI overlay. Это еще не runtime-ready asset pack.
+          </p>
+          <ul class="tight-list">
+            <li>Ruins screen proves first-person fantasy encounter.</li>
+            <li>Camp screen proves rest/craft/talk preparation rhythm.</li>
+            <li>UI overlay proves resources, actions, reward, camp state.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="economy">
+        <div class="section-head">
+          <p class="eyebrow">Data-backed</p>
+          <h2>Economy And Stats</h2>
+        </div>
+        <div class="data-grid" id="economyGrid"></div>
+      </section>
+
+      <section id="uiux">
+        <div class="section-head">
+          <p class="eyebrow">Navigation</p>
+          <h2>UI/UX Map</h2>
+        </div>
+        <div class="screen-map" id="screenMap"></div>
+      </section>
+
+      <section class="section-grid" id="references">
+        <article>
+          <h2>Refs: Borrow</h2>
+          <ul class="tight-list">
+            <li>Skyrim: province fantasy, ruins, loot, hero growth.</li>
+            <li>The Quest: compact first-person RPG structure.</li>
+            <li>Pocket Survivor: mobile node map, events, survival pressure.</li>
+            <li>BG3/NWN2: camp as story/preparation rhythm.</li>
+          </ul>
+        </article>
+        <article>
+          <h2>Refs: Avoid</h2>
+          <ul class="tight-list">
+            <li>Full open-world scope.</li>
+            <li>Base-builder room management.</li>
+            <li>Heavy survival punishment.</li>
+            <li>Copying protected names, symbols, classes, lore.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="section-grid" id="risks">
+        <article>
+          <h2>Risk Gates</h2>
+          <ul class="tight-list">
+            <li><b>Camp steals focus:</b> camp must lead back to map.</li>
+            <li><b>Too much survival:</b> resources create pressure, not punishment.</li>
+            <li><b>Generic fantasy:</b> dragon-mark/relic must be a recognizable motif.</li>
+          </ul>
+        </article>
+        <article>
+          <h2>Manual Review Questions</h2>
+          <ul class="tight-list">
+            <li>Does the ruins shot feel like the game you want to build?</li>
+            <li>Is camp the right size: useful, but not a separate management game?</li>
+            <li>Is the UI density closer to compact RPG than idle/base-builder?</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="handoff">
+        <div class="section-head">
+          <p class="eyebrow">Next chat</p>
+          <h2>Implementation Scope</h2>
+        </div>
+        <div class="handoff-card">
+          <p>
+            Build: province map -> ruins encounter -> reward/fight placeholder -> safe camp ->
+            rest/craft/talk -> unlock next route.
+          </p>
+          <div class="task-grid" id="taskGrid"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Source: concept.md, gdd.md, references.md, data/balance.json, data/ui_flow.json, data/asset_manifest.json.
+    </footer>
+
+    <script src="site.js"></script>
+  </body>
+</html>

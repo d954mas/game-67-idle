@@ -92,6 +92,23 @@ Before finishing:
 - confirm fake shots and data shown match current source-of-truth files;
 - confirm no raw generation/source sheets are linked as final assets.
 
+### Local Server Rule
+
+Keep server validation cross-platform by default:
+
+1. Prefer existing project commands or direct `node`/`python` scripts.
+2. Run the server in foreground first to reveal syntax/runtime errors.
+3. For automated checks, prefer a small cross-platform Node/Python validator or
+   browser automation over shell-specific process management.
+4. Use shell-specific wrappers such as PowerShell `Start-Process`,
+   `Start-Job`, Bash job control, or OS launchers only when a stable project
+   command is unavailable and the task truly needs a background process.
+
+Do not spend repeated attempts on fragile background wrappers, redirected logs,
+or platform launchers. If a simple foreground run already proves the server
+works, switch to a deterministic validator or browser check instead of trying
+more process-launch variants.
+
 ## Failure Modes
 
 - Beautiful website, but no fake gameplay screenshot.

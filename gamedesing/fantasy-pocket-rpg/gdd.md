@@ -1,47 +1,56 @@
-# Fantasy Pocket RPG GDD Slice
+# Fantasy Pocket RPG GDD
 
 ## Current Gate
 
-- Concept gate: partial, direction accepted for camp-as-preparation.
-- Reference gate: first compact pass complete.
-- Visual gate: not started; next needed proof is a gameplay fake shot.
-- Slice gate: first playable slice defined below.
-- Handoff gate: out of scope until visual direction is accepted.
+- Concept gate: accepted for compact fantasy RPG and camp-as-preparation.
+- Reference gate: compact pass complete.
+- Visual gate: first generated art backgrounds and web fake shots created; needs user review.
+- Slice gate: first playable slice defined.
+- Handoff gate: ready for next implementation chat after visual review.
 
 ## Game Summary
 
-A compact fantasy RPG for mobile and PC. The player explores a dangerous province through map locations and first-person/illustrated encounters, gains loot and reputation, then returns to safe camp points to recover, craft, speak with companions, and choose the next upgrade.
+A compact fantasy RPG for mobile and PC. The player explores a dangerous province through map nodes and illustrated first-person encounters, gains loot and clues, then returns to safe camp points to recover, craft, equip, speak with companions, and choose the next upgrade.
 
 ## First 30 Seconds
 
-1. Player sees a province map with one available route: `Old Road -> Moss-Covered Ruins`.
-2. Top bar shows `Gold`, `Supplies`, `Health`, and `Resolve`.
+1. Player sees `Province Map` with one open route: `Old Road -> Moss-Covered Ruins`.
+2. Top bar shows `Health`, `Resolve`, `Supplies`, `Gold`.
 3. Quest card says: `Find the missing scout near the old stones`.
 4. Player taps `Travel`.
-5. First encounter opens in a first-person illustrated scene: broken road, standing stones, distant ruin.
-6. Player chooses `Search the stones` or `Move toward the ruins`.
-7. A small reward/pressure appears: `Found herbs +1`, `Heard wings above: Dragon Omen +1`.
+5. Encounter opens: moss road, standing stones, ruin gate, dragon omen in the sky.
+6. Player chooses `Search the stones` or `Approach ruins`.
+7. Feedback appears: `Found herbs +2`, `Dragon Omen +1`.
 
 ## First 5 Minutes
 
-1. Travel to first location.
+1. Travel to the first ruin.
 2. Resolve one event choice.
-3. Fight one simple enemy or avoid it through a stat check.
+3. Fight or bypass one enemy through a simple stat check.
 4. Loot `Rusty Blade` and `Dragon-Marked Shard`.
-5. Health or Resolve drops enough to justify resting.
+5. Health or Resolve drops enough to make camp useful.
 6. Safe campfire unlocks after the encounter.
-7. In camp, player:
-   - rests;
-   - crafts `Minor Healing Draught` from herbs;
-   - equips or compares loot;
-   - talks to first companion about the dragon mark;
-   - chooses one perk.
-8. Returning to map reveals the next node: `Hunter's Ford`.
+7. In camp, player rests, crafts `Minor Healing Draught`, compares loot, talks to first companion, and chooses `Trail Herbalist I`.
+8. Returning to map reveals `Hunter's Ford`.
 
 ## Core Loop
 
 ```text
 choose destination -> encounter/event -> fight/check/choice -> loot/resources/status change -> safe camp preparation -> upgrade/perk/story beat -> unlock next destination
+```
+
+## Screen Loop
+
+```mermaid
+flowchart LR
+  A["Province Map"] --> B["Encounter View"]
+  B --> C["Combat Panel"]
+  B --> D["Loot Result"]
+  C --> D
+  D --> E["Safe Camp"]
+  E --> F["Inventory/Level"]
+  F --> E
+  E --> A
 ```
 
 ## Camp Rule
@@ -52,7 +61,7 @@ Access:
 
 - safe map nodes;
 - cleared locations;
-- campfires/shrines/inns;
+- campfires, shrines, inns;
 - world-map travel pauses.
 
 Not allowed:
@@ -68,115 +77,129 @@ Camp actions:
 - repair/upgrade selected gear;
 - level up/perk choice;
 - talk to companions;
-- inspect dragon relic/egg/mark;
+- inspect dragon relic/mark;
 - manage inventory before next expedition.
 
-## First-Slice Stats
+## Currencies And Stats
 
-- Health: combat survival.
-- Resolve: mental stamina for fear, magic, persuasion, and resisting curses.
-- Supplies: travel/rest/camp pressure.
-- Gold: shops, repairs, services.
-- Dragon Omen: mystery/progression flag, not a spendable currency in first slice.
+- `Health`: combat survival and rest motivation.
+- `Resolve`: mental stamina for fear, magic, persuasion, and curses.
+- `Supplies`: travel/rest pressure; should never hard-lock the first slice.
+- `Gold`: shop, repair, services; light preview in first slice.
+- `Herbs`: first crafting resource.
+- `Dragon Omen`: mystery/progression flag, not spendable in first slice.
 
-## First-Slice Activities
+## First Activities
 
-### Travel
+### Travel: Old Road
 
-- Input: choose map node.
-- Cost: 1 Supplies for dangerous route, 0 for safe route.
-- Reward: enters encounter, may reveal danger.
-- Failure/blocked state: low supplies warns but does not hard-lock first slice.
+- Input: tap/click map node.
+- Cost: none in tutorial route.
+- Reward: enters `Moss-Covered Ruins`.
+- UI feedback: route line animates, quest card updates.
 
-### Search
+### Search: Standing Stones
 
-- Input: choose search action in encounter.
-- Cost: small Resolve risk or trap chance.
-- Reward: herbs, gold, lore clue, hidden route.
-- Blocked state: needs light/tools/perk for some searches later.
+- Input: tap `Search`.
+- Cost: 25% chance to lose 1 Resolve.
+- Reward: `Herbs +2`, `Dragon Omen +1`.
+- UI feedback: result toast and relic glow.
 
-### Fight
+### Fight: Ruin Wolf / Bandit Scout
 
-- Input: attack, defend, use item, attempt skill.
+- Input: `Attack`, `Defend`, `Use Item`, `Skill`.
 - Cost: Health/Resolve risk.
 - Reward: loot, XP, location progress.
-- Blocked state: low Health suggests retreat to safe camp if available.
+- UI feedback: turn log, enemy health, damage numbers.
 
-### Camp Rest
+### Camp: Safe Fire
 
-- Input: enter camp from safe state.
-- Cost: Supplies.
-- Reward: Health recovery, companion scene, craft access.
-- Blocked state: unsafe location or no supplies for full rest.
+- Input: enter camp after safe state.
+- Cost: `Supplies -1` for full rest.
+- Reward: `Health +12`, companion beat, crafting access.
+- UI feedback: warm camp screen, rest/craft/talk actions.
 
 ## First Upgrade
 
 `Trail Herbalist I`
 
-- Unlock condition: collect herbs in the first ruins.
+- Unlock: collect 2 Herbs.
 - Cost: 2 Herbs + camp access.
-- Effect: healing draught restores more Health.
-- Why player wants it: first tangible camp payoff.
-- Visible before/after: potion card changes from `Heal 10` to `Heal 15`.
-- Affected activity: Camp Crafting.
+- Effect: `Minor Healing Draught` changes from `Heal 10` to `Heal 15`.
+- Why player wants it: first clear camp payoff.
+- Affected activity: crafting and combat recovery.
 
 ## Companion First Beat
 
-First companion role: a scout, mercenary, or apprentice mage who knows local legends but does not understand the dragon mark.
+First companion: practical scout, hedge mage, or mercenary guide. They know the province and suspect the dragon-marked shard is older than local ruins.
 
 First camp conversation:
 
 - confirms the relic is old and dangerous;
-- offers a practical next step;
-- introduces relationship tone;
-- unlocks the next map clue.
+- gives the next map clue;
+- establishes companion personality;
+- frames the dragon thread as mystery, not pet collection.
 
 ## Dragon Progression
 
-Do not start with a dragon pet. Start with mystery:
+Start with mystery, not a dragon pet.
 
-1. strange mark/relic;
-2. dreams/omen;
-3. egg/shard awakening;
-4. small companion or spirit;
-5. combat/travel utility later.
+1. Marked shard/relic.
+2. Dreams and omens.
+3. Egg or spirit trace.
+4. Small companion/spirit utility.
+5. Later combat/travel identity.
 
-The dragon system should support exploration and hero identity, not become a collection game.
+The dragon system must support exploration and hero identity. It must not become gacha collection.
 
-## Visual Direction For First Fake Shot
+## UI/UX Map
 
-Required screen elements:
+- `Province Map`: next route, quest objective, resource top bar.
+- `Encounter View`: illustrated first-person scene, 2-4 actions, event result.
+- `Combat Panel`: simple turn options, enemy state, action log.
+- `Loot Result`: take/equip/compare, visible stat delta.
+- `Safe Camp`: rest/craft/talk/level, supplies/herbs, companion notice.
+- `Inventory`: gear comparison and consumables.
 
-- first-person fantasy ruin or province map;
-- top bar: Health, Resolve, Supplies, Gold;
-- quest objective;
-- primary actions: Travel/Search/Fight/Camp depending state;
-- loot/event result;
-- visible camp availability state;
-- dragon-mark mystery hint;
-- modern readable mobile-first UI.
+## Visual Direction
+
+Current generated art direction:
+
+- painterly premium fantasy;
+- first-person ruins with readable route, relic, dragon omen;
+- cozy camp scene with preparation props and companions;
+- modern dark translucent UI with warm gold/camp accents;
+- no direct Elder Scrolls, D&D, Fallout, or other IP symbols.
+
+Fake-shot requirements:
+
+- show current screen state, not a poster;
+- show resources/stats;
+- show one clear primary action;
+- show next goal;
+- show feedback from last action;
+- show camp availability state.
 
 ## Risks
 
 ### Camp Steals Focus
 
 - Type: design/UX.
-- Test: fake shot and first slice must show camp as return/prep after adventure, not main screen.
-- Stop rule: if the most interesting screen is camp management, reduce camp scope.
+- Test: fake shot and first slice must show camp as return/prep after adventure.
+- Stop rule: if camp management is more interesting than exploration, reduce camp scope.
 
 ### Too Much Survival
 
 - Type: fun risk.
-- Test: first 5 minutes should feel like adventure with pressure, not resource punishment.
+- Test: first 5 minutes should feel like adventure with pressure, not punishment.
 - Stop rule: if Supplies/Health dominate every action, simplify.
 
 ### Visual Identity Too Generic
 
 - Type: art/product risk.
 - Test: fake shot must include a memorable dragon-mark/fantasy province signal.
-- Stop rule: if it looks like generic RPG UI, define stronger art motifs before implementation.
+- Stop rule: if it looks like generic RPG UI, define stronger motifs before implementation.
 
 ## Next Gate
 
-Visual gate: create one gameplay fake shot for the first 5 minutes and review it before expanding content or implementation.
-
+User review of visual web GDD. If direction is accepted, next chat should build the first playable slice from `game_implementation_plan.md`.

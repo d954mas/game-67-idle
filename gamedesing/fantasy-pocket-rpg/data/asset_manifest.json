@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "scope": "visual_gdd",
+  "assets": [
+    {
+      "id": "fake_shot_ruins_background",
+      "file": "art/fake-shot-ruins-background.png",
+      "type": "generated_background",
+      "usage": ["web_gdd", "encounter_fake_shot"],
+      "status": "final_for_gdd",
+      "notes": "Generated painterly first-person ruins scene; UI text is overlaid in HTML/CSS."
+    },
+    {
+      "id": "camp_preparation_background",
+      "file": "art/camp-preparation-background.png",
+      "type": "generated_background",
+      "usage": ["web_gdd", "camp_fake_shot"],
+      "status": "final_for_gdd",
+      "notes": "Generated camp preparation scene; not yet split into runtime sprites/UI."
+    }
+  ],
+  "runtime_ready": false,
+  "runtime_gap": [
+    "No transparent character sprites yet.",
+    "No separated UI PNG frames yet.",
+    "No atlas or engine asset pack yet.",
+    "Current fake shots are HTML/CSS overlays on generated backgrounds."
+  ]
+}
