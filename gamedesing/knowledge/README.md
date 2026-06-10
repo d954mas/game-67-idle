@@ -29,6 +29,8 @@ scope, and product decisions belong in the project's GDD files, not here.
 - [Meta Progression](meta_progression.md) - long-term goals, economies, unlocks, rewards.
 - [UI/UX Patterns](ui_ux_patterns.md) - readable controls, feedback, component states.
 - [Playtest Validation](playtest_validation.md) - first minutes, evidence, bugs, director review.
+- [Reward Feedback](reward_feedback.md) - visible rewards, consequences, unlock clarity.
+- [Visual Direction](visual_direction.md) - readable friendly casual-game visual rules.
 
 ## How To Apply
 

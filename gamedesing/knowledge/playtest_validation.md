@@ -88,10 +88,11 @@ Stability
 - Use [FTUE](ftue.md) to validate first-session comprehension.
 - Use [UI/UX Patterns](ui_ux_patterns.md) to validate readability and state clarity.
 - Use [Meta Progression](meta_progression.md) to validate rewards, unlocks, and pacing.
+- Use [Reward Feedback](reward_feedback.md) to validate reward visibility.
+- Use [Visual Direction](visual_direction.md) to validate visual appeal and readability.
 
 ## References
 
 - Nielsen Norman Group, [10 Usability Heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/)
 - Game Accessibility Guidelines, [Full list](https://gameaccessibilityguidelines.com/full-list/)
 - W3C WAI, [WCAG 2.2 Target Size Minimum](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
-

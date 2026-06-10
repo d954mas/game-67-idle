@@ -67,6 +67,7 @@ See goal
 
 - Use [Core Loop](core_loop.md) to define the first repeatable action before tutorializing it.
 - Use [Playtest Validation](playtest_validation.md) to check first-minute comprehension.
+- Use [Reward Feedback](reward_feedback.md) to make the first reward obvious.
 - Use [UI/UX Patterns](ui_ux_patterns.md) for screen hierarchy and feedback rules.
 - Use [Meta Progression](meta_progression.md) when the FTUE introduces upgrades, unlocks, or currencies.
 

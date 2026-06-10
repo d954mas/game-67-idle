@@ -78,6 +78,7 @@ Meta loop
 
 - Use [Core Loop](core_loop.md) to confirm meta rewards improve repeated play.
 - Use [Playtest Validation](playtest_validation.md) to check pacing, stuck states, and reward clarity.
+- Use [Reward Feedback](reward_feedback.md) to make purchases, unlocks, and upgrades visible.
 - Use [FTUE](ftue.md) for when and how progression enters the first session.
 - Use [UI/UX Patterns](ui_ux_patterns.md) for upgrade states, affordance, and reward feedback.
 
