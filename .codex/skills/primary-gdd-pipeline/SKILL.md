@@ -18,6 +18,9 @@ status reports.
 For visual deliverables, load `references/visual-proof-playbook.md` when making
 fake shots, art bible pages, generated art prompts, runtime asset packs, or
 visual review packets.
+For implementation handoff, load `references/implementation-handoff-playbook.md`
+when preparing a next-chat build plan, first playable slice, acceptance gates,
+or build/test command packet.
 
 ## Non-Negotiables
 
@@ -216,6 +219,8 @@ balance simulation, technical spike, or user review.
 ### 6. Write The Handoff
 
 Create one implementation entrypoint, e.g. `game_implementation_plan.md`.
+Use `references/implementation-handoff-playbook.md` when the handoff is meant
+for another agent or a future chat.
 
 It must include:
 
