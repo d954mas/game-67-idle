@@ -1,4 +1,4 @@
 interface:
   display_name: "Primary GDD Pipeline"
-  short_description: "Make first GDD with visual proof."
-  default_prompt: "Use this skill to turn a loose game idea into a scoped primary GDD, visual proof plan, runtime asset checklist, and implementation handoff."
+  short_description: "Make first GDD from refs, questions, and visual proof."
+  default_prompt: "Use this skill to turn a loose game idea into a scoped primary GDD with creative intake, reference research, gameplay fake shots, runtime asset checklist, and implementation handoff."

@@ -1,13 +1,13 @@
 ---
 name: primary-gdd-pipeline
-description: Use when starting a new game concept, first GDD, visual GDD site, reference pack, fake shots, art bible, runtime asset checklist, or implementation handoff. Triggers include requests to create the initial GDD, gather refs, make a visual design website, define gameplay/core loop/currencies/UI, convert references into game-ready art direction, or prepare a next-chat implementation plan.
+description: Use when starting or revising a game concept, first GDD, visual GDD site, reference pack, fake shots, art bible, runtime asset checklist, or implementation handoff. Triggers include requests to create the initial GDD, gather or compare refs, interview the user for creative direction, make a visual design website, define gameplay/core loop/currencies/UI, convert references into game-ready art direction, or prepare a next-chat implementation plan.
 ---
 
 # Primary GDD Pipeline
 
 Use this skill to turn a loose game idea into a scoped, implementation-ready
-primary GDD with visual proof. Optimize for speed, clarity, and a small vertical
-slice instead of a large document set.
+primary GDD with visual proof. Optimize for speed, user taste capture, and a
+small vertical slice instead of a large document set.
 
 ## Non-Negotiables
 
@@ -15,8 +15,12 @@ slice instead of a large document set.
 - Separate `reference`, `fake shot`, `runtime asset`, and `implementation plan`.
 - Keep temporary generation, scripts, rejected images, screenshots, and audit logs in `tmp/`.
 - Put only durable final outputs in the design folder, usually `gamedesing/` in this repo.
+- Confirm ignored temp/source paths before generating large files.
 - Do not create more than 5 durable docs before producing a visual proof.
-- Do not call a visual board “game-ready art” unless separate runtime assets and a composed screen proof exist.
+- Do not call a website, poster, or mood board "visual proof" unless it shows actual game UI or game-ready assets.
+- Do not call a visual board "game-ready art" unless separate runtime assets and a composed screen proof exist.
+- Ask at most 3 focused creative questions when taste is unclear, then proceed with explicit assumptions.
+- Stop for user review after the first strong fake shot or visual direction board before expanding the GDD.
 - Validators prove consistency, not product quality. Require visual/runtime evidence when possible.
 
 ## Start Checklist
@@ -24,14 +28,46 @@ slice instead of a large document set.
 1. Read `AGENTS.md`.
 2. Locate the design root: prefer existing `gamedesing/`, `gamedesign/`, `docs/design/`, or `GDD.md`.
 3. Check `git status --short --ignore-submodules=all`.
-4. Write the task DoD in one short block:
+4. Check `.gitignore` or repo rules for `tmp/`, raw generation folders, build outputs, and screenshots.
+5. Write the task DoD in one short block:
    - what must exist;
    - what is out of scope;
    - what proof will be accepted.
-5. If the user asks for visuals or art, decide up front:
+6. If the user asks for visuals or art, decide up front:
    - visual reference only;
    - fake gameplay screenshot;
    - runtime-ready asset pack.
+
+## Creative Intake
+
+Before writing broad docs, extract the creative direction. Use local context first.
+If the answer is still ambiguous, ask up to 3 short questions covering:
+
+- closest reference and what to borrow;
+- what the player must understand in the first 5 seconds;
+- what visual/tone elements are forbidden or must be present.
+
+Then restate the working interpretation in 3-6 bullets before creating durable
+files. Include `known`, `assumed`, and `needs user review` when relevant.
+
+For meme-heavy projects, preserve the user's meme anchor as a visible design
+constraint, not just lore text. Example for Game 67 only when project context
+mentions it:
+
+```text
+67/67 at the top -> betrayal/downfall -> 1/67 start -> climb back through life sim systems
+```
+
+## Reference Research
+
+Build a compact reference pack before visual production when the user mentions
+market research, existing games, ads, memes, or "make it like X".
+
+- Gather 3-7 relevant refs.
+- For each ref, record: core loop, progression fantasy, UI density, economy signals, visual tone, and one concrete takeaway.
+- Split notes into `borrow`, `avoid`, and `copy-risk`.
+- If the user asks for current market research or live references, browse the web and cite sources.
+- If browsing is unavailable, state that the pack is based on provided refs/local knowledge and mark it as unverified.
 
 ## Fast Primary GDD Workflow
 
@@ -47,12 +83,6 @@ Create or update one concise concept file before expanding:
 - primary progression metric;
 - tone/safety constraints;
 - no-go list.
-
-For this project pattern, keep the central identity visible:
-
-```text
-67/67 at the top -> betrayal/downfall -> 1/67 start -> climb back through life sim systems
-```
 
 ### 2. Define The First Playable Slice
 
@@ -74,7 +104,7 @@ Cut scope aggressively. The first slice should prove one loop, not the whole gam
 
 ### 3. Make Visual Proof
 
-If the user needs to “see the game”, produce visual proof in this order:
+If the user needs to "see the game", produce visual proof in this order:
 
 1. One gameplay fake shot that shows actual UI, currencies, action, and player goal.
 2. One progression image that shows how life/status changes.
@@ -88,6 +118,10 @@ If the user needs to “see the game”, produce visual proof in this order:
 Use the `imagegen` skill for generated raster art. Move final generated images
 into the project; do not leave project-referenced images only under the default
 generated-images folder.
+
+After item 1 or 2, stop with a short review packet unless the user explicitly
+asked to continue without review. The review packet must show the image path(s)
+and ask whether to keep, redirect, or regenerate the direction.
 
 ### 4. Create Machine-Readable Contracts
 
@@ -115,6 +149,21 @@ It must include:
 - Definition of Done;
 - prompt for the next implementation chat.
 
+## Required Output Shape
+
+When finishing a primary GDD pipeline task, report:
+
+- DoD status: done, partial, or blocked.
+- Files changed or created.
+- Visual proof tier: reference, fake shot, or runtime.
+- User decisions captured.
+- Assumptions still needing review.
+- Validation run and result.
+- Next implementation prompt or next design checkpoint.
+
+Do not bury missing visual proof or unanswered creative questions inside a long
+summary. State gaps plainly.
+
 ## Minimum Artifact Set
 
 Prefer this small set first:
@@ -127,6 +176,17 @@ Prefer this small set first:
 - `game_implementation_plan.md`
 
 Add more docs only when they remove implementation ambiguity.
+
+## Decision Log And Session State
+
+Keep durable decisions in the design folder, preferably:
+
+- `common/design_decisions.md` for accepted creative/product decisions;
+- `handoff_status.md` or implementation plan for current source-of-truth order.
+
+Keep volatile notes in `tmp/session_state.md` when work runs long. It should
+include current DoD, latest accepted visual direction, open questions, generated
+assets status, validation status, and next action. Do not commit this temp file.
 
 ## Visual Art Done Criteria
 
@@ -154,6 +214,11 @@ Run the narrowest useful checks first:
 Do not stop at validators if the user asked for something visual or playable.
 Capture or create visual evidence.
 
+For web visual GDD surfaces, verify both:
+
+- desktop browser screenshot or visual inspection;
+- mobile portrait viewport when the web surface is part of the deliverable.
+
 ## Git Hygiene
 
 Before commit:
@@ -167,8 +232,16 @@ Before commit:
 
 Stop and reframe before continuing when:
 
-- the user says the result is “not game art”, “not gameplay”, or “not clear”;
+- the user says the result is "not game art", "not gameplay", "not clear", or "I do not see the game";
 - you are adding broad docs without a vertical-slice proof;
 - you cannot state the current DoD in one paragraph;
 - visual output is only a poster/reference but the user asked for game-ready assets;
 - implementation is being started before the first playable slice is defined.
+
+## Anti-Patterns From Prior Long Sessions
+
+- Do not build a pretty GDD website that lacks gameplay fake shots.
+- Do not expand lore before currencies, activities, stats, core loop, and UI are visible.
+- Do not treat generated concept art as runtime-ready without separate assets and a composed proof.
+- Do not keep changing docs while the user is asking for a visual direction reset.
+- Do not rely on chat memory for accepted decisions; write them into durable project files.
