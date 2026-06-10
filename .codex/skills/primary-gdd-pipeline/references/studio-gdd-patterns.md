@@ -30,19 +30,26 @@ practice, market research, AI-assisted preproduction, or process improvement.
 
 ## Research Sources
 
-- Tim Ryan, "The Anatomy of a Design Document" on Game Developer:
+- Tim Ryan, "The Anatomy of a Design Document" on Game Developer.
+  Use for document structure, concept/proposal framing, and keeping docs
+  production-facing:
   https://www.gamedeveloper.com/design/the-anatomy-of-a-design-document-part-1-documentation-guidelines-for-the-game-concept-and-proposal
 - Hunicke, LeBlanc, Zubek, "MDA: A Formal Approach to Game Design and Game
-  Research": https://users.cs.northwestern.edu/~hunicke/MDA.pdf
+  Research." Use for mapping mechanics -> dynamics -> aesthetics instead of
+  listing features without player experience:
+  https://users.cs.northwestern.edu/~hunicke/MDA.pdf
 - Valve publications, including playtesting, design process, and art/gameplay
-  connection talks:
+  connection talks. Use for playtest culture, iteration, and observing player
+  behavior instead of trusting docs:
   https://www.valvesoftware.com/en/publications
 - Automated Unity Game Template Generation from GDDs via NLP and Multi-Modal
-  LLMs:
+  LLMs. Use for AI/GDD-to-prototype opportunities and limitations:
   https://arxiv.org/abs/2509.08847
-- Towards Game Design via Creative Machine Learning:
+- Towards Game Design via Creative Machine Learning. Use for AI ideation limits,
+  novelty, and human creative direction:
   https://arxiv.org/abs/2008.13548
-- Automatic Playtesting for Game Parameter Tuning via Active Learning:
+- Automatic Playtesting for Game Parameter Tuning via Active Learning. Use for
+  balance-simulation and parameter-tuning risk gates:
   https://arxiv.org/abs/1908.01417
 
 ## Public Skill Search Note
