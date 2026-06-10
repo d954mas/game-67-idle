@@ -24,6 +24,7 @@ CAPTURE_SCREEN_SCRIPT = os.path.join(ROOT, "tools", "devapi", "capture_screen.ps
 CAPTURE_WINDOW_SCRIPT = os.path.join(ROOT, "tools", "devapi", "capture_window.py")
 RECORD_SCREEN_SCRIPT = os.path.join(ROOT, "tools", "devapi", "record_screen_ffmpeg.ps1")
 ACTIVE_RECORDINGS: list["DevApiRecording"] = []
+LAUNCH_LOG_DIR = os.path.join(ROOT, "build", "logs")
 
 
 class DevApiError(RuntimeError):
@@ -43,12 +44,19 @@ class DevApiClient:
         self.file = self.sock.makefile("rwb", buffering=0)
         self.next_request_id = 1
         self.process_id: int | None = None
+        self.launch_log_path: str | None = None
 
     def close(self) -> None:
         try:
             self.file.close()
         finally:
             self.sock.close()
+
+    def launch_log_tail(self, lines: int = 160) -> str:
+        return format_launch_log_tail(self.launch_log_path, lines=lines)
+
+    def print_launch_log_tail(self, lines: int = 160) -> None:
+        print_launch_log_tail(self.launch_log_path, lines=lines)
 
     def raw(self, payload: Any) -> Any:
         self.file.write((json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8"))
@@ -275,6 +283,37 @@ def ensure_output_dir(output: str) -> str:
     return path
 
 
+def make_launch_log_path(port: int) -> str:
+    os.makedirs(LAUNCH_LOG_DIR, exist_ok=True)
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    return os.path.join(LAUNCH_LOG_DIR, f"native_devapi_{port}_{stamp}_{int((time.time() % 1) * 1000):03d}.log")
+
+
+def tail_text_file(path: str, lines: int = 160, max_bytes: int = 65536) -> str:
+    if not path or not os.path.exists(path):
+        return ""
+    with open(path, "rb") as handle:
+        handle.seek(0, os.SEEK_END)
+        size = handle.tell()
+        handle.seek(max(0, size - max_bytes))
+        data = handle.read()
+    text = data.decode("utf-8", "replace")
+    return "\n".join(text.splitlines()[-lines:])
+
+
+def format_launch_log_tail(path: str | None, lines: int = 160) -> str:
+    if not path:
+        return "launch log: unavailable for reused/existing process"
+    tail = tail_text_file(path, lines=lines)
+    if not tail:
+        return f"launch log: {path}\n<empty>"
+    return f"launch log: {path}\n--- tail ---\n{tail}"
+
+
+def print_launch_log_tail(path: str | None, lines: int = 160) -> None:
+    print(format_launch_log_tail(path, lines=lines), file=sys.stderr)
+
+
 def _png_chunk(kind: bytes, payload: bytes) -> bytes:
     return (
         struct.pack(">I", len(payload))
@@ -476,6 +515,8 @@ def connect_existing(port: int = 9123, timeout: float = 8.0) -> DevApiClient | N
 def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE, reuse_existing: bool = False, fresh_state: bool = True, autosave_enabled: bool = False):
     proc = None
     client = None
+    launch_log_path = None
+    launch_log = None
     if reuse_existing:
         client = connect_existing(port=port, timeout=0.5)
     else:
@@ -491,15 +532,35 @@ def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE, reuse_existing: 
             args.append("--fresh-state")
         if not autosave_enabled:
             args.append("--disable-autosave")
-        proc = subprocess.Popen(args, cwd=ROOT)
+        launch_log_path = make_launch_log_path(port)
+        launch_log = open(launch_log_path, "w", encoding="utf-8", errors="replace", buffering=1)
+        launch_log.write("command: " + " ".join(args) + "\n")
+        launch_log.write("cwd: " + ROOT + "\n\n")
+        launch_log.flush()
+        proc = subprocess.Popen(args, cwd=ROOT, stdout=launch_log, stderr=subprocess.STDOUT)
+        print(f"launch log: {launch_log_path}", file=sys.stderr)
         client = connect_existing(port=port)
         if client is not None:
             client.process_id = proc.pid
+            client.launch_log_path = launch_log_path
     if client is None:
-        raise DevApiError("no devapi connection")
+        detail = format_launch_log_tail(launch_log_path, lines=120)
+        if proc is not None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=3)
+        if launch_log is not None:
+            launch_log.close()
+        raise DevApiError("no devapi connection\n" + detail)
 
     try:
         yield client
+    except Exception:
+        print_launch_log_tail(client.launch_log_path, lines=160)
+        raise
     finally:
         client.close()
         if proc is not None:
@@ -508,3 +569,6 @@ def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE, reuse_existing: 
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 proc.kill()
+                proc.wait(timeout=5)
+        if launch_log is not None:
+            launch_log.close()
