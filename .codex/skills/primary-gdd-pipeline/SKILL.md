@@ -12,6 +12,9 @@ pillars, and a small vertical slice instead of a large document set.
 For deeper studio/GDD methodology, load
 `references/studio-gdd-patterns.md` only when the task asks for research,
 process improvement, or a more rigorous production handoff.
+For repeatable artifact formats, load `references/output-templates.md` only
+when writing session state, decision logs, ref packs, risk gates, or final
+status reports.
 
 ## Non-Negotiables
 
@@ -262,6 +265,7 @@ Keep durable decisions in the design folder, preferably:
 Keep volatile notes in `tmp/session_state.md` when work runs long. It should
 include current DoD, latest accepted visual direction, open questions, generated
 assets status, validation status, and next action. Do not commit this temp file.
+Use `references/output-templates.md` when a stable structure is needed.
 
 ## Visual Art Done Criteria
 
