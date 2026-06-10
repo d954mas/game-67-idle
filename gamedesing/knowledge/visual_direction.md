@@ -68,6 +68,7 @@ and progress without requiring explanation.
 - Use [UI/UX Patterns](ui_ux_patterns.md) for component states and screen hierarchy.
 - Use [Reward Feedback](reward_feedback.md) to make rewards visible and desirable.
 - Use [Content Planning](content_planning.md) to define visual roles for items, areas, and rewards.
+- Use [Accessibility](accessibility.md) to keep color, contrast, motion, and sound usable.
 - Use [FTUE](ftue.md) to keep early screens visually focused.
 - Use [Playtest Validation](playtest_validation.md) to verify screenshots and readability.
 

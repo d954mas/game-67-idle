@@ -37,6 +37,8 @@ scope, and product decisions belong in the project's GDD files, not here.
 - [Design Review](design_review.md) - pre-implementation GDD review checklist.
 - [Iteration Scope](iteration_scope.md) - small playable slices and definition of done.
 - [Telemetry Evidence](telemetry_evidence.md) - logs, events, traces, screenshots, proof.
+- [Mobile/Web Platform Design](mobile_web_platform.md) - touch, viewport, browser, resume constraints.
+- [Accessibility](accessibility.md) - readable, controllable, recoverable game design.
 
 ## How To Apply
 

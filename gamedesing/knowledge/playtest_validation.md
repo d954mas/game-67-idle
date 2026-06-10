@@ -93,6 +93,7 @@ Stability
 - Use [Balance Tuning](balance_tuning.md) to compare player pacing with targets.
 - Use [Content Planning](content_planning.md) to decide what to cut, hide, or add.
 - Use [Telemetry Evidence](telemetry_evidence.md) to define logs, events, traces, and screenshots.
+- Use [Mobile/Web Platform Design](mobile_web_platform.md) and [Accessibility](accessibility.md) for viewport, input, and readability checks.
 
 ## References
 

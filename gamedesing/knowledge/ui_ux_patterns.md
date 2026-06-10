@@ -95,6 +95,8 @@ For each repeated UI component, define:
 - Use [Playtest Validation](playtest_validation.md) to verify screenshots, input, and state clarity.
 - Use [Reward Feedback](reward_feedback.md) for reward, blocked, error, ready, and completion feedback.
 - Use [Visual Direction](visual_direction.md) for palette, silhouette, and readability rules.
+- Use [Accessibility](accessibility.md) for contrast, input, readable text, and backups.
+- Use [Mobile/Web Platform Design](mobile_web_platform.md) for viewport and touch constraints.
 - Use [FTUE](ftue.md) to reduce first-session UI complexity.
 - Use [Meta Progression](meta_progression.md) for upgrade, currency, and unlock state rules.
 
