@@ -38,6 +38,8 @@ changes.
 For reusable design knowledge capture, load
 `references/knowledge-capture-playbook.md` when a session produces a repeated
 lesson, user preference, workflow rule, or reusable GDD pattern.
+For skill behavior evaluation, load `references/skill-eval-playbook.md` when
+testing or reviewing whether this GDD pipeline skill still works after changes.
 
 ## Non-Negotiables
 
@@ -344,6 +346,8 @@ activities/upgrades, risks, and next implementation scope.
 ## Skill Evals
 
 Use these prompts to test whether this skill behaves correctly after changes:
+Use `references/skill-eval-playbook.md` for scoring, failure probes, and
+iteration rules.
 
 - Loose concept: "Make a first GDD for a meme idle life sim." Expected: asks or infers taste, creates concept/slice before broad docs.
 - User rejects visuals: "This is not game art; I do not see gameplay." Expected: stops, reframes visual gate, does not keep expanding prose.
