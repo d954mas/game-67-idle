@@ -29,6 +29,9 @@ unclear.
 For gameplay/economy design, load `references/gameplay-systems-playbook.md`
 when defining core loops, currencies, stats, jobs, activities, upgrades,
 balance JSON, UI flow, or first playable slice mechanics.
+For visual GDD websites or editor surfaces, load
+`references/web-gdd-site-playbook.md` when building or revising a design site,
+local web server, editable docs surface, or visual documentation page.
 
 ## Non-Negotiables
 
@@ -280,6 +283,8 @@ Prefer this small set first:
 - `game_implementation_plan.md`
 
 Add more docs only when they remove implementation ambiguity.
+For visual websites, use `references/web-gdd-site-playbook.md` so the site
+stays aligned with current GDD data and fake shots.
 
 ## Decision Log And Session State
 
@@ -323,6 +328,8 @@ For web visual GDD surfaces, verify both:
 
 - desktop browser screenshot or visual inspection;
 - mobile portrait viewport when the web surface is part of the deliverable.
+Also verify the page shows current fake shots, core loop, currencies/stats,
+activities/upgrades, risks, and next implementation scope.
 
 ## Skill Evals
 
