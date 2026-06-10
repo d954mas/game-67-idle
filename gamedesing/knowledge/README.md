@@ -33,6 +33,8 @@ scope, and product decisions belong in the project's GDD files, not here.
 - [Visual Direction](visual_direction.md) - readable friendly casual-game visual rules.
 - [Balance Tuning](balance_tuning.md) - pacing targets, economy checks, simulations.
 - [Content Planning](content_planning.md) - content roles, matrices, scope control.
+- [GDD Application](gdd_application.md) - turn reusable knowledge into project specs.
+- [Design Review](design_review.md) - pre-implementation GDD review checklist.
 
 ## How To Apply
 
@@ -41,6 +43,9 @@ scope, and product decisions belong in the project's GDD files, not here.
 3. Replace generic examples with project-specific names, numbers, and screens.
 4. Add validation criteria before implementation starts.
 5. If a repeated problem appears in playtests, extract the reusable rule back here.
+
+For feature work, use [GDD Application](gdd_application.md) to write the project-specific
+section, then use [Design Review](design_review.md) before implementation handoff.
 
 ## Maintenance Rules
 
