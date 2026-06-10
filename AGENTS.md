@@ -6,6 +6,7 @@
 - The engine lives in `external/neotolis-engine` as a submodule; do not edit it unless explicitly asked.
 - Game design lives in `gamedesing/`; game code lives in `src/`.
 - Reusable project skills live in `.codex/skills/`; keep them generic enough to reuse in other games.
+- Project-specific operational state for agents lives in `agent_docs/`. Before non-trivial work, read `agent_docs/README.md`; update `agent_docs/project_state.md` after meaningful verified iterations or target changes.
 
 ## Direction
 
