@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "scope": "first_playable_slice",
+  "currencies": [
+    {
+      "id": "gold",
+      "label": "Gold",
+      "type": "soft",
+      "starts_at": 12,
+      "sources": ["event_reward", "loot_sell"],
+      "sinks": ["repair", "shop_service"],
+      "first_slice_role": "Small rewards and repair/shop preview."
+    },
+    {
+      "id": "supplies",
+      "label": "Supplies",
+      "type": "pressure",
+      "starts_at": 3,
+      "sources": ["camp_cache", "forage"],
+      "sinks": ["travel_dangerous_route", "camp_rest"],
+      "first_slice_role": "Limits careless travel/rest without hard-locking."
+    },
+    {
+      "id": "herbs",
+      "label": "Herbs",
+      "type": "crafting",
+      "starts_at": 0,
+      "sources": ["search_ruins", "forage"],
+      "sinks": ["craft_healing_draught"],
+      "first_slice_role": "Shows camp crafting payoff."
+    }
+  ],
+  "stats": [
+    {
+      "id": "health",
+      "label": "Health",
+      "starts_at": 30,
+      "max": 30,
+      "role": "Combat survival and rest motivation."
+    },
+    {
+      "id": "resolve",
+      "label": "Resolve",
+      "starts_at": 10,
+      "max": 10,
+      "role": "Fear, magic, persuasion, curse pressure."
+    },
+    {
+      "id": "dragon_omen",
+      "label": "Dragon Omen",
+      "starts_at": 0,
+      "max": 10,
+      "role": "Mystery/progression flag, not spendable in first slice."
+    }
+  ],
+  "activities": [
+    {
+      "id": "travel_old_road",
+      "label": "Travel: Old Road",
+      "input": "tap_map_node",
+      "cost": [],
+      "reward": [{"id": "enter_location", "value": "moss_ruins"}],
+      "blocked_by": []
+    },
+    {
+      "id": "search_standing_stones",
+      "label": "Search Standing Stones",
+      "input": "tap_action_search",
+      "cost": [{"id": "resolve", "value": 1, "chance": 0.25}],
+      "reward": [
+        {"id": "herbs", "value": 2},
+        {"id": "dragon_omen", "value": 1}
+      ],
+      "blocked_by": []
+    },
+    {
+      "id": "camp_rest_safe_fire",
+      "label": "Rest At Safe Fire",
+      "input": "tap_camp_rest",
+      "cost": [{"id": "supplies", "value": 1}],
+      "reward": [{"id": "health", "value": 12}],
+      "blocked_by": ["unsafe_location"]
+    }
+  ],
+  "upgrades": [
+    {
+      "id": "trail_herbalist_1",
+      "label": "Trail Herbalist I",
+      "unlock": {"id": "herbs", "gte": 2},
+      "cost": [{"id": "herbs", "value": 2}],
+      "effect": {"target": "healing_draught", "heal_bonus": 5},
+      "visible_before_after": "Minor Healing Draught: Heal 10 -> Heal 15"
+    }
+  ],
+  "timing_targets": {
+    "seconds_to_first_choice": 20,
+    "seconds_to_first_reward": 60,
+    "minutes_to_camp": 4,
+    "minutes_to_first_upgrade": 5
+  }
+}
+
