@@ -6,8 +6,12 @@ description: Use when starting or revising a game concept, first GDD, visual GDD
 # Primary GDD Pipeline
 
 Use this skill to turn a loose game idea into a scoped, implementation-ready
-primary GDD with visual proof. Optimize for speed, user taste capture, and a
-small vertical slice instead of a large document set.
+primary GDD with visual proof. Optimize for speed, user taste capture, design
+pillars, and a small vertical slice instead of a large document set.
+
+For deeper studio/GDD methodology, load
+`references/studio-gdd-patterns.md` only when the task asks for research,
+process improvement, or a more rigorous production handoff.
 
 ## Non-Negotiables
 
@@ -21,6 +25,8 @@ small vertical slice instead of a large document set.
 - Do not call a visual board "game-ready art" unless separate runtime assets and a composed screen proof exist.
 - Ask at most 3 focused creative questions when taste is unclear, then proceed with explicit assumptions.
 - Stop for user review after the first strong fake shot or visual direction board before expanding the GDD.
+- Map every major system to a player verb, design pillar, or first-slice test.
+- Treat the GDD as a living source of truth, not a static essay.
 - Validators prove consistency, not product quality. Require visual/runtime evidence when possible.
 
 ## Start Checklist
@@ -49,6 +55,8 @@ If the answer is still ambiguous, ask up to 3 short questions covering:
 
 Then restate the working interpretation in 3-6 bullets before creating durable
 files. Include `known`, `assumed`, and `needs user review` when relevant.
+Capture the user's taste in concrete terms: UI density, camera/framing, art
+finish, humor edge, pacing, monetization tolerance, and no-go references.
 
 For meme-heavy projects, preserve the user's meme anchor as a visible design
 constraint, not just lore text. Example for Game 67 only when project context
@@ -64,10 +72,24 @@ Build a compact reference pack before visual production when the user mentions
 market research, existing games, ads, memes, or "make it like X".
 
 - Gather 3-7 relevant refs.
-- For each ref, record: core loop, progression fantasy, UI density, economy signals, visual tone, and one concrete takeaway.
+- For each ref, record: player fantasy, core loop, progression fantasy, UI density, economy signals, retention/session pattern, visual tone, and one concrete takeaway.
 - Split notes into `borrow`, `avoid`, and `copy-risk`.
+- Mark source quality: user-provided, primary/studio, marketplace/store, secondary article, or unverified.
 - If the user asks for current market research or live references, browse the web and cite sources.
 - If browsing is unavailable, state that the pack is based on provided refs/local knowledge and mark it as unverified.
+
+## Stage Gates
+
+Move fast, but lock one decision layer at a time:
+
+1. Concept gate: hook, audience, platform, 3 pillars, no-go list.
+2. Reference gate: 3-7 refs with borrow/avoid/copy-risk and source quality.
+3. Visual gate: first gameplay fake shot accepted or redirected by the user.
+4. Slice gate: first 30 seconds, first 5 minutes, loop, currencies, UI flow.
+5. Handoff gate: risks, tests, files, commands, and next implementation prompt.
+
+If a later gate exposes a broken earlier gate, stop and revise the earlier gate
+instead of adding more documents.
 
 ## Fast Primary GDD Workflow
 
@@ -80,6 +102,7 @@ Create or update one concise concept file before expanding:
 - genre and platform;
 - target session;
 - core verbs;
+- 3 design pillars and what would violate each pillar;
 - primary progression metric;
 - tone/safety constraints;
 - no-go list.
@@ -94,6 +117,7 @@ Write:
 - first 5 minutes;
 - core loop;
 - currencies/stats;
+- what the player taps/clicks, waits for, compares, and upgrades;
 - first upgrade;
 - first job/activity;
 - first visual change;
@@ -134,7 +158,18 @@ Only after the concept and visual proof are stable, create minimal JSON contract
 
 Keep ids stable and implementation-oriented.
 
-### 5. Write The Handoff
+### 5. Add Risk And Experiment Gates
+
+Before handoff, write the top 3 risks and the smallest test for each:
+
+- fun risk: what may be boring or unclear;
+- production risk: what may be expensive, slow, or hard to generate;
+- UX risk: what may confuse the player in the first minute.
+
+Each risk needs an owner action: fake shot, paper test, playable prototype,
+balance simulation, technical spike, or user review.
+
+### 6. Write The Handoff
 
 Create one implementation entrypoint, e.g. `game_implementation_plan.md`.
 
@@ -146,6 +181,7 @@ It must include:
 - files to read first;
 - implementation phases;
 - build/test commands;
+- risk gates and first playtest questions;
 - Definition of Done;
 - prompt for the next implementation chat.
 
@@ -155,7 +191,9 @@ When finishing a primary GDD pipeline task, report:
 
 - DoD status: done, partial, or blocked.
 - Files changed or created.
+- Current stage gate and next gate.
 - Visual proof tier: reference, fake shot, or runtime.
+- Design pillars and first-slice test status.
 - User decisions captured.
 - Assumptions still needing review.
 - Validation run and result.
@@ -170,6 +208,7 @@ Prefer this small set first:
 
 - `concept.md`
 - `gdd.md`
+- `references.md` or a reference section
 - `data/balance.json`
 - `data/ui_flow.json`
 - `art_bible.html` or visual page/section
