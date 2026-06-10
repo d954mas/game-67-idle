@@ -26,6 +26,9 @@ when comparing games, ads, memes, stores, screenshots, or UI patterns.
 For creative direction intake, load `references/creative-intake-playbook.md`
 when the user's taste, meme anchor, visual target, or acceptance criteria are
 unclear.
+For gameplay/economy design, load `references/gameplay-systems-playbook.md`
+when defining core loops, currencies, stats, jobs, activities, upgrades,
+balance JSON, UI flow, or first playable slice mechanics.
 
 ## Non-Negotiables
 
@@ -164,6 +167,8 @@ Create or update one concise concept file before expanding:
 ### 2. Define The First Playable Slice
 
 Do this before market research or broad content matrices.
+Use `references/gameplay-systems-playbook.md` when the loop, economy, stats,
+activities, or UI states are not already concrete.
 
 Write:
 
@@ -206,6 +211,8 @@ and ask whether to keep, redirect, or regenerate the direction.
 ### 4. Create Machine-Readable Contracts
 
 Only after the concept and visual proof are stable, create minimal JSON contracts:
+Use `references/gameplay-systems-playbook.md` to keep numbers and flows tied to
+player actions and UI states.
 
 - `data/balance.json` - numbers, effects, unlocks.
 - `data/ui_flow.json` - screens, actions, tabs, UI states.
