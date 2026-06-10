@@ -65,6 +65,7 @@ See goal
 
 ## Links
 
+- Use [Core Loop](core_loop.md) to define the first repeatable action before tutorializing it.
 - Use [UI/UX Patterns](ui_ux_patterns.md) for screen hierarchy and feedback rules.
 - Use [Meta Progression](meta_progression.md) when the FTUE introduces upgrades, unlocks, or currencies.
 
@@ -73,4 +74,3 @@ See goal
 - Nielsen Norman Group, [10 Usability Heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/)
 - Nielsen Norman Group, [Recognition and Recall in User Interfaces](https://www.nngroup.com/articles/recognition-and-recall/)
 - Game Accessibility Guidelines, [Basic guidelines](https://gameaccessibilityguidelines.com/basic/)
-

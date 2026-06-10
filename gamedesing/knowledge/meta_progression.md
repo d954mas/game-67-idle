@@ -76,6 +76,7 @@ Meta loop
 
 ## Links
 
+- Use [Core Loop](core_loop.md) to confirm meta rewards improve repeated play.
 - Use [FTUE](ftue.md) for when and how progression enters the first session.
 - Use [UI/UX Patterns](ui_ux_patterns.md) for upgrade states, affordance, and reward feedback.
 
@@ -84,4 +85,3 @@ Meta loop
 - GEEvo paper, [Game Economy Generation and Balancing with Evolutionary Algorithms](https://arxiv.org/abs/2404.18574)
 - Wikipedia, [Incremental game](https://en.wikipedia.org/wiki/Incremental_game)
 - Wikipedia, [Virtual economy](https://en.wikipedia.org/wiki/Virtual_economy)
-

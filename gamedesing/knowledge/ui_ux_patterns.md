@@ -91,6 +91,7 @@ For each repeated UI component, define:
 
 ## Links
 
+- Use [Core Loop](core_loop.md) to decide which action, feedback, and reward must dominate the screen.
 - Use [FTUE](ftue.md) to reduce first-session UI complexity.
 - Use [Meta Progression](meta_progression.md) for upgrade, currency, and unlock state rules.
 
@@ -100,4 +101,3 @@ For each repeated UI component, define:
 - W3C WAI, [WCAG 2.2 Target Size Minimum](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
 - Game Accessibility Guidelines, [Full list](https://gameaccessibilityguidelines.com/full-list/)
 - Apple, [Human Interface Guidelines: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
-

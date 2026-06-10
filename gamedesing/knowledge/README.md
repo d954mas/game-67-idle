@@ -25,6 +25,7 @@ scope, and product decisions belong in the project's GDD files, not here.
 ## Index
 
 - [FTUE](ftue.md) - first session, first 30 seconds, tutorial-by-doing.
+- [Core Loop](core_loop.md) - repeatable action, feedback, reward, and changed state.
 - [Meta Progression](meta_progression.md) - long-term goals, economies, unlocks, rewards.
 - [UI/UX Patterns](ui_ux_patterns.md) - readable controls, feedback, component states.
 
@@ -43,4 +44,3 @@ scope, and product decisions belong in the project's GDD files, not here.
 - Link related knowledge files instead of duplicating sections.
 - Keep external links in a `References` section.
 - Split a file when one topic starts hiding another topic.
-
