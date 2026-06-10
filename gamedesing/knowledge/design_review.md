@@ -82,4 +82,5 @@ Validation: How to verify the fix.
 - Use [Balance Tuning](balance_tuning.md) for pacing findings.
 - Use [Content Planning](content_planning.md) for scope findings.
 - Use [Playtest Validation](playtest_validation.md) for evidence criteria.
-
+- Use [Iteration Scope](iteration_scope.md) to cut the next implementation pass.
+- Use [Telemetry Evidence](telemetry_evidence.md) to make validation observable.

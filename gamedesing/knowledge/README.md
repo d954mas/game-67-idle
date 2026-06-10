@@ -35,6 +35,8 @@ scope, and product decisions belong in the project's GDD files, not here.
 - [Content Planning](content_planning.md) - content roles, matrices, scope control.
 - [GDD Application](gdd_application.md) - turn reusable knowledge into project specs.
 - [Design Review](design_review.md) - pre-implementation GDD review checklist.
+- [Iteration Scope](iteration_scope.md) - small playable slices and definition of done.
+- [Telemetry Evidence](telemetry_evidence.md) - logs, events, traces, screenshots, proof.
 
 ## How To Apply
 

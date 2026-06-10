@@ -99,4 +99,5 @@ Links to project GDD files and knowledge files.
 - Use [Meta Progression](meta_progression.md) for long-term systems.
 - Use [UI/UX Patterns](ui_ux_patterns.md) for screen and component states.
 - Use [Design Review](design_review.md) before implementation handoff.
-
+- Use [Iteration Scope](iteration_scope.md) to define the smallest playable pass.
+- Use [Telemetry Evidence](telemetry_evidence.md) to define proof and diagnostics.

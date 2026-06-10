@@ -92,6 +92,7 @@ Stability
 - Use [Visual Direction](visual_direction.md) to validate visual appeal and readability.
 - Use [Balance Tuning](balance_tuning.md) to compare player pacing with targets.
 - Use [Content Planning](content_planning.md) to decide what to cut, hide, or add.
+- Use [Telemetry Evidence](telemetry_evidence.md) to define logs, events, traces, and screenshots.
 
 ## References
 
