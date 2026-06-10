@@ -21,6 +21,8 @@ visual review packets.
 For implementation handoff, load `references/implementation-handoff-playbook.md`
 when preparing a next-chat build plan, first playable slice, acceptance gates,
 or build/test command packet.
+For market/reference research, load `references/reference-research-playbook.md`
+when comparing games, ads, memes, stores, screenshots, or UI patterns.
 
 ## Non-Negotiables
 
@@ -104,6 +106,8 @@ mentions it:
 
 Build a compact reference pack before visual production when the user mentions
 market research, existing games, ads, memes, or "make it like X".
+Use `references/reference-research-playbook.md` for research scope, comparison
+dimensions, source quality, and synthesis.
 
 - Gather 3-7 relevant refs.
 - For each ref, record: player fantasy, core loop, progression fantasy, UI density, economy signals, retention/session pattern, visual tone, and one concrete takeaway.
