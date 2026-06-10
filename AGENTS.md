@@ -20,6 +20,7 @@
 - Product target for Game 67 is mobile portrait + web. Native desktop/PC is the development and automation harness.
 - Default validation should use the native desktop/PC build because it is faster. Run WASM/web builds only when the user explicitly asks for them or the task is specifically about web/WASM behavior.
 - Native DevAPI scripts must launch the game through `tools/devapi/devapi_client.py::running_game()` so stdout/stderr are captured under `build/logs/`. When a native run, smoke, or capture fails, inspect or report the launch log tail before diagnosing from screenshots/state alone.
+- For gameplay/UI/runtime iterations, use `agent_docs/playtest_harness.md` as the project-specific fast validation entry point before creating ad hoc checks.
 - When validating playable or visual changes, use screenshots and emulated input. Cover desktop browser and a mobile portrait viewport when the surface is web-based.
 - Pack building is explicit; do not wire pack generation into every normal game build.
 - If a task reveals repeated friction, propose updating `AGENTS.md` or creating a project skill.

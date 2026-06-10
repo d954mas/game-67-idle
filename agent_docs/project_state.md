@@ -1,7 +1,7 @@
 # Project State
 
 Updated: 2026-06-10
-Current HEAD at update: `319eb45 Add studio GDD process gates to skill`
+Baseline before this update: `d6c7d54 Add game feel and release readiness guides`
 
 ## Current Target
 
@@ -24,6 +24,8 @@ Latest tooling checkpoint:
 
 - `40294d9 Capture native DevAPI launch logs`
 - Native DevAPI runs now write stdout/stderr launch logs under `build/logs/`.
+- `tools/devapi/agent_playtest.py` is the default agent-friendly native playtest harness for fast gameplay/UI/runtime iterations.
+- Latest verified harness run: `py -3.12 tools\devapi\agent_playtest.py 9123 --full-loop` passed on 2026-06-10.
 
 ## How To Run And Validate
 
@@ -38,6 +40,14 @@ Native smoke:
 ```powershell
 py -3.12 tools\devapi\smoke_test.py <port>
 ```
+
+Agent playtest harness:
+
+```powershell
+py -3.12 tools\devapi\agent_playtest.py 9123 --full-loop
+```
+
+See `agent_docs/playtest_harness.md` for the project-specific runbook.
 
 Native state roundtrip:
 
@@ -61,6 +71,7 @@ DevAPI scripts that use `tools/devapi/devapi_client.py::running_game()` print th
 
 ## Evidence Rules
 
+- For gameplay/UI/runtime iterations, run the agent playtest harness before ad hoc runtime debugging.
 - For gameplay/UI work, prefer native smoke plus framebuffer capture.
 - A screenshot file existing is not enough; use the existing capture path that runs pixel-health.
 - On failure, read the launch log tail before diagnosing from screenshots/state alone.
