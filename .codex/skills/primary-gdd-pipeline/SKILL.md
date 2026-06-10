@@ -15,6 +15,9 @@ process improvement, or a more rigorous production handoff.
 For repeatable artifact formats, load `references/output-templates.md` only
 when writing session state, decision logs, ref packs, risk gates, or final
 status reports.
+For visual deliverables, load `references/visual-proof-playbook.md` when making
+fake shots, art bible pages, generated art prompts, runtime asset packs, or
+visual review packets.
 
 ## Non-Negotiables
 
@@ -181,6 +184,8 @@ If the user needs to "see the game", produce visual proof in this order:
 Use the `imagegen` skill for generated raster art. Move final generated images
 into the project; do not leave project-referenced images only under the default
 generated-images folder.
+Use `references/visual-proof-playbook.md` for fake shot composition, prompt
+structure, runtime asset acceptance, and visual review packets.
 
 After item 1 or 2, stop with a short review packet unless the user explicitly
 asked to continue without review. The review packet must show the image path(s)
