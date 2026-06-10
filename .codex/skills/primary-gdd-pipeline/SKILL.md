@@ -35,6 +35,9 @@ local web server, editable docs surface, or visual documentation page.
 For final review, load `references/quality-review-playbook.md` before claiming
 a GDD pipeline task is done, especially after visual, website, data, or handoff
 changes.
+For reusable design knowledge capture, load
+`references/knowledge-capture-playbook.md` when a session produces a repeated
+lesson, user preference, workflow rule, or reusable GDD pattern.
 
 ## Non-Negotiables
 
@@ -295,6 +298,8 @@ Keep durable decisions in the design folder, preferably:
 
 - `common/design_decisions.md` for accepted creative/product decisions;
 - `handoff_status.md` or implementation plan for current source-of-truth order.
+Use `references/knowledge-capture-playbook.md` when a decision should become a
+reusable lesson rather than only a project-specific choice.
 
 Keep volatile notes in `tmp/session_state.md` when work runs long. It should
 include current DoD, latest accepted visual direction, open questions, generated
