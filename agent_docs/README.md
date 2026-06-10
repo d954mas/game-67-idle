@@ -12,5 +12,7 @@ Before non-trivial work:
 
 Reusable workflow belongs in `.codex/skills/`.
 Project-specific facts, commands, constraints, current state, and repo traps belong in `agent_docs/project_state.md`.
+Universal reusable game-design knowledge belongs in `gamedesing/knowledge/`.
+Current-game design decisions belong in the normal GDD files under `gamedesing/`.
 
 Update `agent_docs/project_state.md` after meaningful verified iterations, target changes, or newly discovered repo traps.

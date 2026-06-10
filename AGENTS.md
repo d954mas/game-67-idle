@@ -5,6 +5,7 @@
 - This is an AI-first game development experiment: improve the game and the AI workflow together.
 - The engine lives in `external/neotolis-engine` as a submodule; do not edit it unless explicitly asked.
 - Game design lives in `gamedesing/`; game code lives in `src/`.
+- Universal reusable design knowledge lives in `gamedesing/knowledge/`. Current-game design decisions, state, balance, copy, lore, and implementation notes stay in the regular GDD files under `gamedesing/`.
 - Reusable project skills live in `.codex/skills/`; keep them generic enough to reuse in other games.
 - Project-specific operational state for agents lives in `agent_docs/`. Before non-trivial work, read `agent_docs/README.md`; update `agent_docs/project_state.md` after meaningful verified iterations or target changes.
 

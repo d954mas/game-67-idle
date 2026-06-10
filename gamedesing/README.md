@@ -1,5 +1,11 @@
 # Game Design Hub
 
+## Knowledge Base
+
+- [knowledge/README.md](knowledge/README.md) - reusable universal design knowledge.
+- Current-game design decisions, state, balance, copy, lore, and implementation notes stay in the regular GDD files in this folder.
+- Do not store current project state in `knowledge/`.
+
 Папка для референсов, концепта и GDD проекта `Game 67 Idle`.
 
 ## Рабочая Идея
