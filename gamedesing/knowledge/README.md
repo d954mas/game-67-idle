@@ -28,6 +28,7 @@ scope, and product decisions belong in the project's GDD files, not here.
 - [Core Loop](core_loop.md) - repeatable action, feedback, reward, and changed state.
 - [Meta Progression](meta_progression.md) - long-term goals, economies, unlocks, rewards.
 - [UI/UX Patterns](ui_ux_patterns.md) - readable controls, feedback, component states.
+- [Playtest Validation](playtest_validation.md) - first minutes, evidence, bugs, director review.
 
 ## How To Apply
 

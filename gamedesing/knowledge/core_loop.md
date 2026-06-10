@@ -84,6 +84,7 @@ loop becomes spreadsheet progression.
 
 ## Links
 
+- Use [Playtest Validation](playtest_validation.md) to prove the loop works in a build.
 - Use [FTUE](ftue.md) to introduce the first loop without overload.
 - Use [Meta Progression](meta_progression.md) to connect loop rewards to long-term goals.
 - Use [UI/UX Patterns](ui_ux_patterns.md) to make loop state and feedback readable.
@@ -93,4 +94,3 @@ loop becomes spreadsheet progression.
 - Hunicke, LeBlanc, Zubek, [MDA: A Formal Approach to Game Design and Game Research](https://users.cs.northwestern.edu/~hunicke/MDA.pdf)
 - Wikipedia, [MDA framework](https://en.wikipedia.org/wiki/MDA_framework)
 - Wikipedia, [Compulsion loop](https://en.wikipedia.org/wiki/Compulsion_loop)
-

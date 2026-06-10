@@ -92,6 +92,7 @@ For each repeated UI component, define:
 ## Links
 
 - Use [Core Loop](core_loop.md) to decide which action, feedback, and reward must dominate the screen.
+- Use [Playtest Validation](playtest_validation.md) to verify screenshots, input, and state clarity.
 - Use [FTUE](ftue.md) to reduce first-session UI complexity.
 - Use [Meta Progression](meta_progression.md) for upgrade, currency, and unlock state rules.
 
