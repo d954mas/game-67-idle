@@ -84,3 +84,5 @@ Validation: How to verify the fix.
 - Use [Playtest Validation](playtest_validation.md) for evidence criteria.
 - Use [Iteration Scope](iteration_scope.md) to cut the next implementation pass.
 - Use [Telemetry Evidence](telemetry_evidence.md) to make validation observable.
+- Use [Game Feel And Controls](game_feel_controls.md) for input and moment-to-moment feel.
+- Use [Release Readiness](release_readiness.md) when reviewing an external-test candidate.

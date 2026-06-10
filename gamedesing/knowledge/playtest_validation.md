@@ -94,6 +94,8 @@ Stability
 - Use [Content Planning](content_planning.md) to decide what to cut, hide, or add.
 - Use [Telemetry Evidence](telemetry_evidence.md) to define logs, events, traces, and screenshots.
 - Use [Mobile/Web Platform Design](mobile_web_platform.md) and [Accessibility](accessibility.md) for viewport, input, and readability checks.
+- Use [Game Feel And Controls](game_feel_controls.md) to validate responsiveness and repeat feel.
+- Use [Release Readiness](release_readiness.md) before external tests or RC review.
 
 ## References
 

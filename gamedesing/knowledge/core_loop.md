@@ -86,6 +86,7 @@ loop becomes spreadsheet progression.
 
 - Use [Playtest Validation](playtest_validation.md) to prove the loop works in a build.
 - Use [Reward Feedback](reward_feedback.md) to make loop consequences visible.
+- Use [Game Feel And Controls](game_feel_controls.md) to make repeated actions responsive.
 - Use [FTUE](ftue.md) to introduce the first loop without overload.
 - Use [Meta Progression](meta_progression.md) to connect loop rewards to long-term goals.
 - Use [UI/UX Patterns](ui_ux_patterns.md) to make loop state and feedback readable.

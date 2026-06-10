@@ -39,6 +39,8 @@ scope, and product decisions belong in the project's GDD files, not here.
 - [Telemetry Evidence](telemetry_evidence.md) - logs, events, traces, screenshots, proof.
 - [Mobile/Web Platform Design](mobile_web_platform.md) - touch, viewport, browser, resume constraints.
 - [Accessibility](accessibility.md) - readable, controllable, recoverable game design.
+- [Game Feel And Controls](game_feel_controls.md) - input response, timing, control feedback.
+- [Release Readiness](release_readiness.md) - external-test and RC design checklist.
 
 ## How To Apply
 
