@@ -32,6 +32,27 @@ REQUIRED_FIELDS = {
     "items",
     "inventory.item_ids",
     "equipment.hand_item_id",
+    "meme_coins",
+    "status",
+    "click_power",
+    "income_per_second",
+    "income_accum_ms",
+    "hands_skill",
+    "coolness",
+    "comfort",
+    "visual_stage",
+    "first_upgrade_owned",
+    "second_upgrade_owned",
+    "third_upgrade_owned",
+    "fourth_upgrade_owned",
+    "fifth_upgrade_owned",
+    "active_job_id",
+    "active_job_elapsed_ms",
+    "active_job_duration_ms",
+    "seen_intro",
+    "final_ready",
+    "feedback_code",
+    "feedback_pulse_ms",
 }
 
 SCALAR_TYPES = {"bool", "int", "float", "string", "string?", "enum"}
@@ -196,56 +217,34 @@ def c_string(value: Any) -> str:
 
 
 def render_state_constants(schema: dict[str, Any]) -> str:
-    fields = schema["fields"]
-    item_fields = schema["types"]["ItemInstance"]["fields"]
-    shape = field_by_path(fields, "shape_index")
-    render_mode = field_by_path(fields, "render_mode_index")
-    camera = field_by_path(fields, "camera_distance")
-    clicks = field_by_path(fields, "test_ui_clicks")
-    label = field_by_path(fields, "test_label_text")
-    button = field_by_path(fields, "test_button_text")
-    master = field_by_path(fields, "settings.master_volume")
-    sfx = field_by_path(fields, "settings.sfx_volume")
-    wallet_soft = field_by_path(fields, "wallet.soft")
-    wallet_hard = field_by_path(fields, "wallet.hard")
-    item_count = field_by_path(item_fields, "count")
-    item_level = field_by_path(item_fields, "level")
-    item_durability = field_by_path(item_fields, "durability")
-    return "\n".join(
-        [
-            f"#define GAME_STATE_SHAPE_INDEX_DEFAULT {default_enum_macro(shape['enum'], shape['default'])}",
-            f"#define GAME_STATE_RENDER_MODE_INDEX_DEFAULT {default_enum_macro(render_mode['enum'], render_mode['default'])}",
-            f"#define GAME_STATE_CAMERA_DISTANCE_DEFAULT {c_float(camera['default'])}",
-            f"#define GAME_STATE_CAMERA_DISTANCE_MIN {c_float(camera['min'])}",
-            f"#define GAME_STATE_CAMERA_DISTANCE_MAX {c_float(camera['max'])}",
-            f"#define GAME_STATE_TEST_UI_CLICKS_DEFAULT {c_int(clicks['default'])}",
-            f"#define GAME_STATE_TEST_UI_CLICKS_MIN {c_int(clicks['min'])}",
-            f"#define GAME_STATE_TEST_UI_CLICKS_MAX {c_int(clicks['max'])}",
-            f"#define GAME_STATE_TEST_LABEL_TEXT_DEFAULT {c_string(label['default'])}",
-            f"#define GAME_STATE_TEST_BUTTON_TEXT_DEFAULT {c_string(button['default'])}",
-            f"#define GAME_STATE_SETTINGS_MASTER_VOLUME_DEFAULT {c_float(master['default'])}",
-            f"#define GAME_STATE_SETTINGS_MASTER_VOLUME_MIN {c_float(master['min'])}",
-            f"#define GAME_STATE_SETTINGS_MASTER_VOLUME_MAX {c_float(master['max'])}",
-            f"#define GAME_STATE_SETTINGS_SFX_VOLUME_DEFAULT {c_float(sfx['default'])}",
-            f"#define GAME_STATE_SETTINGS_SFX_VOLUME_MIN {c_float(sfx['min'])}",
-            f"#define GAME_STATE_SETTINGS_SFX_VOLUME_MAX {c_float(sfx['max'])}",
-            f"#define GAME_STATE_WALLET_SOFT_DEFAULT {c_int(wallet_soft['default'])}",
-            f"#define GAME_STATE_WALLET_SOFT_MIN {c_int(wallet_soft['min'])}",
-            f"#define GAME_STATE_WALLET_SOFT_MAX {c_int(wallet_soft['max'])}",
-            f"#define GAME_STATE_WALLET_HARD_DEFAULT {c_int(wallet_hard['default'])}",
-            f"#define GAME_STATE_WALLET_HARD_MIN {c_int(wallet_hard['min'])}",
-            f"#define GAME_STATE_WALLET_HARD_MAX {c_int(wallet_hard['max'])}",
-            f"#define GAME_STATE_ITEM_COUNT_DEFAULT {c_int(item_count['default'])}",
-            f"#define GAME_STATE_ITEM_COUNT_MIN {c_int(item_count['min'])}",
-            f"#define GAME_STATE_ITEM_COUNT_MAX {c_int(item_count['max'])}",
-            f"#define GAME_STATE_ITEM_LEVEL_DEFAULT {c_int(item_level['default'])}",
-            f"#define GAME_STATE_ITEM_LEVEL_MIN {c_int(item_level['min'])}",
-            f"#define GAME_STATE_ITEM_LEVEL_MAX {c_int(item_level['max'])}",
-            f"#define GAME_STATE_ITEM_DURABILITY_DEFAULT {c_float(item_durability['default'])}",
-            f"#define GAME_STATE_ITEM_DURABILITY_MIN {c_float(item_durability['min'])}",
-            f"#define GAME_STATE_ITEM_DURABILITY_MAX {c_float(item_durability['max'])}",
-        ]
-    )
+    lines: list[str] = []
+
+    def emit_scalar(field: dict[str, Any], prefix: str = "") -> None:
+        typ = field["type"]
+        name = c_macro(f"{prefix}{field['path']}")
+        if typ == "enum":
+            lines.append(f"#define GAME_STATE_{name}_DEFAULT {default_enum_macro(field['enum'], field['default'])}")
+        elif typ == "int":
+            lines.append(f"#define GAME_STATE_{name}_DEFAULT {c_int(field['default'])}")
+            lines.append(f"#define GAME_STATE_{name}_MIN {c_int(field['min'])}")
+            lines.append(f"#define GAME_STATE_{name}_MAX {c_int(field['max'])}")
+        elif typ == "float":
+            lines.append(f"#define GAME_STATE_{name}_DEFAULT {c_float(field['default'])}")
+            lines.append(f"#define GAME_STATE_{name}_MIN {c_float(field['min'])}")
+            lines.append(f"#define GAME_STATE_{name}_MAX {c_float(field['max'])}")
+        elif typ == "string":
+            if "default" in field:
+                lines.append(f"#define GAME_STATE_{name}_DEFAULT {c_string(field['default'])}")
+        elif typ == "bool":
+            lines.append(f"#define GAME_STATE_{name}_DEFAULT {1 if field['default'] else 0}")
+
+    for field in schema["fields"]:
+        if field["type"] in SCALAR_TYPES:
+            emit_scalar(field)
+    for field in schema["types"]["ItemInstance"]["fields"]:
+        if field["type"] in SCALAR_TYPES:
+            emit_scalar(field, "item.")
+    return "\n".join(lines)
 
 
 def render_enum(enum_name: str, values: list[str]) -> str:
@@ -355,11 +354,18 @@ void game_state_register_devapi(void);
 
 def render_schema_header(schema: dict[str, Any]) -> str:
     canonical = json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
+    chunks = [canonical[i : i + 1800] for i in range(0, len(canonical), 1800)]
+    literal_lines = [f"    {json.dumps(chunk)}, \\" for chunk in chunks]
     return (
         "#ifndef GAME_STATE_SCHEMA_GEN_H\n"
         "#define GAME_STATE_SCHEMA_GEN_H\n\n"
         "/* Generated by tools/state_codegen/generate_state.py from state/game_state.schema.json. */\n"
-        f"#define GAME_STATE_SCHEMA_JSON {json.dumps(canonical)}\n\n"
+        "#define GAME_STATE_SCHEMA_JSON_CHUNKS \\\n"
+        "    { \\\n"
+        + "\n".join(literal_lines)
+        + "\n"
+        + '    "" \\\n'
+        + "    }\n\n"
         "#endif\n"
     )
 

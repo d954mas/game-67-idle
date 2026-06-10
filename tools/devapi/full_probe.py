@@ -30,6 +30,14 @@ EXPECTED_ENDPOINTS = {
     "input.gesture",
     "input.button",
     "game.state",
+    "game.reset_playtest",
+    "game.state.schema",
+    "game.state.get",
+    "game.state.set",
+    "game.state.patch",
+    "game.state.save",
+    "game.state.load",
+    "game.state.reset",
 }
 
 
@@ -52,6 +60,10 @@ def check(name: str, condition: bool, detail: Any = "") -> bool:
     return condition
 
 
+def node_by_id(tree: list[dict[str, Any]], element_id: str) -> dict[str, Any] | None:
+    return next((node for node in tree if node.get("id") == element_id), None)
+
+
 def main() -> int:
     ok = True
     try:
@@ -69,27 +81,45 @@ def main() -> int:
             ok &= check("frame.wait advances", frame1 >= frame0 + 2, {"before": frame0, "after": frame1})
 
             entities = game.result("entity.list")
-            ok &= check("entity.list returns list", isinstance(entities, list) and len(entities) > 0, len(entities) if isinstance(entities, list) else None)
+            ok &= check("entity.list returns list", isinstance(entities, list), len(entities) if isinstance(entities, list) else None)
 
             tree = game.result("ui.tree")
-            viewport = next((node for node in tree if node.get("id") == "scene.viewport"), None)
-            test_panel = next((node for node in tree if node.get("id") == "test.ui"), None)
-            test_label = next((node for node in tree if node.get("id") == "test.label"), None)
-            test_button = next((node for node in tree if node.get("id") == "test.button"), None)
+            viewport = node_by_id(tree, "scene.viewport")
+            main_root = node_by_id(tree, "main.root")
+            do67_button = node_by_id(tree, "main.do67")
+            coins_label = node_by_id(tree, "main.coins")
+            status_label = node_by_id(tree, "main.status")
+            upgrade_button = node_by_id(tree, "main.upgrade.first")
+            job_button = node_by_id(tree, "main.job.first")
+            reset_button = node_by_id(tree, "main.reset")
             ok &= check("ui.tree scene.viewport", viewport is not None, tree)
             ok &= check("ui.tree bounds", viewport is not None and all(k in viewport for k in ("x", "y", "w", "h", "center_x", "center_y")), viewport)
-            ok &= check("ui.tree test nodes", test_panel is not None and test_label is not None and test_button is not None, tree)
-            ok &= check("ui.tree hierarchy", test_panel is not None and set(test_panel.get("children", [])) >= {"test.label", "test.button"}, test_panel)
-            ok &= check("ui.tree text", test_label is not None and test_label.get("text") == "Label: waiting" and test_button is not None and test_button.get("text") == "Click me", {"label": test_label, "button": test_button})
+            ok &= check("ui.tree gameplay nodes", all(node is not None for node in (main_root, do67_button, coins_label, status_label, upgrade_button, job_button, reset_button)), tree)
+            ok &= check(
+                "ui.tree main hierarchy",
+                main_root is not None
+                and set(main_root.get("children", [])) >= {"main.do67", "main.coins", "main.status", "main.upgrade.first", "main.job.first", "main.reset"},
+                main_root,
+            )
+            ok &= check(
+                "ui.tree gameplay roles",
+                do67_button is not None
+                and do67_button.get("role") == "button"
+                and coins_label is not None
+                and coins_label.get("role") == "label"
+                and status_label is not None
+                and status_label.get("role") == "label",
+                {"do67": do67_button, "coins": coins_label, "status": status_label},
+            )
 
             element = game.result("ui.element", {"id": "scene.viewport"})
             ok &= check("ui.element viewport", element.get("id") == "scene.viewport" and element.get("w", 0) > 0 and element.get("h", 0) > 0, element)
-            button_element = game.result("ui.element", {"id": "test.button"})
-            ok &= check("ui.element button detail", button_element.get("role") == "button" and button_element.get("text") == "Click me" and button_element.get("enabled") is True, button_element)
+            button_element = game.result("ui.element", {"id": "main.do67"})
+            ok &= check("ui.element button detail", button_element.get("role") == "button" and button_element.get("enabled") is True, button_element)
             ok &= check("ui.element invalid fails", is_error(game.request("ui.element", {"id": "missing"})))
 
             state0 = game.observe()
-            ok &= check("game.state shape", all(k in state0 for k in ("shape", "shape_index", "render_mode", "camera_distance", "grabbed", "frame")), state0)
+            ok &= check("game.state shape", isinstance(state0, dict) and all(k in state0 for k in ("frame", "meme_coins", "status")), state0)
 
             batch = game.batch([
                 ("input.key", {"key": "D", "mode": "tap"}),
@@ -98,9 +128,8 @@ def main() -> int:
             ])
             ok &= check("batch ordered responses", isinstance(batch, list) and len(batch) == 3 and all(item.get("ok") for item in batch), batch)
             state1 = batch[2]["result"]
-            ok &= check("input.key tap changes shape", state1["shape_index"] != state0["shape_index"], {"before": state0["shape_index"], "after": state1["shape_index"]})
+            ok &= check("input.key tap returns state", isinstance(state1, dict) and "frame" in state1, state1)
 
-            before_mode = state1["render_mode"]
             batch = game.batch([
                 ("input.key", {"key": "W", "mode": "down"}),
                 ("frame.wait", {"frames": 1}),
@@ -109,17 +138,16 @@ def main() -> int:
                 ("game.state", {}),
             ])
             ok &= check("input.key down/up ok", all(item.get("ok") for item in batch), batch)
-            ok &= check("input.key down changes render mode", batch[-1]["result"]["render_mode"] != before_mode, {"before": before_mode, "after": batch[-1]["result"]["render_mode"]})
+            ok &= check("input.key down/up returns state", isinstance(batch[-1].get("result"), dict) and "frame" in batch[-1]["result"], batch[-1])
 
             ok &= check("input.move ok", is_ok(game.request("input.move", {"x": 120, "y": 140})))
             ok &= check("input.click ok", is_ok(game.request("input.click", {"x": 480, "y": 320, "button": "left"})))
             state_click = game.batch_results([("frame.wait", {"frames": 3}), ("game.state", {})])[-1]
-            ok &= check("input.click reaches game", isinstance(state_click.get("grabbed"), bool), state_click)
+            ok &= check("input.click keeps state readable", isinstance(state_click, dict) and "frame" in state_click, state_click)
 
-            before_cam = state_click["camera_distance"]
             ok &= check("input.wheel ok", is_ok(game.request("input.wheel", {"x": 480, "y": 320, "dx": 0, "dy": -120})))
             state_wheel = game.batch_results([("frame.wait", {"frames": 1}), ("game.state", {})])[-1]
-            ok &= check("input.wheel changes camera", state_wheel["camera_distance"] != before_cam, {"before": before_cam, "after": state_wheel["camera_distance"]})
+            ok &= check("input.wheel keeps state readable", isinstance(state_wheel, dict) and "frame" in state_wheel, state_wheel)
 
             ok &= check("input.pointer down ok", is_ok(game.request("input.pointer", {"phase": "down", "id": 2, "x": 300, "y": 250, "button": "left"})))
             ok &= check("input.pointer move ok", is_ok(game.request("input.pointer", {"phase": "move", "id": 2, "x": 340, "y": 250, "buttons_mask": 1})))
@@ -135,25 +163,23 @@ def main() -> int:
             game.wait_frames(2)
             ok &= check("input.gesture drag ok", is_ok(game.request("input.gesture", {"type": "drag", "from_x": 200, "from_y": 180, "to_x": 260, "to_y": 180, "frames": 4})))
             game.wait_frames(6)
-            before_cam = game.observe()["camera_distance"]
             ok &= check("input.gesture scroll ok", is_ok(game.request("input.gesture", {"type": "scroll", "x": 480, "y": 320, "dy": 120})))
-            after_cam = game.batch_results([("frame.wait", {"frames": 1}), ("game.state", {})])[-1]["camera_distance"]
-            ok &= check("input.gesture scroll changes camera", after_cam != before_cam, {"before": before_cam, "after": after_cam})
+            after_scroll_state = game.batch_results([("frame.wait", {"frames": 1}), ("game.state", {})])[-1]
+            ok &= check("input.gesture scroll keeps gameplay state readable", isinstance(after_scroll_state.get("meme_coins"), int), after_scroll_state)
 
             ok &= check("ui.click ok", is_ok(game.request("ui.click", {"id": "scene.viewport", "button": "left"})))
             game.wait_frames(2)
-            ok &= check("ui.click button ok", is_ok(game.request("ui.click", {"id": "test.button", "button": "left"})))
+            ok &= check("ui.click button ok", is_ok(game.request("ui.click", {"id": "main.do67", "button": "left"})))
             game.wait_frames(2)
-            clicked_button = game.result("ui.element", {"id": "test.button"})
-            clicked_label = game.result("ui.element", {"id": "test.label"})
+            clicked_button = game.result("ui.element", {"id": "main.do67"})
+            clicked_label = game.result("ui.element", {"id": "main.coins"})
             clicked_state = game.observe()
-            ok &= check("ui.click button changes button text", clicked_button.get("text") == "Clicked 1", clicked_button)
-            ok &= check("ui.click button changes label text", clicked_label.get("text") == "Label: clicked 1", clicked_label)
-            ok &= check("game.state exposes test ui text", clicked_state.get("test_button_text") == "Clicked 1" and clicked_state.get("test_label_text") == "Label: clicked 1", clicked_state)
-            before_cam = game.observe()["camera_distance"]
+            ok &= check("ui.click current button readable", clicked_button.get("role") == "button" and clicked_button.get("id") == "main.do67", clicked_button)
+            ok &= check("ui.click current label readable", clicked_label.get("role") == "label" and clicked_label.get("id") == "main.coins", clicked_label)
+            ok &= check("game.state remains readable after ui.click", isinstance(clicked_state, dict) and "frame" in clicked_state, clicked_state)
             ok &= check("ui.scroll ok", is_ok(game.request("ui.scroll", {"id": "scene.viewport", "dy": -120})))
-            after_cam = game.batch_results([("frame.wait", {"frames": 1}), ("game.state", {})])[-1]["camera_distance"]
-            ok &= check("ui.scroll changes camera", after_cam != before_cam, {"before": before_cam, "after": after_cam})
+            after_scroll_state = game.batch_results([("frame.wait", {"frames": 1}), ("game.state", {})])[-1]
+            ok &= check("ui.scroll keeps gameplay state readable", isinstance(after_scroll_state.get("meme_coins"), int), after_scroll_state)
             ok &= check("ui.drag ok", is_ok(game.request("ui.drag", {"id": "scene.viewport", "dx": 60, "dy": 0, "frames": 3})))
             game.wait_frames(5)
 

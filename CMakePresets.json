@@ -65,6 +65,19 @@
             }
         },
         {
+            "name": "wasm-qa",
+            "displayName": "WASM QA (fast release-like)",
+            "inherits": "wasm-debug",
+            "binaryDir": "${sourceDir}/build/_cmake/wasm-qa",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_FLAGS_RELEASE": "-O1 -DNDEBUG",
+                "NT_ASSERT_MODE": "1",
+                "NT_UI_DEBUG_TOOLS": "OFF",
+                "NT_WASM_QA": "ON"
+            }
+        },
+        {
             "name": "wasm-debug-paired",
             "displayName": "WASM Debug Paired",
             "inherits": "wasm-debug",
@@ -169,6 +182,12 @@
             "name": "game-wasm-release",
             "displayName": "Game: WASM Release",
             "configurePreset": "wasm-release",
+            "targets": ["game_67_idle"]
+        },
+        {
+            "name": "game-wasm-qa",
+            "displayName": "Game: WASM QA",
+            "configurePreset": "wasm-qa",
             "targets": ["game_67_idle"]
         },
         {

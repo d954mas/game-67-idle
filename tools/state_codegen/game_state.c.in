@@ -231,6 +231,27 @@ void game_state_init_defaults(GameState *state) {
     state->settings_sfx_volume = GAME_STATE_SETTINGS_SFX_VOLUME_DEFAULT;
     state->wallet_soft = GAME_STATE_WALLET_SOFT_DEFAULT;
     state->wallet_hard = GAME_STATE_WALLET_HARD_DEFAULT;
+    state->meme_coins = GAME_STATE_MEME_COINS_DEFAULT;
+    state->status = GAME_STATE_STATUS_DEFAULT;
+    state->click_power = GAME_STATE_CLICK_POWER_DEFAULT;
+    state->income_per_second = GAME_STATE_INCOME_PER_SECOND_DEFAULT;
+    state->income_accum_ms = GAME_STATE_INCOME_ACCUM_MS_DEFAULT;
+    state->hands_skill = GAME_STATE_HANDS_SKILL_DEFAULT;
+    state->coolness = GAME_STATE_COOLNESS_DEFAULT;
+    state->comfort = GAME_STATE_COMFORT_DEFAULT;
+    state->visual_stage = GAME_STATE_VISUAL_STAGE_DEFAULT;
+    state->first_upgrade_owned = GAME_STATE_FIRST_UPGRADE_OWNED_DEFAULT;
+    state->second_upgrade_owned = GAME_STATE_SECOND_UPGRADE_OWNED_DEFAULT;
+    state->third_upgrade_owned = GAME_STATE_THIRD_UPGRADE_OWNED_DEFAULT;
+    state->fourth_upgrade_owned = GAME_STATE_FOURTH_UPGRADE_OWNED_DEFAULT;
+    state->fifth_upgrade_owned = GAME_STATE_FIFTH_UPGRADE_OWNED_DEFAULT;
+    (void)copy_text(state->active_job_id, sizeof(state->active_job_id), GAME_STATE_ACTIVE_JOB_ID_DEFAULT);
+    state->active_job_elapsed_ms = GAME_STATE_ACTIVE_JOB_ELAPSED_MS_DEFAULT;
+    state->active_job_duration_ms = GAME_STATE_ACTIVE_JOB_DURATION_MS_DEFAULT;
+    state->seen_intro = GAME_STATE_SEEN_INTRO_DEFAULT;
+    state->final_ready = GAME_STATE_FINAL_READY_DEFAULT;
+    state->feedback_code = GAME_STATE_FEEDBACK_CODE_DEFAULT;
+    state->feedback_pulse_ms = GAME_STATE_FEEDBACK_PULSE_MS_DEFAULT;
 }
 
 void game_state_init(void) {
@@ -297,6 +318,22 @@ bool game_state_validate(const GameState *state, char *error, int error_cap) {
         set_error(error, error_cap, "wallet value out of range");
         return false;
     }
+    if (state->meme_coins < GAME_STATE_MEME_COINS_MIN || state->meme_coins > GAME_STATE_MEME_COINS_MAX ||
+        state->status < GAME_STATE_STATUS_MIN || state->status > GAME_STATE_STATUS_MAX ||
+        state->click_power < GAME_STATE_CLICK_POWER_MIN || state->click_power > GAME_STATE_CLICK_POWER_MAX ||
+        state->income_per_second < GAME_STATE_INCOME_PER_SECOND_MIN || state->income_per_second > GAME_STATE_INCOME_PER_SECOND_MAX ||
+        state->income_accum_ms < GAME_STATE_INCOME_ACCUM_MS_MIN || state->income_accum_ms > GAME_STATE_INCOME_ACCUM_MS_MAX ||
+        state->hands_skill < GAME_STATE_HANDS_SKILL_MIN || state->hands_skill > GAME_STATE_HANDS_SKILL_MAX ||
+        state->coolness < GAME_STATE_COOLNESS_MIN || state->coolness > GAME_STATE_COOLNESS_MAX ||
+        state->comfort < GAME_STATE_COMFORT_MIN || state->comfort > GAME_STATE_COMFORT_MAX ||
+        state->visual_stage < GAME_STATE_VISUAL_STAGE_MIN || state->visual_stage > GAME_STATE_VISUAL_STAGE_MAX ||
+        state->active_job_elapsed_ms < GAME_STATE_ACTIVE_JOB_ELAPSED_MS_MIN || state->active_job_elapsed_ms > GAME_STATE_ACTIVE_JOB_ELAPSED_MS_MAX ||
+        state->active_job_duration_ms < GAME_STATE_ACTIVE_JOB_DURATION_MS_MIN || state->active_job_duration_ms > GAME_STATE_ACTIVE_JOB_DURATION_MS_MAX ||
+        state->feedback_code < GAME_STATE_FEEDBACK_CODE_MIN || state->feedback_code > GAME_STATE_FEEDBACK_CODE_MAX ||
+        state->feedback_pulse_ms < GAME_STATE_FEEDBACK_PULSE_MS_MIN || state->feedback_pulse_ms > GAME_STATE_FEEDBACK_PULSE_MS_MAX) {
+        set_error(error, error_cap, "gameplay value out of range");
+        return false;
+    }
     if (state->inventory_item_ids_count < 0 || state->inventory_item_ids_count > GAME_STATE_MAX_INVENTORY_ITEM_IDS) {
         set_error(error, error_cap, "inventory_item_ids_count out of range");
         return false;
@@ -331,7 +368,24 @@ bool game_state_validate(const GameState *state, char *error, int error_cap) {
 }
 
 cJSON *game_state_schema_json(void) {
-    cJSON *root = cJSON_Parse(GAME_STATE_SCHEMA_JSON);
+    const char *chunks[] = GAME_STATE_SCHEMA_JSON_CHUNKS;
+    size_t len = 0;
+    for (size_t i = 0; chunks[i][0] != '\0'; i++) {
+        len += strlen(chunks[i]);
+    }
+    char *json = (char *)malloc(len + 1U);
+    if (!json) {
+        return cJSON_CreateObject();
+    }
+    char *cursor = json;
+    for (size_t i = 0; chunks[i][0] != '\0'; i++) {
+        size_t chunk_len = strlen(chunks[i]);
+        memcpy(cursor, chunks[i], chunk_len);
+        cursor += chunk_len;
+    }
+    json[len] = '\0';
+    cJSON *root = cJSON_Parse(json);
+    free(json);
     return root ? root : cJSON_CreateObject();
 }
 
@@ -365,6 +419,28 @@ cJSON *game_state_to_json(const GameState *state) {
     cJSON *wallet = cJSON_AddObjectToObject(root, "wallet");
     cJSON_AddNumberToObject(wallet, "soft", state->wallet_soft);
     cJSON_AddNumberToObject(wallet, "hard", state->wallet_hard);
+
+    cJSON_AddNumberToObject(root, "meme_coins", state->meme_coins);
+    cJSON_AddNumberToObject(root, "status", state->status);
+    cJSON_AddNumberToObject(root, "click_power", state->click_power);
+    cJSON_AddNumberToObject(root, "income_per_second", state->income_per_second);
+    cJSON_AddNumberToObject(root, "income_accum_ms", state->income_accum_ms);
+    cJSON_AddNumberToObject(root, "hands_skill", state->hands_skill);
+    cJSON_AddNumberToObject(root, "coolness", state->coolness);
+    cJSON_AddNumberToObject(root, "comfort", state->comfort);
+    cJSON_AddNumberToObject(root, "visual_stage", state->visual_stage);
+    cJSON_AddBoolToObject(root, "first_upgrade_owned", state->first_upgrade_owned);
+    cJSON_AddBoolToObject(root, "second_upgrade_owned", state->second_upgrade_owned);
+    cJSON_AddBoolToObject(root, "third_upgrade_owned", state->third_upgrade_owned);
+    cJSON_AddBoolToObject(root, "fourth_upgrade_owned", state->fourth_upgrade_owned);
+    cJSON_AddBoolToObject(root, "fifth_upgrade_owned", state->fifth_upgrade_owned);
+    cJSON_AddStringToObject(root, "active_job_id", state->active_job_id);
+    cJSON_AddNumberToObject(root, "active_job_elapsed_ms", state->active_job_elapsed_ms);
+    cJSON_AddNumberToObject(root, "active_job_duration_ms", state->active_job_duration_ms);
+    cJSON_AddBoolToObject(root, "seen_intro", state->seen_intro);
+    cJSON_AddBoolToObject(root, "final_ready", state->final_ready);
+    cJSON_AddNumberToObject(root, "feedback_code", state->feedback_code);
+    cJSON_AddNumberToObject(root, "feedback_pulse_ms", state->feedback_pulse_ms);
 
     cJSON *items = cJSON_AddObjectToObject(root, "items");
     for (int i = 0; i < GAME_STATE_MAX_ITEMS; i++) {
@@ -592,6 +668,69 @@ cJSON *game_state_get_path_json(const GameState *state, const char *path, char *
     if (strcmp(path, "equipment.hand_item_id") == 0) {
         return state->has_equipment_hand_item_id ? cJSON_CreateString(state->equipment_hand_item_id) : cJSON_CreateNull();
     }
+    if (strcmp(path, "meme_coins") == 0) {
+        return cJSON_CreateNumber(state->meme_coins);
+    }
+    if (strcmp(path, "status") == 0) {
+        return cJSON_CreateNumber(state->status);
+    }
+    if (strcmp(path, "click_power") == 0) {
+        return cJSON_CreateNumber(state->click_power);
+    }
+    if (strcmp(path, "income_per_second") == 0) {
+        return cJSON_CreateNumber(state->income_per_second);
+    }
+    if (strcmp(path, "income_accum_ms") == 0) {
+        return cJSON_CreateNumber(state->income_accum_ms);
+    }
+    if (strcmp(path, "hands_skill") == 0) {
+        return cJSON_CreateNumber(state->hands_skill);
+    }
+    if (strcmp(path, "coolness") == 0) {
+        return cJSON_CreateNumber(state->coolness);
+    }
+    if (strcmp(path, "comfort") == 0) {
+        return cJSON_CreateNumber(state->comfort);
+    }
+    if (strcmp(path, "visual_stage") == 0) {
+        return cJSON_CreateNumber(state->visual_stage);
+    }
+    if (strcmp(path, "first_upgrade_owned") == 0) {
+        return cJSON_CreateBool(state->first_upgrade_owned);
+    }
+    if (strcmp(path, "second_upgrade_owned") == 0) {
+        return cJSON_CreateBool(state->second_upgrade_owned);
+    }
+    if (strcmp(path, "third_upgrade_owned") == 0) {
+        return cJSON_CreateBool(state->third_upgrade_owned);
+    }
+    if (strcmp(path, "fourth_upgrade_owned") == 0) {
+        return cJSON_CreateBool(state->fourth_upgrade_owned);
+    }
+    if (strcmp(path, "fifth_upgrade_owned") == 0) {
+        return cJSON_CreateBool(state->fifth_upgrade_owned);
+    }
+    if (strcmp(path, "active_job_id") == 0) {
+        return cJSON_CreateString(state->active_job_id);
+    }
+    if (strcmp(path, "active_job_elapsed_ms") == 0) {
+        return cJSON_CreateNumber(state->active_job_elapsed_ms);
+    }
+    if (strcmp(path, "active_job_duration_ms") == 0) {
+        return cJSON_CreateNumber(state->active_job_duration_ms);
+    }
+    if (strcmp(path, "seen_intro") == 0) {
+        return cJSON_CreateBool(state->seen_intro);
+    }
+    if (strcmp(path, "final_ready") == 0) {
+        return cJSON_CreateBool(state->final_ready);
+    }
+    if (strcmp(path, "feedback_code") == 0) {
+        return cJSON_CreateNumber(state->feedback_code);
+    }
+    if (strcmp(path, "feedback_pulse_ms") == 0) {
+        return cJSON_CreateNumber(state->feedback_pulse_ms);
+    }
     set_error(error, error_cap, "unknown state path");
     return NULL;
 }
@@ -793,6 +932,108 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
         state->has_equipment_hand_item_id = true;
         return true;
     }
+    if (strcmp(path, "meme_coins") == 0) {
+        return parse_int_value(value, GAME_STATE_MEME_COINS_MIN, GAME_STATE_MEME_COINS_MAX, &state->meme_coins, error, error_cap);
+    }
+    if (strcmp(path, "status") == 0) {
+        return parse_int_value(value, GAME_STATE_STATUS_MIN, GAME_STATE_STATUS_MAX, &state->status, error, error_cap);
+    }
+    if (strcmp(path, "click_power") == 0) {
+        return parse_int_value(value, GAME_STATE_CLICK_POWER_MIN, GAME_STATE_CLICK_POWER_MAX, &state->click_power, error, error_cap);
+    }
+    if (strcmp(path, "income_per_second") == 0) {
+        return parse_int_value(value, GAME_STATE_INCOME_PER_SECOND_MIN, GAME_STATE_INCOME_PER_SECOND_MAX, &state->income_per_second, error, error_cap);
+    }
+    if (strcmp(path, "income_accum_ms") == 0) {
+        return parse_int_value(value, GAME_STATE_INCOME_ACCUM_MS_MIN, GAME_STATE_INCOME_ACCUM_MS_MAX, &state->income_accum_ms, error, error_cap);
+    }
+    if (strcmp(path, "hands_skill") == 0) {
+        return parse_int_value(value, GAME_STATE_HANDS_SKILL_MIN, GAME_STATE_HANDS_SKILL_MAX, &state->hands_skill, error, error_cap);
+    }
+    if (strcmp(path, "coolness") == 0) {
+        return parse_int_value(value, GAME_STATE_COOLNESS_MIN, GAME_STATE_COOLNESS_MAX, &state->coolness, error, error_cap);
+    }
+    if (strcmp(path, "comfort") == 0) {
+        return parse_int_value(value, GAME_STATE_COMFORT_MIN, GAME_STATE_COMFORT_MAX, &state->comfort, error, error_cap);
+    }
+    if (strcmp(path, "visual_stage") == 0) {
+        return parse_int_value(value, GAME_STATE_VISUAL_STAGE_MIN, GAME_STATE_VISUAL_STAGE_MAX, &state->visual_stage, error, error_cap);
+    }
+    if (strcmp(path, "first_upgrade_owned") == 0) {
+        if (!cJSON_IsBool(value)) {
+            set_error(error, error_cap, "first_upgrade_owned expects bool");
+            return false;
+        }
+        state->first_upgrade_owned = cJSON_IsTrue(value);
+        return true;
+    }
+    if (strcmp(path, "second_upgrade_owned") == 0) {
+        if (!cJSON_IsBool(value)) {
+            set_error(error, error_cap, "second_upgrade_owned expects bool");
+            return false;
+        }
+        state->second_upgrade_owned = cJSON_IsTrue(value);
+        return true;
+    }
+    if (strcmp(path, "third_upgrade_owned") == 0) {
+        if (!cJSON_IsBool(value)) {
+            set_error(error, error_cap, "third_upgrade_owned expects bool");
+            return false;
+        }
+        state->third_upgrade_owned = cJSON_IsTrue(value);
+        return true;
+    }
+    if (strcmp(path, "fourth_upgrade_owned") == 0) {
+        if (!cJSON_IsBool(value)) {
+            set_error(error, error_cap, "fourth_upgrade_owned expects bool");
+            return false;
+        }
+        state->fourth_upgrade_owned = cJSON_IsTrue(value);
+        return true;
+    }
+    if (strcmp(path, "fifth_upgrade_owned") == 0) {
+        if (!cJSON_IsBool(value)) {
+            set_error(error, error_cap, "fifth_upgrade_owned expects bool");
+            return false;
+        }
+        state->fifth_upgrade_owned = cJSON_IsTrue(value);
+        return true;
+    }
+    if (strcmp(path, "active_job_id") == 0) {
+        if (!cJSON_IsString(value) || !copy_text(state->active_job_id, sizeof(state->active_job_id), value->valuestring)) {
+            set_error(error, error_cap, "active_job_id expects short string");
+            return false;
+        }
+        return true;
+    }
+    if (strcmp(path, "active_job_elapsed_ms") == 0) {
+        return parse_int_value(value, GAME_STATE_ACTIVE_JOB_ELAPSED_MS_MIN, GAME_STATE_ACTIVE_JOB_ELAPSED_MS_MAX, &state->active_job_elapsed_ms, error, error_cap);
+    }
+    if (strcmp(path, "active_job_duration_ms") == 0) {
+        return parse_int_value(value, GAME_STATE_ACTIVE_JOB_DURATION_MS_MIN, GAME_STATE_ACTIVE_JOB_DURATION_MS_MAX, &state->active_job_duration_ms, error, error_cap);
+    }
+    if (strcmp(path, "seen_intro") == 0) {
+        if (!cJSON_IsBool(value)) {
+            set_error(error, error_cap, "seen_intro expects bool");
+            return false;
+        }
+        state->seen_intro = cJSON_IsTrue(value);
+        return true;
+    }
+    if (strcmp(path, "final_ready") == 0) {
+        if (!cJSON_IsBool(value)) {
+            set_error(error, error_cap, "final_ready expects bool");
+            return false;
+        }
+        state->final_ready = cJSON_IsTrue(value);
+        return true;
+    }
+    if (strcmp(path, "feedback_code") == 0) {
+        return parse_int_value(value, GAME_STATE_FEEDBACK_CODE_MIN, GAME_STATE_FEEDBACK_CODE_MAX, &state->feedback_code, error, error_cap);
+    }
+    if (strcmp(path, "feedback_pulse_ms") == 0) {
+        return parse_int_value(value, GAME_STATE_FEEDBACK_PULSE_MS_MIN, GAME_STATE_FEEDBACK_PULSE_MS_MAX, &state->feedback_pulse_ms, error, error_cap);
+    }
     set_error(error, error_cap, "unknown state path");
     return false;
 }
@@ -855,6 +1096,29 @@ bool game_state_from_json(GameState *state, const cJSON *json, char *error, int 
     const cJSON *wallet = object_item(json, "wallet");
     if (wallet && (!read_int_range(wallet, "soft", GAME_STATE_WALLET_SOFT_MIN, GAME_STATE_WALLET_SOFT_MAX, &next.wallet_soft, error, error_cap) ||
                    !read_int_range(wallet, "hard", GAME_STATE_WALLET_HARD_MIN, GAME_STATE_WALLET_HARD_MAX, &next.wallet_hard, error, error_cap))) {
+        return false;
+    }
+    if (!read_int_range(json, "meme_coins", GAME_STATE_MEME_COINS_MIN, GAME_STATE_MEME_COINS_MAX, &next.meme_coins, error, error_cap) ||
+        !read_int_range(json, "status", GAME_STATE_STATUS_MIN, GAME_STATE_STATUS_MAX, &next.status, error, error_cap) ||
+        !read_int_range(json, "click_power", GAME_STATE_CLICK_POWER_MIN, GAME_STATE_CLICK_POWER_MAX, &next.click_power, error, error_cap) ||
+        !read_int_range(json, "income_per_second", GAME_STATE_INCOME_PER_SECOND_MIN, GAME_STATE_INCOME_PER_SECOND_MAX, &next.income_per_second, error, error_cap) ||
+        !read_int_range(json, "income_accum_ms", GAME_STATE_INCOME_ACCUM_MS_MIN, GAME_STATE_INCOME_ACCUM_MS_MAX, &next.income_accum_ms, error, error_cap) ||
+        !read_int_range(json, "hands_skill", GAME_STATE_HANDS_SKILL_MIN, GAME_STATE_HANDS_SKILL_MAX, &next.hands_skill, error, error_cap) ||
+        !read_int_range(json, "coolness", GAME_STATE_COOLNESS_MIN, GAME_STATE_COOLNESS_MAX, &next.coolness, error, error_cap) ||
+        !read_int_range(json, "comfort", GAME_STATE_COMFORT_MIN, GAME_STATE_COMFORT_MAX, &next.comfort, error, error_cap) ||
+        !read_int_range(json, "visual_stage", GAME_STATE_VISUAL_STAGE_MIN, GAME_STATE_VISUAL_STAGE_MAX, &next.visual_stage, error, error_cap) ||
+        !read_bool(json, "first_upgrade_owned", &next.first_upgrade_owned, error, error_cap) ||
+        !read_bool(json, "second_upgrade_owned", &next.second_upgrade_owned, error, error_cap) ||
+        !read_bool(json, "third_upgrade_owned", &next.third_upgrade_owned, error, error_cap) ||
+        !read_bool(json, "fourth_upgrade_owned", &next.fourth_upgrade_owned, error, error_cap) ||
+        !read_bool(json, "fifth_upgrade_owned", &next.fifth_upgrade_owned, error, error_cap) ||
+        !read_string(json, "active_job_id", next.active_job_id, sizeof(next.active_job_id), error, error_cap) ||
+        !read_int_range(json, "active_job_elapsed_ms", GAME_STATE_ACTIVE_JOB_ELAPSED_MS_MIN, GAME_STATE_ACTIVE_JOB_ELAPSED_MS_MAX, &next.active_job_elapsed_ms, error, error_cap) ||
+        !read_int_range(json, "active_job_duration_ms", GAME_STATE_ACTIVE_JOB_DURATION_MS_MIN, GAME_STATE_ACTIVE_JOB_DURATION_MS_MAX, &next.active_job_duration_ms, error, error_cap) ||
+        !read_bool(json, "seen_intro", &next.seen_intro, error, error_cap) ||
+        !read_bool(json, "final_ready", &next.final_ready, error, error_cap) ||
+        !read_int_range(json, "feedback_code", GAME_STATE_FEEDBACK_CODE_MIN, GAME_STATE_FEEDBACK_CODE_MAX, &next.feedback_code, error, error_cap) ||
+        !read_int_range(json, "feedback_pulse_ms", GAME_STATE_FEEDBACK_PULSE_MS_MIN, GAME_STATE_FEEDBACK_PULSE_MS_MAX, &next.feedback_pulse_ms, error, error_cap)) {
         return false;
     }
     const cJSON *items = object_item(json, "items");

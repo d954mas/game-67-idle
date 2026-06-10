@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Small conditional bot example for the test scene."""
+"""Small conditional bot example for the first playable Game 67 slice."""
 
 from __future__ import annotations
 
@@ -14,41 +14,37 @@ def main() -> int:
     try:
         with running_game(port=PORT) as game:
             endpoints = set(game.result("endpoints"))
-            required = {"game.state", "input.key", "frame.wait", "ui.scroll"}
+            required = {"game.state", "game.reset_playtest", "frame.wait", "ui.click"}
             missing = sorted(required - endpoints)
             if missing:
                 print("FAIL missing endpoints:", ", ".join(missing))
                 return 1
 
+            game.result("game.reset_playtest")
+            game.wait_frames(2)
             state = game.observe()
-            print("start:", state["shape"], state["render_mode"], state["camera_distance"])
+            print("start:", state["meme_coins"], state["status"])
 
-            target_shape_index = 2
             for _ in range(8):
                 state = game.observe()
-                if state["shape_index"] == target_shape_index:
+                if state["meme_coins"] >= 5:
                     break
-                state = game.key_tap("D")
-            if state["shape_index"] != target_shape_index:
-                print("FAIL shape target:", state)
+                state = game.click_ui("main.do67", wait_frames=2)
+            if state["meme_coins"] < 5:
+                print("FAIL coin target:", state)
                 return 1
 
-            for _ in range(4):
-                state = game.observe()
-                if state["render_mode"] == "wire":
-                    break
-                state = game.key_tap("W")
-            if state["render_mode"] != "wire":
-                print("FAIL render target:", state)
+            state = game.click_ui("main.upgrade.first", wait_frames=2)
+            if state["status"] < 2 or state["first_upgrade_owned"] is not True:
+                print("FAIL upgrade target:", state)
                 return 1
 
-            before_zoom = state["camera_distance"]
-            state = game.scroll_ui("scene.viewport", dy=-120)
-            if state["camera_distance"] == before_zoom:
-                print("FAIL zoom unchanged:", before_zoom, state["camera_distance"])
+            state = game.click_ui("main.job.first", wait_frames=4)
+            if state["first_job_active"] is not True:
+                print("FAIL first job start:", state)
                 return 1
 
-            print("done:", state["shape"], state["render_mode"], state["camera_distance"])
+            print("done:", state["meme_coins"], state["status"], "job_active=", state["first_job_active"])
             return 0
     except DevApiError as exc:
         print("FAIL devapi:", exc)

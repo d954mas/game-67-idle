@@ -33,10 +33,10 @@ def main() -> int:
             scenario.check("master slider visible", master.get("role") == "slider" and master.get("visible") is True, master)
             scenario.check("sfx slider visible", sfx.get("role") == "slider" and sfx.get("visible") is True, sfx)
 
-            clicks_before = game.result("game.state.get", {"doc": "game", "path": "test_ui_clicks"})
-            game.click_ui("test.button", wait_frames=2)
-            clicks_after = game.result("game.state.get", {"doc": "game", "path": "test_ui_clicks"})
-            scenario.check("settings overlay blocks underlying ui", clicks_after == clicks_before, {"before": clicks_before, "after": clicks_after})
+            coins_before = game.result("game.state.get", {"doc": "game", "path": "meme_coins"})
+            game.click_ui("main.do67", wait_frames=2)
+            coins_after = game.result("game.state.get", {"doc": "game", "path": "meme_coins"})
+            scenario.check("settings overlay blocks underlying ui", coins_after == coins_before, {"before": coins_before, "after": coins_after})
 
             game.click_ui("settings.master_volume", wait_frames=2)
             master_value = game.result("game.state.get", {"doc": "game", "path": "settings.master_volume"})

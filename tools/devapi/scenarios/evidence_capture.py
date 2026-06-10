@@ -19,7 +19,7 @@ def main() -> int:
     try:
         with running_game(port=PORT) as game:
             scenario = Scenario(game)
-            game.click_ui("test.button", wait_frames=2)
+            game.click_ui("main.do67", wait_frames=2)
             path = scenario.capture(OUTPUT, wait_frames=1)
             print("screenshot:", path)
             return finish(scenario.ok)

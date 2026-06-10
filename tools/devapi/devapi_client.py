@@ -7,8 +7,11 @@ import json
 import os
 import shutil
 import socket
+import struct
 import subprocess
+import sys
 import time
+import zlib
 import atexit
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -18,6 +21,7 @@ HOST = "127.0.0.1"
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 NATIVE_DEBUG_EXE = os.path.join(ROOT, "build", "game_67_idle", "native-debug", "game_67_idle.exe")
 CAPTURE_SCREEN_SCRIPT = os.path.join(ROOT, "tools", "devapi", "capture_screen.ps1")
+CAPTURE_WINDOW_SCRIPT = os.path.join(ROOT, "tools", "devapi", "capture_window.py")
 RECORD_SCREEN_SCRIPT = os.path.join(ROOT, "tools", "devapi", "record_screen_ffmpeg.ps1")
 ACTIVE_RECORDINGS: list["DevApiRecording"] = []
 
@@ -38,6 +42,7 @@ class DevApiClient:
         self.sock.settimeout(timeout)
         self.file = self.sock.makefile("rwb", buffering=0)
         self.next_request_id = 1
+        self.process_id: int | None = None
 
     def close(self) -> None:
         try:
@@ -98,7 +103,15 @@ class DevApiClient:
         return [response.get("result") for response in responses]
 
     def wait_frames(self, frames: int = 1) -> dict[str, Any]:
-        return self.result("frame.wait", {"frames": frames})
+        if frames <= 0:
+            return self.result("frame.current")
+        remaining = frames
+        last: dict[str, Any] = {}
+        while remaining > 0:
+            chunk = min(remaining, 5)
+            last = self.result("frame.wait", {"frames": chunk})
+            remaining -= chunk
+        return last
 
     def observe(self) -> dict[str, Any]:
         return self.result("game.state")
@@ -133,10 +146,39 @@ class DevApiClient:
         width: int = 0,
         height: int = 0,
         wait_frames: int = 1,
+        audit: bool = False,
     ) -> str:
         if wait_frames > 0:
             self.wait_frames(wait_frames)
-        return run_capture_screenshot(output=output, x=x, y=y, width=width, height=height)
+        try:
+            path = self.capture_framebuffer(output)
+        except DevApiError:
+            path = run_capture_screenshot(output=output, x=x, y=y, width=width, height=height, process_id=self.process_id)
+        if audit:
+            self.audit_screenshot(path)
+        return path
+
+    def audit_screenshot(self, path: str) -> Any:
+        from pixel_health import PixelHealthError, assert_pixel_health
+
+        try:
+            return assert_pixel_health(path)
+        except PixelHealthError as exc:
+            raise DevApiError(str(exc)) from exc
+
+    def capture_framebuffer(self, output: str = "build/captures/screenshot.png") -> str:
+        path = ensure_output_dir(output)
+        ppm_path = path + ".ppm"
+        if os.path.exists(ppm_path):
+            os.remove(ppm_path)
+        response = self.request("game.capture.framebuffer", {"output": ppm_path})
+        if response.get("ok") is not True:
+            raise DevApiError(f"game.capture.framebuffer failed: {response.get('error', response)}")
+        self.wait_frames(2)
+        if not os.path.exists(ppm_path) or os.path.getsize(ppm_path) <= 0:
+            raise DevApiError(f"framebuffer capture was not written: {ppm_path}")
+        convert_ppm_to_png(ppm_path, path)
+        return path
 
     def record_gameplay(
         self,
@@ -233,6 +275,67 @@ def ensure_output_dir(output: str) -> str:
     return path
 
 
+def _png_chunk(kind: bytes, payload: bytes) -> bytes:
+    return (
+        struct.pack(">I", len(payload))
+        + kind
+        + payload
+        + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+    )
+
+
+def write_png_rgb(path: str, width: int, height: int, rgb: bytes) -> None:
+    stride = width * 3
+    rows = []
+    for y in range(height):
+        rows.append(b"\x00" + rgb[y * stride : (y + 1) * stride])
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    data = b"".join([
+        b"\x89PNG\r\n\x1a\n",
+        _png_chunk(b"IHDR", ihdr),
+        _png_chunk(b"IDAT", zlib.compress(b"".join(rows), 6)),
+        _png_chunk(b"IEND", b""),
+    ])
+    with open(path, "wb") as handle:
+        handle.write(data)
+
+
+def _ppm_token(data: bytes, offset: int) -> tuple[bytes, int]:
+    n = len(data)
+    while offset < n and data[offset] in b" \t\r\n":
+        offset += 1
+    if offset < n and data[offset] == ord("#"):
+        while offset < n and data[offset] not in b"\r\n":
+            offset += 1
+        return _ppm_token(data, offset)
+    start = offset
+    while offset < n and data[offset] not in b" \t\r\n":
+        offset += 1
+    return data[start:offset], offset
+
+
+def convert_ppm_to_png(ppm_path: str, png_path: str) -> None:
+    with open(ppm_path, "rb") as handle:
+        data = handle.read()
+    magic, offset = _ppm_token(data, 0)
+    if magic != b"P6":
+        raise DevApiError(f"unsupported framebuffer capture format: {magic!r}")
+    width_b, offset = _ppm_token(data, offset)
+    height_b, offset = _ppm_token(data, offset)
+    max_b, offset = _ppm_token(data, offset)
+    while offset < len(data) and data[offset] in b" \t\r\n":
+        offset += 1
+    width = int(width_b)
+    height = int(height_b)
+    if int(max_b) != 255:
+        raise DevApiError("unsupported framebuffer capture max value")
+    rgb = data[offset:]
+    expected = width * height * 3
+    if len(rgb) != expected:
+        raise DevApiError(f"bad framebuffer capture size: {len(rgb)} != {expected}")
+    write_png_rgb(png_path, width, height, rgb)
+
+
 def run_powershell_script(script: str, args: list[str]) -> str:
     try:
         completed = subprocess.run(
@@ -248,12 +351,29 @@ def run_powershell_script(script: str, args: list[str]) -> str:
     return completed.stdout.strip()
 
 
-def run_capture_screenshot(output: str = "build/captures/screenshot.png", x: int = 0, y: int = 0, width: int = 0, height: int = 0) -> str:
+def run_capture_screenshot(output: str = "build/captures/screenshot.png", x: int = 0, y: int = 0, width: int = 0, height: int = 0, process_id: int | None = None) -> str:
+    path = resolve_output_path(output)
+    if os.name == "nt" and os.path.exists(CAPTURE_WINDOW_SCRIPT):
+        args = [sys.executable, CAPTURE_WINDOW_SCRIPT, "--output", path]
+        if process_id is not None:
+            args.extend(["--process-id", str(process_id)])
+        else:
+            args.extend(["--x", str(x), "--y", str(y), "--width", str(width), "--height", str(height)])
+        try:
+            subprocess.run(args, cwd=ROOT, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as exc:
+            detail = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
+            raise DevApiError(f"{os.path.basename(CAPTURE_WINDOW_SCRIPT)} failed: {detail.strip()}") from exc
+        return path
+
+    args = ["-Output", output, "-X", str(x), "-Y", str(y), "-Width", str(width), "-Height", str(height)]
+    if process_id is not None:
+        args.extend(["-ProcessId", str(process_id)])
     run_powershell_script(
         CAPTURE_SCREEN_SCRIPT,
-        ["-Output", output, "-X", str(x), "-Y", str(y), "-Width", str(width), "-Height", str(height)],
+        args,
     )
-    return resolve_output_path(output)
+    return path
 
 
 def run_record_gameplay(
@@ -373,6 +493,8 @@ def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE, reuse_existing: 
             args.append("--disable-autosave")
         proc = subprocess.Popen(args, cwd=ROOT)
         client = connect_existing(port=port)
+        if client is not None:
+            client.process_id = proc.pid
     if client is None:
         raise DevApiError("no devapi connection")
 

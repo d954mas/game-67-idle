@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke-test the running scene through the temporary game DevAPI."""
+"""Smoke-test the first playable Game 67 slice through DevAPI."""
 
 import sys
 
@@ -23,71 +23,314 @@ def main() -> int:
         with running_game(port=PORT) as bus:
             ok &= check("ping", bus.request("ping").get("ok") is True)
             endpoints = bus.request("endpoints")
-            ok &= check("endpoints", "game.state" in endpoints.get("result", []), endpoints)
             endpoint_names = endpoints.get("result", [])
-            ok &= check(
-                "ui/input endpoints",
-                all(name in endpoint_names for name in ("ui.tree", "ui.element", "ui.click", "ui.drag", "ui.scroll", "input.pointer", "input.wheel", "input.gesture")),
-                endpoints,
-            )
+            ok &= check("game endpoints", all(name in endpoint_names for name in ("game.state", "game.reset_playtest", "ui.tree", "ui.click", "frame.wait")), endpoints)
 
+            bus.request("game.reset_playtest")
+            bus.request("frame.wait", {"frames": 2})
             ui_tree = bus.request("ui.tree")
             ui_ids = [item.get("id") for item in ui_tree.get("result", [])]
-            ok &= check("ui tree exposes viewport", "scene.viewport" in ui_ids, ui_tree)
-            ok &= check("ui tree exposes test ui", all(item in ui_ids for item in ("test.ui", "test.label", "test.button")), ui_tree)
-            viewport = bus.request("ui.element", {"id": "scene.viewport"})
-            ok &= check("ui element uses string id", viewport.get("result", {}).get("id") == "scene.viewport", viewport)
-            button0 = bus.request("ui.element", {"id": "test.button"}).get("result", {})
-            ok &= check("ui button text initial", button0.get("role") == "button" and button0.get("text") == "Click me", button0)
+            ok &= check("ui exposes gameplay", all(item in ui_ids for item in ("main.do67", "main.upgrade.first", "main.job.first", "main.reset")), ui_tree)
 
             state0 = bus.observe()
-            ok &= check("state shape", state0.get("shape") == "cube", state0)
+            ok &= check(
+                "fresh state",
+                state0.get("meme_coins") == 0
+                and state0.get("status") == 1
+                and state0.get("click_power") == 1
+                and state0.get("visual_stage") == 1
+                and state0.get("third_upgrade_owned") is False,
+                state0,
+            )
 
-            batch1 = bus.batch([
-                ("input.key", {"key": "D", "mode": "tap"}),
-                ("frame.wait", {"frames": 1}),
-                ("game.state", {}),
-            ])
-            ok &= check("input batch waits for frame", isinstance(batch1, list) and len(batch1) == 3, batch1)
-            state1 = batch1[2]["result"]
-            ok &= check("input changes shape", state1.get("shape") != state0.get("shape"), f"{state0.get('shape')} -> {state1.get('shape')}")
+            for _ in range(5):
+                state = bus.click_ui("main.do67", wait_frames=2)
+            ok &= check("do67 earns coins", state.get("meme_coins") >= 5, state)
 
-            state2 = bus.key_tap("W")
-            ok &= check("input changes render mode", state2.get("render_mode") != state1.get("render_mode"), f"{state1.get('render_mode')} -> {state2.get('render_mode')}")
+            state = bus.click_ui("main.upgrade.first", wait_frames=2)
+            ok &= check("first upgrade raises status", state.get("status") >= 2 and state.get("first_upgrade_owned") is True, state)
 
-            double_tap = bus.batch([
-                ("input.key", {"key": "D", "mode": "tap"}),
-                ("input.key", {"key": "D", "mode": "tap"}),
-                ("frame.wait", {"frames": 4}),
-                ("game.state", {}),
-            ])
-            ok &= check("same-key taps stay ordered", isinstance(double_tap, list) and len(double_tap) == 4, double_tap)
-            state3 = double_tap[3]["result"]
-            expected_shape = (state2.get("shape_index") + 2) % 4
-            ok &= check("double tap advances twice", state3.get("shape_index") == expected_shape, f"{state2.get('shape_index')} -> {state3.get('shape_index')}")
+            state = bus.click_ui("main.job.first", wait_frames=4)
+            ok &= check("first job starts", state.get("first_job_active") is True, state)
 
-            state4 = bus.click_ui("scene.viewport", wait_frames=2)
-            ok &= check("ui click reaches game input", isinstance(state4.get("grabbed"), bool), state4)
+            state = {}
+            for _ in range(120):
+                bus.request("frame.wait", {"frames": 20})
+                state = bus.request("game.state").get("result", {})
+                if state.get("first_job_ready") is True:
+                    break
+            ok &= check("first job becomes ready", state.get("first_job_ready") is True, state)
 
-            state_button = bus.click_ui("test.button", wait_frames=2)
-            button1 = bus.request("ui.element", {"id": "test.button"}).get("result", {})
-            label1 = bus.request("ui.element", {"id": "test.label"}).get("result", {})
-            ok &= check("ui button click changes button text", button1.get("text") == "Clicked 1", button1)
-            ok &= check("ui button click changes label text", label1.get("text") == "Label: clicked 1", label1)
-            ok &= check("state exposes ui text", state_button.get("test_button_text") == "Clicked 1" and state_button.get("test_label_text") == "Label: clicked 1", state_button)
+            if state.get("first_job_ready") is True:
+                state = bus.click_ui("main.claim", wait_frames=2)
+                ok &= check(
+                    "claim exact reward state",
+                    state.get("meme_coins") == 8
+                    and state.get("status") == 3
+                    and state.get("click_power") == 2
+                    and state.get("income_per_second") == 1
+                    and state.get("comfort") == 2
+                    and state.get("visual_stage") == 3
+                    and state.get("first_upgrade_owned") is True
+                    and state.get("second_upgrade_owned") is False
+                    and state.get("first_job_active") is False
+                    and state.get("first_job_ready") is False
+                    and state.get("first_job_elapsed_ms") == 0,
+                    state,
+                )
+                upgrade = bus.request("ui.element", {"id": "main.upgrade.first"}).get("result", {})
+                ok &= check(
+                    "second upgrade available",
+                    upgrade.get("role") == "button"
+                    and upgrade.get("label") == "Upgrade"
+                    and upgrade.get("text") == "ready cap"
+                    and upgrade.get("enabled") is True,
+                    upgrade,
+                )
+                state = bus.click_ui("main.upgrade.first", wait_frames=2)
+                ok &= check(
+                    "second upgrade raises status",
+                    state.get("meme_coins") == 0
+                    and state.get("status") == 4
+                    and state.get("click_power") == 3
+                    and state.get("hands_skill") == 3
+                    and state.get("visual_stage") == 4
+                    and state.get("first_upgrade_owned") is True
+                    and state.get("second_upgrade_owned") is True
+                    and state.get("third_upgrade_owned") is False
+                    and state.get("income_per_second") == 1
+                    and state.get("comfort") == 2,
+                    state,
+                )
+                upgrade = bus.request("ui.element", {"id": "main.upgrade.first"}).get("result", {})
+                ok &= check(
+                    "third upgrade locked goal visible",
+                    upgrade.get("role") == "button"
+                    and upgrade.get("label") == "Upgrade"
+                    and upgrade.get("text") == "need 20 coins"
+                    and upgrade.get("enabled") is True,
+                    upgrade,
+                )
+                for _ in range(7):
+                    state = bus.click_ui("main.do67", wait_frames=2)
+                ok &= check(
+                    "x3 taps reach third upgrade cost",
+                    state.get("meme_coins", 0) >= 20 and state.get("status") == 4 and state.get("click_power") == 3,
+                    state,
+                )
+                upgrade = bus.request("ui.element", {"id": "main.upgrade.first"}).get("result", {})
+                ok &= check(
+                    "third upgrade available",
+                    upgrade.get("role") == "button"
+                    and upgrade.get("label") == "Upgrade"
+                    and upgrade.get("text") == "ready pic"
+                    and upgrade.get("enabled") is True,
+                    upgrade,
+                )
+                coins_before_third = state.get("meme_coins", 0)
+                state = bus.click_ui("main.upgrade.first", wait_frames=2)
+                third_idle_gain = state.get("meme_coins", 0) - (coins_before_third - 20)
+                ok &= check(
+                    "third upgrade extends loop",
+                    third_idle_gain >= 0
+                    and state.get("status") == 6
+                    and state.get("click_power") == 5
+                    and state.get("hands_skill") == 4
+                    and state.get("visual_stage") == 6
+                    and state.get("first_upgrade_owned") is True
+                    and state.get("second_upgrade_owned") is True
+                    and state.get("third_upgrade_owned") is True
+                    and state.get("first_job_active") is False,
+                    {"state": state, "coins_before_third": coins_before_third, "third_idle_gain": third_idle_gain},
+                )
+                job = bus.request("ui.element", {"id": "main.job.first"}).get("result", {})
+                ok &= check(
+                    "second job tier visible",
+                    job.get("role") == "button"
+                    and job.get("label") == "Start sticker job"
+                    and job.get("text") == "reward 30"
+                    and job.get("enabled") is True,
+                    job,
+                )
+                state = bus.click_ui("main.job.first", wait_frames=4)
+                ok &= check(
+                    "second job starts",
+                    state.get("first_job_active") is True
+                    and state.get("active_job_id") == "sticker_run"
+                    and state.get("active_job_duration_ms") == 8000,
+                    state,
+                )
+                state = {}
+                for _ in range(160):
+                    bus.request("frame.wait", {"frames": 20})
+                    state = bus.request("game.state").get("result", {})
+                    if state.get("first_job_ready") is True:
+                        break
+                ok &= check("second job becomes ready", state.get("first_job_ready") is True and state.get("active_job_id") == "sticker_run", state)
+                if state.get("first_job_ready") is True:
+                    coins_before_claim = state.get("meme_coins", 0)
+                    state = bus.click_ui("main.claim", wait_frames=2)
+                    ok &= check(
+                        "second job claim extends progression",
+                        state.get("meme_coins", 0) >= coins_before_claim + 30
+                        and state.get("status") >= 7
+                        and state.get("income_per_second") >= 2
+                        and state.get("hands_skill") >= 5
+                        and state.get("visual_stage") >= 7
+                        and state.get("first_job_active") is False
+                        and state.get("active_job_id") == "",
+                        state,
+                    )
+                    coins_before_bike = state.get("meme_coins", 0)
+                    ok &= check(
+                        "stk claim leaves bike affordable",
+                        coins_before_bike >= 35
+                        and state.get("status") >= 7
+                        and state.get("click_power") == 5
+                        and state.get("income_per_second") >= 2
+                        and state.get("visual_stage") >= 7,
+                        state,
+                    )
+                    upgrade = bus.request("ui.element", {"id": "main.upgrade.first"}).get("result", {})
+                    ok &= check(
+                        "bike upgrade available",
+                        upgrade.get("role") == "button"
+                        and upgrade.get("label") == "Upgrade"
+                        and upgrade.get("text") == "ready bike"
+                        and upgrade.get("enabled") is True,
+                        upgrade,
+                    )
+                    state = bus.click_ui("main.upgrade.first", wait_frames=2)
+                    bike_cost = 35
+                    bike_idle_gain = state.get("meme_coins", 0) - (coins_before_bike - bike_cost)
+                    ok &= check(
+                        "bike upgrade extends loop",
+                        state.get("fourth_upgrade_owned") is True
+                        and 0 <= bike_idle_gain <= max(3, state.get("income_per_second", 0))
+                        and state.get("status") >= 9
+                        and state.get("click_power") == 8
+                        and state.get("income_per_second") >= 3
+                        and state.get("hands_skill") >= 6
+                        and state.get("visual_stage") >= 9
+                        and state.get("first_upgrade_owned") is True
+                        and state.get("second_upgrade_owned") is True
+                        and state.get("third_upgrade_owned") is True,
+                        {"state": state, "coins_before_bike": coins_before_bike, "bike_idle_gain": bike_idle_gain},
+                    )
+                    coins_after_bike = state.get("meme_coins", 0)
+                    bike_click_power = state.get("click_power", 0)
 
-            state5 = bus.scroll_ui("scene.viewport", dy=-120)
-            ok &= check("ui scroll changes camera", state5.get("camera_distance") != state_button.get("camera_distance"), f"{state_button.get('camera_distance')} -> {state5.get('camera_distance')}")
+                    for _ in range(7):
+                        state = bus.click_ui("main.do67", wait_frames=2)
 
-            state6 = bus.gesture("scroll", {"x": 480, "y": 320, "dy": 120})
-            ok &= check("gesture scroll changes camera", state6.get("camera_distance") != state5.get("camera_distance"), f"{state5.get('camera_distance')} -> {state6.get('camera_distance')}")
+                    coins_before_stnd = state.get("meme_coins", 0)
+                    ok &= check(
+                        "x8 taps reach stnd cost",
+                        coins_before_stnd >= 60
+                        and coins_before_stnd >= coins_after_bike + (7 * bike_click_power)
+                        and state.get("fourth_upgrade_owned") is True
+                        and state.get("fifth_upgrade_owned") is False
+                        and state.get("click_power") >= 8
+                        and state.get("income_per_second") >= 3,
+                        {"state": state, "coins_after_bike": coins_after_bike},
+                    )
 
-            drag = bus.batch([
-                ("ui.drag", {"id": "scene.viewport", "dx": 80, "dy": 0, "frames": 4}),
-                ("frame.wait", {"frames": 6}),
-                ("game.state", {}),
-            ])
-            ok &= check("ui drag batch", isinstance(drag, list) and len(drag) == 3, drag)
+                    upgrade = bus.request("ui.element", {"id": "main.upgrade.first"}).get("result", {})
+                    ok &= check(
+                        "stnd upgrade available",
+                        upgrade.get("role") == "button"
+                        and upgrade.get("label") == "Upgrade"
+                        and upgrade.get("text") == "ready stnd"
+                        and upgrade.get("enabled") is True,
+                        upgrade,
+                    )
+
+                    state = bus.click_ui("main.upgrade.first", wait_frames=2)
+                    stnd_cost = 60
+                    stnd_idle_gain = state.get("meme_coins", 0) - (coins_before_stnd - stnd_cost)
+                    ok &= check(
+                        "stnd upgrade extends loop",
+                        state.get("fifth_upgrade_owned") is True
+                        and stnd_idle_gain >= 0
+                        and state.get("status") >= 10
+                        and state.get("click_power") >= 10
+                        and state.get("income_per_second") >= 8
+                        and state.get("hands_skill") >= 7
+                        and state.get("visual_stage") >= 10
+                        and state.get("first_upgrade_owned") is True
+                        and state.get("second_upgrade_owned") is True
+                        and state.get("third_upgrade_owned") is True
+                        and state.get("fourth_upgrade_owned") is True,
+                        {"state": state, "coins_before_stnd": coins_before_stnd, "stnd_idle_gain": stnd_idle_gain},
+                    )
+                    upgrade = bus.request("ui.element", {"id": "main.upgrade.first"}).get("result", {})
+                    ok &= check(
+                        "stnd terminal upgrade state",
+                        upgrade.get("text") == "owned x10"
+                        and upgrade.get("enabled") is False
+                        and state.get("fifth_upgrade_owned") is True
+                        and state.get("status") >= 10
+                        and state.get("click_power") >= 10
+                        and state.get("income_per_second") >= 8,
+                        {"upgrade": upgrade, "state": state},
+                    )
+
+                    coins_before_idle = state.get("meme_coins", 0)
+                    income = state.get("income_per_second", 0)
+                    state = {}
+                    idle_gain = 0
+                    for _ in range(80):
+                        bus.wait_frames(20)
+                        state = bus.request("game.state").get("result", {})
+                        idle_gain = state.get("meme_coins", 0) - coins_before_idle
+                        if idle_gain >= income:
+                            break
+                    ok &= check(
+                        "post-stnd idle income ticks",
+                        income >= 8 and idle_gain >= income,
+                        {"state": state, "coins_before_idle": coins_before_idle, "idle_gain": idle_gain},
+                    )
+
+                    job = bus.request("ui.element", {"id": "main.job.first"}).get("result", {})
+                    ok &= check(
+                        "shop job visible",
+                        job.get("role") == "button"
+                        and job.get("label") == "Start shop job"
+                        and job.get("text") == "reward 90"
+                        and job.get("enabled") is True,
+                        job,
+                    )
+                    state = bus.click_ui("main.job.first", wait_frames=4)
+                    ok &= check(
+                        "shop job starts",
+                        state.get("first_job_active") is True
+                        and state.get("active_job_id") == "meme_stand_owner"
+                        and state.get("active_job_duration_ms") == 10000
+                        and state.get("fifth_upgrade_owned") is True,
+                        state,
+                    )
+                    state = {}
+                    for _ in range(220):
+                        bus.wait_frames(20)
+                        state = bus.request("game.state").get("result", {})
+                        if state.get("first_job_ready") is True:
+                            break
+                    ok &= check("shop job becomes ready", state.get("first_job_ready") is True and state.get("active_job_id") == "meme_stand_owner", state)
+                    if state.get("first_job_ready") is True:
+                        coins_before_claim = state.get("meme_coins", 0)
+                        state = bus.click_ui("main.claim", wait_frames=2)
+                        claim_gain = state.get("meme_coins", 0) - coins_before_claim
+                        ok &= check(
+                            "shop claim extends post-stnd loop",
+                            claim_gain >= 90
+                            and state.get("income_per_second") >= 16
+                            and state.get("status") >= 11
+                            and state.get("hands_skill") >= 8
+                            and state.get("visual_stage") >= 11
+                            and state.get("first_job_active") is False
+                            and state.get("active_job_id") == "",
+                            {"state": state, "claim_gain": claim_gain},
+                        )
 
         print("\n=== %s ===" % ("ALL PASSED" if ok else "FAILED"))
         return 0 if ok else 1

@@ -7,6 +7,8 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 option(NT_NO_WERROR "Disable -Werror for Neotolis targets." OFF)
 option(GAME_ENABLE_BASISU_RUNTIME "Link Basis Universal runtime transcoder into the game executable." OFF)
+option(NT_WASM_QA "Build a faster release-like WASM QA tier." OFF)
+option(GAME_WASM_COPY_PACK_TO_OUTPUT "Copy the latest game pack beside WASM output." ON)
 set(NT_BASISU ${GAME_ENABLE_BASISU_RUNTIME} CACHE BOOL "Link Basis Universal transcoder for GPU texture compression" FORCE)
 
 set(GAME_DEVAPI_DEFAULT OFF)
@@ -16,7 +18,9 @@ endif()
 option(GAME_DEVAPI_ENABLED "Enable temporary game-side devapi TCP command bus." ${GAME_DEVAPI_DEFAULT})
 
 if(EMSCRIPTEN)
-    if(NT_WASM_ANALYSIS)
+    if(NT_WASM_QA)
+        set(_nt_wasm_tier "qa")
+    elseif(NT_WASM_ANALYSIS)
         set(_nt_wasm_tier "analysis")
     elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
         set(_nt_wasm_tier "release")
@@ -42,9 +46,51 @@ endif()
 
 add_subdirectory(external/neotolis-engine)
 
+if(EMSCRIPTEN AND NT_WASM_QA)
+    set(_game_wasm_engine_targets
+        nt_app
+        nt_atlas
+        nt_comp_storage
+        nt_core
+        nt_drawable_comp
+        nt_entity
+        nt_fs
+        nt_gfx
+        nt_hash
+        nt_http
+        nt_input
+        nt_log
+        nt_material
+        nt_material_comp
+        nt_pool
+        nt_render
+        nt_resource
+        nt_shape_renderer
+        nt_sort
+        nt_sprite_comp
+        nt_sprite_renderer
+        nt_time
+        nt_transform_comp
+        nt_window
+    )
+    foreach(_game_wasm_engine_target IN LISTS _game_wasm_engine_targets)
+        if(TARGET ${_game_wasm_engine_target})
+            set_target_properties(${_game_wasm_engine_target} PROPERTIES
+                ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/engine/${NT_PRESET_NAME}"
+            )
+        endif()
+    endforeach()
+    if(TARGET nt_crc32)
+        set_target_properties(nt_crc32 PROPERTIES
+            ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/shared/${NT_PRESET_NAME}"
+        )
+    endif()
+endif()
+
 set(GAME_TARGET game_67_idle)
 set(GAME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/build/game_67_idle/${NT_PRESET_NAME}")
 set(GAME_PACK_DIR "${CMAKE_SOURCE_DIR}/build/game_67_idle")
+set(GAME_PACK_FILE "${GAME_PACK_DIR}/game_67_idle.ntpack")
 
 add_library(game_cjson STATIC
     external/cjson/cJSON.c
@@ -132,6 +178,7 @@ else()
 endif()
 
 add_executable(${GAME_TARGET} src/main.c)
+target_include_directories(${GAME_TARGET} PRIVATE external/neotolis-engine/deps/glfw/deps)
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core
     nt_app
@@ -139,7 +186,14 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_window
     nt_gfx
     nt_shape_renderer
+    nt_sprite_renderer
     nt_math
+    nt_hash
+    nt_http
+    nt_fs
+    nt_resource
+    nt_atlas
+    nt_material
     nt_entity
     nt_transform_comp
     nt_drawable_comp
@@ -181,6 +235,20 @@ if(NOT EMSCRIPTEN)
 endif()
 
 if(EMSCRIPTEN)
+    if(GAME_WASM_COPY_PACK_TO_OUTPUT)
+        set(GAME_WASM_ASSET_PACK "${GAME_OUTPUT_DIR}/assets/game_67_idle.ntpack")
+        add_custom_command(
+            OUTPUT "${GAME_WASM_ASSET_PACK}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${GAME_OUTPUT_DIR}/assets"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${GAME_PACK_FILE}" "${GAME_WASM_ASSET_PACK}"
+            DEPENDS "${GAME_PACK_FILE}"
+            COMMENT "Copying game_67_idle.ntpack to WASM assets"
+            VERBATIM
+        )
+        add_custom_target(game_67_idle_web_assets DEPENDS "${GAME_WASM_ASSET_PACK}")
+        add_dependencies(${GAME_TARGET} game_67_idle_web_assets)
+    endif()
+
     set_target_properties(${GAME_TARGET} PROPERTIES SUFFIX ".html" OUTPUT_NAME "index")
     nt_configure_shell(${GAME_TARGET}
         TITLE "Game 67 Idle - Neotolis Engine"

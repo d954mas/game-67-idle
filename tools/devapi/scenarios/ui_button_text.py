@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Click the test UI button and verify text changes."""
+"""Click the main Game 67 button and verify state/UI changes."""
 
 from __future__ import annotations
 
@@ -21,16 +21,17 @@ def main() -> int:
             scenario.require_endpoint("ui.tree")
             scenario.require_endpoint("ui.click")
 
-            button0 = game.result("ui.element", {"id": "test.button"})
-            scenario.check("button initial text", button0.get("text") == "Click me", button0)
+            button0 = game.result("ui.element", {"id": "main.do67"})
+            scenario.check("do67 button available", button0.get("role") == "button" and button0.get("enabled") is True, button0)
+            state0 = game.observe()
 
-            state = scenario.click_and_observe("test.button", wait_frames=2)
-            button1 = game.result("ui.element", {"id": "test.button"})
-            label1 = game.result("ui.element", {"id": "test.label"})
+            state = scenario.click_and_observe("main.do67", wait_frames=2)
+            button1 = game.result("ui.element", {"id": "main.do67"})
+            label1 = game.result("ui.element", {"id": "main.coins"})
 
-            scenario.check("button text changed", button1.get("text") == "Clicked 1", button1)
-            scenario.check("label text changed", label1.get("text") == "Label: clicked 1", label1)
-            scenario.check("state mirrors text", state.get("test_button_text") == "Clicked 1" and state.get("test_label_text") == "Label: clicked 1", state)
+            scenario.check("button remains readable", button1.get("role") == "button" and button1.get("id") == "main.do67", button1)
+            scenario.check("coin label updates", label1.get("role") == "label" and "coins" in str(label1.get("text", "")), label1)
+            scenario.check("state increments meme coins", state.get("meme_coins", 0) > state0.get("meme_coins", 0), state)
             return finish(scenario.ok)
     except DevApiError as exc:
         return fail_devapi(exc)
