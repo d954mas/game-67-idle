@@ -23,6 +23,9 @@ when preparing a next-chat build plan, first playable slice, acceptance gates,
 or build/test command packet.
 For market/reference research, load `references/reference-research-playbook.md`
 when comparing games, ads, memes, stores, screenshots, or UI patterns.
+For creative direction intake, load `references/creative-intake-playbook.md`
+when the user's taste, meme anchor, visual target, or acceptance criteria are
+unclear.
 
 ## Non-Negotiables
 
@@ -83,6 +86,8 @@ Treat tools as explicit side effects:
 ## Creative Intake
 
 Before writing broad docs, extract the creative direction. Use local context first.
+Use `references/creative-intake-playbook.md` when the project depends on the
+user's taste, meme literacy, or visual acceptance criteria.
 If the answer is still ambiguous, ask up to 3 short questions covering:
 
 - closest reference and what to borrow;
