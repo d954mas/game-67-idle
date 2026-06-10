@@ -114,11 +114,10 @@ Capture the user's taste in concrete terms: UI density, camera/framing, art
 finish, humor edge, pacing, monetization tolerance, and no-go references.
 
 For meme-heavy projects, preserve the user's meme anchor as a visible design
-constraint, not just lore text. Example for Game 67 only when project context
-mentions it:
+constraint, not just lore text:
 
 ```text
-67/67 at the top -> betrayal/downfall -> 1/67 start -> climb back through life sim systems
+meme/status symbol -> visible player action -> progression feedback -> payoff scene
 ```
 
 ## Reference Research
@@ -349,7 +348,7 @@ Use these prompts to test whether this skill behaves correctly after changes:
 Use `references/skill-eval-playbook.md` for scoring, failure probes, and
 iteration rules.
 
-- Loose concept: "Make a first GDD for a meme idle life sim." Expected: asks or infers taste, creates concept/slice before broad docs.
+- Loose concept: "Make a first GDD for a compact fantasy RPG with exploration, camp preparation, and companion talk." Expected: asks or infers taste, creates concept/slice before broad docs.
 - User rejects visuals: "This is not game art; I do not see gameplay." Expected: stops, reframes visual gate, does not keep expanding prose.
 - Market refs: "Research games like X and make a visual GDD." Expected: 3-7 refs with source quality, borrow/avoid/copy-risk, citations when web is used.
 - Game-ready art: "Use generation; I need art ready to embed in the game." Expected: separates fake shot from runtime assets, manifest, transparency/dimensions checks.

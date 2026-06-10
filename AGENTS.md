@@ -5,23 +5,24 @@
 - This is an AI-first game development experiment: improve the game and the AI workflow together.
 - The engine lives in `external/neotolis-engine` as a submodule; do not edit it unless explicitly asked.
 - Game design lives in `gamedesing/`; game code lives in `src/`.
-- Universal reusable design knowledge lives in `gamedesing/knowledge/`. Current-game design decisions, state, balance, copy, lore, and implementation notes stay in the regular GDD files under `gamedesing/`.
+- The current active test concept is `gamedesing/fantasy-pocket-rpg/`.
+- Universal reusable design knowledge lives in `gamedesing/knowledge/`.
 - Reusable project skills live in `.codex/skills/`; keep them generic enough to reuse in other games.
-- Project-specific operational state for agents lives in `agent_docs/`. Before non-trivial work, read `agent_docs/README.md`; update `agent_docs/project_state.md` after meaningful verified iterations or target changes.
-- For non-trivial gameplay/UI/visual/balance/content iterations, use `agent_docs/iteration_cycle.md` as the project-specific adapter for the reusable iteration workflow.
+- Temporary generation, scripts, rejected images, screenshots, and audit logs go in `tmp/` or another ignored temp/source folder.
+- Final durable docs/data/assets go in their project folder.
 
 ## Direction
 
-- `67` is the core identity: a meme-symbol of legendary status, downfall, and climb back.
-- Keep tone meme-heavy, sharp, readable, and playable.
-- Prefer small playable iterations over large speculative systems.
+- Current test: compact fantasy RPG for mobile + PC.
+- Core references: Skyrim/The Elder Scrolls fantasy, The Quest-style compact first-person RPG, Pocket Survivor map/events/loot structure, BG3/NWN2-style camp as preparation/narrative hub.
+- Camp supports exploration; it must not become a base-builder or room-management game unless explicitly requested later.
+- Prefer small playable iterations over broad speculative systems.
+- For new GDD work, use `.codex/skills/primary-gdd-pipeline/`.
 
 ## Validation
 
-- Product target for Game 67 is mobile portrait + web. Native desktop/PC is the development and automation harness.
-- Default validation should use the native desktop/PC build because it is faster. Run WASM/web builds only when the user explicitly asks for them or the task is specifically about web/WASM behavior.
-- Native DevAPI scripts must launch the game through `tools/devapi/devapi_client.py::running_game()` so stdout/stderr are captured under `build/logs/`. When a native run, smoke, or capture fails, inspect or report the launch log tail before diagnosing from screenshots/state alone.
-- For gameplay/UI/runtime iterations, use `agent_docs/playtest_harness.md` as the project-specific fast validation entry point before creating ad hoc checks.
-- When validating playable or visual changes, use screenshots and emulated input. Cover desktop browser and a mobile portrait viewport when the surface is web-based.
+- Product target is mobile + PC. Native desktop/PC is the preferred development and automation harness once implementation starts.
+- Run web/mobile builds only when the task explicitly targets web/mobile behavior or visual GDD surfaces.
+- When validating playable or visual changes, use screenshots and emulated input. Cover desktop and mobile portrait when the surface is web-based.
 - Pack building is explicit; do not wire pack generation into every normal game build.
-- If a task reveals repeated friction, propose updating `AGENTS.md` or creating a project skill.
+- If a task reveals repeated friction, propose updating `AGENTS.md` or creating/updating a project skill.

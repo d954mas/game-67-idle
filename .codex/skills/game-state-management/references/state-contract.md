@@ -43,7 +43,7 @@ saves/
 
 ```json
 {
-  "schema": "game_67_idle.player_state",
+  "schema": "example_game.player_state",
   "document": "player",
   "version": 3,
   "state": {}

@@ -38,11 +38,11 @@ Passing threshold:
 Use these as raw prompts to a fresh agent or as self-check scenarios:
 
 ```text
-Make a first GDD for a meme idle life sim about falling from legendary status to zero and climbing back.
+Make a first GDD for a compact fantasy RPG with exploration, camp preparation, and companion talk.
 ```
 
 ```text
-Research games like idle life simulators and make a visual GDD. I want to see gameplay, not only text.
+Research compact RPGs like The Quest and mobile survival/RPG hybrids, then make a visual GDD. I want to see gameplay, not only text.
 ```
 
 ```text
