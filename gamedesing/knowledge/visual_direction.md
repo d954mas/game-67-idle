@@ -67,6 +67,7 @@ and progress without requiring explanation.
 
 - Use [UI/UX Patterns](ui_ux_patterns.md) for component states and screen hierarchy.
 - Use [Reward Feedback](reward_feedback.md) to make rewards visible and desirable.
+- Use [Content Planning](content_planning.md) to define visual roles for items, areas, and rewards.
 - Use [FTUE](ftue.md) to keep early screens visually focused.
 - Use [Playtest Validation](playtest_validation.md) to verify screenshots and readability.
 
@@ -75,4 +76,3 @@ and progress without requiring explanation.
 - Game Accessibility Guidelines, [Full list](https://gameaccessibilityguidelines.com/full-list/)
 - W3C WAI, [WCAG 2.2 Contrast Minimum](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
 - W3C WAI, [WCAG 2.2 Target Size Minimum](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
-

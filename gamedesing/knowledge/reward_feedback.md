@@ -74,6 +74,7 @@ Input response
 
 - Use [Core Loop](core_loop.md) to connect rewards to repeatable play.
 - Use [Meta Progression](meta_progression.md) to connect rewards to long-term goals.
+- Use [Balance Tuning](balance_tuning.md) to align reward size with pacing.
 - Use [UI/UX Patterns](ui_ux_patterns.md) for component states and layout.
 - Use [Playtest Validation](playtest_validation.md) to verify reward clarity in builds.
 
@@ -82,4 +83,3 @@ Input response
 - Nielsen Norman Group, [10 Usability Heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/)
 - Game Accessibility Guidelines, [Full list](https://gameaccessibilityguidelines.com/full-list/)
 - Wikipedia, [Compulsion loop](https://en.wikipedia.org/wiki/Compulsion_loop)
-

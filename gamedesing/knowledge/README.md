@@ -31,6 +31,8 @@ scope, and product decisions belong in the project's GDD files, not here.
 - [Playtest Validation](playtest_validation.md) - first minutes, evidence, bugs, director review.
 - [Reward Feedback](reward_feedback.md) - visible rewards, consequences, unlock clarity.
 - [Visual Direction](visual_direction.md) - readable friendly casual-game visual rules.
+- [Balance Tuning](balance_tuning.md) - pacing targets, economy checks, simulations.
+- [Content Planning](content_planning.md) - content roles, matrices, scope control.
 
 ## How To Apply
 

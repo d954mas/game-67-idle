@@ -90,6 +90,8 @@ Stability
 - Use [Meta Progression](meta_progression.md) to validate rewards, unlocks, and pacing.
 - Use [Reward Feedback](reward_feedback.md) to validate reward visibility.
 - Use [Visual Direction](visual_direction.md) to validate visual appeal and readability.
+- Use [Balance Tuning](balance_tuning.md) to compare player pacing with targets.
+- Use [Content Planning](content_planning.md) to decide what to cut, hide, or add.
 
 ## References
 
