@@ -193,6 +193,13 @@
                 "Pack: build game pack release"
             ],
             "problemMatcher": []
+        },
+        {
+            "label": "Tasks: serve board",
+            "type": "shell",
+            "command": "node tools/taskboard/server.mjs",
+            "isBackground": true,
+            "problemMatcher": []
         }
     ]
 }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Task Manager"
+  short_description: "Capture, refine, decompose, and plan project tasks and epics."
+  default_prompt: "Use this skill to manage the markdown task store: capture ideas, refine them into backlog tasks, group work into epics, and report progress."

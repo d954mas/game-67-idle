@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Taskboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Taskboard</h1>
+    <input id="search" type="search" placeholder="Search title, id, tag...">
+    <select id="epicFilter"><option value="">All epics</option></select>
+    <label class="toggle"><input type="checkbox" id="showClosed"> done/dropped</label>
+    <span class="spacer"></span>
+    <button id="newEpic" class="ghost">+ Epic</button>
+    <button id="newTask" class="primary">+ Task</button>
+  </header>
+
+  <section id="epicRail" class="epic-rail"></section>
+
+  <main id="board" class="board"></main>
+
+  <dialog id="editor">
+    <form id="editorForm" method="dialog">
+      <div class="editor-head">
+        <span id="editorId" class="doc-id"></span>
+        <input id="fTitle" name="title" placeholder="Title" required autocomplete="off">
+      </div>
+      <div class="editor-fields">
+        <label>Status <select id="fStatus" name="status"></select></label>
+        <label>Priority <select id="fPriority" name="priority"></select></label>
+        <label id="epicFieldWrap">Epic <select id="fEpic" name="epic"></select></label>
+        <label class="grow">Tags <input id="fTags" name="tags" placeholder="comma, separated" autocomplete="off"></label>
+      </div>
+      <textarea id="fBody" name="body" spellcheck="false"></textarea>
+      <div class="editor-foot">
+        <span id="editorMeta" class="meta"></span>
+        <span class="spacer"></span>
+        <button type="button" id="editorCancel" class="ghost">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
