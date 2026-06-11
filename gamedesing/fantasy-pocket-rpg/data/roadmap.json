@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "iterations": [
+    {
+      "id": "it0_command_discovery",
+      "label": "Command Discovery",
+      "goal": "Know how to build, run, and capture the game.",
+      "done_when": ["build_command_recorded", "run_command_recorded", "validation_command_recorded"]
+    },
+    {
+      "id": "it1_clickable_expedition",
+      "label": "Clickable Expedition Skeleton",
+      "goal": "Click through map -> ruins -> result -> camp -> map.",
+      "done_when": ["route_clickable", "resource_changes", "camp_unlocks", "screenshots_captured"]
+    },
+    {
+      "id": "it2_first_combat",
+      "label": "First Combat Contract",
+      "goal": "Ruin Wolf combat follows data/combat.json.",
+      "done_when": ["normal_attack_win_matches", "forced_retreat_works", "camp_rest_heals"]
+    },
+    {
+      "id": "it3_camp_preparation",
+      "label": "Camp Preparation",
+      "goal": "Rest, craft, perk, talk, and route hint work without base-building.",
+      "done_when": ["trail_herbalist_changes_potion", "companion_reveals_route", "no_rooms_workers_timers"]
+    },
+    {
+      "id": "it4_first_region",
+      "label": "First Region Mini-Loop",
+      "goal": "3-5 nodes form a 10-20 minute repeatable region loop.",
+      "done_when": ["multiple_nodes", "two_enemy_types", "dragon_gate", "clear_next_goal"]
+    }
+  ]
+}

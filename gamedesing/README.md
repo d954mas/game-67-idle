@@ -2,7 +2,7 @@
 
 Current active test:
 
-- `fantasy-pocket-rpg/` - compact fantasy RPG concept, refs, visual GDD site, first slice, and data contracts.
+- `fantasy-pocket-rpg/` - compact fantasy RPG concept, long-term product docs, refs, visual GDD site, first slice, and data contracts.
 
 Reusable knowledge:
 

@@ -75,6 +75,9 @@ async function main() {
       "data/balance.json",
       "data/ui_flow.json",
       "First Combat",
+      "Long-Term Progression",
+      "Content Model",
+      "Iteration Roadmap",
       "Implementation Scope",
     ]) {
       if (!html.includes(needle)) {
@@ -87,6 +90,9 @@ async function main() {
     await fetchOk(baseUrl, "/data/balance.json", "application/json");
     await fetchOk(baseUrl, "/data/ui_flow.json", "application/json");
     await fetchOk(baseUrl, "/data/combat.json", "application/json");
+    await fetchOk(baseUrl, "/data/progression.json", "application/json");
+    await fetchOk(baseUrl, "/data/content_model.json", "application/json");
+    await fetchOk(baseUrl, "/data/roadmap.json", "application/json");
     await fetchOk(baseUrl, "/data/asset_manifest.json", "application/json");
     await fetchOk(baseUrl, "/data/implementation_tasks.json", "application/json");
     await fetchOk(baseUrl, "/art/fake-shot-ruins-background.png", "image/png");

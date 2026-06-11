@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "content_unit": ["node", "encounter", "challenge_or_choice", "reward", "camp_or_world_response", "next_hook"],
+  "templates": {
+    "region": ["id", "name", "fantasy", "danger_tier", "visual_motifs", "factions", "main_mystery", "node_list", "climax", "unlocks_next"],
+    "node": ["id", "name", "type", "unlock_condition", "visible_hook", "danger", "primary_encounter", "reward", "next_unlock"],
+    "encounter": ["id", "scene", "setup_text", "player_choices", "challenge", "success_result", "failure_result", "reward", "camp_follow_up"],
+    "enemy": ["id", "role", "health", "damage_or_action", "special_rule", "reward", "best_counter", "tutorial_lesson"],
+    "camp_beat": ["trigger", "speaker", "practical_effect", "story_clue", "next_route_hint", "repeat_behavior"]
+  },
+  "first_region": {
+    "id": "moss_road",
+    "nodes": ["old_road", "moss_ruins", "safe_fire", "hunters_ford", "sealed_shrine"],
+    "enemies": ["ruin_wolf", "bandit_scout", "ash_wisp"],
+    "rewards": ["herbs", "rusty_blade", "dragon_marked_shard", "trail_herbalist_1", "hunters_ford_unlock"]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "layers": [
+    {
+      "id": "player_power",
+      "label": "Player Power",
+      "purpose": "Can I handle stronger routes?",
+      "first_slice": ["old_knife", "trail_herbalist_1"],
+      "future": ["weapon_traits", "armor_tags", "perks", "dragon_abilities"]
+    },
+    {
+      "id": "world_access",
+      "label": "World Access",
+      "purpose": "Where can I go next?",
+      "first_slice": ["hunters_ford_unlock"],
+      "future": ["region_nodes", "danger_tiers", "hidden_routes", "dragon_seals"]
+    },
+    {
+      "id": "camp_capability",
+      "label": "Camp Capability",
+      "purpose": "How do I prepare better?",
+      "first_slice": ["rest", "craft_draught", "talk_scout"],
+      "future": ["repair", "recipes", "perk_choice", "relic_inspection"]
+    },
+    {
+      "id": "dragon_mystery",
+      "label": "Dragon Mystery",
+      "purpose": "What is happening to the hero?",
+      "first_slice": ["dragon_marked_shard", "dragon_omen_1"],
+      "future": ["omen_dreams", "relic_resonance", "spirit_trace", "first_power"]
+    }
+  ],
+  "cadence": {
+    "first_5_minutes": ["route_unlock", "first_loot", "first_camp", "first_upgrade"],
+    "first_20_minutes": ["3_to_4_nodes", "2_enemy_types", "companion_hint", "dragon_milestone"],
+    "first_region": ["8_to_12_nodes", "2_safe_points", "mini_boss", "faction_choice"]
+  }
+}

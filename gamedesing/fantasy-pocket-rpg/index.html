@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -14,8 +14,11 @@
       </div>
       <nav aria-label="GDD sections">
         <a href="#gameplay">Gameplay</a>
+        <a href="#progression">Progression</a>
+        <a href="#content">Content</a>
         <a href="#economy">Economy</a>
         <a href="#uiux">UI/UX</a>
+        <a href="#roadmap">Roadmap</a>
         <a href="#handoff">Handoff</a>
       </nav>
     </header>
@@ -23,16 +26,18 @@
     <main>
       <section class="overview" id="overview">
         <div class="overview-copy">
-          <p class="eyebrow">Current gate: visual GDD review</p>
-          <h1>Compact fantasy RPG: explore, survive, return to camp, prepare, go deeper.</h1>
+          <p class="eyebrow">Current gate: full concept package review</p>
+          <h1>Explore, survive, return to camp, prepare, go deeper.</h1>
           <p>
-            Это не база и не Skyrim-клон. Первый slice доказывает короткую RPG-экспедицию:
-            карта провинции, руины, выбор/бой, лут, безопасный лагерь, крафт/отдых/диалог и новый маршрут.
+            A compact fantasy RPG for mobile and PC. Not a base-builder and not a Skyrim clone.
+            The first slice proves a short expedition, while the full concept defines how to grow
+            regions, encounters, companions, factions, loot, perks, and dragon mystery beats later.
           </p>
           <div class="pill-row">
             <span>Mobile + PC</span>
-            <span>2-5 min session</span>
+            <span>2-5 min useful beat</span>
             <span>Camp supports exploration</span>
+            <span>Content template driven</span>
           </div>
         </div>
 
@@ -53,7 +58,7 @@
             <button>Approach Ruins</button>
             <button class="locked">Camp locked: unsafe</button>
           </div>
-          <div class="result-toast">Found Herbs +2 · Dragon Omen +1</div>
+          <div class="result-toast">Found Herbs +2 / Dragon Omen +1</div>
         </article>
       </section>
 
@@ -67,12 +72,12 @@
           </ul>
         </article>
         <article>
-          <h2>No-Go</h2>
+          <h2>Long-Term Promise</h2>
           <ul class="tight-list">
-            <li>No settlement rooms, workers, construction timers.</li>
-            <li>No full open-world production scope for P0.</li>
-            <li>No dragon gacha or MMO clutter.</li>
-            <li>No copied Elder Scrolls/D&D/Fallout lore or iconography.</li>
+            <li>New regions are built from node, encounter, reward, and camp response templates.</li>
+            <li>Dragon progression starts as mystery and becomes rare power, not collection.</li>
+            <li>Companions reveal routes, improve checks, and create camp story beats.</li>
+            <li>Factions change routes, services, and quest outcomes after the first region.</li>
           </ul>
         </article>
       </section>
@@ -133,15 +138,31 @@
         <article class="visual-notes">
           <h2>Visual Proof Tier</h2>
           <p>
-            Текущий tier: fake-shot. Это готовое визуальное направление для review:
-            generated backgrounds + HTML/CSS UI overlay. Это еще не runtime-ready asset pack.
+            Current tier: fake-shot. This is a review-ready visual direction: generated backgrounds plus
+            HTML/CSS UI overlay. It is not a runtime-ready asset pack yet.
           </p>
           <ul class="tight-list">
             <li>Ruins screen proves first-person fantasy encounter.</li>
             <li>Camp screen proves rest/craft/talk preparation rhythm.</li>
-            <li>UI overlay proves resources, actions, reward, camp state.</li>
+            <li>UI overlay proves resources, actions, reward, and camp state.</li>
           </ul>
         </article>
+      </section>
+
+      <section id="progression">
+        <div class="section-head">
+          <p class="eyebrow">Future growth</p>
+          <h2>Long-Term Progression</h2>
+        </div>
+        <div class="data-grid" id="progressionGrid"></div>
+      </section>
+
+      <section id="content">
+        <div class="section-head">
+          <p class="eyebrow">Scalable content</p>
+          <h2>Content Model</h2>
+        </div>
+        <div class="data-grid" id="contentGrid"></div>
       </section>
 
       <section id="economy">
@@ -166,6 +187,14 @@
           <h2>First Combat</h2>
         </div>
         <div class="data-grid" id="combatGrid"></div>
+      </section>
+
+      <section id="roadmap">
+        <div class="section-head">
+          <p class="eyebrow">Prototype plan</p>
+          <h2>Iteration Roadmap</h2>
+        </div>
+        <div class="task-grid" id="roadmapGrid"></div>
       </section>
 
       <section class="section-grid" id="references">
@@ -193,17 +222,19 @@
         <article>
           <h2>Risk Gates</h2>
           <ul class="tight-list">
+            <li><b>Core not sticky:</b> player must want one more route.</li>
             <li><b>Camp steals focus:</b> camp must lead back to map.</li>
             <li><b>Too much survival:</b> resources create pressure, not punishment.</li>
-            <li><b>Generic fantasy:</b> dragon-mark/relic must be a recognizable motif.</li>
+            <li><b>Generic fantasy:</b> dragon-mark/relic must be recognizable.</li>
           </ul>
         </article>
         <article>
           <h2>Manual Review Questions</h2>
           <ul class="tight-list">
-            <li>Does the ruins shot feel like the game you want to build?</li>
-            <li>Is camp the right size: useful, but not a separate management game?</li>
-            <li>Is the UI density closer to compact RPG than idle/base-builder?</li>
+            <li>Do you want to click the next route after the first reward?</li>
+            <li>Is camp useful without becoming a separate management game?</li>
+            <li>Does Dragon Omen create curiosity?</li>
+            <li>Can new content be produced from the templates?</li>
           </ul>
         </article>
       </section>
@@ -215,8 +246,8 @@
         </div>
         <div class="handoff-card">
           <p>
-            Build: province map -> ruins encounter -> reward/fight placeholder -> safe camp ->
-            rest/craft/talk -> unlock next route.
+            First discover build/run commands. Then build: province map -> ruins encounter ->
+            Ruin Wolf combat -> safe camp -> rest/craft/talk -> unlock next route.
           </p>
           <div class="task-grid" id="taskGrid"></div>
         </div>
@@ -224,8 +255,10 @@
     </main>
 
     <footer>
-      Source: concept.md, gdd.md, references.md, combat_spec.md, data/balance.json,
-      data/ui_flow.json, data/combat.json, data/asset_manifest.json.
+      Source: product_vision.md, concept.md, gdd.md, progression_plan.md, content_model.md,
+      iteration_roadmap.md, core_hook_validation.md, combat_spec.md,
+      data/balance.json, data/ui_flow.json, data/combat.json, data/progression.json,
+      data/content_model.json, data/roadmap.json, data/asset_manifest.json.
     </footer>
 
     <script src="site.js"></script>

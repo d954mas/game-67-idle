@@ -8,12 +8,14 @@ Build the first playable slice: a player starts on a province map, travels to ol
 
 1. `AGENTS.md`
 2. `gamedesing/fantasy-pocket-rpg/handoff_status.md`
-3. `gamedesing/fantasy-pocket-rpg/gdd.md`
-4. `gamedesing/fantasy-pocket-rpg/data/balance.json`
-5. `gamedesing/fantasy-pocket-rpg/data/ui_flow.json`
-6. `gamedesing/fantasy-pocket-rpg/combat_spec.md`
-7. `gamedesing/fantasy-pocket-rpg/data/combat.json`
-8. `gamedesing/fantasy-pocket-rpg/data/asset_manifest.json`
+3. `gamedesing/fantasy-pocket-rpg/product_vision.md`
+4. `gamedesing/fantasy-pocket-rpg/gdd.md`
+5. `gamedesing/fantasy-pocket-rpg/iteration_roadmap.md`
+6. `gamedesing/fantasy-pocket-rpg/data/balance.json`
+7. `gamedesing/fantasy-pocket-rpg/data/ui_flow.json`
+8. `gamedesing/fantasy-pocket-rpg/combat_spec.md`
+9. `gamedesing/fantasy-pocket-rpg/data/combat.json`
+10. `gamedesing/fantasy-pocket-rpg/data/asset_manifest.json`
 
 ## First Playable Slice Packet
 

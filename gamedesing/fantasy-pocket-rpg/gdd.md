@@ -12,6 +12,8 @@
 
 A compact fantasy RPG for mobile and PC. The player explores a dangerous province through map nodes and illustrated first-person encounters, gains loot and clues, then returns to safe camp points to recover, craft, equip, speak with companions, and choose the next upgrade.
 
+For the full product direction, use `product_vision.md`, `progression_plan.md`, `content_model.md`, `iteration_roadmap.md`, and `core_hook_validation.md`.
+
 ## First 30 Seconds
 
 1. Player sees `Province Map` with one open route: `Old Road -> Moss-Covered Ruins`.

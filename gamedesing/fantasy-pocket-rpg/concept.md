@@ -2,9 +2,9 @@
 
 ## Definition Of Done
 
-- Must exist: concept, reference synthesis, first playable slice, economy/UI contracts, visual web GDD, generated fake-shot art, implementation handoff.
+- Must exist: concept, product vision, progression plan, content model, first playable slice, economy/combat/UI contracts, visual web GDD, generated fake-shot art, iteration roadmap, implementation handoff.
 - Out of scope now: playable game build, final title, full lore bible, full runtime-ready art pack, monetization design.
-- Accepted proof: the first 5 minutes are understandable from docs and site; camp role is clear; refs are translated into borrow/avoid rules; data JSON validates; visual site runs locally.
+- Accepted proof: the first 5 minutes are understandable from docs and site; future expansion path is clear; content can be produced from templates; camp role is clear; refs are translated into borrow/avoid rules; data JSON validates; visual site runs locally.
 
 ## Working Title
 
@@ -61,6 +61,7 @@ Violates this: survival clutter, hidden math, too many currencies, unreadable lo
 - Camp is inspired by BG3/NWN2: safe preparation and companion scenes, not base management.
 - `Legendary Dragons`-type fantasy is used as a long-term dragon power/mystery reference, not as gacha or pet collection.
 - First implementation should prove one short expedition loop, not the whole RPG.
+- Future development should add regions, encounters, companions, factions, gear, perks, and dragon mystery beats by reusing the same route/encounter/camp/unlock loop.
 
 ## Open Decisions
 
