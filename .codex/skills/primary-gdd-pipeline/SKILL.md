@@ -57,6 +57,9 @@ testing or reviewing whether this GDD pipeline skill still works after changes.
 - Treat the GDD as a living source of truth, not a static essay.
 - Use explicit loop budgets, tool policy, and rehydration for long sessions.
 - Validators prove consistency, not product quality. Require visual/runtime evidence when possible.
+- Before handoff, run a mechanics-depth audit: combat/challenge, economy deltas, fail states, unlocks, and UI feedback must be implementable from files, not invented in the next chat.
+- Do not spend more than 2 attempts on local server/background-process plumbing. If the app/server works in foreground, switch to a deterministic Node/Python validator or state the missing visual proof plainly.
+- Prefer cross-platform `node`/`python` validators and project scripts over shell-specific orchestration for ordinary GDD/site checks.
 
 ## Start Checklist
 
@@ -84,6 +87,7 @@ Use a bounded single-agent loop by default. Escalate only when the user asks.
 - Long session checkpoint: update `tmp/session_state.md` every 60-90 minutes or before context may compact.
 - Stuck rule: after 2 failed attempts at the same gate, stop and ask for a concrete user decision.
 - Handoff threshold: if implementation scope exceeds one first playable slice, split into later phases.
+- Infrastructure retry budget: max 2 attempts for server launch, browser setup, or screenshot tooling before switching to a deterministic validator or reporting the gap.
 
 ## Tool Policy
 
@@ -189,6 +193,7 @@ Write:
 - what the player taps/clicks, waits for, compares, and upgrades;
 - first upgrade;
 - first job/activity;
+- first challenge/combat/check with concrete numbers, fail state, and recovery;
 - first visual change;
 - save/reset expectation;
 - acceptance criteria.
@@ -231,6 +236,11 @@ player actions and UI states.
 
 Keep ids stable and implementation-oriented.
 
+For RPGs, survival games, tactics, or any design with danger, add either
+`data/combat.json` or an equivalent challenge section before handoff. It must
+cover enemy stats, player actions, turn/check order, damage or success math,
+win/loss/retreat outcomes, and recovery.
+
 ### 5. Add Risk And Experiment Gates
 
 Before handoff, write the top 3 risks and the smallest test for each:
@@ -260,6 +270,10 @@ It must include:
 - Definition of Done;
 - prompt for the next implementation chat.
 
+If build/test commands are not discovered yet, do not call the handoff fully
+ready. Mark it as `implementation-ready except command discovery` and name the
+next discovery step.
+
 ## Required Output Shape
 
 When finishing a primary GDD pipeline task, report:
@@ -272,6 +286,7 @@ When finishing a primary GDD pipeline task, report:
 - User decisions captured.
 - Assumptions still needing review.
 - Validation run and result.
+- Self-review findings: top 3 gaps or risks found by the pipeline itself.
 - Next implementation prompt or next design checkpoint.
 
 Do not bury missing visual proof or unanswered creative questions inside a long
@@ -328,6 +343,7 @@ Use `references/quality-review-playbook.md` for product-level review before
 final response or commit.
 
 - GDD/data changes: `node gamedesing/tools/validate_all.mjs` if available.
+- If no project validator exists, create the smallest cross-platform Node/Python validator that proves required files, JSON, final images, and source links exist.
 - Generated art pack: validate files, manifest paths, PNG dimensions, transparency where expected.
 - Website/server changes: verify HTTP `200` on the relevant page.
 - Implementation handoff: confirm `game_implementation_plan.md` is linked from README/site/editor whitelist if those exist.
@@ -374,6 +390,8 @@ Stop and reframe before continuing when:
 - you cannot state the current DoD in one paragraph;
 - visual output is only a poster/reference but the user asked for game-ready assets;
 - implementation is being started before the first playable slice is defined.
+- handoff says "ready" while combat/challenge/economy numbers are still vague.
+- infrastructure validation is consuming more time than design/product work.
 
 ## Anti-Patterns From Prior Long Sessions
 

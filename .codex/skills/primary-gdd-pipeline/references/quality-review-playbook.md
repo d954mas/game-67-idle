@@ -32,6 +32,7 @@ Ask:
 - Is the meme/tone visible in gameplay, not only lore?
 - Does the first playable slice avoid broad speculative systems?
 - Are user taste decisions captured rather than guessed?
+- For danger/combat games, can the first encounter be implemented without inventing HP, damage, turn/check rules, win/loss, or recovery?
 
 ## Source-Of-Truth Review
 
@@ -65,6 +66,23 @@ For implementation handoff:
 - forbidden paths/submodules/raw folders are named;
 - next prompt is scoped to one playable slice.
 
+If commands are unknown, the handoff may still be useful, but it is not fully
+ready. It must say `command discovery still required` and name the exact next
+file/search step.
+
+## Pipeline Speed Review
+
+Before final response, ask where time went:
+
+- Did tool/server/browser setup take more than 2 attempts?
+- Did I keep trying shell-specific launchers after a cross-platform validator
+  would prove the same thing?
+- Did I write prose before making the missing mechanic implementable?
+- Did I create docs that did not remove uncertainty for the next agent?
+
+If yes, record the correction in the relevant playbook or project README in
+the same change.
+
 ## Final Report Rule
 
 End with:
@@ -82,4 +100,5 @@ Always include validation results and remaining assumptions.
 - Currencies exist, but sources/sinks are unclear.
 - Site exists, but is not aligned with JSON/source docs.
 - Handoff has phases, but no first clickable action.
+- Handoff has UI actions, but no mechanics numbers behind them.
 - Commit includes ignored/raw/temp generation artifacts.

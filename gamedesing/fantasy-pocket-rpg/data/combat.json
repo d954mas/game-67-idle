@@ -1,0 +1,138 @@
+{
+  "version": 1,
+  "scope": "first_playable_slice",
+  "player_baseline": {
+    "health": 30,
+    "resolve": 10,
+    "weapon": {
+      "id": "old_knife",
+      "label": "Old Knife",
+      "damage": 5
+    },
+    "consumables": [
+      {
+        "id": "minor_healing_draught",
+        "label": "Minor Healing Draught",
+        "heal_before_upgrade": 10,
+        "heal_after_trail_herbalist_1": 15
+      }
+    ]
+  },
+  "enemies": [
+    {
+      "id": "ruin_wolf",
+      "label": "Ruin Wolf",
+      "health": 12,
+      "actions": [
+        {
+          "id": "bite",
+          "label": "Bite",
+          "damage": 4,
+          "target": "player.health"
+        }
+      ],
+      "reward": [
+        {
+          "id": "gold",
+          "value": 4
+        },
+        {
+          "id": "item",
+          "value": "rusty_blade"
+        },
+        {
+          "id": "location_progress",
+          "value": "moss_ruins_cleared"
+        }
+      ]
+    }
+  ],
+  "player_actions": [
+    {
+      "id": "attack",
+      "label": "Attack",
+      "effect": {
+        "target": "enemy.health",
+        "damage": 5
+      }
+    },
+    {
+      "id": "defend",
+      "label": "Defend",
+      "effect": {
+        "incoming_damage_multiplier_next_enemy_action": 0.5
+      }
+    },
+    {
+      "id": "use_draught",
+      "label": "Use Draught",
+      "effect": {
+        "target": "player.health",
+        "heal": 10,
+        "heal_with_trail_herbalist_1": 15,
+        "cap": "player.health.max"
+      },
+      "blocked_by": ["no_minor_healing_draught"]
+    },
+    {
+      "id": "calm_the_beast",
+      "label": "Calm The Beast",
+      "cost": [
+        {
+          "id": "resolve",
+          "value": 2
+        }
+      ],
+      "success_chance": 0.6,
+      "success_outcome": "bypass_without_gold",
+      "failure_outcome": "enemy_immediate_bite"
+    }
+  ],
+  "turn_order": [
+    "player_action",
+    "check_enemy_defeated",
+    "enemy_action_if_combat_active",
+    "check_player_defeated",
+    "next_turn"
+  ],
+  "expected_paths": [
+    {
+      "id": "normal_attack_win",
+      "steps": [
+        {
+          "turn": 1,
+          "player_action": "attack",
+          "enemy_health_after": 7,
+          "player_health_after_enemy": 26
+        },
+        {
+          "turn": 2,
+          "player_action": "attack",
+          "enemy_health_after": 2,
+          "player_health_after_enemy": 22
+        },
+        {
+          "turn": 3,
+          "player_action": "attack",
+          "enemy_health_after": 0,
+          "outcome": "victory"
+        }
+      ],
+      "expected_duration_seconds_max": 45
+    }
+  ],
+  "loss_and_retreat": {
+    "forced_retreat_at_player_health_lte": 0,
+    "return_to": "safe_camp",
+    "health_after_forced_retreat": 5,
+    "supplies_penalty_if_available": 1,
+    "no_supplies_behavior": "warn_exhausted_no_hard_lock",
+    "manual_retreat_available_after_turn": 2,
+    "manual_retreat_reward": []
+  },
+  "camp_recovery_link": {
+    "expected_health_after_normal_win": 22,
+    "camp_rest_cost_supplies": 1,
+    "camp_rest_heal": 12
+  }
+}

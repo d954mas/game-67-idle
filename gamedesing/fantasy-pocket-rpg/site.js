@@ -20,9 +20,10 @@ function addMeta(parent, values) {
 }
 
 async function init() {
-  const [balance, uiFlow, tasks] = await Promise.all([
+  const [balance, uiFlow, combat, tasks] = await Promise.all([
     readJson("data/balance.json"),
     readJson("data/ui_flow.json"),
+    readJson("data/combat.json"),
     readJson("data/implementation_tasks.json"),
   ]);
 
@@ -47,6 +48,28 @@ async function init() {
     addMeta(card, screen.primary_actions.slice(0, 4));
     screenMap.appendChild(card);
   });
+
+  const combatGrid = document.querySelector("#combatGrid");
+  if (combatGrid) {
+    combat.enemies.forEach((enemy) => {
+      const card = el("article", "data-card");
+      card.appendChild(el("b", "", enemy.label));
+      card.appendChild(el("p", "", `HP ${enemy.health}; first attack pattern: ${enemy.actions.map((action) => `${action.label} ${action.damage}`).join(", ")} damage.`));
+      addMeta(card, enemy.reward.map((reward) => `${reward.id}: ${reward.value}`));
+      combatGrid.appendChild(card);
+    });
+
+    combat.player_actions.forEach((action) => {
+      const card = el("article", "data-card");
+      card.appendChild(el("b", "", action.label));
+      const effect = action.effect
+        ? Object.entries(action.effect).map(([key, value]) => `${key}: ${value}`).join("; ")
+        : action.success_outcome || "";
+      card.appendChild(el("p", "", effect));
+      addMeta(card, [action.cost ? `cost: ${action.cost.map((cost) => `${cost.id} ${cost.value}`).join(", ")}` : "", action.success_chance ? `success: ${Math.round(action.success_chance * 100)}%` : ""]);
+      combatGrid.appendChild(card);
+    });
+  }
 
   const taskGrid = document.querySelector("#taskGrid");
   tasks.phases.forEach((phase) => {

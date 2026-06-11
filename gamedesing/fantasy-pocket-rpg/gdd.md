@@ -6,7 +6,7 @@
 - Reference gate: compact pass complete.
 - Visual gate: first generated art backgrounds and web fake shots created; needs user review.
 - Slice gate: first playable slice defined.
-- Handoff gate: ready for next implementation chat after visual review.
+- Handoff gate: implementation-ready except command discovery; next implementation chat must discover local build/run commands first.
 
 ## Game Summary
 
@@ -109,8 +109,11 @@ Camp actions:
 
 - Input: `Attack`, `Defend`, `Use Item`, `Skill`.
 - Cost: Health/Resolve risk.
-- Reward: loot, XP, location progress.
+- Baseline: first enemy is `Ruin Wolf`, 12 HP, 4 damage bite.
+- Expected win: 3 attacks with `Old Knife` at 5 damage each.
+- Reward: `Rusty Blade`, 4 Gold, location progress.
 - UI feedback: turn log, enemy health, damage numbers.
+- Source: `combat_spec.md` and `data/combat.json`.
 
 ### Camp: Safe Fire
 
@@ -202,4 +205,4 @@ Fake-shot requirements:
 
 ## Next Gate
 
-User review of visual web GDD. If direction is accepted, next chat should build the first playable slice from `game_implementation_plan.md`.
+User review of visual web GDD. If direction is accepted, next chat should first discover local build/run commands, then build the first playable slice from `game_implementation_plan.md`.

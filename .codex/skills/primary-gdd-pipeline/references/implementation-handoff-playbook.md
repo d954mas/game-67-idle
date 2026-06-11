@@ -41,6 +41,14 @@ Write the slice as implementation work, not design prose:
 
 If any bullet is vague, the slice is not ready.
 
+For RPG/adventure/survival/tactics slices, also include:
+
+- first enemy/obstacle:
+- player actions and exact effects:
+- enemy/check actions and exact effects:
+- win/loss/retreat outcomes:
+- recovery path:
+
 ## Task Breakdown
 
 Prefer 3-6 small phases:
@@ -115,3 +123,4 @@ Do not edit:
 - Commands are aspirational instead of discovered locally.
 - Acceptance criteria say "feels good" without a screenshot or input proof.
 - The next prompt omits forbidden files or ignored generation folders.
+- Combat/challenge is named in UI but has no numbers or outcomes.

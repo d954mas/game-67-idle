@@ -112,6 +112,15 @@ Before writing JSON, answer:
 - What happens while the player is idle?
 - What prevents the player from being confused or stuck?
 
+For danger/combat/challenge loops, also answer:
+
+- What is the first enemy or obstacle?
+- What are player HP/resource values before and after the encounter?
+- What are enemy HP, damage, and turn/check rules?
+- How many turns/clicks should a normal win take?
+- What happens on low health, loss, retreat, or no supplies?
+- What recovery action proves the camp/rest/heal loop matters?
+
 ## Machine-Readable Contract Notes
 
 Prefer stable ids and explicit links:
@@ -123,6 +132,22 @@ Prefer stable ids and explicit links:
 - asset id references visual state or UI component.
 
 Avoid numbers that exist only in prose.
+
+## Challenge Contract Minimum
+
+For RPG/adventure/survival first slices, create `data/combat.json` or an
+equivalent structured file with:
+
+- player baseline stats used by the encounter;
+- enemy/obstacle stats;
+- player actions and effects;
+- enemy actions and effects;
+- win/loss/retreat outcomes;
+- expected first encounter path;
+- tuning knobs likely to change.
+
+Do not leave combat as "Attack/Defend/Use Item" only. That is UI vocabulary,
+not implementable system behavior.
 
 ## Failure Modes
 

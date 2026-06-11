@@ -12,6 +12,7 @@ REQUIRED_FILES = [
     "concept.md",
     "gdd.md",
     "references.md",
+    "combat_spec.md",
     "handoff_status.md",
     "game_implementation_plan.md",
     "index.html",
@@ -20,6 +21,7 @@ REQUIRED_FILES = [
     "server.mjs",
     "data/balance.json",
     "data/ui_flow.json",
+    "data/combat.json",
     "data/asset_manifest.json",
     "data/implementation_tasks.json",
 ]
@@ -52,6 +54,7 @@ def main() -> None:
 
     balance = load_json("data/balance.json")
     ui_flow = load_json("data/ui_flow.json")
+    combat = load_json("data/combat.json")
     assets = load_json("data/asset_manifest.json")
     tasks = load_json("data/implementation_tasks.json")
 
@@ -65,6 +68,15 @@ def main() -> None:
     if len(tasks.get("phases", [])) < 3:
         fail("implementation_tasks.json should define implementation phases")
 
+    if not combat.get("enemies"):
+        fail("combat.json missing enemies")
+    if not combat.get("player_actions"):
+        fail("combat.json missing player_actions")
+    if not combat.get("expected_paths"):
+        fail("combat.json missing expected_paths")
+    if "ruin_wolf" not in {enemy.get("id") for enemy in combat.get("enemies", [])}:
+        fail("combat.json should define first enemy ruin_wolf")
+
     for asset in assets.get("assets", []):
         file_value = asset.get("file")
         if not file_value:
@@ -77,10 +89,16 @@ def main() -> None:
     require_text(index, "camp-preparation-background.png", "camp fake shot")
     require_text(index, "data/balance.json", "balance data link")
     require_text(index, "data/ui_flow.json", "ui flow data link")
+    require_text(index, "First Combat", "first combat site section")
 
     gdd = ROOT / "gdd.md"
     require_text(gdd, "Camp is a preparation/narrative screen, not a base builder.", "camp scope rule")
     require_text(gdd, "choose destination -> encounter/event", "core loop")
+    require_text(gdd, "data/combat.json", "combat data source")
+
+    combat_spec = ROOT / "combat_spec.md"
+    require_text(combat_spec, "Expected First Win", "expected combat path")
+    require_text(combat_spec, "Camp Recovery Link", "combat to camp recovery link")
 
     print("Fantasy Pocket RPG GDD package is valid.")
 

@@ -55,7 +55,8 @@ async function fetchOk(baseUrl, path, expectedType) {
   if (expectedType && !type.includes(expectedType)) {
     throw new Error(`${path} content-type ${type}, expected ${expectedType}`);
   }
-  return response;
+  const body = await response.arrayBuffer();
+  return { response, body };
 }
 
 async function main() {
@@ -65,13 +66,15 @@ async function main() {
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
   try {
-    const html = await (await fetchOk(baseUrl, "/", "text/html")).text();
+    const htmlResult = await fetchOk(baseUrl, "/", "text/html");
+    const html = new TextDecoder().decode(htmlResult.body);
     for (const needle of [
       "Fantasy Pocket RPG",
       "fake-shot-ruins-background.png",
       "camp-preparation-background.png",
       "data/balance.json",
       "data/ui_flow.json",
+      "First Combat",
       "Implementation Scope",
     ]) {
       if (!html.includes(needle)) {
@@ -83,6 +86,7 @@ async function main() {
     await fetchOk(baseUrl, "/site.js", "text/javascript");
     await fetchOk(baseUrl, "/data/balance.json", "application/json");
     await fetchOk(baseUrl, "/data/ui_flow.json", "application/json");
+    await fetchOk(baseUrl, "/data/combat.json", "application/json");
     await fetchOk(baseUrl, "/data/asset_manifest.json", "application/json");
     await fetchOk(baseUrl, "/data/implementation_tasks.json", "application/json");
     await fetchOk(baseUrl, "/art/fake-shot-ruins-background.png", "image/png");
@@ -90,6 +94,9 @@ async function main() {
 
     console.log(`Fantasy Pocket RPG visual GDD site is valid at ${baseUrl}/`);
   } finally {
+    if (typeof server.closeAllConnections === "function") {
+      server.closeAllConnections();
+    }
     await new Promise((resolveClose) => server.close(resolveClose));
   }
 }
