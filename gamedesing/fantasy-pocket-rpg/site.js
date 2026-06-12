@@ -26,14 +26,13 @@ function addCards(containerId, items, render) {
 }
 
 async function init() {
-  const [balance, uiFlow, combat, progression, contentModel, roadmap, tasks] = await Promise.all([
+  const [balance, uiFlow, combat, progression, contentModel, roadmap] = await Promise.all([
     readJson("data/balance.json"),
     readJson("data/ui_flow.json"),
     readJson("data/combat.json"),
     readJson("data/progression.json"),
     readJson("data/content_model.json"),
     readJson("data/roadmap.json"),
-    readJson("data/implementation_tasks.json"),
   ]);
 
   addCards("#progressionGrid", progression.layers, (layer) => {
@@ -103,10 +102,10 @@ async function init() {
     return card;
   });
 
-  addCards("#taskGrid", tasks.phases, (phase) => {
+  addCards("#taskGrid", roadmap.iterations.slice(0, 4), (phase) => {
     const card = el("article", "task-card");
     card.appendChild(el("b", "", phase.label));
-    card.appendChild(el("p", "", phase.must_prove));
+    card.appendChild(el("p", "", phase.goal));
     addMeta(card, phase.done_when.slice(0, 2));
     return card;
   });

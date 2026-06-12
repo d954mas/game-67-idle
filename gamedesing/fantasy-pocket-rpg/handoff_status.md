@@ -2,6 +2,11 @@
 
 ## Source Of Truth Order
 
+Live work status and task tracking: `tasks/STATUS.md`, `tasks/README.md`, and
+`tools/taskboard/`.
+
+Design source order:
+
 1. `AGENTS.md`
 2. `gamedesing/fantasy-pocket-rpg/product_vision.md`
 3. `gamedesing/fantasy-pocket-rpg/concept.md`
@@ -39,4 +44,5 @@
 
 ## Current Gate
 
-Visual GDD review. If accepted, implementation starts from `game_implementation_plan.md`, but local build/run command discovery is still required before calling the handoff fully ready.
+Historical design handoff snapshot. Live project status and work tracking now
+live in `tasks/STATUS.md` and the task store.

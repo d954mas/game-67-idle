@@ -31,7 +31,6 @@ REQUIRED_FILES = [
     "data/content_model.json",
     "data/roadmap.json",
     "data/asset_manifest.json",
-    "data/implementation_tasks.json",
 ]
 
 
@@ -67,7 +66,6 @@ def main() -> None:
     content_model = load_json("data/content_model.json")
     roadmap = load_json("data/roadmap.json")
     assets = load_json("data/asset_manifest.json")
-    tasks = load_json("data/implementation_tasks.json")
 
     for key in ["currencies", "stats", "activities", "upgrades"]:
         if not balance.get(key):
@@ -75,9 +73,6 @@ def main() -> None:
 
     if len(ui_flow.get("screens", [])) < 5:
         fail("ui_flow.json should define at least 5 screens")
-
-    if len(tasks.get("phases", [])) < 3:
-        fail("implementation_tasks.json should define implementation phases")
 
     if not combat.get("enemies"):
         fail("combat.json missing enemies")

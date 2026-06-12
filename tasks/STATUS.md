@@ -29,8 +29,11 @@ Checkpoint/handoff discipline is canonical there as well: substantial work must
 leave task logs and `STATUS.md` sufficient for resume without chat history.
 `AI_PIPELINE.md` defines multi-agent work-packet discipline for delegated or
 parallel work, plus scoped tool/search/validation discipline.
+The old visual-GDD `data/implementation_tasks.json` duplicate task source is
+retired; work tracking is only in `tasks/`.
 
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
+`tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`,
 `tasks/README.md`, `AI_PIPELINE.md`.
 
 ## Current Gate
@@ -67,6 +70,12 @@ and zero page errors.
 
 Source:
 `tasks/archive/E001/T0037-poki-web-rc-full-path-browser-playtest-audit.md`.
+
+Latest pipeline cleanup evidence: T0010 retired `implementation_tasks.json`;
+visual GDD site validation, package validation, and taskboard validation passed.
+
+Source:
+`tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`.
 
 ## Blocking Work
 

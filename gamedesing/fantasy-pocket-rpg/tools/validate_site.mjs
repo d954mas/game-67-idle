@@ -94,7 +94,6 @@ async function main() {
     await fetchOk(baseUrl, "/data/content_model.json", "application/json");
     await fetchOk(baseUrl, "/data/roadmap.json", "application/json");
     await fetchOk(baseUrl, "/data/asset_manifest.json", "application/json");
-    await fetchOk(baseUrl, "/data/implementation_tasks.json", "application/json");
     await fetchOk(baseUrl, "/art/fake-shot-ruins-background.png", "image/png");
     await fetchOk(baseUrl, "/art/camp-preparation-background.png", "image/png");
 
