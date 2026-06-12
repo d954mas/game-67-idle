@@ -32,11 +32,11 @@ node tools/skills_sync.mjs
 |---|---|---|
 | 1. Capture | Every stated idea becomes a task; deferred work is never lost | `task-manager`, `tasks/` store, `tools/taskboard/` |
 | 2. Refine | Questions to the lead + research; `idea` -> `backlog` with checkable done-when | `task-manager` |
-| 3. Design | Concept, GDD, refs, visual proof, data contracts | `primary-gdd-pipeline`, `game-design-steward`, `gamedesing/` |
+| 3. Design | Concept, GDD, refs, visual proof, data contracts | `primary-gdd-pipeline`, `game-design-steward`, `gamedesign/` |
 | 4. Implement | Smallest playable slice; schema-first state; explicit asset paths | `game-feature-iteration`, `game-state-management`, `game-asset-pipeline` |
 | 5. Validate | Agent drives the running game and captures evidence | `game-runtime-automation` (DevAPI), `game-visual-qa` |
 | 6. Release | Explicit build/serve/package tasks | `game-build-release` |
-| 7. Learn | On failure, name the missing component (instruction, source of truth, tool, validator, eval, recovery path) and encode the fix there — not only in prompts; lessons -> `gamedesing/knowledge/` | `agents-best-practices`, all skills |
+| 7. Learn | On failure, name the missing component (instruction, source of truth, tool, validator, eval, recovery path) and encode the fix there — not only in prompts; lessons -> `gamedesign/knowledge/` | `agents-best-practices`, all skills |
 
 ## Conventions that make this fast
 
@@ -121,11 +121,11 @@ Portable (copied by the exporter):
   local conventions instead of assuming this repo's layout.
 - `tools/skills_sync.mjs`, `tools/skills_eval.mjs`, `tools/taskboard/` — skill
   mirroring, skill regression checks, and the task store (board UI + CLI).
-- `gamedesing/knowledge/` — accumulated design lessons.
+- `gamedesign/knowledge/` — accumulated design lessons.
 - `AI_PIPELINE.md`, `tasks/README.md`, starter `tasks/STATUS.md`, starter
   `AGENTS.md` / `CLAUDE.md`.
 
-Stays behind (game-specific): `src/`, `state/` schemas, `gamedesing/<concept>/`
+Stays behind (game-specific): `src/`, `state/` schemas, `gamedesign/<concept>/`
 docs and data, `tools/devapi/` scenario scripts, build presets. The DevAPI
 *pattern* travels via `.codex/skills/game-runtime-automation/references/devapi-pattern.md`;
 each game re-implements the bridge against its own engine setup.

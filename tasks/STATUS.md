@@ -38,6 +38,8 @@ Taskboard validation now rejects empty active actionable tasks and empty active
 epics, while allowing raw `idea` items to stay lightweight until refined.
 `taskboard validate` now prints remediation hints for common problems so agents
 can recover faster when validation fails.
+Current testbed keeps legacy `gamedesing/`; portable export maps reusable design
+knowledge to corrected `gamedesign/knowledge/` for new projects.
 
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`,
@@ -45,6 +47,7 @@ Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
 `tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
 `tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
+`tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`,
 `tasks/README.md`, `AI_PIPELINE.md`.
 
 ## Current Gate
@@ -73,7 +76,8 @@ Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
 `tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
-`tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`.
+`tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
+`tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`.
 
 ## Last Known Good Evidence
 
@@ -103,11 +107,14 @@ validation, and skill eval.
 T0020 added CLI remediation hints for common taskboard validation failures;
 current repo and fresh export passed taskboard tests, taskboard validation, and
 skill eval.
+T0014 froze `gamedesing/` as this testbed's legacy path and updated portable
+export so new projects use `gamedesign/knowledge/`.
 
 Sources: `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
 `tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
-`tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`.
+`tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
+`tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`.
 
 ## Blocking Work
 
@@ -116,8 +123,8 @@ None.
 ## Non-blocking Debt
 
 No actionable backlog remains for the current pipeline gate. Raw ideas are
-available via `node tools/taskboard/cli.mjs list --ideas`: T0012 board UX and
-T0014 `gamedesing` typo decision. They must be refined before implementation.
+available via `node tools/taskboard/cli.mjs list --ideas`: T0012 board UX. It
+must be refined before implementation.
 
 Historical game/testbed debt is archived with E001, including T0025.
 

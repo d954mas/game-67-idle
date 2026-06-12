@@ -34,7 +34,7 @@ const COPY = [
   "tools/skills_sync.mjs",
   "tools/taskboard",
   "tools/bootstrap/export_base.mjs",
-  "gamedesing/knowledge",
+  { from: "gamedesing/knowledge", to: "gamedesign/knowledge" },
   "AI_PIPELINE.md",
   "tasks/README.md",
 ];
@@ -45,8 +45,8 @@ const AGENTS_TEMPLATE = `# AGENTS.md
 
 - This is an AI-first game development project: improve the game and the AI workflow together.
 - TODO: engine location and editing policy.
-- Game design lives in \`gamedesing/\`; game code lives in \`src/\`.
-- Universal reusable design knowledge lives in \`gamedesing/knowledge/\`.
+- Game design lives in \`gamedesign/\`; game code lives in \`src/\`.
+- Universal reusable design knowledge lives in \`gamedesign/knowledge/\`.
 - Reusable project skills live in \`.codex/skills/\`; keep them generic enough to reuse in other games.
 - Work items and live project status live in \`tasks/\`; follow \`tasks/README.md\`.
 - Temporary generation, scripts, rejected images, screenshots, and audit logs go in \`tmp/\` or another ignored temp folder.
@@ -130,16 +130,18 @@ TODO: list known debt that should not distract the current gate.
 `;
 
 mkdirSync(dst, { recursive: true });
-for (const rel of COPY) {
-  const from = join(root, rel);
+for (const entry of COPY) {
+  const fromRel = typeof entry === "string" ? entry : entry.from;
+  const toRel = typeof entry === "string" ? entry : entry.to;
+  const from = join(root, fromRel);
   if (!existsSync(from)) {
-    console.warn(`warn: missing ${rel}, skipped`);
+    console.warn(`warn: missing ${fromRel}, skipped`);
     continue;
   }
-  const to = join(dst, rel);
+  const to = join(dst, toRel);
   mkdirSync(join(to, ".."), { recursive: true });
   cpSync(from, to, { recursive: true, force });
-  console.log(`copied: ${rel}`);
+  console.log(fromRel === toRel ? `copied: ${fromRel}` : `copied: ${fromRel} -> ${toRel}`);
 }
 
 mkdirSync(join(dst, "tasks", "epics"), { recursive: true });
