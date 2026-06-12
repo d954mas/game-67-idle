@@ -99,6 +99,10 @@ export path when the change affects future projects. For game/runtime changes,
 prove the specific playable or visual behavior, not only that the build
 compiles.
 
+For reusable skill/process changes, also run `node tools/skills_eval.mjs`. The
+eval is intentionally small and static: it checks that key skill activation
+phrases and required output/process anchors have not been lost.
+
 Do not use old task logs, generated files, build outputs, or archived design
 handoffs as current truth unless they are linked from `STATUS.md`, an active
 task, or fresh validation evidence.
@@ -115,8 +119,8 @@ Portable (copied by the exporter):
 
 - `.codex/skills/` — all skills are written engine-agnostic: they discover
   local conventions instead of assuming this repo's layout.
-- `tools/skills_sync.mjs`, `tools/taskboard/` — skill mirroring and the task
-  store (board UI + CLI).
+- `tools/skills_sync.mjs`, `tools/skills_eval.mjs`, `tools/taskboard/` — skill
+  mirroring, skill regression checks, and the task store (board UI + CLI).
 - `gamedesing/knowledge/` — accumulated design lessons.
 - `AI_PIPELINE.md`, `tasks/README.md`, starter `tasks/STATUS.md`, starter
   `AGENTS.md` / `CLAUDE.md`.

@@ -10,6 +10,7 @@ store. The user is the lead: high-level direction and feedback only; agents
 question, research, refine, decompose, and execute.
 
 Store and live-status rules: `tasks/README.md`.
+Live status index: `tasks/STATUS.md`.
 CLI: `node tools/taskboard/cli.mjs <list|show|new|set|validate>`.
 User-facing board: `node tools/taskboard/server.mjs` -> `http://127.0.0.1:8070/`.
 

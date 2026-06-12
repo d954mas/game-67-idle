@@ -175,6 +175,8 @@ Evidence should be the smallest reliable proof for the task:
   `node tools/taskboard/cli.mjs validate`
 - taskboard/tooling change: run `node --test tools/taskboard/test.mjs` and
   `node tools/taskboard/cli.mjs validate`
+- skill/process change: run `node tools/skills_eval.mjs` when changing reusable
+  skill activation, required outputs, or portable workflow rules
 - portable pipeline/export change: validate the current repo, export a fresh
   project with `tools/bootstrap/export_base.mjs`, then validate the exported
   task store from inside the exported project

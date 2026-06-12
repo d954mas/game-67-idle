@@ -31,9 +31,12 @@ leave task logs and `STATUS.md` sufficient for resume without chat history.
 parallel work, plus scoped tool/search/validation discipline.
 The old visual-GDD `data/implementation_tasks.json` duplicate task source is
 retired; work tracking is only in `tasks/`.
+Skill/process regression checks now live in `tools/skills_eval.mjs` and are
+included in portable-base export.
 
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`,
+`tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
 `tasks/README.md`, `AI_PIPELINE.md`.
 
 ## Current Gate
@@ -48,16 +51,17 @@ Source: `tasks/README.md`.
 
 ```powershell
 node tools/taskboard/cli.mjs list
-node tools/taskboard/cli.mjs list --ideas
-node tools/taskboard/cli.mjs list --archive --all
-node tools/taskboard/cli.mjs show T0037
+node tools/skills_eval.mjs
 node tools/taskboard/cli.mjs validate
 node --test tools/taskboard/test.mjs
-node tools/bootstrap/export_base.mjs --target tmp/export-active-archive-test-...
-node tmp/export-active-archive-test-.../tools/taskboard/cli.mjs validate
+node tools/bootstrap/export_base.mjs --target tmp/export-...
+cd tmp/export-...
+node tools/skills_eval.mjs
+node tools/taskboard/cli.mjs validate
 ```
 
-Source: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`.
+Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
+`tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`.
 
 ## Last Known Good Evidence
 
@@ -77,6 +81,12 @@ visual GDD site validation, package validation, and taskboard validation passed.
 Source:
 `tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`.
 
+Latest skill/process evidence: T0018 added `tools/skills_eval.mjs`; current
+repo and fresh export passed skill eval and task validation.
+
+Source:
+`tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`.
+
 ## Blocking Work
 
 None.
@@ -91,8 +101,8 @@ Sources: `tasks/archive/E001/T0025-replace-temporary-wasm-release-workaround-wit
 
 ## Next Priorities
 
-1. Add an explicit archive command only if automatic done/dropped movement is
-   not enough.
-2. Continue pipeline hardening from the short active task list.
+1. Continue with T0016: evaluate `primary-gdd-pipeline` behavior after trim.
+2. Then T0019: recurring entropy cleanup for stale docs, unused skills, and weak
+   examples.
 3. Keep default task context focused on E003 until a new active game or
    pipeline epic is selected.
