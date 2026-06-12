@@ -36,7 +36,7 @@ def main() -> int:
 
         for _ in range(3):
             state = game.click_ui("seed.cycle", wait_frames=2)
-        check("button loop changes state", state.get("test_ui_clicks", 0) >= 3 and state.get("seed_points", 0) >= 3, state)
+        check("button loop changes state", state.get("test_ui_clicks", 0) >= 3 and state.get("wallet", {}).get("soft", 0) >= 3, state)
 
         final_path = game.capture_screenshot(os.path.join(out_dir, f"after_clicks_{stamp}.png"), wait_frames=2, audit=True)
         report["screenshots"].append(final_path)

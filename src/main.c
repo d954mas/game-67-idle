@@ -71,11 +71,7 @@ static void seed_click(void) {
     if (g_game_state.test_ui_clicks < GAME_STATE_TEST_UI_CLICKS_MAX) {
         g_game_state.test_ui_clicks++;
     }
-    if (g_game_state.seed_points < GAME_STATE_SEED_POINTS_MAX) {
-        g_game_state.seed_points++;
-    }
     g_game_state.wallet_soft = g_game_state.test_ui_clicks;
-    g_game_state.visual_stage = 1 + (g_game_state.test_ui_clicks % 3);
     set_seed_label();
     game_state_mark_dirty();
 }
@@ -98,7 +94,7 @@ static void draw_seed_screen(float w, float h) {
     float vp[16];
     ortho(0.0F, w, h, 0.0F, -1.0F, 1.0F, vp);
 
-    const int palette = g_game_state.visual_stage % 3;
+    const int palette = g_game_state.test_ui_clicks % 3;
     const float bg_colors[3][4] = {
         {0.12F, 0.62F, 0.92F, 1.0F},
         {0.45F, 0.82F, 0.38F, 1.0F},

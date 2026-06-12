@@ -38,59 +38,36 @@ def main() -> int:
             ok &= check("schema document", schema.get("document") == "game", schema)
             ok &= check("schema version", schema.get("version") == 1, schema)
 
-            state = bus.result("game.state.set", {"doc": "game", "path": "seed_points", "value": 1234})
-            ok &= check("set seed points", state.get("seed_points") == 1234, state)
-            fractional = bus.request("game.state.set", {"doc": "game", "path": "seed_points", "value": 1.5})
+            state = bus.result("game.state.set", {"doc": "game", "path": "wallet.soft", "value": 1234})
+            ok &= check("set wallet soft", state.get("wallet", {}).get("soft") == 1234, state)
+            fractional = bus.request("game.state.set", {"doc": "game", "path": "wallet.soft", "value": 1.5})
             ok &= check("reject fractional int", fractional.get("ok") is False, fractional)
             state = bus.result(
                 "game.state.patch",
                 {
                     "doc": "game",
                     "values": {
-                        "status": 2,
-                        "click_power": 2,
-                        "first_milestone_done": True,
-                        "second_milestone_done": True,
-                        "third_milestone_done": True,
-                        "fourth_milestone_done": True,
-                        "fifth_milestone_done": True,
-                        "active_job_id": "seed_job",
-                        "active_job_elapsed_ms": 1200,
-                        "active_job_duration_ms": 6000,
+                        "test_ui_clicks": 7,
+                        "test_label_text": "Roundtrip label",
+                        "wallet.hard": 3,
                     },
                 },
             )
             ok &= check(
-                "patch gameplay progression",
-                state.get("status") == 2
-                and state.get("click_power") == 2
-                and state.get("first_milestone_done") is True
-                and state.get("second_milestone_done") is True
-                and state.get("third_milestone_done") is True
-                and state.get("fourth_milestone_done") is True
-                and state.get("fifth_milestone_done") is True
-                and state.get("active_job_id") == "seed_job"
-                and state.get("active_job_elapsed_ms") == 1200,
+                "patch scalar fields",
+                state.get("test_ui_clicks") == 7
+                and state.get("test_label_text") == "Roundtrip label"
+                and state.get("wallet", {}).get("hard") == 3,
                 state,
             )
-            third_flag = bus.result("game.state.get", {"doc": "game", "path": "third_milestone_done"})
-            ok &= check("get third milestone flag", third_flag is True, third_flag)
-            state = bus.result("game.state.set", {"doc": "game", "path": "third_milestone_done", "value": False})
-            ok &= check("set third milestone flag", state.get("third_milestone_done") is False, state)
-            state = bus.result("game.state.set", {"doc": "game", "path": "third_milestone_done", "value": True})
-            ok &= check("restore third milestone flag", state.get("third_milestone_done") is True, state)
-            fourth_flag = bus.result("game.state.get", {"doc": "game", "path": "fourth_milestone_done"})
-            ok &= check("get fourth milestone flag", fourth_flag is True, fourth_flag)
-            state = bus.result("game.state.set", {"doc": "game", "path": "fourth_milestone_done", "value": False})
-            ok &= check("set fourth milestone flag", state.get("fourth_milestone_done") is False, state)
-            state = bus.result("game.state.set", {"doc": "game", "path": "fourth_milestone_done", "value": True})
-            ok &= check("restore fourth milestone flag", state.get("fourth_milestone_done") is True, state)
-            fifth_flag = bus.result("game.state.get", {"doc": "game", "path": "fifth_milestone_done"})
-            ok &= check("get fifth milestone flag", fifth_flag is True, fifth_flag)
-            state = bus.result("game.state.set", {"doc": "game", "path": "fifth_milestone_done", "value": False})
-            ok &= check("set fifth milestone flag", state.get("fifth_milestone_done") is False, state)
-            state = bus.result("game.state.set", {"doc": "game", "path": "fifth_milestone_done", "value": True})
-            ok &= check("restore fifth milestone flag", state.get("fifth_milestone_done") is True, state)
+            tutorial_flag = bus.result("game.state.get", {"doc": "game", "path": "tutorial.done"})
+            ok &= check("get tutorial flag default", tutorial_flag is False, tutorial_flag)
+            state = bus.result("game.state.set", {"doc": "game", "path": "tutorial.done", "value": True})
+            ok &= check("set tutorial flag", state.get("tutorial", {}).get("done") is True, state)
+            bad_bool = bus.request("game.state.set", {"doc": "game", "path": "tutorial.done", "value": 1})
+            ok &= check("reject non-bool flag", bad_bool.get("ok") is False, bad_bool)
+            state = bus.result("game.state.set", {"doc": "game", "path": "tutorial.done", "value": False})
+            ok &= check("restore tutorial flag", state.get("tutorial", {}).get("done") is False, state)
             state = bus.result("game.state.patch", {"doc": "game", "values": {"settings.master_volume": 0.25, "settings.sfx_volume": 0.5}})
             ok &= check("patch settings", state.get("settings", {}).get("master_volume") == 0.25 and state.get("settings", {}).get("sfx_volume") == 0.5, state)
             bad_volume = bus.request("game.state.set", {"doc": "game", "path": "settings.master_volume", "value": 1.5})
@@ -124,17 +101,15 @@ def main() -> int:
             bad_key = bus.request("game.state.save", {"key": "../bad", "doc": "game"})
             ok &= check("reject unsafe save key", bad_key.get("ok") is False, bad_key)
             bus.result("game.state.reset", {"doc": "game"})
-            reset_coins = bus.result("game.state.get", {"doc": "game", "path": "seed_points"})
-            ok &= check("reset seed points", reset_coins == 0, reset_coins)
+            reset_soft = bus.result("game.state.get", {"doc": "game", "path": "wallet.soft"})
+            ok &= check("reset wallet soft", reset_soft == 0, reset_soft)
             loaded = bus.result("game.state.load", {"key": save_key, "doc": "game"})
-            ok &= check("load restored seed points", loaded.get("seed_points") == 1234, loaded)
+            ok &= check("load restored wallet soft", loaded.get("wallet", {}).get("soft") == 1234, loaded)
             ok &= check(
-                "load restored gameplay progression",
-                loaded.get("status") == 2
-                and loaded.get("active_job_id") == "seed_job"
-                and loaded.get("third_milestone_done") is True
-                and loaded.get("fourth_milestone_done") is True
-                and loaded.get("fifth_milestone_done") is True,
+                "load restored scalar fields",
+                loaded.get("test_ui_clicks") == 7
+                and loaded.get("test_label_text") == "Roundtrip label"
+                and loaded.get("wallet", {}).get("hard") == 3,
                 loaded,
             )
             ok &= check("load restored settings", loaded.get("settings", {}).get("master_volume") == 0.25, loaded)
@@ -146,9 +121,6 @@ def main() -> int:
             ok &= check("migration shape", migrated.get("shape") == "sphere", migrated)
             ok &= check("migration render mode", migrated.get("render_mode") == "wire", migrated)
             ok &= check("migration adds wallet", migrated.get("wallet", {}).get("soft") == 0, migrated)
-            ok &= check("migration adds third milestone flag", migrated.get("third_milestone_done") is False, migrated)
-            ok &= check("migration adds fourth milestone flag", migrated.get("fourth_milestone_done") is False, migrated)
-            ok &= check("migration adds fifth milestone flag", migrated.get("fifth_milestone_done") is False, migrated)
             wrong_doc = os.path.join(ROOT, "state", "fixtures", "wrong_document.json")
             wrong_doc_result = bus.request("game.state.load", {"doc": "game", "unsafe_path": wrong_doc})
             ok &= check("reject wrong document", wrong_doc_result.get("ok") is False, wrong_doc_result)

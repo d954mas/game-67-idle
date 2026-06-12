@@ -38,7 +38,7 @@ def main() -> int:
         ok &= check("required endpoints", required.issubset(endpoints), sorted(required - endpoints))
 
         state0 = game.result("game.reset_playtest")
-        ok &= check("reset returns seed state", state0.get("test_ui_clicks") == 0 and state0.get("seed_points") == 0, state0)
+        ok &= check("reset returns seed state", state0.get("test_ui_clicks") == 0 and state0.get("wallet", {}).get("soft") == 0, state0)
 
         tree = game.result("ui.tree")
         ids = {node.get("id") for node in tree}
