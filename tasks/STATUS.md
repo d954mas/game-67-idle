@@ -42,6 +42,8 @@ Current testbed keeps legacy `gamedesing/`; portable export maps reusable design
 knowledge to corrected `gamedesign/knowledge/` for new projects.
 Taskboard editor now has a side-by-side Markdown preview for task and epic
 bodies, with a tested safe renderer for common task syntax.
+Reusable pipeline validation now has a single command:
+`node tools/pipeline_validate.mjs`.
 
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`,
@@ -51,6 +53,7 @@ Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
 `tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`,
 `tasks/archive/E003/T0012-board-ux-markdown-preview-manual-ordering-done-c.md`,
+`tasks/archive/E003/T0042-single-command-portable-pipeline-validation.md`,
 `tasks/README.md`, `AI_PIPELINE.md`.
 
 ## Current Gate
@@ -65,14 +68,7 @@ Source: `tasks/README.md`.
 
 ```powershell
 node tools/taskboard/cli.mjs list
-node tools/skills_eval.mjs
-node tools/taskboard/cli.mjs validate
-node --test tools/taskboard/test.mjs
-node tools/bootstrap/export_base.mjs --target tmp/export-...
-cd tmp/export-...
-node tools/skills_eval.mjs
-node tools/taskboard/cli.mjs validate
-node --test tools/taskboard/test.mjs
+node tools/pipeline_validate.mjs
 ```
 
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
@@ -81,7 +77,8 @@ Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
 `tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
 `tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`,
-`tasks/archive/E003/T0012-board-ux-markdown-preview-manual-ordering-done-c.md`.
+`tasks/archive/E003/T0012-board-ux-markdown-preview-manual-ordering-done-c.md`,
+`tasks/archive/E003/T0042-single-command-portable-pipeline-validation.md`.
 
 ## Last Known Good Evidence
 
@@ -115,13 +112,16 @@ T0014 froze `gamedesing/` as this testbed's legacy path and updated portable
 export so new projects use `gamedesign/knowledge/`.
 T0012 added taskboard Markdown preview; current repo and fresh export passed
 taskboard tests, taskboard validation, skill eval, and HTTP static smoke.
+T0042 added `node tools/pipeline_validate.mjs`; the command passed and validated
+both this repo and a fresh export.
 
 Sources: `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
 `tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
 `tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
 `tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`,
-`tasks/archive/E003/T0012-board-ux-markdown-preview-manual-ordering-done-c.md`.
+`tasks/archive/E003/T0012-board-ux-markdown-preview-manual-ordering-done-c.md`,
+`tasks/archive/E003/T0042-single-command-portable-pipeline-validation.md`.
 
 ## Blocking Work
 

@@ -31,6 +31,7 @@ if (dst === root) {
 const COPY = [
   ".codex/skills",
   "tools/skills_eval.mjs",
+  "tools/pipeline_validate.mjs",
   "tools/skills_sync.mjs",
   "tools/taskboard",
   "tools/bootstrap/export_base.mjs",
