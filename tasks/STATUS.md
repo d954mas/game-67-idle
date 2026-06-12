@@ -5,11 +5,13 @@ Operational project-status index. Rules for this file live in
 
 ## Current Goal
 
-No active scoped goal is selected. The reusable AI pipeline hardening pass is
-complete, and the fantasy RPG slice is historical testbed/evidence, not active
-product work.
+No active scoped goal is selected. A clean exported foundation for the user's
+next game concept is ready at `C:\tmp\clean-game-base-20260612`; the fantasy RPG
+slice is historical testbed/evidence, not active product work.
 
 Sources: `tasks/epics/E003-ai-pipeline-hardening.md`,
+`tasks/epics/E004-clean-project-pipeline-trial.md`,
+`tasks/archive/E004/T0043-run-first-clean-project-game-pipeline-trial.md`,
 `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `AI_PIPELINE.md`.
 
@@ -38,8 +40,9 @@ Taskboard validation now rejects empty active actionable tasks and empty active
 epics, while allowing raw `idea` items to stay lightweight until refined.
 `taskboard validate` now prints remediation hints for common problems so agents
 can recover faster when validation fails.
-Current testbed keeps legacy `gamedesing/`; portable export maps reusable design
-knowledge to corrected `gamedesign/knowledge/` for new projects.
+Reusable design knowledge now lives only in `gamedesign/knowledge/`; portable
+export has no fallback to typo paths. Clean base is available at
+`C:\tmp\clean-game-base-20260612`.
 Taskboard editor now has a side-by-side Markdown preview for task and epic
 bodies, with a tested safe renderer for common task syntax.
 Reusable pipeline validation now has a single command:
@@ -58,10 +61,11 @@ Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 
 ## Current Gate
 
-Current gate: wait for a new user-directed scope. If work continues, create or
-refine exactly one task/epic before implementation.
+Current gate: wait for the user's new game concept. Enter the next concept in
+`C:\tmp\clean-game-base-20260612`, not in this old testbed repository.
 
-Source: `tasks/README.md`.
+Sources: `tasks/archive/E004/T0043-run-first-clean-project-game-pipeline-trial.md`,
+`tasks/README.md`.
 
 ## Required Validation
 
@@ -107,13 +111,18 @@ validation, and skill eval.
 T0020 added CLI remediation hints for common taskboard validation failures;
 current repo and fresh export passed taskboard tests, taskboard validation, and
 skill eval.
-T0014 froze `gamedesing/` as this testbed's legacy path and updated portable
-export so new projects use `gamedesign/knowledge/`.
+T0014/T0043 resolved the design-knowledge path cleanup: reusable knowledge now
+uses canonical `gamedesign/knowledge`, and portable export has no typo fallback.
 T0012 added taskboard Markdown preview; current repo and fresh export passed
 taskboard tests, taskboard validation, skill eval, and HTTP static smoke.
 T0042 added `node tools/pipeline_validate.mjs`; the command passed and validated
 both this repo and a fresh export.
 E003 is now done; no actionable backlog or raw ideas remain.
+E004/T0043 is active: prepare a clean project base for the user's future game
+idea without importing old game files or task history.
+Clean base evidence: `C:\tmp\clean-game-base-20260612` has no tasks, no
+`gamedesing` path, canonical `gamedesign/knowledge`, starter rules that tell
+agents not to invent a concept, and passed `node tools/pipeline_validate.mjs`.
 
 Sources: `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
@@ -129,8 +138,8 @@ None.
 
 ## Non-blocking Debt
 
-No actionable backlog, raw ideas, or active epic remain for the current pipeline
-gate.
+Dirty old game/runtime files still exist in this repository's working tree, but
+they are out of scope for the clean exported project base.
 
 Historical game/testbed debt is archived with E001, including T0025.
 
@@ -138,6 +147,6 @@ Sources: `tasks/archive/E001/T0025-replace-temporary-wasm-release-workaround-wit
 
 ## Next Priorities
 
-1. Ask the user for the next concrete goal.
-2. For any new goal, create/refine one scoped task or epic before implementation
-   if it needs durable tracking.
+1. Wait for the user's game concept.
+2. Enter the concept in `C:\tmp\clean-game-base-20260612` as one scoped task or
+   epic before creating GDD/content.

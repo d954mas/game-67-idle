@@ -35,7 +35,7 @@ const COPY = [
   "tools/skills_sync.mjs",
   "tools/taskboard",
   "tools/bootstrap/export_base.mjs",
-  { from: "gamedesing/knowledge", to: "gamedesign/knowledge" },
+  "gamedesign/knowledge",
   "AI_PIPELINE.md",
   "tasks/README.md",
 ];
@@ -45,6 +45,10 @@ const AGENTS_TEMPLATE = `# AGENTS.md
 ## Project
 
 - This is an AI-first game development project: improve the game and the AI workflow together.
+- This is a clean starter project. Do not import old testbed game docs, task
+  history, assets, or code unless the user explicitly asks.
+- No game concept has been selected yet. Do not invent one; ask the user for the
+  concept before creating GDD, assets, gameplay tasks, or implementation plans.
 - TODO: engine location and editing policy.
 - Game design lives in \`gamedesign/\`; game code lives in \`src/\`.
 - Universal reusable design knowledge lives in \`gamedesign/knowledge/\`.
@@ -56,7 +60,9 @@ const AGENTS_TEMPLATE = `# AGENTS.md
 
 ## Direction
 
-- TODO: current concept, references, scope guardrails.
+- No concept selected yet. First step: capture the user's concept, references,
+  audience, platform, and no-go constraints, then create/refine one task or
+  epic before implementation.
 
 ## Validation
 
@@ -85,49 +91,53 @@ Operational project-status index. Rules for this file live in
 
 ## Current Goal
 
-TODO: one-sentence current project goal.
+No active game concept is selected yet. This is a clean AI-first game project
+base waiting for the user's idea.
 
-Sources: TODO.
+Sources: \`AGENTS.md\`, \`AI_PIPELINE.md\`.
 
 ## Active Work
 
-TODO: current playable path, feature slice, milestone, or workstream that
-matters now.
+None. Do not invent a game concept or create GDD/gameplay/content files until
+the user provides the project idea.
 
-Sources: TODO.
+Sources: \`AGENTS.md\`.
 
 ## Current Gate
 
-TODO: the next acceptance gate or release gate.
+Capture the user's game concept and create/refine exactly one scoped task or
+epic before implementation.
 
-Source: TODO.
+Source: \`tasks/README.md\`.
 
 ## Required Validation
 
 \`\`\`powershell
-TODO: commands that prove the current gate
+node tools/taskboard/cli.mjs list
+node tools/pipeline_validate.mjs
 \`\`\`
 
-Sources: TODO.
+Sources: \`tasks/README.md\`, \`AI_PIPELINE.md\`.
 
 ## Last Known Good Evidence
 
-TODO: latest passing command, screenshot directory, report path, build artifact,
-or other proof.
+Fresh export validation should be recorded here after first setup.
 
 Source: TODO.
 
 ## Blockers
 
-TODO: list blocking work, or write "None."
+No user game concept has been provided yet.
 
 ## Non-blocking Debt
 
-TODO: list known debt that should not distract the current gate.
+None.
 
 ## Next Priorities
 
-1. TODO
+1. Ask the user for the game concept.
+2. Capture the concept as one scoped task or epic.
+3. Start the primary GDD pipeline only after the user provides the concept.
 `;
 
 mkdirSync(dst, { recursive: true });
