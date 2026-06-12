@@ -1,4 +1,0 @@
-interface:
-  display_name: "Game Build Release"
-  short_description: "Build, run, package, and release game targets."
-  default_prompt: "Use this skill to discover and run game build, launch, package, and release workflows."

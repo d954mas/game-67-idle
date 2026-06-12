@@ -1,4 +1,0 @@
-interface:
-  display_name: "Game Visual QA"
-  short_description: "Verify game visuals and interactions with screenshots."
-  default_prompt: "Use this skill to run a game, capture visual evidence, test interactions, and report rendering issues."

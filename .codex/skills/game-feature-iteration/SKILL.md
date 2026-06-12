@@ -1,6 +1,6 @@
 ---
 name: game-feature-iteration
-description: Use when implementing, changing, debugging, or validating a playable game feature in an existing game repository. Triggers include gameplay mechanics, controls, cameras, UI flows, game state, progression, balance-affecting code, engine integration, and requests to make a small playable prototype or vertical slice. Works across engines by discovering local build/run/test conventions first.
+description: Use when implementing, changing, debugging, or validating a playable game feature in an existing game repository, or when discovering, adding, fixing, or running build, launch, debug, release, package, or CI tasks. Triggers include gameplay mechanics, controls, cameras, UI flows, game state, progression, balance-affecting code, engine integration, requests to make a small playable prototype or vertical slice, VS Code tasks, CMake presets, build scripts, launch configurations, release outputs, serving web builds, packaging, and explaining how to run or distribute the game. Works across engines by discovering local build/run/test conventions first.
 ---
 
 # Game Feature Iteration
@@ -37,6 +37,23 @@ If naming differs, infer the equivalent directories from the repository.
 - Do not silently wire asset-pack generation into every normal game build.
 - When adding state, input, or rendering, include a simple way for the user to observe the behavior.
 - Keep reusable workflow in skills; keep project-specific facts and run commands in project docs.
+
+## Build, Launch, And Release Tasks
+
+When the work is about build/launch/release configuration itself:
+
+1. Discover local build sources before inventing commands: `CMakePresets.json`,
+   `.vscode/tasks.json`, `.vscode/launch.json`, package manager scripts,
+   engine docs or examples.
+2. Separate configure, build, run, release, serve, and package tasks.
+3. Give important tasks clear names that show up in the user's IDE, e.g.
+   `Build: native debug`, `Release: web`, `Pack: build game pack`. Make launch
+   entries visible in the run/debug picker if the user expects to click them.
+4. Keep asset-pack generation explicit unless the project intentionally
+   requires automatic packs.
+5. After editing build config: parse the JSON/YAML/TOML files, list available
+   presets or tasks if the tool supports it, run the smallest affected build,
+   and state output paths for executables, web artifacts, and packages.
 
 ## Validation
 

@@ -41,6 +41,7 @@ scope, and product decisions belong in the project's GDD files, not here.
 - [Accessibility](accessibility.md) - readable, controllable, recoverable game design.
 - [Game Feel And Controls](game_feel_controls.md) - input response, timing, control feedback.
 - [Release Readiness](release_readiness.md) - external-test and RC design checklist.
+- [Agent Legibility](agent_legibility.md) - keep the project inspectable and validatable by AI agents; encode lessons into tools/validators, not prompts.
 
 ## How To Apply
 

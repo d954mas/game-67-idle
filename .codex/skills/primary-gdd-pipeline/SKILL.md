@@ -1,6 +1,6 @@
 ---
 name: primary-gdd-pipeline
-description: Use when starting or revising a game concept, first GDD, visual GDD site, reference pack, fake shots, art bible, runtime asset checklist, or implementation handoff. Triggers include requests to create the initial GDD, gather or compare refs, interview the user for creative direction, make a visual design website, define gameplay/core loop/currencies/UI, convert references into game-ready art direction, or prepare a next-chat implementation plan.
+description: Use when starting or revising a game concept, first GDD, visual GDD site, reference pack, fake shots, art bible, runtime asset checklist, implementation handoff, or any later game design document work. Triggers include requests to create the initial GDD, gather or compare refs, interview the user for creative direction, make a visual design website, define gameplay/core loop/currencies/UI, convert references into game-ready art direction, prepare a next-chat implementation plan, and ongoing design stewardship such as editing or reviewing existing design docs, lore, economy, balance rules, progression, feature specs, content plans, open questions, and keeping design docs aligned with implemented gameplay.
 ---
 
 # Primary GDD Pipeline
@@ -22,6 +22,7 @@ small vertical slice instead of a large document set.
 - `references/output-templates.md` — session state, decision logs, ref packs, status reports.
 - `references/studio-gdd-patterns.md` — deeper methodology research or rigorous production handoff.
 - `references/skill-eval-playbook.md` — testing this skill after changes.
+- `references/design-stewardship.md` — editing/reviewing existing design docs, reconciling docs with implemented gameplay, spec template, guardrails.
 
 ## Non-Negotiables
 

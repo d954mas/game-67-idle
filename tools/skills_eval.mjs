@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -45,6 +45,8 @@ const SKILL_CHECKS = [
       "screenshots",
       "recordings",
       "native PC validation",
+      "visual QA",
+      "nonblank",
     ],
     body: [
       "endpoints",
@@ -61,6 +63,10 @@ const SKILL_CHECKS = [
       "result_shape",
       "frame_behavior",
       "side_effects",
+      "Visual QA",
+      "nonblank output",
+      "readable UI text",
+      "controls respond",
     ],
   },
   {
@@ -101,7 +107,67 @@ const SKILL_CHECKS = [
       "data/combat.json",
       "quality-review-playbook.md",
       "skill-eval-playbook.md",
+      "design-stewardship.md",
       "Report Shape",
+    ],
+  },
+  {
+    name: "game-feature-iteration",
+    frontmatter: [
+      "playable game feature",
+      "gameplay mechanics",
+      "vertical slice",
+      "build",
+      "release",
+      "CMake presets",
+      "packaging",
+    ],
+    body: [
+      "AGENTS.md",
+      "smallest playable slice",
+      "iteration-cycle-playbook",
+      "CMakePresets.json",
+      "Build, Launch, And Release Tasks",
+      "asset-pack generation",
+      "smallest affected build",
+      "native desktop",
+    ],
+  },
+  {
+    name: "game-state-management",
+    frontmatter: [
+      "schema-first",
+      "migrations",
+      "DevAPI state commands",
+      "fixtures",
+      "JSON save/load",
+    ],
+    body: [
+      "state/*.schema.json",
+      "generate_state.py",
+      "native-debug",
+      "game_state_actions",
+      "Do not hand-edit",
+      "map<string,T>",
+      "reserved",
+      "Review Checklist",
+      "state-contract.md",
+    ],
+  },
+  {
+    name: "game-asset-pipeline",
+    frontmatter: [
+      "textures",
+      "atlases",
+      "pack builders",
+      "runtime asset loading failures",
+    ],
+    body: [
+      "source of truth",
+      "generated",
+      "reproducible",
+      "Fail loudly",
+      "project-relative",
     ],
   },
 ];
@@ -119,6 +185,18 @@ function includesText(haystack, needle) {
 }
 
 let failures = 0;
+
+// Every skill in .codex/skills must have a check entry; a skill silently
+// outside the eval is how regressions slip through.
+const checkedNames = new Set(SKILL_CHECKS.map((c) => c.name));
+for (const name of readdirSync(skillRoot)) {
+  const dir = join(skillRoot, name);
+  if (!statSync(dir).isDirectory() || !existsSync(join(dir, "SKILL.md"))) continue;
+  if (!checkedNames.has(name)) {
+    console.error(`FAIL ${name}: skill exists but has no check entry in tools/skills_eval.mjs`);
+    failures += 1;
+  }
+}
 
 for (const check of SKILL_CHECKS) {
   const file = join(skillRoot, check.name, "SKILL.md");

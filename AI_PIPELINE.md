@@ -32,11 +32,11 @@ node tools/skills_sync.mjs
 |---|---|---|
 | 1. Capture | Every stated idea becomes a task; deferred work is never lost | `task-manager`, `tasks/` store, `tools/taskboard/` |
 | 2. Refine | Questions to the lead + research; `idea` -> `backlog` with checkable done-when | `task-manager` |
-| 3. Design | Concept, GDD, refs, visual proof, data contracts | `primary-gdd-pipeline`, `game-design-steward`, `gamedesign/` |
+| 3. Design | Concept, GDD, refs, visual proof, data contracts | `primary-gdd-pipeline` (incl. design stewardship), `gamedesign/` |
 | 4. Implement | Smallest playable slice; schema-first state; explicit asset paths | `game-feature-iteration`, `game-state-management`, `game-asset-pipeline` |
-| 5. Validate | Agent drives the running game and captures evidence | `game-runtime-automation` (DevAPI), `game-visual-qa` |
-| 6. Release | Explicit build/serve/package tasks | `game-build-release` |
-| 7. Learn | On failure, name the missing component (instruction, source of truth, tool, validator, eval, recovery path) and encode the fix there, not only in prompts; lessons -> `gamedesign/knowledge/` | `agents-best-practices`, all skills |
+| 5. Validate | Agent drives the running game and captures evidence | `game-runtime-automation` (DevAPI + visual QA) |
+| 6. Release | Explicit build/serve/package tasks | `game-feature-iteration` (build/release section) |
+| 7. Learn | On failure, name the missing component (instruction, source of truth, tool, validator, eval, recovery path) and encode the fix there, not only in prompts; lessons -> `gamedesign/knowledge/` | `gamedesign/knowledge/agent_legibility.md`, all skills |
 
 ## Conventions that make this fast
 

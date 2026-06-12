@@ -1,6 +1,6 @@
 ---
 name: game-runtime-automation
-description: "Use when adding, using, or improving game runtime automation: DevAPI command buses, endpoints/command.describe contracts, ui.tree/ui.click, frame.wait, synthetic input, gameplay bots, smoke tests, screenshots, recordings, native PC validation, or replacing temporary game-side automation with engine-native tooling."
+description: "Use when adding, using, or improving game runtime automation, or visually testing a running build: DevAPI command buses, endpoints/command.describe contracts, ui.tree/ui.click, frame.wait, synthetic input, gameplay bots, smoke tests, screenshots, recordings, native PC validation, or replacing temporary game-side automation with engine-native tooling. Also covers visual QA: checking how the game looks, auditing UI/camera/rendering/animation output, comparing desktop and web builds, and confirming a scene is nonblank, readable, correctly framed, and playable."
 ---
 
 # Game Runtime Automation
@@ -88,6 +88,26 @@ Game-specific layer:
 Do not put game-specific semantic actions into universal skills or engine APIs.
 
 Widget ids must be stable enough for tests. Prefer explicit developer ids over generated layout indices.
+
+## Visual QA
+
+When the task is to verify what the player actually sees and can do:
+
+1. Build and run the primary runtime target through the project's normal
+   launch path.
+2. Capture screenshots or observations in the project scratch area.
+3. Check the requested behavior plus basic visual health:
+   - nonblank output
+   - correct viewport/camera framing
+   - readable UI text
+   - no incoherent overlap
+   - controls respond
+   - no obvious rendering errors
+4. Report concise findings with paths to evidence.
+
+Platform order when the project defines none: native desktop first, then web,
+then other platforms only when requested or relevant. Prefer real screenshots
+and run logs over claims.
 
 ## Evidence
 
