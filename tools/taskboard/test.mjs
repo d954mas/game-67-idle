@@ -1,9 +1,10 @@
 // Taskboard core tests. Run: node --test tools/taskboard/test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, utimesSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import {
   parseDoc, serializeDoc, slugify, createTask, createEpic, listTasks,
   listEpics, updateDoc, findDoc, validateStore,
@@ -50,6 +51,42 @@ test("createTask allocates sequential ids and createEpic separate sequence", (t)
   assert.equal(e1.fields.id, "E001");
   assert.equal(listTasks(root).length, 2);
   assert.equal(listEpics(root).length, 1);
+});
+
+test("task store ignores operational docs", (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "First" });
+  writeFileSync(join(root, "tasks", "README.md"), "# Task Store\n");
+  writeFileSync(join(root, "tasks", "STATUS.md"), "# Project Status\n");
+  assert.equal(listTasks(root).length, 1);
+  assert.deepEqual(validateStore(root), []);
+});
+
+test("done tasks move to archive and stay addressable by id", (t) => {
+  const root = tempRoot(t);
+  createEpic(root, { title: "Epic" });
+  createTask(root, { title: "Archive me", epic: "E001", status: "todo" });
+  const updated = updateDoc(root, "T0001", { fields: { status: "done" } });
+  assert.match(updated.file, /tasks[\\/]+archive[\\/]+E001[\\/]+T0001-/);
+  assert.equal(existsSync(updated.file), true);
+  assert.equal(listTasks(root).length, 0);
+  assert.equal(listTasks(root, { includeArchive: true }).length, 1);
+  assert.equal(findDoc(root, "T0001").fields.status, "done");
+});
+
+test("cli list hides ideas by default and shows them explicitly", (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "Raw idea", status: "idea" });
+  createTask(root, { title: "Actionable", status: "backlog" });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const base = { cwd: root, encoding: "utf8" };
+  const normal = spawnSync(process.execPath, [cli, "list"], base);
+  assert.equal(normal.status, 0, normal.stderr);
+  assert.match(normal.stdout, /Actionable/);
+  assert.doesNotMatch(normal.stdout, /Raw idea/);
+  const ideas = spawnSync(process.execPath, [cli, "list", "--ideas"], base);
+  assert.equal(ideas.status, 0, ideas.stderr);
+  assert.match(ideas.stdout, /Raw idea/);
 });
 
 test("updateDoc patches fields, keeps id/created, bumps updated", (t) => {

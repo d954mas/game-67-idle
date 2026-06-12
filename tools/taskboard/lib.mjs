@@ -1,10 +1,12 @@
 // Taskboard core: markdown + frontmatter task store.
-// One task = one .md file in tasks/, one epic = one .md file in tasks/epics/.
+// One task = one task .md file in tasks/active/ or tasks/archive/.
+// One epic = one .md file in tasks/epics/.
+// tasks/README.md and tasks/STATUS.md are operational docs, not board items.
 // No external dependencies; frontmatter is a strict YAML subset (key: value,
 // arrays as [a, b]). Keep it strict so agents and humans stay compatible.
 
-import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync, statSync, renameSync } from "node:fs";
+import { basename, join, resolve, dirname } from "node:path";
 
 export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done", "dropped"];
 export const EPIC_STATUSES = ["idea", "active", "done", "dropped"];
@@ -32,6 +34,14 @@ export function findRoot(start = process.cwd()) {
 
 export function taskDir(root) {
   return join(root, "tasks");
+}
+
+export function activeTaskDir(root) {
+  return join(taskDir(root), "active");
+}
+
+export function archiveTaskDir(root) {
+  return join(taskDir(root), "archive");
 }
 
 export function epicDir(root) {
@@ -117,26 +127,60 @@ export function serializeDoc(fields, body) {
 
 // --- store -----------------------------------------------------------------
 
-function listDocs(dir, kind) {
+function listDocs(dir, kind, options = {}) {
   if (!existsSync(dir)) {
     return [];
   }
+  const ignoredDocs = new Set(["readme.md", "status.md"]);
   const docs = [];
   for (const name of readdirSync(dir)) {
-    if (!name.endsWith(".md") || name.toLowerCase() === "readme.md") {
+    if (!name.endsWith(".md") || ignoredDocs.has(name.toLowerCase())) {
       continue;
     }
     const file = join(dir, name);
     const { fields, body } = parseDoc(readFileSync(file, "utf8"));
     // rev = file mtime; used for optimistic-lock conflict detection on update.
-    docs.push({ kind, file, name, fields, body, rev: String(statSync(file).mtimeMs) });
+    docs.push({
+      kind,
+      file,
+      name,
+      fields,
+      body,
+      archived: options.archived === true,
+      rev: String(statSync(file).mtimeMs),
+    });
   }
   docs.sort((a, b) => String(a.fields.id || a.name).localeCompare(String(b.fields.id || b.name)));
   return docs;
 }
 
-export function listTasks(root) {
-  return listDocs(taskDir(root), "task");
+function listArchiveTasks(root) {
+  const archive = archiveTaskDir(root);
+  if (!existsSync(archive)) {
+    return [];
+  }
+  const docs = [];
+  for (const group of readdirSync(archive)) {
+    const dir = join(archive, group);
+    if (!statSync(dir).isDirectory()) {
+      continue;
+    }
+    docs.push(...listDocs(dir, "task", { archived: true }));
+  }
+  docs.sort((a, b) => String(a.fields.id || a.name).localeCompare(String(b.fields.id || b.name)));
+  return docs;
+}
+
+export function listTasks(root, options = {}) {
+  const active = [
+    ...listDocs(activeTaskDir(root), "task"),
+    // Legacy root-level task files are read until migrated.
+    ...listDocs(taskDir(root), "task"),
+  ];
+  if (options.includeArchive) {
+    return [...active, ...listArchiveTasks(root)];
+  }
+  return active;
 }
 
 export function listEpics(root) {
@@ -144,7 +188,7 @@ export function listEpics(root) {
 }
 
 export function findDoc(root, id) {
-  const all = [...listTasks(root), ...listEpics(root)];
+  const all = [...listTasks(root, { includeArchive: true }), ...listEpics(root)];
   return all.find((d) => d.fields.id === id) || null;
 }
 
@@ -189,9 +233,9 @@ const EPIC_BODY_TEMPLATE = `## Goal
 `;
 
 export function createTask(root, input = {}) {
-  const dir = taskDir(root);
+  const dir = activeTaskDir(root);
   mkdirSync(dir, { recursive: true });
-  const tasks = listTasks(root);
+  const tasks = listTasks(root, { includeArchive: true });
   const id = nextId(tasks, "T", 4);
   const fields = {
     id,
@@ -254,7 +298,27 @@ export function updateDoc(root, id, patch = {}) {
   fields.updated = todayStamp();
   const body = patch.body !== undefined ? patch.body : doc.body;
   writeFileSync(doc.file, serializeDoc(fields, body));
-  return { ...doc, fields, body };
+  let file = doc.file;
+  if (doc.kind === "task") {
+    const targetDir = taskStorageDir(root, fields);
+    mkdirSync(targetDir, { recursive: true });
+    const targetFile = join(targetDir, basename(doc.file));
+    if (resolve(targetFile) !== resolve(doc.file)) {
+      if (existsSync(targetFile)) {
+        throw new Error(`Cannot move ${id}; target already exists: ${targetFile}`);
+      }
+      renameSync(doc.file, targetFile);
+      file = targetFile;
+    }
+  }
+  return { ...doc, file, fields, body };
+}
+
+function taskStorageDir(root, fields) {
+  if (["done", "dropped"].includes(fields.status)) {
+    return join(archiveTaskDir(root), fields.epic || "unassigned");
+  }
+  return activeTaskDir(root);
 }
 
 export function validateStore(root) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Taskboard CLI for humans and agents.
 //
-//   node tools/taskboard/cli.mjs list [--status s] [--epic E001] [--tag t] [--all]
+//   node tools/taskboard/cli.mjs list [--status s] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
 //   node tools/taskboard/cli.mjs show T0001
 //   node tools/taskboard/cli.mjs new task --title "..." [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
 //   node tools/taskboard/cli.mjs new epic --title "..." [--status active]
@@ -46,15 +46,17 @@ function fail(msg) {
 function shortRow(d) {
   const f = d.fields;
   const tags = (f.tags || []).length ? ` [${f.tags.join(",")}]` : "";
-  return `${f.id}  ${String(f.status).padEnd(7)} ${String(f.priority || "").padEnd(3)} ${String(f.epic || "-").padEnd(5)} ${f.title}${tags}`;
+  const archive = d.archived ? " (archive)" : "";
+  return `${f.id}  ${String(f.status).padEnd(7)} ${String(f.priority || "").padEnd(3)} ${String(f.epic || "-").padEnd(5)} ${f.title}${tags}${archive}`;
 }
 
 const args = parseArgs(rest);
 
 switch (cmd) {
   case "list": {
-    const hidden = new Set(args.all ? [] : ["done", "dropped"]);
-    const tasks = listTasks(root).filter((t) => {
+    const hidden = new Set(args.all ? [] : ["idea", "done", "dropped"]);
+    if (args.ideas) hidden.delete("idea");
+    const tasks = listTasks(root, { includeArchive: args.archive === true }).filter((t) => {
       if (hidden.has(t.fields.status)) return false;
       if (args.status && t.fields.status !== args.status) return false;
       if (args.epic && t.fields.epic !== args.epic) return false;
@@ -67,6 +69,7 @@ switch (cmd) {
       String(a.fields.priority).localeCompare(String(b.fields.priority)));
     for (const e of listEpics(root)) {
       if (!args.status && !args.tag && (!args.epic || args.epic === e.fields.id)) {
+        if (!args.all && !args.archive && ["done", "dropped"].includes(e.fields.status)) continue;
         console.log(`# ${e.fields.id} ${e.fields.title} (${e.fields.status})`);
       }
     }

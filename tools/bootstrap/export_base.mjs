@@ -47,7 +47,7 @@ const AGENTS_TEMPLATE = `# AGENTS.md
 - Game design lives in \`gamedesing/\`; game code lives in \`src/\`.
 - Universal reusable design knowledge lives in \`gamedesing/knowledge/\`.
 - Reusable project skills live in \`.codex/skills/\`; keep them generic enough to reuse in other games.
-- Work items live in the task store \`tasks/\` (see \`tasks/README.md\`); manage them with \`.codex/skills/task-manager/\` and \`tools/taskboard/\`. Capture deferred ideas as tasks instead of losing them.
+- Work items and live project status live in \`tasks/\`; follow \`tasks/README.md\`.
 - Temporary generation, scripts, rejected images, screenshots, and audit logs go in \`tmp/\` or another ignored temp folder.
 - Final durable docs/data/assets go in their project folder.
 - The shared human/agent process lives in \`AI_PIPELINE.md\`.
@@ -67,12 +67,65 @@ const CLAUDE_TEMPLATE = `Project rules, direction, and validation policy: @AGENT
 Shared human/agent process: @AI_PIPELINE.md
 
 Work items (tasks, epics, deferred ideas) live in the \`tasks/\` store.
-Before planning or finishing work, check it and capture anything deferred:
+For status, task format, and workflow rules, follow \`tasks/README.md\`:
 
 - Process: \`.codex/skills/task-manager/SKILL.md\`
 - Conventions: \`tasks/README.md\`
+- Live status: \`tasks/STATUS.md\`
 - CLI: \`node tools/taskboard/cli.mjs <list|show|new|set|validate>\`
 - Visual board for the user: \`node tools/taskboard/server.mjs\` -> http://127.0.0.1:8070/
+`;
+
+const STATUS_TEMPLATE = `# Project Status
+
+Operational project-status index. Rules for this file live in
+\`tasks/README.md\`.
+
+## Current Goal
+
+TODO: one-sentence current project goal.
+
+Sources: TODO.
+
+## Active Work
+
+TODO: current playable path, feature slice, milestone, or workstream that
+matters now.
+
+Sources: TODO.
+
+## Current Gate
+
+TODO: the next acceptance gate or release gate.
+
+Source: TODO.
+
+## Required Validation
+
+\`\`\`powershell
+TODO: commands that prove the current gate
+\`\`\`
+
+Sources: TODO.
+
+## Last Known Good Evidence
+
+TODO: latest passing command, screenshot directory, report path, build artifact,
+or other proof.
+
+Source: TODO.
+
+## Blockers
+
+TODO: list blocking work, or write "None."
+
+## Non-blocking Debt
+
+TODO: list known debt that should not distract the current gate.
+
+## Next Priorities
+
+1. TODO
 `;
 
 mkdirSync(dst, { recursive: true });
@@ -89,9 +142,15 @@ for (const rel of COPY) {
 }
 
 mkdirSync(join(dst, "tasks", "epics"), { recursive: true });
+mkdirSync(join(dst, "tasks", "active"), { recursive: true });
+mkdirSync(join(dst, "tasks", "archive"), { recursive: true });
 mkdirSync(join(dst, "tmp"), { recursive: true });
 
-for (const [name, content] of [["AGENTS.md", AGENTS_TEMPLATE], ["CLAUDE.md", CLAUDE_TEMPLATE]]) {
+for (const [name, content] of [
+  ["AGENTS.md", AGENTS_TEMPLATE],
+  ["CLAUDE.md", CLAUDE_TEMPLATE],
+  ["tasks/STATUS.md", STATUS_TEMPLATE],
+]) {
   const file = join(dst, name);
   if (existsSync(file) && !force) {
     console.log(`kept existing: ${name}`);
