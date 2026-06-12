@@ -108,8 +108,10 @@ eval is intentionally small and static: it checks that key skill activation
 phrases and required output/process anchors have not been lost.
 
 For the full reusable-base gate, run `node tools/pipeline_validate.mjs`. It
-validates this repo, exports a fresh portable base, and validates the exported
-project from inside the exported folder.
+validates this repo (including runtime seed checks: state codegen and CMake
+configure when those files are present), exports a fresh portable base, and
+validates the exported project from inside the exported folder. The runtime
+seed checks skip automatically in workflow-only exports.
 
 Do not use old task logs, generated files, build outputs, or archived design
 handoffs as current truth unless they are linked from `STATUS.md`, an active

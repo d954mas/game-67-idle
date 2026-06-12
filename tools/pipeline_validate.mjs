@@ -12,10 +12,11 @@ const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const exportDir = join(root, "tmp", `pipeline-validate-${stamp}`);
 
-function run(label, args, cwd = root) {
+function run(label, args, opts = {}) {
+  const { cwd = root, exe = process.execPath } = opts;
   console.log(`\n== ${label}`);
   console.log(`$ ${args.map((arg) => (/\s/.test(arg) ? JSON.stringify(arg) : arg)).join(" ")}`);
-  const result = spawnSync(process.execPath, args, {
+  const result = spawnSync(exe, args, {
     cwd,
     stdio: "inherit",
     shell: false,
@@ -38,10 +39,20 @@ run("taskboard list", ["tools/taskboard/cli.mjs", "list"]);
 run("skill eval", ["tools/skills_eval.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
 run("taskboard tests", ["--test", "tools/taskboard/test.mjs"]);
+
+// Runtime seed checks. Skipped automatically in workflow-only exports, which
+// have no state schema or CMake presets.
+if (existsSync(join(root, "state", "game_state.schema.json"))) {
+  run("state codegen", ["-3.12", "tools/state_codegen/generate_state.py"], { exe: "py" });
+}
+if (existsSync(join(root, "CMakePresets.json"))) {
+  run("cmake configure", ["--preset", "native-debug"], { exe: "cmake" });
+}
+
 run("portable export", ["tools/bootstrap/export_base.mjs", "--target", exportDir]);
-run("exported skill eval", ["tools/skills_eval.mjs"], exportDir);
-run("exported taskboard validate", ["tools/taskboard/cli.mjs", "validate"], exportDir);
-run("exported taskboard tests", ["--test", "tools/taskboard/test.mjs"], exportDir);
+run("exported skill eval", ["tools/skills_eval.mjs"], { cwd: exportDir });
+run("exported taskboard validate", ["tools/taskboard/cli.mjs", "validate"], { cwd: exportDir });
+run("exported taskboard tests", ["--test", "tools/taskboard/test.mjs"], { cwd: exportDir });
 
 console.log(`\nok: reusable pipeline validation passed`);
 console.log(`export: ${exportDir}`);
