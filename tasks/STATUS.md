@@ -34,18 +34,21 @@ retired; work tracking is only in `tasks/`.
 Skill/process regression checks now live in `tools/skills_eval.mjs` and are
 included in portable-base export. The eval now covers `task-manager`,
 `game-runtime-automation`, and `primary-gdd-pipeline`.
+Taskboard validation now rejects empty active actionable tasks and empty active
+epics, while allowing raw `idea` items to stay lightweight until refined.
 
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`,
 `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
+`tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
 `tasks/README.md`, `AI_PIPELINE.md`.
 
 ## Current Gate
 
-Current gate: choose and implement the next pipeline hardening task from the
-short active task list. Default task listing must stay short and exclude
-archived history.
+Current gate: no actionable pipeline task is currently ready. If pipeline work
+continues, refine one raw idea from `node tools/taskboard/cli.mjs list --ideas`
+or create a new scoped task from the user's next direction.
 
 Source: `tasks/README.md`.
 
@@ -60,11 +63,13 @@ node tools/bootstrap/export_base.mjs --target tmp/export-...
 cd tmp/export-...
 node tools/skills_eval.mjs
 node tools/taskboard/cli.mjs validate
+node --test tools/taskboard/test.mjs
 ```
 
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
-`tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`.
+`tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
+`tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`.
 
 ## Last Known Good Evidence
 
@@ -88,9 +93,13 @@ Latest skill/process evidence: T0018 added `tools/skills_eval.mjs`; current
 repo and fresh export passed skill eval and task validation.
 T0016 extended that eval to `primary-gdd-pipeline`; current repo and fresh
 export passed skill eval and task validation.
+T0019 added anti-entropy validation for actionable task bodies and active epic
+scope bodies; current repo and fresh export passed taskboard tests, taskboard
+validation, and skill eval.
 
 Sources: `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
-`tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`.
+`tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
+`tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`.
 
 ## Blocking Work
 
@@ -98,7 +107,9 @@ None.
 
 ## Non-blocking Debt
 
-No active non-blocking debt for the current pipeline gate.
+No actionable backlog remains for the current pipeline gate. Raw ideas are
+available via `node tools/taskboard/cli.mjs list --ideas`, but they must be
+refined before implementation.
 
 Historical game/testbed debt is archived with E001, including T0025.
 
@@ -106,7 +117,9 @@ Sources: `tasks/archive/E001/T0025-replace-temporary-wasm-release-workaround-wit
 
 ## Next Priorities
 
-1. Continue with T0019: recurring entropy cleanup for stale docs, unused skills,
-   and weak examples.
-2. Keep default task context focused on E003 until a new active game or
+1. Choose the next user-directed pipeline improvement and create/refine one
+   scoped task.
+2. If continuing from raw ideas, inspect `list --ideas` and refine exactly one
+   item before implementation.
+3. Keep default task context focused on E003 until a new active game or
    pipeline epic is selected.

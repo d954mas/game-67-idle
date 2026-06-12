@@ -343,12 +343,42 @@ export function validateStore(root) {
     if (!statuses.includes(d.fields.status)) {
       problems.push(`${id}: invalid status "${d.fields.status}"`);
     }
+    if (d.kind === "epic" && d.fields.status === "active" && !hasActiveEpicBody(d.body)) {
+      problems.push(`${id}: active epic needs non-empty Goal, In scope, and Out of scope sections`);
+    }
   }
   const epicIds = new Set(epics.map((e) => e.fields.id));
   for (const t of tasks) {
     if (t.fields.epic && !epicIds.has(t.fields.epic)) {
       problems.push(`${t.fields.id}: references missing epic "${t.fields.epic}"`);
     }
+    if (isActionableTask(t) && !hasActionableTaskBody(t.body)) {
+      problems.push(`${t.fields.id}: actionable task needs non-empty What and Done when sections`);
+    }
   }
   return problems;
+}
+
+function isActionableTask(doc) {
+  return ["backlog", "todo", "doing", "review"].includes(doc.fields.status);
+}
+
+function hasActionableTaskBody(body) {
+  const what = sectionText(body, "What");
+  const doneWhen = sectionText(body, "Done when");
+  return what.length > 0 && /- \[[ xX]\]\s+\S/.test(doneWhen);
+}
+
+function hasActiveEpicBody(body) {
+  return ["Goal", "In scope", "Out of scope"].every((section) => sectionText(body, section).length > 0);
+}
+
+function sectionText(body, title) {
+  const pattern = new RegExp(`(?:^|\\n)## ${escapeRegExp(title)}[ \\t]*\\n([\\s\\S]*?)(?=\\n##\\s+|$)`, "i");
+  const match = body.match(pattern);
+  return match ? match[1].replace(/- \[ \]\s*$/, "").trim() : "";
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

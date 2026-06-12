@@ -130,3 +130,53 @@ test("validateStore reports missing epic refs and duplicate ids", (t) => {
   assert.ok(problems.some((p) => p.includes("missing epic")), problems.join("; "));
   assert.ok(problems.some((p) => p.includes("duplicate id")), problems.join("; "));
 });
+
+test("validateStore rejects placeholder actionable tasks but allows raw ideas", (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "Raw idea", status: "idea" });
+  createTask(root, { title: "Empty backlog", status: "backlog" });
+  const problems = validateStore(root);
+  assert.ok(problems.some((p) => p.includes("T0002: actionable task needs")), problems.join("; "));
+
+  updateDoc(root, "T0002", {
+    body: `## What
+
+Make the backlog item executable.
+
+## Done when
+
+- [ ] acceptance is checkable
+
+## Open questions
+
+## Log
+`,
+  });
+  assert.deepEqual(validateStore(root), []);
+});
+
+test("validateStore rejects placeholder active epics but allows raw epic ideas", (t) => {
+  const root = tempRoot(t);
+  createEpic(root, { title: "Raw epic", status: "idea" });
+  createEpic(root, { title: "Active epic", status: "active" });
+  const problems = validateStore(root);
+  assert.ok(problems.some((p) => p.includes("E002: active epic needs")), problems.join("; "));
+
+  updateDoc(root, "E002", {
+    body: `## Goal
+
+Make the epic executable.
+
+## In scope
+
+- One focused workstream.
+
+## Out of scope
+
+- Unrelated work.
+
+## Log
+`,
+  });
+  assert.deepEqual(validateStore(root), []);
+});
