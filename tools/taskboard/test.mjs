@@ -180,3 +180,13 @@ Make the epic executable.
   });
   assert.deepEqual(validateStore(root), []);
 });
+
+test("cli validate prints remediation hints for common failures", (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "Empty backlog", status: "backlog" });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "validate"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /problem: T0001: actionable task needs/);
+  assert.match(result.stdout, /hint: fill `## What` and at least one checkable `## Done when`/);
+});

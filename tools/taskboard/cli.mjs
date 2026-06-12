@@ -135,7 +135,13 @@ switch (cmd) {
     if (!problems.length) {
       console.log("ok: no problems found");
     } else {
-      for (const p of problems) console.log(`problem: ${p}`);
+      for (const p of problems) {
+        console.log(`problem: ${p}`);
+        const hint = remediationHint(p);
+        if (hint) {
+          console.log(`hint: ${hint}`);
+        }
+      }
       process.exit(1);
     }
     break;
@@ -143,4 +149,29 @@ switch (cmd) {
   default:
     console.log("usage: cli.mjs <list|show|new|set|validate> ...  (see header comment)");
     process.exit(cmd ? 1 : 0);
+}
+
+function remediationHint(problem) {
+  if (problem.includes("missing id")) {
+    return "create or repair the item with `node tools/taskboard/cli.mjs new`, or add a unique id in frontmatter";
+  }
+  if (problem.includes("duplicate id")) {
+    return "keep one canonical file for that id; rename or drop the duplicate instead of editing both";
+  }
+  if (problem.includes("missing title")) {
+    return "add a short `title:` in frontmatter so list output is readable";
+  }
+  if (problem.includes("invalid status")) {
+    return "use task statuses idea/backlog/todo/doing/review/done/dropped or epic statuses idea/active/done/dropped";
+  }
+  if (problem.includes("references missing epic")) {
+    return "create the epic first, fix the task's `epic:` value, or clear it if the task is unassigned";
+  }
+  if (problem.includes("actionable task needs")) {
+    return "fill `## What` and at least one checkable `## Done when`, or move raw work back to `status: idea`";
+  }
+  if (problem.includes("active epic needs")) {
+    return "fill `## Goal`, `## In scope`, and `## Out of scope`, or move the epic back to `status: idea`";
+  }
+  return "";
 }

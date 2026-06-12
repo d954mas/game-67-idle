@@ -36,12 +36,15 @@ included in portable-base export. The eval now covers `task-manager`,
 `game-runtime-automation`, and `primary-gdd-pipeline`.
 Taskboard validation now rejects empty active actionable tasks and empty active
 epics, while allowing raw `idea` items to stay lightweight until refined.
+`taskboard validate` now prints remediation hints for common problems so agents
+can recover faster when validation fails.
 
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`,
 `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
 `tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
+`tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
 `tasks/README.md`, `AI_PIPELINE.md`.
 
 ## Current Gate
@@ -69,7 +72,8 @@ node --test tools/taskboard/test.mjs
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
-`tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`.
+`tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
+`tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`.
 
 ## Last Known Good Evidence
 
@@ -96,10 +100,14 @@ export passed skill eval and task validation.
 T0019 added anti-entropy validation for actionable task bodies and active epic
 scope bodies; current repo and fresh export passed taskboard tests, taskboard
 validation, and skill eval.
+T0020 added CLI remediation hints for common taskboard validation failures;
+current repo and fresh export passed taskboard tests, taskboard validation, and
+skill eval.
 
 Sources: `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
-`tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`.
+`tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
+`tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`.
 
 ## Blocking Work
 
@@ -108,8 +116,8 @@ None.
 ## Non-blocking Debt
 
 No actionable backlog remains for the current pipeline gate. Raw ideas are
-available via `node tools/taskboard/cli.mjs list --ideas`, but they must be
-refined before implementation.
+available via `node tools/taskboard/cli.mjs list --ideas`: T0012 board UX and
+T0014 `gamedesing` typo decision. They must be refined before implementation.
 
 Historical game/testbed debt is archived with E001, including T0025.
 
