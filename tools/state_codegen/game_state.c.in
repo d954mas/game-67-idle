@@ -231,7 +231,7 @@ void game_state_init_defaults(GameState *state) {
     state->settings_sfx_volume = GAME_STATE_SETTINGS_SFX_VOLUME_DEFAULT;
     state->wallet_soft = GAME_STATE_WALLET_SOFT_DEFAULT;
     state->wallet_hard = GAME_STATE_WALLET_HARD_DEFAULT;
-    state->meme_coins = GAME_STATE_MEME_COINS_DEFAULT;
+    state->seed_points = GAME_STATE_SEED_POINTS_DEFAULT;
     state->status = GAME_STATE_STATUS_DEFAULT;
     state->click_power = GAME_STATE_CLICK_POWER_DEFAULT;
     state->income_per_second = GAME_STATE_INCOME_PER_SECOND_DEFAULT;
@@ -240,11 +240,11 @@ void game_state_init_defaults(GameState *state) {
     state->coolness = GAME_STATE_COOLNESS_DEFAULT;
     state->comfort = GAME_STATE_COMFORT_DEFAULT;
     state->visual_stage = GAME_STATE_VISUAL_STAGE_DEFAULT;
-    state->first_upgrade_owned = GAME_STATE_FIRST_UPGRADE_OWNED_DEFAULT;
-    state->second_upgrade_owned = GAME_STATE_SECOND_UPGRADE_OWNED_DEFAULT;
-    state->third_upgrade_owned = GAME_STATE_THIRD_UPGRADE_OWNED_DEFAULT;
-    state->fourth_upgrade_owned = GAME_STATE_FOURTH_UPGRADE_OWNED_DEFAULT;
-    state->fifth_upgrade_owned = GAME_STATE_FIFTH_UPGRADE_OWNED_DEFAULT;
+    state->first_milestone_done = GAME_STATE_FIRST_MILESTONE_DONE_DEFAULT;
+    state->second_milestone_done = GAME_STATE_SECOND_MILESTONE_DONE_DEFAULT;
+    state->third_milestone_done = GAME_STATE_THIRD_MILESTONE_DONE_DEFAULT;
+    state->fourth_milestone_done = GAME_STATE_FOURTH_MILESTONE_DONE_DEFAULT;
+    state->fifth_milestone_done = GAME_STATE_FIFTH_MILESTONE_DONE_DEFAULT;
     (void)copy_text(state->active_job_id, sizeof(state->active_job_id), GAME_STATE_ACTIVE_JOB_ID_DEFAULT);
     state->active_job_elapsed_ms = GAME_STATE_ACTIVE_JOB_ELAPSED_MS_DEFAULT;
     state->active_job_duration_ms = GAME_STATE_ACTIVE_JOB_DURATION_MS_DEFAULT;
@@ -318,7 +318,7 @@ bool game_state_validate(const GameState *state, char *error, int error_cap) {
         set_error(error, error_cap, "wallet value out of range");
         return false;
     }
-    if (state->meme_coins < GAME_STATE_MEME_COINS_MIN || state->meme_coins > GAME_STATE_MEME_COINS_MAX ||
+    if (state->seed_points < GAME_STATE_SEED_POINTS_MIN || state->seed_points > GAME_STATE_SEED_POINTS_MAX ||
         state->status < GAME_STATE_STATUS_MIN || state->status > GAME_STATE_STATUS_MAX ||
         state->click_power < GAME_STATE_CLICK_POWER_MIN || state->click_power > GAME_STATE_CLICK_POWER_MAX ||
         state->income_per_second < GAME_STATE_INCOME_PER_SECOND_MIN || state->income_per_second > GAME_STATE_INCOME_PER_SECOND_MAX ||
@@ -420,7 +420,7 @@ cJSON *game_state_to_json(const GameState *state) {
     cJSON_AddNumberToObject(wallet, "soft", state->wallet_soft);
     cJSON_AddNumberToObject(wallet, "hard", state->wallet_hard);
 
-    cJSON_AddNumberToObject(root, "meme_coins", state->meme_coins);
+    cJSON_AddNumberToObject(root, "seed_points", state->seed_points);
     cJSON_AddNumberToObject(root, "status", state->status);
     cJSON_AddNumberToObject(root, "click_power", state->click_power);
     cJSON_AddNumberToObject(root, "income_per_second", state->income_per_second);
@@ -429,11 +429,11 @@ cJSON *game_state_to_json(const GameState *state) {
     cJSON_AddNumberToObject(root, "coolness", state->coolness);
     cJSON_AddNumberToObject(root, "comfort", state->comfort);
     cJSON_AddNumberToObject(root, "visual_stage", state->visual_stage);
-    cJSON_AddBoolToObject(root, "first_upgrade_owned", state->first_upgrade_owned);
-    cJSON_AddBoolToObject(root, "second_upgrade_owned", state->second_upgrade_owned);
-    cJSON_AddBoolToObject(root, "third_upgrade_owned", state->third_upgrade_owned);
-    cJSON_AddBoolToObject(root, "fourth_upgrade_owned", state->fourth_upgrade_owned);
-    cJSON_AddBoolToObject(root, "fifth_upgrade_owned", state->fifth_upgrade_owned);
+    cJSON_AddBoolToObject(root, "first_milestone_done", state->first_milestone_done);
+    cJSON_AddBoolToObject(root, "second_milestone_done", state->second_milestone_done);
+    cJSON_AddBoolToObject(root, "third_milestone_done", state->third_milestone_done);
+    cJSON_AddBoolToObject(root, "fourth_milestone_done", state->fourth_milestone_done);
+    cJSON_AddBoolToObject(root, "fifth_milestone_done", state->fifth_milestone_done);
     cJSON_AddStringToObject(root, "active_job_id", state->active_job_id);
     cJSON_AddNumberToObject(root, "active_job_elapsed_ms", state->active_job_elapsed_ms);
     cJSON_AddNumberToObject(root, "active_job_duration_ms", state->active_job_duration_ms);
@@ -668,8 +668,8 @@ cJSON *game_state_get_path_json(const GameState *state, const char *path, char *
     if (strcmp(path, "equipment.hand_item_id") == 0) {
         return state->has_equipment_hand_item_id ? cJSON_CreateString(state->equipment_hand_item_id) : cJSON_CreateNull();
     }
-    if (strcmp(path, "meme_coins") == 0) {
-        return cJSON_CreateNumber(state->meme_coins);
+    if (strcmp(path, "seed_points") == 0) {
+        return cJSON_CreateNumber(state->seed_points);
     }
     if (strcmp(path, "status") == 0) {
         return cJSON_CreateNumber(state->status);
@@ -695,20 +695,20 @@ cJSON *game_state_get_path_json(const GameState *state, const char *path, char *
     if (strcmp(path, "visual_stage") == 0) {
         return cJSON_CreateNumber(state->visual_stage);
     }
-    if (strcmp(path, "first_upgrade_owned") == 0) {
-        return cJSON_CreateBool(state->first_upgrade_owned);
+    if (strcmp(path, "first_milestone_done") == 0) {
+        return cJSON_CreateBool(state->first_milestone_done);
     }
-    if (strcmp(path, "second_upgrade_owned") == 0) {
-        return cJSON_CreateBool(state->second_upgrade_owned);
+    if (strcmp(path, "second_milestone_done") == 0) {
+        return cJSON_CreateBool(state->second_milestone_done);
     }
-    if (strcmp(path, "third_upgrade_owned") == 0) {
-        return cJSON_CreateBool(state->third_upgrade_owned);
+    if (strcmp(path, "third_milestone_done") == 0) {
+        return cJSON_CreateBool(state->third_milestone_done);
     }
-    if (strcmp(path, "fourth_upgrade_owned") == 0) {
-        return cJSON_CreateBool(state->fourth_upgrade_owned);
+    if (strcmp(path, "fourth_milestone_done") == 0) {
+        return cJSON_CreateBool(state->fourth_milestone_done);
     }
-    if (strcmp(path, "fifth_upgrade_owned") == 0) {
-        return cJSON_CreateBool(state->fifth_upgrade_owned);
+    if (strcmp(path, "fifth_milestone_done") == 0) {
+        return cJSON_CreateBool(state->fifth_milestone_done);
     }
     if (strcmp(path, "active_job_id") == 0) {
         return cJSON_CreateString(state->active_job_id);
@@ -932,8 +932,8 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
         state->has_equipment_hand_item_id = true;
         return true;
     }
-    if (strcmp(path, "meme_coins") == 0) {
-        return parse_int_value(value, GAME_STATE_MEME_COINS_MIN, GAME_STATE_MEME_COINS_MAX, &state->meme_coins, error, error_cap);
+    if (strcmp(path, "seed_points") == 0) {
+        return parse_int_value(value, GAME_STATE_SEED_POINTS_MIN, GAME_STATE_SEED_POINTS_MAX, &state->seed_points, error, error_cap);
     }
     if (strcmp(path, "status") == 0) {
         return parse_int_value(value, GAME_STATE_STATUS_MIN, GAME_STATE_STATUS_MAX, &state->status, error, error_cap);
@@ -959,44 +959,44 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
     if (strcmp(path, "visual_stage") == 0) {
         return parse_int_value(value, GAME_STATE_VISUAL_STAGE_MIN, GAME_STATE_VISUAL_STAGE_MAX, &state->visual_stage, error, error_cap);
     }
-    if (strcmp(path, "first_upgrade_owned") == 0) {
+    if (strcmp(path, "first_milestone_done") == 0) {
         if (!cJSON_IsBool(value)) {
-            set_error(error, error_cap, "first_upgrade_owned expects bool");
+            set_error(error, error_cap, "first_milestone_done expects bool");
             return false;
         }
-        state->first_upgrade_owned = cJSON_IsTrue(value);
+        state->first_milestone_done = cJSON_IsTrue(value);
         return true;
     }
-    if (strcmp(path, "second_upgrade_owned") == 0) {
+    if (strcmp(path, "second_milestone_done") == 0) {
         if (!cJSON_IsBool(value)) {
-            set_error(error, error_cap, "second_upgrade_owned expects bool");
+            set_error(error, error_cap, "second_milestone_done expects bool");
             return false;
         }
-        state->second_upgrade_owned = cJSON_IsTrue(value);
+        state->second_milestone_done = cJSON_IsTrue(value);
         return true;
     }
-    if (strcmp(path, "third_upgrade_owned") == 0) {
+    if (strcmp(path, "third_milestone_done") == 0) {
         if (!cJSON_IsBool(value)) {
-            set_error(error, error_cap, "third_upgrade_owned expects bool");
+            set_error(error, error_cap, "third_milestone_done expects bool");
             return false;
         }
-        state->third_upgrade_owned = cJSON_IsTrue(value);
+        state->third_milestone_done = cJSON_IsTrue(value);
         return true;
     }
-    if (strcmp(path, "fourth_upgrade_owned") == 0) {
+    if (strcmp(path, "fourth_milestone_done") == 0) {
         if (!cJSON_IsBool(value)) {
-            set_error(error, error_cap, "fourth_upgrade_owned expects bool");
+            set_error(error, error_cap, "fourth_milestone_done expects bool");
             return false;
         }
-        state->fourth_upgrade_owned = cJSON_IsTrue(value);
+        state->fourth_milestone_done = cJSON_IsTrue(value);
         return true;
     }
-    if (strcmp(path, "fifth_upgrade_owned") == 0) {
+    if (strcmp(path, "fifth_milestone_done") == 0) {
         if (!cJSON_IsBool(value)) {
-            set_error(error, error_cap, "fifth_upgrade_owned expects bool");
+            set_error(error, error_cap, "fifth_milestone_done expects bool");
             return false;
         }
-        state->fifth_upgrade_owned = cJSON_IsTrue(value);
+        state->fifth_milestone_done = cJSON_IsTrue(value);
         return true;
     }
     if (strcmp(path, "active_job_id") == 0) {
@@ -1098,7 +1098,7 @@ bool game_state_from_json(GameState *state, const cJSON *json, char *error, int 
                    !read_int_range(wallet, "hard", GAME_STATE_WALLET_HARD_MIN, GAME_STATE_WALLET_HARD_MAX, &next.wallet_hard, error, error_cap))) {
         return false;
     }
-    if (!read_int_range(json, "meme_coins", GAME_STATE_MEME_COINS_MIN, GAME_STATE_MEME_COINS_MAX, &next.meme_coins, error, error_cap) ||
+    if (!read_int_range(json, "seed_points", GAME_STATE_SEED_POINTS_MIN, GAME_STATE_SEED_POINTS_MAX, &next.seed_points, error, error_cap) ||
         !read_int_range(json, "status", GAME_STATE_STATUS_MIN, GAME_STATE_STATUS_MAX, &next.status, error, error_cap) ||
         !read_int_range(json, "click_power", GAME_STATE_CLICK_POWER_MIN, GAME_STATE_CLICK_POWER_MAX, &next.click_power, error, error_cap) ||
         !read_int_range(json, "income_per_second", GAME_STATE_INCOME_PER_SECOND_MIN, GAME_STATE_INCOME_PER_SECOND_MAX, &next.income_per_second, error, error_cap) ||
@@ -1107,11 +1107,11 @@ bool game_state_from_json(GameState *state, const cJSON *json, char *error, int 
         !read_int_range(json, "coolness", GAME_STATE_COOLNESS_MIN, GAME_STATE_COOLNESS_MAX, &next.coolness, error, error_cap) ||
         !read_int_range(json, "comfort", GAME_STATE_COMFORT_MIN, GAME_STATE_COMFORT_MAX, &next.comfort, error, error_cap) ||
         !read_int_range(json, "visual_stage", GAME_STATE_VISUAL_STAGE_MIN, GAME_STATE_VISUAL_STAGE_MAX, &next.visual_stage, error, error_cap) ||
-        !read_bool(json, "first_upgrade_owned", &next.first_upgrade_owned, error, error_cap) ||
-        !read_bool(json, "second_upgrade_owned", &next.second_upgrade_owned, error, error_cap) ||
-        !read_bool(json, "third_upgrade_owned", &next.third_upgrade_owned, error, error_cap) ||
-        !read_bool(json, "fourth_upgrade_owned", &next.fourth_upgrade_owned, error, error_cap) ||
-        !read_bool(json, "fifth_upgrade_owned", &next.fifth_upgrade_owned, error, error_cap) ||
+        !read_bool(json, "first_milestone_done", &next.first_milestone_done, error, error_cap) ||
+        !read_bool(json, "second_milestone_done", &next.second_milestone_done, error, error_cap) ||
+        !read_bool(json, "third_milestone_done", &next.third_milestone_done, error, error_cap) ||
+        !read_bool(json, "fourth_milestone_done", &next.fourth_milestone_done, error, error_cap) ||
+        !read_bool(json, "fifth_milestone_done", &next.fifth_milestone_done, error, error_cap) ||
         !read_string(json, "active_job_id", next.active_job_id, sizeof(next.active_job_id), error, error_cap) ||
         !read_int_range(json, "active_job_elapsed_ms", GAME_STATE_ACTIVE_JOB_ELAPSED_MS_MIN, GAME_STATE_ACTIVE_JOB_ELAPSED_MS_MAX, &next.active_job_elapsed_ms, error, error_cap) ||
         !read_int_range(json, "active_job_duration_ms", GAME_STATE_ACTIVE_JOB_DURATION_MS_MIN, GAME_STATE_ACTIVE_JOB_DURATION_MS_MAX, &next.active_job_duration_ms, error, error_cap) ||

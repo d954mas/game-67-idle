@@ -19,7 +19,7 @@ from typing import Any, Iterable
 
 HOST = "127.0.0.1"
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-NATIVE_DEBUG_EXE = os.path.join(ROOT, "build", "game_67_idle", "native-debug", "game_67_idle.exe")
+NATIVE_DEBUG_EXE = os.path.join(ROOT, "build", "game_seed", "native-debug", "game_seed.exe")
 CAPTURE_SCREEN_SCRIPT = os.path.join(ROOT, "tools", "devapi", "capture_screen.ps1")
 CAPTURE_WINDOW_SCRIPT = os.path.join(ROOT, "tools", "devapi", "capture_window.py")
 RECORD_SCREEN_SCRIPT = os.path.join(ROOT, "tools", "devapi", "record_screen_ffmpeg.ps1")
@@ -45,6 +45,12 @@ class DevApiClient:
         self.next_request_id = 1
         self.process_id: int | None = None
         self.launch_log_path: str | None = None
+
+    def __enter__(self) -> "DevApiClient":
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        self.close()
 
     def close(self) -> None:
         try:

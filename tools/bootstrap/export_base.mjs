@@ -49,7 +49,8 @@ const AGENTS_TEMPLATE = `# AGENTS.md
   history, assets, or code unless the user explicitly asks.
 - No game concept has been selected yet. Do not invent one; ask the user for the
   concept before creating GDD, assets, gameplay tasks, or implementation plans.
-- TODO: engine location and editing policy.
+- Engine/runtime location is not selected yet. Once chosen, record its path and
+  editing policy here.
 - Game design lives in \`gamedesign/\`; game code lives in \`src/\`.
 - Universal reusable design knowledge lives in \`gamedesign/knowledge/\`.
 - Reusable project skills live in \`.codex/skills/\`; keep them generic enough to reuse in other games.
@@ -66,7 +67,8 @@ const AGENTS_TEMPLATE = `# AGENTS.md
 
 ## Validation
 
-- TODO: primary runtime target and proof requirements.
+- Primary runtime target is not selected yet. Once chosen, record the required
+  build/run/test commands and proof requirements here.
 - When validating playable or visual changes, capture screenshots and use emulated input.
 - If a task reveals repeated friction, propose updating \`AGENTS.md\` or creating/updating a project skill.
 `;
@@ -121,9 +123,9 @@ Sources: \`tasks/README.md\`, \`AI_PIPELINE.md\`.
 
 ## Last Known Good Evidence
 
-Fresh export validation should be recorded here after first setup.
+Fresh export validation should be recorded here after first local setup.
 
-Source: TODO.
+Source: first local validation after project setup.
 
 ## Blockers
 
@@ -183,5 +185,5 @@ if (sync.status !== 0) {
 }
 
 console.log(`\nexported AI base to ${dst} (${basename(root)} -> ${basename(dst)})`);
-console.log("next: fill the TODOs in AGENTS.md, add tmp/ to .gitignore, then capture first ideas:");
+console.log("next: choose engine/runtime policy when known, ensure tmp/ is ignored, then capture first ideas:");
 console.log("  node tools/taskboard/cli.mjs new task --title \"...\" --status idea");

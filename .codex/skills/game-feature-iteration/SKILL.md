@@ -22,7 +22,7 @@ Use this skill to make small, playable game changes without losing project conte
 Prefer local source-of-truth files over assumptions:
 
 - Project rules: `AGENTS.md`
-- Design docs: `gamedesign/`, `gamedesing/`, `docs/`, or equivalent local folder
+- Design docs: `gamedesign/`, `docs/design/`, `GDD.md`, or equivalent local folder
 - Build/run: `CMakePresets.json`, `.vscode/tasks.json`, package scripts, engine docs
 - Existing examples: `examples/`, `samples/`, nearby features, engine submodules
 

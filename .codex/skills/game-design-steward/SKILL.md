@@ -10,7 +10,7 @@ Use this skill to keep design work coherent, concise, and useful for implementat
 ## Workflow
 
 1. Read `AGENTS.md` for project identity and design constraints.
-2. Find the local design source of truth: common names include `gamedesign/`, `gamedesing/`, `docs/design/`, `GDD.md`, `concept.md`, `lore.md`, and `open_questions.md`.
+2. Find the local design source of truth: common names include `gamedesign/`, `docs/design/`, `GDD.md`, `concept.md`, `lore.md`, and `open_questions.md`.
 3. Separate durable decisions from brainstorms.
 4. Prefer short implementation-ready specs over long prose.
 5. When a design choice affects code, state the expected player-visible behavior and validation signal.
@@ -33,4 +33,3 @@ For new or revised design sections, use:
 - Do not create large new design taxonomies unless the current work needs them.
 - Keep tone consistent with local project rules.
 - If implementation and docs disagree, point out the mismatch explicitly.
-

@@ -16,8 +16,7 @@
                 "CMAKE_C_STANDARD": "17",
                 "CMAKE_C_STANDARD_REQUIRED": "ON",
                 "CMAKE_C_COMPILER": "clang",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "NT_UI_DEBUG_TOOLS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
@@ -26,17 +25,7 @@
             "inherits": "native-debug",
             "binaryDir": "${sourceDir}/build/_cmake/native-release",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "NT_UI_DEBUG_TOOLS": "OFF"
-            }
-        },
-        {
-            "name": "native-debug-test",
-            "displayName": "Native Debug Test (FULL asserts)",
-            "inherits": "native-debug",
-            "binaryDir": "${sourceDir}/build/_cmake/native-debug-test",
-            "cacheVariables": {
-                "NT_ASSERT_MODE": "2"
+                "CMAKE_BUILD_TYPE": "Release"
             }
         },
         {
@@ -46,11 +35,9 @@
             "binaryDir": "${sourceDir}/build/_cmake/wasm-debug",
             "toolchainFile": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "MinSizeRel",
+                "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_C_STANDARD": "17",
-                "CMAKE_C_STANDARD_REQUIRED": "ON",
-                "NT_ASSERT_MODE": "2",
-                "NT_UI_DEBUG_TOOLS": "ON"
+                "CMAKE_C_STANDARD_REQUIRED": "ON"
             }
         },
         {
@@ -59,21 +46,16 @@
             "inherits": "wasm-debug",
             "binaryDir": "${sourceDir}/build/_cmake/wasm-release",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "NT_ASSERT_MODE": "1",
-                "NT_UI_DEBUG_TOOLS": "OFF"
+                "CMAKE_BUILD_TYPE": "Release"
             }
         },
         {
             "name": "wasm-qa",
-            "displayName": "WASM QA (fast release-like)",
+            "displayName": "WASM QA",
             "inherits": "wasm-debug",
             "binaryDir": "${sourceDir}/build/_cmake/wasm-qa",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_C_FLAGS_RELEASE": "-O1 -DNDEBUG",
-                "NT_ASSERT_MODE": "1",
-                "NT_UI_DEBUG_TOOLS": "OFF",
+                "CMAKE_BUILD_TYPE": "MinSizeRel",
                 "NT_WASM_QA": "ON"
             }
         },
@@ -126,89 +108,58 @@
     "buildPresets": [
         {
             "name": "native-debug",
-            "displayName": "Build all native debug targets",
-            "configurePreset": "native-debug"
-        },
-        {
-            "name": "game-native-debug",
-            "displayName": "Game: Native Debug",
+            "displayName": "Build native debug",
             "configurePreset": "native-debug",
-            "targets": ["game_67_idle"]
+            "targets": ["game_seed"]
         },
         {
             "name": "native-release",
-            "displayName": "Build all native release targets",
-            "configurePreset": "native-release"
-        },
-        {
-            "name": "game-native-release",
-            "displayName": "Game: Native Release",
+            "displayName": "Build native release",
             "configurePreset": "native-release",
-            "targets": ["game_67_idle"]
-        },
-        {
-            "name": "pack-native-debug",
-            "displayName": "Pack: Native Debug",
-            "configurePreset": "native-debug",
-            "targets": ["game_67_idle_pack"]
-        },
-        {
-            "name": "pack-native-release",
-            "displayName": "Pack: Native Release",
-            "configurePreset": "native-release",
-            "targets": ["game_67_idle_pack"]
-        },
-        {
-            "name": "native-debug-test",
-            "configurePreset": "native-debug-test"
+            "targets": ["game_seed"]
         },
         {
             "name": "wasm-debug",
-            "displayName": "Build all WASM debug targets",
-            "configurePreset": "wasm-debug"
-        },
-        {
-            "name": "game-wasm-debug",
-            "displayName": "Game: WASM Debug",
+            "displayName": "Build WASM debug",
             "configurePreset": "wasm-debug",
-            "targets": ["game_67_idle"]
+            "targets": ["game_seed"]
         },
         {
             "name": "wasm-release",
-            "displayName": "Build all WASM release targets",
-            "configurePreset": "wasm-release"
-        },
-        {
-            "name": "game-wasm-release",
-            "displayName": "Game: WASM Release",
+            "displayName": "Build WASM release",
             "configurePreset": "wasm-release",
-            "targets": ["game_67_idle"]
+            "targets": ["game_seed"]
         },
         {
-            "name": "game-wasm-qa",
-            "displayName": "Game: WASM QA",
+            "name": "wasm-qa",
+            "displayName": "Build WASM QA",
             "configurePreset": "wasm-qa",
-            "targets": ["game_67_idle"]
+            "targets": ["game_seed"]
         },
         {
             "name": "wasm-debug-paired",
-            "configurePreset": "wasm-debug-paired"
+            "configurePreset": "wasm-debug-paired",
+            "targets": ["game_seed"]
         },
         {
             "name": "wasm-debug-simd",
-            "configurePreset": "wasm-debug-simd"
+            "configurePreset": "wasm-debug-simd",
+            "targets": ["game_seed"]
         },
         {
             "name": "wasm-release-paired",
-            "configurePreset": "wasm-release-paired"
+            "configurePreset": "wasm-release-paired",
+            "targets": ["game_seed"]
         },
         {
             "name": "wasm-release-simd",
-            "configurePreset": "wasm-release-simd"
+            "configurePreset": "wasm-release-simd",
+            "targets": ["game_seed"]
         },
         {
             "name": "wasm-analysis",
-            "configurePreset": "wasm-analysis"
+            "configurePreset": "wasm-analysis",
+            "targets": ["game_seed"]
         }
     ]
 }

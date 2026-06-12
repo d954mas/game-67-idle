@@ -38,11 +38,11 @@ Passing threshold:
 Use these as raw prompts to a fresh agent or as self-check scenarios:
 
 ```text
-Make a first GDD for a compact fantasy RPG with exploration, camp preparation, and companion talk.
+Make a first GDD for a tiny toy-factory puzzle game with collection, upgrades, and a clear first minute.
 ```
 
 ```text
-Research compact RPGs like The Quest and mobile survival/RPG hybrids, then make a visual GDD. I want to see gameplay, not only text.
+Research compact browser puzzle and idle games for a kid-friendly casual audience, then make a visual GDD. I want to see gameplay, not only text.
 ```
 
 ```text

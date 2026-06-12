@@ -1,136 +1,61 @@
 # Project Status
 
-Operational project-status index. Rules for this file live in
-`tasks/README.md`.
+Short live project-status index. Workflow rules live in `tasks/README.md`.
 
 ## Current Goal
 
-No active scoped goal is selected. A clean exported foundation for the user's
-next game concept is ready at `C:\tmp\clean-game-base-20260612`; the fantasy RPG
-slice is historical testbed/evidence, not active product work.
+Prepare this repository itself as a clean base for the user's next game idea.
 
-Sources: `tasks/epics/E003-ai-pipeline-hardening.md`,
-`tasks/epics/E004-clean-project-pipeline-trial.md`,
-`tasks/archive/E004/T0043-run-first-clean-project-game-pipeline-trial.md`,
-`tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
-`AI_PIPELINE.md`.
+Source: current user request.
 
 ## Active Work
 
-Task store restructuring is complete. Current task context is now
-`tasks/active/`; historical done/dropped evidence is in `tasks/archive/`; and
-`tasks/README.md` is the single source of workflow rules. Default
-`taskboard list` shows actionable work only; raw ideas require `list --ideas`.
-`tasks/README.md` also defines Intent To Scope: agents translate natural
-language into one explicit scope, state it before acting, and ask when ambiguous.
-Task creation/refinement thresholds are also canonical there, so agents do not
-create duplicate tasks or implement unrefined ideas.
-Done/evidence gates are canonical there too; portable pipeline changes must be
-validated in both the current repo and a freshly exported project.
-Checkpoint/handoff discipline is canonical there as well: substantial work must
-leave task logs and `STATUS.md` sufficient for resume without chat history.
-`AI_PIPELINE.md` defines multi-agent work-packet discipline for delegated or
-parallel work, plus scoped tool/search/validation discipline.
-The old visual-GDD `data/implementation_tasks.json` duplicate task source is
-retired; work tracking is only in `tasks/`.
-Skill/process regression checks now live in `tools/skills_eval.mjs` and are
-included in portable-base export. The eval now covers `task-manager`,
-`game-runtime-automation`, and `primary-gdd-pipeline`.
-Taskboard validation now rejects empty active actionable tasks and empty active
-epics, while allowing raw `idea` items to stay lightweight until refined.
-`taskboard validate` now prints remediation hints for common problems so agents
-can recover faster when validation fails.
-Reusable design knowledge now lives only in `gamedesign/knowledge/`; portable
-export has no fallback to typo paths. Clean base is available at
-`C:\tmp\clean-game-base-20260612`.
-Taskboard editor now has a side-by-side Markdown preview for task and epic
-bodies, with a tested safe renderer for common task syntax.
-Reusable pipeline validation now has a single command:
-`node tools/pipeline_validate.mjs`.
+No game concept is active yet. Do not invent one.
 
-Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
-`tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`,
-`tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
-`tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
-`tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
-`tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
-`tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`,
-`tasks/archive/E003/T0012-board-ux-markdown-preview-manual-ordering-done-c.md`,
-`tasks/archive/E003/T0042-single-command-portable-pipeline-validation.md`,
-`tasks/README.md`, `AI_PIPELINE.md`.
+The project is intentionally clean:
+
+- old game/task history is not part of the current context;
+- `tasks/` is still the single source of truth for future work items;
+- DevAPI, state codegen, save/load, migrations, and capture tooling are kept as
+  reusable AI/runtime infrastructure;
+- new work starts only after the user describes the next game or explicitly
+  asks for a pipeline change.
 
 ## Current Gate
 
-Current gate: wait for the user's new game concept. Enter the next concept in
-`C:\tmp\clean-game-base-20260612`, not in this old testbed repository.
+Wait for the user's new game concept. When it arrives, translate the natural
+language request into one explicit scope, say what will be done, ask if
+ambiguous, then create only the needed current task/epic.
 
-Sources: `tasks/archive/E004/T0043-run-first-clean-project-game-pipeline-trial.md`,
-`tasks/README.md`.
+Do not remove `state/`, `tools/state_codegen/`, `src/devapi/`, `tools/devapi/`,
+`src/game_storage.*`, or `external/cjson/`; they are the reusable runtime seed.
 
 ## Required Validation
 
 ```powershell
 node tools/taskboard/cli.mjs list
 node tools/pipeline_validate.mjs
+cmake --preset native-debug
+cmake --build --preset native-debug
 ```
-
-Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
-`tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
-`tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
-`tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
-`tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
-`tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`,
-`tasks/archive/E003/T0012-board-ux-markdown-preview-manual-ordering-done-c.md`,
-`tasks/archive/E003/T0042-single-command-portable-pipeline-validation.md`.
 
 ## Last Known Good Evidence
 
-Fantasy RPG web RC audit passed:
-`build/captures/web_visual_qa_audit/2026-06-12T07-30-22-344Z/report.json`.
+Clean seed runtime evidence:
 
-Summary: desktop and mobile portrait each captured 23 screenshots, drove 22
-interactions through `23_shrine_attunement`, and reported zero console warnings
-and zero page errors.
+- `node tools/taskboard/cli.mjs validate`
+- `node tools/skills_eval.mjs`
+- `node tools/pipeline_validate.mjs`
+- `py -3.12 tools/state_codegen/generate_state.py`
+- `cmake --preset native-debug`
+- `cmake --build --preset native-debug`
+- `py -3.12 tools/devapi/smoke_test.py 9123`
+- `py -3.12 tools/devapi/full_probe.py 9123`
+- `py -3.12 tools/devapi/scenarios/state_roundtrip.py 9124`
+- `py -3.12 tools/devapi/scenarios/settings_modal.py 9125`
+- `py -3.12 tools/devapi/scenarios/ui_button_text.py 9126`
 
-Source:
-`tasks/archive/E001/T0037-poki-web-rc-full-path-browser-playtest-audit.md`.
-
-Latest pipeline cleanup evidence: T0010 retired `implementation_tasks.json`;
-visual GDD site validation, package validation, and taskboard validation passed.
-
-Source:
-`tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`.
-
-Latest skill/process evidence: T0018 added `tools/skills_eval.mjs`; current
-repo and fresh export passed skill eval and task validation.
-T0016 extended that eval to `primary-gdd-pipeline`; current repo and fresh
-export passed skill eval and task validation.
-T0019 added anti-entropy validation for actionable task bodies and active epic
-scope bodies; current repo and fresh export passed taskboard tests, taskboard
-validation, and skill eval.
-T0020 added CLI remediation hints for common taskboard validation failures;
-current repo and fresh export passed taskboard tests, taskboard validation, and
-skill eval.
-T0014/T0043 resolved the design-knowledge path cleanup: reusable knowledge now
-uses canonical `gamedesign/knowledge`, and portable export has no typo fallback.
-T0012 added taskboard Markdown preview; current repo and fresh export passed
-taskboard tests, taskboard validation, skill eval, and HTTP static smoke.
-T0042 added `node tools/pipeline_validate.mjs`; the command passed and validated
-both this repo and a fresh export.
-E003 is now done; no actionable backlog or raw ideas remain.
-E004/T0043 is active: prepare a clean project base for the user's future game
-idea without importing old game files or task history.
-Clean base evidence: `C:\tmp\clean-game-base-20260612` has no tasks, no
-`gamedesing` path, canonical `gamedesign/knowledge`, starter rules that tell
-agents not to invent a concept, and passed `node tools/pipeline_validate.mjs`.
-
-Sources: `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
-`tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
-`tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
-`tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
-`tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`,
-`tasks/archive/E003/T0012-board-ux-markdown-preview-manual-ordering-done-c.md`,
-`tasks/archive/E003/T0042-single-command-portable-pipeline-validation.md`.
+All passed after the cleanup.
 
 ## Blocking Work
 
@@ -138,15 +63,10 @@ None.
 
 ## Non-blocking Debt
 
-Dirty old game/runtime files still exist in this repository's working tree, but
-they are out of scope for the clean exported project base.
-
-Historical game/testbed debt is archived with E001, including T0025.
-
-Sources: `tasks/archive/E001/T0025-replace-temporary-wasm-release-workaround-with-o.md`.
+None recorded.
 
 ## Next Priorities
 
-1. Wait for the user's game concept.
-2. Enter the concept in `C:\tmp\clean-game-base-20260612` as one scoped task or
-   epic before creating GDD/content.
+1. Wait for the user's next game concept.
+2. Turn the concept into one scoped current task or epic.
+3. Keep the clean seed runtime and AI pipeline docs short and current.

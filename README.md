@@ -1,129 +1,71 @@
-# Game 67 Idle
+# Game Seed
 
-Small Neotolis Engine smoke-test game project. The engine is connected as a git
-submodule at `external/neotolis-engine`.
+Clean AI-first game project base for the next concept.
 
-## Controls
+This repository is currently a neutral testbed:
 
-- Left mouse drag: rotate the object.
-- Mouse wheel: zoom.
-- `A` / `D`: previous / next test shape.
-- `W`: switch solid, wire, and solid+wire mode.
-- `R`: reset rotation.
-- `Esc`: quit native build.
+- no active game concept is selected;
+- old game-specific design, task history, content, assets, and product files
+  are removed;
+- reusable AI workflow lives in `AI_PIPELINE.md`, `AGENTS.md`, `tasks/`, and
+  `.codex/skills/`;
+- reusable design knowledge lives in `gamedesign/knowledge/`;
+- game code starts at `src/main.c`;
+- universal AI runtime support is kept: DevAPI, screenshot capture, state
+  codegen, save/load, migrations, and smoke scenarios.
 
-## Setup
+The engine is connected as a git submodule at `external/neotolis-engine`.
+
+## Build
 
 ```powershell
 git submodule update --init --recursive
 cmake --preset native-debug
-cmake --build --preset native-debug --target game_67_idle
+cmake --build --preset native-debug
 ```
 
 Native executable:
 
 ```text
-build/game_67_idle/native-debug/game_67_idle.exe
+build/game_seed/native-debug/game_seed.exe
 ```
 
-## WASM
-
-Activate Emscripten first, then configure through `emcmake`. The `wasm-debug`
-preset uses `MinSizeRel` plus full engine asserts so local web builds stay fast
-enough for iteration.
+## Run
 
 ```powershell
-emcmake.bat cmake --preset wasm-debug
-cmake --build --preset wasm-debug --target game_67_idle
-powershell -ExecutionPolicy Bypass -File scripts/serve-web.ps1 build/game_67_idle/wasm-debug 8080
+build/game_seed/native-debug/game_seed.exe
 ```
 
-Open `http://localhost:8080/index.html`.
+The placeholder screen is intentionally minimal. Click or press `Space` to
+cycle colors. `Esc` quits native builds.
 
-## Pack Builder
+## DevAPI
 
-The pack task verifies that the game can use the engine offline builder while
-the engine is a submodule:
+Native debug builds expose the agent command bus:
 
 ```powershell
-cmake --build --preset native-debug --target game_67_idle_pack
+build/game_seed/native-debug/game_seed.exe --devapi 9123 --fresh-state --disable-autosave
 ```
 
-Output:
-
-```text
-build/game_67_idle/game_67_idle.ntpack
-src/generated/game_67_idle_assets.h
-```
-
-The runtime Basis Universal transcoder is disabled by default for this smoke
-scene (`GAME_ENABLE_BASISU_RUNTIME=OFF`) so web links stay small. Turn it on
-when the game starts loading Basis-compressed textures.
-
-## VS Code
-
-Use `.vscode/tasks.json` and `.vscode/launch.json`:
-
-- `Build: native debug`
-- `Run: native debug`
-- `Pack: build game pack debug`
-- `Pack: build game pack release`
-- `Build: wasm debug`
-- `Web: serve debug`
-- `Release: native PC`
-- `Release: web`
-- `Web: serve release`
-- `Release: all`
-
-Run and Debug configurations:
-
-- `Native Debug (PC)`
-- `Native Release (PC)`
-- `Web Debug (Chrome)`
-- `Web Release (Chrome)`
-- `Build Pack Debug`
-- `Build Pack Release`
-
-CMake Tools also has explicit build presets:
-
-- `game-native-debug`
-- `game-native-release`
-- `pack-native-debug`
-- `pack-native-release`
-- `game-wasm-debug`
-- `game-wasm-release`
-
-## DevAPI Bot Harness
-
-Native debug builds can expose a local JSON-lines DevAPI for bots and smoke
-tests:
-
-```powershell
-build/game_67_idle/native-debug/game_67_idle.exe --devapi 9123
-```
-
-Useful tools:
+Useful checks:
 
 ```powershell
 py -3.12 tools/devapi/smoke_test.py 9123
-py -3.12 tools/devapi/bot_demo.py 9123
-py -3.12 tools/devapi/capture_demo.py 9123
-py -3.12 tools/devapi/devapi_cli.py 9123 game.state
+py -3.12 tools/devapi/full_probe.py 9123
+py -3.12 tools/devapi/scenarios/state_roundtrip.py 9123
 ```
 
-Bots should use `tools/devapi/devapi_client.py` and keep their loop explicit:
+State schema source: `state/game_state.schema.json`. Generated C files are
+derived from it by `tools/state_codegen/generate_state.py`.
 
-```python
-from devapi_client import running_game
+## Web
 
-with running_game(port=9123) as game:
-    state = game.observe()
-    state = game.key_tap("D")
-    state = game.scroll_ui("scene.viewport", dy=-120)
-    screenshot = game.capture_screenshot("build/captures/check.png")
+Use this when the task targets web/mobile behavior.
+
+```powershell
+cmake --preset wasm-debug
+cmake --build --preset wasm-debug
+powershell -ExecutionPolicy Bypass -File scripts/serve-web.ps1 build/game_seed/wasm-debug 8080
 ```
 
-The protocol is frame-aware. Prefer ordered batches like
-`input -> frame.wait -> game.state` instead of sleeping.
-Recording is also available through `game.record_gameplay(...)` when `ffmpeg`
-is installed.
+Open `http://localhost:8080/index.html`.

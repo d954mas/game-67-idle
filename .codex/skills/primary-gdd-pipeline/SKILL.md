@@ -48,7 +48,7 @@ small vertical slice instead of a large document set.
 
 ## Start Checklist
 
-1. Read `AGENTS.md`; locate the design root (`gamedesing/`, `gamedesign/`, `docs/design/`, or `GDD.md`).
+1. Read `AGENTS.md`; locate the design root (`gamedesign/`, `docs/design/`, or `GDD.md`).
 2. Check `git status` and ignore rules for `tmp/` and generation folders.
 3. Write the DoD: what must exist, what is out of scope, what proof is accepted.
 4. For visual asks, decide the tier up front: reference / fake shot / runtime asset pack.

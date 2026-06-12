@@ -5,7 +5,7 @@ param(
     [int]$Width = 0,
     [int]$Height = 0,
     [int]$ProcessId = 0,
-    [string]$ProcessName = "game_67_idle"
+    [string]$ProcessName = "game_seed"
 )
 
 $ErrorActionPreference = "Stop"

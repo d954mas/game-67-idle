@@ -224,11 +224,11 @@ the only record of a decision, blocker, or validation result.
 ```markdown
 ---
 id: T0001
-title: Camp rest action
+title: First playable action
 status: backlog
 epic: E001
 priority: P2
-tags: [state, camp]
+tags: [state, core-loop]
 created: 2026-06-11
 updated: 2026-06-11
 ---

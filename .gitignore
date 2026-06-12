@@ -1,6 +1,5 @@
 build/
 tmp/
-gamedesing/assets/generated/source/
 .cache/
 .vs/
 .vscode/.cmake/
@@ -8,8 +7,6 @@ compile_commands.json
 *.user
 *.suo
 *.ntpack
-src/generated/*.h
-!src/generated/game_state.h
-!src/generated/game_state_schema.gen.h
+src/generated/
 __pycache__/
 *.pyc

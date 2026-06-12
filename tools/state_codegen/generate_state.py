@@ -32,7 +32,7 @@ REQUIRED_FIELDS = {
     "items",
     "inventory.item_ids",
     "equipment.hand_item_id",
-    "meme_coins",
+    "seed_points",
     "status",
     "click_power",
     "income_per_second",
@@ -41,11 +41,11 @@ REQUIRED_FIELDS = {
     "coolness",
     "comfort",
     "visual_stage",
-    "first_upgrade_owned",
-    "second_upgrade_owned",
-    "third_upgrade_owned",
-    "fourth_upgrade_owned",
-    "fifth_upgrade_owned",
+    "first_milestone_done",
+    "second_milestone_done",
+    "third_milestone_done",
+    "fourth_milestone_done",
+    "fifth_milestone_done",
     "active_job_id",
     "active_job_elapsed_ms",
     "active_job_duration_ms",
@@ -75,8 +75,8 @@ def c_macro(value: str) -> str:
 def load_schema() -> dict[str, Any]:
     with SCHEMA_PATH.open("r", encoding="utf-8") as f:
         schema = json.load(f)
-    if schema.get("schema") != "game_67_idle.state":
-        raise SystemExit("schema id must be game_67_idle.state")
+    if schema.get("schema") != "game_seed.state":
+        raise SystemExit("schema id must be game_seed.state")
     if schema.get("document") != "game":
         raise SystemExit("document must be game")
     if schema.get("version") != 1:
