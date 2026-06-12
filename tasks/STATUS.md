@@ -32,11 +32,13 @@ parallel work, plus scoped tool/search/validation discipline.
 The old visual-GDD `data/implementation_tasks.json` duplicate task source is
 retired; work tracking is only in `tasks/`.
 Skill/process regression checks now live in `tools/skills_eval.mjs` and are
-included in portable-base export.
+included in portable-base export. The eval now covers `task-manager`,
+`game-runtime-automation`, and `primary-gdd-pipeline`.
 
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`,
 `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
+`tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
 `tasks/README.md`, `AI_PIPELINE.md`.
 
 ## Current Gate
@@ -61,7 +63,8 @@ node tools/taskboard/cli.mjs validate
 ```
 
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
-`tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`.
+`tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
+`tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`.
 
 ## Last Known Good Evidence
 
@@ -83,9 +86,11 @@ Source:
 
 Latest skill/process evidence: T0018 added `tools/skills_eval.mjs`; current
 repo and fresh export passed skill eval and task validation.
+T0016 extended that eval to `primary-gdd-pipeline`; current repo and fresh
+export passed skill eval and task validation.
 
-Source:
-`tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`.
+Sources: `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
+`tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`.
 
 ## Blocking Work
 
@@ -101,8 +106,7 @@ Sources: `tasks/archive/E001/T0025-replace-temporary-wasm-release-workaround-wit
 
 ## Next Priorities
 
-1. Continue with T0016: evaluate `primary-gdd-pipeline` behavior after trim.
-2. Then T0019: recurring entropy cleanup for stale docs, unused skills, and weak
-   examples.
-3. Keep default task context focused on E003 until a new active game or
+1. Continue with T0019: recurring entropy cleanup for stale docs, unused skills,
+   and weak examples.
+2. Keep default task context focused on E003 until a new active game or
    pipeline epic is selected.
