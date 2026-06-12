@@ -1,7 +1,7 @@
 ---
 id: E003
 title: AI pipeline hardening
-status: active
+status: done
 priority: P1
 tags: [ai-pipeline, tooling]
 created: 2026-06-12
@@ -32,3 +32,11 @@ workflow changes before they become reusable project base.
 - Moving historical archived evidence back into default context.
 
 ## Log
+
+- 2026-06-12: Completed hardening pass. Closed active/archive task split,
+  retired duplicate implementation task data, added intent-to-scope and
+  checkpoint rules, added skill regression evals, added anti-entropy taskboard
+  validation and remediation hints, froze legacy `gamedesing/` only for this
+  testbed while exporting corrected `gamedesign/`, added taskboard Markdown
+  preview, and added `node tools/pipeline_validate.mjs` as the reusable-base
+  gate.

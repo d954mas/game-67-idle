@@ -5,9 +5,9 @@ Operational project-status index. Rules for this file live in
 
 ## Current Goal
 
-Harden the reusable AI game-development pipeline so future agents start fast,
-keep context small, and do not confuse current work with historical task logs.
-The fantasy RPG slice is historical testbed/evidence, not active product work.
+No active scoped goal is selected. The reusable AI pipeline hardening pass is
+complete, and the fantasy RPG slice is historical testbed/evidence, not active
+product work.
 
 Sources: `tasks/epics/E003-ai-pipeline-hardening.md`,
 `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
@@ -58,9 +58,8 @@ Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 
 ## Current Gate
 
-Current gate: no actionable pipeline task and no raw idea task is currently
-ready. Continuing pipeline work requires a new user-directed scope or a newly
-captured/refined task.
+Current gate: wait for a new user-directed scope. If work continues, create or
+refine exactly one task/epic before implementation.
 
 Source: `tasks/README.md`.
 
@@ -114,6 +113,7 @@ T0012 added taskboard Markdown preview; current repo and fresh export passed
 taskboard tests, taskboard validation, skill eval, and HTTP static smoke.
 T0042 added `node tools/pipeline_validate.mjs`; the command passed and validated
 both this repo and a fresh export.
+E003 is now done; no actionable backlog or raw ideas remain.
 
 Sources: `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
@@ -129,7 +129,8 @@ None.
 
 ## Non-blocking Debt
 
-No actionable backlog or raw ideas remain for the current pipeline gate.
+No actionable backlog, raw ideas, or active epic remain for the current pipeline
+gate.
 
 Historical game/testbed debt is archived with E001, including T0025.
 
@@ -137,7 +138,6 @@ Sources: `tasks/archive/E001/T0025-replace-temporary-wasm-release-workaround-wit
 
 ## Next Priorities
 
-1. Ask the user for the next pipeline improvement or create one scoped task from
-   the next concrete friction point.
-2. Keep default task context focused on E003 until a new active game or
-   pipeline epic is selected.
+1. Ask the user for the next concrete goal.
+2. For any new goal, create/refine one scoped task or epic before implementation
+   if it needs durable tracking.
