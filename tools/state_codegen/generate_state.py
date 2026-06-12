@@ -299,8 +299,7 @@ typedef bool (*game_state_changed_fn)(const char *path, void *user, char *error,
 
 extern GameState g_game_state;
 
-const char *game_state_shape_name(int value);
-const char *game_state_render_mode_name(int value);
+{render_enum_name_decls(schema)}
 
 void game_state_init_defaults(GameState *state);
 void game_state_init(void);
@@ -546,6 +545,291 @@ void game_state_register_devapi(void) {{
 """
 
 
+# Per-field code generation. Scalar fields (bool/int/float/string/enum,
+# including dotted paths like settings.master_volume) are fully generated
+# from the schema via /*@GEN:...@*/ markers in game_state.c.in. Only the
+# structural patterns stay hand-written in the template: the items map,
+# the inventory id list, and ref-checked optional strings (string?).
+
+GENERATED_SCALAR_TYPES = {"bool", "int", "float", "string", "enum"}
+
+
+def generated_fields(schema: dict[str, Any]) -> list[dict[str, Any]]:
+    return [f for f in schema["fields"] if f["type"] in GENERATED_SCALAR_TYPES]
+
+
+def path_group_key(path: str) -> tuple[str | None, str]:
+    if "." in path:
+        group, key = path.split(".", 1)
+        return group, key
+    return None, path
+
+
+def enum_alias(field: dict[str, Any]) -> str | None:
+    path = field["path"]
+    return path[: -len("_index")] if path.endswith("_index") else None
+
+
+def enum_table(field: dict[str, Any]) -> tuple[str, str]:
+    """Return (names_table, count_macro) for an enum field."""
+    enum_name = field["enum"]
+    return f"k_{c_ident(enum_name)}_names", f"GAME_STATE_{c_macro(enum_name)}_COUNT"
+
+
+def render_enum_name_decls(schema: dict[str, Any]) -> str:
+    return "\n".join(
+        f"const char *game_state_{c_ident(name)}_name(int value);" for name in schema["enums"]
+    )
+
+
+def render_enum_tables(schema: dict[str, Any]) -> str:
+    blocks: list[str] = []
+    for name, values in schema["enums"].items():
+        ename = c_ident(name)
+        lines = [f"static const char *const k_{ename}_names[GAME_STATE_{c_macro(name)}_COUNT] = {{"]
+        lines.extend(f'    "{value}",' for value in values)
+        lines.append("};")
+        blocks.append("\n".join(lines))
+    for name in schema["enums"]:
+        ename = c_ident(name)
+        blocks.append(
+            f"const char *game_state_{ename}_name(int value) {{\n"
+            f"    return (value >= 0 && value < GAME_STATE_{c_macro(name)}_COUNT) ? k_{ename}_names[value] : \"unknown\";\n"
+            f"}}"
+        )
+    return "\n\n".join(blocks)
+
+
+def render_defaults(schema: dict[str, Any]) -> str:
+    lines: list[str] = []
+    for field in generated_fields(schema):
+        ident = c_ident(field["path"])
+        macro = f"GAME_STATE_{c_macro(field['path'])}"
+        if field["type"] == "string":
+            lines.append(f"    (void)copy_text(state->{ident}, sizeof(state->{ident}), {macro}_DEFAULT);")
+        else:
+            lines.append(f"    state->{ident} = {macro}_DEFAULT;")
+    return "\n".join(lines)
+
+
+def render_validate(schema: dict[str, Any]) -> str:
+    lines: list[str] = []
+    for field in generated_fields(schema):
+        path = field["path"]
+        ident = c_ident(path)
+        macro = f"GAME_STATE_{c_macro(path)}"
+        if field["type"] == "enum":
+            _, count_macro = enum_table(field)
+            condition = f"state->{ident} < 0 || state->{ident} >= {count_macro}"
+        elif field["type"] in {"int", "float"}:
+            condition = f"state->{ident} < {macro}_MIN || state->{ident} > {macro}_MAX"
+        else:
+            continue
+        lines.append(f"    if ({condition}) {{")
+        lines.append(f'        set_error(error, error_cap, "{path} out of range");')
+        lines.append("        return false;")
+        lines.append("    }")
+    return "\n".join(lines)
+
+
+def render_to_json(schema: dict[str, Any]) -> str:
+    lines: list[str] = []
+    emitted_groups: set[str] = set()
+    for field in generated_fields(schema):
+        path = field["path"]
+        ident = c_ident(path)
+        group, key = path_group_key(path)
+        target = "root"
+        if group:
+            if group not in emitted_groups:
+                emitted_groups.add(group)
+                lines.append("")
+                lines.append(f'    cJSON *{group} = cJSON_AddObjectToObject(root, "{group}");')
+            target = group
+        if field["type"] == "enum":
+            alias = enum_alias(field)
+            lines.append(f'    cJSON_AddNumberToObject({target}, "{key}", state->{ident});')
+            if alias:
+                ename = c_ident(field["enum"])
+                lines.append(f'    cJSON_AddStringToObject({target}, "{alias}", game_state_{ename}_name(state->{ident}));')
+        elif field["type"] == "int":
+            lines.append(f'    cJSON_AddNumberToObject({target}, "{key}", state->{ident});')
+        elif field["type"] == "float":
+            lines.append(f'    cJSON_AddNumberToObject({target}, "{key}", (double)state->{ident});')
+        elif field["type"] == "bool":
+            lines.append(f'    cJSON_AddBoolToObject({target}, "{key}", state->{ident});')
+        elif field["type"] == "string":
+            lines.append(f'    cJSON_AddStringToObject({target}, "{key}", state->{ident});')
+    return "\n".join(lines)
+
+
+def render_get_path(schema: dict[str, Any]) -> str:
+    lines: list[str] = []
+
+    def emit(path: str, expr: str) -> None:
+        lines.append(f'    if (strcmp(path, "{path}") == 0) {{')
+        lines.append(f"        return {expr};")
+        lines.append("    }")
+
+    for field in generated_fields(schema):
+        path = field["path"]
+        ident = c_ident(path)
+        if field["type"] == "enum":
+            emit(path, f"cJSON_CreateNumber(state->{ident})")
+            alias = enum_alias(field)
+            if alias:
+                ename = c_ident(field["enum"])
+                emit(alias, f"cJSON_CreateString(game_state_{ename}_name(state->{ident}))")
+        elif field["type"] == "int":
+            emit(path, f"cJSON_CreateNumber(state->{ident})")
+        elif field["type"] == "float":
+            emit(path, f"cJSON_CreateNumber((double)state->{ident})")
+        elif field["type"] == "bool":
+            emit(path, f"cJSON_CreateBool(state->{ident})")
+        elif field["type"] == "string":
+            emit(path, f"cJSON_CreateString(state->{ident})")
+    return "\n".join(lines)
+
+
+def render_set_path(schema: dict[str, Any]) -> str:
+    chunks: list[str] = []
+    for field in generated_fields(schema):
+        path = field["path"]
+        ident = c_ident(path)
+        macro = f"GAME_STATE_{c_macro(path)}"
+        typ = field["type"]
+        if typ == "enum":
+            names_table, count_macro = enum_table(field)
+            chunks.append(
+                f'    if (strcmp(path, "{path}") == 0) {{\n'
+                f"        if (!parse_enum_value(value, {names_table}, {count_macro}, &state->{ident}, error, error_cap)) {{\n"
+                f"            return false;\n"
+                f"        }}\n"
+                f"        return true;\n"
+                f"    }}"
+            )
+            alias = enum_alias(field)
+            if alias:
+                chunks.append(
+                    f'    if (strcmp(path, "{alias}") == 0) {{\n'
+                    f"        if (!cJSON_IsString(value)) {{\n"
+                    f'            set_error(error, error_cap, "{alias} expects string");\n'
+                    f"            return false;\n"
+                    f"        }}\n"
+                    f"        int index = enum_index(value->valuestring, {names_table}, {count_macro});\n"
+                    f"        if (index < 0) {{\n"
+                    f'            set_error(error, error_cap, "unknown {alias}");\n'
+                    f"            return false;\n"
+                    f"        }}\n"
+                    f"        state->{ident} = index;\n"
+                    f"        return true;\n"
+                    f"    }}"
+                )
+        elif typ == "int":
+            chunks.append(
+                f'    if (strcmp(path, "{path}") == 0) {{\n'
+                f"        int parsed = 0;\n"
+                f"        if (!parse_int_value(value, {macro}_MIN, {macro}_MAX, &parsed, error, error_cap)) {{\n"
+                f"            return false;\n"
+                f"        }}\n"
+                f"        state->{ident} = parsed;\n"
+                f"        return true;\n"
+                f"    }}"
+            )
+        elif typ == "float":
+            chunks.append(
+                f'    if (strcmp(path, "{path}") == 0) {{\n'
+                f"        if (!cJSON_IsNumber(value)) {{\n"
+                f'            set_error(error, error_cap, "{path} expects number");\n'
+                f"            return false;\n"
+                f"        }}\n"
+                f"        float parsed = (float)value->valuedouble;\n"
+                f"        if (parsed < {macro}_MIN || parsed > {macro}_MAX) {{\n"
+                f'            set_error(error, error_cap, "{path} out of range");\n'
+                f"            return false;\n"
+                f"        }}\n"
+                f"        state->{ident} = parsed;\n"
+                f"        return true;\n"
+                f"    }}"
+            )
+        elif typ == "bool":
+            chunks.append(
+                f'    if (strcmp(path, "{path}") == 0) {{\n'
+                f"        if (!cJSON_IsBool(value)) {{\n"
+                f'            set_error(error, error_cap, "{path} expects bool");\n'
+                f"            return false;\n"
+                f"        }}\n"
+                f"        state->{ident} = cJSON_IsTrue(value);\n"
+                f"        return true;\n"
+                f"    }}"
+            )
+        elif typ == "string":
+            chunks.append(
+                f'    if (strcmp(path, "{path}") == 0) {{\n'
+                f"        if (!cJSON_IsString(value) || !copy_text(state->{ident}, sizeof(state->{ident}), value->valuestring)) {{\n"
+                f'            set_error(error, error_cap, "{path} expects short string");\n'
+                f"            return false;\n"
+                f"        }}\n"
+                f"        return true;\n"
+                f"    }}"
+            )
+    return "\n".join(chunks)
+
+
+def render_from_json(schema: dict[str, Any]) -> str:
+    lines: list[str] = []
+    emitted_groups: set[str] = set()
+
+    def read_call(field: dict[str, Any], source: str, key: str) -> list[str]:
+        ident = c_ident(field["path"])
+        macro = f"GAME_STATE_{c_macro(field['path'])}"
+        typ = field["type"]
+        if typ == "enum":
+            names_table, count_macro = enum_table(field)
+            calls = [f'read_enum({source}, "{key}", {names_table}, {count_macro}, &next.{ident}, error, error_cap)']
+            alias = enum_alias(field)
+            if alias and source == "json":
+                calls.append(f'read_enum({source}, "{alias}", {names_table}, {count_macro}, &next.{ident}, error, error_cap)')
+            return calls
+        if typ == "int":
+            return [f'read_int_range({source}, "{key}", {macro}_MIN, {macro}_MAX, &next.{ident}, error, error_cap)']
+        if typ == "float":
+            return [f'read_float_range({source}, "{key}", {macro}_MIN, {macro}_MAX, &next.{ident}, error, error_cap)']
+        if typ == "bool":
+            return [f'read_bool({source}, "{key}", &next.{ident}, error, error_cap)']
+        if typ == "string":
+            return [f'read_string({source}, "{key}", next.{ident}, sizeof(next.{ident}), error, error_cap)']
+        raise AssertionError(typ)
+
+    for field in generated_fields(schema):
+        group, key = path_group_key(field["path"])
+        if group:
+            if group not in emitted_groups:
+                emitted_groups.add(group)
+                lines.append(f'    const cJSON *{group} = object_item(json, "{group}");')
+            for call in read_call(field, group, key):
+                lines.append(f"    if ({group} && !{call}) {{")
+                lines.append("        return false;")
+                lines.append("    }")
+        else:
+            for call in read_call(field, "json", key):
+                lines.append(f"    if (!{call}) {{")
+                lines.append("        return false;")
+                lines.append("    }")
+    return "\n".join(lines)
+
+
+SOURCE_MARKERS = {
+    "/*@GEN:ENUM_TABLES@*/": render_enum_tables,
+    "/*@GEN:DEFAULTS@*/": render_defaults,
+    "/*@GEN:VALIDATE@*/": render_validate,
+    "/*@GEN:TO_JSON@*/": render_to_json,
+    "/*@GEN:GET_PATH@*/": render_get_path,
+    "/*@GEN:SET_PATH@*/": render_set_path,
+    "/*@GEN:FROM_JSON@*/": render_from_json,
+}
+
+
 def render_source(schema: dict[str, Any]) -> str:
     if not SOURCE_TEMPLATE_PATH.exists():
         raise SystemExit(f"missing source template: {SOURCE_TEMPLATE_PATH.relative_to(ROOT)}")
@@ -559,10 +843,14 @@ def render_source(schema: dict[str, Any]) -> str:
         )
     if "GAME_STATE_SCHEMA_ID" not in text or "game_state_from_json" not in text:
         raise SystemExit("source template does not look like a game state implementation")
+    for marker, render in SOURCE_MARKERS.items():
+        if marker not in text:
+            raise SystemExit(f"source template missing marker: {marker}")
+        text = text.replace(marker, render(schema))
     for field in schema["fields"]:
         path = field["path"]
         if path not in text and c_ident(path) not in text:
-            raise SystemExit(f"source template does not cover schema field: {path}")
+            raise SystemExit(f"generated source does not cover schema field: {path}")
     return text
 
 

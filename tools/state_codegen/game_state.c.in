@@ -29,18 +29,7 @@ static const GameStateMigration k_migrations[] = {
     {0, 1, game_state_migrate_v0_to_v1},
 };
 
-static const char *const k_shape_names[GAME_STATE_SHAPE_COUNT] = {
-    "cube",
-    "sphere",
-    "cylinder",
-    "capsule",
-};
-
-static const char *const k_render_mode_names[GAME_STATE_RENDER_MODE_COUNT] = {
-    "solid_wire",
-    "solid",
-    "wire",
-};
+/*@GEN:ENUM_TABLES@*/
 
 GameState g_game_state;
 
@@ -211,26 +200,9 @@ static bool notify_changed(const char *path, char *error, int error_cap) {
     return s_changed(path, s_changed_user, error, error_cap);
 }
 
-const char *game_state_shape_name(int value) {
-    return (value >= 0 && value < GAME_STATE_SHAPE_COUNT) ? k_shape_names[value] : "unknown";
-}
-
-const char *game_state_render_mode_name(int value) {
-    return (value >= 0 && value < GAME_STATE_RENDER_MODE_COUNT) ? k_render_mode_names[value] : "unknown";
-}
-
 void game_state_init_defaults(GameState *state) {
     memset(state, 0, sizeof(*state));
-    state->shape_index = GAME_STATE_SHAPE_INDEX_DEFAULT;
-    state->render_mode_index = GAME_STATE_RENDER_MODE_INDEX_DEFAULT;
-    state->camera_distance = GAME_STATE_CAMERA_DISTANCE_DEFAULT;
-    state->test_ui_clicks = GAME_STATE_TEST_UI_CLICKS_DEFAULT;
-    (void)copy_text(state->test_label_text, sizeof(state->test_label_text), GAME_STATE_TEST_LABEL_TEXT_DEFAULT);
-    (void)copy_text(state->test_button_text, sizeof(state->test_button_text), GAME_STATE_TEST_BUTTON_TEXT_DEFAULT);
-    state->settings_master_volume = GAME_STATE_SETTINGS_MASTER_VOLUME_DEFAULT;
-    state->settings_sfx_volume = GAME_STATE_SETTINGS_SFX_VOLUME_DEFAULT;
-    state->wallet_soft = GAME_STATE_WALLET_SOFT_DEFAULT;
-    state->wallet_hard = GAME_STATE_WALLET_HARD_DEFAULT;
+/*@GEN:DEFAULTS@*/
 }
 
 void game_state_init(void) {
@@ -271,32 +243,7 @@ bool game_state_validate(const GameState *state, char *error, int error_cap) {
         set_error(error, error_cap, "state is null");
         return false;
     }
-    if (state->shape_index < 0 || state->shape_index >= GAME_STATE_SHAPE_COUNT) {
-        set_error(error, error_cap, "shape_index out of range");
-        return false;
-    }
-    if (state->render_mode_index < 0 || state->render_mode_index >= GAME_STATE_RENDER_MODE_COUNT) {
-        set_error(error, error_cap, "render_mode_index out of range");
-        return false;
-    }
-    if (state->camera_distance < GAME_STATE_CAMERA_DISTANCE_MIN || state->camera_distance > GAME_STATE_CAMERA_DISTANCE_MAX) {
-        set_error(error, error_cap, "camera_distance out of range");
-        return false;
-    }
-    if (state->test_ui_clicks < GAME_STATE_TEST_UI_CLICKS_MIN || state->test_ui_clicks > GAME_STATE_TEST_UI_CLICKS_MAX) {
-        set_error(error, error_cap, "test_ui_clicks out of range");
-        return false;
-    }
-    if (state->settings_master_volume < GAME_STATE_SETTINGS_MASTER_VOLUME_MIN || state->settings_master_volume > GAME_STATE_SETTINGS_MASTER_VOLUME_MAX ||
-        state->settings_sfx_volume < GAME_STATE_SETTINGS_SFX_VOLUME_MIN || state->settings_sfx_volume > GAME_STATE_SETTINGS_SFX_VOLUME_MAX) {
-        set_error(error, error_cap, "settings volume out of range");
-        return false;
-    }
-    if (state->wallet_soft < GAME_STATE_WALLET_SOFT_MIN || state->wallet_soft > GAME_STATE_WALLET_SOFT_MAX ||
-        state->wallet_hard < GAME_STATE_WALLET_HARD_MIN || state->wallet_hard > GAME_STATE_WALLET_HARD_MAX) {
-        set_error(error, error_cap, "wallet value out of range");
-        return false;
-    }
+/*@GEN:VALIDATE@*/
     if (state->inventory_item_ids_count < 0 || state->inventory_item_ids_count > GAME_STATE_MAX_INVENTORY_ITEM_IDS) {
         set_error(error, error_cap, "inventory_item_ids_count out of range");
         return false;
@@ -363,25 +310,7 @@ static cJSON *item_to_json(const GameItemInstance *item) {
 
 cJSON *game_state_to_json(const GameState *state) {
     cJSON *root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "shape_index", state->shape_index);
-    cJSON_AddStringToObject(root, "shape", game_state_shape_name(state->shape_index));
-    cJSON_AddNumberToObject(root, "render_mode_index", state->render_mode_index);
-    cJSON_AddStringToObject(root, "render_mode", game_state_render_mode_name(state->render_mode_index));
-    cJSON_AddNumberToObject(root, "camera_distance", (double)state->camera_distance);
-    cJSON_AddNumberToObject(root, "test_ui_clicks", state->test_ui_clicks);
-    cJSON_AddStringToObject(root, "test_label_text", state->test_label_text);
-    cJSON_AddStringToObject(root, "test_button_text", state->test_button_text);
-
-    cJSON *settings = cJSON_AddObjectToObject(root, "settings");
-    cJSON_AddNumberToObject(settings, "master_volume", (double)state->settings_master_volume);
-    cJSON_AddNumberToObject(settings, "sfx_volume", (double)state->settings_sfx_volume);
-
-    cJSON *tutorial = cJSON_AddObjectToObject(root, "tutorial");
-    cJSON_AddBoolToObject(tutorial, "done", state->tutorial_done);
-
-    cJSON *wallet = cJSON_AddObjectToObject(root, "wallet");
-    cJSON_AddNumberToObject(wallet, "soft", state->wallet_soft);
-    cJSON_AddNumberToObject(wallet, "hard", state->wallet_hard);
+/*@GEN:TO_JSON@*/
 
     cJSON *items = cJSON_AddObjectToObject(root, "items");
     for (int i = 0; i < GAME_STATE_MAX_ITEMS; i++) {
@@ -513,45 +442,7 @@ cJSON *game_state_get_path_json(const GameState *state, const char *path, char *
     if (!path || path[0] == '\0') {
         return game_state_to_json(state);
     }
-    if (strcmp(path, "shape_index") == 0) {
-        return cJSON_CreateNumber(state->shape_index);
-    }
-    if (strcmp(path, "shape") == 0) {
-        return cJSON_CreateString(game_state_shape_name(state->shape_index));
-    }
-    if (strcmp(path, "render_mode_index") == 0) {
-        return cJSON_CreateNumber(state->render_mode_index);
-    }
-    if (strcmp(path, "render_mode") == 0) {
-        return cJSON_CreateString(game_state_render_mode_name(state->render_mode_index));
-    }
-    if (strcmp(path, "camera_distance") == 0) {
-        return cJSON_CreateNumber((double)state->camera_distance);
-    }
-    if (strcmp(path, "test_ui_clicks") == 0) {
-        return cJSON_CreateNumber(state->test_ui_clicks);
-    }
-    if (strcmp(path, "test_label_text") == 0) {
-        return cJSON_CreateString(state->test_label_text);
-    }
-    if (strcmp(path, "test_button_text") == 0) {
-        return cJSON_CreateString(state->test_button_text);
-    }
-    if (strcmp(path, "settings.master_volume") == 0) {
-        return cJSON_CreateNumber((double)state->settings_master_volume);
-    }
-    if (strcmp(path, "settings.sfx_volume") == 0) {
-        return cJSON_CreateNumber((double)state->settings_sfx_volume);
-    }
-    if (strcmp(path, "tutorial.done") == 0) {
-        return cJSON_CreateBool(state->tutorial_done);
-    }
-    if (strcmp(path, "wallet.soft") == 0) {
-        return cJSON_CreateNumber(state->wallet_soft);
-    }
-    if (strcmp(path, "wallet.hard") == 0) {
-        return cJSON_CreateNumber(state->wallet_hard);
-    }
+/*@GEN:GET_PATH@*/
     if (strcmp(path, "items") == 0) {
         cJSON *items = cJSON_CreateObject();
         for (int i = 0; i < GAME_STATE_MAX_ITEMS; i++) {
@@ -618,118 +509,7 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
         set_error(error, error_cap, "path and value are required");
         return false;
     }
-    if (strcmp(path, "shape_index") == 0) {
-        if (!parse_enum_value(value, k_shape_names, GAME_STATE_SHAPE_COUNT, &state->shape_index, error, error_cap)) {
-            return false;
-        }
-        return true;
-    }
-    if (strcmp(path, "shape") == 0) {
-        if (!cJSON_IsString(value)) {
-            set_error(error, error_cap, "shape expects string");
-            return false;
-        }
-        int index = enum_index(value->valuestring, k_shape_names, GAME_STATE_SHAPE_COUNT);
-        if (index < 0) {
-            set_error(error, error_cap, "unknown shape");
-            return false;
-        }
-        state->shape_index = index;
-        return true;
-    }
-    if (strcmp(path, "render_mode_index") == 0) {
-        if (!parse_enum_value(value, k_render_mode_names, GAME_STATE_RENDER_MODE_COUNT, &state->render_mode_index, error, error_cap)) {
-            return false;
-        }
-        return true;
-    }
-    if (strcmp(path, "render_mode") == 0) {
-        if (!cJSON_IsString(value)) {
-            set_error(error, error_cap, "render_mode expects string");
-            return false;
-        }
-        int index = enum_index(value->valuestring, k_render_mode_names, GAME_STATE_RENDER_MODE_COUNT);
-        if (index < 0) {
-            set_error(error, error_cap, "unknown render mode");
-            return false;
-        }
-        state->render_mode_index = index;
-        return true;
-    }
-    if (strcmp(path, "camera_distance") == 0) {
-        if (!cJSON_IsNumber(value)) {
-            set_error(error, error_cap, "camera_distance expects number");
-            return false;
-        }
-        float camera = (float)value->valuedouble;
-        if (camera < GAME_STATE_CAMERA_DISTANCE_MIN || camera > GAME_STATE_CAMERA_DISTANCE_MAX) {
-            set_error(error, error_cap, "camera_distance out of range");
-            return false;
-        }
-        state->camera_distance = camera;
-        return true;
-    }
-    if (strcmp(path, "test_ui_clicks") == 0) {
-        int clicks = 0;
-        if (!parse_int_value(value, GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &clicks, error, error_cap)) {
-            return false;
-        }
-        state->test_ui_clicks = clicks;
-        return true;
-    }
-    if (strcmp(path, "test_label_text") == 0) {
-        if (!cJSON_IsString(value) || !copy_text(state->test_label_text, sizeof(state->test_label_text), value->valuestring)) {
-            set_error(error, error_cap, "test_label_text expects short string");
-            return false;
-        }
-        return true;
-    }
-    if (strcmp(path, "test_button_text") == 0) {
-        if (!cJSON_IsString(value) || !copy_text(state->test_button_text, sizeof(state->test_button_text), value->valuestring)) {
-            set_error(error, error_cap, "test_button_text expects short string");
-            return false;
-        }
-        return true;
-    }
-    if (strcmp(path, "settings.master_volume") == 0 || strcmp(path, "settings.sfx_volume") == 0) {
-        if (!cJSON_IsNumber(value) ||
-            (strcmp(path, "settings.master_volume") == 0 &&
-             (value->valuedouble < (double)GAME_STATE_SETTINGS_MASTER_VOLUME_MIN || value->valuedouble > (double)GAME_STATE_SETTINGS_MASTER_VOLUME_MAX)) ||
-            (strcmp(path, "settings.sfx_volume") == 0 &&
-             (value->valuedouble < (double)GAME_STATE_SETTINGS_SFX_VOLUME_MIN || value->valuedouble > (double)GAME_STATE_SETTINGS_SFX_VOLUME_MAX))) {
-            set_error(error, error_cap, "settings volume out of range");
-            return false;
-        }
-        if (strcmp(path, "settings.master_volume") == 0) {
-            state->settings_master_volume = (float)value->valuedouble;
-        } else {
-            state->settings_sfx_volume = (float)value->valuedouble;
-        }
-        return true;
-    }
-    if (strcmp(path, "tutorial.done") == 0) {
-        if (!cJSON_IsBool(value)) {
-            set_error(error, error_cap, "tutorial.done expects bool");
-            return false;
-        }
-        state->tutorial_done = cJSON_IsTrue(value);
-        return true;
-    }
-    if (strcmp(path, "wallet.soft") == 0 || strcmp(path, "wallet.hard") == 0) {
-        int amount = 0;
-        if (strcmp(path, "wallet.soft") == 0) {
-            if (!parse_int_value(value, GAME_STATE_WALLET_SOFT_MIN, GAME_STATE_WALLET_SOFT_MAX, &amount, error, error_cap)) {
-                return false;
-            }
-            state->wallet_soft = amount;
-        } else {
-            if (!parse_int_value(value, GAME_STATE_WALLET_HARD_MIN, GAME_STATE_WALLET_HARD_MAX, &amount, error, error_cap)) {
-                return false;
-            }
-            state->wallet_hard = amount;
-        }
-        return true;
-    }
+/*@GEN:SET_PATH@*/
     if (strcmp(path, "items") == 0) {
         if (!set_items_from_json(state, value, error, error_cap)) {
             return false;
@@ -849,31 +629,7 @@ bool game_state_from_json(GameState *state, const cJSON *json, char *error, int 
     GameState next;
     game_state_init_defaults(&next);
 
-    if (!read_enum(json, "shape_index", k_shape_names, GAME_STATE_SHAPE_COUNT, &next.shape_index, error, error_cap) ||
-        !read_enum(json, "shape", k_shape_names, GAME_STATE_SHAPE_COUNT, &next.shape_index, error, error_cap) ||
-        !read_enum(json, "render_mode_index", k_render_mode_names, GAME_STATE_RENDER_MODE_COUNT, &next.render_mode_index, error, error_cap) ||
-        !read_enum(json, "render_mode", k_render_mode_names, GAME_STATE_RENDER_MODE_COUNT, &next.render_mode_index, error, error_cap) ||
-        !read_float_range(json, "camera_distance", GAME_STATE_CAMERA_DISTANCE_MIN, GAME_STATE_CAMERA_DISTANCE_MAX, &next.camera_distance, error, error_cap) ||
-        !read_int_range(json, "test_ui_clicks", GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &next.test_ui_clicks, error, error_cap) ||
-        !read_string(json, "test_label_text", next.test_label_text, sizeof(next.test_label_text), error, error_cap) ||
-        !read_string(json, "test_button_text", next.test_button_text, sizeof(next.test_button_text), error, error_cap)) {
-        return false;
-    }
-
-    const cJSON *settings = object_item(json, "settings");
-    if (settings && (!read_float_range(settings, "master_volume", GAME_STATE_SETTINGS_MASTER_VOLUME_MIN, GAME_STATE_SETTINGS_MASTER_VOLUME_MAX, &next.settings_master_volume, error, error_cap) ||
-                     !read_float_range(settings, "sfx_volume", GAME_STATE_SETTINGS_SFX_VOLUME_MIN, GAME_STATE_SETTINGS_SFX_VOLUME_MAX, &next.settings_sfx_volume, error, error_cap))) {
-        return false;
-    }
-    const cJSON *tutorial = object_item(json, "tutorial");
-    if (tutorial && !read_bool(tutorial, "done", &next.tutorial_done, error, error_cap)) {
-        return false;
-    }
-    const cJSON *wallet = object_item(json, "wallet");
-    if (wallet && (!read_int_range(wallet, "soft", GAME_STATE_WALLET_SOFT_MIN, GAME_STATE_WALLET_SOFT_MAX, &next.wallet_soft, error, error_cap) ||
-                   !read_int_range(wallet, "hard", GAME_STATE_WALLET_HARD_MIN, GAME_STATE_WALLET_HARD_MAX, &next.wallet_hard, error, error_cap))) {
-        return false;
-    }
+/*@GEN:FROM_JSON@*/
     const cJSON *items = object_item(json, "items");
     if (items && !set_items_from_json(&next, items, error, error_cap)) {
         return false;

@@ -11,6 +11,7 @@ Use this skill to keep game state explicit, typed, migratable, and agent-legible
 
 1. Read `state/*.schema.json` first. Treat schemas as the source of truth for documents, fields, types, defaults, limits, DevAPI permissions, collections, and migrations.
 2. Inspect `tools/state_codegen/generate_state.py` and generated code under `src/generated/` before editing call sites. Do not guess path names.
+   Scalar fields (bool/int/float/string/enum, including dotted paths) are fully generated from the schema via `/*@GEN:...@*/` markers in the source template — adding such a field needs only a schema edit plus regeneration. Hand-edit the template only for structural patterns (owned-object maps, id lists, ref-checked optional strings).
 3. After schema edits, run `py -3.12 tools/state_codegen/generate_state.py`. The generator owns `src/generated/game_state.h`, `src/generated/game_state.c`, `src/generated/game_state_devapi.c`, and embedded schema JSON.
 4. Keep runtime code working with the current `GameState` only. Old saves must be transformed before parsing into C structs.
 5. Add migrations as `state/migrations/vN_to_vN_plus_1.c`. Migrations receive old `cJSON *state`, mutate it to the next version, and must be deterministic.
