@@ -160,6 +160,12 @@ dialog::backdrop { background: #000a; }
 .editor-fields label.grow { flex: 1; min-width: 160px; }
 .editor-fields .grow input { width: 100%; }
 
+.body-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
 #fBody {
   width: 100%;
   height: 300px;
@@ -169,7 +175,55 @@ dialog::backdrop { background: #000a; }
   white-space: pre;
 }
 
+.markdown-preview {
+  height: 300px;
+  overflow: auto;
+  background: #151a20;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 9px 12px;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3 {
+  margin: 12px 0 6px;
+  line-height: 1.2;
+}
+
+.markdown-preview h1 { font-size: 18px; }
+.markdown-preview h2 { font-size: 15px; }
+.markdown-preview h3 { font-size: 13px; color: var(--muted); text-transform: uppercase; }
+.markdown-preview p { margin: 0 0 8px; }
+.markdown-preview ul { margin: 0 0 10px 18px; padding: 0; }
+.markdown-preview li { margin: 3px 0; }
+.markdown-preview code {
+  background: #0d1116;
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-family: Consolas, "Cascadia Mono", monospace;
+}
+.markdown-preview pre {
+  background: #0d1116;
+  border-radius: 6px;
+  padding: 8px;
+  overflow: auto;
+}
+.markdown-preview pre code { padding: 0; background: transparent; }
+.markdown-preview .task-check {
+  list-style: none;
+  margin-left: -18px;
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.markdown-preview .task-check input { margin: 3px 0 0; }
+
 .editor-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .editor-foot .meta { color: var(--muted); font-size: 12px; }
 
 .empty-hint { color: var(--muted); padding: 30px; }
+
+@media (max-width: 760px) {
+  .body-editor { grid-template-columns: 1fr; }
+}

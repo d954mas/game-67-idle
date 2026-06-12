@@ -40,6 +40,8 @@ epics, while allowing raw `idea` items to stay lightweight until refined.
 can recover faster when validation fails.
 Current testbed keeps legacy `gamedesing/`; portable export maps reusable design
 knowledge to corrected `gamedesign/knowledge/` for new projects.
+Taskboard editor now has a side-by-side Markdown preview for task and epic
+bodies, with a tested safe renderer for common task syntax.
 
 Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/unassigned/T0010-retire-implementation-tasks-json-in-favor-of-tas.md`,
@@ -48,13 +50,14 @@ Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
 `tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
 `tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`,
+`tasks/archive/E003/T0012-board-ux-markdown-preview-manual-ordering-done-c.md`,
 `tasks/README.md`, `AI_PIPELINE.md`.
 
 ## Current Gate
 
-Current gate: no actionable pipeline task is currently ready. If pipeline work
-continues, refine one raw idea from `node tools/taskboard/cli.mjs list --ideas`
-or create a new scoped task from the user's next direction.
+Current gate: no actionable pipeline task and no raw idea task is currently
+ready. Continuing pipeline work requires a new user-directed scope or a newly
+captured/refined task.
 
 Source: `tasks/README.md`.
 
@@ -77,7 +80,8 @@ Sources: `tasks/archive/E003/T0038-add-active-archive-task-store-structure.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
 `tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
 `tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
-`tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`.
+`tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`,
+`tasks/archive/E003/T0012-board-ux-markdown-preview-manual-ordering-done-c.md`.
 
 ## Last Known Good Evidence
 
@@ -109,12 +113,15 @@ current repo and fresh export passed taskboard tests, taskboard validation, and
 skill eval.
 T0014 froze `gamedesing/` as this testbed's legacy path and updated portable
 export so new projects use `gamedesign/knowledge/`.
+T0012 added taskboard Markdown preview; current repo and fresh export passed
+taskboard tests, taskboard validation, skill eval, and HTTP static smoke.
 
 Sources: `tasks/archive/E003/T0018-add-activation-output-evals-for-key-skills-task-.md`,
 `tasks/archive/E003/T0016-eval-primary-gdd-pipeline-behavior-after-trim-sk.md`,
 `tasks/archive/E003/T0019-recurring-entropy-cleanup-stale-docs-unused-skil.md`,
 `tasks/archive/E003/T0020-cli-mjs-validate-add-remediation-hints-to-proble.md`,
-`tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`.
+`tasks/archive/E003/T0014-decide-fix-gamedesing-typo-or-freeze-as-conventi.md`,
+`tasks/archive/E003/T0012-board-ux-markdown-preview-manual-ordering-done-c.md`.
 
 ## Blocking Work
 
@@ -122,9 +129,7 @@ None.
 
 ## Non-blocking Debt
 
-No actionable backlog remains for the current pipeline gate. Raw ideas are
-available via `node tools/taskboard/cli.mjs list --ideas`: T0012 board UX. It
-must be refined before implementation.
+No actionable backlog or raw ideas remain for the current pipeline gate.
 
 Historical game/testbed debt is archived with E001, including T0025.
 
@@ -132,9 +137,7 @@ Sources: `tasks/archive/E001/T0025-replace-temporary-wasm-release-workaround-wit
 
 ## Next Priorities
 
-1. Choose the next user-directed pipeline improvement and create/refine one
-   scoped task.
-2. If continuing from raw ideas, inspect `list --ideas` and refine exactly one
-   item before implementation.
-3. Keep default task context focused on E003 until a new active game or
+1. Ask the user for the next pipeline improvement or create one scoped task from
+   the next concrete friction point.
+2. Keep default task context focused on E003 until a new active game or
    pipeline epic is selected.

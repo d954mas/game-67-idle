@@ -33,7 +33,10 @@
         <label id="epicFieldWrap">Epic <select id="fEpic" name="epic"></select></label>
         <label class="grow">Tags <input id="fTags" name="tags" placeholder="comma, separated" autocomplete="off"></label>
       </div>
-      <textarea id="fBody" name="body" spellcheck="false"></textarea>
+      <div class="body-editor">
+        <textarea id="fBody" name="body" spellcheck="false"></textarea>
+        <div id="bodyPreview" class="markdown-preview" aria-label="Markdown preview"></div>
+      </div>
       <div class="editor-foot">
         <span id="editorMeta" class="meta"></span>
         <span class="spacer"></span>
@@ -43,6 +46,7 @@
     </form>
   </dialog>
 
+  <script src="markdown_preview.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

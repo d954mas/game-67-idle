@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import vm from "node:vm";
 import {
   parseDoc, serializeDoc, slugify, createTask, createEpic, listTasks,
   listEpics, updateDoc, findDoc, validateStore,
@@ -189,4 +190,27 @@ test("cli validate prints remediation hints for common failures", (t) => {
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /problem: T0001: actionable task needs/);
   assert.match(result.stdout, /hint: fill `## What` and at least one checkable `## Done when`/);
+});
+
+test("markdown preview renders task syntax and escapes html", () => {
+  const sandbox = {};
+  sandbox.globalThis = sandbox;
+  const source = readFileSync(join(import.meta.dirname, "public", "markdown_preview.js"), "utf8");
+  vm.runInNewContext(source, sandbox);
+  const html = sandbox.TaskboardMarkdown.renderMarkdown(`# Title
+
+- [x] **done** \`code\`
+- item
+
+\`\`\`
+<tag>
+\`\`\`
+
+<script>alert(1)</script>`);
+  assert.match(html, /<h1>Title<\/h1>/);
+  assert.match(html, /<input type="checkbox" disabled checked>/);
+  assert.match(html, /<strong>done<\/strong>/);
+  assert.match(html, /<code>code<\/code>/);
+  assert.match(html, /&lt;tag&gt;/);
+  assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
 });

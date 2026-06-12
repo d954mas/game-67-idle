@@ -29,6 +29,7 @@ const els = {
   fEpic: document.getElementById("fEpic"),
   fTags: document.getElementById("fTags"),
   fBody: document.getElementById("fBody"),
+  bodyPreview: document.getElementById("bodyPreview"),
   epicFieldWrap: document.getElementById("epicFieldWrap"),
 };
 
@@ -124,6 +125,10 @@ function renderEpicSelects() {
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function renderBodyPreview() {
+  els.bodyPreview.innerHTML = TaskboardMarkdown.renderMarkdown(els.fBody.value);
 }
 
 function renderBoard() {
@@ -233,6 +238,7 @@ function openEditor(kind, id) {
   }
   els.fTags.value = doc ? (doc.fields.tags || []).join(", ") : "";
   els.fBody.value = doc ? doc.body : "";
+  renderBodyPreview();
   els.editorMeta.textContent = doc ? `created ${doc.fields.created} · updated ${doc.fields.updated}` : "";
   els.editor.showModal();
   els.fTitle.focus();
@@ -275,6 +281,7 @@ els.epicFilter.addEventListener("change", () => { state.filterEpic = els.epicFil
 els.showClosed.addEventListener("change", () => { state.showClosed = els.showClosed.checked; render(); });
 els.newTask.addEventListener("click", () => openEditor("task", null));
 els.newEpic.addEventListener("click", () => openEditor("epic", null));
+els.fBody.addEventListener("input", renderBodyPreview);
 els.editorCancel.addEventListener("click", () => { state.editing = null; els.editor.close(); });
 els.editorForm.addEventListener("submit", (ev) => {
   ev.preventDefault();
