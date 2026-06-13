@@ -546,3 +546,18 @@ specific and reusable.
   low-coverage gaps or add sparse checkpoints next cycle.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0073`.
+
+## 2026-06-13 - Reflection closeout should be one command
+
+- Context: A complete profiled-session closeout requires summary, review
+  markdown/JSON, and follow-up drafts.
+- Friction: The workflow asked agents to remember and run multiple commands
+  after already finishing the real work.
+- Time sink: Reflection prep became another manual checklist and could be
+  skipped or run out of order.
+- Likely cause: `closeout.mjs` only wrote a summary; `review.mjs` and
+  `followups.mjs` were separate manual steps.
+- Proposed improvement: Make `closeout.mjs` write the full scratch reflection
+  bundle by default, with opt-outs for summary-only or no-followups cases.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0074`.

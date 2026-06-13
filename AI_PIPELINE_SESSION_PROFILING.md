@@ -35,7 +35,8 @@ Commit reusable profiling infrastructure:
 Do not commit raw session telemetry by default:
 
 - `tmp/session_profiles/*.jsonl`
-- generated `*.summary.md`
+- generated `*.summary.md`, `*.review.md`, `*.review.json`,
+  `*.followups.md`, and `*.followups.json`
 - recovered thread dumps
 - command transcripts
 - one-off timing extracts
@@ -249,7 +250,8 @@ Record tools by role:
 - `context.mjs`: context-read checkpoint writer that measures local file
   character counts and fills `context_inputs` automatically.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
-  and writes a scratch summary artifact.
+  and writes a scratch reflection bundle: summary, review markdown/JSON, and
+  follow-up markdown/JSON.
 - `review.mjs`: reflection prep helper that turns a JSONL profile into
   priority findings: waste/rework, failures, blockers, context hotspots,
   repeated commands, repeated command scope (`preflight`, `scoped`,
@@ -330,8 +332,11 @@ For normal long-session closeout, prefer:
 node tools/ai_profile/closeout.mjs
 ```
 
-`closeout.mjs` appends a final closeout event, writes the `.summary.md`, prints
-both paths, and keeps all raw/profile artifacts under `tmp/session_profiles/`.
+`closeout.mjs` appends a final closeout event, writes the `.summary.md`,
+`.review.md`, `.review.json`, `.followups.md`, and `.followups.json`, prints
+their paths, and keeps all raw/profile artifacts under `tmp/session_profiles/`.
+Use `--no-review` for summary-only closeout, or `--no-followups` when review
+artifacts are needed but follow-up drafts are intentionally skipped.
 
 The summary reports:
 
@@ -352,6 +357,9 @@ node tools/ai_profile/review.mjs tmp/session_profiles/session_profile_YYYY-MM-DD
 
 The review is not a replacement for judgment. It is a fast checklist of what
 the agent must explain or convert into process improvements.
+When `closeout.mjs` was used without `--no-review`, these review artifacts are
+already generated and this manual review command is only needed after further
+profile edits.
 
 For automation or cross-agent handoff, also write the machine-readable review:
 
@@ -376,6 +384,8 @@ Follow-up drafts are not tasks yet. Promote only still-relevant items after
 checking current tasks and recent commits. Drafts include repeated validation,
 missing context inputs, missing work-item metadata, low wall-clock coverage,
 failed records, and waste/rework when those findings appear in review JSON.
+When `closeout.mjs` was used without `--no-followups`, these drafts are already
+generated and this manual command is only needed after rerunning review.
 
 When the review shows repeated broad commands, plan the next validation loop
 before running it:
@@ -401,16 +411,20 @@ A "profiled session" is done when:
   separate loops;
 - the summary script passes and writes a scratch `.summary.md` closeout when
   the session is long enough to reflect on;
-- `closeout.mjs` is used for normal session closeout unless a custom summary
-  path or manual investigation is needed;
-- `review.mjs` is used before deeper reflection when a profile exists;
+- `closeout.mjs` is used for normal session closeout unless manual
+  investigation is needed;
+- the closeout bundle includes summary, review markdown/JSON, and follow-up
+  markdown/JSON unless explicitly skipped with `--no-review` or
+  `--no-followups`;
+- `review.mjs` is used before deeper reflection when a profile exists and the
+  closeout bundle was skipped or stale;
 - `review.mjs --json-output` is used when another tool/agent will consume the
   findings instead of a human reading the markdown;
 - low wall-clock coverage or large profile gaps are explained in the
   retrospective, or the next cycle adds sparse `event.mjs` checkpoints for
   long manual/research/design stretches;
 - `followups.mjs` is used when review JSON should become draft next actions
-  for task/rule/tool promotion;
+  for task/rule/tool promotion and the closeout bundle was skipped or stale;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste;
 - the final response names profile path and summary path;

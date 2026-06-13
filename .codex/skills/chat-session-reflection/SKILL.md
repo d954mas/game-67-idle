@@ -100,17 +100,18 @@ Before writing a retrospective from a live profile, run
 tmp/session_profiles/<name>.summary.md` and cite the summary path. If the
 summary cannot be generated, state that profiling evidence is incomplete.
 For normal session closeout, prefer `tools/ai_profile/closeout.mjs`, which
-records a closeout event and writes the summary in one step.
-Then run `tools/ai_profile/review.mjs <profile.jsonl> --output
-tmp/session_profiles/<name>.review.md` to extract waste/rework, failures,
-blockers, context hotspots, repeated commands, and suggested pipeline actions
-before writing the human retrospective.
-When the review findings need to feed another tool or agent, add
-`--json-output tmp/session_profiles/<name>.review.json` and treat that JSON as
-scratch telemetry unless the lead asks to preserve it.
-When review JSON exists, use `tools/ai_profile/followups.mjs` to produce draft
-next actions, then promote only still-relevant drafts into tasks, rules, or
-tools after checking current taskboard state.
+records a closeout event and writes the summary, review markdown/JSON, and
+follow-up markdown/JSON in one closeout bundle.
+Run `tools/ai_profile/review.mjs <profile.jsonl> --output
+tmp/session_profiles/<name>.review.md --json-output
+tmp/session_profiles/<name>.review.json` only when the closeout bundle was
+skipped, stale, or intentionally created with `--no-review`. The review
+extracts waste/rework, failures, blockers, context hotspots, repeated commands,
+and suggested pipeline actions before the human retrospective.
+Run `tools/ai_profile/followups.mjs` only when review JSON was rerun manually
+or the closeout bundle was created with `--no-followups`. Promote only
+still-relevant drafts into tasks, rules, or tools after checking current
+taskboard state.
 For multi-task profiles, inspect `work_items`, `iterations`, and
 `repeated_broad_final_by_work_item` before calling repeated validation waste.
 If many records lack work-item metadata, add a next-cycle fix: pass
