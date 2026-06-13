@@ -89,6 +89,13 @@ When the user asks for full AI-development profiling, use
 `AI_PIPELINE_SESSION_PROFILING.md` and `tools/ai_profile/`. A proper profile
 must separate useful work, necessary overhead, rework, and waste; report context
 inputs and compactions; and state what was not measurable.
+If the reflection suggests adopting external AI observability/eval tooling,
+consult `AI_PIPELINE_OBSERVABILITY_TOOLS.md` and run
+`tools/ai_profile/observability_gate.mjs` before recommending LangSmith,
+Phoenix, Langfuse, Braintrust, OpenTelemetry/OTLP export, or similar systems.
+Local JSONL remains the baseline unless a bounded pilot proves lower
+reflection/debug time or enables a shared eval/review workflow the local profile
+cannot cover.
 
 For future long sessions, prefer collecting data during work with
 `tools/ai_profile/start.mjs --work-item <id> --iteration <name>` at the

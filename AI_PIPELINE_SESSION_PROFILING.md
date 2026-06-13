@@ -349,6 +349,12 @@ Record tools by role:
   wall-clock coverage and largest unprofiled gaps, missing work-item metadata,
   missing context input details, recovered versus unresolved failed records,
   and suggested pipeline actions.
+- `observability_gate.mjs`: decision helper for proposed external AI
+  observability/eval platforms. Use it before adopting LangSmith, Phoenix,
+  Langfuse, Braintrust, OpenTelemetry/OTLP export, or similar tooling. The
+  local JSONL profile stays the baseline; external systems start as bounded
+  pilots unless the pilot already proved a repeated time saving or a team/eval
+  workflow the local profile cannot cover.
 - `plan_validation.mjs`: pre-validation helper that prints a narrow-to-broad
   validation ladder for the changed work kind. Use it when `review.mjs` reports
   repeated commands, before broad reusable-base checks, or when the right
@@ -542,6 +548,9 @@ A "profiled session" is done when:
   for task/rule/tool promotion and the closeout bundle was skipped or stale;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste;
+- `observability_gate.mjs` is used before adding external tracing/eval
+  platforms; the decision and pilot result are captured in a task log or
+  durable pipeline note, while raw exported telemetry stays in `tmp/`;
 - the final response names profile path and summary path;
 - any repeated waste is converted into a task, skill rule, or pipeline rule;
 - the retrospective uses the profile instead of relying only on memory.

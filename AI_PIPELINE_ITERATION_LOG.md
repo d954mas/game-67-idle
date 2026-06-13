@@ -755,3 +755,21 @@ specific and reusable.
   retrospective history.
 - Follow-up owner: Future profiling/tooling agents.
 - Status: Implemented in `T0086`.
+
+## 2026-06-13 - External observability needs a gate
+
+- Trigger: The lead asked whether ready-made AI observability tools were too
+  setup-heavy and whether we should build our own.
+- Symptom: Without a decision gate, agents can either overbuild local tooling
+  forever or prematurely add LangSmith/Phoenix/Langfuse/Braintrust/OpenTelemetry
+  plumbing before a concrete dashboard/eval/review need exists.
+- Time sink: Tool research can become another manual reflection task if it does
+  not end in an operational rule.
+- Likely cause: The pipeline described local profiling but did not define when
+  external tracing/eval systems are worth piloting.
+- Proposed improvement: Add `AI_PIPELINE_OBSERVABILITY_TOOLS.md` and
+  `tools/ai_profile/observability_gate.mjs`; keep local JSONL as the baseline,
+  require a bounded pilot for external systems, and adopt only after proven
+  time savings or shared review/eval value.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0087`.

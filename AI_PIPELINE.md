@@ -154,6 +154,14 @@ node tools/skills_sync.mjs
   during work instead of reconstructed after the fact. Use
   `tools/ai_profile/closeout.mjs` and `tools/ai_profile/review.mjs` before
   reflection so the agent starts from measured waste/rework/context findings.
+- **External AI observability is gated.** Do not add LangSmith, Phoenix,
+  Langfuse, Braintrust, OpenTelemetry export, or another tracing/eval platform
+  just because reflection needs more data. First use
+  `AI_PIPELINE_OBSERVABILITY_TOOLS.md` and
+  `node tools/ai_profile/observability_gate.mjs` to decide whether local JSONL
+  is enough, a bounded external pilot is justified, or pilot evidence makes an
+  external system an adoption candidate. Local JSONL remains the baseline
+  evidence source unless the lead explicitly changes that rule.
 - **Runtime base is protected in this repository.** `state/`,
   `tools/state_codegen/`, `src/devapi/`, `tools/devapi/`,
   `src/game_storage.*`, and `external/cjson/` are reusable AI/runtime
@@ -283,8 +291,9 @@ Portable (copied by the exporter):
   summarization, generated-art job scaffolding, and the task store (board UI +
   CLI).
 - `gamedesign/knowledge/` - accumulated design lessons.
-- `AI_PIPELINE.md`, `AI_PIPELINE_SESSION_PROFILING.md`, `tasks/README.md`,
-  starter `tasks/STATUS.md`, starter `AGENTS.md` / `CLAUDE.md`.
+- `AI_PIPELINE.md`, `AI_PIPELINE_SESSION_PROFILING.md`,
+  `AI_PIPELINE_OBSERVABILITY_TOOLS.md`, `tasks/README.md`, starter
+  `tasks/STATUS.md`, starter `AGENTS.md` / `CLAUDE.md`.
 
 Stays behind in workflow-only exports: runtime `src/`, `state/` schemas,
 `tools/devapi/` scripts, build presets, and `gamedesign/<concept>/` docs/data.

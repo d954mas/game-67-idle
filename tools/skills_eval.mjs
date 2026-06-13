@@ -279,6 +279,8 @@ const SKILL_CHECKS = [
       "faster path",
       "tool use",
       "profiling telemetry",
+      "AI_PIPELINE_OBSERVABILITY_TOOLS.md",
+      "observability_gate.mjs",
       "time by phase",
       "tmp/session_profiles",
       "start.mjs",

@@ -40,6 +40,7 @@ const COPY = [
   "gamedesign/knowledge",
   "AI_PIPELINE.md",
   "AI_PIPELINE_SESSION_PROFILING.md",
+  "AI_PIPELINE_OBSERVABILITY_TOOLS.md",
   "tasks/README.md",
 ];
 
@@ -63,6 +64,9 @@ const AGENTS_TEMPLATE = `# AGENTS.md
 - The shared human/agent process lives in \`AI_PIPELINE.md\`.
 - Long-session AI development profiling uses \`AI_PIPELINE_SESSION_PROFILING.md\`;
   raw telemetry stays in \`tmp/session_profiles/\`.
+- External AI observability/eval tools are gated by
+  \`AI_PIPELINE_OBSERVABILITY_TOOLS.md\`; start local-first and run only
+  bounded pilots until a tool proves value.
 
 ## Direction
 
