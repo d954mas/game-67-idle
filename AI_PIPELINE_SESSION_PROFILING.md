@@ -69,6 +69,7 @@ For normal work, use the fast facade:
 ```powershell
 node tools/ai.mjs start <task-id> <iteration-name>
 node tools/ai.mjs focus <next-iteration-name>
+node tools/ai.mjs summary
 node tools/ai.mjs context
 node tools/ai.mjs context --path <file>
 node tools/ai.mjs context -- <command> <args>
@@ -106,10 +107,12 @@ project gate, next priorities, source files, and validation commands. Use it
 to audit later whether the agent had the right context before choosing a
 runtime, generating art, or implementing gameplay.
 
-For other medium/high-cost context reads, use the same facade with explicit
-inputs: `node tools/ai.mjs context --path <file>` for local files, or
-`node tools/ai.mjs context -- <command>` for read-only commands whose output
-the agent uses as context.
+For low-cost task orientation, use `node tools/ai.mjs summary`; it prints the
+taskboard summary and records the output as measured context. For other
+medium/high-cost context reads, use the same facade with explicit inputs:
+`node tools/ai.mjs context --path <file>` for local files, or `node tools/ai.mjs
+context -- <command>` for read-only commands whose output the agent uses as
+context.
 
 If a profile was not started at the beginning, start it as soon as the need is
 recognized and add `late_start: true` to the first record.
@@ -386,6 +389,7 @@ Record tools by role:
 - `ai.mjs checkpoint`: fast facade for the thresholded checkpoint helper. Use
   this in normal work; call `checkpoint.mjs` or `gap_checkpoint.mjs` directly
   only when debugging or needing non-default internals.
+- `ai.mjs summary`: fast facade for measured low-context taskboard orientation.
 - `ai.mjs context --path`: fast facade for measured local file context.
 - `ai.mjs context -- <command>`: fast facade for measured read-only command
   context such as `node tools/taskboard/cli.mjs context`.
@@ -471,9 +475,13 @@ Record tools by role:
   record gets a shared `validation_batch_id`, plan risk, plan changes, tier,
   and check id so reflection can separate a planned validation batch from ad
   hoc repeated commands.
-- `taskboard context`: current-context digest for resumes and long work. Prefer
-  it before reading `tasks/STATUS.md` directly; if full status is still needed,
-  log it as a medium/high `context_input`.
+- `taskboard summary`: low-context orientation for most resumes and short
+  process iterations. Use it through `node tools/ai.mjs summary` so the output
+  is measured.
+- `taskboard context`: wider current-context digest for resumes and long work.
+  Use it through `node tools/ai.mjs context -- node tools/taskboard/cli.mjs
+  context` before reading `tasks/STATUS.md` directly; if full status is still
+  needed, log it as a medium/high `context_input`.
 - `apply_patch`: files changed, why the change was scoped.
 - `imagegen`: prompt packet path, candidate count, accepted/rejected result.
 - `view_image`: image paths, visual findings.
@@ -489,9 +497,11 @@ For long files or repeated context loads, add `context_inputs` with rough
 character counts. Exact tokens are not required; the goal is to identify
 expensive context sources.
 
-Prefer `node tools/taskboard/cli.mjs context` for current state. Reading the
-full `tasks/STATUS.md` is justified only when updating it, auditing a specific
-claim, or following an evidence path from the digest.
+Prefer `node tools/ai.mjs summary` for current state. Escalate to `node
+tools/ai.mjs context -- node tools/taskboard/cli.mjs context` only when the
+summary does not expose the task/status/evidence links needed for the decision.
+Reading the full `tasks/STATUS.md` is justified only when updating it, auditing
+a specific claim, or following an evidence path from the digest.
 When reading any medium/high-cost local context file directly, record it with
 `node tools/ai.mjs context --path <file>` so the later review can name the file
 instead of only reporting missing metadata. For command output used as context,

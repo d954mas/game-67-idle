@@ -155,10 +155,11 @@ node tools/skills_sync.mjs
   `.gitignore` is the safety net for scratch paths; the workflow rule is what
   prevents agents from creating noisy session artifacts in non-ignored
   locations. Fast path: `node tools/ai.mjs start <task> <iteration>`,
-  `node tools/ai.mjs focus <iteration>`, `node tools/ai.mjs context`, `node
-  tools/ai.mjs checkpoint "<intent>"`, `node tools/ai.mjs run -- <command>`,
-  `node tools/ai.mjs validate --change <kind> --risk <risk>`, `node
-  tools/ai.mjs status`, and `node tools/ai.mjs reflect`. Use `focus` after a
+  `node tools/ai.mjs focus <iteration>`, `node tools/ai.mjs summary`, `node
+  tools/ai.mjs context`, `node tools/ai.mjs checkpoint "<intent>"`, `node
+  tools/ai.mjs run -- <command>`, `node tools/ai.mjs validate --change <kind>
+  --risk <risk>`, `node tools/ai.mjs status`, and `node tools/ai.mjs reflect`.
+  Use `focus` after a
   commit, process fix, or direction change when the work item is the same but
   current-scope reflection should start fresh. Use `checkpoint` after long
   manual/research/review stretches so wall-clock coverage is captured without
@@ -239,9 +240,10 @@ For playable game work in this repository, the platform gate is strict:
 Default order for substantial work:
 
 1. Load the minimal current context from `tasks/README.md`, starting with
-   `node tools/taskboard/cli.mjs summary`. Use
-   `node tools/taskboard/cli.mjs context` only when the summary is not enough;
-   never read a large `tasks/STATUS.md` wholesale for orientation.
+   `node tools/ai.mjs summary`. Use
+   `node tools/ai.mjs context -- node tools/taskboard/cli.mjs context` only
+   when the summary is not enough; never read a large `tasks/STATUS.md`
+   wholesale for orientation.
 2. Inspect only the files needed for the selected scope.
 3. Prefer scoped search before repo-wide search.
 4. Make the smallest coherent change.

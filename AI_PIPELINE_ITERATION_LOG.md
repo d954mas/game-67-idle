@@ -50,6 +50,21 @@ specific and reusable.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
 
+## 2026-06-13 - Low-context orientation needs a profiled shortcut
+
+- Context: The pipeline rule switched orientation from the wide taskboard
+  context digest to the short taskboard summary.
+- Friction: The short command was easy to run directly, which meant the first
+  context read of a session could still bypass profiler tool/context metadata.
+- Time sink: Retrospectives would then show missing or incomplete context/tool
+  evidence for the exact orientation step meant to reduce context pressure.
+- Likely cause: The process rule was improved before the fast `ai.mjs` facade
+  had a matching `summary` command.
+- Proposed improvement: Add `node tools/ai.mjs summary` as a profiled wrapper
+  around `taskboard summary` and document it as the default orientation path.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
+
 ## 2026-06-13 - Current scope tool use needs shares first
 
 - Context: Whole-profile runtime/captured-elapsed sections had totals and

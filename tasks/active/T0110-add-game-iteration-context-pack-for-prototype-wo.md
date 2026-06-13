@@ -242,3 +242,6 @@ None.
 - 2026-06-13: Added context budget warnings to the profiler context helper and
   changed reflection guidance to start from taskboard summary before escalating
   to the wider context digest.
+- 2026-06-13: Added `node tools/ai.mjs summary` as the profiled shortcut for
+  low-context taskboard orientation so first-session context reads are captured
+  without running the wider digest.

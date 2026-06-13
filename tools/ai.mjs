@@ -8,6 +8,7 @@ function usage() {
   console.error(`usage:
   node tools/ai.mjs start <work-item> [iteration]
   node tools/ai.mjs focus <iteration>
+  node tools/ai.mjs summary [context options]
   node tools/ai.mjs context [--path <file> ...] [context options]
   node tools/ai.mjs context [context options] -- <command> [args...]
   node tools/ai.mjs checkpoint <intent> [--force] [--min-gap-min <n>] [checkpoint options]
@@ -19,6 +20,7 @@ function usage() {
 Fast path:
   start    set current work item and append one profiling checkpoint
   focus    start a new iteration inside the current work item
+  summary  profile and print the low-context taskboard summary
   context  profile measured context; with no args, print the game-iteration packet
   checkpoint record a meaningful manual/research/review gap without noisy short pauses
   run      run a command and record duration/result
@@ -103,6 +105,15 @@ if (command === "focus") {
     process.exit(2);
   }
   run(["tools/ai_profile/start.mjs", "--work-item", scope.work_item, "--iteration", iteration, ...options]);
+}
+
+if (command === "summary") {
+  if (argv.includes("--")) usage();
+  const args = ["tools/ai_profile/context_command.mjs", ...argv];
+  if (!hasFlag(args, "--intent")) args.push("--intent", "Load taskboard summary");
+  if (!hasFlag(args, "--reason")) args.push("--reason", "low-context orientation");
+  args.push("--", process.execPath, "tools/taskboard/cli.mjs", "summary");
+  run(args);
 }
 
 if (command === "context") {

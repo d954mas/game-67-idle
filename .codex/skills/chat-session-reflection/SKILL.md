@@ -25,9 +25,11 @@ Use current durable evidence before memory:
 If evidence is missing, label the claim as likely or unknown instead of making
 it sound proven.
 
-For context hygiene, start with `node tools/taskboard/cli.mjs summary` for
-orientation. Use `node tools/taskboard/cli.mjs context` only when the summary
-does not expose the task/status/evidence links needed for the retrospective.
+For context hygiene, start with `node tools/ai.mjs summary` for measured
+orientation. Use `node tools/ai.mjs context -- node tools/taskboard/cli.mjs
+context` only when the summary does not expose the task/status/evidence links
+needed for the retrospective; the wrapped command is
+`tools/taskboard/cli.mjs context`.
 Read the full `tasks/STATUS.md` only when auditing a specific status claim or
 updating it; otherwise treat it as high-cost context.
 
@@ -102,8 +104,9 @@ cannot cover.
 For future long sessions, prefer collecting data during work with
 `node tools/ai.mjs start <id> <iteration>` at the beginning of a focused
 iteration, `node tools/ai.mjs focus <next-iteration>` after a commit, process
-fix, or direction change inside the same work item, `node tools/ai.mjs context`
-before implementation,
+fix, or direction change inside the same work item, `node tools/ai.mjs summary`
+for low-context orientation, `node tools/ai.mjs context` before implementation
+when a wider game/context pack is needed,
 `node tools/ai.mjs checkpoint "<intent>"` after long manual/research/review
 stretches, `node tools/ai.mjs context --path <file>` for medium/high local
 context reads, `node tools/ai.mjs context -- <command>` for read-only command

@@ -1123,6 +1123,33 @@ test("context profiler warns on oversized context inputs", () => {
   }
 });
 
+test("ai facade profiles taskboard summary shortcut", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "ai-summary.jsonl");
+    const scope = join(dir, "scope.json");
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "SUMMARY", "--iteration", "shortcut"]);
+
+    const result = runRaw(["tools/ai.mjs", "summary", "--profile", profile], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /# Taskboard Summary/);
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].work_item, "SUMMARY");
+    assert.equal(records[0].iteration, "shortcut");
+    assert.equal(records[0].category, "context");
+    assert.deepEqual(records[0].tools, ["ai_profile/context_command.mjs"]);
+    assert.match(records[0].commands[0], /tools\/taskboard\/cli\.mjs summary|tools\\taskboard\\cli\.mjs summary/);
+    assert.match(records[0].context_inputs[0].path, /^command:/);
+    assert.ok(records[0].context_inputs[0].chars > 0);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("context_command records command output as measured context", () => {
   const dir = tempDir();
   try {
