@@ -81,6 +81,10 @@ function capturedElapsedSummary(tools) {
   return sortByDuration(asArray(tools).filter((item) => Number(item?.captured_elapsed_ms || 0) > 0), "captured_elapsed_ms");
 }
 
+function hasCapturedElapsedTools(tools) {
+  return asArray(tools).some((item) => toolCapturedElapsed(item));
+}
+
 function currentScopeReadout(currentClean, snapshot, tools, contextSummary, validationBatches) {
   if (!snapshot?.enabled) {
     return ["No current-scope snapshot is available; start or focus the next iteration before relying on generated reflection."];
@@ -146,7 +150,11 @@ function topImprovements(draft, currentClean) {
     improvements.push("Use validation batch evidence to separate planned validation runs from ad hoc repeated commands.");
   }
   if (asArray(draft.tool_use_summary).length > 0) {
-    improvements.push("Use tool_use_summary to explain which tool classes consumed time, failed, or produced context.");
+    if (hasCapturedElapsedTools(draft.tool_use_summary)) {
+      improvements.push("Use Tool Runtime Review for actual command/tool cost and Captured Elapsed Review for checkpointed manual, research, design, or review spans.");
+    } else {
+      improvements.push("Use tool_use_summary to explain which tool classes consumed time, failed, or produced context.");
+    }
   }
   if (asArray(draft.context_use_summary?.hotspots).length > 0) {
     const hotspot = draft.context_use_summary.hotspots[0];

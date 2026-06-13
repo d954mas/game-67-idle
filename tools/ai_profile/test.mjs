@@ -2614,7 +2614,9 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs context --path")));
     assert.ok(review.top_improvements.some((item) => item.includes("validation batch evidence")));
     assert.ok(review.top_improvements.some((item) => item.includes("repeated_command_classification")));
-    assert.ok(review.top_improvements.some((item) => item.includes("tool_use_summary")));
+    assert.ok(review.top_improvements.some((item) => item.includes("Tool Runtime Review")));
+    assert.ok(review.top_improvements.some((item) => item.includes("Captured Elapsed Review")));
+    assert.equal(review.top_improvements.some((item) => item.includes("tool_use_summary")), false);
     assert.ok(review.top_improvements.some((item) => item.includes("context_use_summary")));
     assert.ok(review.top_improvements.some((item) => item.includes("historical whole-profile review shows 2")));
     assert.equal(review.top_improvements.some((item) => item.includes("current review shows")), false);

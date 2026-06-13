@@ -32,6 +32,23 @@ specific and reusable.
 - Status:
 ```
 
+## 2026-06-13 - Top improvements must name measured time sections
+
+- Context: Reflection review already split command/tool runtime from
+  checkpoint-captured elapsed time, but `Top Improvements` still pointed to the
+  older combined `tool_use_summary` wording.
+- Friction: A fast reader could mistake checkpointed manual/research/review
+  time for slow tool execution, then optimize the wrong part of the pipeline.
+- Time sink: The agent had to manually explain that `gap_checkpoint` and
+  `checkpoint` rows were elapsed-time evidence, not expensive commands.
+- Likely cause: The summary sections evolved faster than the generated
+  recommendation text.
+- Proposed improvement: When captured elapsed rows exist, make top
+  improvements direct readers to `Tool Runtime Review` and `Captured Elapsed
+  Review` explicitly.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
+
 ## 2026-06-13 - Context hotspots need to reach reflection handoff
 
 - Context: Profile review JSON already reported `context_hotspots` and

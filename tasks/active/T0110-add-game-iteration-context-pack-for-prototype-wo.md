@@ -220,3 +220,7 @@ None.
 - 2026-06-13: Split runtime and captured elapsed review sections so fast
   reflection readers can distinguish command/tool cost from checkpointed
   manual/research/review spans without reinterpreting the raw table.
+- 2026-06-13: Updated reflection top improvements to point directly at `Tool
+  Runtime Review` and `Captured Elapsed Review` when captured elapsed rows are
+  present, so future retrospectives optimize command cost and manual/research
+  elapsed time separately.
