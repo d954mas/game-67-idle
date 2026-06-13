@@ -82,6 +82,24 @@ specific and reusable.
 - Follow-up owner: Current and future pipeline agents.
 - Status: Implemented.
 
+## 2026-06-13 - Reflection needs a synthesized current readout
+
+- Context: Current-scope snapshot, tool use, and context use were present, but
+  the agent still had to manually combine them before writing the first
+  retrospective paragraph.
+- Friction: Top improvements stayed dominated by historical lessons, so the
+  fastest path to "what happened in this iteration" was still not the first
+  generated section.
+- Time sink: Manual synthesis across current decision, snapshot, tool use, and
+  context use.
+- Likely cause: The reflection review exposed evidence but did not produce a
+  compact current-iteration readout.
+- Proposed improvement: Add `Current Scope Readout` to generated reflection
+  review with clean/actionable state, coverage, telemetry gaps, failures,
+  largest tool cost, and largest current context input.
+- Follow-up owner: Current and future pipeline agents.
+- Status: Implemented.
+
 ## 2026-06-12 - Concept setup and visual proof sequencing
 
 - Context: The user selected a child-friendly meme evolution game direction,

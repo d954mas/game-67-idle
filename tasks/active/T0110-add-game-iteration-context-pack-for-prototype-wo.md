@@ -203,3 +203,6 @@ None.
 - 2026-06-13: Added current-scope snapshot to review/draft/review handoff so
   iteration records, profiled/wall-clock time, telemetry gaps, and failure
   counts are visible without reopening profile status.
+- 2026-06-13: Added `Current Scope Readout` to reflection review so the final
+  retrospective can start from synthesized current-iteration evidence instead
+  of manually combining snapshot, tool use, and context sections.

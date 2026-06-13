@@ -42,6 +42,35 @@ function formatPercent(value) {
   return `${(number * 100).toFixed(1)}%`;
 }
 
+function currentScopeReadout(currentClean, snapshot, tools, contextSummary) {
+  if (!snapshot?.enabled) {
+    return ["No current-scope snapshot is available; start or focus the next iteration before relying on generated reflection."];
+  }
+  const lines = [];
+  const scopeName = `${snapshot.work_item || ""}${snapshot.iteration ? `/${snapshot.iteration}` : ""}` || "unknown";
+  lines.push(`Current scope ${scopeName} is ${currentClean ? "clean" : "actionable"}: ${snapshot.records || 0} record(s), ${formatMs(snapshot.profiled_ms || 0)} profiled over ${formatMs(snapshot.wall_clock_ms || 0)} wall-clock (${formatPercent(snapshot.coverage_ratio)}).`);
+  const gapTotal = Number(snapshot.missing_context_inputs || 0) + Number(snapshot.missing_work_item_records || 0) + Number(snapshot.missing_tool_records || 0);
+  if (gapTotal === 0) {
+    lines.push("Current telemetry has no context, work-item, or tool metadata gaps.");
+  } else {
+    lines.push(`Current telemetry gaps: context=${snapshot.missing_context_inputs || 0}, work_item=${snapshot.missing_work_item_records || 0}, tools=${snapshot.missing_tool_records || 0}.`);
+  }
+  const unresolved = Number(snapshot.unresolved_failed_records || 0);
+  const recovered = Number(snapshot.recovered_failed_records || 0);
+  lines.push(`Current failures: unresolved=${unresolved}, recovered=${recovered}.`);
+  const topTool = asArray(tools)[0];
+  if (topTool) {
+    lines.push(`Largest current tool cost: ${topTool.tool || "unknown"} (${formatMs(topTool.duration_ms)}, ${topTool.records || 0} record(s)).`);
+  }
+  const hotspot = asArray(contextSummary?.hotspots)[0];
+  if (hotspot) {
+    lines.push(`Largest current context input: ${hotspot.path || "unknown"} (${hotspot.chars || 0} chars).`);
+  } else {
+    lines.push("Current scope has no measured context hotspots.");
+  }
+  return lines;
+}
+
 function topImprovements(draft, currentClean) {
   const improvements = [];
   const historical = asArray(draft.historical_lessons);
@@ -109,6 +138,9 @@ function buildReview(draft, draftPath) {
   const currentStatusMessage = currentActions.length === 0
     ? "No current action items; use historical lessons as next-cycle process guidance."
     : "Resolve current action items before treating historical lessons as next-cycle guidance.";
+  const currentSnapshot = draft.current_state?.current_scope_snapshot || { enabled: false };
+  const currentTools = asArray(draft.current_state?.current_scope_tool_use_summary);
+  const currentContext = draft.current_state?.current_scope_context_use_summary || { hotspots: [], high_context: [], missing_inputs: [] };
 
   return {
     schema_version: 1,
@@ -120,9 +152,10 @@ function buildReview(draft, draftPath) {
       pending_followups: pendingFollowups,
       actions: currentActions,
       status_message: currentStatusMessage,
-      snapshot: draft.current_state?.current_scope_snapshot || { enabled: false },
-      tool_use_summary: asArray(draft.current_state?.current_scope_tool_use_summary),
-      context_use_summary: draft.current_state?.current_scope_context_use_summary || { hotspots: [], high_context: [], missing_inputs: [] },
+      readout: currentScopeReadout(currentClean, currentSnapshot, currentTools, currentContext),
+      snapshot: currentSnapshot,
+      tool_use_summary: currentTools,
+      context_use_summary: currentContext,
     },
     historical_lessons: historicalLessons,
     suppressed_historical_findings: asArray(draft.suppressed_historical_findings),
@@ -155,6 +188,9 @@ function renderMarkdown(review, draftPath) {
   } else {
     for (const action of review.current.actions) lines.push(`- ${action}`);
   }
+  lines.push("");
+  lines.push("## Current Scope Readout");
+  for (const item of asArray(review.current.readout)) lines.push(`- ${item}`);
   lines.push("");
   lines.push("## Current Scope Snapshot");
   const snapshot = review.current.snapshot || {};

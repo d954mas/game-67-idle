@@ -2530,6 +2530,10 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.match(result.stdout, /Current actions: 0/);
     assert.match(result.stdout, /historical_only/);
     assert.match(result.stdout, /No current action items/);
+    assert.match(result.stdout, /Current Scope Readout/);
+    assert.match(result.stdout, /Current scope T0099\/reflection-slice is clean: 2 record\(s\), 5\.0s profiled over 5\.0s wall-clock \(100\.0%\)/);
+    assert.match(result.stdout, /Current telemetry has no context, work-item, or tool metadata gaps/);
+    assert.match(result.stdout, /Largest current tool cost: shell_command \(5\.0s, 2 record\(s\)\)/);
     assert.match(result.stdout, /Current Scope Snapshot/);
     assert.match(result.stdout, /profiled\/wall-clock: 5\.0s \/ 5\.0s \(100\.0%\)/);
     assert.match(result.stdout, /Current Scope Tool Use/);
@@ -2555,6 +2559,8 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.ok(review.top_improvements.some((item) => item.includes("context_use_summary")));
     assert.ok(review.top_improvements.some((item) => item.includes("historical whole-profile review shows 2")));
     assert.equal(review.top_improvements.some((item) => item.includes("current review shows")), false);
+    assert.ok(review.current.readout.some((item) => item.includes("Current scope T0099/reflection-slice is clean")));
+    assert.ok(review.current.readout.some((item) => item.includes("Largest current tool cost: shell_command")));
     assert.equal(review.current.snapshot.records, 2);
     assert.equal(review.current.snapshot.coverage_ratio, 1);
     assert.equal(review.current.tool_use_summary[0].tool, "shell_command");

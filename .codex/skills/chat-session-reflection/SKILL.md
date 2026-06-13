@@ -221,6 +221,9 @@ When the handoff includes a current-scope snapshot, use it as the first
 iteration-size check: records, profiled versus wall-clock time, telemetry gaps,
 and unresolved/recovered failures. Do not reopen `status` just to recover those
 numbers.
+When the reflection review includes `Current Scope Readout`, start the final
+retrospective from that synthesized current-iteration summary before discussing
+historical lessons or whole-profile trends.
 When the draft includes repeated-command evidence, classify repeats before
 turning them into process tasks. Prefer `repeated_command_classification` over
 raw repeat counts: planned validation, validation-waste risk,
