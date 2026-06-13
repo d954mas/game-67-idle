@@ -146,16 +146,18 @@ function buildStatus(profilePath) {
   const lowCoverage = coverage.wall_clock_span_ms >= 30 * 60 * 1000 && Number.isFinite(coverage.coverage_ratio) && coverage.coverage_ratio < 0.25;
 
   let nextAction = "Use this profile as baseline; no urgent profiling action detected.";
+  const scopeReady = scope.valid && Boolean(scope.work_item);
+
   if (!parsed.exists) {
-    nextAction = "Start profiling with run.mjs for substantial commands or event.mjs for the first checkpoint.";
+    nextAction = "Start profiling with `node tools/ai_profile/start.mjs --work-item <id> --iteration <name>`.";
   } else if (parsed.errors.length > 0) {
     nextAction = "Fix invalid JSONL lines before using this profile for reflection.";
   } else if (records.length === 0) {
-    nextAction = "Append the first checkpoint with event.mjs or wrap the next substantial command with run.mjs.";
+    nextAction = "Start the first checkpoint with `node tools/ai_profile/start.mjs --work-item <id> --iteration <name>`.";
   } else if (failedClassification.unresolved > 0) {
     nextAction = "Resolve or explain unresolved failed profile records before trusting this profile for reflection.";
-  } else if (records.length >= 5 && missingWorkItem / records.length > 0.5) {
-    nextAction = "Run `node tools/ai_profile/scope.mjs set --work-item <id> --iteration <name>`, set AI_PROFILE_* env vars, or pass explicit metadata flags.";
+  } else if (!scopeReady) {
+    nextAction = "Start or reset current scope with `node tools/ai_profile/start.mjs --work-item <id> --iteration <name>`.";
   } else if (missingContextInputs > 0) {
     nextAction = "Use context.mjs for medium/high local context reads so context_inputs are measured.";
   } else if (lowCoverage) {

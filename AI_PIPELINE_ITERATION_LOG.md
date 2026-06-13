@@ -657,3 +657,20 @@ specific and reusable.
   scope and append a `phase_start` event in one command.
 - Follow-up owner: Future profiling/tooling agents.
 - Status: Implemented in `T0080`.
+
+## 2026-06-13 - Profile status must separate current setup from history
+
+- Context: After adding `start.mjs`, live `status.mjs` showed current scope set
+  but still recommended setting scope because older records lacked work-item
+  metadata.
+- Friction: The next action made a historical profile quality issue look like
+  an immediate setup problem.
+- Time sink: Agents can waste turns resetting scope instead of addressing the
+  next real current issue, such as missing context inputs or low coverage.
+- Likely cause: `status.mjs` used aggregate work-item coverage to choose the
+  next action without first checking whether current scope was valid.
+- Proposed improvement: Make status recommend `start.mjs` for new/missing
+  setup, but ignore historical missing metadata for next-action priority once
+  current scope is valid.
+- Follow-up owner: Future profiling/tooling agents.
+- Status: Implemented in `T0081`.

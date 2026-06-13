@@ -300,7 +300,8 @@ Record tools by role:
   appending records: latest event, closeout/bundle presence, work-item
   coverage, missing context inputs, wall-clock coverage, failed records, and
   one suggested next profiling action. It separates recovered failed commands
-  from unresolved failed commands when a later matching command passes.
+  from unresolved failed commands when a later matching command passes, and
+  distinguishes current scope setup problems from historical missing metadata.
 - `test.mjs`: regression test suite for profile CLI behavior. Run
   `node --test tools/ai_profile/test.mjs` after profiler tool changes.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
@@ -466,7 +467,9 @@ A "profiled session" is done when:
   medium/high context reads used `context.mjs` where possible;
 - `status.mjs` is used during long sessions when the agent needs to know
   whether current telemetry is missing work-item metadata, context inputs,
-  coverage, closeout, or bundle artifacts;
+  coverage, closeout, or bundle artifacts; if status reports historical
+  missing work-item records while current scope is set, do not reset scope
+  only to repair old records;
 - `node --test tools/ai_profile/test.mjs` passes after changes to profiler
   tools, review/status/followup behavior, or scope/default handling;
 - long or multi-task profiles include `--work-item <id>` on substantial

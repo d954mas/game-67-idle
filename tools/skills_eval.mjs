@@ -288,6 +288,7 @@ const SKILL_CHECKS = [
       "context.mjs",
       "scope.mjs",
       "status.mjs",
+      "historical missing work-item records",
       "test.mjs",
       "node --test tools/ai_profile/test.mjs",
       "closeout.mjs",

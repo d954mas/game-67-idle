@@ -100,6 +100,9 @@ is unclear. It is read-only and reports latest event, closeout/bundle presence,
 work-item coverage, missing context inputs, wall-clock coverage, failed
 records, recovered versus unresolved failed records, and the next profiling
 action.
+If status shows historical missing work-item records but current scope is
+already set, keep the scope and fix the next reported current issue instead of
+resetting metadata for old records.
 
 Before writing a retrospective from a live profile, run
 `tools/ai_profile/summarize_session_profile.mjs <profile.jsonl> --output

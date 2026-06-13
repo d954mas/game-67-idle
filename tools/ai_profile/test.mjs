@@ -168,6 +168,69 @@ test("status reports scope, coverage fields, and next action", () => {
   }
 });
 
+test("status recommends start helper for missing profiles", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "missing.jsonl");
+    const scope = join(dir, "missing-scope.json");
+    const statusJson = join(dir, "status.json");
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+
+    const status = readJson(statusJson);
+    assert.equal(status.exists, false);
+    assert.match(status.next_action, /start\.mjs/);
+    assert.doesNotMatch(status.next_action, /scope\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status does not ask for scope when only historical records lack work item", () => {
+  const dir = tempDir();
+  try {
+    const missingScope = join(dir, "missing-scope.json");
+    const currentScope = join(dir, "current-scope.json");
+    const profile = join(dir, "historical-unscoped.jsonl");
+    const statusJson = join(dir, "status.json");
+
+    for (let index = 0; index < 6; index += 1) {
+      const args = [
+        "tools/ai_profile/event.mjs",
+        "--profile",
+        profile,
+        "--phase",
+        "test",
+        "--category",
+        "context",
+        "--intent",
+        `historical unscoped ${index}`,
+        "--result",
+        "pass",
+        "--value",
+        "productive",
+      ];
+      if (index === 0) args.push("--context-risk", "medium");
+      run(args, { env: { AI_PROFILE_SCOPE_FILE: missingScope } });
+    }
+
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", currentScope, "--work-item", "STATUS2", "--iteration", "current"]);
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: currentScope },
+    });
+
+    const status = readJson(statusJson);
+    assert.equal(status.scope.work_item, "STATUS2");
+    assert.equal(status.work_item_coverage.missing_records, 6);
+    assert.match(status.next_action, /context\.mjs/);
+    assert.doesNotMatch(status.next_action, /scope\.mjs/);
+    assert.doesNotMatch(status.next_action, /start\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("closeout writes summary review and follow-up bundle", () => {
   const dir = tempDir();
   try {
