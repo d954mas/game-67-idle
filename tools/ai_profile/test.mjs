@@ -2599,7 +2599,10 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.match(result.stdout, /Tool Runtime Review/);
     assert.match(result.stdout, /Captured Elapsed Review/);
     assert.match(result.stdout, /shell_command/);
-    assert.match(result.stdout, /ai_profile\/gap_checkpoint\.mjs: 1 record\(s\), 5\.0m captured elapsed/);
+    assert.match(result.stdout, /total runtime: 9\.0s/);
+    assert.match(result.stdout, /shell_command: 5 record\(s\), 9\.0s command\/runtime, share=100\.0%/);
+    assert.match(result.stdout, /total captured elapsed: 5\.0m/);
+    assert.match(result.stdout, /ai_profile\/gap_checkpoint\.mjs: 1 record\(s\), 5\.0m captured elapsed, share=100\.0%/);
     assert.match(result.stdout, /Context Use Review/);
     assert.match(result.stdout, /AI_PIPELINE_SESSION_PROFILING\.md/);
     assert.match(result.stdout, /guardrail_rerun_review/);
@@ -2632,7 +2635,9 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.equal(review.current.tool_use_summary[0].duration_kind, "captured_elapsed");
     assert.equal(review.current.context_use_summary.hotspots[0].path, "tasks/STATUS.md");
     assert.equal(review.tool_runtime_summary[0].tool, "shell_command");
+    assert.equal(review.tool_runtime_total_ms, 9000);
     assert.equal(review.captured_elapsed_summary[0].tool, "ai_profile/gap_checkpoint.mjs");
+    assert.equal(review.captured_elapsed_total_ms, 300000);
     assert.equal(review.tool_use_summary[0].tool, "ai_profile/gap_checkpoint.mjs");
     assert.equal(review.context_use_summary.hotspots[0].path, "AI_PIPELINE_SESSION_PROFILING.md");
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs validate")));

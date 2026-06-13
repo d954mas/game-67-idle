@@ -32,6 +32,22 @@ specific and reusable.
 - Status:
 ```
 
+## 2026-06-13 - Time reviews need totals and shares
+
+- Context: Reflection review listed tool/runtime rows and captured elapsed
+  rows, but did not show total time or each tool's share.
+- Friction: A reader still had to mentally sum durations before deciding
+  whether validation, shell commands, context reads, or manual checkpoints were
+  the real bottleneck.
+- Time sink: Tool-use analysis remained partly manual even after runtime and
+  elapsed time were separated.
+- Likely cause: The review optimized for attribution labels before prioritizing
+  percent-of-total ranking.
+- Proposed improvement: Include runtime/captured elapsed totals and per-row
+  shares in the generated reflection review and JSON.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
+
 ## 2026-06-13 - Top improvements must name measured time sections
 
 - Context: Reflection review already split command/tool runtime from

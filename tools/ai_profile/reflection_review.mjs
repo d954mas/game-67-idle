@@ -42,6 +42,13 @@ function formatPercent(value) {
   return `${(number * 100).toFixed(1)}%`;
 }
 
+function formatShare(value, total) {
+  const numerator = Number(value || 0);
+  const denominator = Number(total || 0);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return "0.0%";
+  return `${((numerator / denominator) * 100).toFixed(1)}%`;
+}
+
 function coverageConfidenceLine(snapshot) {
   const ratio = Number(snapshot?.coverage_ratio);
   const wallClockMs = Number(snapshot?.wall_clock_ms || 0);
@@ -79,6 +86,10 @@ function runtimeToolSummary(tools) {
 
 function capturedElapsedSummary(tools) {
   return sortByDuration(asArray(tools).filter((item) => Number(item?.captured_elapsed_ms || 0) > 0), "captured_elapsed_ms");
+}
+
+function sumField(items, field) {
+  return asArray(items).reduce((sum, item) => sum + Number(item?.[field] || 0), 0);
 }
 
 function hasCapturedElapsedTools(tools) {
@@ -206,6 +217,9 @@ function buildReview(draft, draftPath) {
   const currentTools = asArray(draft.current_state?.current_scope_tool_use_summary);
   const currentContext = draft.current_state?.current_scope_context_use_summary || { hotspots: [], high_context: [], missing_inputs: [] };
   const currentValidationBatches = asArray(draft.current_state?.current_scope_validation_batches);
+  const toolUseSummary = asArray(draft.tool_use_summary);
+  const toolRuntimeSummary = runtimeToolSummary(toolUseSummary);
+  const capturedElapsed = capturedElapsedSummary(toolUseSummary);
 
   return {
     schema_version: 1,
@@ -226,9 +240,11 @@ function buildReview(draft, draftPath) {
     historical_lessons: historicalLessons,
     suppressed_historical_findings: asArray(draft.suppressed_historical_findings),
     repeated_commands: draft.repeated_commands || {},
-    tool_use_summary: asArray(draft.tool_use_summary),
-    tool_runtime_summary: runtimeToolSummary(draft.tool_use_summary),
-    captured_elapsed_summary: capturedElapsedSummary(draft.tool_use_summary),
+    tool_use_summary: toolUseSummary,
+    tool_runtime_summary: toolRuntimeSummary,
+    tool_runtime_total_ms: sumField(toolRuntimeSummary, "runtime_ms"),
+    captured_elapsed_summary: capturedElapsed,
+    captured_elapsed_total_ms: sumField(capturedElapsed, "captured_elapsed_ms"),
     context_use_summary: draft.context_use_summary || { hotspots: [], missing_inputs: [] },
     recovered_failure_classification: asArray(draft.recovered_failure_classification),
     satisfied_followups: asArray(draft.current_state?.satisfied_followups),
@@ -332,19 +348,29 @@ function renderMarkdown(review, draftPath) {
   lines.push("");
   lines.push("## Tool Runtime Review");
   const tools = asArray(review.tool_use_summary);
-  const runtimeTools = runtimeToolSummary(tools);
+  const runtimeTools = asArray(review.tool_runtime_summary).length > 0 ? asArray(review.tool_runtime_summary) : runtimeToolSummary(tools);
+  const runtimeTotalMs = Number(review.tool_runtime_total_ms || sumField(runtimeTools, "runtime_ms"));
   if (runtimeTools.length === 0) {
     lines.push("- none");
   } else {
-    for (const item of runtimeTools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.runtime_ms || item.duration_ms)} ${toolDurationSuffix(item)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
+    lines.push(`- total runtime: ${formatMs(runtimeTotalMs)}`);
+    for (const item of runtimeTools) {
+      const duration = Number(item.runtime_ms || item.duration_ms || 0);
+      lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(duration)} ${toolDurationSuffix(item)}, share=${formatShare(duration, runtimeTotalMs)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
+    }
   }
   lines.push("");
   lines.push("## Captured Elapsed Review");
-  const capturedElapsed = capturedElapsedSummary(tools);
+  const capturedElapsed = asArray(review.captured_elapsed_summary).length > 0 ? asArray(review.captured_elapsed_summary) : capturedElapsedSummary(tools);
+  const capturedElapsedTotalMs = Number(review.captured_elapsed_total_ms || sumField(capturedElapsed, "captured_elapsed_ms"));
   if (capturedElapsed.length === 0) {
     lines.push("- none");
   } else {
-    for (const item of capturedElapsed) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.captured_elapsed_ms || item.duration_ms)} captured elapsed`);
+    lines.push(`- total captured elapsed: ${formatMs(capturedElapsedTotalMs)}`);
+    for (const item of capturedElapsed) {
+      const duration = Number(item.captured_elapsed_ms || item.duration_ms || 0);
+      lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(duration)} captured elapsed, share=${formatShare(duration, capturedElapsedTotalMs)}`);
+    }
   }
   lines.push("");
   lines.push("## Context Use Review");

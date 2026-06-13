@@ -224,3 +224,6 @@ None.
   Runtime Review` and `Captured Elapsed Review` when captured elapsed rows are
   present, so future retrospectives optimize command cost and manual/research
   elapsed time separately.
+- 2026-06-13: Added runtime/captured-elapsed totals and per-tool shares to the
+  reflection review so tool analytics ranks bottlenecks without manual
+  duration summing.
