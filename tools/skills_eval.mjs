@@ -339,6 +339,7 @@ const SKILL_CHECKS = [
       "current-scope tool/context",
       "current-scope snapshot",
       "Current Scope Readout",
+      "coverage-confidence",
       "current-scope validation",
       "missing_tool_metadata",
       "recovered_failure_classification",

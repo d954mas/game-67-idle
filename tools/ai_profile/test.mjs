@@ -2550,6 +2550,7 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.match(result.stdout, /No current action items/);
     assert.match(result.stdout, /Current Scope Readout/);
     assert.match(result.stdout, /Current scope T0099\/reflection-slice is clean: 2 record\(s\), 5\.0s profiled over 5\.0s wall-clock \(100\.0%\)/);
+    assert.match(result.stdout, /Current coverage confidence is usable for rough time-spend claims/);
     assert.match(result.stdout, /Current telemetry has no context, work-item, or tool metadata gaps/);
     assert.match(result.stdout, /Largest current tool cost: shell_command \(5\.0s, 2 record\(s\)\)/);
     assert.match(result.stdout, /Current validation was batched: 1 batch\(es\), 1 record\(s\), broad\/final=0, failed=0/);
@@ -2581,6 +2582,7 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.ok(review.top_improvements.some((item) => item.includes("historical whole-profile review shows 2")));
     assert.equal(review.top_improvements.some((item) => item.includes("current review shows")), false);
     assert.ok(review.current.readout.some((item) => item.includes("Current scope T0099/reflection-slice is clean")));
+    assert.ok(review.current.readout.some((item) => item.includes("coverage confidence is usable")));
     assert.ok(review.current.readout.some((item) => item.includes("Largest current tool cost: shell_command")));
     assert.ok(review.current.readout.some((item) => item.includes("Current validation was batched")));
     assert.equal(review.current.snapshot.records, 2);
@@ -2631,6 +2633,46 @@ test("reflection review keeps dirty current scope actionable", () => {
     assert.match(review.current.status_message, /Resolve current action items/);
     assert.ok(review.current.actions.some((action) => action.includes("node tools/ai.mjs context --")));
     assert.ok(review.historical_lessons.every((lesson) => lesson.current_action === "review_after_current_items"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("reflection review flags partial current coverage confidence", () => {
+  const dir = tempDir();
+  try {
+    const draftJson = join(dir, "partial-coverage.draft.json");
+    const reviewJson = join(dir, "partial-coverage.review.json");
+    writeFileSync(draftJson, `${JSON.stringify({
+      current_state: {
+        current_scope_findings: [],
+        current_regressions: [],
+        pending_followups: [],
+        satisfied_followups: [],
+        current_scope_snapshot: {
+          enabled: true,
+          work_item: "T0099",
+          iteration: "partial-coverage",
+          records: 10,
+          profiled_ms: 60_000,
+          wall_clock_ms: 10 * 60_000,
+          coverage_ratio: 0.1,
+          missing_context_inputs: 0,
+          missing_work_item_records: 0,
+          missing_tool_records: 0,
+          recovered_failed_records: 0,
+          unresolved_failed_records: 0,
+        },
+        current_scope_tool_use_summary: [{ tool: "shell_command", records: 3, duration_ms: 60_000 }],
+      },
+      historical_lessons: [],
+      repeated_commands: { by_scope: [] },
+    })}\n`, "utf8");
+
+    const result = run(["tools/ai_profile/reflection_review.mjs", draftJson, "--json-output", reviewJson]);
+    assert.match(result.stdout, /Current coverage confidence is partial/);
+    const review = readJson(reviewJson);
+    assert.ok(review.current.readout.some((item) => item.includes("coverage confidence is partial")));
   } finally {
     cleanup(dir);
   }

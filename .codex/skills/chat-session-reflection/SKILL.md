@@ -224,6 +224,9 @@ numbers.
 When the reflection review includes `Current Scope Readout`, start the final
 retrospective from that synthesized current-iteration summary before discussing
 historical lessons or whole-profile trends.
+Use its coverage-confidence sentence to decide how precise time-spend claims
+can be; partial coverage means tool durations are evidence, not total
+iteration time.
 When the handoff includes current-scope validation batches, use them to explain
 validation-runner tool cost as planned validation evidence before calling it
 waste or rework.

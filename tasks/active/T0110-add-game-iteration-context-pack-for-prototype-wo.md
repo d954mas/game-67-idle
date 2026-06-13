@@ -209,3 +209,6 @@ None.
 - 2026-06-13: Added current-scope validation batch evidence to review, draft,
   and final reflection review so validation-runner tool cost can be identified
   as planned validation before labeling it waste.
+- 2026-06-13: Added current-scope coverage confidence to reflection readout so
+  low profile coverage limits time-spend claims instead of being hidden behind
+  clean telemetry status.

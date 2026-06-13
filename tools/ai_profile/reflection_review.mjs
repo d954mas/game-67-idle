@@ -42,6 +42,21 @@ function formatPercent(value) {
   return `${(number * 100).toFixed(1)}%`;
 }
 
+function coverageConfidenceLine(snapshot) {
+  const ratio = Number(snapshot?.coverage_ratio);
+  const wallClockMs = Number(snapshot?.wall_clock_ms || 0);
+  if (!Number.isFinite(ratio)) {
+    return "Current coverage confidence is unknown; do not make precise time-spend claims from this scope.";
+  }
+  if (wallClockMs >= 5 * 60 * 1000 && ratio < 0.25) {
+    return "Current coverage confidence is partial; explain unprofiled wall-clock time before making precise time-spend claims.";
+  }
+  if (ratio >= 0.5) {
+    return "Current coverage confidence is usable for rough time-spend claims.";
+  }
+  return "Current coverage confidence is limited; use tool durations as partial evidence, not total iteration time.";
+}
+
 function currentScopeReadout(currentClean, snapshot, tools, contextSummary, validationBatches) {
   if (!snapshot?.enabled) {
     return ["No current-scope snapshot is available; start or focus the next iteration before relying on generated reflection."];
@@ -49,6 +64,7 @@ function currentScopeReadout(currentClean, snapshot, tools, contextSummary, vali
   const lines = [];
   const scopeName = `${snapshot.work_item || ""}${snapshot.iteration ? `/${snapshot.iteration}` : ""}` || "unknown";
   lines.push(`Current scope ${scopeName} is ${currentClean ? "clean" : "actionable"}: ${snapshot.records || 0} record(s), ${formatMs(snapshot.profiled_ms || 0)} profiled over ${formatMs(snapshot.wall_clock_ms || 0)} wall-clock (${formatPercent(snapshot.coverage_ratio)}).`);
+  lines.push(coverageConfidenceLine(snapshot));
   const gapTotal = Number(snapshot.missing_context_inputs || 0) + Number(snapshot.missing_work_item_records || 0) + Number(snapshot.missing_tool_records || 0);
   if (gapTotal === 0) {
     lines.push("Current telemetry has no context, work-item, or tool metadata gaps.");

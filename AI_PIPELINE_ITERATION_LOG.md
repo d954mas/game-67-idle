@@ -116,6 +116,22 @@ specific and reusable.
 - Follow-up owner: Current and future pipeline agents.
 - Status: Implemented.
 
+## 2026-06-13 - Current time claims need coverage confidence
+
+- Context: Current-scope readout showed records, profiled time, and wall-clock
+  time, but did not interpret whether the coverage was enough for precise time
+  claims.
+- Friction: A clean current scope with low coverage could still invite
+  overconfident claims about where the whole iteration time went.
+- Time sink: The agent had to manually compare profiled/wall-clock ratio before
+  deciding how strong a time-spend claim could be.
+- Likely cause: The handoff exposed coverage numbers but not a confidence
+  label.
+- Proposed improvement: Add a coverage-confidence sentence to `Current Scope
+  Readout`: unknown, partial, limited, or usable.
+- Follow-up owner: Current and future pipeline agents.
+- Status: Implemented.
+
 ## 2026-06-12 - Concept setup and visual proof sequencing
 
 - Context: The user selected a child-friendly meme evolution game direction,
