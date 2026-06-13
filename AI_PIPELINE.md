@@ -151,7 +151,9 @@ node tools/skills_sync.mjs
   prevents agents from creating noisy session artifacts in non-ignored
   locations. Use `tools/ai_profile/run.mjs` for substantial commands and
   `tools/ai_profile/event.mjs` for sparse checkpoints so profiling is captured
-  during work instead of reconstructed after the fact.
+  during work instead of reconstructed after the fact. Use
+  `tools/ai_profile/closeout.mjs` and `tools/ai_profile/review.mjs` before
+  reflection so the agent starts from measured waste/rework/context findings.
 - **Runtime base is protected in this repository.** `state/`,
   `tools/state_codegen/`, `src/devapi/`, `tools/devapi/`,
   `src/game_storage.*`, and `external/cjson/` are reusable AI/runtime

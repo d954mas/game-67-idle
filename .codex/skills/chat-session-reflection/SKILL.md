@@ -96,3 +96,7 @@ tmp/session_profiles/<name>.summary.md` and cite the summary path. If the
 summary cannot be generated, state that profiling evidence is incomplete.
 For normal session closeout, prefer `tools/ai_profile/closeout.mjs`, which
 records a closeout event and writes the summary in one step.
+Then run `tools/ai_profile/review.mjs <profile.jsonl> --output
+tmp/session_profiles/<name>.review.md` to extract waste/rework, failures,
+blockers, context hotspots, repeated commands, and suggested pipeline actions
+before writing the human retrospective.

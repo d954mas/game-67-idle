@@ -218,6 +218,9 @@ Record tools by role:
 - `event.mjs`: low-cost checkpoint writer for non-command events.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
   and writes a scratch summary artifact.
+- `review.mjs`: reflection prep helper that turns a JSONL profile into
+  priority findings: waste/rework, failures, blockers, context hotspots,
+  repeated commands, and suggested pipeline actions.
 - `apply_patch`: files changed, why the change was scoped.
 - `imagegen`: prompt packet path, candidate count, accepted/rejected result.
 - `view_image`: image paths, visual findings.
@@ -292,6 +295,15 @@ The summary reports:
 - waste/rework records;
 - blockers and evidence.
 
+For reflection prep, run:
+
+```powershell
+node tools/ai_profile/review.mjs tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl --output tmp/session_profiles/session_profile_YYYY-MM-DD.review.md
+```
+
+The review is not a replacement for judgment. It is a fast checklist of what
+the agent must explain or convert into process improvements.
+
 ## Definition Of Done
 
 A "profiled session" is done when:
@@ -303,6 +315,7 @@ A "profiled session" is done when:
   the session is long enough to reflect on;
 - `closeout.mjs` is used for normal session closeout unless a custom summary
   path or manual investigation is needed;
+- `review.mjs` is used before deeper reflection when a profile exists;
 - the final response names profile path and summary path;
 - any repeated waste is converted into a task, skill rule, or pipeline rule;
 - the retrospective uses the profile instead of relying only on memory.

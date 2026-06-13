@@ -371,3 +371,20 @@ specific and reusable.
   lessons.
 - Follow-up owner: Future implementation/reflection agents.
 - Status: Implemented in `T0062`.
+
+## 2026-06-13 - Profile review should produce action items automatically
+
+- Context: After adding low-overhead profile collection, the remaining gap was
+  reflection prep: a summary says where time went, but does not directly tell
+  the agent what must be explained or improved.
+- Friction: Without an analyzer, the agent still manually scans JSONL/summary
+  output for waste, failed commands, repeated validations, context hotspots,
+  and missing closeout events.
+- Time sink: Manual interpretation of profiles risks becoming another
+  reflection task instead of accelerating the next session.
+- Likely cause: The initial profiler stopped at collection and aggregation. It
+  did not convert profile records into process-review prompts.
+- Proposed improvement: Add `tools/ai_profile/review.mjs` to generate
+  reflection-ready findings and suggested pipeline actions from JSONL profiles.
+- Follow-up owner: Future reflection agents.
+- Status: Implemented in `T0064`.
