@@ -200,3 +200,6 @@ None.
 - 2026-06-13: Added current-scope tool/context summaries to profile review and
   reflection handoff so iteration-local bottlenecks are visible before
   whole-profile history.
+- 2026-06-13: Added current-scope snapshot to review/draft/review handoff so
+  iteration records, profiled/wall-clock time, telemetry gaps, and failure
+  counts are visible without reopening profile status.

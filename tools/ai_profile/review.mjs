@@ -747,6 +747,19 @@ emit(`\nRecords: ${records.length}`);
 emit(`Profiled duration: ${formatMs(totalDuration)}`);
 emit(`Closeout event: ${closeoutSeen ? "yes" : "no"}`);
 
+emit("\n## Current Scope Snapshot");
+if (!currentScope.enabled) {
+  emit("- none");
+} else {
+  const recoveredCount = currentScope.recovered_failed_records.length;
+  const unresolvedCount = currentScope.unresolved_failed_records.length;
+  emit(`- scope: ${currentScope.work_item}${currentScope.iteration ? `/${currentScope.iteration}` : ""}`);
+  emit(`- records: ${currentScope.records}`);
+  emit(`- profiled/wall-clock: ${formatMs(currentScope.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(currentScope.wall_clock_coverage.wall_clock_span_ms)} (${formatPercent(currentScope.wall_clock_coverage.coverage_ratio)})`);
+  emit(`- telemetry gaps: context=${currentScope.missing_context_inputs}, work_item=${currentScope.missing_work_item_records}, tools=${currentScope.missing_tool_records}`);
+  emit(`- failures: unresolved=${unresolvedCount}, recovered=${recoveredCount}`);
+}
+
 emit("\n## Current Scope Findings");
 if (currentScope.findings.length === 0) {
   emit("- Current scope has no urgent review findings.");

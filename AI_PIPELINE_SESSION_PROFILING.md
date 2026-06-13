@@ -678,6 +678,10 @@ measured.
 When the handoff includes current-scope tool/context summaries, use those first
 for the just-finished iteration. Treat whole-profile tool/context summaries as
 historical trend evidence unless the same issue appears in current scope.
+When the handoff includes a current-scope snapshot, use it as the first
+iteration-size check: records, profiled versus wall-clock time, telemetry gaps,
+and unresolved/recovered failures. Do not reopen `status` just to recover those
+numbers.
 When the draft includes repeated-command evidence, classify the repeats before
 turning them into process work. Prefer the generated
 `repeated_command_classification` table over raw repeat counts: planned

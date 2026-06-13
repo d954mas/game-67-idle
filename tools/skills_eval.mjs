@@ -337,6 +337,7 @@ const SKILL_CHECKS = [
       "tool_use_summary",
       "context_use_summary",
       "current-scope tool/context",
+      "current-scope snapshot",
       "missing_tool_metadata",
       "recovered_failure_classification",
       "repeated-command evidence",

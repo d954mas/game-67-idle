@@ -38,6 +38,11 @@ function formatMs(ms) {
   return `${(minutes / 60).toFixed(2)}h`;
 }
 
+function formatPercent(value) {
+  if (!Number.isFinite(value)) return "unknown";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
 function compactFinding(finding) {
   if (!finding || typeof finding !== "object") return { type: "finding", message: String(finding || "") };
   return {
@@ -167,6 +172,24 @@ function compactContextUseSummary(summary) {
   };
 }
 
+function compactCurrentScopeSnapshot(scope) {
+  const coverage = scope?.wall_clock_coverage || {};
+  return {
+    enabled: Boolean(scope?.enabled),
+    work_item: scope?.work_item || "",
+    iteration: scope?.iteration || "",
+    records: Number(scope?.records || 0),
+    profiled_ms: Number(coverage.merged_profiled_ms || 0),
+    wall_clock_ms: Number(coverage.wall_clock_span_ms || 0),
+    coverage_ratio: Number.isFinite(Number(coverage.coverage_ratio)) ? Number(coverage.coverage_ratio) : undefined,
+    missing_context_inputs: Number(scope?.missing_context_inputs || 0),
+    missing_work_item_records: Number(scope?.missing_work_item_records || 0),
+    missing_tool_records: Number(scope?.missing_tool_records || 0),
+    recovered_failed_records: asArray(scope?.recovered_failed_records).length,
+    unresolved_failed_records: asArray(scope?.unresolved_failed_records).length,
+  };
+}
+
 function scopeSummaryText(summary) {
   if (!summary.by_scope.length) return "no scope breakdown";
   return summary.by_scope.map((item) => `${item.scope || "unknown"}=${item.count || 0}`).join(", ");
@@ -277,6 +300,7 @@ function buildDraft(packet, review) {
       current_regressions: currentRegressions,
       pending_followups: pending,
       satisfied_followups: satisfied,
+      current_scope_snapshot: compactCurrentScopeSnapshot(review?.current_scope),
       current_scope_tool_use_summary: asArray(review?.current_scope?.tool_use_summary).slice(0, 8),
       current_scope_context_use_summary: compactContextUseSummary(review?.current_scope?.context_use_summary),
     },
@@ -308,6 +332,19 @@ function renderMarkdown(draft, packetFile) {
     && draft.current_state.pending_followups.length === 0
   ) {
     lines.push("Current reflection state is clean: no active current-scope findings, regressions, or pending follow-ups.");
+  }
+  lines.push("");
+  lines.push("## Current Scope Snapshot");
+  const snapshot = draft.current_state.current_scope_snapshot || {};
+  if (!snapshot.enabled) {
+    lines.push("- none");
+  } else {
+    const scopeName = `${snapshot.work_item || ""}${snapshot.iteration ? `/${snapshot.iteration}` : ""}` || "unknown";
+    lines.push(`- scope: ${scopeName}`);
+    lines.push(`- records: ${snapshot.records || 0}`);
+    lines.push(`- profiled/wall-clock: ${formatMs(snapshot.profiled_ms || 0)} / ${formatMs(snapshot.wall_clock_ms || 0)} (${formatPercent(snapshot.coverage_ratio)})`);
+    lines.push(`- telemetry gaps: context=${snapshot.missing_context_inputs || 0}, work_item=${snapshot.missing_work_item_records || 0}, tools=${snapshot.missing_tool_records || 0}`);
+    lines.push(`- failures: unresolved=${snapshot.unresolved_failed_records || 0}, recovered=${snapshot.recovered_failed_records || 0}`);
   }
   lines.push("");
   lines.push("## Current State");

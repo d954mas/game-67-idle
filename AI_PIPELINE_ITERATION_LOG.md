@@ -66,6 +66,22 @@ specific and reusable.
 - Follow-up owner: Current and future pipeline agents.
 - Status: Implemented.
 
+## 2026-06-13 - Reflection needs an iteration-size snapshot
+
+- Context: Reflection review showed current-scope tools/context, but the
+  first screen still lacked the basic size/quality metrics for the current
+  slice: records, profiled time, wall-clock span, telemetry gaps, and failures.
+- Friction: The agent had to open `node tools/ai.mjs status` or lower review
+  sections to explain how much of the iteration was actually measured.
+- Time sink: Extra status reads and cross-checks were needed before writing a
+  simple claim about the current iteration.
+- Likely cause: The current-scope data existed in review JSON and status, but
+  not in the reflection handoff's first decision section.
+- Proposed improvement: Add a current-scope snapshot to review, draft, and
+  final reflection review before tool/context details.
+- Follow-up owner: Current and future pipeline agents.
+- Status: Implemented.
+
 ## 2026-06-12 - Concept setup and visual proof sequencing
 
 - Context: The user selected a child-friendly meme evolution game direction,

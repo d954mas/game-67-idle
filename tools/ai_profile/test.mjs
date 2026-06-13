@@ -1658,9 +1658,14 @@ test("profile review summarizes current scope tool and context use", () => {
     });
     assert.match(result.stdout, /Current Scope Tool Use/);
     assert.match(result.stdout, /Current Scope Context Use/);
+    assert.match(result.stdout, /Current Scope Snapshot/);
+    assert.match(result.stdout, /profiled\/wall-clock: 5\.0s \/ 5\.0s \(100\.0%\)/);
+    assert.match(result.stdout, /telemetry gaps: context=0, work_item=0, tools=0/);
     assert.match(result.stdout, /tasks\/STATUS\.md: 1234 chars/);
     const review = readJson(reviewJson);
     assert.equal(review.current_scope.records, 2);
+    assert.equal(review.current_scope.wall_clock_coverage.merged_profiled_ms, 5000);
+    assert.equal(review.current_scope.wall_clock_coverage.wall_clock_span_ms, 5000);
     assert.equal(review.current_scope.tool_use_summary[0].tool, "shell_command");
     assert.equal(review.current_scope.tool_use_summary[0].records, 2);
     assert.equal(review.current_scope.context_use_summary.hotspots[0].path, "tasks/STATUS.md");
@@ -2383,6 +2388,20 @@ test("reflection draft classifies repeated command evidence by scope", () => {
         { line: 12, intent: "Validate portable AI pipeline with profile wrappers", context_risk: "medium" },
       ],
       current_scope: {
+        enabled: true,
+        work_item: "T0099",
+        iteration: "reflection-slice",
+        records: 2,
+        missing_context_inputs: 0,
+        missing_work_item_records: 0,
+        missing_tool_records: 0,
+        recovered_failed_records: [],
+        unresolved_failed_records: [],
+        wall_clock_coverage: {
+          merged_profiled_ms: 5000,
+          wall_clock_span_ms: 5000,
+          coverage_ratio: 1,
+        },
         tool_use_summary: [
           { tool: "shell_command", records: 2, duration_ms: 5000, failed: 0, waste_or_rework: 0, contexts: 1, commands: 2 },
         ],
@@ -2406,6 +2425,8 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     assert.match(result.stdout, /Repeated Command Evidence/);
     assert.match(result.stdout, /Tool Use Summary/);
     assert.match(result.stdout, /shell_command/);
+    assert.match(result.stdout, /Current Scope Snapshot/);
+    assert.match(result.stdout, /profiled\/wall-clock: 5\.0s \/ 5\.0s \(100\.0%\)/);
     assert.match(result.stdout, /Current Scope Tool Use/);
     assert.match(result.stdout, /Current Scope Context Use/);
     assert.match(result.stdout, /tasks\/STATUS\.md/);
@@ -2423,6 +2444,8 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     assert.doesNotMatch(result.stdout, /Cause needs human review/);
     const draft = readJson(draftJson);
     assert.equal(draft.repeated_commands.total_distinct, 3);
+    assert.equal(draft.current_state.current_scope_snapshot.records, 2);
+    assert.equal(draft.current_state.current_scope_snapshot.coverage_ratio, 1);
     assert.equal(draft.tool_use_summary[0].tool, "shell_command");
     assert.equal(draft.current_state.current_scope_tool_use_summary[0].tool, "shell_command");
     assert.equal(draft.current_state.current_scope_context_use_summary.hotspots[0].path, "tasks/STATUS.md");
@@ -2472,6 +2495,20 @@ test("reflection review separates clean current scope from historical lessons", 
         current_regressions: [],
         pending_followups: [],
         satisfied_followups: [{ title: "Baseline captured" }],
+        current_scope_snapshot: {
+          enabled: true,
+          work_item: "T0099",
+          iteration: "reflection-slice",
+          records: 2,
+          profiled_ms: 5000,
+          wall_clock_ms: 5000,
+          coverage_ratio: 1,
+          missing_context_inputs: 0,
+          missing_work_item_records: 0,
+          missing_tool_records: 0,
+          recovered_failed_records: 0,
+          unresolved_failed_records: 0,
+        },
         current_scope_tool_use_summary: [{ tool: "shell_command", records: 2, duration_ms: 5000, failed: 0, waste_or_rework: 0 }],
         current_scope_context_use_summary: {
           hotspots: [{ path: "tasks/STATUS.md", chars: 1234 }],
@@ -2493,6 +2530,8 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.match(result.stdout, /Current actions: 0/);
     assert.match(result.stdout, /historical_only/);
     assert.match(result.stdout, /No current action items/);
+    assert.match(result.stdout, /Current Scope Snapshot/);
+    assert.match(result.stdout, /profiled\/wall-clock: 5\.0s \/ 5\.0s \(100\.0%\)/);
     assert.match(result.stdout, /Current Scope Tool Use/);
     assert.match(result.stdout, /Current Scope Context Use/);
     assert.match(result.stdout, /tasks\/STATUS\.md/);
@@ -2516,6 +2555,8 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.ok(review.top_improvements.some((item) => item.includes("context_use_summary")));
     assert.ok(review.top_improvements.some((item) => item.includes("historical whole-profile review shows 2")));
     assert.equal(review.top_improvements.some((item) => item.includes("current review shows")), false);
+    assert.equal(review.current.snapshot.records, 2);
+    assert.equal(review.current.snapshot.coverage_ratio, 1);
     assert.equal(review.current.tool_use_summary[0].tool, "shell_command");
     assert.equal(review.current.context_use_summary.hotspots[0].path, "tasks/STATUS.md");
     assert.equal(review.tool_use_summary[0].tool, "shell_command");

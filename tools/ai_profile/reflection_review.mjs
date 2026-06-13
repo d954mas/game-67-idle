@@ -36,6 +36,12 @@ function formatMs(ms) {
   return `${(minutes / 60).toFixed(2)}h`;
 }
 
+function formatPercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "unknown";
+  return `${(number * 100).toFixed(1)}%`;
+}
+
 function topImprovements(draft, currentClean) {
   const improvements = [];
   const historical = asArray(draft.historical_lessons);
@@ -114,6 +120,7 @@ function buildReview(draft, draftPath) {
       pending_followups: pendingFollowups,
       actions: currentActions,
       status_message: currentStatusMessage,
+      snapshot: draft.current_state?.current_scope_snapshot || { enabled: false },
       tool_use_summary: asArray(draft.current_state?.current_scope_tool_use_summary),
       context_use_summary: draft.current_state?.current_scope_context_use_summary || { hotspots: [], high_context: [], missing_inputs: [] },
     },
@@ -147,6 +154,19 @@ function renderMarkdown(review, draftPath) {
     lines.push(`- ${review.current.status_message}`);
   } else {
     for (const action of review.current.actions) lines.push(`- ${action}`);
+  }
+  lines.push("");
+  lines.push("## Current Scope Snapshot");
+  const snapshot = review.current.snapshot || {};
+  if (!snapshot.enabled) {
+    lines.push("- none");
+  } else {
+    const scopeName = `${snapshot.work_item || ""}${snapshot.iteration ? `/${snapshot.iteration}` : ""}` || "unknown";
+    lines.push(`- scope: ${scopeName}`);
+    lines.push(`- records: ${snapshot.records || 0}`);
+    lines.push(`- profiled/wall-clock: ${formatMs(snapshot.profiled_ms || 0)} / ${formatMs(snapshot.wall_clock_ms || 0)} (${formatPercent(snapshot.coverage_ratio)})`);
+    lines.push(`- telemetry gaps: context=${snapshot.missing_context_inputs || 0}, work_item=${snapshot.missing_work_item_records || 0}, tools=${snapshot.missing_tool_records || 0}`);
+    lines.push(`- failures: unresolved=${snapshot.unresolved_failed_records || 0}, recovered=${snapshot.recovered_failed_records || 0}`);
   }
   lines.push("");
   lines.push("## Current Scope Tool Use");
