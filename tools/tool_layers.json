@@ -7,6 +7,7 @@
       "new_game_policy": "copy",
       "paths": [
         "tools/ai.mjs",
+        "tools/ai.test.mjs",
         "tools/ai_profile/",
         "tools/bootstrap/export_base.mjs",
         "tools/game_context/",

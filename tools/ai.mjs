@@ -2,10 +2,12 @@
 // Fast facade for AI workflow telemetry. Detailed tools stay in tools/ai_profile/.
 
 import { spawnSync } from "node:child_process";
+import { readProfileScope } from "./ai_profile/profile_lib.mjs";
 
 function usage() {
   console.error(`usage:
   node tools/ai.mjs start <work-item> [iteration]
+  node tools/ai.mjs focus <iteration>
   node tools/ai.mjs context
   node tools/ai.mjs checkpoint <intent> [--force] [--min-gap-min <n>] [checkpoint options]
   node tools/ai.mjs run [--phase <name>] [--category <name>] [--intent <text>] [--value <name>] -- <command> [args...]
@@ -15,6 +17,7 @@ function usage() {
 
 Fast path:
   start    set current work item and append one profiling checkpoint
+  focus    start a new iteration inside the current work item
   context  print the compact game-iteration packet and profile its cost
   checkpoint record a meaningful manual/research/review gap without noisy short pauses
   run      run a command and record duration/result
@@ -58,16 +61,38 @@ function withoutFlag(args, flag) {
   return args.filter((arg) => arg !== flag);
 }
 
+function flagValue(args, flag) {
+  const index = args.indexOf(flag);
+  if (index === -1) return "";
+  const value = args[index + 1];
+  return value && !value.startsWith("--") ? value : "";
+}
+
 const [command, ...argv] = process.argv.slice(2);
 
 if (!command || command === "help" || command === "--help" || command === "-h") usage();
 
 if (command === "start") {
-  const [workItem, iteration] = argv;
+  const [workItem] = argv;
   if (!workItem) usage();
+  const maybeIteration = argv[1] || "";
+  const iteration = maybeIteration && !maybeIteration.startsWith("--") ? maybeIteration : "";
+  const options = argv.slice(iteration ? 2 : 1);
   const args = ["tools/ai_profile/start.mjs", "--work-item", workItem];
   if (iteration) args.push("--iteration", iteration);
+  args.push(...options);
   run(args);
+}
+
+if (command === "focus") {
+  const [iteration, ...options] = argv;
+  if (!iteration || iteration.startsWith("--")) usage();
+  const scope = readProfileScope(flagValue(options, "--scope") || undefined);
+  if (!scope.valid || !scope.work_item) {
+    console.error("ai focus requires an existing work item scope. Run `node tools/ai.mjs start <work-item> <iteration>` first.");
+    process.exit(2);
+  }
+  run(["tools/ai_profile/start.mjs", "--work-item", scope.work_item, "--iteration", iteration, ...options]);
 }
 
 if (command === "context") {

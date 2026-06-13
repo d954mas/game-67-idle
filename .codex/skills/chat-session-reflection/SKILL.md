@@ -100,7 +100,9 @@ cannot cover.
 
 For future long sessions, prefer collecting data during work with
 `node tools/ai.mjs start <id> <iteration>` at the beginning of a focused
-iteration, `node tools/ai.mjs context` before implementation,
+iteration, `node tools/ai.mjs focus <next-iteration>` after a commit, process
+fix, or direction change inside the same work item, `node tools/ai.mjs context`
+before implementation,
 `node tools/ai.mjs checkpoint "<intent>"` after long manual/research/review
 stretches, and `node tools/ai.mjs run -- <command>` for substantial commands.
 Do not wait until the end to reconstruct avoidable telemetry from chat history.
@@ -126,6 +128,9 @@ current-scope regressions, handle that explicit decision before continuing.
 If status shows historical missing work-item records but current scope is
 already set, keep the scope and fix the next reported current issue instead of
 resetting metadata for old records.
+If the current issue was already fixed earlier in the same wide work item, use
+`node tools/ai.mjs focus <next-iteration>` to start a fresh current-scope slice
+instead of letting old records keep the current review dirty.
 When status reports `current_scope`, use current-scope missing context and
 work-item counts for next actions; use whole-profile totals as retrospective
 history unless the current-scope counts are also bad.

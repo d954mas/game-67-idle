@@ -1241,3 +1241,20 @@ specific and reusable.
   to avoid noisy short-pause records, with `--force` for exact captures.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Current scope must be slice-sized
+
+- Trigger: After adding validation and checkpoint facades, reflection still
+  reported current-scope regressions because `T0110/game-iteration-context-pack`
+  included older unbatched final checks from before the fix.
+- Symptom: Fixed process issues kept appearing as current action items because
+  the active scope covered several process iterations.
+- Time sink: Agents had to inspect raw JSONL lines to prove the issue was
+  historical within the same umbrella work item.
+- Likely cause: `start` was easy for a new work item, but there was no short
+  facade command for starting a fresh iteration inside the existing work item.
+- Proposed improvement: Add `node tools/ai.mjs focus <iteration>` to reuse the
+  current work item and reset current-scope analysis after a commit, process
+  fix, or direction change.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.

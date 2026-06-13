@@ -34,6 +34,10 @@ workflow/runtime tools.
       `node tools/ai.mjs context`.
 - [x] `tools/ai.mjs` provides the fast path for start, context, profiled run,
       status, and full reflection handoff.
+- [x] `node tools/ai.mjs focus <iteration>` starts a fresh current-scope slice
+      inside the current work item so fixed issues do not stay current forever.
+- [x] `tools/ai.test.mjs` covers `ai.mjs start` option forwarding and `focus`
+      scope reuse.
 - [x] `node tools/ai.mjs checkpoint "<intent>"` provides the fast path for
       thresholded wall-clock checkpoints after manual/research/review gaps.
 - [x] `node tools/ai.mjs reflect` creates the full reflection handoff by
@@ -81,6 +85,12 @@ None.
   recommend `node tools/ai.mjs checkpoint` instead of internal checkpoint
   scripts, so generated reflection handoff points future agents at the fast
   facade.
+- 2026-06-13: Added `node tools/ai.mjs focus <iteration>` to start a fresh
+  current-scope slice inside the current work item after a commit, process fix,
+  or direction change.
+- 2026-06-13: Added `tools/ai.test.mjs` after manual testing exposed that
+  `ai.mjs start` did not forward `--scope` / `--profile` options; fixed the
+  forwarding and included the test in reusable pipeline validation/export.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;
@@ -101,3 +111,13 @@ None.
   tools/skills_eval.mjs`; `node tools/taskboard/cli.mjs validate`; `node
   --test tools/ai_profile/test.mjs`; `node tools/ai.mjs validate --change
   profiling --change pipeline --change skills --risk medium`.
+- 2026-06-13: Validation passed for the focus facade: `node --check
+  tools/ai.mjs`; `node --test tools/ai.test.mjs`; temp-profile `node
+  tools/ai.mjs start TFOCUS initial --scope ... --profile ...`; temp-profile
+  `node tools/ai.mjs focus next --scope ... --profile ...`; live `node
+  tools/ai.mjs focus focus-facade-validation --intent "Start validation slice
+  for focus facade"`.
+- 2026-06-13: Planned validation batch passed after adding facade tests to the
+  portable base: `node tools/ai.mjs validate --change profiling --change
+  pipeline --change skills --risk medium`; fresh `node tools/ai.mjs reflect`
+  then reported stable baseline comparison and clean current scope.

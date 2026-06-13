@@ -60,6 +60,7 @@ if (existsSync(exportDir)) {
 
 run("taskboard summary", ["tools/taskboard/cli.mjs", "summary"]);
 run("ai facade syntax", ["--check", "tools/ai.mjs"]);
+run("ai facade tests", ["--test", "tools/ai.test.mjs"]);
 run("skill eval", ["tools/skills_eval.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
 run("taskboard tests", ["--test", "tools/taskboard/test.mjs"]);
@@ -80,6 +81,7 @@ if (existsSync(join(root, "CMakePresets.json"))) {
 
 run("portable export", ["tools/bootstrap/export_base.mjs", "--target", exportDir]);
 run("exported skill eval", ["tools/skills_eval.mjs"], { cwd: exportDir });
+run("exported ai facade tests", ["--test", "tools/ai.test.mjs"], { cwd: exportDir });
 run("exported taskboard validate", ["tools/taskboard/cli.mjs", "validate"], { cwd: exportDir });
 run("exported taskboard tests", ["--test", "tools/taskboard/test.mjs"], { cwd: exportDir });
 run("exported ai profile tests", ["--test", "tools/ai_profile/test.mjs"], { cwd: exportDir });

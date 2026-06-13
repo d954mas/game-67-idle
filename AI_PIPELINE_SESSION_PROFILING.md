@@ -68,6 +68,7 @@ For normal work, use the fast facade:
 
 ```powershell
 node tools/ai.mjs start <task-id> <iteration-name>
+node tools/ai.mjs focus <next-iteration-name>
 node tools/ai.mjs context
 node tools/ai.mjs checkpoint "Reviewed current reflection and chose next fix"
 node tools/ai.mjs run -- <command> <args>
@@ -77,14 +78,16 @@ node tools/ai.mjs reflect
 ```
 
 This keeps analytics attached to real work without forcing the agent to manage
-the profiler as a separate project. `reflect` prepares the full handoff chain
-when a baseline exists: closeout bundle, baseline comparison, reflection packet,
-draft, and review. It continues when current-scope regressions exist so those
-regressions become reflection evidence; use `node tools/ai.mjs reflect
---strict` to stop on regressions, or `node tools/ai.mjs reflect --quick` only
-for a cheap closeout summary without the full handoff. Use `tools/ai_profile/*`
-directly only when debugging telemetry, running a one-off deep analysis, or
-changing the profiler.
+the profiler as a separate project. Use `focus` after a commit, process fix, or
+direction change when the work item stays the same but current-scope review
+should stop carrying older regressions forward. `reflect` prepares the full
+handoff chain when a baseline exists: closeout bundle, baseline comparison,
+reflection packet, draft, and review. It continues when current-scope
+regressions exist so those regressions become reflection evidence; use `node
+tools/ai.mjs reflect --strict` to stop on regressions, or `node tools/ai.mjs
+reflect --quick` only for a cheap closeout summary without the full handoff.
+Use `tools/ai_profile/*` directly only when debugging telemetry, running a
+one-off deep analysis, or changing the profiler.
 
 For playable game iterations, `node tools/ai.mjs context` profiles and prints
 the compact game context pack. To write the pack JSON explicitly, run:
@@ -358,6 +361,9 @@ Record tools by role:
 - `start.mjs`: one-command iteration starter. Prefer it at the beginning of a
   focused profiled task because it writes persistent scope and a `phase_start`
   checkpoint together.
+- `ai.mjs focus`: fast facade for starting a new iteration inside the current
+  work item. Use it after a commit or process fix so current-scope reflection
+  measures the next slice instead of the whole umbrella task.
 - `run.mjs`: default wrapper for shell commands. Prefer it for expensive,
   repeated, or validation commands so duration and exit code are captured
   automatically.
@@ -703,8 +709,10 @@ from ad hoc reruns of the same broad command; use
 A "profiled session" is done when:
 
 - JSONL exists and parses;
-- a focused long task started with `start.mjs`, or the retrospective explains
-  why profiling began late;
+- a focused long task started with `node tools/ai.mjs start`, and later slices
+  inside the same work item used `node tools/ai.mjs focus` when old current
+  issues should stop carrying forward; otherwise the retrospective explains why
+  profiling began late or why one wide scope was intentional;
 - command work used `run.mjs` for substantial validations/builds/audits;
 - long manual/research/design/review stretches used `node tools/ai.mjs
   checkpoint "<intent>"` with an intent that explains the elapsed time, or the

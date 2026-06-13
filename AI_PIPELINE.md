@@ -155,17 +155,19 @@ node tools/skills_sync.mjs
   `.gitignore` is the safety net for scratch paths; the workflow rule is what
   prevents agents from creating noisy session artifacts in non-ignored
   locations. Fast path: `node tools/ai.mjs start <task> <iteration>`,
-  `node tools/ai.mjs context`, `node tools/ai.mjs checkpoint "<intent>"`,
-  `node tools/ai.mjs run -- <command>`, `node tools/ai.mjs validate --change
-  <kind> --risk <risk>`, `node tools/ai.mjs status`, and `node tools/ai.mjs
-  reflect`. Use `checkpoint` after long manual/research/review stretches so
-  wall-clock coverage is captured without noisy short-pause records. Use
-  `validate` for planned validation batches so broad/final gates are recorded
-  as batched evidence, not ad hoc repeated commands. `reflect` prepares the
-  full reflection handoff and includes current-scope regressions as evidence;
-  use `reflect --strict` to stop on regressions or `reflect --quick` only for a
-  cheap closeout summary. Use `tools/ai_profile/*` directly only when
-  improving or debugging telemetry.
+  `node tools/ai.mjs focus <iteration>`, `node tools/ai.mjs context`, `node
+  tools/ai.mjs checkpoint "<intent>"`, `node tools/ai.mjs run -- <command>`,
+  `node tools/ai.mjs validate --change <kind> --risk <risk>`, `node
+  tools/ai.mjs status`, and `node tools/ai.mjs reflect`. Use `focus` after a
+  commit, process fix, or direction change when the work item is the same but
+  current-scope reflection should start fresh. Use `checkpoint` after long
+  manual/research/review stretches so wall-clock coverage is captured without
+  noisy short-pause records. Use `validate` for planned validation batches so
+  broad/final gates are recorded as batched evidence, not ad hoc repeated
+  commands. `reflect` prepares the full reflection handoff and includes
+  current-scope regressions as evidence; use `reflect --strict` to stop on
+  regressions or `reflect --quick` only for a cheap closeout summary. Use
+  `tools/ai_profile/*` directly only when improving or debugging telemetry.
 - **External AI observability is gated.** Do not add LangSmith, Phoenix,
   Langfuse, Braintrust, OpenTelemetry export, or another tracing/eval platform
   just because reflection needs more data. First use
@@ -296,7 +298,8 @@ Portable (copied by the exporter):
 
 - `.codex/skills/` - all skills are written engine-agnostic: they discover
   local conventions instead of assuming this repo's layout.
-- `tools/ai.mjs`, `tools/skills_sync.mjs`, `tools/skills_eval.mjs`,
+- `tools/ai.mjs`, `tools/ai.test.mjs`, `tools/skills_sync.mjs`,
+  `tools/skills_eval.mjs`,
   `tools/pipeline_validate.mjs`, `tools/ai_profile/`,
   `tools/game_context/`, `tools/assets/new_art_job.mjs`,
   `tools/taskboard/`, `tools/README.md`, `tools/tool_layers.json` - fast AI

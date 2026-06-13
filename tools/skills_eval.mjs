@@ -288,6 +288,7 @@ const SKILL_CHECKS = [
       "tmp/session_profiles",
       "tools/ai.mjs",
       "node tools/ai.mjs start <id> <iteration>",
+      "node tools/ai.mjs focus <next-iteration>",
       "node tools/ai.mjs context",
       "node tools/ai.mjs checkpoint \"<intent>\"",
       "node tools/ai.mjs run -- <command>",
