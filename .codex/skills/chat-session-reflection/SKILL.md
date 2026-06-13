@@ -161,6 +161,10 @@ tmp/session_profiles/<name>.reflection_packet.json` and read that packet first.
 Use it as the first evidence map before opening larger summary, review,
 follow-up, or comparison artifacts. Do not promote packet follow-ups marked
 `satisfied` into tasks unless new evidence reopens the issue.
+After the packet is ready, generate a scratch starter with
+`tools/ai_profile/reflection_draft.mjs <packet.json> --output
+tmp/session_profiles/<name>.reflection_draft.md --json-output
+tmp/session_profiles/<name>.reflection_draft.json`. Read the draft and edit it with judgment; do not treat it as the final retrospective.
 For multi-task profiles, inspect `work_items`, `iterations`, and
 `repeated_broad_final_by_work_item` before calling repeated validation waste.
 When review JSON includes `current_scope`, separate current-scope findings from

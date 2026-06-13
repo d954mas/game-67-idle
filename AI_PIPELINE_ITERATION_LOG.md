@@ -944,3 +944,19 @@ specific and reusable.
   baseline follow-ups.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0097`.
+
+## 2026-06-13 - Reflection packet needs a draft step
+
+- Trigger: The reflection packet reduced evidence gathering, but writing the
+  retrospective still started from a blank page.
+- Symptom: Agents can re-expand compact evidence into ad hoc prose and lose the
+  current-state, follow-up, and symptom/cause/fix structure.
+- Time sink: Rebuilding retrospective shape repeatedly instead of analyzing the
+  next process improvements.
+- Likely cause: The packet is an evidence map, not a structured retrospective
+  starter.
+- Proposed improvement: Add `tools/ai_profile/reflection_draft.mjs` to convert
+  packet plus review JSON into scratch markdown/JSON sections, while requiring
+  the agent to edit the draft with judgment before sharing.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0098`.

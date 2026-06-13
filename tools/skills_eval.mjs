@@ -319,6 +319,8 @@ const SKILL_CHECKS = [
       "reflection_packet.mjs",
       "first evidence map",
       "satisfied",
+      "reflection_draft.mjs",
+      "edit it with judgment",
       "current-scope regressions",
       "whole-profile deltas",
       "missing context input",

@@ -1417,6 +1417,95 @@ test("reflection packet flags current-scope comparison regressions", () => {
   }
 });
 
+test("reflection draft summarizes clean packet artifacts", () => {
+  const dir = tempDir();
+  try {
+    const review = join(dir, "clean.review.json");
+    const packetJson = join(dir, "clean.packet.json");
+    const draftJson = join(dir, "clean.draft.json");
+    const draftMd = join(dir, "clean.draft.md");
+
+    writeFileSync(review, `${JSON.stringify({
+      findings: [{ type: "low_profile_coverage", message: "Profile coverage was low before the clean current scope." }],
+      current_scope: { enabled: true, findings: [], suggested_actions: [] },
+      suggested_pipeline_actions: ["Use checkpoint.mjs for long manual stretches."],
+    })}\n`, "utf8");
+    writeFileSync(packetJson, `${JSON.stringify({
+      profile: "clean.jsonl",
+      artifacts: { review_json: review, comparison_json: join(dir, "clean.compare.json") },
+      readiness: ["ready"],
+      current_scope: { findings: [], suggested_actions: [] },
+      followups: {
+        pending_suggestions: [],
+        satisfied_suggestions: [{ priority: "P3", title: "Use clean AI profile as baseline", packet_reason: "baseline comparison is stable" }],
+        suppressed_historical_findings: ["low_profile_coverage"],
+      },
+      comparison: { verdict: "stable", current_regressions: [] },
+    })}\n`, "utf8");
+
+    const result = run([
+      "tools/ai_profile/reflection_draft.mjs",
+      packetJson,
+      "--output",
+      draftMd,
+      "--json-output",
+      draftJson,
+    ]);
+    assert.match(result.stdout, /Draft status: generated starter/);
+    assert.match(result.stdout, /Current reflection state is clean/);
+    assert.match(result.stdout, /low_profile_coverage/);
+    assert.equal(existsSync(draftMd), true);
+    const draft = readJson(draftJson);
+    assert.equal(draft.current_state.pending_followups.length, 0);
+    assert.equal(draft.current_state.satisfied_followups.length, 1);
+    assert.equal(draft.historical_lessons[0].type, "low_profile_coverage");
+    assert.equal(draft.review, review);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("reflection draft keeps pending followups and regressions visible", () => {
+  const dir = tempDir();
+  try {
+    const review = join(dir, "regressed.review.json");
+    const packetJson = join(dir, "regressed.packet.json");
+    const draftJson = join(dir, "regressed.draft.json");
+
+    writeFileSync(review, `${JSON.stringify({ findings: [] })}\n`, "utf8");
+    writeFileSync(packetJson, `${JSON.stringify({
+      profile: "regressed.jsonl",
+      artifacts: { review_json: review },
+      readiness: ["current_regressions"],
+      current_scope: {
+        findings: [{ type: "current_missing_context_inputs", message: "Current scope has unmeasured context reads." }],
+        suggested_actions: ["Use context.mjs for the next context-heavy read."],
+      },
+      followups: {
+        pending_suggestions: [{ priority: "P1", title: "Fix current context capture", next_action: "Run context_command.mjs for context commands." }],
+        satisfied_suggestions: [],
+        suppressed_historical_findings: [],
+      },
+      comparison: {
+        verdict: "regressed",
+        current_regressions: [{ key: "current_missing_context_inputs", label: "Current missing context", baseline: 0, current: 1 }],
+      },
+    })}\n`, "utf8");
+
+    const result = run(["tools/ai_profile/reflection_draft.mjs", packetJson, "--json-output", draftJson]);
+    assert.match(result.stdout, /Current-scope regressions: 1/);
+    assert.match(result.stdout, /pending \[P1\] Fix current context capture/);
+    assert.match(result.stdout, /regression: Current missing context/);
+    const draft = readJson(draftJson);
+    assert.equal(draft.current_state.current_scope_findings.length, 1);
+    assert.equal(draft.current_state.current_regressions.length, 1);
+    assert.equal(draft.current_state.pending_followups.length, 1);
+    assert.ok(draft.next_cycle_actions.some((action) => action.includes("current-scope regressions")));
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("closeout writes summary review and follow-up bundle", () => {
   const dir = tempDir();
   try {

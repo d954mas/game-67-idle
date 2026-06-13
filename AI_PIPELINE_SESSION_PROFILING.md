@@ -355,6 +355,10 @@ Record tools by role:
 - `reflection_packet.mjs`: reflection handoff helper that gathers review JSON,
   follow-up drafts, captured baseline, and baseline comparison into one compact
   scratch markdown/JSON packet before writing a full retrospective.
+- `reflection_draft.mjs`: retrospective starter helper that reads a reflection
+  packet JSON and its referenced review JSON, then writes scratch markdown/JSON
+  with current state, pending and satisfied follow-ups, historical lessons,
+  next-cycle actions, and caveats. Treat it as a draft; edit it with judgment.
 - `review.mjs`: reflection prep helper that turns a JSONL profile into
   priority findings: waste/rework, failures, blockers, context hotspots,
   repeated commands, repeated command scope (`preflight`, `scoped`,
@@ -542,6 +546,16 @@ unless the lead explicitly asks to preserve it. Packet follow-ups are split
 into pending and satisfied suggestions; do not promote satisfied suggestions
 into tasks unless new evidence reopens the issue.
 
+After a ready packet exists, generate a draft starter:
+
+```powershell
+node tools/ai_profile/reflection_draft.mjs tmp/session_profiles/session_profile_YYYY-MM-DD.reflection_packet.json --output tmp/session_profiles/session_profile_YYYY-MM-DD.reflection_draft.md --json-output tmp/session_profiles/session_profile_YYYY-MM-DD.reflection_draft.json
+```
+
+The draft is not the final retrospective. Use it to avoid repeatedly opening
+summary, review, follow-up, and comparison artifacts, then rewrite with
+judgment, user-visible context, and project-specific examples.
+
 When the review shows repeated broad commands, plan the next validation loop
 before running it:
 
@@ -631,6 +645,9 @@ A "profiled session" is done when:
   scratch evidence packet instead of repeatedly opening summary, review,
   follow-up, and compare files; satisfied packet follow-ups are not promoted
   into tasks;
+- `reflection_draft.mjs` is used after a ready packet when the agent needs to
+  write a full retrospective; the draft is read and edited with judgment, not
+  pasted as final output;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste; use
   `--json-output` when another tool, agent, or later reflection should consume
