@@ -220,6 +220,17 @@ Default order for substantial work:
 5. Run the narrowest validation that proves the change.
 6. Escalate to broader validation only when the scope or risk requires it.
 
+For reusable/process/tooling work, plan validation before running it:
+
+```powershell
+node tools/ai_profile/plan_validation.mjs --change profiling --change skills --risk medium
+```
+
+Use the output as a validation ladder: preflight first, scoped checks second,
+and broad/final checks once at the end of the batch. Re-running broad gates
+such as full portable pipeline validation after every small edit is waste
+unless the previous gate failed or new shared behavior changed.
+
 For pipeline/tooling changes, prove both the current repository and the portable
 export path when the change affects future projects. For game/runtime changes,
 prove the specific playable or visual behavior, not only that the build
@@ -232,8 +243,10 @@ phrases and required output/process anchors have not been lost.
 For the full reusable-base gate, run `node tools/pipeline_validate.mjs`. It
 validates this repo (including runtime seed checks: state codegen and CMake
 configure when those files are present), exports a fresh portable base, and
-validates the exported project from inside the exported folder. The runtime
-seed checks skip automatically in workflow-only exports.
+validates the exported project from inside the exported folder. Treat this as a
+broad/final gate: run it once after narrower checks pass, unless debugging a
+failure in the exporter itself. The runtime seed checks skip automatically in
+workflow-only exports.
 
 Do not use old task logs, generated files, build outputs, or archived design
 handoffs as current truth unless they are linked from `STATUS.md`, an active

@@ -100,3 +100,7 @@ Then run `tools/ai_profile/review.mjs <profile.jsonl> --output
 tmp/session_profiles/<name>.review.md` to extract waste/rework, failures,
 blockers, context hotspots, repeated commands, and suggested pipeline actions
 before writing the human retrospective.
+If profile review finds repeated validation or unclear validation scope, run
+`tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the
+next validation loop and report the narrow/scoped/broad ladder. Treat repeated
+broad gates without a changed risk or failed previous gate as validation waste.

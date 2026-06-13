@@ -388,3 +388,22 @@ specific and reusable.
   reflection-ready findings and suggested pipeline actions from JSONL profiles.
 - Follow-up owner: Future reflection agents.
 - Status: Implemented in `T0064`.
+
+## 2026-06-13 - Broad validation needs a ladder before it runs
+
+- Context: The first live profile review found repeated broad checks in one
+  tooling/reflection loop: taskboard validation, skill sync/eval, portable
+  pipeline validation, and diff checks were rerun multiple times while the
+  scope was still changing.
+- Friction: The rule "run narrowest validation first" existed only as prose, so
+  the agent still defaulted to broad reassurance after small edits.
+- Time sink: Full reusable-base and skill gates are useful, but repeated too
+  early they consume time and profile budget without adding new evidence.
+- Likely cause: No executable pre-validation planner separated preflight,
+  scoped checks, and broad/final checks for the current change kind.
+- Proposed improvement: Add `tools/ai_profile/plan_validation.mjs` to print a
+  narrow-to-broad validation ladder from change tags or touched files. Broad
+  gates should run once at the end of a batch unless a previous gate failed or
+  the risk changed.
+- Follow-up owner: Future implementation/reflection agents.
+- Status: Implemented in `T0065`.

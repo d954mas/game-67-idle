@@ -179,7 +179,11 @@ emit("\n## Suggested Pipeline Actions");
 const actions = [];
 if (waste.length > 0) actions.push("Convert recurring waste/rework reasons into a task, skill rule, validator, or batching rule.");
 if (failed.length > 0) actions.push("For failed commands, decide whether the fix is code, environment, narrower validation, or better preflight.");
-if (repeatedCommands.length > 0) actions.push("Batch repeated broad validation or add a narrower preflight gate before full reruns.");
+if (repeatedCommands.length > 0) {
+  actions.push(
+    "Batch repeated broad validation or run `node tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the next validation loop.",
+  );
+}
 if (highContext.length > 0 || missingContextInputs.length > 0) actions.push("Compact source-of-truth docs or log explicit context_inputs for expensive reads.");
 if (!closeoutSeen) actions.push("Run `node tools/ai_profile/closeout.mjs` at session end.");
 if (actions.length === 0) actions.push("Use this clean profile as baseline; compare against the next real game iteration.");
@@ -192,4 +196,3 @@ if (outputFile) {
   writeFileSync(target, rendered, "utf8");
 }
 process.stdout.write(rendered);
-

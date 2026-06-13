@@ -85,6 +85,7 @@ Active task:
 - `T0062` Add low-overhead AI profile event and command wrappers: in review.
 - `T0063` Add AI profile closeout summary command: in review.
 - `T0064` Add AI profile reflection review analyzer: in review.
+- `T0065` Add AI validation ladder planner: in review.
 
 Current visual proof:
 

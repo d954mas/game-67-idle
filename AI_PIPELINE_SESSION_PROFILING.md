@@ -221,6 +221,10 @@ Record tools by role:
 - `review.mjs`: reflection prep helper that turns a JSONL profile into
   priority findings: waste/rework, failures, blockers, context hotspots,
   repeated commands, and suggested pipeline actions.
+- `plan_validation.mjs`: pre-validation helper that prints a narrow-to-broad
+  validation ladder for the changed work kind. Use it when `review.mjs` reports
+  repeated commands, before broad reusable-base checks, or when the right
+  validation scope is unclear.
 - `apply_patch`: files changed, why the change was scoped.
 - `imagegen`: prompt packet path, candidate count, accepted/rejected result.
 - `view_image`: image paths, visual findings.
@@ -304,6 +308,17 @@ node tools/ai_profile/review.mjs tmp/session_profiles/session_profile_YYYY-MM-DD
 The review is not a replacement for judgment. It is a fast checklist of what
 the agent must explain or convert into process improvements.
 
+When the review shows repeated broad commands, plan the next validation loop
+before running it:
+
+```powershell
+node tools/ai_profile/plan_validation.mjs --change profiling --change skills --risk medium
+```
+
+The planner prints commands but does not run them. Profile substantial commands
+with `run.mjs`, batch broad/final gates, and record any intentionally skipped
+expected gate in the task log.
+
 ## Definition Of Done
 
 A "profiled session" is done when:
@@ -316,6 +331,8 @@ A "profiled session" is done when:
 - `closeout.mjs` is used for normal session closeout unless a custom summary
   path or manual investigation is needed;
 - `review.mjs` is used before deeper reflection when a profile exists;
+- `plan_validation.mjs` is used before rerunning broad validation after the
+  profile review has identified repeated commands or validation waste;
 - the final response names profile path and summary path;
 - any repeated waste is converted into a task, skill rule, or pipeline rule;
 - the retrospective uses the profile instead of relying only on memory.
