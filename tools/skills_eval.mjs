@@ -284,6 +284,7 @@ const SKILL_CHECKS = [
       "run.mjs",
       "event.mjs",
       "context.mjs",
+      "status.mjs",
       "closeout.mjs",
       "closeout bundle",
       "review.mjs",

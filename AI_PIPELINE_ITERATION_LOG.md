@@ -561,3 +561,20 @@ specific and reusable.
   bundle by default, with opt-outs for summary-only or no-followups cases.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0074`.
+
+## 2026-06-13 - Profiling needs a mid-session health check
+
+- Context: The profiler can record events and produce a final closeout bundle,
+  but agents still need to know during work whether telemetry is good enough.
+- Friction: Without a quick status command, missing work-item metadata,
+  missing context inputs, low coverage, failed records, or missing closeout
+  artifacts are discovered late during reflection.
+- Time sink: Late discovery turns telemetry repair into another manual
+  retrospective step.
+- Likely cause: `review.mjs` and `closeout.mjs` are end-of-cycle tools; there
+  was no read-only health check for the current profile.
+- Proposed improvement: Add `tools/ai_profile/status.mjs` to report profile
+  health and one next profiling action without appending records or generating
+  artifacts.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0075`.

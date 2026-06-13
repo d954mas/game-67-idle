@@ -230,6 +230,15 @@ tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl
 
 Override with `--profile <path>` only for tests or when comparing profiles.
 
+To check telemetry health during a long session without closing it, run:
+
+```powershell
+node tools/ai_profile/status.mjs
+```
+
+Use `--json-output tmp/session_profiles/session_profile_YYYY-MM-DD.status.json`
+when a dashboard, follow-up tool, or later agent should consume the status.
+
 For long or multi-task sessions, add segmentation to every substantial command
 or checkpoint:
 
@@ -249,6 +258,10 @@ Record tools by role:
 - `event.mjs`: low-cost checkpoint writer for non-command events.
 - `context.mjs`: context-read checkpoint writer that measures local file
   character counts and fills `context_inputs` automatically.
+- `status.mjs`: mid-session helper that reports current profile health without
+  appending records: latest event, closeout/bundle presence, work-item
+  coverage, missing context inputs, wall-clock coverage, failed records, and
+  one suggested next profiling action.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
   and writes a scratch reflection bundle: summary, review markdown/JSON, and
   follow-up markdown/JSON.
@@ -406,6 +419,9 @@ A "profiled session" is done when:
 - command work used `run.mjs` for substantial validations/builds/audits;
 - non-command context decisions used sparse `event.mjs` checkpoints, and local
   medium/high context reads used `context.mjs` where possible;
+- `status.mjs` is used during long sessions when the agent needs to know
+  whether current telemetry is missing work-item metadata, context inputs,
+  coverage, closeout, or bundle artifacts;
 - long or multi-task profiles include `--work-item <id>` on substantial
   commands and checkpoints, with `--iteration <name>` when the work item has
   separate loops;

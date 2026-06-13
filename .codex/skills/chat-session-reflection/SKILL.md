@@ -94,6 +94,10 @@ For future long sessions, prefer collecting data during work with
 `tools/ai_profile/run.mjs` for substantial commands and
 `tools/ai_profile/event.mjs` for sparse checkpoints. Do not wait until the end
 to reconstruct avoidable telemetry from chat history.
+During long sessions, run `tools/ai_profile/status.mjs` when telemetry health
+is unclear. It is read-only and reports latest event, closeout/bundle presence,
+work-item coverage, missing context inputs, wall-clock coverage, failed
+records, and the next profiling action.
 
 Before writing a retrospective from a live profile, run
 `tools/ai_profile/summarize_session_profile.mjs <profile.jsonl> --output
