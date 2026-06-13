@@ -154,7 +154,7 @@ function buildStatus(profilePath) {
   } else if (failedClassification.unresolved > 0) {
     nextAction = "Resolve or explain unresolved failed profile records before trusting this profile for reflection.";
   } else if (records.length >= 5 && missingWorkItem / records.length > 0.5) {
-    nextAction = "Add --work-item and optional --iteration to future run/event/context/closeout calls.";
+    nextAction = "Set AI_PROFILE_WORK_ITEM and optional AI_PROFILE_ITERATION, or pass --work-item/--iteration to future profile commands.";
   } else if (missingContextInputs > 0) {
     nextAction = "Use context.mjs for medium/high local context reads so context_inputs are measured.";
   } else if (lowCoverage) {

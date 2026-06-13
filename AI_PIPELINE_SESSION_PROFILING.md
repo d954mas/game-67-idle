@@ -166,6 +166,17 @@ native work item IDs.
 `profile-metadata`, `visual-audit-pass-2`, or `release-smoke-rerun`. Use it
 when one work item has multiple distinct loops.
 
+For a focused work session, set default metadata once instead of repeating it
+on every command:
+
+```powershell
+$env:AI_PROFILE_WORK_ITEM = "T0077"
+$env:AI_PROFILE_ITERATION = "env-defaults"
+```
+
+Explicit `--work-item` and `--iteration` flags override these environment
+defaults for one command.
+
 ## What To Log
 
 Log a record for:
@@ -246,6 +257,9 @@ or checkpoint:
 node tools/ai_profile/run.mjs --phase validation --category validation --intent "Check profile metadata" --work-item T0072 --iteration profile-metadata -- node --check tools/ai_profile/profile_lib.mjs
 node tools/ai_profile/context.mjs --phase context --intent "Measure profiling docs" --work-item T0072 --iteration profile-metadata --path AI_PIPELINE_SESSION_PROFILING.md --reason "profile metadata docs"
 ```
+
+If most commands belong to the same task, prefer `AI_PROFILE_WORK_ITEM` and
+`AI_PROFILE_ITERATION` defaults, and use explicit flags only for exceptions.
 
 ## Tool Profiling
 
@@ -427,7 +441,8 @@ A "profiled session" is done when:
   coverage, closeout, or bundle artifacts;
 - long or multi-task profiles include `--work-item <id>` on substantial
   commands and checkpoints, with `--iteration <name>` when the work item has
-  separate loops;
+  separate loops, or equivalent `AI_PROFILE_WORK_ITEM` /
+  `AI_PROFILE_ITERATION` defaults are set for the shell session;
 - the summary script passes and writes a scratch `.summary.md` closeout when
   the session is long enough to reflect on;
 - `closeout.mjs` is used for normal session closeout unless manual

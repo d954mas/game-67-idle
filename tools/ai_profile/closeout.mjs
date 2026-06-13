@@ -32,7 +32,11 @@ options:
   --notes <text>
 
 The command appends one closeout event, writes summary/review/follow-up scratch
-artifacts, and prints their paths. All outputs default to tmp/session_profiles/.`);
+artifacts, and prints their paths. All outputs default to tmp/session_profiles/.
+
+Environment defaults:
+  AI_PROFILE_WORK_ITEM       fallback for --work-item
+  AI_PROFILE_ITERATION       fallback for --iteration`);
   process.exit(2);
 }
 

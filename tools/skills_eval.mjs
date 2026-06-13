@@ -293,6 +293,8 @@ const SKILL_CHECKS = [
       "missing context input",
       "work_items",
       "--work-item",
+      "AI_PROFILE_WORK_ITEM",
+      "AI_PROFILE_ITERATION",
       "iteration",
       "wall_clock_coverage",
       "low_profile_coverage",

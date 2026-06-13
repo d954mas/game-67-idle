@@ -88,6 +88,11 @@ export function stringArg(values, key, fallback = "") {
   return Array.isArray(value) ? String(value[value.length - 1]) : String(value);
 }
 
+function envString(name) {
+  const value = process.env[name];
+  return value === undefined ? "" : String(value).trim();
+}
+
 export function numberArg(values, key) {
   const value = stringArg(values, key, "");
   if (!value) return undefined;
@@ -127,10 +132,10 @@ export function buildRecord(values, extra = {}) {
   const contextRisk = stringArg(values, "context-risk", "");
   if (contextRisk) record.context_risk = contextRisk;
 
-  const workItem = stringArg(values, "work-item", "");
+  const workItem = stringArg(values, "work-item", envString("AI_PROFILE_WORK_ITEM"));
   if (workItem) record.work_item = workItem;
 
-  const iteration = stringArg(values, "iteration", "");
+  const iteration = stringArg(values, "iteration", envString("AI_PROFILE_ITERATION"));
   if (iteration) record.iteration = iteration;
 
   const wasteReason = stringArg(values, "waste-reason", "");

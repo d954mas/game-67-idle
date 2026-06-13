@@ -19,7 +19,11 @@ options:
   --notes <text>
 
 Records file-read and context_inputs entries with measured character counts.
-It does not print file contents.`);
+It does not print file contents.
+
+Environment defaults:
+  AI_PROFILE_WORK_ITEM       fallback for --work-item
+  AI_PROFILE_ITERATION       fallback for --iteration`);
   process.exit(2);
 }
 

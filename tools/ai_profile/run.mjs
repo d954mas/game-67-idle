@@ -21,7 +21,11 @@ options:
   --notes <text>
 
 The wrapped command inherits stdio. The profile event is appended after the
-command exits and records duration, exit code, and pass/fail result.`);
+command exits and records duration, exit code, and pass/fail result.
+
+Environment defaults:
+  AI_PROFILE_WORK_ITEM       fallback for --work-item
+  AI_PROFILE_ITERATION       fallback for --iteration`);
   process.exit(2);
 }
 

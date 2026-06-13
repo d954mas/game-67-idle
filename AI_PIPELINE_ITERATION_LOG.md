@@ -594,3 +594,18 @@ specific and reusable.
   review, status, and follow-up drafts.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0076`.
+
+## 2026-06-13 - Work-item metadata needs low-friction defaults
+
+- Context: `status.mjs` showed low work-item coverage even after
+  `--work-item` support was added.
+- Friction: Repeating `--work-item` and `--iteration` on every profiling
+  command is easy to skip during fast tool loops.
+- Time sink: Reflection then has to segment a daily profile after the fact.
+- Likely cause: Metadata capture required per-command discipline instead of a
+  session-level default.
+- Proposed improvement: Support `AI_PROFILE_WORK_ITEM` and
+  `AI_PROFILE_ITERATION` environment defaults, with explicit CLI flags still
+  overriding them for exceptions.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0077`.

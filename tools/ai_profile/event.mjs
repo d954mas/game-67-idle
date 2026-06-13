@@ -21,7 +21,11 @@ options:
   --context-input <path:chars:reason> repeatable
   --waste-reason <text>
   --blocked-by <text>
-  --notes <text>`);
+  --notes <text>
+
+Environment defaults:
+  AI_PROFILE_WORK_ITEM       fallback for --work-item
+  AI_PROFILE_ITERATION       fallback for --iteration`);
   process.exit(2);
 }
 

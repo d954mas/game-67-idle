@@ -121,7 +121,9 @@ For multi-task profiles, inspect `work_items`, `iterations`, and
 `repeated_broad_final_by_work_item` before calling repeated validation waste.
 If many records lack work-item metadata, add a next-cycle fix: pass
 `--work-item <id>` and optional `--iteration <name>` to `run.mjs`,
-`event.mjs`, `context.mjs`, and `closeout.mjs`.
+`event.mjs`, `context.mjs`, and `closeout.mjs`, or set
+`AI_PROFILE_WORK_ITEM` and `AI_PROFILE_ITERATION` defaults for the shell
+session.
 Inspect `wall_clock_coverage`, `low_profile_coverage`, and largest gaps before
 claiming the profile explains the whole session. Low coverage means the
 retrospective must name what likely happened in the unprofiled gaps, or add a
