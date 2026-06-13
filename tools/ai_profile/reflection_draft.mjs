@@ -148,6 +148,25 @@ function contextUseSummary(review) {
   };
 }
 
+function compactContextUseSummary(summary) {
+  return {
+    hotspots: asArray(summary?.hotspots).slice(0, 8).map((item) => ({
+      path: item.path || "",
+      chars: Number(item.chars || 0),
+    })),
+    high_context: asArray(summary?.high_context).slice(0, 8).map((item) => ({
+      line: Number(item.line || 0),
+      intent: item.intent || "",
+      context_risk: item.context_risk || "",
+    })),
+    missing_inputs: asArray(summary?.missing_inputs).slice(0, 8).map((item) => ({
+      line: Number(item.line || 0),
+      intent: item.intent || "",
+      context_risk: item.context_risk || "",
+    })),
+  };
+}
+
 function scopeSummaryText(summary) {
   if (!summary.by_scope.length) return "no scope breakdown";
   return summary.by_scope.map((item) => `${item.scope || "unknown"}=${item.count || 0}`).join(", ");
@@ -258,6 +277,8 @@ function buildDraft(packet, review) {
       current_regressions: currentRegressions,
       pending_followups: pending,
       satisfied_followups: satisfied,
+      current_scope_tool_use_summary: asArray(review?.current_scope?.tool_use_summary).slice(0, 8),
+      current_scope_context_use_summary: compactContextUseSummary(review?.current_scope?.context_use_summary),
     },
     historical_lessons: historicalLessons,
     suppressed_historical_findings: suppressed,
@@ -295,6 +316,32 @@ function renderMarkdown(draft, packetFile) {
   for (const action of draft.current_state.current_scope_actions) lines.push(`- action: ${action}`);
   if (draft.current_state.current_regressions.length > 0) {
     for (const item of draft.current_state.current_regressions) lines.push(`- regression: ${item.label || item.key || "unknown"}`);
+  }
+  lines.push("");
+  lines.push("## Current Scope Tool Use");
+  if (draft.current_state.current_scope_tool_use_summary.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const item of draft.current_state.current_scope_tool_use_summary) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms || 0)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}, commands=${item.commands || 0}, context=${item.contexts || 0}`);
+  }
+  lines.push("");
+  lines.push("## Current Scope Context Use");
+  const currentContext = draft.current_state.current_scope_context_use_summary || { hotspots: [], high_context: [], missing_inputs: [] };
+  if (currentContext.hotspots.length === 0 && currentContext.high_context.length === 0 && currentContext.missing_inputs.length === 0) {
+    lines.push("- none");
+  } else {
+    if (currentContext.hotspots.length > 0) {
+      lines.push("- hotspots:");
+      for (const item of currentContext.hotspots) lines.push(`  - ${item.path}: ${item.chars} chars`);
+    }
+    if (currentContext.high_context.length > 0) {
+      lines.push("- high context:");
+      for (const item of currentContext.high_context) lines.push(`  - line ${item.line}: ${item.intent}`);
+    }
+    if (currentContext.missing_inputs.length > 0) {
+      lines.push("- missing inputs:");
+      for (const item of currentContext.missing_inputs) lines.push(`  - line ${item.line} [${item.context_risk || "unknown"}]: ${item.intent}`);
+    }
   }
   lines.push("");
   lines.push("## Follow-ups");

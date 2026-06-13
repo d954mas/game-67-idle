@@ -197,3 +197,6 @@ None.
 - 2026-06-13: Added `context_use_summary` to reflection draft/review handoff so
   context hotspots and missing context inputs are visible without reopening raw
   review JSON or long docs.
+- 2026-06-13: Added current-scope tool/context summaries to profile review and
+  reflection handoff so iteration-local bottlenecks are visible before
+  whole-profile history.

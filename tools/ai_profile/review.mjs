@@ -139,6 +139,30 @@ function isLowCoverage(coverage) {
   return coverage.wall_clock_span_ms >= 30 * 60 * 1000 && Number.isFinite(coverage.coverage_ratio) && coverage.coverage_ratio < 0.25;
 }
 
+function contextUseSummary(records) {
+  const chars = new Map();
+  const high = [];
+  const missing = [];
+  for (const record of records) {
+    for (const input of record.context_inputs || []) addCount(chars, input.path || "(inline)", Number(input.chars || 0));
+    if (record.context_risk === "high") high.push(record);
+    if (record.context_risk && record.context_risk !== "low" && !(record.context_inputs || []).length) missing.push(record);
+  }
+  return {
+    hotspots: topEntries(chars, 8).filter(([, count]) => count > 0).map(([path, chars]) => ({ path, chars })),
+    high_context: high.slice(0, 8).map((record) => ({
+      line: record.__line,
+      intent: record.intent || "",
+      context_risk: record.context_risk || "",
+    })),
+    missing_inputs: missing.slice(0, 8).map((record) => ({
+      line: record.__line,
+      intent: record.intent || "",
+      context_risk: record.context_risk || "",
+    })),
+  };
+}
+
 function scopedSummary(records) {
   const broadCommandCounts = new Map();
   const unbatchedBroadCommandCounts = new Map();
@@ -160,11 +184,14 @@ function scopedSummary(records) {
   const coverage = coverageStats(records);
   const failedClassification = classifyFailedRecords(records);
   const recoveredFailureClassification = classifyRecoveredFailures(failedClassification.recovered);
+  const currentContext = contextUseSummary(records);
   return {
     records: records.length,
     missing_context_inputs: records.filter((record) => record.context_risk && record.context_risk !== "low" && !(record.context_inputs || []).length).length,
     missing_work_item_records: records.filter((record) => !record.work_item).length,
     missing_tool_records: records.filter((record) => !Array.isArray(record.tools) || record.tools.length === 0).length,
+    tool_use_summary: toolUseSummary(records).slice(0, 8),
+    context_use_summary: currentContext,
     repeated_broad_final_commands: repeatedBroadFinalCommands,
     repeated_unbatched_broad_final_commands: repeatedUnbatchedBroadFinalCommands,
     recovered_failed_records: failedClassification.recovered.map((item) => ({
@@ -729,6 +756,38 @@ if (currentScope.findings.length === 0) {
 
 emit("\n## Current Scope Actions");
 for (const action of currentScope.suggested_actions) emit(`- ${action}`);
+
+emit("\n## Current Scope Tool Use");
+if (!currentScope.enabled || currentScope.records === 0 || currentScope.tool_use_summary.length === 0) {
+  emit("- none");
+} else {
+  for (const item of currentScope.tool_use_summary) {
+    emit(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
+  }
+}
+
+emit("\n## Current Scope Context Use");
+if (!currentScope.enabled || currentScope.records === 0) {
+  emit("- none");
+} else {
+  const currentContext = currentScope.context_use_summary || { hotspots: [], high_context: [], missing_inputs: [] };
+  if (currentContext.hotspots.length === 0 && currentContext.high_context.length === 0 && currentContext.missing_inputs.length === 0) {
+    emit("- none");
+  } else {
+    if (currentContext.hotspots.length > 0) {
+      emit("- hotspots:");
+      for (const item of currentContext.hotspots) emit(`  - ${item.path}: ${item.chars} chars`);
+    }
+    if (currentContext.high_context.length > 0) {
+      emit("- high context:");
+      for (const item of currentContext.high_context) emit(`  - line ${item.line}: ${item.intent}`);
+    }
+    if (currentContext.missing_inputs.length > 0) {
+      emit("- missing inputs:");
+      for (const item of currentContext.missing_inputs) emit(`  - line ${item.line} [${item.context_risk || "unknown"}]: ${item.intent}`);
+    }
+  }
+}
 
 emit("\n## Historical Whole-Profile Findings");
 if (findings.length === 0) {

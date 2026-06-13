@@ -336,6 +336,7 @@ const SKILL_CHECKS = [
       "top next-cycle",
       "tool_use_summary",
       "context_use_summary",
+      "current-scope tool/context",
       "missing_tool_metadata",
       "recovered_failure_classification",
       "repeated-command evidence",

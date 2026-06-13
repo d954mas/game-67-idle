@@ -48,7 +48,8 @@ function topImprovements(draft, currentClean) {
   }
   if (asArray(draft.repeated_commands?.unbatched_broad_final_commands).length > 0 || hasLesson("repeated_broad_final")) {
     const occurrences = Number(draft.repeated_commands?.unbatched_broad_final_occurrences || 0);
-    improvements.push(`Batch broad/final validation with node tools/ai.mjs validate and rerun it only after a failed gate, changed risk, or final handoff${occurrences > 0 ? `; current review shows ${occurrences} unbatched broad/final occurrence(s)` : ""}.`);
+    const evidenceScope = currentClean ? "historical whole-profile review shows" : "review shows";
+    improvements.push(`Batch broad/final validation with node tools/ai.mjs validate and rerun it only after a failed gate, changed risk, or final handoff${occurrences > 0 ? `; ${evidenceScope} ${occurrences} unbatched broad/final occurrence(s)` : ""}.`);
   }
   if (asArray(draft.repeated_commands?.validation_batches).length > 0) {
     improvements.push("Use validation batch evidence to separate planned validation runs from ad hoc repeated commands.");
@@ -113,6 +114,8 @@ function buildReview(draft, draftPath) {
       pending_followups: pendingFollowups,
       actions: currentActions,
       status_message: currentStatusMessage,
+      tool_use_summary: asArray(draft.current_state?.current_scope_tool_use_summary),
+      context_use_summary: draft.current_state?.current_scope_context_use_summary || { hotspots: [], high_context: [], missing_inputs: [] },
     },
     historical_lessons: historicalLessons,
     suppressed_historical_findings: asArray(draft.suppressed_historical_findings),
@@ -144,6 +147,33 @@ function renderMarkdown(review, draftPath) {
     lines.push(`- ${review.current.status_message}`);
   } else {
     for (const action of review.current.actions) lines.push(`- ${action}`);
+  }
+  lines.push("");
+  lines.push("## Current Scope Tool Use");
+  const currentTools = asArray(review.current.tool_use_summary);
+  if (currentTools.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const item of currentTools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
+  }
+  lines.push("");
+  lines.push("## Current Scope Context Use");
+  const currentContext = review.current.context_use_summary || { hotspots: [], high_context: [], missing_inputs: [] };
+  if (asArray(currentContext.hotspots).length === 0 && asArray(currentContext.high_context).length === 0 && asArray(currentContext.missing_inputs).length === 0) {
+    lines.push("- none");
+  } else {
+    if (asArray(currentContext.hotspots).length > 0) {
+      lines.push("- hotspots:");
+      for (const item of asArray(currentContext.hotspots)) lines.push(`  - ${item.path || "unknown"}: ${item.chars || 0} chars`);
+    }
+    if (asArray(currentContext.high_context).length > 0) {
+      lines.push("- high context:");
+      for (const item of asArray(currentContext.high_context)) lines.push(`  - line ${item.line || 0}: ${item.intent || ""}`);
+    }
+    if (asArray(currentContext.missing_inputs).length > 0) {
+      lines.push("- missing inputs:");
+      for (const item of asArray(currentContext.missing_inputs)) lines.push(`  - line ${item.line || 0} [${item.context_risk || "unknown"}]: ${item.intent || ""}`);
+    }
   }
   lines.push("");
   lines.push("## Historical Lessons");

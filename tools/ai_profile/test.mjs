@@ -1603,6 +1603,74 @@ test("profile review summarizes tool use", () => {
   }
 });
 
+test("profile review summarizes current scope tool and context use", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "current-scope-use.jsonl");
+    const scopeFile = join(dir, "scope.json");
+    const reviewJson = join(dir, "review.json");
+    writeFileSync(scopeFile, `${JSON.stringify({
+      work_item: "T-CURRENT",
+      iteration: "tool-context",
+      updated_at: "2026-06-13T10:00:00+05:00",
+    })}\n`, "utf8");
+    appendFileSync(profile, `${JSON.stringify({
+      ts: "2026-06-13T09:59:59+05:00",
+      phase: "art_generation",
+      category: "art",
+      intent: "Generate older art before current scope",
+      result: "pass",
+      value: "productive",
+      duration_ms: 99000,
+      tools: ["imagegen"],
+    })}\n`, "utf8");
+    appendFileSync(profile, `${JSON.stringify({
+      ts: "2026-06-13T10:00:01+05:00",
+      phase: "context",
+      category: "context",
+      intent: "Load current task context",
+      result: "pass",
+      value: "necessary_overhead",
+      duration_ms: 2000,
+      tools: ["ai_profile/context_command.mjs", "shell_command"],
+      commands: ["node tools/taskboard/cli.mjs context"],
+      context_risk: "medium",
+      context_inputs: [{ path: "tasks/STATUS.md", chars: 1234 }],
+      work_item: "T-CURRENT",
+      iteration: "tool-context",
+    })}\n`, "utf8");
+    appendFileSync(profile, `${JSON.stringify({
+      ts: "2026-06-13T10:00:04+05:00",
+      phase: "validation",
+      category: "validation",
+      intent: "Run current scoped check",
+      result: "pass",
+      value: "productive",
+      duration_ms: 3000,
+      tools: ["shell_command"],
+      commands: ["node tools/skills_eval.mjs"],
+      work_item: "T-CURRENT",
+      iteration: "tool-context",
+    })}\n`, "utf8");
+
+    const result = run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scopeFile },
+    });
+    assert.match(result.stdout, /Current Scope Tool Use/);
+    assert.match(result.stdout, /Current Scope Context Use/);
+    assert.match(result.stdout, /tasks\/STATUS\.md: 1234 chars/);
+    const review = readJson(reviewJson);
+    assert.equal(review.current_scope.records, 2);
+    assert.equal(review.current_scope.tool_use_summary[0].tool, "shell_command");
+    assert.equal(review.current_scope.tool_use_summary[0].records, 2);
+    assert.equal(review.current_scope.context_use_summary.hotspots[0].path, "tasks/STATUS.md");
+    assert.equal(review.current_scope.context_use_summary.hotspots[0].chars, 1234);
+    assert.equal(review.current_scope.tool_use_summary.some((item) => item.tool === "imagegen"), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("profile review and followups flag missing tool metadata", () => {
   const dir = tempDir();
   try {
@@ -2314,6 +2382,16 @@ test("reflection draft classifies repeated command evidence by scope", () => {
       missing_context_inputs: [
         { line: 12, intent: "Validate portable AI pipeline with profile wrappers", context_risk: "medium" },
       ],
+      current_scope: {
+        tool_use_summary: [
+          { tool: "shell_command", records: 2, duration_ms: 5000, failed: 0, waste_or_rework: 0, contexts: 1, commands: 2 },
+        ],
+        context_use_summary: {
+          hotspots: [{ path: "tasks/STATUS.md", chars: 1234 }],
+          high_context: [],
+          missing_inputs: [],
+        },
+      },
     })}\n`, "utf8");
     writeFileSync(packetJson, `${JSON.stringify({
       profile: "repeated.jsonl",
@@ -2328,6 +2406,9 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     assert.match(result.stdout, /Repeated Command Evidence/);
     assert.match(result.stdout, /Tool Use Summary/);
     assert.match(result.stdout, /shell_command/);
+    assert.match(result.stdout, /Current Scope Tool Use/);
+    assert.match(result.stdout, /Current Scope Context Use/);
+    assert.match(result.stdout, /tasks\/STATUS\.md/);
     assert.match(result.stdout, /Context Use Evidence/);
     assert.match(result.stdout, /AI_PIPELINE_SESSION_PROFILING\.md/);
     assert.match(result.stdout, /classification/);
@@ -2343,6 +2424,8 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     const draft = readJson(draftJson);
     assert.equal(draft.repeated_commands.total_distinct, 3);
     assert.equal(draft.tool_use_summary[0].tool, "shell_command");
+    assert.equal(draft.current_state.current_scope_tool_use_summary[0].tool, "shell_command");
+    assert.equal(draft.current_state.current_scope_context_use_summary.hotspots[0].path, "tasks/STATUS.md");
     assert.equal(draft.context_use_summary.hotspots[0].path, "AI_PIPELINE_SESSION_PROFILING.md");
     assert.equal(draft.context_use_summary.missing_inputs[0].line, 12);
     assert.equal(draft.repeated_commands.classification[0].classification, "validation_waste_risk");
@@ -2366,12 +2449,6 @@ test("reflection review separates clean current scope from historical lessons", 
     const reviewMd = join(dir, "clean.review.md");
 
     writeFileSync(draftJson, `${JSON.stringify({
-      current_state: {
-        current_scope_findings: [],
-        current_regressions: [],
-        pending_followups: [],
-        satisfied_followups: [{ title: "Baseline captured" }],
-      },
       historical_lessons: [
         { type: "missing_context_inputs", symptom: "Missing context inputs.", cause: "Unmeasured reads.", fix: "Use node tools/ai.mjs context --path <file>." },
         { type: "repeated_commands", symptom: "Repeated commands.", cause: "Reruns.", fix: "Classify reruns." },
@@ -2383,11 +2460,24 @@ test("reflection review separates clean current scope from historical lessons", 
         by_scope: [{ scope: "scoped", count: 3 }, { scope: "broad/final", count: 1 }],
         classification: [{ command: "node tools/skills_eval.mjs", count: 3, scope: "scoped", classification: "guardrail_rerun_review" }],
         validation_batches: [{ batch_id: "batch-review", records: 5, broad_final_commands: 1, failed: 0 }],
+        unbatched_broad_final_occurrences: 2,
       },
       tool_use_summary: [{ tool: "shell_command", records: 5, duration_ms: 9000, failed: 1, waste_or_rework: 1 }],
       context_use_summary: {
         hotspots: [{ path: "AI_PIPELINE_SESSION_PROFILING.md", chars: 27455 }],
         missing_inputs: [{ line: 12, intent: "Validate portable AI pipeline with profile wrappers", context_risk: "medium" }],
+      },
+      current_state: {
+        current_scope_findings: [],
+        current_regressions: [],
+        pending_followups: [],
+        satisfied_followups: [{ title: "Baseline captured" }],
+        current_scope_tool_use_summary: [{ tool: "shell_command", records: 2, duration_ms: 5000, failed: 0, waste_or_rework: 0 }],
+        current_scope_context_use_summary: {
+          hotspots: [{ path: "tasks/STATUS.md", chars: 1234 }],
+          high_context: [],
+          missing_inputs: [],
+        },
       },
     })}\n`, "utf8");
 
@@ -2403,6 +2493,9 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.match(result.stdout, /Current actions: 0/);
     assert.match(result.stdout, /historical_only/);
     assert.match(result.stdout, /No current action items/);
+    assert.match(result.stdout, /Current Scope Tool Use/);
+    assert.match(result.stdout, /Current Scope Context Use/);
+    assert.match(result.stdout, /tasks\/STATUS\.md/);
     assert.match(result.stdout, /Tool Use Review/);
     assert.match(result.stdout, /shell_command/);
     assert.match(result.stdout, /Context Use Review/);
@@ -2421,6 +2514,10 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.ok(review.top_improvements.some((item) => item.includes("repeated_command_classification")));
     assert.ok(review.top_improvements.some((item) => item.includes("tool_use_summary")));
     assert.ok(review.top_improvements.some((item) => item.includes("context_use_summary")));
+    assert.ok(review.top_improvements.some((item) => item.includes("historical whole-profile review shows 2")));
+    assert.equal(review.top_improvements.some((item) => item.includes("current review shows")), false);
+    assert.equal(review.current.tool_use_summary[0].tool, "shell_command");
+    assert.equal(review.current.context_use_summary.hotspots[0].path, "tasks/STATUS.md");
     assert.equal(review.tool_use_summary[0].tool, "shell_command");
     assert.equal(review.context_use_summary.hotspots[0].path, "AI_PIPELINE_SESSION_PROFILING.md");
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs validate")));

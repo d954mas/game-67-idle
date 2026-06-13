@@ -50,6 +50,22 @@ specific and reusable.
 - Follow-up owner: Current and future pipeline agents.
 - Status: Implemented.
 
+## 2026-06-13 - Current iteration analytics must not drown in history
+
+- Context: Reflection review had a clean current scope, but whole-profile tool
+  use and repeated validation history still dominated the generated review.
+- Friction: A future agent could read historical tool/context totals as the
+  just-finished iteration's bottleneck.
+- Time sink: The agent had to manually compare current scope status against
+  whole-profile findings before deciding what was actually current.
+- Likely cause: `review.mjs` computed current-scope health, but did not expose
+  current-scope tool/context summaries in the same handoff path.
+- Proposed improvement: Emit current-scope tool/context summaries before
+  whole-profile summaries, and label historical validation repeat evidence as
+  historical when current scope is clean.
+- Follow-up owner: Current and future pipeline agents.
+- Status: Implemented.
+
 ## 2026-06-12 - Concept setup and visual proof sequencing
 
 - Context: The user selected a child-friendly meme evolution game direction,

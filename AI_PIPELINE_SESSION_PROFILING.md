@@ -675,6 +675,9 @@ When the draft or review includes `context_use_summary`, read it before opening
 larger review JSON or long source files. Use its hotspots to name the largest
 context inputs and its missing inputs to explain where context cost was not
 measured.
+When the handoff includes current-scope tool/context summaries, use those first
+for the just-finished iteration. Treat whole-profile tool/context summaries as
+historical trend evidence unless the same issue appears in current scope.
 When the draft includes repeated-command evidence, classify the repeats before
 turning them into process work. Prefer the generated
 `repeated_command_classification` table over raw repeat counts: planned
