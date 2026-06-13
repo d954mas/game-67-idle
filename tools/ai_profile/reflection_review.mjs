@@ -65,6 +65,10 @@ function currentScopeReadout(currentClean, snapshot, tools, contextSummary, vali
   const scopeName = `${snapshot.work_item || ""}${snapshot.iteration ? `/${snapshot.iteration}` : ""}` || "unknown";
   lines.push(`Current scope ${scopeName} is ${currentClean ? "clean" : "actionable"}: ${snapshot.records || 0} record(s), ${formatMs(snapshot.profiled_ms || 0)} profiled over ${formatMs(snapshot.wall_clock_ms || 0)} wall-clock (${formatPercent(snapshot.coverage_ratio)}).`);
   lines.push(coverageConfidenceLine(snapshot));
+  const largestGap = asArray(snapshot.largest_gaps)[0];
+  if (largestGap) {
+    lines.push(`Largest current wall-clock gap: ${formatMs(largestGap.duration_ms)} from ${largestGap.start_ts || "unknown"} to ${largestGap.end_ts || "unknown"}.`);
+  }
   const gapTotal = Number(snapshot.missing_context_inputs || 0) + Number(snapshot.missing_work_item_records || 0) + Number(snapshot.missing_tool_records || 0);
   if (gapTotal === 0) {
     lines.push("Current telemetry has no context, work-item, or tool metadata gaps.");
@@ -228,6 +232,13 @@ function renderMarkdown(review, draftPath) {
     lines.push(`- profiled/wall-clock: ${formatMs(snapshot.profiled_ms || 0)} / ${formatMs(snapshot.wall_clock_ms || 0)} (${formatPercent(snapshot.coverage_ratio)})`);
     lines.push(`- telemetry gaps: context=${snapshot.missing_context_inputs || 0}, work_item=${snapshot.missing_work_item_records || 0}, tools=${snapshot.missing_tool_records || 0}`);
     lines.push(`- failures: unresolved=${snapshot.unresolved_failed_records || 0}, recovered=${snapshot.recovered_failed_records || 0}`);
+    const largestGaps = asArray(snapshot.largest_gaps);
+    if (largestGaps.length > 0) {
+      lines.push("- largest gaps:");
+      for (const gap of largestGaps) {
+        lines.push(`  - ${formatMs(gap.duration_ms || 0)} from ${gap.start_ts || "unknown"} to ${gap.end_ts || "unknown"}`);
+      }
+    }
   }
   lines.push("");
   lines.push("## Current Scope Tool Use");

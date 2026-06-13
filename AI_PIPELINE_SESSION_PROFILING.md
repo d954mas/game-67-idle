@@ -688,6 +688,9 @@ historical lessons or whole-profile trends.
 Use its coverage-confidence sentence to decide how precise time-spend claims
 can be; partial coverage means tool durations are evidence, not total
 iteration time.
+If current-scope largest gaps are present, name the largest current wall-clock
+gap before making time-spend claims; use `node tools/ai.mjs checkpoint
+"<intent>"` next time for unexplained manual/research/review gaps.
 When the handoff includes current-scope validation batches, use them to explain
 validation-runner tool cost as planned validation evidence before calling it
 waste or rework.

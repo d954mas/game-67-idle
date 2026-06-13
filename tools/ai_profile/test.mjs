@@ -2408,8 +2408,11 @@ test("reflection draft classifies repeated command evidence by scope", () => {
         unresolved_failed_records: [],
         wall_clock_coverage: {
           merged_profiled_ms: 5000,
-          wall_clock_span_ms: 5000,
-          coverage_ratio: 1,
+          wall_clock_span_ms: 305000,
+          coverage_ratio: 5000 / 305000,
+          largest_gaps: [
+            { start_ts: "2026-06-13T05:00:00.000Z", end_ts: "2026-06-13T05:05:00.000Z", duration_ms: 300000 },
+          ],
         },
         tool_use_summary: [
           { tool: "shell_command", records: 2, duration_ms: 5000, failed: 0, waste_or_rework: 0, contexts: 1, commands: 2 },
@@ -2438,7 +2441,9 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     assert.match(result.stdout, /Tool Use Summary/);
     assert.match(result.stdout, /shell_command/);
     assert.match(result.stdout, /Current Scope Snapshot/);
-    assert.match(result.stdout, /profiled\/wall-clock: 5\.0s \/ 5\.0s \(100\.0%\)/);
+    assert.match(result.stdout, /profiled\/wall-clock: 5\.0s \/ 5\.1m \(1\.6%\)/);
+    assert.match(result.stdout, /largest gaps/);
+    assert.match(result.stdout, /5\.0m from 2026-06-13T05:00:00\.000Z to 2026-06-13T05:05:00\.000Z/);
     assert.match(result.stdout, /Current Scope Tool Use/);
     assert.match(result.stdout, /Current Scope Context Use/);
     assert.match(result.stdout, /Current Scope Validation/);
@@ -2459,7 +2464,8 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     const draft = readJson(draftJson);
     assert.equal(draft.repeated_commands.total_distinct, 3);
     assert.equal(draft.current_state.current_scope_snapshot.records, 2);
-    assert.equal(draft.current_state.current_scope_snapshot.coverage_ratio, 1);
+    assert.equal(draft.current_state.current_scope_snapshot.coverage_ratio, 5000 / 305000);
+    assert.equal(draft.current_state.current_scope_snapshot.largest_gaps[0].duration_ms, 300000);
     assert.equal(draft.tool_use_summary[0].tool, "shell_command");
     assert.equal(draft.current_state.current_scope_tool_use_summary[0].tool, "shell_command");
     assert.equal(draft.current_state.current_scope_context_use_summary.hotspots[0].path, "tasks/STATUS.md");
@@ -2662,6 +2668,9 @@ test("reflection review flags partial current coverage confidence", () => {
           missing_tool_records: 0,
           recovered_failed_records: 0,
           unresolved_failed_records: 0,
+          largest_gaps: [
+            { start_ts: "2026-06-13T05:00:00.000Z", end_ts: "2026-06-13T05:07:00.000Z", duration_ms: 7 * 60_000 },
+          ],
         },
         current_scope_tool_use_summary: [{ tool: "shell_command", records: 3, duration_ms: 60_000 }],
       },
@@ -2671,8 +2680,11 @@ test("reflection review flags partial current coverage confidence", () => {
 
     const result = run(["tools/ai_profile/reflection_review.mjs", draftJson, "--json-output", reviewJson]);
     assert.match(result.stdout, /Current coverage confidence is partial/);
+    assert.match(result.stdout, /Largest current wall-clock gap: 7\.0m from 2026-06-13T05:00:00\.000Z to 2026-06-13T05:07:00\.000Z/);
+    assert.match(result.stdout, /largest gaps/);
     const review = readJson(reviewJson);
     assert.ok(review.current.readout.some((item) => item.includes("coverage confidence is partial")));
+    assert.ok(review.current.readout.some((item) => item.includes("Largest current wall-clock gap")));
   } finally {
     cleanup(dir);
   }

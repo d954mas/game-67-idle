@@ -759,6 +759,12 @@ if (!currentScope.enabled) {
   emit(`- profiled/wall-clock: ${formatMs(currentScope.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(currentScope.wall_clock_coverage.wall_clock_span_ms)} (${formatPercent(currentScope.wall_clock_coverage.coverage_ratio)})`);
   emit(`- telemetry gaps: context=${currentScope.missing_context_inputs}, work_item=${currentScope.missing_work_item_records}, tools=${currentScope.missing_tool_records}`);
   emit(`- failures: unresolved=${unresolvedCount}, recovered=${recoveredCount}`);
+  if (currentScope.wall_clock_coverage.largest_gaps.length > 0) {
+    emit("- largest gaps:");
+    for (const gap of currentScope.wall_clock_coverage.largest_gaps.slice(0, 5)) {
+      emit(`  - ${formatMs(gap.duration_ms)} from ${gap.start_ts} to ${gap.end_ts}`);
+    }
+  }
 }
 
 emit("\n## Current Scope Findings");

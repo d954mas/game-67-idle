@@ -212,3 +212,6 @@ None.
 - 2026-06-13: Added current-scope coverage confidence to reflection readout so
   low profile coverage limits time-spend claims instead of being hidden behind
   clean telemetry status.
+- 2026-06-13: Added current-scope largest gap evidence to reflection
+  draft/review handoff so partial coverage explains which wall-clock intervals
+  are unprofiled before making time-spend claims.

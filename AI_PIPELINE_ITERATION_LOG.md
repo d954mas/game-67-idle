@@ -132,6 +132,22 @@ specific and reusable.
 - Follow-up owner: Current and future pipeline agents.
 - Status: Implemented.
 
+## 2026-06-13 - Partial coverage needs gap evidence
+
+- Context: Reflection review could say current coverage was partial, but the
+  first handoff screen did not name which wall-clock gaps caused that caution.
+- Friction: A later retrospective still had to reopen lower-level profile
+  status/review evidence to explain missing time.
+- Time sink: Extra artifact reads were needed before making honest claims
+  about where time went.
+- Likely cause: `review.mjs` computed `largest_gaps`, but `reflection_draft`
+  and `reflection_review` did not carry current-scope gaps forward.
+- Proposed improvement: Include current-scope `largest_gaps` in the compact
+  snapshot/readout and require agents to name the largest gap before precise
+  time-spend claims.
+- Follow-up owner: Current and future profiling/reflection agents.
+- Status: Implemented.
+
 ## 2026-06-12 - Concept setup and visual proof sequencing
 
 - Context: The user selected a child-friendly meme evolution game direction,

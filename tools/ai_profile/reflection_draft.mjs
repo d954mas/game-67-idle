@@ -187,6 +187,11 @@ function compactCurrentScopeSnapshot(scope) {
     missing_tool_records: Number(scope?.missing_tool_records || 0),
     recovered_failed_records: asArray(scope?.recovered_failed_records).length,
     unresolved_failed_records: asArray(scope?.unresolved_failed_records).length,
+    largest_gaps: asArray(coverage.largest_gaps).slice(0, 5).map((gap) => ({
+      start_ts: gap.start_ts || "",
+      end_ts: gap.end_ts || "",
+      duration_ms: Number(gap.duration_ms || 0),
+    })),
   };
 }
 
@@ -358,6 +363,12 @@ function renderMarkdown(draft, packetFile) {
     lines.push(`- profiled/wall-clock: ${formatMs(snapshot.profiled_ms || 0)} / ${formatMs(snapshot.wall_clock_ms || 0)} (${formatPercent(snapshot.coverage_ratio)})`);
     lines.push(`- telemetry gaps: context=${snapshot.missing_context_inputs || 0}, work_item=${snapshot.missing_work_item_records || 0}, tools=${snapshot.missing_tool_records || 0}`);
     lines.push(`- failures: unresolved=${snapshot.unresolved_failed_records || 0}, recovered=${snapshot.recovered_failed_records || 0}`);
+    if (asArray(snapshot.largest_gaps).length > 0) {
+      lines.push("- largest gaps:");
+      for (const gap of asArray(snapshot.largest_gaps)) {
+        lines.push(`  - ${formatMs(gap.duration_ms || 0)} from ${gap.start_ts || "unknown"} to ${gap.end_ts || "unknown"}`);
+      }
+    }
   }
   lines.push("");
   lines.push("## Current State");
