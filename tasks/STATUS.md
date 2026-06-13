@@ -90,6 +90,7 @@ Active task:
 - `T0067` Normalize commands in AI profile review: in review.
 - `T0068` Classify validation command scope in AI profile review: in review.
 - `T0069` Add automatic AI context input capture: in review.
+- `T0070` Add machine-readable AI profile review output: in review.
 
 Current visual proof:
 

@@ -288,6 +288,7 @@ const SKILL_CHECKS = [
       "review.mjs",
       "plan_validation.mjs",
       "missing context input",
+      "--json-output",
       "--output",
       "context management",
       "planning",

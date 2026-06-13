@@ -476,3 +476,20 @@ specific and reusable.
   intents, not just the count.
 - Follow-up owner: Future profiling/reflection agents.
 - Status: Implemented in `T0069`.
+
+## 2026-06-13 - Profile review should be consumable by tools
+
+- Context: `review.mjs` had become useful for humans: it reported repeated
+  validation scope, missing context inputs, failures, blockers, and suggested
+  actions. But every next automation would have to scrape markdown.
+- Friction: Markdown is fine for reflection, but brittle for follow-up tools
+  that want to create draft tasks, compare profiles, or track recurring waste.
+- Time sink: Agents would otherwise re-parse human text or rerun analysis
+  instead of using structured findings.
+- Likely cause: The review analyzer was initially designed as a readable
+  checklist, not an automation boundary.
+- Proposed improvement: Add `--json-output` to `tools/ai_profile/review.mjs`
+  with schema version, findings, repeated command scopes, missing context
+  input details, and suggested pipeline actions.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0070`.

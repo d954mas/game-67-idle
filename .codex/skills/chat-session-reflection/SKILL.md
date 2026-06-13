@@ -105,6 +105,9 @@ Then run `tools/ai_profile/review.mjs <profile.jsonl> --output
 tmp/session_profiles/<name>.review.md` to extract waste/rework, failures,
 blockers, context hotspots, repeated commands, and suggested pipeline actions
 before writing the human retrospective.
+When the review findings need to feed another tool or agent, add
+`--json-output tmp/session_profiles/<name>.review.json` and treat that JSON as
+scratch telemetry unless the lead asks to preserve it.
 If review reports missing context input details, name the affected line/intents
 and add a next-cycle fix: use `tools/ai_profile/context.mjs --path <file>` for
 local medium/high context reads so file sizes are measured automatically.

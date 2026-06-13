@@ -333,6 +333,17 @@ node tools/ai_profile/review.mjs tmp/session_profiles/session_profile_YYYY-MM-DD
 The review is not a replacement for judgment. It is a fast checklist of what
 the agent must explain or convert into process improvements.
 
+For automation or cross-agent handoff, also write the machine-readable review:
+
+```powershell
+node tools/ai_profile/review.mjs tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl --output tmp/session_profiles/session_profile_YYYY-MM-DD.review.md --json-output tmp/session_profiles/session_profile_YYYY-MM-DD.review.json
+```
+
+The JSON artifact uses `schema_version: 1` and contains findings, repeated
+command scopes, missing context-input details, and suggested pipeline actions.
+Keep it in `tmp/session_profiles/` unless the lead explicitly asks to preserve
+it.
+
 When the review shows repeated broad commands, plan the next validation loop
 before running it:
 
@@ -357,6 +368,8 @@ A "profiled session" is done when:
 - `closeout.mjs` is used for normal session closeout unless a custom summary
   path or manual investigation is needed;
 - `review.mjs` is used before deeper reflection when a profile exists;
+- `review.mjs --json-output` is used when another tool/agent will consume the
+  findings instead of a human reading the markdown;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste;
 - the final response names profile path and summary path;

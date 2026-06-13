@@ -5,7 +5,7 @@ import { CATEGORIES, CONTEXT_RISKS, RESULTS, VALUES, parseArgs, stringArg } from
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/review.mjs <profile.jsonl> [--output <review.md>]
+  node tools/ai_profile/review.mjs <profile.jsonl> [--output <review.md>] [--json-output <review.json>]
 
 Reads a session profile and produces reflection-ready findings: waste/rework,
 failed commands, blocked records, context hotspots, repeated commands, and
@@ -29,6 +29,10 @@ function formatMs(ms) {
 
 function topEntries(map, limit = 10) {
   return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
+}
+
+function mapEntries(map, limit = 10) {
+  return topEntries(map, limit).map(([key, value]) => ({ key, value }));
 }
 
 function parseProfile(file) {
@@ -123,6 +127,7 @@ if (values.help) usage();
 const file = positionals[0];
 if (!file) usage();
 const outputFile = stringArg(values, "output", "");
+const jsonOutputFile = stringArg(values, "json-output", "");
 
 let records;
 try {
@@ -172,6 +177,38 @@ for (const [command, count] of repeatedCommands) addCount(repeatedScopeCounts, c
 const repeatedBroadCommands = repeatedCommands.filter(([command]) => commandScopes.get(command) === "broad/final");
 const topContext = topEntries(contextChars, 10).filter(([, chars]) => chars > 0);
 const topPhaseDuration = topEntries(phaseDuration, 10);
+const findings = [];
+if (waste.length > 0) findings.push({ type: "waste_or_rework", message: `${waste.length} waste/rework record(s) need process fixes.` });
+if (failed.length > 0) findings.push({ type: "failed_records", message: `${failed.length} failed command/event record(s) need failure analysis.` });
+if (blocked.length > 0) findings.push({ type: "blocked_records", message: `${blocked.length} blocker record(s) need owner or decision.` });
+if (highContext.length > 0) findings.push({ type: "high_context", message: `${highContext.length} high-context record(s) indicate context pressure.` });
+if (repeatedCommands.length > 0) findings.push({ type: "repeated_commands", message: `${repeatedCommands.length} repeated command(s) may need batching or narrower gates.` });
+if (repeatedBroadCommands.length > 0) {
+  findings.push({
+    type: "repeated_broad_final",
+    message: `${repeatedBroadCommands.length} repeated broad/final command(s) are likely validation waste unless a gate failed or risk changed.`,
+  });
+}
+if (missingContextInputs.length > 0) {
+  findings.push({
+    type: "missing_context_inputs",
+    message: `${missingContextInputs.length} medium/high context record(s) lack context_inputs details.`,
+  });
+}
+if (!closeoutSeen) findings.push({ type: "missing_closeout", message: "No session_closeout event: use closeout.mjs before final reflection." });
+const actions = [];
+if (waste.length > 0) actions.push("Convert recurring waste/rework reasons into a task, skill rule, validator, or batching rule.");
+if (failed.length > 0) actions.push("For failed commands, decide whether the fix is code, environment, narrower validation, or better preflight.");
+if (repeatedBroadCommands.length > 0) {
+  actions.push(
+    "Batch repeated broad/final validation or run `node tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the next validation loop.",
+  );
+} else if (repeatedCommands.length > 0) {
+  actions.push("Review repeated scoped/preflight commands; keep them only when they guard a fresh edit or failed gate.");
+}
+if (highContext.length > 0 || missingContextInputs.length > 0) actions.push("Compact source-of-truth docs or log explicit context_inputs for expensive reads.");
+if (!closeoutSeen) actions.push("Run `node tools/ai_profile/closeout.mjs` at session end.");
+if (actions.length === 0) actions.push("Use this clean profile as baseline; compare against the next real game iteration.");
 
 emit(`# AI Profile Review - ${basename(file)}`);
 emit(`\nRecords: ${records.length}`);
@@ -179,19 +216,10 @@ emit(`Profiled duration: ${formatMs(totalDuration)}`);
 emit(`Closeout event: ${closeoutSeen ? "yes" : "no"}`);
 
 emit("\n## Priority Findings");
-const findings = [];
-if (waste.length > 0) findings.push(`${waste.length} waste/rework record(s) need process fixes.`);
-if (failed.length > 0) findings.push(`${failed.length} failed command/event record(s) need failure analysis.`);
-if (blocked.length > 0) findings.push(`${blocked.length} blocker record(s) need owner or decision.`);
-if (highContext.length > 0) findings.push(`${highContext.length} high-context record(s) indicate context pressure.`);
-if (repeatedCommands.length > 0) findings.push(`${repeatedCommands.length} repeated command(s) may need batching or narrower gates.`);
-if (repeatedBroadCommands.length > 0) findings.push(`${repeatedBroadCommands.length} repeated broad/final command(s) are likely validation waste unless a gate failed or risk changed.`);
-if (missingContextInputs.length > 0) findings.push(`${missingContextInputs.length} medium/high context record(s) lack context_inputs details.`);
-if (!closeoutSeen) findings.push("No session_closeout event: use closeout.mjs before final reflection.");
 if (findings.length === 0) {
   emit("- No obvious waste/rework/failure/context hotspots in this profile.");
 } else {
-  for (const finding of findings) emit(`- ${finding}`);
+  for (const finding of findings) emit(`- ${finding.message}`);
 }
 
 emit("\n## Waste And Rework To Explain");
@@ -269,19 +297,6 @@ if (topPhaseDuration.length === 0) {
 }
 
 emit("\n## Suggested Pipeline Actions");
-const actions = [];
-if (waste.length > 0) actions.push("Convert recurring waste/rework reasons into a task, skill rule, validator, or batching rule.");
-if (failed.length > 0) actions.push("For failed commands, decide whether the fix is code, environment, narrower validation, or better preflight.");
-if (repeatedBroadCommands.length > 0) {
-  actions.push(
-    "Batch repeated broad/final validation or run `node tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the next validation loop.",
-  );
-} else if (repeatedCommands.length > 0) {
-  actions.push("Review repeated scoped/preflight commands; keep them only when they guard a fresh edit or failed gate.");
-}
-if (highContext.length > 0 || missingContextInputs.length > 0) actions.push("Compact source-of-truth docs or log explicit context_inputs for expensive reads.");
-if (!closeoutSeen) actions.push("Run `node tools/ai_profile/closeout.mjs` at session end.");
-if (actions.length === 0) actions.push("Use this clean profile as baseline; compare against the next real game iteration.");
 for (const action of actions) emit(`- ${action}`);
 
 const rendered = `${output.join("\n")}\n`;
@@ -289,5 +304,51 @@ if (outputFile) {
   const target = resolve(outputFile);
   mkdirSync(dirname(target), { recursive: true });
   writeFileSync(target, rendered, "utf8");
+}
+if (jsonOutputFile) {
+  const repeatedCommandObjects = repeatedCommands.map(([command, count]) => ({
+    command,
+    count,
+    scope: commandScopes.get(command) || "unknown",
+    variants: [...(commandVariants.get(command) || [])],
+  }));
+  const reviewJson = {
+    schema_version: 1,
+    profile: file,
+    records: records.length,
+    profiled_duration_ms: totalDuration,
+    closeout_seen: closeoutSeen,
+    findings,
+    waste_or_rework: waste.map((record) => ({
+      line: record.__line,
+      phase: record.phase,
+      category: record.category,
+      value: record.value,
+      intent: record.intent,
+      reason: record.waste_reason || record.notes || "",
+    })),
+    failed_or_blocked: failureLike.map((record) => ({
+      line: record.__line,
+      phase: record.phase,
+      result: record.result,
+      intent: record.intent,
+      detail: record.blocked_by || record.command_error || commandText(record) || record.notes || "",
+    })),
+    context_hotspots: topContext.map(([path, chars]) => ({ path, chars })),
+    high_context: highContext.map((record) => ({ line: record.__line, intent: record.intent, context_risk: record.context_risk })),
+    missing_context_inputs: missingContextInputs.map((record) => ({
+      line: record.__line,
+      intent: record.intent,
+      context_risk: record.context_risk,
+    })),
+    repeated_commands: repeatedCommandObjects,
+    repeated_commands_by_scope: mapEntries(repeatedScopeCounts, 10).map(({ key, value }) => ({ scope: key, count: value })),
+    repeated_broad_final_commands: repeatedCommandObjects.filter((item) => item.scope === "broad/final"),
+    time_by_phase: topPhaseDuration.map(([phase, duration_ms]) => ({ phase, duration_ms })),
+    suggested_pipeline_actions: actions,
+  };
+  const target = resolve(jsonOutputFile);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, `${JSON.stringify(reviewJson, null, 2)}\n`, "utf8");
 }
 process.stdout.write(rendered);
