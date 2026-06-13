@@ -1361,6 +1361,7 @@ test("validation planner writes json output with broad final decision", () => {
     assert.equal(plan.risk, "medium");
     assert.ok(plan.checks_by_tier.preflight.length > 0);
     assert.ok(plan.checks_by_tier.scoped.length > 0);
+    assert.ok(plan.checks_by_tier.scoped.some((check) => check.id === "ai-profile-tests"));
     assert.ok(plan.broad_final_count > 0);
     assert.ok(plan.broad_final_checks.some((check) => check.id === "portable-pipeline"));
     assert.match(plan.next_action, /broad\/final checks once/);
@@ -1391,6 +1392,90 @@ test("validation planner json output marks low risk broad checks as deferred", (
     assert.ok(plan.deferred_broad_count > 0);
     assert.ok(plan.skipped_final.some((check) => check.id === "portable-pipeline"));
     assert.match(plan.next_action, /deferred/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation runner profiles checks and stops final after failure", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "validation-run.jsonl");
+    const planJson = join(dir, "plan.json");
+    const summaryJson = join(dir, "summary.json");
+    const passCommand = `${JSON.stringify(process.execPath)} -e ${JSON.stringify("process.exit(0)")}`;
+    const failCommand = `${JSON.stringify(process.execPath)} -e ${JSON.stringify("process.exit(3)")}`;
+    writeFileSync(planJson, `${JSON.stringify({
+      schema_version: 1,
+      risk: "medium",
+      changes: ["profiling"],
+      checks: [
+        { id: "preflight-pass", tier: "preflight", command: passCommand, why: "cheap pass", broad: false },
+        { id: "scoped-fail", tier: "scoped", command: failCommand, why: "expected fail", broad: false },
+        { id: "final-skipped", tier: "final", command: passCommand, why: "should not run", broad: true },
+      ],
+      next_action: "test plan",
+    })}\n`, "utf8");
+
+    const result = runRaw([
+      "tools/ai_profile/validation_run.mjs",
+      "--plan", planJson,
+      "--profile", profile,
+      "--work-item", "VALRUN",
+      "--iteration", "failure",
+      "--json-output", summaryJson,
+    ]);
+    assert.equal(result.status, 3, result.stderr);
+    assert.match(result.stdout, /Executed: 2/);
+    assert.match(result.stdout, /Skipped: 1/);
+
+    const summary = readJson(summaryJson);
+    assert.equal(summary.executed.length, 2);
+    assert.equal(summary.skipped[0].id, "final-skipped");
+    assert.equal(summary.skipped[0].reason, "previous check failed");
+    const records = readJsonl(profile);
+    assert.equal(records.length, 2);
+    assert.equal(records[0].validation_check_id, "preflight-pass");
+    assert.equal(records[0].result, "pass");
+    assert.equal(records[0].work_item, "VALRUN");
+    assert.equal(records[1].validation_check_id, "scoped-fail");
+    assert.equal(records[1].result, "fail");
+    assert.equal(records[1].command_exit_code, 3);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation runner dry run writes summary without profile records", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "validation-dry-run.jsonl");
+    const planJson = join(dir, "plan.json");
+    const summaryJson = join(dir, "summary.json");
+    const passCommand = `${JSON.stringify(process.execPath)} -e ${JSON.stringify("process.exit(0)")}`;
+    writeFileSync(planJson, `${JSON.stringify({
+      schema_version: 1,
+      risk: "low",
+      changes: ["docs"],
+      checks: [
+        { id: "dry-pass", tier: "preflight", command: passCommand, why: "dry pass", broad: false },
+        { id: "placeholder", tier: "scoped", command: "<fill me>", why: "placeholder", broad: false, placeholder: true },
+      ],
+    })}\n`, "utf8");
+
+    const result = run([
+      "tools/ai_profile/validation_run.mjs",
+      "--plan", planJson,
+      "--profile", profile,
+      "--dry-run",
+      "--json-output", summaryJson,
+    ]);
+    assert.match(result.stdout, /Executed: 0/);
+    const summary = readJson(summaryJson);
+    assert.equal(summary.dry_run, true);
+    assert.equal(summary.executed.length, 0);
+    assert.equal(summary.skipped.length, 2);
+    assert.equal(existsSync(profile), false);
   } finally {
     cleanup(dir);
   }

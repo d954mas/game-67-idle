@@ -389,6 +389,10 @@ Record tools by role:
   validation ladder for the changed work kind. Use it when `review.mjs` reports
   repeated commands, before broad reusable-base checks, or when the right
   validation scope is unclear.
+- `validation_run.mjs`: profiled validation runner that consumes a validation
+  plan or builds one from `--change/--file/--risk`, executes non-placeholder
+  checks by tier, records each command in the JSONL profile, and skips later
+  checks after a failure unless `--continue-on-fail` is explicit.
 - `taskboard context`: current-context digest for resumes and long work. Prefer
   it before reading `tasks/STATUS.md` directly; if full status is still needed,
   log it as a medium/high `context_input`.
@@ -613,6 +617,20 @@ The planner prints commands but does not run them. Its JSON plan includes
 markdown. Profile substantial commands with `run.mjs`, batch broad/final gates,
 and record any intentionally skipped expected gate in the task log.
 
+When the plan contains concrete commands and the goal is to validate an AI
+pipeline/tooling change, prefer the profiled runner over manually chaining
+checks:
+
+```powershell
+node tools/ai_profile/validation_run.mjs --change profiling --change skills --risk medium --json-output tmp/session_profiles/validation_run.json
+```
+
+Use `--tier preflight --tier scoped` for an early pass that intentionally
+defers broad/final checks, or let the runner execute final checks once at the
+end of the selected batch. Placeholder commands are skipped and listed in the
+summary; fill project-specific native, asset, web, or release commands
+manually when those surfaces are in scope.
+
 ## Definition Of Done
 
 A "profiled session" is done when:
@@ -701,6 +719,9 @@ A "profiled session" is done when:
   profile review has identified repeated commands or validation waste; use
   `--json-output` when another tool, agent, or later reflection should consume
   the validation decision;
+- `validation_run.mjs` is used when the validation plan has concrete commands
+  and command-level telemetry matters; broad/final checks run once at the end
+  of the selected batch and skipped placeholders are visible in the summary;
 - `observability_gate.mjs` is used before adding external tracing/eval
   platforms; the decision and pilot result are captured in a task log or
   durable pipeline note, while raw exported telemetry stays in `tmp/`;

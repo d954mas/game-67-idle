@@ -227,6 +227,11 @@ broad gates without a changed risk or failed previous gate as validation waste.
 When a validation plan will be consumed by another tool/agent or cited in a
 later reflection, write it with `--json-output` and inspect `broad_final_count`,
 `deferred_broad_count`, and `next_action` instead of parsing markdown.
+When the plan contains concrete commands for an AI pipeline/tooling change, use
+`tools/ai_profile/validation_run.mjs --change <kind> --risk <risk>
+--json-output <file>` instead of manually chaining checks. It records each
+executed command in the profile, skips placeholders, and runs broad/final
+checks once at the end of the selected tier batch.
 After changing profiler tools or reflection telemetry behavior, run
 `node --test tools/ai_profile/test.mjs` so scope, status, closeout, recovered
 failure, and follow-up behavior remain covered.

@@ -77,6 +77,14 @@ const CHECKS = [
     broad: false,
   },
   {
+    id: "ai-profile-tests",
+    tier: "scoped",
+    changes: ["profiling"],
+    command: "node --test tools/ai_profile/test.mjs",
+    why: "prove AI profile tooling behavior after profiler changes",
+    broad: false,
+  },
+  {
     id: "taskboard-validate",
     tier: "scoped",
     changes: ["taskboard", "docs", "pipeline", "profiling", "skills"],

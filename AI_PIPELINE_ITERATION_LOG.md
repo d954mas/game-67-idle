@@ -1048,3 +1048,22 @@ specific and reusable.
   execution after draft freshness.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0103`.
+
+## 2026-06-13 - Validation plans need a profiled runner
+
+- Trigger: The reflection review showed repeated validation commands across
+  the profile, especially repeated broad/final `pipeline_validate.mjs` runs.
+- Symptom: Agents can plan the right validation ladder but still manually run
+  checks one by one, repeat broad gates, and forget to profile individual
+  command cost.
+- Time sink: Validation orchestration consumes attention and later reflection
+  has weaker evidence about which checks were useful, failed, skipped, or
+  repeated.
+- Likely cause: `plan_validation.mjs` generated the ladder but did not execute
+  or profile the concrete commands.
+- Proposed improvement: Add `validation_run.mjs` to consume a validation plan
+  or build one from change/risk inputs, execute non-placeholder checks by tier,
+  record each command in the AI profile, and skip broad/final checks after
+  earlier failures unless explicitly overridden.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0104`.
