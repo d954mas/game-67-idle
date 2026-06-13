@@ -52,6 +52,7 @@ function buildSuggestions(review) {
     if (field === "repeated_broad_final") return unbatchedBroadFinalCommands(currentScope).length === 0;
     if (field === "missing_context_inputs") return Number(currentScope.missing_context_inputs || 0) === 0;
     if (field === "missing_work_item_metadata") return Number(currentScope.missing_work_item_records || 0) === 0;
+    if (field === "missing_tool_metadata") return Number(currentScope.missing_tool_records || 0) === 0;
     if (field === "low_profile_coverage") return currentScope.low_profile_coverage !== true;
     if (field === "recovered_failed_records") return asArray(currentScope.recovered_failed_records).length === 0;
     return false;
@@ -116,6 +117,28 @@ function buildSuggestions(review) {
       ],
       next_action: "Run `node tools/ai.mjs start <work-item> <iteration>` for a new task or `node tools/ai.mjs focus <iteration>` for the next slice in the same task.",
     });
+    }
+  }
+
+  if (findingTypes.has("missing_tool_metadata")) {
+    if (currentScopeClean("missing_tool_metadata")) {
+      suppressedHistorical.push("missing_tool_metadata");
+    } else {
+      const missingFinding = asArray(review.findings).find((finding) => finding.type === "missing_tool_metadata");
+      addSuggestion(suggestions, {
+        title: "Fill tool metadata in profile records",
+        priority: "P2",
+        tags: ["pipeline", "profiling", "tools"],
+        source: useCurrentScope ? "current_scope.missing_tool_metadata" : "missing_tool_metadata",
+        why: useCurrentScope
+          ? `${Number(currentScope.missing_tool_records || 0)} current-scope record(s) lack tools metadata.`
+          : missingFinding?.message || "Some profile records lack tools metadata, so tool-use analysis is incomplete.",
+        done_when: [
+          "Substantial profile events use `node tools/ai.mjs run/context/checkpoint/validate` or profiler wrappers that populate `tools`.",
+          "A future profile review has no new `(unrecorded)` tool records in the current scope.",
+        ],
+        next_action: "Use ai.mjs facades or profiler wrappers for the next substantial event; avoid manual event records without `tools`.",
+      });
     }
   }
 

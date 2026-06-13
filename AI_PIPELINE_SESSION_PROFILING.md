@@ -663,6 +663,10 @@ summary, review, follow-up, and comparison artifacts, then rewrite with
 judgment, user-visible context, and project-specific examples.
 When the draft includes `tool_use_summary`, use it to explain which tool
 classes consumed time, failed, produced context, or created rework.
+If `tool_use_summary` includes `(unrecorded)` or review reports
+`missing_tool_metadata`, treat that as incomplete telemetry for future
+sessions and use `node tools/ai.mjs run/context/checkpoint/validate` or
+profiler wrappers that populate `tools`.
 When the draft includes repeated-command evidence, classify the repeats before
 turning them into process work. Prefer the generated
 `repeated_command_classification` table over raw repeat counts: planned

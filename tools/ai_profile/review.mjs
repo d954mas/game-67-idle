@@ -163,6 +163,7 @@ function scopedSummary(records) {
     records: records.length,
     missing_context_inputs: records.filter((record) => record.context_risk && record.context_risk !== "low" && !(record.context_inputs || []).length).length,
     missing_work_item_records: records.filter((record) => !record.work_item).length,
+    missing_tool_records: records.filter((record) => !Array.isArray(record.tools) || record.tools.length === 0).length,
     repeated_broad_final_commands: repeatedBroadFinalCommands,
     repeated_unbatched_broad_final_commands: repeatedUnbatchedBroadFinalCommands,
     recovered_failed_records: failedClassification.recovered.map((item) => ({
@@ -367,6 +368,10 @@ function currentScopeFindingsAndActions(currentScope) {
     findings.push({ type: "current_missing_work_item_metadata", message: `${currentScope.missing_work_item_records} current-scope record(s) lack work_item metadata.` });
     actions.push("Use `node tools/ai.mjs focus <iteration>` for a new slice inside the current work item, or `node tools/ai.mjs start <work-item> <iteration>` for a new work item.");
   }
+  if (currentScope.missing_tool_records > 0) {
+    findings.push({ type: "current_missing_tool_metadata", message: `${currentScope.missing_tool_records} current-scope record(s) lack tools metadata.` });
+    actions.push("Use `node tools/ai.mjs run/context/checkpoint/validate` or profiler wrappers that fill `tools` automatically; avoid manual profile events without `tools`.");
+  }
   if (currentScope.low_profile_coverage) {
     findings.push({ type: "current_low_profile_coverage", message: `Current scope covers ${formatPercent(currentScope.wall_clock_coverage.coverage_ratio)} of a ${formatMs(currentScope.wall_clock_coverage.wall_clock_span_ms)} span.` });
     actions.push("Add node tools/ai.mjs checkpoint records during long current-scope manual/research/design stretches.");
@@ -527,6 +532,7 @@ const failed = [];
 const blocked = [];
 const highContext = [];
 const missingContextInputs = [];
+const missingToolRecords = [];
 let closeoutSeen = false;
 
 for (const record of records) {
@@ -560,6 +566,7 @@ for (const record of records) {
   if (record.result === "blocked" || record.blocked_by) blocked.push(record);
   if (record.context_risk === "high") highContext.push(record);
   if (record.context_risk && record.context_risk !== "low" && !(record.context_inputs || []).length) missingContextInputs.push(record);
+  if (!Array.isArray(record.tools) || record.tools.length === 0) missingToolRecords.push(record);
   if (record.phase === "session_closeout") closeoutSeen = true;
 }
 
@@ -628,6 +635,12 @@ if (records.length >= 20 && missingWorkItemCount > 0) {
     message: `${missingWorkItemCount} record(s) lack work_item metadata; multi-task profiles are harder to analyze.`,
   });
 }
+if (records.length >= 20 && missingToolRecords.length > 0) {
+  findings.push({
+    type: "missing_tool_metadata",
+    message: `${missingToolRecords.length} record(s) lack tools metadata; tool-use analysis is incomplete.`,
+  });
+}
 const lowCoverage = coverage.wall_clock_span_ms >= 30 * 60 * 1000 && Number.isFinite(coverage.coverage_ratio) && coverage.coverage_ratio < 0.25;
 if (lowCoverage) {
   findings.push({
@@ -649,6 +662,7 @@ if (repeatedUnbatchedBroadCommands.length > 0) {
 }
 if (highContext.length > 0 || missingContextInputs.length > 0) actions.push("Compact source-of-truth docs or log explicit context_inputs for expensive reads.");
 if (records.length >= 20 && missingWorkItemCount > 0) actions.push("For long or multi-task profiles, start with `node tools/ai.mjs start <work-item> <iteration>` and use `node tools/ai.mjs focus <iteration>` for later slices.");
+if (records.length >= 20 && missingToolRecords.length > 0) actions.push("Use `node tools/ai.mjs run/context/checkpoint/validate` or profiler wrappers that populate `tools`; avoid manual profile records without tool metadata.");
 if (lowCoverage) actions.push("Explain low wall-clock profile coverage in the retrospective, or add `node tools/ai.mjs checkpoint \"<intent>\"` records during long manual/research/design stretches.");
 if (coverage.largest_gaps.length > 0) actions.push("Explain the largest profile gaps in the retrospective, or add `node tools/ai.mjs checkpoint \"<intent>\"` records during long idle/manual stretches.");
 if (!closeoutSeen) actions.push("Run `node tools/ai_profile/closeout.mjs` at session end.");
@@ -740,6 +754,15 @@ if (missingContextInputs.length === 0) {
 } else {
   for (const record of missingContextInputs.slice(0, 20)) {
     emit(`- line ${record.__line} [${record.context_risk}]: ${record.intent}`);
+  }
+}
+
+emit("\n## Missing Tool Metadata");
+if (missingToolRecords.length === 0) {
+  emit("- none");
+} else {
+  for (const record of missingToolRecords.slice(0, 20)) {
+    emit(`- line ${record.__line}: ${record.intent}`);
   }
 }
 
@@ -845,6 +868,7 @@ if (!currentScope.enabled) {
   emit(`- records: ${currentScope.records}`);
   emit(`- missing context inputs: ${currentScope.missing_context_inputs}`);
   emit(`- missing work-item records: ${currentScope.missing_work_item_records}`);
+  emit(`- missing tool records: ${currentScope.missing_tool_records}`);
   emit(`- repeated broad/final commands: ${currentScope.repeated_broad_final_commands.length}`);
   emit(`- repeated unbatched broad/final commands: ${currentScope.repeated_unbatched_broad_final_commands.length}`);
   emit(`- recovered failed records: ${currentScope.recovered_failed_records.length}`);
@@ -924,6 +948,12 @@ if (jsonOutputFile) {
       line: record.__line,
       intent: record.intent,
       context_risk: record.context_risk,
+    })),
+    missing_tool_records: missingToolRecords.map((record) => ({
+      line: record.__line,
+      intent: record.intent,
+      phase: record.phase,
+      category: record.category,
     })),
     repeated_commands: repeatedCommandObjects,
     repeated_commands_by_scope: mapEntries(repeatedScopeCounts, 10).map(({ key, value }) => ({ scope: key, count: value })),

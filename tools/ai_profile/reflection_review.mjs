@@ -61,6 +61,9 @@ function topImprovements(draft, currentClean) {
   if (hasLesson("missing_work_item_metadata")) {
     improvements.push("Start each focused work item with node tools/ai.mjs start, then use node tools/ai.mjs focus for later slices before running substantial commands.");
   }
+  if (hasLesson("missing_tool_metadata")) {
+    improvements.push("Use ai.mjs facades or profiler wrappers that populate tools so tool_use_summary stays complete.");
+  }
   if (hasLesson("low_profile_coverage")) {
     improvements.push("Place node tools/ai.mjs checkpoint records during long manual, research, design, or review stretches.");
   }

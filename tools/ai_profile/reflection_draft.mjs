@@ -150,6 +150,11 @@ function lessonForFinding(finding, context = {}) {
       cause: "Older profile records were created before persistent work-item scope was reliable.",
       fix: "Start each focused work item with node tools/ai.mjs start, and use node tools/ai.mjs focus for later slices inside the same work item.",
     },
+    missing_tool_metadata: {
+      symptom: message,
+      cause: "Some profile records were written manually or by older helpers without a tools array, so tool-use analysis is incomplete.",
+      fix: "Use node tools/ai.mjs run/context/checkpoint/validate or profiler wrappers that populate tools automatically.",
+    },
     low_profile_coverage: {
       symptom: message,
       cause: "Long manual/research/review stretches were not checkpointed in the historical profile.",

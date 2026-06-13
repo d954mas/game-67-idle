@@ -1603,6 +1603,43 @@ test("profile review summarizes tool use", () => {
   }
 });
 
+test("profile review and followups flag missing tool metadata", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "missing-tools.jsonl");
+    const reviewJson = join(dir, "review.json");
+    const followupsJson = join(dir, "followups.json");
+    for (let index = 0; index < 20; index += 1) {
+      appendFileSync(profile, `${JSON.stringify({
+        ts: `2026-06-13T10:00:${String(index).padStart(2, "0")}+05:00`,
+        phase: "validation",
+        category: "validation",
+        intent: `tool metadata ${index}`,
+        result: "pass",
+        value: "productive",
+        duration_ms: 100,
+        ...(index === 0 ? {} : { tools: ["shell_command"] }),
+      })}\n`, "utf8");
+    }
+
+    const result = run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: join(dir, "scope.json") },
+    });
+    assert.match(result.stdout, /Missing Tool Metadata/);
+    assert.match(result.stdout, /tool metadata 0/);
+    const review = readJson(reviewJson);
+    assert.ok(review.findings.some((finding) => finding.type === "missing_tool_metadata"));
+    assert.equal(review.missing_tool_records.length, 1);
+    assert.ok(review.suggested_pipeline_actions.some((action) => action.includes("populate `tools`")));
+
+    run(["tools/ai_profile/followups.mjs", reviewJson, "--json-output", followupsJson]);
+    const followups = readJson(followupsJson);
+    assert.ok(followups.suggestions.some((suggestion) => suggestion.source === "missing_tool_metadata"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("profile review separates batched and unbatched broad final repeats", () => {
   const dir = tempDir();
   try {
@@ -2430,6 +2467,12 @@ test("closeout writes summary review and follow-up bundle", () => {
     const closeout = records.find((record) => record.phase === "session_closeout");
     assert.ok(closeout);
     assert.equal(closeout.evidence.length, 5);
+    assert.deepEqual(closeout.tools, [
+      "ai_profile/closeout.mjs",
+      "ai_profile/summarize_session_profile.mjs",
+      "ai_profile/review.mjs",
+      "ai_profile/followups.mjs",
+    ]);
   } finally {
     cleanup(dir);
   }

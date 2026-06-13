@@ -85,6 +85,14 @@ if (!values.intent) values.intent = "Close out profiled AI development session";
 if (!values.result) values.result = "pass";
 if (!values.value) values.value = "necessary_overhead";
 if (!values["context-risk"]) values["context-risk"] = "low";
+if (!values.tool) {
+  values.tool = [
+    "ai_profile/closeout.mjs",
+    "ai_profile/summarize_session_profile.mjs",
+  ];
+  if (reviewEnabled) values.tool.push("ai_profile/review.mjs");
+  if (followupsEnabled) values.tool.push("ai_profile/followups.mjs");
+}
 if (!values.evidence) {
   values.evidence = [outputPath];
   if (reviewEnabled) values.evidence.push(reviewOutputPath, reviewJsonOutputPath);

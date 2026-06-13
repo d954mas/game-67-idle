@@ -52,6 +52,9 @@ workflow/runtime tools.
       creating process tasks.
 - [x] Profile review emits `tool_use_summary` so reflection can report which
       tool classes consumed time, failed, produced context, or created rework.
+- [x] Profile review emits `missing_tool_metadata` when records lack `tools`,
+      including follow-up guidance to use `ai.mjs` facades or profiler wrappers
+      that fill tool ids.
 - [x] `node tools/ai.mjs checkpoint "<intent>"` provides the fast path for
       thresholded wall-clock checkpoints after manual/research/review gaps.
 - [x] `node tools/ai.mjs reflect` creates the full reflection handoff by
@@ -139,6 +142,13 @@ None.
   `node tools/ai_profile/review.mjs` showed `Tool Use Summary`; `node
   tools/ai.mjs validate --change profiling --change pipeline --change skills
   --risk medium` passed.
+- 2026-06-13: Added `missing_tool_metadata` findings and follow-up drafts so
+  `(unrecorded)` tool rows become explicit telemetry-quality actions instead
+  of passive summary noise.
+- 2026-06-13: Fixed `closeout.mjs` to record its own tool id and child
+  profiler tools; live `node tools/ai.mjs reflect` then reported a clean
+  current scope with `missing_tool_records: 0`, while historical unrecorded
+  records stayed as retrospective lessons.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;

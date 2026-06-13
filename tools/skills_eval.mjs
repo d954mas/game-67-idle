@@ -334,6 +334,7 @@ const SKILL_CHECKS = [
       "reflection_review.mjs",
       "top next-cycle",
       "tool_use_summary",
+      "missing_tool_metadata",
       "repeated-command evidence",
       "repeated_command_classification",
       "scoped/preflight guardrail",

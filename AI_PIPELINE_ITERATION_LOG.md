@@ -1332,3 +1332,24 @@ specific and reusable.
   and carry it into reflection draft/review.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Unrecorded tool use must become a finding
+
+- Trigger: `tool_use_summary` exposed `(unrecorded)` profile records, but the
+  reflection handoff did not yet flag those records as an explicit telemetry
+  quality issue.
+- Symptom: A retrospective could see incomplete tool-use attribution but still
+  miss the process fix because `(unrecorded)` was buried inside a summary
+  table.
+- Time sink: Future agents would manually inspect raw JSONL to decide whether
+  missing tool ids were historical noise or a current profiling problem.
+- Likely cause: Review output aggregated tool ids but did not create a
+  `missing_tool_metadata` finding/action from records without `tools`.
+- Proposed improvement: Add whole-profile and current-scope missing tool
+  metadata findings, plus follow-up drafts that point agents back to `ai.mjs`
+  facades and profiler wrappers.
+- Extra fix: `closeout.mjs` now records its own tool id and child profiler
+  tools, because reflection handoff itself was creating a fresh missing-tool
+  record.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
