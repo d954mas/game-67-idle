@@ -118,12 +118,23 @@ function toolUseSummary(review) {
     tool: item.tool || "",
     records: Number(item.records || 0),
     duration_ms: Number(item.duration_ms || 0),
+    runtime_ms: Number(item.runtime_ms || 0),
+    command_runtime_ms: Number(item.command_runtime_ms || 0),
+    captured_elapsed_ms: Number(item.captured_elapsed_ms || 0),
+    duration_kind: item.duration_kind || "runtime",
     failed: Number(item.failed || 0),
     blocked: Number(item.blocked || 0),
     waste_or_rework: Number(item.waste_or_rework || 0),
     contexts: Number(item.contexts || 0),
     commands: Number(item.commands || 0),
   }));
+}
+
+function toolDurationSuffix(item) {
+  const kind = item.duration_kind || "runtime";
+  if (kind === "captured_elapsed") return "captured elapsed";
+  if (kind === "mixed") return `mixed; captured=${formatMs(item.captured_elapsed_ms || 0)}, runtime=${formatMs(item.runtime_ms || 0)}`;
+  return (item.command_runtime_ms || 0) > 0 ? "command/runtime" : "runtime";
 }
 
 function recoveredFailureSummary(review) {
@@ -383,7 +394,7 @@ function renderMarkdown(draft, packetFile) {
   if (draft.current_state.current_scope_tool_use_summary.length === 0) {
     lines.push("- none");
   } else {
-    for (const item of draft.current_state.current_scope_tool_use_summary) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms || 0)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}, commands=${item.commands || 0}, context=${item.contexts || 0}`);
+    for (const item of draft.current_state.current_scope_tool_use_summary) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms || 0)} ${toolDurationSuffix(item)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}, commands=${item.commands || 0}, context=${item.contexts || 0}`);
   }
   lines.push("");
   lines.push("## Current Scope Context Use");
@@ -447,7 +458,7 @@ function renderMarkdown(draft, packetFile) {
   if (draft.tool_use_summary.length === 0) {
     lines.push("- none");
   } else {
-    for (const item of draft.tool_use_summary) lines.push(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
+    for (const item of draft.tool_use_summary) lines.push(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.duration_ms)} ${toolDurationSuffix(item)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
   }
   lines.push("");
   lines.push("## Context Use Evidence");

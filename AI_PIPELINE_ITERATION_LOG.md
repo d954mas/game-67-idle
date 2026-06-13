@@ -148,6 +148,22 @@ specific and reusable.
 - Follow-up owner: Current and future profiling/reflection agents.
 - Status: Implemented.
 
+## 2026-06-13 - Checkpoint time is not tool runtime
+
+- Context: `tool_use_summary` can show `ai_profile/gap_checkpoint.mjs` as a
+  high-duration row because it records elapsed manual/research/review time.
+- Friction: A retrospective could misread a checkpoint row as the profiler
+  tool itself being expensive.
+- Time sink: Agents would have to manually reopen profile records to separate
+  captured elapsed time from actual command/tool runtime.
+- Likely cause: Tool-use aggregation summed `duration_ms` without labeling the
+  source of that duration.
+- Proposed improvement: Add `duration_kind`, `captured_elapsed_ms`, and
+  runtime breakdown fields; reflection readout should report runtime and
+  captured checkpoint time separately.
+- Follow-up owner: Current and future profiling/reflection agents.
+- Status: Implemented.
+
 ## 2026-06-12 - Concept setup and visual proof sequencing
 
 - Context: The user selected a child-friendly meme evolution game direction,

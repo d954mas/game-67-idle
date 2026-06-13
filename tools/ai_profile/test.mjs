@@ -1586,6 +1586,17 @@ test("profile review summarizes tool use", () => {
       tools: ["shell_command"],
       commands: ["node tools/skills_eval.mjs"],
     })}\n`, "utf8");
+    appendFileSync(profile, `${JSON.stringify({
+      ts: "2026-06-13T10:05:02+05:00",
+      event_type: "gap_checkpoint",
+      phase: "checkpoint",
+      category: "reflection",
+      intent: "Capture manual review gap",
+      result: "pass",
+      value: "necessary_overhead",
+      duration_ms: 300000,
+      tools: ["ai_profile/gap_checkpoint.mjs"],
+    })}\n`, "utf8");
 
     const result = run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
       env: { AI_PROFILE_SCOPE_FILE: join(dir, "scope.json") },
@@ -1593,11 +1604,18 @@ test("profile review summarizes tool use", () => {
     assert.match(result.stdout, /Tool Use Summary/);
     assert.match(result.stdout, /imagegen/);
     assert.match(result.stdout, /shell_command/);
+    assert.match(result.stdout, /captured elapsed/);
     const review = readJson(reviewJson);
-    assert.equal(review.tool_use_summary[0].tool, "shell_command");
-    assert.equal(review.tool_use_summary[0].failed, 1);
-    assert.equal(review.tool_use_summary[0].waste_or_rework, 1);
-    assert.equal(review.tool_use_summary[1].tool, "imagegen");
+    assert.equal(review.tool_use_summary[0].tool, "ai_profile/gap_checkpoint.mjs");
+    assert.equal(review.tool_use_summary[0].duration_kind, "captured_elapsed");
+    assert.equal(review.tool_use_summary[0].captured_elapsed_ms, 300000);
+    assert.equal(review.tool_use_summary[0].runtime_ms, 0);
+    const shellTool = review.tool_use_summary.find((item) => item.tool === "shell_command");
+    assert.equal(shellTool.failed, 1);
+    assert.equal(shellTool.waste_or_rework, 1);
+    assert.equal(shellTool.duration_kind, "runtime");
+    assert.equal(shellTool.command_runtime_ms, 3000);
+    assert.ok(review.tool_use_summary.some((item) => item.tool === "imagegen"));
   } finally {
     cleanup(dir);
   }
@@ -2530,7 +2548,10 @@ test("reflection review separates clean current scope from historical lessons", 
           recovered_failed_records: 0,
           unresolved_failed_records: 0,
         },
-        current_scope_tool_use_summary: [{ tool: "shell_command", records: 2, duration_ms: 5000, failed: 0, waste_or_rework: 0 }],
+        current_scope_tool_use_summary: [
+          { tool: "ai_profile/gap_checkpoint.mjs", records: 1, duration_ms: 300000, captured_elapsed_ms: 300000, runtime_ms: 0, duration_kind: "captured_elapsed", failed: 0, waste_or_rework: 0 },
+          { tool: "shell_command", records: 2, duration_ms: 5000, runtime_ms: 5000, command_runtime_ms: 5000, duration_kind: "runtime", failed: 0, waste_or_rework: 0 },
+        ],
         current_scope_context_use_summary: {
           hotspots: [{ path: "tasks/STATUS.md", chars: 1234 }],
           high_context: [],
@@ -2558,7 +2579,8 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.match(result.stdout, /Current scope T0099\/reflection-slice is clean: 2 record\(s\), 5\.0s profiled over 5\.0s wall-clock \(100\.0%\)/);
     assert.match(result.stdout, /Current coverage confidence is usable for rough time-spend claims/);
     assert.match(result.stdout, /Current telemetry has no context, work-item, or tool metadata gaps/);
-    assert.match(result.stdout, /Largest current tool cost: shell_command \(5\.0s, 2 record\(s\)\)/);
+    assert.match(result.stdout, /Largest current tool runtime: shell_command \(5\.0s, 2 record\(s\)\)/);
+    assert.match(result.stdout, /Largest current captured elapsed checkpoint: ai_profile\/gap_checkpoint\.mjs \(5\.0m, 1 record\(s\)\)/);
     assert.match(result.stdout, /Current validation was batched: 1 batch\(es\), 1 record\(s\), broad\/final=0, failed=0/);
     assert.match(result.stdout, /Current Scope Snapshot/);
     assert.match(result.stdout, /profiled\/wall-clock: 5\.0s \/ 5\.0s \(100\.0%\)/);
@@ -2589,12 +2611,14 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.equal(review.top_improvements.some((item) => item.includes("current review shows")), false);
     assert.ok(review.current.readout.some((item) => item.includes("Current scope T0099/reflection-slice is clean")));
     assert.ok(review.current.readout.some((item) => item.includes("coverage confidence is usable")));
-    assert.ok(review.current.readout.some((item) => item.includes("Largest current tool cost: shell_command")));
+    assert.ok(review.current.readout.some((item) => item.includes("Largest current tool runtime: shell_command")));
+    assert.ok(review.current.readout.some((item) => item.includes("Largest current captured elapsed checkpoint")));
     assert.ok(review.current.readout.some((item) => item.includes("Current validation was batched")));
     assert.equal(review.current.snapshot.records, 2);
     assert.equal(review.current.snapshot.coverage_ratio, 1);
     assert.equal(review.current.validation_batches[0].batch_id, "current-batch");
-    assert.equal(review.current.tool_use_summary[0].tool, "shell_command");
+    assert.equal(review.current.tool_use_summary[0].tool, "ai_profile/gap_checkpoint.mjs");
+    assert.equal(review.current.tool_use_summary[0].duration_kind, "captured_elapsed");
     assert.equal(review.current.context_use_summary.hotspots[0].path, "tasks/STATUS.md");
     assert.equal(review.tool_use_summary[0].tool, "shell_command");
     assert.equal(review.context_use_summary.hotspots[0].path, "AI_PIPELINE_SESSION_PROFILING.md");

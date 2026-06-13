@@ -215,3 +215,5 @@ None.
 - 2026-06-13: Added current-scope largest gap evidence to reflection
   draft/review handoff so partial coverage explains which wall-clock intervals
   are unprofiled before making time-spend claims.
+- 2026-06-13: Added duration-kind labeling for profile tool-use summaries so
+  checkpoint-captured elapsed time is not mistaken for tool runtime.

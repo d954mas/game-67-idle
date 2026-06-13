@@ -261,11 +261,18 @@ function toolUseSummary(records) {
     const listedTools = Array.isArray(record.tools) && record.tools.length > 0 ? record.tools : ["(unrecorded)"];
     for (const tool of listedTools) {
       const name = String(tool || "(empty)");
+      const capturedElapsed = record.event_type === "checkpoint"
+        || record.event_type === "gap_checkpoint"
+        || name === "ai_profile/checkpoint.mjs"
+        || name === "ai_profile/gap_checkpoint.mjs";
       if (!tools.has(name)) {
         tools.set(name, {
           tool: name,
           records: 0,
           duration_ms: 0,
+          runtime_ms: 0,
+          command_runtime_ms: 0,
+          captured_elapsed_ms: 0,
           failed: 0,
           blocked: 0,
           waste_or_rework: 0,
@@ -276,6 +283,9 @@ function toolUseSummary(records) {
       const item = tools.get(name);
       item.records += 1;
       item.duration_ms += duration;
+      if (capturedElapsed) item.captured_elapsed_ms += duration;
+      else item.runtime_ms += duration;
+      if (!capturedElapsed && (record.commands || []).length > 0) item.command_runtime_ms += duration;
       if (record.result === "fail") item.failed += 1;
       if (record.result === "blocked" || record.blocked_by) item.blocked += 1;
       if (record.value === "waste" || record.value === "rework" || record.waste_reason) item.waste_or_rework += 1;
@@ -283,7 +293,24 @@ function toolUseSummary(records) {
       item.commands += (record.commands || []).length;
     }
   }
-  return [...tools.values()].sort((a, b) => b.duration_ms - a.duration_ms || b.records - a.records).slice(0, 20);
+  return [...tools.values()]
+    .map((item) => ({
+      ...item,
+      duration_kind: item.captured_elapsed_ms > 0 && item.runtime_ms === 0
+        ? "captured_elapsed"
+        : item.captured_elapsed_ms > 0
+          ? "mixed"
+          : "runtime",
+    }))
+    .sort((a, b) => b.duration_ms - a.duration_ms || b.records - a.records)
+    .slice(0, 20);
+}
+
+function toolDurationSuffix(item) {
+  const kind = item.duration_kind || "runtime";
+  if (kind === "captured_elapsed") return "captured elapsed";
+  if (kind === "mixed") return `mixed; captured=${formatMs(item.captured_elapsed_ms || 0)}, runtime=${formatMs(item.runtime_ms || 0)}`;
+  return (item.command_runtime_ms || 0) > 0 ? "command/runtime" : "runtime";
 }
 
 function classifyRepeatedCommands(records, repeatedCommands, commandScopes) {
@@ -782,7 +809,7 @@ if (!currentScope.enabled || currentScope.records === 0 || currentScope.tool_use
   emit("- none");
 } else {
   for (const item of currentScope.tool_use_summary) {
-    emit(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
+    emit(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.duration_ms)} ${toolDurationSuffix(item)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
   }
 }
 
@@ -832,7 +859,7 @@ if (toolSummary.length === 0) {
   emit("- none");
 } else {
   for (const item of toolSummary) {
-    emit(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
+    emit(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.duration_ms)} ${toolDurationSuffix(item)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
   }
 }
 

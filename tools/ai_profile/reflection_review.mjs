@@ -57,6 +57,18 @@ function coverageConfidenceLine(snapshot) {
   return "Current coverage confidence is limited; use tool durations as partial evidence, not total iteration time.";
 }
 
+function toolCapturedElapsed(item) {
+  return (item?.duration_kind || "") === "captured_elapsed"
+    || (Number(item?.captured_elapsed_ms || 0) > 0 && Number(item?.runtime_ms || 0) === 0);
+}
+
+function toolDurationSuffix(item) {
+  const kind = item?.duration_kind || "runtime";
+  if (kind === "captured_elapsed") return "captured elapsed";
+  if (kind === "mixed") return `mixed; captured=${formatMs(item.captured_elapsed_ms || 0)}, runtime=${formatMs(item.runtime_ms || 0)}`;
+  return Number(item?.command_runtime_ms || 0) > 0 ? "command/runtime" : "runtime";
+}
+
 function currentScopeReadout(currentClean, snapshot, tools, contextSummary, validationBatches) {
   if (!snapshot?.enabled) {
     return ["No current-scope snapshot is available; start or focus the next iteration before relying on generated reflection."];
@@ -78,9 +90,14 @@ function currentScopeReadout(currentClean, snapshot, tools, contextSummary, vali
   const unresolved = Number(snapshot.unresolved_failed_records || 0);
   const recovered = Number(snapshot.recovered_failed_records || 0);
   lines.push(`Current failures: unresolved=${unresolved}, recovered=${recovered}.`);
-  const topTool = asArray(tools)[0];
-  if (topTool) {
-    lines.push(`Largest current tool cost: ${topTool.tool || "unknown"} (${formatMs(topTool.duration_ms)}, ${topTool.records || 0} record(s)).`);
+  const toolRows = asArray(tools);
+  const topRuntimeTool = toolRows.find((item) => !toolCapturedElapsed(item));
+  const topCapturedElapsed = toolRows.find((item) => toolCapturedElapsed(item));
+  if (topRuntimeTool) {
+    lines.push(`Largest current tool runtime: ${topRuntimeTool.tool || "unknown"} (${formatMs(topRuntimeTool.runtime_ms || topRuntimeTool.duration_ms)}, ${topRuntimeTool.records || 0} record(s)).`);
+  }
+  if (topCapturedElapsed) {
+    lines.push(`Largest current captured elapsed checkpoint: ${topCapturedElapsed.tool || "unknown"} (${formatMs(topCapturedElapsed.captured_elapsed_ms || topCapturedElapsed.duration_ms)}, ${topCapturedElapsed.records || 0} record(s)).`);
   }
   const batches = asArray(validationBatches);
   if (batches.length > 0) {
@@ -246,7 +263,7 @@ function renderMarkdown(review, draftPath) {
   if (currentTools.length === 0) {
     lines.push("- none");
   } else {
-    for (const item of currentTools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
+    for (const item of currentTools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms)} ${toolDurationSuffix(item)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
   }
   lines.push("");
   lines.push("## Current Scope Context Use");
@@ -296,7 +313,7 @@ function renderMarkdown(review, draftPath) {
   if (tools.length === 0) {
     lines.push("- none");
   } else {
-    for (const item of tools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
+    for (const item of tools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms)} ${toolDurationSuffix(item)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
   }
   lines.push("");
   lines.push("## Context Use Review");
