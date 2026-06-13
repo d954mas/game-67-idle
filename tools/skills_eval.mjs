@@ -310,6 +310,8 @@ const SKILL_CHECKS = [
       "followups.mjs",
       "missing context input",
       "work_items",
+      "current_scope",
+      "suppressed_historical_findings",
       "--work-item",
       "AI_PROFILE_WORK_ITEM",
       "AI_PROFILE_ITERATION",

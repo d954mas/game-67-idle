@@ -466,9 +466,9 @@ node tools/ai_profile/review.mjs tmp/session_profiles/session_profile_YYYY-MM-DD
 
 The JSON artifact uses `schema_version: 1` and contains findings, repeated
 command scopes, work-item/iteration summaries, repeated broad/final commands
-by work item, `wall_clock_coverage`, missing context-input details, and
-suggested pipeline actions. Keep it in `tmp/session_profiles/` unless the lead
-explicitly asks to preserve it.
+by work item, `wall_clock_coverage`, `current_scope`, missing context-input
+details, and suggested pipeline actions. Keep it in `tmp/session_profiles/`
+unless the lead explicitly asks to preserve it.
 
 To turn structured findings into reviewable next actions, generate follow-up
 drafts:
@@ -482,6 +482,10 @@ checking current tasks and recent commits. Drafts include repeated validation,
 missing context inputs, missing work-item metadata, low wall-clock coverage,
 recovered/unresolved failed records, and waste/rework when those findings
 appear in review JSON.
+When review JSON includes `current_scope`, follow-up drafts use current-scope
+health for urgent P1 suggestions and list suppressed historical-only findings
+separately. Historical findings still belong in retrospectives, but they should
+not keep creating current action items after the active scope is clean.
 When `closeout.mjs` was used without `--no-followups`, these drafts are already
 generated and this manual command is only needed after rerunning review.
 
@@ -548,12 +552,17 @@ A "profiled session" is done when:
 - `review.mjs` is used before deeper reflection when a profile exists and the
   closeout bundle was skipped or stale;
 - `review.mjs --json-output` is used when another tool/agent will consume the
-  findings instead of a human reading the markdown;
+  findings instead of a human reading the markdown; when a persistent scope is
+  active, inspect `current_scope` before treating whole-profile history as a
+  current problem;
 - low wall-clock coverage or large profile gaps are explained in the
   retrospective, or the next cycle adds sparse `event.mjs` checkpoints for
   long manual/research/design stretches;
 - `followups.mjs` is used when review JSON should become draft next actions
   for task/rule/tool promotion and the closeout bundle was skipped or stale;
+  if it reports `suppressed_historical_findings`, mention those in the
+  retrospective but do not promote them as current tasks unless they recur in
+  the current scope;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste; use
   `--json-output` when another tool, agent, or later reflection should consume

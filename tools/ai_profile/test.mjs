@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -883,6 +883,129 @@ test("review and followups classify recovered failures", () => {
     run(["tools/ai_profile/followups.mjs", reviewJson, "--json-output", followupsJson]);
     const followups = readJson(followupsJson);
     assert.ok(followups.suggestions.some((suggestion) => suggestion.source === "recovered_failed_records"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("followups suppress historical-only issues when current scope is clean", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "historical-noise.jsonl");
+    const scope = join(dir, "scope.json");
+    const reviewJson = join(dir, "review.json");
+    const followupsJson = join(dir, "followups.json");
+    const broadCommand = "node tools/pipeline_validate.mjs";
+
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "validation",
+      "--category", "validation",
+      "--intent", "old broad validation one",
+      "--result", "pass",
+      "--value", "productive",
+      "--command", broadCommand,
+      "--context-risk", "medium",
+      "--ts", "2026-06-13T10:00:00+05:00",
+    ]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "validation",
+      "--category", "validation",
+      "--intent", "old broad validation two",
+      "--result", "pass",
+      "--value", "productive",
+      "--command", broadCommand,
+      "--duration-ms", "1000",
+      "--ts", "2026-06-13T10:45:00+05:00",
+    ]);
+    for (let index = 0; index < 18; index += 1) {
+      appendFileSync(profile, `${JSON.stringify({
+        ts: `2026-06-13T10:46:${String(index).padStart(2, "0")}+05:00`,
+        phase: "context",
+        category: "context",
+        intent: `old unscoped context ${index}`,
+        result: "pass",
+        value: "necessary_overhead",
+      })}\n`, "utf8");
+    }
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope", scope,
+      "--profile", profile,
+      "--work-item", "CUR",
+      "--iteration", "clean",
+      "--phase", "test",
+      "--intent", "current clean scope",
+    ]);
+
+    run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const review = readJson(reviewJson);
+    assert.equal(review.current_scope.enabled, true);
+    assert.equal(review.current_scope.missing_context_inputs, 0);
+    assert.equal(review.current_scope.missing_work_item_records, 0);
+    assert.equal(review.current_scope.repeated_broad_final_commands.length, 0);
+
+    run(["tools/ai_profile/followups.mjs", reviewJson, "--json-output", followupsJson]);
+    const followups = readJson(followupsJson);
+    assert.ok(followups.suppressed_historical_findings.includes("repeated_broad_final_commands"));
+    assert.ok(followups.suppressed_historical_findings.includes("missing_context_inputs"));
+    assert.ok(followups.suppressed_historical_findings.includes("missing_work_item_metadata"));
+    assert.ok(followups.suppressed_historical_findings.includes("low_profile_coverage"));
+    assert.equal(
+      followups.suggestions.some((suggestion) => suggestion.priority === "P1"),
+      false,
+    );
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("followups preserve current-scope issues", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "current-issue.jsonl");
+    const scope = join(dir, "scope.json");
+    const reviewJson = join(dir, "review.json");
+    const followupsJson = join(dir, "followups.json");
+
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope", scope,
+      "--profile", profile,
+      "--work-item", "CUR",
+      "--iteration", "dirty",
+      "--phase", "test",
+      "--intent", "current dirty scope",
+    ]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "context",
+      "--category", "context",
+      "--intent", "current unmeasured context",
+      "--result", "pass",
+      "--value", "necessary_overhead",
+      "--context-risk", "medium",
+    ], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+
+    run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const review = readJson(reviewJson);
+    assert.equal(review.current_scope.enabled, true);
+    assert.equal(review.current_scope.missing_context_inputs, 1);
+
+    run(["tools/ai_profile/followups.mjs", reviewJson, "--json-output", followupsJson]);
+    const followups = readJson(followupsJson);
+    assert.ok(followups.suggestions.some((suggestion) => suggestion.source === "current_scope.missing_context_inputs"));
+    assert.equal(followups.suppressed_historical_findings.includes("missing_context_inputs"), false);
   } finally {
     cleanup(dir);
   }

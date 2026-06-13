@@ -139,6 +139,11 @@ still-relevant drafts into tasks, rules, or tools after checking current
 taskboard state.
 For multi-task profiles, inspect `work_items`, `iterations`, and
 `repeated_broad_final_by_work_item` before calling repeated validation waste.
+When review JSON includes `current_scope`, separate current-scope findings from
+whole-profile history. If follow-up drafts report
+`suppressed_historical_findings`, mention those as historical lessons but do
+not promote them as current tasks unless the same issue appears in the current
+scope.
 If many records lack work-item metadata, add a next-cycle fix: begin the task
 with `tools/ai_profile/start.mjs --work-item <id> --iteration <name>`, pass
 `--work-item <id>` and optional `--iteration <name>` to `run.mjs`,

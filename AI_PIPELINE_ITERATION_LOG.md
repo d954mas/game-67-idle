@@ -791,3 +791,21 @@ specific and reusable.
   agents can consume validation decisions directly.
 - Follow-up owner: Future profiling/validation/tooling agents.
 - Status: Implemented in `T0088`.
+
+## 2026-06-13 - Profile follow-ups need current-scope filtering
+
+- Trigger: `status.mjs` reported no urgent action for the active scope, while
+  refreshed review/followups still promoted old missing context, missing
+  work-item metadata, low coverage, and repeated broad validation as P1 draft
+  tasks.
+- Symptom: Agents could keep fixing historical telemetry from earlier
+  iterations instead of using it as retrospective context.
+- Time sink: Reflection time shifts from current problems to stale findings
+  that cannot be repaired precisely after the fact.
+- Likely cause: `review.mjs` and `followups.mjs` used whole-profile aggregate
+  findings only, while `status.mjs` had already learned current-scope health.
+- Proposed improvement: Add `current_scope` to review JSON/markdown and make
+  follow-up drafts suppress historical-only issues when the active scope is
+  clean, while still naming them for retrospective history.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0089`.

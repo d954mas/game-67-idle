@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { CATEGORIES, CONTEXT_RISKS, RESULTS, VALUES, parseArgs, stringArg } from "./profile_lib.mjs";
+import { CATEGORIES, CONTEXT_RISKS, RESULTS, VALUES, parseArgs, readProfileScope, stringArg } from "./profile_lib.mjs";
 
 function usage() {
   console.error(`usage:
@@ -123,6 +123,41 @@ function coverageStats(records, gapThresholdMs = 5 * 60 * 1000) {
     largest_gaps: largestGaps.slice(0, 10),
     first_record_ts: new Date(firstMs).toISOString(),
     last_record_ts: new Date(lastMs).toISOString(),
+  };
+}
+
+function currentScopeRecords(records, scope) {
+  const updatedMs = Date.parse(scope.updated_at || "");
+  if (!Number.isFinite(updatedMs)) return [];
+  return records.filter((record) => {
+    const ts = eventTime(record);
+    return ts !== undefined && ts >= updatedMs;
+  });
+}
+
+function isLowCoverage(coverage) {
+  return coverage.wall_clock_span_ms >= 30 * 60 * 1000 && Number.isFinite(coverage.coverage_ratio) && coverage.coverage_ratio < 0.25;
+}
+
+function scopedSummary(records) {
+  const broadCommandCounts = new Map();
+  for (const record of records) {
+    for (const command of record.commands || []) {
+      const normalized = normalizeCommand(command);
+      if (commandScope(normalized) === "broad/final") addCount(broadCommandCounts, normalized);
+    }
+  }
+  const repeatedBroadFinalCommands = topEntries(broadCommandCounts, 20)
+    .filter(([, count]) => count > 1)
+    .map(([command, count]) => ({ command, count, scope: "broad/final" }));
+  const coverage = coverageStats(records);
+  return {
+    records: records.length,
+    missing_context_inputs: records.filter((record) => record.context_risk && record.context_risk !== "low" && !(record.context_inputs || []).length).length,
+    missing_work_item_records: records.filter((record) => !record.work_item).length,
+    repeated_broad_final_commands: repeatedBroadFinalCommands,
+    wall_clock_coverage: coverage,
+    low_profile_coverage: isLowCoverage(coverage),
   };
 }
 
@@ -324,6 +359,16 @@ const topIterations = topEntries(iterationCounts, 20).map(([iteration, count]) =
   duration_ms: iterationDuration.get(iteration) || 0,
 }));
 const missingWorkItemCount = records.filter((record) => !record.work_item).length;
+const scope = readProfileScope();
+const scopeReady = scope.valid && Boolean(scope.work_item) && Boolean(scope.updated_at);
+const scopedRecords = scopeReady ? currentScopeRecords(records, scope) : [];
+const currentScope = {
+  enabled: scopeReady,
+  work_item: scope.work_item || "",
+  iteration: scope.iteration || "",
+  since: scope.updated_at || "",
+  ...scopedSummary(scopedRecords),
+};
 const findings = [];
 const failedClassification = classifyFailedRecords(records);
 const recoveredFailed = failedClassification.recovered;
@@ -502,6 +547,19 @@ if (coverage.largest_gaps.length === 0) {
   }
 }
 
+emit("\n## Current Scope");
+if (!currentScope.enabled) {
+  emit("- none");
+} else {
+  emit(`- scope: ${currentScope.work_item}${currentScope.iteration ? `/${currentScope.iteration}` : ""}`);
+  emit(`- since: ${currentScope.since}`);
+  emit(`- records: ${currentScope.records}`);
+  emit(`- missing context inputs: ${currentScope.missing_context_inputs}`);
+  emit(`- missing work-item records: ${currentScope.missing_work_item_records}`);
+  emit(`- repeated broad/final commands: ${currentScope.repeated_broad_final_commands.length}`);
+  emit(`- wall-clock coverage: ${formatPercent(currentScope.wall_clock_coverage.coverage_ratio)} (${formatMs(currentScope.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(currentScope.wall_clock_coverage.wall_clock_span_ms)})`);
+}
+
 emit("\n## Work Items");
 if (topWorkItems.length === 0) {
   emit("- none");
@@ -583,6 +641,7 @@ if (jsonOutputFile) {
       command: item.command,
       count: item.count,
     })),
+    current_scope: currentScope,
     time_by_phase: topPhaseDuration.map(([phase, duration_ms]) => ({ phase, duration_ms })),
     wall_clock_coverage: coverage,
     work_items: topWorkItems,

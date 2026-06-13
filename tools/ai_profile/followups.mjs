@@ -35,68 +35,99 @@ function formatPercent(value) {
 
 function buildSuggestions(review) {
   const suggestions = [];
+  const suppressedHistorical = [];
   const findingTypes = new Set(asArray(review.findings).map((finding) => finding.type));
+  const currentScope = review.current_scope && review.current_scope.enabled ? review.current_scope : null;
+  const useCurrentScope = Boolean(currentScope && currentScope.records > 0);
+
+  function currentScopeClean(field) {
+    if (!useCurrentScope) return false;
+    if (field === "repeated_broad_final") return asArray(currentScope.repeated_broad_final_commands).length === 0;
+    if (field === "missing_context_inputs") return Number(currentScope.missing_context_inputs || 0) === 0;
+    if (field === "missing_work_item_metadata") return Number(currentScope.missing_work_item_records || 0) === 0;
+    if (field === "low_profile_coverage") return currentScope.low_profile_coverage !== true;
+    return false;
+  }
 
   if (findingTypes.has("repeated_broad_final") || asArray(review.repeated_broad_final_commands).length > 0) {
-    addSuggestion(suggestions, {
+    if (currentScopeClean("repeated_broad_final")) {
+      suppressedHistorical.push("repeated_broad_final_commands");
+    } else {
+      addSuggestion(suggestions, {
       title: "Reduce repeated broad/final validation",
       priority: "P1",
       tags: ["pipeline", "validation", "profiling", "automation"],
-      source: "repeated_broad_final_commands",
-      why: `Broad/final commands repeated: ${commandList(review.repeated_broad_final_commands) || "unknown"}.`,
+      source: useCurrentScope ? "current_scope.repeated_broad_final_commands" : "repeated_broad_final_commands",
+      why: `Broad/final commands repeated: ${commandList(useCurrentScope ? currentScope.repeated_broad_final_commands : review.repeated_broad_final_commands) || "unknown"}.`,
       done_when: [
         "Validation planner or review rules identify when broad/final gates are allowed to rerun.",
         "A future profile shows broad/final repeats only after a failed gate, changed risk, or final batch boundary.",
       ],
       next_action: "Inspect the repeated broad/final commands and decide whether to add a batching rule, narrower preflight, or review threshold.",
-    });
+      });
+    }
   }
 
   if (findingTypes.has("missing_context_inputs") || asArray(review.missing_context_inputs).length > 0) {
-    addSuggestion(suggestions, {
+    if (currentScopeClean("missing_context_inputs")) {
+      suppressedHistorical.push("missing_context_inputs");
+    } else {
+      const missingCount = useCurrentScope ? Number(currentScope.missing_context_inputs || 0) : asArray(review.missing_context_inputs).length;
+      addSuggestion(suggestions, {
       title: "Eliminate missing context input details",
       priority: "P1",
       tags: ["pipeline", "profiling", "context", "reflection"],
-      source: "missing_context_inputs",
-      why: `${asArray(review.missing_context_inputs).length} medium/high context record(s) lacked measured context_inputs.`,
+      source: useCurrentScope ? "current_scope.missing_context_inputs" : "missing_context_inputs",
+      why: `${missingCount} medium/high context record(s) lacked measured context_inputs.`,
       done_when: [
         "Medium/high context events use context.mjs or explicit context_inputs.",
         "Profile review shows no missing context input details for new records.",
       ],
       next_action: "Use context.mjs for local files and update any wrapper or habit that records context_risk without context_inputs.",
-    });
+      });
+    }
   }
 
   if (findingTypes.has("missing_work_item_metadata")) {
+    if (currentScopeClean("missing_work_item_metadata")) {
+      suppressedHistorical.push("missing_work_item_metadata");
+    } else {
     const missingFinding = asArray(review.findings).find((finding) => finding.type === "missing_work_item_metadata");
     addSuggestion(suggestions, {
       title: "Add work item metadata to future profile events",
       priority: "P1",
       tags: ["pipeline", "profiling", "context", "automation"],
-      source: "missing_work_item_metadata",
-      why: missingFinding?.message || "Multi-task profiles have records without work_item metadata.",
+      source: useCurrentScope ? "current_scope.missing_work_item_metadata" : "missing_work_item_metadata",
+      why: useCurrentScope
+        ? `${Number(currentScope.missing_work_item_records || 0)} current-scope record(s) lack work_item metadata.`
+        : missingFinding?.message || "Multi-task profiles have records without work_item metadata.",
       done_when: [
         "Substantial profile events include work-item metadata from scope.mjs, AI_PROFILE_* env vars, or explicit flags.",
         "A future profile review can separate repeated validation by work item.",
       ],
       next_action: "Run `node tools/ai_profile/scope.mjs set --work-item <id> --iteration <name>` for the next focused session, or use explicit flags for exceptions.",
     });
+    }
   }
 
   if (findingTypes.has("low_profile_coverage")) {
+    if (currentScopeClean("low_profile_coverage")) {
+      suppressedHistorical.push("low_profile_coverage");
+    } else {
     const coverage = review.wall_clock_coverage || {};
     addSuggestion(suggestions, {
       title: "Raise AI profile wall-clock coverage",
       priority: "P1",
       tags: ["pipeline", "profiling", "reflection", "observability"],
-      source: "wall_clock_coverage",
-      why: `Profile coverage was ${formatPercent(coverage.coverage_ratio)} across the recorded wall-clock span.`,
+      source: useCurrentScope ? "current_scope.wall_clock_coverage" : "wall_clock_coverage",
+      why: `Profile coverage was ${formatPercent((useCurrentScope ? currentScope.wall_clock_coverage : coverage).coverage_ratio)} across the recorded wall-clock span.`,
       done_when: [
         "Retrospectives explicitly explain low-coverage periods or mark them as unknown.",
         "Future long manual/research/design stretches add sparse event.mjs checkpoints.",
       ],
       next_action: "Inspect wall_clock_coverage and decide whether the next cycle needs checkpoint prompts, a wrapper, or a lower-overhead capture habit.",
     });
+    }
   }
 
   if (findingTypes.has("failed_records") || asArray(review.unresolved_failed_records).length > 0) {
@@ -173,16 +204,19 @@ function buildSuggestions(review) {
     });
   }
 
-  return suggestions;
+  return { suggestions, suppressedHistorical };
 }
 
-function renderMarkdown(reviewFile, review, suggestions) {
+function renderMarkdown(reviewFile, review, suggestions, suppressedHistorical) {
   const lines = [];
   lines.push(`# AI Profile Follow-up Drafts - ${basename(reviewFile)}`);
   lines.push("");
   lines.push(`Profile: ${review.profile || "(unknown)"}`);
   lines.push(`Review schema: ${review.schema_version || "(unknown)"}`);
   lines.push(`Suggestions: ${suggestions.length}`);
+  if (suppressedHistorical.length > 0) {
+    lines.push(`Suppressed historical-only findings: ${suppressedHistorical.join(", ")}`);
+  }
   lines.push("");
   lines.push("These are draft actions. Promote only the items that are still relevant after checking current tasks.");
   for (const suggestion of suggestions) {
@@ -215,8 +249,8 @@ try {
   process.exit(1);
 }
 
-const suggestions = buildSuggestions(review);
-const rendered = renderMarkdown(reviewFile, review, suggestions);
+const { suggestions, suppressedHistorical } = buildSuggestions(review);
+const rendered = renderMarkdown(reviewFile, review, suggestions, suppressedHistorical);
 if (outputFile) {
   const target = resolve(outputFile);
   mkdirSync(dirname(target), { recursive: true });
@@ -225,6 +259,6 @@ if (outputFile) {
 if (jsonOutputFile) {
   const target = resolve(jsonOutputFile);
   mkdirSync(dirname(target), { recursive: true });
-  writeFileSync(target, `${JSON.stringify({ schema_version: 1, review: reviewFile, suggestions }, null, 2)}\n`, "utf8");
+  writeFileSync(target, `${JSON.stringify({ schema_version: 1, review: reviewFile, suggestions, suppressed_historical_findings: suppressedHistorical }, null, 2)}\n`, "utf8");
 }
 process.stdout.write(rendered);
