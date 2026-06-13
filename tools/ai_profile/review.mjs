@@ -176,6 +176,49 @@ function scopedSummary(records) {
   };
 }
 
+function currentScopeFindingsAndActions(currentScope) {
+  const findings = [];
+  const actions = [];
+  if (!currentScope.enabled) {
+    findings.push({ type: "missing_current_scope", message: "No current profile scope is active; review findings are whole-profile history." });
+    actions.push("Start a focused scope with `node tools/ai_profile/start.mjs --work-item <id> --iteration <name>` before using review findings as current tasks.");
+    return { findings, actions };
+  }
+  if (currentScope.records === 0) {
+    findings.push({ type: "empty_current_scope", message: "Current scope has no records yet." });
+    actions.push("Append a current-scope checkpoint, context record, or profiled command before relying on review for current work.");
+    return { findings, actions };
+  }
+  if (currentScope.unresolved_failed_records.length > 0) {
+    findings.push({ type: "current_unresolved_failed_records", message: `${currentScope.unresolved_failed_records.length} current-scope failed record(s) are unresolved.` });
+    actions.push("Resolve or explain current-scope failed records before treating the profile as clean.");
+  }
+  if (currentScope.recovered_failed_records.length > 0) {
+    findings.push({ type: "current_recovered_failed_records", message: `${currentScope.recovered_failed_records.length} current-scope failed record(s) later passed.` });
+    actions.push("Classify current-scope recovered failures as useful negative feedback, avoidable rework, or tool noise.");
+  }
+  if (currentScope.repeated_broad_final_commands.length > 0) {
+    findings.push({ type: "current_repeated_broad_final", message: `${currentScope.repeated_broad_final_commands.length} current-scope broad/final command(s) repeated.` });
+    actions.push("Use validation planning and batch current-scope broad/final gates.");
+  }
+  if (currentScope.missing_context_inputs > 0) {
+    findings.push({ type: "current_missing_context_inputs", message: `${currentScope.missing_context_inputs} current-scope medium/high context record(s) lack context_inputs.` });
+    actions.push("Use context.mjs or context_command.mjs for current-scope medium/high context reads.");
+  }
+  if (currentScope.missing_work_item_records > 0) {
+    findings.push({ type: "current_missing_work_item_metadata", message: `${currentScope.missing_work_item_records} current-scope record(s) lack work_item metadata.` });
+    actions.push("Reset scope or pass explicit --work-item for current-scope records.");
+  }
+  if (currentScope.low_profile_coverage) {
+    findings.push({ type: "current_low_profile_coverage", message: `Current scope covers ${formatPercent(currentScope.wall_clock_coverage.coverage_ratio)} of a ${formatMs(currentScope.wall_clock_coverage.wall_clock_span_ms)} span.` });
+    actions.push("Add checkpoint.mjs records during long current-scope manual/research/design stretches.");
+  }
+  if (findings.length === 0) {
+    actions.push("Use current scope as clean baseline; treat whole-profile findings as historical retrospective context.");
+  }
+  return { findings, actions };
+}
+
 function parseProfile(file) {
   const text = readFileSync(file, "utf8");
   const records = [];
@@ -384,6 +427,9 @@ const currentScope = {
   since: scope.updated_at || "",
   ...scopedSummary(scopedRecords),
 };
+const currentScopeReview = currentScopeFindingsAndActions(currentScope);
+currentScope.findings = currentScopeReview.findings;
+currentScope.suggested_actions = currentScopeReview.actions;
 const findings = [];
 const failedClassification = classifyFailedRecords(records);
 const recoveredFailed = failedClassification.recovered;
@@ -443,9 +489,19 @@ emit(`\nRecords: ${records.length}`);
 emit(`Profiled duration: ${formatMs(totalDuration)}`);
 emit(`Closeout event: ${closeoutSeen ? "yes" : "no"}`);
 
-emit("\n## Priority Findings");
+emit("\n## Current Scope Findings");
+if (currentScope.findings.length === 0) {
+  emit("- Current scope has no urgent review findings.");
+} else {
+  for (const finding of currentScope.findings) emit(`- ${finding.message}`);
+}
+
+emit("\n## Current Scope Actions");
+for (const action of currentScope.suggested_actions) emit(`- ${action}`);
+
+emit("\n## Historical Whole-Profile Findings");
 if (findings.length === 0) {
-  emit("- No obvious waste/rework/failure/context hotspots in this profile.");
+  emit("- No obvious whole-profile waste/rework/failure/context hotspots in this profile.");
 } else {
   for (const finding of findings) emit(`- ${finding.message}`);
 }

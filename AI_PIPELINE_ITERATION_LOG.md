@@ -827,3 +827,19 @@ specific and reusable.
   drafts while keeping them visible as retrospective lessons.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0090`.
+
+## 2026-06-13 - Profile review needs current-scope-first output
+
+- Trigger: Followups were current-scope filtered, but review markdown still
+  opened with historical whole-profile findings as priority findings.
+- Symptom: Later agents could chase old issues despite clean current scope.
+- Time sink: Reflection has to manually reconcile status, followups, and
+  review priority ordering.
+- Likely cause: `review.mjs` had current-scope data but markdown ordering still
+  emphasized whole-profile history.
+- Proposed improvement: Render `Current Scope Findings` and
+  `Current Scope Actions` first, keep `Historical Whole-Profile Findings`
+  separate, and expose `current_scope.findings` /
+  `current_scope.suggested_actions` in JSON.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0091`.

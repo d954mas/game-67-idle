@@ -456,7 +456,9 @@ The review is not a replacement for judgment. It is a fast checklist of what
 the agent must explain or convert into process improvements.
 When `closeout.mjs` was used without `--no-review`, these review artifacts are
 already generated and this manual review command is only needed after further
-profile edits.
+profile edits. Read `Current Scope Findings` and `Current Scope Actions`
+first. Treat `Historical Whole-Profile Findings` as retrospective history
+unless the same issue appears in the current scope.
 
 For automation or cross-agent handoff, also write the machine-readable review:
 
@@ -467,8 +469,10 @@ node tools/ai_profile/review.mjs tmp/session_profiles/session_profile_YYYY-MM-DD
 The JSON artifact uses `schema_version: 1` and contains findings, repeated
 command scopes, work-item/iteration summaries, repeated broad/final commands
 by work item, `wall_clock_coverage`, `current_scope`, missing context-input
-details, and suggested pipeline actions. Keep it in `tmp/session_profiles/`
-unless the lead explicitly asks to preserve it.
+details, and suggested pipeline actions. When scope is active, inspect
+`current_scope.findings` and `current_scope.suggested_actions` before acting
+on whole-profile `findings`. Keep it in `tmp/session_profiles/` unless the
+lead explicitly asks to preserve it.
 
 To turn structured findings into reviewable next actions, generate follow-up
 drafts:
@@ -556,7 +560,8 @@ A "profiled session" is done when:
   closeout bundle was skipped or stale;
 - `review.mjs --json-output` is used when another tool/agent will consume the
   findings instead of a human reading the markdown; when a persistent scope is
-  active, inspect `current_scope` before treating whole-profile history as a
+  active, inspect `current_scope.findings` and
+  `current_scope.suggested_actions` before treating whole-profile history as a
   current problem;
 - low wall-clock coverage or large profile gaps are explained in the
   retrospective, or the next cycle adds sparse `event.mjs` checkpoints for

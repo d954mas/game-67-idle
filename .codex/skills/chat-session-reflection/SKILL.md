@@ -133,6 +133,9 @@ tmp/session_profiles/<name>.review.json` only when the closeout bundle was
 skipped, stale, or intentionally created with `--no-review`. The review
 extracts waste/rework, failures, blockers, context hotspots, repeated commands,
 and suggested pipeline actions before the human retrospective.
+When reading review markdown, start with `Current Scope Findings` and
+`Current Scope Actions`. Treat `Historical Whole-Profile Findings` as
+retrospective history unless the same issue appears in the current scope.
 Run `tools/ai_profile/followups.mjs` only when review JSON was rerun manually
 or the closeout bundle was created with `--no-followups`. Promote only
 still-relevant drafts into tasks, rules, or tools after checking current
@@ -140,7 +143,9 @@ taskboard state.
 For multi-task profiles, inspect `work_items`, `iterations`, and
 `repeated_broad_final_by_work_item` before calling repeated validation waste.
 When review JSON includes `current_scope`, separate current-scope findings from
-whole-profile history. If follow-up drafts report
+whole-profile history. Inspect `current_scope.findings` and
+`current_scope.suggested_actions` before promoting whole-profile findings into
+tasks. If follow-up drafts report
 `suppressed_historical_findings`, mention those as historical lessons but do
 not promote them as current tasks unless the same issue appears in the current
 scope. Treat historical recovered failures as retrospective learning notes;

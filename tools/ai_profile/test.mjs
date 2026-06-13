@@ -967,6 +967,94 @@ test("followups suppress historical-only issues when current scope is clean", ()
   }
 });
 
+test("review reports clean current scope before historical findings", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "current-clean-review.jsonl");
+    const scope = join(dir, "scope.json");
+    const reviewMd = join(dir, "review.md");
+    const reviewJson = join(dir, "review.json");
+
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "validation",
+      "--category", "validation",
+      "--intent", "old unmeasured validation",
+      "--result", "pass",
+      "--value", "productive",
+      "--context-risk", "medium",
+      "--ts", "2026-06-13T10:00:00+05:00",
+    ]);
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope", scope,
+      "--profile", profile,
+      "--work-item", "CUR",
+      "--iteration", "clean-review",
+      "--phase", "test",
+      "--intent", "clean current scope",
+    ]);
+
+    run(["tools/ai_profile/review.mjs", profile, "--output", reviewMd, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const markdown = readFileSync(reviewMd, "utf8");
+    const currentIndex = markdown.indexOf("## Current Scope Findings");
+    const historicalIndex = markdown.indexOf("## Historical Whole-Profile Findings");
+    assert.ok(currentIndex > 0);
+    assert.ok(historicalIndex > currentIndex);
+    assert.match(markdown, /Current scope has no urgent review findings/);
+
+    const review = readJson(reviewJson);
+    assert.equal(review.current_scope.findings.length, 0);
+    assert.ok(review.current_scope.suggested_actions.some((action) => action.includes("clean baseline")));
+    assert.ok(review.findings.some((finding) => finding.type === "missing_context_inputs"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("review reports current-scope issues first", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "current-dirty-review.jsonl");
+    const scope = join(dir, "scope.json");
+    const reviewJson = join(dir, "review.json");
+
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope", scope,
+      "--profile", profile,
+      "--work-item", "CUR",
+      "--iteration", "dirty-review",
+      "--phase", "test",
+      "--intent", "dirty current scope",
+    ]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "context",
+      "--category", "context",
+      "--intent", "current unmeasured context",
+      "--result", "pass",
+      "--value", "necessary_overhead",
+      "--context-risk", "medium",
+    ], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+
+    run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const review = readJson(reviewJson);
+    assert.ok(review.current_scope.findings.some((finding) => finding.type === "current_missing_context_inputs"));
+    assert.ok(review.current_scope.suggested_actions.some((action) => action.includes("context.mjs")));
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("followups preserve current-scope issues", () => {
   const dir = tempDir();
   try {
