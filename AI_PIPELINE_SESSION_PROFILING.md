@@ -206,6 +206,16 @@ the context cost itself is the point.
 
 Use wrappers so profiling does not steal time from the actual work.
 
+At the start of a focused task or long iteration, prefer one command:
+
+```powershell
+node tools/ai_profile/start.mjs --work-item T0080 --iteration profile-start-helper --phase profiling --intent "Start profiler helper work"
+```
+
+`start.mjs` writes the persistent scope file and appends a `phase_start`
+checkpoint, so later `run.mjs`, `event.mjs`, and `context.mjs` records inherit
+the same work-item/iteration metadata without repeating flags.
+
 For shell commands, prefer:
 
 ```powershell
@@ -274,6 +284,9 @@ explicit flags only for exceptions.
 Record tools by role:
 
 - `shell_command`: command, duration, pass/fail, whether it was narrow or broad.
+- `start.mjs`: one-command iteration starter. Prefer it at the beginning of a
+  focused profiled task because it writes persistent scope and a `phase_start`
+  checkpoint together.
 - `run.mjs`: default wrapper for shell commands. Prefer it for expensive,
   repeated, or validation commands so duration and exit code are captured
   automatically.
@@ -446,6 +459,8 @@ expected gate in the task log.
 A "profiled session" is done when:
 
 - JSONL exists and parses;
+- a focused long task started with `start.mjs`, or the retrospective explains
+  why profiling began late;
 - command work used `run.mjs` for substantial validations/builds/audits;
 - non-command context decisions used sparse `event.mjs` checkpoints, and local
   medium/high context reads used `context.mjs` where possible;

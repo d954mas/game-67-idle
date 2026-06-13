@@ -91,9 +91,10 @@ must separate useful work, necessary overhead, rework, and waste; report context
 inputs and compactions; and state what was not measurable.
 
 For future long sessions, prefer collecting data during work with
-`tools/ai_profile/run.mjs` for substantial commands and
-`tools/ai_profile/event.mjs` for sparse checkpoints. Do not wait until the end
-to reconstruct avoidable telemetry from chat history.
+`tools/ai_profile/start.mjs --work-item <id> --iteration <name>` at the
+beginning of a focused profiled iteration, `tools/ai_profile/run.mjs` for
+substantial commands, and `tools/ai_profile/event.mjs` for sparse checkpoints.
+Do not wait until the end to reconstruct avoidable telemetry from chat history.
 During long sessions, run `tools/ai_profile/status.mjs` when telemetry health
 is unclear. It is read-only and reports latest event, closeout/bundle presence,
 work-item coverage, missing context inputs, wall-clock coverage, failed
@@ -119,7 +120,8 @@ still-relevant drafts into tasks, rules, or tools after checking current
 taskboard state.
 For multi-task profiles, inspect `work_items`, `iterations`, and
 `repeated_broad_final_by_work_item` before calling repeated validation waste.
-If many records lack work-item metadata, add a next-cycle fix: pass
+If many records lack work-item metadata, add a next-cycle fix: begin the task
+with `tools/ai_profile/start.mjs --work-item <id> --iteration <name>`, pass
 `--work-item <id>` and optional `--iteration <name>` to `run.mjs`,
 `event.mjs`, `context.mjs`, and `closeout.mjs`, or set
 `AI_PROFILE_WORK_ITEM` and `AI_PROFILE_ITERATION` defaults for the shell

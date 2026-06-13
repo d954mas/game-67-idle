@@ -641,3 +641,19 @@ specific and reusable.
   and exported pipeline validation.
 - Follow-up owner: Future profiling/tooling agents.
 - Status: Implemented in `T0079`.
+
+## 2026-06-13 - Profiling start should be one command
+
+- Context: Persistent scope reduced repeated `--work-item` flags, but starting
+  an iteration still required remembering separate `scope.mjs` and `event.mjs`
+  commands.
+- Friction: Agents can skip the start checkpoint or forget scope until several
+  tool calls have already happened.
+- Time sink: Retrospectives then spend time classifying missing metadata
+  instead of using complete profiles.
+- Likely cause: The profiling pipeline had capture tools but no default
+  "start this work item now" entry point.
+- Proposed improvement: Add `tools/ai_profile/start.mjs` to write persistent
+  scope and append a `phase_start` event in one command.
+- Follow-up owner: Future profiling/tooling agents.
+- Status: Implemented in `T0080`.

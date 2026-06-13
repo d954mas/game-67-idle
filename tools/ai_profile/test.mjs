@@ -96,6 +96,50 @@ test("scope file supplies metadata after CLI and env fallbacks", () => {
   }
 });
 
+test("start writes scope and phase_start event", () => {
+  const dir = tempDir();
+  try {
+    const scope = join(dir, "scope.json");
+    const profile = join(dir, "started.jsonl");
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope",
+      scope,
+      "--profile",
+      profile,
+      "--work-item",
+      "START",
+      "--iteration",
+      "helper",
+      "--phase",
+      "test_start",
+      "--category",
+      "planning",
+      "--notes",
+      "start helper smoke",
+    ]);
+
+    const savedScope = readJson(scope);
+    assert.equal(savedScope.work_item, "START");
+    assert.equal(savedScope.iteration, "helper");
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].event_type, "phase_start");
+    assert.equal(records[0].phase, "test_start");
+    assert.equal(records[0].category, "planning");
+    assert.equal(records[0].result, "pass");
+    assert.equal(records[0].value, "necessary_overhead");
+    assert.equal(records[0].work_item, "START");
+    assert.equal(records[0].iteration, "helper");
+    assert.equal(records[0].notes, "start helper smoke");
+    assert.equal(records[0].scope_path, resolve(scope));
+    assert.deepEqual(records[0].tools, ["ai_profile/start.mjs"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status reports scope, coverage fields, and next action", () => {
   const dir = tempDir();
   try {

@@ -281,6 +281,8 @@ const SKILL_CHECKS = [
       "profiling telemetry",
       "time by phase",
       "tmp/session_profiles",
+      "start.mjs",
+      "tools/ai_profile/start.mjs --work-item <id> --iteration <name>",
       "run.mjs",
       "event.mjs",
       "context.mjs",
