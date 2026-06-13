@@ -220,7 +220,8 @@ Record tools by role:
   and writes a scratch summary artifact.
 - `review.mjs`: reflection prep helper that turns a JSONL profile into
   priority findings: waste/rework, failures, blockers, context hotspots,
-  repeated commands, and suggested pipeline actions.
+  repeated commands, repeated command scope (`preflight`, `scoped`,
+  `broad/final`, `unknown`), and suggested pipeline actions.
 - `plan_validation.mjs`: pre-validation helper that prints a narrow-to-broad
   validation ladder for the changed work kind. Use it when `review.mjs` reports
   repeated commands, before broad reusable-base checks, or when the right

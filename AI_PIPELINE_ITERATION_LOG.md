@@ -440,3 +440,21 @@ specific and reusable.
   repeated commands, while preserving original variants for debugging.
 - Follow-up owner: Future profiling/reflection agents.
 - Status: Implemented in `T0067`.
+
+## 2026-06-13 - Repeated validation needs scope, not only counts
+
+- Context: Live profile review showed repeated commands after validation ladder
+  and context digest work, but the report still mixed cheap preflight checks
+  with broad/final pipeline gates.
+- Friction: A repeated `git diff --check` and repeated
+  `node tools/pipeline_validate.mjs` do not have the same cost or meaning, but
+  the review listed both as plain repeated commands.
+- Time sink: Retrospectives can over-focus on harmless narrow repeats or miss
+  the expensive broad/final reruns that should be batched.
+- Likely cause: `review.mjs` had command counts but no validation scope
+  taxonomy.
+- Proposed improvement: Classify repeated commands as `preflight`, `scoped`,
+  `broad/final`, or `unknown`, summarize repeats by scope, and call out
+  repeated broad/final gates separately.
+- Follow-up owner: Future profiling/reflection agents.
+- Status: Implemented in `T0068`.

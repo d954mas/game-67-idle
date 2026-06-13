@@ -88,6 +88,7 @@ Active task:
 - `T0065` Add AI validation ladder planner: in review.
 - `T0066` Add compact AI context digest: in review.
 - `T0067` Normalize commands in AI profile review: in review.
+- `T0068` Classify validation command scope in AI profile review: in review.
 
 Current visual proof:
 

@@ -70,6 +70,54 @@ function normalizeCommand(command) {
   return String(command || "").replaceAll("\\", "/").replace(/\s+/g, " ").trim();
 }
 
+function commandScope(command) {
+  const normalized = normalizeCommand(command);
+  if (!normalized) return "unknown";
+  if (
+    normalized === "git diff --check" ||
+    normalized.startsWith("node --check ") ||
+    normalized.startsWith("py -3.12 -m py_compile ") ||
+    normalized.startsWith("python -m py_compile ")
+  ) {
+    return "preflight";
+  }
+  if (
+    normalized === "node tools/pipeline_validate.mjs" ||
+    normalized.includes("tools/release_candidate_audit.py") ||
+    normalized.includes("tools/package_native_release.mjs")
+  ) {
+    return "broad/final";
+  }
+  if (
+    normalized.includes("tools/taskboard/cli.mjs validate") ||
+    normalized.includes("tools/taskboard/cli.mjs context") ||
+    normalized.includes("tools/taskboard/test.mjs") ||
+    normalized.includes("tools/skills_eval.mjs") ||
+    normalized.includes("tools/skills_sync.mjs") ||
+    normalized.includes("tools/ai_profile/") ||
+    normalized.includes("tools/state_codegen/") ||
+    normalized.startsWith("cmake --preset ") ||
+    normalized.startsWith("cmake --build --preset native-debug")
+  ) {
+    return "scoped";
+  }
+  if (
+    normalized.startsWith("cmake --build --preset native-release") ||
+    normalized.includes("tools/devapi/scenarios/package_release_smoke.py")
+  ) {
+    return "broad/final";
+  }
+  if (
+    normalized.includes("tools/devapi/scenarios/") ||
+    normalized.includes("tools/devapi/smoke_test.py") ||
+    normalized.includes("tools/devapi/full_probe.py") ||
+    normalized.includes("tools/balance/")
+  ) {
+    return "scoped";
+  }
+  return "unknown";
+}
+
 const { values, positionals } = parseArgs(process.argv.slice(2));
 if (values.help) usage();
 const file = positionals[0];
@@ -90,6 +138,7 @@ const emit = (line = "") => output.push(line);
 const totalDuration = records.reduce((sum, record) => sum + Number(record.duration_ms || 0), 0);
 const commandCounts = new Map();
 const commandVariants = new Map();
+const commandScopes = new Map();
 const phaseDuration = new Map();
 const contextChars = new Map();
 const waste = [];
@@ -106,6 +155,7 @@ for (const record of records) {
     addCount(commandCounts, normalized);
     if (!commandVariants.has(normalized)) commandVariants.set(normalized, new Set());
     commandVariants.get(normalized).add(command);
+    commandScopes.set(normalized, commandScope(normalized));
   }
   for (const input of record.context_inputs || []) addCount(contextChars, input.path || "(inline)", Number(input.chars || 0));
   if (record.value === "waste" || record.value === "rework" || record.waste_reason) waste.push(record);
@@ -117,6 +167,9 @@ for (const record of records) {
 }
 
 const repeatedCommands = topEntries(commandCounts, 20).filter(([, count]) => count > 1);
+const repeatedScopeCounts = new Map();
+for (const [command, count] of repeatedCommands) addCount(repeatedScopeCounts, commandScopes.get(command) || "unknown", count);
+const repeatedBroadCommands = repeatedCommands.filter(([command]) => commandScopes.get(command) === "broad/final");
 const topContext = topEntries(contextChars, 10).filter(([, chars]) => chars > 0);
 const topPhaseDuration = topEntries(phaseDuration, 10);
 
@@ -132,6 +185,7 @@ if (failed.length > 0) findings.push(`${failed.length} failed command/event reco
 if (blocked.length > 0) findings.push(`${blocked.length} blocker record(s) need owner or decision.`);
 if (highContext.length > 0) findings.push(`${highContext.length} high-context record(s) indicate context pressure.`);
 if (repeatedCommands.length > 0) findings.push(`${repeatedCommands.length} repeated command(s) may need batching or narrower gates.`);
+if (repeatedBroadCommands.length > 0) findings.push(`${repeatedBroadCommands.length} repeated broad/final command(s) are likely validation waste unless a gate failed or risk changed.`);
 if (missingContextInputs.length > 0) findings.push(`${missingContextInputs.length} medium/high context record(s) lack context_inputs details.`);
 if (!closeoutSeen) findings.push("No session_closeout event: use closeout.mjs before final reflection.");
 if (findings.length === 0) {
@@ -176,12 +230,26 @@ if (repeatedCommands.length === 0) {
   emit("- none");
 } else {
   for (const [command, count] of repeatedCommands) {
-    emit(`- ${count}x ${command}`);
+    emit(`- ${count}x [${commandScopes.get(command) || "unknown"}] ${command}`);
     const variants = [...(commandVariants.get(command) || [])].filter((variant) => variant !== command);
     if (variants.length > 0) {
       emit(`  - variants: ${variants.slice(0, 3).join(" | ")}${variants.length > 3 ? " | ..." : ""}`);
     }
   }
+}
+
+emit("\n## Repeated Commands By Scope");
+if (repeatedCommands.length === 0) {
+  emit("- none");
+} else {
+  for (const [scope, count] of topEntries(repeatedScopeCounts, 10)) emit(`- ${scope}: ${count}`);
+}
+
+emit("\n## Repeated Broad/Final Commands");
+if (repeatedBroadCommands.length === 0) {
+  emit("- none");
+} else {
+  for (const [command, count] of repeatedBroadCommands) emit(`- ${count}x ${command}`);
 }
 
 emit("\n## Time By Phase");
@@ -195,10 +263,12 @@ emit("\n## Suggested Pipeline Actions");
 const actions = [];
 if (waste.length > 0) actions.push("Convert recurring waste/rework reasons into a task, skill rule, validator, or batching rule.");
 if (failed.length > 0) actions.push("For failed commands, decide whether the fix is code, environment, narrower validation, or better preflight.");
-if (repeatedCommands.length > 0) {
+if (repeatedBroadCommands.length > 0) {
   actions.push(
-    "Batch repeated broad validation or run `node tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the next validation loop.",
+    "Batch repeated broad/final validation or run `node tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the next validation loop.",
   );
+} else if (repeatedCommands.length > 0) {
+  actions.push("Review repeated scoped/preflight commands; keep them only when they guard a fresh edit or failed gate.");
 }
 if (highContext.length > 0 || missingContextInputs.length > 0) actions.push("Compact source-of-truth docs or log explicit context_inputs for expensive reads.");
 if (!closeoutSeen) actions.push("Run `node tools/ai_profile/closeout.mjs` at session end.");
