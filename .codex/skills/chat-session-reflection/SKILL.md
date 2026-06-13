@@ -86,7 +86,8 @@ If the reflection identifies actionable project work, create or update tasks in
 `tasks/` instead of burying work inside the retrospective.
 
 When the user asks for full AI-development profiling, use
-`AI_PIPELINE_SESSION_PROFILING.md` and `tools/ai_profile/`. A proper profile
+`AI_PIPELINE_SESSION_PROFILING.md` and the fast facade in `tools/ai.mjs`.
+A proper profile
 must separate useful work, necessary overhead, rework, and waste; report context
 inputs and compactions; and state what was not measurable.
 If the reflection suggests adopting external AI observability/eval tooling,
@@ -98,11 +99,11 @@ reflection/debug time or enables a shared eval/review workflow the local profile
 cannot cover.
 
 For future long sessions, prefer collecting data during work with
-`tools/ai_profile/start.mjs --work-item <id> --iteration <name>` at the
-beginning of a focused profiled iteration, `tools/ai_profile/run.mjs` for
-substantial commands, and `tools/ai_profile/event.mjs` for sparse checkpoints.
+`node tools/ai.mjs start <id> <iteration>` at the beginning of a focused
+iteration, `node tools/ai.mjs context` before implementation, and
+`node tools/ai.mjs run -- <command>` for substantial commands.
 Do not wait until the end to reconstruct avoidable telemetry from chat history.
-During long sessions, run `tools/ai_profile/status.mjs` when telemetry health
+During long sessions, run `node tools/ai.mjs status` when telemetry health
 is unclear. It is read-only and reports latest event, closeout/bundle presence,
 work-item coverage, missing context inputs, wall-clock coverage, failed
 records, recovered versus unresolved failed records, and the next profiling
@@ -131,7 +132,8 @@ Apply the same rule to wall-clock coverage: if whole-profile coverage is low
 but current-scope coverage is acceptable or too short to judge, do not add
 checkpoint records solely to repair old history.
 
-Before writing a retrospective from a live profile, run
+Before writing a retrospective from a live profile, run `node tools/ai.mjs reflect`
+for the normal closeout bundle. For a deeper baseline-aware handoff, run
 `tools/ai_profile/summarize_session_profile.mjs <profile.jsonl> --output
 tmp/session_profiles/<name>.summary.md` and cite the summary path. If the
 summary cannot be generated, state that profiling evidence is incomplete.

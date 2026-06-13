@@ -197,7 +197,9 @@ Use semantic actions only inside a game project when they make bots clearer. Kee
 
 ## Bot Scripts
 
-Store reusable project automation under `tools/devapi/scenarios/`. Keep scripts small and composable. Repeated manual checks should become scenarios.
+Store project automation under a game-specific folder such as
+`tools/<project>/devapi_scenarios/`. Keep scripts small and composable.
+Repeated manual checks should become scenarios.
 
 Bots should:
 

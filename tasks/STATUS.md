@@ -473,7 +473,7 @@ pink feedback bar is gone. The native release package is now self-contained:
 runtime loads package-local `assets/world67_art.ntpack` when present, package
 generation emits `release_manifest.json`, `CHECKSUMS.txt`, and
 `build/release/67-world-pc/67-world-pc.zip`, and
-`tools/devapi/scenarios/package_release_smoke.py` launches the packaged release
+`tools/project_67_world/devapi_scenarios/package_release_smoke.py` launches the packaged release
 exe from its own folder and captures a nonblank screenshot. The packaged
 Windows executable is now branded: CMake embeds the generated 67 World icon and
 VERSIONINFO metadata into `game_seed.exe`, packaging copies it to
@@ -562,18 +562,18 @@ cmake --preset native-debug
 cmake --build --preset native-debug
 cmake --preset native-release
 cmake --build --preset native-release
-node tools/package_native_release.mjs
-py -3.12 tools/balance/simulate_67_world.py
-py -3.12 tools/devapi/scenarios/full_board_density.py 9238 build/captures/scenarios/full_board_density_v10.png
-py -3.12 tools/devapi/scenarios/better_crate_progression.py 9239 build/captures/scenarios/better_crate_density_v10.png
-py -3.12 tools/devapi/scenarios/first_67_loop.py 9240 build/captures/scenarios/first_67_loop_density_v10.png
-py -3.12 tools/devapi/scenarios/mobile_portrait_layout.py 9253 build/captures/scenarios/mobile_portrait_v11.png 390x844
-py -3.12 tools/devapi/scenarios/first_67_loop.py 9254 build/captures/scenarios/first_67_loop_mobile_regression_v1.png
-py -3.12 tools/devapi/scenarios/full_board_density.py 9255 build/captures/scenarios/full_board_density_mobile_regression_v1.png
-py -3.12 tools/devapi/scenarios/one_hour_progression_runtime.py 9388 build/reports/one_hour_progression_runtime_v2_balance.json build/captures/scenarios/one_hour_progression_runtime_v2_balance.png
-py -3.12 tools/devapi/scenarios/package_release_smoke.py 9394 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png
-py -3.12 tools/devapi/scenarios/child_test_readiness.py 9396 build/reports/child_test_readiness_v29_manual_55.json build/captures/scenarios/child_test_readiness_v29_manual_55
-py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v29_manual_55.json
+node tools/project_67_world/package_native_release.mjs
+py -3.12 tools/project_67_world/balance/simulate_67_world.py
+py -3.12 tools/project_67_world/devapi_scenarios/full_board_density.py 9238 build/captures/scenarios/full_board_density_v10.png
+py -3.12 tools/project_67_world/devapi_scenarios/better_crate_progression.py 9239 build/captures/scenarios/better_crate_density_v10.png
+py -3.12 tools/project_67_world/devapi_scenarios/first_67_loop.py 9240 build/captures/scenarios/first_67_loop_density_v10.png
+py -3.12 tools/project_67_world/devapi_scenarios/mobile_portrait_layout.py 9253 build/captures/scenarios/mobile_portrait_v11.png 390x844
+py -3.12 tools/project_67_world/devapi_scenarios/first_67_loop.py 9254 build/captures/scenarios/first_67_loop_mobile_regression_v1.png
+py -3.12 tools/project_67_world/devapi_scenarios/full_board_density.py 9255 build/captures/scenarios/full_board_density_mobile_regression_v1.png
+py -3.12 tools/project_67_world/devapi_scenarios/one_hour_progression_runtime.py 9388 build/reports/one_hour_progression_runtime_v2_balance.json build/captures/scenarios/one_hour_progression_runtime_v2_balance.png
+py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9394 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png
+py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9396 build/reports/child_test_readiness_v29_manual_55.json build/captures/scenarios/child_test_readiness_v29_manual_55
+py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v29_manual_55.json
 ```
 
 ## Last Known Good Evidence
@@ -598,47 +598,47 @@ Clean seed runtime evidence:
 - `node tools/taskboard/cli.mjs validate` passed after syncing `AGENTS.md` with
   the active 67 World release state in `T0036`.
 - `cmake --build --preset native-debug`
-- `py -3.12 tools/devapi/scenarios/full_board_density.py 9238 build/captures/scenarios/full_board_density_v10.png`
-- `py -3.12 tools/devapi/scenarios/better_crate_progression.py 9239 build/captures/scenarios/better_crate_density_v10.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/full_board_density.py 9238 build/captures/scenarios/full_board_density_v10.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/better_crate_progression.py 9239 build/captures/scenarios/better_crate_density_v10.png`
   and `build/captures/scenarios/better_crate_density_v10_stuck.png`
-- `py -3.12 tools/devapi/scenarios/first_67_loop.py 9240 build/captures/scenarios/first_67_loop_density_v10.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/first_67_loop.py 9240 build/captures/scenarios/first_67_loop_density_v10.png`
 - `py -3.12 tools/devapi/pixel_health.py` passed for all four v10 screenshots.
-- `py -3.12 tools/balance/simulate_67_world.py` passed: Cosmic 67 at 53.92
+- `py -3.12 tools/project_67_world/balance/simulate_67_world.py` passed: Cosmic 67 at 53.92
   minutes, Better Crate level 21.
-- `py -3.12 tools/devapi/scenarios/mobile_portrait_layout.py 9253 build/captures/scenarios/mobile_portrait_v11.png 390x844`
+- `py -3.12 tools/project_67_world/devapi_scenarios/mobile_portrait_layout.py 9253 build/captures/scenarios/mobile_portrait_v11.png 390x844`
   passed and produced `mobile_portrait_v11_first_loop.png` plus
   `mobile_portrait_v11_stuck.png`.
 - `py -3.12 tools/devapi/pixel_health.py` passed for
   `mobile_portrait_v11_first_loop.png`, `mobile_portrait_v11_stuck.png`,
   `first_67_loop_mobile_regression_v1.png`, and
   `full_board_density_mobile_regression_v1.png`.
-- `py -3.12 tools/devapi/scenarios/first_67_loop.py 9254 build/captures/scenarios/first_67_loop_mobile_regression_v1.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/first_67_loop.py 9254 build/captures/scenarios/first_67_loop_mobile_regression_v1.png`
   passed after portrait layout changes.
-- `py -3.12 tools/devapi/scenarios/full_board_density.py 9255 build/captures/scenarios/full_board_density_mobile_regression_v1.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/full_board_density.py 9255 build/captures/scenarios/full_board_density_mobile_regression_v1.png`
   passed after portrait layout changes.
 - `cmake --preset native-release`
 - `cmake --build --preset native-release`
-- `node tools/package_native_release.mjs` produced
+- `node tools/project_67_world/package_native_release.mjs` produced
   `build/release/67-world-pc/67-world/67-world.exe` (708608 bytes) and
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes).
-- `py -3.12 -m py_compile tools/devapi/scenarios/child_test_readiness.py`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/child_test_readiness.py`
 - `cmake --build --preset native-debug`
 - `cmake --build --preset native-release`
-- `node tools/package_native_release.mjs`
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9266 build/reports/child_test_readiness_v5.json build/captures/scenarios/child_test_readiness_v5`
+- `node tools/project_67_world/package_native_release.mjs`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9266 build/reports/child_test_readiness_v5.json build/captures/scenarios/child_test_readiness_v5`
   passed. Report result: `automated_review_passed=true`, package ok,
   `ready_for_manual_child_test=true`, `release_ready=false`.
 - `py -3.12 tools/devapi/pixel_health.py` passed for all five v5 child-test
   readiness screenshots under `build/captures/scenarios/child_test_readiness_v5/`.
-- `py -3.12 -m py_compile tools/devapi/scenarios/child_test_readiness.py`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/child_test_readiness.py`
 - `cmake --build --preset native-debug`
 - `cmake --build --preset native-release`
-- `node tools/package_native_release.mjs` produced
+- `node tools/project_67_world/package_native_release.mjs` produced
   `build/release/67-world-pc/67-world/67-world.exe` (713216 bytes) and
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes).
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9272 build/reports/child_test_readiness_v7_audio.json build/captures/scenarios/child_test_readiness_v7_audio`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9272 build/reports/child_test_readiness_v7_audio.json build/captures/scenarios/child_test_readiness_v7_audio`
   passed. Report result: `automated_review_passed=true`, package ok,
   `ready_for_manual_child_test=true`, `release_ready=false`, audio backend
   `winmm-waveout-generated-pcm`, desktop cue counts `spawn=3`, `merge=1`,
@@ -646,20 +646,20 @@ Clean seed runtime evidence:
 - `py -3.12 tools/devapi/pixel_health.py` passed for all five v7 child-test
   readiness screenshots under
   `build/captures/scenarios/child_test_readiness_v7_audio/`.
-- `node --check tools/package_native_release.mjs`
-- `py -3.12 -m py_compile tools/devapi/devapi_client.py tools/devapi/scenarios/package_release_smoke.py tools/devapi/scenarios/child_test_readiness.py`
+- `node --check tools/project_67_world/package_native_release.mjs`
+- `py -3.12 -m py_compile tools/devapi/devapi_client.py tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/devapi_scenarios/child_test_readiness.py`
 - `cmake --build --preset native-release`
-- `node tools/package_native_release.mjs` produced
+- `node tools/project_67_world/package_native_release.mjs` produced
   `build/release/67-world-pc/67-world/67-world.exe` (713728 bytes),
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes), and `build/release/67-world-pc/67-world-pc.zip` (21712166 bytes).
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9288 build/captures/scenarios/package_release_smoke_v3.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9288 build/captures/scenarios/package_release_smoke_v3.png`
   passed: package files exist, checksums match, zip is valid, packaged release
   stays open from package cwd, and a screenshot is captured.
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/package_release_smoke_v3.png`
   passed.
 - `cmake --build --preset native-debug`
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9290 build/reports/child_test_readiness_v10_package.json build/captures/scenarios/child_test_readiness_v10_package`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9290 build/reports/child_test_readiness_v10_package.json build/captures/scenarios/child_test_readiness_v10_package`
   passed. Report result: `automated_review_passed=true`, package ok with
   manifest/checksums/zip, `ready_for_manual_child_test=true`,
   `release_ready=false`, audio backend `winmm-waveout-generated-pcm`, desktop
@@ -667,17 +667,17 @@ Clean seed runtime evidence:
 - `py -3.12 tools/devapi/pixel_health.py` passed for all five v10 child-test
   readiness screenshots under
   `build/captures/scenarios/child_test_readiness_v10_package/`.
-- `py -3.12 tools/assets/make_windows_icon.py` produced
+- `py -3.12 tools/project_67_world/assets/make_windows_icon.py` produced
   `assets/runtime/67-world/67-world.ico` from the accepted 67 badge art.
-- `py -3.12 -m py_compile tools/assets/make_windows_icon.py tools/devapi/scenarios/package_release_smoke.py`
-- `node --check tools/package_native_release.mjs`
+- `py -3.12 -m py_compile tools/project_67_world/assets/make_windows_icon.py tools/project_67_world/devapi_scenarios/package_release_smoke.py`
+- `node --check tools/project_67_world/package_native_release.mjs`
 - `cmake --build --preset native-debug`
 - `cmake --build --preset native-release`
-- `node tools/package_native_release.mjs` produced
+- `node tools/project_67_world/package_native_release.mjs` produced
   `build/release/67-world-pc/67-world/67-world.exe` (775168 bytes),
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes), and `build/release/67-world-pc/67-world-pc.zip` (21773881 bytes).
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9292 build/captures/scenarios/package_release_smoke_v4_branding.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9292 build/captures/scenarios/package_release_smoke_v4_branding.png`
   passed: package files exist, checksums match, zip is valid, packaged release
   stays open from package cwd, screenshot is nonblank, Windows VERSIONINFO
   values match (`ProductName=67 World`,
@@ -686,7 +686,7 @@ Clean seed runtime evidence:
   GROUP_ICON, and VERSIONINFO resources are present.
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/package_release_smoke_v4_branding.png`
   passed.
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9294 build/reports/child_test_readiness_v11_branding.json build/captures/scenarios/child_test_readiness_v11_branding`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9294 build/reports/child_test_readiness_v11_branding.json build/captures/scenarios/child_test_readiness_v11_branding`
   passed. Report result: `automated_review_passed=true`, package ok with
   manifest/checksums/zip, `ready_for_manual_child_test=true`,
   `release_ready=false`, audio backend `winmm-waveout-generated-pcm`, desktop
@@ -696,13 +696,13 @@ Clean seed runtime evidence:
   `build/captures/scenarios/child_test_readiness_v11_branding/`.
 - `gamedesign/meme-evolution/child_test_acceptance.md` added as the durable
   child-test acceptance source doc.
-- `node --check tools/package_native_release.mjs`
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py tools/devapi/scenarios/child_test_readiness.py`
-- `node tools/package_native_release.mjs` produced
+- `node --check tools/project_67_world/package_native_release.mjs`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/devapi_scenarios/child_test_readiness.py`
+- `node tools/project_67_world/package_native_release.mjs` produced
   `build/release/67-world-pc/67-world/67-world.exe` (775168 bytes),
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes), and `build/release/67-world-pc/67-world-pc.zip` (21777049 bytes).
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9296 build/captures/scenarios/package_release_smoke_v5_acceptance.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9296 build/captures/scenarios/package_release_smoke_v5_acceptance.png`
   passed: package files exist, checksums match, zip is valid,
   `CHILD_TEST_ACCEPTANCE.md` is present in package files, manifest, checksums,
   and zip, packaged release stays open from package cwd, screenshot is nonblank,
@@ -710,7 +710,7 @@ Clean seed runtime evidence:
   resources are present.
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/package_release_smoke_v5_acceptance.png`
   passed.
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9298 build/reports/child_test_readiness_v12_acceptance.json build/captures/scenarios/child_test_readiness_v12_acceptance`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9298 build/reports/child_test_readiness_v12_acceptance.json build/captures/scenarios/child_test_readiness_v12_acceptance`
   passed. Report result: `automated_review_passed=true`, package ok with
   acceptance kit/manifest/checksums/zip, `ready_for_manual_child_test=true`,
   `release_ready=false`, audio backend `winmm-waveout-generated-pcm`, desktop
@@ -718,20 +718,20 @@ Clean seed runtime evidence:
 - `py -3.12 tools/devapi/pixel_health.py` passed for all five v12 child-test
   readiness screenshots under
   `build/captures/scenarios/child_test_readiness_v12_acceptance/`.
-- `node --check tools/package_native_release.mjs`
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py tools/devapi/scenarios/child_test_readiness.py`
-- `node tools/package_native_release.mjs` produced
+- `node --check tools/project_67_world/package_native_release.mjs`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/devapi_scenarios/child_test_readiness.py`
+- `node tools/project_67_world/package_native_release.mjs` produced
   `build/release/67-world-pc/67-world/67-world.exe` (775168 bytes),
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes), and `build/release/67-world-pc/67-world-pc.zip` (21781018 bytes).
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9300 build/captures/scenarios/package_release_smoke_v6_selfcheck.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9300 build/captures/scenarios/package_release_smoke_v6_selfcheck.png`
   passed: package files exist, checksums match, zip is valid,
   `VERIFY_PACKAGE.ps1` and `VERIFY_PACKAGE.bat` are present in package files,
   manifest, checksums, and zip, packaged self-check passes with
   `PASS 67 World package self-check` and 8 checked files, packaged release stays
   open from package cwd, screenshot is nonblank, Windows VERSIONINFO values
   match, and ICON, GROUP_ICON, and VERSIONINFO resources are present.
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9302 build/reports/child_test_readiness_v13_selfcheck.json build/captures/scenarios/child_test_readiness_v13_selfcheck`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9302 build/reports/child_test_readiness_v13_selfcheck.json build/captures/scenarios/child_test_readiness_v13_selfcheck`
   passed. Report result: `automated_review_passed=true`, package ok with
   self-check files/acceptance kit/manifest/checksums/zip,
   `ready_for_manual_child_test=true`, `release_ready=false`, audio backend
@@ -741,13 +741,13 @@ Clean seed runtime evidence:
   `build/captures/scenarios/package_release_smoke_v6_selfcheck.png` and all
   five v13 child-test readiness screenshots under
   `build/captures/scenarios/child_test_readiness_v13_selfcheck/`.
-- `node --check tools/package_native_release.mjs`
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py tools/devapi/scenarios/child_test_readiness.py`
-- `node tools/package_native_release.mjs` produced
+- `node --check tools/project_67_world/package_native_release.mjs`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/devapi_scenarios/child_test_readiness.py`
+- `node tools/project_67_world/package_native_release.mjs` produced
   `build/release/67-world-pc/67-world/67-world.exe` (775168 bytes),
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes), and `build/release/67-world-pc/67-world-pc.zip` (21782184 bytes).
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9304 build/captures/scenarios/package_release_smoke_v8_fresh_launcher.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9304 build/captures/scenarios/package_release_smoke_v8_fresh_launcher.png`
   passed: package files exist, checksums match, zip is valid,
   `START_CHILD_TEST_FRESH.bat` is present in package files, manifest, checksums,
   and zip, the launcher contains `67-world.exe --fresh-state --disable-autosave`,
@@ -755,7 +755,7 @@ Clean seed runtime evidence:
   checked files, packaged release stays open from package cwd, screenshot is
   nonblank, Windows VERSIONINFO values match, and ICON, GROUP_ICON, and
   VERSIONINFO resources are present.
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9308 build/reports/child_test_readiness_v15_fresh_launcher.json build/captures/scenarios/child_test_readiness_v15_fresh_launcher`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9308 build/reports/child_test_readiness_v15_fresh_launcher.json build/captures/scenarios/child_test_readiness_v15_fresh_launcher`
   passed. Report result: `automated_review_passed=true`, package ok with fresh
   child-test launcher/self-check files/acceptance kit/manifest/checksums/zip,
   `ready_for_manual_child_test=true`, `release_ready=false`, audio backend
@@ -769,13 +769,13 @@ Clean seed runtime evidence:
   passed: `PASS 67 World package self-check`, checked files `9`, and printed
   the child-test instruction to run `START_CHILD_TEST_FRESH.bat` with
   `CHILD_TEST_ACCEPTANCE.md`.
-- `node --check tools/package_native_release.mjs`
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py tools/devapi/scenarios/child_test_readiness.py`
-- `node tools/package_native_release.mjs` produced
+- `node --check tools/project_67_world/package_native_release.mjs`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/devapi_scenarios/child_test_readiness.py`
+- `node tools/project_67_world/package_native_release.mjs` produced
   `build/release/67-world-pc/67-world/67-world.exe` (775168 bytes),
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes), and `build/release/67-world-pc/67-world-pc.zip` (21787982 bytes).
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9310 build/captures/scenarios/package_release_smoke_v10_result_recorder.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9310 build/captures/scenarios/package_release_smoke_v10_result_recorder.png`
   passed: package files exist, checksums match, zip is valid,
   `CREATE_CHILD_TEST_REPORT.ps1`, `CREATE_CHILD_TEST_REPORT.bat`, and
   `CHILD_TEST_RESULT_TEMPLATE.md` are present in package files, manifest,
@@ -785,7 +785,7 @@ Clean seed runtime evidence:
   packaged release stays open from package cwd, screenshot is nonblank,
   Windows VERSIONINFO values match, and ICON, GROUP_ICON, and VERSIONINFO
   resources are present.
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9312 build/reports/child_test_readiness_v16_result_recorder.json build/captures/scenarios/child_test_readiness_v16_result_recorder`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9312 build/reports/child_test_readiness_v16_result_recorder.json build/captures/scenarios/child_test_readiness_v16_result_recorder`
   passed. Report result: `automated_review_passed=true`, package ok with
   result template/report scripts/launcher/self-check files/acceptance
   kit/manifest/checksums/zip, `ready_for_manual_child_test=true`,
@@ -801,14 +801,14 @@ Clean seed runtime evidence:
 - `powershell -NoProfile -ExecutionPolicy Bypass -File build/release/67-world-pc/67-world/CREATE_CHILD_TEST_REPORT.ps1`
   passed: `PASS child-test result report created` and created
   `build/release/67-world-pc/67-world/child_test_results/child_test_result_20260613_011657.md`.
-- `node --check tools/package_native_release.mjs`
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py tools/devapi/scenarios/child_test_readiness.py`
+- `node --check tools/project_67_world/package_native_release.mjs`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/devapi_scenarios/child_test_readiness.py`
 - `node tools/taskboard/cli.mjs validate`
-- `node tools/package_native_release.mjs` produced
+- `node tools/project_67_world/package_native_release.mjs` produced
   `build/release/67-world-pc/67-world/67-world.exe` (775168 bytes),
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes), and `build/release/67-world-pc/67-world-pc.zip` (21790690 bytes).
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9314 build/captures/scenarios/package_release_smoke_v11_parent_guide.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9314 build/captures/scenarios/package_release_smoke_v11_parent_guide.png`
   passed: package files exist, checksums match, zip is valid,
   `PARENT_OBSERVER_GUIDE.md` is present in package files, manifest, checksums,
   and zip, packaged self-check passes with `PASS 67 World package self-check`
@@ -816,7 +816,7 @@ Clean seed runtime evidence:
   packaged release stays open from package cwd, screenshot is nonblank,
   Windows VERSIONINFO values match, and ICON, GROUP_ICON, and VERSIONINFO
   resources are present.
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9316 build/reports/child_test_readiness_v17_parent_guide.json build/captures/scenarios/child_test_readiness_v17_parent_guide`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9316 build/reports/child_test_readiness_v17_parent_guide.json build/captures/scenarios/child_test_readiness_v17_parent_guide`
   passed. Report result: `automated_review_passed=true`, package ok with
   parent guide/result template/report scripts/launcher/self-check
   files/acceptance kit/manifest/checksums/zip,
@@ -827,14 +827,14 @@ Clean seed runtime evidence:
   `build/captures/scenarios/package_release_smoke_v11_parent_guide.png` and
   all five v17 child-test readiness screenshots under
   `build/captures/scenarios/child_test_readiness_v17_parent_guide/`.
-- `node --check tools/package_native_release.mjs`
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py tools/devapi/scenarios/child_test_readiness.py`
+- `node --check tools/project_67_world/package_native_release.mjs`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/devapi_scenarios/child_test_readiness.py`
 - `node tools/taskboard/cli.mjs validate`
-- `node tools/package_native_release.mjs` produced
+- `node tools/project_67_world/package_native_release.mjs` produced
   `build/release/67-world-pc/67-world/67-world.exe` (775168 bytes),
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes), and `build/release/67-world-pc/67-world-pc.zip` (21792072 bytes).
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9318 build/captures/scenarios/package_release_smoke_v12_start_here.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9318 build/captures/scenarios/package_release_smoke_v12_start_here.png`
   passed: package files exist, checksums match, zip is valid,
   `START_HERE.bat` is present in package files, manifest, checksums, and zip,
   smoke validates the menu contains verify, normal play, fresh child-test,
@@ -844,7 +844,7 @@ Clean seed runtime evidence:
   packaged release stays open from package cwd, screenshot is nonblank,
   Windows VERSIONINFO values match, and ICON, GROUP_ICON, and VERSIONINFO
   resources are present.
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9320 build/reports/child_test_readiness_v18_start_here.json build/captures/scenarios/child_test_readiness_v18_start_here`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9320 build/reports/child_test_readiness_v18_start_here.json build/captures/scenarios/child_test_readiness_v18_start_here`
   passed. Report result: `automated_review_passed=true`, package ok with
   start-here launcher/parent guide/result template/report scripts/fresh
   launcher/self-check files/acceptance kit/manifest/checksums/zip,
@@ -855,8 +855,8 @@ Clean seed runtime evidence:
   `build/captures/scenarios/package_release_smoke_v12_start_here.png` and all
   five v18 child-test readiness screenshots under
   `build/captures/scenarios/child_test_readiness_v18_start_here/`.
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py`
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9322 build/captures/scenarios/package_release_smoke_v13_start_here_actions.png`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9322 build/captures/scenarios/package_release_smoke_v13_start_here_actions.png`
   passed: in addition to package files/manifest/checksums/zip/self-check,
   result-recorder, packaged launch, screenshot, branding, and resource checks,
   smoke now executes `START_HERE.bat` choice `1` and verifies packaged
@@ -864,7 +864,7 @@ Clean seed runtime evidence:
   is created.
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/package_release_smoke_v13_start_here_actions.png`
   passed.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9324 build/captures/scenarios/package_release_smoke_v14_start_here_launches.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9324 build/captures/scenarios/package_release_smoke_v14_start_here_launches.png`
   passed: in addition to package files/manifest/checksums/zip/self-check,
   result-recorder, packaged launch, screenshot, branding, and resource checks,
   smoke executes `START_HERE.bat` choices `1` and `4`, verifies packaged
@@ -873,25 +873,25 @@ Clean seed runtime evidence:
   started.
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/package_release_smoke_v14_start_here_launches.png`
   passed.
-- `py -3.12 -m py_compile tools/devapi/scenarios/one_hour_progression_runtime.py`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/one_hour_progression_runtime.py`
 - `cmake --build --preset native-debug`
 - `cmake --build --preset native-release`
-- `py -3.12 tools/devapi/scenarios/one_hour_progression_runtime.py 9330 build/reports/one_hour_progression_runtime_v1.json build/captures/scenarios/one_hour_progression_runtime_v1.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/one_hour_progression_runtime.py 9330 build/reports/one_hour_progression_runtime_v1.json build/captures/scenarios/one_hour_progression_runtime_v1.png`
   passed. Report result: native C runtime bot reached Cosmic 67 at
   `53.916666666666664` minutes, `WORLD COMPLETE`, Better Crate level `21`,
   actions `spawn=3232`, `merge=3220`, `buy_faster_spawn=1`,
   `buy_better_crate=21`, `recycle=8`, `tick_passive=3878`.
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/one_hour_progression_runtime_v1.png`
   passed.
-- `node tools/package_native_release.mjs` regenerated
+- `node tools/project_67_world/package_native_release.mjs` regenerated
   `build/release/67-world-pc/67-world/67-world.exe` (775168 bytes),
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes), and `build/release/67-world-pc/67-world-pc.zip` (21792072 bytes).
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9332 build/captures/scenarios/package_release_smoke_v15_runtime_proof.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9332 build/captures/scenarios/package_release_smoke_v15_runtime_proof.png`
   passed after regenerating the current package.
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/package_release_smoke_v15_runtime_proof.png`
   passed.
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9334 build/reports/child_test_readiness_v19_runtime_proof.json build/captures/scenarios/child_test_readiness_v19_runtime_proof`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9334 build/reports/child_test_readiness_v19_runtime_proof.json build/captures/scenarios/child_test_readiness_v19_runtime_proof`
   passed. Report result: `automated_review_passed=true`, package ok with
   start-here launcher/parent guide/result template/report scripts/fresh
   launcher/self-check files/acceptance kit/manifest/checksums/zip,
@@ -901,33 +901,33 @@ Clean seed runtime evidence:
 - `py -3.12 tools/devapi/pixel_health.py` passed for all five v19 child-test
   readiness screenshots under
   `build/captures/scenarios/child_test_readiness_v19_runtime_proof/`.
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_save_isolation.py`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_save_isolation.py`
 - `cmake --build --preset native-debug`
-- `py -3.12 tools/devapi/scenarios/package_save_isolation.py 9336 build/reports/package_save_isolation_v1.json build/captures/scenarios/package_save_isolation_v1.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_save_isolation.py 9336 build/reports/package_save_isolation_v1.json build/captures/scenarios/package_save_isolation_v1.png`
   passed. Report result: isolated release-like cwd, normal gameplay autosaved
   Berry 67 progress, normal restart loaded it, fresh no-autosave child-test
   started clean and reached Banana 67 only in memory, and normal restart after
   child-test still loaded the original Berry save with unchanged save hash.
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/package_save_isolation_v1.png`
   passed.
-- `py -3.12 -m py_compile tools/release_candidate_audit.py`
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v1.json`
+- `py -3.12 -m py_compile tools/project_67_world/release_candidate_audit.py`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v1.json`
   passed. Report result: `automated_gates_passed=true`, `release_ready=false`,
   blocker `Manual child-test/user acceptance report is missing or incomplete.`
-- `node --check tools/package_native_release.mjs`
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py tools/release_candidate_audit.py`
+- `node --check tools/project_67_world/package_native_release.mjs`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/release_candidate_audit.py`
 - `cmake --build --preset native-release`
-- `node tools/package_native_release.mjs` produced a package with
+- `node tools/project_67_world/package_native_release.mjs` produced a package with
   `VALIDATE_CHILD_TEST_REPORT.ps1`, `VALIDATE_CHILD_TEST_REPORT.bat`, updated
   `START_HERE.bat`, manifest, checksums, and zip entries.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9340 build/captures/scenarios/package_release_smoke_v17_report_validator_retry.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9340 build/captures/scenarios/package_release_smoke_v17_report_validator_retry.png`
   passed: package files/checksums/zip/self-check include the child-test report
   validator, `START_HERE.bat` exposes validator option `5`, blank generated
   reports are rejected, and a synthetic filled report passes.
 - `powershell -NoProfile -ExecutionPolicy Bypass -File build/release/67-world-pc/67-world/VERIFY_PACKAGE.ps1`
   passed: packaged self-check now checks 16 files and points testers to the
   child-test validator after filling the report.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v2_report_validator.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v2_report_validator.json`
   passed. Report result: `automated_gates_passed=true`, `release_ready=false`,
   blocker `Manual child-test/user acceptance report is missing or incomplete.`
 - Package screenshot capture gap discovered during T0040: the v16/v17 package
@@ -935,13 +935,13 @@ Clean seed runtime evidence:
   package smoke screenshot was visually weak despite passing its loose health
   check. Captured as `T0041`; do not treat package-window screenshot presence
   alone as proof of rendered gameplay.
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py tools/release_candidate_audit.py`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/release_candidate_audit.py`
 - `cmake --build --preset native-release`
-- `node tools/package_native_release.mjs` produced
+- `node tools/project_67_world/package_native_release.mjs` produced
   `build/release/67-world-pc/67-world/67-world.exe` (775680 bytes),
   `build/release/67-world-pc/67-world/assets/world67_art.ntpack` (20995020
   bytes), and `build/release/67-world-pc/67-world-pc.zip` (21798358 bytes).
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9342 build/captures/scenarios/package_release_framebuffer_proof_v1.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9342 build/captures/scenarios/package_release_framebuffer_proof_v1.png`
   passed. Package smoke now launches the packaged release exe with
   `--capture-framebuffer-once`, writes a PPM framebuffer artifact, converts it
   to PNG, and fails blank/black/near-white/low-contrast screenshots. The proof
@@ -949,15 +949,15 @@ Clean seed runtime evidence:
   `luma_range=251.9`, `stdev=51.2`, `mean=130.9`.
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/package_release_framebuffer_proof_v1.png --min-unique-colors 64 --min-unique-buckets 16 --min-luma-range 48 --min-luma-stdev 12`
   passed.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v3_framebuffer_proof.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v3_framebuffer_proof.json`
   passed. Report result: `automated_gates_passed=true`, `release_ready=false`,
   blocker `Manual child-test/user acceptance report is missing or incomplete.`
 - `cmake --build --preset native-debug`
 - `py -3.12 tools/devapi/smoke_test.py 9344`
   passed after the shared framebuffer helper change.
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py`
-- `node tools/package_native_release.mjs` regenerated a clean package and zip.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9346 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py`
+- `node tools/project_67_world/package_native_release.mjs` regenerated a clean package and zip.
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9346 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   passed. Package smoke now deletes only the child-test report files it creates
   during recorder/validator checks, removes the empty smoke-created
   `child_test_results` folder, and fails if any generated report remains.
@@ -966,11 +966,11 @@ Clean seed runtime evidence:
   smoke-created blank reports.
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png --min-unique-colors 64 --min-unique-buckets 16 --min-luma-range 48 --min-luma-stdev 12`
   passed.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v4_clean_smoke.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v4_clean_smoke.json`
   passed. Report result: `automated_gates_passed=true`, `release_ready=false`,
   blocker `Manual child-test/user acceptance report is missing or incomplete.`
-- `py -3.12 -m py_compile tools/release_candidate_audit.py`
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v5_clean_handoff.json`
+- `py -3.12 -m py_compile tools/project_67_world/release_candidate_audit.py`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v5_clean_handoff.json`
   passed. Release audit now requires
   `build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   instead of the older v1 package framebuffer proof.
@@ -985,33 +985,33 @@ Clean seed runtime evidence:
 - Temporary blank/synthetic report artifacts were removed, and
   `Test-Path build/release/67-world-pc/67-world/child_test_results` returned
   `False`.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v6_handoff_cleanliness.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v6_handoff_cleanliness.json`
   passed after cleanup. Report result: `automated_gates_passed=true`,
   `release_ready=false`, blocker `Manual child-test/user acceptance report is
   missing or incomplete.`
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py tools/release_candidate_audit.py`
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9348 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/release_candidate_audit.py`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9348 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   passed and wrote `build/reports/package_release_smoke_v2_evidence.json`,
   which records current package hashes, zip hash, framebuffer capture hash,
   visual health, report-cleanup status, launch probe, and overall pass/fail.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v7_bound_smoke_evidence.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v7_bound_smoke_evidence.json`
   passed. Release audit now requires package smoke evidence hashes to match the
   current staged package and current framebuffer proof.
 - Intentional tampered smoke evidence test produced
   `build/tmp/release_candidate_audit_tampered_smoke_should_fail.json` with
   `automated_gates_passed=false`; the original smoke evidence was restored.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v8_bound_smoke_final.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v8_bound_smoke_final.json`
   passed after restoration. Report result: `automated_gates_passed=true`,
   `release_ready=false`, blocker `Manual child-test/user acceptance report is
   missing or incomplete.`
-- `node --check tools/package_native_release.mjs`
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py tools/release_candidate_audit.py`
-- `node tools/package_native_release.mjs` produced a package with
+- `node --check tools/project_67_world/package_native_release.mjs`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/release_candidate_audit.py`
+- `node tools/project_67_world/package_native_release.mjs` produced a package with
   `EXPORT_CHILD_TEST_RESULTS.ps1`, `EXPORT_CHILD_TEST_RESULTS.bat`, updated
   `START_HERE.bat`, `README.txt`, self-check, manifest, checksums, and zip.
   Package output: `67-world.exe` 775680 bytes,
   `assets/world67_art.ntpack` 20995020 bytes, zip 21803566 bytes.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9352 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9352 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   passed and refreshed `build/reports/package_release_smoke_v2_evidence.json`.
   Smoke now verifies `EXPORT_CHILD_TEST_RESULTS.ps1/.bat`, START_HERE option
   `6`, package manifest/checksum/zip inclusion, blank report export failure,
@@ -1023,12 +1023,12 @@ Clean seed runtime evidence:
   `False` after smoke.
 - `Test-Path build/release/67-world-pc/67-world/child_test_results_for_return.zip`
   returned `False` after smoke.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v9_child_test_export.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v9_child_test_export.json`
   passed. Report result: `automated_gates_passed=true`,
   `release_ready=false`, blocker `Manual child-test/user acceptance report is
   missing or incomplete.`
-- `py -3.12 -m py_compile tools/release_candidate_audit.py`
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v10_return_bundle_missing.json`
+- `py -3.12 -m py_compile tools/project_67_world/release_candidate_audit.py`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v10_return_bundle_missing.json`
   passed with no returned bundle. Report result:
   `automated_gates_passed=true`, `release_ready=false`, blocker
   `Manual child-test/user acceptance report is missing or incomplete.`
@@ -1043,16 +1043,16 @@ Clean seed runtime evidence:
   produced `automated_gates_passed=true`, `release_ready=false`, proving a zip
   with an incomplete report is rejected.
 - Temporary synthetic artifacts were removed, and
-  `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v12_return_bundle_clean.json`
+  `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v12_return_bundle_clean.json`
   passed clean. Report result: `automated_gates_passed=true`,
   `release_ready=false`, blocker `Manual child-test/user acceptance report is
   missing or incomplete.`
-- `node --check tools/package_native_release.mjs`
-- `py -3.12 -m py_compile tools/devapi/scenarios/package_release_smoke.py tools/release_candidate_audit.py`
-- `node tools/package_native_release.mjs` produced a package with optional
+- `node --check tools/project_67_world/package_native_release.mjs`
+- `py -3.12 -m py_compile tools/project_67_world/devapi_scenarios/package_release_smoke.py tools/project_67_world/release_candidate_audit.py`
+- `node tools/project_67_world/package_native_release.mjs` produced a package with optional
   child-test evidence export support. Package output: `67-world.exe` 775680
   bytes, `assets/world67_art.ntpack` 20995020 bytes, zip 21804900 bytes.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9354 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9354 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   passed and refreshed `build/reports/package_release_smoke_v2_evidence.json`.
   Smoke now proves a synthetic optional file at
   `child_test_results/evidence/evidence_note_for_smoke.txt` is copied into the
@@ -1072,11 +1072,11 @@ Clean seed runtime evidence:
   `Test-Path build/release/67-world-pc/67-world/child_test_results`, and
   `Test-Path build/tmp/child_test_result_synthetic_evidence_bundle.md`
   returned `False`.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v13_optional_evidence_clean.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v13_optional_evidence_clean.json`
   passed clean. Report result: `automated_gates_passed=true`,
   `release_ready=false`, blocker remains real manual child-test/user
   acceptance only.
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9356 build/reports/child_test_readiness_v20_optional_evidence_package.json build/captures/scenarios/child_test_readiness_v20_optional_evidence_package`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9356 build/reports/child_test_readiness_v20_optional_evidence_package.json build/captures/scenarios/child_test_readiness_v20_optional_evidence_package`
   passed after optional evidence packaging. Report result:
   `automated_review_passed=true`, package ok, `ready_for_manual_child_test=true`,
   `release_ready=false`, audio backend `winmm-waveout-generated-pcm`, desktop
@@ -1085,108 +1085,108 @@ Clean seed runtime evidence:
 - `py -3.12 tools/devapi/pixel_health.py` passed for all five v20 child-test
   readiness screenshots under
   `build/captures/scenarios/child_test_readiness_v20_optional_evidence_package/`.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v14_current_readiness.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v14_current_readiness.json`
   passed after updating the audit to use v20 readiness evidence. Report result:
   `automated_gates_passed=true`, `release_ready=false`, blocker remains real
   manual child-test/user acceptance only.
-- `node tools/package_native_release.mjs` rebuilt the package after adding
+- `node tools/project_67_world/package_native_release.mjs` rebuilt the package after adding
   guided document actions to `START_HERE.bat`. Package output:
   `67-world.exe` 775680 bytes, `assets/world67_art.ntpack` 20995020 bytes, zip
   21805213 bytes.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   passed and refreshed `build/reports/package_release_smoke_v2_evidence.json`.
   Smoke now validates `choice /C 12345678Q`, executes choice `2` and sees the
   parent observer guide title, executes choice `3` and sees the child-test
   acceptance kit title, then still validates normal/fresh launch, report
   creation, export bundle, cleanup, zip, self-check, branding, and framebuffer
   proof.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v15_guided_start_menu.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v15_guided_start_menu.json`
   passed after release audit was strengthened to require the guided document
   menu tokens. Report result: `automated_gates_passed=true`,
   `release_ready=false`, blocker remains real manual child-test/user
   acceptance only.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   passed after fixing the guided-menu numbering mismatch. Smoke now verifies
   choice `4` launches fresh child-test, choice `5` launches normal play,
   choices `2` and `3` show the parent guide and acceptance kit, and cleanup
   leaves no generated reports or return zip in the staged package.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v16_guided_menu_order.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v16_guided_menu_order.json`
   passed after the corrected `START_HERE.bat` order. Report result:
   `automated_gates_passed=true`, `release_ready=false`; blocker remains real
   manual child-test/user acceptance only.
-- `node tools/package_native_release.mjs` rebuilt the package after fixing the
+- `node tools/project_67_world/package_native_release.mjs` rebuilt the package after fixing the
   recommended-order labels in `START_HERE.bat`. Package output:
   `67-world.exe` 775680 bytes, `assets/world67_art.ntpack` 20995020 bytes, zip
   21805220 bytes.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   passed after exact menu-choice labels were added to the recommended
   child-test order. Smoke now validates `[4] Start fresh child-test`,
   `[6] Create report after the session`, `[7] Validate the filled report`, and
   `[8] Export validated child-test results zip` in `START_HERE.bat`, then
   validates launch, report, export, cleanup, zip, self-check, branding, and
   framebuffer proof.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v17_start_here_order_labels.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v17_start_here_order_labels.json`
   passed after exact menu-choice labels. Report result:
   `automated_gates_passed=true`, `release_ready=false`; blocker remains real
   manual child-test/user acceptance only.
-- `node tools/package_native_release.mjs` rebuilt the package after adding the
+- `node tools/project_67_world/package_native_release.mjs` rebuilt the package after adding the
   guided child-test menu path to packaged `README.txt`. Package output:
   `67-world.exe` 775680 bytes, `assets/world67_art.ntpack` 20995020 bytes, zip
   21805524 bytes.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   passed after README guided path. Smoke now validates that `README.txt`
   contains `Guided child-test menu path` with choices `[1]`, `[2]`, `[3]`,
   `[4]`, `[6]`, `[7]`, and `[8]`, then validates launch, report, export,
   cleanup, zip, self-check, branding, and framebuffer proof.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v18_readme_guided_path.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v18_readme_guided_path.json`
   passed after README guided path. Report result:
   `automated_gates_passed=true`, `release_ready=false`; blocker remains real
   manual child-test/user acceptance only.
-- `node tools/package_native_release.mjs` rebuilt the package after adding
+- `node tools/project_67_world/package_native_release.mjs` rebuilt the package after adding
   package-level `RETURN_INSTRUCTIONS.txt`. Package output: `67-world.exe`
   775680 bytes, `assets/world67_art.ntpack` 20995020 bytes, zip 21806246 bytes.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   passed after package-level return instructions. Smoke now requires
   `RETURN_INSTRUCTIONS.txt`, reports 19 checked files in self-check, proves the
   exported return zip includes `RETURN_INSTRUCTIONS.txt`, and still validates
   launch, report, export, cleanup, zip, self-check, branding, and framebuffer
   proof.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v19_return_instructions_package.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v19_return_instructions_package.json`
   passed after package-level return instructions. Report result:
   `automated_gates_passed=true`, `release_ready=false`; blocker remains real
   manual child-test/user acceptance only.
-- `node tools/package_native_release.mjs` rebuilt the package after strict
+- `node tools/project_67_world/package_native_release.mjs` rebuilt the package after strict
   checksum coverage was added to `VERIFY_PACKAGE.ps1`. Package output:
   `67-world.exe` 775680 bytes, `assets/world67_art.ntpack` 20995020 bytes, zip
   21806897 bytes.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   passed after strict self-check coverage. Smoke requires exact
   `Checked files: 19`, proves `RETURN_INSTRUCTIONS.txt` is still packaged and
   exported in the return zip, and leaves no generated child-test reports,
   return zip, or synthetic valid report in the staged package.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v20_strict_self_check.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v20_strict_self_check.json`
   passed after strict checksum coverage. Report result:
   `automated_gates_passed=true`, `release_ready=false`; blocker remains real
   manual child-test/user acceptance only.
-- `node tools/package_native_release.mjs` rebuilt the package after tightening
+- `node tools/project_67_world/package_native_release.mjs` rebuilt the package after tightening
   manual child-test report acceptance. Package output: `67-world.exe` 775680
   bytes, `assets/world67_art.ntpack` 20995020 bytes, zip 21808722 bytes.
-- `py -3.12 tools/devapi/scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/package_release_smoke.py 9358 build/captures/scenarios/package_release_framebuffer_proof_v2_clean_smoke.png`
   passed after the stricter report gate. Smoke now proves blank report
   rejection, almost-valid missing-notes rejection with
   `need 4 meaningful entries for Notes` and
   `missing meaningful line: Observer summary`, meaningful synthetic report
   validation/export, cleanup, zip, self-check, branding, and framebuffer proof.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v21_meaningful_child_test_report.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v21_meaningful_child_test_report.json`
   passed after the stricter report gate. Report result:
   `automated_gates_passed=true`, `release_ready=false`; blocker remains real
   manual child-test/user acceptance only.
-- `py -3.12 tools/devapi/scenarios/child_test_readiness.py 9356 build/reports/child_test_readiness_v21_package_bound.json build/captures/scenarios/child_test_readiness_v21_package_bound`
+- `py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py 9356 build/reports/child_test_readiness_v21_package_bound.json build/captures/scenarios/child_test_readiness_v21_package_bound`
   passed after binding readiness evidence to the current package. The report
   now includes SHA-256 hashes for `67-world.exe`, `assets/world67_art.ntpack`,
   `release_manifest.json`, `CHECKSUMS.txt`, and `67-world-pc.zip`, while still
   passing desktop FTUE/upgrade/stuck/audio and portrait checks.
-- `py -3.12 tools/release_candidate_audit.py --output build/reports/release_candidate_audit_v22_bound_readiness_package.json`
+- `py -3.12 tools/project_67_world/release_candidate_audit.py --output build/reports/release_candidate_audit_v22_bound_readiness_package.json`
   passed after release audit was strengthened to reject stale child-test
   readiness reports whose package hashes do not match the current package.
   Report result: `automated_gates_passed=true`, `release_ready=false`; blocker
@@ -1196,9 +1196,9 @@ Clean seed runtime evidence:
 - `cmake --build --preset native-debug`
 - `py -3.12 tools/devapi/smoke_test.py 9123`
 - `py -3.12 tools/devapi/full_probe.py 9123`
-- `py -3.12 tools/devapi/scenarios/state_roundtrip.py 9124`
-- `py -3.12 tools/devapi/scenarios/settings_modal.py 9125`
-- `py -3.12 tools/devapi/scenarios/ui_button_text.py 9126`
+- `py -3.12 tools/project_67_world/devapi_scenarios/state_roundtrip.py 9124`
+- `py -3.12 tools/project_67_world/devapi_scenarios/settings_modal.py 9125`
+- `py -3.12 tools/project_67_world/devapi_scenarios/ui_button_text.py 9126`
 
 All passed after the cleanup.
 

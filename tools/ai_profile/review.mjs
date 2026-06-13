@@ -345,8 +345,8 @@ function commandScope(command) {
   }
   if (
     normalized === "node tools/pipeline_validate.mjs" ||
-    normalized.includes("tools/release_candidate_audit.py") ||
-    normalized.includes("tools/package_native_release.mjs")
+    normalized.includes("tools/project_67_world/release_candidate_audit.py") ||
+    normalized.includes("tools/project_67_world/package_native_release.mjs")
   ) {
     return "broad/final";
   }
@@ -365,15 +365,15 @@ function commandScope(command) {
   }
   if (
     normalized.startsWith("cmake --build --preset native-release") ||
-    normalized.includes("tools/devapi/scenarios/package_release_smoke.py")
+    normalized.includes("tools/project_67_world/devapi_scenarios/package_release_smoke.py")
   ) {
     return "broad/final";
   }
   if (
-    normalized.includes("tools/devapi/scenarios/") ||
+    normalized.includes("tools/project_67_world/devapi_scenarios/") ||
     normalized.includes("tools/devapi/smoke_test.py") ||
     normalized.includes("tools/devapi/full_probe.py") ||
-    normalized.includes("tools/balance/")
+    normalized.includes("tools/project_67_world/balance/")
   ) {
     return "scoped";
   }

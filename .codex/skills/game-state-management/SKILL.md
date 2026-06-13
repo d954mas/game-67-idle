@@ -18,7 +18,7 @@ Use this skill to keep game state explicit, typed, migratable, and agent-legible
 6. Add or update fixtures under `state/fixtures/` for every migration that moves, deletes, renames, or compensates data.
 7. Put gameplay operations in `game_state_actions.h/.c` or an equivalent domain layer. Gameplay/UI code should call actions, not mutate raw `GameState` fields.
 8. Mark successful runtime mutations dirty and autosave from the frame loop, not from each setter call. Web saves should use an explicit browser persistence layer such as `localStorage`, not only `fopen`.
-9. Validate on the native PC build first: `cmake --build --preset native-debug` (or the project's native debug preset from `CMakePresets.json`), then relevant `tools/devapi/scenarios/*` scripts. Use WASM only when the user asks or the task targets web behavior.
+9. Validate on the native PC build first: `cmake --build --preset native-debug` (or the project's native debug preset from `CMakePresets.json`), then relevant game-specific DevAPI scenario scripts. Use WASM only when the user asks or the task targets web behavior.
 10. Use DevAPI for runtime checks: `game.state.schema`, `game.state.get`, `game.state.set`, `game.state.patch`, `game.state.save`, `game.state.load`, `game.state.reset`.
 
 ## Rules

@@ -3,7 +3,7 @@ import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync,
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const releaseDir = join(root, "build", "game_seed", "native-release");
 const sourceExe = join(releaseDir, "game_seed.exe");
 const sourceAssets = join(releaseDir, "assets");

@@ -1,7 +1,7 @@
 /* Build 67 World runtime art pack.
  * Usage: build_67_world_packs <pack_dir>
  * Run from the project root after:
- *   py -3.12 tools/assets/build_67_world_art.py
+ *   py -3.12 tools/project_67_world/assets/build_67_world_art.py
  */
 
 /* clang-format off */

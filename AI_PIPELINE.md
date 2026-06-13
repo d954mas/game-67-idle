@@ -43,6 +43,11 @@ node tools/skills_sync.mjs
 - **One source of truth per thing.** Skills: `.codex/skills/`. Task/status
   conventions: `tasks/README.md`. State shape: `state/*.schema.json`.
   Generated files are regenerated, not edited.
+- **Tools have portability layers.** Before cleaning a project or exporting a
+  new game base, use `tools/README.md` and `tools/tool_layers.json`.
+  `portable_ai_pipeline` moves to new games, `reusable_game_infrastructure`
+  moves only when the runtime matches, and `project_specific_67_world` is
+  deleted, archived, or intentionally adapted.
 - **Art iterations are packetized.** For generated game art, start from an
   accepted visual target, write an art request packet, slice from a manifest,
   run an explicit pack/material build, and validate in the primary runtime. Do
@@ -142,18 +147,17 @@ node tools/skills_sync.mjs
   multi-turn sessions. Do not use the iteration log as a task board or project
   status file.
 - **Profile long AI sessions without polluting git.** Use
-  `AI_PIPELINE_SESSION_PROFILING.md` and `tools/ai_profile/` when work is long,
+  `AI_PIPELINE_SESSION_PROFILING.md` and `node tools/ai.mjs ...` when work is long,
   repeated, release-critical, or explicitly about AI workflow. Reusable
   profiling rules/tools are committed; raw session JSONL, generated summaries,
   recovered thread dumps, and one-off telemetry extracts stay in
   `tmp/session_profiles/` unless the lead explicitly asks to promote them.
   `.gitignore` is the safety net for scratch paths; the workflow rule is what
   prevents agents from creating noisy session artifacts in non-ignored
-  locations. Use `tools/ai_profile/run.mjs` for substantial commands and
-  `tools/ai_profile/event.mjs` for sparse checkpoints so profiling is captured
-  during work instead of reconstructed after the fact. Use
-  `tools/ai_profile/closeout.mjs` and `tools/ai_profile/review.mjs` before
-  reflection so the agent starts from measured waste/rework/context findings.
+  locations. Fast path: `node tools/ai.mjs start <task> <iteration>`,
+  `node tools/ai.mjs context`, `node tools/ai.mjs run -- <command>`,
+  `node tools/ai.mjs status`, and `node tools/ai.mjs reflect`. Use
+  `tools/ai_profile/*` directly only when improving or debugging telemetry.
 - **External AI observability is gated.** Do not add LangSmith, Phoenix,
   Langfuse, Braintrust, OpenTelemetry export, or another tracing/eval platform
   just because reflection needs more data. First use
@@ -284,12 +288,13 @@ Portable (copied by the exporter):
 
 - `.codex/skills/` - all skills are written engine-agnostic: they discover
   local conventions instead of assuming this repo's layout.
-- `tools/skills_sync.mjs`, `tools/skills_eval.mjs`,
+- `tools/ai.mjs`, `tools/skills_sync.mjs`, `tools/skills_eval.mjs`,
   `tools/pipeline_validate.mjs`, `tools/ai_profile/`,
-  `tools/assets/new_art_job.mjs`, `tools/taskboard/` - skill mirroring, skill
-  regression checks, full reusable-base validation, AI session profile
-  summarization, generated-art job scaffolding, and the task store (board UI +
-  CLI).
+  `tools/game_context/`, `tools/assets/new_art_job.mjs`,
+  `tools/taskboard/`, `tools/README.md`, `tools/tool_layers.json` - fast AI
+  workflow facade, skill mirroring, skill regression checks, reusable-base
+  validation, AI session profiling internals, game iteration context, generated
+  art job scaffolding, task store UI/CLI, and tool portability map.
 - `gamedesign/knowledge/` - accumulated design lessons.
 - `AI_PIPELINE.md`, `AI_PIPELINE_SESSION_PROFILING.md`,
   `AI_PIPELINE_OBSERVABILITY_TOOLS.md`, `tasks/README.md`, starter

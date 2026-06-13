@@ -1152,3 +1152,22 @@ specific and reusable.
   put clean-state prose in `current.status_message`.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0109`.
+
+## 2026-06-13 - Game prototype work needs a pre-code context pack
+
+- Trigger: During 67 World prototyping, the agent lost or underweighted
+  project context: native PC is the primary harness, web is not a shortcut,
+  Cow Evolution reference study is a gate, and generated UI/art must be
+  reusable runtime assets.
+- Symptom: The agent spent time on the wrong harness and weak visual/art
+  integration before returning to the native playable path.
+- Time sink: The agent had to rediscover project rules and user corrections
+  after implementation had already drifted.
+- Likely cause: Context was spread across `AGENTS.md`, task status, skills,
+  design docs, art requests, and validation runbooks with no compact pre-code
+  artifact for playable game iterations.
+- Proposed improvement: Add `tools/game_context/iteration_context.mjs` and
+  require playable work to start from a compact context pack, preferably
+  captured through AI profiling with `context_command.mjs`.
+- Follow-up owner: Future game-feature and profiling agents.
+- Status: Implemented in `T0110`.

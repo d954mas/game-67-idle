@@ -5,7 +5,7 @@
   "crop_manifest": "gamedesign/meme-evolution/data/art_crop_manifest.json",
   "runtime_dir": "assets/runtime/67-world",
   "commands": {
-    "slice_assets": "py -3.12 tools/assets/build_67_world_art.py",
+    "slice_assets": "py -3.12 tools/project_67_world/assets/build_67_world_art.py",
     "configure_native": "cmake --preset native-debug",
     "build_pack_tool": "cmake --build --preset native-debug --target build_67_world_packs",
     "build_pack": "build/game_seed/native-debug/build_67_world_packs.exe build/game_seed/67-world-packs"

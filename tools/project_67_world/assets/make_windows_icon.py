@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "assets" / "runtime" / "67-world" / "icon_67_badge-v1.png"
 OUTPUT = ROOT / "assets" / "runtime" / "67-world" / "67-world.ico"
 SIZES = [16, 24, 32, 48, 64, 128, 256]

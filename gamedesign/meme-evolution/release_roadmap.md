@@ -152,7 +152,7 @@ world animation, or milestone.
    - Upgrade costs and passive income tuned.
    - Board-full recovery.
    - Milestones.
-   - Current proof: `py -3.12 tools/balance/simulate_67_world.py` reaches
+   - Current proof: `py -3.12 tools/project_67_world/balance/simulate_67_world.py` reaches
      Cosmic in the 55-60 minute target window.
 
 4. Visual asset integration.

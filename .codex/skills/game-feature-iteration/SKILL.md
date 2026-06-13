@@ -10,6 +10,10 @@ Use this skill to make small, playable game changes without losing project conte
 ## Workflow
 
 1. Read local project rules first: `AGENTS.md`, project state/runbooks if present, then relevant design docs, build presets, and nearby code.
+   For playable implementation work, first run
+   `node tools/ai.mjs context` when available. This prints the compact game
+   context and profiles the pre-code context cost. If the facade is absent,
+   fall back to `node tools/game_context/iteration_context.mjs`.
 2. State the selected runtime harness before implementation, including why it is allowed by local rules.
 3. If the feature is based on a named reference, verify a reference deconstruction
    exists before coding. It must include source evidence,

@@ -27,6 +27,7 @@ them durable. Durable docs should contain conclusions, not every event.
 Commit reusable profiling infrastructure:
 
 - `AI_PIPELINE_SESSION_PROFILING.md`
+- `tools/ai.mjs`
 - `tools/ai_profile/*`
 - skill/rule updates that make profiling part of the agent workflow
 - task files that track profiling pipeline work
@@ -63,6 +64,33 @@ Start a profile when any of these are true:
 - a context compaction occurs during active work;
 - the agent has already repeated the same validation or file-reading loop twice.
 
+For normal work, use the fast facade:
+
+```powershell
+node tools/ai.mjs start <task-id> <iteration-name>
+node tools/ai.mjs context
+node tools/ai.mjs run -- <command> <args>
+node tools/ai.mjs status
+node tools/ai.mjs reflect
+```
+
+This keeps analytics attached to real work without forcing the agent to manage
+the profiler as a separate project. Use `tools/ai_profile/*` directly only when
+debugging telemetry, running a one-off deep analysis, or changing the profiler.
+
+For playable game iterations, `node tools/ai.mjs context` profiles and prints
+the compact game context pack. To write the pack JSON explicitly, run:
+
+```powershell
+node tools/game_context/iteration_context.mjs --json-output tmp/game_iteration_context_<task>.json
+```
+
+This records the pre-code context used for the iteration: active concept,
+native/web harness gates, reference-study gate, visual/art gate, current
+project gate, next priorities, source files, and validation commands. Use it
+to audit later whether the agent had the right context before choosing a
+runtime, generating art, or implementing gameplay.
+
 If a profile was not started at the beginning, start it as soon as the need is
 recognized and add `late_start: true` to the first record.
 
@@ -89,7 +117,7 @@ Recommended fields:
   "work_item": "T0055",
   "iteration": "top-hud-polish",
   "tools": ["shell_command"],
-  "commands": ["py -3.12 tools/devapi/scenarios/child_test_readiness.py ..."],
+  "commands": ["py -3.12 tools/project_67_world/devapi_scenarios/child_test_readiness.py ..."],
   "files_read": ["tasks/STATUS.md", "src/main.c"],
   "files_written": ["src/main.c"],
   "evidence": ["build/reports/child_test_readiness_v25_top_hud.json"],

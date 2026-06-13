@@ -88,7 +88,7 @@
         {
             "label": "Release: native PC",
             "type": "shell",
-            "command": "node tools/package_native_release.mjs",
+            "command": "node tools/project_67_world/package_native_release.mjs",
             "dependsOn": "Build: native release",
             "group": "build",
             "problemMatcher": []

@@ -52,7 +52,7 @@ Useful checks:
 ```powershell
 py -3.12 tools/devapi/smoke_test.py 9123
 py -3.12 tools/devapi/full_probe.py 9123
-py -3.12 tools/devapi/scenarios/state_roundtrip.py 9123
+py -3.12 tools/project_67_world/devapi_scenarios/state_roundtrip.py 9123
 ```
 
 State schema source: `state/game_state.schema.json`. Generated C files are

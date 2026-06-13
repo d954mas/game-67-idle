@@ -30,11 +30,15 @@ if (dst === root) {
 
 const COPY = [
   ".codex/skills",
+  "tools/ai.mjs",
   "tools/skills_eval.mjs",
   "tools/pipeline_validate.mjs",
   "tools/skills_sync.mjs",
   "tools/ai_profile",
   "tools/assets/new_art_job.mjs",
+  "tools/game_context",
+  "tools/README.md",
+  "tools/tool_layers.json",
   "tools/taskboard",
   "tools/bootstrap/export_base.mjs",
   "gamedesign/knowledge",

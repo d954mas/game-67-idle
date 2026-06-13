@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_DIR = ROOT / "build" / "release" / "67-world-pc" / "67-world"
 PACKAGE_ZIP = ROOT / "build" / "release" / "67-world-pc" / "67-world-pc.zip"
 DEFAULT_OUTPUT = ROOT / "build" / "reports" / "release_candidate_audit_v1.json"

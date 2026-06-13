@@ -191,7 +191,7 @@ nt_set_warning_flags(${GAME_TARGET})
 nt_set_sanitizer_flags(${GAME_TARGET})
 
 if(NOT EMSCRIPTEN)
-    add_executable(build_67_world_packs tools/assets/build_67_world_packs.c)
+    add_executable(build_67_world_packs tools/project_67_world/assets/build_67_world_packs.c)
     target_link_libraries(build_67_world_packs PRIVATE nt_builder)
     target_include_directories(build_67_world_packs PRIVATE
         external/neotolis-engine/tools/builder

@@ -72,8 +72,8 @@
     "text baked into character art"
   ],
   "commands": {
-    "slice_assets": "extend tools/assets/build_67_world_art.py after source sheet is accepted",
+    "slice_assets": "extend tools/project_67_world/assets/build_67_world_art.py after source sheet is accepted",
     "build_pack": "cmake --build --preset native-debug --target build_67_world_packs && build/game_seed/native-debug/build_67_world_packs.exe build/game_seed/67-world-packs",
-    "native_evidence": "py -3.12 tools/devapi/scenarios/first_67_loop.py <port> build/captures/scenarios/<batch2-evidence>.png"
+    "native_evidence": "py -3.12 tools/project_67_world/devapi_scenarios/first_67_loop.py <port> build/captures/scenarios/<batch2-evidence>.png"
   }
 }

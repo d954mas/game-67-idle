@@ -4,7 +4,7 @@ import { appendRecord, buildRecord, parseArgs, stringArg } from "./profile_lib.m
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/context_command.mjs --phase <phase> --intent <text> [options] -- <command> [args...]
+  node tools/ai_profile/context_command.mjs [--phase <phase>] [--intent <text>] [options] -- <command> [args...]
 
 options:
   --category <category>                      default: context
@@ -36,11 +36,13 @@ const { values, positionals } = parseArgs(process.argv.slice(2));
 if (values.help || positionals.length === 0) usage();
 
 if (!values.category) values.category = "context";
+if (!values.phase) values.phase = "context";
 if (!values.value) values.value = "necessary_overhead";
 if (!values.tool) values.tool = "ai_profile/context_command.mjs";
 
 const command = positionals[0];
 const commandArgs = positionals.slice(1);
+if (!values.intent) values.intent = `Read context from ${commandText(positionals)}`;
 const started = process.hrtime.bigint();
 const result = spawnSync(command, commandArgs, {
   cwd: process.cwd(),

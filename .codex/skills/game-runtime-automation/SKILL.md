@@ -29,7 +29,8 @@ Use this skill to let an agent observe, drive, and verify a running game.
 Keep reusable automation in the game project, not inside this skill:
 
 - `tools/devapi/devapi_client.py`: shared runtime client.
-- `tools/devapi/scenarios/`: reusable bots and regression scenarios.
+- `tools/<project>/devapi_scenarios/` or the local equivalent: game-specific
+  bots and regression scenarios.
 - `build/captures/`: ignored screenshots, recordings, and smoke logs.
 - `build/logs/`: ignored launch stdout/stderr logs for agent-readable failure diagnosis.
 - project-specific agent playtest runbook: the fastest documented command that launches, observes, acts, captures evidence, writes a report, and exits nonzero on failure.

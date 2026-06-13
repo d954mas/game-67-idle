@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageFilter
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 CROP_MANIFEST = ROOT / "gamedesign" / "meme-evolution" / "data" / "art_crop_manifest.json"
 ASSET_MANIFEST = ROOT / "gamedesign" / "meme-evolution" / "data" / "asset_manifest.json"
 
@@ -160,7 +160,7 @@ def main() -> int:
         "crop_manifest": rel(CROP_MANIFEST),
         "runtime_dir": rel(out_dir),
         "commands": {
-            "slice_assets": "py -3.12 tools/assets/build_67_world_art.py",
+            "slice_assets": "py -3.12 tools/project_67_world/assets/build_67_world_art.py",
             "configure_native": "cmake --preset native-debug",
             "build_pack_tool": "cmake --build --preset native-debug --target build_67_world_packs",
             "build_pack": "build/game_seed/native-debug/build_67_world_packs.exe build/game_seed/67-world-packs"

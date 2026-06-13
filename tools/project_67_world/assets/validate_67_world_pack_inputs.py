@@ -11,8 +11,8 @@ from pathlib import Path
 from PIL import Image
 
 
-ROOT = Path(__file__).resolve().parents[2]
-PACK_BUILDER = ROOT / "tools" / "assets" / "build_67_world_packs.c"
+ROOT = Path(__file__).resolve().parents[3]
+PACK_BUILDER = ROOT / "tools" / "project_67_world" / "assets" / "build_67_world_packs.c"
 RUNTIME_DIR = ROOT / "assets" / "runtime" / "67-world"
 
 

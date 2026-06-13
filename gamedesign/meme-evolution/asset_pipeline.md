@@ -20,8 +20,8 @@ Current explicit art iteration path for native PC.
 ## Commands
 
 ```powershell
-py -3.12 tools/assets/build_67_world_art.py
-py -3.12 tools/assets/validate_67_world_pack_inputs.py
+py -3.12 tools/project_67_world/assets/build_67_world_art.py
+py -3.12 tools/project_67_world/assets/validate_67_world_pack_inputs.py
 cmake --preset native-debug
 cmake --build --preset native-debug --target build_67_world_packs
 build/game_seed/native-debug/build_67_world_packs.exe build/game_seed/67-world-packs
@@ -38,7 +38,7 @@ build/game_seed/native-debug/build_67_world_packs.exe build/game_seed/67-world-p
 - Batch 3 sprite pack run: `world67_art.ntpack` built successfully with 77
   atlas sprites over 2 pages, `Cache: 5 hit / 3 miss`, builder timing total
   `0.1s`, pack size `20502.9 KB`.
-- Pre-pack validation: `py -3.12 tools/assets/validate_67_world_pack_inputs.py`
+- Pre-pack validation: `py -3.12 tools/project_67_world/assets/validate_67_world_pack_inputs.py`
   passed for 76 pack input assets.
 
 Pack generation is explicit and is not wired into every normal game build.
@@ -48,30 +48,30 @@ Pack generation is explicit and is not wired into every normal game build.
 - `build/captures/scenarios/first_67_loop_assets_v3.png`
 - `build/captures/scenarios/first_67_loop_field_artkit_v2.png`
 - `build/captures/scenarios/first_67_loop_field_repair_v2.png`
-- `py -3.12 tools/devapi/scenarios/first_67_loop.py 9148 build/captures/scenarios/first_67_loop_assets_v3.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/first_67_loop.py 9148 build/captures/scenarios/first_67_loop_assets_v3.png`
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/first_67_loop_assets_v3.png`
-- `py -3.12 tools/devapi/scenarios/first_67_loop.py 9167 build/captures/scenarios/first_67_loop_field_artkit_v2.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/first_67_loop.py 9167 build/captures/scenarios/first_67_loop_field_artkit_v2.png`
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/first_67_loop_field_artkit_v2.png`
-- `py -3.12 tools/devapi/scenarios/first_67_loop.py 9169 build/captures/scenarios/first_67_loop_field_repair_v2.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/first_67_loop.py 9169 build/captures/scenarios/first_67_loop_field_repair_v2.png`
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/first_67_loop_field_repair_v2.png`
 - `tmp/67-world-batch2-runtime-contact-v2.png`
 - `build/captures/scenarios/first_67_loop_batch2_art_v1.png`
 - `build/captures/scenarios/extended_67_progression_batch2_art_v1.png`
-- `py -3.12 tools/devapi/scenarios/first_67_loop.py 9177 build/captures/scenarios/first_67_loop_batch2_art_v1.png`
-- `py -3.12 tools/devapi/scenarios/extended_67_progression.py 9176 build/captures/scenarios/extended_67_progression_batch2_art_v1.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/first_67_loop.py 9177 build/captures/scenarios/first_67_loop_batch2_art_v1.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/extended_67_progression.py 9176 build/captures/scenarios/extended_67_progression_batch2_art_v1.png`
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/first_67_loop_batch2_art_v1.png`
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/extended_67_progression_batch2_art_v1.png`
 - `tmp/67-world-batch3-runtime-contact-v2.png`
 - `build/captures/scenarios/first_67_loop_30_variants_v1.png`
 - `build/captures/scenarios/extended_67_progression_30_variants_v1.png`
-- `py -3.12 tools/devapi/scenarios/first_67_loop.py 9179 build/captures/scenarios/first_67_loop_30_variants_v1.png`
-- `py -3.12 tools/devapi/scenarios/extended_67_progression.py 9178 build/captures/scenarios/extended_67_progression_30_variants_v1.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/first_67_loop.py 9179 build/captures/scenarios/first_67_loop_30_variants_v1.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/extended_67_progression.py 9178 build/captures/scenarios/extended_67_progression_30_variants_v1.png`
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/first_67_loop_30_variants_v1.png`
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/extended_67_progression_30_variants_v1.png`
 - `build/captures/scenarios/first_67_loop_better_crate_v1.png`
 - `build/captures/scenarios/extended_67_progression_better_crate_v1.png`
 - `build/captures/scenarios/better_crate_progression_v2.png`
-- `py -3.12 tools/devapi/scenarios/better_crate_progression.py 9203 build/captures/scenarios/better_crate_progression_v2.png`
+- `py -3.12 tools/project_67_world/devapi_scenarios/better_crate_progression.py 9203 build/captures/scenarios/better_crate_progression_v2.png`
 - `py -3.12 tools/devapi/pixel_health.py build/captures/scenarios/better_crate_progression_v2.png`
 
 The screenshot must be a 960x540 framebuffer capture for the default native
