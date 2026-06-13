@@ -843,3 +843,20 @@ specific and reusable.
   `current_scope.suggested_actions` in JSON.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0091`.
+
+## 2026-06-13 - Clean profiles need baseline comparison
+
+- Trigger: Follow-up drafts reported a clean profile and suggested using it as
+  a baseline for a later session.
+- Symptom: Without a compare tool, future agents must manually reconcile two
+  review JSON files before saying whether the AI-development process improved
+  or regressed.
+- Time sink: Trend analysis becomes another reflection reading task and can
+  confuse current-scope problems with old whole-profile telemetry debt.
+- Likely cause: The profiling pipeline could generate review/follow-up
+  artifacts but had no baseline-vs-current comparison step.
+- Proposed improvement: Add `tools/ai_profile/compare_reviews.mjs` to compare
+  two review JSON files, report current-scope regressions separately from
+  historical whole-profile deltas, and emit machine-readable JSON.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0092`.

@@ -140,6 +140,12 @@ Run `tools/ai_profile/followups.mjs` only when review JSON was rerun manually
 or the closeout bundle was created with `--no-followups`. Promote only
 still-relevant drafts into tasks, rules, or tools after checking current
 taskboard state.
+When a previous clean review JSON is available, run
+`tools/ai_profile/compare_reviews.mjs <baseline.review.json>
+<current.review.json> --output tmp/session_profiles/<name>.compare.md
+--json-output tmp/session_profiles/<name>.compare.json` before writing trend
+claims. Treat current-scope regressions from the compare output as urgent and
+whole-profile deltas as historical trend evidence.
 For multi-task profiles, inspect `work_items`, `iterations`, and
 `repeated_broad_final_by_work_item` before calling repeated validation waste.
 When review JSON includes `current_scope`, separate current-scope findings from

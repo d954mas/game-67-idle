@@ -496,6 +496,18 @@ still become follow-up drafts if they reveal recurring rework.
 When `closeout.mjs` was used without `--no-followups`, these drafts are already
 generated and this manual command is only needed after rerunning review.
 
+When a profile is clean enough to become a baseline, compare the next review
+JSON against it instead of manually reading two artifacts:
+
+```powershell
+node tools/ai_profile/compare_reviews.mjs tmp/session_profiles/baseline.review.json tmp/session_profiles/current.review.json --output tmp/session_profiles/profile_compare.md --json-output tmp/session_profiles/profile_compare.json
+```
+
+Use `--fail-on-regression` only for automation that should fail when
+current-scope metrics regress. The comparison treats current-scope regressions
+as urgent and reports whole-profile deltas as historical trend, so old
+telemetry debt does not keep creating current work.
+
 When the review shows repeated broad commands, plan the next validation loop
 before running it:
 
@@ -572,6 +584,9 @@ A "profiled session" is done when:
   retrospective but do not promote them as current tasks unless they recur in
   the current scope; this includes historical recovered failures that already
   passed later;
+- `compare_reviews.mjs` is used when a previous clean review JSON should act
+  as a baseline for a later profile; inspect current-scope regressions first
+  and treat whole-profile deltas as trend evidence;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste; use
   `--json-output` when another tool, agent, or later reflection should consume

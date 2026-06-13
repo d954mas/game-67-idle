@@ -821,6 +821,129 @@ test("validation planner json output marks low risk broad checks as deferred", (
   }
 });
 
+test("compare review baseline reports improvement", () => {
+  const dir = tempDir();
+  try {
+    const baseline = join(dir, "baseline.review.json");
+    const current = join(dir, "current.review.json");
+    const compareJson = join(dir, "compare.json");
+    writeFileSync(baseline, `${JSON.stringify({
+      schema_version: 1,
+      profile: "baseline.jsonl",
+      findings: [{ type: "missing_context_inputs" }],
+      missing_context_inputs: [{ line: 1 }],
+      repeated_broad_final_commands: [],
+      recovered_failed_records: [],
+      unresolved_failed_records: [],
+      current_scope: {
+        enabled: true,
+        records: 2,
+        findings: [{ type: "current_missing_context_inputs" }],
+        missing_context_inputs: 1,
+        missing_work_item_records: 0,
+        repeated_broad_final_commands: [],
+        recovered_failed_records: [],
+        unresolved_failed_records: [],
+        low_profile_coverage: false,
+      },
+    })}\n`, "utf8");
+    writeFileSync(current, `${JSON.stringify({
+      schema_version: 1,
+      profile: "current.jsonl",
+      findings: [],
+      missing_context_inputs: [],
+      repeated_broad_final_commands: [],
+      recovered_failed_records: [],
+      unresolved_failed_records: [],
+      current_scope: {
+        enabled: true,
+        records: 2,
+        findings: [],
+        missing_context_inputs: 0,
+        missing_work_item_records: 0,
+        repeated_broad_final_commands: [],
+        recovered_failed_records: [],
+        unresolved_failed_records: [],
+        low_profile_coverage: false,
+      },
+    })}\n`, "utf8");
+
+    const result = run(["tools/ai_profile/compare_reviews.mjs", baseline, current, "--json-output", compareJson]);
+    assert.match(result.stdout, /Verdict: improved/);
+    const compare = readJson(compareJson);
+    assert.equal(compare.verdict, "improved");
+    assert.equal(compare.current_regressions.length, 0);
+    assert.ok(compare.improvements.some((item) => item.key === "current_missing_context_inputs"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("compare review baseline fails on current-scope regression", () => {
+  const dir = tempDir();
+  try {
+    const baseline = join(dir, "baseline.review.json");
+    const current = join(dir, "current.review.json");
+    const compareJson = join(dir, "compare.json");
+    writeFileSync(baseline, `${JSON.stringify({
+      schema_version: 1,
+      profile: "baseline.jsonl",
+      findings: [],
+      missing_context_inputs: [],
+      repeated_broad_final_commands: [],
+      recovered_failed_records: [],
+      unresolved_failed_records: [],
+      current_scope: {
+        enabled: true,
+        records: 2,
+        findings: [],
+        missing_context_inputs: 0,
+        missing_work_item_records: 0,
+        repeated_broad_final_commands: [],
+        recovered_failed_records: [],
+        unresolved_failed_records: [],
+        low_profile_coverage: false,
+      },
+    })}\n`, "utf8");
+    writeFileSync(current, `${JSON.stringify({
+      schema_version: 1,
+      profile: "current.jsonl",
+      findings: [{ type: "missing_context_inputs" }],
+      missing_context_inputs: [{ line: 2 }],
+      repeated_broad_final_commands: [],
+      recovered_failed_records: [],
+      unresolved_failed_records: [],
+      current_scope: {
+        enabled: true,
+        records: 2,
+        findings: [{ type: "current_missing_context_inputs" }],
+        missing_context_inputs: 2,
+        missing_work_item_records: 0,
+        repeated_broad_final_commands: [],
+        recovered_failed_records: [],
+        unresolved_failed_records: [],
+        low_profile_coverage: false,
+      },
+    })}\n`, "utf8");
+
+    const result = runRaw([
+      "tools/ai_profile/compare_reviews.mjs",
+      baseline,
+      current,
+      "--json-output",
+      compareJson,
+      "--fail-on-regression",
+    ]);
+    assert.equal(result.status, 1, result.stdout);
+    assert.match(result.stdout, /Verdict: regressed/);
+    const compare = readJson(compareJson);
+    assert.equal(compare.verdict, "regressed");
+    assert.ok(compare.current_regressions.some((item) => item.key === "current_missing_context_inputs"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("closeout writes summary review and follow-up bundle", () => {
   const dir = tempDir();
   try {
