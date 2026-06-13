@@ -1286,6 +1286,99 @@ test("capture baseline refuses overwrite unless forced", () => {
   }
 });
 
+test("reflection packet summarizes clean profile artifacts", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "packet.jsonl");
+    const review = join(dir, "packet.review.json");
+    const followups = join(dir, "packet.followups.json");
+    const baselineDir = join(dir, "baselines");
+    const baselineReview = join(baselineDir, "clean.review.json");
+    const manifest = join(baselineDir, "clean.manifest.json");
+    const compare = join(dir, "clean.compare.json");
+    const packetJson = join(dir, "packet.out.json");
+
+    mkdirSync(baselineDir, { recursive: true });
+    writeFileSync(profile, "", "utf8");
+    writeFileSync(review, `${JSON.stringify({
+      current_scope: {
+        enabled: true,
+        records: 2,
+        findings: [],
+        suggested_actions: ["Use current scope as clean baseline."],
+      },
+    })}\n`, "utf8");
+    writeFileSync(followups, `${JSON.stringify({
+      suggestions: [{ priority: "P3", title: "Use clean AI profile as baseline", next_action: "Compare later." }],
+      suppressed_historical_findings: ["low_profile_coverage"],
+    })}\n`, "utf8");
+    writeFileSync(baselineReview, "{}\n", "utf8");
+    writeFileSync(manifest, `${JSON.stringify({
+      label: "clean",
+      captured_at: "2026-06-13T10:05:00+05:00",
+      baseline_review: resolve(baselineReview),
+    })}\n`, "utf8");
+    writeFileSync(compare, `${JSON.stringify({
+      verdict: "stable",
+      current_regressions: [],
+      improvements: [],
+      historical_regressions: [],
+    })}\n`, "utf8");
+
+    const result = run(["tools/ai_profile/reflection_packet.mjs", profile, "--json-output", packetJson]);
+    assert.match(result.stdout, /Readiness: ready/);
+    assert.match(result.stdout, /Baseline comparison: stable/);
+    const packet = readJson(packetJson);
+    assert.deepEqual(packet.readiness, ["ready"]);
+    assert.equal(packet.current_scope.findings.length, 0);
+    assert.equal(packet.followups.suggestions.length, 1);
+    assert.equal(packet.comparison.verdict, "stable");
+    assert.equal(packet.comparison.current_regressions.length, 0);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("reflection packet flags current-scope comparison regressions", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "packet-regressed.jsonl");
+    const review = join(dir, "packet-regressed.review.json");
+    const followups = join(dir, "packet-regressed.followups.json");
+    const baselineDir = join(dir, "baselines");
+    const baselineReview = join(baselineDir, "clean.review.json");
+    const manifest = join(baselineDir, "clean.manifest.json");
+    const compare = join(dir, "clean.compare.json");
+    const packetJson = join(dir, "packet.out.json");
+
+    mkdirSync(baselineDir, { recursive: true });
+    writeFileSync(profile, "", "utf8");
+    writeFileSync(review, `${JSON.stringify({ current_scope: { enabled: true, records: 2, findings: [] } })}\n`, "utf8");
+    writeFileSync(followups, `${JSON.stringify({ suggestions: [], suppressed_historical_findings: [] })}\n`, "utf8");
+    writeFileSync(baselineReview, "{}\n", "utf8");
+    writeFileSync(manifest, `${JSON.stringify({
+      label: "clean",
+      captured_at: "2026-06-13T10:05:00+05:00",
+      baseline_review: resolve(baselineReview),
+    })}\n`, "utf8");
+    writeFileSync(compare, `${JSON.stringify({
+      verdict: "regressed",
+      current_regressions: [{ key: "current_missing_context_inputs", label: "Current missing context", baseline: 0, current: 1 }],
+      improvements: [],
+      historical_regressions: [],
+    })}\n`, "utf8");
+
+    const result = run(["tools/ai_profile/reflection_packet.mjs", profile, "--json-output", packetJson]);
+    assert.match(result.stdout, /Readiness: current_regressions/);
+    assert.match(result.stdout, /regression: Current missing context 0 -> 1/);
+    const packet = readJson(packetJson);
+    assert.ok(packet.readiness.includes("current_regressions"));
+    assert.equal(packet.comparison.current_regressions.length, 1);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("closeout writes summary review and follow-up bundle", () => {
   const dir = tempDir();
   try {

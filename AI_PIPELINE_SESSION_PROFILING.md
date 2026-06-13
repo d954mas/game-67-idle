@@ -352,6 +352,9 @@ Record tools by role:
   `tmp/session_profiles/baselines/<label>.review.json` and writes a manifest
   with source, target, current-scope counts, and a ready compare command. Use
   it before later closeout/review commands overwrite the daily review JSON.
+- `reflection_packet.mjs`: reflection handoff helper that gathers review JSON,
+  follow-up drafts, captured baseline, and baseline comparison into one compact
+  scratch markdown/JSON packet before writing a full retrospective.
 - `review.mjs`: reflection prep helper that turns a JSONL profile into
   priority findings: waste/rework, failures, blockers, context hotspots,
   repeated commands, repeated command scope (`preflight`, `scoped`,
@@ -525,6 +528,18 @@ current-scope metrics regress. The comparison treats current-scope regressions
 as urgent and reports whole-profile deltas as historical trend, so old
 telemetry debt does not keep creating current work.
 
+When status reports a fresh bundle and fresh baseline comparison, generate a
+compact reflection packet before writing the retrospective:
+
+```powershell
+node tools/ai_profile/reflection_packet.mjs tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl --output tmp/session_profiles/session_profile_YYYY-MM-DD.reflection_packet.md --json-output tmp/session_profiles/session_profile_YYYY-MM-DD.reflection_packet.json
+```
+
+The packet is scratch evidence. It cites source artifacts, current-scope
+findings/actions, follow-up drafts, suppressed historical findings, and
+baseline comparison regressions/trend. Keep it in `tmp/session_profiles/`
+unless the lead explicitly asks to preserve it.
+
 When the review shows repeated broad commands, plan the next validation loop
 before running it:
 
@@ -609,6 +624,10 @@ A "profiled session" is done when:
   future baseline, because normal closeout/review filenames are overwritten by
   later runs; check `status.mjs` first and recapture only when status reports
   no captured baseline for the profile;
+- `reflection_packet.mjs` is used before writing a full retrospective when
+  generated profile artifacts exist, so the reflection starts from one compact
+  scratch evidence packet instead of repeatedly opening summary, review,
+  follow-up, and compare files;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste; use
   `--json-output` when another tool, agent, or later reflection should consume

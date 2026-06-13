@@ -908,3 +908,21 @@ specific and reusable.
   `compare_reviews.mjs` command when comparison evidence is missing or stale.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0095`.
+
+## 2026-06-13 - Reflection needs one compact evidence packet
+
+- Trigger: Status, review, followups, baseline capture, and baseline comparison
+  were all available, but writing a retrospective still required manually
+  opening several scratch artifacts.
+- Symptom: Reflection setup can waste context and time by repeatedly reading
+  summary, review, follow-up, and comparison files.
+- Time sink: Agents spend the first part of a retrospective reconstructing the
+  evidence map instead of analyzing the work.
+- Likely cause: The profiling pipeline produced useful artifacts but no compact
+  handoff packet for the reflection step.
+- Proposed improvement: Add `tools/ai_profile/reflection_packet.mjs` to gather
+  current-scope findings/actions, follow-up drafts, suppressed historical
+  findings, baseline comparison trend, and source artifact paths into one
+  scratch markdown/JSON packet.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0096`.
