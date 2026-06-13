@@ -116,6 +116,11 @@ For multi-task profiles, inspect `work_items`, `iterations`, and
 If many records lack work-item metadata, add a next-cycle fix: pass
 `--work-item <id>` and optional `--iteration <name>` to `run.mjs`,
 `event.mjs`, `context.mjs`, and `closeout.mjs`.
+Inspect `wall_clock_coverage`, `low_profile_coverage`, and largest gaps before
+claiming the profile explains the whole session. Low coverage means the
+retrospective must name what likely happened in the unprofiled gaps, or add a
+next-cycle rule to place sparse `event.mjs` checkpoints during long manual,
+research, design, or review stretches.
 If review reports missing context input details, name the affected line/intents
 and add a next-cycle fix: use `tools/ai_profile/context.mjs --path <file>` for
 local medium/high context reads so file sizes are measured automatically.

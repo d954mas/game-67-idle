@@ -29,6 +29,10 @@ function commandList(commands, limit = 5) {
     .join("; ");
 }
 
+function formatPercent(value) {
+  return Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "unknown";
+}
+
 function buildSuggestions(review) {
   const suggestions = [];
   const findingTypes = new Set(asArray(review.findings).map((finding) => finding.type));
@@ -60,6 +64,38 @@ function buildSuggestions(review) {
         "Profile review shows no missing context input details for new records.",
       ],
       next_action: "Use context.mjs for local files and update any wrapper or habit that records context_risk without context_inputs.",
+    });
+  }
+
+  if (findingTypes.has("missing_work_item_metadata")) {
+    const missingFinding = asArray(review.findings).find((finding) => finding.type === "missing_work_item_metadata");
+    addSuggestion(suggestions, {
+      title: "Add work item metadata to future profile events",
+      priority: "P1",
+      tags: ["pipeline", "profiling", "context", "automation"],
+      source: "missing_work_item_metadata",
+      why: missingFinding?.message || "Multi-task profiles have records without work_item metadata.",
+      done_when: [
+        "Substantial profile events include --work-item and, when useful, --iteration.",
+        "A future profile review can separate repeated validation by work item.",
+      ],
+      next_action: "Use --work-item on run/event/context/closeout commands for the next multi-task session and keep raw telemetry in tmp/session_profiles/.",
+    });
+  }
+
+  if (findingTypes.has("low_profile_coverage")) {
+    const coverage = review.wall_clock_coverage || {};
+    addSuggestion(suggestions, {
+      title: "Raise AI profile wall-clock coverage",
+      priority: "P1",
+      tags: ["pipeline", "profiling", "reflection", "observability"],
+      source: "wall_clock_coverage",
+      why: `Profile coverage was ${formatPercent(coverage.coverage_ratio)} across the recorded wall-clock span.`,
+      done_when: [
+        "Retrospectives explicitly explain low-coverage periods or mark them as unknown.",
+        "Future long manual/research/design stretches add sparse event.mjs checkpoints.",
+      ],
+      next_action: "Inspect wall_clock_coverage and decide whether the next cycle needs checkpoint prompts, a wrapper, or a lower-overhead capture habit.",
     });
   }
 

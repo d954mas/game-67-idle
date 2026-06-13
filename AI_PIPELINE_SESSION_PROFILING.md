@@ -254,8 +254,8 @@ Record tools by role:
   priority findings: waste/rework, failures, blockers, context hotspots,
   repeated commands, repeated command scope (`preflight`, `scoped`,
   `broad/final`, `unknown`), repeated broad/final commands by work item,
-  missing work-item metadata, missing context input details, and suggested
-  pipeline actions.
+  wall-clock coverage and largest unprofiled gaps, missing work-item metadata,
+  missing context input details, and suggested pipeline actions.
 - `plan_validation.mjs`: pre-validation helper that prints a narrow-to-broad
   validation ladder for the changed work kind. Use it when `review.mjs` reports
   repeated commands, before broad reusable-base checks, or when the right
@@ -361,9 +361,9 @@ node tools/ai_profile/review.mjs tmp/session_profiles/session_profile_YYYY-MM-DD
 
 The JSON artifact uses `schema_version: 1` and contains findings, repeated
 command scopes, work-item/iteration summaries, repeated broad/final commands
-by work item, missing context-input details, and suggested pipeline actions.
-Keep it in `tmp/session_profiles/` unless the lead explicitly asks to preserve
-it.
+by work item, `wall_clock_coverage`, missing context-input details, and
+suggested pipeline actions. Keep it in `tmp/session_profiles/` unless the lead
+explicitly asks to preserve it.
 
 To turn structured findings into reviewable next actions, generate follow-up
 drafts:
@@ -373,7 +373,9 @@ node tools/ai_profile/followups.mjs tmp/session_profiles/session_profile_YYYY-MM
 ```
 
 Follow-up drafts are not tasks yet. Promote only still-relevant items after
-checking current tasks and recent commits.
+checking current tasks and recent commits. Drafts include repeated validation,
+missing context inputs, missing work-item metadata, low wall-clock coverage,
+failed records, and waste/rework when those findings appear in review JSON.
 
 When the review shows repeated broad commands, plan the next validation loop
 before running it:
@@ -404,6 +406,9 @@ A "profiled session" is done when:
 - `review.mjs` is used before deeper reflection when a profile exists;
 - `review.mjs --json-output` is used when another tool/agent will consume the
   findings instead of a human reading the markdown;
+- low wall-clock coverage or large profile gaps are explained in the
+  retrospective, or the next cycle adds sparse `event.mjs` checkpoints for
+  long manual/research/design stretches;
 - `followups.mjs` is used when review JSON should become draft next actions
   for task/rule/tool promotion;
 - `plan_validation.mjs` is used before rerunning broad validation after the

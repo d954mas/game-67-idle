@@ -27,6 +27,11 @@ function formatMs(ms) {
   return `${(minutes / 60).toFixed(2)}h`;
 }
 
+function formatPercent(value) {
+  if (!Number.isFinite(value)) return "unknown";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
 function topEntries(map, limit = 10) {
   return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
 }
@@ -49,6 +54,76 @@ function repeatedSegmentCommands(map, limit = 20) {
   return topEntries(map, limit)
     .filter(([, count]) => count > 1)
     .map(([key, count]) => ({ ...splitSegmentCommandKey(key), count }));
+}
+
+function eventTime(record) {
+  const parsed = Date.parse(record.ts || "");
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function profileIntervals(records) {
+  const intervals = [];
+  for (const record of records) {
+    const endMs = eventTime(record);
+    if (endMs === undefined) continue;
+    const durationMs = Math.max(0, Number(record.duration_ms || 0));
+    const startMs = endMs - durationMs;
+    intervals.push({ start_ms: startMs, end_ms: endMs, duration_ms: durationMs, line: record.__line, intent: record.intent });
+  }
+  intervals.sort((a, b) => a.start_ms - b.start_ms || a.end_ms - b.end_ms);
+  return intervals;
+}
+
+function coverageStats(records, gapThresholdMs = 5 * 60 * 1000) {
+  const intervals = profileIntervals(records);
+  if (intervals.length === 0) {
+    return {
+      wall_clock_span_ms: 0,
+      merged_profiled_ms: 0,
+      coverage_ratio: undefined,
+      largest_gaps: [],
+      first_record_ts: "",
+      last_record_ts: "",
+    };
+  }
+
+  const merged = [];
+  for (const interval of intervals) {
+    const last = merged[merged.length - 1];
+    if (!last || interval.start_ms > last.end_ms) {
+      merged.push({ ...interval });
+      continue;
+    }
+    if (interval.end_ms > last.end_ms) last.end_ms = interval.end_ms;
+  }
+
+  const firstMs = intervals[0].start_ms;
+  const lastMs = intervals.reduce((max, interval) => Math.max(max, interval.end_ms), intervals[0].end_ms);
+  const wallClockSpanMs = Math.max(0, lastMs - firstMs);
+  const mergedProfiledMs = merged.reduce((sum, interval) => sum + Math.max(0, interval.end_ms - interval.start_ms), 0);
+  const largestGaps = [];
+  for (let index = 1; index < merged.length; index += 1) {
+    const previous = merged[index - 1];
+    const current = merged[index];
+    const durationMs = current.start_ms - previous.end_ms;
+    if (durationMs >= gapThresholdMs) {
+      largestGaps.push({
+        start_ts: new Date(previous.end_ms).toISOString(),
+        end_ts: new Date(current.start_ms).toISOString(),
+        duration_ms: durationMs,
+      });
+    }
+  }
+  largestGaps.sort((a, b) => b.duration_ms - a.duration_ms);
+
+  return {
+    wall_clock_span_ms: wallClockSpanMs,
+    merged_profiled_ms: mergedProfiledMs,
+    coverage_ratio: wallClockSpanMs > 0 ? Math.min(1, mergedProfiledMs / wallClockSpanMs) : undefined,
+    largest_gaps: largestGaps.slice(0, 10),
+    first_record_ts: new Date(firstMs).toISOString(),
+    last_record_ts: new Date(lastMs).toISOString(),
+  };
 }
 
 function parseProfile(file) {
@@ -210,6 +285,7 @@ const repeatedBroadCommands = repeatedCommands.filter(([command]) => commandScop
 const repeatedBroadByWorkItem = repeatedSegmentCommands(workItemBroadCommandCounts, 20);
 const topContext = topEntries(contextChars, 10).filter(([, chars]) => chars > 0);
 const topPhaseDuration = topEntries(phaseDuration, 10);
+const coverage = coverageStats(records);
 const topWorkItems = topEntries(workItemCounts, 20).map(([work_item, count]) => ({
   work_item,
   records: count,
@@ -245,6 +321,13 @@ if (records.length >= 20 && missingWorkItemCount > 0) {
     message: `${missingWorkItemCount} record(s) lack work_item metadata; multi-task profiles are harder to analyze.`,
   });
 }
+const lowCoverage = coverage.wall_clock_span_ms >= 30 * 60 * 1000 && Number.isFinite(coverage.coverage_ratio) && coverage.coverage_ratio < 0.25;
+if (lowCoverage) {
+  findings.push({
+    type: "low_profile_coverage",
+    message: `Profile covers ${formatPercent(coverage.coverage_ratio)} of a ${formatMs(coverage.wall_clock_span_ms)} wall-clock span; large unprofiled gaps need explanation.`,
+  });
+}
 if (!closeoutSeen) findings.push({ type: "missing_closeout", message: "No session_closeout event: use closeout.mjs before final reflection." });
 const actions = [];
 if (waste.length > 0) actions.push("Convert recurring waste/rework reasons into a task, skill rule, validator, or batching rule.");
@@ -258,6 +341,8 @@ if (repeatedBroadCommands.length > 0) {
 }
 if (highContext.length > 0 || missingContextInputs.length > 0) actions.push("Compact source-of-truth docs or log explicit context_inputs for expensive reads.");
 if (records.length >= 20 && missingWorkItemCount > 0) actions.push("For long or multi-task profiles, pass `--work-item <id>` and `--iteration <name>` to run/event/context/closeout commands.");
+if (lowCoverage) actions.push("Explain low wall-clock profile coverage in the retrospective, or add sparse `event.mjs` checkpoints during long manual/research/design stretches.");
+if (coverage.largest_gaps.length > 0) actions.push("Explain the largest profile gaps in the retrospective, or add sparse `event.mjs` checkpoints during long idle/manual stretches.");
 if (!closeoutSeen) actions.push("Run `node tools/ai_profile/closeout.mjs` at session end.");
 if (actions.length === 0) actions.push("Use this clean profile as baseline; compare against the next real game iteration.");
 
@@ -354,6 +439,19 @@ if (topPhaseDuration.length === 0) {
   for (const [phase, duration] of topPhaseDuration) emit(`- ${phase}: ${formatMs(duration)}`);
 }
 
+emit("\n## Wall-Clock Coverage");
+emit(`- span: ${formatMs(coverage.wall_clock_span_ms)}`);
+emit(`- merged profiled time: ${formatMs(coverage.merged_profiled_ms)}`);
+emit(`- coverage: ${formatPercent(coverage.coverage_ratio)}`);
+if (coverage.largest_gaps.length === 0) {
+  emit("- largest gaps: none above 5.0m");
+} else {
+  emit("- largest gaps:");
+  for (const gap of coverage.largest_gaps.slice(0, 5)) {
+    emit(`  - ${formatMs(gap.duration_ms)} from ${gap.start_ts} to ${gap.end_ts}`);
+  }
+}
+
 emit("\n## Work Items");
 if (topWorkItems.length === 0) {
   emit("- none");
@@ -422,6 +520,7 @@ if (jsonOutputFile) {
       count: item.count,
     })),
     time_by_phase: topPhaseDuration.map(([phase, duration_ms]) => ({ phase, duration_ms })),
+    wall_clock_coverage: coverage,
     work_items: topWorkItems,
     iterations: topIterations,
     suggested_pipeline_actions: actions,

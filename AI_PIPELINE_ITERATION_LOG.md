@@ -529,3 +529,20 @@ specific and reusable.
   summarize repeated broad/final commands by work item.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0072`.
+
+## 2026-06-13 - Session profiles need wall-clock coverage
+
+- Context: Profile summaries and reviews report recorded command/event
+  duration, but long AI sessions also contain manual review, design thinking,
+  waiting, user feedback, and unlogged tool use.
+- Friction: A profile could look precise while only covering a small slice of
+  the real wall-clock session.
+- Time sink: Retrospectives then over-explain logged commands and under-explain
+  the largest unprofiled gaps.
+- Likely cause: `review.mjs` had no wall-clock span, merged profiled interval,
+  coverage ratio, or gap list.
+- Proposed improvement: Add wall-clock coverage and largest-gap reporting to
+  the profile review markdown/JSON, and require retrospectives to explain
+  low-coverage gaps or add sparse checkpoints next cycle.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0073`.
