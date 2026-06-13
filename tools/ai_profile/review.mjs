@@ -159,6 +159,7 @@ function scopedSummary(records) {
     .map(([command, count]) => ({ command, count, scope: "broad/final" }));
   const coverage = coverageStats(records);
   const failedClassification = classifyFailedRecords(records);
+  const recoveredFailureClassification = classifyRecoveredFailures(failedClassification.recovered);
   return {
     records: records.length,
     missing_context_inputs: records.filter((record) => record.context_risk && record.context_risk !== "low" && !(record.context_inputs || []).length).length,
@@ -174,6 +175,7 @@ function scopedSummary(records) {
       recovered_by_line: item.recovered_by_line,
       recovered_by_intent: item.recovered_by_intent,
     })),
+    recovered_failure_classification: recoveredFailureClassification,
     unresolved_failed_records: failedClassification.unresolved.map((record) => ({
       line: record.__line,
       phase: record.phase,
@@ -448,6 +450,49 @@ function classifyFailedRecords(records) {
   return { recovered, unresolved };
 }
 
+function classifyRecoveredFailures(recoveredFailures) {
+  return recoveredFailures.map((item) => {
+    const record = item.record;
+    const detail = [
+      commandText(record),
+      record.command_error || "",
+      record.waste_reason || "",
+      record.blocked_by || "",
+      record.notes || "",
+    ].filter(Boolean).join(" ").toLowerCase();
+    const scope = commandScope(commandText(record));
+    let classification = "useful_negative_feedback";
+    let reason = "A failed check later passed and has no explicit waste/rework marker, so treat it as validation feedback unless review proves otherwise.";
+    let next_action = "Keep as learning evidence; only create a rule or preflight if the same class of failure recurs.";
+    if (record.value === "waste" || record.value === "rework" || record.waste_reason) {
+      classification = "avoidable_rework";
+      reason = "The failed record was marked as waste/rework or includes a waste reason.";
+      next_action = "Convert the cause into a rule, preflight, narrower validation gate, or implementation checklist.";
+    } else if (/(timeout|timed out|flaky|econn|network|dns|eacces|eperm|permission|locked|busy|spawn|enoent)/i.test(detail)) {
+      classification = "tool_or_environment_noise";
+      reason = "The failure detail looks like tool, filesystem, environment, or transient infrastructure noise.";
+      next_action = "Stabilize the tool/environment or mark as noise; do not turn it into a product-process rule without recurrence.";
+    } else if (record.validation_batch_id) {
+      classification = "planned_validation_feedback";
+      reason = "The failure happened inside a profiled validation batch and later passed.";
+      next_action = "Keep with validation batch evidence; promote only recurring failures to process changes.";
+    }
+    return {
+      line: record.__line,
+      recovered_by_line: item.recovered_by_line,
+      intent: record.intent || "",
+      recovered_by_intent: item.recovered_by_intent || "",
+      command: commandText(record),
+      scope,
+      classification,
+      reason,
+      next_action,
+      value: record.value || "",
+      waste_reason: record.waste_reason || "",
+    };
+  });
+}
+
 function commandScope(command) {
   const normalized = normalizeCommand(command);
   if (!normalized) return "unknown";
@@ -611,6 +656,7 @@ const findings = [];
 const failedClassification = classifyFailedRecords(records);
 const recoveredFailed = failedClassification.recovered;
 const unresolvedFailed = failedClassification.unresolved;
+const recoveredFailureClassification = classifyRecoveredFailures(recoveredFailed);
 if (waste.length > 0) findings.push({ type: "waste_or_rework", message: `${waste.length} waste/rework record(s) need process fixes.` });
 if (unresolvedFailed.length > 0) findings.push({ type: "failed_records", message: `${unresolvedFailed.length} unresolved failed command/event record(s) need failure analysis.` });
 if (recoveredFailed.length > 0) findings.push({ type: "recovered_failed_records", message: `${recoveredFailed.length} failed record(s) later passed and should be classified as recovered rework.` });
@@ -652,7 +698,7 @@ if (!closeoutSeen) findings.push({ type: "missing_closeout", message: "No sessio
 const actions = [];
 if (waste.length > 0) actions.push("Convert recurring waste/rework reasons into a task, skill rule, validator, or batching rule.");
 if (unresolvedFailed.length > 0) actions.push("For unresolved failed commands, decide whether the fix is code, environment, narrower validation, or better preflight.");
-if (recoveredFailed.length > 0) actions.push("Classify recovered failed commands as rework/learning in the retrospective instead of treating them as current blockers.");
+if (recoveredFailed.length > 0) actions.push("Use recovered_failure_classification to separate useful validation feedback, avoidable rework, and tool/environment noise.");
 if (repeatedUnbatchedBroadCommands.length > 0) {
   actions.push(
     "Batch repeated broad/final validation with `node tools/ai.mjs validate --change <kind> --risk <risk>` before the next validation loop.",
@@ -726,6 +772,16 @@ if (recoveredFailed.length === 0) {
 } else {
   for (const item of recoveredFailed.slice(0, 20)) {
     emit(`- line ${item.record.__line} recovered by line ${item.recovered_by_line}: ${item.record.intent}`);
+  }
+}
+
+emit("\n## Recovered Failure Classification");
+if (recoveredFailureClassification.length === 0) {
+  emit("- none");
+} else {
+  for (const item of recoveredFailureClassification.slice(0, 20)) {
+    emit(`- line ${item.line} -> ${item.classification}: ${item.reason}`);
+    emit(`  - next: ${item.next_action}`);
   }
 }
 
@@ -936,6 +992,7 @@ if (jsonOutputFile) {
       recovered_by_line: item.recovered_by_line,
       recovered_by_intent: item.recovered_by_intent,
     })),
+    recovered_failure_classification: recoveredFailureClassification,
     unresolved_failed_records: unresolvedFailed.map((record) => ({
       line: record.__line,
       phase: record.phase,

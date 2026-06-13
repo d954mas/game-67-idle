@@ -1371,3 +1371,20 @@ specific and reusable.
   for telemetry debugging.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Recovered failures need triage labels
+
+- Trigger: Reflection review still said to classify recovered failures as
+  useful feedback, avoidable rework, or tool noise, but the review artifact did
+  not provide those labels.
+- Symptom: A retrospective had to reopen raw profile records to decide whether
+  failed-then-passed commands should become process work.
+- Time sink: Failure analysis stayed manual even though the profile already
+  stores result, value, waste reason, command details, validation batch id, and
+  recovery line.
+- Likely cause: `review.mjs` detected recovered failures but did not emit a
+  `recovered_failure_classification` handoff section.
+- Proposed improvement: Add generated recovered-failure labels and next
+  actions to review JSON/Markdown and carry them into reflection draft/review.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.

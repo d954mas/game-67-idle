@@ -120,6 +120,19 @@ function toolUseSummary(review) {
   }));
 }
 
+function recoveredFailureSummary(review) {
+  return asArray(review?.recovered_failure_classification).slice(0, 8).map((item) => ({
+    line: Number(item.line || 0),
+    recovered_by_line: Number(item.recovered_by_line || 0),
+    intent: item.intent || "",
+    command: item.command || "",
+    scope: item.scope || "unknown",
+    classification: item.classification || "needs_manual_classification",
+    reason: item.reason || "",
+    next_action: item.next_action || "",
+  }));
+}
+
 function scopeSummaryText(summary) {
   if (!summary.by_scope.length) return "no scope breakdown";
   return summary.by_scope.map((item) => `${item.scope || "unknown"}=${item.count || 0}`).join(", ");
@@ -129,6 +142,10 @@ function lessonForFinding(finding, context = {}) {
   const type = finding.type || "finding";
   const message = finding.message || "";
   const repeatedSummary = context.repeated_commands || repeatedCommandSummary(null);
+  const recoveredSummary = context.recovered_failures || [];
+  const recoveredClasses = recoveredSummary.length > 0
+    ? [...new Set(recoveredSummary.map((item) => item.classification || "unknown"))].join(", ")
+    : "no generated classification";
   const templates = {
     repeated_commands: {
       symptom: `${message} Scope mix: ${scopeSummaryText(repeatedSummary)}. Planned validation batches: ${repeatedSummary.validation_batches.length}.`,
@@ -162,8 +179,8 @@ function lessonForFinding(finding, context = {}) {
     },
     recovered_failed_records: {
       symptom: message,
-      cause: "Some failed commands later passed; they are historical rework or useful negative feedback, not current blockers.",
-      fix: "Classify recovered failures in retrospectives and only promote recurring current-scope failures.",
+      cause: `Some failed commands later passed; generated classification: ${recoveredClasses}.`,
+      fix: "Use recovered_failure_classification to separate useful validation feedback, avoidable rework, and tool/environment noise before promoting tasks or rules.",
     },
   };
   return {
@@ -184,9 +201,13 @@ function buildDraft(packet, review) {
   const findings = asArray(review?.findings);
   const repeatedSummary = repeatedCommandSummary(review);
   const toolsSummary = toolUseSummary(review);
+  const recoveredSummary = recoveredFailureSummary(review);
   const currentFindings = asArray(packet.current_scope?.findings).map(compactFinding);
   const currentActions = asArray(packet.current_scope?.suggested_actions);
-  const historicalLessons = findings.map((finding) => lessonForFinding(finding, { repeated_commands: repeatedSummary }));
+  const historicalLessons = findings.map((finding) => lessonForFinding(finding, {
+    repeated_commands: repeatedSummary,
+    recovered_failures: recoveredSummary,
+  }));
   const nextActions = [];
   if (currentRegressions.length > 0) {
     nextActions.push("Inspect current-scope regressions before writing the final retrospective.");
@@ -226,6 +247,7 @@ function buildDraft(packet, review) {
     suppressed_historical_findings: suppressed,
     repeated_commands: repeatedSummary,
     tool_use_summary: toolsSummary,
+    recovered_failure_classification: recoveredSummary,
     next_cycle_actions: nextActions,
   };
 }
@@ -290,6 +312,16 @@ function renderMarkdown(draft, packetFile) {
     lines.push("- none");
   } else {
     for (const item of draft.tool_use_summary) lines.push(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
+  }
+  lines.push("");
+  lines.push("## Recovered Failure Evidence");
+  if (draft.recovered_failure_classification.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const item of draft.recovered_failure_classification) {
+      lines.push(`- line ${item.line} -> ${item.classification}: ${item.reason}`);
+      lines.push(`  - next: ${item.next_action}`);
+    }
   }
   lines.push("");
   lines.push("## Repeated Command Evidence");

@@ -617,7 +617,9 @@ separately. Historical findings still belong in retrospectives, but they should
 not keep creating current action items after the active scope is clean.
 Recovered failed records follow the same rule: historical recovered failures
 are retrospective learning notes, while current-scope recovered failures can
-still become follow-up drafts if they reveal recurring rework.
+still become follow-up drafts if they reveal recurring rework. When review JSON
+includes `recovered_failure_classification`, use those labels first: useful
+validation feedback, avoidable rework, or tool/environment noise.
 When `closeout.mjs` was used without `--no-followups`, these drafts are already
 generated and this manual command is only needed after rerunning review.
 

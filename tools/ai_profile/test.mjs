@@ -2511,6 +2511,9 @@ test("review and followups classify recovered failures", () => {
     const review = readJson(reviewJson);
     assert.equal(review.recovered_failed_records.length, 1);
     assert.equal(review.unresolved_failed_records.length, 0);
+    assert.equal(review.recovered_failure_classification.length, 1);
+    assert.equal(review.recovered_failure_classification[0].classification, "avoidable_rework");
+    assert.match(review.recovered_failure_classification[0].next_action, /preflight|rule|validation/);
 
     run(["tools/ai_profile/followups.mjs", reviewJson, "--json-output", followupsJson]);
     const followups = readJson(followupsJson);

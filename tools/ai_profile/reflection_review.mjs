@@ -68,7 +68,7 @@ function topImprovements(draft, currentClean) {
     improvements.push("Place node tools/ai.mjs checkpoint records during long manual, research, design, or review stretches.");
   }
   if (hasLesson("recovered_failed_records")) {
-    improvements.push("Classify recovered failures as useful negative feedback, avoidable rework, or tool noise.");
+    improvements.push("Use recovered_failure_classification to separate useful validation feedback, avoidable rework, and tool/environment noise.");
   }
   if (asArray(draft.current_state?.satisfied_followups).length > 0) {
     improvements.push("Keep satisfied follow-ups out of new task creation unless fresh evidence reopens them.");
@@ -113,6 +113,7 @@ function buildReview(draft, draftPath) {
     suppressed_historical_findings: asArray(draft.suppressed_historical_findings),
     repeated_commands: draft.repeated_commands || {},
     tool_use_summary: asArray(draft.tool_use_summary),
+    recovered_failure_classification: asArray(draft.recovered_failure_classification),
     satisfied_followups: asArray(draft.current_state?.satisfied_followups),
     top_improvements: topImprovements(draft, currentClean),
     caveats: [
@@ -156,6 +157,17 @@ function renderMarkdown(review, draftPath) {
     lines.push("- none");
   } else {
     for (const item of tools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
+  }
+  lines.push("");
+  lines.push("## Recovered Failure Review");
+  const recovered = asArray(review.recovered_failure_classification);
+  if (recovered.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const item of recovered) {
+      lines.push(`- line ${item.line || 0} -> ${item.classification || "unknown"}: ${item.reason || ""}`);
+      lines.push(`  - next: ${item.next_action || ""}`);
+    }
   }
   lines.push("");
   lines.push("## Repeated Command Review");
