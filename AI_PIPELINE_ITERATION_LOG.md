@@ -860,3 +860,19 @@ specific and reusable.
   historical whole-profile deltas, and emit machine-readable JSON.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0092`.
+
+## 2026-06-13 - Baselines need a capture step before comparison
+
+- Trigger: Follow-up drafts recommended using a clean review JSON as a
+  baseline, but normal closeout/review commands write stable daily filenames.
+- Symptom: A later closeout can overwrite the review JSON that was meant to be
+  the comparison anchor.
+- Time sink: Future agents may manually reconstruct which review was the clean
+  baseline or compare against the wrong artifact.
+- Likely cause: The compare tool existed, but the pipeline had no explicit
+  baseline capture step.
+- Proposed improvement: Add `tools/ai_profile/capture_baseline.mjs` to copy a
+  clean review JSON to `tmp/session_profiles/baselines/<label>.review.json`
+  and write a manifest with the compare command.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0093`.

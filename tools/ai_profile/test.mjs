@@ -944,6 +944,104 @@ test("compare review baseline fails on current-scope regression", () => {
   }
 });
 
+test("capture baseline writes stable review copy and manifest", () => {
+  const dir = tempDir();
+  try {
+    const review = join(dir, "clean.review.json");
+    const baseline = join(dir, "baseline.review.json");
+    const manifest = join(dir, "baseline.manifest.json");
+    writeFileSync(review, `${JSON.stringify({
+      schema_version: 1,
+      profile: "clean.jsonl",
+      records: 12,
+      findings: [],
+      current_scope: {
+        enabled: true,
+        records: 3,
+        findings: [],
+        missing_context_inputs: 0,
+        missing_work_item_records: 0,
+        repeated_broad_final_commands: [],
+        recovered_failed_records: [],
+        unresolved_failed_records: [],
+      },
+    })}\n`, "utf8");
+
+    const result = run([
+      "tools/ai_profile/capture_baseline.mjs",
+      review,
+      "--label",
+      "Clean Baseline",
+      "--output",
+      baseline,
+      "--manifest",
+      manifest,
+    ]);
+    assert.match(result.stdout, /Label: clean-baseline/);
+    assert.deepEqual(readJson(baseline).profile, "clean.jsonl");
+    const captured = readJson(manifest);
+    assert.equal(captured.label, "clean-baseline");
+    assert.equal(captured.baseline_review, resolve(baseline));
+    assert.equal(captured.summary.current_scope_findings, 0);
+    assert.match(captured.compare_command, /compare_reviews\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("capture baseline refuses overwrite unless forced", () => {
+  const dir = tempDir();
+  try {
+    const review = join(dir, "clean.review.json");
+    const baseline = join(dir, "baseline.review.json");
+    const manifest = join(dir, "baseline.manifest.json");
+    writeFileSync(review, `${JSON.stringify({
+      schema_version: 1,
+      profile: "clean.jsonl",
+      records: 1,
+      findings: [],
+      current_scope: { enabled: true, records: 1, findings: [] },
+    })}\n`, "utf8");
+    run([
+      "tools/ai_profile/capture_baseline.mjs",
+      review,
+      "--label",
+      "guard",
+      "--output",
+      baseline,
+      "--manifest",
+      manifest,
+    ]);
+
+    const refused = runRaw([
+      "tools/ai_profile/capture_baseline.mjs",
+      review,
+      "--label",
+      "guard",
+      "--output",
+      baseline,
+      "--manifest",
+      manifest,
+    ]);
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /refused to overwrite/);
+
+    run([
+      "tools/ai_profile/capture_baseline.mjs",
+      review,
+      "--label",
+      "guard",
+      "--output",
+      baseline,
+      "--manifest",
+      manifest,
+      "--force",
+    ]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("closeout writes summary review and follow-up bundle", () => {
   const dir = tempDir();
   try {
@@ -1085,6 +1183,7 @@ test("followups suppress historical-only issues when current scope is clean", ()
       followups.suggestions.some((suggestion) => suggestion.priority === "P1"),
       false,
     );
+    assert.ok(followups.suggestions.some((suggestion) => suggestion.next_action.includes("capture_baseline.mjs")));
   } finally {
     cleanup(dir);
   }

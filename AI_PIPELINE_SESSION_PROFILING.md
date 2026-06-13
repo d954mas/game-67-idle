@@ -342,6 +342,10 @@ Record tools by role:
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
   and writes a scratch reflection bundle: summary, review markdown/JSON, and
   follow-up markdown/JSON.
+- `capture_baseline.mjs`: baseline helper that copies a clean review JSON to
+  `tmp/session_profiles/baselines/<label>.review.json` and writes a manifest
+  with source, target, current-scope counts, and a ready compare command. Use
+  it before later closeout/review commands overwrite the daily review JSON.
 - `review.mjs`: reflection prep helper that turns a JSONL profile into
   priority findings: waste/rework, failures, blockers, context hotspots,
   repeated commands, repeated command scope (`preflight`, `scoped`,
@@ -496,11 +500,18 @@ still become follow-up drafts if they reveal recurring rework.
 When `closeout.mjs` was used without `--no-followups`, these drafts are already
 generated and this manual command is only needed after rerunning review.
 
-When a profile is clean enough to become a baseline, compare the next review
-JSON against it instead of manually reading two artifacts:
+When a profile is clean enough to become a baseline, capture the review JSON
+before later closeout/review commands overwrite the daily artifact:
 
 ```powershell
-node tools/ai_profile/compare_reviews.mjs tmp/session_profiles/baseline.review.json tmp/session_profiles/current.review.json --output tmp/session_profiles/profile_compare.md --json-output tmp/session_profiles/profile_compare.json
+node tools/ai_profile/capture_baseline.mjs tmp/session_profiles/session_profile_YYYY-MM-DD.review.json --label clean-profile-baseline
+```
+
+Then compare the next review JSON against the captured baseline instead of
+manually reading two artifacts:
+
+```powershell
+node tools/ai_profile/compare_reviews.mjs tmp/session_profiles/baselines/clean-profile-baseline.review.json tmp/session_profiles/current.review.json --output tmp/session_profiles/profile_compare.md --json-output tmp/session_profiles/profile_compare.json
 ```
 
 Use `--fail-on-regression` only for automation that should fail when
@@ -587,6 +598,9 @@ A "profiled session" is done when:
 - `compare_reviews.mjs` is used when a previous clean review JSON should act
   as a baseline for a later profile; inspect current-scope regressions first
   and treat whole-profile deltas as trend evidence;
+- `capture_baseline.mjs` is used before relying on a clean review JSON as a
+  future baseline, because normal closeout/review filenames are overwritten by
+  later runs;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste; use
   `--json-output` when another tool, agent, or later reflection should consume

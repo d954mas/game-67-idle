@@ -205,7 +205,7 @@ function buildSuggestions(review) {
       source: "clean_profile",
       why: "No follow-up findings were detected in the review JSON.",
       done_when: ["A later profile is compared against this baseline."],
-      next_action: "Keep the review JSON as scratch evidence and compare trend after the next long session.",
+      next_action: "Capture the review with `node tools/ai_profile/capture_baseline.mjs <review.json> --label <name>`, then compare a later review with compare_reviews.mjs.",
     });
   }
 

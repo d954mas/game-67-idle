@@ -140,7 +140,10 @@ Run `tools/ai_profile/followups.mjs` only when review JSON was rerun manually
 or the closeout bundle was created with `--no-followups`. Promote only
 still-relevant drafts into tasks, rules, or tools after checking current
 taskboard state.
-When a previous clean review JSON is available, run
+When a review JSON is clean enough to become a baseline, first capture it with
+`tools/ai_profile/capture_baseline.mjs <review.json> --label <name>` so later
+closeout/review commands do not overwrite the daily artifact. When a previous
+clean baseline review JSON is available, run
 `tools/ai_profile/compare_reviews.mjs <baseline.review.json>
 <current.review.json> --output tmp/session_profiles/<name>.compare.md
 --json-output tmp/session_profiles/<name>.compare.json` before writing trend
