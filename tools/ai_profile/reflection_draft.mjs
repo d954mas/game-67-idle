@@ -29,6 +29,15 @@ function loadOptionalJson(path) {
   }
 }
 
+function formatMs(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return "0s";
+  const seconds = ms / 1000;
+  if (seconds < 90) return `${seconds.toFixed(1)}s`;
+  const minutes = seconds / 60;
+  if (minutes < 90) return `${minutes.toFixed(1)}m`;
+  return `${(minutes / 60).toFixed(2)}h`;
+}
+
 function compactFinding(finding) {
   if (!finding || typeof finding !== "object") return { type: "finding", message: String(finding || "") };
   return {
@@ -98,6 +107,19 @@ function repeatedCommandSummary(review) {
   };
 }
 
+function toolUseSummary(review) {
+  return asArray(review?.tool_use_summary).slice(0, 8).map((item) => ({
+    tool: item.tool || "",
+    records: Number(item.records || 0),
+    duration_ms: Number(item.duration_ms || 0),
+    failed: Number(item.failed || 0),
+    blocked: Number(item.blocked || 0),
+    waste_or_rework: Number(item.waste_or_rework || 0),
+    contexts: Number(item.contexts || 0),
+    commands: Number(item.commands || 0),
+  }));
+}
+
 function scopeSummaryText(summary) {
   if (!summary.by_scope.length) return "no scope breakdown";
   return summary.by_scope.map((item) => `${item.scope || "unknown"}=${item.count || 0}`).join(", ");
@@ -156,6 +178,7 @@ function buildDraft(packet, review) {
   const suppressed = asArray(packet.followups?.suppressed_historical_findings);
   const findings = asArray(review?.findings);
   const repeatedSummary = repeatedCommandSummary(review);
+  const toolsSummary = toolUseSummary(review);
   const currentFindings = asArray(packet.current_scope?.findings).map(compactFinding);
   const currentActions = asArray(packet.current_scope?.suggested_actions);
   const historicalLessons = findings.map((finding) => lessonForFinding(finding, { repeated_commands: repeatedSummary }));
@@ -197,6 +220,7 @@ function buildDraft(packet, review) {
     historical_lessons: historicalLessons,
     suppressed_historical_findings: suppressed,
     repeated_commands: repeatedSummary,
+    tool_use_summary: toolsSummary,
     next_cycle_actions: nextActions,
   };
 }
@@ -254,6 +278,13 @@ function renderMarkdown(draft, packetFile) {
     lines.push("- none");
   } else {
     for (const finding of draft.suppressed_historical_findings) lines.push(`- ${finding}`);
+  }
+  lines.push("");
+  lines.push("## Tool Use Summary");
+  if (draft.tool_use_summary.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const item of draft.tool_use_summary) lines.push(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
   }
   lines.push("");
   lines.push("## Repeated Command Evidence");

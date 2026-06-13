@@ -1314,3 +1314,21 @@ specific and reusable.
   review JSON/markdown and carry it through reflection draft/review.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Tool use needs its own summary
+
+- Trigger: The reflection workflow asked for tool counts and tool-use audit,
+  but profile review focused on commands, validation batches, and context
+  rather than aggregating `record.tools`.
+- Symptom: A retrospective could say which commands repeated, but still had to
+  manually inspect JSONL to answer which tool classes consumed time, failed, or
+  created rework.
+- Time sink: Tool-use analysis stayed manual despite the profile already
+  storing `tools`, `duration_ms`, `result`, `value`, `commands`, and
+  `context_inputs`.
+- Likely cause: `review.mjs` treated command text as the main tool signal and
+  did not emit a separate `tool_use_summary`.
+- Proposed improvement: Add `tool_use_summary` to profile review JSON/markdown
+  and carry it into reflection draft/review.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.

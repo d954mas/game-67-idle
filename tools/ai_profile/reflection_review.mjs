@@ -26,6 +26,16 @@ function commandScopeCount(draft, scope) {
   return Number(item?.count || 0);
 }
 
+function formatMs(ms) {
+  const value = Number(ms || 0);
+  if (!Number.isFinite(value) || value <= 0) return "0s";
+  const seconds = value / 1000;
+  if (seconds < 90) return `${seconds.toFixed(1)}s`;
+  const minutes = seconds / 60;
+  if (minutes < 90) return `${minutes.toFixed(1)}m`;
+  return `${(minutes / 60).toFixed(2)}h`;
+}
+
 function topImprovements(draft, currentClean) {
   const improvements = [];
   const historical = asArray(draft.historical_lessons);
@@ -41,6 +51,9 @@ function topImprovements(draft, currentClean) {
   }
   if (asArray(draft.repeated_commands?.validation_batches).length > 0) {
     improvements.push("Use validation batch evidence to separate planned validation runs from ad hoc repeated commands.");
+  }
+  if (asArray(draft.tool_use_summary).length > 0) {
+    improvements.push("Use tool_use_summary to explain which tool classes consumed time, failed, or produced context.");
   }
   if (hasLesson("missing_context_inputs")) {
     improvements.push("Use node tools/ai.mjs context --path <file> or node tools/ai.mjs context -- <command> so reflection can measure context cost.");
@@ -96,6 +109,7 @@ function buildReview(draft, draftPath) {
     historical_lessons: historicalLessons,
     suppressed_historical_findings: asArray(draft.suppressed_historical_findings),
     repeated_commands: draft.repeated_commands || {},
+    tool_use_summary: asArray(draft.tool_use_summary),
     satisfied_followups: asArray(draft.current_state?.satisfied_followups),
     top_improvements: topImprovements(draft, currentClean),
     caveats: [
@@ -131,6 +145,14 @@ function renderMarkdown(review, draftPath) {
       lines.push(`  - symptom: ${lesson.symptom}`);
       lines.push(`  - fix: ${lesson.fix}`);
     }
+  }
+  lines.push("");
+  lines.push("## Tool Use Review");
+  const tools = asArray(review.tool_use_summary);
+  if (tools.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const item of tools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
   }
   lines.push("");
   lines.push("## Repeated Command Review");

@@ -223,6 +223,38 @@ function validationBatches(records) {
     }));
 }
 
+function toolUseSummary(records) {
+  const tools = new Map();
+  for (const record of records) {
+    const duration = Number(record.duration_ms || 0);
+    const listedTools = Array.isArray(record.tools) && record.tools.length > 0 ? record.tools : ["(unrecorded)"];
+    for (const tool of listedTools) {
+      const name = String(tool || "(empty)");
+      if (!tools.has(name)) {
+        tools.set(name, {
+          tool: name,
+          records: 0,
+          duration_ms: 0,
+          failed: 0,
+          blocked: 0,
+          waste_or_rework: 0,
+          contexts: 0,
+          commands: 0,
+        });
+      }
+      const item = tools.get(name);
+      item.records += 1;
+      item.duration_ms += duration;
+      if (record.result === "fail") item.failed += 1;
+      if (record.result === "blocked" || record.blocked_by) item.blocked += 1;
+      if (record.value === "waste" || record.value === "rework" || record.waste_reason) item.waste_or_rework += 1;
+      if (record.category === "context" || (record.context_inputs || []).length > 0) item.contexts += 1;
+      item.commands += (record.commands || []).length;
+    }
+  }
+  return [...tools.values()].sort((a, b) => b.duration_ms - a.duration_ms || b.records - a.records).slice(0, 20);
+}
+
 function classifyRepeatedCommands(records, repeatedCommands, commandScopes) {
   const stats = new Map();
   for (const record of records) {
@@ -540,6 +572,7 @@ const batchedBroadCommands = topEntries(batchedBroadCommandCounts, 20);
 const repeatedBroadByWorkItem = repeatedSegmentCommands(workItemBroadCommandCounts, 20);
 const validationBatchSummaries = validationBatches(records);
 const repeatedCommandClassifications = classifyRepeatedCommands(records, repeatedCommands, commandScopes);
+const toolSummary = toolUseSummary(records);
 const topContext = topEntries(contextChars, 10).filter(([, chars]) => chars > 0);
 const topPhaseDuration = topEntries(phaseDuration, 10);
 const coverage = coverageStats(records);
@@ -641,6 +674,15 @@ if (findings.length === 0) {
   emit("- No obvious whole-profile waste/rework/failure/context hotspots in this profile.");
 } else {
   for (const finding of findings) emit(`- ${finding.message}`);
+}
+
+emit("\n## Tool Use Summary");
+if (toolSummary.length === 0) {
+  emit("- none");
+} else {
+  for (const item of toolSummary) {
+    emit(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
+  }
 }
 
 emit("\n## Waste And Rework To Explain");
@@ -886,6 +928,7 @@ if (jsonOutputFile) {
     repeated_commands: repeatedCommandObjects,
     repeated_commands_by_scope: mapEntries(repeatedScopeCounts, 10).map(({ key, value }) => ({ scope: key, count: value })),
     repeated_command_classification: repeatedCommandClassifications,
+    tool_use_summary: toolSummary,
     repeated_broad_final_commands: repeatedCommandObjects.filter((item) => item.scope === "broad/final"),
     repeated_unbatched_broad_final_commands: repeatedUnbatchedBroadCommands.map(([command, count]) => ({
       command,

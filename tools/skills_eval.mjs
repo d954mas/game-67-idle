@@ -333,6 +333,7 @@ const SKILL_CHECKS = [
       "edit it with judgment",
       "reflection_review.mjs",
       "top next-cycle",
+      "tool_use_summary",
       "repeated-command evidence",
       "repeated_command_classification",
       "scoped/preflight guardrail",

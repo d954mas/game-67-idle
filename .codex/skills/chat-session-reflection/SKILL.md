@@ -202,6 +202,8 @@ In reflection review JSON, `current.actions` counts only real pending work; a
 clean-scope no-action explanation belongs in `current.status_message` and must
 not be treated as an action item.
 Anchor: top next-cycle improvements.
+When the draft includes `tool_use_summary`, use it to explain which tool
+classes consumed time, failed, produced context, or created rework.
 When the draft includes repeated-command evidence, classify repeats before
 turning them into process tasks. Prefer `repeated_command_classification` over
 raw repeat counts: planned validation, validation-waste risk,

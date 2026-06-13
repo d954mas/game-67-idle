@@ -50,6 +50,8 @@ workflow/runtime tools.
       triage repeated commands as planned validation, validation-waste risk,
       failure/rework signal, guardrail rerun, or manual-review case before
       creating process tasks.
+- [x] Profile review emits `tool_use_summary` so reflection can report which
+      tool classes consumed time, failed, produced context, or created rework.
 - [x] `node tools/ai.mjs checkpoint "<intent>"` provides the fast path for
       thresholded wall-clock checkpoints after manual/research/review gaps.
 - [x] `node tools/ai.mjs reflect` creates the full reflection handoff by
@@ -128,6 +130,15 @@ None.
   `planned_validation`, `failure_recovery_or_rework`, and
   `guardrail_rerun_review`; `node tools/ai.mjs validate --change profiling
   --change pipeline --change skills --risk medium` passed.
+- 2026-06-13: Added `tool_use_summary` to profile review, reflection draft,
+  and reflection review so tool-use analysis is available without manually
+  reopening raw JSONL records.
+- 2026-06-13: Validation passed for tool-use summary: `node --check` for
+  touched profile generators; `node --test tools/ai_profile/test.mjs`; `node
+  tools/skills_eval.mjs`; `node tools/taskboard/cli.mjs validate`; live
+  `node tools/ai_profile/review.mjs` showed `Tool Use Summary`; `node
+  tools/ai.mjs validate --change profiling --change pipeline --change skills
+  --risk medium` passed.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;

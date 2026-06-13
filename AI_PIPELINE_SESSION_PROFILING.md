@@ -443,6 +443,7 @@ Record tools by role:
   improvements.
 - `review.mjs`: reflection prep helper that turns a JSONL profile into
   priority findings: waste/rework, failures, blockers, context hotspots,
+  tool-use summary by recorded tool id,
   repeated commands, repeated command scope (`preflight`, `scoped`,
   `broad/final`, `unknown`), repeated broad/final commands by work item,
   repeated command classification (`planned_validation`,
@@ -660,6 +661,8 @@ node tools/ai_profile/reflection_draft.mjs tmp/session_profiles/session_profile_
 The draft is not the final retrospective. Use it to avoid repeatedly opening
 summary, review, follow-up, and comparison artifacts, then rewrite with
 judgment, user-visible context, and project-specific examples.
+When the draft includes `tool_use_summary`, use it to explain which tool
+classes consumed time, failed, produced context, or created rework.
 When the draft includes repeated-command evidence, classify the repeats before
 turning them into process work. Prefer the generated
 `repeated_command_classification` table over raw repeat counts: planned
