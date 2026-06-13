@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -46,6 +46,18 @@ function readJsonl(file) {
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+}
+
+function writeBundleArtifacts(profile, text = "artifact\n") {
+  const base = profile.replace(/\.jsonl$/i, "");
+  for (const suffix of ["summary.md", "review.md", "review.json", "followups.md", "followups.json"]) {
+    writeFileSync(`${base}.${suffix}`, text, "utf8");
+  }
+}
+
+function setMtime(path, iso) {
+  const date = new Date(iso);
+  utimesSync(path, date, date);
 }
 
 test("scope file supplies metadata after CLI and env fallbacks", () => {
@@ -344,6 +356,89 @@ test("status recommends checkpoint helper for low wall-clock coverage", () => {
     assert.equal(status.low_profile_coverage, true);
     assert.match(status.next_action, /checkpoint\.mjs/);
     assert.doesNotMatch(status.next_action, /event\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status reports complete fresh closeout bundle", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "fresh-bundle.jsonl");
+    const statusJson = join(dir, "status.json");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "session_closeout",
+      "--category",
+      "reflection",
+      "--intent",
+      "closeout",
+      "--result",
+      "pass",
+      "--value",
+      "necessary_overhead",
+      "--ts",
+      "2026-06-13T10:00:00+05:00",
+    ]);
+    writeBundleArtifacts(profile);
+    setMtime(profile, "2026-06-13T05:00:00Z");
+    for (const suffix of ["summary.md", "review.md", "review.json", "followups.md", "followups.json"]) {
+      setMtime(profile.replace(/\.jsonl$/i, `.${suffix}`), "2026-06-13T05:01:00Z");
+    }
+
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    const status = readJson(statusJson);
+    assert.equal(status.bundle.complete, true);
+    assert.equal(status.bundle.fresh, true);
+    assert.deepEqual(status.bundle.stale_artifacts, []);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status reports complete stale closeout bundle", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "stale-bundle.jsonl");
+    const scope = join(dir, "scope.json");
+    const statusJson = join(dir, "status.json");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "session_closeout",
+      "--category",
+      "reflection",
+      "--intent",
+      "closeout",
+      "--result",
+      "pass",
+      "--value",
+      "necessary_overhead",
+      "--duration-ms",
+      "600000",
+      "--ts",
+      "2026-06-13T10:00:00+05:00",
+    ]);
+    writeBundleArtifacts(profile);
+    setMtime(profile, "2026-06-13T05:02:00Z");
+    for (const suffix of ["summary.md", "review.md", "review.json", "followups.md", "followups.json"]) {
+      setMtime(profile.replace(/\.jsonl$/i, `.${suffix}`), "2026-06-13T05:01:00Z");
+    }
+    writeFileSync(scope, `${JSON.stringify({ schema_version: 1, work_item: "STALE", iteration: "bundle" })}\n`, "utf8");
+
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const status = readJson(statusJson);
+    assert.equal(status.bundle.complete, true);
+    assert.equal(status.bundle.fresh, false);
+    assert.deepEqual(status.bundle.stale_artifacts, ["summary", "review", "review_json", "followups", "followups_json"]);
+    assert.match(status.next_action, /closeout\.mjs/);
   } finally {
     cleanup(dir);
   }

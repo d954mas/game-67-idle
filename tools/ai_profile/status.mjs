@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { defaultProfilePath, parseArgs, readProfileScope, stringArg } from "./profile_lib.mjs";
 
@@ -85,16 +85,34 @@ function coverageStats(records) {
   };
 }
 
+function fileMtimeMs(path) {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return undefined;
+  }
+}
+
 function bundleStatus(profilePath) {
+  const profileMtimeMs = fileMtimeMs(profilePath);
   const artifacts = [
     ["summary", artifactPath(profilePath, "summary.md")],
     ["review", artifactPath(profilePath, "review.md")],
     ["review_json", artifactPath(profilePath, "review.json")],
     ["followups", artifactPath(profilePath, "followups.md")],
     ["followups_json", artifactPath(profilePath, "followups.json")],
-  ].map(([name, path]) => ({ name, path, exists: existsSync(path) }));
+  ].map(([name, path]) => {
+    const mtimeMs = fileMtimeMs(path);
+    const exists = mtimeMs !== undefined;
+    const stale = exists && profileMtimeMs !== undefined && mtimeMs + 1 < profileMtimeMs;
+    return { name, path, exists, mtime_ms: mtimeMs, stale };
+  });
+  const complete = artifacts.every((artifact) => artifact.exists);
   return {
-    complete: artifacts.every((artifact) => artifact.exists),
+    complete,
+    fresh: complete && artifacts.every((artifact) => !artifact.stale),
+    profile_mtime_ms: profileMtimeMs,
+    stale_artifacts: artifacts.filter((artifact) => artifact.stale).map((artifact) => artifact.name),
     artifacts,
   };
 }
@@ -190,6 +208,8 @@ function buildStatus(profilePath) {
     nextAction = "At session end, run closeout.mjs to generate the reflection bundle.";
   } else if (!bundle.complete) {
     nextAction = "Run closeout.mjs again, or rerun review/followups if the bundle was intentionally skipped.";
+  } else if (!bundle.fresh) {
+    nextAction = "Before reflection, rerun closeout.mjs so summary, review, and followups match the latest profile.";
   }
 
   return {
@@ -247,6 +267,7 @@ function renderMarkdown(status) {
   lines.push(`Closeout event: ${status.closeout_seen ? "yes" : "no"}`);
   lines.push(`Scope: ${status.scope.exists ? "set" : "none"}${status.scope.work_item ? ` (${status.scope.work_item}${status.scope.iteration ? `/${status.scope.iteration}` : ""})` : ""}`);
   lines.push(`Bundle complete: ${status.bundle.complete ? "yes" : "no"}`);
+  lines.push(`Bundle fresh: ${status.bundle.fresh ? "yes" : "no"}${status.bundle.stale_artifacts.length > 0 ? ` (${status.bundle.stale_artifacts.join(", ")} stale)` : ""}`);
   lines.push(`Work-item coverage: ${formatPercent(status.work_item_coverage.coverage_ratio)} (${status.work_item_coverage.missing_records} missing)`);
   lines.push(`Missing context inputs: ${status.missing_context_inputs}`);
   lines.push(`Current scope records: ${status.current_scope.records} (${status.current_scope.missing_context_inputs} missing context inputs, ${status.current_scope.missing_work_item_records} missing work items)`);

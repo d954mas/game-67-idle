@@ -333,6 +333,9 @@ Record tools by role:
   When current scope has `updated_at`, status reports current-scope record and
   missing-context counts separately; use current-scope health for next actions
   and whole-profile totals for retrospective history.
+  Treat `Bundle complete: yes` as insufficient for reflection unless
+  `Bundle fresh: yes` also holds; stale bundles were generated before the
+  latest profile records.
 - `test.mjs`: regression test suite for profile CLI behavior. Run
   `node --test tools/ai_profile/test.mjs` after profiler tool changes.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
@@ -522,6 +525,9 @@ A "profiled session" is done when:
 - the closeout bundle includes summary, review markdown/JSON, and follow-up
   markdown/JSON unless explicitly skipped with `--no-review` or
   `--no-followups`;
+- `status.mjs` reports `Bundle fresh: yes` before a retrospective relies on
+  generated summary/review/follow-up artifacts; if it reports stale artifacts,
+  rerun `closeout.mjs` or the stale review/follow-up commands first;
 - `review.mjs` is used before deeper reflection when a profile exists and the
   closeout bundle was skipped or stale;
 - `review.mjs --json-output` is used when another tool/agent will consume the

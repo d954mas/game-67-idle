@@ -292,6 +292,7 @@ const SKILL_CHECKS = [
       "tools/ai_profile/context_command.mjs -- <command>",
       "scope.mjs",
       "status.mjs",
+      "Bundle fresh: yes",
       "historical missing work-item records",
       "current_scope",
       "current-scope missing context",

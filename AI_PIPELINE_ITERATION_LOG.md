@@ -723,3 +723,19 @@ specific and reusable.
   to avoid claiming unknown overnight gaps.
 - Follow-up owner: Future profiling/tooling agents.
 - Status: Implemented in `T0084`.
+
+## 2026-06-13 - Complete profile bundles can still be stale
+
+- Context: Live profile status reported a complete closeout bundle while the
+  existing review artifact described 159 records and the profile had already
+  grown past 200 records.
+- Friction: Agents can treat old summaries/reviews/followups as current simply
+  because all files exist.
+- Time sink: Reflection then explains stale findings or misses new telemetry.
+- Likely cause: `status.mjs` checked artifact existence but not whether the
+  artifacts were newer than the profile JSONL.
+- Proposed improvement: Add bundle freshness detection, stale artifact names,
+  and a status rule to rerun closeout/review before relying on generated
+  reflection artifacts.
+- Follow-up owner: Future profiling/tooling agents.
+- Status: Implemented in `T0085`.

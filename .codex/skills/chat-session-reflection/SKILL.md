@@ -100,6 +100,9 @@ is unclear. It is read-only and reports latest event, closeout/bundle presence,
 work-item coverage, missing context inputs, wall-clock coverage, failed
 records, recovered versus unresolved failed records, and the next profiling
 action.
+Before relying on generated summary/review/follow-up artifacts, check that
+status reports `Bundle fresh: yes`; if the bundle is stale, rerun
+`tools/ai_profile/closeout.mjs` or the stale review/follow-up commands.
 If status shows historical missing work-item records but current scope is
 already set, keep the scope and fix the next reported current issue instead of
 resetting metadata for old records.
