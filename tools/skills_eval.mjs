@@ -341,6 +341,8 @@ const SKILL_CHECKS = [
       "Current Scope Readout",
       "coverage-confidence",
       "captured_elapsed",
+      "Tool Runtime Review",
+      "Captured Elapsed Review",
       "current-scope validation",
       "missing_tool_metadata",
       "recovered_failure_classification",

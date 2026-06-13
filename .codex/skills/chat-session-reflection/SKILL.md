@@ -208,6 +208,8 @@ When the draft includes `tool_use_summary`, use it to explain which tool
 classes consumed time, failed, produced context, or created rework.
 If a tool row has `duration_kind: captured_elapsed`, treat its duration as
 manual/research/review time captured by a checkpoint, not as tool runtime.
+Prefer `Tool Runtime Review` for actual command/tool cost and
+`Captured Elapsed Review` for checkpointed manual/research/review spans.
 If `tool_use_summary` includes `(unrecorded)` or review reports
 `missing_tool_metadata`, treat that as incomplete telemetry for future
 sessions and use `node tools/ai.mjs run/context/checkpoint/validate` or

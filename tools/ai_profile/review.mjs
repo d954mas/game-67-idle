@@ -313,6 +313,15 @@ function toolDurationSuffix(item) {
   return (item.command_runtime_ms || 0) > 0 ? "command/runtime" : "runtime";
 }
 
+function isCapturedElapsedTool(item) {
+  return item.duration_kind === "captured_elapsed"
+    || (Number(item.captured_elapsed_ms || 0) > 0 && Number(item.runtime_ms || 0) === 0);
+}
+
+function sortByDuration(items, field) {
+  return [...items].sort((a, b) => Number(b[field] || 0) - Number(a[field] || 0) || Number(b.records || 0) - Number(a.records || 0));
+}
+
 function classifyRepeatedCommands(records, repeatedCommands, commandScopes) {
   const stats = new Map();
   for (const record of records) {
@@ -863,6 +872,26 @@ if (toolSummary.length === 0) {
   }
 }
 
+const toolRuntimeSummary = sortByDuration(toolSummary.filter((item) => !isCapturedElapsedTool(item)), "runtime_ms");
+emit("\n## Tool Runtime Summary");
+if (toolRuntimeSummary.length === 0) {
+  emit("- none");
+} else {
+  for (const item of toolRuntimeSummary) {
+    emit(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.runtime_ms || item.duration_ms)} ${toolDurationSuffix(item)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
+  }
+}
+
+const capturedElapsedSummary = sortByDuration(toolSummary.filter((item) => Number(item.captured_elapsed_ms || 0) > 0), "captured_elapsed_ms");
+emit("\n## Captured Elapsed Summary");
+if (capturedElapsedSummary.length === 0) {
+  emit("- none");
+} else {
+  for (const item of capturedElapsedSummary) {
+    emit(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.captured_elapsed_ms || item.duration_ms)} captured elapsed`);
+  }
+}
+
 emit("\n## Waste And Rework To Explain");
 if (waste.length === 0) {
   emit("- none");
@@ -1134,6 +1163,8 @@ if (jsonOutputFile) {
     repeated_commands_by_scope: mapEntries(repeatedScopeCounts, 10).map(({ key, value }) => ({ scope: key, count: value })),
     repeated_command_classification: repeatedCommandClassifications,
     tool_use_summary: toolSummary,
+    tool_runtime_summary: toolRuntimeSummary,
+    captured_elapsed_summary: capturedElapsedSummary,
     repeated_broad_final_commands: repeatedCommandObjects.filter((item) => item.scope === "broad/final"),
     repeated_unbatched_broad_final_commands: repeatedUnbatchedBroadCommands.map(([command, count]) => ({
       command,

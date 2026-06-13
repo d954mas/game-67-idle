@@ -69,6 +69,18 @@ function toolDurationSuffix(item) {
   return Number(item?.command_runtime_ms || 0) > 0 ? "command/runtime" : "runtime";
 }
 
+function sortByDuration(items, field) {
+  return [...asArray(items)].sort((a, b) => Number(b?.[field] || 0) - Number(a?.[field] || 0) || Number(b?.records || 0) - Number(a?.records || 0));
+}
+
+function runtimeToolSummary(tools) {
+  return sortByDuration(asArray(tools).filter((item) => !toolCapturedElapsed(item)), "runtime_ms");
+}
+
+function capturedElapsedSummary(tools) {
+  return sortByDuration(asArray(tools).filter((item) => Number(item?.captured_elapsed_ms || 0) > 0), "captured_elapsed_ms");
+}
+
 function currentScopeReadout(currentClean, snapshot, tools, contextSummary, validationBatches) {
   if (!snapshot?.enabled) {
     return ["No current-scope snapshot is available; start or focus the next iteration before relying on generated reflection."];
@@ -207,6 +219,8 @@ function buildReview(draft, draftPath) {
     suppressed_historical_findings: asArray(draft.suppressed_historical_findings),
     repeated_commands: draft.repeated_commands || {},
     tool_use_summary: asArray(draft.tool_use_summary),
+    tool_runtime_summary: runtimeToolSummary(draft.tool_use_summary),
+    captured_elapsed_summary: capturedElapsedSummary(draft.tool_use_summary),
     context_use_summary: draft.context_use_summary || { hotspots: [], missing_inputs: [] },
     recovered_failure_classification: asArray(draft.recovered_failure_classification),
     satisfied_followups: asArray(draft.current_state?.satisfied_followups),
@@ -308,12 +322,21 @@ function renderMarkdown(review, draftPath) {
     }
   }
   lines.push("");
-  lines.push("## Tool Use Review");
+  lines.push("## Tool Runtime Review");
   const tools = asArray(review.tool_use_summary);
-  if (tools.length === 0) {
+  const runtimeTools = runtimeToolSummary(tools);
+  if (runtimeTools.length === 0) {
     lines.push("- none");
   } else {
-    for (const item of tools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms)} ${toolDurationSuffix(item)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
+    for (const item of runtimeTools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.runtime_ms || item.duration_ms)} ${toolDurationSuffix(item)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
+  }
+  lines.push("");
+  lines.push("## Captured Elapsed Review");
+  const capturedElapsed = capturedElapsedSummary(tools);
+  if (capturedElapsed.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const item of capturedElapsed) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.captured_elapsed_ms || item.duration_ms)} captured elapsed`);
   }
   lines.push("");
   lines.push("## Context Use Review");

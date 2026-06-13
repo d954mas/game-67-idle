@@ -164,6 +164,22 @@ specific and reusable.
 - Follow-up owner: Current and future profiling/reflection agents.
 - Status: Implemented.
 
+## 2026-06-13 - Runtime and checkpoint elapsed need separate review sections
+
+- Context: Even after adding `duration_kind`, the main tool-use table could
+  still start with checkpoint-captured elapsed time because it sorts by total
+  duration.
+- Friction: Fast reflection readers had to mentally split actual runtime from
+  checkpointed manual/research/review spans.
+- Time sink: Extra interpretation was needed before naming the real tool cost
+  bottleneck.
+- Likely cause: The profile had the right labels but not separate review
+  sections for the two time meanings.
+- Proposed improvement: Add `Tool Runtime Review` and `Captured Elapsed
+  Review` sections, plus JSON summaries for each.
+- Follow-up owner: Current and future profiling/reflection agents.
+- Status: Implemented.
+
 ## 2026-06-12 - Concept setup and visual proof sequencing
 
 - Context: The user selected a child-friendly meme evolution game direction,

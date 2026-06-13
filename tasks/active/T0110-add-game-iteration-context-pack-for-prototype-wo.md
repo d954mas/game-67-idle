@@ -217,3 +217,6 @@ None.
   are unprofiled before making time-spend claims.
 - 2026-06-13: Added duration-kind labeling for profile tool-use summaries so
   checkpoint-captured elapsed time is not mistaken for tool runtime.
+- 2026-06-13: Split runtime and captured elapsed review sections so fast
+  reflection readers can distinguish command/tool cost from checkpointed
+  manual/research/review spans without reinterpreting the raw table.
