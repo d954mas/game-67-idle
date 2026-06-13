@@ -426,3 +426,17 @@ specific and reusable.
   to inspect only linked task/evidence files.
 - Follow-up owner: Future implementation/reflection agents.
 - Status: Implemented in `T0066`.
+
+## 2026-06-13 - Profile review must normalize command spellings
+
+- Context: After adding the context digest, the live profile review still
+  reported separate repeats for `tools/taskboard/...` and `tools\taskboard\...`.
+- Friction: The repeated-command count was directionally right but noisy,
+  especially on Windows where slash style changes between shell/tool calls.
+- Time sink: Reflection can chase duplicate-looking findings instead of seeing
+  the true repeated command count.
+- Likely cause: `review.mjs` counted raw command strings with no normalization.
+- Proposed improvement: Normalize slash style and whitespace before counting
+  repeated commands, while preserving original variants for debugging.
+- Follow-up owner: Future profiling/reflection agents.
+- Status: Implemented in `T0067`.

@@ -66,6 +66,10 @@ function commandText(record) {
   return (record.commands || []).join(" && ");
 }
 
+function normalizeCommand(command) {
+  return String(command || "").replaceAll("\\", "/").replace(/\s+/g, " ").trim();
+}
+
 const { values, positionals } = parseArgs(process.argv.slice(2));
 if (values.help) usage();
 const file = positionals[0];
@@ -85,6 +89,7 @@ const output = [];
 const emit = (line = "") => output.push(line);
 const totalDuration = records.reduce((sum, record) => sum + Number(record.duration_ms || 0), 0);
 const commandCounts = new Map();
+const commandVariants = new Map();
 const phaseDuration = new Map();
 const contextChars = new Map();
 const waste = [];
@@ -96,7 +101,12 @@ let closeoutSeen = false;
 
 for (const record of records) {
   addCount(phaseDuration, record.phase, Number(record.duration_ms || 0));
-  for (const command of record.commands || []) addCount(commandCounts, command);
+  for (const command of record.commands || []) {
+    const normalized = normalizeCommand(command);
+    addCount(commandCounts, normalized);
+    if (!commandVariants.has(normalized)) commandVariants.set(normalized, new Set());
+    commandVariants.get(normalized).add(command);
+  }
   for (const input of record.context_inputs || []) addCount(contextChars, input.path || "(inline)", Number(input.chars || 0));
   if (record.value === "waste" || record.value === "rework" || record.waste_reason) waste.push(record);
   if (record.result === "fail") failed.push(record);
@@ -165,7 +175,13 @@ emit("\n## Repeated Commands");
 if (repeatedCommands.length === 0) {
   emit("- none");
 } else {
-  for (const [command, count] of repeatedCommands) emit(`- ${count}x ${command}`);
+  for (const [command, count] of repeatedCommands) {
+    emit(`- ${count}x ${command}`);
+    const variants = [...(commandVariants.get(command) || [])].filter((variant) => variant !== command);
+    if (variants.length > 0) {
+      emit(`  - variants: ${variants.slice(0, 3).join(" | ")}${variants.length > 3 ? " | ..." : ""}`);
+    }
+  }
 }
 
 emit("\n## Time By Phase");
