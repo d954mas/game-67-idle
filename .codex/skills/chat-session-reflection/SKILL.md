@@ -202,6 +202,9 @@ tasks. If follow-up drafts report
 not promote them as current tasks unless the same issue appears in the current
 scope. Treat historical recovered failures as retrospective learning notes;
 only current-scope or recurring recovered failures should become process tasks.
+For broad/final validation follow-ups, current action status must use
+`current_scope.repeated_unbatched_broad_final_commands`; batched current-scope
+final gates are planned validation evidence, not a pending action.
 If many records lack work-item metadata, add a next-cycle fix: begin the task
 with `tools/ai_profile/start.mjs --work-item <id> --iteration <name>`, pass
 `--work-item <id>` and optional `--iteration <name>` to `run.mjs`,

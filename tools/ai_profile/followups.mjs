@@ -33,6 +33,13 @@ function formatPercent(value) {
   return Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : "unknown";
 }
 
+function unbatchedBroadFinalCommands(container) {
+  if (Array.isArray(container?.repeated_unbatched_broad_final_commands)) {
+    return container.repeated_unbatched_broad_final_commands;
+  }
+  return asArray(container?.repeated_broad_final_commands);
+}
+
 function buildSuggestions(review) {
   const suggestions = [];
   const suppressedHistorical = [];
@@ -42,7 +49,7 @@ function buildSuggestions(review) {
 
   function currentScopeClean(field) {
     if (!useCurrentScope) return false;
-    if (field === "repeated_broad_final") return asArray(currentScope.repeated_broad_final_commands).length === 0;
+    if (field === "repeated_broad_final") return unbatchedBroadFinalCommands(currentScope).length === 0;
     if (field === "missing_context_inputs") return Number(currentScope.missing_context_inputs || 0) === 0;
     if (field === "missing_work_item_metadata") return Number(currentScope.missing_work_item_records || 0) === 0;
     if (field === "low_profile_coverage") return currentScope.low_profile_coverage !== true;
@@ -50,16 +57,17 @@ function buildSuggestions(review) {
     return false;
   }
 
-  if (findingTypes.has("repeated_broad_final") || asArray(review.repeated_broad_final_commands).length > 0) {
+  if (findingTypes.has("repeated_broad_final") || unbatchedBroadFinalCommands(review).length > 0) {
     if (currentScopeClean("repeated_broad_final")) {
       suppressedHistorical.push("repeated_broad_final_commands");
     } else {
+      const commands = useCurrentScope ? unbatchedBroadFinalCommands(currentScope) : unbatchedBroadFinalCommands(review);
       addSuggestion(suggestions, {
       title: "Reduce repeated broad/final validation",
       priority: "P1",
       tags: ["pipeline", "validation", "profiling", "automation"],
-      source: useCurrentScope ? "current_scope.repeated_broad_final_commands" : "repeated_broad_final_commands",
-      why: `Broad/final commands repeated: ${commandList(useCurrentScope ? currentScope.repeated_broad_final_commands : review.repeated_broad_final_commands) || "unknown"}.`,
+      source: useCurrentScope ? "current_scope.repeated_unbatched_broad_final_commands" : "repeated_unbatched_broad_final_commands",
+      why: `Unbatched broad/final commands repeated: ${commandList(commands) || "unknown"}.`,
       done_when: [
         "Validation planner or review rules identify when broad/final gates are allowed to rerun.",
         "A future profile shows broad/final repeats only after a failed gate, changed risk, or final batch boundary.",

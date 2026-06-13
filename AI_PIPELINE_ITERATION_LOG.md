@@ -1119,3 +1119,21 @@ specific and reusable.
   findings while keeping planned batch gates visible as evidence.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0107`.
+
+## 2026-06-13 - Historical validation waste must not become current action
+
+- Trigger: `reflection_review.mjs` reported `current_action_required` even
+  after current-scope baseline compare was stable and unbatched broad/final
+  repeats were zero.
+- Symptom: A historical repeated broad/final follow-up stayed pending and made
+  a clean current scope look blocked.
+- Time sink: Agents had to manually inspect status, review, draft, and
+  follow-up artifacts to prove the action was historical-only.
+- Likely cause: `followups.mjs` still used total
+  `current_scope.repeated_broad_final_commands`, which includes planned
+  batched final gates.
+- Proposed improvement: Generate current broad/final follow-ups from
+  `current_scope.repeated_unbatched_broad_final_commands` with a backward
+  compatible fallback for older review JSON.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0108`.

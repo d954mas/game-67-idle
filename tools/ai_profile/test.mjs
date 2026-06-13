@@ -2666,6 +2666,62 @@ test("followups suppress historical recovered failures when current scope is cle
   }
 });
 
+test("followups suppress historical broad final when current scope has only batched repeats", () => {
+  const dir = tempDir();
+  try {
+    const reviewJson = join(dir, "batched-current.review.json");
+    const followupsJson = join(dir, "batched-current.followups.json");
+    writeFileSync(reviewJson, `${JSON.stringify({
+      schema_version: 1,
+      profile: "batched-current.jsonl",
+      findings: [
+        {
+          type: "repeated_broad_final",
+          message: "1 unbatched repeated broad/final command(s) are historical validation waste.",
+        },
+      ],
+      repeated_broad_final_commands: [
+        { command: "node tools/pipeline_validate.mjs", count: 4, scope: "broad/final" },
+      ],
+      repeated_unbatched_broad_final_commands: [
+        { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
+      ],
+      batched_broad_final_commands: [
+        { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
+      ],
+      current_scope: {
+        enabled: true,
+        records: 4,
+        findings: [],
+        suggested_actions: ["Use current scope as clean baseline."],
+        repeated_broad_final_commands: [
+          { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
+        ],
+        repeated_unbatched_broad_final_commands: [],
+        missing_context_inputs: 0,
+        missing_work_item_records: 0,
+        recovered_failed_records: [],
+        unresolved_failed_records: [],
+        low_profile_coverage: false,
+      },
+    })}\n`, "utf8");
+
+    run(["tools/ai_profile/followups.mjs", reviewJson, "--json-output", followupsJson]);
+    const followups = readJson(followupsJson);
+    assert.ok(followups.suppressed_historical_findings.includes("repeated_broad_final_commands"));
+    assert.equal(
+      followups.suggestions.some((suggestion) => suggestion.source === "current_scope.repeated_unbatched_broad_final_commands"),
+      false,
+    );
+    assert.equal(
+      followups.suggestions.some((suggestion) => suggestion.title === "Reduce repeated broad/final validation"),
+      false,
+    );
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("followups preserve current-scope recovered failures", () => {
   const dir = tempDir();
   try {

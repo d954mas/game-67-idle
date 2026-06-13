@@ -715,7 +715,9 @@ A "profiled session" is done when:
   if it reports `suppressed_historical_findings`, mention those in the
   retrospective but do not promote them as current tasks unless they recur in
   the current scope; this includes historical recovered failures that already
-  passed later;
+  passed later. For broad/final validation follow-ups, current action status is
+  based on `current_scope.repeated_unbatched_broad_final_commands`, not total
+  batched broad/final repeats;
 - `compare_reviews.mjs` is used when a previous clean review JSON should act
   as a baseline for a later profile; inspect current-scope regressions first
   and treat whole-profile deltas as trend evidence; check `status.mjs` first
