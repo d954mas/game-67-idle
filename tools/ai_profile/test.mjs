@@ -27,6 +27,15 @@ function run(args, options = {}) {
   return result;
 }
 
+function runRaw(args, options = {}) {
+  return spawnSync(process.execPath, args, {
+    cwd: root,
+    env: { ...process.env, ...(options.env || {}) },
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
 }
@@ -226,6 +235,77 @@ test("status does not ask for scope when only historical records lack work item"
     assert.match(status.next_action, /context\.mjs/);
     assert.doesNotMatch(status.next_action, /scope\.mjs/);
     assert.doesNotMatch(status.next_action, /start\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("context_command records command output as measured context", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "context-command.jsonl");
+    const scope = join(dir, "scope.json");
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "CTXCMD", "--iteration", "success"]);
+    const result = runRaw([
+      "tools/ai_profile/context_command.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "context",
+      "--intent",
+      "read command context",
+      "--reason",
+      "test output",
+      "--",
+      process.execPath,
+      "-e",
+      "console.log('context command output')",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /context command output/);
+    const record = readJsonl(profile)[0];
+    assert.equal(record.result, "pass");
+    assert.equal(record.value, "necessary_overhead");
+    assert.equal(record.command_exit_code, 0);
+    assert.deepEqual(record.tools, ["ai_profile/context_command.mjs"]);
+    assert.equal(record.work_item, "CTXCMD");
+    assert.equal(record.iteration, "success");
+    assert.equal(record.context_inputs.length, 1);
+    assert.match(record.context_inputs[0].path, /^command:/);
+    assert.ok(record.context_inputs[0].chars >= "context command output\n".length);
+    assert.equal(record.context_inputs[0].reason, "test output");
+    assert.equal(record.context_risk, "low");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("context_command records failing command and preserves exit code", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "context-command-fail.jsonl");
+    const result = runRaw([
+      "tools/ai_profile/context_command.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "context",
+      "--intent",
+      "read failing command context",
+      "--",
+      process.execPath,
+      "-e",
+      "console.error('context command failed'); process.exit(7)",
+    ]);
+
+    assert.equal(result.status, 7);
+    assert.match(result.stderr, /context command failed/);
+    const record = readJsonl(profile)[0];
+    assert.equal(record.result, "fail");
+    assert.equal(record.command_exit_code, 7);
+    assert.equal(record.context_inputs.length, 1);
+    assert.ok(record.context_inputs[0].chars >= "context command failed\n".length);
   } finally {
     cleanup(dir);
   }

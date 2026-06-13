@@ -138,7 +138,10 @@ next-cycle rule to place sparse `event.mjs` checkpoints during long manual,
 research, design, or review stretches.
 If review reports missing context input details, name the affected line/intents
 and add a next-cycle fix: use `tools/ai_profile/context.mjs --path <file>` for
-local medium/high context reads so file sizes are measured automatically.
+local medium/high context reads, or
+`tools/ai_profile/context_command.mjs -- <command>` for read-only commands
+that print context such as `node tools/taskboard/cli.mjs context`, so context
+size is measured automatically.
 If review reports recovered failed records, classify them as useful negative
 feedback, avoidable rework, or tool noise. Treat only unresolved failed records
 as current blockers.

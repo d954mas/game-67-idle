@@ -674,3 +674,19 @@ specific and reusable.
   current scope is valid.
 - Follow-up owner: Future profiling/tooling agents.
 - Status: Implemented in `T0081`.
+
+## 2026-06-13 - Command-produced context needs measurement
+
+- Context: `status.mjs` correctly surfaced missing context-input details as the
+  next current profiling issue.
+- Friction: `context.mjs` measures local files, but important context often
+  comes from read-only commands such as `node tools/taskboard/cli.mjs context`.
+- Time sink: Reflection can see that context was consumed, but cannot measure
+  command output size unless the agent manually records it.
+- Likely cause: The profiling pipeline had no wrapper for command-produced
+  context.
+- Proposed improvement: Add `tools/ai_profile/context_command.mjs` to run a
+  read-only command, print its output, and record stdout/stderr character count
+  as `context_inputs`.
+- Follow-up owner: Future profiling/tooling agents.
+- Status: Implemented in `T0082`.

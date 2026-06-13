@@ -286,6 +286,8 @@ const SKILL_CHECKS = [
       "run.mjs",
       "event.mjs",
       "context.mjs",
+      "context_command.mjs",
+      "tools/ai_profile/context_command.mjs -- <command>",
       "scope.mjs",
       "status.mjs",
       "historical missing work-item records",

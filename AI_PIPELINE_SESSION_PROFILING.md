@@ -246,6 +246,17 @@ node tools/ai_profile/context.mjs --phase context --intent "Load current rules" 
 `--context-risk` is provided. Use it instead of manually typing
 `--context-input` when the source is a local file.
 
+For read-only commands that produce context, prefer:
+
+```powershell
+node tools/ai_profile/context_command.mjs --phase context --intent "Load current task digest" --reason "session resume" -- node tools/taskboard/cli.mjs context
+```
+
+`context_command.mjs` prints the wrapped command output, records command text,
+duration, exit code, and measures stdout/stderr as one `context_inputs` entry.
+Use it for `taskboard context`, generated summaries, profile reviews, search
+summaries, or other command output that the agent reads as context.
+
 Use project-relative paths when possible. `--context-input` also accepts
 Windows absolute paths because the parser treats the first numeric segment as
 the character-count separator.
@@ -293,6 +304,9 @@ Record tools by role:
 - `event.mjs`: low-cost checkpoint writer for non-command events.
 - `context.mjs`: context-read checkpoint writer that measures local file
   character counts and fills `context_inputs` automatically.
+- `context_command.mjs`: context command wrapper that preserves command output
+  while measuring stdout/stderr as context input. Use it for read-only context
+  commands such as `node tools/taskboard/cli.mjs context`.
 - `scope.mjs`: persistent session-scope helper that writes
   `tmp/session_profiles/current_scope.json` so work-item/iteration defaults
   survive separate tool command invocations.
@@ -465,6 +479,8 @@ A "profiled session" is done when:
 - command work used `run.mjs` for substantial validations/builds/audits;
 - non-command context decisions used sparse `event.mjs` checkpoints, and local
   medium/high context reads used `context.mjs` where possible;
+- read-only commands that produced medium/high context used
+  `context_command.mjs` where possible;
 - `status.mjs` is used during long sessions when the agent needs to know
   whether current telemetry is missing work-item metadata, context inputs,
   coverage, closeout, or bundle artifacts; if status reports historical
