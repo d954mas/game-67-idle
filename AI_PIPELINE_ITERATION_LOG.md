@@ -100,6 +100,22 @@ specific and reusable.
 - Follow-up owner: Current and future pipeline agents.
 - Status: Implemented.
 
+## 2026-06-13 - Current validation cost needs batch evidence
+
+- Context: The current readout showed `ai_profile/validation_run.mjs` as the
+  largest tool cost, but did not say whether that cost was planned validation
+  or avoidable waste.
+- Friction: The agent still had to inspect validation batch evidence before
+  interpreting the top tool cost.
+- Time sink: Manual cross-check between tool-use rows and validation batch
+  rows.
+- Likely cause: Current-scope validation batches were only available in
+  whole-profile validation sections, not in the current-scope handoff.
+- Proposed improvement: Carry current-scope validation batches into review,
+  draft, final review, and the current readout.
+- Follow-up owner: Current and future pipeline agents.
+- Status: Implemented.
+
 ## 2026-06-12 - Concept setup and visual proof sequencing
 
 - Context: The user selected a child-friendly meme evolution game direction,

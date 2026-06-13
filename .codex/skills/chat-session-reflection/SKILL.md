@@ -224,6 +224,9 @@ numbers.
 When the reflection review includes `Current Scope Readout`, start the final
 retrospective from that synthesized current-iteration summary before discussing
 historical lessons or whole-profile trends.
+When the handoff includes current-scope validation batches, use them to explain
+validation-runner tool cost as planned validation evidence before calling it
+waste or rework.
 When the draft includes repeated-command evidence, classify repeats before
 turning them into process tasks. Prefer `repeated_command_classification` over
 raw repeat counts: planned validation, validation-waste risk,

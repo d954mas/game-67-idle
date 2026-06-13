@@ -42,7 +42,7 @@ function formatPercent(value) {
   return `${(number * 100).toFixed(1)}%`;
 }
 
-function currentScopeReadout(currentClean, snapshot, tools, contextSummary) {
+function currentScopeReadout(currentClean, snapshot, tools, contextSummary, validationBatches) {
   if (!snapshot?.enabled) {
     return ["No current-scope snapshot is available; start or focus the next iteration before relying on generated reflection."];
   }
@@ -61,6 +61,13 @@ function currentScopeReadout(currentClean, snapshot, tools, contextSummary) {
   const topTool = asArray(tools)[0];
   if (topTool) {
     lines.push(`Largest current tool cost: ${topTool.tool || "unknown"} (${formatMs(topTool.duration_ms)}, ${topTool.records || 0} record(s)).`);
+  }
+  const batches = asArray(validationBatches);
+  if (batches.length > 0) {
+    const records = batches.reduce((sum, item) => sum + Number(item.records || 0), 0);
+    const broadFinal = batches.reduce((sum, item) => sum + Number(item.broad_final_commands || 0), 0);
+    const failed = batches.reduce((sum, item) => sum + Number(item.failed || 0), 0);
+    lines.push(`Current validation was batched: ${batches.length} batch(es), ${records} record(s), broad/final=${broadFinal}, failed=${failed}.`);
   }
   const hotspot = asArray(contextSummary?.hotspots)[0];
   if (hotspot) {
@@ -141,6 +148,7 @@ function buildReview(draft, draftPath) {
   const currentSnapshot = draft.current_state?.current_scope_snapshot || { enabled: false };
   const currentTools = asArray(draft.current_state?.current_scope_tool_use_summary);
   const currentContext = draft.current_state?.current_scope_context_use_summary || { hotspots: [], high_context: [], missing_inputs: [] };
+  const currentValidationBatches = asArray(draft.current_state?.current_scope_validation_batches);
 
   return {
     schema_version: 1,
@@ -152,10 +160,11 @@ function buildReview(draft, draftPath) {
       pending_followups: pendingFollowups,
       actions: currentActions,
       status_message: currentStatusMessage,
-      readout: currentScopeReadout(currentClean, currentSnapshot, currentTools, currentContext),
+      readout: currentScopeReadout(currentClean, currentSnapshot, currentTools, currentContext, currentValidationBatches),
       snapshot: currentSnapshot,
       tool_use_summary: currentTools,
       context_use_summary: currentContext,
+      validation_batches: currentValidationBatches,
     },
     historical_lessons: historicalLessons,
     suppressed_historical_findings: asArray(draft.suppressed_historical_findings),
@@ -229,6 +238,18 @@ function renderMarkdown(review, draftPath) {
     if (asArray(currentContext.missing_inputs).length > 0) {
       lines.push("- missing inputs:");
       for (const item of asArray(currentContext.missing_inputs)) lines.push(`  - line ${item.line || 0} [${item.context_risk || "unknown"}]: ${item.intent || ""}`);
+    }
+  }
+  lines.push("");
+  lines.push("## Current Scope Validation");
+  const currentValidationBatches = asArray(review.current.validation_batches);
+  if (currentValidationBatches.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const item of currentValidationBatches) {
+      const result = Number(item.failed || 0) > 0 ? `${item.failed} failed` : "pass";
+      const changes = asArray(item.changes).length > 0 ? asArray(item.changes).join(", ") : "unknown";
+      lines.push(`- ${item.batch_id || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms)}, ${result}, risk=${item.risk || "unknown"}, changes=${changes}, broad/final=${item.broad_final_commands || 0}`);
     }
   }
   lines.push("");

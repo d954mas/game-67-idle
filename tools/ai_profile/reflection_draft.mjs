@@ -190,6 +190,18 @@ function compactCurrentScopeSnapshot(scope) {
   };
 }
 
+function compactValidationBatches(batches) {
+  return asArray(batches).slice(0, 8).map((item) => ({
+    batch_id: item.batch_id || "",
+    records: Number(item.records || 0),
+    duration_ms: Number(item.duration_ms || 0),
+    failed: Number(item.failed || 0),
+    broad_final_commands: Number(item.broad_final_commands || 0),
+    risk: item.risk || "",
+    changes: asArray(item.changes),
+  }));
+}
+
 function scopeSummaryText(summary) {
   if (!summary.by_scope.length) return "no scope breakdown";
   return summary.by_scope.map((item) => `${item.scope || "unknown"}=${item.count || 0}`).join(", ");
@@ -303,6 +315,7 @@ function buildDraft(packet, review) {
       current_scope_snapshot: compactCurrentScopeSnapshot(review?.current_scope),
       current_scope_tool_use_summary: asArray(review?.current_scope?.tool_use_summary).slice(0, 8),
       current_scope_context_use_summary: compactContextUseSummary(review?.current_scope?.context_use_summary),
+      current_scope_validation_batches: compactValidationBatches(review?.current_scope?.validation_batches),
     },
     historical_lessons: historicalLessons,
     suppressed_historical_findings: suppressed,
@@ -378,6 +391,17 @@ function renderMarkdown(draft, packetFile) {
     if (currentContext.missing_inputs.length > 0) {
       lines.push("- missing inputs:");
       for (const item of currentContext.missing_inputs) lines.push(`  - line ${item.line} [${item.context_risk || "unknown"}]: ${item.intent}`);
+    }
+  }
+  lines.push("");
+  lines.push("## Current Scope Validation");
+  if (draft.current_state.current_scope_validation_batches.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const item of draft.current_state.current_scope_validation_batches) {
+      const result = item.failed > 0 ? `${item.failed} failed` : "pass";
+      const changes = item.changes.length > 0 ? item.changes.join(", ") : "unknown";
+      lines.push(`- ${item.batch_id || "unknown"}: ${item.records} record(s), ${formatMs(item.duration_ms)}, ${result}, risk=${item.risk || "unknown"}, changes=${changes}, broad/final=${item.broad_final_commands}`);
     }
   }
   lines.push("");

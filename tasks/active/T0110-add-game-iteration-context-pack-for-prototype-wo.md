@@ -206,3 +206,6 @@ None.
 - 2026-06-13: Added `Current Scope Readout` to reflection review so the final
   retrospective can start from synthesized current-iteration evidence instead
   of manually combining snapshot, tool use, and context sections.
+- 2026-06-13: Added current-scope validation batch evidence to review, draft,
+  and final reflection review so validation-runner tool cost can be identified
+  as planned validation before labeling it waste.

@@ -192,6 +192,7 @@ function scopedSummary(records) {
     missing_tool_records: records.filter((record) => !Array.isArray(record.tools) || record.tools.length === 0).length,
     tool_use_summary: toolUseSummary(records).slice(0, 8),
     context_use_summary: currentContext,
+    validation_batches: validationBatches(records).slice(0, 8),
     repeated_broad_final_commands: repeatedBroadFinalCommands,
     repeated_unbatched_broad_final_commands: repeatedUnbatchedBroadFinalCommands,
     recovered_failed_records: failedClassification.recovered.map((item) => ({
@@ -799,6 +800,17 @@ if (!currentScope.enabled || currentScope.records === 0) {
       emit("- missing inputs:");
       for (const item of currentContext.missing_inputs) emit(`  - line ${item.line} [${item.context_risk || "unknown"}]: ${item.intent}`);
     }
+  }
+}
+
+emit("\n## Current Scope Validation");
+if (!currentScope.enabled || currentScope.validation_batches.length === 0) {
+  emit("- none");
+} else {
+  for (const batch of currentScope.validation_batches) {
+    const result = batch.failed > 0 ? `${batch.failed} failed` : "pass";
+    const changes = batch.changes.length > 0 ? batch.changes.join(", ") : "unknown";
+    emit(`- ${batch.batch_id}: ${batch.records} record(s), ${formatMs(batch.duration_ms)}, ${result}, risk=${batch.risk || "unknown"}, changes=${changes}, broad/final=${batch.broad_final_commands}`);
   }
 }
 

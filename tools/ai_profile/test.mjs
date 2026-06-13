@@ -1649,6 +1649,11 @@ test("profile review summarizes current scope tool and context use", () => {
       duration_ms: 3000,
       tools: ["shell_command"],
       commands: ["node tools/skills_eval.mjs"],
+      validation_batch_id: "current-batch",
+      validation_check_id: "skills-current",
+      validation_tier: "scoped",
+      validation_plan_risk: "medium",
+      validation_plan_changes: ["profiling"],
       work_item: "T-CURRENT",
       iteration: "tool-context",
     })}\n`, "utf8");
@@ -1659,6 +1664,8 @@ test("profile review summarizes current scope tool and context use", () => {
     assert.match(result.stdout, /Current Scope Tool Use/);
     assert.match(result.stdout, /Current Scope Context Use/);
     assert.match(result.stdout, /Current Scope Snapshot/);
+    assert.match(result.stdout, /Current Scope Validation/);
+    assert.match(result.stdout, /current-batch: 1 record\(s\), 3\.0s, pass, risk=medium, changes=profiling, broad\/final=0/);
     assert.match(result.stdout, /profiled\/wall-clock: 5\.0s \/ 5\.0s \(100\.0%\)/);
     assert.match(result.stdout, /telemetry gaps: context=0, work_item=0, tools=0/);
     assert.match(result.stdout, /tasks\/STATUS\.md: 1234 chars/);
@@ -1670,6 +1677,8 @@ test("profile review summarizes current scope tool and context use", () => {
     assert.equal(review.current_scope.tool_use_summary[0].records, 2);
     assert.equal(review.current_scope.context_use_summary.hotspots[0].path, "tasks/STATUS.md");
     assert.equal(review.current_scope.context_use_summary.hotspots[0].chars, 1234);
+    assert.equal(review.current_scope.validation_batches[0].batch_id, "current-batch");
+    assert.equal(review.current_scope.validation_batches[0].records, 1);
     assert.equal(review.current_scope.tool_use_summary.some((item) => item.tool === "imagegen"), false);
   } finally {
     cleanup(dir);
@@ -2410,6 +2419,9 @@ test("reflection draft classifies repeated command evidence by scope", () => {
           high_context: [],
           missing_inputs: [],
         },
+        validation_batches: [
+          { batch_id: "current-batch", records: 1, duration_ms: 3000, failed: 0, broad_final_commands: 0, risk: "medium", changes: ["profiling"] },
+        ],
       },
     })}\n`, "utf8");
     writeFileSync(packetJson, `${JSON.stringify({
@@ -2429,6 +2441,8 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     assert.match(result.stdout, /profiled\/wall-clock: 5\.0s \/ 5\.0s \(100\.0%\)/);
     assert.match(result.stdout, /Current Scope Tool Use/);
     assert.match(result.stdout, /Current Scope Context Use/);
+    assert.match(result.stdout, /Current Scope Validation/);
+    assert.match(result.stdout, /current-batch: 1 record\(s\), 3\.0s, pass, risk=medium, changes=profiling, broad\/final=0/);
     assert.match(result.stdout, /tasks\/STATUS\.md/);
     assert.match(result.stdout, /Context Use Evidence/);
     assert.match(result.stdout, /AI_PIPELINE_SESSION_PROFILING\.md/);
@@ -2449,6 +2463,7 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     assert.equal(draft.tool_use_summary[0].tool, "shell_command");
     assert.equal(draft.current_state.current_scope_tool_use_summary[0].tool, "shell_command");
     assert.equal(draft.current_state.current_scope_context_use_summary.hotspots[0].path, "tasks/STATUS.md");
+    assert.equal(draft.current_state.current_scope_validation_batches[0].batch_id, "current-batch");
     assert.equal(draft.context_use_summary.hotspots[0].path, "AI_PIPELINE_SESSION_PROFILING.md");
     assert.equal(draft.context_use_summary.missing_inputs[0].line, 12);
     assert.equal(draft.repeated_commands.classification[0].classification, "validation_waste_risk");
@@ -2515,6 +2530,9 @@ test("reflection review separates clean current scope from historical lessons", 
           high_context: [],
           missing_inputs: [],
         },
+        current_scope_validation_batches: [
+          { batch_id: "current-batch", records: 1, duration_ms: 3000, failed: 0, broad_final_commands: 0, risk: "medium", changes: ["profiling"] },
+        ],
       },
     })}\n`, "utf8");
 
@@ -2534,10 +2552,13 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.match(result.stdout, /Current scope T0099\/reflection-slice is clean: 2 record\(s\), 5\.0s profiled over 5\.0s wall-clock \(100\.0%\)/);
     assert.match(result.stdout, /Current telemetry has no context, work-item, or tool metadata gaps/);
     assert.match(result.stdout, /Largest current tool cost: shell_command \(5\.0s, 2 record\(s\)\)/);
+    assert.match(result.stdout, /Current validation was batched: 1 batch\(es\), 1 record\(s\), broad\/final=0, failed=0/);
     assert.match(result.stdout, /Current Scope Snapshot/);
     assert.match(result.stdout, /profiled\/wall-clock: 5\.0s \/ 5\.0s \(100\.0%\)/);
     assert.match(result.stdout, /Current Scope Tool Use/);
     assert.match(result.stdout, /Current Scope Context Use/);
+    assert.match(result.stdout, /Current Scope Validation/);
+    assert.match(result.stdout, /current-batch: 1 record\(s\), 3\.0s, pass, risk=medium, changes=profiling, broad\/final=0/);
     assert.match(result.stdout, /tasks\/STATUS\.md/);
     assert.match(result.stdout, /Tool Use Review/);
     assert.match(result.stdout, /shell_command/);
@@ -2561,8 +2582,10 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.equal(review.top_improvements.some((item) => item.includes("current review shows")), false);
     assert.ok(review.current.readout.some((item) => item.includes("Current scope T0099/reflection-slice is clean")));
     assert.ok(review.current.readout.some((item) => item.includes("Largest current tool cost: shell_command")));
+    assert.ok(review.current.readout.some((item) => item.includes("Current validation was batched")));
     assert.equal(review.current.snapshot.records, 2);
     assert.equal(review.current.snapshot.coverage_ratio, 1);
+    assert.equal(review.current.validation_batches[0].batch_id, "current-batch");
     assert.equal(review.current.tool_use_summary[0].tool, "shell_command");
     assert.equal(review.current.context_use_summary.hotspots[0].path, "tasks/STATUS.md");
     assert.equal(review.tool_use_summary[0].tool, "shell_command");
