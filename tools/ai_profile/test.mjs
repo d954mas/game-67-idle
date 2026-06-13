@@ -875,7 +875,9 @@ test("review and followups classify recovered failures", () => {
       "--value", "productive",
       "--command", command,
     ]);
-    run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson]);
+    run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: join(dir, "no-scope.json") },
+    });
     const review = readJson(reviewJson);
     assert.equal(review.recovered_failed_records.length, 1);
     assert.equal(review.unresolved_failed_records.length, 0);
@@ -1006,6 +1008,124 @@ test("followups preserve current-scope issues", () => {
     const followups = readJson(followupsJson);
     assert.ok(followups.suggestions.some((suggestion) => suggestion.source === "current_scope.missing_context_inputs"));
     assert.equal(followups.suppressed_historical_findings.includes("missing_context_inputs"), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("followups suppress historical recovered failures when current scope is clean", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "historical-recovered.jsonl");
+    const scope = join(dir, "scope.json");
+    const reviewJson = join(dir, "review.json");
+    const followupsJson = join(dir, "followups.json");
+    const command = "node tools/skills_eval.mjs";
+
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "validation",
+      "--category", "validation",
+      "--intent", "old failing eval",
+      "--result", "fail",
+      "--value", "rework",
+      "--command", command,
+      "--ts", "2026-06-13T10:00:00+05:00",
+    ]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "validation",
+      "--category", "validation",
+      "--intent", "old passing eval",
+      "--result", "pass",
+      "--value", "productive",
+      "--command", command,
+      "--ts", "2026-06-13T10:01:00+05:00",
+    ]);
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope", scope,
+      "--profile", profile,
+      "--work-item", "CUR",
+      "--iteration", "clean",
+      "--phase", "test",
+      "--intent", "clean current scope",
+    ]);
+
+    run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const review = readJson(reviewJson);
+    assert.equal(review.recovered_failed_records.length, 1);
+    assert.equal(review.current_scope.recovered_failed_records.length, 0);
+
+    run(["tools/ai_profile/followups.mjs", reviewJson, "--json-output", followupsJson]);
+    const followups = readJson(followupsJson);
+    assert.ok(followups.suppressed_historical_findings.includes("recovered_failed_records"));
+    assert.equal(
+      followups.suggestions.some((suggestion) => suggestion.source === "recovered_failed_records"),
+      false,
+    );
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("followups preserve current-scope recovered failures", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "current-recovered.jsonl");
+    const scope = join(dir, "scope.json");
+    const reviewJson = join(dir, "review.json");
+    const followupsJson = join(dir, "followups.json");
+    const command = "node tools/skills_eval.mjs";
+
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope", scope,
+      "--profile", profile,
+      "--work-item", "CUR",
+      "--iteration", "recovered",
+      "--phase", "test",
+      "--intent", "current recovered scope",
+    ]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "validation",
+      "--category", "validation",
+      "--intent", "current failing eval",
+      "--result", "fail",
+      "--value", "rework",
+      "--command", command,
+    ], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "validation",
+      "--category", "validation",
+      "--intent", "current passing eval",
+      "--result", "pass",
+      "--value", "productive",
+      "--command", command,
+    ], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+
+    run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const review = readJson(reviewJson);
+    assert.equal(review.current_scope.recovered_failed_records.length, 1);
+
+    run(["tools/ai_profile/followups.mjs", reviewJson, "--json-output", followupsJson]);
+    const followups = readJson(followupsJson);
+    assert.ok(followups.suggestions.some((suggestion) => suggestion.source === "current_scope.recovered_failed_records"));
+    assert.equal(followups.suppressed_historical_findings.includes("recovered_failed_records"), false);
   } finally {
     cleanup(dir);
   }

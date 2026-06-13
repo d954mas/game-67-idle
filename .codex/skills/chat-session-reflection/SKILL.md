@@ -143,7 +143,8 @@ When review JSON includes `current_scope`, separate current-scope findings from
 whole-profile history. If follow-up drafts report
 `suppressed_historical_findings`, mention those as historical lessons but do
 not promote them as current tasks unless the same issue appears in the current
-scope.
+scope. Treat historical recovered failures as retrospective learning notes;
+only current-scope or recurring recovered failures should become process tasks.
 If many records lack work-item metadata, add a next-cycle fix: begin the task
 with `tools/ai_profile/start.mjs --work-item <id> --iteration <name>`, pass
 `--work-item <id>` and optional `--iteration <name>` to `run.mjs`,

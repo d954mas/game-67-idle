@@ -809,3 +809,21 @@ specific and reusable.
   clean, while still naming them for retrospective history.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0089`.
+
+## 2026-06-13 - Recovered failure follow-ups need current-scope filtering
+
+- Trigger: After current-scope filtering, live followups dropped from five
+  suggestions to one, but the remaining recovered-failure suggestion was also
+  historical-only.
+- Symptom: Old failures that were already recovered could keep appearing as
+  draft tasks even when the current scope had no recovered failures.
+- Time sink: Reflection agents spend time reclassifying known historical
+  negative feedback instead of checking whether the current iteration repeated
+  it.
+- Likely cause: `followups.mjs` suppressed historical validation/context/
+  coverage issues, but not historical recovered failures.
+- Proposed improvement: Add recovered/unresolved failure summaries to
+  `current_scope` and suppress historical-only recovered failures in follow-up
+  drafts while keeping them visible as retrospective lessons.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0090`.

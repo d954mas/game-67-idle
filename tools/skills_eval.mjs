@@ -312,6 +312,7 @@ const SKILL_CHECKS = [
       "work_items",
       "current_scope",
       "suppressed_historical_findings",
+      "historical recovered failures",
       "--work-item",
       "AI_PROFILE_WORK_ITEM",
       "AI_PROFILE_ITERATION",

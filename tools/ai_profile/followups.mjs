@@ -46,6 +46,7 @@ function buildSuggestions(review) {
     if (field === "missing_context_inputs") return Number(currentScope.missing_context_inputs || 0) === 0;
     if (field === "missing_work_item_metadata") return Number(currentScope.missing_work_item_records || 0) === 0;
     if (field === "low_profile_coverage") return currentScope.low_profile_coverage !== true;
+    if (field === "recovered_failed_records") return asArray(currentScope.recovered_failed_records).length === 0;
     return false;
   }
 
@@ -146,18 +147,22 @@ function buildSuggestions(review) {
   }
 
   if (findingTypes.has("recovered_failed_records") || asArray(review.recovered_failed_records).length > 0) {
-    addSuggestion(suggestions, {
+    if (currentScopeClean("recovered_failed_records")) {
+      suppressedHistorical.push("recovered_failed_records");
+    } else {
+      addSuggestion(suggestions, {
       title: "Classify recovered AI profile failures",
       priority: "P2",
       tags: ["pipeline", "profiling", "reflection", "learning"],
-      source: "recovered_failed_records",
-      why: `${asArray(review.recovered_failed_records).length} failed record(s) later passed and should be treated as recovered rework or learning.`,
+      source: useCurrentScope ? "current_scope.recovered_failed_records" : "recovered_failed_records",
+      why: `${asArray(useCurrentScope ? currentScope.recovered_failed_records : review.recovered_failed_records).length} failed record(s) later passed and should be treated as recovered rework or learning.`,
       done_when: [
         "Recovered failures are named in the retrospective with cause and faster path.",
         "Only recurring recovered failures become rules, preflights, or tasks.",
       ],
       next_action: "Review recovered_failed_records and decide whether they were useful negative feedback, avoidable rework, or tool noise.",
-    });
+      });
+    }
   }
 
   if (findingTypes.has("waste_or_rework") || asArray(review.waste_or_rework).length > 0) {

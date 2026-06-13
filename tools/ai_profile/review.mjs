@@ -151,11 +151,26 @@ function scopedSummary(records) {
     .filter(([, count]) => count > 1)
     .map(([command, count]) => ({ command, count, scope: "broad/final" }));
   const coverage = coverageStats(records);
+  const failedClassification = classifyFailedRecords(records);
   return {
     records: records.length,
     missing_context_inputs: records.filter((record) => record.context_risk && record.context_risk !== "low" && !(record.context_inputs || []).length).length,
     missing_work_item_records: records.filter((record) => !record.work_item).length,
     repeated_broad_final_commands: repeatedBroadFinalCommands,
+    recovered_failed_records: failedClassification.recovered.map((item) => ({
+      line: item.record.__line,
+      phase: item.record.phase,
+      intent: item.record.intent,
+      detail: commandText(item.record) || item.record.command_error || item.record.notes || "",
+      recovered_by_line: item.recovered_by_line,
+      recovered_by_intent: item.recovered_by_intent,
+    })),
+    unresolved_failed_records: failedClassification.unresolved.map((record) => ({
+      line: record.__line,
+      phase: record.phase,
+      intent: record.intent,
+      detail: commandText(record) || record.command_error || record.notes || "",
+    })),
     wall_clock_coverage: coverage,
     low_profile_coverage: isLowCoverage(coverage),
   };
@@ -557,6 +572,8 @@ if (!currentScope.enabled) {
   emit(`- missing context inputs: ${currentScope.missing_context_inputs}`);
   emit(`- missing work-item records: ${currentScope.missing_work_item_records}`);
   emit(`- repeated broad/final commands: ${currentScope.repeated_broad_final_commands.length}`);
+  emit(`- recovered failed records: ${currentScope.recovered_failed_records.length}`);
+  emit(`- unresolved failed records: ${currentScope.unresolved_failed_records.length}`);
   emit(`- wall-clock coverage: ${formatPercent(currentScope.wall_clock_coverage.coverage_ratio)} (${formatMs(currentScope.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(currentScope.wall_clock_coverage.wall_clock_span_ms)})`);
 }
 

@@ -486,6 +486,9 @@ When review JSON includes `current_scope`, follow-up drafts use current-scope
 health for urgent P1 suggestions and list suppressed historical-only findings
 separately. Historical findings still belong in retrospectives, but they should
 not keep creating current action items after the active scope is clean.
+Recovered failed records follow the same rule: historical recovered failures
+are retrospective learning notes, while current-scope recovered failures can
+still become follow-up drafts if they reveal recurring rework.
 When `closeout.mjs` was used without `--no-followups`, these drafts are already
 generated and this manual command is only needed after rerunning review.
 
@@ -562,7 +565,8 @@ A "profiled session" is done when:
   for task/rule/tool promotion and the closeout bundle was skipped or stale;
   if it reports `suppressed_historical_findings`, mention those in the
   retrospective but do not promote them as current tasks unless they recur in
-  the current scope;
+  the current scope; this includes historical recovered failures that already
+  passed later;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste; use
   `--json-output` when another tool, agent, or later reflection should consume
