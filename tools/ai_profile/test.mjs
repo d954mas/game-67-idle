@@ -1826,6 +1826,83 @@ test("reflection draft classifies repeated command evidence by scope", () => {
   }
 });
 
+test("reflection review separates clean current scope from historical lessons", () => {
+  const dir = tempDir();
+  try {
+    const draftJson = join(dir, "clean.draft.json");
+    const reviewJson = join(dir, "clean.review.json");
+    const reviewMd = join(dir, "clean.review.md");
+
+    writeFileSync(draftJson, `${JSON.stringify({
+      current_state: {
+        current_scope_findings: [],
+        current_regressions: [],
+        pending_followups: [],
+        satisfied_followups: [{ title: "Baseline captured" }],
+      },
+      historical_lessons: [
+        { type: "missing_context_inputs", symptom: "Missing context inputs.", cause: "Unmeasured reads.", fix: "Use context.mjs." },
+        { type: "repeated_commands", symptom: "Repeated commands.", cause: "Reruns.", fix: "Classify reruns." },
+      ],
+      suppressed_historical_findings: ["missing_context_inputs"],
+      repeated_commands: {
+        by_scope: [{ scope: "scoped", count: 3 }, { scope: "broad/final", count: 1 }],
+      },
+    })}\n`, "utf8");
+
+    const result = run([
+      "tools/ai_profile/reflection_review.mjs",
+      draftJson,
+      "--output",
+      reviewMd,
+      "--json-output",
+      reviewJson,
+    ]);
+    assert.match(result.stdout, /Verdict: current_clean/);
+    assert.match(result.stdout, /historical_only/);
+    assert.match(result.stdout, /Top Improvements/);
+    const review = readJson(reviewJson);
+    assert.equal(review.verdict, "current_clean");
+    assert.equal(review.current.actions.length, 1);
+    assert.ok(review.historical_lessons.every((lesson) => lesson.current_action === "historical_only"));
+    assert.ok(review.top_improvements.some((item) => item.includes("context.mjs")));
+    assert.equal(existsSync(reviewMd), true);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("reflection review keeps dirty current scope actionable", () => {
+  const dir = tempDir();
+  try {
+    const draftJson = join(dir, "dirty.draft.json");
+    const reviewJson = join(dir, "dirty.review.json");
+
+    writeFileSync(draftJson, `${JSON.stringify({
+      current_state: {
+        current_scope_findings: [{ type: "current_missing_context_inputs", message: "Current context is unmeasured." }],
+        current_regressions: [{ key: "current_missing_context_inputs", label: "Current missing context" }],
+        pending_followups: [{ title: "Fix context capture", next_action: "Run context_command.mjs." }],
+        satisfied_followups: [],
+      },
+      historical_lessons: [
+        { type: "low_profile_coverage", symptom: "Low coverage.", cause: "No checkpoints.", fix: "Use checkpoint.mjs." },
+      ],
+      repeated_commands: { by_scope: [] },
+    })}\n`, "utf8");
+
+    const result = run(["tools/ai_profile/reflection_review.mjs", draftJson, "--json-output", reviewJson]);
+    assert.match(result.stdout, /Verdict: current_action_required/);
+    assert.match(result.stdout, /Current context is unmeasured/);
+    const review = readJson(reviewJson);
+    assert.equal(review.verdict, "current_action_required");
+    assert.ok(review.current.actions.some((action) => action.includes("context_command.mjs")));
+    assert.ok(review.historical_lessons.every((lesson) => lesson.current_action === "review_after_current_items"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("closeout writes summary review and follow-up bundle", () => {
   const dir = tempDir();
   try {

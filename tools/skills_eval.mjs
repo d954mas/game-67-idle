@@ -326,6 +326,8 @@ const SKILL_CHECKS = [
       "satisfied",
       "reflection_draft.mjs",
       "edit it with judgment",
+      "reflection_review.mjs",
+      "top next-cycle",
       "repeated-command evidence",
       "batchable scoped/preflight",
       "current-scope regressions",

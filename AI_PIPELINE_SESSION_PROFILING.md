@@ -368,6 +368,10 @@ Record tools by role:
   comparison, reflection packet, and reflection draft. It does not capture
   baselines automatically and stops on current-scope regressions unless
   `--allow-regression` is explicit.
+- `reflection_review.mjs`: compact decision-review helper that consumes
+  `reflection_draft.mjs --json-output` and separates current actions from
+  historical-only lessons, repeated-command interpretation, and top next-cycle
+  improvements.
 - `review.mjs`: reflection prep helper that turns a JSONL profile into
   priority findings: waste/rework, failures, blockers, context hotspots,
   repeated commands, repeated command scope (`preflight`, `scoped`,
@@ -580,6 +584,16 @@ When the draft includes repeated-command evidence, classify the repeats before
 turning them into process work: justified rerun after a fresh edit or failed
 gate, batchable scoped/preflight check, or broad/final validation waste.
 
+Before writing final retrospective prose, generate a compact decision review:
+
+```powershell
+node tools/ai_profile/reflection_review.mjs tmp/session_profiles/session_profile_YYYY-MM-DD.reflection_draft.json --output tmp/session_profiles/session_profile_YYYY-MM-DD.reflection_review.md --json-output tmp/session_profiles/session_profile_YYYY-MM-DD.reflection_review.json
+```
+
+Use this review to separate current action items from historical-only lessons
+and to extract the top next-cycle improvements. It is still a generated aid,
+not final prose.
+
 When the review shows repeated broad commands, plan the next validation loop
 before running it:
 
@@ -679,6 +693,9 @@ A "profiled session" is done when:
   do not manually repeat closeout/compare/packet/draft command sequences; use
   manual commands only when the wrapper reports missing baseline, regression,
   or another explicit stop condition;
+- `reflection_review.mjs` is used after a fresh reflection draft before writing
+  final retrospective prose, so current actions, historical-only lessons, and
+  top improvements are reviewed explicitly;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste; use
   `--json-output` when another tool, agent, or later reflection should consume

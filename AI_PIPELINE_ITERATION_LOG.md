@@ -1013,3 +1013,20 @@ specific and reusable.
   current-scope regressions.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0101`.
+
+## 2026-06-13 - Reflection draft needs a decision review
+
+- Trigger: `prepare_reflection.mjs` can prepare a fresh draft, but the next
+  step still requires the agent to manually decide what is current action,
+  historical-only context, and top next-cycle improvement.
+- Symptom: The final retrospective can either over-promote historical lessons
+  into new tasks or under-use the draft's structured evidence.
+- Time sink: Agents spend extra attention converting generated draft sections
+  into concise decisions before writing final prose.
+- Likely cause: `reflection_draft.mjs` is intentionally a starter, not a
+  decision review.
+- Proposed improvement: Add `reflection_review.mjs` to consume draft JSON and
+  emit current verdict, historical lesson status, repeated-command summary, and
+  top improvements.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0102`.

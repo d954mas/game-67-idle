@@ -174,6 +174,12 @@ After the packet is ready, generate a scratch starter with
 `tools/ai_profile/reflection_draft.mjs <packet.json> --output
 tmp/session_profiles/<name>.reflection_draft.md --json-output
 tmp/session_profiles/<name>.reflection_draft.json`. Read the draft and edit it with judgment; do not treat it as the final retrospective.
+After the draft is ready, generate a compact decision review with
+`tools/ai_profile/reflection_review.mjs <draft.json> --output
+tmp/session_profiles/<name>.reflection_review.md --json-output
+tmp/session_profiles/<name>.reflection_review.json`. Use it to separate
+current actions from historical-only lessons and to extract the top next-cycle
+improvements before writing final prose.
 When the draft includes repeated-command evidence, classify repeats as
 justified reruns after fresh edits or failed gates, batchable scoped/preflight
 checks, or broad/final validation waste before turning them into process tasks.
