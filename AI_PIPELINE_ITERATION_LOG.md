@@ -926,3 +926,21 @@ specific and reusable.
   scratch markdown/JSON packet.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0096`.
+
+## 2026-06-13 - Reflection packets should suppress satisfied follow-ups
+
+- Trigger: The reflection packet showed readiness `ready` and stable baseline
+  comparison, but still listed "Use clean AI profile as baseline" as an active
+  follow-up.
+- Symptom: Agents can repeat already-completed baseline capture/comparison work
+  during reflection.
+- Time sink: Satisfied process tasks stay visible as pending work and require
+  manual interpretation.
+- Likely cause: Follow-up drafts are generated from review JSON only, while
+  the packet has broader scratch evidence such as baseline manifests and
+  comparison JSON.
+- Proposed improvement: Have `reflection_packet.mjs` classify follow-ups as
+  pending or satisfied using packet-level evidence, starting with clean-profile
+  baseline follow-ups.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0097`.

@@ -318,6 +318,7 @@ const SKILL_CHECKS = [
       "stale baseline comparison",
       "reflection_packet.mjs",
       "first evidence map",
+      "satisfied",
       "current-scope regressions",
       "whole-profile deltas",
       "missing context input",

@@ -67,6 +67,27 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function classifySuggestions(suggestions, baseline, compare) {
+  const currentRegressions = asArray(compare.value?.current_regressions);
+  return suggestions.map((suggestion) => {
+    const source = suggestion.source || "";
+    const title = suggestion.title || "";
+    const isBaseline = source === "clean_profile" || title.toLowerCase().includes("baseline");
+    if (isBaseline && baseline?.baseline_review && compare.exists && compare.value && currentRegressions.length === 0) {
+      return {
+        ...suggestion,
+        packet_status: "satisfied",
+        packet_reason: "Captured baseline and fresh comparison exist with no current-scope regressions.",
+      };
+    }
+    return {
+      ...suggestion,
+      packet_status: "pending",
+      packet_reason: "No packet rule marked this follow-up as satisfied.",
+    };
+  });
+}
+
 function buildPacket(profilePath) {
   const reviewPath = artifactPath(profilePath, "review.json");
   const followupsPath = artifactPath(profilePath, "followups.json");
@@ -82,6 +103,9 @@ function buildPacket(profilePath) {
   const suppressed = asArray(followups.value?.suppressed_historical_findings);
   const currentRegressions = asArray(compare.value?.current_regressions);
   const improvements = asArray(compare.value?.improvements);
+  const classifiedSuggestions = classifySuggestions(suggestions, baseline, compare);
+  const pendingSuggestions = classifiedSuggestions.filter((suggestion) => suggestion.packet_status !== "satisfied");
+  const satisfiedSuggestions = classifiedSuggestions.filter((suggestion) => suggestion.packet_status === "satisfied");
 
   const readiness = [];
   if (!review.exists) readiness.push("review_missing");
@@ -110,7 +134,9 @@ function buildPacket(profilePath) {
       suggested_actions: asArray(currentScope.suggested_actions),
     },
     followups: {
-      suggestions,
+      suggestions: classifiedSuggestions,
+      pending_suggestions: pendingSuggestions,
+      satisfied_suggestions: satisfiedSuggestions,
       suppressed_historical_findings: suppressed,
     },
     comparison: {
@@ -131,7 +157,8 @@ function renderMarkdown(packet) {
   lines.push(`Profile: ${packet.profile}`);
   lines.push(`Readiness: ${packet.readiness.join(", ")}`);
   lines.push(`Current scope findings: ${packet.current_scope.findings.length}`);
-  lines.push(`Follow-up suggestions: ${packet.followups.suggestions.length}`);
+  lines.push(`Pending follow-up suggestions: ${packet.followups.pending_suggestions.length}`);
+  lines.push(`Satisfied follow-up suggestions: ${packet.followups.satisfied_suggestions.length}`);
   lines.push(`Suppressed historical findings: ${packet.followups.suppressed_historical_findings.join(", ") || "none"}`);
   lines.push(`Baseline comparison: ${packet.comparison.exists ? packet.comparison.verdict || "unknown" : "missing"}`);
   lines.push(`Current-scope regressions: ${packet.comparison.current_regressions.length}`);
@@ -144,11 +171,18 @@ function renderMarkdown(packet) {
   }
   for (const action of packet.current_scope.suggested_actions) lines.push(`- action: ${action}`);
   lines.push("");
-  lines.push("## Follow-ups");
-  if (packet.followups.suggestions.length === 0) {
+  lines.push("## Pending Follow-ups");
+  if (packet.followups.pending_suggestions.length === 0) {
     lines.push("- none");
   } else {
-    for (const suggestion of packet.followups.suggestions) lines.push(`- [${suggestion.priority || "P?"}] ${suggestion.title || "(untitled)"}: ${suggestion.next_action || ""}`);
+    for (const suggestion of packet.followups.pending_suggestions) lines.push(`- [${suggestion.priority || "P?"}] ${suggestion.title || "(untitled)"}: ${suggestion.next_action || ""}`);
+  }
+  lines.push("");
+  lines.push("## Satisfied Follow-ups");
+  if (packet.followups.satisfied_suggestions.length === 0) {
+    lines.push("- none");
+  } else {
+    for (const suggestion of packet.followups.satisfied_suggestions) lines.push(`- [${suggestion.priority || "P?"}] ${suggestion.title || "(untitled)"}: ${suggestion.packet_reason || ""}`);
   }
   lines.push("");
   lines.push("## Baseline Comparison");

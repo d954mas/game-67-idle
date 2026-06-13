@@ -538,7 +538,9 @@ node tools/ai_profile/reflection_packet.mjs tmp/session_profiles/session_profile
 The packet is scratch evidence. It cites source artifacts, current-scope
 findings/actions, follow-up drafts, suppressed historical findings, and
 baseline comparison regressions/trend. Keep it in `tmp/session_profiles/`
-unless the lead explicitly asks to preserve it.
+unless the lead explicitly asks to preserve it. Packet follow-ups are split
+into pending and satisfied suggestions; do not promote satisfied suggestions
+into tasks unless new evidence reopens the issue.
 
 When the review shows repeated broad commands, plan the next validation loop
 before running it:
@@ -627,7 +629,8 @@ A "profiled session" is done when:
 - `reflection_packet.mjs` is used before writing a full retrospective when
   generated profile artifacts exist, so the reflection starts from one compact
   scratch evidence packet instead of repeatedly opening summary, review,
-  follow-up, and compare files;
+  follow-up, and compare files; satisfied packet follow-ups are not promoted
+  into tasks;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste; use
   `--json-output` when another tool, agent, or later reflection should consume

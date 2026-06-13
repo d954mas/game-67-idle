@@ -1332,8 +1332,46 @@ test("reflection packet summarizes clean profile artifacts", () => {
     assert.deepEqual(packet.readiness, ["ready"]);
     assert.equal(packet.current_scope.findings.length, 0);
     assert.equal(packet.followups.suggestions.length, 1);
+    assert.equal(packet.followups.pending_suggestions.length, 0);
+    assert.equal(packet.followups.satisfied_suggestions.length, 1);
     assert.equal(packet.comparison.verdict, "stable");
     assert.equal(packet.comparison.current_regressions.length, 0);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("reflection packet keeps baseline follow-up pending when comparison is missing", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "packet-pending.jsonl");
+    const review = join(dir, "packet-pending.review.json");
+    const followups = join(dir, "packet-pending.followups.json");
+    const baselineDir = join(dir, "baselines");
+    const baselineReview = join(baselineDir, "clean.review.json");
+    const manifest = join(baselineDir, "clean.manifest.json");
+    const packetJson = join(dir, "packet.out.json");
+
+    mkdirSync(baselineDir, { recursive: true });
+    writeFileSync(profile, "", "utf8");
+    writeFileSync(review, `${JSON.stringify({ current_scope: { enabled: true, records: 2, findings: [] } })}\n`, "utf8");
+    writeFileSync(followups, `${JSON.stringify({
+      suggestions: [{ priority: "P3", title: "Use clean AI profile as baseline", source: "clean_profile", next_action: "Compare later." }],
+      suppressed_historical_findings: [],
+    })}\n`, "utf8");
+    writeFileSync(baselineReview, "{}\n", "utf8");
+    writeFileSync(manifest, `${JSON.stringify({
+      label: "clean",
+      captured_at: "2026-06-13T10:05:00+05:00",
+      baseline_review: resolve(baselineReview),
+    })}\n`, "utf8");
+
+    const result = run(["tools/ai_profile/reflection_packet.mjs", profile, "--json-output", packetJson]);
+    assert.match(result.stdout, /Readiness: comparison_missing/);
+    assert.match(result.stdout, /Pending Follow-ups/);
+    const packet = readJson(packetJson);
+    assert.equal(packet.followups.pending_suggestions.length, 1);
+    assert.equal(packet.followups.satisfied_suggestions.length, 0);
   } finally {
     cleanup(dir);
   }
