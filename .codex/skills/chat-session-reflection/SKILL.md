@@ -109,6 +109,9 @@ resetting metadata for old records.
 When status reports `current_scope`, use current-scope missing context and
 work-item counts for next actions; use whole-profile totals as retrospective
 history unless the current-scope counts are also bad.
+Apply the same rule to wall-clock coverage: if whole-profile coverage is low
+but current-scope coverage is acceptable or too short to judge, do not add
+checkpoint records solely to repair old history.
 
 Before writing a retrospective from a live profile, run
 `tools/ai_profile/summarize_session_profile.mjs <profile.jsonl> --output

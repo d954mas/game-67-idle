@@ -331,8 +331,9 @@ Record tools by role:
   from unresolved failed commands when a later matching command passes, and
   distinguishes current scope setup problems from historical missing metadata.
   When current scope has `updated_at`, status reports current-scope record and
-  missing-context counts separately; use current-scope health for next actions
-  and whole-profile totals for retrospective history.
+  missing-context counts separately, including current-scope wall-clock
+  coverage; use current-scope health for next actions and whole-profile totals
+  for retrospective history.
   Treat `Bundle complete: yes` as insufficient for reflection unless
   `Bundle fresh: yes` also holds; stale bundles were generated before the
   latest profile records.
@@ -510,7 +511,9 @@ A "profiled session" is done when:
   missing work-item records while current scope is set, do not reset scope
   only to repair old records; if whole-profile missing context inputs are old
   but current-scope missing context inputs are zero, do not rerun context
-  capture solely to repair history;
+  capture solely to repair history; if whole-profile low coverage is old but
+  current-scope coverage is acceptable or too short to judge, do not add
+  checkpoint events solely to repair history;
 - `node --test tools/ai_profile/test.mjs` passes after changes to profiler
   tools, review/status/followup behavior, or scope/default handling;
 - long or multi-task profiles include `--work-item <id>` on substantial

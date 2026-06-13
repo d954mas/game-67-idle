@@ -354,8 +354,76 @@ test("status recommends checkpoint helper for low wall-clock coverage", () => {
 
     const status = readJson(statusJson);
     assert.equal(status.low_profile_coverage, true);
+    assert.equal(status.current_scope.low_profile_coverage, true);
     assert.match(status.next_action, /checkpoint\.mjs/);
     assert.doesNotMatch(status.next_action, /event\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status does not recommend checkpoint for historical low coverage only", () => {
+  const dir = tempDir();
+  try {
+    const oldScope = join(dir, "old-scope.json");
+    const scope = join(dir, "scope.json");
+    const profile = join(dir, "historical-low-coverage.jsonl");
+    const statusJson = join(dir, "status.json");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "planning",
+      "--category",
+      "planning",
+      "--intent",
+      "old sparse event",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--ts",
+      "2026-06-13T10:00:00+05:00",
+    ], { env: { AI_PROFILE_SCOPE_FILE: oldScope } });
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "planning",
+      "--category",
+      "planning",
+      "--intent",
+      "old future sparse event",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--ts",
+      "2026-06-13T10:31:00+05:00",
+    ], { env: { AI_PROFILE_SCOPE_FILE: oldScope } });
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope",
+      scope,
+      "--profile",
+      profile,
+      "--work-item",
+      "STATUS5",
+      "--iteration",
+      "current",
+      "--ts",
+      "2026-06-13T10:32:00+05:00",
+    ]);
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+
+    const status = readJson(statusJson);
+    assert.equal(status.low_profile_coverage, true);
+    assert.equal(status.current_scope.low_profile_coverage, false);
+    assert.doesNotMatch(status.next_action, /checkpoint\.mjs/);
   } finally {
     cleanup(dir);
   }

@@ -739,3 +739,19 @@ specific and reusable.
   reflection artifacts.
 - Follow-up owner: Future profiling/tooling agents.
 - Status: Implemented in `T0085`.
+
+## 2026-06-13 - Wall-clock coverage status needs current-scope view
+
+- Context: After adding checkpoint capture, live status still recommended
+  checkpoint work because whole-profile wall-clock coverage was low.
+- Friction: Old low coverage can keep driving the next action even when the
+  current focused iteration has its own clean scope.
+- Time sink: Agents may add extra checkpoints to repair stale historical gaps
+  instead of acting on current telemetry health.
+- Likely cause: `status.mjs` scoped context/work-item health but still used
+  whole-profile wall-clock coverage for next-action priority.
+- Proposed improvement: Add current-scope wall-clock coverage and use it for
+  next actions when current scope is active, leaving whole-profile coverage as
+  retrospective history.
+- Follow-up owner: Future profiling/tooling agents.
+- Status: Implemented in `T0086`.

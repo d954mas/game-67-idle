@@ -166,6 +166,10 @@ function currentScopeRecords(records, scope) {
   });
 }
 
+function isLowCoverage(coverage) {
+  return coverage.wall_clock_span_ms >= 30 * 60 * 1000 && Number.isFinite(coverage.coverage_ratio) && coverage.coverage_ratio < 0.25;
+}
+
 function buildStatus(profilePath) {
   const parsed = parseProfile(profilePath);
   const records = parsed.records;
@@ -178,15 +182,17 @@ function buildStatus(profilePath) {
   const bundle = bundleStatus(profilePath);
   const scope = readProfileScope();
   const latest = latestRecord(records);
-  const lowCoverage = coverage.wall_clock_span_ms >= 30 * 60 * 1000 && Number.isFinite(coverage.coverage_ratio) && coverage.coverage_ratio < 0.25;
 
   let nextAction = "Use this profile as baseline; no urgent profiling action detected.";
   const scopeReady = scope.valid && Boolean(scope.work_item);
   const scopedRecords = scopeReady ? currentScopeRecords(records, scope) : [];
+  const scopedCoverage = coverageStats(scopedRecords);
   const scopedMissingContextInputs = countMissingContextInputs(scopedRecords);
   const scopedMissingWorkItem = countMissingWorkItem(scopedRecords);
   const hasCurrentScopeWindow = scopeReady && Boolean(scope.updated_at);
   const actionableMissingContextInputs = hasCurrentScopeWindow ? scopedMissingContextInputs : missingContextInputs;
+  const lowCoverage = isLowCoverage(coverage);
+  const actionableLowCoverage = hasCurrentScopeWindow ? isLowCoverage(scopedCoverage) : lowCoverage;
 
   if (!parsed.exists) {
     nextAction = "Start profiling with `node tools/ai_profile/start.mjs --work-item <id> --iteration <name>`.";
@@ -202,7 +208,7 @@ function buildStatus(profilePath) {
     nextAction = "Append a current-scope checkpoint with event.mjs, context.mjs, context_command.mjs, or run.mjs.";
   } else if (actionableMissingContextInputs > 0) {
     nextAction = "Use context.mjs for medium/high local context reads so context_inputs are measured.";
-  } else if (lowCoverage) {
+  } else if (actionableLowCoverage) {
     nextAction = "Use checkpoint.mjs during long manual/research/design stretches so elapsed time is recorded with duration_ms.";
   } else if (!closeoutSeen) {
     nextAction = "At session end, run closeout.mjs to generate the reflection bundle.";
@@ -240,6 +246,8 @@ function buildStatus(profilePath) {
       records: scopedRecords.length,
       missing_work_item_records: scopedMissingWorkItem,
       missing_context_inputs: scopedMissingContextInputs,
+      wall_clock_coverage: scopedCoverage,
+      low_profile_coverage: isLowCoverage(scopedCoverage),
     },
     missing_context_inputs: missingContextInputs,
     failed_records: failedRecords,
@@ -271,6 +279,7 @@ function renderMarkdown(status) {
   lines.push(`Work-item coverage: ${formatPercent(status.work_item_coverage.coverage_ratio)} (${status.work_item_coverage.missing_records} missing)`);
   lines.push(`Missing context inputs: ${status.missing_context_inputs}`);
   lines.push(`Current scope records: ${status.current_scope.records} (${status.current_scope.missing_context_inputs} missing context inputs, ${status.current_scope.missing_work_item_records} missing work items)`);
+  lines.push(`Current scope wall-clock coverage: ${formatPercent(status.current_scope.wall_clock_coverage.coverage_ratio)} (${formatMs(status.current_scope.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(status.current_scope.wall_clock_coverage.wall_clock_span_ms)})`);
   lines.push(`Failed records: ${status.failed_records} (${status.recovered_failed_records} recovered, ${status.unresolved_failed_records} unresolved)`);
   lines.push(`Wall-clock coverage: ${formatPercent(status.wall_clock_coverage.coverage_ratio)} (${formatMs(status.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(status.wall_clock_coverage.wall_clock_span_ms)})`);
   lines.push("");
