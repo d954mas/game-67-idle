@@ -141,13 +141,20 @@ function isLowCoverage(coverage) {
 
 function scopedSummary(records) {
   const broadCommandCounts = new Map();
+  const unbatchedBroadCommandCounts = new Map();
   for (const record of records) {
     for (const command of record.commands || []) {
       const normalized = normalizeCommand(command);
-      if (commandScope(normalized) === "broad/final") addCount(broadCommandCounts, normalized);
+      if (commandScope(normalized) === "broad/final") {
+        addCount(broadCommandCounts, normalized);
+        if (!record.validation_batch_id) addCount(unbatchedBroadCommandCounts, normalized);
+      }
     }
   }
   const repeatedBroadFinalCommands = topEntries(broadCommandCounts, 20)
+    .filter(([, count]) => count > 1)
+    .map(([command, count]) => ({ command, count, scope: "broad/final" }));
+  const repeatedUnbatchedBroadFinalCommands = topEntries(unbatchedBroadCommandCounts, 20)
     .filter(([, count]) => count > 1)
     .map(([command, count]) => ({ command, count, scope: "broad/final" }));
   const coverage = coverageStats(records);
@@ -157,6 +164,7 @@ function scopedSummary(records) {
     missing_context_inputs: records.filter((record) => record.context_risk && record.context_risk !== "low" && !(record.context_inputs || []).length).length,
     missing_work_item_records: records.filter((record) => !record.work_item).length,
     repeated_broad_final_commands: repeatedBroadFinalCommands,
+    repeated_unbatched_broad_final_commands: repeatedUnbatchedBroadFinalCommands,
     recovered_failed_records: failedClassification.recovered.map((item) => ({
       line: item.record.__line,
       phase: item.record.phase,
@@ -236,8 +244,8 @@ function currentScopeFindingsAndActions(currentScope) {
     findings.push({ type: "current_recovered_failed_records", message: `${currentScope.recovered_failed_records.length} current-scope failed record(s) later passed.` });
     actions.push("Classify current-scope recovered failures as useful negative feedback, avoidable rework, or tool noise.");
   }
-  if (currentScope.repeated_broad_final_commands.length > 0) {
-    findings.push({ type: "current_repeated_broad_final", message: `${currentScope.repeated_broad_final_commands.length} current-scope broad/final command(s) repeated.` });
+  if (currentScope.repeated_unbatched_broad_final_commands.length > 0) {
+    findings.push({ type: "current_repeated_broad_final", message: `${currentScope.repeated_unbatched_broad_final_commands.length} current-scope unbatched broad/final command(s) repeated.` });
     actions.push("Use validation planning and batch current-scope broad/final gates.");
   }
   if (currentScope.missing_context_inputs > 0) {
@@ -400,6 +408,8 @@ const workItemDuration = new Map();
 const iterationCounts = new Map();
 const iterationDuration = new Map();
 const workItemBroadCommandCounts = new Map();
+const unbatchedBroadCommandCounts = new Map();
+const batchedBroadCommandCounts = new Map();
 const contextChars = new Map();
 const waste = [];
 const failed = [];
@@ -426,6 +436,11 @@ for (const record of records) {
     commandScopes.set(normalized, scope);
     if (scope === "broad/final") {
       addCount(workItemBroadCommandCounts, segmentCommandKey(workItem, normalized));
+      if (record.validation_batch_id) {
+        addCount(batchedBroadCommandCounts, normalized);
+      } else {
+        addCount(unbatchedBroadCommandCounts, normalized);
+      }
     }
   }
   for (const input of record.context_inputs || []) addCount(contextChars, input.path || "(inline)", Number(input.chars || 0));
@@ -441,6 +456,8 @@ const repeatedCommands = topEntries(commandCounts, 20).filter(([, count]) => cou
 const repeatedScopeCounts = new Map();
 for (const [command, count] of repeatedCommands) addCount(repeatedScopeCounts, commandScopes.get(command) || "unknown", count);
 const repeatedBroadCommands = repeatedCommands.filter(([command]) => commandScopes.get(command) === "broad/final");
+const repeatedUnbatchedBroadCommands = topEntries(unbatchedBroadCommandCounts, 20).filter(([, count]) => count > 1);
+const batchedBroadCommands = topEntries(batchedBroadCommandCounts, 20);
 const repeatedBroadByWorkItem = repeatedSegmentCommands(workItemBroadCommandCounts, 20);
 const validationBatchSummaries = validationBatches(records);
 const topContext = topEntries(contextChars, 10).filter(([, chars]) => chars > 0);
@@ -480,10 +497,10 @@ if (recoveredFailed.length > 0) findings.push({ type: "recovered_failed_records"
 if (blocked.length > 0) findings.push({ type: "blocked_records", message: `${blocked.length} blocker record(s) need owner or decision.` });
 if (highContext.length > 0) findings.push({ type: "high_context", message: `${highContext.length} high-context record(s) indicate context pressure.` });
 if (repeatedCommands.length > 0) findings.push({ type: "repeated_commands", message: `${repeatedCommands.length} repeated command(s) may need batching or narrower gates.` });
-if (repeatedBroadCommands.length > 0) {
+if (repeatedUnbatchedBroadCommands.length > 0) {
   findings.push({
     type: "repeated_broad_final",
-    message: `${repeatedBroadCommands.length} repeated broad/final command(s) are likely validation waste unless a gate failed or risk changed.`,
+    message: `${repeatedUnbatchedBroadCommands.length} unbatched repeated broad/final command(s) are likely validation waste unless a gate failed or risk changed.`,
   });
 }
 if (missingContextInputs.length > 0) {
@@ -510,7 +527,7 @@ const actions = [];
 if (waste.length > 0) actions.push("Convert recurring waste/rework reasons into a task, skill rule, validator, or batching rule.");
 if (unresolvedFailed.length > 0) actions.push("For unresolved failed commands, decide whether the fix is code, environment, narrower validation, or better preflight.");
 if (recoveredFailed.length > 0) actions.push("Classify recovered failed commands as rework/learning in the retrospective instead of treating them as current blockers.");
-if (repeatedBroadCommands.length > 0) {
+if (repeatedUnbatchedBroadCommands.length > 0) {
   actions.push(
     "Batch repeated broad/final validation or run `node tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the next validation loop.",
   );
@@ -631,6 +648,22 @@ if (repeatedBroadCommands.length === 0) {
   for (const [command, count] of repeatedBroadCommands) emit(`- ${count}x ${command}`);
 }
 
+emit("\n## Broad/Final Validation Classification");
+if (repeatedBroadCommands.length === 0 && batchedBroadCommands.length === 0) {
+  emit("- none");
+} else {
+  if (batchedBroadCommands.length > 0) {
+    emit("- batched:");
+    for (const [command, count] of batchedBroadCommands) emit(`  - ${count}x ${command}`);
+  }
+  if (repeatedUnbatchedBroadCommands.length > 0) {
+    emit("- unbatched repeated:");
+    for (const [command, count] of repeatedUnbatchedBroadCommands) emit(`  - ${count}x ${command}`);
+  } else {
+    emit("- unbatched repeated: none");
+  }
+}
+
 emit("\n## Repeated Broad/Final Commands By Work Item");
 if (repeatedBroadByWorkItem.length === 0) {
   emit("- none");
@@ -679,6 +712,7 @@ if (!currentScope.enabled) {
   emit(`- missing context inputs: ${currentScope.missing_context_inputs}`);
   emit(`- missing work-item records: ${currentScope.missing_work_item_records}`);
   emit(`- repeated broad/final commands: ${currentScope.repeated_broad_final_commands.length}`);
+  emit(`- repeated unbatched broad/final commands: ${currentScope.repeated_unbatched_broad_final_commands.length}`);
   emit(`- recovered failed records: ${currentScope.recovered_failed_records.length}`);
   emit(`- unresolved failed records: ${currentScope.unresolved_failed_records.length}`);
   emit(`- wall-clock coverage: ${formatPercent(currentScope.wall_clock_coverage.coverage_ratio)} (${formatMs(currentScope.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(currentScope.wall_clock_coverage.wall_clock_span_ms)})`);
@@ -760,6 +794,16 @@ if (jsonOutputFile) {
     repeated_commands: repeatedCommandObjects,
     repeated_commands_by_scope: mapEntries(repeatedScopeCounts, 10).map(({ key, value }) => ({ scope: key, count: value })),
     repeated_broad_final_commands: repeatedCommandObjects.filter((item) => item.scope === "broad/final"),
+    repeated_unbatched_broad_final_commands: repeatedUnbatchedBroadCommands.map(([command, count]) => ({
+      command,
+      count,
+      scope: "broad/final",
+    })),
+    batched_broad_final_commands: batchedBroadCommands.map(([command, count]) => ({
+      command,
+      count,
+      scope: "broad/final",
+    })),
     repeated_broad_final_by_work_item: repeatedBroadByWorkItem.map((item) => ({
       work_item: item.segment,
       command: item.command,

@@ -36,7 +36,7 @@ function topImprovements(draft, currentClean) {
   if (hasLesson("repeated_commands")) {
     improvements.push("Classify repeated commands as justified reruns, batchable checks, or validation waste before adding process tasks.");
   }
-  if (commandScopeCount(draft, "broad/final") > 0 || hasLesson("repeated_broad_final")) {
+  if (asArray(draft.repeated_commands?.unbatched_broad_final_commands).length > 0 || hasLesson("repeated_broad_final")) {
     improvements.push("Batch broad/final validation and rerun it only after a failed gate, changed risk, or final handoff.");
   }
   if (asArray(draft.repeated_commands?.validation_batches).length > 0) {

@@ -1102,3 +1102,20 @@ specific and reusable.
   with cap and previous-record metadata.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0106`.
+
+## 2026-06-13 - Broad validation repeats need batched/unbatched classification
+
+- Trigger: `validation_run.mjs` added planned validation batches, but
+  repeated broad/final analysis still counted planned final gates together
+  with ad hoc reruns.
+- Symptom: A healthy validation batch could make the retrospective look worse
+  by increasing the broad/final repeat count.
+- Time sink: Agents had to manually inspect batch records to decide whether a
+  repeated `pipeline_validate.mjs` was planned or wasteful.
+- Likely cause: `review.mjs` had total repeated broad/final counts but no
+  batched/unbatched split.
+- Proposed improvement: Add `batched_broad_final_commands` and
+  `repeated_unbatched_broad_final_commands`; use unbatched repeats for waste
+  findings while keeping planned batch gates visible as evidence.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0107`.

@@ -27,17 +27,26 @@ function findingTypes(review) {
 
 function currentScope(review) {
   const scope = review.current_scope || {};
+  const repeatedUnbatchedBroadFinal = Array.isArray(scope.repeated_unbatched_broad_final_commands)
+    ? scope.repeated_unbatched_broad_final_commands
+    : asArray(scope.repeated_broad_final_commands);
   return {
     enabled: scope.enabled === true,
     records: asNumber(scope.records),
     findings: asArray(scope.findings),
     missing_context_inputs: asNumber(scope.missing_context_inputs),
     missing_work_item_records: asNumber(scope.missing_work_item_records),
-    repeated_broad_final_commands: asArray(scope.repeated_broad_final_commands),
+    repeated_broad_final_commands: repeatedUnbatchedBroadFinal,
     recovered_failed_records: asArray(scope.recovered_failed_records),
     unresolved_failed_records: asArray(scope.unresolved_failed_records),
     low_profile_coverage: scope.low_profile_coverage === true ? 1 : 0,
   };
+}
+
+function repeatedUnbatchedBroadFinalCommands(review) {
+  return Array.isArray(review.repeated_unbatched_broad_final_commands)
+    ? review.repeated_unbatched_broad_final_commands
+    : asArray(review.repeated_broad_final_commands);
 }
 
 function extractMetrics(review) {
@@ -53,7 +62,7 @@ function extractMetrics(review) {
     current_low_profile_coverage: scope.low_profile_coverage,
     whole_findings: asArray(review.findings).length,
     whole_missing_context_inputs: asArray(review.missing_context_inputs).length,
-    whole_repeated_broad_final_commands: asArray(review.repeated_broad_final_commands).length,
+    whole_repeated_broad_final_commands: repeatedUnbatchedBroadFinalCommands(review).length,
     whole_recovered_failed_records: asArray(review.recovered_failed_records).length,
     whole_unresolved_failed_records: asArray(review.unresolved_failed_records).length,
     whole_low_profile_coverage: types.has("low_profile_coverage") ? 1 : 0,
@@ -64,13 +73,13 @@ const METRICS = [
   ["current_findings", "Current-scope findings", "current"],
   ["current_missing_context_inputs", "Current-scope missing context inputs", "current"],
   ["current_missing_work_item_records", "Current-scope missing work-item records", "current"],
-  ["current_repeated_broad_final_commands", "Current-scope repeated broad/final commands", "current"],
+  ["current_repeated_broad_final_commands", "Current-scope repeated unbatched broad/final commands", "current"],
   ["current_recovered_failed_records", "Current-scope recovered failed records", "current"],
   ["current_unresolved_failed_records", "Current-scope unresolved failed records", "current"],
   ["current_low_profile_coverage", "Current-scope low coverage flag", "current"],
   ["whole_findings", "Whole-profile findings", "historical"],
   ["whole_missing_context_inputs", "Whole-profile missing context inputs", "historical"],
-  ["whole_repeated_broad_final_commands", "Whole-profile repeated broad/final commands", "historical"],
+  ["whole_repeated_broad_final_commands", "Whole-profile repeated unbatched broad/final commands", "historical"],
   ["whole_recovered_failed_records", "Whole-profile recovered failed records", "historical"],
   ["whole_unresolved_failed_records", "Whole-profile unresolved failed records", "historical"],
   ["whole_low_profile_coverage", "Whole-profile low coverage flag", "historical"],

@@ -42,6 +42,8 @@ function repeatedCommandSummary(review) {
   const commands = asArray(review?.repeated_commands);
   const byScope = asArray(review?.repeated_commands_by_scope);
   const broadFinal = asArray(review?.repeated_broad_final_commands);
+  const unbatchedBroadFinal = asArray(review?.repeated_unbatched_broad_final_commands);
+  const batchedBroadFinal = asArray(review?.batched_broad_final_commands);
   const broadFinalByWorkItem = asArray(review?.repeated_broad_final_by_work_item);
   const validationBatches = asArray(review?.validation_batches);
   return {
@@ -53,6 +55,16 @@ function repeatedCommandSummary(review) {
       scope: item.scope || "unknown",
     })),
     broad_final_commands: broadFinal.slice(0, 8).map((item) => ({
+      command: item.command || "",
+      count: Number(item.count || 0),
+      scope: item.scope || "broad/final",
+    })),
+    unbatched_broad_final_commands: unbatchedBroadFinal.slice(0, 8).map((item) => ({
+      command: item.command || "",
+      count: Number(item.count || 0),
+      scope: item.scope || "broad/final",
+    })),
+    batched_broad_final_commands: batchedBroadFinal.slice(0, 8).map((item) => ({
       command: item.command || "",
       count: Number(item.count || 0),
       scope: item.scope || "broad/final",
@@ -91,8 +103,8 @@ function lessonForFinding(finding, context = {}) {
     },
     repeated_broad_final: {
       symptom: message,
-      cause: "Broad/final validation was repeated in the historical profile instead of being batched or guarded by a validation plan.",
-      fix: "Use validation planning and current-scope status before rerunning broad/final gates.",
+      cause: "Unbatched broad/final validation was repeated in the historical profile instead of being guarded by a validation plan or captured as a planned validation batch.",
+      fix: "Use validation_run.mjs or a validation plan before rerunning broad/final gates; treat planned validation batches separately from ad hoc repeats.",
     },
     missing_context_inputs: {
       symptom: message,
@@ -248,6 +260,14 @@ function renderMarkdown(draft, packetFile) {
     if (draft.repeated_commands.broad_final_by_work_item.length > 0) {
       lines.push("- broad/final by work item:");
       for (const item of draft.repeated_commands.broad_final_by_work_item) lines.push(`  - ${item.work_item || "unknown"}: ${item.count}x ${item.command}`);
+    }
+    if (draft.repeated_commands.unbatched_broad_final_commands.length > 0) {
+      lines.push("- unbatched broad/final repeated:");
+      for (const item of draft.repeated_commands.unbatched_broad_final_commands) lines.push(`  - ${item.count}x ${item.command}`);
+    }
+    if (draft.repeated_commands.batched_broad_final_commands.length > 0) {
+      lines.push("- batched broad/final:");
+      for (const item of draft.repeated_commands.batched_broad_final_commands) lines.push(`  - ${item.count}x ${item.command}`);
     }
     if (draft.repeated_commands.validation_batches.length > 0) {
       lines.push("- validation batches:");

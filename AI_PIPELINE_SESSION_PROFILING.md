@@ -649,9 +649,11 @@ end of the selected batch. Placeholder commands are skipped and listed in the
 summary; fill project-specific native, asset, web, or release commands
 manually when those surfaces are in scope.
 When reviewing repeated validation, inspect `review.mjs`'s `Validation
-Batches` section and JSON `validation_batches` before treating repeated
-commands as waste. A planned batch with one final gate is different from ad hoc
-reruns of the same broad command.
+Batches` and `Broad/Final Validation Classification` sections before treating
+repeated commands as waste. A planned batch with one final gate is different
+from ad hoc reruns of the same broad command; use
+`repeated_unbatched_broad_final_commands` for waste decisions and
+`batched_broad_final_commands` as planned validation evidence.
 
 ## Definition Of Done
 
@@ -744,8 +746,8 @@ A "profiled session" is done when:
 - `validation_run.mjs` is used when the validation plan has concrete commands
   and command-level telemetry matters; broad/final checks run once at the end
   of the selected batch, skipped placeholders are visible in the summary, and
-  `review.mjs` later reports validation batches as context for repeated-command
-  interpretation;
+  `review.mjs` later reports validation batches plus batched/unbatched
+  broad/final classification as context for repeated-command interpretation;
 - `observability_gate.mjs` is used before adding external tracing/eval
   platforms; the decision and pilot result are captured in a task log or
   durable pipeline note, while raw exported telemetry stays in `tmp/`;

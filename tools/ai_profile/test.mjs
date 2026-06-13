@@ -1560,6 +1560,92 @@ test("profile review summarizes validation batches", () => {
   }
 });
 
+test("profile review separates batched and unbatched broad final repeats", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "broad-final-classification.jsonl");
+    const reviewJson = join(dir, "review.json");
+    const command = "node tools/pipeline_validate.mjs";
+    for (const [index, batchId] of ["batch-a", "batch-b", ""].entries()) {
+      appendFileSync(profile, `${JSON.stringify({
+        ts: `2026-06-13T10:00:0${index}+05:00`,
+        phase: "validation",
+        category: "validation",
+        intent: `pipeline validation ${index}`,
+        result: "pass",
+        value: "necessary_overhead",
+        duration_ms: 1000,
+        commands: [command],
+        ...(batchId ? {
+          validation_batch_id: batchId,
+          validation_check_id: "portable-pipeline",
+          validation_tier: "final",
+          validation_plan_risk: "medium",
+          validation_plan_changes: ["pipeline"],
+        } : {}),
+      })}\n`, "utf8");
+    }
+    appendFileSync(profile, `${JSON.stringify({
+      ts: "2026-06-13T10:00:03+05:00",
+      phase: "validation",
+      category: "validation",
+      intent: "pipeline validation unbatched second",
+      result: "pass",
+      value: "necessary_overhead",
+      duration_ms: 1000,
+      commands: [command],
+    })}\n`, "utf8");
+
+    run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: join(dir, "scope.json") },
+    });
+    const review = readJson(reviewJson);
+    assert.equal(review.repeated_broad_final_commands[0].count, 4);
+    assert.equal(review.batched_broad_final_commands[0].count, 2);
+    assert.equal(review.repeated_unbatched_broad_final_commands[0].count, 2);
+    assert.ok(review.findings.some((finding) => finding.type === "repeated_broad_final"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("profile review does not flag repeated broad final when repeats are batched", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "batched-only-broad-final.jsonl");
+    const reviewJson = join(dir, "review.json");
+    const command = "node tools/pipeline_validate.mjs";
+    for (const [index, batchId] of ["batch-a", "batch-b"].entries()) {
+      appendFileSync(profile, `${JSON.stringify({
+        ts: `2026-06-13T10:00:0${index}+05:00`,
+        phase: "validation",
+        category: "validation",
+        intent: `batched final ${index}`,
+        result: "pass",
+        value: "necessary_overhead",
+        duration_ms: 1000,
+        commands: [command],
+        validation_batch_id: batchId,
+        validation_check_id: "portable-pipeline",
+        validation_tier: "final",
+        validation_plan_risk: "medium",
+        validation_plan_changes: ["pipeline"],
+      })}\n`, "utf8");
+    }
+
+    run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: join(dir, "scope.json") },
+    });
+    const review = readJson(reviewJson);
+    assert.equal(review.repeated_broad_final_commands[0].count, 2);
+    assert.equal(review.batched_broad_final_commands[0].count, 2);
+    assert.deepEqual(review.repeated_unbatched_broad_final_commands, []);
+    assert.equal(review.findings.some((finding) => finding.type === "repeated_broad_final"), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("validation runner dry run writes summary without profile records", () => {
   const dir = tempDir();
   try {
@@ -1713,6 +1799,62 @@ test("compare review baseline fails on current-scope regression", () => {
     const compare = readJson(compareJson);
     assert.equal(compare.verdict, "regressed");
     assert.ok(compare.current_regressions.some((item) => item.key === "current_missing_context_inputs"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("compare review baseline ignores batched broad final repeats", () => {
+  const dir = tempDir();
+  try {
+    const baseline = join(dir, "baseline.review.json");
+    const current = join(dir, "current.review.json");
+    const compareJson = join(dir, "compare.json");
+    const baseReview = {
+      schema_version: 1,
+      profile: "baseline.jsonl",
+      findings: [],
+      missing_context_inputs: [],
+      repeated_broad_final_commands: [],
+      repeated_unbatched_broad_final_commands: [],
+      batched_broad_final_commands: [],
+      recovered_failed_records: [],
+      unresolved_failed_records: [],
+      current_scope: {
+        enabled: true,
+        records: 2,
+        findings: [],
+        missing_context_inputs: 0,
+        missing_work_item_records: 0,
+        repeated_broad_final_commands: [],
+        repeated_unbatched_broad_final_commands: [],
+        recovered_failed_records: [],
+        unresolved_failed_records: [],
+        low_profile_coverage: false,
+      },
+    };
+    const currentReview = {
+      ...baseReview,
+      profile: "current.jsonl",
+      repeated_broad_final_commands: [{ command: "node tools/pipeline_validate.mjs", count: 2 }],
+      repeated_unbatched_broad_final_commands: [],
+      batched_broad_final_commands: [{ command: "node tools/pipeline_validate.mjs", count: 2 }],
+      current_scope: {
+        ...baseReview.current_scope,
+        records: 4,
+        repeated_broad_final_commands: [{ command: "node tools/pipeline_validate.mjs", count: 2 }],
+        repeated_unbatched_broad_final_commands: [],
+      },
+    };
+    writeFileSync(baseline, `${JSON.stringify(baseReview)}\n`, "utf8");
+    writeFileSync(current, `${JSON.stringify(currentReview)}\n`, "utf8");
+
+    const result = run(["tools/ai_profile/compare_reviews.mjs", baseline, current, "--json-output", compareJson]);
+    assert.match(result.stdout, /Verdict: stable/);
+    const compare = readJson(compareJson);
+    assert.equal(compare.verdict, "stable");
+    assert.equal(compare.current_regressions.length, 0);
+    assert.equal(compare.deltas.find((item) => item.key === "current_repeated_broad_final_commands").current, 0);
   } finally {
     cleanup(dir);
   }
@@ -2058,6 +2200,12 @@ test("reflection draft classifies repeated command evidence by scope", () => {
       repeated_broad_final_commands: [
         { command: "node tools/pipeline_validate.mjs", count: 4, scope: "broad/final" },
       ],
+      repeated_unbatched_broad_final_commands: [
+        { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
+      ],
+      batched_broad_final_commands: [
+        { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
+      ],
       repeated_broad_final_by_work_item: [
         { work_item: "T0099", command: "node tools/pipeline_validate.mjs", count: 2 },
       ],
@@ -2086,6 +2234,8 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     const draft = readJson(draftJson);
     assert.equal(draft.repeated_commands.total_distinct, 3);
     assert.equal(draft.repeated_commands.broad_final_commands.length, 1);
+    assert.equal(draft.repeated_commands.unbatched_broad_final_commands[0].count, 2);
+    assert.equal(draft.repeated_commands.batched_broad_final_commands[0].count, 2);
     assert.equal(draft.repeated_commands.broad_final_by_work_item[0].work_item, "T0099");
     assert.equal(draft.repeated_commands.validation_batches[0].batch_id, "batch-draft");
     assert.match(draft.historical_lessons[0].cause, /fresh edit or failed gate/);
