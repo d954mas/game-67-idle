@@ -119,7 +119,7 @@ function lessonForFinding(finding, context = {}) {
     low_profile_coverage: {
       symptom: message,
       cause: "Long manual/research/review stretches were not checkpointed in the historical profile.",
-      fix: "Use checkpoint.mjs during long non-command stretches.",
+      fix: "Use node tools/ai.mjs checkpoint \"<intent>\" during long non-command stretches.",
     },
     recovered_failed_records: {
       symptom: message,

@@ -7,6 +7,7 @@ function usage() {
   console.error(`usage:
   node tools/ai.mjs start <work-item> [iteration]
   node tools/ai.mjs context
+  node tools/ai.mjs checkpoint <intent> [--force] [--min-gap-min <n>] [checkpoint options]
   node tools/ai.mjs run [--phase <name>] [--category <name>] [--intent <text>] [--value <name>] -- <command> [args...]
   node tools/ai.mjs validate --change <kind> [--risk low|medium|high] [--tier <name>] [--dry-run]
   node tools/ai.mjs status
@@ -15,6 +16,7 @@ function usage() {
 Fast path:
   start    set current work item and append one profiling checkpoint
   context  print the compact game-iteration packet and profile its cost
+  checkpoint record a meaningful manual/research/review gap without noisy short pauses
   run      run a command and record duration/result
   validate run a planned validation batch with batch metadata
   status   show telemetry health
@@ -52,6 +54,10 @@ function hasFlag(args, flag) {
   return args.includes(flag);
 }
 
+function withoutFlag(args, flag) {
+  return args.filter((arg) => arg !== flag);
+}
+
 const [command, ...argv] = process.argv.slice(2);
 
 if (!command || command === "help" || command === "--help" || command === "-h") usage();
@@ -75,6 +81,18 @@ if (command === "context") {
     process.execPath,
     "tools/game_context/iteration_context.mjs",
   ]);
+}
+
+if (command === "checkpoint") {
+  const force = hasFlag(argv, "--force");
+  const args = withoutFlag(argv, "--force");
+  const [intent, ...options] = args;
+  if (!intent || intent.startsWith("--")) usage();
+  const target = force ? "tools/ai_profile/checkpoint.mjs" : "tools/ai_profile/gap_checkpoint.mjs";
+  const profileArgs = [target, "--intent", intent, ...options];
+  if (!hasFlag(profileArgs, "--value")) profileArgs.push("--value", "necessary_overhead");
+  if (!force && !hasFlag(profileArgs, "--min-gap-min")) profileArgs.push("--min-gap-min", "2");
+  run(profileArgs);
 }
 
 if (command === "run") {

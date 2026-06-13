@@ -258,7 +258,7 @@ function currentScopeFindingsAndActions(currentScope) {
   }
   if (currentScope.low_profile_coverage) {
     findings.push({ type: "current_low_profile_coverage", message: `Current scope covers ${formatPercent(currentScope.wall_clock_coverage.coverage_ratio)} of a ${formatMs(currentScope.wall_clock_coverage.wall_clock_span_ms)} span.` });
-    actions.push("Add checkpoint.mjs records during long current-scope manual/research/design stretches.");
+    actions.push("Add node tools/ai.mjs checkpoint records during long current-scope manual/research/design stretches.");
   }
   if (findings.length === 0) {
     actions.push("Use current scope as clean baseline; treat whole-profile findings as historical retrospective context.");

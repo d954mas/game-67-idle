@@ -100,8 +100,9 @@ cannot cover.
 
 For future long sessions, prefer collecting data during work with
 `node tools/ai.mjs start <id> <iteration>` at the beginning of a focused
-iteration, `node tools/ai.mjs context` before implementation, and
-`node tools/ai.mjs run -- <command>` for substantial commands.
+iteration, `node tools/ai.mjs context` before implementation,
+`node tools/ai.mjs checkpoint "<intent>"` after long manual/research/review
+stretches, and `node tools/ai.mjs run -- <command>` for substantial commands.
 Do not wait until the end to reconstruct avoidable telemetry from chat history.
 During long sessions, run `node tools/ai.mjs status` when telemetry health
 is unclear. It is read-only and reports latest event, closeout/bundle presence,
@@ -225,13 +226,10 @@ scope persists outside a single shell command.
 Inspect `wall_clock_coverage`, `low_profile_coverage`, and largest gaps before
 claiming the profile explains the whole session. Low coverage means the
 retrospective must name what likely happened in the unprofiled gaps, or add a
-next-cycle rule to place `tools/ai_profile/checkpoint.mjs --intent <text>`
-checkpoints during long manual, research, design, or review stretches so the
-elapsed time is recorded with `duration_ms`.
-When the agent is unsure whether the gap is long enough to record, use
-`tools/ai_profile/gap_checkpoint.mjs --intent <text> --min-gap-min <minutes>`;
-it records only meaningful gaps and skips short pauses without adding profile
-noise.
+next-cycle rule to place `node tools/ai.mjs checkpoint "<intent>"` checkpoints
+during long manual, research, design, or review stretches so the elapsed time
+is recorded with `duration_ms`. The facade records only meaningful gaps by
+default; use `--force` only when a short stretch must be captured exactly.
 If review reports missing context input details, name the affected line/intents
 and add a next-cycle fix: use `tools/ai_profile/context.mjs --path <file>` for
 local medium/high context reads, or

@@ -49,7 +49,7 @@ function topImprovements(draft, currentClean) {
     improvements.push("Start each focused iteration with start.mjs or scope.mjs before running substantial commands.");
   }
   if (hasLesson("low_profile_coverage")) {
-    improvements.push("Place checkpoint.mjs records during long manual, research, design, or review stretches.");
+    improvements.push("Place node tools/ai.mjs checkpoint records during long manual, research, design, or review stretches.");
   }
   if (hasLesson("recovered_failed_records")) {
     improvements.push("Classify recovered failures as useful negative feedback, avoidable rework, or tool noise.");

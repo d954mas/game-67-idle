@@ -155,9 +155,11 @@ node tools/skills_sync.mjs
   `.gitignore` is the safety net for scratch paths; the workflow rule is what
   prevents agents from creating noisy session artifacts in non-ignored
   locations. Fast path: `node tools/ai.mjs start <task> <iteration>`,
-  `node tools/ai.mjs context`, `node tools/ai.mjs run -- <command>`,
-  `node tools/ai.mjs validate --change <kind> --risk <risk>`,
-  `node tools/ai.mjs status`, and `node tools/ai.mjs reflect`. Use
+  `node tools/ai.mjs context`, `node tools/ai.mjs checkpoint "<intent>"`,
+  `node tools/ai.mjs run -- <command>`, `node tools/ai.mjs validate --change
+  <kind> --risk <risk>`, `node tools/ai.mjs status`, and `node tools/ai.mjs
+  reflect`. Use `checkpoint` after long manual/research/review stretches so
+  wall-clock coverage is captured without noisy short-pause records. Use
   `validate` for planned validation batches so broad/final gates are recorded
   as batched evidence, not ad hoc repeated commands. `reflect` prepares the
   full reflection handoff and includes current-scope regressions as evidence;

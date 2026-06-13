@@ -34,6 +34,8 @@ workflow/runtime tools.
       `node tools/ai.mjs context`.
 - [x] `tools/ai.mjs` provides the fast path for start, context, profiled run,
       status, and full reflection handoff.
+- [x] `node tools/ai.mjs checkpoint "<intent>"` provides the fast path for
+      thresholded wall-clock checkpoints after manual/research/review gaps.
 - [x] `node tools/ai.mjs reflect` creates the full reflection handoff by
       default and keeps current-scope regressions visible instead of stopping
       before packet/draft/review generation.
@@ -72,6 +74,13 @@ None.
 - 2026-06-13: Added `node tools/ai.mjs validate` as the short path for
   profiled validation batches, so broad/final gates carry batch metadata for
   later reflection instead of looking like unbatched repeated commands.
+- 2026-06-13: Added `node tools/ai.mjs checkpoint` as the short path for
+  thresholded wall-clock checkpoints, so long manual/research/review gaps can
+  be captured without requiring agents to remember internal profiler scripts.
+- 2026-06-13: Updated profile status/review/draft/review-summary text to
+  recommend `node tools/ai.mjs checkpoint` instead of internal checkpoint
+  scripts, so generated reflection handoff points future agents at the fast
+  facade.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;
@@ -83,3 +92,12 @@ None.
   tools/ai.mjs`; `node tools/ai.mjs validate --change pipeline --risk low
   --dry-run`; `node tools/ai.mjs validate --change pipeline --change skills
   --risk medium`; `node tools/taskboard/cli.mjs validate`.
+- 2026-06-13: Validation passed for the checkpoint facade: `node --check
+  tools/ai.mjs`; `node tools/ai.mjs checkpoint "Test forced checkpoint
+  facade" --force --profile tmp/session_profiles/checkpoint_facade_test.jsonl
+  --duration-ms 1234`; `node tools/ai.mjs checkpoint "Test thresholded
+  checkpoint empty profile" --profile
+  tmp/session_profiles/checkpoint_facade_empty.jsonl`; `node
+  tools/skills_eval.mjs`; `node tools/taskboard/cli.mjs validate`; `node
+  --test tools/ai_profile/test.mjs`; `node tools/ai.mjs validate --change
+  profiling --change pipeline --change skills --risk medium`.

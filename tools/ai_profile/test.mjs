@@ -380,7 +380,7 @@ test("status recommends checkpoint helper for low wall-clock coverage", () => {
     const status = readJson(statusJson);
     assert.equal(status.low_profile_coverage, true);
     assert.equal(status.current_scope.low_profile_coverage, true);
-    assert.match(status.next_action, /checkpoint\.mjs/);
+    assert.match(status.next_action, /ai\.mjs checkpoint/);
     assert.doesNotMatch(status.next_action, /event\.mjs/);
   } finally {
     cleanup(dir);
@@ -2100,7 +2100,7 @@ test("reflection draft summarizes clean packet artifacts", () => {
     writeFileSync(review, `${JSON.stringify({
       findings: [{ type: "low_profile_coverage", message: "Profile coverage was low before the clean current scope." }],
       current_scope: { enabled: true, findings: [], suggested_actions: [] },
-      suggested_pipeline_actions: ["Use checkpoint.mjs for long manual stretches."],
+      suggested_pipeline_actions: ["Use node tools/ai.mjs checkpoint for long manual stretches."],
     })}\n`, "utf8");
     writeFileSync(packetJson, `${JSON.stringify({
       profile: "clean.jsonl",
@@ -2311,7 +2311,12 @@ test("reflection review keeps dirty current scope actionable", () => {
         satisfied_followups: [],
       },
       historical_lessons: [
-        { type: "low_profile_coverage", symptom: "Low coverage.", cause: "No checkpoints.", fix: "Use checkpoint.mjs." },
+        {
+          type: "low_profile_coverage",
+          symptom: "Low coverage.",
+          cause: "No checkpoints.",
+          fix: "Use node tools/ai.mjs checkpoint.",
+        },
       ],
       repeated_commands: { by_scope: [] },
     })}\n`, "utf8");

@@ -69,6 +69,7 @@ For normal work, use the fast facade:
 ```powershell
 node tools/ai.mjs start <task-id> <iteration-name>
 node tools/ai.mjs context
+node tools/ai.mjs checkpoint "Reviewed current reflection and chose next fix"
 node tools/ai.mjs run -- <command> <args>
 node tools/ai.mjs validate --change <kind> --risk <risk>
 node tools/ai.mjs status
@@ -273,13 +274,14 @@ manual visual finding, or handoff decision.
 For long non-command stretches, prefer:
 
 ```powershell
-node tools/ai_profile/checkpoint.mjs --intent "Reviewed generated art and selected fixes" --category art --value productive
+node tools/ai.mjs checkpoint "Reviewed generated art and selected fixes" --category art --value productive
 ```
 
-`checkpoint.mjs` records a duration from the previous profile record to the
-checkpoint timestamp. It caps inferred duration with `--max-duration-min`
-defaulting to 60, so an overnight or unknown gap is not treated as fully
-explained. Use `--duration-ms` when the elapsed time is known more precisely.
+The facade uses the thresholded gap checkpoint by default and writes only when
+the latest profile gap is meaningful. It defaults to `--min-gap-min 2` so
+ordinary short pauses do not clutter the profile. Use `--force` when a short
+manual stretch must be recorded exactly, and pass `--duration-ms` when the
+elapsed time is known more precisely.
 
 When the pause may be short and you only want to close meaningful coverage
 holes, use the thresholded helper:
@@ -366,6 +368,9 @@ Record tools by role:
 - `gap_checkpoint.mjs`: thresholded wall-clock checkpoint helper that writes a
   checkpoint only when the gap since the latest profile record is at least
   `--min-gap-min` (default 5).
+- `ai.mjs checkpoint`: fast facade for the thresholded checkpoint helper. Use
+  this in normal work; call `checkpoint.mjs` or `gap_checkpoint.mjs` directly
+  only when debugging or needing non-default internals.
 - `context.mjs`: context-read checkpoint writer that measures local file
   character counts and fills `context_inputs` automatically.
 - `context_command.mjs`: context command wrapper that preserves command output
@@ -701,8 +706,8 @@ A "profiled session" is done when:
 - a focused long task started with `start.mjs`, or the retrospective explains
   why profiling began late;
 - command work used `run.mjs` for substantial validations/builds/audits;
-- long manual/research/design/review stretches used `checkpoint.mjs` or
-  `gap_checkpoint.mjs` with an intent that explains the elapsed time, or the
+- long manual/research/design/review stretches used `node tools/ai.mjs
+  checkpoint "<intent>"` with an intent that explains the elapsed time, or the
   retrospective marks the gap as unknown;
 - non-command context decisions used sparse `event.mjs` checkpoints, and local
   medium/high context reads used `context.mjs` where possible;

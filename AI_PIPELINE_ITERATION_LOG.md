@@ -1222,3 +1222,22 @@ specific and reusable.
   final gates correctly.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Wall-clock checkpoints need a facade too
+
+- Trigger: Fresh profile status after validation showed current-scope
+  wall-clock coverage near 3% even though command telemetry and reflection
+  handoff were working.
+- Symptom: Long manual reading, diff review, and decision time still appeared
+  as unexplained gaps unless the agent remembered the internal
+  `tools/ai_profile/*checkpoint.mjs` paths.
+- Time sink: Reflections had to explain low coverage instead of using the
+  profile directly to separate useful manual review from unknown idle time.
+- Likely cause: Checkpoint tools existed, but the fast `tools/ai.mjs` facade did
+  not expose them alongside `start`, `context`, `run`, `validate`, `status`,
+  and `reflect`.
+- Proposed improvement: Add `node tools/ai.mjs checkpoint "<intent>"` as the
+  normal path for manual/research/review gaps. Keep it thresholded by default
+  to avoid noisy short-pause records, with `--force` for exact captures.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
