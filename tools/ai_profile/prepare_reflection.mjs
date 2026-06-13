@@ -9,7 +9,8 @@ function usage() {
   node tools/ai_profile/prepare_reflection.mjs [--profile <profile.jsonl>] [--json-output <status.json>] [--allow-regression] [--verbose]
 
 Refreshes the reflection handoff chain using existing tools:
-closeout -> baseline comparison -> reflection packet -> reflection draft.
+closeout -> baseline comparison -> reflection packet -> reflection draft ->
+reflection review.
 
 It does not auto-capture baselines. If no baseline is captured, run
 capture_baseline.mjs deliberately after reviewing whether the profile is clean.`);
@@ -101,6 +102,17 @@ function runDraft(status) {
   ], "reflection draft", { quiet: !verboseOutput });
 }
 
+function runReview(status) {
+  runNode([
+    "tools/ai_profile/reflection_review.mjs",
+    status.reflection.draft.json,
+    "--output",
+    status.reflection.review.markdown,
+    "--json-output",
+    status.reflection.review.json,
+  ], "reflection review", { quiet: !verboseOutput });
+}
+
 function ensureProfile(status) {
   if (!status.exists) {
     console.error("profile does not exist; start profiling before preparing reflection");
@@ -159,6 +171,12 @@ if (status.reflection.draft.status !== "fresh") {
   status = writeStatus(profilePath);
 }
 
+if (status.reflection.review.status !== "fresh") {
+  steps.push("review");
+  runReview(status);
+  status = writeStatus(profilePath);
+}
+
 if (finalStatusOutput) {
   const target = resolve(finalStatusOutput);
   mkdirSync(dirname(target), { recursive: true });
@@ -173,4 +191,5 @@ console.log(`Profile: ${profilePath}`);
 console.log(`Steps: ${steps.length > 0 ? steps.join(", ") : "none"}`);
 console.log(`Packet: ${status.reflection.packet.status} ${status.reflection.packet.markdown}`);
 console.log(`Draft: ${status.reflection.draft.status} ${status.reflection.draft.markdown}`);
+console.log(`Review: ${status.reflection.review.status} ${status.reflection.review.markdown}`);
 console.log(`Next: ${status.next_action}`);

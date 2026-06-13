@@ -109,15 +109,17 @@ records, recovered versus unresolved failed records, and the next profiling
 action. It also reports captured baseline manifests when clean review JSON has
 already been preserved under `tmp/session_profiles/baselines/`, plus whether
 the latest baseline comparison is missing, stale, regressed, or fresh. After a
-fresh bundle and comparison, it reports reflection packet/draft freshness and
-prints the exact commands to regenerate missing or stale handoff artifacts.
+fresh bundle and comparison, it reports reflection packet/draft/review
+freshness and prints the exact commands to regenerate missing or stale handoff
+artifacts.
+Anchor: reflection packet/draft/review freshness.
 Before relying on generated summary/review/follow-up artifacts, check that
 status reports `Bundle fresh: yes`; if the bundle is stale, rerun
 `tools/ai_profile/closeout.mjs` or the stale review/follow-up commands.
 For normal retrospective preparation, run
 `tools/ai_profile/prepare_reflection.mjs --json-output
 tmp/session_profiles/<name>.status.json` before manually chaining closeout,
-compare, packet, or draft commands. If it stops on missing baseline or
+compare, packet, draft, or review commands. If it stops on missing baseline or
 current-scope regressions, handle that explicit decision before continuing.
 If status shows historical missing work-item records but current scope is
 already set, keep the scope and fix the next reported current issue instead of
@@ -168,8 +170,8 @@ tmp/session_profiles/<name>.reflection_packet.json` and read that packet first.
 Use it as the first evidence map before opening larger summary, review,
 follow-up, or comparison artifacts. Do not promote packet follow-ups marked
 `satisfied` into tasks unless new evidence reopens the issue.
-If status reports packet/draft missing or stale, run the exact command from its
-`Reflection Artifacts` section before writing the retrospective.
+If status reports packet/draft/review missing or stale, run the exact command
+from its `Reflection Artifacts` section before writing the retrospective.
 After the packet is ready, generate a scratch starter with
 `tools/ai_profile/reflection_draft.mjs <packet.json> --output
 tmp/session_profiles/<name>.reflection_draft.md --json-output
@@ -177,9 +179,11 @@ tmp/session_profiles/<name>.reflection_draft.json`. Read the draft and edit it w
 After the draft is ready, generate a compact decision review with
 `tools/ai_profile/reflection_review.mjs <draft.json> --output
 tmp/session_profiles/<name>.reflection_review.md --json-output
-tmp/session_profiles/<name>.reflection_review.json`. Use it to separate
-current actions from historical-only lessons and to extract the top next-cycle
-improvements before writing final prose.
+tmp/session_profiles/<name>.reflection_review.json`. `prepare_reflection.mjs`
+does this automatically when the review is missing or stale. Use the review to
+separate current actions from historical-only lessons and to extract the top
+next-cycle improvements before writing final prose.
+Anchor: top next-cycle improvements.
 When the draft includes repeated-command evidence, classify repeats as
 justified reruns after fresh edits or failed gates, batchable scoped/preflight
 checks, or broad/final validation waste before turning them into process tasks.

@@ -180,6 +180,8 @@ function reflectionArtifactPaths(profilePath) {
     packet_json: join(dir, `${base}.reflection_packet.json`),
     draft_md: join(dir, `${base}.reflection_draft.md`),
     draft_json: join(dir, `${base}.reflection_draft.json`),
+    review_md: join(dir, `${base}.reflection_review.md`),
+    review_json: join(dir, `${base}.reflection_review.json`),
   };
 }
 
@@ -239,6 +241,8 @@ function readReflectionStatus(profilePath, comparison) {
   const packet = artifactPairStatus(paths.packet_md, paths.packet_json, packetDependencies);
   const draftBlockedReason = packet.status === "fresh" ? "" : "packet is not fresh";
   const draft = artifactPairStatus(paths.draft_md, paths.draft_json, [paths.packet_json, artifactPath(profilePath, "review.json")], draftBlockedReason);
+  const reviewBlockedReason = draft.status === "fresh" ? "" : "draft is not fresh";
+  const review = artifactPairStatus(paths.review_md, paths.review_json, [paths.draft_json], reviewBlockedReason);
   return {
     packet: {
       ...packet,
@@ -247,6 +251,10 @@ function readReflectionStatus(profilePath, comparison) {
     draft: {
       ...draft,
       command: `node tools/ai_profile/reflection_draft.mjs ${paths.packet_json} --output ${paths.draft_md} --json-output ${paths.draft_json}`,
+    },
+    review: {
+      ...review,
+      command: `node tools/ai_profile/reflection_review.mjs ${paths.draft_json} --output ${paths.review_md} --json-output ${paths.review_json}`,
     },
   };
 }
@@ -401,8 +409,10 @@ function buildStatus(profilePath) {
     nextAction = `Generate reflection packet: ${reflection.packet.command}`;
   } else if (baselines.latest_manifest && comparison.status === "fresh" && reflection.draft.status !== "fresh") {
     nextAction = `Generate reflection draft: ${reflection.draft.command}`;
+  } else if (baselines.latest_manifest && comparison.status === "fresh" && reflection.review.status !== "fresh") {
+    nextAction = `Generate reflection review: ${reflection.review.command}`;
   } else if (baselines.latest_manifest && comparison.status === "fresh" && comparison.paths) {
-    nextAction = `Use fresh reflection draft ${reflection.draft.markdown} as the first retrospective artifact.`;
+    nextAction = `Use fresh reflection review ${reflection.review.markdown} as the first retrospective decision artifact.`;
   }
 
   return {
@@ -470,6 +480,7 @@ function renderMarkdown(status) {
   lines.push(`Baseline comparison: ${status.comparison.status}${status.comparison.verdict ? ` (${status.comparison.verdict})` : ""}`);
   lines.push(`Reflection packet: ${status.reflection.packet.status}`);
   lines.push(`Reflection draft: ${status.reflection.draft.status}`);
+  lines.push(`Reflection review: ${status.reflection.review.status}`);
   lines.push(`Work-item coverage: ${formatPercent(status.work_item_coverage.coverage_ratio)} (${status.work_item_coverage.missing_records} missing)`);
   lines.push(`Missing context inputs: ${status.missing_context_inputs}`);
   lines.push(`Current scope records: ${status.current_scope.records} (${status.current_scope.missing_context_inputs} missing context inputs, ${status.current_scope.missing_work_item_records} missing work items)`);
@@ -519,6 +530,10 @@ function renderMarkdown(status) {
   lines.push(`  - markdown: ${status.reflection.draft.markdown}`);
   lines.push(`  - json: ${status.reflection.draft.json}`);
   lines.push(`  - command: ${status.reflection.draft.command}`);
+  lines.push(`- review: ${status.reflection.review.status} (${status.reflection.review.reason})`);
+  lines.push(`  - markdown: ${status.reflection.review.markdown}`);
+  lines.push(`  - json: ${status.reflection.review.json}`);
+  lines.push(`  - command: ${status.reflection.review.command}`);
   if (status.errors.length > 0) {
     lines.push("");
     lines.push("## Errors");

@@ -1030,3 +1030,21 @@ specific and reusable.
   top improvements.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0102`.
+
+## 2026-06-13 - Reflection review should be part of handoff status
+
+- Trigger: `reflection_review.mjs` existed, but `status.mjs` and
+  `prepare_reflection.mjs` still treated a fresh draft as the final handoff
+  state.
+- Symptom: Agents could skip the new decision-review step or regenerate it
+  manually outside the normal status/prep path.
+- Time sink: The last reflection decision artifact depended on memory instead
+  of a mechanically detectable freshness check.
+- Likely cause: The review generator was added after the packet/draft status
+  chain, but the wrapper and status tree were not extended in the same
+  iteration.
+- Proposed improvement: Add reflection review missing/stale/waiting/fresh
+  status, exact generation command, and automatic `prepare_reflection.mjs`
+  execution after draft freshness.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0103`.

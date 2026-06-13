@@ -835,13 +835,14 @@ test("status reports stale reflection draft after fresh packet", () => {
     const status = readJson(statusJson);
     assert.equal(status.reflection.packet.status, "fresh");
     assert.equal(status.reflection.draft.status, "stale");
+    assert.equal(status.reflection.review.status, "waiting");
     assert.match(status.next_action, /Generate reflection draft/);
   } finally {
     cleanup(dir);
   }
 });
 
-test("status reports fresh reflection draft as first retrospective artifact", () => {
+test("status reports missing reflection review after fresh draft", () => {
   const dir = tempDir();
   try {
     const profile = join(dir, "fresh-draft.jsonl");
@@ -884,7 +885,62 @@ test("status reports fresh reflection draft as first retrospective artifact", ()
     const status = readJson(statusJson);
     assert.equal(status.reflection.packet.status, "fresh");
     assert.equal(status.reflection.draft.status, "fresh");
-    assert.match(status.next_action, /Use fresh reflection draft/);
+    assert.equal(status.reflection.review.status, "missing");
+    assert.match(status.next_action, /Generate reflection review/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status reports fresh reflection review as first retrospective decision artifact", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "fresh-review.jsonl");
+    const scope = join(dir, "scope.json");
+    const statusJson = join(dir, "status.json");
+    const baselineDir = join(dir, "baselines");
+    const baselineReview = join(baselineDir, "clean.review.json");
+    const manifest = join(baselineDir, "clean.manifest.json");
+    const compareJson = join(dir, "clean.compare.json");
+    const packetMd = join(dir, "fresh-review.reflection_packet.md");
+    const packetJson = join(dir, "fresh-review.reflection_packet.json");
+    const draftMd = join(dir, "fresh-review.reflection_draft.md");
+    const draftJson = join(dir, "fresh-review.reflection_draft.json");
+    const reviewMd = join(dir, "fresh-review.reflection_review.md");
+    const reviewJson = join(dir, "fresh-review.reflection_review.json");
+
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "BASE", "--iteration", "review-fresh"]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "session_closeout",
+      "--category", "reflection",
+      "--intent", "clean closeout",
+      "--result", "pass",
+      "--value", "necessary_overhead",
+      "--work-item", "BASE",
+      "--iteration", "review-fresh",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    writeBundleArtifacts(profile);
+    mkdirSync(baselineDir, { recursive: true });
+    writeFileSync(baselineReview, "{}\n", "utf8");
+    writeFileSync(manifest, `${JSON.stringify({ schema_version: 1, label: "clean", baseline_review: resolve(baselineReview) })}\n`, "utf8");
+    writeFileSync(compareJson, `${JSON.stringify({ verdict: "stable", current_regressions: [] })}\n`, "utf8");
+    writeFileSync(packetMd, "packet\n", "utf8");
+    writeFileSync(packetJson, "{}\n", "utf8");
+    writeFileSync(draftMd, "draft\n", "utf8");
+    writeFileSync(draftJson, "{}\n", "utf8");
+    writeFileSync(reviewMd, "review\n", "utf8");
+    writeFileSync(reviewJson, "{}\n", "utf8");
+
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const status = readJson(statusJson);
+    assert.equal(status.reflection.packet.status, "fresh");
+    assert.equal(status.reflection.draft.status, "fresh");
+    assert.equal(status.reflection.review.status, "fresh");
+    assert.match(status.next_action, /Use fresh reflection review/);
   } finally {
     cleanup(dir);
   }
@@ -904,6 +960,8 @@ test("prepare reflection is no-op when handoff artifacts are fresh", () => {
     const packetJson = join(dir, "prep-fresh.reflection_packet.json");
     const draftMd = join(dir, "prep-fresh.reflection_draft.md");
     const draftJson = join(dir, "prep-fresh.reflection_draft.json");
+    const reviewMd = join(dir, "prep-fresh.reflection_review.md");
+    const reviewJson = join(dir, "prep-fresh.reflection_review.json");
 
     run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "PREP", "--iteration", "fresh"]);
     run([
@@ -926,6 +984,8 @@ test("prepare reflection is no-op when handoff artifacts are fresh", () => {
     writeFileSync(packetJson, `${JSON.stringify({ artifacts: { review_json: `${profile.replace(/\.jsonl$/i, "")}.review.json` } })}\n`, "utf8");
     writeFileSync(draftMd, "draft\n", "utf8");
     writeFileSync(draftJson, "{}\n", "utf8");
+    writeFileSync(reviewMd, "review\n", "utf8");
+    writeFileSync(reviewJson, "{}\n", "utf8");
 
     const result = run(["tools/ai_profile/prepare_reflection.mjs", "--profile", profile, "--json-output", statusJson], {
       env: { AI_PROFILE_SCOPE_FILE: scope },
@@ -934,12 +994,13 @@ test("prepare reflection is no-op when handoff artifacts are fresh", () => {
     const status = readJson(statusJson);
     assert.equal(status.reflection.packet.status, "fresh");
     assert.equal(status.reflection.draft.status, "fresh");
+    assert.equal(status.reflection.review.status, "fresh");
   } finally {
     cleanup(dir);
   }
 });
 
-test("prepare reflection generates missing packet and draft", () => {
+test("prepare reflection generates missing packet draft and review", () => {
   const dir = tempDir();
   try {
     const profile = join(dir, "prep-missing.jsonl");
@@ -971,12 +1032,14 @@ test("prepare reflection generates missing packet and draft", () => {
     const result = run(["tools/ai_profile/prepare_reflection.mjs", "--profile", profile, "--json-output", statusJson], {
       env: { AI_PROFILE_SCOPE_FILE: scope },
     });
-    assert.match(result.stdout, /Steps: packet, draft/);
+    assert.match(result.stdout, /Steps: packet, draft, review/);
     assert.equal(existsSync(join(dir, "prep-missing.reflection_packet.json")), true);
     assert.equal(existsSync(join(dir, "prep-missing.reflection_draft.json")), true);
+    assert.equal(existsSync(join(dir, "prep-missing.reflection_review.json")), true);
     const status = readJson(statusJson);
     assert.equal(status.reflection.packet.status, "fresh");
     assert.equal(status.reflection.draft.status, "fresh");
+    assert.equal(status.reflection.review.status, "fresh");
   } finally {
     cleanup(dir);
   }

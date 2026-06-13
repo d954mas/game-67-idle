@@ -344,9 +344,9 @@ Record tools by role:
   comparison JSON is missing, stale, regressed, or fresh, and prints the exact
   `compare_reviews.mjs` command when comparison evidence must be refreshed.
   After bundle and comparison are fresh, status reports whether reflection
-  packet and draft artifacts are missing, stale, waiting, or fresh, and prints
-  the exact generation commands. Use that status instead of manually guessing
-  the next reflection handoff step.
+  packet, draft, and review artifacts are missing, stale, waiting, or fresh,
+  and prints the exact generation commands. Use that status instead of
+  manually guessing the next reflection handoff step.
 - `test.mjs`: regression test suite for profile CLI behavior. Run
   `node --test tools/ai_profile/test.mjs` after profiler tool changes.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
@@ -365,9 +365,9 @@ Record tools by role:
   next-cycle actions, and caveats. Treat it as a draft; edit it with judgment.
 - `prepare_reflection.mjs`: one-command handoff helper that runs only the
   stale/missing reflection preparation steps: closeout bundle, baseline
-  comparison, reflection packet, and reflection draft. It does not capture
-  baselines automatically and stops on current-scope regressions unless
-  `--allow-regression` is explicit.
+  comparison, reflection packet, reflection draft, and reflection review. It
+  does not capture baselines automatically and stops on current-scope
+  regressions unless `--allow-regression` is explicit.
 - `reflection_review.mjs`: compact decision-review helper that consumes
   `reflection_draft.mjs --json-output` and separates current actions from
   historical-only lessons, repeated-command interpretation, and top next-cycle
@@ -472,10 +472,10 @@ node tools/ai_profile/prepare_reflection.mjs --json-output tmp/session_profiles/
 ```
 
 It uses `status.mjs` and existing tools to run only stale or missing steps in
-the closeout, baseline comparison, reflection packet, and reflection draft
-chain. It refuses to auto-capture baselines; review and capture a clean
-baseline deliberately. It also stops on current-scope comparison regressions
-unless `--allow-regression` is explicit.
+the closeout, baseline comparison, reflection packet, reflection draft, and
+reflection review chain. It refuses to auto-capture baselines; review and
+capture a clean baseline deliberately. It also stops on current-scope
+comparison regressions unless `--allow-regression` is explicit.
 
 The summary reports:
 
@@ -654,9 +654,10 @@ A "profiled session" is done when:
 - `status.mjs` reports `Bundle fresh: yes` before a retrospective relies on
   generated summary/review/follow-up artifacts; if it reports stale artifacts,
   rerun `closeout.mjs` or the stale review/follow-up commands first;
-- `status.mjs` reports fresh reflection packet and draft artifacts before a
-  full retrospective starts from generated handoff evidence; if packet or draft
-  is missing/stale, run the exact command printed in `Reflection Artifacts`;
+- `status.mjs` reports fresh reflection packet, draft, and review artifacts
+  before a full retrospective starts from generated handoff evidence; if
+  packet, draft, or review is missing/stale, run the exact command printed in
+  `Reflection Artifacts`;
 - `review.mjs` is used before deeper reflection when a profile exists and the
   closeout bundle was skipped or stale;
 - `review.mjs --json-output` is used when another tool/agent will consume the
@@ -690,9 +691,9 @@ A "profiled session" is done when:
   write a full retrospective; the draft is read and edited with judgment, not
   pasted as final output;
 - `prepare_reflection.mjs` is used for normal retrospective handoff so agents
-  do not manually repeat closeout/compare/packet/draft command sequences; use
-  manual commands only when the wrapper reports missing baseline, regression,
-  or another explicit stop condition;
+  do not manually repeat closeout/compare/packet/draft/review command
+  sequences; use manual commands only when the wrapper reports missing
+  baseline, regression, or another explicit stop condition;
 - `reflection_review.mjs` is used after a fresh reflection draft before writing
   final retrospective prose, so current actions, historical-only lessons, and
   top improvements are reviewed explicitly;
