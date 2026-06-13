@@ -176,6 +176,45 @@ function scopedSummary(records) {
   };
 }
 
+function validationBatches(records) {
+  const batches = new Map();
+  for (const record of records) {
+    if (!record.validation_batch_id) continue;
+    const id = String(record.validation_batch_id);
+    if (!batches.has(id)) {
+      batches.set(id, {
+        batch_id: id,
+        work_item: record.work_item || "",
+        iteration: record.iteration || "",
+        risk: record.validation_plan_risk || "",
+        changes: Array.isArray(record.validation_plan_changes) ? record.validation_plan_changes : [],
+        records: 0,
+        duration_ms: 0,
+        failed: 0,
+        commands: 0,
+        broad_final_commands: 0,
+        tiers: new Map(),
+      });
+    }
+    const batch = batches.get(id);
+    batch.records += 1;
+    batch.duration_ms += Number(record.duration_ms || 0);
+    if (record.result === "fail") batch.failed += 1;
+    const tier = record.validation_tier || "unknown";
+    addCount(batch.tiers, tier);
+    for (const command of record.commands || []) {
+      batch.commands += 1;
+      if (commandScope(command) === "broad/final") batch.broad_final_commands += 1;
+    }
+  }
+  return [...batches.values()]
+    .sort((a, b) => b.records - a.records || b.duration_ms - a.duration_ms)
+    .map((batch) => ({
+      ...batch,
+      tiers: mapEntries(batch.tiers, 10).map(({ key, value }) => ({ tier: key, count: value })),
+    }));
+}
+
 function currentScopeFindingsAndActions(currentScope) {
   const findings = [];
   const actions = [];
@@ -403,6 +442,7 @@ const repeatedScopeCounts = new Map();
 for (const [command, count] of repeatedCommands) addCount(repeatedScopeCounts, commandScopes.get(command) || "unknown", count);
 const repeatedBroadCommands = repeatedCommands.filter(([command]) => commandScopes.get(command) === "broad/final");
 const repeatedBroadByWorkItem = repeatedSegmentCommands(workItemBroadCommandCounts, 20);
+const validationBatchSummaries = validationBatches(records);
 const topContext = topEntries(contextChars, 10).filter(([, chars]) => chars > 0);
 const topPhaseDuration = topEntries(phaseDuration, 10);
 const coverage = coverageStats(records);
@@ -598,6 +638,17 @@ if (repeatedBroadByWorkItem.length === 0) {
   for (const item of repeatedBroadByWorkItem) emit(`- ${item.work_item || item.segment}: ${item.count}x ${item.command}`);
 }
 
+emit("\n## Validation Batches");
+if (validationBatchSummaries.length === 0) {
+  emit("- none");
+} else {
+  for (const batch of validationBatchSummaries.slice(0, 10)) {
+    const result = batch.failed > 0 ? `${batch.failed} failed` : "pass";
+    const changes = batch.changes.length > 0 ? batch.changes.join(", ") : "unknown";
+    emit(`- ${batch.batch_id}: ${batch.records} record(s), ${formatMs(batch.duration_ms)}, ${result}, risk=${batch.risk || "unknown"}, changes=${changes}, broad/final=${batch.broad_final_commands}`);
+  }
+}
+
 emit("\n## Time By Phase");
 if (topPhaseDuration.length === 0) {
   emit("- none");
@@ -714,6 +765,7 @@ if (jsonOutputFile) {
       command: item.command,
       count: item.count,
     })),
+    validation_batches: validationBatchSummaries,
     current_scope: currentScope,
     time_by_phase: topPhaseDuration.map(([phase, duration_ms]) => ({ phase, duration_ms })),
     wall_clock_coverage: coverage,

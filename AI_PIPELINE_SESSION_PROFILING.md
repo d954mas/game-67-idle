@@ -392,7 +392,10 @@ Record tools by role:
 - `validation_run.mjs`: profiled validation runner that consumes a validation
   plan or builds one from `--change/--file/--risk`, executes non-placeholder
   checks by tier, records each command in the JSONL profile, and skips later
-  checks after a failure unless `--continue-on-fail` is explicit.
+  checks after a failure unless `--continue-on-fail` is explicit. Each command
+  record gets a shared `validation_batch_id`, plan risk, plan changes, tier,
+  and check id so reflection can separate a planned validation batch from ad
+  hoc repeated commands.
 - `taskboard context`: current-context digest for resumes and long work. Prefer
   it before reading `tasks/STATUS.md` directly; if full status is still needed,
   log it as a medium/high `context_input`.
@@ -630,6 +633,10 @@ defers broad/final checks, or let the runner execute final checks once at the
 end of the selected batch. Placeholder commands are skipped and listed in the
 summary; fill project-specific native, asset, web, or release commands
 manually when those surfaces are in scope.
+When reviewing repeated validation, inspect `review.mjs`'s `Validation
+Batches` section and JSON `validation_batches` before treating repeated
+commands as waste. A planned batch with one final gate is different from ad hoc
+reruns of the same broad command.
 
 ## Definition Of Done
 
@@ -721,7 +728,9 @@ A "profiled session" is done when:
   the validation decision;
 - `validation_run.mjs` is used when the validation plan has concrete commands
   and command-level telemetry matters; broad/final checks run once at the end
-  of the selected batch and skipped placeholders are visible in the summary;
+  of the selected batch, skipped placeholders are visible in the summary, and
+  `review.mjs` later reports validation batches as context for repeated-command
+  interpretation;
 - `observability_gate.mjs` is used before adding external tracing/eval
   platforms; the decision and pilot result are captured in a task log or
   durable pipeline note, while raw exported telemetry stays in `tmp/`;

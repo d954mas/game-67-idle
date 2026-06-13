@@ -187,6 +187,8 @@ Anchor: top next-cycle improvements.
 When the draft includes repeated-command evidence, classify repeats as
 justified reruns after fresh edits or failed gates, batchable scoped/preflight
 checks, or broad/final validation waste before turning them into process tasks.
+When `review.mjs` or the draft reports validation batches, use that batch
+evidence to separate planned validation runs from ad hoc repeated commands.
 For multi-task profiles, inspect `work_items`, `iterations`, and
 `repeated_broad_final_by_work_item` before calling repeated validation waste.
 When review JSON includes `current_scope`, separate current-scope findings from
@@ -231,7 +233,9 @@ When the plan contains concrete commands for an AI pipeline/tooling change, use
 `tools/ai_profile/validation_run.mjs --change <kind> --risk <risk>
 --json-output <file>` instead of manually chaining checks. It records each
 executed command in the profile, skips placeholders, and runs broad/final
-checks once at the end of the selected tier batch.
+checks once at the end of the selected tier batch. Its command records share a
+`validation_batch_id`; later reflection should inspect `Validation Batches`
+before treating repeated commands as waste.
 After changing profiler tools or reflection telemetry behavior, run
 `node --test tools/ai_profile/test.mjs` so scope, status, closeout, recovered
 failure, and follow-up behavior remain covered.

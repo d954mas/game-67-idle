@@ -1067,3 +1067,21 @@ specific and reusable.
   earlier failures unless explicitly overridden.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0104`.
+
+## 2026-06-13 - Validation batches need explicit reflection context
+
+- Trigger: `validation_run.mjs` records each command separately, which is good
+  telemetry, but repeated-command analysis can still read a planned validation
+  batch as ordinary command repetition.
+- Symptom: Retrospectives may over-classify a healthy validation batch as
+  waste, especially when scoped checks and one broad/final gate appear near the
+  same handoff.
+- Time sink: The agent has to manually reconstruct whether repeated commands
+  came from a planned batch or ad hoc reruns.
+- Likely cause: Profile records lacked a shared validation batch id and
+  `review.mjs` had no validation-batch section.
+- Proposed improvement: Add `validation_batch_id`, plan risk/changes, check id
+  and tier metadata to `validation_run.mjs` records; summarize batches in
+  `review.mjs`, `reflection_draft.mjs`, and `reflection_review.mjs`.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0105`.

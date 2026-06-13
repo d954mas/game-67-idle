@@ -1423,6 +1423,7 @@ test("validation runner profiles checks and stops final after failure", () => {
       "--profile", profile,
       "--work-item", "VALRUN",
       "--iteration", "failure",
+      "--batch-id", "batch-test",
       "--json-output", summaryJson,
     ]);
     assert.equal(result.status, 3, result.stderr);
@@ -1430,17 +1431,63 @@ test("validation runner profiles checks and stops final after failure", () => {
     assert.match(result.stdout, /Skipped: 1/);
 
     const summary = readJson(summaryJson);
+    assert.equal(summary.batch_id, "batch-test");
     assert.equal(summary.executed.length, 2);
     assert.equal(summary.skipped[0].id, "final-skipped");
     assert.equal(summary.skipped[0].reason, "previous check failed");
     const records = readJsonl(profile);
     assert.equal(records.length, 2);
     assert.equal(records[0].validation_check_id, "preflight-pass");
+    assert.equal(records[0].validation_batch_id, "batch-test");
+    assert.equal(records[0].validation_plan_risk, "medium");
+    assert.deepEqual(records[0].validation_plan_changes, ["profiling"]);
     assert.equal(records[0].result, "pass");
     assert.equal(records[0].work_item, "VALRUN");
     assert.equal(records[1].validation_check_id, "scoped-fail");
     assert.equal(records[1].result, "fail");
     assert.equal(records[1].command_exit_code, 3);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("profile review summarizes validation batches", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "validation-batches.jsonl");
+    const reviewMd = join(dir, "review.md");
+    const reviewJson = join(dir, "review.json");
+    for (const [index, tier] of ["preflight", "scoped", "final"].entries()) {
+      appendFileSync(profile, `${JSON.stringify({
+        ts: `2026-06-13T10:00:0${index}+05:00`,
+        phase: "validation",
+        category: "validation",
+        intent: `check ${tier}`,
+        result: "pass",
+        value: tier === "final" ? "necessary_overhead" : "productive",
+        duration_ms: 1000 + index,
+        commands: [tier === "final" ? "node tools/pipeline_validate.mjs" : "node tools/skills_eval.mjs"],
+        validation_batch_id: "batch-review",
+        validation_check_id: `check-${tier}`,
+        validation_tier: tier,
+        validation_plan_risk: "medium",
+        validation_plan_changes: ["profiling", "pipeline"],
+        command_exit_code: 0,
+      })}\n`, "utf8");
+    }
+
+    const result = run(["tools/ai_profile/review.mjs", profile, "--output", reviewMd, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: join(dir, "scope.json") },
+    });
+    assert.match(result.stdout, /Validation Batches/);
+    assert.match(result.stdout, /batch-review/);
+    const review = readJson(reviewJson);
+    assert.equal(review.validation_batches.length, 1);
+    assert.equal(review.validation_batches[0].batch_id, "batch-review");
+    assert.equal(review.validation_batches[0].records, 3);
+    assert.equal(review.validation_batches[0].broad_final_commands, 1);
+    assert.deepEqual(review.validation_batches[0].changes, ["profiling", "pipeline"]);
+    assert.equal(existsSync(reviewMd), true);
   } finally {
     cleanup(dir);
   }
@@ -1947,6 +1994,9 @@ test("reflection draft classifies repeated command evidence by scope", () => {
       repeated_broad_final_by_work_item: [
         { work_item: "T0099", command: "node tools/pipeline_validate.mjs", count: 2 },
       ],
+      validation_batches: [
+        { batch_id: "batch-draft", records: 4, duration_ms: 12000, failed: 0, broad_final_commands: 1, risk: "medium", changes: ["profiling"] },
+      ],
     })}\n`, "utf8");
     writeFileSync(packetJson, `${JSON.stringify({
       profile: "repeated.jsonl",
@@ -1963,11 +2013,14 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     assert.match(result.stdout, /preflight: 3/);
     assert.match(result.stdout, /scoped: 2/);
     assert.match(result.stdout, /node tools\/pipeline_validate\.mjs/);
+    assert.match(result.stdout, /validation batches/);
+    assert.match(result.stdout, /batch-draft/);
     assert.doesNotMatch(result.stdout, /Cause needs human review/);
     const draft = readJson(draftJson);
     assert.equal(draft.repeated_commands.total_distinct, 3);
     assert.equal(draft.repeated_commands.broad_final_commands.length, 1);
     assert.equal(draft.repeated_commands.broad_final_by_work_item[0].work_item, "T0099");
+    assert.equal(draft.repeated_commands.validation_batches[0].batch_id, "batch-draft");
     assert.match(draft.historical_lessons[0].cause, /fresh edit or failed gate/);
   } finally {
     cleanup(dir);
@@ -1995,6 +2048,7 @@ test("reflection review separates clean current scope from historical lessons", 
       suppressed_historical_findings: ["missing_context_inputs"],
       repeated_commands: {
         by_scope: [{ scope: "scoped", count: 3 }, { scope: "broad/final", count: 1 }],
+        validation_batches: [{ batch_id: "batch-review", records: 5, broad_final_commands: 1, failed: 0 }],
       },
     })}\n`, "utf8");
 
@@ -2008,12 +2062,15 @@ test("reflection review separates clean current scope from historical lessons", 
     ]);
     assert.match(result.stdout, /Verdict: current_clean/);
     assert.match(result.stdout, /historical_only/);
+    assert.match(result.stdout, /validation batches/);
+    assert.match(result.stdout, /batch-review/);
     assert.match(result.stdout, /Top Improvements/);
     const review = readJson(reviewJson);
     assert.equal(review.verdict, "current_clean");
     assert.equal(review.current.actions.length, 1);
     assert.ok(review.historical_lessons.every((lesson) => lesson.current_action === "historical_only"));
     assert.ok(review.top_improvements.some((item) => item.includes("context.mjs")));
+    assert.ok(review.top_improvements.some((item) => item.includes("validation batch evidence")));
     assert.equal(existsSync(reviewMd), true);
   } finally {
     cleanup(dir);

@@ -39,6 +39,9 @@ function topImprovements(draft, currentClean) {
   if (commandScopeCount(draft, "broad/final") > 0 || hasLesson("repeated_broad_final")) {
     improvements.push("Batch broad/final validation and rerun it only after a failed gate, changed risk, or final handoff.");
   }
+  if (asArray(draft.repeated_commands?.validation_batches).length > 0) {
+    improvements.push("Use validation batch evidence to separate planned validation runs from ad hoc repeated commands.");
+  }
   if (hasLesson("missing_context_inputs")) {
     improvements.push("Use context.mjs or context_command.mjs for medium/high context reads so reflection can measure context cost.");
   }
@@ -129,6 +132,11 @@ function renderMarkdown(review, draftPath) {
     lines.push("- none");
   } else {
     for (const item of byScope) lines.push(`- ${item.scope || "unknown"}: ${item.count || 0}`);
+  }
+  const validationBatches = asArray(review.repeated_commands.validation_batches);
+  if (validationBatches.length > 0) {
+    lines.push("- validation batches:");
+    for (const item of validationBatches) lines.push(`  - ${item.batch_id || "unknown"}: ${item.records || 0} record(s), broad/final=${item.broad_final_commands || 0}, failed=${item.failed || 0}`);
   }
   lines.push("");
   lines.push("## Top Improvements");

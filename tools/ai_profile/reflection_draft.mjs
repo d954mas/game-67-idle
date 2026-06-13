@@ -43,6 +43,7 @@ function repeatedCommandSummary(review) {
   const byScope = asArray(review?.repeated_commands_by_scope);
   const broadFinal = asArray(review?.repeated_broad_final_commands);
   const broadFinalByWorkItem = asArray(review?.repeated_broad_final_by_work_item);
+  const validationBatches = asArray(review?.validation_batches);
   return {
     total_distinct: commands.length,
     by_scope: byScope,
@@ -61,6 +62,15 @@ function repeatedCommandSummary(review) {
       command: item.command || "",
       count: Number(item.count || 0),
     })),
+    validation_batches: validationBatches.slice(0, 8).map((item) => ({
+      batch_id: item.batch_id || "",
+      records: Number(item.records || 0),
+      duration_ms: Number(item.duration_ms || 0),
+      failed: Number(item.failed || 0),
+      broad_final_commands: Number(item.broad_final_commands || 0),
+      risk: item.risk || "",
+      changes: asArray(item.changes),
+    })),
   };
 }
 
@@ -75,7 +85,7 @@ function lessonForFinding(finding, context = {}) {
   const repeatedSummary = context.repeated_commands || repeatedCommandSummary(null);
   const templates = {
     repeated_commands: {
-      symptom: `${message} Scope mix: ${scopeSummaryText(repeatedSummary)}.`,
+      symptom: `${message} Scope mix: ${scopeSummaryText(repeatedSummary)}. Planned validation batches: ${repeatedSummary.validation_batches.length}.`,
       cause: "Commands are being rerun across the whole profile; some reruns are valid guardrails, but repeated scoped/preflight checks should be tied to a fresh edit or failed gate, and broad/final reruns should be batched.",
       fix: "Use the repeated-command evidence to classify reruns as justified, batchable, or validation waste; batch broad/final gates and keep preflight/scoped reruns close to changed files.",
     },
@@ -238,6 +248,13 @@ function renderMarkdown(draft, packetFile) {
     if (draft.repeated_commands.broad_final_by_work_item.length > 0) {
       lines.push("- broad/final by work item:");
       for (const item of draft.repeated_commands.broad_final_by_work_item) lines.push(`  - ${item.work_item || "unknown"}: ${item.count}x ${item.command}`);
+    }
+    if (draft.repeated_commands.validation_batches.length > 0) {
+      lines.push("- validation batches:");
+      for (const item of draft.repeated_commands.validation_batches) {
+        const result = item.failed > 0 ? `${item.failed} failed` : "pass";
+        lines.push(`  - ${item.batch_id || "unknown"}: ${item.records} record(s), ${result}, broad/final=${item.broad_final_commands}`);
+      }
     }
   }
   lines.push("");

@@ -44,6 +44,11 @@ function shellQuote(value) {
   return String(value).includes(" ") ? JSON.stringify(String(value)) : String(value);
 }
 
+function defaultBatchId() {
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
+  return `validation-${stamp}`;
+}
+
 function planFromCommand(values) {
   const args = ["tools/ai_profile/plan_validation.mjs", "--json"];
   for (const change of listArg(values, "change")) args.push("--change", change);
@@ -75,7 +80,7 @@ function checksByTier(plan, selectedTiers) {
   return checks.filter((check) => selectedTiers.has(check.tier));
 }
 
-function recordValidation(values, check, result, durationMs) {
+function recordValidation(values, check, result, durationMs, batchId, plan) {
   const exitCode = typeof result.status === "number" ? result.status : 1;
   const recordValues = {
     ...values,
@@ -89,13 +94,20 @@ function recordValidation(values, check, result, durationMs) {
     command: check.command,
     notes: check.why || "",
   };
-  const extra = { validation_check_id: check.id || "", validation_tier: check.tier || "", command_exit_code: exitCode };
+  const extra = {
+    validation_batch_id: batchId,
+    validation_check_id: check.id || "",
+    validation_tier: check.tier || "",
+    validation_plan_risk: plan.risk || "",
+    validation_plan_changes: plan.changes || [],
+    command_exit_code: exitCode,
+  };
   if (result.error) extra.command_error = result.error.message;
   const profilePath = stringArg(values, "profile", "");
   return appendRecord(profilePath, buildRecord(recordValues, extra));
 }
 
-function runCheck(values, check) {
+function runCheck(values, check, batchId, plan) {
   console.error(`validation_run: ${check.tier} ${check.id || check.command}`);
   const started = process.hrtime.bigint();
   const result = spawnSync(check.command, {
@@ -108,7 +120,7 @@ function runCheck(values, check) {
   const durationMs = Number((ended - started) / 1000000n);
   let profile = "";
   try {
-    profile = recordValidation(values, check, result, durationMs);
+    profile = recordValidation(values, check, result, durationMs, batchId, plan);
   } catch (error) {
     console.error(`profile validation record failed: ${error.message}`);
   }
@@ -137,6 +149,7 @@ const selectedTierArgs = listArg(values, "tier");
 const selectedTiers = new Set(selectedTierArgs.length > 0 ? selectedTierArgs.map(normalizeTier) : TIERS);
 const plan = readPlan(values);
 const runnableChecks = checksByTier(plan, selectedTiers);
+const batchId = stringArg(values, "batch-id", defaultBatchId());
 const dryRun = values["dry-run"] === true;
 const continueOnFail = values["continue-on-fail"] === true;
 const executed = [];
@@ -156,13 +169,14 @@ for (const check of runnableChecks) {
     skipped.push({ id: check.id || "", tier: check.tier || "", command: check.command || "", reason: "dry run" });
     continue;
   }
-  const result = runCheck(values, check);
+  const result = runCheck(values, check, batchId, plan);
   executed.push(result);
   if (result.result !== "pass") failed = true;
 }
 
 const summary = {
   schema_version: 1,
+  batch_id: batchId,
   plan: {
     risk: plan.risk || "",
     changes: plan.changes || [],
@@ -180,6 +194,7 @@ summary.exit_code = summary.failed_count > 0 ? executed.find((item) => item.resu
 writeJson(stringArg(values, "json-output", ""), summary);
 
 console.log("# Validation Run");
+console.log(`Batch: ${summary.batch_id}`);
 console.log(`Changes: ${(summary.plan.changes || []).join(", ") || "(from plan)"}`);
 console.log(`Risk: ${summary.plan.risk || "unknown"}`);
 console.log(`Tiers: ${summary.selected_tiers.join(", ")}`);
