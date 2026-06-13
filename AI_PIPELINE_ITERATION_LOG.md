@@ -1085,3 +1085,20 @@ specific and reusable.
   `review.mjs`, `reflection_draft.mjs`, and `reflection_review.mjs`.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0105`.
+
+## 2026-06-13 - Wall-clock gaps need a thresholded checkpoint
+
+- Trigger: The reflection review still reports low whole-profile wall-clock
+  coverage, while normal `checkpoint.mjs` always writes a record even for short
+  pauses.
+- Symptom: Agents either leave manual/research/review gaps unprofiled or add
+  noisy checkpoints for small pauses.
+- Time sink: Later reflection has to guess whether gaps were real work,
+  short idle time, or unmeasured review.
+- Likely cause: The profile had a duration-inference checkpoint, but no
+  thresholded helper that only records meaningful gaps.
+- Proposed improvement: Add `gap_checkpoint.mjs` to write a checkpoint only
+  when elapsed time since the latest profile record exceeds `--min-gap-min`,
+  with cap and previous-record metadata.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0106`.

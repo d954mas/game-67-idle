@@ -1286,6 +1286,73 @@ test("checkpoint explicit duration overrides inferred duration", () => {
   }
 });
 
+test("gap checkpoint appends only when gap exceeds threshold", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "gap-checkpoint.jsonl");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "planning",
+      "--category", "planning",
+      "--intent", "previous planning",
+      "--result", "pass",
+      "--value", "productive",
+      "--ts", "2026-06-13T10:00:00+05:00",
+    ]);
+    const result = run([
+      "tools/ai_profile/gap_checkpoint.mjs",
+      "--profile", profile,
+      "--intent", "manual review gap",
+      "--min-gap-min", "5",
+      "--max-duration-min", "10",
+      "--ts", "2026-06-13T10:12:00+05:00",
+      "--work-item", "GAP",
+    ]);
+    assert.match(result.stdout, /profile gap checkpoint appended/);
+    const records = readJsonl(profile);
+    const checkpoint = records[1];
+    assert.equal(checkpoint.event_type, "gap_checkpoint");
+    assert.equal(checkpoint.duration_ms, 600000);
+    assert.equal(checkpoint.raw_gap_ms, 720000);
+    assert.equal(checkpoint.min_gap_ms, 300000);
+    assert.equal(checkpoint.duration_capped, true);
+    assert.equal(checkpoint.previous_profile_line, 1);
+    assert.equal(checkpoint.work_item, "GAP");
+    assert.deepEqual(checkpoint.tools, ["ai_profile/gap_checkpoint.mjs"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("gap checkpoint skips short gaps without writing a record", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "gap-checkpoint-skip.jsonl");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "planning",
+      "--category", "planning",
+      "--intent", "previous planning",
+      "--result", "pass",
+      "--value", "productive",
+      "--ts", "2026-06-13T10:00:00+05:00",
+    ]);
+    const result = run([
+      "tools/ai_profile/gap_checkpoint.mjs",
+      "--profile", profile,
+      "--intent", "short pause",
+      "--min-gap-min", "5",
+      "--ts", "2026-06-13T10:02:00+05:00",
+    ]);
+    assert.match(result.stdout, /gap checkpoint skipped/);
+    assert.equal(readJsonl(profile).length, 1);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("observability gate stays local without concrete external needs", () => {
   const dir = tempDir();
   try {

@@ -213,6 +213,10 @@ retrospective must name what likely happened in the unprofiled gaps, or add a
 next-cycle rule to place `tools/ai_profile/checkpoint.mjs --intent <text>`
 checkpoints during long manual, research, design, or review stretches so the
 elapsed time is recorded with `duration_ms`.
+When the agent is unsure whether the gap is long enough to record, use
+`tools/ai_profile/gap_checkpoint.mjs --intent <text> --min-gap-min <minutes>`;
+it records only meaningful gaps and skips short pauses without adding profile
+noise.
 If review reports missing context input details, name the affected line/intents
 and add a next-cycle fix: use `tools/ai_profile/context.mjs --path <file>` for
 local medium/high context reads, or

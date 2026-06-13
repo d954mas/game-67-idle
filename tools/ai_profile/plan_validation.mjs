@@ -60,6 +60,14 @@ const CHECKS = [
     placeholder: true,
   },
   {
+    id: "gap-checkpoint-syntax",
+    tier: "preflight",
+    changes: ["profiling"],
+    command: "node --check tools/ai_profile/gap_checkpoint.mjs",
+    why: "cheap syntax check for the gap checkpoint helper",
+    broad: false,
+  },
+  {
     id: "profile-planner-self",
     tier: "scoped",
     changes: ["profiling", "pipeline"],
