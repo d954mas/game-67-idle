@@ -960,3 +960,21 @@ specific and reusable.
   the agent to edit the draft with judgment before sharing.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0098`.
+
+## 2026-06-13 - Repeated commands need scope-aware interpretation
+
+- Trigger: The first reflection draft rendered `repeated_commands` with a
+  generic "human review needed" cause/fix even though review JSON already had
+  repeated-command scopes and examples.
+- Symptom: Retrospectives can over-treat all repeats as waste, or waste time
+  manually reopening review JSON to see which repeats were scoped, preflight,
+  or broad/final.
+- Time sink: The agent still has to reconstruct whether repeated commands were
+  justified by fresh edits, batchable, or validation waste.
+- Likely cause: The draft generator consumed review findings but ignored the
+  structured repeated-command evidence adjacent to those findings.
+- Proposed improvement: Include repeated-command scope breakdown, top commands,
+  and broad/final by-work-item examples in the draft, and require explicit
+  classification before creating process work.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0099`.

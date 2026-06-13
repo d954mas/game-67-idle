@@ -1506,6 +1506,58 @@ test("reflection draft keeps pending followups and regressions visible", () => {
   }
 });
 
+test("reflection draft classifies repeated command evidence by scope", () => {
+  const dir = tempDir();
+  try {
+    const review = join(dir, "repeated.review.json");
+    const packetJson = join(dir, "repeated.packet.json");
+    const draftJson = join(dir, "repeated.draft.json");
+
+    writeFileSync(review, `${JSON.stringify({
+      findings: [{ type: "repeated_commands", message: "3 repeated command(s) may need batching or narrower gates." }],
+      repeated_commands: [
+        { command: "node tools/pipeline_validate.mjs", count: 4, scope: "broad/final" },
+        { command: "git diff --check", count: 3, scope: "preflight" },
+        { command: "node tools/skills_eval.mjs", count: 2, scope: "scoped" },
+      ],
+      repeated_commands_by_scope: [
+        { scope: "broad/final", count: 4 },
+        { scope: "preflight", count: 3 },
+        { scope: "scoped", count: 2 },
+      ],
+      repeated_broad_final_commands: [
+        { command: "node tools/pipeline_validate.mjs", count: 4, scope: "broad/final" },
+      ],
+      repeated_broad_final_by_work_item: [
+        { work_item: "T0099", command: "node tools/pipeline_validate.mjs", count: 2 },
+      ],
+    })}\n`, "utf8");
+    writeFileSync(packetJson, `${JSON.stringify({
+      profile: "repeated.jsonl",
+      artifacts: { review_json: review },
+      readiness: ["ready"],
+      current_scope: { findings: [], suggested_actions: [] },
+      followups: { pending_suggestions: [], satisfied_suggestions: [], suppressed_historical_findings: [] },
+      comparison: { verdict: "stable", current_regressions: [] },
+    })}\n`, "utf8");
+
+    const result = run(["tools/ai_profile/reflection_draft.mjs", packetJson, "--json-output", draftJson]);
+    assert.match(result.stdout, /Repeated Command Evidence/);
+    assert.match(result.stdout, /broad\/final: 4/);
+    assert.match(result.stdout, /preflight: 3/);
+    assert.match(result.stdout, /scoped: 2/);
+    assert.match(result.stdout, /node tools\/pipeline_validate\.mjs/);
+    assert.doesNotMatch(result.stdout, /Cause needs human review/);
+    const draft = readJson(draftJson);
+    assert.equal(draft.repeated_commands.total_distinct, 3);
+    assert.equal(draft.repeated_commands.broad_final_commands.length, 1);
+    assert.equal(draft.repeated_commands.broad_final_by_work_item[0].work_item, "T0099");
+    assert.match(draft.historical_lessons[0].cause, /fresh edit or failed gate/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("closeout writes summary review and follow-up bundle", () => {
   const dir = tempDir();
   try {

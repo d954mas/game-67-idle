@@ -38,10 +38,47 @@ function compactFinding(finding) {
   };
 }
 
-function lessonForFinding(finding) {
+function repeatedCommandSummary(review) {
+  const commands = asArray(review?.repeated_commands);
+  const byScope = asArray(review?.repeated_commands_by_scope);
+  const broadFinal = asArray(review?.repeated_broad_final_commands);
+  const broadFinalByWorkItem = asArray(review?.repeated_broad_final_by_work_item);
+  return {
+    total_distinct: commands.length,
+    by_scope: byScope,
+    top_commands: commands.slice(0, 8).map((item) => ({
+      command: item.command || "",
+      count: Number(item.count || 0),
+      scope: item.scope || "unknown",
+    })),
+    broad_final_commands: broadFinal.slice(0, 8).map((item) => ({
+      command: item.command || "",
+      count: Number(item.count || 0),
+      scope: item.scope || "broad/final",
+    })),
+    broad_final_by_work_item: broadFinalByWorkItem.slice(0, 8).map((item) => ({
+      work_item: item.work_item || item.segment || "",
+      command: item.command || "",
+      count: Number(item.count || 0),
+    })),
+  };
+}
+
+function scopeSummaryText(summary) {
+  if (!summary.by_scope.length) return "no scope breakdown";
+  return summary.by_scope.map((item) => `${item.scope || "unknown"}=${item.count || 0}`).join(", ");
+}
+
+function lessonForFinding(finding, context = {}) {
   const type = finding.type || "finding";
   const message = finding.message || "";
+  const repeatedSummary = context.repeated_commands || repeatedCommandSummary(null);
   const templates = {
+    repeated_commands: {
+      symptom: `${message} Scope mix: ${scopeSummaryText(repeatedSummary)}.`,
+      cause: "Commands are being rerun across the whole profile; some reruns are valid guardrails, but repeated scoped/preflight checks should be tied to a fresh edit or failed gate, and broad/final reruns should be batched.",
+      fix: "Use the repeated-command evidence to classify reruns as justified, batchable, or validation waste; batch broad/final gates and keep preflight/scoped reruns close to changed files.",
+    },
     repeated_broad_final: {
       symptom: message,
       cause: "Broad/final validation was repeated in the historical profile instead of being batched or guarded by a validation plan.",
@@ -84,9 +121,10 @@ function buildDraft(packet, review) {
   const satisfied = asArray(packet.followups?.satisfied_suggestions);
   const suppressed = asArray(packet.followups?.suppressed_historical_findings);
   const findings = asArray(review?.findings);
+  const repeatedSummary = repeatedCommandSummary(review);
   const currentFindings = asArray(packet.current_scope?.findings).map(compactFinding);
   const currentActions = asArray(packet.current_scope?.suggested_actions);
-  const historicalLessons = findings.map(lessonForFinding);
+  const historicalLessons = findings.map((finding) => lessonForFinding(finding, { repeated_commands: repeatedSummary }));
   const nextActions = [];
   if (currentRegressions.length > 0) {
     nextActions.push("Inspect current-scope regressions before writing the final retrospective.");
@@ -124,6 +162,7 @@ function buildDraft(packet, review) {
     },
     historical_lessons: historicalLessons,
     suppressed_historical_findings: suppressed,
+    repeated_commands: repeatedSummary,
     next_cycle_actions: nextActions,
   };
 }
@@ -181,6 +220,25 @@ function renderMarkdown(draft, packetFile) {
     lines.push("- none");
   } else {
     for (const finding of draft.suppressed_historical_findings) lines.push(`- ${finding}`);
+  }
+  lines.push("");
+  lines.push("## Repeated Command Evidence");
+  if (draft.repeated_commands.total_distinct === 0) {
+    lines.push("- none");
+  } else {
+    lines.push(`- distinct repeated commands: ${draft.repeated_commands.total_distinct}`);
+    if (draft.repeated_commands.by_scope.length > 0) {
+      lines.push("- by scope:");
+      for (const item of draft.repeated_commands.by_scope) lines.push(`  - ${item.scope || "unknown"}: ${item.count || 0}`);
+    }
+    if (draft.repeated_commands.top_commands.length > 0) {
+      lines.push("- top commands:");
+      for (const item of draft.repeated_commands.top_commands) lines.push(`  - ${item.count}x [${item.scope}] ${item.command}`);
+    }
+    if (draft.repeated_commands.broad_final_by_work_item.length > 0) {
+      lines.push("- broad/final by work item:");
+      for (const item of draft.repeated_commands.broad_final_by_work_item) lines.push(`  - ${item.work_item || "unknown"}: ${item.count}x ${item.command}`);
+    }
   }
   lines.push("");
   lines.push("## Next Cycle Actions");

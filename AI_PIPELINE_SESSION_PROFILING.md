@@ -555,6 +555,9 @@ node tools/ai_profile/reflection_draft.mjs tmp/session_profiles/session_profile_
 The draft is not the final retrospective. Use it to avoid repeatedly opening
 summary, review, follow-up, and comparison artifacts, then rewrite with
 judgment, user-visible context, and project-specific examples.
+When the draft includes repeated-command evidence, classify the repeats before
+turning them into process work: justified rerun after a fresh edit or failed
+gate, batchable scoped/preflight check, or broad/final validation waste.
 
 When the review shows repeated broad commands, plan the next validation loop
 before running it:

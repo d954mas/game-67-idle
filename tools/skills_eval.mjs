@@ -321,6 +321,8 @@ const SKILL_CHECKS = [
       "satisfied",
       "reflection_draft.mjs",
       "edit it with judgment",
+      "repeated-command evidence",
+      "batchable scoped/preflight",
       "current-scope regressions",
       "whole-profile deltas",
       "missing context input",

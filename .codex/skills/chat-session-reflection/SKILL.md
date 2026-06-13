@@ -165,6 +165,9 @@ After the packet is ready, generate a scratch starter with
 `tools/ai_profile/reflection_draft.mjs <packet.json> --output
 tmp/session_profiles/<name>.reflection_draft.md --json-output
 tmp/session_profiles/<name>.reflection_draft.json`. Read the draft and edit it with judgment; do not treat it as the final retrospective.
+When the draft includes repeated-command evidence, classify repeats as
+justified reruns after fresh edits or failed gates, batchable scoped/preflight
+checks, or broad/final validation waste before turning them into process tasks.
 For multi-task profiles, inspect `work_items`, `iterations`, and
 `repeated_broad_final_by_work_item` before calling repeated validation waste.
 When review JSON includes `current_scope`, separate current-scope findings from
