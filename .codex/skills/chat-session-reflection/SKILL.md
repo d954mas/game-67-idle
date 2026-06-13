@@ -249,12 +249,14 @@ When a validation plan will be consumed by another tool/agent or cited in a
 later reflection, write it with `--json-output` and inspect `broad_final_count`,
 `deferred_broad_count`, and `next_action` instead of parsing markdown.
 When the plan contains concrete commands for an AI pipeline/tooling change, use
-`tools/ai_profile/validation_run.mjs --change <kind> --risk <risk>
---json-output <file>` instead of manually chaining checks. It records each
-executed command in the profile, skips placeholders, and runs broad/final
-checks once at the end of the selected tier batch. Its command records share a
-`validation_batch_id`; later reflection should inspect `Validation Batches`
-before treating repeated commands as waste.
+`node tools/ai.mjs validate --change <kind> --risk <risk>` instead of manually
+chaining checks or wrapping `node tools/pipeline_validate.mjs` with
+`ai.mjs run`. It records each executed command in the profile, skips
+placeholders, and runs broad/final checks once at the end of the selected tier
+batch. Its command records share a `validation_batch_id`; later reflection
+should inspect `Validation Batches` before treating repeated commands as waste.
+Use `tools/ai_profile/validation_run.mjs` directly only when debugging the
+validation runner or producing a custom machine-readable run summary.
 After changing profiler tools or reflection telemetry behavior, run
 `node --test tools/ai_profile/test.mjs` so scope, status, closeout, recovered
 failure, and follow-up behavior remain covered.

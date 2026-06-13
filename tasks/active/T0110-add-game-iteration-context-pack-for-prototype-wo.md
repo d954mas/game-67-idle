@@ -37,6 +37,9 @@ workflow/runtime tools.
 - [x] `node tools/ai.mjs reflect` creates the full reflection handoff by
       default and keeps current-scope regressions visible instead of stopping
       before packet/draft/review generation.
+- [x] `node tools/ai.mjs validate --change <kind> --risk <risk>` wraps the
+      profiled validation batch runner so broad/final checks are recorded as
+      batched validation evidence.
 - [x] Current 67 World-specific scripts are grouped under
       `tools/project_67_world/` instead of being mixed into generic tool
       folders.
@@ -66,6 +69,9 @@ None.
 - 2026-06-13: Changed `node tools/ai.mjs reflect` to generate the full
   reflection handoff by default; `--strict` preserves stop-on-regression
   behavior and `--quick` keeps cheap closeout behavior.
+- 2026-06-13: Added `node tools/ai.mjs validate` as the short path for
+  profiled validation batches, so broad/final gates carry batch metadata for
+  later reflection instead of looking like unbatched repeated commands.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;
@@ -73,3 +79,7 @@ None.
   `node tools/taskboard/cli.mjs validate`; `node tools/ai.mjs run -- node
   tools/pipeline_validate.mjs`; `git diff --check`; `node tools/ai.mjs
   reflect`.
+- 2026-06-13: Validation passed for the validation facade: `node --check
+  tools/ai.mjs`; `node tools/ai.mjs validate --change pipeline --risk low
+  --dry-run`; `node tools/ai.mjs validate --change pipeline --change skills
+  --risk medium`; `node tools/taskboard/cli.mjs validate`.

@@ -1204,3 +1204,21 @@ specific and reusable.
   stopping on regressions and `--quick` for cheap closeout.
 - Follow-up owner: Future profiling/reflection agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Validation facade must batch broad/final gates
+
+- Trigger: Reflection review reported repeated unbatched broad/final commands
+  after the agent validated pipeline work through `node tools/ai.mjs run --
+  node tools/pipeline_validate.mjs`.
+- Symptom: A legitimate final gate looked like ad hoc repeated validation
+  waste because it had no validation batch metadata.
+- Time sink: Agents had to inspect review JSON and command history to separate
+  planned validation from avoidable reruns.
+- Likely cause: The fast facade had `run`, `status`, and `reflect`, but no
+  short command for planned validation batches.
+- Proposed improvement: Add `node tools/ai.mjs validate --change <kind>
+  --risk <risk>` as the normal path for AI pipeline/tooling validation. It
+  wraps the validation batch runner so later reflection can classify broad and
+  final gates correctly.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.

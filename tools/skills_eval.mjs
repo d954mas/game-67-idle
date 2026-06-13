@@ -290,6 +290,7 @@ const SKILL_CHECKS = [
       "node tools/ai.mjs start <id> <iteration>",
       "node tools/ai.mjs context",
       "node tools/ai.mjs run -- <command>",
+      "node tools/ai.mjs validate --change <kind> --risk <risk>",
       "node tools/ai.mjs status",
       "node tools/ai.mjs reflect",
       "start.mjs",

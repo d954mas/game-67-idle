@@ -156,11 +156,14 @@ node tools/skills_sync.mjs
   prevents agents from creating noisy session artifacts in non-ignored
   locations. Fast path: `node tools/ai.mjs start <task> <iteration>`,
   `node tools/ai.mjs context`, `node tools/ai.mjs run -- <command>`,
-  `node tools/ai.mjs status`, and `node tools/ai.mjs reflect`. `reflect`
-  prepares the full reflection handoff and includes current-scope regressions
-  as evidence; use `reflect --strict` to stop on regressions or `reflect
-  --quick` only for a cheap closeout summary. Use `tools/ai_profile/*` directly
-  only when improving or debugging telemetry.
+  `node tools/ai.mjs validate --change <kind> --risk <risk>`,
+  `node tools/ai.mjs status`, and `node tools/ai.mjs reflect`. Use
+  `validate` for planned validation batches so broad/final gates are recorded
+  as batched evidence, not ad hoc repeated commands. `reflect` prepares the
+  full reflection handoff and includes current-scope regressions as evidence;
+  use `reflect --strict` to stop on regressions or `reflect --quick` only for a
+  cheap closeout summary. Use `tools/ai_profile/*` directly only when
+  improving or debugging telemetry.
 - **External AI observability is gated.** Do not add LangSmith, Phoenix,
   Langfuse, Braintrust, OpenTelemetry export, or another tracing/eval platform
   just because reflection needs more data. First use

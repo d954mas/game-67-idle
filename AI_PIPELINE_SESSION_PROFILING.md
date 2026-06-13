@@ -70,6 +70,7 @@ For normal work, use the fast facade:
 node tools/ai.mjs start <task-id> <iteration-name>
 node tools/ai.mjs context
 node tools/ai.mjs run -- <command> <args>
+node tools/ai.mjs validate --change <kind> --risk <risk>
 node tools/ai.mjs status
 node tools/ai.mjs reflect
 ```
@@ -672,18 +673,19 @@ markdown. Profile substantial commands with `run.mjs`, batch broad/final gates,
 and record any intentionally skipped expected gate in the task log.
 
 When the plan contains concrete commands and the goal is to validate an AI
-pipeline/tooling change, prefer the profiled runner over manually chaining
-checks:
+pipeline/tooling change, prefer the facade over manually chaining checks:
 
 ```powershell
-node tools/ai_profile/validation_run.mjs --change profiling --change skills --risk medium --json-output tmp/session_profiles/validation_run.json
+node tools/ai.mjs validate --change profiling --change skills --risk medium
 ```
 
 Use `--tier preflight --tier scoped` for an early pass that intentionally
-defers broad/final checks, or let the runner execute final checks once at the
+defers broad/final checks, or let `validate` execute final checks once at the
 end of the selected batch. Placeholder commands are skipped and listed in the
-summary; fill project-specific native, asset, web, or release commands
-manually when those surfaces are in scope.
+summary; fill project-specific native, asset, web, or release commands manually
+when those surfaces are in scope. Use `tools/ai_profile/validation_run.mjs`
+directly only when debugging the validation runner or writing a machine-readable
+summary JSON for another tool.
 When reviewing repeated validation, inspect `review.mjs`'s `Validation
 Batches` and `Broad/Final Validation Classification` sections before treating
 repeated commands as waste. A planned batch with one final gate is different

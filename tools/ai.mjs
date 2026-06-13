@@ -8,6 +8,7 @@ function usage() {
   node tools/ai.mjs start <work-item> [iteration]
   node tools/ai.mjs context
   node tools/ai.mjs run [--phase <name>] [--category <name>] [--intent <text>] [--value <name>] -- <command> [args...]
+  node tools/ai.mjs validate --change <kind> [--risk low|medium|high] [--tier <name>] [--dry-run]
   node tools/ai.mjs status
   node tools/ai.mjs reflect [--quick] [--strict]
 
@@ -15,6 +16,7 @@ Fast path:
   start    set current work item and append one profiling checkpoint
   context  print the compact game-iteration packet and profile its cost
   run      run a command and record duration/result
+  validate run a planned validation batch with batch metadata
   status   show telemetry health
   reflect  prepare the full reflection handoff from current telemetry
 
@@ -84,6 +86,13 @@ if (command === "run") {
   if (!hasFlag(options, "--value")) args.push("--value", "productive");
   args.push("--", ...commandArgs);
   run(args);
+}
+
+if (command === "validate") {
+  const args = [...argv];
+  if (!hasFlag(args, "--plan") && !hasFlag(args, "--change")) usage();
+  if (!hasFlag(args, "--plan") && !hasFlag(args, "--risk")) args.push("--risk", "medium");
+  run(["tools/ai_profile/validation_run.mjs", ...args]);
 }
 
 if (command === "status") {
