@@ -116,6 +116,14 @@ function repeatedCommandsWithTotals(summary) {
   };
 }
 
+function largestByField(items, field) {
+  return asArray(items).reduce((best, item) => {
+    const value = Number(item?.[field] || 0);
+    if (!best || value > Number(best?.[field] || 0)) return item;
+    return best;
+  }, null);
+}
+
 function hasCapturedElapsedTools(tools) {
   return asArray(tools).some((item) => toolCapturedElapsed(item));
 }
@@ -170,11 +178,26 @@ function topImprovements(draft, currentClean) {
   const improvements = [];
   const historical = asArray(draft.historical_lessons);
   const hasLesson = (type) => historical.some((lesson) => lesson.type === type);
+  const repeatedCommands = repeatedCommandsWithTotals(draft.repeated_commands);
+  const topRepeatedScope = largestByField(repeatedCommands.by_scope, "count");
+  const toolUseSummary = asArray(draft.tool_use_summary);
+  const runtimeTools = runtimeToolSummary(toolUseSummary);
+  const runtimeTotal = sumField(runtimeTools, "runtime_ms");
+  const topRuntimeTool = largestByField(runtimeTools, "runtime_ms");
+  const capturedElapsed = capturedElapsedSummary(toolUseSummary);
+  const capturedTotal = sumField(capturedElapsed, "captured_elapsed_ms");
+  const topCapturedElapsed = largestByField(capturedElapsed, "captured_elapsed_ms");
+  const contextSummary = contextSummaryWithTotals(draft.context_use_summary);
+  const topContextHotspot = largestByField(contextSummary.hotspots, "chars");
   if (!currentClean) {
     improvements.push("Resolve current-scope findings, regressions, and pending follow-ups before treating historical lessons as process work.");
   }
   if (hasLesson("repeated_commands")) {
-    improvements.push("Use repeated_command_classification to triage repeats before adding process tasks.");
+    if (topRepeatedScope) {
+      improvements.push(`Use Repeated Command Review shares to triage repeats before adding process tasks; largest scope is ${topRepeatedScope.scope || "unknown"} (${formatShare(topRepeatedScope.count, repeatedCommands.repeated_total_occurrences)} of repeated occurrences).`);
+    } else {
+      improvements.push("Use repeated_command_classification to triage repeats before adding process tasks.");
+    }
   }
   if (asArray(draft.repeated_commands?.unbatched_broad_final_commands).length > 0 || hasLesson("repeated_broad_final")) {
     const occurrences = Number(draft.repeated_commands?.unbatched_broad_final_occurrences || 0);
@@ -184,16 +207,17 @@ function topImprovements(draft, currentClean) {
   if (asArray(draft.repeated_commands?.validation_batches).length > 0) {
     improvements.push("Use validation batch evidence to separate planned validation runs from ad hoc repeated commands.");
   }
-  if (asArray(draft.tool_use_summary).length > 0) {
-    if (hasCapturedElapsedTools(draft.tool_use_summary)) {
-      improvements.push("Use Tool Runtime Review for actual command/tool cost and Captured Elapsed Review for checkpointed manual, research, design, or review spans.");
+  if (toolUseSummary.length > 0) {
+    if (hasCapturedElapsedTools(toolUseSummary)) {
+      const runtimeDetail = topRuntimeTool ? `; top runtime is ${topRuntimeTool.tool || "unknown"} (${formatShare(topRuntimeTool.runtime_ms || topRuntimeTool.duration_ms, runtimeTotal)})` : "";
+      const elapsedDetail = topCapturedElapsed ? `; top captured elapsed is ${topCapturedElapsed.tool || "unknown"} (${formatShare(topCapturedElapsed.captured_elapsed_ms || topCapturedElapsed.duration_ms, capturedTotal)})` : "";
+      improvements.push(`Use Tool Runtime Review for actual command/tool cost and Captured Elapsed Review for checkpointed manual, research, design, or review spans${runtimeDetail}${elapsedDetail}.`);
     } else {
       improvements.push("Use tool_use_summary to explain which tool classes consumed time, failed, or produced context.");
     }
   }
-  if (asArray(draft.context_use_summary?.hotspots).length > 0) {
-    const hotspot = draft.context_use_summary.hotspots[0];
-    improvements.push(`Use context_use_summary to explain context pressure; largest input is ${hotspot.path || "unknown"} (${hotspot.chars || 0} chars).`);
+  if (topContextHotspot) {
+    improvements.push(`Use context_use_summary to explain context pressure; largest input is ${topContextHotspot.path || "unknown"} (${topContextHotspot.chars || 0} chars, ${formatShare(topContextHotspot.chars, contextSummary.total_hotspot_chars)} of hotspot chars).`);
   }
   if (hasLesson("missing_context_inputs")) {
     improvements.push("Use node tools/ai.mjs context --path <file> or node tools/ai.mjs context -- <command> so reflection can measure context cost.");

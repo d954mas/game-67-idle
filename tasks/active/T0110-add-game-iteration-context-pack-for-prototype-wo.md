@@ -233,3 +233,6 @@ None.
 - 2026-06-13: Added repeated-command totals and per-scope/classification shares
   to reflection review JSON/Markdown so command repetition bottlenecks are
   visible without manual count summing.
+- 2026-06-13: Updated top improvements to include dominant measured shares for
+  repeated-command scope, runtime/captured elapsed, and context hotspots so the
+  first review screen names the bottleneck without scrolling into lower tables.

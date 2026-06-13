@@ -32,6 +32,22 @@ specific and reusable.
 - Status:
 ```
 
+## 2026-06-13 - Top improvements should carry bottleneck shares
+
+- Context: Runtime, captured elapsed, context, and repeated-command sections
+  now had totals and shares, but `Top Improvements` still used generic summary
+  wording without the dominant percentages.
+- Friction: A reader had to scroll into lower sections before seeing which
+  runtime tool, context input, or repeated-command scope dominated.
+- Time sink: The first decision layer still required manual cross-reading even
+  though the measured shares were already available.
+- Likely cause: Ranking data was added to review sections before the top
+  recommendation generator was made share-aware.
+- Proposed improvement: Include dominant shares directly in top improvements
+  for repeated commands, runtime/captured elapsed, and context pressure.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
+
 ## 2026-06-13 - Repeated commands need totals and shares
 
 - Context: Reflection review classified repeated commands by scope and cause,

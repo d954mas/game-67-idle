@@ -2624,11 +2624,15 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.ok(review.historical_lessons.every((lesson) => lesson.current_action === "historical_only"));
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs context --path")));
     assert.ok(review.top_improvements.some((item) => item.includes("validation batch evidence")));
-    assert.ok(review.top_improvements.some((item) => item.includes("repeated_command_classification")));
+    assert.ok(review.top_improvements.some((item) => item.includes("Repeated Command Review shares")));
+    assert.ok(review.top_improvements.some((item) => item.includes("largest scope is scoped (75.0%")));
     assert.ok(review.top_improvements.some((item) => item.includes("Tool Runtime Review")));
     assert.ok(review.top_improvements.some((item) => item.includes("Captured Elapsed Review")));
+    assert.ok(review.top_improvements.some((item) => item.includes("top runtime is shell_command (100.0%)")));
+    assert.ok(review.top_improvements.some((item) => item.includes("top captured elapsed is ai_profile/gap_checkpoint.mjs (100.0%)")));
     assert.equal(review.top_improvements.some((item) => item.includes("tool_use_summary")), false);
     assert.ok(review.top_improvements.some((item) => item.includes("context_use_summary")));
+    assert.ok(review.top_improvements.some((item) => item.includes("100.0% of hotspot chars")));
     assert.ok(review.top_improvements.some((item) => item.includes("historical whole-profile review shows 2")));
     assert.equal(review.top_improvements.some((item) => item.includes("current review shows")), false);
     assert.ok(review.current.readout.some((item) => item.includes("Current scope T0099/reflection-slice is clean")));
