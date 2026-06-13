@@ -198,10 +198,11 @@ function buildSuggestions(review) {
         .map((item) => `${item.scope}:${item.count}`)
         .join(", ") || "unknown"}.`,
       done_when: [
+        "`repeated_command_classification` is inspected before creating process tasks.",
         "Repeated scoped/preflight commands are either justified by fresh edits or batched.",
         "Unnecessary repeats become a validation ladder or wrapper rule.",
       ],
-      next_action: "Check whether repeated scoped/preflight commands followed fresh edits; if not, add batching guidance.",
+      next_action: "Inspect repeated_command_classification; batch guardrail reruns that did not follow fresh edits or failed gates.",
     });
   }
 

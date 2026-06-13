@@ -445,6 +445,9 @@ Record tools by role:
   priority findings: waste/rework, failures, blockers, context hotspots,
   repeated commands, repeated command scope (`preflight`, `scoped`,
   `broad/final`, `unknown`), repeated broad/final commands by work item,
+  repeated command classification (`planned_validation`,
+  `validation_waste_risk`, `failure_recovery_or_rework`,
+  `guardrail_rerun_review`, `needs_manual_classification`),
   wall-clock coverage and largest unprofiled gaps, missing work-item metadata,
   missing context input details, recovered versus unresolved failed records,
   and suggested pipeline actions.
@@ -658,8 +661,10 @@ The draft is not the final retrospective. Use it to avoid repeatedly opening
 summary, review, follow-up, and comparison artifacts, then rewrite with
 judgment, user-visible context, and project-specific examples.
 When the draft includes repeated-command evidence, classify the repeats before
-turning them into process work: justified rerun after a fresh edit or failed
-gate, batchable scoped/preflight check, or broad/final validation waste.
+turning them into process work. Prefer the generated
+`repeated_command_classification` table over raw repeat counts: planned
+validation, validation-waste risk, failure/rework signal, scoped/preflight
+guardrail rerun, or manual-review case.
 
 Before writing final retrospective prose, generate a compact decision review:
 

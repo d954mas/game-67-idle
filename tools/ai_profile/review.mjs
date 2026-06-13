@@ -223,6 +223,85 @@ function validationBatches(records) {
     }));
 }
 
+function classifyRepeatedCommands(records, repeatedCommands, commandScopes) {
+  const stats = new Map();
+  for (const record of records) {
+    for (const command of record.commands || []) {
+      const normalized = normalizeCommand(command);
+      if (!normalized) continue;
+      if (!stats.has(normalized)) {
+        stats.set(normalized, {
+          command: normalized,
+          count: 0,
+          scope: commandScopes.get(normalized) || commandScope(normalized),
+          batched: 0,
+          unbatched: 0,
+          failed: 0,
+          passed: 0,
+          work_items: new Map(),
+          iterations: new Map(),
+          first_line: record.__line,
+          last_line: record.__line,
+        });
+      }
+      const item = stats.get(normalized);
+      item.count += 1;
+      if (record.validation_batch_id) item.batched += 1;
+      else item.unbatched += 1;
+      if (record.result === "fail") item.failed += 1;
+      if (record.result === "pass") item.passed += 1;
+      addCount(item.work_items, record.work_item || "(none)");
+      addCount(item.iterations, record.iteration || "(none)");
+      item.first_line = Math.min(item.first_line, record.__line);
+      item.last_line = Math.max(item.last_line, record.__line);
+    }
+  }
+
+  return repeatedCommands.map(([command, count]) => {
+    const item = stats.get(command) || { command, count, scope: commandScopes.get(command) || "unknown", batched: 0, unbatched: count, failed: 0, passed: 0, work_items: new Map(), iterations: new Map(), first_line: 0, last_line: 0 };
+    let classification = "needs_manual_classification";
+    let reason = "Command scope is unknown or lacks enough metadata to classify safely.";
+    let next_action = "Inspect surrounding profile records before turning this repeat into a process task.";
+    if (item.scope === "broad/final" && item.unbatched > 1) {
+      classification = "validation_waste_risk";
+      reason = "Broad/final command repeated outside a validation batch.";
+      next_action = "Use `node tools/ai.mjs validate --change <kind> --risk <risk>` and rerun broad/final gates only after a failed gate, changed risk, or final handoff.";
+    } else if (item.batched > 0 && item.unbatched === 0) {
+      classification = "planned_validation";
+      reason = "All repeats are inside profiled validation batches.";
+      next_action = "Keep as planned validation evidence; do not promote as waste.";
+    } else if (item.scope === "broad/final" && item.batched > 0) {
+      classification = "mostly_planned_validation";
+      reason = "Broad/final repeats are partly batched, with at most one unbatched occurrence.";
+      next_action = "Keep batched runs as evidence and inspect the unbatched occurrence only if it recurs.";
+    } else if (item.failed > 0) {
+      classification = "failure_recovery_or_rework";
+      reason = "Repeated command includes failed attempts.";
+      next_action = "Classify the failure as useful negative feedback, avoidable rework, or tool noise.";
+    } else if (item.scope === "preflight" || item.scope === "scoped") {
+      classification = "guardrail_rerun_review";
+      reason = "Scoped/preflight repeats can be valid guardrails when they follow fresh edits or failed gates.";
+      next_action = "Keep the repeat only when it guards a fresh edit or failed gate; otherwise batch it with nearby checks.";
+    }
+    return {
+      command: item.command,
+      count,
+      scope: item.scope,
+      classification,
+      reason,
+      next_action,
+      batched: item.batched,
+      unbatched: item.unbatched,
+      failed: item.failed,
+      passed: item.passed,
+      work_items: mapEntries(item.work_items, 5).map(({ key, value }) => ({ work_item: key, count: value })),
+      iterations: mapEntries(item.iterations, 5).map(({ key, value }) => ({ iteration: key, count: value })),
+      first_line: item.first_line,
+      last_line: item.last_line,
+    };
+  });
+}
+
 function currentScopeFindingsAndActions(currentScope) {
   const findings = [];
   const actions = [];
@@ -460,6 +539,7 @@ const repeatedUnbatchedBroadCommands = topEntries(unbatchedBroadCommandCounts, 2
 const batchedBroadCommands = topEntries(batchedBroadCommandCounts, 20);
 const repeatedBroadByWorkItem = repeatedSegmentCommands(workItemBroadCommandCounts, 20);
 const validationBatchSummaries = validationBatches(records);
+const repeatedCommandClassifications = classifyRepeatedCommands(records, repeatedCommands, commandScopes);
 const topContext = topEntries(contextChars, 10).filter(([, chars]) => chars > 0);
 const topPhaseDuration = topEntries(phaseDuration, 10);
 const coverage = coverageStats(records);
@@ -641,6 +721,18 @@ if (repeatedCommands.length === 0) {
   for (const [scope, count] of topEntries(repeatedScopeCounts, 10)) emit(`- ${scope}: ${count}`);
 }
 
+emit("\n## Repeated Command Classification");
+if (repeatedCommandClassifications.length === 0) {
+  emit("- none");
+} else {
+  for (const item of repeatedCommandClassifications.slice(0, 20)) {
+    emit(`- ${item.count}x [${item.scope}] ${item.classification}: ${item.command}`);
+    emit(`  - reason: ${item.reason}`);
+    emit(`  - next: ${item.next_action}`);
+    emit(`  - evidence: batched=${item.batched}, unbatched=${item.unbatched}, failed=${item.failed}, lines=${item.first_line}-${item.last_line}`);
+  }
+}
+
 emit("\n## Repeated Broad/Final Commands");
 if (repeatedBroadCommands.length === 0) {
   emit("- none");
@@ -793,6 +885,7 @@ if (jsonOutputFile) {
     })),
     repeated_commands: repeatedCommandObjects,
     repeated_commands_by_scope: mapEntries(repeatedScopeCounts, 10).map(({ key, value }) => ({ scope: key, count: value })),
+    repeated_command_classification: repeatedCommandClassifications,
     repeated_broad_final_commands: repeatedCommandObjects.filter((item) => item.scope === "broad/final"),
     repeated_unbatched_broad_final_commands: repeatedUnbatchedBroadCommands.map(([command, count]) => ({
       command,

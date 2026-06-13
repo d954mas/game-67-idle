@@ -1296,3 +1296,21 @@ specific and reusable.
   generated reflection advice prefer those facade paths.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Repeated command counts need triage labels
+
+- Trigger: Reflection review reported repeated commands by scope and
+  validation batches, but the next action still required manually deciding
+  whether each repeat was planned validation, useful guardrail rerun, rework,
+  or waste.
+- Symptom: Agents could turn raw repeat counts into process tasks too early,
+  or spend extra reflection time reopening profile records to interpret them.
+- Time sink: Repeated-command analysis remained a manual judgment step even
+  though the profile already knows scope, validation batch metadata, failures,
+  work items, and line ranges.
+- Likely cause: `review.mjs` summarized counts but did not attach a triage
+  classification and next action to each repeated command.
+- Proposed improvement: Add `repeated_command_classification` to profile
+  review JSON/markdown and carry it through reflection draft/review.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.

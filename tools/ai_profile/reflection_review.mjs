@@ -34,7 +34,7 @@ function topImprovements(draft, currentClean) {
     improvements.push("Resolve current-scope findings, regressions, and pending follow-ups before treating historical lessons as process work.");
   }
   if (hasLesson("repeated_commands")) {
-    improvements.push("Classify repeated commands as justified reruns, batchable checks, or validation waste before adding process tasks.");
+    improvements.push("Use repeated_command_classification to triage repeats before adding process tasks.");
   }
   if (asArray(draft.repeated_commands?.unbatched_broad_final_commands).length > 0 || hasLesson("repeated_broad_final")) {
     improvements.push("Batch broad/final validation with node tools/ai.mjs validate and rerun it only after a failed gate, changed risk, or final handoff.");
@@ -141,6 +141,11 @@ function renderMarkdown(review, draftPath) {
     for (const item of byScope) lines.push(`- ${item.scope || "unknown"}: ${item.count || 0}`);
   }
   const validationBatches = asArray(review.repeated_commands.validation_batches);
+  const classifications = asArray(review.repeated_commands.classification);
+  if (classifications.length > 0) {
+    lines.push("- classification:");
+    for (const item of classifications) lines.push(`  - ${item.count || 0}x ${item.classification || "unknown"} [${item.scope || "unknown"}]: ${item.command || ""}`);
+  }
   if (validationBatches.length > 0) {
     lines.push("- validation batches:");
     for (const item of validationBatches) lines.push(`  - ${item.batch_id || "unknown"}: ${item.records || 0} record(s), broad/final=${item.broad_final_commands || 0}, failed=${item.failed || 0}`);

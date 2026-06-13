@@ -202,9 +202,11 @@ In reflection review JSON, `current.actions` counts only real pending work; a
 clean-scope no-action explanation belongs in `current.status_message` and must
 not be treated as an action item.
 Anchor: top next-cycle improvements.
-When the draft includes repeated-command evidence, classify repeats as
-justified reruns after fresh edits or failed gates, batchable scoped/preflight
-checks, or broad/final validation waste before turning them into process tasks.
+When the draft includes repeated-command evidence, classify repeats before
+turning them into process tasks. Prefer `repeated_command_classification` over
+raw repeat counts: planned validation, validation-waste risk,
+failure/rework signal, scoped/preflight guardrail rerun, or manual-review
+case.
 When `review.mjs` or the draft reports validation batches, use that batch
 evidence to separate planned validation runs from ad hoc repeated commands.
 For broad/final validation, prefer `repeated_unbatched_broad_final_commands`

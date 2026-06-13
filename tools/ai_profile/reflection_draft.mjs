@@ -46,9 +46,21 @@ function repeatedCommandSummary(review) {
   const batchedBroadFinal = asArray(review?.batched_broad_final_commands);
   const broadFinalByWorkItem = asArray(review?.repeated_broad_final_by_work_item);
   const validationBatches = asArray(review?.validation_batches);
+  const classifications = asArray(review?.repeated_command_classification);
   return {
     total_distinct: commands.length,
     by_scope: byScope,
+    classification: classifications.slice(0, 8).map((item) => ({
+      command: item.command || "",
+      count: Number(item.count || 0),
+      scope: item.scope || "unknown",
+      classification: item.classification || "needs_manual_classification",
+      reason: item.reason || "",
+      next_action: item.next_action || "",
+      batched: Number(item.batched || 0),
+      unbatched: Number(item.unbatched || 0),
+      failed: Number(item.failed || 0),
+    })),
     top_commands: commands.slice(0, 8).map((item) => ({
       command: item.command || "",
       count: Number(item.count || 0),
@@ -98,8 +110,8 @@ function lessonForFinding(finding, context = {}) {
   const templates = {
     repeated_commands: {
       symptom: `${message} Scope mix: ${scopeSummaryText(repeatedSummary)}. Planned validation batches: ${repeatedSummary.validation_batches.length}.`,
-      cause: "Commands are being rerun across the whole profile; some reruns are valid guardrails, but repeated scoped/preflight checks should be tied to a fresh edit or failed gate, and broad/final reruns should be batched.",
-      fix: "Use the repeated-command evidence to classify reruns as justified, batchable, or validation waste; batch broad/final gates and keep preflight/scoped reruns close to changed files.",
+      cause: "Commands are being rerun across the whole profile; the generated classification separates planned validation, validation-waste risk, failure/rework signals, scoped guardrail reruns, and manual-review cases.",
+      fix: "Use repeated_command_classification before adding process tasks; batch broad/final gates and keep preflight/scoped reruns close to changed files.",
     },
     repeated_broad_final: {
       symptom: message,
@@ -252,6 +264,10 @@ function renderMarkdown(draft, packetFile) {
     if (draft.repeated_commands.by_scope.length > 0) {
       lines.push("- by scope:");
       for (const item of draft.repeated_commands.by_scope) lines.push(`  - ${item.scope || "unknown"}: ${item.count || 0}`);
+    }
+    if (draft.repeated_commands.classification.length > 0) {
+      lines.push("- classification:");
+      for (const item of draft.repeated_commands.classification) lines.push(`  - ${item.count}x ${item.classification} [${item.scope}]: ${item.command}`);
     }
     if (draft.repeated_commands.top_commands.length > 0) {
       lines.push("- top commands:");

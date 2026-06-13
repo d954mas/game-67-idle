@@ -1603,6 +1603,9 @@ test("profile review separates batched and unbatched broad final repeats", () =>
     assert.equal(review.repeated_broad_final_commands[0].count, 4);
     assert.equal(review.batched_broad_final_commands[0].count, 2);
     assert.equal(review.repeated_unbatched_broad_final_commands[0].count, 2);
+    assert.equal(review.repeated_command_classification[0].classification, "validation_waste_risk");
+    assert.equal(review.repeated_command_classification[0].batched, 2);
+    assert.equal(review.repeated_command_classification[0].unbatched, 2);
     assert.ok(review.findings.some((finding) => finding.type === "repeated_broad_final"));
   } finally {
     cleanup(dir);
@@ -1640,6 +1643,7 @@ test("profile review does not flag repeated broad final when repeats are batched
     assert.equal(review.repeated_broad_final_commands[0].count, 2);
     assert.equal(review.batched_broad_final_commands[0].count, 2);
     assert.deepEqual(review.repeated_unbatched_broad_final_commands, []);
+    assert.equal(review.repeated_command_classification[0].classification, "planned_validation");
     assert.equal(review.findings.some((finding) => finding.type === "repeated_broad_final"), false);
   } finally {
     cleanup(dir);
@@ -2197,6 +2201,10 @@ test("reflection draft classifies repeated command evidence by scope", () => {
         { scope: "preflight", count: 3 },
         { scope: "scoped", count: 2 },
       ],
+      repeated_command_classification: [
+        { command: "node tools/pipeline_validate.mjs", count: 4, scope: "broad/final", classification: "validation_waste_risk", reason: "Broad/final command repeated outside a validation batch.", next_action: "Use ai validation facade.", batched: 2, unbatched: 2, failed: 0 },
+        { command: "git diff --check", count: 3, scope: "preflight", classification: "guardrail_rerun_review", reason: "Preflight guardrail rerun.", next_action: "Keep only after fresh edits.", batched: 0, unbatched: 3, failed: 0 },
+      ],
       repeated_broad_final_commands: [
         { command: "node tools/pipeline_validate.mjs", count: 4, scope: "broad/final" },
       ],
@@ -2224,6 +2232,8 @@ test("reflection draft classifies repeated command evidence by scope", () => {
 
     const result = run(["tools/ai_profile/reflection_draft.mjs", packetJson, "--json-output", draftJson]);
     assert.match(result.stdout, /Repeated Command Evidence/);
+    assert.match(result.stdout, /classification/);
+    assert.match(result.stdout, /validation_waste_risk/);
     assert.match(result.stdout, /broad\/final: 4/);
     assert.match(result.stdout, /preflight: 3/);
     assert.match(result.stdout, /scoped: 2/);
@@ -2233,12 +2243,13 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     assert.doesNotMatch(result.stdout, /Cause needs human review/);
     const draft = readJson(draftJson);
     assert.equal(draft.repeated_commands.total_distinct, 3);
+    assert.equal(draft.repeated_commands.classification[0].classification, "validation_waste_risk");
     assert.equal(draft.repeated_commands.broad_final_commands.length, 1);
     assert.equal(draft.repeated_commands.unbatched_broad_final_commands[0].count, 2);
     assert.equal(draft.repeated_commands.batched_broad_final_commands[0].count, 2);
     assert.equal(draft.repeated_commands.broad_final_by_work_item[0].work_item, "T0099");
     assert.equal(draft.repeated_commands.validation_batches[0].batch_id, "batch-draft");
-    assert.match(draft.historical_lessons[0].cause, /fresh edit or failed gate/);
+    assert.match(draft.historical_lessons[0].cause, /generated classification/);
   } finally {
     cleanup(dir);
   }
@@ -2267,6 +2278,7 @@ test("reflection review separates clean current scope from historical lessons", 
       suppressed_historical_findings: ["missing_context_inputs"],
       repeated_commands: {
         by_scope: [{ scope: "scoped", count: 3 }, { scope: "broad/final", count: 1 }],
+        classification: [{ command: "node tools/skills_eval.mjs", count: 3, scope: "scoped", classification: "guardrail_rerun_review" }],
         validation_batches: [{ batch_id: "batch-review", records: 5, broad_final_commands: 1, failed: 0 }],
       },
     })}\n`, "utf8");
@@ -2283,6 +2295,7 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.match(result.stdout, /Current actions: 0/);
     assert.match(result.stdout, /historical_only/);
     assert.match(result.stdout, /No current action items/);
+    assert.match(result.stdout, /guardrail_rerun_review/);
     assert.match(result.stdout, /validation batches/);
     assert.match(result.stdout, /batch-review/);
     assert.match(result.stdout, /Top Improvements/);
@@ -2293,6 +2306,7 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.ok(review.historical_lessons.every((lesson) => lesson.current_action === "historical_only"));
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs context --path")));
     assert.ok(review.top_improvements.some((item) => item.includes("validation batch evidence")));
+    assert.ok(review.top_improvements.some((item) => item.includes("repeated_command_classification")));
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs validate")));
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs start")));
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs focus")));

@@ -46,6 +46,10 @@ workflow/runtime tools.
       paths.
 - [x] Generated profile status/review/draft/review/follow-up advice points to
       `node tools/ai.mjs ...` fast paths when a facade exists.
+- [x] Profile review emits `repeated_command_classification` so reflection can
+      triage repeated commands as planned validation, validation-waste risk,
+      failure/rework signal, guardrail rerun, or manual-review case before
+      creating process tasks.
 - [x] `node tools/ai.mjs checkpoint "<intent>"` provides the fast path for
       thresholded wall-clock checkpoints after manual/research/review gaps.
 - [x] `node tools/ai.mjs reflect` creates the full reflection handoff by
@@ -114,6 +118,16 @@ None.
   validate --change profiling --change pipeline --change skills --risk medium`;
   `node tools/ai.mjs reflect`; `node tools/ai.mjs status` reported stable
   baseline comparison and clean current scope.
+- 2026-06-13: Added `repeated_command_classification` to profile review,
+  reflection draft, and reflection review so repeated command analysis starts
+  from triage labels instead of raw repeat counts.
+- 2026-06-13: Validation passed for repeated-command classification: `node
+  --check` for touched profile generators; `node --test
+  tools/ai_profile/test.mjs`; `node tools/skills_eval.mjs`; live
+  `node tools/ai_profile/review.mjs` showed `validation_waste_risk`,
+  `planned_validation`, `failure_recovery_or_rework`, and
+  `guardrail_rerun_review`; `node tools/ai.mjs validate --change profiling
+  --change pipeline --change skills --risk medium` passed.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;
