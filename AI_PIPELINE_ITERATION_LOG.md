@@ -690,3 +690,20 @@ specific and reusable.
   as `context_inputs`.
 - Follow-up owner: Future profiling/tooling agents.
 - Status: Implemented in `T0082`.
+
+## 2026-06-13 - Profile status needs current-scope health
+
+- Context: After command context was measured, live `status.mjs` still
+  recommended fixing four old missing context-input records from earlier
+  iterations.
+- Friction: The status next action could keep pointing at stale history instead
+  of the current work item.
+- Time sink: Agents can waste turns trying to repair old telemetry that cannot
+  be made precise after the fact.
+- Likely cause: `status.mjs` used whole-profile aggregate context metrics for
+  next-action priority even when persistent scope had a current `updated_at`.
+- Proposed improvement: Add current-scope health based on `scope.updated_at`
+  and use current-scope missing context/work-item counts for next action while
+  keeping whole-profile totals for retrospective history.
+- Follow-up owner: Future profiling/tooling agents.
+- Status: Implemented in `T0083`.

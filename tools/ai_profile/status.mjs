@@ -131,12 +131,29 @@ function classifyFailedRecords(records) {
   return { recovered, unresolved };
 }
 
+function countMissingWorkItem(records) {
+  return records.filter((record) => !record.work_item).length;
+}
+
+function countMissingContextInputs(records) {
+  return records.filter((record) => record.context_risk && record.context_risk !== "low" && !(record.context_inputs || []).length).length;
+}
+
+function currentScopeRecords(records, scope) {
+  const updatedMs = Date.parse(scope.updated_at || "");
+  if (!Number.isFinite(updatedMs)) return [];
+  return records.filter((record) => {
+    const ts = eventTime(record);
+    return ts !== undefined && ts >= updatedMs;
+  });
+}
+
 function buildStatus(profilePath) {
   const parsed = parseProfile(profilePath);
   const records = parsed.records;
   const closeoutSeen = records.some((record) => record.phase === "session_closeout");
-  const missingWorkItem = records.filter((record) => !record.work_item).length;
-  const missingContextInputs = records.filter((record) => record.context_risk && record.context_risk !== "low" && !(record.context_inputs || []).length).length;
+  const missingWorkItem = countMissingWorkItem(records);
+  const missingContextInputs = countMissingContextInputs(records);
   const failedRecords = records.filter((record) => record.result === "fail").length;
   const failedClassification = classifyFailedRecords(records);
   const coverage = coverageStats(records);
@@ -147,6 +164,11 @@ function buildStatus(profilePath) {
 
   let nextAction = "Use this profile as baseline; no urgent profiling action detected.";
   const scopeReady = scope.valid && Boolean(scope.work_item);
+  const scopedRecords = scopeReady ? currentScopeRecords(records, scope) : [];
+  const scopedMissingContextInputs = countMissingContextInputs(scopedRecords);
+  const scopedMissingWorkItem = countMissingWorkItem(scopedRecords);
+  const hasCurrentScopeWindow = scopeReady && Boolean(scope.updated_at);
+  const actionableMissingContextInputs = hasCurrentScopeWindow ? scopedMissingContextInputs : missingContextInputs;
 
   if (!parsed.exists) {
     nextAction = "Start profiling with `node tools/ai_profile/start.mjs --work-item <id> --iteration <name>`.";
@@ -158,7 +180,9 @@ function buildStatus(profilePath) {
     nextAction = "Resolve or explain unresolved failed profile records before trusting this profile for reflection.";
   } else if (!scopeReady) {
     nextAction = "Start or reset current scope with `node tools/ai_profile/start.mjs --work-item <id> --iteration <name>`.";
-  } else if (missingContextInputs > 0) {
+  } else if (hasCurrentScopeWindow && scopedRecords.length === 0) {
+    nextAction = "Append a current-scope checkpoint with event.mjs, context.mjs, context_command.mjs, or run.mjs.";
+  } else if (actionableMissingContextInputs > 0) {
     nextAction = "Use context.mjs for medium/high local context reads so context_inputs are measured.";
   } else if (lowCoverage) {
     nextAction = "Add sparse event.mjs checkpoints during long manual/research/design stretches.";
@@ -191,6 +215,12 @@ function buildStatus(profilePath) {
       missing_records: missingWorkItem,
       coverage_ratio: records.length > 0 ? (records.length - missingWorkItem) / records.length : undefined,
     },
+    current_scope: {
+      since: scope.updated_at || "",
+      records: scopedRecords.length,
+      missing_work_item_records: scopedMissingWorkItem,
+      missing_context_inputs: scopedMissingContextInputs,
+    },
     missing_context_inputs: missingContextInputs,
     failed_records: failedRecords,
     recovered_failed_records: failedClassification.recovered,
@@ -219,6 +249,7 @@ function renderMarkdown(status) {
   lines.push(`Bundle complete: ${status.bundle.complete ? "yes" : "no"}`);
   lines.push(`Work-item coverage: ${formatPercent(status.work_item_coverage.coverage_ratio)} (${status.work_item_coverage.missing_records} missing)`);
   lines.push(`Missing context inputs: ${status.missing_context_inputs}`);
+  lines.push(`Current scope records: ${status.current_scope.records} (${status.current_scope.missing_context_inputs} missing context inputs, ${status.current_scope.missing_work_item_records} missing work items)`);
   lines.push(`Failed records: ${status.failed_records} (${status.recovered_failed_records} recovered, ${status.unresolved_failed_records} unresolved)`);
   lines.push(`Wall-clock coverage: ${formatPercent(status.wall_clock_coverage.coverage_ratio)} (${formatMs(status.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(status.wall_clock_coverage.wall_clock_span_ms)})`);
   lines.push("");

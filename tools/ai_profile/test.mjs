@@ -196,7 +196,7 @@ test("status recommends start helper for missing profiles", () => {
   }
 });
 
-test("status does not ask for scope when only historical records lack work item", () => {
+test("status does not ask for scope or context fixes when only historical records are incomplete", () => {
   const dir = tempDir();
   try {
     const missingScope = join(dir, "missing-scope.json");
@@ -224,7 +224,17 @@ test("status does not ask for scope when only historical records lack work item"
       run(args, { env: { AI_PROFILE_SCOPE_FILE: missingScope } });
     }
 
-    run(["tools/ai_profile/scope.mjs", "set", "--scope", currentScope, "--work-item", "STATUS2", "--iteration", "current"]);
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope",
+      currentScope,
+      "--profile",
+      profile,
+      "--work-item",
+      "STATUS2",
+      "--iteration",
+      "current",
+    ]);
     run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
       env: { AI_PROFILE_SCOPE_FILE: currentScope },
     });
@@ -232,9 +242,60 @@ test("status does not ask for scope when only historical records lack work item"
     const status = readJson(statusJson);
     assert.equal(status.scope.work_item, "STATUS2");
     assert.equal(status.work_item_coverage.missing_records, 6);
-    assert.match(status.next_action, /context\.mjs/);
+    assert.equal(status.current_scope.records, 1);
+    assert.equal(status.current_scope.missing_context_inputs, 0);
+    assert.equal(status.current_scope.missing_work_item_records, 0);
+    assert.match(status.next_action, /closeout\.mjs/);
     assert.doesNotMatch(status.next_action, /scope\.mjs/);
     assert.doesNotMatch(status.next_action, /start\.mjs/);
+    assert.doesNotMatch(status.next_action, /context\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status still flags missing context inputs in the current scope", () => {
+  const dir = tempDir();
+  try {
+    const scope = join(dir, "scope.json");
+    const profile = join(dir, "current-missing-context.jsonl");
+    const statusJson = join(dir, "status.json");
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope",
+      scope,
+      "--profile",
+      profile,
+      "--work-item",
+      "STATUS3",
+      "--iteration",
+      "current",
+    ]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "context",
+      "--category",
+      "context",
+      "--intent",
+      "current unmeasured context",
+      "--result",
+      "pass",
+      "--value",
+      "necessary_overhead",
+      "--context-risk",
+      "medium",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+
+    const status = readJson(statusJson);
+    assert.equal(status.current_scope.records, 2);
+    assert.equal(status.current_scope.missing_context_inputs, 1);
+    assert.match(status.next_action, /context\.mjs/);
   } finally {
     cleanup(dir);
   }
