@@ -2278,13 +2278,16 @@ test("reflection review separates clean current scope from historical lessons", 
       reviewJson,
     ]);
     assert.match(result.stdout, /Verdict: current_clean/);
+    assert.match(result.stdout, /Current actions: 0/);
     assert.match(result.stdout, /historical_only/);
+    assert.match(result.stdout, /No current action items/);
     assert.match(result.stdout, /validation batches/);
     assert.match(result.stdout, /batch-review/);
     assert.match(result.stdout, /Top Improvements/);
     const review = readJson(reviewJson);
     assert.equal(review.verdict, "current_clean");
-    assert.equal(review.current.actions.length, 1);
+    assert.equal(review.current.actions.length, 0);
+    assert.match(review.current.status_message, /No current action items/);
     assert.ok(review.historical_lessons.every((lesson) => lesson.current_action === "historical_only"));
     assert.ok(review.top_improvements.some((item) => item.includes("context.mjs")));
     assert.ok(review.top_improvements.some((item) => item.includes("validation batch evidence")));
@@ -2318,6 +2321,7 @@ test("reflection review keeps dirty current scope actionable", () => {
     assert.match(result.stdout, /Current context is unmeasured/);
     const review = readJson(reviewJson);
     assert.equal(review.verdict, "current_action_required");
+    assert.match(review.current.status_message, /Resolve current action items/);
     assert.ok(review.current.actions.some((action) => action.includes("context_command.mjs")));
     assert.ok(review.historical_lessons.every((lesson) => lesson.current_action === "review_after_current_items"));
   } finally {

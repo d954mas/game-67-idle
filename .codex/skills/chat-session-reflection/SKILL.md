@@ -183,6 +183,9 @@ tmp/session_profiles/<name>.reflection_review.json`. `prepare_reflection.mjs`
 does this automatically when the review is missing or stale. Use the review to
 separate current actions from historical-only lessons and to extract the top
 next-cycle improvements before writing final prose.
+In reflection review JSON, `current.actions` counts only real pending work; a
+clean-scope no-action explanation belongs in `current.status_message` and must
+not be treated as an action item.
 Anchor: top next-cycle improvements.
 When the draft includes repeated-command evidence, classify repeats as
 justified reruns after fresh edits or failed gates, batchable scoped/preflight

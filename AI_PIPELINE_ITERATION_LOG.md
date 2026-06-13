@@ -1137,3 +1137,18 @@ specific and reusable.
   compatible fallback for older review JSON.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0108`.
+
+## 2026-06-13 - Clean reflection reviews need zero real current actions
+
+- Trigger: Fresh `reflection_review.mjs` output had `Verdict: current_clean`
+  but still printed `Current actions: 1`.
+- Symptom: The no-action explanatory sentence was stored in
+  `current.actions`, so automation or a later agent could count a clean
+  handoff as having one pending action.
+- Time sink: Humans/agents had to read the action text to discover it was not
+  actually work.
+- Likely cause: The review JSON mixed status messaging with action lists.
+- Proposed improvement: Keep `current.actions` for real pending work only and
+  put clean-state prose in `current.status_message`.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0109`.

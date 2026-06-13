@@ -78,7 +78,9 @@ function buildReview(draft, draftPath) {
   for (const finding of currentFindings) currentActions.push(finding.message || finding.type || "Resolve current-scope finding.");
   for (const regression of currentRegressions) currentActions.push(`Inspect current-scope regression: ${regression.label || regression.key || "unknown"}.`);
   for (const followup of pendingFollowups) currentActions.push(followup.next_action || followup.title || "Review pending follow-up.");
-  if (currentActions.length === 0) currentActions.push("No current action items; use historical lessons as next-cycle process guidance.");
+  const currentStatusMessage = currentActions.length === 0
+    ? "No current action items; use historical lessons as next-cycle process guidance."
+    : "Resolve current action items before treating historical lessons as next-cycle guidance.";
 
   return {
     schema_version: 1,
@@ -89,6 +91,7 @@ function buildReview(draft, draftPath) {
       regressions: currentRegressions,
       pending_followups: pendingFollowups,
       actions: currentActions,
+      status_message: currentStatusMessage,
     },
     historical_lessons: historicalLessons,
     suppressed_historical_findings: asArray(draft.suppressed_historical_findings),
@@ -113,7 +116,11 @@ function renderMarkdown(review, draftPath) {
   lines.push(`Top improvements: ${review.top_improvements.length}`);
   lines.push("");
   lines.push("## Current Decision");
-  for (const action of review.current.actions) lines.push(`- ${action}`);
+  if (review.current.actions.length === 0) {
+    lines.push(`- ${review.current.status_message}`);
+  } else {
+    for (const action of review.current.actions) lines.push(`- ${action}`);
+  }
   lines.push("");
   lines.push("## Historical Lessons");
   if (review.historical_lessons.length === 0) {

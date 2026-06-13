@@ -614,7 +614,9 @@ node tools/ai_profile/reflection_review.mjs tmp/session_profiles/session_profile
 
 Use this review to separate current action items from historical-only lessons
 and to extract the top next-cycle improvements. It is still a generated aid,
-not final prose.
+not final prose. `Current actions` counts only real pending action items; when
+the current scope is clean, the explanatory no-action text lives in
+`current.status_message` and must not be promoted as a task.
 
 When the review shows repeated broad commands, plan the next validation loop
 before running it:
