@@ -468,6 +468,9 @@ Record tools by role:
   validation ladder for the changed work kind. Use it when `review.mjs` reports
   repeated commands, before broad reusable-base checks, or when the right
   validation scope is unclear.
+- `check_touched_js.mjs`: preflight helper used by validation plans to run
+  `node --check` over touched `.js`, `.mjs`, and `.cjs` files, including
+  staged, unstaged, and untracked files.
 - `validation_run.mjs`: profiled validation runner that consumes a validation
   plan or builds one from `--change/--file/--risk`, executes non-placeholder
   checks by tier, records each command in the JSONL profile, and skips later
@@ -758,7 +761,9 @@ Use `--tier preflight --tier scoped` for an early pass that intentionally
 defers broad/final checks, or let `validate` execute final checks once at the
 end of the selected batch. Placeholder commands are skipped and listed in the
 summary; fill project-specific native, asset, web, or release commands manually
-when those surfaces are in scope. Use `tools/ai_profile/validation_run.mjs`
+when those surfaces are in scope. Touched JavaScript syntax checks are not a
+placeholder; the plan uses `tools/ai_profile/check_touched_js.mjs`. Use
+`tools/ai_profile/validation_run.mjs`
 directly only when debugging the validation runner or writing a machine-readable
 summary JSON for another tool.
 When reviewing repeated validation, inspect `review.mjs`'s `Validation

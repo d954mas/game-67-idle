@@ -245,3 +245,7 @@ None.
 - 2026-06-13: Added `node tools/ai.mjs summary` as the profiled shortcut for
   low-context taskboard orientation so first-session context reads are captured
   without running the wider digest.
+- 2026-06-13: Replaced the validation planner's touched-JavaScript syntax
+  placeholder with `tools/ai_profile/check_touched_js.mjs`, which checks
+  staged, unstaged, and untracked `.js/.mjs/.cjs` files inside validation
+  batches.

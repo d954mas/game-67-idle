@@ -1490,6 +1490,9 @@ test("validation planner writes json output with broad final decision", () => {
     assert.equal(plan.schema_version, 1);
     assert.equal(plan.risk, "medium");
     assert.ok(plan.checks_by_tier.preflight.length > 0);
+    const jsSyntaxCheck = plan.checks_by_tier.preflight.find((check) => check.id === "js-syntax-touched");
+    assert.equal(jsSyntaxCheck.command, "node tools/ai_profile/check_touched_js.mjs");
+    assert.equal(jsSyntaxCheck.placeholder, undefined);
     assert.ok(plan.checks_by_tier.scoped.length > 0);
     assert.ok(plan.checks_by_tier.scoped.some((check) => check.id === "ai-profile-tests"));
     assert.ok(plan.broad_final_count > 0);

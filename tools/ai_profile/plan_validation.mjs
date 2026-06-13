@@ -54,10 +54,9 @@ const CHECKS = [
     id: "js-syntax-touched",
     tier: "preflight",
     changes: ["profiling", "pipeline", "taskboard", "tests"],
-    command: "node --check <touched .mjs/.js file>",
-    why: "cheap syntax check for changed JavaScript tools",
+    command: "node tools/ai_profile/check_touched_js.mjs",
+    why: "cheap syntax check for touched JavaScript tools",
     broad: false,
-    placeholder: true,
   },
   {
     id: "gap-checkpoint-syntax",

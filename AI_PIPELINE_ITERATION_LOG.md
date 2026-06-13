@@ -65,6 +65,22 @@ specific and reusable.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
 
+## 2026-06-13 - Touched JS syntax checks should not be placeholders
+
+- Context: `node tools/ai.mjs validate` repeatedly reported
+  `js-syntax-touched` as a skipped placeholder, so agents still ran manual
+  `node --check` commands around validation batches.
+- Friction: The validation batch looked incomplete even when the real checks
+  passed, and manual syntax checks added repeated command noise.
+- Time sink: Each tooling iteration needed a separate decision about which
+  `.mjs/.js` files to syntax-check.
+- Likely cause: The validation planner knew a touched-JS preflight was needed
+  but had no helper that could discover touched files safely.
+- Proposed improvement: Add an automatic touched-JS preflight helper and make
+  validation plans call it directly instead of emitting a placeholder.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
+
 ## 2026-06-13 - Current scope tool use needs shares first
 
 - Context: Whole-profile runtime/captured-elapsed sections had totals and
