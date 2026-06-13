@@ -239,3 +239,6 @@ None.
 - 2026-06-13: Added current-scope runtime/captured-elapsed totals and per-tool
   shares to reflection review so the just-finished iteration is ranked before
   whole-profile history.
+- 2026-06-13: Added context budget warnings to the profiler context helper and
+  changed reflection guidance to start from taskboard summary before escalating
+  to the wider context digest.

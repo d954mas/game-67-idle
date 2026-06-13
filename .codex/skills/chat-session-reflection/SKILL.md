@@ -25,9 +25,10 @@ Use current durable evidence before memory:
 If evidence is missing, label the claim as likely or unknown instead of making
 it sound proven.
 
-For context hygiene, start with `node tools/taskboard/cli.mjs context` and
-follow only the task/status/evidence links needed for the retrospective. Read
-the full `tasks/STATUS.md` only when auditing a specific status claim or
+For context hygiene, start with `node tools/taskboard/cli.mjs summary` for
+orientation. Use `node tools/taskboard/cli.mjs context` only when the summary
+does not expose the task/status/evidence links needed for the retrospective.
+Read the full `tasks/STATUS.md` only when auditing a specific status claim or
 updating it; otherwise treat it as high-cost context.
 
 ## Workflow

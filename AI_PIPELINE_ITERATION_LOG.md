@@ -32,6 +32,24 @@ specific and reusable.
 - Status:
 ```
 
+## 2026-06-13 - Context reads need immediate budget warnings
+
+- Context: Reflection showed context pressure as a measurable bottleneck, and a
+  fresh tooling iteration accidentally measured a 125k-char test file as
+  context.
+- Friction: The profiler recorded the oversized read, but the agent only saw the
+  cost after inspecting review artifacts.
+- Time sink: Large context inputs can consume attention before they become
+  visible in retrospective output.
+- Likely cause: `ai_profile/context.mjs` measured context size but did not give
+  an immediate budget warning, and reflection guidance started from the wider
+  taskboard context digest.
+- Proposed improvement: Print context budget warnings during context capture and
+  start reflection orientation from `taskboard summary`, escalating to full
+  `context` only when needed.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
+
 ## 2026-06-13 - Current scope tool use needs shares first
 
 - Context: Whole-profile runtime/captured-elapsed sections had totals and

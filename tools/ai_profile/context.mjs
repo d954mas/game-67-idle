@@ -13,6 +13,8 @@ options:
   --value <productive|necessary_overhead|rework|waste|unknown> default: necessary_overhead
   --reason <text>                            reason for every path
   --context-risk <low|medium|high|unknown>   default: auto from total chars
+  --warn-file-chars <n>                      default: 20000
+  --warn-total-chars <n>                     default: 50000
   --profile <path>                           default: tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl
   --work-item <id>                           task/issue/phase id for segmenting long profiles
   --iteration <name>                         small iteration or batch label
@@ -43,6 +45,13 @@ function autoRisk(totalChars) {
   return "low";
 }
 
+function numberArg(values, key, fallback) {
+  const value = values[key];
+  if (value === undefined || value === true || value === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 const { values } = parseArgs(process.argv.slice(2));
 if (values.help) usage();
 
@@ -52,8 +61,11 @@ if (paths.length === 0) usage();
 if (!values.category) values.category = "context";
 if (!values.result) values.result = "pass";
 if (!values.value) values.value = "necessary_overhead";
+if (!values.tool) values.tool = "ai_profile/context.mjs";
 
 const reason = stringArg(values, "reason", "context input");
+const warnFileChars = numberArg(values, "warn-file-chars", 20000);
+const warnTotalChars = numberArg(values, "warn-total-chars", 50000);
 const contextInputs = [];
 const filesRead = [];
 let totalChars = 0;
@@ -73,8 +85,15 @@ try {
   const profilePath = stringArg(values, "profile", "");
   const target = appendRecord(profilePath, record);
   console.log(`profile context appended: ${target}`);
+  console.log(`context budget: total=${totalChars} chars, risk=${values["context-risk"]}`);
   for (const input of contextInputs) {
     console.log(`- ${input.path}: ${input.chars} chars (${input.reason})`);
+    if (warnFileChars > 0 && input.chars >= warnFileChars) {
+      console.log(`  warning: large context input; prefer rg/Select-String or a narrower file slice before reading this whole file again.`);
+    }
+  }
+  if (warnTotalChars > 0 && totalChars >= warnTotalChars) {
+    console.log(`warning: context batch is large; split future context reads into focused files or command output.`);
   }
 } catch (error) {
   console.error(`profile context failed: ${error.message}`);

@@ -1087,6 +1087,42 @@ test("prepare reflection refuses current-scope regressions by default", () => {
   }
 });
 
+test("context profiler warns on oversized context inputs", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "context-budget.jsonl");
+    const largeFile = join(dir, "large-context.txt");
+    writeFileSync(largeFile, "x".repeat(240), "utf8");
+
+    const result = runRaw([
+      "tools/ai_profile/context.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "context",
+      "--intent",
+      "measure oversized context",
+      "--path",
+      largeFile,
+      "--warn-file-chars",
+      "100",
+      "--warn-total-chars",
+      "200",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /context budget: total=240 chars, risk=low/);
+    assert.match(result.stdout, /warning: large context input/);
+    assert.match(result.stdout, /warning: context batch is large/);
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].context_inputs[0].chars, 240);
+    assert.deepEqual(records[0].tools, ["ai_profile/context.mjs"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("context_command records command output as measured context", () => {
   const dir = tempDir();
   try {
