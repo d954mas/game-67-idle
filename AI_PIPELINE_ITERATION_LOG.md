@@ -1171,3 +1171,19 @@ specific and reusable.
   captured through AI profiling with `context_command.mjs`.
 - Follow-up owner: Future game-feature and profiling agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Routine validation should not print the whole task backlog
+
+- Trigger: `node tools/pipeline_validate.mjs` started with
+  `node tools/taskboard/cli.mjs list`.
+- Symptom: Validation output printed the full active review pile, which made
+  the fast path noisy and pushed old review items into the agent's attention.
+- Time sink: Agents had to visually filter dozens of non-current tasks before
+  seeing whether the pipeline was healthy.
+- Likely cause: The taskboard had `list` for full inspection and `context` for
+  deeper orientation, but no small "status at a glance" command.
+- Proposed improvement: Add `node tools/taskboard/cli.mjs summary` for counts,
+  current goal, blockers, next priorities, open doing/todo/backlog work, and
+  review count. Use it in routine validation.
+- Follow-up owner: Future taskboard/pipeline agents.
+- Status: Implemented in `T0110`.

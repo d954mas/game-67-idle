@@ -2,6 +2,7 @@
 // Taskboard CLI for humans and agents.
 //
 //   node tools/taskboard/cli.mjs list [--status s] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
+//   node tools/taskboard/cli.mjs summary [--tasks-limit 5]
 //   node tools/taskboard/cli.mjs show T0001
 //   node tools/taskboard/cli.mjs new task --title "..." [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
 //   node tools/taskboard/cli.mjs new epic --title "..." [--status active]
@@ -100,6 +101,57 @@ function idNumber(task) {
   return match ? Number(match[0]) : 0;
 }
 
+function actionableTasks(root) {
+  const tasks = listTasks(root).filter((task) => !["idea", "done", "dropped"].includes(task.fields.status));
+  tasks.sort((a, b) => taskRank(a) - taskRank(b) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)));
+  return tasks;
+}
+
+function renderSummary(root, options) {
+  const statusFile = join(root, "tasks", "STATUS.md");
+  const status = existsSync(statusFile) ? readFileSync(statusFile, "utf8") : "";
+  const tasksLimit = numberArg(options["tasks-limit"], 5);
+  const tasks = actionableTasks(root);
+  const openTasks = tasks.filter((task) => task.fields.status !== "review");
+  const reviewCount = tasks.length - openTasks.length;
+  const lines = [];
+  lines.push("# Taskboard Summary");
+  lines.push("");
+  lines.push(`active_task_counts: ${statusCounts(listTasks(root))}`);
+  lines.push(`open_actionable_tasks: ${openTasks.length}`);
+  lines.push(`review_tasks: ${reviewCount}`);
+  const currentGoal = sectionText(status, "Current Goal");
+  const blockers = sectionText(status, "Blocking Work") || sectionText(status, "Blockers");
+  const nextPriorities = sectionText(status, "Next Priorities");
+  for (const [title, body, budget] of [
+    ["Current Goal", currentGoal, 500],
+    ["Blocking Work", blockers, 500],
+    ["Next Priorities", nextPriorities, 700],
+  ]) {
+    if (!body) continue;
+    lines.push("");
+    lines.push(`## ${title}`);
+    lines.push("");
+    lines.push(clampText(body, budget).text || "(empty)");
+  }
+  lines.push("");
+  lines.push("## Top Open Tasks");
+  lines.push("");
+  for (const task of openTasks.slice(0, tasksLimit)) {
+    lines.push(`- ${shortRow(task)}`);
+  }
+  if (openTasks.length > tasksLimit) {
+    lines.push(`- ... ${openTasks.length - tasksLimit} more; run \`node tools/taskboard/cli.mjs context\` or \`list\` only when needed.`);
+  }
+  if (openTasks.length === 0) {
+    lines.push("- none");
+    if (reviewCount > 0) {
+      lines.push(`- ${reviewCount} task(s) are in review; inspect them only when reviewing or closing old work.`);
+    }
+  }
+  return `${lines.join("\n")}\n`;
+}
+
 function renderContext(root, options) {
   const statusFile = join(root, "tasks", "STATUS.md");
   const status = existsSync(statusFile) ? readFileSync(statusFile, "utf8") : "";
@@ -114,8 +166,7 @@ function renderContext(root, options) {
     "Required Validation",
     "Last Known Good Evidence",
   ];
-  const tasks = listTasks(root).filter((task) => !["idea", "done", "dropped"].includes(task.fields.status));
-  tasks.sort((a, b) => taskRank(a) - taskRank(b) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)));
+  const tasks = actionableTasks(root);
 
   const lines = [];
   lines.push("# Current Context Digest");
@@ -187,6 +238,10 @@ switch (cmd) {
     if (!tasks.length) {
       console.log("(no tasks match)");
     }
+    break;
+  }
+  case "summary": {
+    process.stdout.write(renderSummary(root, args));
     break;
   }
   case "context": {

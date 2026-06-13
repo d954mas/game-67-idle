@@ -23,9 +23,10 @@ const SKILL_CHECKS = [
     body: [
       "tasks/README.md",
       "tools/taskboard/cli.mjs",
+      "cli.mjs summary",
       "cli.mjs context",
       "tasks/STATUS.md",
-      "full `tasks/STATUS.md` only",
+      "Read full",
       "Done when",
       "## Log",
       "evidence line",

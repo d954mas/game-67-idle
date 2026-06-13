@@ -141,6 +141,45 @@ ${"evidence\n".repeat(300)}
   assert.match(result.stdout, /\.\.\. 1 more/);
 });
 
+test("cli summary is short and avoids full task list noise", (t) => {
+  const root = tempRoot(t);
+  mkdirSync(join(root, "tasks"), { recursive: true });
+  writeFileSync(
+    join(root, "tasks", "STATUS.md"),
+    `# Project Status
+
+## Current Goal
+
+Improve the game quickly.
+
+## Blocking Work
+
+- none
+
+## Next Priorities
+
+1. Build the next playable slice.
+`.replace(/\n/g, "\r\n"),
+  );
+  createTask(root, { title: "Doing task", status: "doing", priority: "P1" });
+  createTask(root, { title: "Review task", status: "review", priority: "P1" });
+  createTask(root, { title: "Idea task", status: "idea", priority: "P1" });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(
+    process.execPath,
+    [cli, "summary", "--tasks-limit", "1"],
+    { cwd: root, encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Taskboard Summary/);
+  assert.match(result.stdout, /active_task_counts: idea:1 backlog:0 todo:0 doing:1 review:1/);
+  assert.match(result.stdout, /open_actionable_tasks: 1/);
+  assert.match(result.stdout, /review_tasks: 1/);
+  assert.match(result.stdout, /Improve the game quickly/);
+  assert.match(result.stdout, /T0001 .* Doing task/);
+  assert.doesNotMatch(result.stdout, /T0002 .* Review task/);
+});
+
 test("updateDoc patches fields, keeps id/created, bumps updated", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Patch me", status: "idea" });

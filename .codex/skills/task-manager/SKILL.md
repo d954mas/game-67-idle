@@ -11,16 +11,18 @@ question, research, refine, decompose, and execute.
 
 Store and live-status rules: `tasks/README.md`.
 Live status index: `tasks/STATUS.md`.
+Fast status: `node tools/taskboard/cli.mjs summary`.
 Compact current-context digest: `node tools/taskboard/cli.mjs context`.
-CLI: `node tools/taskboard/cli.mjs <list|context|show|new|set|validate>`.
+CLI: `node tools/taskboard/cli.mjs <summary|list|context|show|new|set|validate>`.
 User-facing board: `node tools/taskboard/server.mjs` -> `http://127.0.0.1:8070/`.
 
 ## Workflow
 
 1. Follow `tasks/README.md` for the minimal current-context protocol, status
-   updates, task format, and state transitions. Start long work with
-   `node tools/taskboard/cli.mjs context`; read full `tasks/STATUS.md` only
-   when changing it or auditing a specific linked claim.
+   updates, task format, and state transitions. Start quick orientation with
+   `node tools/taskboard/cli.mjs summary`; use
+   `node tools/taskboard/cli.mjs context` for long work. Read full
+   `tasks/STATUS.md` only when changing it or auditing a specific linked claim.
 2. Capture anything the user wants that will not be done right now as a task.
    Losing a stated idea is a failure; when in doubt, capture as `status: idea`.
 3. Refine before implementing: an `idea` task needs answered user questions,

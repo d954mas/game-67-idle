@@ -37,6 +37,8 @@ workflow/runtime tools.
 - [x] Current 67 World-specific scripts are grouped under
       `tools/project_67_world/` instead of being mixed into generic tool
       folders.
+- [x] `tools/taskboard/cli.mjs summary` gives a short orientation path that
+      avoids printing the full review backlog during routine validation.
 - [x] Regression tests cover native/web hard gates and source discovery.
 - [x] Full validation is complete and the work is ready to commit.
 
@@ -52,6 +54,12 @@ None.
 - 2026-06-13: Added `tools/ai.mjs` as the short AI workflow facade and moved
   67 World-specific asset, balance, release, and DevAPI scenario scripts under
   `tools/project_67_world/`.
+- 2026-06-13: Added `node tools/taskboard/cli.mjs summary` and switched
+  `pipeline_validate` away from noisy full task listing.
+- 2026-06-13: Summary validation passed: `node tools/taskboard/cli.mjs
+  summary --tasks-limit 3`, `node --test tools/taskboard/test.mjs`, `node
+  tools/skills_eval.mjs`, and `node tools/ai.mjs run -- node
+  tools/pipeline_validate.mjs`.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;

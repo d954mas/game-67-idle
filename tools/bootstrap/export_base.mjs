@@ -128,7 +128,7 @@ Source: \`tasks/README.md\`.
 ## Required Validation
 
 \`\`\`powershell
-node tools/taskboard/cli.mjs list
+node tools/taskboard/cli.mjs summary
 node tools/pipeline_validate.mjs
 \`\`\`
 

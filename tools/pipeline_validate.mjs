@@ -58,7 +58,7 @@ if (existsSync(exportDir)) {
   rmSync(exportDir, { recursive: true, force: true });
 }
 
-run("taskboard list", ["tools/taskboard/cli.mjs", "list"]);
+run("taskboard summary", ["tools/taskboard/cli.mjs", "summary"]);
 run("ai facade syntax", ["--check", "tools/ai.mjs"]);
 run("skill eval", ["tools/skills_eval.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);

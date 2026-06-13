@@ -22,6 +22,7 @@ Open `http://127.0.0.1:8070/`.
 ## CLI
 
 ```powershell
+node tools/taskboard/cli.mjs summary
 node tools/taskboard/cli.mjs list
 node tools/taskboard/cli.mjs context
 node tools/taskboard/cli.mjs list --ideas
@@ -90,6 +91,7 @@ Search current context before history.
 For task/work planning, prefer:
 
 - `tasks/STATUS.md`
+- `node tools/taskboard/cli.mjs summary`
 - `node tools/taskboard/cli.mjs list`
 - relevant files in `tasks/active/`
 - active epic files only when they affect the current scope
