@@ -32,6 +32,21 @@ specific and reusable.
 - Status:
 ```
 
+## 2026-06-13 - Context hotspots need totals and shares
+
+- Context: Reflection review listed context hotspot character counts, but did
+  not show total context volume or each hotspot's share.
+- Friction: A reader could see large files and commands, but still had to
+  calculate whether one source dominated context pressure.
+- Time sink: Context-use analysis stayed partly manual, especially when
+  deciding whether to optimize taskboard context, docs, or status reads first.
+- Likely cause: Context analytics was propagated into the handoff before the
+  ranking output was made symmetrical with tool runtime shares.
+- Proposed improvement: Add total hotspot chars and per-hotspot shares to
+  generated reflection review JSON/Markdown.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
+
 ## 2026-06-13 - Time reviews need totals and shares
 
 - Context: Reflection review listed tool/runtime rows and captured elapsed

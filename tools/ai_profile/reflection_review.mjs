@@ -92,6 +92,17 @@ function sumField(items, field) {
   return asArray(items).reduce((sum, item) => sum + Number(item?.[field] || 0), 0);
 }
 
+function contextSummaryWithTotals(summary) {
+  const hotspots = asArray(summary?.hotspots);
+  return {
+    ...(summary || {}),
+    hotspots,
+    high_context: asArray(summary?.high_context),
+    missing_inputs: asArray(summary?.missing_inputs),
+    total_hotspot_chars: sumField(hotspots, "chars"),
+  };
+}
+
 function hasCapturedElapsedTools(tools) {
   return asArray(tools).some((item) => toolCapturedElapsed(item));
 }
@@ -215,11 +226,12 @@ function buildReview(draft, draftPath) {
     : "Resolve current action items before treating historical lessons as next-cycle guidance.";
   const currentSnapshot = draft.current_state?.current_scope_snapshot || { enabled: false };
   const currentTools = asArray(draft.current_state?.current_scope_tool_use_summary);
-  const currentContext = draft.current_state?.current_scope_context_use_summary || { hotspots: [], high_context: [], missing_inputs: [] };
+  const currentContext = contextSummaryWithTotals(draft.current_state?.current_scope_context_use_summary);
   const currentValidationBatches = asArray(draft.current_state?.current_scope_validation_batches);
   const toolUseSummary = asArray(draft.tool_use_summary);
   const toolRuntimeSummary = runtimeToolSummary(toolUseSummary);
   const capturedElapsed = capturedElapsedSummary(toolUseSummary);
+  const contextSummary = contextSummaryWithTotals(draft.context_use_summary);
 
   return {
     schema_version: 1,
@@ -245,7 +257,7 @@ function buildReview(draft, draftPath) {
     tool_runtime_total_ms: sumField(toolRuntimeSummary, "runtime_ms"),
     captured_elapsed_summary: capturedElapsed,
     captured_elapsed_total_ms: sumField(capturedElapsed, "captured_elapsed_ms"),
-    context_use_summary: draft.context_use_summary || { hotspots: [], missing_inputs: [] },
+    context_use_summary: contextSummary,
     recovered_failure_classification: asArray(draft.recovered_failure_classification),
     satisfied_followups: asArray(draft.current_state?.satisfied_followups),
     top_improvements: topImprovements(draft, currentClean),
@@ -310,8 +322,13 @@ function renderMarkdown(review, draftPath) {
     lines.push("- none");
   } else {
     if (asArray(currentContext.hotspots).length > 0) {
+      const totalChars = Number(currentContext.total_hotspot_chars || sumField(currentContext.hotspots, "chars"));
+      lines.push(`- total hotspot chars: ${totalChars}`);
       lines.push("- hotspots:");
-      for (const item of asArray(currentContext.hotspots)) lines.push(`  - ${item.path || "unknown"}: ${item.chars || 0} chars`);
+      for (const item of asArray(currentContext.hotspots)) {
+        const chars = Number(item.chars || 0);
+        lines.push(`  - ${item.path || "unknown"}: ${chars} chars, share=${formatShare(chars, totalChars)}`);
+      }
     }
     if (asArray(currentContext.high_context).length > 0) {
       lines.push("- high context:");
@@ -379,8 +396,13 @@ function renderMarkdown(review, draftPath) {
     lines.push("- none");
   } else {
     if (asArray(contextSummary.hotspots).length > 0) {
+      const totalChars = Number(contextSummary.total_hotspot_chars || sumField(contextSummary.hotspots, "chars"));
+      lines.push(`- total hotspot chars: ${totalChars}`);
       lines.push("- hotspots:");
-      for (const item of asArray(contextSummary.hotspots)) lines.push(`  - ${item.path || "unknown"}: ${item.chars || 0} chars`);
+      for (const item of asArray(contextSummary.hotspots)) {
+        const chars = Number(item.chars || 0);
+        lines.push(`  - ${item.path || "unknown"}: ${chars} chars, share=${formatShare(chars, totalChars)}`);
+      }
     }
     if (asArray(contextSummary.missing_inputs).length > 0) {
       lines.push("- missing inputs:");

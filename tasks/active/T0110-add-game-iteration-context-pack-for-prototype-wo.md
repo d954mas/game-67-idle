@@ -227,3 +227,6 @@ None.
 - 2026-06-13: Added runtime/captured-elapsed totals and per-tool shares to the
   reflection review so tool analytics ranks bottlenecks without manual
   duration summing.
+- 2026-06-13: Added context hotspot totals and per-hotspot shares to reflection
+  review JSON/Markdown so context pressure is ranked without manual character
+  summing.
