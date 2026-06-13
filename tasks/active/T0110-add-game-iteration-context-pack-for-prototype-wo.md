@@ -155,6 +155,9 @@ None.
 - 2026-06-13: Added `recovered_failure_classification` to profile review and
   reflection handoff so failed-then-passed commands are triaged as useful
   feedback, avoidable rework, or tool/environment noise before creating tasks.
+- 2026-06-13: Added `repeated_unbatched_broad_final_occurrences` so reflection
+  reports the scale of broad/final validation waste, not only the number of
+  distinct repeated commands.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;

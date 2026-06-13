@@ -1683,6 +1683,8 @@ test("profile review separates batched and unbatched broad final repeats", () =>
     assert.equal(review.repeated_broad_final_commands[0].count, 4);
     assert.equal(review.batched_broad_final_commands[0].count, 2);
     assert.equal(review.repeated_unbatched_broad_final_commands[0].count, 2);
+    assert.equal(review.repeated_unbatched_broad_final_occurrences, 2);
+    assert.match(review.findings.find((finding) => finding.type === "repeated_broad_final").message, /2 unbatched broad\/final occurrence/);
     assert.equal(review.repeated_command_classification[0].classification, "validation_waste_risk");
     assert.equal(review.repeated_command_classification[0].batched, 2);
     assert.equal(review.repeated_command_classification[0].unbatched, 2);
@@ -2291,6 +2293,7 @@ test("reflection draft classifies repeated command evidence by scope", () => {
       repeated_unbatched_broad_final_commands: [
         { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
       ],
+      repeated_unbatched_broad_final_occurrences: 2,
       batched_broad_final_commands: [
         { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
       ],
@@ -2320,6 +2323,7 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     assert.match(result.stdout, /shell_command/);
     assert.match(result.stdout, /classification/);
     assert.match(result.stdout, /validation_waste_risk/);
+    assert.match(result.stdout, /unbatched broad\/final repeated: 2 occurrence/);
     assert.match(result.stdout, /broad\/final: 4/);
     assert.match(result.stdout, /preflight: 3/);
     assert.match(result.stdout, /scoped: 2/);
@@ -2331,6 +2335,7 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     assert.equal(draft.repeated_commands.total_distinct, 3);
     assert.equal(draft.tool_use_summary[0].tool, "shell_command");
     assert.equal(draft.repeated_commands.classification[0].classification, "validation_waste_risk");
+    assert.equal(draft.repeated_commands.unbatched_broad_final_occurrences, 2);
     assert.equal(draft.repeated_commands.broad_final_commands.length, 1);
     assert.equal(draft.repeated_commands.unbatched_broad_final_commands[0].count, 2);
     assert.equal(draft.repeated_commands.batched_broad_final_commands[0].count, 2);

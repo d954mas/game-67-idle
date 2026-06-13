@@ -47,7 +47,8 @@ function topImprovements(draft, currentClean) {
     improvements.push("Use repeated_command_classification to triage repeats before adding process tasks.");
   }
   if (asArray(draft.repeated_commands?.unbatched_broad_final_commands).length > 0 || hasLesson("repeated_broad_final")) {
-    improvements.push("Batch broad/final validation with node tools/ai.mjs validate and rerun it only after a failed gate, changed risk, or final handoff.");
+    const occurrences = Number(draft.repeated_commands?.unbatched_broad_final_occurrences || 0);
+    improvements.push(`Batch broad/final validation with node tools/ai.mjs validate and rerun it only after a failed gate, changed risk, or final handoff${occurrences > 0 ? `; current review shows ${occurrences} unbatched broad/final occurrence(s)` : ""}.`);
   }
   if (asArray(draft.repeated_commands?.validation_batches).length > 0) {
     improvements.push("Use validation batch evidence to separate planned validation runs from ad hoc repeated commands.");
@@ -176,6 +177,9 @@ function renderMarkdown(review, draftPath) {
     lines.push("- none");
   } else {
     for (const item of byScope) lines.push(`- ${item.scope || "unknown"}: ${item.count || 0}`);
+    if (Number(review.repeated_commands.unbatched_broad_final_occurrences || 0) > 0) {
+      lines.push(`- unbatched broad/final occurrences: ${review.repeated_commands.unbatched_broad_final_occurrences}`);
+    }
   }
   const validationBatches = asArray(review.repeated_commands.validation_batches);
   const classifications = asArray(review.repeated_commands.classification);

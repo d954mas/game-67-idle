@@ -219,7 +219,9 @@ When `review.mjs` or the draft reports validation batches, use that batch
 evidence to separate planned validation runs from ad hoc repeated commands.
 For broad/final validation, prefer `repeated_unbatched_broad_final_commands`
 over the total broad/final count when deciding whether repeated validation was
-waste; `batched_broad_final_commands` is planned validation evidence.
+waste; `batched_broad_final_commands` is planned validation evidence. Use
+`repeated_unbatched_broad_final_occurrences` to state the scale of the waste
+risk, because the command array count only reports distinct repeated commands.
 For multi-task profiles, inspect `work_items`, `iterations`, and
 `repeated_broad_final_by_work_item` before calling repeated validation waste.
 When review JSON includes `current_scope`, separate current-scope findings from

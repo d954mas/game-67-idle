@@ -1388,3 +1388,20 @@ specific and reusable.
   actions to review JSON/Markdown and carry them into reflection draft/review.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Broad/final repeat findings need occurrence counts
+
+- Trigger: Reflection review reported `1` unbatched repeated broad/final
+  command, while the underlying profile had 30 unbatched occurrences of that
+  command.
+- Symptom: The finding was technically true as a distinct-command count, but
+  understated the scale of repeated broad/final validation.
+- Time sink: A retrospective had to reopen arrays and manually sum counts to
+  explain whether repeated final validation was a small issue or a large
+  historical waste pattern.
+- Likely cause: `review.mjs` used the number of repeated command entries in
+  the finding message instead of the sum of unbatched occurrences.
+- Proposed improvement: Add `repeated_unbatched_broad_final_occurrences` and
+  carry it through review, reflection draft, and reflection review.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.

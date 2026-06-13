@@ -675,7 +675,9 @@ When the draft includes repeated-command evidence, classify the repeats before
 turning them into process work. Prefer the generated
 `repeated_command_classification` table over raw repeat counts: planned
 validation, validation-waste risk, failure/rework signal, scoped/preflight
-guardrail rerun, or manual-review case.
+guardrail rerun, or manual-review case. For broad/final validation, use
+`repeated_unbatched_broad_final_occurrences` to state the scale of the waste
+risk; `repeated_unbatched_broad_final_commands` only counts distinct commands.
 
 Before writing final retrospective prose, generate a compact decision review:
 

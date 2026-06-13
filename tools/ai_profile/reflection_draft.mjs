@@ -58,6 +58,7 @@ function repeatedCommandSummary(review) {
   const classifications = asArray(review?.repeated_command_classification);
   return {
     total_distinct: commands.length,
+    unbatched_broad_final_occurrences: Number(review?.repeated_unbatched_broad_final_occurrences || 0),
     by_scope: byScope,
     classification: classifications.slice(0, 8).map((item) => ({
       command: item.command || "",
@@ -153,7 +154,7 @@ function lessonForFinding(finding, context = {}) {
       fix: "Use repeated_command_classification before adding process tasks; batch broad/final gates and keep preflight/scoped reruns close to changed files.",
     },
     repeated_broad_final: {
-      symptom: message,
+      symptom: `${message} Unbatched broad/final occurrences: ${Number(repeatedSummary.unbatched_broad_final_occurrences || 0)}.`,
       cause: "Unbatched broad/final validation was repeated in the historical profile instead of being guarded by a validation plan or captured as a planned validation batch.",
       fix: "Use node tools/ai.mjs validate --change <kind> --risk <risk> before rerunning broad/final gates; treat planned validation batches separately from ad hoc repeats.",
     },
@@ -346,7 +347,7 @@ function renderMarkdown(draft, packetFile) {
       for (const item of draft.repeated_commands.broad_final_by_work_item) lines.push(`  - ${item.work_item || "unknown"}: ${item.count}x ${item.command}`);
     }
     if (draft.repeated_commands.unbatched_broad_final_commands.length > 0) {
-      lines.push("- unbatched broad/final repeated:");
+      lines.push(`- unbatched broad/final repeated: ${draft.repeated_commands.unbatched_broad_final_occurrences} occurrence(s)`);
       for (const item of draft.repeated_commands.unbatched_broad_final_commands) lines.push(`  - ${item.count}x ${item.command}`);
     }
     if (draft.repeated_commands.batched_broad_final_commands.length > 0) {

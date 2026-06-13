@@ -339,6 +339,7 @@ const SKILL_CHECKS = [
       "recovered_failure_classification",
       "repeated-command evidence",
       "repeated_command_classification",
+      "repeated_unbatched_broad_final_occurrences",
       "scoped/preflight guardrail",
       "current-scope regressions",
       "whole-profile deltas",

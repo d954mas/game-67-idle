@@ -620,6 +620,7 @@ const repeatedScopeCounts = new Map();
 for (const [command, count] of repeatedCommands) addCount(repeatedScopeCounts, commandScopes.get(command) || "unknown", count);
 const repeatedBroadCommands = repeatedCommands.filter(([command]) => commandScopes.get(command) === "broad/final");
 const repeatedUnbatchedBroadCommands = topEntries(unbatchedBroadCommandCounts, 20).filter(([, count]) => count > 1);
+const repeatedUnbatchedBroadOccurrences = repeatedUnbatchedBroadCommands.reduce((sum, [, count]) => sum + count, 0);
 const batchedBroadCommands = topEntries(batchedBroadCommandCounts, 20);
 const repeatedBroadByWorkItem = repeatedSegmentCommands(workItemBroadCommandCounts, 20);
 const validationBatchSummaries = validationBatches(records);
@@ -666,7 +667,7 @@ if (repeatedCommands.length > 0) findings.push({ type: "repeated_commands", mess
 if (repeatedUnbatchedBroadCommands.length > 0) {
   findings.push({
     type: "repeated_broad_final",
-    message: `${repeatedUnbatchedBroadCommands.length} unbatched repeated broad/final command(s) are likely validation waste unless a gate failed or risk changed.`,
+    message: `${repeatedUnbatchedBroadOccurrences} unbatched broad/final occurrence(s) across ${repeatedUnbatchedBroadCommands.length} repeated command(s) are likely validation waste unless a gate failed or risk changed.`,
   });
 }
 if (missingContextInputs.length > 0) {
@@ -1022,6 +1023,7 @@ if (jsonOutputFile) {
       count,
       scope: "broad/final",
     })),
+    repeated_unbatched_broad_final_occurrences: repeatedUnbatchedBroadOccurrences,
     batched_broad_final_commands: batchedBroadCommands.map(([command, count]) => ({
       command,
       count,
