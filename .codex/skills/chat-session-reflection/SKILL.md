@@ -142,12 +142,14 @@ but current-scope coverage is acceptable or too short to judge, do not add
 checkpoint records solely to repair old history.
 
 Before writing a retrospective from a live profile, run
-`node tools/ai.mjs reflect`. It prepares the closeout bundle, baseline comparison, reflection
+`node tools/ai.mjs reflect`. It first runs a thresholded gap checkpoint to
+capture any long manual/research/review stretch since the latest profile
+record, then prepares the closeout bundle, baseline comparison, reflection
 packet, draft, and review when the required baseline is available. It continues
 through current-scope regressions so they are visible in the reflection
-handoff; use `node tools/ai.mjs reflect --strict` to stop on regressions, or
-`node tools/ai.mjs reflect --quick` only when a cheap closeout summary is
-enough.
+handoff; use `node tools/ai.mjs reflect --strict` to stop on regressions, `node
+tools/ai.mjs reflect --quick` only when a cheap closeout summary is enough, or
+`--no-gap-checkpoint` only when debugging telemetry behavior.
 If the full handoff cannot be generated, state what is missing instead of
 manually chaining commands unless you are debugging the profiler.
 For low-level session closeout, `tools/ai_profile/closeout.mjs` records a

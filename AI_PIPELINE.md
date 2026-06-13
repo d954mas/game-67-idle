@@ -164,10 +164,13 @@ node tools/skills_sync.mjs
   manual/research/review stretches so wall-clock coverage is captured without
   noisy short-pause records. Use `validate` for planned validation batches so
   broad/final gates are recorded as batched evidence, not ad hoc repeated
-  commands. `reflect` prepares the full reflection handoff and includes
-  current-scope regressions as evidence; use `reflect --strict` to stop on
-  regressions or `reflect --quick` only for a cheap closeout summary. Use
-  `tools/ai_profile/*` directly only when improving or debugging telemetry.
+  commands. `reflect` first attempts a thresholded gap checkpoint for long
+  unprofiled manual/research/review time, then prepares the full reflection
+  handoff and includes current-scope regressions as evidence; use
+  `reflect --strict` to stop on regressions, `reflect --quick` only for a cheap
+  closeout summary, or `reflect --no-gap-checkpoint` only when debugging
+  telemetry. Use `tools/ai_profile/*` directly only when improving or debugging
+  telemetry.
 - **External AI observability is gated.** Do not add LangSmith, Phoenix,
   Langfuse, Braintrust, OpenTelemetry export, or another tracing/eval platform
   just because reflection needs more data. First use

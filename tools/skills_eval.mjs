@@ -297,6 +297,7 @@ const SKILL_CHECKS = [
       "node tools/ai.mjs validate --change <kind> --risk <risk>",
       "node tools/ai.mjs status",
       "node tools/ai.mjs reflect",
+      "thresholded gap checkpoint",
       "run.mjs",
       "status.mjs",
       "prepare_reflection.mjs",

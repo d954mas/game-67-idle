@@ -149,6 +149,9 @@ None.
   profiler tools; live `node tools/ai.mjs reflect` then reported a clean
   current scope with `missing_tool_records: 0`, while historical unrecorded
   records stayed as retrospective lessons.
+- 2026-06-13: Updated `node tools/ai.mjs reflect` to run a thresholded
+  pre-reflection gap checkpoint before quick/full handoff, reducing the chance
+  that long manual review/research stretches are lost from wall-clock coverage.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;

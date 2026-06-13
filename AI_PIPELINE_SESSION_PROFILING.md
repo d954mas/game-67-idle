@@ -83,11 +83,13 @@ This keeps analytics attached to real work without forcing the agent to manage
 the profiler as a separate project. Use `focus` after a commit, process fix, or
 direction change when the work item stays the same but current-scope review
 should stop carrying older regressions forward. `reflect` prepares the full
-handoff chain when a baseline exists: closeout bundle, baseline comparison,
-reflection packet, draft, and review. It continues when current-scope
-regressions exist so those regressions become reflection evidence; use `node
-tools/ai.mjs reflect --strict` to stop on regressions, or `node tools/ai.mjs
-reflect --quick` only for a cheap closeout summary without the full handoff.
+handoff chain when a baseline exists: a thresholded pre-reflection gap
+checkpoint, closeout bundle, baseline comparison, reflection packet, draft, and
+review. It continues when current-scope regressions exist so those regressions
+become reflection evidence; use `node tools/ai.mjs reflect --strict` to stop on
+regressions, `node tools/ai.mjs reflect --quick` only for a cheap closeout
+summary without the full handoff, or `--no-gap-checkpoint` only when debugging
+telemetry behavior.
 Use `tools/ai_profile/*` directly only when debugging telemetry, running a
 one-off deep analysis, or changing the profiler.
 

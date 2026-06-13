@@ -14,7 +14,7 @@ function usage() {
   node tools/ai.mjs run [--phase <name>] [--category <name>] [--intent <text>] [--value <name>] -- <command> [args...]
   node tools/ai.mjs validate --change <kind> [--risk low|medium|high] [--tier <name>] [--dry-run]
   node tools/ai.mjs status
-  node tools/ai.mjs reflect [--quick] [--strict]
+  node tools/ai.mjs reflect [--quick] [--strict] [--no-gap-checkpoint]
 
 Fast path:
   start    set current work item and append one profiling checkpoint
@@ -24,13 +24,13 @@ Fast path:
   run      run a command and record duration/result
   validate run a planned validation batch with batch metadata
   status   show telemetry health
-  reflect  prepare the full reflection handoff from current telemetry
+  reflect  capture any long pre-reflection gap and prepare the handoff
 
 Use tools/ai_profile/* directly only when debugging the profiler itself.`);
   process.exit(2);
 }
 
-function run(args) {
+function runNode(args) {
   const result = spawnSync(process.execPath, args, {
     cwd: process.cwd(),
     env: process.env,
@@ -41,7 +41,16 @@ function run(args) {
     console.error(result.error.message);
     process.exit(1);
   }
-  process.exit(result.status ?? 1);
+  return result.status ?? 1;
+}
+
+function run(args) {
+  process.exit(runNode(args));
+}
+
+function runOrExit(args) {
+  const status = runNode(args);
+  if (status !== 0) process.exit(status);
 }
 
 function shellText(args) {
@@ -154,11 +163,23 @@ if (command === "status") {
 }
 
 if (command === "reflect") {
-  if (argv.includes("--quick")) {
-    run(["tools/ai_profile/closeout.mjs", ...argv.filter((arg) => arg !== "--quick")]);
+  const skipGapCheckpoint = argv.includes("--no-gap-checkpoint");
+  const reflectArgs = withoutFlag(argv, "--no-gap-checkpoint");
+  if (!skipGapCheckpoint) {
+    const gapArgs = [
+      "tools/ai_profile/gap_checkpoint.mjs",
+      "--intent",
+      "Capture pre-reflection unprofiled work gap",
+      ...reflectArgs,
+    ];
+    if (!hasFlag(gapArgs, "--min-gap-min")) gapArgs.push("--min-gap-min", "2");
+    runOrExit(gapArgs);
   }
-  const strict = argv.includes("--strict");
-  const args = argv.filter((arg) => arg !== "--strict");
+  if (reflectArgs.includes("--quick")) {
+    run(["tools/ai_profile/closeout.mjs", ...reflectArgs.filter((arg) => arg !== "--quick")]);
+  }
+  const strict = reflectArgs.includes("--strict");
+  const args = reflectArgs.filter((arg) => arg !== "--strict");
   if (!strict && !hasFlag(args, "--allow-regression")) args.push("--allow-regression");
   run(["tools/ai_profile/prepare_reflection.mjs", ...args]);
 }

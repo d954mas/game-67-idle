@@ -1353,3 +1353,21 @@ specific and reusable.
   record.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Reflection should auto-capture the last long gap
+
+- Trigger: Fresh reflection review still reported low wall-clock coverage and
+  recommended manual `node tools/ai.mjs checkpoint "<intent>"` records after
+  long non-command stretches.
+- Symptom: The agent could do useful manual review/research, then remember to
+  run `reflect` but forget the checkpoint immediately before handoff.
+- Time sink: Retrospectives would keep explaining missing wall-clock coverage
+  even when the handoff command had enough information to capture the final
+  gap cheaply.
+- Likely cause: `node tools/ai.mjs reflect` prepared artifacts but did not run
+  the existing thresholded gap helper first.
+- Proposed improvement: Make `reflect` run a thresholded pre-reflection gap
+  checkpoint before quick/full handoff, with `--no-gap-checkpoint` reserved
+  for telemetry debugging.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
