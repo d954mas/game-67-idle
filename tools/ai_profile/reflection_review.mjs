@@ -88,6 +88,14 @@ function capturedElapsedSummary(tools) {
   return sortByDuration(asArray(tools).filter((item) => Number(item?.captured_elapsed_ms || 0) > 0), "captured_elapsed_ms");
 }
 
+function toolRuntimeMs(item) {
+  return Number(item?.runtime_ms || item?.duration_ms || 0);
+}
+
+function toolCapturedElapsedMs(item) {
+  return Number(item?.captured_elapsed_ms || item?.duration_ms || 0);
+}
+
 function sumField(items, field) {
   return asArray(items).reduce((sum, item) => sum + Number(item?.[field] || 0), 0);
 }
@@ -263,6 +271,8 @@ function buildReview(draft, draftPath) {
     : "Resolve current action items before treating historical lessons as next-cycle guidance.";
   const currentSnapshot = draft.current_state?.current_scope_snapshot || { enabled: false };
   const currentTools = asArray(draft.current_state?.current_scope_tool_use_summary);
+  const currentRuntimeTools = runtimeToolSummary(currentTools);
+  const currentCapturedElapsed = capturedElapsedSummary(currentTools);
   const currentContext = contextSummaryWithTotals(draft.current_state?.current_scope_context_use_summary);
   const currentValidationBatches = asArray(draft.current_state?.current_scope_validation_batches);
   const toolUseSummary = asArray(draft.tool_use_summary);
@@ -284,6 +294,8 @@ function buildReview(draft, draftPath) {
       readout: currentScopeReadout(currentClean, currentSnapshot, currentTools, currentContext, currentValidationBatches),
       snapshot: currentSnapshot,
       tool_use_summary: currentTools,
+      tool_runtime_total_ms: sumField(currentRuntimeTools, "runtime_ms"),
+      captured_elapsed_total_ms: sumField(currentCapturedElapsed, "captured_elapsed_ms"),
       context_use_summary: currentContext,
       validation_batches: currentValidationBatches,
     },
@@ -351,7 +363,16 @@ function renderMarkdown(review, draftPath) {
   if (currentTools.length === 0) {
     lines.push("- none");
   } else {
-    for (const item of currentTools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms)} ${toolDurationSuffix(item)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
+    const currentRuntimeTotalMs = Number(review.current.tool_runtime_total_ms || sumField(runtimeToolSummary(currentTools), "runtime_ms"));
+    const currentCapturedTotalMs = Number(review.current.captured_elapsed_total_ms || sumField(capturedElapsedSummary(currentTools), "captured_elapsed_ms"));
+    if (currentRuntimeTotalMs > 0) lines.push(`- total current runtime: ${formatMs(currentRuntimeTotalMs)}`);
+    if (currentCapturedTotalMs > 0) lines.push(`- total current captured elapsed: ${formatMs(currentCapturedTotalMs)}`);
+    for (const item of currentTools) {
+      const captured = toolCapturedElapsed(item);
+      const duration = captured ? toolCapturedElapsedMs(item) : toolRuntimeMs(item);
+      const shareTotal = captured ? currentCapturedTotalMs : currentRuntimeTotalMs;
+      lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(duration)} ${toolDurationSuffix(item)}, share=${formatShare(duration, shareTotal)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
+    }
   }
   lines.push("");
   lines.push("## Current Scope Context Use");

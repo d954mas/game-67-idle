@@ -236,3 +236,6 @@ None.
 - 2026-06-13: Updated top improvements to include dominant measured shares for
   repeated-command scope, runtime/captured elapsed, and context hotspots so the
   first review screen names the bottleneck without scrolling into lower tables.
+- 2026-06-13: Added current-scope runtime/captured-elapsed totals and per-tool
+  shares to reflection review so the just-finished iteration is ranked before
+  whole-profile history.

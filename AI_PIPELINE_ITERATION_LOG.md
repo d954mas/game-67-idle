@@ -32,6 +32,22 @@ specific and reusable.
 - Status:
 ```
 
+## 2026-06-13 - Current scope tool use needs shares first
+
+- Context: Whole-profile runtime/captured-elapsed sections had totals and
+  shares, but `Current Scope Tool Use` still listed raw durations only.
+- Friction: After a focused game or pipeline iteration, a reader still had to
+  calculate whether validation, shell commands, or checkpoints dominated the
+  just-finished slice.
+- Time sink: The reflection handoff could steer attention back to historical
+  totals instead of the current iteration's actual bottleneck.
+- Likely cause: Share output was added to whole-profile review sections before
+  current-scope sections were made symmetrical.
+- Proposed improvement: Add current-scope runtime/captured-elapsed totals and
+  per-tool shares directly under `Current Scope Tool Use`.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
+
 ## 2026-06-13 - Top improvements should carry bottleneck shares
 
 - Context: Runtime, captured elapsed, context, and repeated-command sections

@@ -2592,6 +2592,10 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.match(result.stdout, /Current Scope Snapshot/);
     assert.match(result.stdout, /profiled\/wall-clock: 5\.0s \/ 5\.0s \(100\.0%\)/);
     assert.match(result.stdout, /Current Scope Tool Use/);
+    assert.match(result.stdout, /total current runtime: 5\.0s/);
+    assert.match(result.stdout, /total current captured elapsed: 5\.0m/);
+    assert.match(result.stdout, /ai_profile\/gap_checkpoint\.mjs: 1 record\(s\), 5\.0m captured elapsed, share=100\.0%/);
+    assert.match(result.stdout, /shell_command: 2 record\(s\), 5\.0s command\/runtime, share=100\.0%/);
     assert.match(result.stdout, /Current Scope Context Use/);
     assert.match(result.stdout, /total hotspot chars: 1234/);
     assert.match(result.stdout, /tasks\/STATUS\.md: 1234 chars, share=100\.0%/);
@@ -2645,6 +2649,8 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.equal(review.current.validation_batches[0].batch_id, "current-batch");
     assert.equal(review.current.tool_use_summary[0].tool, "ai_profile/gap_checkpoint.mjs");
     assert.equal(review.current.tool_use_summary[0].duration_kind, "captured_elapsed");
+    assert.equal(review.current.tool_runtime_total_ms, 5000);
+    assert.equal(review.current.captured_elapsed_total_ms, 300000);
     assert.equal(review.current.context_use_summary.hotspots[0].path, "tasks/STATUS.md");
     assert.equal(review.current.context_use_summary.total_hotspot_chars, 1234);
     assert.equal(review.tool_runtime_summary[0].tool, "shell_command");
