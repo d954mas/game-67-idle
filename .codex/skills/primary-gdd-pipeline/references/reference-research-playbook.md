@@ -116,7 +116,7 @@ timestamped/framed observations. If the packet is incomplete, say that plainly
 and keep implementation blocked or scoped to a quick check.
 
 Reference study must be auditable. For a central gameplay reference, write or
-update a durable deconstruction doc in the active design folder before the
+update a durable deconstruction doc in the active project wiki before the
 implementation task continues. Include a source matrix with source title/link
 or local path, source quality, checked date, what the source proves, and what it
 does not prove. Use gameplay footage or a long screenshot sequence for
@@ -124,6 +124,12 @@ interaction claims; use guides, reviews, lectures, wiki pages, and
 deconstructions as supporting evidence, not replacements for observed gameplay.
 If the user challenges whether the ref was studied, answer from the doc. If the
 doc cannot answer, improve the study before coding.
+
+In this repo, project-specific reference docs and source notes belong under
+`gamedesign/projects/<game-id>/references/` and
+`gamedesign/projects/<game-id>/sources/`. Use
+`gamedesign/knowledge/reference_deconstruction.md` as the reusable method, not
+as the place to store a game's reference evidence.
 
 Parallel reference work is research-only until unlocked. It may gather source
 links, capture frames, transcribe visible actions, update the deconstruction,

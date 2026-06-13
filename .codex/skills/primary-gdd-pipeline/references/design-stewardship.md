@@ -7,8 +7,10 @@ economy, content plans, and open questions.
 ## Workflow
 
 1. Read `AGENTS.md` for project identity and design constraints.
-2. Find the local design source of truth: common names include `gamedesign/`,
-   `docs/design/`, `GDD.md`, `concept.md`, `lore.md`, and `open_questions.md`.
+2. Find the local design source of truth. In this repo, game-specific design
+   source of truth lives in `gamedesign/projects/<game-id>/`. Common files
+   inside it include `gdd.md`, `concept.md`, `decisions.md`,
+   `open_questions.md`, `references/`, `sources/`, and `data/`.
 3. Separate durable decisions from brainstorms.
 4. Prefer short implementation-ready specs over long prose.
 5. When a design choice affects code, state the expected player-visible
@@ -30,6 +32,8 @@ For new or revised design sections, use:
 ## Guardrails
 
 - Do not bury key rules in lore prose.
+- Do not put project facts in `gamedesign/knowledge/`; keep that folder for
+  reusable cross-project rules only.
 - Do not create large new design taxonomies unless the current work needs
   them.
 - Keep tone consistent with local project rules.

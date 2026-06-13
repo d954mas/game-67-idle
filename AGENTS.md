@@ -6,7 +6,15 @@
 - No active game concept is selected. Treat this repository as a clean template for the next iteration.
 - The engine lives in `external/neotolis-engine` as a submodule; do not edit it unless explicitly asked.
 - Game design lives in `gamedesign/`; game code lives in `src/`.
-- Reusable design knowledge lives in `gamedesign/knowledge/`.
+- Design folder map is documented in `gamedesign/README.md`.
+- Reusable cross-project design knowledge lives in `gamedesign/knowledge/`.
+  Do not put current-game facts, GDD decisions, balance numbers, screenshots,
+  playtest results, implementation status, or project-specific sources there.
+- Reusable source notes for `gamedesign/knowledge/` live in
+  `gamedesign/sources/`.
+- Each game concept gets its own wiki/GDD folder under
+  `gamedesign/projects/<game-id>/`. Put project GDDs, decisions, references,
+  source notes, evidence, screenshots, balance, UI flow, and content data there.
 - Universal runtime infrastructure is intentionally kept:
   `state/` schemas/fixtures/migrations, `tools/state_codegen/`,
   `src/devapi/`, `tools/devapi/`, `src/game_storage.*`, and
@@ -28,8 +36,8 @@
 - Current runtime surface: native `Game Seed` template in `src/main.c`.
 - The template is intentionally small: a shape-renderer screen, one cycle action,
   persistent state, DevAPI, screenshot capture, and smoke/full probes.
-- Start a new game iteration by creating a fresh concept/GDD in `gamedesign/`
-  and fresh work items in `tasks/active/`.
+- Start a new game iteration by creating a fresh project wiki/GDD under
+  `gamedesign/projects/<game-id>/` and fresh work items in `tasks/active/`.
 - Prefer small playable native iterations over broad speculative systems.
 - For new GDD work, use `.codex/skills/primary-gdd-pipeline/`.
 - For polished/generated visual work, use `.codex/skills/game-visual-art-direction/`.
@@ -38,7 +46,7 @@
   for a small UI/visual detail, central deconstruction for a gameplay/art
   driver, deep deconstruction only for release-critical pacing, balance, or UX.
 - Before reference-driven gameplay/UI/economy/balance/final art, create or
-  update the durable deconstruction in the active design folder using
+  update the durable deconstruction in the active project wiki using
   `gamedesign/knowledge/reference_deconstruction.md`. The short Reference
   Digest must name: mode, sources checked, observed facts, borrow/avoid/copy
   risk, current-build mismatch, and the next native screenshot/scenario proof.

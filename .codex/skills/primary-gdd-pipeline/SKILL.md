@@ -27,6 +27,16 @@ small vertical slice instead of a large document set.
 ## Non-Negotiables
 
 - Start with a Definition of Done before creating files.
+- In this repo, project-specific game design lives under
+  `gamedesign/projects/<game-id>/`. Create or locate that folder before writing
+  a concept, GDD, decision log, reference study, source note, balance file, UI
+  flow, screenshot evidence, or implementation handoff.
+- Keep `gamedesign/knowledge/` for reusable cross-project design knowledge
+  only. Do not store current-game facts, balance, lore, screenshots, tasks, or
+  project-specific sources there.
+- Use `gamedesign/sources/` only for raw sources that support reusable
+  `knowledge/` pages. Project sources belong in
+  `gamedesign/projects/<game-id>/sources/` or `references/`.
 - Separate `reference`, `fake shot`, `runtime asset`, and `implementation plan`; never relabel one as another.
 - Temp generation, rejected images, screenshots, audit logs -> `tmp/`; only durable outputs in the design folder.
 - Stop for user review after the first strong fake shot or direction board before expanding the GDD.
@@ -45,7 +55,7 @@ small vertical slice instead of a large document set.
   action, visible response, reward/UI feedback, and inferred meaning. Fill the
   visible observations before the inference column.
 - Central reference study must be auditable: a durable deconstruction doc in
-  the active design folder must include a source matrix with source quality,
+  the active project wiki must include a source matrix with source quality,
   checked date, evidence value, and uncertainty. If the user challenges whether
   the ref was studied, answer from that doc; if the doc cannot answer, improve
   the study before implementation.
@@ -118,7 +128,8 @@ small vertical slice instead of a large document set.
 
 ## Start Checklist
 
-1. Read `AGENTS.md`; locate the design root (`gamedesign/`, `docs/design/`, or `GDD.md`).
+1. Read `AGENTS.md`; locate or create the active project wiki. In this repo,
+   use `gamedesign/projects/<game-id>/` for game-specific GDD work.
 2. Check `git status` and ignore rules for `tmp/` and generation folders.
 3. Write the DoD: what must exist, what is out of scope, what proof is accepted.
 4. For visual asks, decide the tier up front: reference / fake shot / runtime asset pack.
@@ -136,8 +147,10 @@ revise the earlier gate instead of adding documents.
 
 ## Workflow
 
-1. **Pin the concept** in one concise file: fantasy, hook, genre/platform,
-   session, core verbs, 3 pillars + violations, progression metric, no-go list.
+1. **Pin the concept** in one concise project file, usually
+   `gamedesign/projects/<game-id>/concept.md`: fantasy, hook,
+   genre/platform, session, core verbs, 3 pillars + violations, progression
+   metric, no-go list.
 2. **Define the first playable slice** before broad research or content
    matrices. It proves one loop, not the whole game. First challenge/combat
    needs concrete numbers, fail state, and recovery.
@@ -163,8 +176,9 @@ active DoD before editing.
 
 ## Minimum Artifact Set
 
-`concept.md`, `gdd.md`, references section, `data/balance.json`,
-`data/ui_flow.json`, visual page/section, `game_implementation_plan.md`.
+Inside `gamedesign/projects/<game-id>/`: `concept.md`, `gdd.md`, references
+section or `references/`, `data/balance.json`, `data/ui_flow.json`, visual
+page/section, and `game_implementation_plan.md`.
 Add more docs only when they remove implementation ambiguity.
 
 ## Validation

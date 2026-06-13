@@ -54,6 +54,15 @@ Use compact Markdown:
 
 Temporary state belongs in `tmp/session_state.md`.
 
+In this repo, route durable notes by scope:
+
+- project-specific facts, decisions, examples, references, screenshots,
+  playtest notes, and GDD material -> `gamedesign/projects/<game-id>/`;
+- reusable cross-project rules and methods -> `gamedesign/knowledge/`;
+- raw sources for reusable knowledge -> `gamedesign/sources/`;
+- project sources -> `gamedesign/projects/<game-id>/sources/` or
+  `references/`.
+
 ## Obsidian-Style Linking
 
 Prefer short topic files with links:
@@ -75,6 +84,8 @@ use normal Markdown links.
 - Add examples only when they clarify a real decision.
 - Mark project-specific examples as examples, not universal rules.
 - Do not let knowledge notes become a duplicate GDD.
+- Do not promote project material into `gamedesign/knowledge/` until it is
+  rewritten as a reusable rule.
 
 ## Review Before Commit
 
