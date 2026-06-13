@@ -89,10 +89,10 @@ function buildSuggestions(review) {
       source: useCurrentScope ? "current_scope.missing_context_inputs" : "missing_context_inputs",
       why: `${missingCount} medium/high context record(s) lacked measured context_inputs.`,
       done_when: [
-        "Medium/high context events use context.mjs or explicit context_inputs.",
+        "Medium/high context events use `node tools/ai.mjs context --path <file>` or `node tools/ai.mjs context -- <command>`.",
         "Profile review shows no missing context input details for new records.",
       ],
-      next_action: "Use context.mjs for local files and update any wrapper or habit that records context_risk without context_inputs.",
+      next_action: "Use `node tools/ai.mjs context --path <file>` for local files or `node tools/ai.mjs context -- <command>` for context commands.",
       });
     }
   }

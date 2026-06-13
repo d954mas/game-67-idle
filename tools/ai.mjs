@@ -8,7 +8,8 @@ function usage() {
   console.error(`usage:
   node tools/ai.mjs start <work-item> [iteration]
   node tools/ai.mjs focus <iteration>
-  node tools/ai.mjs context
+  node tools/ai.mjs context [--path <file> ...] [context options]
+  node tools/ai.mjs context [context options] -- <command> [args...]
   node tools/ai.mjs checkpoint <intent> [--force] [--min-gap-min <n>] [checkpoint options]
   node tools/ai.mjs run [--phase <name>] [--category <name>] [--intent <text>] [--value <name>] -- <command> [args...]
   node tools/ai.mjs validate --change <kind> [--risk low|medium|high] [--tier <name>] [--dry-run]
@@ -18,7 +19,7 @@ function usage() {
 Fast path:
   start    set current work item and append one profiling checkpoint
   focus    start a new iteration inside the current work item
-  context  print the compact game-iteration packet and profile its cost
+  context  profile measured context; with no args, print the game-iteration packet
   checkpoint record a meaningful manual/research/review gap without noisy short pauses
   run      run a command and record duration/result
   validate run a planned validation batch with batch metadata
@@ -96,6 +97,16 @@ if (command === "focus") {
 }
 
 if (command === "context") {
+  if (argv.includes("--")) {
+    run(["tools/ai_profile/context_command.mjs", ...argv]);
+  }
+  if (hasFlag(argv, "--path")) {
+    const args = ["tools/ai_profile/context.mjs", ...argv];
+    if (!hasFlag(args, "--phase")) args.push("--phase", "context");
+    if (!hasFlag(args, "--intent")) args.push("--intent", "Measure context files");
+    run(args);
+  }
+  if (argv.length > 0) usage();
   run([
     "tools/ai_profile/context_command.mjs",
     "--intent",

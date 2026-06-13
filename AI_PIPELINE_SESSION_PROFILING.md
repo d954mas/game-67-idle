@@ -70,6 +70,8 @@ For normal work, use the fast facade:
 node tools/ai.mjs start <task-id> <iteration-name>
 node tools/ai.mjs focus <next-iteration-name>
 node tools/ai.mjs context
+node tools/ai.mjs context --path <file>
+node tools/ai.mjs context -- <command> <args>
 node tools/ai.mjs checkpoint "Reviewed current reflection and chose next fix"
 node tools/ai.mjs run -- <command> <args>
 node tools/ai.mjs validate --change <kind> --risk <risk>
@@ -101,6 +103,11 @@ native/web harness gates, reference-study gate, visual/art gate, current
 project gate, next priorities, source files, and validation commands. Use it
 to audit later whether the agent had the right context before choosing a
 runtime, generating art, or implementing gameplay.
+
+For other medium/high-cost context reads, use the same facade with explicit
+inputs: `node tools/ai.mjs context --path <file>` for local files, or
+`node tools/ai.mjs context -- <command>` for read-only commands whose output
+the agent uses as context.
 
 If a profile was not started at the beginning, start it as soon as the need is
 recognized and add `late_start: true` to the first record.
@@ -301,24 +308,24 @@ pauses.
 For context-file reads, prefer the measured helper:
 
 ```powershell
-node tools/ai_profile/context.mjs --phase context --intent "Load current rules" --path AGENTS.md --path tasks/README.md --reason "session start"
+node tools/ai.mjs context --path AGENTS.md --path tasks/README.md --reason "session start"
 ```
 
-`context.mjs` measures character counts, records `files_read`, fills
-`context_inputs`, and assigns context risk automatically unless
-`--context-risk` is provided. Use it instead of manually typing
-`--context-input` when the source is a local file.
+The facade measures character counts, records `files_read`, fills
+`context_inputs`, and assigns context risk automatically unless `--context-risk`
+is provided. Use it instead of manually typing `--context-input` when the
+source is a local file.
 
 For read-only commands that produce context, prefer:
 
 ```powershell
-node tools/ai_profile/context_command.mjs --phase context --intent "Load current task digest" --reason "session resume" -- node tools/taskboard/cli.mjs context
+node tools/ai.mjs context --intent "Load current task digest" --reason "session resume" -- node tools/taskboard/cli.mjs context
 ```
 
-`context_command.mjs` prints the wrapped command output, records command text,
-duration, exit code, and measures stdout/stderr as one `context_inputs` entry.
-Use it for `taskboard context`, generated summaries, profile reviews, search
-summaries, or other command output that the agent reads as context.
+This prints the wrapped command output, records command text, duration, exit
+code, and measures stdout/stderr as one `context_inputs` entry. Use it for
+`taskboard context`, generated summaries, profile reviews, search summaries, or
+other command output that the agent reads as context.
 
 Use project-relative paths when possible. `--context-input` also accepts
 Windows absolute paths because the parser treats the first numeric segment as
@@ -346,7 +353,7 @@ or checkpoint:
 
 ```powershell
 node tools/ai_profile/run.mjs --phase validation --category validation --intent "Check profile metadata" --work-item T0072 --iteration profile-metadata -- node --check tools/ai_profile/profile_lib.mjs
-node tools/ai_profile/context.mjs --phase context --intent "Measure profiling docs" --work-item T0072 --iteration profile-metadata --path AI_PIPELINE_SESSION_PROFILING.md --reason "profile metadata docs"
+node tools/ai.mjs context --intent "Measure profiling docs" --path AI_PIPELINE_SESSION_PROFILING.md --reason "profile metadata docs"
 ```
 
 If most commands belong to the same task, prefer `AI_PROFILE_WORK_ITEM` and
@@ -377,11 +384,12 @@ Record tools by role:
 - `ai.mjs checkpoint`: fast facade for the thresholded checkpoint helper. Use
   this in normal work; call `checkpoint.mjs` or `gap_checkpoint.mjs` directly
   only when debugging or needing non-default internals.
-- `context.mjs`: context-read checkpoint writer that measures local file
-  character counts and fills `context_inputs` automatically.
-- `context_command.mjs`: context command wrapper that preserves command output
-  while measuring stdout/stderr as context input. Use it for read-only context
-  commands such as `node tools/taskboard/cli.mjs context`.
+- `ai.mjs context --path`: fast facade for measured local file context.
+- `ai.mjs context -- <command>`: fast facade for measured read-only command
+  context such as `node tools/taskboard/cli.mjs context`.
+- `context.mjs` and `context_command.mjs`: low-level context tools used by the
+  facade; call them directly only when debugging or customizing profiler
+  internals.
 - `scope.mjs`: persistent session-scope helper that writes
   `tmp/session_profiles/current_scope.json` so work-item/iteration defaults
   survive separate tool command invocations.
@@ -479,8 +487,9 @@ Prefer `node tools/taskboard/cli.mjs context` for current state. Reading the
 full `tasks/STATUS.md` is justified only when updating it, auditing a specific
 claim, or following an evidence path from the digest.
 When reading any medium/high-cost local context file directly, record it with
-`tools/ai_profile/context.mjs` so the later review can name the file instead of
-only reporting missing metadata.
+`node tools/ai.mjs context --path <file>` so the later review can name the file
+instead of only reporting missing metadata. For command output used as context,
+wrap it with `node tools/ai.mjs context -- <command>`.
 
 Examples:
 
@@ -718,10 +727,10 @@ A "profiled session" is done when:
   checkpoint "<intent>"` with an intent that explains the elapsed time, or the
   retrospective marks the gap as unknown;
 - non-command manual/research/review stretches used `node tools/ai.mjs
-  checkpoint "<intent>"`, and local medium/high context reads used
-  `context.mjs` where possible;
-- read-only commands that produced medium/high context used
-  `context_command.mjs` where possible;
+  checkpoint "<intent>"`, and local medium/high context reads used `node
+  tools/ai.mjs context --path <file>` where possible;
+- read-only commands that produced medium/high context used `node tools/ai.mjs
+  context -- <command>` where possible;
 - `status.mjs` is used during long sessions when the agent needs to know
   whether current telemetry is missing work-item metadata, context inputs,
   coverage, closeout, or bundle artifacts; if status reports historical

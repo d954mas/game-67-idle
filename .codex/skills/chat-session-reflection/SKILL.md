@@ -104,7 +104,10 @@ iteration, `node tools/ai.mjs focus <next-iteration>` after a commit, process
 fix, or direction change inside the same work item, `node tools/ai.mjs context`
 before implementation,
 `node tools/ai.mjs checkpoint "<intent>"` after long manual/research/review
-stretches, and `node tools/ai.mjs run -- <command>` for substantial commands.
+stretches, `node tools/ai.mjs context --path <file>` for medium/high local
+context reads, `node tools/ai.mjs context -- <command>` for read-only command
+output used as context, and `node tools/ai.mjs run -- <command>` for
+substantial commands.
 Do not wait until the end to reconstruct avoidable telemetry from chat history.
 During long sessions, run `node tools/ai.mjs status` when telemetry health
 is unclear. It is read-only and reports latest event, closeout/bundle presence,
@@ -233,11 +236,10 @@ during long manual, research, design, or review stretches so the elapsed time
 is recorded with `duration_ms`. The facade records only meaningful gaps by
 default; use `--force` only when a short stretch must be captured exactly.
 If review reports missing context input details, name the affected line/intents
-and add a next-cycle fix: use `tools/ai_profile/context.mjs --path <file>` for
-local medium/high context reads, or
-`tools/ai_profile/context_command.mjs -- <command>` for read-only commands
-that print context such as `node tools/taskboard/cli.mjs context`, so context
-size is measured automatically.
+and add a next-cycle fix: use `node tools/ai.mjs context --path <file>` for
+local medium/high context reads, or `node tools/ai.mjs context -- <command>`
+for read-only commands that print context such as `node tools/taskboard/cli.mjs
+context`, so context size is measured automatically.
 If review reports recovered failed records, classify them as useful negative
 feedback, avoidable rework, or tool noise. Treat only unresolved failed records
 as current blockers.

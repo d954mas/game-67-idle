@@ -1277,3 +1277,22 @@ specific and reusable.
   custom profiler work.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Measured context capture needs a facade
+
+- Trigger: Reflection/status advice could point to the fast `ai.mjs` facade for
+  start, focus, checkpoint, run, validate, and reflect, but context-file and
+  context-command measurement still depended on remembering internal profiler
+  scripts.
+- Symptom: Future agents could skip measured context capture or call
+  `tools/ai_profile/*` directly, which makes analytics feel like extra
+  bureaucracy instead of a cheap part of normal work.
+- Time sink: Retrospectives would continue to report missing context inputs,
+  then spend time explaining why tool/context usage was not measurable.
+- Likely cause: `node tools/ai.mjs context` only covered the game iteration
+  context pack, not arbitrary local files or read-only command output.
+- Proposed improvement: Extend `node tools/ai.mjs context` with `--path` for
+  measured local files and `-- <command>` for measured command output, and make
+  generated reflection advice prefer those facade paths.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.

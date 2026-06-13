@@ -38,6 +38,12 @@ workflow/runtime tools.
       inside the current work item so fixed issues do not stay current forever.
 - [x] `tools/ai.test.mjs` covers `ai.mjs start` option forwarding and `focus`
       scope reuse.
+- [x] `node tools/ai.mjs context --path <file>` and `node tools/ai.mjs
+      context -- <command>` wrap measured context capture for ordinary
+      profiling, so analytics covers tool/context usage without exposing
+      internal profiler scripts.
+- [x] `tools/ai.test.mjs` covers measured context file and command facade
+      paths.
 - [x] Generated profile status/review/draft/review/follow-up advice points to
       `node tools/ai.mjs ...` fast paths when a facade exists.
 - [x] `node tools/ai.mjs checkpoint "<intent>"` provides the fast path for
@@ -97,6 +103,17 @@ None.
   reflection review, and follow-up recommendation text to prefer
   `node tools/ai.mjs ...` fast paths instead of low-level profiler scripts when
   a facade exists.
+- 2026-06-13: Extended `node tools/ai.mjs context` so `--path <file>` records
+  measured local-file context and `-- <command>` records measured read-only
+  command output, keeping tool/context analytics on the same fast facade as the
+  rest of the workflow.
+- 2026-06-13: Validation passed after measured context facade updates: `node
+  --check` for touched profiler/facade scripts; `node --test tools/ai.test.mjs`;
+  `node --test tools/ai_profile/test.mjs`; `node tools/skills_eval.mjs`; `node
+  tools/taskboard/cli.mjs validate`; `git diff --check`; `node tools/ai.mjs
+  validate --change profiling --change pipeline --change skills --risk medium`;
+  `node tools/ai.mjs reflect`; `node tools/ai.mjs status` reported stable
+  baseline comparison and clean current scope.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;

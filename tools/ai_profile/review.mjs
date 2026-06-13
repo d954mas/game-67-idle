@@ -250,7 +250,7 @@ function currentScopeFindingsAndActions(currentScope) {
   }
   if (currentScope.missing_context_inputs > 0) {
     findings.push({ type: "current_missing_context_inputs", message: `${currentScope.missing_context_inputs} current-scope medium/high context record(s) lack context_inputs.` });
-    actions.push("Use context.mjs or context_command.mjs for current-scope medium/high context reads.");
+    actions.push("Use `node tools/ai.mjs context --path <file>` or `node tools/ai.mjs context -- <command>` for current-scope medium/high context reads.");
   }
   if (currentScope.missing_work_item_records > 0) {
     findings.push({ type: "current_missing_work_item_metadata", message: `${currentScope.missing_work_item_records} current-scope record(s) lack work_item metadata.` });

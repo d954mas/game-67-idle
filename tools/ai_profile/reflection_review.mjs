@@ -43,7 +43,7 @@ function topImprovements(draft, currentClean) {
     improvements.push("Use validation batch evidence to separate planned validation runs from ad hoc repeated commands.");
   }
   if (hasLesson("missing_context_inputs")) {
-    improvements.push("Use context.mjs or context_command.mjs for medium/high context reads so reflection can measure context cost.");
+    improvements.push("Use node tools/ai.mjs context --path <file> or node tools/ai.mjs context -- <command> so reflection can measure context cost.");
   }
   if (hasLesson("missing_work_item_metadata")) {
     improvements.push("Start each focused work item with node tools/ai.mjs start, then use node tools/ai.mjs focus for later slices before running substantial commands.");

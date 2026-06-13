@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -87,6 +87,55 @@ test("focus fails clearly without an existing work item scope", () => {
     assert.equal(result.status, 2);
     assert.match(result.stderr, /requires an existing work item scope/);
     assert.equal(existsSync(missingScope), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("context records measured file inputs", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    const file = join(dir, "notes.md");
+    writeFileSync(file, "reference notes\n", "utf8");
+
+    const result = run(["context", "--path", file, "--profile", profile, "--intent", "Measure temp context"]);
+    assert.equal(result.status, 0, result.stderr);
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].phase, "context");
+    assert.equal(records[0].context_inputs.length, 1);
+    assert.equal(records[0].context_inputs[0].chars, "reference notes\n".length);
+    assert.equal(records[0].files_read[0], file);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("context command records measured command output", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    const result = run([
+      "context",
+      "--profile",
+      profile,
+      "--intent",
+      "Measure command context",
+      "--",
+      process.execPath,
+      "-e",
+      "console.log('context-output')",
+    ]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /context-output/);
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].phase, "context");
+    assert.equal(records[0].commands.length, 1);
+    assert.match(records[0].context_inputs[0].path, /command:/);
+    assert.ok(records[0].context_inputs[0].chars >= "context-output\n".length);
   } finally {
     cleanup(dir);
   }

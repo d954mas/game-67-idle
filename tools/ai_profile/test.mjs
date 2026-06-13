@@ -285,7 +285,7 @@ test("status does not ask for scope or context fixes when only historical record
     assert.match(status.next_action, /closeout\.mjs/);
     assert.doesNotMatch(status.next_action, /scope\.mjs/);
     assert.doesNotMatch(status.next_action, /start\.mjs/);
-    assert.doesNotMatch(status.next_action, /context\.mjs/);
+    assert.doesNotMatch(status.next_action, /ai\.mjs context/);
   } finally {
     cleanup(dir);
   }
@@ -332,7 +332,7 @@ test("status still flags missing context inputs in the current scope", () => {
     const status = readJson(statusJson);
     assert.equal(status.current_scope.records, 2);
     assert.equal(status.current_scope.missing_context_inputs, 1);
-    assert.match(status.next_action, /context\.mjs/);
+    assert.match(status.next_action, /ai\.mjs context --path/);
   } finally {
     cleanup(dir);
   }
@@ -2151,10 +2151,10 @@ test("reflection draft keeps pending followups and regressions visible", () => {
       readiness: ["current_regressions"],
       current_scope: {
         findings: [{ type: "current_missing_context_inputs", message: "Current scope has unmeasured context reads." }],
-        suggested_actions: ["Use context.mjs for the next context-heavy read."],
+        suggested_actions: ["Use node tools/ai.mjs context --path <file> for the next context-heavy read."],
       },
       followups: {
-        pending_suggestions: [{ priority: "P1", title: "Fix current context capture", next_action: "Run context_command.mjs for context commands." }],
+        pending_suggestions: [{ priority: "P1", title: "Fix current context capture", next_action: "Run node tools/ai.mjs context -- <command> for context commands." }],
         satisfied_suggestions: [],
         suppressed_historical_findings: [],
       },
@@ -2259,7 +2259,7 @@ test("reflection review separates clean current scope from historical lessons", 
         satisfied_followups: [{ title: "Baseline captured" }],
       },
       historical_lessons: [
-        { type: "missing_context_inputs", symptom: "Missing context inputs.", cause: "Unmeasured reads.", fix: "Use context.mjs." },
+        { type: "missing_context_inputs", symptom: "Missing context inputs.", cause: "Unmeasured reads.", fix: "Use node tools/ai.mjs context --path <file>." },
         { type: "repeated_commands", symptom: "Repeated commands.", cause: "Reruns.", fix: "Classify reruns." },
         { type: "repeated_broad_final", symptom: "Repeated final gates.", cause: "Unbatched.", fix: "Use ai facade validation." },
         { type: "missing_work_item_metadata", symptom: "Missing work item.", cause: "Wide scope.", fix: "Use ai facade focus." },
@@ -2291,7 +2291,7 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.equal(review.current.actions.length, 0);
     assert.match(review.current.status_message, /No current action items/);
     assert.ok(review.historical_lessons.every((lesson) => lesson.current_action === "historical_only"));
-    assert.ok(review.top_improvements.some((item) => item.includes("context.mjs")));
+    assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs context --path")));
     assert.ok(review.top_improvements.some((item) => item.includes("validation batch evidence")));
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs validate")));
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs start")));
@@ -2312,7 +2312,7 @@ test("reflection review keeps dirty current scope actionable", () => {
       current_state: {
         current_scope_findings: [{ type: "current_missing_context_inputs", message: "Current context is unmeasured." }],
         current_regressions: [{ key: "current_missing_context_inputs", label: "Current missing context" }],
-        pending_followups: [{ title: "Fix context capture", next_action: "Run context_command.mjs." }],
+        pending_followups: [{ title: "Fix context capture", next_action: "Run node tools/ai.mjs context -- <command>." }],
         satisfied_followups: [],
       },
       historical_lessons: [
@@ -2332,7 +2332,7 @@ test("reflection review keeps dirty current scope actionable", () => {
     const review = readJson(reviewJson);
     assert.equal(review.verdict, "current_action_required");
     assert.match(review.current.status_message, /Resolve current action items/);
-    assert.ok(review.current.actions.some((action) => action.includes("context_command.mjs")));
+    assert.ok(review.current.actions.some((action) => action.includes("node tools/ai.mjs context --")));
     assert.ok(review.historical_lessons.every((lesson) => lesson.current_action === "review_after_current_items"));
   } finally {
     cleanup(dir);
@@ -2568,7 +2568,7 @@ test("review reports current-scope issues first", () => {
     });
     const review = readJson(reviewJson);
     assert.ok(review.current_scope.findings.some((finding) => finding.type === "current_missing_context_inputs"));
-    assert.ok(review.current_scope.suggested_actions.some((action) => action.includes("context.mjs")));
+    assert.ok(review.current_scope.suggested_actions.some((action) => action.includes("node tools/ai.mjs context --path")));
   } finally {
     cleanup(dir);
   }

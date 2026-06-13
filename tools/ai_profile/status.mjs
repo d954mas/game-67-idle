@@ -392,7 +392,7 @@ function buildStatus(profilePath) {
   } else if (hasCurrentScopeWindow && scopedRecords.length === 0) {
     nextAction = "Append a current-scope record with `node tools/ai.mjs checkpoint \"<intent>\"`, `node tools/ai.mjs context`, or `node tools/ai.mjs run -- <command>`.";
   } else if (actionableMissingContextInputs > 0) {
-    nextAction = "Use context.mjs for medium/high local context reads so context_inputs are measured.";
+    nextAction = "Use `node tools/ai.mjs context --path <file>` for medium/high local context reads so context_inputs are measured.";
   } else if (actionableLowCoverage) {
     nextAction = "Use node tools/ai.mjs checkpoint \"<intent>\" during long manual/research/design stretches so elapsed time is recorded with duration_ms.";
   } else if (!closeoutSeen) {

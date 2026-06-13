@@ -109,7 +109,7 @@ function lessonForFinding(finding, context = {}) {
     missing_context_inputs: {
       symptom: message,
       cause: "Medium/high context reads were recorded without measured context_inputs.",
-      fix: "Use context.mjs or context_command.mjs for medium/high context reads.",
+      fix: "Use node tools/ai.mjs context --path <file> for local files, or node tools/ai.mjs context -- <command> for read-only context commands.",
     },
     missing_work_item_metadata: {
       symptom: message,
