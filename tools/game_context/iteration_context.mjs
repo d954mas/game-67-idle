@@ -118,8 +118,8 @@ function buildContext(root, options = {}) {
   const validation = sectionText(agents, "Validation");
   const taskContext = runTaskContext(root, Math.max(1200, maxStatusChars));
 
-  const concept = bulletContaining(project, [/Active game concept/i, /No active game concept/i, /No concept selected/i], "No active concept found in AGENTS.md.");
-  const productTarget = bulletContaining(direction, [/current product target/i, /release-quality/i, /product target/i], "");
+  const concept = bulletContaining(project, [/No active game concept/i, /No concept selected/i, /Active game concept/i], "No active concept found in AGENTS.md.");
+  const productTarget = bulletContaining(direction, [/current product target/i, /release-quality/i, /product target/i, /Current runtime surface/i], "");
   const runtimeSurface = bulletContaining(direction, [/current runtime surface/i, /src\/main\.c/i, /placeholder/i], "");
   const nativeGate = bulletContaining(validation, [/Native desktop\/PC/i, /native PC/i, /preferred development/i], "");
   const webGate = bulletContaining(validation, [/web prototype/i, /web server/i, /localhost/i, /browser\/frontend/i], "");
@@ -127,24 +127,17 @@ function buildContext(root, options = {}) {
   const visualGate = bulletContaining(direction, [/generated-art/i, /visual work/i, /game-visual-art-direction/i], "");
 
   const designSources = existing(root, [
-    "gamedesign/meme-evolution/gdd.md",
-    "gamedesign/meme-evolution/cow_evolution_deconstruction_v2.md",
-    "gamedesign/meme-evolution/reference_research.md",
-    "gamedesign/meme-evolution/asset_pipeline.md",
-    "gamedesign/meme-evolution/data/balance.json",
-    "gamedesign/meme-evolution/data/ui_flow.json",
-    "gamedesign/meme-evolution/data/asset_manifest.json",
-    "gamedesign/meme-evolution/art_requests/67-world-reusable-ui-v1.json",
+    "gamedesign/knowledge/README.md",
+    "gamedesign/knowledge/reference_deconstruction.md",
   ]);
   const runtimeSources = existing(root, [
     "src/main.c",
+    "state/game_state.schema.json",
     "CMakePresets.json",
     "tools/devapi",
-    "tools/project_67_world/balance/simulate_67_world.py",
-    "tools/project_67_world/package_native_release.mjs",
   ]);
 
-  const currentGate = sectionText(taskContext, "Current Gate");
+  const currentGate = sectionText(taskContext, "Current Gate") || sectionText(taskContext, "Current Goal");
   const nextPriorities = sectionText(taskContext, "Next Priorities");
   const blockers = sectionText(taskContext, "Blocking Work") || sectionText(taskContext, "Blockers");
   const requiredValidation = sectionText(taskContext, "Required Validation");
@@ -175,7 +168,7 @@ function buildContext(root, options = {}) {
       "If reference-driven, cite the durable deconstruction/digest and next native proof.",
       "If visual/UI work, cite the accepted target or art request and reusable asset strategy.",
       "Name the smallest playable slice and the native screenshot/scenario that will prove it.",
-      "Start or set the AI profile scope for the task before substantial commands.",
+      "Use passive AI profiling only for long or risky work where stall evidence would help.",
     ],
   };
 }

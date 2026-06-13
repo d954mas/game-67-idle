@@ -99,7 +99,7 @@ test("context records measured file inputs", () => {
     const file = join(dir, "notes.md");
     writeFileSync(file, "reference notes\n", "utf8");
 
-    const result = run(["context", "--path", file, "--profile", profile, "--intent", "Measure temp context"]);
+    const result = run(["context", "--profile-mode", "full", "--path", file, "--profile", profile, "--intent", "Measure temp context"]);
     assert.equal(result.status, 0, result.stderr);
     const records = readJsonl(profile);
     assert.equal(records.length, 1);
@@ -118,6 +118,8 @@ test("context command records measured command output", () => {
     const profile = join(dir, "profile.jsonl");
     const result = run([
       "context",
+      "--profile-mode",
+      "full",
       "--profile",
       profile,
       "--intent",
@@ -136,6 +138,80 @@ test("context command records measured command output", () => {
     assert.equal(records[0].commands.length, 1);
     assert.match(records[0].context_inputs[0].path, /command:/);
     assert.ok(records[0].context_inputs[0].chars >= "context-output\n".length);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("passive run skips short successful commands", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    const result = run([
+      "run",
+      "--profile",
+      profile,
+      "--profile-slow-ms",
+      "60000",
+      "--",
+      process.execPath,
+      "-e",
+      "console.log('fast-ok')",
+    ]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /fast-ok/);
+    assert.equal(existsSync(profile), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("passive run records failed commands", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    const result = run([
+      "run",
+      "--profile",
+      profile,
+      "--",
+      process.execPath,
+      "-e",
+      "process.exit(7)",
+    ]);
+
+    assert.equal(result.status, 7);
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].result, "fail");
+    assert.equal(records[0].passive_reason, "failed_command");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("passive run records slow commands", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    const result = run([
+      "run",
+      "--profile",
+      profile,
+      "--profile-slow-ms",
+      "0",
+      "--",
+      process.execPath,
+      "-e",
+      "console.log('slow-enough')",
+    ]);
+
+    assert.equal(result.status, 0, result.stderr);
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].result, "pass");
+    assert.equal(records[0].passive_reason, "slow_command");
   } finally {
     cleanup(dir);
   }

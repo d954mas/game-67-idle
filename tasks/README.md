@@ -26,6 +26,7 @@ node tools/taskboard/cli.mjs summary
 node tools/taskboard/cli.mjs list
 node tools/taskboard/cli.mjs context
 node tools/taskboard/cli.mjs list --ideas
+node tools/taskboard/cli.mjs list --review
 node tools/taskboard/cli.mjs list --archive
 node tools/taskboard/cli.mjs new task --title "..." --epic E001 --priority P1
 node tools/taskboard/cli.mjs set T0001 --status doing
@@ -71,9 +72,10 @@ Then read only task files directly relevant to the decision:
 - tasks named in `STATUS.md` as blockers, debt, evidence, or next priority
 - active epic only when the work changes that epic's scope or gate
 
-Do not load completed tasks, old logs, P3 ideas, unrelated epics, or broad
-design docs by default. Follow those links only when debugging a regression,
-checking evidence, or making a concrete decision that needs them.
+Do not load completed tasks, review queues, old logs, P3 ideas, unrelated
+epics, or broad design docs by default. Follow those links only when reviewing
+or closing old work, debugging a regression, checking evidence, or making a
+concrete decision that needs them.
 
 Read `tasks/STATUS.md` directly only when changing it, auditing a specific
 status claim, or following a section/evidence path from the context digest.
@@ -183,9 +185,8 @@ Evidence should be the smallest reliable proof for the task:
   `node tools/taskboard/cli.mjs validate`
 - taskboard/tooling change: run `node --test tools/taskboard/test.mjs` and
   `node tools/taskboard/cli.mjs validate`
-- AI profile/profiling tooling change: run
-  `node --test tools/ai_profile/test.mjs`, `node tools/skills_eval.mjs`, and
-  `node tools/taskboard/cli.mjs validate`
+- AI profile/profiling tooling change: run the narrow facade/profile tests
+  that cover the changed behavior, plus `node tools/taskboard/cli.mjs validate`
 - skill/process change: run `node tools/skills_eval.mjs` when changing reusable
   skill activation, required outputs, or portable workflow rules
 - full reusable pipeline-base change: run `node tools/pipeline_validate.mjs`
@@ -200,6 +201,11 @@ Evidence should be the smallest reliable proof for the task:
 If a validation command is too slow, unavailable, or fails for an unrelated
 environment reason, record that explicitly in the task log and final report.
 Do not silently mark the task done.
+
+Profiling evidence is advisory for normal game work. Do not make a task wait
+on fresh profile bundles, reflection packets, drafts, reviews, follow-ups, or
+baselines unless the task is explicitly about AI workflow, profiler behavior,
+or a requested retrospective.
 
 When work changes the current goal, release gate, validation command set,
 blockers, last known good evidence, or next priorities, update `STATUS.md` in
@@ -264,8 +270,10 @@ updated: 2026-06-11
   `list --ideas` to inspect them. Use `list --all` for every active status.
 - New and active task files live in `active/`. When a task is set to `done` or
   `dropped`, tooling moves it to `archive/<epic-id>/` or `archive/unassigned/`.
-- `node tools/taskboard/cli.mjs list` intentionally omits archived tasks.
-  Use `list --archive` only for history/evidence review.
+- `node tools/taskboard/cli.mjs list` intentionally omits `idea`, `review`,
+  `done`, `dropped`, and archived tasks. Use `list --review` for review
+  cleanup, `list --ideas` for raw ideas, and `list --archive` only for
+  history/evidence review.
 - `idea` means raw and unexamined; do not implement from an `idea` task.
   Refine it first: ask questions, research, split, then move to `backlog`.
 - Never delete a task file to "remove" work; set `status: dropped` and note

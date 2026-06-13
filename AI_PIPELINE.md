@@ -43,10 +43,17 @@ node tools/skills_sync.mjs
 - **One source of truth per thing.** Skills: `.codex/skills/`. Task/status
   conventions: `tasks/README.md`. State shape: `state/*.schema.json`.
   Generated files are regenerated, not edited.
+- **Tools are assistants, not gates.** Tool defaults must be quiet, bounded, and
+  advisory. A script should summarize the useful next action by default and
+  require an explicit `--verbose`, `--deep`, `--all`, `--review`, or
+  `--include-final` style flag for exhaustive output, broad validation,
+  generated handoff artifacts, or old queues. If a script creates process work
+  during normal game implementation, simplify the script or move that behavior
+  behind an explicit deep mode.
 - **Tools have portability layers.** Before cleaning a project or exporting a
   new game base, use `tools/README.md` and `tools/tool_layers.json`.
   `portable_ai_pipeline` moves to new games, `reusable_game_infrastructure`
-  moves only when the runtime matches, and `project_specific_67_world` is
+  moves only when the runtime matches, and project-specific tooling is
   deleted, archived, or intentionally adapted.
 - **Art iterations are packetized.** For generated game art, start from an
   accepted visual target, write an art request packet, slice from a manifest,
@@ -56,122 +63,32 @@ node tools/skills_sync.mjs
   passes, scaffold the contract with `node tools/assets/new_art_job.mjs` so the
   agent can move directly from candidate generation to crop/slice/pack/native
   evidence.
-- **References are a build gate, not inspiration notes.** When a user names a
-  reference game/style, produce an auditable deconstruction before coding
-  gameplay, UI, economy, balance, or art. Use
-  `gamedesign/knowledge/reference_deconstruction.md`: gather a source packet
-  with checked dates, write a visible-action ledger and player transcript
-  before system conclusions, extract screen grammar/mechanics/economy/visual
-  composition, then translate into borrow/avoid/copy-risk plus a current-build
-  mismatch audit. A central gameplay ref needs official/store/trailer visuals,
-  gameplay footage/walkthrough or a long screenshot sequence, and the current
-  native capture. The study is only implementation-ready when it names the next
-  native screenshot/scenario proof. If the doc cannot answer a later "did you
-  study the ref?" challenge, improve the doc before implementation.
-- **Reference study has modes.** Before researching, state the mode:
-  `quick check`, `central deconstruction`, or `deep deconstruction`. Quick
-  checks are for small UI, wording, or visual details and require links/paths
-  plus concrete visible observations, but they do not unlock core gameplay,
-  economy, balance, or art-direction changes. Central deconstruction is the
-  default for a named gameplay/art driver. Deep deconstruction is required when
-  first-session pacing, balance, retention pressure, or release-critical UX
-  depends on the reference. Central and deep studies must end with a current
-  native mismatch audit and an exact screenshot/scenario proof for the next
-  implementation pass.
-- **"Studied" means source-backed.** An agent may only claim a gameplay
-  reference was studied when the durable artifact records the actual source
-  packet: links or local paths, checked date, gameplay video/walkthrough or a
-  long screenshot sequence, official/store/trailer visuals when available,
-  supporting guide/review/deconstruction sources for balance or friction
-  claims, current native capture, and timestamped/framed observations. If this
-  packet is missing, the honest status is "not studied enough to implement."
-- **Reference source order is explicit.** Study refs through a Source Ladder:
-  user-provided material -> official/store/trailer visuals -> raw gameplay
-  video/walkthrough or long screenshot sequence -> guides/reviews/lectures/
-  deconstructions/wikis/community notes. Central/deep refs must record the
-  ladder in the durable doc with source role, checked date, watched/read scope,
-  and whether the source is observation evidence or secondary interpretation.
-  Secondary summaries can explain balance or friction, but cannot replace
-  observed gameplay frames for loop, first-screen, control, reward, or UI
-  claims.
-- **Reference study needs an evidence board.** For central/deep refs, gather
-  and cite at least six concrete frames/screenshots before drawing conclusions:
-  first screen, first input, visible response, reward feedback,
-  upgrade/progression UI, and a friction or blocked/full-board state. Pair
-  those stills with raw gameplay/walkthrough evidence for timing, and add a
-  guide/review/lecture/wiki/deconstruction only as supporting interpretation
-  when making balance, pacing, or player-friction claims. Store links, local
-  paths, timestamps/frame ids, checked date, and "what this proves" in the
-  deconstruction. No frames/timestamps means "not studied enough to implement."
-- **Reference Lock comes before implementation.** Before coding gameplay/UI,
-  tuning balance, or generating final art from a named reference, the agent
-  writes a short lock in the task log or deconstruction doc: study mode, ref
-  question, doc path, source packet to collect, current native capture path or
-  capture plan, no-coding/no-final-art boundary, and expected native proof.
-  Implementation unlocks only after the deconstruction names at least three
-  observed source facts, one current-build mismatch, borrow/avoid/copy-risk,
-  and the exact next screenshot/scenario. If sources are missing, the lock
-  stays closed and the next action is source gathering or a narrow exception.
-- **Reference Intake comes before opinions.** When a user names a ref or says
-  the result does not match it, the next agent move is not to defend the build
-  or make another implementation pass. State the exact question the ref must
-  answer, choose `quick check`, `central deconstruction`, or `deep
-  deconstruction`, name the durable doc path, list the source packet to gather,
-  capture or plan the current native screenshot, and name the first proof
-  screenshot/scenario. Label every later design claim as observed, inferred,
-  user-provided, or unknown; unknown/inferred claims do not unlock code,
-  economy, balance, UI, or final art.
-- **Reference study has a Definition of Ready.** A named reference may drive
-  code, economy, balance, UI, or final art only after the durable doc contains:
-  mode, Reference Lock, source matrix, gameplay footage/walkthrough or a long
-  screenshot sequence for interaction claims, current native capture,
-  observation ledger, borrow/avoid/copy-risk, current-build mismatch, and the
-  next native proof. If any required item is missing, the agent must say the
-  reference study is not ready for implementation and keep working on sources
-  or ask for user material instead of coding from memory.
-- **Reference study must be inspectable by the lead.** Before implementation
-  resumes from a named reference, give a short Reference Digest in chat or the
-  task log: study mode, sources checked, 3-5 observed facts, current-build
-  mismatch, borrow/avoid/copy-risk, and the next native screenshot/scenario
-  proof. If the digest would be vague, the study is still not ready.
-- **Parallel reference work is research-only until unlocked.** A reference
-  deconstruction may run beside unrelated setup or tooling, but not beside the
-  gameplay/UI/economy/balance/final-art implementation it is supposed to guide.
-  The implementation lane opens only after the durable doc has observed facts,
-  current-build mismatch, borrow/avoid/copy-risk, Reference Digest, and the
-  exact native proof. Do not retrofit research conclusions to code or art that
-  was already made in parallel.
+- **References are a gate only when they drive the work.** If the user names a
+  reference or says the build does not match one, use the smallest honest mode:
+  quick check, central deconstruction, or deep deconstruction. Before
+  reference-driven implementation, the durable doc must support a short
+  Reference Digest: mode, sources checked, observed facts, borrow/avoid/copy
+  risk, current-build mismatch, and next native proof. Details live in
+  `gamedesign/knowledge/reference_deconstruction.md` and
+  `.codex/skills/primary-gdd-pipeline/references/reference-research-playbook.md`.
 - **Record process pain sparingly.** Use `AI_PIPELINE_ITERATION_LOG.md` for
   occasional notes about time sinks, agent mistakes, and pipeline improvement
   ideas. Use `chat-session-reflection` for deeper retrospectives of long
   multi-turn sessions. Do not use the iteration log as a task board or project
   status file.
-- **Profile long AI sessions without polluting git.** Use
-  `AI_PIPELINE_SESSION_PROFILING.md` and `node tools/ai.mjs ...` when work is long,
-  repeated, release-critical, or explicitly about AI workflow. Reusable
-  profiling rules/tools are committed; raw session JSONL, generated summaries,
-  recovered thread dumps, and one-off telemetry extracts stay in
-  `tmp/session_profiles/` unless the lead explicitly asks to promote them.
-  `.gitignore` is the safety net for scratch paths; the workflow rule is what
-  prevents agents from creating noisy session artifacts in non-ignored
-  locations. Fast path: `node tools/ai.mjs start <task> <iteration>`,
-  `node tools/ai.mjs focus <iteration>`, `node tools/ai.mjs summary`, `node
-  tools/ai.mjs context`, `node tools/ai.mjs checkpoint "<intent>"`, `node
-  tools/ai.mjs run -- <command>`, `node tools/ai.mjs validate --change <kind>
-  --risk <risk>`, `node tools/ai.mjs status`, and `node tools/ai.mjs reflect`.
-  Use `focus` after a
-  commit, process fix, or direction change when the work item is the same but
-  current-scope reflection should start fresh. Use `checkpoint` after long
-  manual/research/review stretches so wall-clock coverage is captured without
-  noisy short-pause records. Use `validate` for planned validation batches so
-  broad/final gates are recorded as batched evidence, not ad hoc repeated
-  commands. `reflect` first attempts a thresholded gap checkpoint for long
-  unprofiled manual/research/review time, then prepares the full reflection
-  handoff and includes current-scope regressions as evidence; use
-  `reflect --strict` to stop on regressions, `reflect --quick` only for a cheap
-  closeout summary, or `reflect --no-gap-checkpoint` only when debugging
-  telemetry. Use `tools/ai_profile/*` directly only when improving or debugging
-  telemetry.
+- **Profiling is passive by default.** Its job is to reveal where an AI agent
+  gets stuck, not to become another workflow. Normal game work may use
+  `node tools/ai.mjs run -- <command>` and `node tools/ai.mjs checkpoint
+  "<intent>"`; the facade records only slow commands, failed commands, large
+  context reads, and long manual/research gaps. Do not fix stale profile
+  bundles, packets, drafts, baselines, or follow-up artifacts during ordinary
+  game development. Use `node tools/ai.mjs status` for the short passive
+  diagnostic. Use `node tools/ai.mjs reflect` for a short closeout only.
+  Full reflection handoff (`packet`/`draft`/`review`/baseline comparison) is
+  opt-in with `node tools/ai.mjs reflect --deep` or direct
+  `tools/ai_profile/*` commands when the task is explicitly about AI workflow,
+  a long retrospective, or debugging the profiler itself. Raw telemetry stays
+  in `tmp/session_profiles/`.
 - **External AI observability is gated.** Do not add LangSmith, Phoenix,
   Langfuse, Braintrust, OpenTelemetry export, or another tracing/eval platform
   just because reflection needs more data. First use
@@ -240,7 +157,7 @@ For playable game work in this repository, the platform gate is strict:
 Default order for substantial work:
 
 1. Load the minimal current context from `tasks/README.md`, starting with
-   `node tools/ai.mjs summary`. Use
+   `node tools/ai.mjs summary` or `node tools/taskboard/cli.mjs summary`. Use
    `node tools/ai.mjs context -- node tools/taskboard/cli.mjs context` only
    when the summary is not enough; never read a large `tasks/STATUS.md`
    wholesale for orientation.
@@ -250,7 +167,7 @@ Default order for substantial work:
 5. Run the narrowest validation that proves the change.
 6. Escalate to broader validation only when the scope or risk requires it.
 
-For reusable/process/tooling work, plan validation before running it:
+For reusable/process/tooling work, plan validation before running broad checks:
 
 ```powershell
 node tools/ai_profile/plan_validation.mjs --change profiling --change skills --risk medium

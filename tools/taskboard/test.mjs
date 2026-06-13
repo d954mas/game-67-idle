@@ -90,6 +90,24 @@ test("cli list hides ideas by default and shows them explicitly", (t) => {
   assert.match(ideas.stdout, /Raw idea/);
 });
 
+test("cli list hides review by default and shows it explicitly", (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "Active work", status: "todo" });
+  createTask(root, { title: "Old review", status: "review" });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const base = { cwd: root, encoding: "utf8" };
+  const normal = spawnSync(process.execPath, [cli, "list"], base);
+  assert.equal(normal.status, 0, normal.stderr);
+  assert.match(normal.stdout, /Active work/);
+  assert.doesNotMatch(normal.stdout, /Old review/);
+  const review = spawnSync(process.execPath, [cli, "list", "--review"], base);
+  assert.equal(review.status, 0, review.stderr);
+  assert.match(review.stdout, /Old review/);
+  const statusReview = spawnSync(process.execPath, [cli, "list", "--status", "review"], base);
+  assert.equal(statusReview.status, 0, statusReview.stderr);
+  assert.match(statusReview.stdout, /Old review/);
+});
+
 test("cli context caps status and prioritizes recent actionable tasks", (t) => {
   const root = tempRoot(t);
   mkdirSync(join(root, "tasks"), { recursive: true });
@@ -124,7 +142,7 @@ ${"evidence\n".repeat(300)}
 `.replace(/\n/g, "\r\n"),
   );
   createTask(root, { title: "Old review", status: "review", priority: "P1" });
-  createTask(root, { title: "New review", status: "review", priority: "P1" });
+  createTask(root, { title: "Current todo", status: "todo", priority: "P1" });
   const cli = join(import.meta.dirname, "cli.mjs");
   const result = spawnSync(
     process.execPath,
@@ -136,9 +154,9 @@ ${"evidence\n".repeat(300)}
   assert.match(result.stdout, /status_warning: large/);
   assert.match(result.stdout, /## Current Gate/);
   assert.match(result.stdout, /Keep the context digest short/);
-  assert.match(result.stdout, /T0002 .* New review/);
+  assert.match(result.stdout, /T0002 .* Current todo/);
   assert.doesNotMatch(result.stdout, /T0001 .* Old review/);
-  assert.match(result.stdout, /\.\.\. 1 more/);
+  assert.match(result.stdout, /1 review task\(s\) hidden/);
 });
 
 test("cli summary is short and avoids full task list noise", (t) => {

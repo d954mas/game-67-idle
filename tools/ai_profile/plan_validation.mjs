@@ -118,7 +118,7 @@ const CHECKS = [
   {
     id: "skills-eval",
     tier: "scoped",
-    changes: ["skills", "pipeline", "profiling"],
+    changes: ["skills"],
     command: "node tools/skills_eval.mjs",
     why: "prove reusable skill activation and required process anchors remain intact",
     broad: false,
@@ -178,7 +178,7 @@ const CHECKS = [
   {
     id: "portable-pipeline",
     tier: "final",
-    changes: ["pipeline", "skills", "profiling", "taskboard"],
+    changes: ["pipeline", "skills", "taskboard"],
     command: "node tools/pipeline_validate.mjs",
     why: "prove the reusable base still exports and validates in a fresh project",
     broad: true,
@@ -196,11 +196,11 @@ const CHECKS = [
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/plan_validation.mjs --change <kind> [--change <kind> ...] [--file <path> ...] [--risk low|medium|high] [--json] [--json-output <file>]
+  node tools/ai_profile/plan_validation.mjs --change <kind> [--change <kind> ...] [--file <path> ...] [--risk low|medium|high] [--include-final] [--json] [--json-output <file>]
   node tools/ai_profile/plan_validation.mjs --list-changes
 
 Prints a validation ladder. It does not run commands.
-Broad/final checks are meant to run once after scoped checks pass.`);
+Broad/final checks are opt-in unless --include-final is present.`);
   process.exit(2);
 }
 
@@ -238,20 +238,21 @@ function riskIndex(risk) {
   return index === -1 ? RISK_LEVELS.indexOf("medium") : index;
 }
 
-function shouldIncludeFinal(check, selectedChanges, risk) {
+function shouldIncludeFinal(check, selectedChanges, risk, includeFinal) {
   if (!check.broad) return true;
+  if (!includeFinal) return false;
   const highEnoughRisk = riskIndex(risk) >= riskIndex("medium");
   const explicitlyRelevant = check.changes.some((change) => selectedChanges.has(change));
   return highEnoughRisk && explicitlyRelevant;
 }
 
-function selectChecks(selectedChanges, risk) {
+function selectChecks(selectedChanges, risk, includeFinal) {
   const selected = [];
   const seen = new Set();
   for (const check of CHECKS) {
     const applies = check.changes.includes("all") || check.changes.some((change) => selectedChanges.has(change));
     if (!applies) continue;
-    if (!shouldIncludeFinal(check, selectedChanges, risk)) continue;
+    if (!shouldIncludeFinal(check, selectedChanges, risk, includeFinal)) continue;
     if (seen.has(check.id)) continue;
     seen.add(check.id);
     selected.push(check);
@@ -266,7 +267,7 @@ function renderMarkdown(changes, risk, checks, skippedFinal) {
   lines.push(`Risk: ${risk}`);
   lines.push(`Change kinds: ${[...changes].sort().join(", ")}`);
   lines.push("");
-  lines.push("Rule: run preflight/scoped checks first; run broad/final checks once at the end of the batch, not after every edit.");
+  lines.push("Rule: run preflight/scoped checks first. Add `--include-final` only for release, portable-base, or shared-behavior gates.");
   for (const tier of ["preflight", "scoped", "final"]) {
     const tierChecks = checks.filter((check) => check.tier === tier);
     if (tierChecks.length === 0) continue;
@@ -285,10 +286,10 @@ function renderMarkdown(changes, risk, checks, skippedFinal) {
       lines.push(`- \`${check.command}\` - ${check.why}`);
     }
     lines.push("");
-    lines.push("These are deferred because risk is low. Run them if the change becomes portable, release-critical, or touches shared behavior.");
+    lines.push("These are deferred by default. Run them only when the change is portable, release-critical, or touches shared behavior.");
   }
   lines.push("");
-  lines.push("Profile substantial commands with `tools/ai_profile/run.mjs`; record skipped broad checks in the task log if they would normally be expected.");
+  lines.push("For normal work, use `node tools/ai.mjs run -- <command>` only when passive telemetry on slow/failing commands is useful.");
   return `${lines.join("\n")}\n`;
 }
 
@@ -313,7 +314,7 @@ function buildPlan(changes, risk, checks, skippedFinal) {
     deferred_broad_count: skippedFinal.length,
     next_action: broadFinalChecks.length > 0
       ? "Run preflight and scoped checks first; run broad/final checks once at the end of the batch."
-      : "Run preflight and scoped checks; broad/final checks are deferred unless risk or scope grows.",
+      : "Run preflight and scoped checks; broad/final checks are deferred unless the task explicitly needs a release, portable-base, or shared-behavior gate.",
     rule:
       "Broad/final checks should repeat only after a failed gate, changed risk, changed shared behavior, or final batch boundary.",
   };
@@ -350,7 +351,8 @@ if (unknown.length > 0) {
   process.exit(2);
 }
 
-const checks = selectChecks(changes, risk);
+const includeFinal = values["include-final"] === true;
+const checks = selectChecks(changes, risk, includeFinal);
 const skippedFinal = CHECKS.filter((check) => {
   if (!check.broad) return false;
   const applies = check.changes.some((change) => changes.has(change));

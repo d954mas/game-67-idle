@@ -1123,14 +1123,14 @@ test("context profiler warns on oversized context inputs", () => {
   }
 });
 
-test("ai facade profiles taskboard summary shortcut", () => {
+test("ai facade can fully profile taskboard summary shortcut", () => {
   const dir = tempDir();
   try {
     const profile = join(dir, "ai-summary.jsonl");
     const scope = join(dir, "scope.json");
     run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "SUMMARY", "--iteration", "shortcut"]);
 
-    const result = runRaw(["tools/ai.mjs", "summary", "--profile", profile], {
+    const result = runRaw(["tools/ai.mjs", "summary", "--profile-mode", "full", "--profile", profile], {
       env: { AI_PROFILE_SCOPE_FILE: scope },
     });
     assert.equal(result.status, 0, result.stderr);
@@ -1470,7 +1470,7 @@ test("observability gate recommends bounded pilot for shared eval needs", () => 
   }
 });
 
-test("validation planner writes json output with broad final decision", () => {
+test("validation planner defers broad final checks by default", () => {
   const dir = tempDir();
   try {
     const output = join(dir, "validation-plan.json");
@@ -1495,10 +1495,34 @@ test("validation planner writes json output with broad final decision", () => {
     assert.equal(jsSyntaxCheck.placeholder, undefined);
     assert.ok(plan.checks_by_tier.scoped.length > 0);
     assert.ok(plan.checks_by_tier.scoped.some((check) => check.id === "ai-profile-tests"));
+    assert.equal(plan.broad_final_count, 0);
+    assert.ok(plan.skipped_final.some((check) => check.id === "portable-pipeline"));
+    assert.match(plan.next_action, /deferred/);
+    assert.match(result.stdout, /Validation Ladder/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation planner includes broad final checks only when requested", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan-final.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--change",
+      "pipeline",
+      "--risk",
+      "medium",
+      "--include-final",
+      "--json-output",
+      output,
+    ]);
+
+    const plan = readJson(output);
     assert.ok(plan.broad_final_count > 0);
     assert.ok(plan.broad_final_checks.some((check) => check.id === "portable-pipeline"));
     assert.match(plan.next_action, /broad\/final checks once/);
-    assert.match(result.stdout, /Validation Ladder/);
   } finally {
     cleanup(dir);
   }

@@ -232,12 +232,21 @@ function validationBatches(records) {
         failed: 0,
         commands: 0,
         broad_final_commands: 0,
+        output_chars: 0,
+        suppressed_output_chars: 0,
+        suppressed_output_records: 0,
         tiers: new Map(),
       });
     }
     const batch = batches.get(id);
     batch.records += 1;
     batch.duration_ms += Number(record.duration_ms || 0);
+    const outputChars = Number(record.command_output_chars || 0);
+    batch.output_chars += Number.isFinite(outputChars) ? outputChars : 0;
+    if (record.command_output_suppressed) {
+      batch.suppressed_output_chars += Number.isFinite(outputChars) ? outputChars : 0;
+      batch.suppressed_output_records += 1;
+    }
     if (record.result === "fail") batch.failed += 1;
     const tier = record.validation_tier || "unknown";
     addCount(batch.tiers, tier);
@@ -1038,7 +1047,9 @@ if (validationBatchSummaries.length === 0) {
   for (const batch of validationBatchSummaries.slice(0, 10)) {
     const result = batch.failed > 0 ? `${batch.failed} failed` : "pass";
     const changes = batch.changes.length > 0 ? batch.changes.join(", ") : "unknown";
-    emit(`- ${batch.batch_id}: ${batch.records} record(s), ${formatMs(batch.duration_ms)}, ${result}, risk=${batch.risk || "unknown"}, changes=${changes}, broad/final=${batch.broad_final_commands}`);
+    const output = batch.output_chars > 0 ? `, output=${batch.output_chars} chars` : "";
+    const suppressed = batch.suppressed_output_records > 0 ? `, suppressed=${batch.suppressed_output_chars} chars/${batch.suppressed_output_records} record(s)` : "";
+    emit(`- ${batch.batch_id}: ${batch.records} record(s), ${formatMs(batch.duration_ms)}, ${result}, risk=${batch.risk || "unknown"}, changes=${changes}, broad/final=${batch.broad_final_commands}${output}${suppressed}`);
   }
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke test for the 67 World runtime and universal DevAPI surface."""
+"""Smoke test for the neutral Game Seed runtime and universal DevAPI surface."""
 
 from __future__ import annotations
 
@@ -29,9 +29,7 @@ def main() -> int:
             "ui.click",
             "game.state",
             "game.reset_playtest",
-            "game.action.spawn_67",
-            "game.action.merge_matching_67",
-            "game.action.buy_faster_spawn",
+            "game.action.cycle",
             "game.state.schema",
             "game.state.get",
             "game.state.set",
@@ -42,23 +40,20 @@ def main() -> int:
 
         state0 = game.result("game.reset_playtest")
         ok &= check(
-            "reset returns 67 world state",
-            state0.get("wallet", {}).get("soft") == 0
-            and state0.get("collection_discovered_count") == 1
-            and state0.get("world_67", {}).get("board_used") == 0,
+            "reset returns seed state",
+            state0.get("test_ui_clicks") == 0 and state0.get("seed", {}).get("shape") == "cube",
             state0,
         )
 
         tree = game.result("ui.tree")
         ids = {node.get("id") for node in tree}
-        ok &= check("ui tree exposes 67 controls", {"root", "world.board", "world.slot.00", "world.slot.01", "world.spawn", "world.upgrade"}.issubset(ids), tree)
+        ok &= check("ui tree exposes seed controls", {"root", "seed.preview", "seed.cycle"}.issubset(ids), tree)
 
-        clicked = game.click_ui("world.spawn", wait_frames=2)
-        ok &= check("ui.click spawns tiny 67", clicked.get("count_tiny_67", 0) >= 1, clicked)
-        game.click_ui("world.spawn", wait_frames=1)
-        game.click_ui("world.slot.00", wait_frames=1)
-        merged = game.click_ui("world.slot.01", wait_frames=2)
-        ok &= check("ui.click merges to berry 67", merged.get("count_berry_67", 0) >= 1 and merged.get("collection_discovered_count", 0) >= 2, merged)
+        clicked = game.click_ui("seed.cycle", wait_frames=2)
+        ok &= check("ui.click cycles seed state", clicked.get("test_ui_clicks", 0) >= 1, clicked)
+
+        cycled = game.result("game.action.cycle")
+        ok &= check("action endpoint cycles seed state", cycled.get("test_ui_clicks", 0) >= 2, cycled)
 
         patched = game.result("game.state.set", {"doc": "game", "path": "settings.master_volume", "value": 0.5})
         ok &= check("state set works", abs(patched.get("settings", {}).get("master_volume", 0.0) - 0.5) < 0.01, patched)

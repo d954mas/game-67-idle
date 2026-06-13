@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Taskboard CLI for humans and agents.
 //
-//   node tools/taskboard/cli.mjs list [--status s] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
+//   node tools/taskboard/cli.mjs list [--status s] [--epic E001] [--tag t] [--ideas] [--review] [--all] [--archive]
 //   node tools/taskboard/cli.mjs summary [--tasks-limit 5]
 //   node tools/taskboard/cli.mjs show T0001
 //   node tools/taskboard/cli.mjs new task --title "..." [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
@@ -101,9 +101,15 @@ function idNumber(task) {
   return match ? Number(match[0]) : 0;
 }
 
-function actionableTasks(root) {
-  const tasks = listTasks(root).filter((task) => !["idea", "done", "dropped"].includes(task.fields.status));
+function currentWorkTasks(root) {
+  const tasks = listTasks(root).filter((task) => ["backlog", "todo", "doing"].includes(task.fields.status));
   tasks.sort((a, b) => taskRank(a) - taskRank(b) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)));
+  return tasks;
+}
+
+function reviewTasks(root) {
+  const tasks = listTasks(root).filter((task) => task.fields.status === "review");
+  tasks.sort((a, b) => priorityRank(a.fields.priority) - priorityRank(b.fields.priority) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)));
   return tasks;
 }
 
@@ -111,9 +117,8 @@ function renderSummary(root, options) {
   const statusFile = join(root, "tasks", "STATUS.md");
   const status = existsSync(statusFile) ? readFileSync(statusFile, "utf8") : "";
   const tasksLimit = numberArg(options["tasks-limit"], 5);
-  const tasks = actionableTasks(root);
-  const openTasks = tasks.filter((task) => task.fields.status !== "review");
-  const reviewCount = tasks.length - openTasks.length;
+  const openTasks = currentWorkTasks(root);
+  const reviewCount = reviewTasks(root).length;
   const lines = [];
   lines.push("# Taskboard Summary");
   lines.push("");
@@ -146,7 +151,7 @@ function renderSummary(root, options) {
   if (openTasks.length === 0) {
     lines.push("- none");
     if (reviewCount > 0) {
-      lines.push(`- ${reviewCount} task(s) are in review; inspect them only when reviewing or closing old work.`);
+      lines.push(`- ${reviewCount} task(s) are in review; run \`node tools/taskboard/cli.mjs list --review\` only when reviewing or closing old work.`);
     }
   }
   return `${lines.join("\n")}\n`;
@@ -166,7 +171,8 @@ function renderContext(root, options) {
     "Required Validation",
     "Last Known Good Evidence",
   ];
-  const tasks = actionableTasks(root);
+  const tasks = currentWorkTasks(root);
+  const reviewCount = reviewTasks(root).length;
 
   const lines = [];
   lines.push("# Current Context Digest");
@@ -204,6 +210,9 @@ function renderContext(root, options) {
   if (tasks.length === 0) {
     lines.push("- none");
   }
+  if (reviewCount > 0) {
+    lines.push(`- ${reviewCount} review task(s) hidden from current context; use \`list --review\` for review cleanup.`);
+  }
   lines.push("");
   lines.push("Next context step: inspect only the linked task files or evidence paths needed for the current decision.");
   return `${lines.join("\n")}\n`;
@@ -213,8 +222,10 @@ const args = parseArgs(rest);
 
 switch (cmd) {
   case "list": {
-    const hidden = new Set(args.all ? [] : ["idea", "done", "dropped"]);
+    const hidden = new Set(args.all ? [] : ["idea", "review", "done", "dropped"]);
     if (args.ideas) hidden.delete("idea");
+    if (args.review) hidden.delete("review");
+    if (args.status) hidden.clear();
     const tasks = listTasks(root, { includeArchive: args.archive === true }).filter((t) => {
       if (hidden.has(t.fields.status)) return false;
       if (args.status && t.fields.status !== args.status) return false;

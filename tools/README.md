@@ -5,6 +5,27 @@ equally portable.
 
 The machine-readable map is `tools/tool_layers.json`.
 
+## Tool Contract
+
+AI tooling must help the game work move faster. Defaults should be quiet,
+bounded, and advisory:
+
+- default commands print short actionable output;
+- slow, broad, destructive, artifact-generating, or deep-retrospective behavior
+  must require an explicit flag or explicit user/task need;
+- scripts must not turn stale generated diagnostics into blockers for normal
+  game work;
+- generated scratch outputs go under `tmp/` or another ignored path unless the
+  lead explicitly promotes them;
+- validation scripts should run the narrow proof first and reserve broad/final
+  checks for release, portable-base, or shared-behavior changes;
+- a script that finds a problem should report the next useful action, not create
+  a new process obligation by default.
+
+When adding or changing a tool, prefer `summary`/passive output as the default
+and `--verbose`, `--deep`, `--all`, or an explicit subcommand for exhaustive
+inspection.
+
 ## Layers
 
 ### `portable_ai_pipeline`

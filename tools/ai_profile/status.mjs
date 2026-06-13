@@ -5,10 +5,11 @@ import { defaultProfilePath, parseArgs, readProfileScope, stringArg } from "./pr
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/status.mjs [--profile <profile.jsonl>] [--json-output <status.json>]
+  node tools/ai_profile/status.mjs [--profile <profile.jsonl>] [--json-output <status.json>] [--verbose]
 
 Reports current AI profile health without appending records or generating a
-closeout bundle. Use it mid-session to decide the next profiling action.`);
+closeout bundle. Default output is a short passive diagnostic; --verbose shows
+the full reflection/baseline handoff state.`);
   process.exit(2);
 }
 
@@ -361,6 +362,16 @@ function buildStatus(profilePath) {
   const reflection = readReflectionStatus(profilePath, comparison);
   const scope = readProfileScope();
   const latest = latestRecord(records);
+  const slowest = records
+    .filter((record) => Number(record.duration_ms || 0) > 0)
+    .sort((a, b) => Number(b.duration_ms || 0) - Number(a.duration_ms || 0))[0] || null;
+  const largestContext = records
+    .flatMap((record) => (record.context_inputs || []).map((input) => ({
+      ...input,
+      record_line: record.__line,
+      intent: record.intent || "",
+    })))
+    .sort((a, b) => Number(b.chars || 0) - Number(a.chars || 0))[0] || null;
 
   let nextAction = baselines.latest_manifest
     ? comparison.status === "fresh"
@@ -455,8 +466,73 @@ function buildStatus(profilePath) {
     unresolved_failed_records: failedClassification.unresolved,
     wall_clock_coverage: coverage,
     low_profile_coverage: lowCoverage,
+    passive_summary: {
+      mode: "passive",
+      slowest_record: slowest ? {
+        line: slowest.__line,
+        duration_ms: Number(slowest.duration_ms || 0),
+        phase: slowest.phase || "",
+        category: slowest.category || "",
+        intent: slowest.intent || "",
+        result: slowest.result || "",
+        commands: slowest.commands || [],
+        passive_reason: slowest.passive_reason || "",
+      } : null,
+      largest_context_input: largestContext ? {
+        path: largestContext.path || "",
+        chars: Number(largestContext.chars || 0),
+        reason: largestContext.reason || "",
+        record_line: largestContext.record_line,
+        intent: largestContext.intent,
+      } : null,
+      normal_work_next_action: failedClassification.unresolved > 0
+        ? "Inspect unresolved failed records."
+        : slowest
+          ? "No profiling maintenance needed for normal game work; use the slowest record only if you are investigating a slowdown."
+          : "No profiling maintenance needed for normal game work.",
+    },
     next_action: nextAction,
   };
+}
+
+function renderPassiveMarkdown(status) {
+  const lines = [];
+  const slowest = status.passive_summary.slowest_record;
+  const largestContext = status.passive_summary.largest_context_input;
+  lines.push(`# AI Profile Passive Status - ${basename(status.profile)}`);
+  lines.push("");
+  lines.push(`Mode: passive`);
+  lines.push(`Records: ${status.records}`);
+  lines.push(`Unresolved failures: ${status.unresolved_failed_records}`);
+  lines.push(`Recovered failures: ${status.recovered_failed_records}`);
+  lines.push(`Wall-clock coverage: ${formatPercent(status.wall_clock_coverage.coverage_ratio)} (${formatMs(status.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(status.wall_clock_coverage.wall_clock_span_ms)})`);
+  if (status.scope.work_item) {
+    lines.push(`Current scope: ${status.scope.work_item}${status.scope.iteration ? `/${status.scope.iteration}` : ""}`);
+  } else {
+    lines.push("Current scope: none");
+  }
+  lines.push("");
+  lines.push("## Slowest Recorded Work");
+  if (slowest) {
+    lines.push(`- line ${slowest.line}: ${formatMs(slowest.duration_ms)} [${slowest.phase}/${slowest.category}] ${slowest.intent}`);
+    if (slowest.commands.length > 0) lines.push(`- command: ${slowest.commands[0]}`);
+    if (slowest.passive_reason) lines.push(`- reason: ${slowest.passive_reason}`);
+  } else {
+    lines.push("- none recorded");
+  }
+  lines.push("");
+  lines.push("## Largest Context Input");
+  if (largestContext) {
+    lines.push(`- line ${largestContext.record_line}: ${largestContext.path} (${largestContext.chars} chars)`);
+    if (largestContext.reason) lines.push(`- reason: ${largestContext.reason}`);
+  } else {
+    lines.push("- none recorded");
+  }
+  lines.push("");
+  lines.push("## Next Action");
+  lines.push(`- ${status.passive_summary.normal_work_next_action}`);
+  lines.push("- Use `node tools/ai.mjs status --verbose` only for AI-workflow retrospectives.");
+  return `${lines.join("\n")}\n`;
 }
 
 function renderMarkdown(status) {
@@ -551,7 +627,7 @@ if (values.help) usage();
 const profilePath = resolve(stringArg(values, "profile", defaultProfilePath()));
 const jsonOutputFile = stringArg(values, "json-output", "");
 const status = buildStatus(profilePath);
-const rendered = renderMarkdown(status);
+const rendered = values.verbose === true ? renderMarkdown(status) : renderPassiveMarkdown(status);
 
 if (jsonOutputFile) {
   const target = resolve(jsonOutputFile);

@@ -43,16 +43,14 @@ static float clamp01(float value) {
 
 const char *game_audio_cue_name(GameAudioCue cue) {
     switch (cue) {
-    case GAME_AUDIO_CUE_SPAWN:
-        return "spawn";
-    case GAME_AUDIO_CUE_MERGE:
-        return "merge";
-    case GAME_AUDIO_CUE_UPGRADE:
-        return "upgrade";
-    case GAME_AUDIO_CUE_RECYCLE:
-        return "recycle";
-    case GAME_AUDIO_CUE_BLOCKED:
-        return "blocked";
+    case GAME_AUDIO_CUE_CLICK:
+        return "click";
+    case GAME_AUDIO_CUE_SUCCESS:
+        return "success";
+    case GAME_AUDIO_CUE_NOTIFY:
+        return "notify";
+    case GAME_AUDIO_CUE_ERROR:
+        return "error";
     case GAME_AUDIO_CUE_COUNT:
     default:
         return "unknown";
@@ -113,15 +111,13 @@ void game_audio_set_device_enabled(bool enabled) {
 
 static int cue_sample_count(GameAudioCue cue) {
     switch (cue) {
-    case GAME_AUDIO_CUE_SPAWN:
+    case GAME_AUDIO_CUE_CLICK:
         return (int)(0.12F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_MERGE:
+    case GAME_AUDIO_CUE_SUCCESS:
         return (int)(0.22F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_UPGRADE:
+    case GAME_AUDIO_CUE_NOTIFY:
         return (int)(0.26F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_RECYCLE:
-        return (int)(0.16F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_BLOCKED:
+    case GAME_AUDIO_CUE_ERROR:
         return (int)(0.11F * (float)GAME_AUDIO_SAMPLE_RATE);
     case GAME_AUDIO_CUE_COUNT:
     default:
@@ -142,27 +138,22 @@ static void fill_cue_samples(GameAudioCue cue, int16_t *out, int sample_count, f
         const float env = attack * release;
         float sample = 0.0F;
         switch (cue) {
-        case GAME_AUDIO_CUE_SPAWN: {
+        case GAME_AUDIO_CUE_CLICK: {
             const float f = 440.0F + 520.0F * u;
             sample = 0.78F * sine(f * t) + 0.20F * sine(f * 2.0F * t);
             break;
         }
-        case GAME_AUDIO_CUE_MERGE: {
+        case GAME_AUDIO_CUE_SUCCESS: {
             const float f = (u < 0.50F) ? 620.0F : 930.0F;
             sample = 0.62F * sine(f * t) + 0.28F * sine((f + 180.0F * u) * t);
             break;
         }
-        case GAME_AUDIO_CUE_UPGRADE: {
+        case GAME_AUDIO_CUE_NOTIFY: {
             const float f = (u < 0.33F) ? 523.25F : ((u < 0.66F) ? 659.25F : 783.99F);
             sample = 0.64F * sine(f * t) + 0.24F * sine(f * 2.0F * t);
             break;
         }
-        case GAME_AUDIO_CUE_RECYCLE: {
-            const float f = 360.0F - 120.0F * u;
-            sample = 0.70F * sine(f * t);
-            break;
-        }
-        case GAME_AUDIO_CUE_BLOCKED: {
+        case GAME_AUDIO_CUE_ERROR: {
             const float f = (u < 0.50F) ? 180.0F : 150.0F;
             sample = 0.58F * sine(f * t) + 0.14F * sine(90.0F * t);
             break;

@@ -14,6 +14,7 @@ Live status index: `tasks/STATUS.md`.
 Fast status: `node tools/taskboard/cli.mjs summary`.
 Compact current-context digest: `node tools/taskboard/cli.mjs context`.
 CLI: `node tools/taskboard/cli.mjs <summary|list|context|show|new|set|validate>`.
+`list` shows current work only; use `list --review` only for review cleanup.
 User-facing board: `node tools/taskboard/server.mjs` -> `http://127.0.0.1:8070/`.
 
 ## Workflow
@@ -31,6 +32,11 @@ User-facing board: `node tools/taskboard/server.mjs` -> `http://127.0.0.1:8070/`
    focused session; scope boundaries live in the epic's in/out-of-scope.
 5. Track honestly: `doing` on start, `review` when awaiting feedback, `done`
    only with ticked criteria and an evidence line in `## Log`.
+
+Treat `review` as a separate acceptance/cleanup queue, not default current
+work. Do not inspect the review queue during normal game implementation unless
+the user asks to review/close old tasks or the current decision depends on a
+specific review item.
 
 ## Refinement bar
 
