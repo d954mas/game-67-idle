@@ -1,3 +1,11 @@
+---
+type: Platform Design Knowledge
+title: Mobile/Web Platform Design
+description: Reusable design constraints for touch, viewport, browser, and resume behavior.
+tags: [mobile, web, platform, ux]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Mobile/Web Platform Design
 
 Reusable design rules for games that may run on phones, tablets, desktop browsers,

@@ -1,3 +1,11 @@
+---
+type: Agent Workflow Knowledge
+title: Agent Legibility And Feedback Loops
+description: Rules for keeping game projects inspectable and useful for AI agents.
+tags: [ai, workflow, legibility]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Agent Legibility And Feedback Loops
 
 ## Goal

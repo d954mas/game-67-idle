@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Game Feel And Controls
+description: Reusable rules for responsive input, timing, and control feedback.
+tags: [controls, game-feel, ux]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Game Feel And Controls
 
 Reusable rules for making input, timing, movement, and moment-to-moment feedback

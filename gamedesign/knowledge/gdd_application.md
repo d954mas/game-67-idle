@@ -1,3 +1,11 @@
+---
+type: Knowledge Application Guide
+title: GDD Application
+description: Workflow for applying reusable knowledge to project-specific GDDs.
+tags: [gdd, application, workflow]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # GDD Application
 
 Reusable workflow for turning knowledge-base rules into a project-specific GDD.

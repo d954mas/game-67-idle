@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Release Readiness
+description: Reusable checklist for external testing and release-candidate readiness.
+tags: [release, qa, validation]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Release Readiness
 
 Reusable design-side checklist for deciding whether a game build is ready for an

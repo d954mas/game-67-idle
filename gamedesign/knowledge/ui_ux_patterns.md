@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: UI/UX Patterns
+description: Reusable patterns for readable game UI, hierarchy, controls, and states.
+tags: [ui, ux, patterns]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # UI/UX Patterns
 
 Reusable UI/UX rules for readable casual game screens.

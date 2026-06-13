@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Visual Direction
+description: Reusable rules for friendly, readable game visual direction.
+tags: [visual, art-direction, readability]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Visual Direction
 
 Reusable rules for readable, friendly casual-game visual direction.

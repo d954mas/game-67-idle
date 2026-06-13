@@ -1,3 +1,11 @@
+---
+type: Reference Method
+title: Reference Deconstruction
+description: Method for studying game references before implementation.
+tags: [references, research, deconstruction]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Reference Deconstruction
 
 Goal: prevent shallow "genre understood" research from driving implementation.

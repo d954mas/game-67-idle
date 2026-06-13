@@ -1,3 +1,11 @@
+---
+type: Research Notes
+title: AI Art Pipeline Research 2026
+description: Research-backed notes for AI-assisted game art workflows.
+tags: [art, research, ai, pipeline]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # AI Art Pipeline Research 2026
 
 Research notes for speeding up generated game art work in this repository.

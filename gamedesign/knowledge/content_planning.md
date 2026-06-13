@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Content Planning
+description: Reusable structure for scoping and organizing game content.
+tags: [content, scope, planning]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Content Planning
 
 Reusable rules for planning game content without losing the core loop.

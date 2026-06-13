@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Iteration Scope
+description: Rules for keeping playable iterations small and reviewable.
+tags: [scope, iteration, planning]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Iteration Scope
 
 Reusable rules for cutting game work into small playable iterations.

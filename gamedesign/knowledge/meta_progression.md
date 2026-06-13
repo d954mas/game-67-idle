@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Meta Progression
+description: Reusable patterns for long-term progression, unlocks, and goals.
+tags: [meta-progression, economy, rewards]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Meta Progression
 
 Reusable structure for long-term progression, economy, unlocks, and rewards.

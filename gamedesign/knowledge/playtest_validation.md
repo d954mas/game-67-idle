@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Playtest Validation
+description: Reusable evidence rules for proving first-minute gameplay behavior.
+tags: [playtest, validation, evidence]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Playtest Validation
 
 Reusable validation checklist for early casual game builds.

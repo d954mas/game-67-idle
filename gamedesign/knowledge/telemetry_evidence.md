@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Telemetry Evidence
+description: Reusable rules for logs, events, screenshots, and proof artifacts.
+tags: [telemetry, evidence, validation]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Telemetry Evidence
 
 Reusable rules for defining logs, events, and evidence in game design specs.

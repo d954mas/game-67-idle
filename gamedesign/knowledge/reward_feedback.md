@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Reward Feedback
+description: Reusable rules for making rewards, progress, and consequences visible.
+tags: [rewards, feedback, ux]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Reward Feedback
 
 Reusable rules for making rewards, progress, and consequences feel clear.

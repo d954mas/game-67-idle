@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Core Loop
+description: Reusable structure for defining and reviewing the main gameplay loop.
+tags: [core-loop, gameplay, validation]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Core Loop
 
 Reusable structure for defining and reviewing the main repeatable gameplay loop.

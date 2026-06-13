@@ -1,3 +1,11 @@
+---
+type: Art Pipeline Knowledge
+title: AI Art Iteration Pipeline
+description: Reusable workflow for moving generated art into runtime assets.
+tags: [art, pipeline, ai, assets]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # AI Art Iteration Pipeline
 
 Reusable workflow for turning generated art into game-ready runtime assets
@@ -75,7 +83,7 @@ Include:
 Quick scaffold:
 
 ```powershell
-node tools/assets/new_art_job.mjs --id 67-world-characters-v2 --family "next 67 variants" --target gamedesign/meme-evolution/visuals/67-world-first-7-lineup-v1.png
+node tools/assets/new_art_job.mjs --id character-lineup-v1 --family "starter character set" --target gamedesign/my-game/visuals/first-lineup-v1.png
 ```
 
 ## Fast Local Loop
@@ -92,8 +100,9 @@ node tools/assets/new_art_job.mjs --id 67-world-characters-v2 --family "next 67 
 5. **Compose in runtime.** Buttons are slice9 background + runtime text/icon;
    boards are border/tile/highlight/slot pieces; characters are separate
    sprites with metadata.
-6. **Validate in the primary harness.** For this project that means native PC
-   screenshot/DevAPI evidence unless the current task explicitly targets web.
+6. **Validate in the primary harness.** For this repo template that usually
+   means native PC screenshot/DevAPI evidence unless the current task
+   explicitly targets web.
 7. **Audit the evidence source.** Check that the screenshot is from the
    expected framebuffer/runtime path, has the expected dimensions, and did not
    silently fall back to a window or browser capture.

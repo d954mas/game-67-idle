@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Balance Tuning
+description: Reusable pacing and economy checks for game balance.
+tags: [balance, economy, progression]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Balance Tuning
 
 Reusable rules for tuning game numbers, pacing, economy, and difficulty.

@@ -1,75 +1,94 @@
+---
+type: Knowledge Guide
+title: Design Knowledge Base
+description: Lightweight OKF-style rules for reusable game design knowledge.
+tags: [knowledge, gdd, okf-lite, ai]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Design Knowledge Base
 
 Reusable design knowledge for game GDD work.
 
-This folder is for universal patterns, checklists, anti-patterns, and references.
-Current-game facts, current balance, implemented state, names, jokes, milestone
-scope, and product decisions belong in the project's GDD files, not here.
+This folder is an OKF-lite knowledge bundle: plain Markdown files with small
+YAML frontmatter, links between related pages, citations when external sources
+matter, and a short change log. It is intentionally not a task tracker, GDD,
+status board, database, SDK, or required pipeline.
 
-## Use This Folder For
+## Folder Roles
+
+- `gamedesign/knowledge/` - reusable principles, checklists, patterns, and
+  reference-study methods that can apply across game projects.
+- `gamedesign/sources/` - optional raw source notes, excerpts, links, and
+  durable research packets. Keep these closer to the original material.
+- Project-specific concept docs belong in the active project GDD folder, not in
+  this reusable knowledge base.
+- Work status and deferred tasks belong in `tasks/`, not here.
+
+## Entry Points
+
+- [Index](index.md) - topic map for agents and humans.
+- [Log](log.md) - compact history of meaningful knowledge-base changes.
+- [GDD Application](gdd_application.md) - how to turn reusable rules into a
+  concrete project spec.
+- [Reference Deconstruction](reference_deconstruction.md) - how to study a
+  reference before implementation.
+- [Agent Legibility](agent_legibility.md) - how to keep docs/tooling useful for
+  AI-assisted work.
+
+## OKF-Lite File Shape
+
+New or substantially edited files should start with this frontmatter:
+
+```yaml
+---
+type: Game Design Knowledge
+title: Short Human Title
+description: One sentence describing when to use this page.
+tags: [design, example]
+timestamp: 2026-06-13T00:00:00Z
+---
+```
+
+Only `type` is required. The other fields are recommended because they help an
+agent find the right page without reading every file. Existing legacy pages can
+be migrated when they are edited; do not run a large migration just to satisfy a
+format.
+
+## Page Rules
+
+- Keep pages short enough to scan before a design or implementation pass.
+- Prefer checklists, decision prompts, anti-patterns, and validation criteria
+  over essays.
+- Link related knowledge files instead of duplicating sections.
+- Put external sources under `## References` or `## Citations`.
+- Use `gamedesign/sources/` for raw research; summarize only reusable lessons
+  in `knowledge/`.
+- Add a new page only when an existing page would become less readable.
+
+## What Belongs Here
 
 - FTUE and onboarding design rules.
-- Meta progression and economy structure.
-- UI/UX patterns for readable game screens.
-- Reusable review checklists.
-- Links to external references worth reusing across projects.
+- Core loop, reward, economy, content, and progression patterns.
+- UI/UX, accessibility, playtest, and release-readiness checklists.
+- Reference deconstruction methods and reusable research protocols.
+- AI-agent legibility rules that make design work easier to inspect and verify.
 
-## Do Not Use This Folder For
+## What Does Not Belong Here
 
-- Current project state.
-- Current sprint tasks.
-- Implemented feature status.
-- Game-specific lore, characters, currencies, or copy.
-- One-off playtest notes unless they become a reusable principle.
+- Current project status.
+- Sprint tasks or implementation checklists.
+- Game-specific lore, names, currencies, jokes, copy, or balance numbers.
+- One-off playtest notes unless they become reusable across projects.
+- Tool output dumps, generated prompt logs, or raw chat transcripts.
 
-## Index
+## Maintenance
 
-- [FTUE](ftue.md) - first session, first 30 seconds, tutorial-by-doing.
-- [Core Loop](core_loop.md) - repeatable action, feedback, reward, and changed state.
-- [Meta Progression](meta_progression.md) - long-term goals, economies, unlocks, rewards.
-- [UI/UX Patterns](ui_ux_patterns.md) - readable controls, feedback, component states.
-- [Playtest Validation](playtest_validation.md) - first minutes, evidence, bugs, director review.
-- [Reward Feedback](reward_feedback.md) - visible rewards, consequences, unlock clarity.
-- [Visual Direction](visual_direction.md) - readable friendly casual-game visual rules.
-- [Reference Deconstruction](reference_deconstruction.md) - how to study references before implementation.
-- [AI Art Iteration Pipeline](ai_art_iteration_pipeline.md) - fast generated-art to reusable runtime asset workflow.
-- [Balance Tuning](balance_tuning.md) - pacing targets, economy checks, simulations.
-- [Content Planning](content_planning.md) - content roles, matrices, scope control.
-- [GDD Application](gdd_application.md) - turn reusable knowledge into project specs.
-- [Design Review](design_review.md) - pre-implementation GDD review checklist.
-- [Iteration Scope](iteration_scope.md) - small playable slices and definition of done.
-- [Telemetry Evidence](telemetry_evidence.md) - logs, events, traces, screenshots, proof.
-- [Mobile/Web Platform Design](mobile_web_platform.md) - touch, viewport, browser, resume constraints.
-- [Accessibility](accessibility.md) - readable, controllable, recoverable game design.
-- [Game Feel And Controls](game_feel_controls.md) - input response, timing, control feedback.
-- [Release Readiness](release_readiness.md) - external-test and RC design checklist.
-- [Agent Legibility](agent_legibility.md) - keep the project inspectable and validatable by AI agents; encode lessons into tools/validators, not prompts.
+When adding or changing durable knowledge:
 
-## How To Apply
-
-1. Start from the topic file closest to the design problem.
-2. Copy only the relevant checklist into the game-specific GDD.
-3. Replace generic examples with project-specific names, numbers, and screens.
-4. Add validation criteria before implementation starts.
-5. If a repeated problem appears in playtests, extract the reusable rule back here.
-
-For feature work, use [GDD Application](gdd_application.md) to write the project-specific
-section, then use [Design Review](design_review.md) before implementation handoff.
-
-## Maintenance Rules
-
-- Keep files short enough to scan before a design or implementation pass.
-- Prefer checklists and decision prompts over essays.
-- Link related knowledge files instead of duplicating sections.
-- Keep external links in a `References` section.
-- Split a file when one topic starts hiding another topic.
-
-## Contribution Rules
-
-- Add a new file only when an existing file would become less readable.
-- Add a rule only if it can change a design decision, review finding, or validation step.
-- Keep project-specific examples out; use neutral examples or placeholders.
-- If a playtest finding is project-specific, write it in the project GDD first.
-- Promote a playtest finding into this folder only when it becomes reusable across games.
-- New files should include: `Goal`, practical checklist, anti-patterns, validation, and links.
-- Prefer one strong page over many shallow pages.
+1. Update the page itself.
+2. Add or fix links in [Index](index.md) if discoverability changed.
+3. Add one short entry to [Log](log.md) for meaningful changes.
+4. Move raw source material to `gamedesign/sources/` if it should be preserved.
+5. Keep tooling optional; do not add a validator or script unless repeated
+   mistakes prove it would save time.

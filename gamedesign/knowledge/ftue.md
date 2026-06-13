@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: FTUE
+description: Reusable rules for first-session onboarding and tutorial-by-doing.
+tags: [ftue, onboarding, ux]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # FTUE
 
 First Time User Experience design for casual games.

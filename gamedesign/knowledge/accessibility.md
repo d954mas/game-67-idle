@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Accessibility
+description: Reusable rules for readable, controllable, recoverable game experiences.
+tags: [accessibility, ux, validation]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Accessibility
 
 Reusable accessibility rules for casual game design.

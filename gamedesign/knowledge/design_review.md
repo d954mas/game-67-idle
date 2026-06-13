@@ -1,3 +1,11 @@
+---
+type: Game Design Knowledge
+title: Design Review
+description: Checklist for reviewing game design docs before implementation.
+tags: [review, gdd, quality]
+timestamp: 2026-06-13T00:00:00Z
+---
+
 # Design Review
 
 Reusable checklist for reviewing a GDD section before implementation.
