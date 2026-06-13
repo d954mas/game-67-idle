@@ -75,8 +75,14 @@ node tools/ai.mjs reflect
 ```
 
 This keeps analytics attached to real work without forcing the agent to manage
-the profiler as a separate project. Use `tools/ai_profile/*` directly only when
-debugging telemetry, running a one-off deep analysis, or changing the profiler.
+the profiler as a separate project. `reflect` prepares the full handoff chain
+when a baseline exists: closeout bundle, baseline comparison, reflection packet,
+draft, and review. It continues when current-scope regressions exist so those
+regressions become reflection evidence; use `node tools/ai.mjs reflect
+--strict` to stop on regressions, or `node tools/ai.mjs reflect --quick` only
+for a cheap closeout summary without the full handoff. Use `tools/ai_profile/*`
+directly only when debugging telemetry, running a one-off deep analysis, or
+changing the profiler.
 
 For playable game iterations, `node tools/ai.mjs context` profiles and prints
 the compact game context pack. To write the pack JSON explicitly, run:

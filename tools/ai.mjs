@@ -9,14 +9,14 @@ function usage() {
   node tools/ai.mjs context
   node tools/ai.mjs run [--phase <name>] [--category <name>] [--intent <text>] [--value <name>] -- <command> [args...]
   node tools/ai.mjs status
-  node tools/ai.mjs reflect [--full]
+  node tools/ai.mjs reflect [--quick] [--strict]
 
 Fast path:
   start    set current work item and append one profiling checkpoint
   context  print the compact game-iteration packet and profile its cost
   run      run a command and record duration/result
   status   show telemetry health
-  reflect  write closeout summary/review/follow-up scratch artifacts
+  reflect  prepare the full reflection handoff from current telemetry
 
 Use tools/ai_profile/* directly only when debugging the profiler itself.`);
   process.exit(2);
@@ -91,10 +91,13 @@ if (command === "status") {
 }
 
 if (command === "reflect") {
-  if (argv.includes("--full")) {
-    run(["tools/ai_profile/prepare_reflection.mjs", ...argv.filter((arg) => arg !== "--full")]);
+  if (argv.includes("--quick")) {
+    run(["tools/ai_profile/closeout.mjs", ...argv.filter((arg) => arg !== "--quick")]);
   }
-  run(["tools/ai_profile/closeout.mjs", ...argv]);
+  const strict = argv.includes("--strict");
+  const args = argv.filter((arg) => arg !== "--strict");
+  if (!strict && !hasFlag(args, "--allow-regression")) args.push("--allow-regression");
+  run(["tools/ai_profile/prepare_reflection.mjs", ...args]);
 }
 
 usage();

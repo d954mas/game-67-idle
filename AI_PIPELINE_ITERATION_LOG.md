@@ -1187,3 +1187,20 @@ specific and reusable.
   review count. Use it in routine validation.
 - Follow-up owner: Future taskboard/pipeline agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Reflection facade must produce the whole handoff
+
+- Trigger: After `node tools/ai.mjs reflect`, profile status still asked for a
+  baseline comparison, reflection packet, draft, and review.
+- Symptom: The command name promised reflection readiness, but the agent still
+  had to run or interpret a multi-step handoff chain.
+- Time sink: Future retrospectives would again start with tool maintenance
+  instead of reading a ready reflection artifact.
+- Likely cause: The facade exposed closeout behavior under the broader
+  `reflect` name.
+- Proposed improvement: Make `node tools/ai.mjs reflect` run the full
+  `prepare_reflection` handoff by default. Continue through current-scope
+  regressions so they become reflection evidence; reserve `--strict` for
+  stopping on regressions and `--quick` for cheap closeout.
+- Follow-up owner: Future profiling/reflection agents.
+- Status: Implemented in `T0110`.

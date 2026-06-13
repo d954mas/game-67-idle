@@ -132,14 +132,18 @@ Apply the same rule to wall-clock coverage: if whole-profile coverage is low
 but current-scope coverage is acceptable or too short to judge, do not add
 checkpoint records solely to repair old history.
 
-Before writing a retrospective from a live profile, run `node tools/ai.mjs reflect`
-for the normal closeout bundle. For a deeper baseline-aware handoff, run
-`tools/ai_profile/summarize_session_profile.mjs <profile.jsonl> --output
-tmp/session_profiles/<name>.summary.md` and cite the summary path. If the
-summary cannot be generated, state that profiling evidence is incomplete.
-For normal session closeout, prefer `tools/ai_profile/closeout.mjs`, which
-records a closeout event and writes the summary, review markdown/JSON, and
-follow-up markdown/JSON in one closeout bundle.
+Before writing a retrospective from a live profile, run
+`node tools/ai.mjs reflect`. It prepares the closeout bundle, baseline comparison, reflection
+packet, draft, and review when the required baseline is available. It continues
+through current-scope regressions so they are visible in the reflection
+handoff; use `node tools/ai.mjs reflect --strict` to stop on regressions, or
+`node tools/ai.mjs reflect --quick` only when a cheap closeout summary is
+enough.
+If the full handoff cannot be generated, state what is missing instead of
+manually chaining commands unless you are debugging the profiler.
+For low-level session closeout, `tools/ai_profile/closeout.mjs` records a
+closeout event and writes the summary, review markdown/JSON, and follow-up
+markdown/JSON in one closeout bundle.
 Run `tools/ai_profile/review.mjs <profile.jsonl> --output
 tmp/session_profiles/<name>.review.md --json-output
 tmp/session_profiles/<name>.review.json` only when the closeout bundle was

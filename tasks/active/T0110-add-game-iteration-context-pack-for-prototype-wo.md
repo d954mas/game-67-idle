@@ -33,7 +33,10 @@ workflow/runtime tools.
 - [x] Profiling docs explain how to capture the context pack through
       `node tools/ai.mjs context`.
 - [x] `tools/ai.mjs` provides the fast path for start, context, profiled run,
-      status, and reflection closeout.
+      status, and full reflection handoff.
+- [x] `node tools/ai.mjs reflect` creates the full reflection handoff by
+      default and keeps current-scope regressions visible instead of stopping
+      before packet/draft/review generation.
 - [x] Current 67 World-specific scripts are grouped under
       `tools/project_67_world/` instead of being mixed into generic tool
       folders.
@@ -60,6 +63,9 @@ None.
   summary --tasks-limit 3`, `node --test tools/taskboard/test.mjs`, `node
   tools/skills_eval.mjs`, and `node tools/ai.mjs run -- node
   tools/pipeline_validate.mjs`.
+- 2026-06-13: Changed `node tools/ai.mjs reflect` to generate the full
+  reflection handoff by default; `--strict` preserves stop-on-regression
+  behavior and `--quick` keeps cheap closeout behavior.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;
