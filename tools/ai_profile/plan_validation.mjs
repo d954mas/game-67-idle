@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { basename } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { basename, dirname, resolve } from "node:path";
 import { listArg, parseArgs, stringArg } from "./profile_lib.mjs";
 
 const RISK_LEVELS = ["low", "medium", "high"];
@@ -180,7 +181,7 @@ const CHECKS = [
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/plan_validation.mjs --change <kind> [--change <kind> ...] [--file <path> ...] [--risk low|medium|high] [--json]
+  node tools/ai_profile/plan_validation.mjs --change <kind> [--change <kind> ...] [--file <path> ...] [--risk low|medium|high] [--json] [--json-output <file>]
   node tools/ai_profile/plan_validation.mjs --list-changes
 
 Prints a validation ladder. It does not run commands.
@@ -276,6 +277,33 @@ function renderMarkdown(changes, risk, checks, skippedFinal) {
   return `${lines.join("\n")}\n`;
 }
 
+function buildPlan(changes, risk, checks, skippedFinal) {
+  const sortedChanges = [...changes].sort();
+  const byTier = Object.fromEntries(["preflight", "scoped", "final"].map((tier) => [
+    tier,
+    checks.filter((check) => check.tier === tier),
+  ]));
+  const finalChecks = byTier.final || [];
+  const broadFinalChecks = finalChecks.filter((check) => check.broad);
+  return {
+    schema_version: 1,
+    risk,
+    changes: sortedChanges,
+    checks,
+    checks_by_tier: byTier,
+    final_checks: finalChecks,
+    broad_final_checks: broadFinalChecks,
+    skipped_final: skippedFinal,
+    broad_final_count: broadFinalChecks.length,
+    deferred_broad_count: skippedFinal.length,
+    next_action: broadFinalChecks.length > 0
+      ? "Run preflight and scoped checks first; run broad/final checks once at the end of the batch."
+      : "Run preflight and scoped checks; broad/final checks are deferred unless risk or scope grows.",
+    rule:
+      "Broad/final checks should repeat only after a failed gate, changed risk, changed shared behavior, or final batch boundary.",
+  };
+}
+
 const { values } = parseArgs(process.argv.slice(2));
 if (values.help) usage();
 if (values["list-changes"]) {
@@ -313,9 +341,17 @@ const skippedFinal = CHECKS.filter((check) => {
   const applies = check.changes.some((change) => changes.has(change));
   return applies && !checks.includes(check);
 });
+const plan = buildPlan(changes, risk, checks, skippedFinal);
+const jsonOutput = stringArg(values, "json-output", "");
+
+if (jsonOutput) {
+  const target = resolve(jsonOutput);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, `${JSON.stringify(plan, null, 2)}\n`, "utf8");
+}
 
 if (values.json) {
-  process.stdout.write(`${JSON.stringify({ risk, changes: [...changes].sort(), checks, skipped_final: skippedFinal }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 } else {
   process.stdout.write(renderMarkdown(changes, risk, checks, skippedFinal));
 }

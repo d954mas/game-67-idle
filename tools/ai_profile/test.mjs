@@ -765,6 +765,62 @@ test("observability gate recommends bounded pilot for shared eval needs", () => 
   }
 });
 
+test("validation planner writes json output with broad final decision", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan.json");
+    const result = run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--change",
+      "profiling",
+      "--change",
+      "pipeline",
+      "--risk",
+      "medium",
+      "--json-output",
+      output,
+    ]);
+
+    const plan = readJson(output);
+    assert.equal(plan.schema_version, 1);
+    assert.equal(plan.risk, "medium");
+    assert.ok(plan.checks_by_tier.preflight.length > 0);
+    assert.ok(plan.checks_by_tier.scoped.length > 0);
+    assert.ok(plan.broad_final_count > 0);
+    assert.ok(plan.broad_final_checks.some((check) => check.id === "portable-pipeline"));
+    assert.match(plan.next_action, /broad\/final checks once/);
+    assert.match(result.stdout, /Validation Ladder/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation planner json output marks low risk broad checks as deferred", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan-low.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--change",
+      "pipeline",
+      "--risk",
+      "low",
+      "--json-output",
+      output,
+      "--json",
+    ]);
+
+    const plan = readJson(output);
+    assert.equal(plan.risk, "low");
+    assert.equal(plan.broad_final_count, 0);
+    assert.ok(plan.deferred_broad_count > 0);
+    assert.ok(plan.skipped_final.some((check) => check.id === "portable-pipeline"));
+    assert.match(plan.next_action, /deferred/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("closeout writes summary review and follow-up bundle", () => {
   const dir = tempDir();
   try {

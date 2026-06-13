@@ -305,6 +305,8 @@ const SKILL_CHECKS = [
       "closeout bundle",
       "review.mjs",
       "plan_validation.mjs",
+      "--json-output",
+      "broad_final_count",
       "followups.mjs",
       "missing context input",
       "work_items",

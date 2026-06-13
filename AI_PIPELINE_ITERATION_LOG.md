@@ -773,3 +773,21 @@ specific and reusable.
   time savings or shared review/eval value.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0087`.
+
+## 2026-06-13 - Validation plans need machine-readable artifacts
+
+- Trigger: Profile follow-ups still reported 27 repeated broad/final
+  `node tools/pipeline_validate.mjs` runs even after adding a validation
+  ladder planner.
+- Symptom: The planner helped humans, but automation and later agents had to
+  parse markdown or rely on chat memory to know whether broad/final checks were
+  allowed.
+- Time sink: Broad gates are expensive, and repeated validation noise makes
+  reflection spend time explaining preventable reruns.
+- Likely cause: `plan_validation.mjs` had stdout JSON but no durable
+  `--json-output` artifact with compact broad/final counts and next action.
+- Proposed improvement: Add `--json-output`, `checks_by_tier`,
+  `broad_final_count`, `deferred_broad_count`, and `next_action` so future
+  agents can consume validation decisions directly.
+- Follow-up owner: Future profiling/validation/tooling agents.
+- Status: Implemented in `T0088`.

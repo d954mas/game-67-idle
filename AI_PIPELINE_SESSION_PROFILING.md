@@ -492,9 +492,17 @@ before running it:
 node tools/ai_profile/plan_validation.mjs --change profiling --change skills --risk medium
 ```
 
-The planner prints commands but does not run them. Profile substantial commands
-with `run.mjs`, batch broad/final gates, and record any intentionally skipped
-expected gate in the task log.
+For automation or handoff, also write a machine-readable plan:
+
+```powershell
+node tools/ai_profile/plan_validation.mjs --change profiling --change skills --risk medium --json-output tmp/session_profiles/validation_plan.json
+```
+
+The planner prints commands but does not run them. Its JSON plan includes
+`checks_by_tier`, `broad_final_checks`, `broad_final_count`,
+`deferred_broad_count`, and `next_action` so agents and tools can avoid parsing
+markdown. Profile substantial commands with `run.mjs`, batch broad/final gates,
+and record any intentionally skipped expected gate in the task log.
 
 ## Definition Of Done
 
@@ -547,7 +555,9 @@ A "profiled session" is done when:
 - `followups.mjs` is used when review JSON should become draft next actions
   for task/rule/tool promotion and the closeout bundle was skipped or stale;
 - `plan_validation.mjs` is used before rerunning broad validation after the
-  profile review has identified repeated commands or validation waste;
+  profile review has identified repeated commands or validation waste; use
+  `--json-output` when another tool, agent, or later reflection should consume
+  the validation decision;
 - `observability_gate.mjs` is used before adding external tracing/eval
   platforms; the decision and pilot result are captured in a task log or
   durable pipeline note, while raw exported telemetry stays in `tmp/`;
