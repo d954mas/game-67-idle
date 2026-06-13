@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, resolve } from "node:path";
+import { parseArgs, stringArg } from "./profile_lib.mjs";
 
 const allowed = {
   category: new Set([
@@ -22,7 +23,11 @@ const allowed = {
 };
 
 function usage() {
-  console.error("usage: node tools/ai_profile/summarize_session_profile.mjs <profile.jsonl>");
+  console.error(`usage:
+  node tools/ai_profile/summarize_session_profile.mjs <profile.jsonl> [--output <summary.md>]
+
+If --output is provided, the summary is written to that file and still printed
+to stdout. Put generated summaries under tmp/session_profiles/ by default.`);
   process.exit(2);
 }
 
@@ -49,20 +54,29 @@ function topEntries(map, limit = 10) {
   return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
 }
 
+const output = [];
+
+function emit(line = "") {
+  output.push(line);
+}
+
 function printMap(title, map, formatter = (value) => String(value)) {
-  console.log(`\n## ${title}`);
+  emit(`\n## ${title}`);
   const entries = topEntries(map);
   if (entries.length === 0) {
-    console.log("- none");
+    emit("- none");
     return;
   }
   for (const [key, value] of entries) {
-    console.log(`- ${key}: ${formatter(value)}`);
+    emit(`- ${key}: ${formatter(value)}`);
   }
 }
 
-const file = process.argv[2];
+const { values, positionals } = parseArgs(process.argv.slice(2));
+if (values.help) usage();
+const file = positionals[0];
 if (!file) usage();
+const outputFile = stringArg(values, "output", "");
 
 const text = readFileSync(file, "utf8");
 const lines = text.split(/\r?\n/);
@@ -154,10 +168,10 @@ for (const record of records) {
   }
 }
 
-console.log(`# AI Session Profile Summary - ${basename(file)}`);
-console.log(`\nRecords: ${records.length}`);
-console.log(`Profiled duration: ${formatMs(totalDuration)}`);
-console.log(`Commands recorded: ${commandCount}`);
+emit(`# AI Session Profile Summary - ${basename(file)}`);
+emit(`\nRecords: ${records.length}`);
+emit(`Profiled duration: ${formatMs(totalDuration)}`);
+emit(`Commands recorded: ${commandCount}`);
 
 printMap("Duration By Phase", durationByPhase, formatMs);
 printMap("Duration By Category", durationByCategory, formatMs);
@@ -170,22 +184,29 @@ printMap("Most Written Files", fileWrites);
 printMap("Context Input Chars", contextChars);
 printMap("Evidence Paths", evidenceCounts);
 
-console.log("\n## Waste And Rework");
+emit("\n## Waste And Rework");
 if (wasteRecords.length === 0) {
-  console.log("- none");
+  emit("- none");
 } else {
   for (const record of wasteRecords) {
     const reason = record.waste_reason || record.notes || "no reason recorded";
-    console.log(`- line ${record.__line} [${record.phase}/${record.category}/${record.value}]: ${record.intent} -> ${reason}`);
+    emit(`- line ${record.__line} [${record.phase}/${record.category}/${record.value}]: ${record.intent} -> ${reason}`);
   }
 }
 
-console.log("\n## Blockers");
+emit("\n## Blockers");
 if (blockers.length === 0) {
-  console.log("- none");
+  emit("- none");
 } else {
   for (const record of blockers) {
-    console.log(`- line ${record.__line} [${record.phase}]: ${record.blocked_by || record.intent}`);
+    emit(`- line ${record.__line} [${record.phase}]: ${record.blocked_by || record.intent}`);
   }
 }
 
+const rendered = `${output.join("\n")}\n`;
+if (outputFile) {
+  const target = resolve(outputFile);
+  mkdirSync(dirname(target), { recursive: true });
+  writeFileSync(target, rendered, "utf8");
+}
+process.stdout.write(rendered);

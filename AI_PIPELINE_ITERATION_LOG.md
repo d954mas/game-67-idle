@@ -349,3 +349,25 @@ specific and reusable.
   corrections, or before starting another 24+ hour run.
 - Follow-up owner: Current and future pipeline/reflection agents.
 - Status: Implemented in `T0060`.
+
+## 2026-06-13 - Profiling must be captured during work, not reconstructed
+
+- Context: After the retrospective, the user asked for real profiling of
+  chat/tool/context spend and then challenged whether raw telemetry belonged in
+  git.
+- Friction: Post-hoc thread extraction can recover turn durations,
+  compactions, and some file/tool patterns, but not exact token usage or a
+  complete command/tool list. Manual profiling also risks becoming more work
+  than the development it measures.
+- Time sink: Reconstructing telemetry from chat consumed extra turns and still
+  produced partial data.
+- Likely cause: The pipeline had reflection docs and a summary script, but no
+  low-overhead way to collect command timing and checkpoint events while work
+  happened.
+- Proposed improvement: Add local, ignored JSONL profiling with
+  `tools/ai_profile/run.mjs` for substantial commands and
+  `tools/ai_profile/event.mjs` for sparse checkpoints. Keep raw profiles in
+  `tmp/session_profiles/`; commit only reusable rules/tools and compact
+  lessons.
+- Follow-up owner: Future implementation/reflection agents.
+- Status: Implemented in `T0062`.

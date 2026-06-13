@@ -84,3 +84,15 @@ When the user asks for full AI-development profiling, use
 `AI_PIPELINE_SESSION_PROFILING.md` and `tools/ai_profile/`. A proper profile
 must separate useful work, necessary overhead, rework, and waste; report context
 inputs and compactions; and state what was not measurable.
+
+For future long sessions, prefer collecting data during work with
+`tools/ai_profile/run.mjs` for substantial commands and
+`tools/ai_profile/event.mjs` for sparse checkpoints. Do not wait until the end
+to reconstruct avoidable telemetry from chat history.
+
+Before writing a retrospective from a live profile, run
+`tools/ai_profile/summarize_session_profile.mjs <profile.jsonl> --output
+tmp/session_profiles/<name>.summary.md` and cite the summary path. If the
+summary cannot be generated, state that profiling evidence is incomplete.
+For normal session closeout, prefer `tools/ai_profile/closeout.mjs`, which
+records a closeout event and writes the summary in one step.

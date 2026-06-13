@@ -172,11 +172,52 @@ Log a record for:
 Do not log every tiny file read. Batch related reads into one record unless
 the context cost itself is the point.
 
+## Low-Overhead Capture
+
+Use wrappers so profiling does not steal time from the actual work.
+
+For shell commands, prefer:
+
+```powershell
+node tools/ai_profile/run.mjs --phase validation --category validation --intent "Run taskboard validation" -- node tools/taskboard/cli.mjs validate
+```
+
+`run.mjs` inherits stdio, waits for the command, then appends one JSONL record
+with duration, exit code, command text, result, and tool type.
+
+For non-command checkpoints, use:
+
+```powershell
+node tools/ai_profile/event.mjs --phase context --category context --intent "Read current status" --result pass --value necessary_overhead --file-read tasks/STATUS.md --context-input tasks/STATUS.md:42000:current-gate --context-risk medium
+```
+
+Use `event.mjs` only for meaningful checkpoints: phase start/end, user
+correction, context compaction, major file-read batch, wrong assumption,
+manual visual finding, or handoff decision.
+
+Use project-relative paths when possible. `--context-input` also accepts
+Windows absolute paths because the parser treats the first numeric segment as
+the character-count separator.
+
+Both commands default to:
+
+```text
+tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl
+```
+
+Override with `--profile <path>` only for tests or when comparing profiles.
+
 ## Tool Profiling
 
 Record tools by role:
 
 - `shell_command`: command, duration, pass/fail, whether it was narrow or broad.
+- `run.mjs`: default wrapper for shell commands. Prefer it for expensive,
+  repeated, or validation commands so duration and exit code are captured
+  automatically.
+- `event.mjs`: low-cost checkpoint writer for non-command events.
+- `closeout.mjs`: end-of-session helper that appends a final closeout event
+  and writes a scratch summary artifact.
 - `apply_patch`: files changed, why the change was scoped.
 - `imagegen`: prompt packet path, candidate count, accepted/rejected result.
 - `view_image`: image paths, visual findings.
@@ -222,6 +263,24 @@ Run:
 node tools/ai_profile/summarize_session_profile.mjs tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl
 ```
 
+For session closeout, write a scratch summary artifact:
+
+```powershell
+node tools/ai_profile/summarize_session_profile.mjs tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl --output tmp/session_profiles/session_profile_YYYY-MM-DD.summary.md
+```
+
+The summary is still printed to stdout. The `.summary.md` file is ignored by
+git by default because it lives under `tmp/`.
+
+For normal long-session closeout, prefer:
+
+```powershell
+node tools/ai_profile/closeout.mjs
+```
+
+`closeout.mjs` appends a final closeout event, writes the `.summary.md`, prints
+both paths, and keeps all raw/profile artifacts under `tmp/session_profiles/`.
+
 The summary reports:
 
 - total records and profiled duration;
@@ -238,7 +297,12 @@ The summary reports:
 A "profiled session" is done when:
 
 - JSONL exists and parses;
-- the summary script passes;
+- command work used `run.mjs` for substantial validations/builds/audits;
+- non-command context decisions used sparse `event.mjs` checkpoints;
+- the summary script passes and writes a scratch `.summary.md` closeout when
+  the session is long enough to reflect on;
+- `closeout.mjs` is used for normal session closeout unless a custom summary
+  path or manual investigation is needed;
 - the final response names profile path and summary path;
 - any repeated waste is converted into a task, skill rule, or pipeline rule;
 - the retrospective uses the profile instead of relying only on memory.

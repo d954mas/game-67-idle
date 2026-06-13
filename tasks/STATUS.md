@@ -82,6 +82,8 @@ Active task:
 - `T0059` Require 55-minute manual child-test acceptance: in review.
 - `T0060` Add chat-session reflection skill and retrospective: in review.
 - `T0061` Add AI development session profiling pipeline: in review.
+- `T0062` Add low-overhead AI profile event and command wrappers: in review.
+- `T0063` Add AI profile closeout summary command: in review.
 
 Current visual proof:
 

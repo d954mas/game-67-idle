@@ -149,7 +149,9 @@ node tools/skills_sync.mjs
   `tmp/session_profiles/` unless the lead explicitly asks to promote them.
   `.gitignore` is the safety net for scratch paths; the workflow rule is what
   prevents agents from creating noisy session artifacts in non-ignored
-  locations.
+  locations. Use `tools/ai_profile/run.mjs` for substantial commands and
+  `tools/ai_profile/event.mjs` for sparse checkpoints so profiling is captured
+  during work instead of reconstructed after the fact.
 - **Runtime base is protected in this repository.** `state/`,
   `tools/state_codegen/`, `src/devapi/`, `tools/devapi/`,
   `src/game_storage.*`, and `external/cjson/` are reusable AI/runtime
