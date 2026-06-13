@@ -114,6 +114,11 @@ prints the exact commands to regenerate missing or stale handoff artifacts.
 Before relying on generated summary/review/follow-up artifacts, check that
 status reports `Bundle fresh: yes`; if the bundle is stale, rerun
 `tools/ai_profile/closeout.mjs` or the stale review/follow-up commands.
+For normal retrospective preparation, run
+`tools/ai_profile/prepare_reflection.mjs --json-output
+tmp/session_profiles/<name>.status.json` before manually chaining closeout,
+compare, packet, or draft commands. If it stops on missing baseline or
+current-scope regressions, handle that explicit decision before continuing.
 If status shows historical missing work-item records but current scope is
 already set, keep the scope and fix the next reported current issue instead of
 resetting metadata for old records.

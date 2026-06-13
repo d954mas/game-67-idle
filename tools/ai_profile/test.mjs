@@ -55,6 +55,31 @@ function writeBundleArtifacts(profile, text = "artifact\n") {
   }
 }
 
+function writeValidReflectionBundle(profile) {
+  const base = profile.replace(/\.jsonl$/i, "");
+  writeFileSync(`${base}.summary.md`, "summary\n", "utf8");
+  writeFileSync(`${base}.review.md`, "review\n", "utf8");
+  writeFileSync(`${base}.review.json`, `${JSON.stringify({
+    profile,
+    findings: [],
+    current_scope: {
+      enabled: true,
+      records: 1,
+      findings: [],
+      suggested_actions: ["Use current scope as clean baseline."],
+    },
+    repeated_commands: [],
+    repeated_commands_by_scope: [],
+    repeated_broad_final_commands: [],
+    repeated_broad_final_by_work_item: [],
+  })}\n`, "utf8");
+  writeFileSync(`${base}.followups.md`, "followups\n", "utf8");
+  writeFileSync(`${base}.followups.json`, `${JSON.stringify({
+    suggestions: [],
+    suppressed_historical_findings: [],
+  })}\n`, "utf8");
+}
+
 function setMtime(path, iso) {
   const date = new Date(iso);
   utimesSync(path, date, date);
@@ -860,6 +885,140 @@ test("status reports fresh reflection draft as first retrospective artifact", ()
     assert.equal(status.reflection.packet.status, "fresh");
     assert.equal(status.reflection.draft.status, "fresh");
     assert.match(status.next_action, /Use fresh reflection draft/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("prepare reflection is no-op when handoff artifacts are fresh", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "prep-fresh.jsonl");
+    const scope = join(dir, "scope.json");
+    const statusJson = join(dir, "status.json");
+    const baselineDir = join(dir, "baselines");
+    const baselineReview = join(baselineDir, "clean.review.json");
+    const manifest = join(baselineDir, "clean.manifest.json");
+    const compareJson = join(dir, "clean.compare.json");
+    const packetMd = join(dir, "prep-fresh.reflection_packet.md");
+    const packetJson = join(dir, "prep-fresh.reflection_packet.json");
+    const draftMd = join(dir, "prep-fresh.reflection_draft.md");
+    const draftJson = join(dir, "prep-fresh.reflection_draft.json");
+
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "PREP", "--iteration", "fresh"]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "session_closeout",
+      "--category", "reflection",
+      "--intent", "clean closeout",
+      "--result", "pass",
+      "--value", "necessary_overhead",
+      "--work-item", "PREP",
+      "--iteration", "fresh",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    writeValidReflectionBundle(profile);
+    mkdirSync(baselineDir, { recursive: true });
+    writeFileSync(baselineReview, "{}\n", "utf8");
+    writeFileSync(manifest, `${JSON.stringify({ schema_version: 1, label: "clean", baseline_review: resolve(baselineReview) })}\n`, "utf8");
+    writeFileSync(compareJson, `${JSON.stringify({ verdict: "stable", current_regressions: [] })}\n`, "utf8");
+    writeFileSync(packetMd, "packet\n", "utf8");
+    writeFileSync(packetJson, `${JSON.stringify({ artifacts: { review_json: `${profile.replace(/\.jsonl$/i, "")}.review.json` } })}\n`, "utf8");
+    writeFileSync(draftMd, "draft\n", "utf8");
+    writeFileSync(draftJson, "{}\n", "utf8");
+
+    const result = run(["tools/ai_profile/prepare_reflection.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    assert.match(result.stdout, /Steps: none/);
+    const status = readJson(statusJson);
+    assert.equal(status.reflection.packet.status, "fresh");
+    assert.equal(status.reflection.draft.status, "fresh");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("prepare reflection generates missing packet and draft", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "prep-missing.jsonl");
+    const scope = join(dir, "scope.json");
+    const statusJson = join(dir, "status.json");
+    const baselineDir = join(dir, "baselines");
+    const baselineReview = join(baselineDir, "clean.review.json");
+    const manifest = join(baselineDir, "clean.manifest.json");
+    const compareJson = join(dir, "clean.compare.json");
+
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "PREP", "--iteration", "missing"]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "session_closeout",
+      "--category", "reflection",
+      "--intent", "clean closeout",
+      "--result", "pass",
+      "--value", "necessary_overhead",
+      "--work-item", "PREP",
+      "--iteration", "missing",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    writeValidReflectionBundle(profile);
+    mkdirSync(baselineDir, { recursive: true });
+    writeFileSync(baselineReview, "{}\n", "utf8");
+    writeFileSync(manifest, `${JSON.stringify({ schema_version: 1, label: "clean", baseline_review: resolve(baselineReview) })}\n`, "utf8");
+    writeFileSync(compareJson, `${JSON.stringify({ verdict: "stable", current_regressions: [] })}\n`, "utf8");
+
+    const result = run(["tools/ai_profile/prepare_reflection.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    assert.match(result.stdout, /Steps: packet, draft/);
+    assert.equal(existsSync(join(dir, "prep-missing.reflection_packet.json")), true);
+    assert.equal(existsSync(join(dir, "prep-missing.reflection_draft.json")), true);
+    const status = readJson(statusJson);
+    assert.equal(status.reflection.packet.status, "fresh");
+    assert.equal(status.reflection.draft.status, "fresh");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("prepare reflection refuses current-scope regressions by default", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "prep-regressed.jsonl");
+    const scope = join(dir, "scope.json");
+    const baselineDir = join(dir, "baselines");
+    const baselineReview = join(baselineDir, "clean.review.json");
+    const manifest = join(baselineDir, "clean.manifest.json");
+    const compareJson = join(dir, "clean.compare.json");
+
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "PREP", "--iteration", "regressed"]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "session_closeout",
+      "--category", "reflection",
+      "--intent", "clean closeout",
+      "--result", "pass",
+      "--value", "necessary_overhead",
+      "--work-item", "PREP",
+      "--iteration", "regressed",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    writeValidReflectionBundle(profile);
+    mkdirSync(baselineDir, { recursive: true });
+    writeFileSync(baselineReview, "{}\n", "utf8");
+    writeFileSync(manifest, `${JSON.stringify({ schema_version: 1, label: "clean", baseline_review: resolve(baselineReview) })}\n`, "utf8");
+    writeFileSync(compareJson, `${JSON.stringify({
+      verdict: "regressed",
+      current_regressions: [{ key: "current_missing_context_inputs", label: "Current missing context", baseline: 0, current: 1 }],
+    })}\n`, "utf8");
+
+    const result = runRaw(["tools/ai_profile/prepare_reflection.mjs", "--profile", profile], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /current-scope regressions present/);
+    assert.equal(existsSync(join(dir, "prep-regressed.reflection_packet.json")), false);
   } finally {
     cleanup(dir);
   }

@@ -995,3 +995,21 @@ specific and reusable.
   states and exact packet/draft generation commands.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0100`.
+
+## 2026-06-13 - Reflection prep should be one command
+
+- Trigger: Even after status reported packet/draft freshness, preparing a
+  retrospective still required agents to manually run closeout, baseline
+  comparison, packet, and draft commands in the right order when artifacts were
+  stale.
+- Symptom: Routine handoff setup could be repeated, skipped, or performed in
+  the wrong order despite every step being mechanically detectable.
+- Time sink: Agents spend attention orchestrating scratch artifacts instead of
+  analyzing the session and improving the process.
+- Likely cause: The pipeline had good individual tools and a status decision
+  tree, but no wrapper that executed the decision tree.
+- Proposed improvement: Add `prepare_reflection.mjs` to run only stale/missing
+  handoff steps while refusing automatic baseline capture and stopping on
+  current-scope regressions.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0101`.

@@ -363,6 +363,11 @@ Record tools by role:
   packet JSON and its referenced review JSON, then writes scratch markdown/JSON
   with current state, pending and satisfied follow-ups, historical lessons,
   next-cycle actions, and caveats. Treat it as a draft; edit it with judgment.
+- `prepare_reflection.mjs`: one-command handoff helper that runs only the
+  stale/missing reflection preparation steps: closeout bundle, baseline
+  comparison, reflection packet, and reflection draft. It does not capture
+  baselines automatically and stops on current-scope regressions unless
+  `--allow-regression` is explicit.
 - `review.mjs`: reflection prep helper that turns a JSONL profile into
   priority findings: waste/rework, failures, blockers, context hotspots,
   repeated commands, repeated command scope (`preflight`, `scoped`,
@@ -455,6 +460,18 @@ node tools/ai_profile/closeout.mjs
 their paths, and keeps all raw/profile artifacts under `tmp/session_profiles/`.
 Use `--no-review` for summary-only closeout, or `--no-followups` when review
 artifacts are needed but follow-up drafts are intentionally skipped.
+
+For normal retrospective preparation, prefer the one-command wrapper:
+
+```powershell
+node tools/ai_profile/prepare_reflection.mjs --json-output tmp/session_profiles/session_profile_YYYY-MM-DD.status.json
+```
+
+It uses `status.mjs` and existing tools to run only stale or missing steps in
+the closeout, baseline comparison, reflection packet, and reflection draft
+chain. It refuses to auto-capture baselines; review and capture a clean
+baseline deliberately. It also stops on current-scope comparison regressions
+unless `--allow-regression` is explicit.
 
 The summary reports:
 
@@ -658,6 +675,10 @@ A "profiled session" is done when:
 - `reflection_draft.mjs` is used after a ready packet when the agent needs to
   write a full retrospective; the draft is read and edited with judgment, not
   pasted as final output;
+- `prepare_reflection.mjs` is used for normal retrospective handoff so agents
+  do not manually repeat closeout/compare/packet/draft command sequences; use
+  manual commands only when the wrapper reports missing baseline, regression,
+  or another explicit stop condition;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste; use
   `--json-output` when another tool, agent, or later reflection should consume
