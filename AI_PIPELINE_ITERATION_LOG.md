@@ -1258,3 +1258,22 @@ specific and reusable.
   fix, or direction change.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
+
+## 2026-06-13 - Generated advice must point to the fast facade
+
+- Trigger: Fresh reflection became current-clean, but historical lessons and
+  suggested pipeline actions still mentioned low-level profiler scripts such as
+  `start.mjs`, `scope.mjs`, `event.mjs`, `validation_run.mjs`, and
+  `plan_validation.mjs`.
+- Symptom: A future agent could follow the generated advice and bypass the
+  simpler `node tools/ai.mjs ...` workflow we had just created.
+- Time sink: Agents would need to translate scratch reflection output back into
+  the intended fast path before acting on it.
+- Likely cause: The facade was added after the profile review/draft/follow-up
+  generators, but their user-facing copy still described internal tools.
+- Proposed improvement: Update generated status/review/draft/review/follow-up
+  recommendations to prefer `node tools/ai.mjs start`, `focus`, `checkpoint`,
+  `run`, and `validate`; keep low-level profiler scripts only for debugging or
+  custom profiler work.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.

@@ -69,10 +69,10 @@ function buildSuggestions(review) {
       source: useCurrentScope ? "current_scope.repeated_unbatched_broad_final_commands" : "repeated_unbatched_broad_final_commands",
       why: `Unbatched broad/final commands repeated: ${commandList(commands) || "unknown"}.`,
       done_when: [
-        "Validation planner or review rules identify when broad/final gates are allowed to rerun.",
+        "`node tools/ai.mjs validate --change <kind> --risk <risk>` is the default path for broad/final gates.",
         "A future profile shows broad/final repeats only after a failed gate, changed risk, or final batch boundary.",
       ],
-      next_action: "Inspect the repeated broad/final commands and decide whether to add a batching rule, narrower preflight, or review threshold.",
+      next_action: "Use `node tools/ai.mjs validate --change <kind> --risk <risk>` for the next validation loop and inspect validation batch evidence before adding more rules.",
       });
     }
   }
@@ -111,10 +111,10 @@ function buildSuggestions(review) {
         ? `${Number(currentScope.missing_work_item_records || 0)} current-scope record(s) lack work_item metadata.`
         : missingFinding?.message || "Multi-task profiles have records without work_item metadata.",
       done_when: [
-        "Substantial profile events include work-item metadata from scope.mjs, AI_PROFILE_* env vars, or explicit flags.",
+        "Substantial profile events are started with `node tools/ai.mjs start <work-item> <iteration>` or `node tools/ai.mjs focus <iteration>`.",
         "A future profile review can separate repeated validation by work item.",
       ],
-      next_action: "Run `node tools/ai_profile/scope.mjs set --work-item <id> --iteration <name>` for the next focused session, or use explicit flags for exceptions.",
+      next_action: "Run `node tools/ai.mjs start <work-item> <iteration>` for a new task or `node tools/ai.mjs focus <iteration>` for the next slice in the same task.",
     });
     }
   }
@@ -132,9 +132,9 @@ function buildSuggestions(review) {
       why: `Profile coverage was ${formatPercent((useCurrentScope ? currentScope.wall_clock_coverage : coverage).coverage_ratio)} across the recorded wall-clock span.`,
       done_when: [
         "Retrospectives explicitly explain low-coverage periods or mark them as unknown.",
-        "Future long manual/research/design stretches add sparse event.mjs checkpoints.",
+        "Future long manual/research/design stretches add `node tools/ai.mjs checkpoint \"<intent>\"` records.",
       ],
-      next_action: "Inspect wall_clock_coverage and decide whether the next cycle needs checkpoint prompts, a wrapper, or a lower-overhead capture habit.",
+      next_action: "Inspect wall_clock_coverage and use `node tools/ai.mjs checkpoint \"<intent>\"` after long manual/research/design stretches.",
     });
     }
   }

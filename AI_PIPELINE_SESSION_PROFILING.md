@@ -717,8 +717,9 @@ A "profiled session" is done when:
 - long manual/research/design/review stretches used `node tools/ai.mjs
   checkpoint "<intent>"` with an intent that explains the elapsed time, or the
   retrospective marks the gap as unknown;
-- non-command context decisions used sparse `event.mjs` checkpoints, and local
-  medium/high context reads used `context.mjs` where possible;
+- non-command manual/research/review stretches used `node tools/ai.mjs
+  checkpoint "<intent>"`, and local medium/high context reads used
+  `context.mjs` where possible;
 - read-only commands that produced medium/high context used
   `context_command.mjs` where possible;
 - `status.mjs` is used during long sessions when the agent needs to know
@@ -759,8 +760,8 @@ A "profiled session" is done when:
   `current_scope.suggested_actions` before treating whole-profile history as a
   current problem;
 - low wall-clock coverage or large profile gaps are explained in the
-  retrospective, or the next cycle adds sparse `event.mjs` checkpoints for
-  long manual/research/design stretches;
+  retrospective, or the next cycle adds `node tools/ai.mjs checkpoint
+  "<intent>"` records for long manual/research/design stretches;
 - `followups.mjs` is used when review JSON should become draft next actions
   for task/rule/tool promotion and the closeout bundle was skipped or stale;
   if it reports `suppressed_historical_findings`, mention those in the

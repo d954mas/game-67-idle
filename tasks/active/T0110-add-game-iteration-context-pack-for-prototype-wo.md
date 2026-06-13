@@ -38,6 +38,8 @@ workflow/runtime tools.
       inside the current work item so fixed issues do not stay current forever.
 - [x] `tools/ai.test.mjs` covers `ai.mjs start` option forwarding and `focus`
       scope reuse.
+- [x] Generated profile status/review/draft/review/follow-up advice points to
+      `node tools/ai.mjs ...` fast paths when a facade exists.
 - [x] `node tools/ai.mjs checkpoint "<intent>"` provides the fast path for
       thresholded wall-clock checkpoints after manual/research/review gaps.
 - [x] `node tools/ai.mjs reflect` creates the full reflection handoff by
@@ -91,6 +93,10 @@ None.
 - 2026-06-13: Added `tools/ai.test.mjs` after manual testing exposed that
   `ai.mjs start` did not forward `--scope` / `--profile` options; fixed the
   forwarding and included the test in reusable pipeline validation/export.
+- 2026-06-13: Updated generated profile status, review, reflection draft,
+  reflection review, and follow-up recommendation text to prefer
+  `node tools/ai.mjs ...` fast paths instead of low-level profiler scripts when
+  a facade exists.
 - 2026-06-13: Validation passed: `node --check tools/ai.mjs`;
   `node --check tools/project_67_world/package_native_release.mjs`;
   `py -3.12 -m py_compile` for moved release/art/scenario scripts;
@@ -121,3 +127,9 @@ None.
   portable base: `node tools/ai.mjs validate --change profiling --change
   pipeline --change skills --risk medium`; fresh `node tools/ai.mjs reflect`
   then reported stable baseline comparison and clean current scope.
+- 2026-06-13: Validation passed after generated recommendation facade updates:
+  `node --check` for touched profile generators and `node --test
+  tools/ai_profile/test.mjs`; `node tools/ai.mjs validate --change profiling
+  --change pipeline --change skills --risk medium`; fresh `node
+  tools/ai.mjs reflect` reported stable baseline comparison and clean current
+  scope.

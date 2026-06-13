@@ -221,13 +221,10 @@ For broad/final validation follow-ups, current action status must use
 `current_scope.repeated_unbatched_broad_final_commands`; batched current-scope
 final gates are planned validation evidence, not a pending action.
 If many records lack work-item metadata, add a next-cycle fix: begin the task
-with `tools/ai_profile/start.mjs --work-item <id> --iteration <name>`, pass
-`--work-item <id>` and optional `--iteration <name>` to `run.mjs`,
-`event.mjs`, `context.mjs`, and `closeout.mjs`, or set
-`AI_PROFILE_WORK_ITEM` and `AI_PROFILE_ITERATION` defaults for the shell
-session. In Codex-style separate tool calls, prefer
-`tools/ai_profile/scope.mjs set --work-item <id> --iteration <name>` so the
-scope persists outside a single shell command.
+with `node tools/ai.mjs start <work-item> <iteration>`, then use
+`node tools/ai.mjs focus <next-iteration>` for later slices inside the same
+work item. Use low-level scope/start scripts only when debugging profiler
+internals or writing custom profile records.
 Inspect `wall_clock_coverage`, `low_profile_coverage`, and largest gaps before
 claiming the profile explains the whole session. Low coverage means the
 retrospective must name what likely happened in the unprofiled gaps, or add a
@@ -244,10 +241,10 @@ size is measured automatically.
 If review reports recovered failed records, classify them as useful negative
 feedback, avoidable rework, or tool noise. Treat only unresolved failed records
 as current blockers.
-If profile review finds repeated validation or unclear validation scope, run
-`tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the
-next validation loop and report the narrow/scoped/broad ladder. Treat repeated
-broad gates without a changed risk or failed previous gate as validation waste.
+If profile review finds repeated validation or unclear validation scope, use
+`node tools/ai.mjs validate --change <kind> --risk <risk>` for the next
+validation loop and report the selected tier batch. Treat repeated broad gates
+without a changed risk or failed previous gate as validation waste.
 When a validation plan will be consumed by another tool/agent or cited in a
 later reflection, write it with `--json-output` and inspect `broad_final_count`,
 `deferred_broad_count`, and `next_action` instead of parsing markdown.

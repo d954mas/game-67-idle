@@ -104,7 +104,7 @@ function lessonForFinding(finding, context = {}) {
     repeated_broad_final: {
       symptom: message,
       cause: "Unbatched broad/final validation was repeated in the historical profile instead of being guarded by a validation plan or captured as a planned validation batch.",
-      fix: "Use validation_run.mjs or a validation plan before rerunning broad/final gates; treat planned validation batches separately from ad hoc repeats.",
+      fix: "Use node tools/ai.mjs validate --change <kind> --risk <risk> before rerunning broad/final gates; treat planned validation batches separately from ad hoc repeats.",
     },
     missing_context_inputs: {
       symptom: message,
@@ -114,7 +114,7 @@ function lessonForFinding(finding, context = {}) {
     missing_work_item_metadata: {
       symptom: message,
       cause: "Older profile records were created before persistent work-item scope was reliable.",
-      fix: "Start each focused iteration with start.mjs or scope.mjs so future records inherit work-item metadata.",
+      fix: "Start each focused work item with node tools/ai.mjs start, and use node tools/ai.mjs focus for later slices inside the same work item.",
     },
     low_profile_coverage: {
       symptom: message,

@@ -380,17 +380,17 @@ function buildStatus(profilePath) {
   const actionableLowCoverage = hasCurrentScopeWindow ? isLowCoverage(scopedCoverage) : lowCoverage;
 
   if (!parsed.exists) {
-    nextAction = "Start profiling with `node tools/ai_profile/start.mjs --work-item <id> --iteration <name>`.";
+    nextAction = "Start profiling with `node tools/ai.mjs start <work-item> <iteration>`.";
   } else if (parsed.errors.length > 0) {
     nextAction = "Fix invalid JSONL lines before using this profile for reflection.";
   } else if (records.length === 0) {
-    nextAction = "Start the first checkpoint with `node tools/ai_profile/start.mjs --work-item <id> --iteration <name>`.";
+    nextAction = "Start the first checkpoint with `node tools/ai.mjs start <work-item> <iteration>`.";
   } else if (failedClassification.unresolved > 0) {
     nextAction = "Resolve or explain unresolved failed profile records before trusting this profile for reflection.";
   } else if (!scopeReady) {
-    nextAction = "Start or reset current scope with `node tools/ai_profile/start.mjs --work-item <id> --iteration <name>`.";
+    nextAction = "Start or reset current scope with `node tools/ai.mjs start <work-item> <iteration>`, or use `node tools/ai.mjs focus <iteration>` inside the same work item.";
   } else if (hasCurrentScopeWindow && scopedRecords.length === 0) {
-    nextAction = "Append a current-scope checkpoint with event.mjs, context.mjs, context_command.mjs, or run.mjs.";
+    nextAction = "Append a current-scope record with `node tools/ai.mjs checkpoint \"<intent>\"`, `node tools/ai.mjs context`, or `node tools/ai.mjs run -- <command>`.";
   } else if (actionableMissingContextInputs > 0) {
     nextAction = "Use context.mjs for medium/high local context reads so context_inputs are measured.";
   } else if (actionableLowCoverage) {

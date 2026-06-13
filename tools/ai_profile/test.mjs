@@ -226,7 +226,7 @@ test("status recommends start helper for missing profiles", () => {
 
     const status = readJson(statusJson);
     assert.equal(status.exists, false);
-    assert.match(status.next_action, /start\.mjs/);
+    assert.match(status.next_action, /ai\.mjs start/);
     assert.doesNotMatch(status.next_action, /scope\.mjs/);
   } finally {
     cleanup(dir);
@@ -2261,6 +2261,8 @@ test("reflection review separates clean current scope from historical lessons", 
       historical_lessons: [
         { type: "missing_context_inputs", symptom: "Missing context inputs.", cause: "Unmeasured reads.", fix: "Use context.mjs." },
         { type: "repeated_commands", symptom: "Repeated commands.", cause: "Reruns.", fix: "Classify reruns." },
+        { type: "repeated_broad_final", symptom: "Repeated final gates.", cause: "Unbatched.", fix: "Use ai facade validation." },
+        { type: "missing_work_item_metadata", symptom: "Missing work item.", cause: "Wide scope.", fix: "Use ai facade focus." },
       ],
       suppressed_historical_findings: ["missing_context_inputs"],
       repeated_commands: {
@@ -2291,6 +2293,9 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.ok(review.historical_lessons.every((lesson) => lesson.current_action === "historical_only"));
     assert.ok(review.top_improvements.some((item) => item.includes("context.mjs")));
     assert.ok(review.top_improvements.some((item) => item.includes("validation batch evidence")));
+    assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs validate")));
+    assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs start")));
+    assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs focus")));
     assert.equal(existsSync(reviewMd), true);
   } finally {
     cleanup(dir);

@@ -37,7 +37,7 @@ function topImprovements(draft, currentClean) {
     improvements.push("Classify repeated commands as justified reruns, batchable checks, or validation waste before adding process tasks.");
   }
   if (asArray(draft.repeated_commands?.unbatched_broad_final_commands).length > 0 || hasLesson("repeated_broad_final")) {
-    improvements.push("Batch broad/final validation and rerun it only after a failed gate, changed risk, or final handoff.");
+    improvements.push("Batch broad/final validation with node tools/ai.mjs validate and rerun it only after a failed gate, changed risk, or final handoff.");
   }
   if (asArray(draft.repeated_commands?.validation_batches).length > 0) {
     improvements.push("Use validation batch evidence to separate planned validation runs from ad hoc repeated commands.");
@@ -46,7 +46,7 @@ function topImprovements(draft, currentClean) {
     improvements.push("Use context.mjs or context_command.mjs for medium/high context reads so reflection can measure context cost.");
   }
   if (hasLesson("missing_work_item_metadata")) {
-    improvements.push("Start each focused iteration with start.mjs or scope.mjs before running substantial commands.");
+    improvements.push("Start each focused work item with node tools/ai.mjs start, then use node tools/ai.mjs focus for later slices before running substantial commands.");
   }
   if (hasLesson("low_profile_coverage")) {
     improvements.push("Place node tools/ai.mjs checkpoint records during long manual, research, design, or review stretches.");

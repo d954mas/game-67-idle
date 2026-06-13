@@ -228,7 +228,7 @@ function currentScopeFindingsAndActions(currentScope) {
   const actions = [];
   if (!currentScope.enabled) {
     findings.push({ type: "missing_current_scope", message: "No current profile scope is active; review findings are whole-profile history." });
-    actions.push("Start a focused scope with `node tools/ai_profile/start.mjs --work-item <id> --iteration <name>` before using review findings as current tasks.");
+    actions.push("Start a focused scope with `node tools/ai.mjs start <work-item> <iteration>` before using review findings as current tasks.");
     return { findings, actions };
   }
   if (currentScope.records === 0) {
@@ -246,7 +246,7 @@ function currentScopeFindingsAndActions(currentScope) {
   }
   if (currentScope.repeated_unbatched_broad_final_commands.length > 0) {
     findings.push({ type: "current_repeated_broad_final", message: `${currentScope.repeated_unbatched_broad_final_commands.length} current-scope unbatched broad/final command(s) repeated.` });
-    actions.push("Use validation planning and batch current-scope broad/final gates.");
+    actions.push("Use `node tools/ai.mjs validate --change <kind> --risk <risk>` for current-scope broad/final gates.");
   }
   if (currentScope.missing_context_inputs > 0) {
     findings.push({ type: "current_missing_context_inputs", message: `${currentScope.missing_context_inputs} current-scope medium/high context record(s) lack context_inputs.` });
@@ -254,7 +254,7 @@ function currentScopeFindingsAndActions(currentScope) {
   }
   if (currentScope.missing_work_item_records > 0) {
     findings.push({ type: "current_missing_work_item_metadata", message: `${currentScope.missing_work_item_records} current-scope record(s) lack work_item metadata.` });
-    actions.push("Reset scope or pass explicit --work-item for current-scope records.");
+    actions.push("Use `node tools/ai.mjs focus <iteration>` for a new slice inside the current work item, or `node tools/ai.mjs start <work-item> <iteration>` for a new work item.");
   }
   if (currentScope.low_profile_coverage) {
     findings.push({ type: "current_low_profile_coverage", message: `Current scope covers ${formatPercent(currentScope.wall_clock_coverage.coverage_ratio)} of a ${formatMs(currentScope.wall_clock_coverage.wall_clock_span_ms)} span.` });
@@ -529,15 +529,15 @@ if (unresolvedFailed.length > 0) actions.push("For unresolved failed commands, d
 if (recoveredFailed.length > 0) actions.push("Classify recovered failed commands as rework/learning in the retrospective instead of treating them as current blockers.");
 if (repeatedUnbatchedBroadCommands.length > 0) {
   actions.push(
-    "Batch repeated broad/final validation or run `node tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the next validation loop.",
+    "Batch repeated broad/final validation with `node tools/ai.mjs validate --change <kind> --risk <risk>` before the next validation loop.",
   );
 } else if (repeatedCommands.length > 0) {
   actions.push("Review repeated scoped/preflight commands; keep them only when they guard a fresh edit or failed gate.");
 }
 if (highContext.length > 0 || missingContextInputs.length > 0) actions.push("Compact source-of-truth docs or log explicit context_inputs for expensive reads.");
-if (records.length >= 20 && missingWorkItemCount > 0) actions.push("For long or multi-task profiles, pass `--work-item <id>` and `--iteration <name>` to run/event/context/closeout commands.");
-if (lowCoverage) actions.push("Explain low wall-clock profile coverage in the retrospective, or add sparse `event.mjs` checkpoints during long manual/research/design stretches.");
-if (coverage.largest_gaps.length > 0) actions.push("Explain the largest profile gaps in the retrospective, or add sparse `event.mjs` checkpoints during long idle/manual stretches.");
+if (records.length >= 20 && missingWorkItemCount > 0) actions.push("For long or multi-task profiles, start with `node tools/ai.mjs start <work-item> <iteration>` and use `node tools/ai.mjs focus <iteration>` for later slices.");
+if (lowCoverage) actions.push("Explain low wall-clock profile coverage in the retrospective, or add `node tools/ai.mjs checkpoint \"<intent>\"` records during long manual/research/design stretches.");
+if (coverage.largest_gaps.length > 0) actions.push("Explain the largest profile gaps in the retrospective, or add `node tools/ai.mjs checkpoint \"<intent>\"` records during long idle/manual stretches.");
 if (!closeoutSeen) actions.push("Run `node tools/ai_profile/closeout.mjs` at session end.");
 if (actions.length === 0) actions.push("Use this clean profile as baseline; compare against the next real game iteration.");
 
