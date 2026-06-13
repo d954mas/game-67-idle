@@ -62,6 +62,7 @@ run("taskboard list", ["tools/taskboard/cli.mjs", "list"]);
 run("skill eval", ["tools/skills_eval.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
 run("taskboard tests", ["--test", "tools/taskboard/test.mjs"]);
+run("ai profile tests", ["--test", "tools/ai_profile/test.mjs"]);
 
 // Runtime seed checks. Skipped automatically in workflow-only exports, which
 // have no state schema or CMake presets.
@@ -77,6 +78,7 @@ run("portable export", ["tools/bootstrap/export_base.mjs", "--target", exportDir
 run("exported skill eval", ["tools/skills_eval.mjs"], { cwd: exportDir });
 run("exported taskboard validate", ["tools/taskboard/cli.mjs", "validate"], { cwd: exportDir });
 run("exported taskboard tests", ["--test", "tools/taskboard/test.mjs"], { cwd: exportDir });
+run("exported ai profile tests", ["--test", "tools/ai_profile/test.mjs"], { cwd: exportDir });
 
 console.log(`\nok: reusable pipeline validation passed`);
 console.log(`export: ${exportDir}`);

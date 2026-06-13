@@ -1,0 +1,192 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+
+const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+
+function tempDir() {
+  return mkdtempSync(join(tmpdir(), "ai-profile-test-"));
+}
+
+function cleanup(dir) {
+  rmSync(dir, { recursive: true, force: true });
+}
+
+function run(args, options = {}) {
+  const result = spawnSync(process.execPath, args, {
+    cwd: root,
+    env: { ...process.env, ...(options.env || {}) },
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  assert.equal(result.status, 0, `${args.join(" ")}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  return result;
+}
+
+function readJson(file) {
+  return JSON.parse(readFileSync(file, "utf8"));
+}
+
+function readJsonl(file) {
+  return readFileSync(file, "utf8")
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+test("scope file supplies metadata after CLI and env fallbacks", () => {
+  const dir = tempDir();
+  try {
+    const scope = join(dir, "scope.json");
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "SCOPE", "--iteration", "scope-default"]);
+
+    const scopeOnly = join(dir, "scope-only.jsonl");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", scopeOnly,
+      "--phase", "test",
+      "--category", "tooling",
+      "--intent", "scope only",
+      "--result", "pass",
+      "--value", "productive",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    assert.deepEqual(
+      { work_item: readJsonl(scopeOnly)[0].work_item, iteration: readJsonl(scopeOnly)[0].iteration },
+      { work_item: "SCOPE", iteration: "scope-default" },
+    );
+
+    const envOverride = join(dir, "env-override.jsonl");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", envOverride,
+      "--phase", "test",
+      "--category", "tooling",
+      "--intent", "env override",
+      "--result", "pass",
+      "--value", "productive",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope, AI_PROFILE_WORK_ITEM: "ENV", AI_PROFILE_ITERATION: "env-default" } });
+    assert.deepEqual(
+      { work_item: readJsonl(envOverride)[0].work_item, iteration: readJsonl(envOverride)[0].iteration },
+      { work_item: "ENV", iteration: "env-default" },
+    );
+
+    const cliOverride = join(dir, "cli-override.jsonl");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", cliOverride,
+      "--phase", "test",
+      "--category", "tooling",
+      "--intent", "cli override",
+      "--result", "pass",
+      "--value", "productive",
+      "--work-item", "CLI",
+      "--iteration", "cli-default",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope, AI_PROFILE_WORK_ITEM: "ENV", AI_PROFILE_ITERATION: "env-default" } });
+    assert.deepEqual(
+      { work_item: readJsonl(cliOverride)[0].work_item, iteration: readJsonl(cliOverride)[0].iteration },
+      { work_item: "CLI", iteration: "cli-default" },
+    );
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status reports scope, coverage fields, and next action", () => {
+  const dir = tempDir();
+  try {
+    const scope = join(dir, "scope.json");
+    const profile = join(dir, "profile.jsonl");
+    const statusJson = join(dir, "status.json");
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "STATUS", "--iteration", "status-test"]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "test",
+      "--category", "tooling",
+      "--intent", "status event",
+      "--result", "pass",
+      "--value", "productive",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    const status = readJson(statusJson);
+    assert.equal(status.scope.work_item, "STATUS");
+    assert.equal(status.scope.iteration, "status-test");
+    assert.equal(status.work_item_coverage.missing_records, 0);
+    assert.equal(status.closeout_seen, false);
+    assert.match(status.next_action, /closeout\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("closeout writes summary review and follow-up bundle", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "bundle.jsonl");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "test",
+      "--category", "tooling",
+      "--intent", "bundle seed",
+      "--result", "pass",
+      "--value", "productive",
+      "--work-item", "BUNDLE",
+    ]);
+    run(["tools/ai_profile/closeout.mjs", "--profile", profile, "--work-item", "BUNDLE", "--iteration", "closeout"]);
+    for (const suffix of ["summary.md", "review.md", "review.json", "followups.md", "followups.json"]) {
+      assert.equal(existsSync(join(dir, `bundle.${suffix}`)), true, suffix);
+    }
+    const records = readJsonl(profile);
+    const closeout = records.find((record) => record.phase === "session_closeout");
+    assert.ok(closeout);
+    assert.equal(closeout.evidence.length, 5);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("review and followups classify recovered failures", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "recovered.jsonl");
+    const reviewJson = join(dir, "review.json");
+    const followupsJson = join(dir, "followups.json");
+    const command = "node tools/skills_eval.mjs";
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "validation",
+      "--category", "validation",
+      "--intent", "failing eval",
+      "--result", "fail",
+      "--value", "rework",
+      "--command", command,
+    ]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "validation",
+      "--category", "validation",
+      "--intent", "passing eval",
+      "--result", "pass",
+      "--value", "productive",
+      "--command", command,
+    ]);
+    run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson]);
+    const review = readJson(reviewJson);
+    assert.equal(review.recovered_failed_records.length, 1);
+    assert.equal(review.unresolved_failed_records.length, 0);
+
+    run(["tools/ai_profile/followups.mjs", reviewJson, "--json-output", followupsJson]);
+    const followups = readJson(followupsJson);
+    assert.ok(followups.suggestions.some((suggestion) => suggestion.source === "recovered_failed_records"));
+  } finally {
+    cleanup(dir);
+  }
+});

@@ -288,6 +288,8 @@ Record tools by role:
   coverage, missing context inputs, wall-clock coverage, failed records, and
   one suggested next profiling action. It separates recovered failed commands
   from unresolved failed commands when a later matching command passes.
+- `test.mjs`: regression test suite for profile CLI behavior. Run
+  `node --test tools/ai_profile/test.mjs` after profiler tool changes.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
   and writes a scratch reflection bundle: summary, review markdown/JSON, and
   follow-up markdown/JSON.
@@ -450,6 +452,8 @@ A "profiled session" is done when:
 - `status.mjs` is used during long sessions when the agent needs to know
   whether current telemetry is missing work-item metadata, context inputs,
   coverage, closeout, or bundle artifacts;
+- `node --test tools/ai_profile/test.mjs` passes after changes to profiler
+  tools, review/status/followup behavior, or scope/default handling;
 - long or multi-task profiles include `--work-item <id>` on substantial
   commands and checkpoints, with `--iteration <name>` when the work item has
   separate loops, or equivalent `AI_PROFILE_WORK_ITEM` /

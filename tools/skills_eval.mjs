@@ -286,6 +286,8 @@ const SKILL_CHECKS = [
       "context.mjs",
       "scope.mjs",
       "status.mjs",
+      "test.mjs",
+      "node --test tools/ai_profile/test.mjs",
       "closeout.mjs",
       "closeout bundle",
       "review.mjs",

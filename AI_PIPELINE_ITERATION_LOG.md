@@ -625,3 +625,19 @@ specific and reusable.
   explicit flags first, then env vars, then the persistent scope file.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0078`.
+
+## 2026-06-13 - Profiler tools need regression tests
+
+- Context: The AI profiler accumulated multiple coupled behaviors: scope
+  precedence, status health, closeout bundles, recovered failures, and
+  follow-up drafts.
+- Friction: Live command checks prove the current change but do not guard
+  future edits from breaking earlier profiler behavior.
+- Time sink: Regressions would be rediscovered during reflection instead of
+  caught during validation.
+- Likely cause: `pipeline_validate.mjs` covered taskboard and skills but had no
+  AI profile test suite.
+- Proposed improvement: Add `tools/ai_profile/test.mjs` and run it in source
+  and exported pipeline validation.
+- Follow-up owner: Future profiling/tooling agents.
+- Status: Implemented in `T0079`.

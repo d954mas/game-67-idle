@@ -141,3 +141,6 @@ If profile review finds repeated validation or unclear validation scope, run
 `tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the
 next validation loop and report the narrow/scoped/broad ladder. Treat repeated
 broad gates without a changed risk or failed previous gate as validation waste.
+After changing profiler tools or reflection telemetry behavior, run
+`node --test tools/ai_profile/test.mjs` so scope, status, closeout, recovered
+failure, and follow-up behavior remain covered.
