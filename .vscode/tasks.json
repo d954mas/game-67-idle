@@ -10,7 +10,7 @@
         {
             "label": "Build: native debug",
             "type": "shell",
-            "command": "cmake --build --preset native-debug --target game_67_idle",
+            "command": "cmake --build --preset native-debug --target game_seed",
             "dependsOn": "CMake: configure native debug",
             "group": {
                 "kind": "build",
@@ -21,14 +21,14 @@
         {
             "label": "Run: native debug",
             "type": "shell",
-            "command": "${workspaceFolder}/build/game_67_idle/native-debug/game_67_idle.exe",
+            "command": "${workspaceFolder}/build/game_seed/native-debug/game_seed.exe",
             "dependsOn": "Build: native debug",
             "problemMatcher": []
         },
         {
             "label": "Run: native debug + devapi",
             "type": "shell",
-            "command": "${workspaceFolder}/build/game_67_idle/native-debug/game_67_idle.exe --devapi 9123",
+            "command": "${workspaceFolder}/build/game_seed/native-debug/game_seed.exe --devapi 9123",
             "dependsOn": "Build: native debug",
             "problemMatcher": []
         },
@@ -81,45 +81,52 @@
         {
             "label": "Build: native release",
             "type": "shell",
-            "command": "cmake --build --preset game-native-release",
+            "command": "cmake --build --preset native-release --target game_seed",
             "dependsOn": "CMake: configure native release",
             "problemMatcher": ["$gcc"]
         },
         {
             "label": "Release: native PC",
             "type": "shell",
-            "command": "cmake --build --preset game-native-release",
-            "dependsOn": "CMake: configure native release",
+            "command": "node tools/package_native_release.mjs",
+            "dependsOn": "Build: native release",
             "group": "build",
-            "problemMatcher": ["$gcc"]
+            "problemMatcher": []
         },
         {
-            "label": "Pack: build game pack debug",
+            "label": "Run: native release package",
             "type": "shell",
-            "command": "cmake --build --preset pack-native-debug",
-            "dependsOn": "CMake: configure native debug",
+            "command": "${workspaceFolder}/build/release/67-world-pc/67-world/RUN_67_WORLD.bat",
+            "dependsOn": "Release: native PC",
+            "problemMatcher": []
+        },
+        {
+            "label": "Pack: build 67 World art pack debug",
+            "type": "shell",
+            "command": "${workspaceFolder}/build/game_seed/native-debug/build_67_world_packs.exe build/game_seed/67-world-packs",
+            "dependsOn": "Build: pack builder debug",
             "group": "build",
-            "problemMatcher": ["$gcc"]
+            "problemMatcher": []
         },
         {
             "label": "Build: pack builder debug",
             "type": "shell",
-            "command": "cmake --build --preset native-debug --target build_game_67_idle_pack",
+            "command": "cmake --build --preset native-debug --target build_67_world_packs",
             "dependsOn": "CMake: configure native debug",
             "problemMatcher": ["$gcc"]
         },
         {
-            "label": "Pack: build game pack release",
+            "label": "Pack: build 67 World art pack release",
             "type": "shell",
-            "command": "cmake --build --preset pack-native-release",
-            "dependsOn": "CMake: configure native release",
+            "command": "${workspaceFolder}/build/game_seed/native-release/build_67_world_packs.exe build/game_seed/67-world-packs",
+            "dependsOn": "Build: pack builder release",
             "group": "build",
-            "problemMatcher": ["$gcc"]
+            "problemMatcher": []
         },
         {
             "label": "Build: pack builder release",
             "type": "shell",
-            "command": "cmake --build --preset native-release --target build_game_67_idle_pack",
+            "command": "cmake --build --preset native-release --target build_67_world_packs",
             "dependsOn": "CMake: configure native release",
             "problemMatcher": ["$gcc"]
         },
@@ -132,14 +139,14 @@
         {
             "label": "Build: wasm debug",
             "type": "shell",
-            "command": "cmake --build --preset game-wasm-debug",
+            "command": "cmake --build --preset wasm-debug --target game_seed",
             "dependsOn": "CMake: configure wasm debug",
             "problemMatcher": ["$gcc"]
         },
         {
             "label": "Web: serve debug",
             "type": "shell",
-            "command": "powershell -ExecutionPolicy Bypass -File scripts/serve-web.ps1 build/game_67_idle/wasm-debug 8080",
+            "command": "powershell -ExecutionPolicy Bypass -File scripts/serve-web.ps1 build/game_seed/wasm-debug 8080",
             "dependsOn": "Build: wasm debug",
             "isBackground": true,
             "problemMatcher": {
@@ -162,7 +169,7 @@
         {
             "label": "Release: web",
             "type": "shell",
-            "command": "cmake --build --preset game-wasm-release",
+            "command": "cmake --build --preset wasm-release --target game_seed",
             "dependsOn": "CMake: configure wasm release",
             "group": "build",
             "problemMatcher": ["$gcc"]
@@ -170,7 +177,7 @@
         {
             "label": "Web: serve release",
             "type": "shell",
-            "command": "powershell -ExecutionPolicy Bypass -File scripts/serve-web.ps1 build/game_67_idle/wasm-release 8081",
+            "command": "powershell -ExecutionPolicy Bypass -File scripts/serve-web.ps1 build/game_seed/wasm-release 8081",
             "dependsOn": "Release: web",
             "isBackground": true,
             "problemMatcher": {
@@ -190,7 +197,7 @@
             "dependsOn": [
                 "Release: native PC",
                 "Release: web",
-                "Pack: build game pack release"
+                "Pack: build 67 World art pack release"
             ],
             "problemMatcher": []
         },

@@ -368,12 +368,16 @@ def convert_ppm_to_png(ppm_path: str, png_path: str) -> None:
     width_b, offset = _ppm_token(data, offset)
     height_b, offset = _ppm_token(data, offset)
     max_b, offset = _ppm_token(data, offset)
-    while offset < len(data) and data[offset] in b" \t\r\n":
-        offset += 1
     width = int(width_b)
     height = int(height_b)
     if int(max_b) != 255:
         raise DevApiError("unsupported framebuffer capture max value")
+    if offset >= len(data) or data[offset] not in b" \t\r\n":
+        raise DevApiError("bad framebuffer capture header separator")
+    if data[offset : offset + 2] == b"\r\n":
+        offset += 2
+    else:
+        offset += 1
     rgb = data[offset:]
     expected = width * height * 3
     if len(rgb) != expected:
@@ -518,7 +522,15 @@ def connect_existing(port: int = 9123, timeout: float = 8.0) -> DevApiClient | N
 
 
 @contextmanager
-def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE, reuse_existing: bool = False, fresh_state: bool = True, autosave_enabled: bool = False):
+def running_game(
+    port: int = 9123,
+    exe: str = NATIVE_DEBUG_EXE,
+    cwd: str = ROOT,
+    reuse_existing: bool = False,
+    fresh_state: bool = True,
+    autosave_enabled: bool = False,
+    window_size: str | None = None,
+):
     proc = None
     client = None
     launch_log_path = None
@@ -534,6 +546,8 @@ def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE, reuse_existing: 
         if not os.path.exists(exe):
             raise DevApiError(f"build native debug first: {exe}")
         args = [exe, "--devapi", str(port)]
+        if window_size:
+            args.extend(["--window-size", window_size])
         if fresh_state:
             args.append("--fresh-state")
         if not autosave_enabled:
@@ -541,9 +555,9 @@ def running_game(port: int = 9123, exe: str = NATIVE_DEBUG_EXE, reuse_existing: 
         launch_log_path = make_launch_log_path(port)
         launch_log = open(launch_log_path, "w", encoding="utf-8", errors="replace", buffering=1)
         launch_log.write("command: " + " ".join(args) + "\n")
-        launch_log.write("cwd: " + ROOT + "\n\n")
+        launch_log.write("cwd: " + cwd + "\n\n")
         launch_log.flush()
-        proc = subprocess.Popen(args, cwd=ROOT, stdout=launch_log, stderr=subprocess.STDOUT)
+        proc = subprocess.Popen(args, cwd=cwd, stdout=launch_log, stderr=subprocess.STDOUT)
         print(f"launch log: {launch_log_path}", file=sys.stderr)
         client = connect_existing(port=port)
         if client is not None:

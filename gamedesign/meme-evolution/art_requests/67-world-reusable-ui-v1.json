@@ -1,0 +1,83 @@
+{
+  "schema": "67_world.art_request",
+  "version": 1,
+  "id": "67-world-reusable-ui-v1",
+  "visual_targets": [
+    "gamedesign/meme-evolution/visuals/67-world-gameplay-fake-shot-v1.png",
+    "gamedesign/meme-evolution/visuals/67-world-first-7-lineup-v1.png"
+  ],
+  "source_art": [
+    "gamedesign/meme-evolution/visuals/67-world-ui-art-sheet-v1.png",
+    "gamedesign/meme-evolution/visuals/67-world-batch-2-character-sheet-v1.png",
+    "gamedesign/meme-evolution/visuals/67-world-batch-3-character-sheet-v1.png",
+    "gamedesign/meme-evolution/visuals/67-world-reusable-ui-kit-v1.png",
+    "gamedesign/meme-evolution/visuals/67-world-field-first-kit-v1.png",
+    "gamedesign/meme-evolution/visuals/67-world-field-repair-kit-v1.png"
+  ],
+  "asset_family": "reusable ui kit and unique 67 character sprite batches for release-track progression",
+  "audience": "kids, bright meme casual game",
+  "runtime_harness": "native PC",
+  "reusable_kinds": [
+    "sprite",
+    "slice9",
+    "icon",
+    "tile",
+    "border",
+    "effect"
+  ],
+  "must_not_bake": [
+    "button labels",
+    "resource counters",
+    "timer values",
+    "tutorial text",
+    "debug text",
+    "game state values"
+  ],
+  "runtime_composition": {
+    "buttons": "slice9 background plus runtime text/icon",
+    "cards": "slice9 card background plus character sprite and runtime lock/progress state",
+    "field": "repeated grass/dark grass tiles plus separate path, fence props, ground shadows, and in-world crate",
+    "board": "legacy board frame and tile pieces remain available but are not the primary field-first screen",
+    "hud": "slice9 panels plus separate resource icons and runtime numbers",
+    "characters": "separate transparent sprites placed on board slots and collection cards"
+  },
+  "batch_2_characters": [
+    "jelly_67",
+    "lemon_67",
+    "watermelon_67",
+    "bubblegum_67",
+    "sticker_67",
+    "party_67",
+    "arcade_67",
+    "cloud_67",
+    "crown_67",
+    "rocket_67",
+    "rainbow_67"
+  ],
+  "batch_3_characters": [
+    "neon_67",
+    "gummy_67",
+    "pixel_67",
+    "lava_67",
+    "donut_67",
+    "slime_67",
+    "disco_67",
+    "dragon_67",
+    "ninja_67",
+    "galaxy_67",
+    "golden_67",
+    "cosmic_67"
+  ],
+  "qa_rejects": [
+    "random letters",
+    "watermarks",
+    "labels fused into reusable backgrounds",
+    "icons fused into buttons",
+    "wrong subject",
+    "weak silhouette at gameplay size",
+    "green background left opaque",
+    "baked board state"
+  ],
+  "crop_manifest": "gamedesign/meme-evolution/data/art_crop_manifest.json",
+  "runtime_manifest": "gamedesign/meme-evolution/data/asset_manifest.json"
+}

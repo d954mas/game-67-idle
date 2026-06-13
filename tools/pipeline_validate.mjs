@@ -15,7 +15,7 @@ const exportDir = join(root, "tmp", `pipeline-validate-${stamp}`);
 function run(label, args, opts = {}) {
   const { cwd = root, exe = process.execPath } = opts;
   console.log(`\n== ${label}`);
-  console.log(`$ ${args.map((arg) => (/\s/.test(arg) ? JSON.stringify(arg) : arg)).join(" ")}`);
+  console.log(`$ ${[exe, ...args].map((arg) => (/\s/.test(arg) ? JSON.stringify(arg) : arg)).join(" ")}`);
   const result = spawnSync(exe, args, {
     cwd,
     stdio: "inherit",
@@ -31,6 +31,29 @@ function run(label, args, opts = {}) {
   }
 }
 
+function findPythonRunner() {
+  const candidates = [
+    { exe: "py", args: ["-3.12"] },
+    { exe: "python", args: [] },
+    { exe: "python3", args: [] },
+  ];
+  for (const candidate of candidates) {
+    const result = spawnSync(candidate.exe, [...candidate.args, "--version"], {
+      cwd: root,
+      encoding: "utf8",
+      shell: false,
+      stdio: "pipe",
+    });
+    if (result.status === 0) {
+      const version = `${result.stdout || result.stderr}`.trim();
+      console.log(`python runner: ${candidate.exe} ${candidate.args.join(" ")} ${version}`.replace(/\s+/g, " "));
+      return candidate;
+    }
+  }
+  console.error("error: no working Python runner found; tried py -3.12, python, and python3");
+  process.exit(1);
+}
+
 if (existsSync(exportDir)) {
   rmSync(exportDir, { recursive: true, force: true });
 }
@@ -43,7 +66,8 @@ run("taskboard tests", ["--test", "tools/taskboard/test.mjs"]);
 // Runtime seed checks. Skipped automatically in workflow-only exports, which
 // have no state schema or CMake presets.
 if (existsSync(join(root, "state", "game_state.schema.json"))) {
-  run("state codegen", ["-3.12", "tools/state_codegen/generate_state.py"], { exe: "py" });
+  const python = findPythonRunner();
+  run("state codegen", [...python.args, "tools/state_codegen/generate_state.py"], { exe: python.exe });
 }
 if (existsSync(join(root, "CMakePresets.json"))) {
   run("cmake configure", ["--preset", "native-debug"], { exe: "cmake" });

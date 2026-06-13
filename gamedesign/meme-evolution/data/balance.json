@@ -1,0 +1,360 @@
+{
+  "version": 1,
+  "currency": {
+    "id": "giggle_coins",
+    "starting_amount": 0
+  },
+  "board": {
+    "slot_count": 12,
+    "starting_slots_unlocked": 6
+  },
+  "spawn": {
+    "button_id": "spawn_67",
+    "creates_variant": "tiny_67",
+    "base_cooldown_seconds": 1.5,
+    "upgraded_cooldown_seconds": 1.0,
+    "better_crate_rule": "After Faster Spawn, the same upgrade slot buys Better Crate levels. Level N lets the field crate spawn the highest discovered variant at index N instead of always Tiny 67, capped below Cosmic so the final unlock still comes from merging two Golden 67s."
+  },
+  "variants": [
+    {
+      "id": "tiny_67",
+      "order": 1,
+      "display_name": "Tiny 67",
+      "unlock": { "type": "start" },
+      "passive_coins_per_5_seconds": 1,
+      "first_discovery_bonus": 0,
+      "merge_result": "berry_67"
+    },
+    {
+      "id": "berry_67",
+      "order": 2,
+      "display_name": "Berry 67",
+      "unlock": { "type": "merge", "requires": "tiny_67", "count": 2 },
+      "passive_coins_per_5_seconds": 2,
+      "first_discovery_bonus": 5,
+      "merge_result": "banana_67"
+    },
+    {
+      "id": "banana_67",
+      "order": 3,
+      "display_name": "Banana 67",
+      "unlock": { "type": "merge", "requires": "berry_67", "count": 2 },
+      "passive_coins_per_5_seconds": 4,
+      "first_discovery_bonus": 10,
+      "merge_result": "smoothie_67"
+    },
+    {
+      "id": "smoothie_67",
+      "order": 4,
+      "display_name": "Smoothie 67",
+      "unlock": { "type": "merge", "requires": "banana_67", "count": 2 },
+      "passive_coins_per_5_seconds": 8,
+      "first_discovery_bonus": 15,
+      "merge_result": "cool_67"
+    },
+    {
+      "id": "cool_67",
+      "order": 5,
+      "display_name": "Cool 67",
+      "unlock": { "type": "merge", "requires": "smoothie_67", "count": 2 },
+      "passive_coins_per_5_seconds": 16,
+      "first_discovery_bonus": 25,
+      "merge_result": "portal_67"
+    },
+    {
+      "id": "portal_67",
+      "order": 6,
+      "display_name": "Portal 67",
+      "unlock": { "type": "merge", "requires": "cool_67", "count": 2 },
+      "passive_coins_per_5_seconds": 32,
+      "first_discovery_bonus": 40,
+      "merge_result": "mystery_67"
+    },
+    {
+      "id": "mystery_67",
+      "order": 7,
+      "display_name": "Mystery 67",
+      "unlock": { "type": "milestone", "requires_discovered_variants": 6 },
+      "passive_coins_per_5_seconds": 48,
+      "first_discovery_bonus": 67,
+      "merge_result": "jelly_67"
+    },
+    {
+      "id": "jelly_67",
+      "order": 8,
+      "display_name": "Jelly 67",
+      "unlock": { "type": "merge", "requires": "mystery_67", "count": 2 },
+      "passive_coins_per_5_seconds": 72,
+      "first_discovery_bonus": 90,
+      "merge_result": "lemon_67"
+    },
+    {
+      "id": "lemon_67",
+      "order": 9,
+      "display_name": "Lemon 67",
+      "unlock": { "type": "merge", "requires": "jelly_67", "count": 2 },
+      "passive_coins_per_5_seconds": 105,
+      "first_discovery_bonus": 120,
+      "merge_result": "watermelon_67"
+    },
+    {
+      "id": "watermelon_67",
+      "order": 10,
+      "display_name": "Watermelon 67",
+      "unlock": { "type": "merge", "requires": "lemon_67", "count": 2 },
+      "passive_coins_per_5_seconds": 150,
+      "first_discovery_bonus": 150,
+      "merge_result": "bubblegum_67"
+    },
+    {
+      "id": "bubblegum_67",
+      "order": 11,
+      "display_name": "Bubblegum 67",
+      "unlock": { "type": "merge", "requires": "watermelon_67", "count": 2 },
+      "passive_coins_per_5_seconds": 210,
+      "first_discovery_bonus": 190,
+      "merge_result": "sticker_67"
+    },
+    {
+      "id": "sticker_67",
+      "order": 12,
+      "display_name": "Sticker 67",
+      "unlock": { "type": "merge", "requires": "bubblegum_67", "count": 2 },
+      "passive_coins_per_5_seconds": 290,
+      "first_discovery_bonus": 240,
+      "merge_result": "party_67"
+    },
+    {
+      "id": "party_67",
+      "order": 13,
+      "display_name": "Party 67",
+      "unlock": { "type": "merge", "requires": "sticker_67", "count": 2 },
+      "passive_coins_per_5_seconds": 390,
+      "first_discovery_bonus": 300,
+      "merge_result": "arcade_67"
+    },
+    {
+      "id": "arcade_67",
+      "order": 14,
+      "display_name": "Arcade 67",
+      "unlock": { "type": "merge", "requires": "party_67", "count": 2 },
+      "passive_coins_per_5_seconds": 520,
+      "first_discovery_bonus": 380,
+      "merge_result": "cloud_67"
+    },
+    {
+      "id": "cloud_67",
+      "order": 15,
+      "display_name": "Cloud 67",
+      "unlock": { "type": "merge", "requires": "arcade_67", "count": 2 },
+      "passive_coins_per_5_seconds": 680,
+      "first_discovery_bonus": 480,
+      "merge_result": "crown_67"
+    },
+    {
+      "id": "crown_67",
+      "order": 16,
+      "display_name": "Crown 67",
+      "unlock": { "type": "merge", "requires": "cloud_67", "count": 2 },
+      "passive_coins_per_5_seconds": 880,
+      "first_discovery_bonus": 600,
+      "merge_result": "rocket_67"
+    },
+    {
+      "id": "rocket_67",
+      "order": 17,
+      "display_name": "Rocket 67",
+      "unlock": { "type": "merge", "requires": "crown_67", "count": 2 },
+      "passive_coins_per_5_seconds": 1120,
+      "first_discovery_bonus": 760,
+      "merge_result": "rainbow_67"
+    },
+    {
+      "id": "rainbow_67",
+      "order": 18,
+      "display_name": "Rainbow 67",
+      "unlock": { "type": "merge", "requires": "rocket_67", "count": 2 },
+      "passive_coins_per_5_seconds": 1400,
+      "first_discovery_bonus": 950,
+      "merge_result": "neon_67"
+    },
+    {
+      "id": "neon_67",
+      "order": 19,
+      "display_name": "Neon 67",
+      "unlock": { "type": "merge", "requires": "rainbow_67", "count": 2 },
+      "passive_coins_per_5_seconds": 1800,
+      "first_discovery_bonus": 1200,
+      "merge_result": "gummy_67"
+    },
+    {
+      "id": "gummy_67",
+      "order": 20,
+      "display_name": "Gummy 67",
+      "unlock": { "type": "merge", "requires": "neon_67", "count": 2 },
+      "passive_coins_per_5_seconds": 2300,
+      "first_discovery_bonus": 1500,
+      "merge_result": "pixel_67"
+    },
+    {
+      "id": "pixel_67",
+      "order": 21,
+      "display_name": "Pixel 67",
+      "unlock": { "type": "merge", "requires": "gummy_67", "count": 2 },
+      "passive_coins_per_5_seconds": 3000,
+      "first_discovery_bonus": 1900,
+      "merge_result": "lava_67"
+    },
+    {
+      "id": "lava_67",
+      "order": 22,
+      "display_name": "Lava 67",
+      "unlock": { "type": "merge", "requires": "pixel_67", "count": 2 },
+      "passive_coins_per_5_seconds": 3900,
+      "first_discovery_bonus": 2400,
+      "merge_result": "donut_67"
+    },
+    {
+      "id": "donut_67",
+      "order": 23,
+      "display_name": "Donut 67",
+      "unlock": { "type": "merge", "requires": "lava_67", "count": 2 },
+      "passive_coins_per_5_seconds": 5100,
+      "first_discovery_bonus": 3000,
+      "merge_result": "slime_67"
+    },
+    {
+      "id": "slime_67",
+      "order": 24,
+      "display_name": "Slime 67",
+      "unlock": { "type": "merge", "requires": "donut_67", "count": 2 },
+      "passive_coins_per_5_seconds": 6600,
+      "first_discovery_bonus": 3800,
+      "merge_result": "disco_67"
+    },
+    {
+      "id": "disco_67",
+      "order": 25,
+      "display_name": "Disco 67",
+      "unlock": { "type": "merge", "requires": "slime_67", "count": 2 },
+      "passive_coins_per_5_seconds": 8600,
+      "first_discovery_bonus": 4800,
+      "merge_result": "dragon_67"
+    },
+    {
+      "id": "dragon_67",
+      "order": 26,
+      "display_name": "Dragon 67",
+      "unlock": { "type": "merge", "requires": "disco_67", "count": 2 },
+      "passive_coins_per_5_seconds": 11200,
+      "first_discovery_bonus": 6000,
+      "merge_result": "ninja_67"
+    },
+    {
+      "id": "ninja_67",
+      "order": 27,
+      "display_name": "Ninja 67",
+      "unlock": { "type": "merge", "requires": "dragon_67", "count": 2 },
+      "passive_coins_per_5_seconds": 14500,
+      "first_discovery_bonus": 7600,
+      "merge_result": "galaxy_67"
+    },
+    {
+      "id": "galaxy_67",
+      "order": 28,
+      "display_name": "Galaxy 67",
+      "unlock": { "type": "merge", "requires": "ninja_67", "count": 2 },
+      "passive_coins_per_5_seconds": 19000,
+      "first_discovery_bonus": 9500,
+      "merge_result": "golden_67"
+    },
+    {
+      "id": "golden_67",
+      "order": 29,
+      "display_name": "Golden 67",
+      "unlock": { "type": "merge", "requires": "galaxy_67", "count": 2 },
+      "passive_coins_per_5_seconds": 25000,
+      "first_discovery_bonus": 12000,
+      "merge_result": "cosmic_67"
+    },
+    {
+      "id": "cosmic_67",
+      "order": 30,
+      "display_name": "Cosmic 67",
+      "unlock": { "type": "merge", "requires": "golden_67", "count": 2 },
+      "passive_coins_per_5_seconds": 33000,
+      "first_discovery_bonus": 15000,
+      "merge_result": null
+    }
+  ],
+  "release_pacing_targets": {
+    "session_goal_minutes": 60,
+    "target_window_minutes": [55, 60],
+    "target_variant_count": 30,
+    "notes": "Current deterministic ordinary-play simulator reaches Cosmic 67 at 57.19 minutes using spawn, merge, passive income, Faster Spawn, Better Crate, and stuck-board recycle. The 55-60 minute release window keeps the first release-track hour complete while rejecting the older too-fast 53.92 minute proof. Late Better Crate levels are intentionally slower than the first 10 levels so the final 30-variant arc feels closer to a full one-hour child-test session without changing FTUE.",
+    "target_first_unlock_minute_by_order": {
+      "1": 0,
+      "2": 0.03,
+      "3": 0.08,
+      "4": 0.18,
+      "5": 0.31,
+      "6": 0.58,
+      "7": 1.11,
+      "8": 1.71,
+      "9": 2.48,
+      "10": 3.31,
+      "11": 4.38,
+      "12": 5.76,
+      "13": 7.49,
+      "14": 9.36,
+      "15": 11.33,
+      "16": 13.39,
+      "17": 15.53,
+      "18": 17.73,
+      "19": 20.08,
+      "20": 23.18,
+      "21": 26.48,
+      "22": 29.88,
+      "23": 33.28,
+      "24": 36.73,
+      "25": 40.21,
+      "26": 43.58,
+      "27": 46.88,
+      "28": 50.16,
+      "29": 53.43,
+      "30": 57.18
+    }
+  },
+  "upgrades": [
+    {
+      "id": "faster_spawn",
+      "display_name": "Faster Spawn",
+      "unlock": { "type": "discovered_variant", "variant": "berry_67" },
+      "cost": { "currency": "giggle_coins", "amount": 25 },
+      "effect": {
+        "spawn_cooldown_seconds": 1.0
+      },
+      "max_level": 1
+    },
+    {
+      "id": "better_crate",
+      "display_name": "Better Crate",
+      "unlock": { "type": "after_upgrade", "upgrade": "faster_spawn" },
+      "cost": {
+        "currency": "giggle_coins",
+        "formula": "level<=3: passive(level)*216+270; level<=10: passive(level)*378+level*216; level<=20: passive(level)*560+level*700; otherwise: passive(level)*800+level*1500"
+      },
+      "effect": {
+        "spawn_variant_index": "min(level, discovered_count - 1, 28)"
+      },
+      "max_level": 28
+    }
+  ],
+  "milestones": [
+    {
+      "id": "first_30_variants",
+      "requires_discovered_variants": 30,
+      "reward": "cosmic_67_world_preview"
+    }
+  ]
+}

@@ -10,12 +10,61 @@ Use this skill to make small, playable game changes without losing project conte
 ## Workflow
 
 1. Read local project rules first: `AGENTS.md`, project state/runbooks if present, then relevant design docs, build presets, and nearby code.
-2. Identify the smallest playable slice that satisfies the request.
-3. For non-trivial work, use the iteration cycle in `references/iteration-cycle-playbook.md`.
-4. Keep implementation close to existing engine and game patterns.
-5. Avoid broad refactors unless the feature cannot be implemented safely without them.
-6. Validate the primary runtime target first; validate secondary targets only when relevant or requested.
-7. Capture evidence and report what changed, where to run it, and what was verified.
+2. State the selected runtime harness before implementation, including why it is allowed by local rules.
+3. If the feature is based on a named reference, verify a reference deconstruction
+   exists before coding. It must include source evidence,
+   first-10-seconds and first-60-seconds actions, 1-5 minute loop,
+   screen grammar, mechanics/balance notes, reward/UI hierarchy,
+   borrow/avoid/copy-risk, and mismatch audit against the current build.
+   For a central gameplay reference, the deconstruction must be
+   observation-first and include official/store/trailer visuals, gameplay
+   video/walkthrough or a long screenshot sequence, and a current build capture.
+   It must also follow the four-pass method: source packet, player transcript,
+   systems extraction, and translation gate. If the translation gate does not
+   name the next screenshot/scenario proof, do not code yet. If the user asks
+   whether the ref was studied or rejects the current gameplay as unlike the
+   ref, answer from the deconstruction doc; if the doc cannot answer, improve
+   the study before coding. Do not claim a gameplay ref was studied unless the
+   doc records source links/paths, checked dates, timestamps/frames or
+   screenshot ids for observed beats, supporting guide/review/deconstruction
+   sources used for balance claims, and the current native capture. Treat the
+   Reference Study Definition of Ready as a pre-code gate: if mode, doc path,
+   Reference Lock, source matrix, current native capture, observation ledger,
+   borrow/avoid/copy-risk, current-build mismatch, or next native proof are
+   missing, state that the reference study is not ready for implementation and
+   gather sources or ask for user material instead of coding.
+   The deconstruction must also record the Source Ladder before conclusions:
+   user-provided material, official/store/trailer visuals, raw gameplay
+   video/walkthrough or long screenshot sequence, then supporting guides,
+   reviews, lectures, deconstructions, wikis, or community notes. Secondary
+   summaries cannot replace raw gameplay evidence for first-screen, control,
+   loop, reward, or UI hierarchy claims.
+   The deconstruction must include a Reference Evidence Board for central/deep
+   refs: at least six cited frames/screenshots for first screen, first input,
+   visible response, reward feedback, upgrade/progression UI, and
+   friction/blocked state, plus raw gameplay/walkthrough timing evidence. If
+   those frames/timestamps cannot be named, the reference is not studied enough
+   to implement.
+   If the user says the current build is not like the reference, run Reference Intake
+   before defending or making another pass: state the reference question, mode,
+   durable doc path, source packet, current native capture plan/path,
+   no-coding/no-final-art boundary, and first proof. Treat observed and
+   user-provided claims as usable; inferred/unknown claims must stay out of
+   implementation unless accepted as a narrow exception.
+   Before coding resumes, provide a Reference Digest with the mode, sources
+   checked, 3-5 observed facts, current-build mismatch, borrow/avoid/copy-risk,
+   and next native screenshot/scenario proof. If the digest cannot be written
+   from the durable doc, the reference is not implementation-ready.
+   Parallel reference work is research-only: source collection, frame capture,
+   visible transcript, and mismatch capture may run beside unrelated setup, but
+   the reference-driven gameplay/UI/economy/balance implementation lane stays
+   locked until the digest, mismatch audit, and next native proof exist.
+4. Identify the smallest playable slice that satisfies the request.
+5. For non-trivial work, use the iteration cycle in `references/iteration-cycle-playbook.md`.
+6. Keep implementation close to existing engine and game patterns.
+7. Avoid broad refactors unless the feature cannot be implemented safely without them.
+8. Validate the primary runtime target first; validate secondary targets only when relevant or requested.
+9. Capture evidence and report what changed, where to run it, and what was verified.
 
 ## Discovery
 
@@ -30,12 +79,20 @@ If naming differs, infer the equivalent directories from the repository.
 
 ## Implementation Rules
 
+- Treat the local primary runtime as a hard platform gate, not a preference.
+- Do not create, serve, validate, or pivot to a web prototype for playable work unless the current user request explicitly asks for web/mobile/browser output or the user approves a clearly stated exception.
+- Before starting a web server, opening localhost for a web build, creating HTML/CSS/JS prototype files, or installing frontend/browser tooling, restate the explicit permission that allows it. If no such permission exists, continue on the primary native/game runtime path.
 - Make one coherent gameplay increment at a time.
 - Write or infer a short task packet for work that spans design, code, visuals, or validation.
 - Keep code agent-readable: clear names, small functions, limited comments.
 - Preserve engine boundaries; do not edit submodules or vendored engine code unless explicitly requested.
 - Do not silently wire asset-pack generation into every normal game build.
 - When adding state, input, or rendering, include a simple way for the user to observe the behavior.
+- Do not implement a "like reference X" feature from a feature list alone.
+  Translate the reference into player-facing screen grammar and visible
+  runtime evidence first.
+- Do not implement a reference-driven feature from memory unless sources are
+  unavailable and the user accepts a clearly scoped memory-only exception.
 - Keep reusable workflow in skills; keep project-specific facts and run commands in project docs.
 
 ## Build, Launch, And Release Tasks

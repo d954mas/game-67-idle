@@ -31,6 +31,8 @@ scope, and product decisions belong in the project's GDD files, not here.
 - [Playtest Validation](playtest_validation.md) - first minutes, evidence, bugs, director review.
 - [Reward Feedback](reward_feedback.md) - visible rewards, consequences, unlock clarity.
 - [Visual Direction](visual_direction.md) - readable friendly casual-game visual rules.
+- [Reference Deconstruction](reference_deconstruction.md) - how to study references before implementation.
+- [AI Art Iteration Pipeline](ai_art_iteration_pipeline.md) - fast generated-art to reusable runtime asset workflow.
 - [Balance Tuning](balance_tuning.md) - pacing targets, economy checks, simulations.
 - [Content Planning](content_planning.md) - content roles, matrices, scope control.
 - [GDD Application](gdd_application.md) - turn reusable knowledge into project specs.

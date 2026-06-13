@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "screens": [
+    {
+      "id": "main_playfield",
+      "purpose": "Spawn, merge, collect, and unlock 67 variants on one screen.",
+      "default": true,
+      "regions": [
+        {
+          "id": "top_bar",
+          "elements": [
+            { "id": "giggle_coin_counter", "binds_to": "currency.giggle_coins" },
+            { "id": "collection_progress", "format": "{discovered_count} / 67" }
+          ]
+        },
+        {
+          "id": "merge_board",
+          "elements": [
+            { "id": "board_slots", "count": 12 },
+            { "id": "merge_hint", "shown_when": "two_matching_variants_exist" },
+            { "id": "board_full_blocker", "shown_when": "no_empty_slots_and_merge_exists" },
+            { "id": "clear_slot_prompt", "shown_when": "no_empty_slots_and_no_merge_exists" }
+          ]
+        },
+        {
+          "id": "collection_tray",
+          "elements": [
+            { "id": "variant_slot_1", "variant": "tiny_67" },
+            { "id": "variant_slot_2", "variant": "berry_67" },
+            { "id": "variant_slot_3", "variant": "banana_67" },
+            { "id": "variant_slot_4", "variant": "smoothie_67" },
+            { "id": "variant_slot_5", "variant": "cool_67" },
+            { "id": "variant_slot_6", "variant": "portal_67" },
+            { "id": "variant_slot_7", "variant": "mystery_67" }
+          ]
+        },
+        {
+          "id": "primary_controls",
+          "elements": [
+            { "id": "spawn_67_button", "action": "spawn_67" },
+            { "id": "progress_upgrade", "action": "buy_upgrade:faster_spawn_then_better_crate" }
+          ]
+        },
+        {
+          "id": "feedback_layer",
+          "elements": [
+            { "id": "coin_flyout", "shown_when": "coins_changed" },
+            { "id": "merge_burst", "shown_when": "merge_completed" },
+            { "id": "new_variant_toast", "shown_when": "new_variant_discovered" }
+          ]
+        }
+      ]
+    }
+  ],
+  "actions": [
+    {
+      "id": "spawn_67",
+      "input": "tap_or_click",
+      "blocked_when": "board_full_with_merge_available_or_spawn_cooldown_active",
+      "success_feedback": "pop_best_crate_67_into_empty_slot"
+    },
+    {
+      "id": "merge_matching_67",
+      "input": "drag_matching_variant_onto_same_variant",
+      "blocked_when": "variants_do_not_match",
+      "success_feedback": "merge_burst_and_new_variant_toast"
+    },
+    {
+      "id": "recycle_lowest_67",
+      "input": "tap_crate_when_board_full_and_no_pairs",
+      "blocked_when": "empty_slot_exists_or_merge_available",
+      "success_feedback": "lowest_67_pops_into_coins_and_frees_slot"
+    },
+    {
+      "id": "buy_upgrade:faster_spawn",
+      "input": "tap_or_click",
+      "blocked_when": "not_enough_giggle_coins_or_not_unlocked",
+      "success_feedback": "spawn_button_speed_glow"
+    },
+    {
+      "id": "buy_upgrade:better_crate",
+      "input": "tap_or_click_after_faster_spawn",
+      "blocked_when": "not_enough_giggle_coins_or_next_crate_level_not_discovered",
+      "success_feedback": "field_crate_level_up_glow"
+    }
+  ],
+  "first_session_path": [
+    "spawn_67",
+    "spawn_67",
+    "merge_matching_67",
+    "collect_passive_giggle_coins",
+    "buy_upgrade:faster_spawn",
+    "continue_merging_to_banana_67"
+  ]
+}

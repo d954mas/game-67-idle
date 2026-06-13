@@ -1,0 +1,11 @@
+{
+  "schema": "game.art_crop_manifest",
+  "version": 1,
+  "art_job": "gamedesign/meme-evolution/art_requests/67-world-batch2-variants-v1.json",
+  "output_dir": "assets/runtime/67-world-batch2-variants-v1",
+  "green_screen": {
+    "mode": "chroma_key",
+    "notes": "Use transparent PNGs or a flat chroma-key background for local alpha removal."
+  },
+  "sources": []
+}

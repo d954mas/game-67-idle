@@ -42,6 +42,9 @@ else()
 endif()
 
 add_subdirectory(external/neotolis-engine)
+if(NOT EMSCRIPTEN AND NOT TARGET nt_builder)
+    add_subdirectory(external/neotolis-engine/tools/builder external/neotolis-engine/tools/builder)
+endif()
 
 set(GAME_TARGET game_seed)
 set(GAME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/build/${GAME_TARGET}/${NT_PRESET_NAME}")
@@ -85,6 +88,8 @@ add_custom_target(game_state_codegen
 add_library(game_state STATIC
     src/game_storage.c
     src/game_storage.h
+    src/game_state_actions.c
+    src/game_state_actions.h
     "${GAME_STATE_GENERATED_SOURCE}"
     "${GAME_STATE_GENERATED_HEADER}"
     "${GAME_STATE_GENERATED_SCHEMA_HEADER}"
@@ -128,7 +133,21 @@ else()
     target_compile_definitions(game_devapi INTERFACE NT_DEVAPI_ENABLED=0)
 endif()
 
-add_executable(${GAME_TARGET} src/main.c)
+set(GAME_WINDOWS_RESOURCE "")
+if(WIN32 AND NOT EMSCRIPTEN)
+    enable_language(RC)
+    set(GAME_WINDOWS_RESOURCE src/windows/67_world.rc)
+    set_source_files_properties(src/windows/67_world.rc PROPERTIES
+        OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/assets/runtime/67-world/67-world.ico"
+    )
+endif()
+
+add_executable(${GAME_TARGET}
+    src/main.c
+    src/game_audio.c
+    src/game_audio.h
+    ${GAME_WINDOWS_RESOURCE}
+)
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core
     nt_app
@@ -136,24 +155,80 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_window
     nt_gfx
     nt_shape_renderer
+    nt_sprite_renderer
+    nt_resource
+    nt_atlas
+    nt_material
+    nt_hash
+    nt_fs
+    nt_log
     nt_math
     game_devapi
     game_state
     game_cjson
 )
-target_include_directories(${GAME_TARGET} PRIVATE src external/cjson external/neotolis-engine/deps/glfw/deps)
+if(EMSCRIPTEN)
+    target_link_libraries(${GAME_TARGET} PRIVATE nt_http)
+else()
+    target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub)
+endif()
+target_include_directories(${GAME_TARGET} PRIVATE
+    src
+    src/generated/assets
+    external/cjson
+    external/neotolis-engine/deps/glfw/deps
+)
 target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=$<BOOL:${GAME_DEVAPI_ENABLED}> _CRT_SECURE_NO_WARNINGS)
 
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_platform_web)
 endif()
+if(WIN32 AND NOT EMSCRIPTEN)
+    target_link_libraries(${GAME_TARGET} PRIVATE winmm)
+endif()
 
 nt_set_warning_flags(${GAME_TARGET})
 nt_set_sanitizer_flags(${GAME_TARGET})
 
+if(NOT EMSCRIPTEN)
+    add_executable(build_67_world_packs tools/assets/build_67_world_packs.c)
+    target_link_libraries(build_67_world_packs PRIVATE nt_builder)
+    target_include_directories(build_67_world_packs PRIVATE
+        external/neotolis-engine/tools/builder
+        external/neotolis-engine/engine
+        external/neotolis-engine/shared/include
+    )
+    target_compile_definitions(build_67_world_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(build_67_world_packs PRIVATE -U_DLL)
+    nt_set_warning_flags(build_67_world_packs)
+    nt_set_sanitizer_flags(build_67_world_packs)
+    set_target_properties(build_67_world_packs PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}"
+    )
+endif()
+
 set_target_properties(${GAME_TARGET} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}"
 )
+
+set(GAME_WORLD67_PACK_SOURCE "${CMAKE_SOURCE_DIR}/build/game_seed/67-world-packs/world67_art.ntpack")
+set(GAME_WORLD67_PACK_OUTPUT "${GAME_OUTPUT_DIR}/assets/world67_art.ntpack")
+if(EXISTS "${GAME_WORLD67_PACK_SOURCE}")
+    add_custom_command(
+        OUTPUT "${GAME_WORLD67_PACK_OUTPUT}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_OUTPUT_DIR}/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GAME_WORLD67_PACK_SOURCE}" "${GAME_WORLD67_PACK_OUTPUT}"
+        DEPENDS "${GAME_WORLD67_PACK_SOURCE}"
+        COMMENT "Copying world67_art.ntpack -> native assets/"
+        VERBATIM
+    )
+    add_custom_target(game_world67_pack_copy DEPENDS "${GAME_WORLD67_PACK_OUTPUT}")
+    add_dependencies(${GAME_TARGET} game_world67_pack_copy)
+else()
+    message(WARNING
+        "67 World art pack not found at ${GAME_WORLD67_PACK_SOURCE}. "
+        "Run build_67_world_packs before packaging; native dev can still load from build/game_seed/67-world-packs when present.")
+endif()
 
 if(EMSCRIPTEN)
     set_target_properties(${GAME_TARGET} PROPERTIES SUFFIX ".html" OUTPUT_NAME "index")
