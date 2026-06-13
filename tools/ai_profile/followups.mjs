@@ -99,18 +99,33 @@ function buildSuggestions(review) {
     });
   }
 
-  if (findingTypes.has("failed_records") || asArray(review.failed_or_blocked).some((item) => item.result === "fail")) {
+  if (findingTypes.has("failed_records") || asArray(review.unresolved_failed_records).length > 0) {
     addSuggestion(suggestions, {
       title: "Analyze failed AI profile records",
       priority: "P1",
       tags: ["pipeline", "profiling", "debug", "validation"],
-      source: "failed_or_blocked",
-      why: `${asArray(review.failed_or_blocked).length} failed or blocked record(s) need owner/decision.`,
+      source: "unresolved_failed_records",
+      why: `${asArray(review.unresolved_failed_records).length} unresolved failed record(s) need owner/decision.`,
       done_when: [
         "Each failed/blocked record is classified as code issue, environment issue, bad validation scope, or expected negative test.",
         "Recurring failure causes are converted into a rule, preflight, or task.",
       ],
       next_action: "Open the failed_or_blocked entries and classify the cause before continuing broad validation.",
+    });
+  }
+
+  if (findingTypes.has("recovered_failed_records") || asArray(review.recovered_failed_records).length > 0) {
+    addSuggestion(suggestions, {
+      title: "Classify recovered AI profile failures",
+      priority: "P2",
+      tags: ["pipeline", "profiling", "reflection", "learning"],
+      source: "recovered_failed_records",
+      why: `${asArray(review.recovered_failed_records).length} failed record(s) later passed and should be treated as recovered rework or learning.`,
+      done_when: [
+        "Recovered failures are named in the retrospective with cause and faster path.",
+        "Only recurring recovered failures become rules, preflights, or tasks.",
+      ],
+      next_action: "Review recovered_failed_records and decide whether they were useful negative feedback, avoidable rework, or tool noise.",
     });
   }
 

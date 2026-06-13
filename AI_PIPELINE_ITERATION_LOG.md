@@ -578,3 +578,19 @@ specific and reusable.
   artifacts.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0075`.
+
+## 2026-06-13 - Failed profile records need recovery state
+
+- Context: The live profile status reported failed records from earlier
+  `skills_eval` runs even though later matching `skills_eval` runs passed.
+- Friction: Recovered failures looked like unresolved current health issues,
+  which made the next action noisy.
+- Time sink: Reflection would have to manually inspect whether each failure
+  was later fixed.
+- Likely cause: Profile analysis counted failed records but did not compare
+  them against later passing records for the same normalized command.
+- Proposed improvement: Classify failed records as recovered when the same
+  command later passes, and report recovered versus unresolved failures in
+  review, status, and follow-up drafts.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0076`.

@@ -103,6 +103,34 @@ function latestRecord(records) {
   return [...records].sort((a, b) => (eventTime(b) || 0) - (eventTime(a) || 0))[0];
 }
 
+function normalizeCommand(command) {
+  return String(command || "").replaceAll("\\", "/").replace(/\s+/g, " ").trim();
+}
+
+function commandKeys(record) {
+  return (record.commands || []).map(normalizeCommand).filter(Boolean);
+}
+
+function classifyFailedRecords(records) {
+  const passedLater = new Map();
+  let recovered = 0;
+  let unresolved = 0;
+  for (const record of [...records].sort((a, b) => b.__line - a.__line)) {
+    const keys = commandKeys(record);
+    if (record.result === "pass") {
+      for (const key of keys) passedLater.set(key, record);
+      continue;
+    }
+    if (record.result !== "fail") continue;
+    if (keys.some((key) => passedLater.has(key))) {
+      recovered += 1;
+    } else {
+      unresolved += 1;
+    }
+  }
+  return { recovered, unresolved };
+}
+
 function buildStatus(profilePath) {
   const parsed = parseProfile(profilePath);
   const records = parsed.records;
@@ -110,6 +138,7 @@ function buildStatus(profilePath) {
   const missingWorkItem = records.filter((record) => !record.work_item).length;
   const missingContextInputs = records.filter((record) => record.context_risk && record.context_risk !== "low" && !(record.context_inputs || []).length).length;
   const failedRecords = records.filter((record) => record.result === "fail").length;
+  const failedClassification = classifyFailedRecords(records);
   const coverage = coverageStats(records);
   const bundle = bundleStatus(profilePath);
   const latest = latestRecord(records);
@@ -122,8 +151,8 @@ function buildStatus(profilePath) {
     nextAction = "Fix invalid JSONL lines before using this profile for reflection.";
   } else if (records.length === 0) {
     nextAction = "Append the first checkpoint with event.mjs or wrap the next substantial command with run.mjs.";
-  } else if (failedRecords > 0) {
-    nextAction = "Classify failed profile records in the reflection or task log so recovered failures do not look unresolved.";
+  } else if (failedClassification.unresolved > 0) {
+    nextAction = "Resolve or explain unresolved failed profile records before trusting this profile for reflection.";
   } else if (records.length >= 5 && missingWorkItem / records.length > 0.5) {
     nextAction = "Add --work-item and optional --iteration to future run/event/context/closeout calls.";
   } else if (missingContextInputs > 0) {
@@ -160,6 +189,8 @@ function buildStatus(profilePath) {
     },
     missing_context_inputs: missingContextInputs,
     failed_records: failedRecords,
+    recovered_failed_records: failedClassification.recovered,
+    unresolved_failed_records: failedClassification.unresolved,
     wall_clock_coverage: coverage,
     low_profile_coverage: lowCoverage,
     next_action: nextAction,
@@ -183,7 +214,7 @@ function renderMarkdown(status) {
   lines.push(`Bundle complete: ${status.bundle.complete ? "yes" : "no"}`);
   lines.push(`Work-item coverage: ${formatPercent(status.work_item_coverage.coverage_ratio)} (${status.work_item_coverage.missing_records} missing)`);
   lines.push(`Missing context inputs: ${status.missing_context_inputs}`);
-  lines.push(`Failed records: ${status.failed_records}`);
+  lines.push(`Failed records: ${status.failed_records} (${status.recovered_failed_records} recovered, ${status.unresolved_failed_records} unresolved)`);
   lines.push(`Wall-clock coverage: ${formatPercent(status.wall_clock_coverage.coverage_ratio)} (${formatMs(status.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(status.wall_clock_coverage.wall_clock_span_ms)})`);
   lines.push("");
   lines.push("## Bundle Artifacts");

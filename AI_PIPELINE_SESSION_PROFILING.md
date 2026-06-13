@@ -261,7 +261,8 @@ Record tools by role:
 - `status.mjs`: mid-session helper that reports current profile health without
   appending records: latest event, closeout/bundle presence, work-item
   coverage, missing context inputs, wall-clock coverage, failed records, and
-  one suggested next profiling action.
+  one suggested next profiling action. It separates recovered failed commands
+  from unresolved failed commands when a later matching command passes.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
   and writes a scratch reflection bundle: summary, review markdown/JSON, and
   follow-up markdown/JSON.
@@ -270,7 +271,8 @@ Record tools by role:
   repeated commands, repeated command scope (`preflight`, `scoped`,
   `broad/final`, `unknown`), repeated broad/final commands by work item,
   wall-clock coverage and largest unprofiled gaps, missing work-item metadata,
-  missing context input details, and suggested pipeline actions.
+  missing context input details, recovered versus unresolved failed records,
+  and suggested pipeline actions.
 - `plan_validation.mjs`: pre-validation helper that prints a narrow-to-broad
   validation ladder for the changed work kind. Use it when `review.mjs` reports
   repeated commands, before broad reusable-base checks, or when the right
@@ -396,7 +398,8 @@ node tools/ai_profile/followups.mjs tmp/session_profiles/session_profile_YYYY-MM
 Follow-up drafts are not tasks yet. Promote only still-relevant items after
 checking current tasks and recent commits. Drafts include repeated validation,
 missing context inputs, missing work-item metadata, low wall-clock coverage,
-failed records, and waste/rework when those findings appear in review JSON.
+recovered/unresolved failed records, and waste/rework when those findings
+appear in review JSON.
 When `closeout.mjs` was used without `--no-followups`, these drafts are already
 generated and this manual command is only needed after rerunning review.
 

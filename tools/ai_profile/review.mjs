@@ -165,6 +165,33 @@ function normalizeCommand(command) {
   return String(command || "").replaceAll("\\", "/").replace(/\s+/g, " ").trim();
 }
 
+function commandKeys(record) {
+  return (record.commands || []).map(normalizeCommand).filter(Boolean);
+}
+
+function classifyFailedRecords(records) {
+  const passedLater = new Map();
+  const recovered = [];
+  const unresolved = [];
+  for (const record of [...records].sort((a, b) => b.__line - a.__line)) {
+    const keys = commandKeys(record);
+    if (record.result === "pass") {
+      for (const key of keys) passedLater.set(key, record);
+      continue;
+    }
+    if (record.result !== "fail") continue;
+    const recoveredBy = keys.map((key) => passedLater.get(key)).find(Boolean);
+    if (recoveredBy) {
+      recovered.push({ record, recovered_by_line: recoveredBy.__line, recovered_by_intent: recoveredBy.intent || "" });
+    } else {
+      unresolved.push(record);
+    }
+  }
+  recovered.sort((a, b) => a.record.__line - b.record.__line);
+  unresolved.sort((a, b) => a.__line - b.__line);
+  return { recovered, unresolved };
+}
+
 function commandScope(command) {
   const normalized = normalizeCommand(command);
   if (!normalized) return "unknown";
@@ -298,8 +325,12 @@ const topIterations = topEntries(iterationCounts, 20).map(([iteration, count]) =
 }));
 const missingWorkItemCount = records.filter((record) => !record.work_item).length;
 const findings = [];
+const failedClassification = classifyFailedRecords(records);
+const recoveredFailed = failedClassification.recovered;
+const unresolvedFailed = failedClassification.unresolved;
 if (waste.length > 0) findings.push({ type: "waste_or_rework", message: `${waste.length} waste/rework record(s) need process fixes.` });
-if (failed.length > 0) findings.push({ type: "failed_records", message: `${failed.length} failed command/event record(s) need failure analysis.` });
+if (unresolvedFailed.length > 0) findings.push({ type: "failed_records", message: `${unresolvedFailed.length} unresolved failed command/event record(s) need failure analysis.` });
+if (recoveredFailed.length > 0) findings.push({ type: "recovered_failed_records", message: `${recoveredFailed.length} failed record(s) later passed and should be classified as recovered rework.` });
 if (blocked.length > 0) findings.push({ type: "blocked_records", message: `${blocked.length} blocker record(s) need owner or decision.` });
 if (highContext.length > 0) findings.push({ type: "high_context", message: `${highContext.length} high-context record(s) indicate context pressure.` });
 if (repeatedCommands.length > 0) findings.push({ type: "repeated_commands", message: `${repeatedCommands.length} repeated command(s) may need batching or narrower gates.` });
@@ -331,7 +362,8 @@ if (lowCoverage) {
 if (!closeoutSeen) findings.push({ type: "missing_closeout", message: "No session_closeout event: use closeout.mjs before final reflection." });
 const actions = [];
 if (waste.length > 0) actions.push("Convert recurring waste/rework reasons into a task, skill rule, validator, or batching rule.");
-if (failed.length > 0) actions.push("For failed commands, decide whether the fix is code, environment, narrower validation, or better preflight.");
+if (unresolvedFailed.length > 0) actions.push("For unresolved failed commands, decide whether the fix is code, environment, narrower validation, or better preflight.");
+if (recoveredFailed.length > 0) actions.push("Classify recovered failed commands as rework/learning in the retrospective instead of treating them as current blockers.");
 if (repeatedBroadCommands.length > 0) {
   actions.push(
     "Batch repeated broad/final validation or run `node tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the next validation loop.",
@@ -376,6 +408,24 @@ if (failureLike.length === 0) {
   for (const record of failureLike.slice(0, 20)) {
     const detail = record.blocked_by || record.command_error || commandText(record) || record.notes || "no detail recorded";
     emit(`- line ${record.__line} [${record.phase}/${record.result}]: ${record.intent} -> ${detail}`);
+  }
+}
+
+emit("\n## Recovered Failed Records");
+if (recoveredFailed.length === 0) {
+  emit("- none");
+} else {
+  for (const item of recoveredFailed.slice(0, 20)) {
+    emit(`- line ${item.record.__line} recovered by line ${item.recovered_by_line}: ${item.record.intent}`);
+  }
+}
+
+emit("\n## Unresolved Failed Records");
+if (unresolvedFailed.length === 0) {
+  emit("- none");
+} else {
+  for (const record of unresolvedFailed.slice(0, 20)) {
+    emit(`- line ${record.__line}: ${record.intent} -> ${commandText(record) || record.command_error || record.notes || "no detail recorded"}`);
   }
 }
 
@@ -503,6 +553,20 @@ if (jsonOutputFile) {
       result: record.result,
       intent: record.intent,
       detail: record.blocked_by || record.command_error || commandText(record) || record.notes || "",
+    })),
+    recovered_failed_records: recoveredFailed.map((item) => ({
+      line: item.record.__line,
+      phase: item.record.phase,
+      intent: item.record.intent,
+      detail: commandText(item.record) || item.record.command_error || item.record.notes || "",
+      recovered_by_line: item.recovered_by_line,
+      recovered_by_intent: item.recovered_by_intent,
+    })),
+    unresolved_failed_records: unresolvedFailed.map((record) => ({
+      line: record.__line,
+      phase: record.phase,
+      intent: record.intent,
+      detail: commandText(record) || record.command_error || record.notes || "",
     })),
     context_hotspots: topContext.map(([path, chars]) => ({ path, chars })),
     high_context: highContext.map((record) => ({ line: record.__line, intent: record.intent, context_risk: record.context_risk })),

@@ -97,7 +97,8 @@ to reconstruct avoidable telemetry from chat history.
 During long sessions, run `tools/ai_profile/status.mjs` when telemetry health
 is unclear. It is read-only and reports latest event, closeout/bundle presence,
 work-item coverage, missing context inputs, wall-clock coverage, failed
-records, and the next profiling action.
+records, recovered versus unresolved failed records, and the next profiling
+action.
 
 Before writing a retrospective from a live profile, run
 `tools/ai_profile/summarize_session_profile.mjs <profile.jsonl> --output
@@ -129,6 +130,9 @@ research, design, or review stretches.
 If review reports missing context input details, name the affected line/intents
 and add a next-cycle fix: use `tools/ai_profile/context.mjs --path <file>` for
 local medium/high context reads so file sizes are measured automatically.
+If review reports recovered failed records, classify them as useful negative
+feedback, avoidable rework, or tool noise. Treat only unresolved failed records
+as current blockers.
 If profile review finds repeated validation or unclear validation scope, run
 `tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the
 next validation loop and report the narrow/scoped/broad ladder. Treat repeated

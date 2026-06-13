@@ -296,6 +296,8 @@ const SKILL_CHECKS = [
       "iteration",
       "wall_clock_coverage",
       "low_profile_coverage",
+      "recovered failed records",
+      "unresolved failed records",
       "largest gaps",
       "--json-output",
       "--output",
