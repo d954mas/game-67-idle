@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 export const CATEGORIES = new Set([
@@ -30,6 +30,14 @@ export function localDate() {
 
 export function defaultProfilePath() {
   return resolve("tmp", "session_profiles", `session_profile_${localDate()}.jsonl`);
+}
+
+export function defaultScopePath() {
+  return resolve("tmp", "session_profiles", "current_scope.json");
+}
+
+export function profileScopePath() {
+  return resolve(envString("AI_PROFILE_SCOPE_FILE") || defaultScopePath());
 }
 
 export function timestamp() {
@@ -93,6 +101,25 @@ function envString(name) {
   return value === undefined ? "" : String(value).trim();
 }
 
+export function readProfileScope(scopePath = profileScopePath()) {
+  const target = resolve(scopePath);
+  if (!existsSync(target)) return { path: target, exists: false, valid: true, work_item: "", iteration: "", error: "" };
+  try {
+    const parsed = JSON.parse(readFileSync(target, "utf8"));
+    return {
+      path: target,
+      exists: true,
+      valid: true,
+      work_item: String(parsed.work_item || "").trim(),
+      iteration: String(parsed.iteration || "").trim(),
+      updated_at: String(parsed.updated_at || ""),
+      error: "",
+    };
+  } catch (error) {
+    return { path: target, exists: true, valid: false, work_item: "", iteration: "", error: error.message };
+  }
+}
+
 export function numberArg(values, key) {
   const value = stringArg(values, key, "");
   if (!value) return undefined;
@@ -116,6 +143,7 @@ export function parseContextInput(raw) {
 }
 
 export function buildRecord(values, extra = {}) {
+  const profileScope = readProfileScope();
   const record = {
     ts: stringArg(values, "ts", timestamp()),
     phase: stringArg(values, "phase"),
@@ -132,10 +160,10 @@ export function buildRecord(values, extra = {}) {
   const contextRisk = stringArg(values, "context-risk", "");
   if (contextRisk) record.context_risk = contextRisk;
 
-  const workItem = stringArg(values, "work-item", envString("AI_PROFILE_WORK_ITEM"));
+  const workItem = stringArg(values, "work-item", envString("AI_PROFILE_WORK_ITEM") || profileScope.work_item);
   if (workItem) record.work_item = workItem;
 
-  const iteration = stringArg(values, "iteration", envString("AI_PROFILE_ITERATION"));
+  const iteration = stringArg(values, "iteration", envString("AI_PROFILE_ITERATION") || profileScope.iteration);
   if (iteration) record.iteration = iteration;
 
   const wasteReason = stringArg(values, "waste-reason", "");

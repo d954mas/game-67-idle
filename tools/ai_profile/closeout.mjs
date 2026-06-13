@@ -36,7 +36,8 @@ artifacts, and prints their paths. All outputs default to tmp/session_profiles/.
 
 Environment defaults:
   AI_PROFILE_WORK_ITEM       fallback for --work-item
-  AI_PROFILE_ITERATION       fallback for --iteration`);
+  AI_PROFILE_ITERATION       fallback for --iteration
+  tools/ai_profile/scope.mjs fallback after env vars`);
   process.exit(2);
 }
 

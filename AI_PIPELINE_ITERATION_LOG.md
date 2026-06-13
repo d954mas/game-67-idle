@@ -609,3 +609,19 @@ specific and reusable.
   overriding them for exceptions.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0077`.
+
+## 2026-06-13 - Tool loops need persistent profile scope
+
+- Context: `AI_PROFILE_WORK_ITEM` and `AI_PROFILE_ITERATION` reduce repeated
+  CLI flags, but Codex tool calls may run in separate shell processes.
+- Friction: Environment defaults can work inside one command but are not a
+  reliable "set once for the session" mechanism across tool calls.
+- Time sink: Agents still need to remember metadata flags or inline env setup
+  for every command.
+- Likely cause: The previous default-context design assumed a persistent
+  terminal environment.
+- Proposed improvement: Add `tools/ai_profile/scope.mjs` to write an ignored
+  `tmp/session_profiles/current_scope.json` fallback. Profile records use
+  explicit flags first, then env vars, then the persistent scope file.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0078`.

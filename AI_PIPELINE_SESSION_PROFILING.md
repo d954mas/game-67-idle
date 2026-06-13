@@ -167,7 +167,14 @@ native work item IDs.
 when one work item has multiple distinct loops.
 
 For a focused work session, set default metadata once instead of repeating it
-on every command:
+on every command. In Codex-style tool loops where shell environment does not
+persist reliably across tool calls, prefer the persistent scope file:
+
+```powershell
+node tools/ai_profile/scope.mjs set --work-item T0078 --iteration persistent-scope
+```
+
+For an ordinary persistent terminal, environment defaults are also supported:
 
 ```powershell
 $env:AI_PROFILE_WORK_ITEM = "T0077"
@@ -175,7 +182,7 @@ $env:AI_PROFILE_ITERATION = "env-defaults"
 ```
 
 Explicit `--work-item` and `--iteration` flags override these environment
-defaults for one command.
+defaults and the persistent scope file for one command.
 
 ## What To Log
 
@@ -259,7 +266,8 @@ node tools/ai_profile/context.mjs --phase context --intent "Measure profiling do
 ```
 
 If most commands belong to the same task, prefer `AI_PROFILE_WORK_ITEM` and
-`AI_PROFILE_ITERATION` defaults, and use explicit flags only for exceptions.
+`AI_PROFILE_ITERATION` defaults or `tools/ai_profile/scope.mjs set`, and use
+explicit flags only for exceptions.
 
 ## Tool Profiling
 
@@ -272,6 +280,9 @@ Record tools by role:
 - `event.mjs`: low-cost checkpoint writer for non-command events.
 - `context.mjs`: context-read checkpoint writer that measures local file
   character counts and fills `context_inputs` automatically.
+- `scope.mjs`: persistent session-scope helper that writes
+  `tmp/session_profiles/current_scope.json` so work-item/iteration defaults
+  survive separate tool command invocations.
 - `status.mjs`: mid-session helper that reports current profile health without
   appending records: latest event, closeout/bundle presence, work-item
   coverage, missing context inputs, wall-clock coverage, failed records, and
@@ -442,7 +453,8 @@ A "profiled session" is done when:
 - long or multi-task profiles include `--work-item <id>` on substantial
   commands and checkpoints, with `--iteration <name>` when the work item has
   separate loops, or equivalent `AI_PROFILE_WORK_ITEM` /
-  `AI_PROFILE_ITERATION` defaults are set for the shell session;
+  `AI_PROFILE_ITERATION` defaults are set for the shell session, or
+  `tools/ai_profile/scope.mjs set` is used for persistent tool-call scope;
 - the summary script passes and writes a scratch `.summary.md` closeout when
   the session is long enough to reflect on;
 - `closeout.mjs` is used for normal session closeout unless manual

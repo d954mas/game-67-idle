@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { defaultProfilePath, parseArgs, stringArg } from "./profile_lib.mjs";
+import { defaultProfilePath, parseArgs, readProfileScope, stringArg } from "./profile_lib.mjs";
 
 function usage() {
   console.error(`usage:
@@ -141,6 +141,7 @@ function buildStatus(profilePath) {
   const failedClassification = classifyFailedRecords(records);
   const coverage = coverageStats(records);
   const bundle = bundleStatus(profilePath);
+  const scope = readProfileScope();
   const latest = latestRecord(records);
   const lowCoverage = coverage.wall_clock_span_ms >= 30 * 60 * 1000 && Number.isFinite(coverage.coverage_ratio) && coverage.coverage_ratio < 0.25;
 
@@ -154,7 +155,7 @@ function buildStatus(profilePath) {
   } else if (failedClassification.unresolved > 0) {
     nextAction = "Resolve or explain unresolved failed profile records before trusting this profile for reflection.";
   } else if (records.length >= 5 && missingWorkItem / records.length > 0.5) {
-    nextAction = "Set AI_PROFILE_WORK_ITEM and optional AI_PROFILE_ITERATION, or pass --work-item/--iteration to future profile commands.";
+    nextAction = "Run `node tools/ai_profile/scope.mjs set --work-item <id> --iteration <name>`, set AI_PROFILE_* env vars, or pass explicit metadata flags.";
   } else if (missingContextInputs > 0) {
     nextAction = "Use context.mjs for medium/high local context reads so context_inputs are measured.";
   } else if (lowCoverage) {
@@ -181,6 +182,7 @@ function buildStatus(profilePath) {
       work_item: latest.work_item || "",
       iteration: latest.iteration || "",
     } : null,
+    scope,
     closeout_seen: closeoutSeen,
     bundle,
     work_item_coverage: {
@@ -206,11 +208,12 @@ function renderMarkdown(status) {
   lines.push(`Valid JSONL: ${status.valid ? "yes" : "no"}`);
   lines.push(`Records: ${status.records}`);
   if (status.latest_record) {
-    lines.push(`Latest: line ${status.latest_record.line} ${status.latest_record.ts} [${status.latest_record.phase}/${status.latest_record.category}] ${status.latest_record.intent}`);
+  lines.push(`Latest: line ${status.latest_record.line} ${status.latest_record.ts} [${status.latest_record.phase}/${status.latest_record.category}] ${status.latest_record.intent}`);
   } else {
     lines.push("Latest: none");
   }
   lines.push(`Closeout event: ${status.closeout_seen ? "yes" : "no"}`);
+  lines.push(`Scope: ${status.scope.exists ? "set" : "none"}${status.scope.work_item ? ` (${status.scope.work_item}${status.scope.iteration ? `/${status.scope.iteration}` : ""})` : ""}`);
   lines.push(`Bundle complete: ${status.bundle.complete ? "yes" : "no"}`);
   lines.push(`Work-item coverage: ${formatPercent(status.work_item_coverage.coverage_ratio)} (${status.work_item_coverage.missing_records} missing)`);
   lines.push(`Missing context inputs: ${status.missing_context_inputs}`);

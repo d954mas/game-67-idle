@@ -76,10 +76,10 @@ function buildSuggestions(review) {
       source: "missing_work_item_metadata",
       why: missingFinding?.message || "Multi-task profiles have records without work_item metadata.",
       done_when: [
-        "Substantial profile events include --work-item and, when useful, --iteration.",
+        "Substantial profile events include work-item metadata from scope.mjs, AI_PROFILE_* env vars, or explicit flags.",
         "A future profile review can separate repeated validation by work item.",
       ],
-      next_action: "Use --work-item on run/event/context/closeout commands for the next multi-task session and keep raw telemetry in tmp/session_profiles/.",
+      next_action: "Run `node tools/ai_profile/scope.mjs set --work-item <id> --iteration <name>` for the next focused session, or use explicit flags for exceptions.",
     });
   }
 

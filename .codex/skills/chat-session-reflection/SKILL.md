@@ -123,7 +123,9 @@ If many records lack work-item metadata, add a next-cycle fix: pass
 `--work-item <id>` and optional `--iteration <name>` to `run.mjs`,
 `event.mjs`, `context.mjs`, and `closeout.mjs`, or set
 `AI_PROFILE_WORK_ITEM` and `AI_PROFILE_ITERATION` defaults for the shell
-session.
+session. In Codex-style separate tool calls, prefer
+`tools/ai_profile/scope.mjs set --work-item <id> --iteration <name>` so the
+scope persists outside a single shell command.
 Inspect `wall_clock_coverage`, `low_profile_coverage`, and largest gaps before
 claiming the profile explains the whole session. Low coverage means the
 retrospective must name what likely happened in the unprofiled gaps, or add a
