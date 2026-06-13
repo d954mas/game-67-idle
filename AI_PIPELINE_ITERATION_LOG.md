@@ -876,3 +876,18 @@ specific and reusable.
   and write a manifest with the compare command.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0093`.
+
+## 2026-06-13 - Status should know whether baseline was captured
+
+- Trigger: After adding baseline capture, `status.mjs` still reported "Use
+  this profile as baseline" without saying whether a baseline already existed.
+- Symptom: On resume, agents could repeatedly run baseline capture or ask
+  whether the clean review had already been preserved.
+- Time sink: Reflection setup becomes a manual scratch-artifact inspection
+  instead of one status check.
+- Likely cause: Baseline capture wrote manifests, but status did not read the
+  baseline directory.
+- Proposed improvement: Teach `status.mjs` to report captured baseline
+  manifests and change next action to capture only when no baseline exists.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0094`.

@@ -337,6 +337,10 @@ Record tools by role:
   Treat `Bundle complete: yes` as insufficient for reflection unless
   `Bundle fresh: yes` also holds; stale bundles were generated before the
   latest profile records.
+  Status also reports captured baseline manifests from
+  `tmp/session_profiles/baselines/`; if a clean profile already has a captured
+  baseline, use the reported baseline for the next comparison instead of
+  recapturing.
 - `test.mjs`: regression test suite for profile CLI behavior. Run
   `node --test tools/ai_profile/test.mjs` after profiler tool changes.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
@@ -600,7 +604,8 @@ A "profiled session" is done when:
   and treat whole-profile deltas as trend evidence;
 - `capture_baseline.mjs` is used before relying on a clean review JSON as a
   future baseline, because normal closeout/review filenames are overwritten by
-  later runs;
+  later runs; check `status.mjs` first and recapture only when status reports
+  no captured baseline for the profile;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste; use
   `--json-output` when another tool, agent, or later reflection should consume

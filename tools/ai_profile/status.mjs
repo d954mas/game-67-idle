@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { defaultProfilePath, parseArgs, readProfileScope, stringArg } from "./profile_lib.mjs";
 
@@ -117,6 +117,49 @@ function bundleStatus(profilePath) {
   };
 }
 
+function readBaselineStatus(profilePath) {
+  const dir = join(dirname(profilePath), "baselines");
+  if (!existsSync(dir)) return { dir, count: 0, latest_manifest: null, errors: [] };
+  const manifests = [];
+  const errors = [];
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith(".manifest.json")) continue;
+    const path = join(dir, name);
+    try {
+      const parsed = JSON.parse(readFileSync(path, "utf8"));
+      const capturedMs = Date.parse(parsed.captured_at || "");
+      manifests.push({
+        manifest_path: path,
+        label: parsed.label || "",
+        captured_at: parsed.captured_at || "",
+        captured_ms: Number.isFinite(capturedMs) ? capturedMs : fileMtimeMs(path) || 0,
+        source_review: parsed.source_review || "",
+        baseline_review: parsed.baseline_review || "",
+        compare_command: parsed.compare_command || "",
+        summary: parsed.summary || {},
+      });
+    } catch (error) {
+      errors.push(`${path}: ${error.message}`);
+    }
+  }
+  manifests.sort((a, b) => b.captured_ms - a.captured_ms || b.manifest_path.localeCompare(a.manifest_path));
+  const latest = manifests[0] || null;
+  return {
+    dir,
+    count: manifests.length,
+    latest_manifest: latest ? {
+      manifest_path: latest.manifest_path,
+      label: latest.label,
+      captured_at: latest.captured_at,
+      source_review: latest.source_review,
+      baseline_review: latest.baseline_review,
+      compare_command: latest.compare_command,
+      summary: latest.summary,
+    } : null,
+    errors,
+  };
+}
+
 function latestRecord(records) {
   return [...records].sort((a, b) => (eventTime(b) || 0) - (eventTime(a) || 0))[0];
 }
@@ -180,10 +223,13 @@ function buildStatus(profilePath) {
   const failedClassification = classifyFailedRecords(records);
   const coverage = coverageStats(records);
   const bundle = bundleStatus(profilePath);
+  const baselines = readBaselineStatus(profilePath);
   const scope = readProfileScope();
   const latest = latestRecord(records);
 
-  let nextAction = "Use this profile as baseline; no urgent profiling action detected.";
+  let nextAction = baselines.latest_manifest
+    ? `Use captured baseline ${baselines.latest_manifest.baseline_review} for the next compare_reviews.mjs run.`
+    : `Capture this clean review with \`node tools/ai_profile/capture_baseline.mjs ${artifactPath(profilePath, "review.json")} --label <name>\`.`;
   const scopeReady = scope.valid && Boolean(scope.work_item);
   const scopedRecords = scopeReady ? currentScopeRecords(records, scope) : [];
   const scopedCoverage = coverageStats(scopedRecords);
@@ -237,6 +283,7 @@ function buildStatus(profilePath) {
     scope,
     closeout_seen: closeoutSeen,
     bundle,
+    baselines,
     work_item_coverage: {
       missing_records: missingWorkItem,
       coverage_ratio: records.length > 0 ? (records.length - missingWorkItem) / records.length : undefined,
@@ -276,6 +323,7 @@ function renderMarkdown(status) {
   lines.push(`Scope: ${status.scope.exists ? "set" : "none"}${status.scope.work_item ? ` (${status.scope.work_item}${status.scope.iteration ? `/${status.scope.iteration}` : ""})` : ""}`);
   lines.push(`Bundle complete: ${status.bundle.complete ? "yes" : "no"}`);
   lines.push(`Bundle fresh: ${status.bundle.fresh ? "yes" : "no"}${status.bundle.stale_artifacts.length > 0 ? ` (${status.bundle.stale_artifacts.join(", ")} stale)` : ""}`);
+  lines.push(`Captured baselines: ${status.baselines.count}${status.baselines.latest_manifest ? ` (latest: ${status.baselines.latest_manifest.label || basename(status.baselines.latest_manifest.manifest_path)})` : ""}`);
   lines.push(`Work-item coverage: ${formatPercent(status.work_item_coverage.coverage_ratio)} (${status.work_item_coverage.missing_records} missing)`);
   lines.push(`Missing context inputs: ${status.missing_context_inputs}`);
   lines.push(`Current scope records: ${status.current_scope.records} (${status.current_scope.missing_context_inputs} missing context inputs, ${status.current_scope.missing_work_item_records} missing work items)`);
@@ -286,6 +334,23 @@ function renderMarkdown(status) {
   lines.push("## Bundle Artifacts");
   for (const artifact of status.bundle.artifacts) {
     lines.push(`- ${artifact.exists ? "yes" : "no"} ${artifact.name}: ${artifact.path}`);
+  }
+  lines.push("");
+  lines.push("## Baselines");
+  if (!status.baselines.latest_manifest) {
+    lines.push("- none");
+  } else {
+    lines.push(`- latest label: ${status.baselines.latest_manifest.label || "(unlabeled)"}`);
+    lines.push(`- captured at: ${status.baselines.latest_manifest.captured_at || "unknown"}`);
+    lines.push(`- review: ${status.baselines.latest_manifest.baseline_review}`);
+    lines.push(`- manifest: ${status.baselines.latest_manifest.manifest_path}`);
+    if (status.baselines.latest_manifest.compare_command) {
+      lines.push(`- compare command: ${status.baselines.latest_manifest.compare_command}`);
+    }
+  }
+  if (status.baselines.errors.length > 0) {
+    lines.push("- errors:");
+    for (const error of status.baselines.errors) lines.push(`  - ${error}`);
   }
   if (status.errors.length > 0) {
     lines.push("");

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -507,6 +507,103 @@ test("status reports complete stale closeout bundle", () => {
     assert.equal(status.bundle.fresh, false);
     assert.deepEqual(status.bundle.stale_artifacts, ["summary", "review", "review_json", "followups", "followups_json"]);
     assert.match(status.next_action, /closeout\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status recommends baseline capture when clean profile has no baseline", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "clean-no-baseline.jsonl");
+    const scope = join(dir, "scope.json");
+    const statusJson = join(dir, "status.json");
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "BASE", "--iteration", "missing"]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "session_closeout",
+      "--category",
+      "reflection",
+      "--intent",
+      "clean closeout",
+      "--result",
+      "pass",
+      "--value",
+      "necessary_overhead",
+      "--work-item",
+      "BASE",
+      "--iteration",
+      "missing",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    writeBundleArtifacts(profile);
+
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const status = readJson(statusJson);
+    assert.equal(status.baselines.count, 0);
+    assert.equal(status.baselines.latest_manifest, null);
+    assert.match(status.next_action, /capture_baseline\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status reports latest captured baseline when one exists", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "clean-with-baseline.jsonl");
+    const scope = join(dir, "scope.json");
+    const statusJson = join(dir, "status.json");
+    const baselineDir = join(dir, "baselines");
+    const baselineReview = join(baselineDir, "clean.review.json");
+    const manifest = join(baselineDir, "clean.manifest.json");
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "BASE", "--iteration", "present"]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "session_closeout",
+      "--category",
+      "reflection",
+      "--intent",
+      "clean closeout",
+      "--result",
+      "pass",
+      "--value",
+      "necessary_overhead",
+      "--work-item",
+      "BASE",
+      "--iteration",
+      "present",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    writeBundleArtifacts(profile);
+    mkdirSync(baselineDir, { recursive: true });
+    writeFileSync(baselineReview, "{}\n", "utf8");
+    writeFileSync(manifest, `${JSON.stringify({
+      schema_version: 1,
+      label: "clean",
+      captured_at: "2026-06-13T10:05:00+05:00",
+      source_review: profile.replace(/\.jsonl$/i, ".review.json"),
+      baseline_review: resolve(baselineReview),
+      compare_command: `node tools/ai_profile/compare_reviews.mjs ${resolve(baselineReview)} current.review.json`,
+      summary: { current_scope_findings: 0 },
+    })}\n`, "utf8");
+
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const status = readJson(statusJson);
+    assert.equal(status.baselines.count, 1);
+    assert.equal(status.baselines.latest_manifest.label, "clean");
+    assert.equal(status.baselines.latest_manifest.baseline_review, resolve(baselineReview));
+    assert.match(status.next_action, /captured baseline/);
+    assert.match(status.next_action, /compare_reviews\.mjs/);
+    assert.doesNotMatch(status.next_action, /capture_baseline\.mjs/);
   } finally {
     cleanup(dir);
   }

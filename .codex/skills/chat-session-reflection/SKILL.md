@@ -106,7 +106,8 @@ During long sessions, run `tools/ai_profile/status.mjs` when telemetry health
 is unclear. It is read-only and reports latest event, closeout/bundle presence,
 work-item coverage, missing context inputs, wall-clock coverage, failed
 records, recovered versus unresolved failed records, and the next profiling
-action.
+action. It also reports captured baseline manifests when clean review JSON has
+already been preserved under `tmp/session_profiles/baselines/`.
 Before relying on generated summary/review/follow-up artifacts, check that
 status reports `Bundle fresh: yes`; if the bundle is stale, rerun
 `tools/ai_profile/closeout.mjs` or the stale review/follow-up commands.
@@ -140,7 +141,8 @@ Run `tools/ai_profile/followups.mjs` only when review JSON was rerun manually
 or the closeout bundle was created with `--no-followups`. Promote only
 still-relevant drafts into tasks, rules, or tools after checking current
 taskboard state.
-When a review JSON is clean enough to become a baseline, first capture it with
+When a review JSON is clean enough to become a baseline, check `status.mjs`
+first. If status reports no captured baseline, capture it with
 `tools/ai_profile/capture_baseline.mjs <review.json> --label <name>` so later
 closeout/review commands do not overwrite the daily artifact. When a previous
 clean baseline review JSON is available, run
