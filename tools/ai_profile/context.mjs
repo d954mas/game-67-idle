@@ -14,6 +14,8 @@ options:
   --reason <text>                            reason for every path
   --context-risk <low|medium|high|unknown>   default: auto from total chars
   --profile <path>                           default: tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl
+  --work-item <id>                           task/issue/phase id for segmenting long profiles
+  --iteration <name>                         small iteration or batch label
   --notes <text>
 
 Records file-read and context_inputs entries with measured character counts.

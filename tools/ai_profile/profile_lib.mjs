@@ -127,6 +127,12 @@ export function buildRecord(values, extra = {}) {
   const contextRisk = stringArg(values, "context-risk", "");
   if (contextRisk) record.context_risk = contextRisk;
 
+  const workItem = stringArg(values, "work-item", "");
+  if (workItem) record.work_item = workItem;
+
+  const iteration = stringArg(values, "iteration", "");
+  if (iteration) record.iteration = iteration;
+
   const wasteReason = stringArg(values, "waste-reason", "");
   if (wasteReason) record.waste_reason = wasteReason;
 

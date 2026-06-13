@@ -21,6 +21,8 @@ options:
   --result <...>         default: pass
   --value <...>          default: necessary_overhead
   --context-risk <...>   default: low
+  --work-item <id>       task/issue/phase id for segmenting long profiles
+  --iteration <name>     small iteration or batch label
   --notes <text>
 
 The command appends one closeout event, writes a summary markdown artifact, and
@@ -74,4 +76,3 @@ if (summary.status !== 0) {
 
 console.log(`\nProfile: ${profilePath}`);
 console.log(`Summary: ${outputPath}`);
-

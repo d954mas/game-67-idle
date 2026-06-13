@@ -512,3 +512,20 @@ specific and reusable.
   state.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0071`.
+
+## 2026-06-13 - Daily profiles need work-item segmentation
+
+- Context: Live AI profiling now spans many small pipeline increments in one
+  day, each with its own task, validation, and commit.
+- Friction: A single daily JSONL profile can make repeated broad/final
+  validation look worse than it is because independent tasks are mixed
+  together.
+- Time sink: Reflection has to infer which repeated commands belonged to the
+  same work item instead of reading it directly from telemetry.
+- Likely cause: Profile records had phase/category/intent, but no durable
+  task or iteration metadata.
+- Proposed improvement: Add optional `work_item` and `iteration` fields to
+  profile events, document `--work-item`/`--iteration`, and have `review.mjs`
+  summarize repeated broad/final commands by work item.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0072`.

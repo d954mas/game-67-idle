@@ -111,6 +111,11 @@ scratch telemetry unless the lead asks to preserve it.
 When review JSON exists, use `tools/ai_profile/followups.mjs` to produce draft
 next actions, then promote only still-relevant drafts into tasks, rules, or
 tools after checking current taskboard state.
+For multi-task profiles, inspect `work_items`, `iterations`, and
+`repeated_broad_final_by_work_item` before calling repeated validation waste.
+If many records lack work-item metadata, add a next-cycle fix: pass
+`--work-item <id>` and optional `--iteration <name>` to `run.mjs`,
+`event.mjs`, `context.mjs`, and `closeout.mjs`.
 If review reports missing context input details, name the affected line/intents
 and add a next-cycle fix: use `tools/ai_profile/context.mjs --path <file>` for
 local medium/high context reads so file sizes are measured automatically.

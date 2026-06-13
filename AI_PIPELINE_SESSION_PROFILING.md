@@ -85,6 +85,8 @@ Recommended fields:
 ```json
 {
   "duration_ms": 120000,
+  "work_item": "T0055",
+  "iteration": "top-hud-polish",
   "tools": ["shell_command"],
   "commands": ["py -3.12 tools/devapi/scenarios/child_test_readiness.py ..."],
   "files_read": ["tasks/STATUS.md", "src/main.c"],
@@ -154,6 +156,15 @@ Recommended fields:
 - `high` - broad history, long status logs, compaction risk, or stale evidence
   risk.
 
+`work_item` is the durable task, issue, ticket, phase, or user-request id that
+the event belongs to. Use it for any profile that spans more than one task.
+For this repo, prefer task IDs such as `T0072`; for other projects, use their
+native work item IDs.
+
+`iteration` is a smaller batch label inside the work item, such as
+`profile-metadata`, `visual-audit-pass-2`, or `release-smoke-rerun`. Use it
+when one work item has multiple distinct loops.
+
 ## What To Log
 
 Log a record for:
@@ -218,6 +229,14 @@ tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl
 
 Override with `--profile <path>` only for tests or when comparing profiles.
 
+For long or multi-task sessions, add segmentation to every substantial command
+or checkpoint:
+
+```powershell
+node tools/ai_profile/run.mjs --phase validation --category validation --intent "Check profile metadata" --work-item T0072 --iteration profile-metadata -- node --check tools/ai_profile/profile_lib.mjs
+node tools/ai_profile/context.mjs --phase context --intent "Measure profiling docs" --work-item T0072 --iteration profile-metadata --path AI_PIPELINE_SESSION_PROFILING.md --reason "profile metadata docs"
+```
+
 ## Tool Profiling
 
 Record tools by role:
@@ -234,7 +253,8 @@ Record tools by role:
 - `review.mjs`: reflection prep helper that turns a JSONL profile into
   priority findings: waste/rework, failures, blockers, context hotspots,
   repeated commands, repeated command scope (`preflight`, `scoped`,
-  `broad/final`, `unknown`), missing context input details, and suggested
+  `broad/final`, `unknown`), repeated broad/final commands by work item,
+  missing work-item metadata, missing context input details, and suggested
   pipeline actions.
 - `plan_validation.mjs`: pre-validation helper that prints a narrow-to-broad
   validation ladder for the changed work kind. Use it when `review.mjs` reports
@@ -340,7 +360,8 @@ node tools/ai_profile/review.mjs tmp/session_profiles/session_profile_YYYY-MM-DD
 ```
 
 The JSON artifact uses `schema_version: 1` and contains findings, repeated
-command scopes, missing context-input details, and suggested pipeline actions.
+command scopes, work-item/iteration summaries, repeated broad/final commands
+by work item, missing context-input details, and suggested pipeline actions.
 Keep it in `tmp/session_profiles/` unless the lead explicitly asks to preserve
 it.
 
@@ -373,6 +394,9 @@ A "profiled session" is done when:
 - command work used `run.mjs` for substantial validations/builds/audits;
 - non-command context decisions used sparse `event.mjs` checkpoints, and local
   medium/high context reads used `context.mjs` where possible;
+- long or multi-task profiles include `--work-item <id>` on substantial
+  commands and checkpoints, with `--iteration <name>` when the work item has
+  separate loops;
 - the summary script passes and writes a scratch `.summary.md` closeout when
   the session is long enough to reflect on;
 - `closeout.mjs` is used for normal session closeout unless a custom summary

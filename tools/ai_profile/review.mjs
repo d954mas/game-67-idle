@@ -35,6 +35,22 @@ function mapEntries(map, limit = 10) {
   return topEntries(map, limit).map(([key, value]) => ({ key, value }));
 }
 
+function segmentCommandKey(segment, command) {
+  return `${segment}\u0000${command}`;
+}
+
+function splitSegmentCommandKey(key) {
+  const separator = key.indexOf("\u0000");
+  if (separator === -1) return { segment: key, command: "" };
+  return { segment: key.slice(0, separator), command: key.slice(separator + 1) };
+}
+
+function repeatedSegmentCommands(map, limit = 20) {
+  return topEntries(map, limit)
+    .filter(([, count]) => count > 1)
+    .map(([key, count]) => ({ ...splitSegmentCommandKey(key), count }));
+}
+
 function parseProfile(file) {
   const text = readFileSync(file, "utf8");
   const records = [];
@@ -145,6 +161,11 @@ const commandCounts = new Map();
 const commandVariants = new Map();
 const commandScopes = new Map();
 const phaseDuration = new Map();
+const workItemCounts = new Map();
+const workItemDuration = new Map();
+const iterationCounts = new Map();
+const iterationDuration = new Map();
+const workItemBroadCommandCounts = new Map();
 const contextChars = new Map();
 const waste = [];
 const failed = [];
@@ -154,13 +175,24 @@ const missingContextInputs = [];
 let closeoutSeen = false;
 
 for (const record of records) {
-  addCount(phaseDuration, record.phase, Number(record.duration_ms || 0));
+  const duration = Number(record.duration_ms || 0);
+  const workItem = record.work_item || "(none)";
+  const iteration = record.iteration || "(none)";
+  addCount(phaseDuration, record.phase, duration);
+  addCount(workItemCounts, workItem);
+  addCount(workItemDuration, workItem, duration);
+  addCount(iterationCounts, iteration);
+  addCount(iterationDuration, iteration, duration);
   for (const command of record.commands || []) {
     const normalized = normalizeCommand(command);
     addCount(commandCounts, normalized);
     if (!commandVariants.has(normalized)) commandVariants.set(normalized, new Set());
     commandVariants.get(normalized).add(command);
-    commandScopes.set(normalized, commandScope(normalized));
+    const scope = commandScope(normalized);
+    commandScopes.set(normalized, scope);
+    if (scope === "broad/final") {
+      addCount(workItemBroadCommandCounts, segmentCommandKey(workItem, normalized));
+    }
   }
   for (const input of record.context_inputs || []) addCount(contextChars, input.path || "(inline)", Number(input.chars || 0));
   if (record.value === "waste" || record.value === "rework" || record.waste_reason) waste.push(record);
@@ -175,8 +207,20 @@ const repeatedCommands = topEntries(commandCounts, 20).filter(([, count]) => cou
 const repeatedScopeCounts = new Map();
 for (const [command, count] of repeatedCommands) addCount(repeatedScopeCounts, commandScopes.get(command) || "unknown", count);
 const repeatedBroadCommands = repeatedCommands.filter(([command]) => commandScopes.get(command) === "broad/final");
+const repeatedBroadByWorkItem = repeatedSegmentCommands(workItemBroadCommandCounts, 20);
 const topContext = topEntries(contextChars, 10).filter(([, chars]) => chars > 0);
 const topPhaseDuration = topEntries(phaseDuration, 10);
+const topWorkItems = topEntries(workItemCounts, 20).map(([work_item, count]) => ({
+  work_item,
+  records: count,
+  duration_ms: workItemDuration.get(work_item) || 0,
+}));
+const topIterations = topEntries(iterationCounts, 20).map(([iteration, count]) => ({
+  iteration,
+  records: count,
+  duration_ms: iterationDuration.get(iteration) || 0,
+}));
+const missingWorkItemCount = records.filter((record) => !record.work_item).length;
 const findings = [];
 if (waste.length > 0) findings.push({ type: "waste_or_rework", message: `${waste.length} waste/rework record(s) need process fixes.` });
 if (failed.length > 0) findings.push({ type: "failed_records", message: `${failed.length} failed command/event record(s) need failure analysis.` });
@@ -195,6 +239,12 @@ if (missingContextInputs.length > 0) {
     message: `${missingContextInputs.length} medium/high context record(s) lack context_inputs details.`,
   });
 }
+if (records.length >= 20 && missingWorkItemCount > 0) {
+  findings.push({
+    type: "missing_work_item_metadata",
+    message: `${missingWorkItemCount} record(s) lack work_item metadata; multi-task profiles are harder to analyze.`,
+  });
+}
 if (!closeoutSeen) findings.push({ type: "missing_closeout", message: "No session_closeout event: use closeout.mjs before final reflection." });
 const actions = [];
 if (waste.length > 0) actions.push("Convert recurring waste/rework reasons into a task, skill rule, validator, or batching rule.");
@@ -207,6 +257,7 @@ if (repeatedBroadCommands.length > 0) {
   actions.push("Review repeated scoped/preflight commands; keep them only when they guard a fresh edit or failed gate.");
 }
 if (highContext.length > 0 || missingContextInputs.length > 0) actions.push("Compact source-of-truth docs or log explicit context_inputs for expensive reads.");
+if (records.length >= 20 && missingWorkItemCount > 0) actions.push("For long or multi-task profiles, pass `--work-item <id>` and `--iteration <name>` to run/event/context/closeout commands.");
 if (!closeoutSeen) actions.push("Run `node tools/ai_profile/closeout.mjs` at session end.");
 if (actions.length === 0) actions.push("Use this clean profile as baseline; compare against the next real game iteration.");
 
@@ -289,11 +340,32 @@ if (repeatedBroadCommands.length === 0) {
   for (const [command, count] of repeatedBroadCommands) emit(`- ${count}x ${command}`);
 }
 
+emit("\n## Repeated Broad/Final Commands By Work Item");
+if (repeatedBroadByWorkItem.length === 0) {
+  emit("- none");
+} else {
+  for (const item of repeatedBroadByWorkItem) emit(`- ${item.work_item || item.segment}: ${item.count}x ${item.command}`);
+}
+
 emit("\n## Time By Phase");
 if (topPhaseDuration.length === 0) {
   emit("- none");
 } else {
   for (const [phase, duration] of topPhaseDuration) emit(`- ${phase}: ${formatMs(duration)}`);
+}
+
+emit("\n## Work Items");
+if (topWorkItems.length === 0) {
+  emit("- none");
+} else {
+  for (const item of topWorkItems) emit(`- ${item.work_item}: ${item.records} record(s), ${formatMs(item.duration_ms)}`);
+}
+
+emit("\n## Iterations");
+if (topIterations.length === 0) {
+  emit("- none");
+} else {
+  for (const item of topIterations) emit(`- ${item.iteration}: ${item.records} record(s), ${formatMs(item.duration_ms)}`);
 }
 
 emit("\n## Suggested Pipeline Actions");
@@ -344,7 +416,14 @@ if (jsonOutputFile) {
     repeated_commands: repeatedCommandObjects,
     repeated_commands_by_scope: mapEntries(repeatedScopeCounts, 10).map(({ key, value }) => ({ scope: key, count: value })),
     repeated_broad_final_commands: repeatedCommandObjects.filter((item) => item.scope === "broad/final"),
+    repeated_broad_final_by_work_item: repeatedBroadByWorkItem.map((item) => ({
+      work_item: item.segment,
+      command: item.command,
+      count: item.count,
+    })),
     time_by_phase: topPhaseDuration.map(([phase, duration_ms]) => ({ phase, duration_ms })),
+    work_items: topWorkItems,
+    iterations: topIterations,
     suggested_pipeline_actions: actions,
   };
   const target = resolve(jsonOutputFile);

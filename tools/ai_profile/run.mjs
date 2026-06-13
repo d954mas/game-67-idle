@@ -9,6 +9,8 @@ function usage() {
 options:
   --value <productive|necessary_overhead|rework|waste|unknown> default: productive
   --profile <path>                                            default: tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl
+  --work-item <id>                                             task/issue/phase id for segmenting long profiles
+  --iteration <name>                                           small iteration or batch label
   --context-risk <low|medium|high|unknown>
   --file-read <path>            repeatable
   --file-written <path>         repeatable
@@ -65,4 +67,3 @@ try {
 }
 
 process.exit(exitCode);
-

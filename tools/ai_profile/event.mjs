@@ -9,6 +9,8 @@ options:
   --result <pass|fail|mixed|blocked|skipped|unknown>   default: unknown
   --value <productive|necessary_overhead|rework|waste|unknown>
   --profile <path>                                    default: tmp/session_profiles/session_profile_YYYY-MM-DD.jsonl
+  --work-item <id>                                    task/issue/phase id for segmenting long profiles
+  --iteration <name>                                  small iteration or batch label
   --context-risk <low|medium|high|unknown>
   --duration-ms <number>
   --tool <name>                 repeatable
@@ -34,4 +36,3 @@ try {
   console.error(`profile event failed: ${error.message}`);
   usage();
 }
-
