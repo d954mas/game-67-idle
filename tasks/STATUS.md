@@ -86,6 +86,7 @@ Active task:
 - `T0063` Add AI profile closeout summary command: in review.
 - `T0064` Add AI profile reflection review analyzer: in review.
 - `T0065` Add AI validation ladder planner: in review.
+- `T0066` Add compact AI context digest: in review.
 
 Current visual proof:
 

@@ -225,6 +225,9 @@ Record tools by role:
   validation ladder for the changed work kind. Use it when `review.mjs` reports
   repeated commands, before broad reusable-base checks, or when the right
   validation scope is unclear.
+- `taskboard context`: current-context digest for resumes and long work. Prefer
+  it before reading `tasks/STATUS.md` directly; if full status is still needed,
+  log it as a medium/high `context_input`.
 - `apply_patch`: files changed, why the change was scoped.
 - `imagegen`: prompt packet path, candidate count, accepted/rejected result.
 - `view_image`: image paths, visual findings.
@@ -239,6 +242,10 @@ When a tool was used late, add `waste_reason`.
 For long files or repeated context loads, add `context_inputs` with rough
 character counts. Exact tokens are not required; the goal is to identify
 expensive context sources.
+
+Prefer `node tools/taskboard/cli.mjs context` for current state. Reading the
+full `tasks/STATUS.md` is justified only when updating it, auditing a specific
+claim, or following an evidence path from the digest.
 
 Examples:
 

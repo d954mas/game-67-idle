@@ -213,7 +213,9 @@ For playable game work in this repository, the platform gate is strict:
 
 Default order for substantial work:
 
-1. Load the minimal current context from `tasks/README.md`.
+1. Load the minimal current context from `tasks/README.md`, starting with
+   `node tools/taskboard/cli.mjs context` instead of reading a large
+   `tasks/STATUS.md` wholesale.
 2. Inspect only the files needed for the selected scope.
 3. Prefer scoped search before repo-wide search.
 4. Make the smallest coherent change.

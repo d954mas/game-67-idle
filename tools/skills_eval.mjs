@@ -23,7 +23,9 @@ const SKILL_CHECKS = [
     body: [
       "tasks/README.md",
       "tools/taskboard/cli.mjs",
+      "cli.mjs context",
       "tasks/STATUS.md",
+      "full `tasks/STATUS.md` only",
       "Done when",
       "## Log",
       "evidence line",
@@ -269,6 +271,8 @@ const SKILL_CHECKS = [
       "AGENTS.md",
       "AI_PIPELINE.md",
       "tasks/STATUS.md",
+      "tools/taskboard/cli.mjs context",
+      "high-cost context",
       "durable evidence",
       "symptom",
       "cause",

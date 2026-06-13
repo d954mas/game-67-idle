@@ -23,6 +23,7 @@ Open `http://127.0.0.1:8070/`.
 
 ```powershell
 node tools/taskboard/cli.mjs list
+node tools/taskboard/cli.mjs context
 node tools/taskboard/cli.mjs list --ideas
 node tools/taskboard/cli.mjs list --archive
 node tools/taskboard/cli.mjs new task --title "..." --epic E001 --priority P1
@@ -59,8 +60,8 @@ For long-running project work, resumes, planning, multi-agent work, or code/doc
 changes, agents first load only the current working context:
 
 1. `AGENTS.md`
-2. `tasks/STATUS.md`
-3. `node tools/taskboard/cli.mjs list`
+2. `node tools/taskboard/cli.mjs context`
+3. `node tools/taskboard/cli.mjs list` only when the digest is not enough
 
 Then read only task files directly relevant to the decision:
 
@@ -72,6 +73,11 @@ Then read only task files directly relevant to the decision:
 Do not load completed tasks, old logs, P3 ideas, unrelated epics, or broad
 design docs by default. Follow those links only when debugging a regression,
 checking evidence, or making a concrete decision that needs them.
+
+Read `tasks/STATUS.md` directly only when changing it, auditing a specific
+status claim, or following a section/evidence path from the context digest.
+When `cli.mjs context` reports `status_warning: large`, treat full-status reads
+as high context cost and prefer showing a specific task or evidence file.
 
 When asked "where are we" or "what next", start from `STATUS.md`, then summarize
 only relevant active epic progress, `doing`/`review` items, top backlog by

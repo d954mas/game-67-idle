@@ -6,6 +6,7 @@
 //   node tools/taskboard/cli.mjs new task --title "..." [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
 //   node tools/taskboard/cli.mjs new epic --title "..." [--status active]
 //   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"]
+//   node tools/taskboard/cli.mjs context [--status-max-chars 8000] [--tasks-limit 25]
 //   node tools/taskboard/cli.mjs validate
 //
 // Agents: prefer `new` over hand-writing files so IDs never collide.
@@ -14,7 +15,8 @@ import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
   updateDoc, validateStore, TASK_STATUSES,
 } from "./lib.mjs";
-import { relative } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
@@ -50,6 +52,112 @@ function shortRow(d) {
   return `${f.id}  ${String(f.status).padEnd(7)} ${String(f.priority || "").padEnd(3)} ${String(f.epic || "-").padEnd(5)} ${f.title}${tags}${archive}`;
 }
 
+function numberArg(value, fallback) {
+  if (value === undefined || value === true || value === "") return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function clampText(text, maxChars) {
+  if (text.length <= maxChars) return { text: text.trim(), truncated: false };
+  const clipped = text.slice(0, Math.max(0, maxChars - 80)).replace(/\s+$/, "");
+  return {
+    text: `${clipped}\n\n... truncated ${text.length - clipped.length} chars; inspect tasks/STATUS.md or linked task files only if needed.`,
+    truncated: true,
+  };
+}
+
+function sectionText(markdown, title) {
+  const pattern = new RegExp(`(?:^|\\r?\\n)## ${escapeRegExp(title)}[ \\t]*\\r?\\n([\\s\\S]*?)(?=\\r?\\n##\\s+|$)`, "i");
+  const match = markdown.match(pattern);
+  return match ? match[1].trim() : "";
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function statusCounts(tasks) {
+  const counts = new Map();
+  for (const task of tasks) {
+    const key = task.fields.status || "unknown";
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return TASK_STATUSES.map((status) => `${status}:${counts.get(status) || 0}`).join(" ");
+}
+
+function priorityRank(priority) {
+  return { P0: 0, P1: 1, P2: 2, P3: 3 }[priority] ?? 9;
+}
+
+function taskRank(task) {
+  const statusRank = { doing: 0, todo: 1, backlog: 2, review: 3, idea: 4, done: 5, dropped: 6 }[task.fields.status] ?? 9;
+  return statusRank * 10 + priorityRank(task.fields.priority);
+}
+
+function idNumber(task) {
+  const match = String(task.fields.id || "").match(/\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
+function renderContext(root, options) {
+  const statusFile = join(root, "tasks", "STATUS.md");
+  const status = existsSync(statusFile) ? readFileSync(statusFile, "utf8") : "";
+  const statusMaxChars = numberArg(options["status-max-chars"], 8000);
+  const tasksLimit = numberArg(options["tasks-limit"], 25);
+  const sections = [
+    "Current Goal",
+    "Blocking Work",
+    "Non-blocking Debt",
+    "Next Priorities",
+    "Current Gate",
+    "Required Validation",
+    "Last Known Good Evidence",
+  ];
+  const tasks = listTasks(root).filter((task) => !["idea", "done", "dropped"].includes(task.fields.status));
+  tasks.sort((a, b) => taskRank(a) - taskRank(b) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)));
+
+  const lines = [];
+  lines.push("# Current Context Digest");
+  lines.push("");
+  lines.push(`status_file: ${relative(root, statusFile)}`);
+  lines.push(`status_chars: ${status.length}`);
+  if (status.length > statusMaxChars) {
+    lines.push(`status_warning: large; digest is capped at ${statusMaxChars} chars`);
+  }
+  lines.push(`active_task_counts: ${statusCounts(listTasks(root))}`);
+  lines.push("");
+
+  let remaining = statusMaxChars;
+  for (const section of sections) {
+    const body = sectionText(status, section);
+    if (!body) continue;
+    const sectionBudget = Math.max(600, Math.min(remaining, 1400));
+    const clipped = clampText(body, sectionBudget);
+    lines.push(`## ${section}`);
+    lines.push("");
+    lines.push(clipped.text || "(empty)");
+    lines.push("");
+    remaining -= Math.min(body.length, sectionBudget);
+    if (remaining <= 0) break;
+  }
+
+  lines.push("## Actionable Tasks");
+  lines.push("");
+  for (const task of tasks.slice(0, tasksLimit)) {
+    lines.push(`- ${shortRow(task)}`);
+  }
+  if (tasks.length > tasksLimit) {
+    lines.push(`- ... ${tasks.length - tasksLimit} more; run \`node tools/taskboard/cli.mjs list\` or show a specific task only if needed.`);
+  }
+  if (tasks.length === 0) {
+    lines.push("- none");
+  }
+  lines.push("");
+  lines.push("Next context step: inspect only the linked task files or evidence paths needed for the current decision.");
+  return `${lines.join("\n")}\n`;
+}
+
 const args = parseArgs(rest);
 
 switch (cmd) {
@@ -79,6 +187,10 @@ switch (cmd) {
     if (!tasks.length) {
       console.log("(no tasks match)");
     }
+    break;
+  }
+  case "context": {
+    process.stdout.write(renderContext(root, args));
     break;
   }
   case "show": {
@@ -147,7 +259,7 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("usage: cli.mjs <list|show|new|set|validate> ...  (see header comment)");
+    console.log("usage: cli.mjs <list|context|show|new|set|validate> ...  (see header comment)");
     process.exit(cmd ? 1 : 0);
 }
 

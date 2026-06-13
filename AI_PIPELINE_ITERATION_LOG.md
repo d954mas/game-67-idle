@@ -407,3 +407,22 @@ specific and reusable.
   the risk changed.
 - Follow-up owner: Future implementation/reflection agents.
 - Status: Implemented in `T0065`.
+
+## 2026-06-13 - Current status needs a compact context entrypoint
+
+- Context: During pipeline work the live `tasks/STATUS.md` grew past 80k
+  characters. Agents were still instructed to read it at the start of long
+  work, which made context loading expensive and increased stale-detail risk.
+- Friction: The status file is useful as an index, but once it becomes large,
+  full reads mix current gates with long evidence history and make every
+  resume more expensive.
+- Time sink: Agents spend context and attention on old release evidence or long
+  active-work lists before identifying the one task or gate they need.
+- Likely cause: The minimal-context protocol named `tasks/STATUS.md` directly
+  instead of a bounded digest command.
+- Proposed improvement: Add `node tools/taskboard/cli.mjs context` as the
+  default current-context entrypoint. It reports status size, selected current
+  sections, task counts, and a limited actionable task list, then tells agents
+  to inspect only linked task/evidence files.
+- Follow-up owner: Future implementation/reflection agents.
+- Status: Implemented in `T0066`.

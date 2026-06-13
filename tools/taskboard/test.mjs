@@ -90,6 +90,57 @@ test("cli list hides ideas by default and shows them explicitly", (t) => {
   assert.match(ideas.stdout, /Raw idea/);
 });
 
+test("cli context caps status and prioritizes recent actionable tasks", (t) => {
+  const root = tempRoot(t);
+  mkdirSync(join(root, "tasks"), { recursive: true });
+  writeFileSync(
+    join(root, "tasks", "STATUS.md"),
+    `# Project Status
+
+## Current Goal
+
+Ship the current project.
+
+## Current Gate
+
+Keep the context digest short.
+
+## Required Validation
+
+Run the narrow checks.
+
+## Last Known Good Evidence
+
+Large evidence list starts here.
+${"evidence\n".repeat(300)}
+
+## Blocking Work
+
+- none
+
+## Next Priorities
+
+1. Continue with the next task.
+`.replace(/\n/g, "\r\n"),
+  );
+  createTask(root, { title: "Old review", status: "review", priority: "P1" });
+  createTask(root, { title: "New review", status: "review", priority: "P1" });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(
+    process.execPath,
+    [cli, "context", "--status-max-chars", "1200", "--tasks-limit", "1"],
+    { cwd: root, encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /# Current Context Digest/);
+  assert.match(result.stdout, /status_warning: large/);
+  assert.match(result.stdout, /## Current Gate/);
+  assert.match(result.stdout, /Keep the context digest short/);
+  assert.match(result.stdout, /T0002 .* New review/);
+  assert.doesNotMatch(result.stdout, /T0001 .* Old review/);
+  assert.match(result.stdout, /\.\.\. 1 more/);
+});
+
 test("updateDoc patches fields, keeps id/created, bumps updated", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Patch me", status: "idea" });
