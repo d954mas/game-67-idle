@@ -81,6 +81,7 @@ Active task:
 - `T0058` Harden one-hour release audit evidence: in review.
 - `T0059` Require 55-minute manual child-test acceptance: in review.
 - `T0060` Add chat-session reflection skill and retrospective: in review.
+- `T0061` Add AI development session profiling pipeline: in review.
 
 Current visual proof:
 

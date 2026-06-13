@@ -141,6 +141,15 @@ node tools/skills_sync.mjs
   ideas. Use `chat-session-reflection` for deeper retrospectives of long
   multi-turn sessions. Do not use the iteration log as a task board or project
   status file.
+- **Profile long AI sessions without polluting git.** Use
+  `AI_PIPELINE_SESSION_PROFILING.md` and `tools/ai_profile/` when work is long,
+  repeated, release-critical, or explicitly about AI workflow. Reusable
+  profiling rules/tools are committed; raw session JSONL, generated summaries,
+  recovered thread dumps, and one-off telemetry extracts stay in
+  `tmp/session_profiles/` unless the lead explicitly asks to promote them.
+  `.gitignore` is the safety net for scratch paths; the workflow rule is what
+  prevents agents from creating noisy session artifacts in non-ignored
+  locations.
 - **Runtime base is protected in this repository.** `state/`,
   `tools/state_codegen/`, `src/devapi/`, `tools/devapi/`,
   `src/game_storage.*`, and `external/cjson/` are reusable AI/runtime
@@ -249,13 +258,14 @@ Portable (copied by the exporter):
 - `.codex/skills/` - all skills are written engine-agnostic: they discover
   local conventions instead of assuming this repo's layout.
 - `tools/skills_sync.mjs`, `tools/skills_eval.mjs`,
-  `tools/pipeline_validate.mjs`, `tools/assets/new_art_job.mjs`,
-  `tools/taskboard/` - skill mirroring, skill regression checks, full
-  reusable-base validation, generated-art job scaffolding, and the task store
-  (board UI + CLI).
+  `tools/pipeline_validate.mjs`, `tools/ai_profile/`,
+  `tools/assets/new_art_job.mjs`, `tools/taskboard/` - skill mirroring, skill
+  regression checks, full reusable-base validation, AI session profile
+  summarization, generated-art job scaffolding, and the task store (board UI +
+  CLI).
 - `gamedesign/knowledge/` - accumulated design lessons.
-- `AI_PIPELINE.md`, `tasks/README.md`, starter `tasks/STATUS.md`, starter
-  `AGENTS.md` / `CLAUDE.md`.
+- `AI_PIPELINE.md`, `AI_PIPELINE_SESSION_PROFILING.md`, `tasks/README.md`,
+  starter `tasks/STATUS.md`, starter `AGENTS.md` / `CLAUDE.md`.
 
 Stays behind in workflow-only exports: runtime `src/`, `state/` schemas,
 `tools/devapi/` scripts, build presets, and `gamedesign/<concept>/` docs/data.

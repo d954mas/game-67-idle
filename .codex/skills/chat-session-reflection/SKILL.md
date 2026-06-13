@@ -17,7 +17,10 @@ Use current durable evidence before memory:
 2. Live status and task logs: `tasks/STATUS.md`, relevant `tasks/active/*`.
 3. Evidence artifacts: reports, screenshots, package logs, validation outputs,
    generated assets, release/audit files.
-4. Conversation context only after checking durable state.
+4. Session profiling artifacts when present:
+   `tmp/session_profiles/*.jsonl`, generated summaries, or recovered thread
+   extracts. Treat these as scratch evidence, not git-bound deliverables.
+5. Conversation context only after checking durable state.
 
 If evidence is missing, label the claim as likely or unknown instead of making
 it sound proven.
@@ -36,20 +39,24 @@ it sound proven.
 4. Identify where the agent was wrong or inefficient. Include circular work,
    late discoveries, wrong assumptions, over-validation, premature coding,
    poor decomposition, and unnecessary artifacts.
-5. Audit tool use. Cover terminal/files/search/tests/generation/agents. Say
+5. Extract or use profiling telemetry. If a live profile exists, summarize
+   time by phase/category/value, tool counts, repeated context loads, waste,
+   rework, and compactions. If no live profile exists, use thread history when
+   available and clearly mark the result as partial.
+6. Audit tool use. Cover terminal/files/search/tests/generation/agents. Say
    where a tool was useful, late, missing, or wasted.
-6. Audit context management. Name forgotten constraints, rediscovered
+7. Audit context management. Name forgotten constraints, rediscovered
    decisions, stale source-of-truth files, and state that should have been
    pinned.
-7. Audit planning. Name order mistakes, missing vertical slices, broad scopes,
+8. Audit planning. Name order mistakes, missing vertical slices, broad scopes,
    missing Definition of Done, and weak checkpoints.
-8. Audit product quality. Review as a director: unclear gameplay, weak visuals,
+9. Audit product quality. Review as a director: unclear gameplay, weak visuals,
    unreadable UI, brittle packaging, unproven manual acceptance, or technical
    success that still fails the product goal.
-9. Propose a next-session workflow with concrete gates, not generic advice.
-10. Propose prompt/system changes: added instructions, bans, checklists,
+10. Propose a next-session workflow with concrete gates, not generic advice.
+11. Propose prompt/system changes: added instructions, bans, checklists,
     readiness criteria, and role boundaries.
-11. End with the 10 highest-leverage improvements.
+12. End with the 10 highest-leverage improvements.
 
 ## Output Rules
 
@@ -60,6 +67,9 @@ it sound proven.
 - Distinguish product problems from pipeline problems.
 - Prefer hard process changes over vague habits.
 - Do not mark the project goal complete from a retrospective.
+- Separate committed process improvements from scratch telemetry. Raw
+  profiling logs, thread dumps, and one-off timing extracts belong in
+  `tmp/session_profiles/` unless the lead explicitly asks to preserve them.
 
 ## Durable Capture
 
@@ -69,3 +79,8 @@ a dedicated requested document; the iteration log is only for compact lessons.
 
 If the reflection identifies actionable project work, create or update tasks in
 `tasks/` instead of burying work inside the retrospective.
+
+When the user asks for full AI-development profiling, use
+`AI_PIPELINE_SESSION_PROFILING.md` and `tools/ai_profile/`. A proper profile
+must separate useful work, necessary overhead, rework, and waste; report context
+inputs and compactions; and state what was not measurable.

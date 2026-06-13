@@ -9,6 +9,12 @@ Evidence inspected: `AGENTS.md`, `AI_PIPELINE.md`, `AI_PIPELINE_ITERATION_LOG.md
 package smoke evidence, child-test readiness screenshots, and latest native
 framebuffer screenshots.
 
+Telemetry follow-up: `tmp/session_profiles/session_telemetry_extract_2026-06-13.md`
+records what could be recovered from the Codex thread log after this
+retrospective: partial turn durations, visible item types, compactions,
+tool/action patterns, and telemetry gaps. Session-specific telemetry is scratch
+data by default; reusable profiling rules and tools belong in git.
+
 ## 1. What Was Done
 
 - A concrete active concept was selected: `67 World`, a child-friendly meme

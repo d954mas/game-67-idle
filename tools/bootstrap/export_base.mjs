@@ -33,11 +33,13 @@ const COPY = [
   "tools/skills_eval.mjs",
   "tools/pipeline_validate.mjs",
   "tools/skills_sync.mjs",
+  "tools/ai_profile",
   "tools/assets/new_art_job.mjs",
   "tools/taskboard",
   "tools/bootstrap/export_base.mjs",
   "gamedesign/knowledge",
   "AI_PIPELINE.md",
+  "AI_PIPELINE_SESSION_PROFILING.md",
   "tasks/README.md",
 ];
 
@@ -59,6 +61,8 @@ const AGENTS_TEMPLATE = `# AGENTS.md
 - Temporary generation, scripts, rejected images, screenshots, and audit logs go in \`tmp/\` or another ignored temp folder.
 - Final durable docs/data/assets go in their project folder.
 - The shared human/agent process lives in \`AI_PIPELINE.md\`.
+- Long-session AI development profiling uses \`AI_PIPELINE_SESSION_PROFILING.md\`;
+  raw telemetry stays in \`tmp/session_profiles/\`.
 
 ## Direction
 
