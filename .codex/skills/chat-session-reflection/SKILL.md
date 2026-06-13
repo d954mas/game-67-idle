@@ -108,7 +108,9 @@ work-item coverage, missing context inputs, wall-clock coverage, failed
 records, recovered versus unresolved failed records, and the next profiling
 action. It also reports captured baseline manifests when clean review JSON has
 already been preserved under `tmp/session_profiles/baselines/`, plus whether
-the latest baseline comparison is missing, stale, regressed, or fresh.
+the latest baseline comparison is missing, stale, regressed, or fresh. After a
+fresh bundle and comparison, it reports reflection packet/draft freshness and
+prints the exact commands to regenerate missing or stale handoff artifacts.
 Before relying on generated summary/review/follow-up artifacts, check that
 status reports `Bundle fresh: yes`; if the bundle is stale, rerun
 `tools/ai_profile/closeout.mjs` or the stale review/follow-up commands.
@@ -161,6 +163,8 @@ tmp/session_profiles/<name>.reflection_packet.json` and read that packet first.
 Use it as the first evidence map before opening larger summary, review,
 follow-up, or comparison artifacts. Do not promote packet follow-ups marked
 `satisfied` into tasks unless new evidence reopens the issue.
+If status reports packet/draft missing or stale, run the exact command from its
+`Reflection Artifacts` section before writing the retrospective.
 After the packet is ready, generate a scratch starter with
 `tools/ai_profile/reflection_draft.mjs <packet.json> --output
 tmp/session_profiles/<name>.reflection_draft.md --json-output

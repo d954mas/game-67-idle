@@ -316,6 +316,8 @@ const SKILL_CHECKS = [
       "clean baseline review JSON",
       "missing, stale, regressed, or fresh",
       "stale baseline comparison",
+      "reflection packet/draft freshness",
+      "Reflection Artifacts",
       "reflection_packet.mjs",
       "first evidence map",
       "satisfied",

@@ -978,3 +978,20 @@ specific and reusable.
   classification before creating process work.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0099`.
+
+## 2026-06-13 - Status should cover the full reflection handoff
+
+- Trigger: `status.mjs` reported fresh closeout bundle and fresh baseline
+  comparison, but did not say whether reflection packet or draft artifacts were
+  missing or stale.
+- Symptom: Agents still had to remember the final packet/draft commands before
+  writing a retrospective.
+- Time sink: The last handoff step could be repeated, skipped, or manually
+  inspected even though artifact freshness is mechanically knowable.
+- Likely cause: Status had grown around telemetry health, bundle freshness, and
+  baseline comparison, but the newer packet/draft tools were not integrated
+  into the status decision tree.
+- Proposed improvement: Add reflection artifact status with missing/stale/fresh
+  states and exact packet/draft generation commands.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0100`.

@@ -343,6 +343,10 @@ Record tools by role:
   recapturing. When a baseline exists, status reports whether the latest
   comparison JSON is missing, stale, regressed, or fresh, and prints the exact
   `compare_reviews.mjs` command when comparison evidence must be refreshed.
+  After bundle and comparison are fresh, status reports whether reflection
+  packet and draft artifacts are missing, stale, waiting, or fresh, and prints
+  the exact generation commands. Use that status instead of manually guessing
+  the next reflection handoff step.
 - `test.mjs`: regression test suite for profile CLI behavior. Run
   `node --test tools/ai_profile/test.mjs` after profiler tool changes.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
@@ -619,6 +623,9 @@ A "profiled session" is done when:
 - `status.mjs` reports `Bundle fresh: yes` before a retrospective relies on
   generated summary/review/follow-up artifacts; if it reports stale artifacts,
   rerun `closeout.mjs` or the stale review/follow-up commands first;
+- `status.mjs` reports fresh reflection packet and draft artifacts before a
+  full retrospective starts from generated handoff evidence; if packet or draft
+  is missing/stale, run the exact command printed in `Reflection Artifacts`;
 - `review.mjs` is used before deeper reflection when a profile exists and the
   closeout bundle was skipped or stale;
 - `review.mjs --json-output` is used when another tool/agent will consume the

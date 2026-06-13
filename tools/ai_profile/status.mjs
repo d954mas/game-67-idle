@@ -172,6 +172,85 @@ function compareArtifactPaths(profilePath, baseline) {
   };
 }
 
+function reflectionArtifactPaths(profilePath) {
+  const base = basename(profilePath).replace(/\.jsonl$/i, "");
+  const dir = dirname(profilePath);
+  return {
+    packet_md: join(dir, `${base}.reflection_packet.md`),
+    packet_json: join(dir, `${base}.reflection_packet.json`),
+    draft_md: join(dir, `${base}.reflection_draft.md`),
+    draft_json: join(dir, `${base}.reflection_draft.json`),
+  };
+}
+
+function latestMtime(paths) {
+  const mtimes = paths.map(fileMtimeMs).filter((mtime) => mtime !== undefined);
+  return mtimes.length > 0 ? Math.max(...mtimes) : undefined;
+}
+
+function artifactPairStatus(markdownPath, jsonPath, dependencyPaths, blockedReason = "") {
+  const markdownMtime = fileMtimeMs(markdownPath);
+  const jsonMtime = fileMtimeMs(jsonPath);
+  const markdownExists = markdownMtime !== undefined;
+  const jsonExists = jsonMtime !== undefined;
+  if (blockedReason) {
+    return {
+      status: "waiting",
+      reason: blockedReason,
+      markdown: markdownPath,
+      json: jsonPath,
+      markdown_exists: markdownExists,
+      json_exists: jsonExists,
+      stale: false,
+    };
+  }
+  if (!markdownExists || !jsonExists) {
+    return {
+      status: "missing",
+      reason: !markdownExists && !jsonExists ? "markdown and json are missing" : markdownExists ? "json is missing" : "markdown is missing",
+      markdown: markdownPath,
+      json: jsonPath,
+      markdown_exists: markdownExists,
+      json_exists: jsonExists,
+      stale: false,
+    };
+  }
+  const dependencyMtime = latestMtime(dependencyPaths);
+  const stale = dependencyMtime !== undefined && Math.min(markdownMtime, jsonMtime) + 1 < dependencyMtime;
+  return {
+    status: stale ? "stale" : "fresh",
+    reason: stale ? "artifact is older than reflection inputs" : "artifact is fresh",
+    markdown: markdownPath,
+    json: jsonPath,
+    markdown_exists: markdownExists,
+    json_exists: jsonExists,
+    stale,
+  };
+}
+
+function readReflectionStatus(profilePath, comparison) {
+  const paths = reflectionArtifactPaths(profilePath);
+  const packetDependencies = [
+    profilePath,
+    artifactPath(profilePath, "review.json"),
+    artifactPath(profilePath, "followups.json"),
+  ];
+  if (comparison?.paths?.compare_json) packetDependencies.push(comparison.paths.compare_json);
+  const packet = artifactPairStatus(paths.packet_md, paths.packet_json, packetDependencies);
+  const draftBlockedReason = packet.status === "fresh" ? "" : "packet is not fresh";
+  const draft = artifactPairStatus(paths.draft_md, paths.draft_json, [paths.packet_json, artifactPath(profilePath, "review.json")], draftBlockedReason);
+  return {
+    packet: {
+      ...packet,
+      command: `node tools/ai_profile/reflection_packet.mjs ${profilePath} --output ${paths.packet_md} --json-output ${paths.packet_json}`,
+    },
+    draft: {
+      ...draft,
+      command: `node tools/ai_profile/reflection_draft.mjs ${paths.packet_json} --output ${paths.draft_md} --json-output ${paths.draft_json}`,
+    },
+  };
+}
+
 function readComparisonStatus(profilePath, baseline) {
   const paths = compareArtifactPaths(profilePath, baseline);
   if (!paths || !baseline) {
@@ -271,6 +350,7 @@ function buildStatus(profilePath) {
   const bundle = bundleStatus(profilePath);
   const baselines = readBaselineStatus(profilePath);
   const comparison = readComparisonStatus(profilePath, baselines.latest_manifest);
+  const reflection = readReflectionStatus(profilePath, comparison);
   const scope = readProfileScope();
   const latest = latestRecord(records);
 
@@ -313,6 +393,16 @@ function buildStatus(profilePath) {
     nextAction = "Run closeout.mjs again, or rerun review/followups if the bundle was intentionally skipped.";
   } else if (!bundle.fresh) {
     nextAction = "Before reflection, rerun closeout.mjs so summary, review, and followups match the latest profile.";
+  } else if (baselines.latest_manifest && comparison.status !== "fresh" && comparison.status !== "regressed") {
+    nextAction = `Run baseline comparison: ${comparison.compare_command}`;
+  } else if (baselines.latest_manifest && comparison.status === "regressed") {
+    nextAction = `Inspect current-scope regressions in ${comparison.paths.compare_json} before writing reflection.`;
+  } else if (baselines.latest_manifest && comparison.status === "fresh" && reflection.packet.status !== "fresh") {
+    nextAction = `Generate reflection packet: ${reflection.packet.command}`;
+  } else if (baselines.latest_manifest && comparison.status === "fresh" && reflection.draft.status !== "fresh") {
+    nextAction = `Generate reflection draft: ${reflection.draft.command}`;
+  } else if (baselines.latest_manifest && comparison.status === "fresh" && comparison.paths) {
+    nextAction = `Use fresh reflection draft ${reflection.draft.markdown} as the first retrospective artifact.`;
   }
 
   return {
@@ -336,6 +426,7 @@ function buildStatus(profilePath) {
     bundle,
     baselines,
     comparison,
+    reflection,
     work_item_coverage: {
       missing_records: missingWorkItem,
       coverage_ratio: records.length > 0 ? (records.length - missingWorkItem) / records.length : undefined,
@@ -377,6 +468,8 @@ function renderMarkdown(status) {
   lines.push(`Bundle fresh: ${status.bundle.fresh ? "yes" : "no"}${status.bundle.stale_artifacts.length > 0 ? ` (${status.bundle.stale_artifacts.join(", ")} stale)` : ""}`);
   lines.push(`Captured baselines: ${status.baselines.count}${status.baselines.latest_manifest ? ` (latest: ${status.baselines.latest_manifest.label || basename(status.baselines.latest_manifest.manifest_path)})` : ""}`);
   lines.push(`Baseline comparison: ${status.comparison.status}${status.comparison.verdict ? ` (${status.comparison.verdict})` : ""}`);
+  lines.push(`Reflection packet: ${status.reflection.packet.status}`);
+  lines.push(`Reflection draft: ${status.reflection.draft.status}`);
   lines.push(`Work-item coverage: ${formatPercent(status.work_item_coverage.coverage_ratio)} (${status.work_item_coverage.missing_records} missing)`);
   lines.push(`Missing context inputs: ${status.missing_context_inputs}`);
   lines.push(`Current scope records: ${status.current_scope.records} (${status.current_scope.missing_context_inputs} missing context inputs, ${status.current_scope.missing_work_item_records} missing work items)`);
@@ -416,6 +509,16 @@ function renderMarkdown(status) {
   if (status.comparison.verdict) lines.push(`- verdict: ${status.comparison.verdict}`);
   lines.push(`- current-scope regressions: ${status.comparison.current_regressions}`);
   if (status.comparison.compare_command) lines.push(`- command: ${status.comparison.compare_command}`);
+  lines.push("");
+  lines.push("## Reflection Artifacts");
+  lines.push(`- packet: ${status.reflection.packet.status} (${status.reflection.packet.reason})`);
+  lines.push(`  - markdown: ${status.reflection.packet.markdown}`);
+  lines.push(`  - json: ${status.reflection.packet.json}`);
+  lines.push(`  - command: ${status.reflection.packet.command}`);
+  lines.push(`- draft: ${status.reflection.draft.status} (${status.reflection.draft.reason})`);
+  lines.push(`  - markdown: ${status.reflection.draft.markdown}`);
+  lines.push(`  - json: ${status.reflection.draft.json}`);
+  lines.push(`  - command: ${status.reflection.draft.command}`);
   if (status.errors.length > 0) {
     lines.push("");
     lines.push("## Errors");
