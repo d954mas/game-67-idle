@@ -194,3 +194,6 @@ None.
   --change pipeline --change skills --risk medium`; fresh `node
   tools/ai.mjs reflect` reported stable baseline comparison and clean current
   scope.
+- 2026-06-13: Added `context_use_summary` to reflection draft/review handoff so
+  context hotspots and missing context inputs are visible without reopening raw
+  review JSON or long docs.

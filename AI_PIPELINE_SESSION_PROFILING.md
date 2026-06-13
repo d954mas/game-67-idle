@@ -671,6 +671,10 @@ If `tool_use_summary` includes `(unrecorded)` or review reports
 `missing_tool_metadata`, treat that as incomplete telemetry for future
 sessions and use `node tools/ai.mjs run/context/checkpoint/validate` or
 profiler wrappers that populate `tools`.
+When the draft or review includes `context_use_summary`, read it before opening
+larger review JSON or long source files. Use its hotspots to name the largest
+context inputs and its missing inputs to explain where context cost was not
+measured.
 When the draft includes repeated-command evidence, classify the repeats before
 turning them into process work. Prefer the generated
 `repeated_command_classification` table over raw repeat counts: planned

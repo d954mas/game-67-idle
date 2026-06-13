@@ -2307,6 +2307,13 @@ test("reflection draft classifies repeated command evidence by scope", () => {
         { tool: "shell_command", records: 5, duration_ms: 9000, failed: 1, waste_or_rework: 1, contexts: 0, commands: 5 },
         { tool: "imagegen", records: 1, duration_ms: 3000, failed: 0, waste_or_rework: 0, contexts: 0, commands: 0 },
       ],
+      context_hotspots: [
+        { path: "AI_PIPELINE_SESSION_PROFILING.md", chars: 27455 },
+        { path: "command:node tools/taskboard/cli.mjs context", chars: 36514 },
+      ],
+      missing_context_inputs: [
+        { line: 12, intent: "Validate portable AI pipeline with profile wrappers", context_risk: "medium" },
+      ],
     })}\n`, "utf8");
     writeFileSync(packetJson, `${JSON.stringify({
       profile: "repeated.jsonl",
@@ -2321,6 +2328,8 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     assert.match(result.stdout, /Repeated Command Evidence/);
     assert.match(result.stdout, /Tool Use Summary/);
     assert.match(result.stdout, /shell_command/);
+    assert.match(result.stdout, /Context Use Evidence/);
+    assert.match(result.stdout, /AI_PIPELINE_SESSION_PROFILING\.md/);
     assert.match(result.stdout, /classification/);
     assert.match(result.stdout, /validation_waste_risk/);
     assert.match(result.stdout, /unbatched broad\/final repeated: 2 occurrence/);
@@ -2334,6 +2343,8 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     const draft = readJson(draftJson);
     assert.equal(draft.repeated_commands.total_distinct, 3);
     assert.equal(draft.tool_use_summary[0].tool, "shell_command");
+    assert.equal(draft.context_use_summary.hotspots[0].path, "AI_PIPELINE_SESSION_PROFILING.md");
+    assert.equal(draft.context_use_summary.missing_inputs[0].line, 12);
     assert.equal(draft.repeated_commands.classification[0].classification, "validation_waste_risk");
     assert.equal(draft.repeated_commands.unbatched_broad_final_occurrences, 2);
     assert.equal(draft.repeated_commands.broad_final_commands.length, 1);
@@ -2374,6 +2385,10 @@ test("reflection review separates clean current scope from historical lessons", 
         validation_batches: [{ batch_id: "batch-review", records: 5, broad_final_commands: 1, failed: 0 }],
       },
       tool_use_summary: [{ tool: "shell_command", records: 5, duration_ms: 9000, failed: 1, waste_or_rework: 1 }],
+      context_use_summary: {
+        hotspots: [{ path: "AI_PIPELINE_SESSION_PROFILING.md", chars: 27455 }],
+        missing_inputs: [{ line: 12, intent: "Validate portable AI pipeline with profile wrappers", context_risk: "medium" }],
+      },
     })}\n`, "utf8");
 
     const result = run([
@@ -2390,6 +2405,8 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.match(result.stdout, /No current action items/);
     assert.match(result.stdout, /Tool Use Review/);
     assert.match(result.stdout, /shell_command/);
+    assert.match(result.stdout, /Context Use Review/);
+    assert.match(result.stdout, /AI_PIPELINE_SESSION_PROFILING\.md/);
     assert.match(result.stdout, /guardrail_rerun_review/);
     assert.match(result.stdout, /validation batches/);
     assert.match(result.stdout, /batch-review/);
@@ -2403,7 +2420,9 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.ok(review.top_improvements.some((item) => item.includes("validation batch evidence")));
     assert.ok(review.top_improvements.some((item) => item.includes("repeated_command_classification")));
     assert.ok(review.top_improvements.some((item) => item.includes("tool_use_summary")));
+    assert.ok(review.top_improvements.some((item) => item.includes("context_use_summary")));
     assert.equal(review.tool_use_summary[0].tool, "shell_command");
+    assert.equal(review.context_use_summary.hotspots[0].path, "AI_PIPELINE_SESSION_PROFILING.md");
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs validate")));
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs start")));
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs focus")));

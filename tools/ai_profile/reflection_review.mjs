@@ -56,6 +56,10 @@ function topImprovements(draft, currentClean) {
   if (asArray(draft.tool_use_summary).length > 0) {
     improvements.push("Use tool_use_summary to explain which tool classes consumed time, failed, or produced context.");
   }
+  if (asArray(draft.context_use_summary?.hotspots).length > 0) {
+    const hotspot = draft.context_use_summary.hotspots[0];
+    improvements.push(`Use context_use_summary to explain context pressure; largest input is ${hotspot.path || "unknown"} (${hotspot.chars || 0} chars).`);
+  }
   if (hasLesson("missing_context_inputs")) {
     improvements.push("Use node tools/ai.mjs context --path <file> or node tools/ai.mjs context -- <command> so reflection can measure context cost.");
   }
@@ -114,6 +118,7 @@ function buildReview(draft, draftPath) {
     suppressed_historical_findings: asArray(draft.suppressed_historical_findings),
     repeated_commands: draft.repeated_commands || {},
     tool_use_summary: asArray(draft.tool_use_summary),
+    context_use_summary: draft.context_use_summary || { hotspots: [], missing_inputs: [] },
     recovered_failure_classification: asArray(draft.recovered_failure_classification),
     satisfied_followups: asArray(draft.current_state?.satisfied_followups),
     top_improvements: topImprovements(draft, currentClean),
@@ -158,6 +163,21 @@ function renderMarkdown(review, draftPath) {
     lines.push("- none");
   } else {
     for (const item of tools) lines.push(`- ${item.tool || "unknown"}: ${item.records || 0} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed || 0}, waste/rework=${item.waste_or_rework || 0}`);
+  }
+  lines.push("");
+  lines.push("## Context Use Review");
+  const contextSummary = review.context_use_summary || { hotspots: [], missing_inputs: [] };
+  if (asArray(contextSummary.hotspots).length === 0 && asArray(contextSummary.missing_inputs).length === 0) {
+    lines.push("- none");
+  } else {
+    if (asArray(contextSummary.hotspots).length > 0) {
+      lines.push("- hotspots:");
+      for (const item of asArray(contextSummary.hotspots)) lines.push(`  - ${item.path || "unknown"}: ${item.chars || 0} chars`);
+    }
+    if (asArray(contextSummary.missing_inputs).length > 0) {
+      lines.push("- missing inputs:");
+      for (const item of asArray(contextSummary.missing_inputs)) lines.push(`  - line ${item.line || 0} [${item.context_risk || "unknown"}]: ${item.intent || ""}`);
+    }
   }
   lines.push("");
   lines.push("## Recovered Failure Review");

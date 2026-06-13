@@ -134,6 +134,20 @@ function recoveredFailureSummary(review) {
   }));
 }
 
+function contextUseSummary(review) {
+  return {
+    hotspots: asArray(review?.context_hotspots).slice(0, 8).map((item) => ({
+      path: item.path || "",
+      chars: Number(item.chars || 0),
+    })),
+    missing_inputs: asArray(review?.missing_context_inputs).slice(0, 8).map((item) => ({
+      line: Number(item.line || 0),
+      intent: item.intent || "",
+      context_risk: item.context_risk || "",
+    })),
+  };
+}
+
 function scopeSummaryText(summary) {
   if (!summary.by_scope.length) return "no scope breakdown";
   return summary.by_scope.map((item) => `${item.scope || "unknown"}=${item.count || 0}`).join(", ");
@@ -203,6 +217,7 @@ function buildDraft(packet, review) {
   const repeatedSummary = repeatedCommandSummary(review);
   const toolsSummary = toolUseSummary(review);
   const recoveredSummary = recoveredFailureSummary(review);
+  const contextSummary = contextUseSummary(review);
   const currentFindings = asArray(packet.current_scope?.findings).map(compactFinding);
   const currentActions = asArray(packet.current_scope?.suggested_actions);
   const historicalLessons = findings.map((finding) => lessonForFinding(finding, {
@@ -249,6 +264,7 @@ function buildDraft(packet, review) {
     repeated_commands: repeatedSummary,
     tool_use_summary: toolsSummary,
     recovered_failure_classification: recoveredSummary,
+    context_use_summary: contextSummary,
     next_cycle_actions: nextActions,
   };
 }
@@ -313,6 +329,20 @@ function renderMarkdown(draft, packetFile) {
     lines.push("- none");
   } else {
     for (const item of draft.tool_use_summary) lines.push(`- ${item.tool}: ${item.records} record(s), ${formatMs(item.duration_ms)}, failed=${item.failed}, waste/rework=${item.waste_or_rework}, commands=${item.commands}, context=${item.contexts}`);
+  }
+  lines.push("");
+  lines.push("## Context Use Evidence");
+  if (draft.context_use_summary.hotspots.length === 0 && draft.context_use_summary.missing_inputs.length === 0) {
+    lines.push("- none");
+  } else {
+    if (draft.context_use_summary.hotspots.length > 0) {
+      lines.push("- hotspots:");
+      for (const item of draft.context_use_summary.hotspots) lines.push(`  - ${item.path}: ${item.chars} chars`);
+    }
+    if (draft.context_use_summary.missing_inputs.length > 0) {
+      lines.push("- missing inputs:");
+      for (const item of draft.context_use_summary.missing_inputs) lines.push(`  - line ${item.line} [${item.context_risk || "unknown"}]: ${item.intent}`);
+    }
   }
   lines.push("");
   lines.push("## Recovered Failure Evidence");

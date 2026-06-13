@@ -32,6 +32,24 @@ specific and reusable.
 - Status:
 ```
 
+## 2026-06-13 - Context hotspots need to reach reflection handoff
+
+- Context: Profile review JSON already reported `context_hotspots` and
+  `missing_context_inputs`, but the generated reflection draft/review did not
+  surface them next to tool-use and repeated-command evidence.
+- Friction: To explain context spend, the agent had to reopen heavier review
+  artifacts or rely on memory instead of reading a compact handoff section.
+- Time sink: Extra context was spent rediscovering that
+  `node tools/taskboard/cli.mjs context` and profiling docs were among the
+  largest inputs.
+- Likely cause: Context analytics was collected in `review.mjs`, but not
+  propagated through the normal reflection handoff.
+- Proposed improvement: Carry `context_use_summary` into reflection draft and
+  review, and require retrospectives to read it before opening raw review JSON
+  or long docs.
+- Follow-up owner: Current and future pipeline agents.
+- Status: Implemented.
+
 ## 2026-06-12 - Concept setup and visual proof sequencing
 
 - Context: The user selected a child-friendly meme evolution game direction,
