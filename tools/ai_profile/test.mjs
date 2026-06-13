@@ -301,6 +301,54 @@ test("status still flags missing context inputs in the current scope", () => {
   }
 });
 
+test("status recommends checkpoint helper for low wall-clock coverage", () => {
+  const dir = tempDir();
+  try {
+    const scope = join(dir, "scope.json");
+    const profile = join(dir, "low-coverage.jsonl");
+    const statusJson = join(dir, "status.json");
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope",
+      scope,
+      "--profile",
+      profile,
+      "--work-item",
+      "STATUS4",
+      "--iteration",
+      "coverage",
+    ]);
+    const futureTs = new Date(Date.now() + 31 * 60 * 1000).toISOString();
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "planning",
+      "--category",
+      "planning",
+      "--intent",
+      "future sparse checkpoint",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--ts",
+      futureTs,
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+
+    const status = readJson(statusJson);
+    assert.equal(status.low_profile_coverage, true);
+    assert.match(status.next_action, /checkpoint\.mjs/);
+    assert.doesNotMatch(status.next_action, /event\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("context_command records command output as measured context", () => {
   const dir = tempDir();
   try {
@@ -367,6 +415,134 @@ test("context_command records failing command and preserves exit code", () => {
     assert.equal(record.command_exit_code, 7);
     assert.equal(record.context_inputs.length, 1);
     assert.ok(record.context_inputs[0].chars >= "context command failed\n".length);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("checkpoint infers duration from previous profile record", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "checkpoint.jsonl");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "planning",
+      "--category",
+      "planning",
+      "--intent",
+      "previous event",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--ts",
+      "2026-06-13T10:00:00+05:00",
+    ]);
+    run([
+      "tools/ai_profile/checkpoint.mjs",
+      "--profile",
+      profile,
+      "--intent",
+      "manual planning checkpoint",
+      "--ts",
+      "2026-06-13T10:05:00+05:00",
+    ]);
+
+    const records = readJsonl(profile);
+    const checkpoint = records[1];
+    assert.equal(checkpoint.event_type, "checkpoint");
+    assert.equal(checkpoint.duration_ms, 300000);
+    assert.equal(checkpoint.duration_source, "since_previous_record");
+    assert.equal(checkpoint.duration_capped, false);
+    assert.equal(checkpoint.previous_profile_line, 1);
+    assert.equal(checkpoint.previous_profile_intent, "previous event");
+    assert.deepEqual(checkpoint.tools, ["ai_profile/checkpoint.mjs"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("checkpoint caps inferred duration", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "checkpoint-capped.jsonl");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "planning",
+      "--category",
+      "planning",
+      "--intent",
+      "previous event",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--ts",
+      "2026-06-13T10:00:00+05:00",
+    ]);
+    run([
+      "tools/ai_profile/checkpoint.mjs",
+      "--profile",
+      profile,
+      "--intent",
+      "capped checkpoint",
+      "--ts",
+      "2026-06-13T12:00:00+05:00",
+      "--max-duration-min",
+      "10",
+    ]);
+
+    const checkpoint = readJsonl(profile)[1];
+    assert.equal(checkpoint.duration_ms, 600000);
+    assert.equal(checkpoint.duration_capped, true);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("checkpoint explicit duration overrides inferred duration", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "checkpoint-explicit.jsonl");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "planning",
+      "--category",
+      "planning",
+      "--intent",
+      "previous event",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--ts",
+      "2026-06-13T10:00:00+05:00",
+    ]);
+    run([
+      "tools/ai_profile/checkpoint.mjs",
+      "--profile",
+      profile,
+      "--intent",
+      "explicit checkpoint",
+      "--ts",
+      "2026-06-13T12:00:00+05:00",
+      "--duration-ms",
+      "1234",
+    ]);
+
+    const checkpoint = readJsonl(profile)[1];
+    assert.equal(checkpoint.duration_ms, 1234);
+    assert.equal(checkpoint.duration_source, "explicit");
+    assert.equal(checkpoint.duration_capped, undefined);
   } finally {
     cleanup(dir);
   }

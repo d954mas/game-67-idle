@@ -235,6 +235,17 @@ Use `event.mjs` only for meaningful checkpoints: phase start/end, user
 correction, context compaction, major file-read batch, wrong assumption,
 manual visual finding, or handoff decision.
 
+For long non-command stretches, prefer:
+
+```powershell
+node tools/ai_profile/checkpoint.mjs --intent "Reviewed generated art and selected fixes" --category art --value productive
+```
+
+`checkpoint.mjs` records a duration from the previous profile record to the
+checkpoint timestamp. It caps inferred duration with `--max-duration-min`
+defaulting to 60, so an overnight or unknown gap is not treated as fully
+explained. Use `--duration-ms` when the elapsed time is known more precisely.
+
 For context-file reads, prefer the measured helper:
 
 ```powershell
@@ -302,6 +313,9 @@ Record tools by role:
   repeated, or validation commands so duration and exit code are captured
   automatically.
 - `event.mjs`: low-cost checkpoint writer for non-command events.
+- `checkpoint.mjs`: wall-clock checkpoint helper for manual, research, design,
+  review, and other non-command stretches. It infers `duration_ms` from the
+  previous profile record and caps long unknown gaps by default.
 - `context.mjs`: context-read checkpoint writer that measures local file
   character counts and fills `context_inputs` automatically.
 - `context_command.mjs`: context command wrapper that preserves command output
@@ -480,6 +494,9 @@ A "profiled session" is done when:
 - a focused long task started with `start.mjs`, or the retrospective explains
   why profiling began late;
 - command work used `run.mjs` for substantial validations/builds/audits;
+- long manual/research/design/review stretches used `checkpoint.mjs` with an
+  intent that explains the elapsed time, or the retrospective marks the gap as
+  unknown;
 - non-command context decisions used sparse `event.mjs` checkpoints, and local
   medium/high context reads used `context.mjs` where possible;
 - read-only commands that produced medium/high context used

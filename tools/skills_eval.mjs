@@ -285,6 +285,8 @@ const SKILL_CHECKS = [
       "tools/ai_profile/start.mjs --work-item <id> --iteration <name>",
       "run.mjs",
       "event.mjs",
+      "checkpoint.mjs",
+      "tools/ai_profile/checkpoint.mjs --intent <text>",
       "context.mjs",
       "context_command.mjs",
       "tools/ai_profile/context_command.mjs -- <command>",

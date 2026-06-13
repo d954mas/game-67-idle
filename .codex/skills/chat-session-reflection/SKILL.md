@@ -137,8 +137,9 @@ scope persists outside a single shell command.
 Inspect `wall_clock_coverage`, `low_profile_coverage`, and largest gaps before
 claiming the profile explains the whole session. Low coverage means the
 retrospective must name what likely happened in the unprofiled gaps, or add a
-next-cycle rule to place sparse `event.mjs` checkpoints during long manual,
-research, design, or review stretches.
+next-cycle rule to place `tools/ai_profile/checkpoint.mjs --intent <text>`
+checkpoints during long manual, research, design, or review stretches so the
+elapsed time is recorded with `duration_ms`.
 If review reports missing context input details, name the affected line/intents
 and add a next-cycle fix: use `tools/ai_profile/context.mjs --path <file>` for
 local medium/high context reads, or

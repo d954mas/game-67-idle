@@ -707,3 +707,19 @@ specific and reusable.
   keeping whole-profile totals for retrospective history.
 - Follow-up owner: Future profiling/tooling agents.
 - Status: Implemented in `T0083`.
+
+## 2026-06-13 - Wall-clock gaps need duration checkpoints
+
+- Context: After current-scope status stopped chasing stale context gaps, the
+  next live health issue was low wall-clock profile coverage.
+- Friction: `event.mjs` can mark a checkpoint, but without `duration_ms` it
+  does not improve coverage or explain elapsed manual time.
+- Time sink: Reflection still has to reconstruct long manual/research/design
+  stretches from memory.
+- Likely cause: The profiler had command duration wrappers but no low-overhead
+  manual checkpoint that derives duration from the previous profile event.
+- Proposed improvement: Add `tools/ai_profile/checkpoint.mjs` to record
+  non-command work duration since the last profile record, with a default cap
+  to avoid claiming unknown overnight gaps.
+- Follow-up owner: Future profiling/tooling agents.
+- Status: Implemented in `T0084`.

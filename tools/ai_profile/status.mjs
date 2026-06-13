@@ -185,7 +185,7 @@ function buildStatus(profilePath) {
   } else if (actionableMissingContextInputs > 0) {
     nextAction = "Use context.mjs for medium/high local context reads so context_inputs are measured.";
   } else if (lowCoverage) {
-    nextAction = "Add sparse event.mjs checkpoints during long manual/research/design stretches.";
+    nextAction = "Use checkpoint.mjs during long manual/research/design stretches so elapsed time is recorded with duration_ms.";
   } else if (!closeoutSeen) {
     nextAction = "At session end, run closeout.mjs to generate the reflection bundle.";
   } else if (!bundle.complete) {
