@@ -81,6 +81,21 @@ specific and reusable.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0110`.
 
+## 2026-06-13 - Successful validation output should be compact
+
+- Context: Validation batches repeatedly printed full stdout from successful
+  scoped checks, especially `node --test`, even when the summary was enough.
+- Friction: Passing test output consumed context and made the useful signal
+  harder to scan.
+- Time sink: Agents had to parse long successful output before seeing the
+  actual validation summary and next action.
+- Likely cause: `validation_run.mjs` inherited child stdout/stderr for every
+  check.
+- Proposed improvement: Suppress stdout/stderr for passing validation checks
+  while recording output character counts; always print failing output.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
+
 ## 2026-06-13 - Current scope tool use needs shares first
 
 - Context: Whole-profile runtime/captured-elapsed sections had totals and

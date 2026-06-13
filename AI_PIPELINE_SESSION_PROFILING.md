@@ -476,8 +476,9 @@ Record tools by role:
   checks by tier, records each command in the JSONL profile, and skips later
   checks after a failure unless `--continue-on-fail` is explicit. Each command
   record gets a shared `validation_batch_id`, plan risk, plan changes, tier,
-  and check id so reflection can separate a planned validation batch from ad
-  hoc repeated commands.
+  check id, and output character count so reflection can separate a planned
+  validation batch from ad hoc repeated commands. Passing command output is
+  compacted; failing command output is printed for diagnosis.
 - `taskboard summary`: low-context orientation for most resumes and short
   process iterations. Use it through `node tools/ai.mjs summary` so the output
   is measured.

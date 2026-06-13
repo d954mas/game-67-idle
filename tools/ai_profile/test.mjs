@@ -1584,6 +1584,47 @@ test("validation runner profiles checks and stops final after failure", () => {
   }
 });
 
+test("validation runner compacts passing output but prints failures", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "validation-output.jsonl");
+    const planJson = join(dir, "plan-output.json");
+    const summaryJson = join(dir, "summary-output.json");
+    const passCommand = `${JSON.stringify(process.execPath)} -e ${JSON.stringify("console.log('PASS_OUTPUT')")}`;
+    const failCommand = `${JSON.stringify(process.execPath)} -e ${JSON.stringify("console.error('FAIL_OUTPUT'); process.exit(4)")}`;
+    writeFileSync(planJson, `${JSON.stringify({
+      schema_version: 1,
+      risk: "medium",
+      changes: ["profiling"],
+      checks: [
+        { id: "pass-output", tier: "preflight", command: passCommand, why: "passing output", broad: false },
+        { id: "fail-output", tier: "scoped", command: failCommand, why: "failing output", broad: false },
+      ],
+      next_action: "test output",
+    })}\n`, "utf8");
+
+    const result = runRaw([
+      "tools/ai_profile/validation_run.mjs",
+      "--plan", planJson,
+      "--profile", profile,
+      "--json-output", summaryJson,
+    ]);
+    assert.equal(result.status, 4);
+    assert.doesNotMatch(result.stdout, /PASS_OUTPUT/);
+    assert.match(result.stdout, /pass preflight pass-output \(\d+ms, output \d+ chars suppressed\)/);
+    assert.match(result.stderr, /FAIL_OUTPUT/);
+
+    const summary = readJson(summaryJson);
+    assert.equal(summary.executed[0].output_suppressed, true);
+    assert.equal(summary.executed[1].output_suppressed, false);
+    const records = readJsonl(profile);
+    assert.equal(records[0].command_output_suppressed, true);
+    assert.equal(records[1].command_output_suppressed, undefined);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("profile review summarizes validation batches", () => {
   const dir = tempDir();
   try {

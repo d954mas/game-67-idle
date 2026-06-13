@@ -249,3 +249,6 @@ None.
   placeholder with `tools/ai_profile/check_touched_js.mjs`, which checks
   staged, unstaged, and untracked `.js/.mjs/.cjs` files inside validation
   batches.
+- 2026-06-13: Compacted passing validation command output in
+  `validation_run.mjs` while preserving full failing output and recording output
+  character counts for later reflection.

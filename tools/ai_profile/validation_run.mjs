@@ -23,7 +23,8 @@ options:
 Runs non-placeholder validation checks from plan_validation.mjs and records each
 executed command in the AI profile. Broad/final checks run once at the end of
 the selected batch and are skipped after earlier failures unless
---continue-on-fail is explicit.`);
+--continue-on-fail is explicit. Passing command output is compact by default;
+failing command output is always printed.`);
   process.exit(2);
 }
 
@@ -80,8 +81,13 @@ function checksByTier(plan, selectedTiers) {
   return checks.filter((check) => selectedTiers.has(check.tier));
 }
 
-function recordValidation(values, check, result, durationMs, batchId, plan) {
+function outputText(result) {
+  return `${result.stdout || ""}${result.stderr || ""}`;
+}
+
+function recordValidation(values, check, result, durationMs, batchId, plan, outputSuppressed) {
   const exitCode = typeof result.status === "number" ? result.status : 1;
+  const commandOutputChars = outputText(result).length;
   const recordValues = {
     ...values,
     phase: stringArg(values, "phase", "validation"),
@@ -101,7 +107,9 @@ function recordValidation(values, check, result, durationMs, batchId, plan) {
     validation_plan_risk: plan.risk || "",
     validation_plan_changes: plan.changes || [],
     command_exit_code: exitCode,
+    command_output_chars: commandOutputChars,
   };
+  if (outputSuppressed) extra.command_output_suppressed = true;
   if (result.error) extra.command_error = result.error.message;
   const profilePath = stringArg(values, "profile", "");
   return appendRecord(profilePath, buildRecord(recordValues, extra));
@@ -114,13 +122,21 @@ function runCheck(values, check, batchId, plan) {
     cwd: process.cwd(),
     env: process.env,
     shell: true,
-    stdio: "inherit",
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
   });
   const ended = process.hrtime.bigint();
   const durationMs = Number((ended - started) / 1000000n);
+  const exitCode = typeof result.status === "number" ? result.status : 1;
+  const commandOutput = outputText(result);
+  const outputSuppressed = exitCode === 0 && commandOutput.length > 0;
+  if (!outputSuppressed) {
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+  }
   let profile = "";
   try {
-    profile = recordValidation(values, check, result, durationMs, batchId, plan);
+    profile = recordValidation(values, check, result, durationMs, batchId, plan, outputSuppressed);
   } catch (error) {
     console.error(`profile validation record failed: ${error.message}`);
   }
@@ -128,9 +144,11 @@ function runCheck(values, check, batchId, plan) {
     id: check.id || "",
     tier: check.tier || "",
     command: check.command || "",
-    exit_code: typeof result.status === "number" ? result.status : 1,
-    result: result.status === 0 ? "pass" : "fail",
+    exit_code: exitCode,
+    result: exitCode === 0 ? "pass" : "fail",
     duration_ms: durationMs,
+    output_chars: commandOutput.length,
+    output_suppressed: outputSuppressed,
     profile,
   };
 }
@@ -202,7 +220,8 @@ console.log(`Executed: ${summary.executed.length}`);
 console.log(`Skipped: ${summary.skipped.length}`);
 console.log(`Result: ${summary.passed ? "pass" : "fail"}`);
 for (const item of summary.executed) {
-  console.log(`- ${item.result} ${item.tier} ${item.id || shellQuote(item.command)} (${item.duration_ms}ms)`);
+  const output = item.output_suppressed ? `, output ${item.output_chars} chars suppressed` : "";
+  console.log(`- ${item.result} ${item.tier} ${item.id || shellQuote(item.command)} (${item.duration_ms}ms${output})`);
 }
 for (const item of summary.skipped) {
   console.log(`- skipped ${item.tier} ${item.id || shellQuote(item.command)}: ${item.reason}`);
