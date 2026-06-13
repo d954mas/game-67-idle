@@ -340,7 +340,9 @@ Record tools by role:
   Status also reports captured baseline manifests from
   `tmp/session_profiles/baselines/`; if a clean profile already has a captured
   baseline, use the reported baseline for the next comparison instead of
-  recapturing.
+  recapturing. When a baseline exists, status reports whether the latest
+  comparison JSON is missing, stale, regressed, or fresh, and prints the exact
+  `compare_reviews.mjs` command when comparison evidence must be refreshed.
 - `test.mjs`: regression test suite for profile CLI behavior. Run
   `node --test tools/ai_profile/test.mjs` after profiler tool changes.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
@@ -601,7 +603,8 @@ A "profiled session" is done when:
   passed later;
 - `compare_reviews.mjs` is used when a previous clean review JSON should act
   as a baseline for a later profile; inspect current-scope regressions first
-  and treat whole-profile deltas as trend evidence;
+  and treat whole-profile deltas as trend evidence; check `status.mjs` first
+  so missing or stale comparison artifacts are regenerated before trend claims;
 - `capture_baseline.mjs` is used before relying on a clean review JSON as a
   future baseline, because normal closeout/review filenames are overwritten by
   later runs; check `status.mjs` first and recapture only when status reports

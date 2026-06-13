@@ -314,6 +314,8 @@ const SKILL_CHECKS = [
       "compare_reviews.mjs",
       "baseline.review.json",
       "clean baseline review JSON",
+      "missing, stale, regressed, or fresh",
+      "stale baseline comparison",
       "current-scope regressions",
       "whole-profile deltas",
       "missing context input",

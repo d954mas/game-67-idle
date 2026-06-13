@@ -107,7 +107,8 @@ is unclear. It is read-only and reports latest event, closeout/bundle presence,
 work-item coverage, missing context inputs, wall-clock coverage, failed
 records, recovered versus unresolved failed records, and the next profiling
 action. It also reports captured baseline manifests when clean review JSON has
-already been preserved under `tmp/session_profiles/baselines/`.
+already been preserved under `tmp/session_profiles/baselines/`, plus whether
+the latest baseline comparison is missing, stale, regressed, or fresh.
 Before relying on generated summary/review/follow-up artifacts, check that
 status reports `Bundle fresh: yes`; if the bundle is stale, rerun
 `tools/ai_profile/closeout.mjs` or the stale review/follow-up commands.
@@ -150,7 +151,9 @@ clean baseline review JSON is available, run
 <current.review.json> --output tmp/session_profiles/<name>.compare.md
 --json-output tmp/session_profiles/<name>.compare.json` before writing trend
 claims. Treat current-scope regressions from the compare output as urgent and
-whole-profile deltas as historical trend evidence.
+whole-profile deltas as historical trend evidence. If status reports a missing
+or stale baseline comparison, run the exact compare command from status before
+writing trend claims.
 For multi-task profiles, inspect `work_items`, `iterations`, and
 `repeated_broad_final_by_work_item` before calling repeated validation waste.
 When review JSON includes `current_scope`, separate current-scope findings from

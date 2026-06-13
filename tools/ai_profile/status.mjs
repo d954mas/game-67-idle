@@ -160,6 +160,52 @@ function readBaselineStatus(profilePath) {
   };
 }
 
+function compareArtifactPaths(profilePath, baseline) {
+  if (!baseline) return null;
+  const label = baseline.label || basename(baseline.baseline_review || "baseline").replace(/\.review\.json$/i, "");
+  const dir = dirname(profilePath);
+  return {
+    label,
+    review_json: artifactPath(profilePath, "review.json"),
+    compare_md: join(dir, `${label}.compare.md`),
+    compare_json: join(dir, `${label}.compare.json`),
+  };
+}
+
+function readComparisonStatus(profilePath, baseline) {
+  const paths = compareArtifactPaths(profilePath, baseline);
+  if (!paths || !baseline) {
+    return { available: false, status: "none", reason: "no baseline captured", paths: null, verdict: "", current_regressions: 0, compare_command: "" };
+  }
+  const compareCommand = `node tools/ai_profile/compare_reviews.mjs ${baseline.baseline_review} ${paths.review_json} --output ${paths.compare_md} --json-output ${paths.compare_json}`;
+  const reviewMtime = fileMtimeMs(paths.review_json);
+  const baselineMtime = fileMtimeMs(baseline.baseline_review);
+  const compareMtime = fileMtimeMs(paths.compare_json);
+  if (compareMtime === undefined) {
+    return { available: true, status: "missing", reason: "comparison json is missing", paths, verdict: "", current_regressions: 0, compare_command: compareCommand };
+  }
+  const staleAgainstReview = reviewMtime !== undefined && compareMtime + 1 < reviewMtime;
+  const staleAgainstBaseline = baselineMtime !== undefined && compareMtime + 1 < baselineMtime;
+  if (staleAgainstReview || staleAgainstBaseline) {
+    return { available: true, status: "stale", reason: staleAgainstReview ? "comparison is older than current review" : "comparison is older than baseline", paths, verdict: "", current_regressions: 0, compare_command: compareCommand };
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(paths.compare_json, "utf8"));
+    const regressions = Array.isArray(parsed.current_regressions) ? parsed.current_regressions.length : 0;
+    return {
+      available: true,
+      status: regressions > 0 ? "regressed" : "fresh",
+      reason: regressions > 0 ? "current-scope regressions present" : "comparison is fresh",
+      paths,
+      verdict: parsed.verdict || "",
+      current_regressions: regressions,
+      compare_command: compareCommand,
+    };
+  } catch (error) {
+    return { available: true, status: "invalid", reason: `comparison json is invalid: ${error.message}`, paths, verdict: "", current_regressions: 0, compare_command: compareCommand };
+  }
+}
+
 function latestRecord(records) {
   return [...records].sort((a, b) => (eventTime(b) || 0) - (eventTime(a) || 0))[0];
 }
@@ -224,11 +270,16 @@ function buildStatus(profilePath) {
   const coverage = coverageStats(records);
   const bundle = bundleStatus(profilePath);
   const baselines = readBaselineStatus(profilePath);
+  const comparison = readComparisonStatus(profilePath, baselines.latest_manifest);
   const scope = readProfileScope();
   const latest = latestRecord(records);
 
   let nextAction = baselines.latest_manifest
-    ? `Use captured baseline ${baselines.latest_manifest.baseline_review} for the next compare_reviews.mjs run.`
+    ? comparison.status === "fresh"
+      ? `Use fresh comparison ${comparison.paths.compare_json} as baseline trend evidence.`
+      : comparison.status === "regressed"
+        ? `Inspect current-scope regressions in ${comparison.paths.compare_json} before writing reflection.`
+        : `Run baseline comparison: ${comparison.compare_command}`
     : `Capture this clean review with \`node tools/ai_profile/capture_baseline.mjs ${artifactPath(profilePath, "review.json")} --label <name>\`.`;
   const scopeReady = scope.valid && Boolean(scope.work_item);
   const scopedRecords = scopeReady ? currentScopeRecords(records, scope) : [];
@@ -284,6 +335,7 @@ function buildStatus(profilePath) {
     closeout_seen: closeoutSeen,
     bundle,
     baselines,
+    comparison,
     work_item_coverage: {
       missing_records: missingWorkItem,
       coverage_ratio: records.length > 0 ? (records.length - missingWorkItem) / records.length : undefined,
@@ -324,6 +376,7 @@ function renderMarkdown(status) {
   lines.push(`Bundle complete: ${status.bundle.complete ? "yes" : "no"}`);
   lines.push(`Bundle fresh: ${status.bundle.fresh ? "yes" : "no"}${status.bundle.stale_artifacts.length > 0 ? ` (${status.bundle.stale_artifacts.join(", ")} stale)` : ""}`);
   lines.push(`Captured baselines: ${status.baselines.count}${status.baselines.latest_manifest ? ` (latest: ${status.baselines.latest_manifest.label || basename(status.baselines.latest_manifest.manifest_path)})` : ""}`);
+  lines.push(`Baseline comparison: ${status.comparison.status}${status.comparison.verdict ? ` (${status.comparison.verdict})` : ""}`);
   lines.push(`Work-item coverage: ${formatPercent(status.work_item_coverage.coverage_ratio)} (${status.work_item_coverage.missing_records} missing)`);
   lines.push(`Missing context inputs: ${status.missing_context_inputs}`);
   lines.push(`Current scope records: ${status.current_scope.records} (${status.current_scope.missing_context_inputs} missing context inputs, ${status.current_scope.missing_work_item_records} missing work items)`);
@@ -352,6 +405,17 @@ function renderMarkdown(status) {
     lines.push("- errors:");
     for (const error of status.baselines.errors) lines.push(`  - ${error}`);
   }
+  lines.push("");
+  lines.push("## Baseline Comparison");
+  lines.push(`- status: ${status.comparison.status}`);
+  lines.push(`- reason: ${status.comparison.reason}`);
+  if (status.comparison.paths) {
+    lines.push(`- compare json: ${status.comparison.paths.compare_json}`);
+    lines.push(`- compare markdown: ${status.comparison.paths.compare_md}`);
+  }
+  if (status.comparison.verdict) lines.push(`- verdict: ${status.comparison.verdict}`);
+  lines.push(`- current-scope regressions: ${status.comparison.current_regressions}`);
+  if (status.comparison.compare_command) lines.push(`- command: ${status.comparison.compare_command}`);
   if (status.errors.length > 0) {
     lines.push("");
     lines.push("## Errors");

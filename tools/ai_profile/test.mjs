@@ -601,9 +601,156 @@ test("status reports latest captured baseline when one exists", () => {
     assert.equal(status.baselines.count, 1);
     assert.equal(status.baselines.latest_manifest.label, "clean");
     assert.equal(status.baselines.latest_manifest.baseline_review, resolve(baselineReview));
-    assert.match(status.next_action, /captured baseline/);
+    assert.equal(status.comparison.status, "missing");
     assert.match(status.next_action, /compare_reviews\.mjs/);
     assert.doesNotMatch(status.next_action, /capture_baseline\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status reports stale baseline comparison", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "stale-compare.jsonl");
+    const scope = join(dir, "scope.json");
+    const statusJson = join(dir, "status.json");
+    const baselineDir = join(dir, "baselines");
+    const baselineReview = join(baselineDir, "clean.review.json");
+    const manifest = join(baselineDir, "clean.manifest.json");
+    const compareJson = join(dir, "clean.compare.json");
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "BASE", "--iteration", "stale"]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "session_closeout",
+      "--category", "reflection",
+      "--intent", "clean closeout",
+      "--result", "pass",
+      "--value", "necessary_overhead",
+      "--work-item", "BASE",
+      "--iteration", "stale",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    writeBundleArtifacts(profile);
+    mkdirSync(baselineDir, { recursive: true });
+    writeFileSync(baselineReview, "{}\n", "utf8");
+    writeFileSync(manifest, `${JSON.stringify({
+      schema_version: 1,
+      label: "clean",
+      captured_at: "2026-06-13T10:05:00+05:00",
+      baseline_review: resolve(baselineReview),
+    })}\n`, "utf8");
+    writeFileSync(compareJson, `${JSON.stringify({ verdict: "stable", current_regressions: [] })}\n`, "utf8");
+    setMtime(profile, "2026-06-13T05:00:00Z");
+    for (const suffix of ["summary.md", "review.md", "review.json", "followups.md", "followups.json"]) {
+      setMtime(profile.replace(/\.jsonl$/i, `.${suffix}`), "2026-06-13T05:10:00Z");
+    }
+    setMtime(compareJson, "2026-06-13T05:00:00Z");
+
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const status = readJson(statusJson);
+    assert.equal(status.comparison.status, "stale");
+    assert.match(status.comparison.reason, /older than current review/);
+    assert.match(status.next_action, /Run baseline comparison/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status reports current-scope regressions from baseline comparison", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "regressed-compare.jsonl");
+    const scope = join(dir, "scope.json");
+    const statusJson = join(dir, "status.json");
+    const baselineDir = join(dir, "baselines");
+    const baselineReview = join(baselineDir, "clean.review.json");
+    const manifest = join(baselineDir, "clean.manifest.json");
+    const compareJson = join(dir, "clean.compare.json");
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "BASE", "--iteration", "regressed"]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "session_closeout",
+      "--category", "reflection",
+      "--intent", "clean closeout",
+      "--result", "pass",
+      "--value", "necessary_overhead",
+      "--work-item", "BASE",
+      "--iteration", "regressed",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    writeBundleArtifacts(profile);
+    mkdirSync(baselineDir, { recursive: true });
+    writeFileSync(baselineReview, "{}\n", "utf8");
+    writeFileSync(manifest, `${JSON.stringify({
+      schema_version: 1,
+      label: "clean",
+      captured_at: "2026-06-13T10:05:00+05:00",
+      baseline_review: resolve(baselineReview),
+    })}\n`, "utf8");
+    writeFileSync(compareJson, `${JSON.stringify({
+      verdict: "regressed",
+      current_regressions: [{ key: "current_missing_context_inputs" }],
+    })}\n`, "utf8");
+
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const status = readJson(statusJson);
+    assert.equal(status.comparison.status, "regressed");
+    assert.equal(status.comparison.current_regressions, 1);
+    assert.match(status.next_action, /Inspect current-scope regressions/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status reports fresh baseline comparison without regressions", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "fresh-compare.jsonl");
+    const scope = join(dir, "scope.json");
+    const statusJson = join(dir, "status.json");
+    const baselineDir = join(dir, "baselines");
+    const baselineReview = join(baselineDir, "clean.review.json");
+    const manifest = join(baselineDir, "clean.manifest.json");
+    const compareJson = join(dir, "clean.compare.json");
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "BASE", "--iteration", "fresh"]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "session_closeout",
+      "--category", "reflection",
+      "--intent", "clean closeout",
+      "--result", "pass",
+      "--value", "necessary_overhead",
+      "--work-item", "BASE",
+      "--iteration", "fresh",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    writeBundleArtifacts(profile);
+    mkdirSync(baselineDir, { recursive: true });
+    writeFileSync(baselineReview, "{}\n", "utf8");
+    writeFileSync(manifest, `${JSON.stringify({
+      schema_version: 1,
+      label: "clean",
+      captured_at: "2026-06-13T10:05:00+05:00",
+      baseline_review: resolve(baselineReview),
+    })}\n`, "utf8");
+    writeFileSync(compareJson, `${JSON.stringify({
+      verdict: "stable",
+      current_regressions: [],
+    })}\n`, "utf8");
+
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const status = readJson(statusJson);
+    assert.equal(status.comparison.status, "fresh");
+    assert.equal(status.comparison.verdict, "stable");
+    assert.match(status.next_action, /fresh comparison/);
+    assert.doesNotMatch(status.next_action, /Run baseline comparison/);
   } finally {
     cleanup(dir);
   }

@@ -891,3 +891,20 @@ specific and reusable.
   manifests and change next action to capture only when no baseline exists.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0094`.
+
+## 2026-06-13 - Status should know whether baseline was compared
+
+- Trigger: `status.mjs` reported captured baselines but did not know whether
+  the current review JSON had already been compared against the latest
+  baseline.
+- Symptom: Agents still had to inspect scratch files or rerun comparison
+  manually before making trend claims.
+- Time sink: Reflection setup can repeat compare work or miss a stale
+  comparison artifact.
+- Likely cause: Baseline capture and baseline comparison were separate tools,
+  but status only knew about capture manifests.
+- Proposed improvement: Teach `status.mjs` to report comparison status
+  (`missing`, `stale`, `regressed`, `fresh`) and print the exact
+  `compare_reviews.mjs` command when comparison evidence is missing or stale.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0095`.
