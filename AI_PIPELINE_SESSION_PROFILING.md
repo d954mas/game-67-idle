@@ -195,6 +195,17 @@ Use `event.mjs` only for meaningful checkpoints: phase start/end, user
 correction, context compaction, major file-read batch, wrong assumption,
 manual visual finding, or handoff decision.
 
+For context-file reads, prefer the measured helper:
+
+```powershell
+node tools/ai_profile/context.mjs --phase context --intent "Load current rules" --path AGENTS.md --path tasks/README.md --reason "session start"
+```
+
+`context.mjs` measures character counts, records `files_read`, fills
+`context_inputs`, and assigns context risk automatically unless
+`--context-risk` is provided. Use it instead of manually typing
+`--context-input` when the source is a local file.
+
 Use project-relative paths when possible. `--context-input` also accepts
 Windows absolute paths because the parser treats the first numeric segment as
 the character-count separator.
@@ -216,12 +227,15 @@ Record tools by role:
   repeated, or validation commands so duration and exit code are captured
   automatically.
 - `event.mjs`: low-cost checkpoint writer for non-command events.
+- `context.mjs`: context-read checkpoint writer that measures local file
+  character counts and fills `context_inputs` automatically.
 - `closeout.mjs`: end-of-session helper that appends a final closeout event
   and writes a scratch summary artifact.
 - `review.mjs`: reflection prep helper that turns a JSONL profile into
   priority findings: waste/rework, failures, blockers, context hotspots,
   repeated commands, repeated command scope (`preflight`, `scoped`,
-  `broad/final`, `unknown`), and suggested pipeline actions.
+  `broad/final`, `unknown`), missing context input details, and suggested
+  pipeline actions.
 - `plan_validation.mjs`: pre-validation helper that prints a narrow-to-broad
   validation ladder for the changed work kind. Use it when `review.mjs` reports
   repeated commands, before broad reusable-base checks, or when the right
@@ -247,6 +261,9 @@ expensive context sources.
 Prefer `node tools/taskboard/cli.mjs context` for current state. Reading the
 full `tasks/STATUS.md` is justified only when updating it, auditing a specific
 claim, or following an evidence path from the digest.
+When reading any medium/high-cost local context file directly, record it with
+`tools/ai_profile/context.mjs` so the later review can name the file instead of
+only reporting missing metadata.
 
 Examples:
 
@@ -333,7 +350,8 @@ A "profiled session" is done when:
 
 - JSONL exists and parses;
 - command work used `run.mjs` for substantial validations/builds/audits;
-- non-command context decisions used sparse `event.mjs` checkpoints;
+- non-command context decisions used sparse `event.mjs` checkpoints, and local
+  medium/high context reads used `context.mjs` where possible;
 - the summary script passes and writes a scratch `.summary.md` closeout when
   the session is long enough to reflect on;
 - `closeout.mjs` is used for normal session closeout unless a custom summary

@@ -105,6 +105,9 @@ Then run `tools/ai_profile/review.mjs <profile.jsonl> --output
 tmp/session_profiles/<name>.review.md` to extract waste/rework, failures,
 blockers, context hotspots, repeated commands, and suggested pipeline actions
 before writing the human retrospective.
+If review reports missing context input details, name the affected line/intents
+and add a next-cycle fix: use `tools/ai_profile/context.mjs --path <file>` for
+local medium/high context reads so file sizes are measured automatically.
 If profile review finds repeated validation or unclear validation scope, run
 `tools/ai_profile/plan_validation.mjs --change <kind> --risk <risk>` before the
 next validation loop and report the narrow/scoped/broad ladder. Treat repeated

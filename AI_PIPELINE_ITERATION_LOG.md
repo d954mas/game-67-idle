@@ -458,3 +458,21 @@ specific and reusable.
   repeated broad/final gates separately.
 - Follow-up owner: Future profiling/reflection agents.
 - Status: Implemented in `T0068`.
+
+## 2026-06-13 - Context input sizes should be measured, not hand-entered
+
+- Context: Live profile review kept reporting medium/high context records that
+  lacked `context_inputs`. The agent could say context was expensive, but not
+  always name which file or source consumed it.
+- Friction: Manual `--context-input path:chars:reason` is easy to skip and easy
+  to mistype, especially with Windows paths.
+- Time sink: Retrospectives then spend effort reconstructing context cost from
+  memory or broad file reads.
+- Likely cause: The pipeline had `event.mjs` for manual context checkpoints but
+  no measured helper for local file inputs.
+- Proposed improvement: Add `tools/ai_profile/context.mjs` to measure local
+  file character counts and append `files_read` plus `context_inputs`
+  automatically. `review.mjs` should also list missing context-input lines and
+  intents, not just the count.
+- Follow-up owner: Future profiling/reflection agents.
+- Status: Implemented in `T0069`.

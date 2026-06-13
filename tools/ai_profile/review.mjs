@@ -225,6 +225,15 @@ if (topContext.length === 0 && highContext.length === 0) {
   }
 }
 
+emit("\n## Missing Context Input Details");
+if (missingContextInputs.length === 0) {
+  emit("- none");
+} else {
+  for (const record of missingContextInputs.slice(0, 20)) {
+    emit(`- line ${record.__line} [${record.context_risk}]: ${record.intent}`);
+  }
+}
+
 emit("\n## Repeated Commands");
 if (repeatedCommands.length === 0) {
   emit("- none");
