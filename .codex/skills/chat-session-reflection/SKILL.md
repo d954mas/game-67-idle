@@ -108,6 +108,9 @@ before writing the human retrospective.
 When the review findings need to feed another tool or agent, add
 `--json-output tmp/session_profiles/<name>.review.json` and treat that JSON as
 scratch telemetry unless the lead asks to preserve it.
+When review JSON exists, use `tools/ai_profile/followups.mjs` to produce draft
+next actions, then promote only still-relevant drafts into tasks, rules, or
+tools after checking current taskboard state.
 If review reports missing context input details, name the affected line/intents
 and add a next-cycle fix: use `tools/ai_profile/context.mjs --path <file>` for
 local medium/high context reads so file sizes are measured automatically.

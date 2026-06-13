@@ -287,6 +287,7 @@ const SKILL_CHECKS = [
       "closeout.mjs",
       "review.mjs",
       "plan_validation.mjs",
+      "followups.mjs",
       "missing context input",
       "--json-output",
       "--output",

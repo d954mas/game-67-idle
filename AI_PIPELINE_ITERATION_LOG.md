@@ -493,3 +493,22 @@ specific and reusable.
   input details, and suggested pipeline actions.
 - Follow-up owner: Future profiling/reflection/tooling agents.
 - Status: Implemented in `T0070`.
+
+## 2026-06-13 - Review JSON needs safe follow-up drafts
+
+- Context: `review.mjs --json-output` made findings consumable by tools, but
+  the next step still required a human/agent to manually translate those
+  findings into possible tasks or rule changes.
+- Friction: Direct auto-task creation risks duplicating existing tasks or
+  preserving findings that were already fixed in the current iteration.
+- Time sink: Without a draft generator, every reflection loop repeats the same
+  interpretation of repeated broad validation, missing context inputs, failures,
+  and waste/rework.
+- Likely cause: Structured review output existed, but there was no safe
+  intermediate artifact between "finding" and "task".
+- Proposed improvement: Add `tools/ai_profile/followups.mjs` to generate
+  reviewable markdown/JSON follow-up drafts from review JSON. Promotion to real
+  task/rule/tool remains a deliberate agent decision after checking current
+  state.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0071`.

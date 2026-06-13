@@ -344,6 +344,16 @@ command scopes, missing context-input details, and suggested pipeline actions.
 Keep it in `tmp/session_profiles/` unless the lead explicitly asks to preserve
 it.
 
+To turn structured findings into reviewable next actions, generate follow-up
+drafts:
+
+```powershell
+node tools/ai_profile/followups.mjs tmp/session_profiles/session_profile_YYYY-MM-DD.review.json --output tmp/session_profiles/session_profile_YYYY-MM-DD.followups.md --json-output tmp/session_profiles/session_profile_YYYY-MM-DD.followups.json
+```
+
+Follow-up drafts are not tasks yet. Promote only still-relevant items after
+checking current tasks and recent commits.
+
 When the review shows repeated broad commands, plan the next validation loop
 before running it:
 
@@ -370,6 +380,8 @@ A "profiled session" is done when:
 - `review.mjs` is used before deeper reflection when a profile exists;
 - `review.mjs --json-output` is used when another tool/agent will consume the
   findings instead of a human reading the markdown;
+- `followups.mjs` is used when review JSON should become draft next actions
+  for task/rule/tool promotion;
 - `plan_validation.mjs` is used before rerunning broad validation after the
   profile review has identified repeated commands or validation waste;
 - the final response names profile path and summary path;

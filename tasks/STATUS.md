@@ -91,6 +91,7 @@ Active task:
 - `T0068` Classify validation command scope in AI profile review: in review.
 - `T0069` Add automatic AI context input capture: in review.
 - `T0070` Add machine-readable AI profile review output: in review.
+- `T0071` Generate follow-up actions from AI profile review JSON: in review.
 
 Current visual proof:
 
