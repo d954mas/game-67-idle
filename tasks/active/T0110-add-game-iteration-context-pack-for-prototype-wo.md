@@ -230,3 +230,6 @@ None.
 - 2026-06-13: Added context hotspot totals and per-hotspot shares to reflection
   review JSON/Markdown so context pressure is ranked without manual character
   summing.
+- 2026-06-13: Added repeated-command totals and per-scope/classification shares
+  to reflection review JSON/Markdown so command repetition bottlenecks are
+  visible without manual count summing.

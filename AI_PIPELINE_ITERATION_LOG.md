@@ -32,6 +32,22 @@ specific and reusable.
 - Status:
 ```
 
+## 2026-06-13 - Repeated commands need totals and shares
+
+- Context: Reflection review classified repeated commands by scope and cause,
+  but did not show total repeated occurrences or each class's share.
+- Friction: A reader could see many repeated commands, but still had to sum
+  scoped/preflight/broad-final counts before deciding where repetition was
+  concentrated.
+- Time sink: Repeated-command analysis stayed partly manual after runtime and
+  context sections had already gained totals and shares.
+- Likely cause: Repeated command review was built as a diagnostic list before
+  the profiling handoff switched to ranked bottleneck summaries.
+- Proposed improvement: Add total repeated occurrences, classified occurrence
+  totals, and per-row shares to generated reflection review JSON/Markdown.
+- Follow-up owner: Future profiling/reflection/tooling agents.
+- Status: Implemented in `T0110`.
+
 ## 2026-06-13 - Context hotspots need totals and shares
 
 - Context: Reflection review listed context hotspot character counts, but did

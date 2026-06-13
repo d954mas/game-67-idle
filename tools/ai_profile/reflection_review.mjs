@@ -103,6 +103,19 @@ function contextSummaryWithTotals(summary) {
   };
 }
 
+function repeatedCommandsWithTotals(summary) {
+  const byScope = asArray(summary?.by_scope);
+  const classification = asArray(summary?.classification);
+  return {
+    ...(summary || {}),
+    by_scope: byScope,
+    classification,
+    validation_batches: asArray(summary?.validation_batches),
+    repeated_total_occurrences: sumField(byScope, "count"),
+    classification_total_occurrences: sumField(classification, "count"),
+  };
+}
+
 function hasCapturedElapsedTools(tools) {
   return asArray(tools).some((item) => toolCapturedElapsed(item));
 }
@@ -232,6 +245,7 @@ function buildReview(draft, draftPath) {
   const toolRuntimeSummary = runtimeToolSummary(toolUseSummary);
   const capturedElapsed = capturedElapsedSummary(toolUseSummary);
   const contextSummary = contextSummaryWithTotals(draft.context_use_summary);
+  const repeatedCommands = repeatedCommandsWithTotals(draft.repeated_commands);
 
   return {
     schema_version: 1,
@@ -251,7 +265,7 @@ function buildReview(draft, draftPath) {
     },
     historical_lessons: historicalLessons,
     suppressed_historical_findings: asArray(draft.suppressed_historical_findings),
-    repeated_commands: draft.repeated_commands || {},
+    repeated_commands: repeatedCommands,
     tool_use_summary: toolUseSummary,
     tool_runtime_summary: toolRuntimeSummary,
     tool_runtime_total_ms: sumField(toolRuntimeSummary, "runtime_ms"),
@@ -422,20 +436,31 @@ function renderMarkdown(review, draftPath) {
   }
   lines.push("");
   lines.push("## Repeated Command Review");
-  const byScope = asArray(review.repeated_commands.by_scope);
+  const repeatedCommands = review.repeated_commands || {};
+  const byScope = asArray(repeatedCommands.by_scope);
+  const repeatedTotal = Number(repeatedCommands.repeated_total_occurrences || sumField(byScope, "count"));
   if (byScope.length === 0) {
     lines.push("- none");
   } else {
-    for (const item of byScope) lines.push(`- ${item.scope || "unknown"}: ${item.count || 0}`);
-    if (Number(review.repeated_commands.unbatched_broad_final_occurrences || 0) > 0) {
-      lines.push(`- unbatched broad/final occurrences: ${review.repeated_commands.unbatched_broad_final_occurrences}`);
+    lines.push(`- total repeated occurrences: ${repeatedTotal}`);
+    for (const item of byScope) {
+      const count = Number(item.count || 0);
+      lines.push(`- ${item.scope || "unknown"}: ${count}, share=${formatShare(count, repeatedTotal)}`);
+    }
+    if (Number(repeatedCommands.unbatched_broad_final_occurrences || 0) > 0) {
+      lines.push(`- unbatched broad/final occurrences: ${repeatedCommands.unbatched_broad_final_occurrences}`);
     }
   }
-  const validationBatches = asArray(review.repeated_commands.validation_batches);
-  const classifications = asArray(review.repeated_commands.classification);
+  const validationBatches = asArray(repeatedCommands.validation_batches);
+  const classifications = asArray(repeatedCommands.classification);
+  const classificationTotal = Number(repeatedCommands.classification_total_occurrences || sumField(classifications, "count"));
   if (classifications.length > 0) {
+    lines.push(`- classified repeated occurrences: ${classificationTotal}`);
     lines.push("- classification:");
-    for (const item of classifications) lines.push(`  - ${item.count || 0}x ${item.classification || "unknown"} [${item.scope || "unknown"}]: ${item.command || ""}`);
+    for (const item of classifications) {
+      const count = Number(item.count || 0);
+      lines.push(`  - ${count}x ${item.classification || "unknown"}, share=${formatShare(count, classificationTotal)} [${item.scope || "unknown"}]: ${item.command || ""}`);
+    }
   }
   if (validationBatches.length > 0) {
     lines.push("- validation batches:");

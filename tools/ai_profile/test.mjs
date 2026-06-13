@@ -2609,6 +2609,11 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.match(result.stdout, /total hotspot chars: 27455/);
     assert.match(result.stdout, /AI_PIPELINE_SESSION_PROFILING\.md: 27455 chars, share=100\.0%/);
     assert.match(result.stdout, /guardrail_rerun_review/);
+    assert.match(result.stdout, /total repeated occurrences: 4/);
+    assert.match(result.stdout, /scoped: 3, share=75\.0%/);
+    assert.match(result.stdout, /broad\/final: 1, share=25\.0%/);
+    assert.match(result.stdout, /classified repeated occurrences: 3/);
+    assert.match(result.stdout, /3x guardrail_rerun_review, share=100\.0% \[scoped\]/);
     assert.match(result.stdout, /validation batches/);
     assert.match(result.stdout, /batch-review/);
     assert.match(result.stdout, /Top Improvements/);
@@ -2645,6 +2650,8 @@ test("reflection review separates clean current scope from historical lessons", 
     assert.equal(review.tool_use_summary[0].tool, "ai_profile/gap_checkpoint.mjs");
     assert.equal(review.context_use_summary.hotspots[0].path, "AI_PIPELINE_SESSION_PROFILING.md");
     assert.equal(review.context_use_summary.total_hotspot_chars, 27455);
+    assert.equal(review.repeated_commands.repeated_total_occurrences, 4);
+    assert.equal(review.repeated_commands.classification_total_occurrences, 3);
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs validate")));
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs start")));
     assert.ok(review.top_improvements.some((item) => item.includes("node tools/ai.mjs focus")));
