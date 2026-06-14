@@ -87,14 +87,74 @@ class RenderUiCompositionProofTests(unittest.TestCase):
             report = json.loads((root / "proof.json").read_text(encoding="utf-8"))
             self.assertEqual(report["verdict"], "pass")
             self.assertIn("timing_ms", report)
+            self.assertIn("cache_stats", report)
             self.assertIn("timing_ms", report["items"][0])
             self.assertIn("overlays", report["items"][0])
             self.assertIn("profile: slowest composition item", result.stdout)
             markdown = (root / "proof.md").read_text(encoding="utf-8")
             self.assertIn("## Timing", markdown)
+            self.assertIn("## Cache", markdown)
             with Image.open(root / "proof.png") as proof:
                 self.assertGreater(proof.width, 120)
                 self.assertGreater(proof.height, 80)
+
+    def test_reuses_cached_slice9_panels_for_repeated_items(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            assets = root / "assets"
+            assets.mkdir()
+            write_panel(assets / "button.png")
+            manifest = {
+                "schema": "game.asset_manifest",
+                "version": 1,
+                "assets": [
+                    {
+                        "id": "button",
+                        "kind": "slice9",
+                        "path": "assets/button.png",
+                        "slice9": {"left": 8, "top": 8, "right": 8, "bottom": 8},
+                        "content": {"x": 9, "y": 9, "w": 22, "h": 14},
+                        "target_preview_sizes": [[96, 40]],
+                    }
+                ],
+            }
+            layout = {
+                "schema": "game.ui_composition_proof_layout",
+                "version": 1,
+                "items": [
+                    {"base_id": "button", "size": [96, 40], "label": "One"},
+                    {"base_id": "button", "size": [96, 40], "label": "Two"},
+                ],
+            }
+            (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (root / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--asset-manifest",
+                    "manifest.json",
+                    "--layout",
+                    "layout.json",
+                    "--output",
+                    "proof.png",
+                    "--json-output",
+                    "proof.json",
+                    "--profile",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads((root / "proof.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["verdict"], "pass")
+            self.assertGreaterEqual(report["cache_stats"]["image_hits"], 1)
+            self.assertGreaterEqual(report["cache_stats"]["panel_hits"], 1)
+            self.assertEqual(report["cache_stats"]["panel_misses"], 1)
 
     def test_fails_when_overlay_overlaps_content_without_allow_policy(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

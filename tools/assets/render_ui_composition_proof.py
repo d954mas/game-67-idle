@@ -32,6 +32,21 @@ ANCHORS = {
 }
 
 
+class CompositionRenderCache:
+    def __init__(self) -> None:
+        self.images: dict[str, Image.Image] = {}
+        self.slice_tiles: dict[tuple[str, tuple[int, int, int, int], tuple[int, int]], list[list[Image.Image]]] = {}
+        self.panels: dict[tuple[str, tuple[int, int], tuple[int, int, int, int], tuple[int, int]], Image.Image] = {}
+        self.stats = {
+            "image_hits": 0,
+            "image_misses": 0,
+            "slice_tile_hits": 0,
+            "slice_tile_misses": 0,
+            "panel_hits": 0,
+            "panel_misses": 0,
+        }
+
+
 def project_path(path: str | Path) -> Path:
     candidate = Path(path)
     if candidate.is_absolute():
@@ -86,28 +101,70 @@ def rects_intersect(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) 
     return ax < bx + bw and ax + aw > bx and ay < by + bh and ay + ah > by
 
 
-def nine_slice_resize(image: Image.Image, margins: dict[str, Any], size: tuple[int, int]) -> Image.Image:
+def margins_key(margins: dict[str, Any]) -> tuple[int, int, int, int]:
+    return (int(margins["left"]), int(margins["top"]), int(margins["right"]), int(margins["bottom"]))
+
+
+def nine_slice_source_tiles(
+    image: Image.Image,
+    margins: dict[str, Any],
+    *,
+    asset_id: str | None = None,
+    cache: CompositionRenderCache | None = None,
+) -> list[list[Image.Image]]:
+    left, top, right, bottom = margins_key(margins)
+    source_width, source_height = image.size
+    cache_key = (asset_id or "", (left, top, right, bottom), image.size)
+    if cache is not None and asset_id and cache_key in cache.slice_tiles:
+        cache.stats["slice_tile_hits"] += 1
+        return cache.slice_tiles[cache_key]
+    if cache is not None and asset_id:
+        cache.stats["slice_tile_misses"] += 1
+    source_x = [0, left, source_width - right, source_width]
+    source_y = [0, top, source_height - bottom, source_height]
+    tiles = [
+        [image.crop((source_x[col], source_y[row], source_x[col + 1], source_y[row + 1])) for col in range(3)]
+        for row in range(3)
+    ]
+    if cache is not None and asset_id:
+        cache.slice_tiles[cache_key] = tiles
+    return tiles
+
+
+def nine_slice_resize(
+    image: Image.Image,
+    margins: dict[str, Any],
+    size: tuple[int, int],
+    *,
+    asset_id: str | None = None,
+    cache: CompositionRenderCache | None = None,
+) -> Image.Image:
     left = int(margins["left"])
     top = int(margins["top"])
     right = int(margins["right"])
     bottom = int(margins["bottom"])
-    source_width, source_height = image.size
     out_width, out_height = size
+    panel_key = (asset_id or "", size, (left, top, right, bottom), image.size)
+    if cache is not None and asset_id and panel_key in cache.panels:
+        cache.stats["panel_hits"] += 1
+        return cache.panels[panel_key].copy()
+    if cache is not None and asset_id:
+        cache.stats["panel_misses"] += 1
     result = Image.new("RGBA", size, (0, 0, 0, 0))
-    source_x = [0, left, source_width - right, source_width]
-    source_y = [0, top, source_height - bottom, source_height]
     dest_x = [0, left, out_width - right, out_width]
     dest_y = [0, top, out_height - bottom, out_height]
+    source_tiles = nine_slice_source_tiles(image, margins, asset_id=asset_id, cache=cache)
     for row in range(3):
         for col in range(3):
-            source_box = (source_x[col], source_y[row], source_x[col + 1], source_y[row + 1])
             dest_box = (dest_x[col], dest_y[row], dest_x[col + 1], dest_y[row + 1])
             dest_width = max(1, dest_box[2] - dest_box[0])
             dest_height = max(1, dest_box[3] - dest_box[1])
-            tile = image.crop(source_box)
+            tile = source_tiles[row][col]
             if tile.size != (dest_width, dest_height):
                 tile = resize_rgba_premultiplied(tile, (dest_width, dest_height))
             result.alpha_composite(tile, (dest_box[0], dest_box[1]))
+    if cache is not None and asset_id:
+        cache.panels[panel_key] = result.copy()
     return result
 
 
@@ -202,7 +259,11 @@ def default_layout(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def load_image(asset: dict[str, Any], problems: list[str]) -> Image.Image | None:
+def load_image(asset: dict[str, Any], problems: list[str], cache: CompositionRenderCache | None = None) -> Image.Image | None:
+    asset_id = str(asset.get("id") or "")
+    if cache is not None and asset_id in cache.images:
+        cache.stats["image_hits"] += 1
+        return cache.images[asset_id]
     path_value = asset.get("path") or asset.get("output")
     if not isinstance(path_value, str) or not path_value:
         problems.append(f"asset {asset.get('id', '(unknown)')} needs path")
@@ -211,7 +272,11 @@ def load_image(asset: dict[str, Any], problems: list[str]) -> Image.Image | None
     if not path.exists():
         problems.append(f"asset {asset.get('id', '(unknown)')} image missing: {normalize_path(path)}")
         return None
-    return Image.open(path).convert("RGBA")
+    image = Image.open(path).convert("RGBA")
+    if cache is not None and asset_id:
+        cache.images[asset_id] = image
+        cache.stats["image_misses"] += 1
+    return image
 
 
 def draw_content_rect(draw: ImageDraw.ImageDraw, rect: tuple[int, int, int, int]) -> None:
@@ -223,6 +288,7 @@ def render_item(
     item: dict[str, Any],
     assets: dict[str, dict[str, Any]],
     text_font: ImageFont.ImageFont,
+    cache: CompositionRenderCache | None = None,
     profile: bool = False,
 ) -> tuple[Image.Image | None, dict[str, Any]]:
     started = perf_counter()
@@ -236,7 +302,7 @@ def render_item(
         return None, report
     if base.get("kind") != "slice9":
         problems.append(f"base {base_id} must be kind=slice9")
-    base_image = load_image(base, problems)
+    base_image = load_image(base, problems, cache)
     size = item.get("size")
     if not isinstance(size, list) or len(size) != 2:
         problems.append(f"item {base_id} needs size [width,height]")
@@ -250,7 +316,7 @@ def render_item(
         problems.append(f"base {base_id} size {target_size[0]}x{target_size[1]} is smaller than slice9 margins")
         panel = Image.new("RGBA", target_size, (0, 0, 0, 0))
     elif base_image:
-        panel = nine_slice_resize(base_image, margins, target_size)
+        panel = nine_slice_resize(base_image, margins, target_size, asset_id=str(base_id), cache=cache)
     else:
         panel = Image.new("RGBA", target_size, (0, 0, 0, 0))
 
@@ -273,7 +339,7 @@ def render_item(
         if not overlay:
             problems.append(f"overlay asset missing: {overlay_id}")
             continue
-        overlay_image = load_image(overlay, problems)
+        overlay_image = load_image(overlay, problems, cache)
         if overlay_image is None:
             continue
         anchor = str(overlay_data.get("anchor") or overlay.get("anchor") or "center")
@@ -369,6 +435,11 @@ def make_markdown(report: dict[str, Any]) -> str:
         for name, elapsed in report["timing_ms"].items():
             lines.append(f"- {name}: {elapsed} ms")
         lines.append("")
+    if report.get("cache_stats"):
+        lines.extend(["## Cache", ""])
+        for name, value in report["cache_stats"].items():
+            lines.append(f"- {name}: {value}")
+        lines.append("")
     lines.extend(["## Items", ""])
     for item in report["items"]:
         suffix = f": {'; '.join(item['problems'])}" if item["problems"] else ""
@@ -404,13 +475,14 @@ def main(argv: list[str]) -> int:
     items = layout.get("items") or []
     assets = asset_map(manifest)
     proof_font = font(15)
+    cache = CompositionRenderCache()
     rendered: list[tuple[dict[str, Any], Image.Image]] = []
     reports: list[dict[str, Any]] = []
     if not items:
         reports.append({"base_id": "(none)", "size": [0, 0], "label": "", "content_rect": [0, 0, 0, 0], "status": "fail", "problems": ["layout has no items"]})
     render_started = perf_counter()
     for item in items:
-        image, item_report = render_item(item, assets, proof_font, args.profile)
+        image, item_report = render_item(item, assets, proof_font, cache, args.profile)
         reports.append(item_report)
         if image is not None:
             rendered.append((item_report, image))
@@ -442,6 +514,7 @@ def main(argv: list[str]) -> int:
             "save_output": save_ms,
             "total": round((perf_counter() - started) * 1000, 3),
         }
+        report["cache_stats"] = dict(cache.stats)
     if args.json_output:
         write_text(project_path(args.json_output), json.dumps(report, indent=2) + "\n")
     if args.report:

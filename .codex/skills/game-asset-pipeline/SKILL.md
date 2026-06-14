@@ -203,7 +203,10 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
   A button/panel that passes standalone preview can still fail if portrait
   composition squeezes text or stacks controls without spacing. Composition
   proof should fail decorative overlays that overlap content safe areas unless
-  the layout or overlay explicitly allows that overlap.
+  the layout or overlay explicitly allows that overlap. Use `--profile` on
+  slow composition proof runs so timing and cache-hit stats show whether the
+  bottleneck is image loading, repeated slice9 assembly, sheet rendering, or
+  output saving.
 - Icon crops need semantic role, source size class, and state/rarity role when
   relevant.
 - Sprite/marker crops need pivot or anchor before code uses them.

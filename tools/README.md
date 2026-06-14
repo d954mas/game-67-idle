@@ -275,6 +275,9 @@ after slice9 assets pass pixel audits; it catches panels/buttons that are
 technically cuttable but whose `content` rectangle collapses at compact sizes or
 cannot fit real runtime text. The output PNG is human review evidence, and the
 JSON/Markdown report should be recorded beside other generated UI reviews.
+Run with `--profile` when it feels slow; the report includes timing plus
+image/slice9/panel cache-hit stats so optimization work can compare measured
+bottlenecks instead of guessing from the rendered PNG.
 `tools/assets/audit_generated_source_derivation.py` is the anti-redraw gate for
 generated UI crops: it compares each runtime PNG against the accepted source
 crop after chroma cleanup and fails builders that output procedural redraws
