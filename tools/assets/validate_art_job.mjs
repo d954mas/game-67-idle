@@ -11,7 +11,9 @@ function usage() {
 Validates generated game UI/art job contracts before runtime integration.
 Default mode is draft-friendly. Strict mode requires accepted source art,
 crop entries, and runtime assets. Final-art mode also rejects procedural
-debug scaffolds and incomplete generation provenance.`);
+debug scaffolds and incomplete generation provenance. A scoped partial runtime
+slice can validate, but it is reported as partial-runtime-slice-valid instead
+of a complete final-art claim.`);
   process.exit(2);
 }
 
@@ -1229,6 +1231,25 @@ function validateJob(job, jobPath, options = {}) {
   return problems;
 }
 
+function validationStatus(job, values) {
+  if (values.finalArt) {
+    const mode = normalizedText(job.expected_outputs?.runtime_scope?.mode);
+    if (mode === "partial_runtime_slice") return "partial-runtime-slice-valid";
+    return "final-art-valid";
+  }
+  return values.strict ? "strict-valid" : "draft-valid";
+}
+
+function printRuntimeScope(job) {
+  const scope = job.expected_outputs?.runtime_scope;
+  if (!scope || typeof scope !== "object" || Array.isArray(scope)) return;
+  const mode = normalizedText(scope.mode);
+  if (mode !== "partial_runtime_slice") return;
+  const included = normalizedStringArray(scope.included_source_families).join(",") || "-";
+  const deferred = normalizedStringArray(scope.deferred_source_families).join(",") || "-";
+  console.log(`scope: partial_runtime_slice included=${included} deferred=${deferred}`);
+}
+
 const values = parseArgs(process.argv.slice(2));
 if (values.help) usage();
 if (!values.job) usage();
@@ -1242,4 +1263,5 @@ if (problems.length > 0) {
   for (const problem of problems) console.log(`problem: ${problem}`);
   process.exit(1);
 }
-console.log(`ok: art job ${job.id || values.job} is ${values.finalArt ? "final-art-valid" : values.strict ? "strict-valid" : "draft-valid"}`);
+console.log(`ok: art job ${job.id || values.job} is ${validationStatus(job, values)}`);
+if (values.finalArt) printRuntimeScope(job);

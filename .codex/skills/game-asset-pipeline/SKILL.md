@@ -129,7 +129,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     `partial_runtime_slice`, with `included_source_families`,
     `deferred_source_families`, and a concrete `reason`; otherwise final-art
     validation must fail when required icon or decor source families have no
-    runtime-ready crop/runtime assets. If it fails, run
+    runtime-ready crop/runtime assets. A scoped pass prints
+    `partial-runtime-slice-valid`; report it as a validated partial slice, not
+    as a complete generated UI kit. If it fails, run
     `node tools/assets/plan_missing_source_family_prompts.mjs --job <art-job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`
     so the next generation pass has concrete prompt packets for the missing
     source families.

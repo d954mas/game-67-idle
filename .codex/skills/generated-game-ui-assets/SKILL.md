@@ -230,6 +230,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       `deferred_source_families`, and a concrete `reason`. Without that scoped
       exception, final-art validation must fail when required icon or decor
       source families do not have matching runtime-ready crop/runtime assets.
+      A scoped pass prints `partial-runtime-slice-valid`; report it as a
+      validated partial slice, not as a complete generated UI kit.
       If this audit fails, create a generation prompt queue with
       `node tools/assets/plan_missing_source_family_prompts.mjs --job <job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`
       and generate the missing source families from those packets.

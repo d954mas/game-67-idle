@@ -1231,7 +1231,9 @@ test("final-art mode allows explicit partial runtime slice to defer source famil
 
   const result = run(["--job", job, "--final-art"], dir);
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /final-art-valid/);
+  assert.match(result.stdout, /partial-runtime-slice-valid/);
+  assert.match(result.stdout, /scope: partial_runtime_slice/);
+  assert.doesNotMatch(result.stdout, /is final-art-valid/);
 });
 
 test("final-art mode rejects procedural debug records even with exception", (t) => {
