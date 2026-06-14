@@ -65,10 +65,15 @@ def is_green_screen_spill_like(red: int, green: int, blue: int) -> bool:
     return green > 100 and green > red * 1.35 and green > blue * 1.35 and green - max(red, blue) > 28
 
 
+def is_muted_green_key_spill_like(red: int, green: int, blue: int) -> bool:
+    return green >= 55 and blue <= 32 and green - blue >= 40 and green - red >= 18
+
+
 def is_source_key_spill_like(red: int, green: int, blue: int, key: RGB) -> bool:
     key_red, key_green, key_blue = key
     if key_green > 220 and key_red < 40 and key_blue < 40:
-        return green > 90 and green > red * 1.25 and green > blue * 1.25 and green - max(red, blue) > 22
+        saturated = green > 90 and green > red * 1.25 and green > blue * 1.25 and green - max(red, blue) > 22
+        return saturated or is_muted_green_key_spill_like(red, green, blue)
     if key_red > 220 and key_blue > 220 and key_green < 40:
         return is_exact_key_like(red, green, blue, key=key, tolerance=36)
     if key_red > 220 and key_green < 40 and key_blue < 40:
@@ -197,7 +202,9 @@ def remove_green_screen_spill(image: Image.Image, passes: int = 3, radius: int =
 def source_key_spill_mask(red: Any, green: Any, blue: Any, key: RGB) -> Any:
     key_red, key_green, key_blue = key
     if key_green > 220 and key_red < 40 and key_blue < 40:
-        return (green > 90) & (green > red * 1.25) & (green > blue * 1.25) & (green - np.maximum(red, blue) > 22)
+        saturated = (green > 90) & (green > red * 1.25) & (green > blue * 1.25) & (green - np.maximum(red, blue) > 22)
+        muted = (green >= 55) & (blue <= 32) & (green - blue >= 40) & (green - red >= 18)
+        return saturated | muted
     if key_red > 220 and key_blue > 220 and key_green < 40:
         return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= 36
     if key_red > 220 and key_green < 40 and key_blue < 40:

@@ -287,6 +287,23 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("source key edge fringe remains", result.stdout)
 
+    def test_manifest_source_key_muted_green_edge_cast_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            image.putpixel((8, 16), (57, 88, 5, 255))
+            image.save(out_dir / "icon.png")
+
+            manifest = self.write_manifest("assets/icon.png")
+            manifest["green_screen"] = {"mode": "chroma_key", "key": "#00ff00"}
+            result = self.run_audit(root, manifest)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("source key edge fringe remains", result.stdout)
+
     def test_manifest_source_key_green_transparent_rgb_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

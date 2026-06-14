@@ -6,10 +6,19 @@ verdict: **pass**
 
 ## Timing
 
-- render_items: 755.584 ms
-- render_sheet: 76.189 ms
-- save_output: 79.117 ms
-- total: 913.644 ms
+- render_items: 724.025 ms
+- render_sheet: 77.731 ms
+- save_output: 77.986 ms
+- total: 882.335 ms
+
+## Cache
+
+- image_hits: 14
+- image_misses: 7
+- slice_tile_hits: 14
+- slice_tile_misses: 7
+- panel_hits: 0
+- panel_misses: 21
 
 ## Items
 

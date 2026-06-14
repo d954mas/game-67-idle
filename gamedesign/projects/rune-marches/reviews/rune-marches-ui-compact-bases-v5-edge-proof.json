@@ -1,0 +1,812 @@
+{
+  "schema": "game.ui_asset_edge_proof",
+  "version": 1,
+  "rows": [
+    {
+      "asset_id": "compact_button_idle_short_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
+      "side": "top",
+      "rect": [
+        0,
+        0,
+        211,
+        22
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 2.978
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_short_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
+      "side": "right",
+      "rect": [
+        188,
+        0,
+        211,
+        118
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 1.807
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_short_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
+      "side": "bottom",
+      "rect": [
+        0,
+        96,
+        211,
+        118
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 2.663
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_short_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
+      "side": "left",
+      "rect": [
+        0,
+        0,
+        23,
+        118
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 1.796
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_medium_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
+      "side": "top",
+      "rect": [
+        0,
+        0,
+        298,
+        23
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 4.345
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_medium_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
+      "side": "right",
+      "rect": [
+        276,
+        0,
+        298,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 1.73
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_medium_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
+      "side": "bottom",
+      "rect": [
+        0,
+        97,
+        298,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 3.745
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_medium_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
+      "side": "left",
+      "rect": [
+        0,
+        0,
+        23,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 1.825
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_long_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
+      "side": "top",
+      "rect": [
+        0,
+        0,
+        444,
+        23
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 6.25
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_long_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
+      "side": "right",
+      "rect": [
+        421,
+        0,
+        444,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 1.926
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_long_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
+      "side": "bottom",
+      "rect": [
+        0,
+        97,
+        444,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 5.496
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_long_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
+      "side": "left",
+      "rect": [
+        0,
+        0,
+        22,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 1.768
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_short_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
+      "side": "top",
+      "rect": [
+        0,
+        0,
+        211,
+        23
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 3.549
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_short_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
+      "side": "right",
+      "rect": [
+        188,
+        0,
+        211,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 1.883
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_short_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
+      "side": "bottom",
+      "rect": [
+        0,
+        96,
+        211,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 2.876
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_short_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
+      "side": "left",
+      "rect": [
+        0,
+        0,
+        23,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 1.897
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_medium_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
+      "side": "top",
+      "rect": [
+        0,
+        0,
+        298,
+        23
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 4.777
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_medium_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
+      "side": "right",
+      "rect": [
+        276,
+        0,
+        298,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 1.881
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_medium_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
+      "side": "bottom",
+      "rect": [
+        0,
+        96,
+        298,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 4.081
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_medium_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
+      "side": "left",
+      "rect": [
+        0,
+        0,
+        23,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 1.986
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_long_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png",
+      "side": "top",
+      "rect": [
+        0,
+        0,
+        445,
+        23
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 6.826
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_long_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png",
+      "side": "right",
+      "rect": [
+        422,
+        0,
+        445,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 2.267
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_long_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png",
+      "side": "bottom",
+      "rect": [
+        0,
+        96,
+        445,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 6.048
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_long_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png",
+      "side": "left",
+      "rect": [
+        0,
+        0,
+        23,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 1.853
+      }
+    },
+    {
+      "asset_id": "compact_journal_panel_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png",
+      "side": "top",
+      "rect": [
+        0,
+        0,
+        346,
+        23
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 5.134
+      }
+    },
+    {
+      "asset_id": "compact_journal_panel_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png",
+      "side": "right",
+      "rect": [
+        323,
+        0,
+        346,
+        722
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 10.036
+      }
+    },
+    {
+      "asset_id": "compact_journal_panel_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png",
+      "side": "bottom",
+      "rect": [
+        0,
+        699,
+        346,
+        722
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 4.633
+      }
+    },
+    {
+      "asset_id": "compact_journal_panel_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png",
+      "side": "left",
+      "rect": [
+        0,
+        0,
+        23,
+        722
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 10.21
+      }
+    }
+  ],
+  "counts": {
+    "total": 0,
+    "visible": 0,
+    "transparent_rgb": 0,
+    "reasons": {}
+  },
+  "timing_ms": {
+    "total": 174.59,
+    "render_strips": 106.266,
+    "compose_sheet": 47.644
+  },
+  "asset_timings": [
+    {
+      "asset_id": "compact_button_idle_short_v5",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
+      "timing_ms": {
+        "load_image": 5.981,
+        "alpha_bbox": 0.065,
+        "total": 15.521
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_medium_v5",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
+      "timing_ms": {
+        "load_image": 1.076,
+        "alpha_bbox": 0.066,
+        "total": 13.337
+      }
+    },
+    {
+      "asset_id": "compact_button_idle_long_v5",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
+      "timing_ms": {
+        "load_image": 1.472,
+        "alpha_bbox": 0.076,
+        "total": 17.284
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_short_v5",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
+      "timing_ms": {
+        "load_image": 0.798,
+        "alpha_bbox": 0.06,
+        "total": 11.515
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_medium_v5",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
+      "timing_ms": {
+        "load_image": 0.991,
+        "alpha_bbox": 0.057,
+        "total": 14.038
+      }
+    },
+    {
+      "asset_id": "compact_button_disabled_long_v5",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png",
+      "timing_ms": {
+        "load_image": 1.25,
+        "alpha_bbox": 0.063,
+        "total": 18.598
+      }
+    },
+    {
+      "asset_id": "compact_journal_panel_v5",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png",
+      "timing_ms": {
+        "load_image": 6.037,
+        "alpha_bbox": 0.169,
+        "total": 36.542
+      }
+    }
+  ],
+  "crop_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json",
+  "image_output": "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-edge-proof.png"
+}

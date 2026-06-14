@@ -6,7 +6,7 @@ verdict: **pass**
 
 ## Timing
 
-- total: 44.984 ms
+- total: 42.59 ms
 
 ## Atlases
 

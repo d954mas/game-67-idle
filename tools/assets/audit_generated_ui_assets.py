@@ -97,7 +97,9 @@ def source_key_spill_mask_array(array: Any, key: tuple[int, int, int]) -> Any:
     blue = array[..., 2].astype(np.int16)
     key_red, key_green, key_blue = key
     if key_green > 220 and key_red < 40 and key_blue < 40:
-        return (green > 90) & (green > red * 1.25) & (green > blue * 1.25) & (green - np.maximum(red, blue) > 22)
+        saturated = (green > 90) & (green > red * 1.25) & (green > blue * 1.25) & (green - np.maximum(red, blue) > 22)
+        muted = (green >= 55) & (blue <= 32) & (green - blue >= 40) & (green - red >= 18)
+        return saturated | muted
     if key_red > 220 and key_blue > 220 and key_green < 40:
         return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= 36
     if key_red > 220 and key_green < 40 and key_blue < 40:

@@ -230,13 +230,21 @@
       "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-bases-v2-journal-top-right-edge-proof-small.png",
       "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-contact-sheet.png",
       "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-slice9-preview.png",
-      "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png"
+      "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png",
+      "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-edge-proof.png"
     ],
     "candidate_asset_audits": [
       "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-asset-audit.md",
       "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-asset-audit.json",
       "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-asset-audit.md",
       "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-asset-audit.json"
+    ],
+    "candidate_edge_proofs": [
+      "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-edge-proof.png"
+    ],
+    "candidate_edge_proof_reports": [
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-edge-proof.md",
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-edge-proof.json"
     ],
     "candidate_source_derivation_audits": [
       "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-source-derivation-audit.md",

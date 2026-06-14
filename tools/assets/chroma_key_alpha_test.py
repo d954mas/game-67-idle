@@ -7,6 +7,7 @@ from tools.assets.chroma_key_alpha import (
     is_dark_purple_halo_like,
     is_green_screen_spill_like,
     is_magenta_edge_spill_like,
+    is_source_key_spill_like,
     key_to_alpha,
     resize_rgba_premultiplied,
 )
@@ -98,6 +99,19 @@ class ChromaKeyAlphaTests(unittest.TestCase):
 
         self.assertEqual(alpha, 0)
         self.assertFalse(is_green_screen_spill_like(red, green, blue))
+
+    def test_key_to_alpha_removes_muted_green_source_key_edge_cast(self) -> None:
+        image = Image.new("RGBA", (24, 24), (0, 255, 0, 255))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((5, 5, 18, 18), fill=(142, 86, 38, 255))
+        image.putpixel((18, 12), (57, 88, 5, 255))
+
+        cleaned = key_to_alpha(image, key=(0, 255, 0), aggressive_visible_decontaminate=True)
+        red, green, blue, alpha = cleaned.getpixel((18, 12))
+
+        self.assertTrue(is_source_key_spill_like(57, 88, 5, (0, 255, 0)))
+        self.assertEqual(alpha, 0)
+        self.assertFalse(is_source_key_spill_like(red, green, blue, (0, 255, 0)))
 
     def test_premultiplied_resize_does_not_sample_hidden_green(self) -> None:
         image = Image.new("RGBA", (12, 12), (0, 255, 0, 0))
