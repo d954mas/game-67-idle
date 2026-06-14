@@ -161,10 +161,56 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             root = Path(tmp)
             write_png(root / "assets/runtime/panel.png")
             manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")], label_review=True)
-            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)), "--json-output", "packed/audit.json")
+            result = run(
+                AUDIT,
+                root,
+                "--atlas-pack",
+                str(pack.relative_to(root)),
+                "--asset-manifest",
+                str(manifest.relative_to(root)),
+                "--json-output",
+                "packed/audit.json",
+                "--report",
+                "packed/audit.md",
+                "--profile",
+            )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             audit = json.loads((root / "packed/audit.json").read_text(encoding="utf-8"))
             self.assertEqual(audit["verdict"], "pass")
+            self.assertIn("timing_ms", audit)
+            self.assertIn("timing_ms", audit["atlases"][0])
+            self.assertIn("labeled_preview_path", audit["atlases"][0])
+            self.assertIn("profile: slowest atlas audit", result.stdout)
+            markdown = (root / "packed/audit.md").read_text(encoding="utf-8")
+            self.assertIn("## Timing", markdown)
+
+    def test_rejects_labeled_review_pack_without_preview_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")], label_review=True)
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            preview_path = root / pack_data["atlases"][0]["labeled_preview_path"]
+            preview_path.unlink()
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("labeled preview image missing", result.stdout + result.stderr)
+
+    def test_rejects_label_pixels_in_clean_atlas(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")], label_review=True)
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            atlas_path = root / pack_data["atlases"][0]["path"]
+            entry = pack_data["atlases"][0]["entries"][0]
+            label_x, label_y, _, _ = entry["review_label"]["rect"]
+            atlas = Image.open(atlas_path).convert("RGBA")
+            atlas.putpixel((label_x, label_y), (255, 255, 255, 255))
+            atlas.save(atlas_path)
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("review_label rect must be empty in clean atlas", result.stdout + result.stderr)
 
     def test_rejects_labeled_review_rect_over_asset(self):
         with tempfile.TemporaryDirectory() as tmp:

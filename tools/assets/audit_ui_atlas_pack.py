@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from PIL import Image
@@ -66,6 +67,17 @@ def intersects(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bo
     return ax < bx + bw and ax + aw > bx and ay < by + bh and ay + ah > by
 
 
+def rect_has_visible_pixel(image: Image.Image, rect: tuple[int, int, int, int]) -> bool:
+    x, y, width, height = rect
+    alpha = image.getchannel("A")
+    pixels = alpha.load()
+    for py in range(y, y + height):
+        for px in range(x, x + width):
+            if pixels[px, py] > 0:
+                return True
+    return False
+
+
 def check_extrusion(atlas: Image.Image, entry: dict[str, Any]) -> list[str]:
     problems: list[str] = []
     entry_id = str(entry.get("id") or "(unknown)")
@@ -107,8 +119,10 @@ def check_extrusion(atlas: Image.Image, entry: dict[str, Any]) -> list[str]:
     return problems
 
 
-def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None) -> dict[str, Any]:
+def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile: bool = False) -> dict[str, Any]:
+    started = perf_counter()
     pack = read_json(pack_path)
+    timings: dict[str, float] = {}
     problems: list[str] = []
     if pack.get("schema") != "game.ui_atlas_pack":
         problems.append("atlas pack schema must be game.ui_atlas_pack")
@@ -138,6 +152,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None) -> dict
         atlases = []
 
     for atlas_info in atlases:
+        atlas_started = perf_counter()
         atlas_problems: list[str] = []
         atlas_path_value = atlas_info.get("path") if isinstance(atlas_info, dict) else None
         atlas_path = project_path(atlas_path_value) if isinstance(atlas_path_value, str) else None
@@ -149,10 +164,24 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None) -> dict
         else:
             atlas = Image.open(atlas_path).convert("RGBA")
 
+        labeled_preview = None
+        labeled_preview_path_value = atlas_info.get("labeled_preview_path") if isinstance(atlas_info, dict) else None
+        if atlas_info.get("label_overlay"):
+            if not isinstance(labeled_preview_path_value, str) or not labeled_preview_path_value:
+                atlas_problems.append("labeled review atlas needs labeled_preview_path")
+            else:
+                labeled_preview_path = project_path(labeled_preview_path_value)
+                if not labeled_preview_path.exists():
+                    atlas_problems.append(f"labeled preview image missing: {labeled_preview_path_value}")
+                else:
+                    labeled_preview = Image.open(labeled_preview_path).convert("RGBA")
+
         size = atlas_info.get("size") if isinstance(atlas_info, dict) else None
         if atlas is not None:
             if not isinstance(size, list) or len(size) != 2 or [int(size[0]), int(size[1])] != [atlas.width, atlas.height]:
                 atlas_problems.append(f"atlas size metadata must match image {atlas.width}x{atlas.height}")
+        if atlas is not None and labeled_preview is not None and labeled_preview.size != atlas.size:
+            atlas_problems.append("labeled preview size must match atlas image")
 
         entries = atlas_info.get("entries") if isinstance(atlas_info, dict) else None
         if not isinstance(entries, list) or not entries:
@@ -161,6 +190,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None) -> dict
 
         entries_by_id = {str(entry.get("id") or ""): entry for entry in entries if isinstance(entry, dict)}
         padded_rects: list[tuple[str, tuple[int, int, int, int]]] = []
+        review_label_rects: list[tuple[str, tuple[int, int, int, int]]] = []
         for entry in entries:
             entry_id = str(entry.get("id") or "")
             if not entry_id:
@@ -219,28 +249,42 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None) -> dict
                             lx, ly, lw, lh = label_rect
                             if lx + lw > atlas.width or ly + lh > atlas.height:
                                 atlas_problems.append(f"{entry_id} review_label rect exceeds atlas bounds")
+                            elif rect_has_visible_pixel(atlas, label_rect):
+                                atlas_problems.append(f"{entry_id} review_label rect must be empty in clean atlas")
+                        if labeled_preview is not None:
+                            lx, ly, lw, lh = label_rect
+                            if lx + lw <= labeled_preview.width and ly + lh <= labeled_preview.height and not rect_has_visible_pixel(labeled_preview, label_rect):
+                                atlas_problems.append(f"{entry_id} review_label rect has no visible pixels in labeled preview")
+                        review_label_rects.append((entry_id, label_rect))
 
             if atlas is not None and rect_valid(entry.get("atlas_rect")) and rect_valid(entry.get("padded_rect")):
                 atlas_problems.extend(check_extrusion(atlas, entry))
 
-        atlas_reports.append(
-            {
-                "pack_group": atlas_info.get("pack_group") if isinstance(atlas_info, dict) else None,
-                "path": atlas_path_value,
-                "status": "pass" if not atlas_problems else "fail",
-                "problems": atlas_problems,
-                "entry_count": len(entries),
-                "physical_entry_count": atlas_info.get("physical_entry_count") if isinstance(atlas_info, dict) else None,
-                "alias_count": atlas_info.get("alias_count") if isinstance(atlas_info, dict) else None,
-            }
-        )
+        for label_id, label_rect in review_label_rects:
+            for padded_id, padded_rect in padded_rects:
+                if intersects(label_rect, padded_rect):
+                    atlas_problems.append(f"{label_id} review_label rect overlaps padded_rect for {padded_id}")
+
+        atlas_report = {
+            "pack_group": atlas_info.get("pack_group") if isinstance(atlas_info, dict) else None,
+            "path": atlas_path_value,
+            "labeled_preview_path": labeled_preview_path_value,
+            "status": "pass" if not atlas_problems else "fail",
+            "problems": atlas_problems,
+            "entry_count": len(entries),
+            "physical_entry_count": atlas_info.get("physical_entry_count") if isinstance(atlas_info, dict) else None,
+            "alias_count": atlas_info.get("alias_count") if isinstance(atlas_info, dict) else None,
+        }
+        if profile:
+            atlas_report["timing_ms"] = {"total": round((perf_counter() - atlas_started) * 1000, 3)}
+        atlas_reports.append(atlas_report)
         problems.extend(atlas_problems)
 
     for asset_id in expected_assets:
         if asset_id not in reported_ids:
             problems.append(f"missing packed asset id {asset_id}")
 
-    return {
+    result = {
         "schema": "game.ui_atlas_pack_audit",
         "version": 1,
         "atlas_pack": norm_path(pack_path),
@@ -249,6 +293,10 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None) -> dict
         "problems": problems,
         "atlases": atlas_reports,
     }
+    if profile:
+        timings["total"] = round((perf_counter() - started) * 1000, 3)
+        result["timing_ms"] = timings
+    return result
 
 
 def main() -> None:
@@ -257,13 +305,14 @@ def main() -> None:
     parser.add_argument("--asset-manifest")
     parser.add_argument("--json-output")
     parser.add_argument("--report")
+    parser.add_argument("--profile", action="store_true", help="Record atlas audit timing in JSON/Markdown and print the slowest atlas group.")
     args = parser.parse_args()
 
     pack_path = project_path(args.atlas_pack)
     if not pack_path.exists():
         fail(f"atlas pack not found: {args.atlas_pack}")
     manifest_path = project_path(args.asset_manifest) if args.asset_manifest else None
-    audit = audit_pack(pack_path, manifest_path)
+    audit = audit_pack(pack_path, manifest_path, args.profile)
     if args.json_output:
         write_json(project_path(args.json_output), audit)
     lines = [
@@ -273,9 +322,13 @@ def main() -> None:
         f"asset_manifest: `{audit.get('asset_manifest')}`",
         f"verdict: **{audit['verdict']}**",
         "",
-        "## Atlases",
-        "",
     ]
+    if audit.get("timing_ms"):
+        lines.extend(["## Timing", ""])
+        for name, elapsed in audit["timing_ms"].items():
+            lines.append(f"- {name}: {elapsed} ms")
+        lines.append("")
+    lines.extend(["## Atlases", ""])
     for atlas in audit["atlases"]:
         suffix = ""
         if atlas["problems"]:
@@ -294,6 +347,9 @@ def main() -> None:
     if audit["problems"]:
         raise SystemExit(1)
     print(f"pass: audited {sum(atlas['entry_count'] for atlas in audit['atlases'])} packed UI asset(s)")
+    if args.profile and audit["atlases"]:
+        slowest = max(audit["atlases"], key=lambda atlas: atlas.get("timing_ms", {}).get("total", 0))
+        print(f"profile: slowest atlas audit `{slowest.get('pack_group')}` {slowest.get('timing_ms', {}).get('total', 0)} ms")
 
 
 if __name__ == "__main__":

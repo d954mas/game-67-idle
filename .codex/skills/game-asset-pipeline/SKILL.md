@@ -125,11 +125,15 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     not the game's final runtime atlas packer.
 21. Audit generated UI review atlases before final-art claims:
     `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
+    Add `--profile` when atlas audit feels slow so JSON/Markdown preserve audit
+    timing and stdout prints the slowest atlas group.
     Record passing JSON in `expected_outputs.atlas_pack_audit`; final-art
     validation requires it. This catches missing packed assets, out-of-bounds
     rects, padded-rect overlaps, alias mismatches, metadata mismatches, and
     broken extrusion pixels. For labeled review atlases, it also catches labels
-    missing from metadata or overlapping the art.
+    missing from metadata, missing labeled preview images, labels overlapping
+    any art, labels accidentally baked into the clean atlas, or label rects
+    without visible pixels in the labeled preview.
 
 ## Rules
 
@@ -220,7 +224,9 @@ Before UI assets are integrated:
   `--profile` so occupancy/timing evidence is stored with the pack manifest.
 - Atlas pack audit evidence exists and passes before final generated UI claims.
   It should prove coverage, bounds, non-overlap, extrusion pixels, and
-  non-overlapping review labels.
+  non-overlapping review labels. For labeled review atlases, the audit should
+  prove that labels are visible only in the labeled preview and not in the clean
+  atlas texture.
 - Contact sheet or preview evidence exists for crops and stretched slice9
   states.
 - Pixel audit evidence exists for generated runtime PNGs and reports no clipped
