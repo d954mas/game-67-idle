@@ -569,6 +569,126 @@ function collectCropOutputs(crop) {
   return outputs;
 }
 
+function normalizedText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizedStringArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter(hasText).map((item) => String(item).trim());
+}
+
+function expectedRequiredSourceFamilies(job) {
+  return normalizedStringArray(
+    job.expected_outputs?.required_source_families ??
+      job.generation_contract?.final_source_families_required ??
+      job.generation_contract?.required_source_families
+  );
+}
+
+function itemTextBlob(item) {
+  return normalizedText(
+    [
+      item?.id,
+      item?.kind,
+      item?.role,
+      item?.semantic_role,
+      item?.need,
+      item?.source_family,
+      item?.source_family_role,
+      item?.overlay_family,
+      item?.source_crop,
+    ]
+      .filter((value) => value !== undefined && value !== null)
+      .join(" ")
+  );
+}
+
+function isRuntimeReadyIcon(item) {
+  return normalizedText(item?.kind) === "icon";
+}
+
+function isRuntimeReadyDecorOverlay(item) {
+  const kind = normalizedText(item?.kind);
+  if (kind === "decor_overlay") return true;
+  if (kind !== "sprite" && kind !== "effect" && kind !== "border") return false;
+  const text = itemTextBlob(item);
+  return /\b(decor|overlay|ornament|gem|badge|medallion|cap|ribbon|divider|flourish|lock)\b/.test(text);
+}
+
+const REQUIRED_FAMILY_RUNTIME_RULES = [
+  {
+    family: "isolated icon sheet",
+    runtimeLabel: "runtime-ready icon",
+    matches: isRuntimeReadyIcon,
+  },
+  {
+    family: "ui decor overlay sheet",
+    runtimeLabel: "runtime-ready decor overlay",
+    matches: isRuntimeReadyDecorOverlay,
+  },
+];
+
+function validateRuntimeScope(job, requiredFamilies, problems) {
+  const scope = job.expected_outputs?.runtime_scope;
+  if (scope === undefined) return new Set();
+  const deferred = new Set();
+  if (!scope || typeof scope !== "object" || Array.isArray(scope)) {
+    problems.push("expected_outputs.runtime_scope must be an object when provided");
+    return deferred;
+  }
+
+  const mode = normalizedText(scope.mode);
+  const includedFamilies = normalizedStringArray(scope.included_source_families);
+  const deferredFamilies = normalizedStringArray(scope.deferred_source_families);
+  const requiredSet = new Set(requiredFamilies);
+  for (const family of deferredFamilies) deferred.add(family);
+
+  if (!["partial_runtime_slice", "full_runtime_ui"].includes(mode)) {
+    problems.push("expected_outputs.runtime_scope.mode must be partial_runtime_slice or full_runtime_ui");
+  }
+  if (mode === "partial_runtime_slice") {
+    if (includedFamilies.length === 0) problems.push("expected_outputs.runtime_scope.partial_runtime_slice needs included_source_families");
+    if (deferredFamilies.length === 0) problems.push("expected_outputs.runtime_scope.partial_runtime_slice needs deferred_source_families");
+    if (!hasText(scope.reason)) problems.push("expected_outputs.runtime_scope.partial_runtime_slice needs reason");
+  }
+  if (mode === "full_runtime_ui" && deferredFamilies.length > 0) {
+    problems.push("expected_outputs.runtime_scope.full_runtime_ui cannot defer source families");
+  }
+  for (const family of [...includedFamilies, ...deferredFamilies]) {
+    if (!requiredSet.has(family)) {
+      problems.push(`expected_outputs.runtime_scope references non-required source family: ${family}`);
+    }
+  }
+  for (const family of requiredFamilies) {
+    if (includedFamilies.includes(family) && deferredFamilies.includes(family)) {
+      problems.push(`expected_outputs.runtime_scope cannot both include and defer source family: ${family}`);
+    }
+  }
+  return deferred;
+}
+
+function validateRequiredSourceFamilyRuntimeCoverage(job, crop, runtime, problems) {
+  const requiredFamilies = expectedRequiredSourceFamilies(job);
+  if (requiredFamilies.length === 0) return;
+  const deferredFamilies = validateRuntimeScope(job, requiredFamilies, problems);
+  const cropItems = [];
+  for (const source of crop?.sources || []) {
+    for (const item of source.crops || []) cropItems.push(item);
+  }
+  const runtimeAssets = runtime?.assets || [];
+  for (const rule of REQUIRED_FAMILY_RUNTIME_RULES) {
+    if (!requiredFamilies.includes(rule.family) || deferredFamilies.has(rule.family)) continue;
+    const hasCrop = cropItems.some(rule.matches);
+    const hasRuntime = runtimeAssets.some(rule.matches);
+    if (!hasCrop || !hasRuntime) {
+      problems.push(
+        `final-art mode required source family ${rule.family} needs ${rule.runtimeLabel} crop/runtime assets or an explicit expected_outputs.runtime_scope.deferred_source_families entry`
+      );
+    }
+  }
+}
+
 function loadGenerationRecord(entry, label, root, problems, strict) {
   if (typeof entry === "string") {
     const path = projectPath(entry, root);
@@ -704,7 +824,7 @@ function hasEmptyWorkflowJson(record) {
   return workflow && typeof workflow === "object" && Object.keys(workflow).length === 0;
 }
 
-function validateFinalArtReadiness(job, crop, records, root, problems) {
+function validateFinalArtReadiness(job, crop, runtime, records, root, problems) {
   const usableRecords = records.filter((record) => record && typeof record === "object");
   if (usableRecords.length === 0) {
     problems.push("final-art mode requires at least one loaded generation record");
@@ -746,6 +866,7 @@ function validateFinalArtReadiness(job, crop, records, root, problems) {
       problems.push(`final-art mode source ${sourcePath} needs a generated or artist generation record`);
     }
   }
+  validateRequiredSourceFamilyRuntimeCoverage(job, crop, runtime, problems);
 }
 
 function validateJob(job, jobPath, options = {}) {
@@ -1102,7 +1223,7 @@ function validateJob(job, jobPath, options = {}) {
           true
         );
       }
-      validateFinalArtReadiness(job, crop, loadedGenerationRecords, root, problems);
+      validateFinalArtReadiness(job, crop, runtime, loadedGenerationRecords, root, problems);
     }
   }
   return problems;

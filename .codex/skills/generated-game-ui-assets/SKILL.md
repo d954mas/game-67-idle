@@ -224,6 +224,12 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       Record passing reports in `expected_outputs.source_family_coverage_audit`;
       final-art validation requires this evidence so one mixed generated sheet
       cannot substitute for separate blank bases, icons, and decor overlays.
+      If the runtime manifest intentionally cuts only part of those source
+      families, declare `expected_outputs.runtime_scope.mode` as
+      `partial_runtime_slice`, with `included_source_families`,
+      `deferred_source_families`, and a concrete `reason`. Without that scoped
+      exception, final-art validation must fail when required icon or decor
+      source families do not have matching runtime-ready crop/runtime assets.
       If this audit fails, create a generation prompt queue with
       `node tools/assets/plan_missing_source_family_prompts.mjs --job <job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`
       and generate the missing source families from those packets.

@@ -124,7 +124,12 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     gate fails one mixed source sheet, candidate/debug records, and missing
     accepted source families. Record passing JSON reports in
     `expected_outputs.source_family_coverage_audit` before final-art
-    validation. If it fails, run
+    validation. If the runtime manifest intentionally cuts only part of those
+    source families, declare `expected_outputs.runtime_scope.mode` as
+    `partial_runtime_slice`, with `included_source_families`,
+    `deferred_source_families`, and a concrete `reason`; otherwise final-art
+    validation must fail when required icon or decor source families have no
+    runtime-ready crop/runtime assets. If it fails, run
     `node tools/assets/plan_missing_source_family_prompts.mjs --job <art-job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`
     so the next generation pass has concrete prompt packets for the missing
     source families.
@@ -262,6 +267,11 @@ Before UI assets are integrated:
   exact non-overlapping review labels. For labeled review atlases, the audit
   should prove that wrapped `review_label.lines` fit their rects and labels are
   visible only in the labeled preview, not in the clean atlas texture.
+- A full UI kit claim requires runtime-ready assets for every required runtime
+  source family. If icons or decor overlays are accepted as source art but not
+  cut into the runtime crop/asset manifests, record the work as
+  `partial_runtime_slice` and do not describe it as the complete generated UI
+  kit.
 - Contact sheet or preview evidence exists for crops and stretched slice9
   states.
 - Pixel audit evidence exists for generated runtime PNGs and reports no clipped

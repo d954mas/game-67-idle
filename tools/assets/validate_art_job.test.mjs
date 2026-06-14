@@ -1192,6 +1192,48 @@ test("final-art mode validates generated source with complete provenance", (t) =
   assert.match(result.stdout, /final-art-valid/);
 });
 
+test("final-art mode rejects required decor source family without runtime decor assets", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
+  jobData.generation_contract.source_families.push("ui decor overlay sheet");
+  jobData.generation_contract.source_family_roles["ui decor overlay sheet"] = "separate non-stretch decor overlay sprites";
+  jobData.expected_outputs.required_source_families = [
+    "blank UI kit sheet",
+    "isolated icon sheet",
+    "ui decor overlay sheet",
+  ];
+  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /required source family ui decor overlay sheet needs runtime-ready decor overlay/);
+});
+
+test("final-art mode allows explicit partial runtime slice to defer source families", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
+  jobData.generation_contract.source_families.push("ui decor overlay sheet");
+  jobData.generation_contract.source_family_roles["ui decor overlay sheet"] = "separate non-stretch decor overlay sprites";
+  jobData.expected_outputs.required_source_families = [
+    "blank UI kit sheet",
+    "isolated icon sheet",
+    "ui decor overlay sheet",
+  ];
+  jobData.expected_outputs.runtime_scope = {
+    mode: "partial_runtime_slice",
+    included_source_families: ["blank UI kit sheet", "isolated icon sheet"],
+    deferred_source_families: ["ui decor overlay sheet"],
+    reason: "This proof validates slice9 bases and icons before decor overlays are cut into runtime assets.",
+  };
+  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /final-art-valid/);
+});
+
 test("final-art mode rejects procedural debug records even with exception", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);

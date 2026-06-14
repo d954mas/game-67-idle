@@ -137,6 +137,17 @@
       "isolated icon sheet",
       "ui decor overlay sheet"
     ],
+    "runtime_scope": {
+      "mode": "partial_runtime_slice",
+      "included_source_families": [
+        "blank UI kit sheet"
+      ],
+      "deferred_source_families": [
+        "isolated icon sheet",
+        "ui decor overlay sheet"
+      ],
+      "reason": "Compact v5 runtime evidence validates generated slice9 bases only. Icon and decor source families have accepted provenance/intake coverage, but they are not yet cut into runtime crop and asset manifests, so this job must not be presented as a complete UI kit."
+    },
     "generation_records": [
       "gamedesign/projects/rune-marches/art/generation_records/rune-marches-compact-ui-bases-source-v5.json",
       "gamedesign/projects/rune-marches/art/generation_records/rune-marches-isolated-icons-source-v1.json",
