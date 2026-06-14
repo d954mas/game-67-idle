@@ -171,6 +171,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       padding, scale variant, alias links, and slice9-safe rotation policy.
     - review atlas build:
       `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`
+      Add `--profile` when optimizing atlas size or slow pack builds; it writes
+      timing plus atlas occupancy/asset-area ratios into JSON/Markdown and
+      prints the slowest pack group.
       Record the JSON manifest in `expected_outputs.atlas_pack`; final-art
       validation requires this evidence. This produces grouped review/proof
       atlas PNGs from `pack_group`, preserves slice9/content metadata, writes
@@ -281,7 +284,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   slice9 margins, content safe areas, source paths, physical entry count, and
   alias count. The labeled preview must put asset names in `review_label.rect`
   free space outside the asset `padded_rect`; do not place labels over the art.
-  It must not be presented as the game's final runtime atlas.
+  It must not be presented as the game's final runtime atlas. Use `--profile`
+  while optimizing atlas economy so reports preserve occupancy and padded-asset
+  ratios instead of relying on visual guessing.
 - Audit review atlases with `audit_ui_atlas_pack.py`; a proof image is not
   trusted until coverage, bounds, overlap, alias reuse, and extrusion pixel
   checks pass, including non-overlapping review labels.

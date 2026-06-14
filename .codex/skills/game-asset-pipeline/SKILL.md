@@ -114,6 +114,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 20. For generated UI review readiness, build the labeled review atlas after
     the runtime manifest passes atlas metadata audit:
     `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`.
+    Add `--profile` while optimizing atlas size or slow pack builds so the
+    JSON/Markdown report captures timing, occupancy ratio, and padded-asset
+    ratio, and stdout prints the slowest pack group.
     Record the JSON pack manifest in `expected_outputs.atlas_pack`; final-art
     validation requires it for generated UI. The manifest should preserve atlas
     rects, padded rects, extrusion, slice9 margins, content safe areas, source
@@ -213,7 +216,8 @@ Before UI assets are integrated:
   rects, write separate `labeled_preview_path` images for human review, place
   names in `review_label.rect` free space outside asset `padded_rect`s, and
   preserve slice9/content metadata without pretending to be the game's final
-  runtime packer.
+  runtime packer. When atlas economy or speed is under review, build it with
+  `--profile` so occupancy/timing evidence is stored with the pack manifest.
 - Atlas pack audit evidence exists and passes before final generated UI claims.
   It should prove coverage, bounds, non-overlap, extrusion pixels, and
   non-overlapping review labels.

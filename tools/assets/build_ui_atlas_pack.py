@@ -6,6 +6,7 @@ import json
 import math
 import re
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from PIL import Image
@@ -257,7 +258,9 @@ def draw_review_labels(atlas: Image.Image, entries: list[dict[str, Any]]) -> Non
         draw.rectangle([rect[0], rect[1], rect[0] + rect[2] - 1, rect[1] + rect[3] - 1], outline=(255, 255, 255, 110))
 
 
-def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_size: int, label_review: bool) -> dict[str, Any]:
+def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_size: int, label_review: bool, profile: bool = False) -> dict[str, Any]:
+    started = perf_counter()
+    timings: dict[str, float] = {}
     canonical_items = [item for item in items if not item["asset"].get("alias_of")]
     alias_items = [item for item in items if item["asset"].get("alias_of")]
     if not canonical_items:
@@ -270,6 +273,7 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
         if alias_of not in ids_in_group:
             fail(f"asset {item['asset']['id']} aliases missing asset {alias_of} in pack group {group}")
 
+    layout_started = perf_counter()
     sorted_items = sorted(canonical_items, key=lambda item: (-item["image"].height, -item["image"].width, item["asset"]["id"]))
     prepare_review_labels(sorted_items, alias_items, label_review)
     border = max(item["border_padding"] for item in sorted_items)
@@ -288,8 +292,11 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
         target_width = min(max_size, max(target_width * 2, widest))
     if placement_result is None:
         fail(f"pack group {group} exceeds max atlas size {max_size}")
+    if profile:
+        timings["layout"] = round((perf_counter() - layout_started) * 1000, 3)
 
     placements, width, height = placement_result
+    compose_started = perf_counter()
     atlas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     entries: list[dict[str, Any]] = []
     entries_by_id: dict[str, dict[str, Any]] = {}
@@ -301,6 +308,8 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
         entry = make_entry(placement, x, y, image)
         entries.append(entry)
         entries_by_id[entry["id"]] = entry
+    if profile:
+        timings["compose"] = round((perf_counter() - compose_started) * 1000, 3)
 
     item_by_id = {item["asset"]["id"]: item for item in items}
     for item in sorted(alias_items, key=lambda value: value["asset"]["id"]):
@@ -321,15 +330,24 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
     path = output_dir / f"{clean_name(group)}.png"
     path.parent.mkdir(parents=True, exist_ok=True)
     sorted_entries = sorted(entries, key=lambda entry: entry["id"])
+    save_started = perf_counter()
     atlas.save(path)
+    if profile:
+        timings["save_atlas"] = round((perf_counter() - save_started) * 1000, 3)
     labeled_preview_path = None
     if label_review:
+        label_started = perf_counter()
         preview = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         preview.alpha_composite(atlas, (0, 0))
         draw_review_labels(preview, sorted_entries)
         preview_path = output_dir / f"{clean_name(group)}-labeled.png"
         preview.save(preview_path)
         labeled_preview_path = norm_path(preview_path)
+        if profile:
+            timings["save_labeled_preview"] = round((perf_counter() - label_started) * 1000, 3)
+    atlas_area = width * height
+    reserved_tile_area = sum(int(placement["tile_width"]) * int(placement["tile_height"]) for placement in placements)
+    padded_asset_area = sum(int(entry["padded_rect"][2]) * int(entry["padded_rect"][3]) for entry in sorted_entries if not entry.get("alias_of"))
     result = {
         "pack_group": group,
         "purpose": "review_validation_atlas_not_engine_runtime_pack",
@@ -339,20 +357,38 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
         "entry_count": len(entries),
         "physical_entry_count": len(placements),
         "alias_count": len(alias_items),
+        "atlas_area": atlas_area,
+        "reserved_tile_area": reserved_tile_area,
+        "padded_asset_area": padded_asset_area,
+        "occupancy_ratio": round(reserved_tile_area / atlas_area, 4) if atlas_area else 0,
+        "padded_asset_ratio": round(padded_asset_area / atlas_area, 4) if atlas_area else 0,
         "entries": sorted_entries,
     }
     if labeled_preview_path:
         result["labeled_preview_path"] = labeled_preview_path
+    if profile:
+        timings["total"] = round((perf_counter() - started) * 1000, 3)
+        result["timing_ms"] = timings
     return result
 
 
-def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report_path: Path | None, max_size: int, label_review: bool) -> dict[str, Any]:
+def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report_path: Path | None, max_size: int, label_review: bool, profile: bool = False) -> dict[str, Any]:
+    started = perf_counter()
+    read_started = started
     manifest = read_json(asset_manifest)
+    load_started = perf_counter()
     loaded = load_assets(manifest)
+    timings: dict[str, float] = {}
+    if profile:
+        timings["read_manifest"] = round((load_started - read_started) * 1000, 3)
+        timings["load_assets"] = round((perf_counter() - load_started) * 1000, 3)
     groups: dict[str, list[dict[str, Any]]] = {}
     for item in loaded:
         groups.setdefault(item["pack_group"], []).append(item)
-    atlases = [pack_group(group, items, output_dir, max_size, label_review) for group, items in sorted(groups.items())]
+    pack_started = perf_counter()
+    atlases = [pack_group(group, items, output_dir, max_size, label_review, profile) for group, items in sorted(groups.items())]
+    if profile:
+        timings["pack_groups"] = round((perf_counter() - pack_started) * 1000, 3)
     pack_manifest = {
         "schema": "game.ui_atlas_pack",
         "version": 1,
@@ -363,6 +399,19 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
         "max_size": max_size,
         "atlases": atlases,
     }
+    if profile:
+        efficiency = {
+            "atlas_area": sum(int(atlas.get("atlas_area", 0)) for atlas in atlases),
+            "reserved_tile_area": sum(int(atlas.get("reserved_tile_area", 0)) for atlas in atlases),
+            "padded_asset_area": sum(int(atlas.get("padded_asset_area", 0)) for atlas in atlases),
+        }
+        atlas_area = int(efficiency["atlas_area"])
+        if atlas_area:
+            efficiency["occupancy_ratio"] = round(int(efficiency["reserved_tile_area"]) / atlas_area, 4)
+            efficiency["padded_asset_ratio"] = round(int(efficiency["padded_asset_area"]) / atlas_area, 4)
+        timings["total"] = round((perf_counter() - started) * 1000, 3)
+        pack_manifest["atlas_efficiency"] = efficiency
+        pack_manifest["timing_ms"] = timings
     write_json(json_output, pack_manifest)
     if report_path:
         lines = [
@@ -373,11 +422,29 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
             f"output_dir: `{pack_manifest['output_dir']}`",
             f"atlases: **{len(atlases)}**",
             "",
-            "## Atlases",
-            "",
         ]
+        if pack_manifest.get("atlas_efficiency"):
+            efficiency = pack_manifest["atlas_efficiency"]
+            lines.extend(
+                [
+                    "## Atlas Efficiency",
+                    "",
+                    f"- occupancy_ratio: {efficiency.get('occupancy_ratio', '-')}",
+                    f"- padded_asset_ratio: {efficiency.get('padded_asset_ratio', '-')}",
+                    f"- atlas_area: {efficiency.get('atlas_area', '-')}",
+                    f"- reserved_tile_area: {efficiency.get('reserved_tile_area', '-')}",
+                    f"- padded_asset_area: {efficiency.get('padded_asset_area', '-')}",
+                    "",
+                ]
+            )
+        if pack_manifest.get("timing_ms"):
+            lines.extend(["## Timing", ""])
+            for name, elapsed in pack_manifest["timing_ms"].items():
+                lines.append(f"- {name}: {elapsed} ms")
+            lines.append("")
+        lines.extend(["## Atlases", ""])
         for atlas in atlases:
-            line = f"- `{atlas['pack_group']}` -> `{atlas['path']}` {atlas['size'][0]}x{atlas['size'][1]}, entries={atlas['entry_count']}, physical={atlas['physical_entry_count']}, aliases={atlas['alias_count']}"
+            line = f"- `{atlas['pack_group']}` -> `{atlas['path']}` {atlas['size'][0]}x{atlas['size'][1]}, entries={atlas['entry_count']}, physical={atlas['physical_entry_count']}, aliases={atlas['alias_count']}, occupancy={atlas['occupancy_ratio']}"
             if atlas.get("labeled_preview_path"):
                 line += f", labeled_preview=`{atlas['labeled_preview_path']}`"
             lines.append(line)
@@ -394,6 +461,7 @@ def main() -> None:
     parser.add_argument("--report")
     parser.add_argument("--max-size", type=int, default=2048)
     parser.add_argument("--label-review", action="store_true", help="Draw id labels in padding/free space for human review. Do not use this image as a runtime texture.")
+    parser.add_argument("--profile", action="store_true", help="Record atlas build timing and efficiency metrics in JSON/Markdown and print the slowest atlas group.")
     args = parser.parse_args()
 
     asset_manifest = project_path(args.asset_manifest)
@@ -402,10 +470,13 @@ def main() -> None:
     report_path = project_path(args.report) if args.report else None
     if args.max_size < 64:
         fail("--max-size must be >= 64")
-    pack = build_pack(asset_manifest, output_dir, json_output, report_path, args.max_size, args.label_review)
+    pack = build_pack(asset_manifest, output_dir, json_output, report_path, args.max_size, args.label_review, args.profile)
     total_entries = sum(atlas["entry_count"] for atlas in pack["atlases"])
     print(f"pass: packed {total_entries} UI asset id(s) into {len(pack['atlases'])} review atlas image(s)")
     print(f"wrote atlas manifest: {norm_path(json_output)}")
+    if args.profile and pack["atlases"]:
+        slowest = max(pack["atlases"], key=lambda atlas: atlas.get("timing_ms", {}).get("total", 0))
+        print(f"profile: slowest atlas group `{slowest['pack_group']}` {slowest.get('timing_ms', {}).get('total', 0)} ms occupancy={slowest.get('occupancy_ratio')}")
 
 
 if __name__ == "__main__":

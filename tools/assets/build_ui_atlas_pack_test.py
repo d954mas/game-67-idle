@@ -164,14 +164,20 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             write_png(root / "assets/runtime/panel.png")
             manifest = root / "manifest.json"
             manifest.write_text(json.dumps({"schema": "game.asset_manifest", "version": 1, "assets": [asset("panel", "assets/runtime/panel.png")]}), encoding="utf-8")
-            result = run_pack(root, "--asset-manifest", "manifest.json", "--output-dir", "packed", "--json-output", "packed/atlas.json", "--label-review")
+            result = run_pack(root, "--asset-manifest", "manifest.json", "--output-dir", "packed", "--json-output", "packed/atlas.json", "--report", "packed/atlas.md", "--label-review", "--profile")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             pack = json.loads((root / "packed/atlas.json").read_text(encoding="utf-8"))
             self.assertEqual(pack["purpose"], "review_validation_atlas_not_engine_runtime_pack")
             self.assertTrue(pack["label_overlay"])
+            self.assertIn("atlas_efficiency", pack)
+            self.assertGreater(pack["atlas_efficiency"]["occupancy_ratio"], 0)
+            self.assertIn("timing_ms", pack)
+            self.assertGreaterEqual(pack["timing_ms"]["total"], 0)
             atlas_info = pack["atlases"][0]
             self.assertTrue(atlas_info["label_overlay"])
             self.assertIn("labeled_preview_path", atlas_info)
+            self.assertGreater(atlas_info["occupancy_ratio"], 0)
+            self.assertIn("timing_ms", atlas_info)
             entries = {entry["id"]: entry for entry in atlas_info["entries"]}
             label = entries["panel"]["review_label"]
             self.assertEqual(label["text"], "panel")
@@ -182,6 +188,10 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             preview = Image.open(root / atlas_info["labeled_preview_path"]).convert("RGBA")
             self.assertEqual(atlas.getpixel((label_x, label_y))[3], 0)
             self.assertGreater(preview.getpixel((label_x, label_y))[3], 0)
+            report = (root / "packed/atlas.md").read_text(encoding="utf-8")
+            self.assertIn("## Atlas Efficiency", report)
+            self.assertIn("## Timing", report)
+            self.assertIn("profile: slowest atlas group", result.stdout)
 
     def test_fails_when_asset_exceeds_max_size(self):
         with tempfile.TemporaryDirectory() as tmp:
