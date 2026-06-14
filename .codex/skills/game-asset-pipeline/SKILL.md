@@ -69,6 +69,11 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     bounds, add output padding, remove edge fringe, remove green-screen spill
     even when the crop manifest does not declare a source key, and preview the
     result before runtime use.
+    For dual-plate extraction, run
+    `py -3.12 tools/assets/dual_plate_alpha.py --light <light.png> --dark <dark.png> --output <rgba.png> --json-output <report.json> --report <report.md> --profile`
+    and reject reports where `transparent_nonzero_rgb_pixels` is above zero.
+    Hidden RGB under transparent alpha can leak back as 1-2px fringe during
+    premultiplied resizing or atlas filtering.
 15. For generated UI PNGs, run the pixel audit after slicing:
     `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`.
     The audit should pass before integrating or regenerating runtime headers.

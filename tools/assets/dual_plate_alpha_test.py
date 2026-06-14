@@ -9,7 +9,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from tools.assets.dual_plate_alpha import cleanup_alpha_blobs, extract_dual_plate_alpha
+from tools.assets.dual_plate_alpha import build_report, cleanup_alpha_blobs, extract_dual_plate_alpha
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -75,8 +75,17 @@ class DualPlateAlphaTests(unittest.TestCase):
         removed = cleanup_alpha_blobs(image, min_area=2)
 
         self.assertEqual(removed, 1)
-        self.assertEqual(image.getpixel((7, 7))[3], 0)
+        self.assertEqual(image.getpixel((7, 7)), (0, 0, 0, 0))
         self.assertEqual(image.getpixel((3, 3))[3], 255)
+
+    def test_report_counts_hidden_rgb_under_transparency(self) -> None:
+        image = Image.new("RGBA", (2, 1), (0, 0, 0, 0))
+        image.putpixel((1, 0), (200, 20, 120, 0))
+
+        report = build_report(image, removed_blob_pixels=0)
+
+        self.assertEqual(report["alpha_bbox"], None)
+        self.assertEqual(report["transparent_nonzero_rgb_pixels"], 1)
 
     def test_cli_writes_png_and_json_report(self) -> None:
         foreground = (100, 70, 40)
@@ -102,6 +111,9 @@ class DualPlateAlphaTests(unittest.TestCase):
                     str(output_path),
                     "--json-output",
                     str(json_path),
+                    "--report",
+                    str(root / "report.md"),
+                    "--profile",
                 ],
                 text=True,
                 capture_output=True,
@@ -113,6 +125,11 @@ class DualPlateAlphaTests(unittest.TestCase):
             report = json.loads(json_path.read_text(encoding="utf-8"))
             self.assertEqual(report["schema"], "game.dual_plate_alpha_report")
             self.assertEqual(report["visible_pixels"], 16)
+            self.assertEqual(report["transparent_nonzero_rgb_pixels"], 0)
+            self.assertEqual(report["alpha_bbox"], [0, 0, 4, 4])
+            self.assertIn("timing_ms", report)
+            self.assertIn("profile: dual-plate alpha total", result.stdout)
+            self.assertIn("## Timing", (root / "report.md").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

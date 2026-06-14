@@ -6,6 +6,7 @@ import json
 from collections import deque
 from pathlib import Path
 from statistics import mean
+from time import perf_counter
 from typing import Literal
 
 from PIL import Image
@@ -158,28 +159,45 @@ def cleanup_alpha_blobs(
         if not should_remove:
             continue
         for x, y in component:
-            red, green, blue, _alpha = pixels[x, y]
-            pixels[x, y] = (red, green, blue, 0)
+            pixels[x, y] = (0, 0, 0, 0)
             removed += 1
     image.paste(rgba)
     return removed
 
 
-def build_report(image: Image.Image, *, removed_blob_pixels: int) -> dict:
+def count_transparent_nonzero_rgb(image: Image.Image) -> int:
+    rgba = image.convert("RGBA")
+    return sum(1 for red, green, blue, alpha in rgba.getdata() if alpha == 0 and (red != 0 or green != 0 or blue != 0))
+
+
+def alpha_bbox(image: Image.Image) -> list[int] | None:
+    bbox = image.convert("RGBA").getchannel("A").getbbox()
+    if not bbox:
+        return None
+    left, top, right, bottom = bbox
+    return [left, top, right - left, bottom - top]
+
+
+def build_report(image: Image.Image, *, removed_blob_pixels: int, timings: dict[str, float] | None = None) -> dict:
     rgba = image.convert("RGBA")
     alphas = list(rgba.getchannel("A").getdata())
     visible = [alpha for alpha in alphas if alpha > 0]
-    return {
+    report = {
         "schema": "game.dual_plate_alpha_report",
         "version": 1,
         "size": list(rgba.size),
+        "alpha_bbox": alpha_bbox(rgba),
         "visible_pixels": len(visible),
         "transparent_pixels": len(alphas) - len(visible),
+        "transparent_nonzero_rgb_pixels": count_transparent_nonzero_rgb(rgba),
         "min_visible_alpha": min(visible) if visible else 0,
         "max_visible_alpha": max(visible) if visible else 0,
         "mean_visible_alpha": round(mean(visible), 3) if visible else 0,
         "removed_blob_pixels": removed_blob_pixels,
     }
+    if timings:
+        report["timing_ms"] = timings
+    return report
 
 
 def write_markdown_report(path: Path, report: dict) -> None:
@@ -195,11 +213,14 @@ def write_markdown_report(path: Path, report: dict) -> None:
                 "# Dual Plate Alpha Report",
                 "",
                 f"Size: `{report['size'][0]}x{report['size'][1]}`",
+                f"Alpha bbox: `{report['alpha_bbox']}`",
                 f"Visible pixels: `{report['visible_pixels']}`",
                 f"Transparent pixels: `{report['transparent_pixels']}`",
+                f"Transparent non-zero RGB pixels: `{report['transparent_nonzero_rgb_pixels']}`",
                 f"Visible alpha range: `{report['min_visible_alpha']}..{report['max_visible_alpha']}`",
                 f"Mean visible alpha: `{report['mean_visible_alpha']}`",
                 f"Removed blob pixels: `{report['removed_blob_pixels']}`",
+                *(["", "## Timing", *[f"- {name}: {elapsed} ms" for name, elapsed in report["timing_ms"].items()]] if report.get("timing_ms") else []),
                 "",
             ]
         ),
@@ -222,8 +243,11 @@ def main() -> int:
     parser.add_argument("--keep-largest-blob", action="store_true")
     parser.add_argument("--json-output", type=Path)
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--profile", action="store_true", help="Record extraction, cleanup, save, and report timings.")
     args = parser.parse_args()
 
+    started = perf_counter()
+    extract_started = perf_counter()
     result = extract_dual_plate_alpha(
         Image.open(args.light),
         Image.open(args.dark),
@@ -234,15 +258,25 @@ def main() -> int:
         alpha_cutoff=args.alpha_cutoff,
         alpha_hardening=args.alpha_hardening,
     )
+    timings: dict[str, float] = {}
+    if args.profile:
+        timings["extract"] = round((perf_counter() - extract_started) * 1000, 3)
+    cleanup_started = perf_counter()
     removed_blob_pixels = cleanup_alpha_blobs(
         result,
         min_area=args.blob_min_area,
         keep_largest=args.keep_largest_blob,
         alpha_threshold=max(1, args.alpha_cutoff),
     )
+    if args.profile:
+        timings["cleanup"] = round((perf_counter() - cleanup_started) * 1000, 3)
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    save_started = perf_counter()
     result.save(args.output)
+    if args.profile:
+        timings["save_output"] = round((perf_counter() - save_started) * 1000, 3)
 
+    report_started = perf_counter()
     report = build_report(result, removed_blob_pixels=removed_blob_pixels)
     report.update(
         {
@@ -259,12 +293,18 @@ def main() -> int:
             "keep_largest_blob": args.keep_largest_blob,
         }
     )
+    if args.profile:
+        timings["build_report"] = round((perf_counter() - report_started) * 1000, 3)
+        timings["total"] = round((perf_counter() - started) * 1000, 3)
+        report["timing_ms"] = timings
     if args.json_output:
         args.json_output.parent.mkdir(parents=True, exist_ok=True)
         args.json_output.write_text(json.dumps(report, indent=2), encoding="utf-8")
     if args.report:
         write_markdown_report(args.report, report)
     print(f"wrote {args.output} ({report['visible_pixels']} visible pixels)")
+    if args.profile:
+        print(f"profile: dual-plate alpha total {report['timing_ms']['total']} ms")
     return 0
 
 

@@ -112,7 +112,7 @@ pixel-aligned generated plates: one on a light background and one on a dark
 background. Use it when chroma-key source sheets repeatedly fail fringe audits
 or when the asset has delicate antialiasing, hair-like detail, glow, or soft
 ornate edges. It writes an RGBA PNG plus optional JSON/Markdown report with
-visible-pixel and cleanup stats:
+visible-pixel, alpha-bbox, hidden transparent-RGB, cleanup, and timing stats:
 
 ```powershell
 py -3.12 tools/assets/dual_plate_alpha.py `
@@ -121,13 +121,17 @@ py -3.12 tools/assets/dual_plate_alpha.py `
   --output path/to/output.png `
   --json-output path/to/report.json `
   --report path/to/report.md `
-  --blob-min-area 12
+  --blob-min-area 12 `
+  --profile
 ```
 
 This mode requires a stronger generation contract than chroma: both plates must
 have the same dimensions and the same subject placement. If the generator
 changes the ornament shape, lighting, or pose between plates, reject the pair
-before extraction.
+before extraction. If the report has `transparent_nonzero_rgb_pixels` above
+zero, do not accept the extraction yet; hidden RGB under alpha can leak back as
+1-2px fringe during premultiplied resizing or atlas filtering. Blob cleanup
+zeroes RGB when it removes tiny alpha components.
 
 `tools/assets/validate_art_job.mjs` validates the generated-art job contract:
 source families, generation records, reusable kinds, crop/runtime manifests,
