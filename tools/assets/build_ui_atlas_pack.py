@@ -18,6 +18,9 @@ RESAMPLE_NEAREST = getattr(getattr(Image, "Resampling", Image), "NEAREST", Image
 LABEL_PAD_X = 2
 LABEL_PAD_Y = 1
 LABEL_GAP_Y = 2
+LABEL_LINE_GAP_Y = 1
+LABEL_MIN_WIDTH = 72
+LABEL_MAX_WIDTH = 220
 
 
 def fail(message: str) -> None:
@@ -71,6 +74,75 @@ def measure_label(label: str) -> tuple[int, int]:
     return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
 
 
+def wrap_long_piece(piece: str, max_width: int) -> list[str]:
+    lines: list[str] = []
+    current = ""
+    for char in piece:
+        candidate = current + char
+        if current and measure_label(candidate)[0] > max_width:
+            lines.append(current)
+            current = char
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    return lines or [piece]
+
+
+def identifier_pieces(text: str) -> list[str]:
+    raw = re.split(r"([_-])", text)
+    pieces: list[str] = []
+    index = 0
+    while index < len(raw):
+        part = raw[index]
+        if not part:
+            index += 1
+            continue
+        if index + 1 < len(raw) and raw[index + 1] in {"_", "-"}:
+            pieces.append(part + raw[index + 1])
+            index += 2
+        else:
+            pieces.append(part)
+            index += 1
+    return pieces or [text]
+
+
+def wrap_identifier_line(text: str, max_width: int) -> list[str]:
+    lines: list[str] = []
+    current = ""
+    for piece in identifier_pieces(text):
+        candidates = wrap_long_piece(piece, max_width) if measure_label(piece)[0] > max_width else [piece]
+        for candidate_piece in candidates:
+            candidate = current + candidate_piece
+            if current and measure_label(candidate)[0] > max_width:
+                lines.append(current)
+                current = candidate_piece
+            else:
+                current = candidate
+    if current:
+        lines.append(current)
+    return lines or [text]
+
+
+def label_display_lines(label: str, max_width: int) -> list[str]:
+    source_lines = [label]
+    alias_match = re.match(r"^(.+) \(\+(.+)\)$", label)
+    if alias_match:
+        source_lines = [alias_match.group(1), *[f"+{alias}" for alias in alias_match.group(2).split(",") if alias]]
+    lines: list[str] = []
+    for source_line in source_lines:
+        lines.extend(wrap_identifier_line(source_line, max_width))
+    return lines or [label]
+
+
+def measure_label_lines(lines: list[str]) -> tuple[int, int]:
+    line_sizes = [measure_label(line) for line in lines]
+    width = max((size[0] for size in line_sizes), default=0)
+    line_height = max((size[1] for size in line_sizes), default=0)
+    height = line_height * len(lines) + LABEL_LINE_GAP_Y * max(0, len(lines) - 1)
+    return width, height
+
+
 def item_label(item: dict[str, Any], aliases_by_target: dict[str, list[str]] | None = None) -> str:
     label = str(item["asset"]["id"])
     aliases = aliases_by_target.get(label, []) if aliases_by_target else []
@@ -89,9 +161,13 @@ def prepare_review_labels(items: list[dict[str, Any]], alias_items: list[dict[st
             aliases_by_target.setdefault(str(alias_of), []).append(str(item["asset"]["id"]))
     for item in items:
         label = item_label(item, aliases_by_target)
-        label_width, label_height = measure_label(label)
+        padded_width = int(item["image"].width) + int(item["extrude"]) * 2
+        max_text_width = min(LABEL_MAX_WIDTH, max(LABEL_MIN_WIDTH, padded_width))
+        lines = label_display_lines(label, max_text_width)
+        label_width, label_height = measure_label_lines(lines)
         item["review_label"] = {
             "text": label,
+            "lines": lines,
             "width": label_width + LABEL_PAD_X * 2,
             "height": label_height + LABEL_PAD_Y * 2,
             "gap_y": LABEL_GAP_Y,
@@ -238,6 +314,7 @@ def make_entry(item: dict[str, Any], x: int, y: int, image: Image.Image) -> dict
         label_y = y + image.height + extrude * 2 + int(review_label.get("gap_y", 0))
         entry["review_label"] = {
             "text": review_label["text"],
+            "lines": list(review_label.get("lines") or [review_label["text"]]),
             "rect": [label_x, label_y, int(review_label["width"]), int(review_label["height"])],
         }
     return entry
@@ -252,9 +329,16 @@ def draw_review_labels(atlas: Image.Image, entries: list[dict[str, Any]]) -> Non
         review_label = entry.get("review_label")
         if isinstance(review_label, dict) and isinstance(review_label.get("rect"), list):
             label = str(review_label.get("text") or entry["id"])
+            lines = review_label.get("lines")
+            if not isinstance(lines, list) or not all(isinstance(line, str) for line in lines):
+                lines = [label]
             label_x, label_y, label_width, label_height = [int(value) for value in review_label["rect"]]
             draw.rectangle([label_x, label_y, label_x + label_width - 1, label_y + label_height - 1], fill=(0, 0, 0, 170))
-            draw.text((label_x + LABEL_PAD_X, label_y + LABEL_PAD_Y), label, fill=(255, 255, 255, 255))
+            line_y = label_y + LABEL_PAD_Y
+            line_height = max((measure_label(line)[1] for line in lines), default=0)
+            for line in lines:
+                draw.text((label_x + LABEL_PAD_X, line_y), line, fill=(255, 255, 255, 255))
+                line_y += line_height + LABEL_LINE_GAP_Y
         draw.rectangle([rect[0], rect[1], rect[0] + rect[2] - 1, rect[1] + rect[3] - 1], outline=(255, 255, 255, 110))
 
 

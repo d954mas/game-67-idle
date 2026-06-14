@@ -187,6 +187,45 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             self.assertNotIn("review_label", entries["button_primary"])
             self.assertNotIn("review_label", entries["button_secondary"])
 
+    def test_label_review_wraps_long_ids_without_widening_tile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base_id = "fantasy_panel_primary_inventory_frame"
+            hover_id = "fantasy_panel_primary_inventory_frame_hovered"
+            selected_id = "fantasy_panel_primary_inventory_frame_selected"
+            write_png(root / "assets/runtime/base.png")
+            write_png(root / "assets/runtime/hover.png")
+            write_png(root / "assets/runtime/selected.png")
+            manifest = root / "manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema": "game.asset_manifest",
+                        "version": 1,
+                        "assets": [
+                            asset(base_id, "assets/runtime/base.png"),
+                            asset(hover_id, "assets/runtime/hover.png", alias_of=base_id),
+                            asset(selected_id, "assets/runtime/selected.png", alias_of=base_id),
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = run_pack(root, "--asset-manifest", "manifest.json", "--output-dir", "packed", "--json-output", "packed/atlas.json", "--label-review")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            pack = json.loads((root / "packed/atlas.json").read_text(encoding="utf-8"))
+            atlas_info = pack["atlases"][0]
+            entries = {entry["id"]: entry for entry in atlas_info["entries"]}
+            label = entries[base_id]["review_label"]
+            self.assertEqual(label["text"], f"{base_id} (+{hover_id},{selected_id})")
+            self.assertGreater(len(label["lines"]), 3)
+            self.assertLessEqual(label["rect"][2], 80)
+            self.assertTrue(all(line for line in label["lines"]))
+            self.assertNotIn("review_label", entries[hover_id])
+            preview = Image.open(root / atlas_info["labeled_preview_path"]).convert("RGBA")
+            label_x, label_y, _, _ = label["rect"]
+            self.assertGreater(preview.getpixel((label_x, label_y))[3], 0)
+
     def test_label_review_marks_manifest_as_review_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

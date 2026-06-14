@@ -198,8 +198,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       atlas PNGs from `pack_group`, preserves slice9/content metadata, writes
       extruded padded rects, reuses alias regions, and can draw id labels in
       reserved `review_label.rect` free space outside each asset `padded_rect`
-      so the lead can name which assets to take. This is review evidence, not
-      the game's final runtime packer.
+      so the lead can name which assets to take. Long labels should keep exact
+      `review_label.text` metadata and render wrapped `review_label.lines` in
+      the preview so verbose ids do not widen the atlas. This is review
+      evidence, not the game's final runtime packer.
     - review atlas audit:
       `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
       Add `--profile` when atlas audit feels slow; it writes audit timing and
@@ -316,7 +318,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   slice9 margins, content safe areas, source paths, physical entry count, and
   alias count. The labeled preview must put exact asset names in
   `review_label.rect` free space outside the asset `padded_rect`; do not place
-  labels over the art or over other labels.
+  labels over the art or over other labels. Preserve the exact id and alias
+  list in `review_label.text`; wrap only the rendered preview text through
+  `review_label.lines`.
   It must not be presented as the game's final runtime atlas. Use `--profile`
   while optimizing atlas economy so reports preserve occupancy and padded-asset
   ratios instead of relying on visual guessing.
