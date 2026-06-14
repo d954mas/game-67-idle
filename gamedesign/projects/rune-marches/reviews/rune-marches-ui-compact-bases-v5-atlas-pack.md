@@ -15,11 +15,23 @@ atlases: **1**
 
 ## Timing
 
-- read_manifest: 0.198 ms
-- load_assets: 17.407 ms
-- pack_groups: 87.037 ms
-- total: 105.146 ms
+- read_manifest: 0.217 ms
+- load_assets: 18.407 ms
+- pack_groups: 87.86 ms
+- total: 107.242 ms
 
 ## Atlases
 
 - `ui_rune_marches_compact_bases_v5` -> `assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5.png` 803x1073, entries=7, physical=7, aliases=0, occupancy=0.6508, labeled_preview=`assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5-labeled.png`
+
+## Asset Id Index
+
+### ui_rune_marches_compact_bases_v5
+
+- `compact_button_disabled_long_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png`, atlas_rect=[355, 3, 445, 119], padded_rect=[353, 1, 449, 123], label_rect=[353, 127, 198, 34]
+- `compact_button_disabled_medium_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png`, atlas_rect=[453, 752, 298, 119], padded_rect=[451, 750, 302, 123], label_rect=[451, 876, 198, 34]
+- `compact_button_disabled_short_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png`, atlas_rect=[307, 914, 211, 119], padded_rect=[305, 912, 215, 123], label_rect=[305, 1038, 198, 34]
+- `compact_button_idle_long_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png`, atlas_rect=[3, 752, 444, 119], padded_rect=[1, 750, 448, 123], label_rect=[1, 876, 218, 18]
+- `compact_button_idle_medium_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png`, atlas_rect=[3, 914, 298, 119], padded_rect=[1, 912, 302, 123], label_rect=[1, 1038, 164, 34]
+- `compact_button_idle_short_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png`, atlas_rect=[524, 914, 211, 118], padded_rect=[522, 912, 215, 122], label_rect=[522, 1037, 223, 18]
+- `compact_journal_panel_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png`, atlas_rect=[3, 3, 346, 722], padded_rect=[1, 1, 350, 726], label_rect=[1, 730, 198, 18]

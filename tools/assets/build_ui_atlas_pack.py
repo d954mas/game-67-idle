@@ -553,6 +553,24 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
                 line += f", labeled_preview=`{atlas['labeled_preview_path']}`"
             lines.append(line)
         lines.append("")
+        lines.extend(["## Asset Id Index", ""])
+        for atlas in atlases:
+            lines.append(f"### {atlas['pack_group']}")
+            lines.append("")
+            for entry in atlas["entries"]:
+                details = [
+                    f"kind={entry.get('kind') or '-'}",
+                    f"source=`{entry.get('source_path') or '-'}`",
+                    f"atlas_rect={entry.get('atlas_rect')}",
+                    f"padded_rect={entry.get('padded_rect')}",
+                ]
+                if entry.get("alias_of"):
+                    details.append(f"alias_of=`{entry['alias_of']}`")
+                review_label = entry.get("review_label") if isinstance(entry.get("review_label"), dict) else None
+                if review_label:
+                    details.append(f"label_rect={review_label.get('rect')}")
+                lines.append(f"- `{entry['id']}`: " + ", ".join(details))
+            lines.append("")
         write_text(report_path, "\n".join(lines))
     return pack_manifest
 

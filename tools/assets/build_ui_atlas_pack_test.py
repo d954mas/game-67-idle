@@ -260,6 +260,10 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             report = (root / "packed/atlas.md").read_text(encoding="utf-8")
             self.assertIn("## Atlas Efficiency", report)
             self.assertIn("## Timing", report)
+            self.assertIn("## Asset Id Index", report)
+            self.assertIn("### ui_common", report)
+            self.assertIn("- `panel`: kind=slice9", report)
+            self.assertIn("label_rect=", report)
             self.assertIn("profile: slowest atlas group", result.stdout)
 
     def test_fails_when_asset_exceeds_max_size(self):

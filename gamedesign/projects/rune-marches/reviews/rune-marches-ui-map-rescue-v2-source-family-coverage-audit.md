@@ -11,7 +11,7 @@ verdict: **pass**
 
 ## Records
 
-- PASS `rune-marches-blank-ui-bases-source-v2` -> blank UI kit sheet
+- PASS `rune-marches-compact-ui-bases-source-v5` -> blank UI kit sheet
 - PASS `rune-marches-isolated-icons-source-v1` -> isolated icon sheet
 - PASS `rune-marches-ui-decor-overlays-source-v1` -> ui decor overlay sheet
 
