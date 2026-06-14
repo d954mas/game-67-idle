@@ -1,0 +1,38 @@
+{
+  "schema": "game.slice9_design_policy_audit",
+  "version": 1,
+  "crop_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-bases-v2-crop_manifest.json",
+  "runtime_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-bases-v2-asset_manifest.json",
+  "verdict": "pass",
+  "problems": [],
+  "assets": [
+    {
+      "id": "modal_panel_v2",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-bases-v2/modal_panel_v2_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "journal_panel_v2",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-bases-v2/journal_panel_v2_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "button_idle_v2",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-bases-v2/button_idle_v2_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "button_disabled_v2",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-bases-v2/button_disabled_v2_slice9.png",
+      "status": "pass",
+      "problems": []
+    }
+  ]
+}

@@ -21,6 +21,8 @@ function usage() {
   node tools/ai.mjs checkpoint <intent> [--force] [--min-gap-min <n>] [checkpoint options]
   node tools/ai.mjs run [--profile-mode passive|full|off] [--profile-slow-ms <n>] [--phase <name>] [--category <name>] [--intent <text>] [--value <name>] -- <command> [args...]
   node tools/ai.mjs validate --change <kind> [--risk low|medium|high] [--tier <name>] [--dry-run]
+  node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail [gate options]
+  node tools/ai.mjs close-slice --task <task-id> --project <game-id> --evidence <text> [close options]
   node tools/ai.mjs status [--verbose]
   node tools/ai.mjs reflect [--deep] [--strict] [--no-gap-checkpoint]
 
@@ -32,6 +34,8 @@ Fast path:
   checkpoint record a long manual/research/review gap without noisy short pauses
   run      run a command; passive mode records only slow/failing commands
   validate run a planned validation batch with batch metadata
+  gate     write a product-read screenshot gate before expanding game content
+  close-slice require product gate + evidence before handoff/review
   status   show passive telemetry health; --verbose shows deep handoff state
   reflect  write a short closeout by default; --deep prepares the full handoff
 
@@ -392,6 +396,14 @@ if (command === "validate") {
   if (!hasFlag(args, "--plan") && !hasFlag(args, "--change")) usage();
   if (!hasFlag(args, "--plan") && !hasFlag(args, "--risk")) args.push("--risk", "medium");
   run(["tools/ai_profile/validation_run.mjs", ...args]);
+}
+
+if (command === "gate") {
+  run(["tools/product_gate/review.mjs", ...argv]);
+}
+
+if (command === "close-slice") {
+  run(["tools/product_gate/close_slice.mjs", ...argv]);
 }
 
 if (command === "status") {

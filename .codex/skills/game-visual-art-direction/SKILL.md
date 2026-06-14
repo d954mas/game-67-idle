@@ -9,6 +9,11 @@ Use this skill when visual quality is part of the game task, especially for
 polished prototypes, child-testable builds, generated art, UI, sprites, fake
 shots, or release-quality presentation.
 
+For reusable generated runtime UI kits, also use
+`.codex/skills/generated-game-ui-assets/`; it owns the end-to-end UI asset kit
+workflow from art bible through slice9, pixel audit, responsive layout audit,
+and runtime proof.
+
 ## Workflow
 
 1. Read local project rules and the active design docs before generating art.
@@ -55,6 +60,11 @@ shots, or release-quality presentation.
    (`sprite`, `slice9`, `icon`, `tile`, `border`, `background`,
    `full_mockup`), candidate policy, must-not-bake items, crop ids, expected
    runtime composition, and slice9 insets.
+   For generated game UI, do not begin from one full-screen mockup unless it is
+   explicitly only a visual target. Start from source families: blank UI kit
+   sheet, isolated icon sheet, map/world layer sheet, and sprite/FX sheet.
+   The job must pass `node tools/assets/validate_art_job.mjs --job <job>`
+   in draft mode before final generation.
 4. State the runtime harness separately from the visual source of truth.
    Visual work may use generated images, but playable validation follows the
    project's primary runtime rules.
@@ -66,6 +76,9 @@ shots, or release-quality presentation.
 7. Inspect generated outputs before integration. Reject assets with unreadable
    text, wrong subject, weak silhouettes, random logos, watermarks, or style
    drift.
+   Reject procedural/programmer-art fallbacks as final generated art. They may
+   unblock geometry tests, but they do not satisfy a visual-generation task
+   unless the lead explicitly accepts a recorded exception.
 8. Create or update a small runtime asset checklist: which generated assets are
    source art, which are cropped/packed runtime assets, and which screen uses
    them.
@@ -73,6 +86,10 @@ shots, or release-quality presentation.
    the primary runtime.
 10. Validate with screenshots from the primary runtime and compare against the
     accepted visual target.
+11. If the lead rejects the current visuals as ugly, unclear, toy-like,
+    debug-looking, or not product-quality, freeze feature expansion. Create a
+    short visual/product failure report, a rescue task, and the next screenshot
+    proof before writing more gameplay content.
 
 ## Fast Art Job Loop
 
@@ -126,14 +143,29 @@ release-quality, or child-testable game work:
   improve the art/UI source assets first, then integrate them.
 - The main gameplay screenshot must communicate the core action without the
   agent explaining it.
+- If the screenshot cannot pass the player-read questions (where am I, what do
+  I do, what changed, what reward did I get, why does this look like a game),
+  do not call visual work done and do not continue adding content. When
+  available, create the durable gate with `node tools/product_gate/review.mjs`
+  or `node tools/ai.mjs gate`, then use `node tools/ai.mjs close-slice` for
+  handoff evidence.
 
 ## Reusable UI Gate
 
 Generated UI for a game must be reusable runtime UI, not only screenshot art:
 
+- Keep the current research note in view for generated UI work:
+  `gamedesign/sources/generated_game_ui_asset_pipeline_research_2026-06-14.md`.
+- Create or update an art bible before source generation: palette, line weight,
+  material language, border thickness, corner style, icon silhouette rules,
+  state colors, and forbidden motifs.
+- Treat a full generated screenshot as reference/fake shot only. Runtime UI
+  must come from separately generated/cropped source families.
 - Prefer slice9-ready panels and buttons: separate blank button backgrounds,
   panel frames, corners, edges, and center fills where the runtime needs
-  resizable elements.
+  resizable elements. Record stretch zones, fixed ornament policy, minimum
+  usable size, and disallowed uses; generated buttons that only work as large
+  primary controls must not be reused as compact/mobile secondary controls.
 - Do not bake labels, counters, or icons into reusable button backgrounds.
   Generate icons separately and compose them in runtime.
 - Do not make the full gameplay board one fixed art image when the game needs a
@@ -141,8 +173,51 @@ Generated UI for a game must be reusable runtime UI, not only screenshot art:
   parts separately.
 - Generate distinct visual states for controls when needed: idle, hover/press,
   disabled, affordable, locked, and selected.
-- Asset manifests should record intended slice9 insets or composition rules,
-  not just PNG paths.
+- Asset manifests should record intended slice9 insets, content safe areas,
+  target preview sizes, slice9 stretch/overlay usage policy, semantic icon
+  roles, pivots/anchors, and composition rules, not just PNG paths.
+- Accepted source sheets must also have a generation record: provider/model or
+  workflow, workflow file/json, seed or no-seed reason, prompt, negative prompt, source family
+  role, accepted image path, and rejected candidate notes. Create it with
+  `node tools/assets/new_generation_record.mjs` and reference the record path
+  from the art job's `expected_outputs.generation_records`. Generated/artist
+  records need real workflow provenance, not empty `{}` placeholders.
+- Reject UI sheets that have fused buttons/icons, fake text, no gutters between
+  assets, uncuttable ornate panels, inconsistent state colors, or decorations
+  occupying the text/content safe area.
+- Reject icon/source sheets whose gutters are too small for extraction. A sheet
+  that requires overlapping crop rectangles, keeps neighboring shadows, clips
+  silhouettes, or leaves chroma-key fringe is not an accepted runtime source
+  even if the individual drawings look attractive.
+- Accept generated source sheets only after the crop contact sheet shows no
+  clipped silhouettes, no adjacent asset fragments, and no visible key-color
+  outline at gameplay preview size.
+- Before slicing, use `tools/assets/normalize_source_sheet_chroma.py` when a
+  generated sheet has non-flat chroma background, then run
+  `tools/assets/audit_source_sheet_intake.py` to catch gross source-sheet
+  failures: non-flat chroma backgrounds, merged components, clipped components,
+  or too-small gutters. A pass here is necessary but not a beauty or slice9-art
+  pass.
+- For generated UI kits, require both human preview evidence and the pixel
+  audit from `tools/assets/audit_generated_ui_assets.py`; a clean-looking
+  contact sheet alone is not enough because 1-3 px clipping and chroma fringe
+  can survive visual review.
+- A technical audit pass is not a beauty pass. If the runtime screenshot reads
+  as two-color programmer UI, the art task remains open even if slice9/pixel
+  gates pass.
+- `node tools/assets/validate_art_job.mjs --job <job> --final-art` must pass
+  before claiming a final generated/artist UI art pass. It should fail while
+  accepted source records are procedural debug scaffolds or have partial/unknown
+  generation provenance.
+- Reusable UI kits need composition proof, not only asset proof. Capture at
+  least desktop and portrait screenshots when the target includes mobile or
+  responsive play. Portrait must be a distinct composition: reduced HUD values,
+  one full-width primary action row, secondary actions below, and no dense
+  desktop stat strings squeezed into panels.
+- When the runtime exposes UI bounds, add a responsive layout audit for the
+  key action nodes. Screenshot gates judge player-read; UI-tree audits catch
+  compressed touch targets, overlaps, and portrait primary actions that are not
+  actually full-width.
 
 ## Generated Asset Rules
 

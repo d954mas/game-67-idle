@@ -1,0 +1,35 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v1.png",
+  "size": [
+    1254,
+    1254
+  ],
+  "key_color": "#ff00ff",
+  "key_tolerance": 8,
+  "component_count": 1,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 36,
+  "closest_gap_px": null,
+  "closest_pair": null,
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        0,
+        0,
+        1254,
+        1254
+      ],
+      "area_px": 1536284,
+      "border_gap_px": 0
+    }
+  ],
+  "problems": [
+    "component_count 1 is below required 8",
+    "component_1 border gap 0px is below required 24px"
+  ],
+  "status": "fail"
+}

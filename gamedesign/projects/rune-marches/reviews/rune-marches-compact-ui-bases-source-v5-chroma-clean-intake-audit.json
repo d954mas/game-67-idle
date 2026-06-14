@@ -1,0 +1,259 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-compact-ui-bases-source-v5-chroma-clean.png",
+  "size": [
+    1536,
+    1024
+  ],
+  "key_color": "#00ff00",
+  "key_tolerance": 48,
+  "component_count": 11,
+  "min_component_area_px": 1200,
+  "min_border_px": 8,
+  "min_gutter_px": 12,
+  "max_exact_key_conflict_px": 0,
+  "max_key_hue_conflict_ratio": 0.05,
+  "closest_gap_px": 40,
+  "closest_pair": [
+    "component_6",
+    "component_7"
+  ],
+  "candidate_key_scores": [
+    {
+      "key_color": "#ff00ff",
+      "visible_px": 544517,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 16,
+      "hue_band_ratio": 2.9e-05,
+      "score": 16.002938
+    },
+    {
+      "key_color": "#0000ff",
+      "visible_px": 544517,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 18,
+      "hue_band_ratio": 3.3e-05,
+      "score": 18.003306
+    },
+    {
+      "key_color": "#00ffff",
+      "visible_px": 544517,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 3106,
+      "hue_band_ratio": 0.005704,
+      "score": 3106.570414
+    },
+    {
+      "key_color": "#00ff00",
+      "visible_px": 544517,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 5623,
+      "hue_band_ratio": 0.010327,
+      "score": 5624.032658
+    },
+    {
+      "key_color": "#ffff00",
+      "visible_px": 544517,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 9101,
+      "hue_band_ratio": 0.016714,
+      "score": 9102.67139
+    },
+    {
+      "key_color": "#ff0000",
+      "visible_px": 544517,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 43405,
+      "hue_band_ratio": 0.079713,
+      "score": 43412.971285
+    }
+  ],
+  "suggested_key_color": "#ff00ff",
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        1149,
+        131,
+        338,
+        714
+      ],
+      "area_px": 239210,
+      "visible_px": 239210,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 49
+    },
+    {
+      "id": "component_2",
+      "bbox": [
+        311,
+        203,
+        290,
+        111
+      ],
+      "area_px": 31563,
+      "visible_px": 31563,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 203
+    },
+    {
+      "id": "component_3",
+      "bbox": [
+        642,
+        203,
+        436,
+        111
+      ],
+      "area_px": 47403,
+      "visible_px": 47403,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 203
+    },
+    {
+      "id": "component_4",
+      "bbox": [
+        63,
+        204,
+        203,
+        110
+      ],
+      "area_px": 22034,
+      "visible_px": 22034,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 63
+    },
+    {
+      "id": "component_5",
+      "bbox": [
+        63,
+        389,
+        203,
+        111
+      ],
+      "area_px": 22110,
+      "visible_px": 22110,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 63
+    },
+    {
+      "id": "component_6",
+      "bbox": [
+        311,
+        389,
+        290,
+        111
+      ],
+      "area_px": 31641,
+      "visible_px": 31641,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 311
+    },
+    {
+      "id": "component_7",
+      "bbox": [
+        641,
+        389,
+        437,
+        111
+      ],
+      "area_px": 47592,
+      "visible_px": 47592,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 389
+    },
+    {
+      "id": "component_8",
+      "bbox": [
+        259,
+        589,
+        141,
+        148
+      ],
+      "area_px": 16430,
+      "visible_px": 16430,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 259
+    },
+    {
+      "id": "component_9",
+      "bbox": [
+        561,
+        590,
+        151,
+        144
+      ],
+      "area_px": 21191,
+      "visible_px": 21191,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 290
+    },
+    {
+      "id": "component_10",
+      "bbox": [
+        57,
+        807,
+        451,
+        88
+      ],
+      "area_px": 31083,
+      "visible_px": 31083,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 57
+    },
+    {
+      "id": "component_11",
+      "bbox": [
+        567,
+        807,
+        497,
+        88
+      ],
+      "area_px": 34260,
+      "visible_px": 34260,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 129
+    }
+  ],
+  "problems": [],
+  "status": "pass"
+}

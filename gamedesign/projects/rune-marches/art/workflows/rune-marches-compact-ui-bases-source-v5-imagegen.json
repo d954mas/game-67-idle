@@ -1,0 +1,17 @@
+{
+  "schema": "game.image_generation_workflow",
+  "version": 1,
+  "mode": "built-in image_gen",
+  "provider": "built-in image generation",
+  "model": "built-in image generation",
+  "generated_at": "2026-06-14",
+  "prompt_packet": "gamedesign/projects/rune-marches/art/prompts/rune-marches-blank-ui-bases-source-v3-compact-prompt.json",
+  "raw_output_source": "C:/Users/ROG/.codex/generated_images/019ec14c-05a4-7131-a14d-df472b7d8b08",
+  "accepted_raw_source": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-compact-ui-bases-source-v5.png",
+  "accepted_clean_source": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-compact-ui-bases-source-v5-chroma-clean.png",
+  "notes": [
+    "Built-in image generation did not expose a stable seed.",
+    "Source was generated with flat #00ff00 chroma intent, then normalized with tools/assets/normalize_source_sheet_chroma.py.",
+    "V5 was selected after V3 failed strict gutter by 1px and V4 failed key-hue/gutter intake."
+  ]
+}

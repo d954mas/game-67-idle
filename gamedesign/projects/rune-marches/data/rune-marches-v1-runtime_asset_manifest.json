@@ -1,0 +1,555 @@
+{
+  "schema": "game.asset_manifest",
+  "version": 2,
+  "art_job": "gamedesign/projects/rune-marches/art_requests/rune-marches-v1.json",
+  "crop_manifest": "gamedesign/projects/rune-marches/data/rune-marches-v1-crop_manifest.json",
+  "runtime_dir": "assets/runtime/rune-marches-v1",
+  "generated_code": [
+    "src/generated/rune_marches_assets.gen.h",
+    "src/generated/rune_marches_assets.gen.c"
+  ],
+  "commands": {
+    "slice_assets": "py -3.12 tools/assets/build_rune_marches_assets.py --source gamedesign/projects/rune-marches/art/fake_shots/rune-marches-gameplay-v1.png --runtime-dir assets/runtime/rune-marches-v1 --generated-dir src/generated --crop-manifest gamedesign/projects/rune-marches/data/rune-marches-v1-crop_manifest.json --runtime-manifest gamedesign/projects/rune-marches/data/rune-marches-v1-runtime_asset_manifest.json",
+    "source_ui_bases_v2": "py -3.12 tools/assets/build_rune_marches_ui_bases_v2.py",
+    "build_pack": "not wired yet; native proof uses generated C texture arrays",
+    "native_evidence_desktop": "py -3.12 tmp/rune_marches_scenario.py tmp/rune_marches/native_first_slice_labeled.png 960x540",
+    "native_evidence_portrait": "py -3.12 tmp/rune_marches_scenario.py tmp/rune_marches/native_first_slice_portrait_current.png 360x640"
+  },
+  "web_mobile_size_plan": {
+    "first_test": "ship PNG-derived RGBA proof for native, then encode runtime PNG/WebP or engine compressed pack before T0001 web validation",
+    "budget_note": "visual quality wins for first audience test; keep individual UI/icon assets small and avoid full-screen baked UI as the dynamic runtime surface matures",
+    "current_png_total_bytes": 2318010
+  },
+  "assets": [
+    {
+      "id": "map_background",
+      "path": "assets/runtime/rune-marches-v1/map_background.png",
+      "kind": "background",
+      "dimensions": [
+        512,
+        256
+      ],
+      "png_size_bytes": 283564,
+      "slice9": null,
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "landmark_miregate",
+      "path": "assets/runtime/rune-marches-v1/landmark_miregate.png",
+      "kind": "icon",
+      "dimensions": [
+        96,
+        112
+      ],
+      "png_size_bytes": 29131,
+      "slice9": null,
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "landmark_wispfen_road",
+      "path": "assets/runtime/rune-marches-v1/landmark_wispfen_road.png",
+      "kind": "icon",
+      "dimensions": [
+        96,
+        112
+      ],
+      "png_size_bytes": 28273,
+      "slice9": null,
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "landmark_old_bell_tower_locked",
+      "path": "assets/runtime/rune-marches-v1/landmark_old_bell_tower_locked.png",
+      "kind": "icon",
+      "dimensions": [
+        96,
+        128
+      ],
+      "png_size_bytes": 31811,
+      "slice9": null,
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "enemy_mire_wisp",
+      "path": "assets/runtime/rune-marches-v1/enemy_mire_wisp.png",
+      "kind": "sprite",
+      "dimensions": [
+        144,
+        128
+      ],
+      "png_size_bytes": 38775,
+      "slice9": null,
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "spell_spark_effect",
+      "path": "assets/runtime/rune-marches-v1/spell_spark_effect.png",
+      "kind": "effect",
+      "dimensions": [
+        96,
+        96
+      ],
+      "png_size_bytes": 20375,
+      "slice9": null,
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_panel_slice9",
+      "path": "assets/runtime/rune-marches-v1/ui_panel_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        192,
+        192
+      ],
+      "png_size_bytes": 67048,
+      "slice9": [
+        24,
+        24,
+        24,
+        24
+      ],
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "button_idle_slice9",
+      "path": "assets/runtime/rune-marches-v1/button_idle_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        128,
+        64
+      ],
+      "png_size_bytes": 14307,
+      "slice9": [
+        24,
+        18,
+        24,
+        18
+      ],
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "button_disabled_slice9",
+      "path": "assets/runtime/rune-marches-v1/button_disabled_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        128,
+        64
+      ],
+      "png_size_bytes": 10284,
+      "slice9": [
+        24,
+        18,
+        24,
+        18
+      ],
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_modal_panel_slice9",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/modal_panel_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        854,
+        581
+      ],
+      "png_size_bytes": 9840,
+      "slice9": [
+        92,
+        96,
+        92,
+        82
+      ],
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_journal_panel_slice9",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/journal_panel_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        365,
+        506
+      ],
+      "png_size_bytes": 7027,
+      "slice9": [
+        54,
+        74,
+        54,
+        64
+      ],
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_button_idle_slice9",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/button_idle_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        431,
+        145
+      ],
+      "png_size_bytes": 3367,
+      "slice9": [
+        56,
+        20,
+        56,
+        20
+      ],
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_button_pressed_slice9",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/button_pressed_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        406,
+        139
+      ],
+      "png_size_bytes": 3099,
+      "slice9": [
+        56,
+        20,
+        56,
+        20
+      ],
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_button_disabled_slice9",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/button_disabled_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        381,
+        162
+      ],
+      "png_size_bytes": 3398,
+      "slice9": [
+        52,
+        20,
+        52,
+        20
+      ],
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_status_bar_slice9",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/status_bar_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        1226,
+        104
+      ],
+      "png_size_bytes": 3611,
+      "slice9": [
+        72,
+        20,
+        72,
+        20
+      ],
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_reward_chip_slice9",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/reward_chip_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        230,
+        222
+      ],
+      "png_size_bytes": 3376,
+      "slice9": [
+        44,
+        20,
+        44,
+        20
+      ],
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_icon_frame_slice9",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_frame_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        217,
+        251
+      ],
+      "png_size_bytes": 3435,
+      "slice9": [
+        24,
+        24,
+        24,
+        24
+      ],
+      "semantic_role": null,
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_icon_health",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_health.png",
+      "kind": "icon",
+      "dimensions": [
+        120,
+        126
+      ],
+      "png_size_bytes": 33160,
+      "slice9": null,
+      "semantic_role": "health",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_icon_mana",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_mana.png",
+      "kind": "icon",
+      "dimensions": [
+        101,
+        140
+      ],
+      "png_size_bytes": 27325,
+      "slice9": null,
+      "semantic_role": "mana",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_icon_silver",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_silver.png",
+      "kind": "icon",
+      "dimensions": [
+        124,
+        129
+      ],
+      "png_size_bytes": 33398,
+      "slice9": null,
+      "semantic_role": "silver",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_icon_xp",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_xp.png",
+      "kind": "icon",
+      "dimensions": [
+        132,
+        131
+      ],
+      "png_size_bytes": 31812,
+      "slice9": null,
+      "semantic_role": "xp",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_icon_road_safety",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_road_safety.png",
+      "kind": "icon",
+      "dimensions": [
+        129,
+        152
+      ],
+      "png_size_bytes": 37936,
+      "slice9": null,
+      "semantic_role": "road_safety",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_icon_rune_spark",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_rune_spark.png",
+      "kind": "icon",
+      "dimensions": [
+        114,
+        140
+      ],
+      "png_size_bytes": 33719,
+      "slice9": null,
+      "semantic_role": "rune_spark",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_decor_modal_top_gem",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/decor_modal_top_gem.png",
+      "kind": "decor",
+      "dimensions": [
+        169,
+        95
+      ],
+      "png_size_bytes": 3242,
+      "slice9": null,
+      "semantic_role": "panel_top_decor",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_decor_modal_bottom_gem",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/decor_modal_bottom_gem.png",
+      "kind": "decor",
+      "dimensions": [
+        165,
+        89
+      ],
+      "png_size_bytes": 3103,
+      "slice9": null,
+      "semantic_role": "panel_bottom_decor",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_decor_journal_top_gem",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/decor_journal_top_gem.png",
+      "kind": "decor",
+      "dimensions": [
+        135,
+        72
+      ],
+      "png_size_bytes": 2574,
+      "slice9": null,
+      "semantic_role": "panel_top_decor",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_decor_journal_bottom_gem",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/decor_journal_bottom_gem.png",
+      "kind": "decor",
+      "dimensions": [
+        135,
+        74
+      ],
+      "png_size_bytes": 2577,
+      "slice9": null,
+      "semantic_role": "panel_bottom_decor",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_decor_reward_top_gem",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/decor_reward_top_gem.png",
+      "kind": "decor",
+      "dimensions": [
+        102,
+        63
+      ],
+      "png_size_bytes": 2098,
+      "slice9": null,
+      "semantic_role": "chip_top_decor",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_decor_reward_bottom_gem",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/decor_reward_bottom_gem.png",
+      "kind": "decor",
+      "dimensions": [
+        102,
+        65
+      ],
+      "png_size_bytes": 2156,
+      "slice9": null,
+      "semantic_role": "chip_bottom_decor",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_decor_icon_frame_top_gem",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/decor_icon_frame_top_gem.png",
+      "kind": "decor",
+      "dimensions": [
+        84,
+        62
+      ],
+      "png_size_bytes": 1980,
+      "slice9": null,
+      "semantic_role": "icon_frame_top_decor",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_v2_decor_icon_frame_bottom_gem",
+      "path": "assets/runtime/rune-marches-ui-map-rescue-v2/decor_icon_frame_bottom_gem.png",
+      "kind": "decor",
+      "dimensions": [
+        84,
+        62
+      ],
+      "png_size_bytes": 1909,
+      "slice9": null,
+      "semantic_role": "icon_frame_bottom_decor",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_bases_v2_modal_panel_slice9",
+      "path": "assets/runtime/rune-marches-ui-bases-v2/modal_panel_v2_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        709,
+        592
+      ],
+      "png_size_bytes": 711705,
+      "slice9": [
+        104,
+        100,
+        104,
+        100
+      ],
+      "semantic_role": "large_modal_panel",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_bases_v2_journal_panel_slice9",
+      "path": "assets/runtime/rune-marches-ui-bases-v2/journal_panel_v2_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        357,
+        639
+      ],
+      "png_size_bytes": 402672,
+      "slice9": [
+        84,
+        104,
+        84,
+        104
+      ],
+      "semantic_role": "large_journal_panel",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_bases_v2_button_idle_slice9",
+      "path": "assets/runtime/rune-marches-ui-bases-v2/button_idle_v2_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        504,
+        246
+      ],
+      "png_size_bytes": 208460,
+      "slice9": [
+        96,
+        44,
+        96,
+        44
+      ],
+      "semantic_role": "large_primary_button",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_bases_v2_button_disabled_slice9",
+      "path": "assets/runtime/rune-marches-ui-bases-v2/button_disabled_v2_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        502,
+        246
+      ],
+      "png_size_bytes": 217463,
+      "slice9": [
+        96,
+        44,
+        96,
+        44
+      ],
+      "semantic_role": "large_primary_button_disabled",
+      "runtime_usage": "native nt_gfx texture"
+    }
+  ]
+}

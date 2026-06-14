@@ -1,0 +1,147 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v2-chroma-clean.png",
+  "size": [
+    1254,
+    1254
+  ],
+  "key_color": "#ff00ff",
+  "key_tolerance": 8,
+  "component_count": 4,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 24,
+  "max_exact_key_conflict_px": 0,
+  "max_key_hue_conflict_ratio": 0.05,
+  "closest_gap_px": 119,
+  "closest_pair": [
+    "component_1",
+    "component_2"
+  ],
+  "candidate_key_scores": [
+    {
+      "key_color": "#00ff00",
+      "visible_px": 767262,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 45,
+      "hue_band_ratio": 5.9e-05,
+      "score": 45.005865
+    },
+    {
+      "key_color": "#ffff00",
+      "visible_px": 767262,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 4087,
+      "hue_band_ratio": 0.005327,
+      "score": 4087.532673
+    },
+    {
+      "key_color": "#00ffff",
+      "visible_px": 767262,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 4992,
+      "hue_band_ratio": 0.006506,
+      "score": 4992.650625
+    },
+    {
+      "key_color": "#ff00ff",
+      "visible_px": 767262,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 7486,
+      "hue_band_ratio": 0.009757,
+      "score": 7486.975677
+    },
+    {
+      "key_color": "#ff0000",
+      "visible_px": 767262,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 135010,
+      "hue_band_ratio": 0.175963,
+      "score": 135027.596336
+    },
+    {
+      "key_color": "#0000ff",
+      "visible_px": 767262,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 204299,
+      "hue_band_ratio": 0.26627,
+      "score": 204325.627019
+    }
+  ],
+  "suggested_key_color": "#00ff00",
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        65,
+        137,
+        677,
+        560
+      ],
+      "area_px": 376026,
+      "visible_px": 376026,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 1700,
+      "purple_halo_hue_px": 2549,
+      "key_hue_conflict_ratio": 0.0113,
+      "border_gap_px": 65
+    },
+    {
+      "id": "component_2",
+      "bbox": [
+        861,
+        137,
+        325,
+        607
+      ],
+      "area_px": 195397,
+      "visible_px": 195397,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 879,
+      "purple_halo_hue_px": 1769,
+      "key_hue_conflict_ratio": 0.013552,
+      "border_gap_px": 68
+    },
+    {
+      "id": "component_3",
+      "bbox": [
+        77,
+        909,
+        472,
+        214
+      ],
+      "area_px": 98169,
+      "visible_px": 98169,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 792,
+      "purple_halo_hue_px": 1307,
+      "key_hue_conflict_ratio": 0.021381,
+      "border_gap_px": 77
+    },
+    {
+      "id": "component_4",
+      "bbox": [
+        703,
+        909,
+        470,
+        214
+      ],
+      "area_px": 97670,
+      "visible_px": 97670,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 793,
+      "purple_halo_hue_px": 1289,
+      "key_hue_conflict_ratio": 0.021317,
+      "border_gap_px": 81
+    }
+  ],
+  "problems": [],
+  "status": "pass"
+}

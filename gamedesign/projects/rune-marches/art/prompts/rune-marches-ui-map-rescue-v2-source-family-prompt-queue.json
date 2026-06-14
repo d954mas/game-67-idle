@@ -1,0 +1,17 @@
+{
+  "schema": "game.source_family_prompt_queue",
+  "version": 1,
+  "art_job": "gamedesign/projects/rune-marches/art_requests/rune-marches-ui-map-rescue-v2.json",
+  "coverage_audit": "gamedesign/projects/rune-marches/reviews/rune-marches-ui-map-rescue-v2-source-family-coverage-audit.json",
+  "missing_source_families": [
+    "blank UI kit sheet"
+  ],
+  "packets": [
+    {
+      "source_family": "blank UI kit sheet",
+      "markdown": "gamedesign/projects/rune-marches/art/prompts/rune-marches-ui-map-rescue-v2-blank-ui-kit-sheet-prompt.md",
+      "json": "gamedesign/projects/rune-marches/art/prompts/rune-marches-ui-map-rescue-v2-blank-ui-kit-sheet-prompt.json",
+      "generation_record_command": "node tools/assets/new_generation_record.mjs --id <accepted-source-id> --project-dir <project-dir> --source-family \"blank UI kit sheet\" --source-family-role \"<accepted role>\" --accepted-source <path> --provider <provider> --model <model-or-workflow> --workflow-path <workflow.json> --prompt-packet gamedesign/projects/rune-marches/art/prompts/rune-marches-ui-map-rescue-v2-blank-ui-kit-sheet-prompt.json --seed <seed> --prompt \"<prompt>\" --negative-prompt \"<negative prompt>\""
+    }
+  ]
+}

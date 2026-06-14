@@ -1,0 +1,77 @@
+{
+  "schema": "game.art_job",
+  "version": 1,
+  "id": "rune-marches-v1",
+  "status": "direction_selected",
+  "asset_family": "world-ui-kit",
+  "audience": "casual PC web mobile RPG players",
+  "runtime_harness": "native PC first, then web/mobile",
+  "visual_targets": [
+    "gamedesign/projects/rune-marches/art/fake_shots/rune-marches-gameplay-v1.png"
+  ],
+  "candidate_policy": {
+    "target_count": 4,
+    "keep_raw_candidates": true,
+    "reject_to_tmp": true,
+    "accept_one_or_two_for_runtime": true
+  },
+  "reusable_kinds": [
+    "sprite",
+    "slice9",
+    "icon",
+    "tile",
+    "border",
+    "effect",
+    "background"
+  ],
+  "must_not_bake": [
+    "button labels",
+    "resource counters",
+    "timer values",
+    "tutorial text",
+    "debug text",
+    "game state values",
+    "quest numbers",
+    "damage values"
+  ],
+  "expected_outputs": {
+    "source_art": [
+      "gamedesign/projects/rune-marches/art/fake_shots/rune-marches-gameplay-v1.png"
+    ],
+    "crop_manifest": "gamedesign/projects/rune-marches/data/rune-marches-v1-crop_manifest.json",
+    "runtime_manifest": "gamedesign/projects/rune-marches/data/rune-marches-v1-runtime_asset_manifest.json",
+    "runtime_dir": "assets/runtime/rune-marches-v1",
+    "native_evidence": [
+      "tmp/rune_marches/native_first_slice_labeled_v2.png",
+      "tmp/rune_marches/native_first_slice_portrait_v3.png"
+    ]
+  },
+  "runtime_composition": {
+    "buttons": "slice9 background plus runtime text/icon",
+    "cards": "slice9 panel background plus runtime labels and state",
+    "map": "painted region background, separate landmark icons, path overlay, and runtime lock/highlight state",
+    "combat": "separate enemy sprite, spell effect sprite, HP bars, and runtime action buttons",
+    "characters": "separate transparent sprites with pivots and gameplay ids"
+  },
+  "qa_rejects": [
+    "random letters",
+    "watermarks",
+    "labels fused into reusable backgrounds",
+    "icons fused into buttons",
+    "wrong subject",
+    "weak silhouette at gameplay size",
+    "opaque chroma-key background",
+    "baked board state",
+    "Elder Scrolls dragon/shout/helmet/logo lookalikes",
+    "The Quest exact UI copying"
+  ],
+  "commands": {
+    "slice_assets": "fill after source sheets are accepted",
+    "build_pack": "fill after pack builder is wired",
+    "native_evidence": "py -3.12 tmp/rune_marches_scenario.py tmp/rune_marches/native_first_slice_labeled_v2.png 960x540"
+  },
+  "selection_notes": [
+    "2026-06-13: First generated fake shot accepted as visual direction for mood, map readability, magic identity, and UI material language.",
+    "Do not copy its dense top inventory for FTUE; simplify before runtime integration."
+  ]
+}

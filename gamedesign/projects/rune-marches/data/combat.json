@@ -1,0 +1,330 @@
+{
+  "schema": "rune_marches.combat",
+  "version": 1,
+  "encounters": {
+    "mire_wisp_first": {
+      "location": "wispfen_road",
+      "player_baseline": {
+        "hp": 20,
+        "mana": 10,
+        "strike_damage": 3,
+        "spark_damage": 5
+      },
+      "enemy": {
+        "id": "mire_wisp",
+        "name": "Mire Wisp",
+        "hp": 10,
+        "damage": 2,
+        "intent": "drift_bite"
+      },
+      "player_actions": {
+        "strike": {
+          "damage": 3,
+          "mana_cost": 0
+        },
+        "spark": {
+          "damage": 5,
+          "mana_cost": 3
+        },
+        "guard": {
+          "damage": 0,
+          "mana_cost": 0,
+          "damage_reduction_next_enemy_action": 1
+        },
+        "retreat": {
+          "ends_encounter": true,
+          "silver_reward_multiplier": 0,
+          "hp_cost": 1
+        }
+      },
+      "enemy_action": {
+        "trigger": "after_each_non_lethal_player_action",
+        "damage": 2
+      },
+      "win_outcome": {
+        "silver": 6,
+        "xp": 4,
+        "rune_sparks_first_win": 1,
+        "road_safety_delta": 1
+      },
+      "loss_outcome": {
+        "return_location": "miregate",
+        "hp_after_loss": 1,
+        "silver": 0,
+        "xp": 1,
+        "message_id": "soft_loss_rest_hint"
+      },
+      "expected_first_win_path": [
+        "spark",
+        "spark"
+      ],
+      "expected_first_win_turns": 2,
+      "tuning_knobs": [
+        "enemy.hp",
+        "enemy.damage",
+        "player_actions.spark.damage",
+        "player_actions.spark.mana_cost",
+        "win_outcome.silver"
+      ]
+    },
+    "reed_raider_first": {
+      "location": "reedmere_crossing",
+      "player_baseline": {
+        "hp": 20,
+        "mana": 12,
+        "strike_damage": 3,
+        "spark_damage": 7
+      },
+      "enemy": {
+        "id": "reed_raider",
+        "name": "Reed Raider",
+        "hp": 12,
+        "damage": 3,
+        "intent": "block_crossing"
+      },
+      "player_actions": {
+        "strike": {
+          "damage": 3,
+          "mana_cost": 0
+        },
+        "spark": {
+          "damage": 7,
+          "mana_cost": 3
+        },
+        "guard": {
+          "damage": 0,
+          "mana_cost": 0,
+          "damage_reduction_next_enemy_action": 1
+        },
+        "retreat": {
+          "ends_encounter": true,
+          "silver_reward_multiplier": 0,
+          "hp_cost": 1
+        }
+      },
+      "enemy_action": {
+        "trigger": "after_each_non_lethal_player_action",
+        "damage": 3
+      },
+      "win_outcome": {
+        "silver": 8,
+        "xp": 6,
+        "east_road_safety_delta": 1,
+        "unlocks_optional_action": "moss_shrine_blessing_if_kindness_1"
+      },
+      "loss_outcome": {
+        "return_location": "miregate",
+        "hp_after_loss": 1,
+        "silver": 0,
+        "xp": 1,
+        "message_id": "soft_loss_rest_hint"
+      },
+      "expected_first_win_path": [
+        "spark",
+        "strike",
+        "strike"
+      ],
+      "expected_first_win_turns": 3,
+      "tuning_knobs": [
+        "enemy.hp",
+        "enemy.damage",
+        "player_actions.spark.damage",
+        "win_outcome.silver"
+      ]
+    },
+    "fen_shade_first": {
+      "location": "greenfen_causeway",
+      "player_baseline": {
+        "hp": 20,
+        "mana": 12,
+        "strike_damage": 3,
+        "spark_damage": 7
+      },
+      "enemy": {
+        "id": "fen_shade",
+        "name": "Fen Shade",
+        "hp": 14,
+        "damage": 4,
+        "intent": "guard_greenfen"
+      },
+      "player_actions": {
+        "strike": {
+          "damage": 3,
+          "mana_cost": 0
+        },
+        "spark": {
+          "damage": 7,
+          "mana_cost": 3
+        },
+        "guard": {
+          "damage": 0,
+          "mana_cost": 0,
+          "damage_reduction_next_enemy_action": 1
+        },
+        "retreat": {
+          "ends_encounter": true,
+          "silver_reward_multiplier": 0,
+          "hp_cost": 1
+        }
+      },
+      "enemy_action": {
+        "trigger": "after_each_non_lethal_player_action",
+        "damage": 4
+      },
+      "win_outcome": {
+        "silver": 10,
+        "xp": 8,
+        "greenfen_safety_delta": 1,
+        "rune_lore": 1
+      },
+      "loss_outcome": {
+        "return_location": "miregate",
+        "hp_after_loss": 1,
+        "silver": 0,
+        "xp": 1,
+        "message_id": "soft_loss_rest_hint"
+      },
+      "expected_first_win_path": [
+        "spark",
+        "spark"
+      ],
+      "expected_first_win_turns": 2,
+      "tuning_knobs": [
+        "enemy.hp",
+        "enemy.damage",
+        "win_outcome.silver",
+        "win_outcome.rune_lore"
+      ]
+    },
+    "briar_stalker_first": {
+      "location": "briar_gate",
+      "player_baseline": {
+        "hp": 24,
+        "mana": 14,
+        "strike_damage": 3,
+        "spark_damage": 9
+      },
+      "enemy": {
+        "id": "briar_stalker",
+        "name": "Briar Stalker",
+        "hp": 18,
+        "damage": 5,
+        "intent": "test_main_road"
+      },
+      "player_actions": {
+        "strike": {
+          "damage": 3,
+          "mana_cost": 0
+        },
+        "spark": {
+          "damage": 9,
+          "mana_cost": 3
+        },
+        "guard": {
+          "damage": 0,
+          "mana_cost": 0,
+          "damage_reduction_next_enemy_action": 1
+        },
+        "retreat": {
+          "ends_encounter": true,
+          "silver_reward_multiplier": 0,
+          "hp_cost": 1
+        }
+      },
+      "enemy_action": {
+        "trigger": "after_each_non_lethal_player_action",
+        "damage": 5
+      },
+      "win_outcome": {
+        "silver": 12,
+        "xp": 10,
+        "briar_gate_safety_delta": 1,
+        "main_quest_step": 16
+      },
+      "loss_outcome": {
+        "return_location": "miregate",
+        "hp_after_loss": 1,
+        "silver": 0,
+        "xp": 1,
+        "message_id": "soft_loss_rest_hint"
+      },
+      "expected_first_win_path": [
+        "spark",
+        "spark"
+      ],
+      "expected_first_win_turns": 2,
+      "tuning_knobs": [
+        "enemy.hp",
+        "enemy.damage",
+        "win_outcome.silver",
+        "win_outcome.xp"
+      ]
+    },
+    "moonwell_sentinel_first": {
+      "location": "moonwell",
+      "player_baseline": {
+        "hp": 24,
+        "mana": 14,
+        "strike_damage": 3,
+        "spark_damage": 9
+      },
+      "enemy": {
+        "id": "moonwell_sentinel",
+        "name": "Moonwell Sentinel",
+        "hp": 16,
+        "damage": 4,
+        "intent": "test_oath"
+      },
+      "player_actions": {
+        "strike": {
+          "damage": 3,
+          "mana_cost": 0
+        },
+        "spark": {
+          "damage": 9,
+          "mana_cost": 3
+        },
+        "guard": {
+          "damage": 0,
+          "mana_cost": 0,
+          "damage_reduction_next_enemy_action": 1
+        },
+        "retreat": {
+          "ends_encounter": true,
+          "silver_reward_multiplier": 0,
+          "hp_cost": 1
+        }
+      },
+      "enemy_action": {
+        "trigger": "after_each_non_lethal_player_action",
+        "damage": 4
+      },
+      "win_outcome": {
+        "silver": 6,
+        "xp": 6,
+        "moonwell_blessing_delta": 1,
+        "moonwell_safety_delta": 1,
+        "mana_restore": "to_current_max",
+        "main_quest_step": 16
+      },
+      "loss_outcome": {
+        "return_location": "miregate",
+        "hp_after_loss": 1,
+        "silver": 0,
+        "xp": 1,
+        "message_id": "soft_loss_rest_hint"
+      },
+      "expected_first_win_path": [
+        "spark",
+        "spark"
+      ],
+      "expected_first_win_turns": 2,
+      "tuning_knobs": [
+        "enemy.hp",
+        "enemy.damage",
+        "win_outcome.moonwell_blessing_delta",
+        "win_outcome.mana_restore"
+      ]
+    }
+  }
+}

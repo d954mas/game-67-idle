@@ -1,0 +1,53 @@
+{
+  "schema": "game.runtime_ui_asset_usage_audit",
+  "version": 1,
+  "asset_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-bases-v2-asset_manifest.json",
+  "usage": "gamedesign/projects/rune-marches/data/rune-marches-native-ui-bases-v2-usage.json",
+  "verdict": "pass",
+  "problems": [],
+  "usages": [
+    {
+      "id": "journal_panel_v2",
+      "context": "desktop_journal_side_panel_960x540",
+      "layout_mode": "desktop",
+      "usage_tags": [
+        "desktop_side_panel",
+        "quest_journal"
+      ],
+      "size": {
+        "width": 268.8,
+        "height": 280.8
+      },
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "button_idle_v2",
+      "context": "desktop_primary_action_960x540",
+      "layout_mode": "desktop",
+      "usage_tags": [
+        "primary_action"
+      ],
+      "size": {
+        "width": 320,
+        "height": 104
+      },
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "button_disabled_v2",
+      "context": "desktop_primary_action_disabled_960x540",
+      "layout_mode": "desktop",
+      "usage_tags": [
+        "primary_action"
+      ],
+      "size": {
+        "width": 320,
+        "height": 104
+      },
+      "status": "pass",
+      "problems": []
+    }
+  ]
+}

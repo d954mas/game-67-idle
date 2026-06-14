@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -110,6 +110,37 @@ function existing(root, paths) {
   return paths.filter((path) => existsSync(join(root, path)));
 }
 
+function directories(path) {
+  try {
+    return readdirSync(path, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+}
+
+function projectDesignSources(root) {
+  const sources = [];
+  for (const projectId of directories(join(root, "gamedesign", "projects"))) {
+    sources.push(...existing(root, [
+      `gamedesign/projects/${projectId}/README.md`,
+      `gamedesign/projects/${projectId}/gdd.md`,
+      `gamedesign/projects/${projectId}/GDD.md`,
+      `gamedesign/projects/${projectId}/art/art_direction.md`,
+      `gamedesign/projects/${projectId}/data/balance.json`,
+    ]));
+  }
+  for (const legacyId of directories(join(root, "gamedesign"))) {
+    if (legacyId === "knowledge" || legacyId === "sources" || legacyId === "projects") continue;
+    sources.push(...existing(root, [
+      `gamedesign/${legacyId}/gdd.md`,
+      `gamedesign/${legacyId}/GDD.md`,
+      `gamedesign/${legacyId}/art/art_direction.md`,
+      `gamedesign/${legacyId}/data/balance.json`,
+    ]));
+  }
+  return [...new Set(sources)];
+}
+
 function buildContext(root, options = {}) {
   const maxStatusChars = Number.isFinite(Number(options.statusMaxChars)) ? Number(options.statusMaxChars) : 5000;
   const agents = readIfExists(join(root, "AGENTS.md"));
@@ -129,7 +160,7 @@ function buildContext(root, options = {}) {
   const designSources = existing(root, [
     "gamedesign/knowledge/README.md",
     "gamedesign/knowledge/reference_deconstruction.md",
-  ]);
+  ]).concat(projectDesignSources(root));
   const runtimeSources = existing(root, [
     "src/main.c",
     "state/game_state.schema.json",

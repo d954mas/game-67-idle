@@ -64,11 +64,20 @@ Use this skill to make small, playable game changes without losing project conte
    the reference-driven gameplay/UI/economy/balance implementation lane stays
    locked until the digest, mismatch audit, and next native proof exist.
 4. Identify the smallest playable slice that satisfies the request.
-5. For non-trivial work, use the iteration cycle in `references/iteration-cycle-playbook.md`.
-6. Keep implementation close to existing engine and game patterns.
-7. Avoid broad refactors unless the feature cannot be implemented safely without them.
-8. Validate the primary runtime target first; validate secondary targets only when relevant or requested.
-9. Capture evidence and report what changed, where to run it, and what was verified.
+5. If the request names visual quality, FTUE, feel, audience testing, or a
+   "casual" product target, capture or inspect the first playable screen before
+   broadening scope. Do not add more locations, quests, systems, or content
+   until the screen answers: where the player is, what they can do now, what
+   changed after input, what reward they got, and why it looks like a game
+   rather than a debug tool. Write the gate with
+   `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate` when that
+   tool exists. Use `node tools/ai.mjs close-slice` before handoff when the
+   slice depends on product-read evidence.
+6. For non-trivial work, use the iteration cycle in `references/iteration-cycle-playbook.md`.
+7. Keep implementation close to existing engine and game patterns.
+8. Avoid broad refactors unless the feature cannot be implemented safely without them.
+9. Validate the primary runtime target first; validate secondary targets only when relevant or requested.
+10. Capture evidence and report what changed, where to run it, and what was verified.
 
 ## Discovery
 
@@ -92,6 +101,9 @@ If naming differs, infer the equivalent directories from the repository.
 - Preserve engine boundaries; do not edit submodules or vendored engine code unless explicitly requested.
 - Do not silently wire asset-pack generation into every normal game build.
 - When adding state, input, or rendering, include a simple way for the user to observe the behavior.
+- Treat a failed screenshot/player-read review as a stop condition. Fix the
+  core screen or loop before adding more data, balance, quests, routes, or
+  technical systems.
 - Do not implement a "like reference X" feature from a feature list alone.
   Translate the reference into player-facing screen grammar and visible
   runtime evidence first.

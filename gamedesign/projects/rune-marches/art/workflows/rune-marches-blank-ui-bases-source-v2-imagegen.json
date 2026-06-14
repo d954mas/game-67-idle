@@ -1,0 +1,33 @@
+{
+  "schema": "game.image_generation_workflow_record",
+  "version": 1,
+  "tool": "built-in image_gen",
+  "thread_id": "019ec14c-05a4-7131-a14d-df472b7d8b08",
+  "source_default_path": "C:/Users/ROG/.codex/generated_images/019ec14c-05a4-7131-a14d-df472b7d8b08/ig_040687cb9ceaa82c016a2e6831ca5c81919a23e97dbb8e3569.png",
+  "workspace_raw_copy": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v2.png",
+  "workspace_chroma_clean_copy": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v2-chroma-clean.png",
+  "created_at_local": "2026-06-14T13:38:03+05:00",
+  "prompt_kind": "blank UI kit source family, narrowed four-asset sheet",
+  "prompt": "Cut-ready fantasy RPG blank UI base source sheet for Rune Marches with only four isolated UI assets in a 2x2 grid: large modal panel, tall journal panel, medium idle button, medium disabled button. Flat #ff00ff chroma-key background, large gutters, no text, no center-edge ornaments, corner caps only.",
+  "negative_prompt": "text, numbers, fake letters, glyphs, watermark, logos, icons inside buttons, character art, map art, central ornaments, center-edge ornaments, cropped items, shadows on background, decorative objects outside corners",
+  "constraints": [
+    "four assets only",
+    "2x2 grid",
+    "at least 120px intended gutters",
+    "no top/bottom/side center ornaments",
+    "corner caps only",
+    "blank slice9 bases only"
+  ],
+  "postprocess": {
+    "tool": "tools/assets/normalize_source_sheet_chroma.py",
+    "source": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v2.png",
+    "output": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v2-chroma-clean.png",
+    "key_color": "#ff00ff",
+    "key_tolerance": 48,
+    "purpose": "normalize only border-connected chroma background to exact key color before slicing"
+  },
+  "known_limitations": [
+    "built-in image_gen does not expose a stable numeric seed",
+    "source is not yet cropped into runtime slice9 assets"
+  ]
+}

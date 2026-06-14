@@ -1,0 +1,41 @@
+{
+  "schema": "game.source_family_coverage_audit",
+  "version": 1,
+  "art_job": "gamedesign/projects/rune-marches/art_requests/rune-marches-ui-map-rescue-v2.json",
+  "verdict": "pass",
+  "required_source_families": [
+    "blank UI kit sheet",
+    "isolated icon sheet",
+    "ui decor overlay sheet"
+  ],
+  "records": [
+    {
+      "id": "rune-marches-blank-ui-bases-source-v2",
+      "path": "gamedesign/projects/rune-marches/art/generation_records/rune-marches-blank-ui-bases-source-v2.json",
+      "source_family": "blank UI kit sheet",
+      "source_family_role": "blank UI kit sheet accepted intake",
+      "accepted_source_image": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v2-chroma-clean.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "rune-marches-isolated-icons-source-v1",
+      "path": "gamedesign/projects/rune-marches/art/generation_records/rune-marches-isolated-icons-source-v1.json",
+      "source_family": "isolated icon sheet",
+      "source_family_role": "semantic HP/mana/currency/progression and map-pin icons with gutters",
+      "accepted_source_image": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-isolated-icons-source-v1-chroma-clean.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "rune-marches-ui-decor-overlays-source-v1",
+      "path": "gamedesign/projects/rune-marches/art/generation_records/rune-marches-ui-decor-overlays-source-v1.json",
+      "source_family": "ui decor overlay sheet",
+      "source_family_role": "non-stretch corner caps badges medallions banners dividers and small fantasy flourishes",
+      "accepted_source_image": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-ui-decor-overlays-source-v1-chroma-clean.png",
+      "status": "pass",
+      "problems": []
+    }
+  ],
+  "problems": []
+}

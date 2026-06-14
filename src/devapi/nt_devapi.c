@@ -12,7 +12,7 @@
 #include "input/nt_input_internal.h"
 #include "transform_comp/nt_transform_comp.h"
 
-#define GAME_DEVAPI_MAX_ENDPOINTS 48
+#define GAME_DEVAPI_MAX_ENDPOINTS 96
 #define GAME_DEVAPI_MAX_KEY_EVENTS 128
 #define GAME_DEVAPI_MAX_POINTER_EVENTS 256
 #define GAME_DEVAPI_MAX_GROUPS 8

@@ -1,0 +1,66 @@
+{
+  "schema": "game.slice9_design_policy_audit",
+  "version": 1,
+  "crop_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-map-rescue-v2-crop_manifest.json",
+  "runtime_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-map-rescue-v2-asset_manifest.json",
+  "verdict": "pass",
+  "problems": [],
+  "assets": [
+    {
+      "id": "modal_panel",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-map-rescue-v2/modal_panel_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "journal_panel",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-map-rescue-v2/journal_panel_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "button_idle",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-map-rescue-v2/button_idle_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "button_pressed",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-map-rescue-v2/button_pressed_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "button_disabled",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-map-rescue-v2/button_disabled_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "status_bar",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-map-rescue-v2/status_bar_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "reward_chip",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-map-rescue-v2/reward_chip_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_frame",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_frame_slice9.png",
+      "status": "pass",
+      "problems": []
+    }
+  ]
+}

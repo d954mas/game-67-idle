@@ -1,0 +1,25 @@
+{
+  "schema": "game.image_generation_workflow_record",
+  "version": 1,
+  "tool": "built-in image_gen",
+  "thread_id": "019ec14c-05a4-7131-a14d-df472b7d8b08",
+  "source_default_path": "C:/Users/ROG/.codex/generated_images/019ec14c-05a4-7131-a14d-df472b7d8b08/ig_040687cb9ceaa82c016a2e64b686fc81918511d51d647fcd1a.png",
+  "workspace_copy": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v1.png",
+  "created_at_local": "2026-06-14T13:23:16+05:00",
+  "prompt_kind": "blank UI kit source family",
+  "prompt": "Cut-ready fantasy RPG blank UI kit source sheet for Rune Marches: one large modal panel, one tall journal panel, reward chip, status bar, idle/pressed/disabled buttons, icon frame, flat #ff00ff chroma background, large gutters, no text, no icons fused into buttons, no unique decoration inside slice9 stretch zones.",
+  "negative_prompt": "text, numbers, fake glyphs, watermark, logos, icons fused into buttons, character art, map art, cropped items, item overlap, shadows on background, perspective tilt",
+  "constraints": [
+    "source family sheet, not gameplay screenshot",
+    "flat #ff00ff chroma-key background",
+    "large gutters around every component",
+    "blank UI bases only",
+    "simple slice9 centers and long edges",
+    "decorative caps only in corners",
+    "no text or fake letters"
+  ],
+  "known_limitations": [
+    "built-in image_gen does not expose a stable numeric seed",
+    "candidate still includes center-edge ornaments on large panel and journal panel"
+  ]
+}

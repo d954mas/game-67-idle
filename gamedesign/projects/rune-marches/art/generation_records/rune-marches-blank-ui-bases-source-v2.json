@@ -1,0 +1,16 @@
+{
+  "schema": "game.art_generation_record",
+  "version": 1,
+  "id": "rune-marches-blank-ui-bases-source-v2",
+  "provider": "built-in image_gen",
+  "model_or_workflow": "gpt-image built-in",
+  "workflow_path": "gamedesign/projects/rune-marches/art/workflows/rune-marches-blank-ui-bases-source-v2-imagegen.json",
+  "no_seed_reason": "built-in image_gen does not expose a stable numeric seed in this environment; source_default_path and workflow metadata are recorded in the workflow file",
+  "prompt": "Cut-ready fantasy RPG blank UI base source sheet for Rune Marches with only four isolated UI assets in a 2x2 grid: large modal panel, tall journal panel, medium idle button, medium disabled button. Flat #ff00ff chroma-key background, large gutters, no text, no center-edge ornaments, corner caps only.",
+  "negative_prompt": "text, numbers, fake letters, glyphs, watermark, logos, icons inside buttons, character art, map art, central ornaments, center-edge ornaments, cropped items, shadows on background, decorative objects outside corners",
+  "source_family": "blank UI kit sheet",
+  "source_family_role": "blank UI kit sheet accepted intake",
+  "accepted_source_image": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v2-chroma-clean.png",
+  "final_art_source": "generated",
+  "rejected_candidate_notes": "Accepted generated blank UI bases after border-connected chroma normalization. Runtime crop manifest, slice9 preview, edge proof, pixel audit, slice9 design policy audit, and source-derivation audit pass for this source."
+}

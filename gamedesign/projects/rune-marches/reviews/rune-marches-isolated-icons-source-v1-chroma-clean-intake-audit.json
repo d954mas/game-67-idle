@@ -1,0 +1,282 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-isolated-icons-source-v1-chroma-clean.png",
+  "size": [
+    1254,
+    1254
+  ],
+  "key_color": "#00ff00",
+  "key_tolerance": 8,
+  "component_count": 12,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 24,
+  "max_exact_key_conflict_px": 0,
+  "max_key_hue_conflict_ratio": 0.05,
+  "closest_gap_px": 63,
+  "closest_pair": [
+    "component_8",
+    "component_11"
+  ],
+  "candidate_key_scores": [
+    {
+      "key_color": "#ff00ff",
+      "visible_px": 331782,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 3,
+      "hue_band_ratio": 9e-06,
+      "score": 3.000904
+    },
+    {
+      "key_color": "#0000ff",
+      "visible_px": 331782,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 124,
+      "hue_band_ratio": 0.000374,
+      "score": 124.037374
+    },
+    {
+      "key_color": "#00ff00",
+      "visible_px": 331782,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 5628,
+      "hue_band_ratio": 0.016963,
+      "score": 5629.696295
+    },
+    {
+      "key_color": "#ffff00",
+      "visible_px": 331782,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 18297,
+      "hue_band_ratio": 0.055148,
+      "score": 18302.514766
+    },
+    {
+      "key_color": "#00ffff",
+      "visible_px": 331782,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 22160,
+      "hue_band_ratio": 0.066791,
+      "score": 22166.679084
+    },
+    {
+      "key_color": "#ff0000",
+      "visible_px": 331782,
+      "exact_conflict_px": 1,
+      "exact_conflict_ratio": 3e-06,
+      "hue_band_px": 26720,
+      "hue_band_ratio": 0.080535,
+      "score": 27728.053481
+    }
+  ],
+  "suggested_key_color": "#ff00ff",
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        968,
+        166,
+        228,
+        226
+      ],
+      "area_px": 26458,
+      "visible_px": 26458,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 58
+    },
+    {
+      "id": "component_2",
+      "bbox": [
+        407,
+        182,
+        154,
+        220
+      ],
+      "area_px": 22148,
+      "visible_px": 22148,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 182
+    },
+    {
+      "id": "component_3",
+      "bbox": [
+        681,
+        184,
+        197,
+        200
+      ],
+      "area_px": 30751,
+      "visible_px": 30751,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 184
+    },
+    {
+      "id": "component_4",
+      "bbox": [
+        57,
+        199,
+        217,
+        197
+      ],
+      "area_px": 29848,
+      "visible_px": 29848,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 22,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.000737,
+      "border_gap_px": 57
+    },
+    {
+      "id": "component_5",
+      "bbox": [
+        968,
+        515,
+        234,
+        232
+      ],
+      "area_px": 25997,
+      "visible_px": 25997,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 52
+    },
+    {
+      "id": "component_6",
+      "bbox": [
+        391,
+        517,
+        184,
+        221
+      ],
+      "area_px": 29861,
+      "visible_px": 29861,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 391
+    },
+    {
+      "id": "component_7",
+      "bbox": [
+        57,
+        519,
+        216,
+        219
+      ],
+      "area_px": 27445,
+      "visible_px": 27445,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 57
+    },
+    {
+      "id": "component_8",
+      "bbox": [
+        674,
+        523,
+        224,
+        221
+      ],
+      "area_px": 30943,
+      "visible_px": 30943,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 356
+    },
+    {
+      "id": "component_9",
+      "bbox": [
+        90,
+        855,
+        160,
+        244
+      ],
+      "area_px": 28035,
+      "visible_px": 28035,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 90
+    },
+    {
+      "id": "component_10",
+      "bbox": [
+        405,
+        857,
+        157,
+        243
+      ],
+      "area_px": 27251,
+      "visible_px": 27251,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 154
+    },
+    {
+      "id": "component_11",
+      "bbox": [
+        961,
+        858,
+        223,
+        245
+      ],
+      "area_px": 33627,
+      "visible_px": 33627,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 70
+    },
+    {
+      "id": "component_12",
+      "bbox": [
+        663,
+        866,
+        222,
+        224
+      ],
+      "area_px": 19418,
+      "merged_from": [
+        "component_12",
+        "component_13",
+        "component_14",
+        "component_15",
+        "component_16"
+      ],
+      "visible_px": 19418,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 164
+    }
+  ],
+  "problems": [],
+  "status": "pass"
+}

@@ -144,8 +144,21 @@ if (needsBundle(status)) {
 }
 
 if (!status.baselines.latest_manifest) {
-  console.error(`no captured baseline; review ${status.bundle.artifacts.find((artifact) => artifact.name === "review_json")?.path || "review JSON"} and run capture_baseline.mjs deliberately`);
-  process.exit(1);
+  console.error(`warning: no captured baseline; review ${status.bundle.artifacts.find((artifact) => artifact.name === "review_json")?.path || "review JSON"} and run capture_baseline.mjs deliberately`);
+  if (finalStatusOutput) {
+    const target = resolve(finalStatusOutput);
+    mkdirSync(dirname(target), { recursive: true });
+    runNode(["tools/ai_profile/status.mjs", "--profile", profilePath, "--json-output", target], "final profile status", { quiet: true });
+    status = readJson(target);
+  } else if (existsSync(tempStatus)) {
+    rmSync(tempStatus, { force: true });
+  }
+  console.log("# AI Reflection Prep");
+  console.log(`Profile: ${profilePath}`);
+  console.log(`Steps: ${steps.length > 0 ? steps.join(", ") : "none"}`);
+  console.log("Baseline: missing");
+  console.log(`Next: ${status.next_action}`);
+  process.exit(0);
 }
 
 if (status.comparison.status === "missing" || status.comparison.status === "stale" || status.comparison.status === "invalid") {

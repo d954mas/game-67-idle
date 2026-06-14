@@ -7,6 +7,10 @@ description: Use when adding, converting, packing, referencing, validating, or o
 
 Use this skill to keep source assets, generated outputs, and runtime packs understandable.
 
+For reusable generated runtime UI kits, also use
+`.codex/skills/generated-game-ui-assets/`; it coordinates the full source
+sheet -> slice9/icon -> audit -> responsive proof workflow.
+
 ## Workflow
 
 1. Identify the asset source of truth: `assets/`, `raw/`, `art/`, `gamedesign/art/`, or local equivalent.
@@ -14,13 +18,87 @@ Use this skill to keep source assets, generated outputs, and runtime packs under
 3. For generated multi-asset work, identify the art job/request packet. If it
    does not exist, scaffold it with `tools/assets/new_art_job.mjs` before
    adding crop coordinates or pack ids.
-4. Read the existing pack/build script before adding new asset logic.
-5. Do not assume the pack/material path is too slow. If the engine or project
+   For generated UI, run
+   `node tools/assets/validate_art_job.mjs --job <art-job>` before generation
+   or slicing. Fix the contract instead of carrying missing decisions in chat.
+4. After accepting generated or artist source art, create its provenance record
+   with `node tools/assets/new_generation_record.mjs` and reference that record
+   from the art job. Procedural/programmer-art scaffolds require an explicit
+   procedural exception and cannot close a generated-art task. Generated/artist
+   records need a real workflow path or non-empty workflow JSON; `{}` is only
+   acceptable for procedural debug records. If the provider exposes no stable
+   seed, record a no-seed reason with `--no-seed-reason` instead of an unknown
+   pseudo-seed.
+5. Before asking an image model for a new source family, compile the prompt
+   packet from the art job:
+   `node tools/assets/plan_source_sheet_prompt.mjs --job <art-job> --source-family "<family>" --output <prompt.md> --json-output <prompt.json>`.
+   Use `--intake-audit` or `--key-color` when a previous source-sheet audit
+   found a safer chroma key. When recording the accepted source, pass the JSON
+   prompt packet path to `new_generation_record.mjs --prompt-packet`. Strict
+   art-job validation reads that JSON and checks its schema, required prompt
+   fields, acceptance checklist, job identity, and source-family match.
+6. Read the existing pack/build script before adding new asset logic.
+7. Do not assume the pack/material path is too slow. If the engine or project
    has pack builders and caches, inspect the builder and run or measure the
    smallest pack build before choosing a direct PNG/runtime shortcut.
-6. Add the smallest asset path that proves the runtime integration.
-7. Regenerate packs with the project task or preset.
-8. Verify both generated files and runtime loading behavior when possible.
+8. Add the smallest asset path that proves the runtime integration.
+9. Regenerate packs with the project task or preset.
+10. Verify both generated files and runtime loading behavior when possible.
+11. For UI assets, run strict validation after source art is accepted and cut:
+   `node tools/assets/validate_art_job.mjs --job <art-job> --strict`.
+   Strict mode should pass before runtime integration is considered done. It
+   requires `expected_outputs.asset_audit` and reads JSON reports to confirm
+   they passed, reference the art job's crop manifest, and cover every crop id.
+12. Before claiming a final generated/artist art pass, run:
+    `node tools/assets/validate_art_job.mjs --job <art-job> --final-art`.
+    This must fail while any runtime source is procedural debug art or has
+    partial/unknown generation provenance.
+13. Before writing crop rectangles for generated source sheets, run:
+    `py -3.12 tools/assets/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>`
+    if the source has a non-flat chroma background, then run:
+    `py -3.12 tools/assets/audit_source_sheet_intake.py --source <source-sheet>`.
+    This catches merged components, clipped items, bad chroma backgrounds, and
+    too-small gutters before slicing work begins. Record passing JSON reports
+    in `expected_outputs.source_sheet_intake_audit` for final-art claims. The
+    report source must match the art job source art or crop source.
+14. For generated sprites/icons, treat crop extraction as a solved production
+    step, not a visual guess: remove background by transparent/alpha or
+    border-connected chroma, isolate the intended component, trim to alpha
+    bounds, add output padding, remove edge fringe, and preview the result
+    before runtime use.
+15. For generated UI PNGs, run the pixel audit after slicing:
+    `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`.
+    The audit should pass before integrating or regenerating runtime headers.
+16. For 1-2 pixel edge disputes, generate a zoomed edge proof:
+    `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png>`.
+    Record durable proof paths in the art job (`expected_outputs.edge_proofs`
+    for primary outputs or candidate evidence for non-primary candidates).
+17. For generated-source UI crops, run the derivation audit after slicing:
+    `py -3.12 tools/assets/audit_generated_source_derivation.py --crop-manifest <crop-manifest>`.
+    This catches builders that read a generated sheet but output procedural
+    redraws instead of source-derived PNGs. Record passing JSON reports in
+    `expected_outputs.source_derivation_audit` before claiming final art. The
+    report crop manifest must match the art job crop manifest and cover every
+    source-derived `slice9`, `border`, `tile`, and `sprite` crop id.
+18. For generated slice9 assets, run the design-policy audit after crop and
+    runtime manifests are updated:
+    `node tools/assets/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
+    This gate does not judge beauty; it requires explicit stretch-zone,
+    fixed-ornament, overlay, min-size, and disallowed-use policy so ornate art
+    is not silently used in a size or role where it will stretch badly. Record
+    passing JSON reports in `expected_outputs.slice9_design_audit` before
+    final-art validation.
+19. For final generated UI claims, run the source-family coverage audit:
+    `node tools/assets/audit_source_family_coverage.mjs --job <art-job> --json-output <audit.json> --report <audit.md>`.
+    Jobs should declare `expected_outputs.required_source_families`, usually
+    blank UI kit sheet, isolated icon sheet, and UI decor overlay sheet. This
+    gate fails one mixed source sheet, candidate/debug records, and missing
+    accepted source families. Record passing JSON reports in
+    `expected_outputs.source_family_coverage_audit` before final-art
+    validation. If it fails, run
+    `node tools/assets/plan_missing_source_family_prompts.mjs --job <art-job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`
+    so the next generation pass has concrete prompt packets for the missing
+    source families.
 
 ## Rules
 
@@ -33,9 +111,89 @@ Use this skill to keep source assets, generated outputs, and runtime packs under
   engine capability, or explicit iteration-only boundary.
 - For generated UI, keep crop rectangles, pivots, trim rules, and slice9 margins
   in a manifest; do not preserve them only in chat or screenshots.
+- Manual crop rectangles are not enough for generated icon/sprite sheets. Icon
+  crops need a trim/padding rule and component isolation policy, or an explicit
+  no-trim/no-isolation reason in the manifest.
+- Reject source sheets whose icons or small sprites do not have enough gutters
+  for safe alpha trim and component isolation. Tight adjacent shadows are a
+  source-generation failure, not a runtime integration detail.
+- Chroma-key cleanup must be border-connected so intentional interior colors
+  are not deleted. Remove antialias/key fringe at transparent edges before
+  packing. Also audit and remove soft purple edge halos, not only exact
+  chroma-key pixels. Fill transparent edge RGB with neighboring non-key edge
+  colors and resize/downscale in premultiplied-alpha space so filtering cannot
+  sample the old key color back into visible pixels. Reuse
+  `tools/assets/chroma_key_alpha.py` for this shared cleanup.
+- Source-sheet intake must reject unsafe chroma choices before slicing: exact
+  key-color holes inside component bounds are not normal background, and broad
+  key/halo hue conflicts inside art need either a safer background color or an
+  explicit preserve/masking policy. Use the intake audit's suggested key color
+  when regenerating source sheets.
+- Pixel audits must catch one- or two-pixel dark purple, dark maroon/magenta,
+  and red-blue halos on the outer alpha contour, not only bright magenta
+  fringe.
+- Slice9 crops need more than margins: record content safe area, target preview
+  sizes, minimum size implications, whether the center/edges stretch or tile,
+  fixed-ornament policy, and disallowed uses. If a generated asset is
+  `large_only`, do not use it for compact secondary/mobile buttons; generate a
+  separate compact source family or split decoration into overlay sprites.
+- Slice9 UI needs runtime composition proof at the smallest supported layout.
+  A button/panel that passes standalone preview can still fail if portrait
+  composition squeezes text or stacks controls without spacing.
+- Icon crops need semantic role, source size class, and state/rarity role when
+  relevant.
+- Sprite/marker crops need pivot or anchor before code uses them.
 - For generated art jobs, keep selected source sheets, rejected-output notes,
   runtime asset ids, pack commands, and screenshot evidence referenced from the
   same job contract.
+- Keep full screenshots/fake shots separate from source sheets. A screenshot is
+  a visual target; crop/slice manifests should point to accepted source sheets
+  designed for cutting.
+
+## Generated UI Production Gate
+
+Before UI assets are integrated:
+
+- The art job draft validator passes.
+- Accepted generated/artist source sheets have generation records created with
+  `tools/assets/new_generation_record.mjs`; procedural source is recorded only
+  as a debug exception.
+- The final-art validator passes before the work is described as final
+  generated or artist art.
+- Source-sheet intake audit exists and passes before crop rectangles are
+  treated as production slicing data.
+- Source families are accepted: blank UI kit, isolated icons, map/world layer,
+  and sprite/FX where needed.
+- Final UI art has source-family coverage evidence proving blank bases, icons,
+  and decor overlays are separate accepted source families rather than one
+  mixed sheet.
+- The crop manifest has named entries with `id`, `kind`, `rect`, `output`, and
+  kind-specific metadata.
+- The runtime manifest references every crop output with the same `id`, `kind`,
+  and `path`; missing crop outputs are strict-validation failures.
+- Slice9 crop/runtime entries have matching `stretch_policy` and `usage_policy`;
+  a passing `slice9_design_audit` is required before final generated/artist art
+  can be claimed.
+- Every `slice9` entry has margins, content safe area, and target preview sizes.
+- Every generated `icon` entry has trim padding and component isolation policy
+  unless the manifest records why the asset is already clean.
+- The runtime manifest references only runtime-ready files, not temp
+  generation outputs.
+- Contact sheet or preview evidence exists for crops and stretched slice9
+  states.
+- Pixel audit evidence exists for generated runtime PNGs and reports no clipped
+  icon alpha bounds, chroma-key edge fringe, purple edge halo, or unsafe
+  transparent-edge RGB.
+- Edge proof preview evidence exists when the lead/user reports 1-2 pixel
+  fringe, because ordinary contact sheets can hide single-pixel defects.
+- Generated-source derivation audit evidence exists when a runtime PNG is
+  claimed to come from generated source art rather than a procedural scaffold.
+- Native screenshot proof exists for playable/native work once integrated.
+- When mobile/portrait is in scope, native portrait screenshot proof exists and
+  demonstrates a distinct compact composition rather than a scaled desktop HUD.
+- When a DevAPI/UI tree exists, responsive layout audit evidence exists for
+  the key slice9 action nodes: minimum touch size, no overlap, and portrait
+  primary action above secondary choices.
 
 ## Pack Builder Changes
 

@@ -1,0 +1,59 @@
+{
+  "schema": "game.slice9_design_policy_audit",
+  "version": 1,
+  "crop_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json",
+  "runtime_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json",
+  "verdict": "pass",
+  "problems": [],
+  "assets": [
+    {
+      "id": "compact_button_idle_short_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "compact_button_idle_medium_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "compact_button_idle_long_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "compact_button_disabled_short_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "compact_button_disabled_medium_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "compact_button_disabled_long_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "compact_journal_panel_v5",
+      "kind": "slice9",
+      "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png",
+      "status": "pass",
+      "problems": []
+    }
+  ]
+}

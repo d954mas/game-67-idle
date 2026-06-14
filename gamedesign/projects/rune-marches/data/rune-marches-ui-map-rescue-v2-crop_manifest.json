@@ -1,0 +1,270 @@
+{
+  "schema": "game.art_crop_manifest",
+  "version": 1,
+  "art_job": "gamedesign/projects/rune-marches/art_requests/rune-marches-ui-map-rescue-v2.json",
+  "output_dir": "assets/runtime/rune-marches-ui-map-rescue-v2",
+  "green_screen": {
+    "mode": "chroma_key",
+    "key": "#ff00ff",
+    "notes": "Generated source sheet uses flat magenta. Builder removes border-connected high-red/high-blue/low-green pixels into alpha, expands edge cleanup to catch chroma fringe, and trims icons to alpha bounds with padding."
+  },
+  "sources": [
+    {
+      "id": "ui_kit_source_v2",
+      "path": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-ui-kit-source-v2.png",
+      "generator": "built-in image generation",
+      "source_role": "reusable UI source family; not a gameplay screenshot",
+      "crops": [
+        {
+          "id": "modal_panel",
+          "kind": "slice9",
+          "rect": [28, 47, 818, 545],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/modal_panel_slice9.png",
+          "slice9": { "left": 92, "top": 96, "right": 92, "bottom": 82 },
+          "min_edge_padding": 6,
+          "content": { "x": 120, "y": 120, "w": 578, "h": 320 },
+          "target_preview_sizes": [[360, 240], [520, 320], [760, 420]],
+          "stretch_policy": {
+            "center": "plain_texture",
+            "horizontal_edges": "straight_frame",
+            "vertical_edges": "straight_frame",
+            "corners": "decorative_fixed",
+            "non_stretch_ornaments": "corner_only"
+          },
+          "usage_policy": {
+            "size_class": "flexible",
+            "min_size": [360, 240],
+            "disallowed_uses": []
+          },
+          "state": "default"
+        },
+        {
+          "id": "journal_panel",
+          "kind": "slice9",
+          "rect": [889, 148, 335, 438],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/journal_panel_slice9.png",
+          "slice9": { "left": 54, "top": 74, "right": 54, "bottom": 64 },
+          "min_edge_padding": 6,
+          "content": { "x": 72, "y": 96, "w": 191, "h": 246 },
+          "target_preview_sizes": [[220, 280], [300, 380], [360, 460]],
+          "stretch_policy": {
+            "center": "plain_texture",
+            "horizontal_edges": "straight_frame",
+            "vertical_edges": "straight_frame",
+            "corners": "decorative_fixed",
+            "non_stretch_ornaments": "corner_only"
+          },
+          "usage_policy": {
+            "size_class": "flexible",
+            "min_size": [220, 280],
+            "disallowed_uses": []
+          },
+          "state": "default"
+        },
+        {
+          "id": "button_idle",
+          "kind": "slice9",
+          "rect": [28, 660, 395, 145],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/button_idle_slice9.png",
+          "slice9": { "left": 56, "top": 20, "right": 56, "bottom": 20 },
+          "min_edge_padding": { "left": 6, "top": 0, "right": 6, "bottom": 0 },
+          "content": { "x": 76, "y": 42, "w": 243, "h": 61 },
+          "target_preview_sizes": [[128, 48], [180, 56], [240, 64]],
+          "stretch_policy": {
+            "center": "plain_texture",
+            "horizontal_edges": "straight_frame",
+            "vertical_edges": "straight_frame",
+            "corners": "decorative_fixed",
+            "non_stretch_ornaments": "corner_only"
+          },
+          "usage_policy": {
+            "size_class": "compact_only",
+            "min_size": [128, 48],
+            "disallowed_uses": ["large_modal_primary_button"]
+          },
+          "state": "idle"
+        },
+        {
+          "id": "button_pressed",
+          "kind": "slice9",
+          "rect": [463, 664, 378, 139],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/button_pressed_slice9.png",
+          "slice9": { "left": 56, "top": 20, "right": 56, "bottom": 20 },
+          "min_edge_padding": { "left": 6, "top": 0, "right": 6, "bottom": 0 },
+          "content": { "x": 76, "y": 42, "w": 226, "h": 55 },
+          "target_preview_sizes": [[128, 48], [180, 56], [240, 64]],
+          "stretch_policy": {
+            "center": "plain_texture",
+            "horizontal_edges": "straight_frame",
+            "vertical_edges": "straight_frame",
+            "corners": "decorative_fixed",
+            "non_stretch_ornaments": "corner_only"
+          },
+          "usage_policy": {
+            "size_class": "compact_only",
+            "min_size": [128, 48],
+            "disallowed_uses": ["large_modal_primary_button"]
+          },
+          "state": "pressed"
+        },
+        {
+          "id": "button_disabled",
+          "kind": "slice9",
+          "rect": [873, 667, 351, 138],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/button_disabled_slice9.png",
+          "slice9": { "left": 52, "top": 20, "right": 52, "bottom": 20 },
+          "min_edge_padding": { "left": 6, "top": 6, "right": 6, "bottom": 0 },
+          "content": { "x": 72, "y": 42, "w": 207, "h": 54 },
+          "target_preview_sizes": [[128, 48], [180, 56], [240, 64]],
+          "stretch_policy": {
+            "center": "plain_texture",
+            "horizontal_edges": "straight_frame",
+            "vertical_edges": "straight_frame",
+            "corners": "decorative_fixed",
+            "non_stretch_ornaments": "corner_only"
+          },
+          "usage_policy": {
+            "size_class": "compact_only",
+            "min_size": [128, 48],
+            "disallowed_uses": ["large_modal_primary_button"]
+          },
+          "state": "disabled"
+        },
+        {
+          "id": "status_bar",
+          "kind": "slice9",
+          "rect": [30, 850, 1194, 82],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/status_bar_slice9.png",
+          "slice9": { "left": 72, "top": 20, "right": 72, "bottom": 20 },
+          "min_edge_padding": { "left": 6, "top": 0, "right": 6, "bottom": 6 },
+          "content": { "x": 96, "y": 20, "w": 1002, "h": 42 },
+          "target_preview_sizes": [[320, 48], [540, 56], [900, 64]],
+          "stretch_policy": {
+            "center": "plain_texture",
+            "horizontal_edges": "straight_frame",
+            "vertical_edges": "straight_frame",
+            "corners": "simple_fixed",
+            "non_stretch_ornaments": "corner_only"
+          },
+          "usage_policy": {
+            "size_class": "status_strip_only",
+            "min_size": [320, 48],
+            "disallowed_uses": ["button", "modal_panel"]
+          },
+          "state": "default"
+        },
+        {
+          "id": "reward_chip",
+          "kind": "slice9",
+          "rect": [28, 1018, 214, 130],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/reward_chip_slice9.png",
+          "slice9": { "left": 44, "top": 20, "right": 44, "bottom": 20 },
+          "min_edge_padding": 6,
+          "content": { "x": 52, "y": 46, "w": 110, "h": 38 },
+          "target_preview_sizes": [[120, 56], [160, 64], [220, 72]],
+          "stretch_policy": {
+            "center": "plain_texture",
+            "horizontal_edges": "straight_frame",
+            "vertical_edges": "straight_frame",
+            "corners": "decorative_fixed",
+            "non_stretch_ornaments": "corner_only"
+          },
+          "usage_policy": {
+            "size_class": "flexible",
+            "min_size": [120, 56],
+            "disallowed_uses": ["primary_button"]
+          },
+          "state": "default"
+        },
+        {
+          "id": "icon_frame",
+          "kind": "slice9",
+          "rect": [261, 984, 193, 189],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_frame_slice9.png",
+          "slice9": { "left": 24, "top": 24, "right": 24, "bottom": 24 },
+          "min_edge_padding": 6,
+          "content": { "x": 54, "y": 54, "w": 85, "h": 81 },
+          "target_preview_sizes": [[64, 64], [96, 96], [128, 128]],
+          "stretch_policy": {
+            "center": "transparent",
+            "horizontal_edges": "straight_frame",
+            "vertical_edges": "straight_frame",
+            "corners": "decorative_fixed",
+            "non_stretch_ornaments": "corner_only"
+          },
+          "usage_policy": {
+            "size_class": "icon_slot_only",
+            "min_size": [64, 64],
+            "disallowed_uses": ["button", "modal_panel"]
+          },
+          "state": "default"
+        },
+        {
+          "id": "icon_health",
+          "kind": "icon",
+          "rect": [494, 1016, 120, 128],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_health.png",
+          "semantic_role": "health",
+          "size_class": "96px source",
+          "trim_padding": 10,
+          "isolate_component": "center"
+        },
+        {
+          "id": "icon_mana",
+          "kind": "icon",
+          "rect": [620, 1000, 118, 152],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_mana.png",
+          "semantic_role": "mana",
+          "size_class": "96px source",
+          "trim_padding": 10,
+          "isolate_component": "center"
+        },
+        {
+          "id": "icon_silver",
+          "kind": "icon",
+          "rect": [725, 996, 136, 152],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_silver.png",
+          "semantic_role": "silver",
+          "size_class": "96px source",
+          "trim_padding": 10,
+          "isolate_component": "center"
+        },
+        {
+          "id": "icon_xp",
+          "kind": "icon",
+          "rect": [846, 996, 142, 152],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_xp.png",
+          "semantic_role": "xp",
+          "size_class": "96px source",
+          "trim_padding": 10,
+          "isolate_component": "center"
+        },
+        {
+          "id": "icon_road_safety",
+          "kind": "icon",
+          "rect": [974, 996, 144, 166],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_road_safety.png",
+          "semantic_role": "road_safety",
+          "size_class": "96px source",
+          "trim_padding": 10,
+          "isolate_component": "center"
+        },
+        {
+          "id": "icon_rune_spark",
+          "kind": "icon",
+          "rect": [1096, 986, 144, 176],
+          "output": "assets/runtime/rune-marches-ui-map-rescue-v2/icon_rune_spark.png",
+          "semantic_role": "rune_spark",
+          "size_class": "96px source",
+          "trim_padding": 10,
+          "preserve_purple_edges": true,
+          "isolate_component": "center"
+        }
+      ]
+    }
+  ],
+  "preview_evidence": [
+    "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-kit-v2-contact-sheet.png",
+    "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-kit-v2-slice9-preview.png"
+  ]
+}

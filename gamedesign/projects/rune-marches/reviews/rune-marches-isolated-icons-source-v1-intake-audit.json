@@ -1,0 +1,98 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-isolated-icons-source-v1.png",
+  "size": [
+    1254,
+    1254
+  ],
+  "key_color": "#ff00ff",
+  "key_tolerance": 8,
+  "component_count": 1,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 24,
+  "max_exact_key_conflict_px": 0,
+  "max_key_hue_conflict_ratio": 0.05,
+  "closest_gap_px": null,
+  "closest_pair": null,
+  "candidate_key_scores": [
+    {
+      "key_color": "#ff00ff",
+      "visible_px": 1572516,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 3,
+      "hue_band_ratio": 2e-06,
+      "score": 3.000191
+    },
+    {
+      "key_color": "#0000ff",
+      "visible_px": 1572516,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 124,
+      "hue_band_ratio": 7.9e-05,
+      "score": 124.007885
+    },
+    {
+      "key_color": "#ffff00",
+      "visible_px": 1572516,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 18297,
+      "hue_band_ratio": 0.011635,
+      "score": 18298.163549
+    },
+    {
+      "key_color": "#00ffff",
+      "visible_px": 1572516,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 22160,
+      "hue_band_ratio": 0.014092,
+      "score": 22161.409207
+    },
+    {
+      "key_color": "#ff0000",
+      "visible_px": 1572516,
+      "exact_conflict_px": 1,
+      "exact_conflict_ratio": 1e-06,
+      "hue_band_px": 26720,
+      "hue_band_ratio": 0.016992,
+      "score": 27721.699188
+    },
+    {
+      "key_color": "#00ff00",
+      "visible_px": 1572516,
+      "exact_conflict_px": 1236254,
+      "exact_conflict_ratio": 0.786163,
+      "hue_band_px": 1246360,
+      "hue_band_ratio": 0.79259,
+      "score": 1237500439.258971
+    }
+  ],
+  "suggested_key_color": "#ff00ff",
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        0,
+        0,
+        1254,
+        1254
+      ],
+      "area_px": 1572516,
+      "visible_px": 1572516,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 22,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 1.4e-05,
+      "border_gap_px": 0
+    }
+  ],
+  "problems": [
+    "component_1 border gap 0px is below required 24px"
+  ],
+  "status": "fail"
+}

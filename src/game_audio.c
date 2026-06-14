@@ -109,6 +109,7 @@ void game_audio_set_device_enabled(bool enabled) {
     s_device_enabled = enabled;
 }
 
+#if defined(_WIN32) && !defined(NT_PLATFORM_WEB)
 static int cue_sample_count(GameAudioCue cue) {
     switch (cue) {
     case GAME_AUDIO_CUE_CLICK:
@@ -167,6 +168,7 @@ static void fill_cue_samples(GameAudioCue cue, int16_t *out, int sample_count, f
         out[i] = (int16_t)(scaled * 32767.0F);
     }
 }
+#endif
 
 void game_audio_play(GameAudioCue cue) {
     if (cue < 0 || cue >= GAME_AUDIO_CUE_COUNT) {

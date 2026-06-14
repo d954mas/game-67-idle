@@ -1,0 +1,51 @@
+{
+  "schema": "game.responsive_layout_audit",
+  "version": 1,
+  "surface": "desktop",
+  "ui_tree": "tmp/rune_marches/ui_tree_desktop.json",
+  "viewport": {
+    "width": 960,
+    "height": 540
+  },
+  "primary": "action.scout_road",
+  "buttons": [
+    {
+      "id": "action.scout_road",
+      "role": "button",
+      "enabled": true,
+      "visible": true,
+      "bounds": {
+        "x": 350,
+        "y": 462,
+        "w": 260,
+        "h": 64
+      }
+    },
+    {
+      "id": "action.rest",
+      "role": "button",
+      "enabled": true,
+      "visible": true,
+      "bounds": {
+        "x": 14,
+        "y": 462,
+        "w": 222.5,
+        "h": 64
+      }
+    },
+    {
+      "id": "upgrade.spark_ward_1",
+      "role": "button",
+      "enabled": false,
+      "visible": true,
+      "bounds": {
+        "x": 723.5,
+        "y": 462,
+        "w": 222.5,
+        "h": 64
+      }
+    }
+  ],
+  "problems": [],
+  "verdict": "pass"
+}

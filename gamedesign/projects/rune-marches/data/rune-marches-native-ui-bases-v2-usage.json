@@ -1,0 +1,66 @@
+{
+  "schema": "game.runtime_ui_asset_usage",
+  "version": 1,
+  "runtime_surface": "native_pc",
+  "source_file": "src/main.c",
+  "asset_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-bases-v2-asset_manifest.json",
+  "notes": [
+    "This file records generated UI base placements that are active in native runtime screenshots.",
+    "Compact and dense secondary buttons intentionally remain on the older compact-safe UI kit until a separate compact generated source family exists.",
+    "Generated modal panel use is guarded in code by actual panel size and is excluded from the 960x540 first-screen usage proof."
+  ],
+  "usages": [
+    {
+      "id": "journal_panel_v2",
+      "context": "desktop_journal_side_panel_960x540",
+      "layout_mode": "desktop",
+      "viewport": [
+        960,
+        540
+      ],
+      "size": [
+        268.8,
+        280.8
+      ],
+      "usage_tags": [
+        "desktop_side_panel",
+        "quest_journal"
+      ],
+      "source_location": "src/main.c:914"
+    },
+    {
+      "id": "button_idle_v2",
+      "context": "desktop_primary_action_960x540",
+      "layout_mode": "desktop",
+      "viewport": [
+        960,
+        540
+      ],
+      "size": [
+        320,
+        104
+      ],
+      "usage_tags": [
+        "primary_action"
+      ],
+      "source_location": "src/main.c:677"
+    },
+    {
+      "id": "button_disabled_v2",
+      "context": "desktop_primary_action_disabled_960x540",
+      "layout_mode": "desktop",
+      "viewport": [
+        960,
+        540
+      ],
+      "size": [
+        320,
+        104
+      ],
+      "usage_tags": [
+        "primary_action"
+      ],
+      "source_location": "src/main.c:677"
+    }
+  ]
+}

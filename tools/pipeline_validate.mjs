@@ -68,11 +68,39 @@ run("ai profile tests", ["--test", "tools/ai_profile/test.mjs"]);
 if (existsSync(join(root, "tools", "game_context", "test.mjs"))) {
   run("game context tests", ["--test", "tools/game_context/test.mjs"]);
 }
+if (existsSync(join(root, "tools", "product_gate", "test.mjs"))) {
+  run("product gate tests", ["--test", "tools/product_gate/test.mjs"]);
+}
+if (existsSync(join(root, "tools", "assets", "new_generation_record.test.mjs"))) {
+  run("generated art job node tests", [
+    "--test",
+    "tools/assets/plan_source_sheet_prompt.test.mjs",
+    "tools/assets/plan_missing_source_family_prompts.test.mjs",
+    "tools/assets/new_generation_record.test.mjs",
+    "tools/assets/validate_art_job.test.mjs",
+    "tools/assets/audit_slice9_design_policy.test.mjs",
+    "tools/assets/audit_runtime_ui_asset_usage.test.mjs",
+    "tools/assets/audit_source_family_coverage.test.mjs",
+  ]);
+}
+let python = null;
+if (existsSync(join(root, "tools", "assets", "normalize_source_sheet_chroma_test.py"))) {
+  python = findPythonRunner();
+  run("source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.chroma_key_alpha_test", "tools.assets.normalize_source_sheet_chroma_test", "tools.assets.audit_source_sheet_intake_test"], { exe: python.exe });
+}
+if (existsSync(join(root, "tools", "assets", "audit_generated_ui_assets_test.py"))) {
+  python ||= findPythonRunner();
+  run("generated UI asset audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_ui_assets_test", "tools.assets.render_ui_asset_edge_proof_test"], { exe: python.exe });
+}
+if (existsSync(join(root, "tools", "assets", "audit_generated_source_derivation_test.py"))) {
+  python ||= findPythonRunner();
+  run("generated source derivation audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_source_derivation_test"], { exe: python.exe });
+}
 
 // Runtime seed checks. Skipped automatically in workflow-only exports, which
 // have no state schema or CMake presets.
 if (existsSync(join(root, "state", "game_state.schema.json"))) {
-  const python = findPythonRunner();
+  python ||= findPythonRunner();
   run("state codegen", [...python.args, "tools/state_codegen/generate_state.py"], { exe: python.exe });
 }
 if (existsSync(join(root, "CMakePresets.json"))) {
@@ -87,6 +115,42 @@ run("exported taskboard tests", ["--test", "tools/taskboard/test.mjs"], { cwd: e
 run("exported ai profile tests", ["--test", "tools/ai_profile/test.mjs"], { cwd: exportDir });
 if (existsSync(join(exportDir, "tools", "game_context", "test.mjs"))) {
   run("exported game context tests", ["--test", "tools/game_context/test.mjs"], { cwd: exportDir });
+}
+if (existsSync(join(exportDir, "tools", "product_gate", "test.mjs"))) {
+  run("exported product gate tests", ["--test", "tools/product_gate/test.mjs"], { cwd: exportDir });
+}
+if (existsSync(join(exportDir, "tools", "assets", "new_generation_record.test.mjs"))) {
+  run("exported generated art job node tests", [
+    "--test",
+    "tools/assets/plan_source_sheet_prompt.test.mjs",
+    "tools/assets/plan_missing_source_family_prompts.test.mjs",
+    "tools/assets/new_generation_record.test.mjs",
+    "tools/assets/validate_art_job.test.mjs",
+    "tools/assets/audit_slice9_design_policy.test.mjs",
+    "tools/assets/audit_runtime_ui_asset_usage.test.mjs",
+    "tools/assets/audit_source_family_coverage.test.mjs",
+  ], { cwd: exportDir });
+}
+if (existsSync(join(exportDir, "tools", "assets", "normalize_source_sheet_chroma_test.py"))) {
+  python ||= findPythonRunner();
+  run("exported source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.chroma_key_alpha_test", "tools.assets.normalize_source_sheet_chroma_test", "tools.assets.audit_source_sheet_intake_test"], {
+    cwd: exportDir,
+    exe: python.exe,
+  });
+}
+if (existsSync(join(exportDir, "tools", "assets", "audit_generated_ui_assets_test.py"))) {
+  python ||= findPythonRunner();
+  run("exported generated UI asset audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_ui_assets_test", "tools.assets.render_ui_asset_edge_proof_test"], {
+    cwd: exportDir,
+    exe: python.exe,
+  });
+}
+if (existsSync(join(exportDir, "tools", "assets", "audit_generated_source_derivation_test.py"))) {
+  python ||= findPythonRunner();
+  run("exported generated source derivation audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_source_derivation_test"], {
+    cwd: exportDir,
+    exe: python.exe,
+  });
 }
 
 console.log(`\nok: reusable pipeline validation passed`);

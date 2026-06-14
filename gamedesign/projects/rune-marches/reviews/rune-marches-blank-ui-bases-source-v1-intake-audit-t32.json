@@ -1,0 +1,114 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v1.png",
+  "size": [
+    1254,
+    1254
+  ],
+  "key_color": "#ff00ff",
+  "key_tolerance": 32,
+  "component_count": 8,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 36,
+  "closest_gap_px": 10,
+  "closest_pair": [
+    "component_4",
+    "component_5"
+  ],
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        65,
+        80,
+        761,
+        596
+      ],
+      "area_px": 442870,
+      "border_gap_px": 65
+    },
+    {
+      "id": "component_2",
+      "bbox": [
+        893,
+        83,
+        311,
+        758
+      ],
+      "area_px": 231058,
+      "border_gap_px": 50
+    },
+    {
+      "id": "component_3",
+      "bbox": [
+        71,
+        718,
+        261,
+        101
+      ],
+      "area_px": 24643,
+      "border_gap_px": 71
+    },
+    {
+      "id": "component_4",
+      "bbox": [
+        65,
+        868,
+        763,
+        97
+      ],
+      "area_px": 64461,
+      "border_gap_px": 65
+    },
+    {
+      "id": "component_5",
+      "bbox": [
+        1016,
+        975,
+        189,
+        193
+      ],
+      "area_px": 35974,
+      "border_gap_px": 49
+    },
+    {
+      "id": "component_6",
+      "bbox": [
+        68,
+        1033,
+        266,
+        135
+      ],
+      "area_px": 35206,
+      "border_gap_px": 68
+    },
+    {
+      "id": "component_7",
+      "bbox": [
+        375,
+        1033,
+        266,
+        135
+      ],
+      "area_px": 35108,
+      "border_gap_px": 86
+    },
+    {
+      "id": "component_8",
+      "bbox": [
+        680,
+        1034,
+        263,
+        134
+      ],
+      "area_px": 34752,
+      "border_gap_px": 86
+    }
+  ],
+  "problems": [
+    "closest component gap 10px is below required 36px"
+  ],
+  "status": "fail"
+}

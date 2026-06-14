@@ -577,6 +577,39 @@ test("status recommends baseline capture when clean profile has no baseline", ()
   }
 });
 
+test("prepare reflection exits cleanly when baseline is missing", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "prep-no-baseline.jsonl");
+    const scope = join(dir, "scope.json");
+    const statusJson = join(dir, "status.json");
+    run(["tools/ai_profile/scope.mjs", "set", "--scope", scope, "--work-item", "PREP", "--iteration", "no-baseline"]);
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile", profile,
+      "--phase", "session_closeout",
+      "--category", "reflection",
+      "--intent", "clean closeout",
+      "--result", "pass",
+      "--value", "necessary_overhead",
+      "--work-item", "PREP",
+      "--iteration", "no-baseline",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    writeValidReflectionBundle(profile);
+
+    const result = run(["tools/ai_profile/prepare_reflection.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    assert.match(result.stdout, /Baseline: missing/);
+    assert.match(result.stderr, /warning: no captured baseline/);
+    const status = readJson(statusJson);
+    assert.equal(status.baselines.latest_manifest, null);
+    assert.match(status.next_action, /capture_baseline\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status reports latest captured baseline when one exists", () => {
   const dir = tempDir();
   try {

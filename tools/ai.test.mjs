@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -212,6 +212,89 @@ test("passive run records slow commands", () => {
     assert.equal(records.length, 1);
     assert.equal(records[0].result, "pass");
     assert.equal(records[0].passive_reason, "slow_command");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("gate forwards product-read review options", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    const output = join(dir, "gate.md");
+    const json = join(dir, "gate.json");
+    writeFileSync(screenshot, "png", "utf8");
+
+    const result = run([
+      "gate",
+      "--project", "rune-marches",
+      "--task", "T0006",
+      "--screenshot", screenshot,
+      "--verdict", "fail",
+      "--where", "A fantasy road screen.",
+      "--action", "Click the primary Scout button.",
+      "--response", "The route advances into combat.",
+      "--reward", "Coins and upgrade progress become visible.",
+      "--game-look", "Map art and game controls replace debug widgets.",
+      "--problem", "The first screen still has too many controls.",
+      "--next", "Reduce the HUD and rebuild the primary action group.",
+      "--output", output,
+      "--json-output", json,
+      "--index-output", join(dir, "latest.json"),
+      "--strict",
+    ]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Product Read Gate/);
+    assert.equal(existsSync(output), true);
+    assert.equal(readJson(json).verdict, "fail");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("close-slice forwards product gate closeout options", () => {
+  const dir = tempDir();
+  try {
+    const taskDir = join(dir, "tasks", "active");
+    const gate = join(dir, "gate.json");
+    mkdirSync(taskDir, { recursive: true });
+    writeFileSync(join(taskDir, "T0096-test.md"), `---
+id: T0096
+title: Test task
+status: doing
+priority: P0
+tags: [test]
+created: 2026-06-14
+updated: 2026-06-14
+---
+
+## What
+
+Test task.
+
+## Done when
+
+- [ ] evidence exists
+
+## Open questions
+
+## Log
+`, "utf8");
+    writeFileSync(gate, `${JSON.stringify({ verdict: "pass", surface: "desktop", screenshot: "tmp/screen.png", markdown: "gate.md", next: "Next slice" })}\n`, "utf8");
+    const result = run([
+      "close-slice",
+      "--project", "rune-marches",
+      "--task", "T0096",
+      "--gate", gate,
+      "--evidence", "product gate test evidence",
+      "--strict",
+    ], { env: { ...process.env, TASKBOARD_ROOT: dir } });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Close Slice/);
+    const task = readFileSync(join(taskDir, "T0096-test.md"), "utf8");
+    assert.match(task, /close-slice PASS gate/);
   } finally {
     cleanup(dir);
   }

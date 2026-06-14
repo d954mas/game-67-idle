@@ -57,12 +57,61 @@ node tools/skills_sync.mjs
   deleted, archived, or intentionally adapted.
 - **Art iterations are packetized.** For generated game art, start from an
   accepted visual target, write an art request packet, slice from a manifest,
-  run an explicit pack/material build, and validate in the primary runtime. Do
-  not keep crop coordinates or slice9 decisions only in chat. Reusable guidance:
-  `gamedesign/knowledge/ai_art_iteration_pipeline.md`. For new multi-asset
-  passes, scaffold the contract with `node tools/assets/new_art_job.mjs` so the
-  agent can move directly from candidate generation to crop/slice/pack/native
-  evidence.
+  run an explicit pack/material build, and validate in the primary runtime. For
+  generated UI, research/source notes come first when the pipeline is being
+  changed; current notes live in
+  `gamedesign/sources/generated_game_ui_asset_pipeline_research_2026-06-14.md`.
+  Do not keep crop coordinates, content safe areas, or slice9 decisions only in
+  chat. Start generated runtime UI work with
+  `.codex/skills/generated-game-ui-assets/`; it coordinates art direction,
+  asset pipeline, pixel audits, responsive layout audits, and runtime proof.
+  Accepted generated source sheets must carry provenance: provider/model or
+  workflow, workflow file/json, seed or no-seed reason, prompt, negative prompt, source family
+  role, accepted source image, and rejected candidate notes. Record it with
+  `node tools/assets/new_generation_record.mjs` and reference the created file
+  from `expected_outputs.generation_records`. Generated/artist records need a
+  real workflow path or non-empty workflow JSON; dummy `{}` provenance is
+  draft-only and cannot pass the final-art gate. If a provider does not expose
+  a stable seed, record a concrete no-seed reason rather than writing `unknown`
+  as a pseudo-seed. Procedural or programmer-art
+  fallbacks may prove geometry, but they do not satisfy final generated-art
+  work unless an explicit debug exception is recorded in the generation record
+  and the art job.
+  Reusable guidance: `gamedesign/knowledge/ai_art_iteration_pipeline.md`.
+  For new multi-asset passes, scaffold the contract with
+  `node tools/assets/new_art_job.mjs`, run
+  `node tools/assets/validate_art_job.mjs --job <job>` before generation, and
+  run `node tools/assets/validate_art_job.mjs --job <job> --strict` after
+  slicing/runtime manifests exist. Run
+  `node tools/assets/validate_art_job.mjs --job <job> --final-art` before
+  claiming a final generated/artist art pass; this must fail while any accepted
+  source is procedural debug art or has partial/unknown generation provenance.
+  Before slicing a generated UI source sheet, run
+  `py -3.12 tools/assets/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>`
+  when the generator produced a non-flat chroma background, then run
+  `py -3.12 tools/assets/audit_source_sheet_intake.py --source <source-sheet> --json-output <audit.json> --report <audit.md>`
+  to catch non-flat chroma backgrounds, merged components, clipped components,
+  and too-small gutters. For generated UI runtime PNGs, also run
+  `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`
+  after slicing; this catches clipped icon alpha bounds and chroma-key edge
+  fringe that a JSON validator cannot see.
+- **Product-read gates stop content expansion.** For game work where visual,
+  FTUE, gameplay feel, or audience testing matters, the first playable screen
+  must pass a screenshot/player-read review before adding more content or
+  systems. The review asks: where am I, what can I do now, what changed after
+  input, what is the reward, and does this look like a game rather than a
+  debug tool? If the answer is weak, freeze scope and fix the screen/loop
+  first. Passing builds, scenarios, or probes is not enough. Use
+  `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate` to write the
+  durable gate artifact. Before handing off a slice, use
+  `node tools/ai.mjs close-slice` so the task log records the gate, validation
+  evidence, and next action.
+- **Responsive UI needs geometry evidence.** For desktop/mobile UI composition,
+  pair screenshot gates with a UI-tree layout audit when the runtime exposes
+  element bounds. Use `node tools/product_gate/responsive_layout_audit.mjs` to
+  check required action nodes, minimum touch sizes, non-overlap, and portrait
+  primary-action layout. This catches compressed clickable zones that a static
+  screenshot review can miss.
 - **References are a gate only when they drive the work.** If the user names a
   reference or says the build does not match one, use the smallest honest mode:
   quick check, central deconstruction, or deep deconstruction. Before
@@ -104,6 +153,10 @@ node tools/skills_sync.mjs
 - **Evidence or it did not happen.** A task is `done` only with ticked
   `## Done when` boxes and an evidence line in `## Log`.
 - **Small slices.** Prefer one playable iteration over broad speculative work.
+- **Visual failure is a stop condition.** If the lead rejects a screenshot or
+  runtime build as ugly, unclear, or unplayable, stop feature expansion. Create
+  a rescue task, a visual/product failure report, and the smallest runtime
+  screenshot proof needed for the next pass.
 - Scratch-vs-durable paths and platform validation order are project rules in
   `AGENTS.md`, not repeated here.
 
@@ -224,11 +277,13 @@ Portable (copied by the exporter):
 - `tools/ai.mjs`, `tools/ai.test.mjs`, `tools/skills_sync.mjs`,
   `tools/skills_eval.mjs`,
   `tools/pipeline_validate.mjs`, `tools/ai_profile/`,
-  `tools/game_context/`, `tools/assets/new_art_job.mjs`,
-  `tools/taskboard/`, `tools/README.md`, `tools/tool_layers.json` - fast AI
+  `tools/game_context/`, `tools/product_gate/`, `tools/assets/new_art_job.mjs`,
+  `tools/assets/new_generation_record.mjs`, `tools/assets/validate_art_job.mjs`,
+  `tools/assets/audit_generated_ui_assets.py`, `tools/taskboard/`, `tools/README.md`,
+  `tools/tool_layers.json` - fast AI
   workflow facade, skill mirroring, skill regression checks, reusable-base
   validation, AI session profiling internals, game iteration context, generated
-  art job scaffolding, task store UI/CLI, and tool portability map.
+  art job scaffolding/validation, task store UI/CLI, and tool portability map.
 - `gamedesign/knowledge/` - accumulated design lessons.
 - `AI_PIPELINE.md`, `AI_PIPELINE_SESSION_PROFILING.md`,
   `AI_PIPELINE_OBSERVABILITY_TOOLS.md`, `tasks/README.md`, starter

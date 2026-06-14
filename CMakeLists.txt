@@ -61,6 +61,18 @@ set(GAME_STATE_GENERATED_HEADER "${CMAKE_SOURCE_DIR}/src/generated/game_state.h"
 set(GAME_STATE_GENERATED_SOURCE "${CMAKE_SOURCE_DIR}/src/generated/game_state.c")
 set(GAME_STATE_GENERATED_DEVAPI_SOURCE "${CMAKE_SOURCE_DIR}/src/generated/game_state_devapi.c")
 set(GAME_STATE_GENERATED_SCHEMA_HEADER "${CMAKE_SOURCE_DIR}/src/generated/game_state_schema.gen.h")
+set(RUNE_MARCHES_ASSET_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/art/fake_shots/rune-marches-gameplay-v1.png")
+set(RUNE_MARCHES_ASSET_CODEGEN "${CMAKE_SOURCE_DIR}/tools/assets/build_rune_marches_assets.py")
+set(RUNE_MARCHES_UI_KIT_V2_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/art/source_sheets/rune-marches-ui-kit-source-v2.png")
+set(RUNE_MARCHES_UI_KIT_V2_CODEGEN "${CMAKE_SOURCE_DIR}/tools/assets/build_rune_marches_ui_kit_v2.py")
+set(RUNE_MARCHES_UI_BASES_V2_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v2-chroma-clean.png")
+set(RUNE_MARCHES_UI_BASES_V2_CODEGEN "${CMAKE_SOURCE_DIR}/tools/assets/build_rune_marches_ui_bases_v2.py")
+set(RUNE_MARCHES_UI_COMPACT_BASES_V5_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/art/source_sheets/rune-marches-compact-ui-bases-source-v5-chroma-clean.png")
+set(RUNE_MARCHES_UI_COMPACT_BASES_V5_CODEGEN "${CMAKE_SOURCE_DIR}/tools/assets/build_rune_marches_ui_compact_bases_v5.py")
+set(RUNE_MARCHES_ASSET_GENERATED_HEADER "${CMAKE_SOURCE_DIR}/src/generated/rune_marches_assets.gen.h")
+set(RUNE_MARCHES_ASSET_GENERATED_SOURCE "${CMAKE_SOURCE_DIR}/src/generated/rune_marches_assets.gen.c")
+set(RUNE_MARCHES_CROP_MANIFEST "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/data/rune-marches-v1-crop_manifest.json")
+set(RUNE_MARCHES_RUNTIME_MANIFEST "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/data/rune-marches-v1-runtime_asset_manifest.json")
 
 add_custom_command(
     OUTPUT
@@ -83,6 +95,45 @@ add_custom_target(game_state_codegen
         "${GAME_STATE_GENERATED_SOURCE}"
         "${GAME_STATE_GENERATED_DEVAPI_SOURCE}"
         "${GAME_STATE_GENERATED_SCHEMA_HEADER}"
+)
+
+add_custom_command(
+    OUTPUT
+        "${RUNE_MARCHES_ASSET_GENERATED_HEADER}"
+        "${RUNE_MARCHES_ASSET_GENERATED_SOURCE}"
+        "${RUNE_MARCHES_CROP_MANIFEST}"
+        "${RUNE_MARCHES_RUNTIME_MANIFEST}"
+    COMMAND "${Python3_EXECUTABLE}" "${RUNE_MARCHES_UI_KIT_V2_CODEGEN}"
+    COMMAND "${Python3_EXECUTABLE}" "${RUNE_MARCHES_UI_BASES_V2_CODEGEN}"
+    COMMAND "${Python3_EXECUTABLE}" "${RUNE_MARCHES_UI_COMPACT_BASES_V5_CODEGEN}"
+    COMMAND "${Python3_EXECUTABLE}" "${RUNE_MARCHES_ASSET_CODEGEN}"
+        --source "${RUNE_MARCHES_ASSET_SOURCE}"
+        --runtime-dir "${CMAKE_SOURCE_DIR}/assets/runtime/rune-marches-v1"
+        --generated-dir "${CMAKE_SOURCE_DIR}/src/generated"
+        --crop-manifest "${RUNE_MARCHES_CROP_MANIFEST}"
+        --runtime-manifest "${RUNE_MARCHES_RUNTIME_MANIFEST}"
+        --ui-kit-v2-dir "${CMAKE_SOURCE_DIR}/assets/runtime/rune-marches-ui-map-rescue-v2"
+        --ui-bases-v2-dir "${CMAKE_SOURCE_DIR}/assets/runtime/rune-marches-ui-bases-v2"
+        --ui-compact-bases-v5-dir "${CMAKE_SOURCE_DIR}/assets/runtime/rune-marches-ui-compact-bases-v5"
+    DEPENDS
+        "${RUNE_MARCHES_ASSET_SOURCE}"
+        "${RUNE_MARCHES_ASSET_CODEGEN}"
+        "${RUNE_MARCHES_UI_KIT_V2_SOURCE}"
+        "${RUNE_MARCHES_UI_KIT_V2_CODEGEN}"
+        "${RUNE_MARCHES_UI_BASES_V2_SOURCE}"
+        "${RUNE_MARCHES_UI_BASES_V2_CODEGEN}"
+        "${RUNE_MARCHES_UI_COMPACT_BASES_V5_SOURCE}"
+        "${RUNE_MARCHES_UI_COMPACT_BASES_V5_CODEGEN}"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    COMMENT "Generating Rune Marches runtime art assets"
+    VERBATIM
+)
+add_custom_target(rune_marches_asset_codegen
+    DEPENDS
+        "${RUNE_MARCHES_ASSET_GENERATED_HEADER}"
+        "${RUNE_MARCHES_ASSET_GENERATED_SOURCE}"
+        "${RUNE_MARCHES_CROP_MANIFEST}"
+        "${RUNE_MARCHES_RUNTIME_MANIFEST}"
 )
 
 add_library(game_state STATIC
@@ -137,7 +188,10 @@ add_executable(${GAME_TARGET}
     src/main.c
     src/game_audio.c
     src/game_audio.h
+    "${RUNE_MARCHES_ASSET_GENERATED_SOURCE}"
+    "${RUNE_MARCHES_ASSET_GENERATED_HEADER}"
 )
+add_dependencies(${GAME_TARGET} rune_marches_asset_codegen)
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core
     nt_app

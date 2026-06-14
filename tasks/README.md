@@ -195,6 +195,10 @@ Evidence should be the smallest reliable proof for the task:
   task store from inside the exported project
 - game/runtime change: run the narrow native/web scenario that proves the
   changed behavior, and capture screenshots when the change is visual/playable
+- visual, FTUE, audience-test, or first-screen gameplay change: run
+  `node tools/ai.mjs gate` on the screenshot and record the generated gate
+  artifact before expanding content; use `node tools/ai.mjs close-slice` before
+  handoff/review
 - release/build change: run the relevant build command and record the artifact
   or report path
 

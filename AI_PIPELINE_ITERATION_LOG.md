@@ -5,6 +5,18 @@ This is not the task board, not live status, and not a full retrospective.
 
 ## Current Lessons
 
+### 2026-06-14 - Automation Green Did Not Mean Product Good
+
+- Context: A long native RPG prototype run added systems, routes, state,
+  DevAPI scenarios, and screenshots, but the lead rejected the visible game as
+  unclear and visually unacceptable.
+- Friction: The agent treated passing probes as progress while the first
+  screen still failed product-read, FTUE, and art-direction quality.
+- Lesson: For visual/gameplay-heavy game work, stop content expansion until a
+  native screenshot passes the player-read gate: where am I, what do I do,
+  what changed, what is the reward, and does it look like a game.
+- Status: Added pipeline and skill stop-gates; T0006 is the visual rescue task.
+
 ### 2026-06-13 - Tooling Must Stay Passive
 
 - Context: Profiling, validation, reflection, and task scripts grew into their

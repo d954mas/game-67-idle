@@ -1,0 +1,19 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "rune-marches",
+  "task": "T0007",
+  "surface": "desktop-ui-kit-v2",
+  "verdict": "pass",
+  "timestamp": "2026-06-14T05:02:30.996Z",
+  "screenshot": "tmp/rune_marches/native_ui_kit_v2_first_screen_desktop.png",
+  "answers": {
+    "where": "Miregate and Wispfen Road are visible on a fantasy map with the Warden Journal beside it.",
+    "action": "Scout Road is the dominant available action, with Rest and Upgrade as secondary choices.",
+    "response": "Scout Road starts the first road encounter and changes the journal/combat state.",
+    "reward": "The route promises XP, silver, sparks, and visible main-quest progress in the journal.",
+    "game_look": "Generated map art, carved slice9 panels, icon resources, and fantasy buttons read as game UI rather than debug UI."
+  },
+  "problem": "",
+  "next": "Asset extraction, slice9 composition, and desktop proof are usable; next polish should simplify HUD art and route readability."
+}
