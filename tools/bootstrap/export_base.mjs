@@ -63,6 +63,8 @@ const COPY = [
   "tools/assets/audit_generated_ui_assets_test.py",
   "tools/assets/render_ui_asset_edge_proof.py",
   "tools/assets/render_ui_asset_edge_proof_test.py",
+  "tools/assets/render_ui_composition_proof.py",
+  "tools/assets/render_ui_composition_proof_test.py",
   "tools/assets/audit_generated_source_derivation.py",
   "tools/assets/audit_generated_source_derivation_test.py",
   "tools/game_context",

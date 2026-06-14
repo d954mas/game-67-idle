@@ -2,7 +2,7 @@
   "schema": "game.slice9_design_policy_audit",
   "version": 1,
   "crop_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json",
-  "runtime_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-runtime_manifest.json",
+  "runtime_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json",
   "verdict": "pass",
   "problems": [],
   "assets": [

@@ -58,6 +58,7 @@ game project:
 - `tools/assets/audit_source_sheet_intake.py`
 - `tools/assets/audit_generated_ui_assets.py`
 - `tools/assets/render_ui_asset_edge_proof.py`
+- `tools/assets/render_ui_composition_proof.py`
 - `tools/assets/audit_generated_source_derivation.py`
 
 `tools/product_gate/review.mjs` creates the durable screenshot/player-read
@@ -191,6 +192,13 @@ alpha-boundary strips on a checkerboard and marks detected bad edge pixels. Use
 it when 1-2 pixel fringe is reported or when a normal contact sheet is too small
 to review edge quality. Use `--asset-id` and `--side` to create a small proof
 for the exact reported edge.
+`tools/assets/render_ui_composition_proof.py` renders runtime composition proof
+from an asset manifest: slice9 base at target preview sizes, optional anchored
+decor/state overlays, runtime labels, and content safe-area outlines. Use it
+after slice9 assets pass pixel audits; it catches panels/buttons that are
+technically cuttable but whose `content` rectangle collapses at compact sizes or
+cannot fit real runtime text. The output PNG is human review evidence, and the
+JSON/Markdown report should be recorded beside other generated UI reviews.
 `tools/assets/audit_generated_source_derivation.py` is the anti-redraw gate for
 generated UI crops: it compares each runtime PNG against the accepted source
 crop after chroma cleanup and fails builders that output procedural redraws

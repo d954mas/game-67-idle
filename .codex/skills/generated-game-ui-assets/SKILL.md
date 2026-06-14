@@ -140,6 +140,12 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       Record passing reports in `expected_outputs.slice9_design_audit`; final-art
       validation requires this evidence so cuttable but unscalable generated
       panels cannot pass as production UI.
+    - runtime composition proof:
+      `py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest <runtime-manifest> --output <proof.png> --json-output <proof.json> --report <proof.md>`
+      Record the proof image and report with preview/review evidence. This gate
+      must fail if slice9 margins leave no usable content area at target sizes,
+      runtime labels do not fit, overlays fall outside their anchored base, or
+      the UI only works as a static source-size crop.
     - source family coverage audit:
       `node tools/assets/audit_source_family_coverage.mjs --job <job> --json-output <audit.json> --report <audit.md>`
       Record passing reports in `expected_outputs.source_family_coverage_audit`;

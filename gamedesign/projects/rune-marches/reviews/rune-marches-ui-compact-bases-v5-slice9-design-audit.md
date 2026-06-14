@@ -1,6 +1,6 @@
 # Slice9 Design Policy Audit
 crop_manifest: `gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json`
-runtime_manifest: `gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-runtime_manifest.json`
+runtime_manifest: `gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json`
 verdict: **pass**
 ## Assets
 - PASS `compact_button_idle_short_v5`

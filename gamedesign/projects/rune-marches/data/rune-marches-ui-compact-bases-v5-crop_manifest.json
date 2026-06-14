@@ -40,16 +40,16 @@
           },
           "target_preview_sizes": [
             [
-              128,
-              48
+              160,
+              72
             ],
             [
-              160,
-              52
+              184,
+              72
             ],
             [
               203,
-              64
+              72
             ]
           ],
           "stretch_policy": {
@@ -62,8 +62,8 @@
           "usage_policy": {
             "size_class": "compact_only",
             "min_size": [
-              128,
-              48
+              160,
+              72
             ],
             "disallowed_uses": [
               "large_primary_button"
@@ -97,16 +97,16 @@
           },
           "target_preview_sizes": [
             [
-              180,
-              56
+              220,
+              72
             ],
             [
-              220,
-              60
+              256,
+              72
             ],
             [
               290,
-              64
+              72
             ]
           ],
           "stretch_policy": {
@@ -119,8 +119,8 @@
           "usage_policy": {
             "size_class": "compact_only",
             "min_size": [
-              180,
-              56
+              220,
+              72
             ],
             "disallowed_uses": [
               "large_primary_button"
@@ -154,12 +154,12 @@
           },
           "target_preview_sizes": [
             [
-              240,
-              64
+              320,
+              72
             ],
             [
-              320,
-              64
+              376,
+              72
             ],
             [
               436,
@@ -176,8 +176,8 @@
           "usage_policy": {
             "size_class": "compact_only",
             "min_size": [
-              240,
-              64
+              320,
+              72
             ],
             "disallowed_uses": [
               "large_primary_button"
@@ -211,16 +211,16 @@
           },
           "target_preview_sizes": [
             [
-              128,
-              48
+              160,
+              72
             ],
             [
-              160,
-              52
+              184,
+              72
             ],
             [
               203,
-              64
+              72
             ]
           ],
           "stretch_policy": {
@@ -233,8 +233,8 @@
           "usage_policy": {
             "size_class": "compact_only",
             "min_size": [
-              128,
-              48
+              160,
+              72
             ],
             "disallowed_uses": [
               "large_primary_button"
@@ -268,16 +268,16 @@
           },
           "target_preview_sizes": [
             [
-              180,
-              56
+              220,
+              72
             ],
             [
-              220,
-              60
+              256,
+              72
             ],
             [
               290,
-              64
+              72
             ]
           ],
           "stretch_policy": {
@@ -290,8 +290,8 @@
           "usage_policy": {
             "size_class": "compact_only",
             "min_size": [
-              180,
-              56
+              220,
+              72
             ],
             "disallowed_uses": [
               "large_primary_button"
@@ -325,12 +325,12 @@
           },
           "target_preview_sizes": [
             [
-              240,
-              64
+              320,
+              72
             ],
             [
-              320,
-              64
+              376,
+              72
             ],
             [
               437,
@@ -347,8 +347,8 @@
           "usage_policy": {
             "size_class": "compact_only",
             "min_size": [
-              240,
-              64
+              320,
+              72
             ],
             "disallowed_uses": [
               "large_primary_button"
@@ -419,6 +419,7 @@
   ],
   "preview_evidence": [
     "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-contact-sheet.png",
-    "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-slice9-preview.png"
+    "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-slice9-preview.png",
+    "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png"
   ]
 }

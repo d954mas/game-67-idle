@@ -148,7 +148,8 @@ function main() {
   if (!existsSync(cropPath)) fail(`crop manifest not found: ${cropPath}`);
   const crop = readJson(cropPath);
   const runtimePath = args["runtime-manifest"];
-  const runtime = runtimePath && existsSync(runtimePath) ? readJson(runtimePath) : null;
+  if (runtimePath && !existsSync(runtimePath)) fail(`runtime manifest not found: ${runtimePath}`);
+  const runtime = runtimePath ? readJson(runtimePath) : null;
   const runtimeById = new Map((runtime?.assets || []).filter((asset) => asset.kind === "slice9").map((asset) => [asset.id, asset]));
 
   const assets = [];

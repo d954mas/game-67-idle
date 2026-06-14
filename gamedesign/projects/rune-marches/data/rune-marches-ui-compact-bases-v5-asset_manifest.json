@@ -9,7 +9,8 @@
   "commands": {
     "slice_assets": "py -3.12 tools/assets/build_rune_marches_ui_compact_bases_v5.py",
     "asset_audit": "py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-asset-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-asset-audit.md",
-    "source_derivation_audit": "py -3.12 tools/assets/audit_generated_source_derivation.py --crop-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.md"
+    "source_derivation_audit": "py -3.12 tools/assets/audit_generated_source_derivation.py --crop-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.md",
+    "composition_proof": "py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --output gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.md"
   },
   "assets": [
     {
@@ -30,16 +31,16 @@
       },
       "target_preview_sizes": [
         [
-          128,
-          48
+          160,
+          72
         ],
         [
-          160,
-          52
+          184,
+          72
         ],
         [
           203,
-          64
+          72
         ]
       ],
       "stretch_policy": {
@@ -52,8 +53,8 @@
       "usage_policy": {
         "size_class": "compact_only",
         "min_size": [
-          128,
-          48
+          160,
+          72
         ],
         "disallowed_uses": [
           "large_primary_button"
@@ -80,16 +81,16 @@
       },
       "target_preview_sizes": [
         [
-          180,
-          56
+          220,
+          72
         ],
         [
-          220,
-          60
+          256,
+          72
         ],
         [
           290,
-          64
+          72
         ]
       ],
       "stretch_policy": {
@@ -102,8 +103,8 @@
       "usage_policy": {
         "size_class": "compact_only",
         "min_size": [
-          180,
-          56
+          220,
+          72
         ],
         "disallowed_uses": [
           "large_primary_button"
@@ -130,12 +131,12 @@
       },
       "target_preview_sizes": [
         [
-          240,
-          64
+          320,
+          72
         ],
         [
-          320,
-          64
+          376,
+          72
         ],
         [
           436,
@@ -152,8 +153,8 @@
       "usage_policy": {
         "size_class": "compact_only",
         "min_size": [
-          240,
-          64
+          320,
+          72
         ],
         "disallowed_uses": [
           "large_primary_button"
@@ -180,16 +181,16 @@
       },
       "target_preview_sizes": [
         [
-          128,
-          48
+          160,
+          72
         ],
         [
-          160,
-          52
+          184,
+          72
         ],
         [
           203,
-          64
+          72
         ]
       ],
       "stretch_policy": {
@@ -202,8 +203,8 @@
       "usage_policy": {
         "size_class": "compact_only",
         "min_size": [
-          128,
-          48
+          160,
+          72
         ],
         "disallowed_uses": [
           "large_primary_button"
@@ -230,16 +231,16 @@
       },
       "target_preview_sizes": [
         [
-          180,
-          56
+          220,
+          72
         ],
         [
-          220,
-          60
+          256,
+          72
         ],
         [
           290,
-          64
+          72
         ]
       ],
       "stretch_policy": {
@@ -252,8 +253,8 @@
       "usage_policy": {
         "size_class": "compact_only",
         "min_size": [
-          180,
-          56
+          220,
+          72
         ],
         "disallowed_uses": [
           "large_primary_button"
@@ -280,12 +281,12 @@
       },
       "target_preview_sizes": [
         [
-          240,
-          64
+          320,
+          72
         ],
         [
-          320,
-          64
+          376,
+          72
         ],
         [
           437,
@@ -302,8 +303,8 @@
       "usage_policy": {
         "size_class": "compact_only",
         "min_size": [
-          240,
-          64
+          320,
+          72
         ],
         "disallowed_uses": [
           "large_primary_button"
@@ -365,7 +366,8 @@
   ],
   "preview_evidence": [
     "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-contact-sheet.png",
-    "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-slice9-preview.png"
+    "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-slice9-preview.png",
+    "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png"
   ],
   "asset_audit": [
     "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-asset-audit.md",
