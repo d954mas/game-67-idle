@@ -17,10 +17,15 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
 2. Research references first when the visual/gameplay target is new or the
    lead rejected the current result. Store reusable source notes under
    `gamedesign/sources/` and project-specific findings under the active
-   project folder.
+   project folder. Keep the UI/UX production note in view when designing or
+   reviewing reusable game UI:
+   `gamedesign/sources/game_ui_ux_design_guidelines_research_2026-06-14.md`.
 3. Create or update an art bible before generation. Record palette, materials,
    line weight, border/corner language, icon silhouette rules, mobile density,
-   forbidden motifs, and responsive composition rules.
+   forbidden motifs, and responsive composition rules. Also record the screen
+   UX contract: player intent, first readable action, persistent/contextual
+   HUD split, modal behavior, reward feedback, blocked/locked state, content
+   safe areas, and target desktop/portrait layouts.
 4. Create or update one art job packet with:
    `node tools/assets/new_art_job.mjs --id <job-id> --family <family> --project-dir <project-dir>`.
    Keep accepted source sheet paths, expected crop/runtime manifests, and
@@ -54,7 +59,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    prompt. Pass the JSON packet path into `new_generation_record.mjs` with
    `--prompt-packet` so provenance links back to the contract-derived prompt.
 7. Generate source families, not one gameplay screenshot or one mixed sheet:
-   blank UI kit sheet, isolated icon sheet, UI decor overlay sheet, map/world
+   screen backgrounds, blank resizable bases, isolated icon sheet, UI decor
+   overlay sheet, state overlay sheet, bar/progress system sheet, map/world
    layer sheet, sprite/FX sheet if needed. Use full mockups only as visual
    targets; full mockups only as visual targets. Do not claim final generated
    UI from a mixed source sheet.
@@ -105,8 +111,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    icons, or textures with procedural shapes and present them as generated
    outputs; procedural drawing is allowed only for debug overlays, labels,
    contact-sheet backgrounds, or explicitly recorded scaffold exceptions.
-12. Produce contact sheet and slice9 stretched previews before integration.
-   Preview minimum, normal, and large sizes.
+12. Produce contact sheet, slice9 stretched previews, and a composition proof
+   before integration. The composition proof must show base + anchored decor
+   overlays + state overlays + runtime text at minimum, normal, large, and at
+   least one hostile aspect/portrait size when responsive UI is in scope.
 13. Run gates in order:
     - draft contract: `node tools/assets/validate_art_job.mjs --job <job>`
     - source sheet intake before slicing:
@@ -202,6 +210,33 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   sprites with anchors, not baked into the stretchable base texture. Record that
   contract in `stretch_policy`; the audit should fail if the manifest relies on
   chat notes instead of machine-readable policy.
+- Treat beautiful fixed decoration as composition data. A panel top plaque,
+  side gem, screw, lock, rarity crest, divider, glow strip, or button cap needs
+  its own crop id, anchor, z-order, allowed base ids, and min/max offset rules.
+  If it cannot be named as a separate overlay, it is probably unsafe inside a
+  resizable base.
+- Progress bars are systems, not one strip: track base, fill strip/tile, left
+  cap, right cap, marker/handle, disabled/locked overlay, optional glow, and
+  runtime label. Each part needs a semantic id and atlas metadata.
+
+## Atlas And Reuse Rules
+
+- Pack by runtime lifetime and screen family: `ui_common`, `ui_panel_family`,
+  `ui_icons_core`, `ui_map`, `ui_fx`, or a project-specific equivalent. Avoid
+  one giant atlas when many screens use only a small subset.
+- Every atlas/runtime entry needs metadata for `id`, `kind`, `pack_group`,
+  source crop, atlas rect, trim/original size, pivot/anchor, slice9 margins,
+  content safe area, state role, and source family.
+- Use trim only with padding, alpha bleed, edge extrusion, and shape padding.
+  Tight alpha crops without bleed/extrude are a known cause of 1-2 pixel halos
+  and neighboring-pixel leaks.
+- Prefer overlays over duplicated full controls. Common variants should be
+  base button + state overlay + selected/locked/affordable overlay + icon +
+  runtime label unless the material or silhouette truly changes.
+- Alias duplicate regions where the same pixels serve different semantic ids.
+  Store the semantic ids in metadata instead of duplicating the bitmap.
+- Record scale variants deliberately (`1x`, `2x`, mobile/desktop). Keep layout
+  coordinates and atlas variants stable enough to avoid fractional artifacts.
 
 ## Icon And Sprite Rules
 

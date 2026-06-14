@@ -6,6 +6,11 @@ from typing import Any
 
 from PIL import Image, ImageFilter
 
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - fallback path is kept for portable minimal Python installs.
+    np = None
+
 
 RGB = tuple[int, int, int]
 
@@ -164,7 +169,72 @@ def remove_source_key_spill(image: Image.Image, key: RGB, passes: int = 3, radiu
             pixels[x, y] = (red, green, blue, 0)
 
 
-def bleed_transparent_rgb(image: Image.Image, passes: int = 16, key: RGB | None = None) -> None:
+def source_key_spill_mask(red: Any, green: Any, blue: Any, key: RGB) -> Any:
+    key_red, key_green, key_blue = key
+    if key_green > 220 and key_red < 40 and key_blue < 40:
+        return (green > 90) & (green > red * 1.25) & (green > blue * 1.25) & (green - np.maximum(red, blue) > 22)
+    if key_red > 220 and key_blue > 220 and key_green < 40:
+        return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= 36
+    if key_red > 220 and key_green < 40 and key_blue < 40:
+        return (red > 90) & (red > green * 1.25) & (red > blue * 1.25) & (red - np.maximum(green, blue) > 22)
+    if key_blue > 220 and key_red < 40 and key_green < 40:
+        return (blue > 90) & (blue > red * 1.25) & (blue > green * 1.25) & (blue - np.maximum(red, green) > 22)
+    return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= 36
+
+
+def bad_edge_rgb_mask_array(array: Any, key: RGB | None) -> Any:
+    red = array[..., 0].astype(np.int16)
+    green = array[..., 1].astype(np.int16)
+    blue = array[..., 2].astype(np.int16)
+    key_fringe = (red > 115) & (blue > 120) & (green < 145) & (red + blue > 300) & (red + blue > green * 3)
+    purple = (red > 75) & (blue > 75) & (green < 120) & (np.minimum(red, blue) - green > 20) & (red + blue > green * 2 + 80)
+    dark_purple = (
+        (red >= 32)
+        & (blue >= 32)
+        & ((green < np.minimum(red, blue) * 0.55) | (green <= 12))
+        & (np.abs(red - blue) < 64)
+        & (red + blue > green * 3 + 38)
+    )
+    magenta = (red > 80) & (blue > 45) & (green < 120) & (red > green + 32) & (blue > green + 6)
+    dark_magenta = (red > 44) & (blue > 34) & (green < 42) & (red > green + 24) & (blue > green + 14) & (red + blue > green * 2 + 48)
+    source_key = np.zeros(red.shape, dtype=bool)
+    if key is not None:
+        source_key = source_key_spill_mask(red, green, blue, key)
+    return key_fringe | purple | dark_purple | magenta | dark_magenta | source_key
+
+
+def bleed_transparent_rgb_numpy(image: Image.Image, passes: int = 16, key: RGB | None = None) -> bool:
+    if np is None:
+        return False
+    array = np.array(image.convert("RGBA"), dtype=np.uint8)
+    if array.size == 0:
+        return True
+    for _pass in range(passes):
+        alpha = array[..., 3]
+        transparent = alpha <= 12
+        bad = bad_edge_rgb_mask_array(array, key)
+        source = (~transparent) | (~bad)
+        padded_rgb = np.pad(array[..., :3].astype(np.uint32), ((1, 1), (1, 1), (0, 0)), mode="edge")
+        padded_source = np.pad(source, ((1, 1), (1, 1)), mode="constant", constant_values=False)
+        total = np.zeros(array[..., :3].shape, dtype=np.uint32)
+        count = np.zeros(alpha.shape, dtype=np.uint16)
+        for dy, dx in ((-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)):
+            y0 = 1 + dy
+            x0 = 1 + dx
+            neighbor_source = padded_source[y0 : y0 + alpha.shape[0], x0 : x0 + alpha.shape[1]]
+            neighbor_rgb = padded_rgb[y0 : y0 + alpha.shape[0], x0 : x0 + alpha.shape[1]]
+            total += neighbor_rgb * neighbor_source[..., None]
+            count += neighbor_source.astype(np.uint16)
+        update = transparent & (count > 0)
+        if not np.any(update):
+            break
+        array[..., :3][update] = (total[update] // count[update, None]).astype(np.uint8)
+        array[..., 3][update] = 0
+    image.paste(Image.fromarray(array))
+    return True
+
+
+def bleed_transparent_rgb_python(image: Image.Image, passes: int = 16, key: RGB | None = None) -> None:
     pixels = image.load()
     width, height = image.size
     for _pass in range(passes):
@@ -200,6 +270,12 @@ def bleed_transparent_rgb(image: Image.Image, passes: int = 16, key: RGB | None 
             return
         for x, y, red, green, blue in updates:
             pixels[x, y] = (red, green, blue, 0)
+
+
+def bleed_transparent_rgb(image: Image.Image, passes: int = 16, key: RGB | None = None) -> None:
+    if bleed_transparent_rgb_numpy(image, passes=passes, key=key):
+        return
+    bleed_transparent_rgb_python(image, passes=passes, key=key)
 
 
 def repair_transparent_edge_rgb(image: Image.Image, radius: int = 4, key: RGB | None = None) -> None:

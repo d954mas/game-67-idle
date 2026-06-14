@@ -156,11 +156,21 @@ Generated UI for a game must be reusable runtime UI, not only screenshot art:
 
 - Keep the current research note in view for generated UI work:
   `gamedesign/sources/generated_game_ui_asset_pipeline_research_2026-06-14.md`.
+- Keep the game UI/UX production research note in view for hierarchy,
+  decomposition, slice9, atlas, and reuse decisions:
+  `gamedesign/sources/game_ui_ux_design_guidelines_research_2026-06-14.md`.
 - Create or update an art bible before source generation: palette, line weight,
   material language, border thickness, corner style, icon silhouette rules,
   state colors, and forbidden motifs.
+- Define the screen UX contract before source generation: player intent,
+  persistent HUD, contextual HUD, modal surfaces, primary action, feedback,
+  blocked/locked state, and the first screenshot questions the UI must answer.
 - Treat a full generated screenshot as reference/fake shot only. Runtime UI
   must come from separately generated/cropped source families.
+- Split runtime UI into explicit families: screen backgrounds, resizable bases,
+  decor overlays, icons, state overlays, runtime text, and hit targets/layout.
+  Beautiful fixed ornaments belong in overlay sprites with anchors, not in
+  slice9 stretch regions.
 - Prefer slice9-ready panels and buttons: separate blank button backgrounds,
   panel frames, corners, edges, and center fills where the runtime needs
   resizable elements. Record stretch zones, fixed ornament policy, minimum
