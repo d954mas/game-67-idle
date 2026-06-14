@@ -52,6 +52,12 @@ def is_key(pixel: tuple[int, int, int, int], key: tuple[int, int, int], toleranc
 
 
 def find_components(image: Image.Image, key: tuple[int, int, int], tolerance: int) -> list[dict[str, object]]:
+    if np is not None:
+        return find_components_numpy(image, key, tolerance)
+    return find_components_python(image, key, tolerance)
+
+
+def find_components_python(image: Image.Image, key: tuple[int, int, int], tolerance: int) -> list[dict[str, object]]:
     rgba = image.convert("RGBA")
     width, height = rgba.size
     pixels = rgba.load()
@@ -98,6 +104,109 @@ def find_components(image: Image.Image, key: tuple[int, int, int], tolerance: in
                     "_pixel_offsets": pixel_offsets,
                 }
             )
+    return components
+
+
+def find_components_numpy(image: Image.Image, key: tuple[int, int, int], tolerance: int) -> list[dict[str, object]]:
+    if np is None:
+        raise RuntimeError("numpy is required for find_components_numpy")
+    array = np.asarray(image.convert("RGBA"))
+    height, width = array.shape[:2]
+    art_mask = np.asarray(~key_like_mask(array, key, tolerance), dtype=bool)
+    runs: list[tuple[int, int, int, int]] = []
+    parents: list[int] = []
+    ranks: list[int] = []
+
+    def make_set() -> int:
+        index = len(parents)
+        parents.append(index)
+        ranks.append(0)
+        return index
+
+    def find(index: int) -> int:
+        parent = parents[index]
+        if parent != index:
+            parent = find(parent)
+            parents[index] = parent
+        return parent
+
+    def union(left: int, right: int) -> None:
+        left_root = find(left)
+        right_root = find(right)
+        if left_root == right_root:
+            return
+        if ranks[left_root] < ranks[right_root]:
+            left_root, right_root = right_root, left_root
+        parents[right_root] = left_root
+        if ranks[left_root] == ranks[right_root]:
+            ranks[left_root] += 1
+
+    previous_row: list[tuple[int, int, int]] = []
+    for y in range(height):
+        row = art_mask[y]
+        padded = np.empty(width + 2, dtype=bool)
+        padded[0] = False
+        padded[-1] = False
+        padded[1:-1] = row
+        changes = np.flatnonzero(padded[1:] != padded[:-1])
+        current_row: list[tuple[int, int, int]] = []
+        previous_index = 0
+        for start, end in zip(changes[0::2], changes[1::2]):
+            run_index = make_set()
+            run_start = int(start)
+            run_end = int(end)
+            runs.append((y, run_start, run_end, run_index))
+            current_row.append((run_start, run_end, run_index))
+            while previous_index < len(previous_row) and previous_row[previous_index][1] <= run_start:
+                previous_index += 1
+            overlap_index = previous_index
+            while overlap_index < len(previous_row) and previous_row[overlap_index][0] < run_end:
+                previous_start, previous_end, previous_run_index = previous_row[overlap_index]
+                if previous_end > run_start and previous_start < run_end:
+                    union(run_index, previous_run_index)
+                overlap_index += 1
+        previous_row = current_row
+
+    grouped: dict[int, dict[str, object]] = {}
+    for y, start, end, run_index in runs:
+        root = find(run_index)
+        area = end - start
+        row_offset = y * width
+        component = grouped.get(root)
+        if component is None:
+            component = {
+                "min_x": start,
+                "min_y": y,
+                "max_x": end - 1,
+                "max_y": y,
+                "area_px": area,
+                "_pixel_offsets": list(range(row_offset + start, row_offset + end)),
+            }
+            grouped[root] = component
+            continue
+        component["min_x"] = min(int(component["min_x"]), start)
+        component["min_y"] = min(int(component["min_y"]), y)
+        component["max_x"] = max(int(component["max_x"]), end - 1)
+        component["max_y"] = max(int(component["max_y"]), y)
+        component["area_px"] = int(component["area_px"]) + area
+        offsets = component["_pixel_offsets"]
+        if isinstance(offsets, list):
+            offsets.extend(range(row_offset + start, row_offset + end))
+
+    components: list[dict[str, object]] = []
+    for component in sorted(grouped.values(), key=lambda item: (int(item["min_y"]), int(item["min_x"]))):
+        min_x = int(component["min_x"])
+        min_y = int(component["min_y"])
+        max_x = int(component["max_x"])
+        max_y = int(component["max_y"])
+        components.append(
+            {
+                "id": f"component_{len(components) + 1}",
+                "bbox": [min_x, min_y, max_x - min_x + 1, max_y - min_y + 1],
+                "area_px": int(component["area_px"]),
+                "_pixel_offsets": component["_pixel_offsets"],
+            }
+        )
     return components
 
 
