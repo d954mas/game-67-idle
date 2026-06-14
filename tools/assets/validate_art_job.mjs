@@ -2,6 +2,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
+const REVIEW_ATLAS_PURPOSE = "review_validation_atlas_not_engine_runtime_pack";
+
 function usage() {
   console.error(`usage:
   node tools/assets/validate_art_job.mjs --job <art-job.json> [--strict] [--final-art]
@@ -362,6 +364,14 @@ function validateAtlasPackEvidence(paths, fieldName, root, problems, strict, exp
     if (pack.schema !== "game.ui_atlas_pack") {
       problems.push(`${fieldName} JSON schema must be game.ui_atlas_pack: ${item}`);
     }
+    if (expected.requireReviewAtlas) {
+      if (pack.purpose !== REVIEW_ATLAS_PURPOSE) {
+        problems.push(`${fieldName} JSON purpose must be ${REVIEW_ATLAS_PURPOSE}: ${item}`);
+      }
+      if (pack.label_overlay !== true) {
+        problems.push(`${fieldName} JSON label_overlay must be true for final-art review evidence: ${item}`);
+      }
+    }
     if (expected.runtimeManifest) {
       if (!objectHasText(pack, "asset_manifest")) {
         problems.push(`${fieldName} JSON needs asset_manifest: ${item}`);
@@ -376,6 +386,20 @@ function validateAtlasPackEvidence(paths, fieldName, root, problems, strict, exp
     const reportedIds = new Set();
     for (const atlas of pack.atlases) {
       if (!hasText(atlas?.pack_group)) problems.push(`${fieldName} atlas needs pack_group: ${item}`);
+      if (expected.requireReviewAtlas) {
+        const packGroup = atlas?.pack_group || "(unknown)";
+        if (atlas?.purpose !== REVIEW_ATLAS_PURPOSE) {
+          problems.push(`${fieldName} atlas ${packGroup} purpose must be ${REVIEW_ATLAS_PURPOSE}: ${item}`);
+        }
+        if (atlas?.label_overlay !== true) {
+          problems.push(`${fieldName} atlas ${packGroup} label_overlay must be true for final-art review evidence: ${item}`);
+        }
+        if (!hasText(atlas?.labeled_preview_path)) {
+          problems.push(`${fieldName} atlas ${packGroup} needs labeled_preview_path for final-art review: ${item}`);
+        } else if (strict && !existsSync(projectPath(atlas.labeled_preview_path, root))) {
+          problems.push(`${fieldName} atlas labeled preview missing: ${atlas.labeled_preview_path}`);
+        }
+      }
       if (!hasText(atlas?.path)) {
         problems.push(`${fieldName} atlas needs path: ${item}`);
       } else if (strict && !existsSync(projectPath(atlas.path, root))) {
@@ -828,6 +852,7 @@ function validateJob(job, jobPath, options = {}) {
         {
           runtimeManifest: job.expected_outputs?.runtime_manifest,
           assetIds: expectedCropIds,
+          requireReviewAtlas: finalArt,
         }
       );
     }

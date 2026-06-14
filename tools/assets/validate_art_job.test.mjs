@@ -62,13 +62,20 @@ function writeAtlasPack(dir, path, overrides = {}) {
   const pack = {
     schema: "game.ui_atlas_pack",
     version: 1,
+    purpose: "review_validation_atlas_not_engine_runtime_pack",
+    label_overlay: true,
     asset_manifest: "gamedesign/projects/test/data/ui-kit-assets.json",
     output_dir: "assets/runtime/ui-kit-atlas",
     atlases: [
       {
         pack_group: "ui_common",
+        purpose: "review_validation_atlas_not_engine_runtime_pack",
+        label_overlay: true,
         path: "assets/runtime/ui-kit-atlas/ui_common.png",
+        labeled_preview_path: "assets/runtime/ui-kit-atlas/ui_common-labeled.png",
         size: [256, 128],
+        physical_entry_count: 3,
+        alias_count: 0,
         entries: [
           { id: "panel", kind: "slice9", atlas_rect: [3, 3, 96, 64], padded_rect: [1, 1, 100, 68], extrude: 2 },
           { id: "resource_icon", kind: "icon", atlas_rect: [105, 3, 64, 64], padded_rect: [103, 1, 68, 68], extrude: 2 },
@@ -214,6 +221,7 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
   writeAtlasPackAudit(dir, atlasPackAudit);
   mkdirSync(join(dir, "assets/runtime/ui-kit-atlas"), { recursive: true });
   writeFileSync(join(dir, "assets/runtime/ui-kit-atlas/ui_common.png"), "fake-png", "utf8");
+  writeFileSync(join(dir, "assets/runtime/ui-kit-atlas/ui_common-labeled.png"), "fake-png", "utf8");
   mkdirSync(join(dir, dirname(compositionProofPng)), { recursive: true });
   writeFileSync(join(dir, compositionProofPng), "fake-png", "utf8");
 
@@ -764,6 +772,44 @@ test("final-art mode rejects atlas pack for another runtime manifest", (t) => {
   const result = run(["--job", job, "--final-art"], dir);
   assert.equal(result.status, 1);
   assert.match(result.stdout, /expected_outputs.atlas_pack JSON asset_manifest must match expected_outputs.runtime_manifest/);
+});
+
+test("final-art mode rejects non-review atlas pack evidence", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const pack = "gamedesign/projects/test/data/ui-kit-atlas-pack.json";
+  writeAtlasPack(dir, pack, {
+    purpose: undefined,
+    label_overlay: false,
+    atlases: [
+      {
+        pack_group: "ui_common",
+        path: "assets/runtime/ui-kit-atlas/ui_common.png",
+        size: [256, 128],
+        entries: [
+          { id: "panel", kind: "slice9", atlas_rect: [3, 3, 96, 64], padded_rect: [1, 1, 100, 68], extrude: 2 },
+          { id: "resource_icon", kind: "icon", atlas_rect: [105, 3, 64, 64], padded_rect: [103, 1, 68, 68], extrude: 2 },
+          { id: "enemy", kind: "sprite", atlas_rect: [175, 3, 64, 64], padded_rect: [173, 1, 68, 68], extrude: 2 },
+        ],
+      },
+    ],
+  });
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.atlas_pack JSON purpose must be review_validation_atlas_not_engine_runtime_pack/);
+  assert.match(result.stdout, /expected_outputs.atlas_pack JSON label_overlay must be true for final-art review evidence/);
+  assert.match(result.stdout, /expected_outputs.atlas_pack atlas ui_common needs labeled_preview_path for final-art review/);
+});
+
+test("final-art mode rejects missing labeled atlas preview image", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  rmSync(join(dir, "assets/runtime/ui-kit-atlas/ui_common-labeled.png"), { force: true });
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.atlas_pack atlas labeled preview missing: assets\/runtime\/ui-kit-atlas\/ui_common-labeled\.png/);
 });
 
 test("final-art mode rejects atlas pack missing a crop id", (t) => {

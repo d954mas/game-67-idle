@@ -193,9 +193,11 @@ Before UI assets are integrated:
   unless the manifest records why the asset is already clean.
 - The runtime manifest references only runtime-ready files, not temp
   generation outputs.
-- Atlas pack evidence exists for final generated UI claims. It should group by
-  `pack_group`, write atlas PNGs with extruded padded sprite rects, and preserve
-  slice9/content metadata for runtime loading.
+- Labeled review atlas evidence exists for final generated UI claims. It should
+  group by `pack_group`, write clean atlas PNGs with extruded padded sprite
+  rects, write separate `labeled_preview_path` images for human review, and
+  preserve slice9/content metadata without pretending to be the game's final
+  runtime packer.
 - Atlas pack audit evidence exists and passes before final generated UI claims.
   It should prove coverage, bounds, non-overlap, and extrusion pixels.
 - Contact sheet or preview evidence exists for crops and stretched slice9
