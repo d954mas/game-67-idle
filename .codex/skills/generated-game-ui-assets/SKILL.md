@@ -145,6 +145,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       without changing pass/fail semantics.
     - edge proof preview for 1-2px fringe review:
       `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`
+      Add `--profile` when edge proofs feel slow or when comparing cleanup
+      fixes; it records total, render-strip, compose, per-asset, and per-side
+      timing without changing defect counts.
     - slice9 design policy audit:
       `node tools/assets/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
       Record passing reports in `expected_outputs.slice9_design_audit`; final-art
@@ -310,6 +313,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   defect. Use `--asset-id` and `--side` to create small proof images for the
   exact reported edge. Write `--json-output` and `--report` when comparing
   fixes so the review records per-side counts by reason, not only a screenshot.
+  Add `--profile` for slow proof runs so the slowest asset side is printed and
+  timing is preserved in JSON/Markdown.
   Store accepted proof image paths in `expected_outputs.edge_proofs` and JSON
   report paths in `expected_outputs.edge_proof_reports` only when
   `counts.total` is zero; reports with bad marks document candidates to reject

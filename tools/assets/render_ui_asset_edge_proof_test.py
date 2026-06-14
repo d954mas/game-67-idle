@@ -196,6 +196,7 @@ class RenderUiAssetEdgeProofTests(unittest.TestCase):
                     str(json_output),
                     "--report",
                     str(markdown_output),
+                    "--profile",
                 ],
                 cwd=root,
                 text=True,
@@ -212,10 +213,16 @@ class RenderUiAssetEdgeProofTests(unittest.TestCase):
             self.assertGreater(report["counts"]["transparent_rgb"], 0)
             self.assertGreater(report["counts"]["reasons"]["green_screen_spill"], 0)
             self.assertEqual(report["rows"][0]["asset_id"], "icon_test")
+            self.assertIn("timing_ms", report)
+            self.assertGreaterEqual(report["timing_ms"]["total"], 0)
+            self.assertIn("asset_timings", report)
+            self.assertIn("timing_ms", report["rows"][0])
             markdown = markdown_output.read_text(encoding="utf-8")
             self.assertIn("Total bad marks", markdown)
             self.assertIn("green_screen_spill", markdown)
+            self.assertIn("## Timing", markdown)
             self.assertIn("edge proof marks", result.stdout)
+            self.assertIn("profile: slowest edge strip", result.stdout)
 
     def test_preserve_green_edges_suppresses_green_spill_marks(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

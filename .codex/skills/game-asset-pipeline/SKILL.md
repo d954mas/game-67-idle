@@ -76,6 +76,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     per-asset timing and the slowest asset without changing audit verdicts.
 16. For 1-2 pixel edge disputes, generate a zoomed edge proof:
     `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`.
+    Add `--profile` for slow or disputed cleanup runs so JSON/Markdown capture
+    total, render-strip, compose, per-asset, and per-side timing, and stdout
+    prints the slowest asset side.
     Record durable proof paths in the art job (`expected_outputs.edge_proofs`
     for primary outputs or candidate evidence for non-primary candidates), and
     record matching JSON reports in `expected_outputs.edge_proof_reports` so
@@ -221,6 +224,8 @@ Before UI assets are integrated:
   spill, or unsafe transparent-edge RGB.
 - Edge proof preview evidence exists when the lead/user reports 1-2 pixel
   fringe, because ordinary contact sheets can hide single-pixel defects.
+  Slow edge-proof runs should include `--profile` evidence so bottlenecks are
+  visible before rewriting tools.
 - Generated-source derivation audit evidence exists when a runtime PNG is
   claimed to come from generated source art rather than a procedural scaffold.
 - Native screenshot proof exists for playable/native work once integrated.

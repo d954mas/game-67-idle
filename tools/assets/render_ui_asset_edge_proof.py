@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
@@ -71,7 +72,9 @@ def near_visible(alpha_pixels: Any, x: int, y: int, width: int, height: int, rad
 
 
 def classify_bad_edge_pixel(
-    image: Image.Image,
+    pixels: Any,
+    alpha_pixels: Any,
+    image_size: tuple[int, int],
     x: int,
     y: int,
     *,
@@ -80,10 +83,7 @@ def classify_bad_edge_pixel(
     preserve_green: bool,
     preserve_source_key: bool,
 ) -> str | None:
-    pixels = image.load()
-    alpha = image.getchannel("A")
-    alpha_pixels = alpha.load()
-    width, height = image.size
+    width, height = image_size
     red, green, blue, current_alpha = pixels[x, y]
     source_key_bad = (
         source_key is not None
@@ -137,11 +137,17 @@ def render_strip(
     proof.alpha_composite(crop)
     counts = empty_counts()
     draw = ImageDraw.Draw(proof) if mark_bad_pixels else None
+    pixels = image.load()
+    alpha = image.getchannel("A")
+    alpha_pixels = alpha.load()
+    image_size = image.size
     left, top, _right, _bottom = rect
     for y in range(top, top + crop.height):
         for x in range(left, left + crop.width):
             classified = classify_bad_edge_pixel(
-                image,
+                pixels,
+                alpha_pixels,
+                image_size,
                 x,
                 y,
                 source_key=source_key,
@@ -181,13 +187,20 @@ def render_edge_proof(
     mark_bad_pixels: bool,
     asset_ids: set[str] | None,
     sides_filter: set[str] | None,
+    profile: bool = False,
 ) -> tuple[Image.Image, dict[str, Any]]:
+    started = perf_counter()
     font = ImageFont.load_default()
     rows: list[tuple[str, Image.Image, dict[str, Any]]] = []
     report_rows: list[dict[str, Any]] = []
+    timings: dict[str, float] = {}
+    asset_timings: list[dict[str, Any]] = []
+    render_strips_ms = 0.0
     sides = [side for side in ["top", "right", "bottom", "left"] if sides_filter is None or side in sides_filter]
     source_key = parse_hex_color(manifest.get("green_screen", {}).get("key"))
     for crop in crop_entries(manifest):
+        asset_started = perf_counter()
+        asset_timing: dict[str, Any] = {}
         crop_id = str(crop.get("id", ""))
         if asset_ids is not None and crop_id not in asset_ids:
             continue
@@ -197,8 +210,14 @@ def render_edge_proof(
         path = (root / output).resolve()
         if not path.exists():
             continue
+        load_started = perf_counter()
         image = Image.open(path).convert("RGBA")
+        if profile:
+            asset_timing["load_image"] = round((perf_counter() - load_started) * 1000, 3)
+        bbox_started = perf_counter()
         bbox = alpha_bbox(image)
+        if profile:
+            asset_timing["alpha_bbox"] = round((perf_counter() - bbox_started) * 1000, 3)
         if bbox is None:
             continue
         preserve_purple = bool(crop.get("preserve_purple_edges"))
@@ -206,6 +225,7 @@ def render_edge_proof(
         preserve_source_key = bool(crop.get("preserve_source_key_edges"))
         for side in sides:
             rect = crop_rect_for_side(bbox, image.size, side, strip, pad)
+            strip_started = perf_counter()
             strip_image, counts = render_strip(
                 image,
                 rect,
@@ -216,32 +236,44 @@ def render_edge_proof(
                 preserve_green=preserve_green,
                 preserve_source_key=preserve_source_key,
             )
+            strip_ms = round((perf_counter() - strip_started) * 1000, 3)
+            if profile:
+                render_strips_ms += strip_ms
             label = f"{crop_id or path.stem} / {side} / rect={list(rect)} / bad_marks={counts['total']}"
             rows.append((label, strip_image, counts))
-            report_rows.append(
-                {
-                    "asset_id": crop_id,
-                    "kind": crop.get("kind", ""),
-                    "output": output,
-                    "side": side,
-                    "rect": list(rect),
-                    "counts": counts,
-                    "preserve": {
-                        "purple": preserve_purple,
-                        "green": preserve_green,
-                        "source_key": preserve_source_key,
-                    },
-                }
-            )
+            row = {
+                "asset_id": crop_id,
+                "kind": crop.get("kind", ""),
+                "output": output,
+                "side": side,
+                "rect": list(rect),
+                "counts": counts,
+                "preserve": {
+                    "purple": preserve_purple,
+                    "green": preserve_green,
+                    "source_key": preserve_source_key,
+                },
+            }
+            if profile:
+                row["timing_ms"] = {"render_strip": strip_ms}
+            report_rows.append(row)
+        if profile:
+            asset_timing["total"] = round((perf_counter() - asset_started) * 1000, 3)
+            asset_timings.append({"asset_id": crop_id, "output": output, "timing_ms": asset_timing})
 
     if not rows:
-        return Image.new("RGBA", (480, 80), (24, 24, 24, 255)), {
+        report = {
             "schema": "game.ui_asset_edge_proof",
             "version": 1,
             "rows": [],
             "counts": empty_counts(),
         }
+        if profile:
+            report["timing_ms"] = {"total": round((perf_counter() - started) * 1000, 3)}
+            report["asset_timings"] = asset_timings
+        return Image.new("RGBA", (480, 80), (24, 24, 24, 255)), report
 
+    compose_started = perf_counter()
     label_height = 18
     gutter = 12
     margin = 12
@@ -256,12 +288,22 @@ def render_edge_proof(
         y += label_height
         sheet.alpha_composite(image, (margin, y))
         y += image.height + gutter
-    return sheet, {
+    if profile:
+        timings = {
+            "total": round((perf_counter() - started) * 1000, 3),
+            "render_strips": round(render_strips_ms, 3),
+            "compose_sheet": round((perf_counter() - compose_started) * 1000, 3),
+        }
+    report = {
         "schema": "game.ui_asset_edge_proof",
         "version": 1,
         "rows": report_rows,
         "counts": aggregate_counts(report_rows),
     }
+    if profile:
+        report["timing_ms"] = timings
+        report["asset_timings"] = asset_timings
+    return sheet, report
 
 
 def render_markdown(report: dict[str, Any]) -> str:
@@ -284,6 +326,18 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.extend(["## Reasons", ""])
         for reason, count in sorted(reasons.items()):
             lines.append(f"- `{reason}`: {count}")
+        lines.append("")
+    if report.get("timing_ms"):
+        lines.extend(["## Timing", "", f"Total: {report['timing_ms'].get('total', '-')} ms", ""])
+        for name, elapsed in report["timing_ms"].items():
+            if name == "total":
+                continue
+            lines.append(f"- {name}: {elapsed} ms")
+        if report.get("asset_timings"):
+            lines.append("")
+            for asset in sorted(report["asset_timings"], key=lambda item: item.get("timing_ms", {}).get("total", 0), reverse=True)[:10]:
+                timing = asset.get("timing_ms", {})
+                lines.append(f"- `{asset.get('asset_id')}` total={timing.get('total', '-')} ms output={asset.get('output')}")
         lines.append("")
     lines.extend(["## Rows", ""])
     for row in report["rows"]:
@@ -309,6 +363,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--no-mark-bad-pixels", action="store_true")
     parser.add_argument("--json-output", help="Write structured edge-proof counts by asset side and defect class.")
     parser.add_argument("--report", help="Write a Markdown edge-proof report next to the proof image.")
+    parser.add_argument("--profile", action="store_true", help="Record edge-proof timing in JSON/Markdown and print the slowest asset side.")
     return parser.parse_args(argv)
 
 
@@ -325,6 +380,7 @@ def main(argv: list[str]) -> int:
         not args.no_mark_bad_pixels,
         set(args.asset_id) if args.asset_id else None,
         set(args.side) if args.side else None,
+        args.profile,
     )
     output = project_path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -342,6 +398,13 @@ def main(argv: list[str]) -> int:
     print(f"wrote edge proof: {output} size={proof.width}x{proof.height}")
     if args.json_output or args.report:
         print(f"edge proof marks: total={report['counts']['total']} reasons={report['counts']['reasons']}")
+    if args.profile and report.get("rows"):
+        slowest = max(report["rows"], key=lambda row: row.get("timing_ms", {}).get("render_strip", 0))
+        print(
+            "profile: slowest edge strip "
+            f"`{slowest.get('asset_id')}` {slowest.get('side')} "
+            f"{slowest.get('timing_ms', {}).get('render_strip', 0)} ms"
+        )
     return 0
 
 
