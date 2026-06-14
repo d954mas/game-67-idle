@@ -155,6 +155,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       panels cannot pass as production UI.
     - runtime composition proof:
       `py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest <runtime-manifest> --output <proof.png> --json-output <proof.json> --report <proof.md>`
+      Add `--profile` when composition proof feels slow; it writes timing and
+      prints the slowest base/size item. Overlay sprites must not overlap the
+      content safe area unless the layout or overlay explicitly sets
+      `allow_content_overlap`.
       Record the proof image and report with preview/review evidence. This gate
       must fail if slice9 margins leave no usable content area at target sizes,
       runtime labels do not fit, overlays fall outside their anchored base, or
@@ -267,6 +271,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   its own crop id, anchor, z-order, allowed base ids, and min/max offset rules.
   If it cannot be named as a separate overlay, it is probably unsafe inside a
   resizable base.
+- Runtime composition proof must treat content safe areas as reserved for text,
+  prices, counters, and state values. Decorative overlays that cross those
+  bounds need explicit `allow_content_overlap`; otherwise the proof should fail
+  before integration.
 - Progress bars are systems, not one strip: track base, fill strip/tile, left
   cap, right cap, marker/handle, disabled/locked overlay, optional glow, and
   runtime label. Each part needs a semantic id and atlas metadata.

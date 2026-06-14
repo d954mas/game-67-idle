@@ -5,6 +5,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
@@ -77,6 +78,12 @@ def font(size: int = 14) -> ImageFont.ImageFont:
 def text_size(draw: ImageDraw.ImageDraw, text: str, text_font: ImageFont.ImageFont) -> tuple[int, int]:
     bbox = draw.textbbox((0, 0), text, font=text_font)
     return bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+
+def rects_intersect(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    return ax < bx + bw and ax + aw > bx and ay < by + bh and ay + ah > by
 
 
 def nine_slice_resize(image: Image.Image, margins: dict[str, Any], size: tuple[int, int]) -> Image.Image:
@@ -216,12 +223,17 @@ def render_item(
     item: dict[str, Any],
     assets: dict[str, dict[str, Any]],
     text_font: ImageFont.ImageFont,
+    profile: bool = False,
 ) -> tuple[Image.Image | None, dict[str, Any]]:
+    started = perf_counter()
     problems: list[str] = []
     base_id = item.get("base_id")
     base = assets.get(str(base_id))
     if not base:
-        return None, {"base_id": base_id, "status": "fail", "problems": [f"base asset missing: {base_id}"]}
+        report = {"base_id": base_id, "status": "fail", "problems": [f"base asset missing: {base_id}"]}
+        if profile:
+            report["timing_ms"] = {"total": round((perf_counter() - started) * 1000, 3)}
+        return None, report
     if base.get("kind") != "slice9":
         problems.append(f"base {base_id} must be kind=slice9")
     base_image = load_image(base, problems)
@@ -248,12 +260,15 @@ def render_item(
         if target_size[0] < int(min_width) or target_size[1] < int(min_height):
             problems.append(f"base {base_id} size {target_size[0]}x{target_size[1]} is below usage_policy.min_size {min_width}x{min_height}")
 
+    content_rect = content_rect_for_size(base, base_image.size if base_image else target_size, target_size)
+    overlay_reports: list[dict[str, Any]] = []
     overlay_specs = []
     overlay_specs.extend(item.get("decor_overlays") or [])
     overlay_specs.extend(item.get("state_overlays") or [])
     overlay_specs.extend(item.get("overlays") or [])
     for overlay_spec in overlay_specs:
-        overlay_id = overlay_spec.get("id") if isinstance(overlay_spec, dict) else overlay_spec
+        overlay_data = overlay_spec if isinstance(overlay_spec, dict) else {"id": overlay_spec}
+        overlay_id = overlay_data.get("id")
         overlay = assets.get(str(overlay_id))
         if not overlay:
             problems.append(f"overlay asset missing: {overlay_id}")
@@ -261,21 +276,33 @@ def render_item(
         overlay_image = load_image(overlay, problems)
         if overlay_image is None:
             continue
-        anchor = str(overlay_spec.get("anchor") or overlay.get("anchor") or "center")
+        anchor = str(overlay_data.get("anchor") or overlay.get("anchor") or "center")
         if anchor not in ANCHORS:
             problems.append(f"overlay {overlay_id} has unsupported anchor {anchor}")
             anchor = "center"
-        offset_value = overlay_spec.get("offset") or overlay.get("offset") or [0, 0]
+        offset_value = overlay_data.get("offset") or overlay.get("offset") or [0, 0]
         if not isinstance(offset_value, list) or len(offset_value) != 2:
             problems.append(f"overlay {overlay_id} offset must be [x,y]")
             offset_value = [0, 0]
         x, y = anchor_position(anchor, target_size, overlay_image.size, (int(offset_value[0]), int(offset_value[1])))
+        overlay_rect = (x, y, overlay_image.width, overlay_image.height)
         if x < 0 or y < 0 or x + overlay_image.width > target_size[0] or y + overlay_image.height > target_size[1]:
             problems.append(f"overlay {overlay_id} at {x},{y} falls outside base {base_id} {target_size[0]}x{target_size[1]}")
+        allow_content_overlap = bool(overlay_data.get("allow_content_overlap") or overlay.get("allow_content_overlap"))
+        if not allow_content_overlap and rects_intersect(overlay_rect, content_rect):
+            problems.append(f"overlay {overlay_id} rect {list(overlay_rect)} overlaps content rect {list(content_rect)} for {base_id}")
         panel.alpha_composite(overlay_image, (x, y))
+        overlay_reports.append(
+            {
+                "id": overlay_id,
+                "anchor": anchor,
+                "offset": [int(offset_value[0]), int(offset_value[1])],
+                "rect": list(overlay_rect),
+                "allow_content_overlap": allow_content_overlap,
+            }
+        )
 
     draw = ImageDraw.Draw(panel)
-    content_rect = content_rect_for_size(base, base_image.size if base_image else target_size, target_size)
     draw_content_rect(draw, content_rect)
     label = str(item.get("label") or "")
     if label:
@@ -288,14 +315,18 @@ def render_item(
         draw.text((text_x + 1, text_y + 1), label, font=text_font, fill=(0, 0, 0, 180))
         draw.text((text_x, text_y), label, font=text_font, fill=(245, 239, 220, 255))
 
-    return panel, {
+    report = {
         "base_id": base_id,
         "size": list(target_size),
         "label": label,
         "content_rect": list(content_rect),
+        "overlays": overlay_reports,
         "status": "pass" if not problems else "fail",
         "problems": problems,
     }
+    if profile:
+        report["timing_ms"] = {"total": round((perf_counter() - started) * 1000, 3)}
+    return panel, report
 
 
 def render_sheet(rendered: list[tuple[dict[str, Any], Image.Image]], title: str) -> Image.Image:
@@ -332,9 +363,13 @@ def make_markdown(report: dict[str, Any]) -> str:
         f"output: `{report['output']}`",
         f"verdict: **{report['verdict']}**",
         "",
-        "## Items",
-        "",
     ]
+    if report.get("timing_ms"):
+        lines.extend(["## Timing", ""])
+        for name, elapsed in report["timing_ms"].items():
+            lines.append(f"- {name}: {elapsed} ms")
+        lines.append("")
+    lines.extend(["## Items", ""])
     for item in report["items"]:
         suffix = f": {'; '.join(item['problems'])}" if item["problems"] else ""
         lines.append(f"- {item['status'].upper()} `{item['base_id']}` {item['size'][0]}x{item['size'][1]}{suffix}")
@@ -349,10 +384,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--json-output")
     parser.add_argument("--report")
     parser.add_argument("--no-fail", action="store_true", help="Write proof even when composition problems are found.")
+    parser.add_argument("--profile", action="store_true", help="Record composition proof timing in JSON/Markdown and print the slowest item.")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
+    started = perf_counter()
     args = parse_args(argv)
     manifest_path = project_path(args.asset_manifest)
     if not manifest_path.exists():
@@ -371,17 +408,23 @@ def main(argv: list[str]) -> int:
     reports: list[dict[str, Any]] = []
     if not items:
         reports.append({"base_id": "(none)", "size": [0, 0], "label": "", "content_rect": [0, 0, 0, 0], "status": "fail", "problems": ["layout has no items"]})
+    render_started = perf_counter()
     for item in items:
-        image, item_report = render_item(item, assets, proof_font)
+        image, item_report = render_item(item, assets, proof_font, args.profile)
         reports.append(item_report)
         if image is not None:
             rendered.append((item_report, image))
+    render_ms = round((perf_counter() - render_started) * 1000, 3)
     if not rendered:
         rendered.append(({"base_id": "(none)", "size": [320, 80], "status": "fail"}, Image.new("RGBA", (320, 80), (70, 24, 24, 255))))
     output = project_path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
+    sheet_started = perf_counter()
     sheet = render_sheet(rendered, str(layout.get("title") or "Runtime UI Composition Proof"))
+    sheet_ms = round((perf_counter() - sheet_started) * 1000, 3)
+    save_started = perf_counter()
     sheet.save(output)
+    save_ms = round((perf_counter() - save_started) * 1000, 3)
     verdict = "pass" if all(item["status"] == "pass" for item in reports) else "fail"
     report = {
         "schema": "game.ui_composition_proof",
@@ -392,11 +435,21 @@ def main(argv: list[str]) -> int:
         "verdict": verdict,
         "items": reports,
     }
+    if args.profile:
+        report["timing_ms"] = {
+            "render_items": render_ms,
+            "render_sheet": sheet_ms,
+            "save_output": save_ms,
+            "total": round((perf_counter() - started) * 1000, 3),
+        }
     if args.json_output:
         write_text(project_path(args.json_output), json.dumps(report, indent=2) + "\n")
     if args.report:
         write_text(project_path(args.report), make_markdown(report))
     print(f"{verdict}: wrote composition proof: {normalize_path(output)} items={len(reports)}")
+    if args.profile and reports:
+        slowest = max(reports, key=lambda item: item.get("timing_ms", {}).get("total", 0))
+        print(f"profile: slowest composition item `{slowest.get('base_id')}` {slowest.get('timing_ms', {}).get('total', 0)} ms")
     if verdict != "pass" and not args.no_fail:
         return 1
     return 0

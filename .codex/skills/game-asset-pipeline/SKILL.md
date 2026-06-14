@@ -175,7 +175,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
   separate compact source family or split decoration into overlay sprites.
 - Slice9 UI needs runtime composition proof at the smallest supported layout.
   A button/panel that passes standalone preview can still fail if portrait
-  composition squeezes text or stacks controls without spacing.
+  composition squeezes text or stacks controls without spacing. Composition
+  proof should fail decorative overlays that overlap content safe areas unless
+  the layout or overlay explicitly allows that overlap.
 - Icon crops need semantic role, source size class, and state/rarity role when
   relevant.
 - Sprite/marker crops need pivot or anchor before code uses them.

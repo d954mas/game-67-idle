@@ -9,9 +9,18 @@
     {
       "pack_group": "ui_rune_marches_compact_bases_v5",
       "path": "assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5.png",
+      "labeled_preview_path": "assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5-labeled.png",
       "status": "pass",
       "problems": [],
-      "entry_count": 7
+      "entry_count": 7,
+      "physical_entry_count": 7,
+      "alias_count": 0,
+      "timing_ms": {
+        "total": 41.001
+      }
     }
-  ]
+  ],
+  "timing_ms": {
+    "total": 42.469
+  }
 }

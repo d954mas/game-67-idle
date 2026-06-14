@@ -4,6 +4,13 @@ asset_manifest: `gamedesign/projects/rune-marches/data/rune-marches-ui-compact-b
 output: `gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png`
 verdict: **pass**
 
+## Timing
+
+- render_items: 755.584 ms
+- render_sheet: 76.189 ms
+- save_output: 79.117 ms
+- total: 913.644 ms
+
 ## Items
 
 - PASS `compact_button_idle_short_v5` 160x72

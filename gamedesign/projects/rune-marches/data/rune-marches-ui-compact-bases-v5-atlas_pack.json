@@ -1,18 +1,29 @@
 {
   "schema": "game.ui_atlas_pack",
   "version": 1,
+  "purpose": "review_validation_atlas_not_engine_runtime_pack",
+  "label_overlay": true,
   "asset_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json",
   "output_dir": "assets/runtime/rune-marches-ui-compact-bases-v5-atlas",
   "max_size": 2048,
   "atlases": [
     {
       "pack_group": "ui_rune_marches_compact_bases_v5",
+      "purpose": "review_validation_atlas_not_engine_runtime_pack",
+      "label_overlay": true,
       "path": "assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5.png",
       "size": [
         803,
-        978
+        1020
       ],
       "entry_count": 7,
+      "physical_entry_count": 7,
+      "alias_count": 0,
+      "atlas_area": 819060,
+      "reserved_tile_area": 523332,
+      "padded_asset_area": 491398,
+      "occupancy_ratio": 0.6389,
+      "padded_asset_ratio": 0.6,
       "entries": [
         {
           "id": "compact_button_disabled_long_v5",
@@ -66,7 +77,16 @@
             ]
           },
           "role": "compact long disabled button for full-width portrait action",
-          "state": "disabled"
+          "state": "disabled",
+          "review_label": {
+            "text": "compact_button_disabled_long_v5",
+            "rect": [
+              353,
+              126,
+              164,
+              12
+            ]
+          }
         },
         {
           "id": "compact_button_disabled_medium_v5",
@@ -74,13 +94,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
           "atlas_rect": [
             453,
-            731,
+            745,
             298,
             119
           ],
           "padded_rect": [
             451,
-            729,
+            743,
             302,
             123
           ],
@@ -120,7 +140,16 @@
             ]
           },
           "role": "compact medium disabled button for portrait primary and secondary actions",
-          "state": "disabled"
+          "state": "disabled",
+          "review_label": {
+            "text": "compact_button_disabled_medium_v5",
+            "rect": [
+              451,
+              868,
+              183,
+              12
+            ]
+          }
         },
         {
           "id": "compact_button_disabled_short_v5",
@@ -128,13 +157,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
           "atlas_rect": [
             307,
-            856,
+            884,
             211,
             119
           ],
           "padded_rect": [
             305,
-            854,
+            882,
             215,
             123
           ],
@@ -174,7 +203,16 @@
             ]
           },
           "role": "compact short disabled button for dense secondary actions",
-          "state": "disabled"
+          "state": "disabled",
+          "review_label": {
+            "text": "compact_button_disabled_short_v5",
+            "rect": [
+              305,
+              1007,
+              166,
+              12
+            ]
+          }
         },
         {
           "id": "compact_button_idle_long_v5",
@@ -182,13 +220,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
           "atlas_rect": [
             3,
-            731,
+            745,
             444,
             119
           ],
           "padded_rect": [
             1,
-            729,
+            743,
             448,
             123
           ],
@@ -228,7 +266,16 @@
             ]
           },
           "role": "compact long idle button for full-width portrait action",
-          "state": "idle"
+          "state": "idle",
+          "review_label": {
+            "text": "compact_button_idle_long_v5",
+            "rect": [
+              1,
+              868,
+              143,
+              12
+            ]
+          }
         },
         {
           "id": "compact_button_idle_medium_v5",
@@ -236,13 +283,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
           "atlas_rect": [
             3,
-            856,
+            884,
             298,
             119
           ],
           "padded_rect": [
             1,
-            854,
+            882,
             302,
             123
           ],
@@ -282,7 +329,16 @@
             ]
           },
           "role": "compact medium idle button for portrait primary and secondary actions",
-          "state": "idle"
+          "state": "idle",
+          "review_label": {
+            "text": "compact_button_idle_medium_v5",
+            "rect": [
+              1,
+              1007,
+              162,
+              12
+            ]
+          }
         },
         {
           "id": "compact_button_idle_short_v5",
@@ -290,13 +346,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
           "atlas_rect": [
             524,
-            856,
+            884,
             211,
             118
           ],
           "padded_rect": [
             522,
-            854,
+            882,
             215,
             122
           ],
@@ -336,7 +392,16 @@
             ]
           },
           "role": "compact short idle button for dense secondary actions",
-          "state": "idle"
+          "state": "idle",
+          "review_label": {
+            "text": "compact_button_idle_short_v5",
+            "rect": [
+              522,
+              1006,
+              145,
+              12
+            ]
+          }
         },
         {
           "id": "compact_journal_panel_v5",
@@ -390,9 +455,39 @@
             ]
           },
           "role": "compact portrait journal/objective panel",
-          "state": "default"
+          "state": "default",
+          "review_label": {
+            "text": "compact_journal_panel_v5",
+            "rect": [
+              1,
+              729,
+              129,
+              12
+            ]
+          }
         }
-      ]
+      ],
+      "labeled_preview_path": "assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5-labeled.png",
+      "timing_ms": {
+        "layout": 1.846,
+        "compose": 3.77,
+        "save_atlas": 38.972,
+        "save_labeled_preview": 43.629,
+        "total": 89.092
+      }
     }
-  ]
+  ],
+  "atlas_efficiency": {
+    "atlas_area": 819060,
+    "reserved_tile_area": 523332,
+    "padded_asset_area": 491398,
+    "occupancy_ratio": 0.6389,
+    "padded_asset_ratio": 0.6
+  },
+  "timing_ms": {
+    "read_manifest": 0.218,
+    "load_assets": 17.75,
+    "pack_groups": 89.497,
+    "total": 108.016
+  }
 }
