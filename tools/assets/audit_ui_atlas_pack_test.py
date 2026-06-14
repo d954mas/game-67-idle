@@ -1,0 +1,142 @@
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+from PIL import Image
+
+
+ROOT = Path(__file__).resolve().parents[2]
+PACKER = ROOT / "tools/assets/build_ui_atlas_pack.py"
+AUDIT = ROOT / "tools/assets/audit_ui_atlas_pack.py"
+
+
+def write_png(path: Path, size=(8, 6), color=(220, 40, 30, 255)) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGBA", size, color).save(path)
+
+
+def asset(asset_id: str, path: str, **overrides):
+    data = {
+        "id": asset_id,
+        "kind": "slice9",
+        "path": path,
+        "pack_group": "ui_common",
+        "source_crop": asset_id,
+        "original_size": [8, 6],
+        "trim_rect": [0, 0, 8, 6],
+        "slice9": {"left": 2, "top": 2, "right": 2, "bottom": 2},
+        "content": {"x": 2, "y": 2, "w": 4, "h": 2},
+        "atlas_policy": {
+            "trim_mode": "alpha",
+            "alpha_bleed": True,
+            "premultiply_alpha": True,
+            "extrude": 1,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "scale_variant": "1x",
+            "allow_rotation": False,
+            "trim_preserves_slice9": True,
+        },
+    }
+    data.update(overrides)
+    return data
+
+
+def run(script: Path, cwd: Path, *args: str):
+    return subprocess.run(
+        [sys.executable, str(script), *args],
+        cwd=cwd,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
+def build_pack(root: Path, assets):
+    manifest = root / "manifest.json"
+    manifest.write_text(json.dumps({"schema": "game.asset_manifest", "version": 1, "assets": assets}), encoding="utf-8")
+    result = run(
+        PACKER,
+        root,
+        "--asset-manifest",
+        "manifest.json",
+        "--output-dir",
+        "packed",
+        "--json-output",
+        "packed/atlas.json",
+    )
+    if result.returncode != 0:
+        raise AssertionError(result.stdout + result.stderr)
+    return manifest, root / "packed/atlas.json"
+
+
+class AuditUiAtlasPackTest(unittest.TestCase):
+    def test_passes_valid_pack(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            write_png(root / "assets/runtime/button.png", color=(0, 180, 80, 255))
+            manifest, pack = build_pack(
+                root,
+                [
+                    asset("panel", "assets/runtime/panel.png"),
+                    asset("button", "assets/runtime/button.png"),
+                ],
+            )
+            result = run(
+                AUDIT,
+                root,
+                "--atlas-pack",
+                str(pack.relative_to(root)),
+                "--asset-manifest",
+                str(manifest.relative_to(root)),
+                "--json-output",
+                "packed/audit.json",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            audit = json.loads((root / "packed/audit.json").read_text(encoding="utf-8"))
+            self.assertEqual(audit["verdict"], "pass")
+
+    def test_rejects_broken_extrusion_pixels(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")])
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            atlas_path = root / pack_data["atlases"][0]["path"]
+            atlas = Image.open(atlas_path).convert("RGBA")
+            entry = pack_data["atlases"][0]["entries"][0]
+            x, y, _, _ = entry["atlas_rect"]
+            atlas.putpixel((x, y - 1), (0, 0, 255, 255))
+            atlas.save(atlas_path)
+
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("extrusion pixel mismatch", result.stdout + result.stderr)
+
+    def test_rejects_missing_asset_coverage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            write_png(root / "assets/runtime/button.png", color=(0, 180, 80, 255))
+            manifest, pack = build_pack(
+                root,
+                [
+                    asset("panel", "assets/runtime/panel.png"),
+                    asset("button", "assets/runtime/button.png"),
+                ],
+            )
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            pack_data["atlases"][0]["entries"] = [entry for entry in pack_data["atlases"][0]["entries"] if entry["id"] != "button"]
+            pack.write_text(json.dumps(pack_data), encoding="utf-8")
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("missing packed asset id button", result.stdout + result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

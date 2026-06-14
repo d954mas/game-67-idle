@@ -52,6 +52,7 @@ game project:
 - `tools/assets/audit_slice9_design_policy.mjs`
 - `tools/assets/audit_atlas_metadata.mjs`
 - `tools/assets/build_ui_atlas_pack.py`
+- `tools/assets/audit_ui_atlas_pack.py`
 - `tools/assets/audit_runtime_ui_asset_usage.mjs`
 - `tools/assets/audit_source_family_coverage.mjs`
 - `tools/assets/chroma_key_alpha.py`
@@ -165,6 +166,11 @@ in a `game.ui_atlas_pack` manifest, and writes extruded padded rects around
 each sprite so filtering cannot sample transparent or neighboring pixels.
 Record the JSON manifest in `expected_outputs.atlas_pack`; final-art validation
 requires it for generated UI.
+`tools/assets/audit_ui_atlas_pack.py` validates the built atlas pack. It checks
+pack coverage against the runtime asset manifest, atlas image bounds, non-
+overlapping padded rects, metadata consistency, and that extrusion pixels match
+the source edge pixels. Record passing JSON in
+`expected_outputs.atlas_pack_audit`; final-art validation requires it.
 `tools/assets/audit_runtime_ui_asset_usage.mjs` is the runtime placement gate.
 It compares a `game.runtime_ui_asset_usage` file against an asset manifest's
 `usage_policy`, then fails generated UI assets drawn below `min_size`, in the

@@ -81,6 +81,21 @@ function writeAtlasPack(dir, path, overrides = {}) {
   writeFileSync(join(dir, path), `${JSON.stringify(pack, null, 2)}\n`, "utf8");
 }
 
+function writeAtlasPackAudit(dir, path, overrides = {}) {
+  mkdirSync(join(dir, dirname(path)), { recursive: true });
+  const audit = {
+    schema: "game.ui_atlas_pack_audit",
+    version: 1,
+    atlas_pack: "gamedesign/projects/test/data/ui-kit-atlas-pack.json",
+    asset_manifest: "gamedesign/projects/test/data/ui-kit-assets.json",
+    verdict: "pass",
+    problems: [],
+    atlases: [{ pack_group: "ui_common", status: "pass", problems: [], entry_count: 3 }],
+    ...overrides,
+  };
+  writeFileSync(join(dir, path), `${JSON.stringify(audit, null, 2)}\n`, "utf8");
+}
+
 function writeValidDraft(dir) {
   mkdirSync(join(dir, "gamedesign/projects/test/art_requests"), { recursive: true });
   mkdirSync(join(dir, "gamedesign/projects/test/data"), { recursive: true });
@@ -187,6 +202,7 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
   const sourceFamilyCoverageAudit = "gamedesign/projects/test/reviews/ui-kit-source-family-coverage-audit.json";
   const atlasMetadataAudit = "gamedesign/projects/test/reviews/ui-kit-atlas-metadata-audit.json";
   const atlasPack = "gamedesign/projects/test/data/ui-kit-atlas-pack.json";
+  const atlasPackAudit = "gamedesign/projects/test/reviews/ui-kit-atlas-pack-audit.json";
   writeAuditReport(dir, assetAudit, "game.generated_ui_asset_audit");
   writeAuditReport(dir, sourceSheetIntakeAudit, "game.source_sheet_intake_audit");
   writeAuditReport(dir, sourceDerivationAudit, "game.generated_source_derivation_audit");
@@ -195,6 +211,7 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
   writeAuditReport(dir, sourceFamilyCoverageAudit, "game.source_family_coverage_audit");
   writeAuditReport(dir, atlasMetadataAudit, "game.atlas_metadata_audit");
   writeAtlasPack(dir, atlasPack);
+  writeAtlasPackAudit(dir, atlasPackAudit);
   mkdirSync(join(dir, "assets/runtime/ui-kit-atlas"), { recursive: true });
   writeFileSync(join(dir, "assets/runtime/ui-kit-atlas/ui_common.png"), "fake-png", "utf8");
   mkdirSync(join(dir, dirname(compositionProofPng)), { recursive: true });
@@ -228,6 +245,7 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
   jobData.expected_outputs.source_family_coverage_audit = [sourceFamilyCoverageAudit];
   jobData.expected_outputs.atlas_metadata_audit = [atlasMetadataAudit];
   jobData.expected_outputs.atlas_pack = [atlasPack];
+  jobData.expected_outputs.atlas_pack_audit = [atlasPackAudit];
   writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
 
   const crop = "gamedesign/projects/test/data/ui-kit-crop.json";
@@ -686,6 +704,18 @@ test("final-art mode requires atlas pack evidence", (t) => {
   assert.match(result.stdout, /final-art mode requires expected_outputs.atlas_pack/);
 });
 
+test("final-art mode requires atlas pack audit evidence", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
+  delete jobData.expected_outputs.atlas_pack_audit;
+  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /final-art mode requires expected_outputs.atlas_pack_audit/);
+});
+
 test("final-art mode requires source family coverage audit evidence", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);
@@ -754,6 +784,34 @@ test("final-art mode rejects atlas pack missing a crop id", (t) => {
   const result = run(["--job", job, "--final-art"], dir);
   assert.equal(result.status, 1);
   assert.match(result.stdout, /expected_outputs.atlas_pack JSON missing packed asset id resource_icon/);
+});
+
+test("final-art mode rejects failing atlas pack audit evidence", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const audit = "gamedesign/projects/test/reviews/ui-kit-atlas-pack-audit.json";
+  writeAtlasPackAudit(dir, audit, {
+    verdict: "fail",
+    problems: ["panel top extrusion pixel mismatch"],
+  });
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON verdict\/status must be pass/);
+  assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON must not list problems/);
+});
+
+test("final-art mode rejects atlas pack audit for another pack", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const audit = "gamedesign/projects/test/reviews/ui-kit-atlas-pack-audit.json";
+  writeAtlasPackAudit(dir, audit, {
+    atlas_pack: "gamedesign/projects/test/data/other-atlas-pack.json",
+  });
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON atlas_pack must match expected_outputs.atlas_pack/);
 });
 
 test("final-art mode rejects failing source family coverage audit evidence", (t) => {

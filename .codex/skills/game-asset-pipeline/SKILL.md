@@ -106,6 +106,12 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     validation requires it for generated UI. The pack manifest should preserve
     atlas rects, padded rects, extrusion, slice9 margins, content safe areas,
     and source paths.
+21. Audit generated UI atlas packs before final-art claims:
+    `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
+    Record passing JSON in `expected_outputs.atlas_pack_audit`; final-art
+    validation requires it. This catches missing packed assets, out-of-bounds
+    rects, padded-rect overlaps, metadata mismatches, and broken extrusion
+    pixels.
 
 ## Rules
 
@@ -189,6 +195,8 @@ Before UI assets are integrated:
 - Atlas pack evidence exists for final generated UI claims. It should group by
   `pack_group`, write atlas PNGs with extruded padded sprite rects, and preserve
   slice9/content metadata for runtime loading.
+- Atlas pack audit evidence exists and passes before final generated UI claims.
+  It should prove coverage, bounds, non-overlap, and extrusion pixels.
 - Contact sheet or preview evidence exists for crops and stretched slice9
   states.
 - Pixel audit evidence exists for generated runtime PNGs and reports no clipped

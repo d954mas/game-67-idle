@@ -27,6 +27,8 @@ ATLAS_AUDIT_JSON = PROJECT_DIR / "reviews/rune-marches-ui-compact-bases-v5-atlas
 ATLAS_AUDIT_MD = PROJECT_DIR / "reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.md"
 ATLAS_PACK_JSON = PROJECT_DIR / "data/rune-marches-ui-compact-bases-v5-atlas_pack.json"
 ATLAS_PACK_MD = PROJECT_DIR / "reviews/rune-marches-ui-compact-bases-v5-atlas-pack.md"
+ATLAS_PACK_AUDIT_JSON = PROJECT_DIR / "reviews/rune-marches-ui-compact-bases-v5-atlas-pack-audit.json"
+ATLAS_PACK_AUDIT_MD = PROJECT_DIR / "reviews/rune-marches-ui-compact-bases-v5-atlas-pack-audit.md"
 ATLAS_PACK_DIR = ROOT / "assets/runtime/rune-marches-ui-compact-bases-v5-atlas"
 
 
@@ -338,6 +340,7 @@ def write_manifests() -> None:
             "composition_proof": "py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --output gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.md",
             "atlas_metadata_audit": "node tools/assets/audit_atlas_metadata.mjs --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.md",
             "build_atlas_pack": "py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --output-dir assets/runtime/rune-marches-ui-compact-bases-v5-atlas --json-output gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-atlas_pack.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-pack.md",
+            "atlas_pack_audit": "py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-atlas_pack.json --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-pack-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-pack-audit.md",
         },
         "assets": [
             {
@@ -381,6 +384,10 @@ def write_manifests() -> None:
             rel(ATLAS_PACK_JSON),
             rel(ATLAS_PACK_MD),
             f"{rel(ATLAS_PACK_DIR)}/ui_rune_marches_compact_bases_v5.png",
+        ],
+        "atlas_pack_audit": [
+            rel(ATLAS_PACK_AUDIT_MD),
+            rel(ATLAS_PACK_AUDIT_JSON),
         ],
     }
     RUNTIME_MANIFEST.write_text(json.dumps(runtime_manifest, indent=2) + "\n", encoding="utf-8")

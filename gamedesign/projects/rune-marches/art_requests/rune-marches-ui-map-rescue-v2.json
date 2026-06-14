@@ -264,6 +264,10 @@
       "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-pack.md",
       "assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5.png"
     ],
+    "candidate_atlas_pack_audits": [
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-pack-audit.md",
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-pack-audit.json"
+    ],
     "candidate_runtime_usage": [
       "gamedesign/projects/rune-marches/data/rune-marches-native-ui-bases-v2-usage.json"
     ],
@@ -274,7 +278,7 @@
     "candidate_native_evidence": [
       "gamedesign/projects/rune-marches/art/screenshots/rune-marches-native-ui-bases-v2-first-screen-960x540.png"
     ],
-    "notes": "V1 is a rejected real generated bitmap candidate. V2 chroma-clean source passes source-sheet intake and has a separate generated-source runtime candidate pack with crop/runtime manifests, contact sheet, slice9 preview, pixel audit, slice9 policy audit, runtime usage audit, native screenshot proof, and green source-derivation audit proving runtime PNGs come from the generated crop rather than procedural redraw. Compact bases v5 add a separate compact/mobile generated-source candidate whose target preview sizes were raised to 72px height after composition proof showed smaller 48-64px button sizes collapsed the runtime content safe area; v5 passes pixel, slice9 policy, source-derivation, composition-proof, atlas-metadata, and atlas-pack gates. Remaining gap: final UI still needs generated/artist decor overlay and icon source families before `--final-art` can pass."
+    "notes": "V1 is a rejected real generated bitmap candidate. V2 chroma-clean source passes source-sheet intake and has a separate generated-source runtime candidate pack with crop/runtime manifests, contact sheet, slice9 preview, pixel audit, slice9 policy audit, runtime usage audit, native screenshot proof, and green source-derivation audit proving runtime PNGs come from the generated crop rather than procedural redraw. Compact bases v5 add a separate compact/mobile generated-source candidate whose target preview sizes were raised to 72px height after composition proof showed smaller 48-64px button sizes collapsed the runtime content safe area; v5 passes pixel, slice9 policy, source-derivation, composition-proof, atlas-metadata, atlas-pack, and atlas-pack-audit gates. Remaining gap: final UI still needs generated/artist decor overlay and icon source families before `--final-art` can pass."
   },
   "runtime_composition": {
     "first_screen": "top compact status, clean map, one journal/goal panel, one dominant primary action, hidden combat buttons until encounter",
@@ -316,6 +320,7 @@
     "generated_ui_bases_v2_runtime_usage_audit": "node tools/assets/audit_runtime_ui_asset_usage.mjs --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-bases-v2-asset_manifest.json --usage gamedesign/projects/rune-marches/data/rune-marches-native-ui-bases-v2-usage.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-native-ui-bases-v2-usage-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-native-ui-bases-v2-usage-audit.md",
     "generated_ui_compact_bases_v5_atlas_metadata_audit": "node tools/assets/audit_atlas_metadata.mjs --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.md",
     "generated_ui_compact_bases_v5_build_atlas_pack": "py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --output-dir assets/runtime/rune-marches-ui-compact-bases-v5-atlas --json-output gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-atlas_pack.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-pack.md",
+    "generated_ui_compact_bases_v5_atlas_pack_audit": "py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-atlas_pack.json --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-pack-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-pack-audit.md",
     "build_pack": "use generated_ui_compact_bases_v5_build_atlas_pack for the compact v5 candidate; wire project-wide native pack after final UI families are accepted",
     "native_evidence": "py -3.12 tmp/rune_marches_visual_rescue_scenario.py tmp/rune_marches/native_visual_rescue_labeled.png 960x540 9124"
   }

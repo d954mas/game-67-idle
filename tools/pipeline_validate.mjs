@@ -91,7 +91,7 @@ if (existsSync(join(root, "tools", "assets", "normalize_source_sheet_chroma_test
 }
 if (existsSync(join(root, "tools", "assets", "audit_generated_ui_assets_test.py"))) {
   python ||= findPythonRunner();
-  run("generated UI asset audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_ui_assets_test", "tools.assets.render_ui_asset_edge_proof_test", "tools.assets.render_ui_composition_proof_test", "tools.assets.build_ui_atlas_pack_test"], { exe: python.exe });
+  run("generated UI asset audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_ui_assets_test", "tools.assets.render_ui_asset_edge_proof_test", "tools.assets.render_ui_composition_proof_test", "tools.assets.build_ui_atlas_pack_test", "tools.assets.audit_ui_atlas_pack_test"], { exe: python.exe });
 }
 if (existsSync(join(root, "tools", "assets", "audit_generated_source_derivation_test.py"))) {
   python ||= findPythonRunner();
@@ -142,7 +142,7 @@ if (existsSync(join(exportDir, "tools", "assets", "normalize_source_sheet_chroma
 }
 if (existsSync(join(exportDir, "tools", "assets", "audit_generated_ui_assets_test.py"))) {
   python ||= findPythonRunner();
-  run("exported generated UI asset audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_ui_assets_test", "tools.assets.render_ui_asset_edge_proof_test", "tools.assets.render_ui_composition_proof_test", "tools.assets.build_ui_atlas_pack_test"], {
+  run("exported generated UI asset audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_ui_assets_test", "tools.assets.render_ui_asset_edge_proof_test", "tools.assets.render_ui_composition_proof_test", "tools.assets.build_ui_atlas_pack_test", "tools.assets.audit_ui_atlas_pack_test"], {
     cwd: exportDir,
     exe: python.exe,
   });

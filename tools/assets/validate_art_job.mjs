@@ -413,6 +413,49 @@ function validateAtlasPackEvidence(paths, fieldName, root, problems, strict, exp
   }
 }
 
+function validateAtlasPackAuditEvidence(paths, fieldName, root, problems, strict, expected = {}) {
+  const items = asArrayField(paths, fieldName, problems);
+  if (!items) return;
+  for (const item of items) {
+    if (!hasText(item)) {
+      problems.push(`${fieldName} path must be a non-empty string`);
+      continue;
+    }
+    const fullPath = projectPath(item, root);
+    if (!existsSync(fullPath)) {
+      if (strict) problems.push(`${fieldName} missing: ${item}`);
+      continue;
+    }
+    if (!item.toLowerCase().endsWith(".json")) continue;
+    const report = readJsonOrProblem(fullPath, problems, fieldName);
+    if (!report) continue;
+    if (report.schema !== "game.ui_atlas_pack_audit") {
+      problems.push(`${fieldName} JSON schema must be game.ui_atlas_pack_audit: ${item}`);
+    }
+    const status = report.verdict ?? report.status;
+    if (status !== "pass") {
+      problems.push(`${fieldName} JSON verdict/status must be pass: ${item}`);
+    }
+    if (Array.isArray(report.problems) && report.problems.length > 0) {
+      problems.push(`${fieldName} JSON must not list problems: ${item}`);
+    }
+    if (expected.runtimeManifest) {
+      if (!objectHasText(report, "asset_manifest")) {
+        problems.push(`${fieldName} JSON needs asset_manifest: ${item}`);
+      } else if (normalizePathForCompare(report.asset_manifest) !== normalizePathForCompare(expected.runtimeManifest)) {
+        problems.push(`${fieldName} JSON asset_manifest must match expected_outputs.runtime_manifest: ${item}`);
+      }
+    }
+    if (expected.atlasPacks && expected.atlasPacks.size > 0) {
+      if (!objectHasText(report, "atlas_pack")) {
+        problems.push(`${fieldName} JSON needs atlas_pack: ${item}`);
+      } else if (!expected.atlasPacks.has(normalizePathForCompare(report.atlas_pack))) {
+        problems.push(`${fieldName} JSON atlas_pack must match expected_outputs.atlas_pack: ${item}`);
+      }
+    }
+  }
+}
+
 function collectCropIds(crop, allowedKinds = null) {
   const ids = new Set();
   for (const source of crop?.sources || []) {
@@ -663,6 +706,11 @@ function validateJob(job, jobPath, options = {}) {
     "expected_outputs.atlas_pack",
     problems
   );
+  const atlasPackAuditEvidence = asArrayField(
+    job.expected_outputs?.atlas_pack_audit ?? job.expected_outputs?.atlas_pack_audits,
+    "expected_outputs.atlas_pack_audit",
+    problems
+  );
   for (const kind of ["slice9", "icon", "sprite"]) {
     if (!hasRequiredGroup(job, kind)) problems.push(`required_asset_groups should include a ${kind} group`);
   }
@@ -783,6 +831,24 @@ function validateJob(job, jobPath, options = {}) {
         }
       );
     }
+    const expectedAtlasPacks = new Set(
+      (atlasPackEvidence || [])
+        .filter((item) => hasText(item) && item.toLowerCase().endsWith(".json"))
+        .map((item) => normalizePathForCompare(item))
+    );
+    if (Array.isArray(atlasPackAuditEvidence)) {
+      validateAtlasPackAuditEvidence(
+        atlasPackAuditEvidence,
+        "expected_outputs.atlas_pack_audit",
+        root,
+        problems,
+        true,
+        {
+          runtimeManifest: job.expected_outputs?.runtime_manifest,
+          atlasPacks: expectedAtlasPacks,
+        }
+      );
+    }
     if (Array.isArray(compositionProofEvidence)) {
       validateCompositionProofEvidence(
         compositionProofEvidence,
@@ -891,6 +957,9 @@ function validateJob(job, jobPath, options = {}) {
       }
       if (!Array.isArray(atlasPackEvidence) || atlasPackEvidence.length === 0) {
         problems.push("final-art mode requires expected_outputs.atlas_pack");
+      }
+      if (!Array.isArray(atlasPackAuditEvidence) || atlasPackAuditEvidence.length === 0) {
+        problems.push("final-art mode requires expected_outputs.atlas_pack_audit");
       }
       if (!Array.isArray(sourceFamilyCoverageEvidence) || sourceFamilyCoverageEvidence.length === 0) {
         problems.push("final-art mode requires expected_outputs.source_family_coverage_audit");
