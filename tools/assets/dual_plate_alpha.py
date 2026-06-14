@@ -182,14 +182,23 @@ def build_report(image: Image.Image, *, removed_blob_pixels: int, timings: dict[
     rgba = image.convert("RGBA")
     alphas = list(rgba.getchannel("A").getdata())
     visible = [alpha for alpha in alphas if alpha > 0]
+    hidden_rgb_pixels = count_transparent_nonzero_rgb(rgba)
+    problems: list[str] = []
+    if not visible:
+        problems.append("extraction produced no visible alpha pixels")
+    if hidden_rgb_pixels > 0:
+        problems.append(f"transparent pixels retain non-zero RGB: {hidden_rgb_pixels}")
     report = {
         "schema": "game.dual_plate_alpha_report",
         "version": 1,
+        "verdict": "pass" if not problems else "fail",
+        "status": "pass" if not problems else "fail",
+        "problems": problems,
         "size": list(rgba.size),
         "alpha_bbox": alpha_bbox(rgba),
         "visible_pixels": len(visible),
         "transparent_pixels": len(alphas) - len(visible),
-        "transparent_nonzero_rgb_pixels": count_transparent_nonzero_rgb(rgba),
+        "transparent_nonzero_rgb_pixels": hidden_rgb_pixels,
         "min_visible_alpha": min(visible) if visible else 0,
         "max_visible_alpha": max(visible) if visible else 0,
         "mean_visible_alpha": round(mean(visible), 3) if visible else 0,
@@ -207,11 +216,13 @@ def write_markdown_report(path: Path, report: dict) -> None:
             [
                 "---",
                 "type: DualPlateAlphaReport",
+                f"verdict: {report['verdict']}",
                 f"visible_pixels: {report['visible_pixels']}",
                 "---",
                 "",
                 "# Dual Plate Alpha Report",
                 "",
+                f"Verdict: **{report['verdict']}**",
                 f"Size: `{report['size'][0]}x{report['size'][1]}`",
                 f"Alpha bbox: `{report['alpha_bbox']}`",
                 f"Visible pixels: `{report['visible_pixels']}`",
@@ -220,6 +231,7 @@ def write_markdown_report(path: Path, report: dict) -> None:
                 f"Visible alpha range: `{report['min_visible_alpha']}..{report['max_visible_alpha']}`",
                 f"Mean visible alpha: `{report['mean_visible_alpha']}`",
                 f"Removed blob pixels: `{report['removed_blob_pixels']}`",
+                *(["", "## Problems", *[f"- {problem}" for problem in report["problems"]]] if report.get("problems") else []),
                 *(["", "## Timing", *[f"- {name}: {elapsed} ms" for name, elapsed in report["timing_ms"].items()]] if report.get("timing_ms") else []),
                 "",
             ]
@@ -243,6 +255,7 @@ def main() -> int:
     parser.add_argument("--keep-largest-blob", action="store_true")
     parser.add_argument("--json-output", type=Path)
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--no-fail", action="store_true", help="Write diagnostic output even when the extraction report verdict is fail.")
     parser.add_argument("--profile", action="store_true", help="Record extraction, cleanup, save, and report timings.")
     args = parser.parse_args()
 
@@ -302,9 +315,11 @@ def main() -> int:
         args.json_output.write_text(json.dumps(report, indent=2), encoding="utf-8")
     if args.report:
         write_markdown_report(args.report, report)
-    print(f"wrote {args.output} ({report['visible_pixels']} visible pixels)")
+    print(f"{report['verdict']}: wrote {args.output} ({report['visible_pixels']} visible pixels)")
     if args.profile:
         print(f"profile: dual-plate alpha total {report['timing_ms']['total']} ms")
+    if report["verdict"] != "pass" and not args.no_fail:
+        return 1
     return 0
 
 

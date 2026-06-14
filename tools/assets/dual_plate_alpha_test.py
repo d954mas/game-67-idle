@@ -86,6 +86,9 @@ class DualPlateAlphaTests(unittest.TestCase):
 
         self.assertEqual(report["alpha_bbox"], None)
         self.assertEqual(report["transparent_nonzero_rgb_pixels"], 1)
+        self.assertEqual(report["verdict"], "fail")
+        self.assertTrue(any("no visible alpha pixels" in problem for problem in report["problems"]))
+        self.assertTrue(any("transparent pixels retain non-zero RGB" in problem for problem in report["problems"]))
 
     def test_cli_writes_png_and_json_report(self) -> None:
         foreground = (100, 70, 40)
@@ -124,12 +127,70 @@ class DualPlateAlphaTests(unittest.TestCase):
             self.assertTrue(output_path.exists())
             report = json.loads(json_path.read_text(encoding="utf-8"))
             self.assertEqual(report["schema"], "game.dual_plate_alpha_report")
+            self.assertEqual(report["verdict"], "pass")
+            self.assertEqual(report["problems"], [])
             self.assertEqual(report["visible_pixels"], 16)
             self.assertEqual(report["transparent_nonzero_rgb_pixels"], 0)
             self.assertEqual(report["alpha_bbox"], [0, 0, 4, 4])
             self.assertIn("timing_ms", report)
             self.assertIn("profile: dual-plate alpha total", result.stdout)
+            self.assertIn("pass: wrote", result.stdout)
             self.assertIn("## Timing", (root / "report.md").read_text(encoding="utf-8"))
+
+    def test_cli_fails_empty_extraction_unless_no_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            light_path = root / "light.png"
+            dark_path = root / "dark.png"
+            output_path = root / "out.png"
+            json_path = root / "report.json"
+            report_path = root / "report.md"
+            Image.new("RGBA", (2, 2), (255, 255, 255, 255)).save(light_path)
+            Image.new("RGBA", (2, 2), (0, 0, 0, 255)).save(dark_path)
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--light",
+                    str(light_path),
+                    "--dark",
+                    str(dark_path),
+                    "--output",
+                    str(output_path),
+                    "--json-output",
+                    str(json_path),
+                    "--report",
+                    str(report_path),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report = json.loads(json_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["verdict"], "fail")
+            self.assertIn("no visible alpha pixels", report["problems"][0])
+            self.assertIn("Verdict: **fail**", report_path.read_text(encoding="utf-8"))
+
+            no_fail_result = subprocess.run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--light",
+                    str(light_path),
+                    "--dark",
+                    str(dark_path),
+                    "--output",
+                    str(root / "out-no-fail.png"),
+                    "--no-fail",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(no_fail_result.returncode, 0, no_fail_result.stdout + no_fail_result.stderr)
 
 
 if __name__ == "__main__":

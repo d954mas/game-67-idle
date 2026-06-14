@@ -128,10 +128,11 @@ py -3.12 tools/assets/dual_plate_alpha.py `
 This mode requires a stronger generation contract than chroma: both plates must
 have the same dimensions and the same subject placement. If the generator
 changes the ornament shape, lighting, or pose between plates, reject the pair
-before extraction. If the report has `transparent_nonzero_rgb_pixels` above
-zero, do not accept the extraction yet; hidden RGB under alpha can leak back as
-1-2px fringe during premultiplied resizing or atlas filtering. Blob cleanup
-zeroes RGB when it removes tiny alpha components.
+before extraction. Treat the JSON report as a gate: accept only `verdict:
+pass` with an empty `problems` list and `transparent_nonzero_rgb_pixels: 0`.
+Hidden RGB under alpha can leak back as 1-2px fringe during premultiplied
+resizing or atlas filtering. Blob cleanup zeroes RGB when it removes tiny alpha
+components. Use `--no-fail` only to keep rejected diagnostic candidates.
 
 `tools/assets/validate_art_job.mjs` validates the generated-art job contract:
 source families, generation records, reusable kinds, crop/runtime manifests,
