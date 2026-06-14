@@ -47,6 +47,8 @@ const COPY = [
   "tools/assets/validate_art_job.test.mjs",
   "tools/assets/audit_slice9_design_policy.mjs",
   "tools/assets/audit_slice9_design_policy.test.mjs",
+  "tools/assets/audit_atlas_metadata.mjs",
+  "tools/assets/audit_atlas_metadata.test.mjs",
   "tools/assets/audit_runtime_ui_asset_usage.mjs",
   "tools/assets/audit_runtime_ui_asset_usage.test.mjs",
   "tools/assets/audit_source_family_coverage.mjs",

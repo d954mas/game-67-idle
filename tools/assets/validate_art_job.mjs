@@ -251,6 +251,13 @@ function validateAuditEvidence(paths, fieldName, expectedSchema, root, problems,
         problems.push(`${fieldName} JSON crop_manifest must match expected_outputs.crop_manifest: ${item}`);
       }
     }
+    if (expected.assetManifest) {
+      if (!objectHasText(report, "asset_manifest")) {
+        problems.push(`${fieldName} JSON needs asset_manifest: ${item}`);
+      } else if (normalizePathForCompare(report.asset_manifest) !== normalizePathForCompare(expected.assetManifest)) {
+        problems.push(`${fieldName} JSON asset_manifest must match expected_outputs.runtime_manifest: ${item}`);
+      }
+    }
     if (expected.sourceArtPaths) {
       if (!objectHasText(report, "source")) {
         problems.push(`${fieldName} JSON needs source: ${item}`);
@@ -574,6 +581,11 @@ function validateJob(job, jobPath, options = {}) {
     "expected_outputs.composition_proof",
     problems
   );
+  const atlasMetadataAuditEvidence = asArrayField(
+    job.expected_outputs?.atlas_metadata_audit ?? job.expected_outputs?.atlas_metadata_audits,
+    "expected_outputs.atlas_metadata_audit",
+    problems
+  );
   for (const kind of ["slice9", "icon", "sprite"]) {
     if (!hasRequiredGroup(job, kind)) problems.push(`required_asset_groups should include a ${kind} group`);
   }
@@ -664,6 +676,20 @@ function validateJob(job, jobPath, options = {}) {
         {
           cropManifest: job.expected_outputs?.crop_manifest,
           assetIds: slice9CropIds,
+        }
+      );
+    }
+    if (Array.isArray(atlasMetadataAuditEvidence)) {
+      validateAuditEvidence(
+        atlasMetadataAuditEvidence,
+        "expected_outputs.atlas_metadata_audit",
+        "game.atlas_metadata_audit",
+        root,
+        problems,
+        true,
+        {
+          assetManifest: job.expected_outputs?.runtime_manifest,
+          assetIds: expectedCropIds,
         }
       );
     }
@@ -769,6 +795,9 @@ function validateJob(job, jobPath, options = {}) {
       }
       if (!Array.isArray(compositionProofEvidence) || compositionProofEvidence.length === 0) {
         problems.push("final-art mode requires expected_outputs.composition_proof");
+      }
+      if (!Array.isArray(atlasMetadataAuditEvidence) || atlasMetadataAuditEvidence.length === 0) {
+        problems.push("final-art mode requires expected_outputs.atlas_metadata_audit");
       }
       if (!Array.isArray(sourceFamilyCoverageEvidence) || sourceFamilyCoverageEvidence.length === 0) {
         problems.push("final-art mode requires expected_outputs.source_family_coverage_audit");

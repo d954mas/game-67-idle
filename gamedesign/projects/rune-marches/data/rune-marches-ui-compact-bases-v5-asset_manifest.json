@@ -10,7 +10,8 @@
     "slice_assets": "py -3.12 tools/assets/build_rune_marches_ui_compact_bases_v5.py",
     "asset_audit": "py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-asset-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-asset-audit.md",
     "source_derivation_audit": "py -3.12 tools/assets/audit_generated_source_derivation.py --crop-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.md",
-    "composition_proof": "py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --output gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.md"
+    "composition_proof": "py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --output gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.md",
+    "atlas_metadata_audit": "node tools/assets/audit_atlas_metadata.mjs --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.md"
   },
   "assets": [
     {
@@ -61,7 +62,30 @@
         ]
       },
       "role": "compact short idle button for dense secondary actions",
-      "state": "idle"
+      "state": "idle",
+      "pack_group": "ui_rune_marches_compact_bases_v5",
+      "source_crop": "compact_button_idle_short_v5",
+      "original_size": [
+        211,
+        118
+      ],
+      "trim_rect": [
+        0,
+        0,
+        211,
+        118
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      }
     },
     {
       "id": "compact_button_idle_medium_v5",
@@ -111,7 +135,30 @@
         ]
       },
       "role": "compact medium idle button for portrait primary and secondary actions",
-      "state": "idle"
+      "state": "idle",
+      "pack_group": "ui_rune_marches_compact_bases_v5",
+      "source_crop": "compact_button_idle_medium_v5",
+      "original_size": [
+        298,
+        119
+      ],
+      "trim_rect": [
+        0,
+        0,
+        298,
+        119
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      }
     },
     {
       "id": "compact_button_idle_long_v5",
@@ -161,7 +208,30 @@
         ]
       },
       "role": "compact long idle button for full-width portrait action",
-      "state": "idle"
+      "state": "idle",
+      "pack_group": "ui_rune_marches_compact_bases_v5",
+      "source_crop": "compact_button_idle_long_v5",
+      "original_size": [
+        444,
+        119
+      ],
+      "trim_rect": [
+        0,
+        0,
+        444,
+        119
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      }
     },
     {
       "id": "compact_button_disabled_short_v5",
@@ -211,7 +281,30 @@
         ]
       },
       "role": "compact short disabled button for dense secondary actions",
-      "state": "disabled"
+      "state": "disabled",
+      "pack_group": "ui_rune_marches_compact_bases_v5",
+      "source_crop": "compact_button_disabled_short_v5",
+      "original_size": [
+        211,
+        119
+      ],
+      "trim_rect": [
+        0,
+        0,
+        211,
+        119
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      }
     },
     {
       "id": "compact_button_disabled_medium_v5",
@@ -261,7 +354,30 @@
         ]
       },
       "role": "compact medium disabled button for portrait primary and secondary actions",
-      "state": "disabled"
+      "state": "disabled",
+      "pack_group": "ui_rune_marches_compact_bases_v5",
+      "source_crop": "compact_button_disabled_medium_v5",
+      "original_size": [
+        298,
+        119
+      ],
+      "trim_rect": [
+        0,
+        0,
+        298,
+        119
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      }
     },
     {
       "id": "compact_button_disabled_long_v5",
@@ -311,7 +427,30 @@
         ]
       },
       "role": "compact long disabled button for full-width portrait action",
-      "state": "disabled"
+      "state": "disabled",
+      "pack_group": "ui_rune_marches_compact_bases_v5",
+      "source_crop": "compact_button_disabled_long_v5",
+      "original_size": [
+        445,
+        119
+      ],
+      "trim_rect": [
+        0,
+        0,
+        445,
+        119
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      }
     },
     {
       "id": "compact_journal_panel_v5",
@@ -361,7 +500,30 @@
         ]
       },
       "role": "compact portrait journal/objective panel",
-      "state": "default"
+      "state": "default",
+      "pack_group": "ui_rune_marches_compact_bases_v5",
+      "source_crop": "compact_journal_panel_v5",
+      "original_size": [
+        346,
+        722
+      ],
+      "trim_rect": [
+        0,
+        0,
+        346,
+        722
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      }
     }
   ],
   "preview_evidence": [
@@ -381,5 +543,9 @@
     "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png",
     "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.md",
     "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.json"
+  ],
+  "atlas_metadata_audit": [
+    "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.md",
+    "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.json"
   ]
 }

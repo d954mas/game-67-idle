@@ -50,6 +50,7 @@ game project:
 - `tools/assets/new_generation_record.mjs`
 - `tools/assets/validate_art_job.mjs`
 - `tools/assets/audit_slice9_design_policy.mjs`
+- `tools/assets/audit_atlas_metadata.mjs`
 - `tools/assets/audit_runtime_ui_asset_usage.mjs`
 - `tools/assets/audit_source_family_coverage.mjs`
 - `tools/assets/chroma_key_alpha.py`
@@ -149,6 +150,14 @@ allowed size class, minimum runtime size, and disallowed uses. This catches the
 failure where a generated panel is technically cuttable but has medallions,
 gems, or heavy caps baked into areas that runtime resizing will stretch; those
 decorations must be corner-only or separate overlay sprites.
+`tools/assets/audit_atlas_metadata.mjs` checks runtime asset manifests before
+packing/reuse. Every asset must declare `pack_group`, `source_crop`,
+`original_size`, `trim_rect`, and `atlas_policy` fields for trim mode, alpha
+bleed, premultiplied-alpha-safe processing, extrusion, shape/border padding,
+scale variant, and rotation policy. Slice9 entries must set
+`allow_rotation: false` and `trim_preserves_slice9: true`; aliases must point
+to existing asset ids. This is the gate for atlas space savings without
+reintroducing 1-2 pixel halos or broken slice margins.
 `tools/assets/audit_runtime_ui_asset_usage.mjs` is the runtime placement gate.
 It compares a `game.runtime_ui_asset_usage` file against an asset manifest's
 `usage_policy`, then fails generated UI assets drawn below `min_size`, in the

@@ -149,6 +149,13 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       requires this evidence in `expected_outputs.composition_proof`, and the
       JSON report must point at the same runtime manifest and cover every
       slice9 base id.
+    - atlas metadata audit:
+      `node tools/assets/audit_atlas_metadata.mjs --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
+      Record passing reports in `expected_outputs.atlas_metadata_audit`;
+      final-art validation requires this evidence. This gate checks
+      `pack_group`, `source_crop`, `original_size`, `trim_rect`, trim mode,
+      alpha bleed, premultiplied-alpha handling, extrusion, shape/border
+      padding, scale variant, alias links, and slice9-safe rotation policy.
     - source family coverage audit:
       `node tools/assets/audit_source_family_coverage.mjs --job <job> --json-output <audit.json> --report <audit.md>`
       Record passing reports in `expected_outputs.source_family_coverage_audit`;
@@ -236,6 +243,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
 - Every atlas/runtime entry needs metadata for `id`, `kind`, `pack_group`,
   source crop, atlas rect, trim/original size, pivot/anchor, slice9 margins,
   content safe area, state role, and source family.
+- Run `audit_atlas_metadata.mjs` before treating a generated UI kit as final
+  art. The runtime manifest should make trim, bleed, extrusion, padding,
+  rotation, scale variant, and alias policy machine-readable.
 - Use trim only with padding, alpha bleed, edge extrusion, and shape padding.
   Tight alpha crops without bleed/extrude are a known cause of 1-2 pixel halos
   and neighboring-pixel leaks.

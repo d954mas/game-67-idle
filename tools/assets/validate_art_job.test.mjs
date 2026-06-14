@@ -47,6 +47,10 @@ function writeAuditReport(dir, path, schema, verdict = "pass", problems = [], ex
     report.output = "gamedesign/projects/test/art/previews/ui-kit-composition-proof.png";
     report.items = [{ base_id: "panel", status: verdict, problems }];
   }
+  if (schema === "game.atlas_metadata_audit") {
+    report.asset_manifest = "gamedesign/projects/test/data/ui-kit-assets.json";
+    report.assets = [{ id: "panel" }, { id: "resource_icon" }, { id: "enemy" }];
+  }
   if (schema === "game.source_sheet_intake_audit") report.status = verdict;
   if (schema === "game.source_sheet_intake_audit") report.source = "gamedesign/projects/test/art/ui-source.png";
   Object.assign(report, extra);
@@ -157,12 +161,14 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
   const compositionProof = "gamedesign/projects/test/reviews/ui-kit-composition-proof.json";
   const compositionProofPng = "gamedesign/projects/test/art/previews/ui-kit-composition-proof.png";
   const sourceFamilyCoverageAudit = "gamedesign/projects/test/reviews/ui-kit-source-family-coverage-audit.json";
+  const atlasMetadataAudit = "gamedesign/projects/test/reviews/ui-kit-atlas-metadata-audit.json";
   writeAuditReport(dir, assetAudit, "game.generated_ui_asset_audit");
   writeAuditReport(dir, sourceSheetIntakeAudit, "game.source_sheet_intake_audit");
   writeAuditReport(dir, sourceDerivationAudit, "game.generated_source_derivation_audit");
   writeAuditReport(dir, slice9DesignAudit, "game.slice9_design_policy_audit");
   writeAuditReport(dir, compositionProof, "game.ui_composition_proof");
   writeAuditReport(dir, sourceFamilyCoverageAudit, "game.source_family_coverage_audit");
+  writeAuditReport(dir, atlasMetadataAudit, "game.atlas_metadata_audit");
   mkdirSync(join(dir, dirname(compositionProofPng)), { recursive: true });
   writeFileSync(join(dir, compositionProofPng), "fake-png", "utf8");
 
@@ -192,6 +198,7 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
   jobData.expected_outputs.slice9_design_audit = [slice9DesignAudit];
   jobData.expected_outputs.composition_proof = [compositionProof, compositionProofPng];
   jobData.expected_outputs.source_family_coverage_audit = [sourceFamilyCoverageAudit];
+  jobData.expected_outputs.atlas_metadata_audit = [atlasMetadataAudit];
   writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
 
   const crop = "gamedesign/projects/test/data/ui-kit-crop.json";
@@ -626,6 +633,18 @@ test("final-art mode requires composition proof evidence", (t) => {
   assert.match(result.stdout, /final-art mode requires expected_outputs.composition_proof/);
 });
 
+test("final-art mode requires atlas metadata audit evidence", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
+  delete jobData.expected_outputs.atlas_metadata_audit;
+  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /final-art mode requires expected_outputs.atlas_metadata_audit/);
+});
+
 test("final-art mode requires source family coverage audit evidence", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);
@@ -636,6 +655,31 @@ test("final-art mode requires source family coverage audit evidence", (t) => {
   const result = run(["--job", job, "--final-art"], dir);
   assert.equal(result.status, 1);
   assert.match(result.stdout, /final-art mode requires expected_outputs.source_family_coverage_audit/);
+});
+
+test("final-art mode rejects failing atlas metadata audit evidence", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const audit = "gamedesign/projects/test/reviews/ui-kit-atlas-metadata-audit.json";
+  writeAuditReport(dir, audit, "game.atlas_metadata_audit", "fail", ["panel missing pack_group"]);
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.atlas_metadata_audit JSON verdict\/status must be pass/);
+  assert.match(result.stdout, /expected_outputs.atlas_metadata_audit JSON must not list problems/);
+});
+
+test("final-art mode rejects atlas metadata audit for another runtime manifest", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const audit = "gamedesign/projects/test/reviews/ui-kit-atlas-metadata-audit.json";
+  writeAuditReport(dir, audit, "game.atlas_metadata_audit", "pass", [], {
+    asset_manifest: "gamedesign/projects/test/data/other-assets.json",
+  });
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.atlas_metadata_audit JSON asset_manifest must match expected_outputs.runtime_manifest/);
 });
 
 test("final-art mode rejects failing source family coverage audit evidence", (t) => {

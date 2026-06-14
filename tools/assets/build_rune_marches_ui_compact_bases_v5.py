@@ -23,6 +23,8 @@ OUT_DIR = ROOT / "assets/runtime/rune-marches-ui-compact-bases-v5"
 PREVIEW_DIR = PROJECT_DIR / "art/previews"
 CROP_MANIFEST = PROJECT_DIR / "data/rune-marches-ui-compact-bases-v5-crop_manifest.json"
 RUNTIME_MANIFEST = PROJECT_DIR / "data/rune-marches-ui-compact-bases-v5-asset_manifest.json"
+ATLAS_AUDIT_JSON = PROJECT_DIR / "reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.json"
+ATLAS_AUDIT_MD = PROJECT_DIR / "reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.md"
 
 
 BUTTON_STRETCH = {
@@ -31,6 +33,19 @@ BUTTON_STRETCH = {
     "vertical_edges": "straight_frame",
     "corners": "decorative_fixed",
     "non_stretch_ornaments": "corner_only",
+}
+
+
+ATLAS_POLICY_SLICE9 = {
+    "trim_mode": "alpha",
+    "alpha_bleed": True,
+    "premultiply_alpha": True,
+    "extrude": 2,
+    "shape_padding": 2,
+    "border_padding": 1,
+    "scale_variant": "1x",
+    "allow_rotation": False,
+    "trim_preserves_slice9": True,
 }
 
 
@@ -144,6 +159,18 @@ CROPS: list[dict[str, Any]] = [
 
 def rel(path: Path) -> str:
     return path.relative_to(ROOT).as_posix()
+
+
+def atlas_fields(crop: dict[str, Any]) -> dict[str, Any]:
+    width = int(crop["rect"][2])
+    height = int(crop["rect"][3])
+    return {
+        "pack_group": "ui_rune_marches_compact_bases_v5",
+        "source_crop": crop["id"],
+        "original_size": [width, height],
+        "trim_rect": [0, 0, width, height],
+        "atlas_policy": ATLAS_POLICY_SLICE9,
+    }
 
 
 def crop_asset(source: Image.Image, crop: dict[str, Any]) -> Image.Image:
@@ -306,6 +333,7 @@ def write_manifests() -> None:
             "asset_audit": "py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-asset-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-asset-audit.md",
             "source_derivation_audit": "py -3.12 tools/assets/audit_generated_source_derivation.py --crop-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.md",
             "composition_proof": "py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --output gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.md",
+            "atlas_metadata_audit": "node tools/assets/audit_atlas_metadata.mjs --asset-manifest gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json --json-output gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.json --report gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-atlas-metadata-audit.md",
         },
         "assets": [
             {
@@ -319,6 +347,7 @@ def write_manifests() -> None:
                 "usage_policy": crop["usage_policy"],
                 "role": crop["role"],
                 "state": crop["state"],
+                **atlas_fields(crop),
             }
             for crop in CROPS
         ],
@@ -339,6 +368,10 @@ def write_manifests() -> None:
             "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png",
             "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.md",
             "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.json",
+        ],
+        "atlas_metadata_audit": [
+            rel(ATLAS_AUDIT_MD),
+            rel(ATLAS_AUDIT_JSON),
         ],
     }
     RUNTIME_MANIFEST.write_text(json.dumps(runtime_manifest, indent=2) + "\n", encoding="utf-8")

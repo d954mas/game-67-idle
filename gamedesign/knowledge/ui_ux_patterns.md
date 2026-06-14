@@ -40,6 +40,79 @@ Use this order unless the game has a strong reason to differ:
 - Locked, affordable, active, ready, claimed, and disabled states must be visually distinct.
 - Error or blocked states should explain what to do next.
 
+## Game UI Surface Taxonomy
+
+Separate screens by job before drawing panels:
+
+- `persistent_hud`: always-needed state such as health, currency, energy, or
+  current phase.
+- `contextual_hud`: appears only when the player can act on it now.
+- `primary_action`: the one strongest action for the current screen or FTUE
+  step.
+- `secondary_actions`: useful but visually quieter actions.
+- `modal_decision`: interrupting choice, purchase, reward claim, settings, or
+  confirmation.
+- `objective_feedback`: current goal, blocker, reward, and next step.
+- `decoration`: theme and material language only; it must not compete with the
+  action hierarchy.
+
+If these jobs are not named, art direction will usually overproduce decorative
+frames and underproduce readable interaction.
+
+## Runtime UI Asset Taxonomy
+
+Generate and integrate these as separate reusable families:
+
+- `backgrounds`: screen backdrops, parchment, vignette, map layers, scenery.
+- `slice9_bases`: blank panels, buttons, slots, tabs, chips, and tooltips.
+- `decor_overlays`: corner caps, top plaques, gems, screws, locks, crests,
+  dividers, glow strips, selected rings.
+- `icons`: semantic symbols with consistent silhouette and padding.
+- `state_overlays`: hover, press, disabled, locked, selected, affordable,
+  claimable, cooldown, warning.
+- `bars`: track, fill, caps, marker, glow, disabled overlay, runtime label.
+- `runtime_text`: labels, values, timers, quest text, localization, debug text.
+- `hit_targets`: invisible/tinted layout rectangles, often larger than art on
+  touch screens.
+
+The same visual richness can remain, but it should be assembled from reusable
+parts instead of baked into one full panel image.
+
+## Slice9 Design Rules
+
+- Slice9 bases should be structurally simple: protected corners, straight or
+  repeatable edges, and a calm center/fill.
+- Unique plaques, gems, medallions, lock plates, banners, cap ornaments, and
+  state effects belong in `decor_overlays` or `state_overlays`, not in
+  stretch zones.
+- Content safe area is part of the asset. Text and icons must not collide with
+  corners, grime, screws, or decorative caps.
+- Minimum usable size is part of the asset. A button that works at 240x72 may
+  be invalid at 128x48.
+- Preview hostile sizes: minimum, normal, large, very wide, very tall, and the
+  smallest supported portrait composition.
+- If an edge only looks good at source size, it is a static mockup edge, not a
+  reusable slice9 edge.
+
+## Atlas And Reuse Rules
+
+- Pack by runtime lifetime and screen family, for example `ui_common`,
+  `ui_panel_family`, `ui_icons_core`, `ui_map`, and `ui_fx`.
+- Store metadata with every runtime asset: semantic id, kind, pack group,
+  source crop, atlas rect, trim rect, original size, pivot/anchor, slice9
+  margins, content safe area, state role, source family, scale variant, and
+  usage policy.
+- Use trim only with alpha bleed, premultiplied-alpha-safe resizing, extrusion,
+  border padding, and shape padding. Tight crops without padding cause halos
+  and neighboring-pixel leaks.
+- Do not rotate slice9 assets in an atlas unless the runtime explicitly knows
+  how to rotate slice margins. Default is `allow_rotation: false`.
+- Prefer overlays and aliases over duplicated full controls: base button +
+  selected overlay + locked overlay + icon + runtime label is usually cheaper
+  and more flexible than four full button PNGs.
+- Alias identical pixels when two semantic ids share the same art. Duplicate
+  meaning in metadata, not bitmap storage.
+
 ## Component State Checklist
 
 For each repeated UI component, define:
