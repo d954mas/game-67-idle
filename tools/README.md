@@ -219,10 +219,12 @@ verdict-compatible. When NumPy is available, the edge color scans use
 vectorized masks with the same Python fallback kept for minimal portable
 installs.
 `tools/assets/render_ui_asset_edge_proof.py` renders zoomed top/right/bottom/left
-alpha-boundary strips on a checkerboard and marks detected bad edge pixels. Use
-it when 1-2 pixel fringe is reported or when a normal contact sheet is too small
-to review edge quality. Use `--asset-id` and `--side` to create a small proof
-for the exact reported edge.
+alpha-boundary strips on a checkerboard and marks detected bad edge pixels. It
+uses the same key/purple/green/source-key edge classes as the generated UI
+asset audit, including hidden bad RGB in transparent pixels near visible
+edges. Use it when 1-2 pixel fringe is reported or when a normal contact sheet
+is too small to review edge quality. Use `--asset-id` and `--side` to create a
+small proof for the exact reported edge.
 `tools/assets/render_ui_composition_proof.py` renders runtime composition proof
 from an asset manifest: slice9 base at target preview sizes, optional anchored
 decor/state overlays, runtime labels, and content safe-area outlines. Use it

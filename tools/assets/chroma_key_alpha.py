@@ -61,6 +61,10 @@ def is_any_purple_halo_like(red: int, green: int, blue: int) -> bool:
     )
 
 
+def is_green_screen_spill_like(red: int, green: int, blue: int) -> bool:
+    return green > 100 and green > red * 1.35 and green > blue * 1.35 and green - max(red, blue) > 28
+
+
 def is_source_key_spill_like(red: int, green: int, blue: int, key: RGB) -> bool:
     key_red, key_green, key_blue = key
     if key_green > 220 and key_red < 40 and key_blue < 40:
@@ -169,6 +173,27 @@ def remove_source_key_spill(image: Image.Image, key: RGB, passes: int = 3, radiu
             pixels[x, y] = (red, green, blue, 0)
 
 
+def remove_green_screen_spill(image: Image.Image, passes: int = 3, radius: int = 2) -> None:
+    pixels = image.load()
+    width, height = image.size
+    for _pass in range(passes):
+        alpha = image.getchannel("A")
+        alpha_pixels = alpha.load()
+        to_clear: list[tuple[int, int]] = []
+        for y in range(height):
+            for x in range(width):
+                red, green, blue, current_alpha = pixels[x, y]
+                if current_alpha <= 12 or not is_green_screen_spill_like(red, green, blue):
+                    continue
+                if touches_alpha(alpha_pixels, x, y, width, height, radius, visible=False):
+                    to_clear.append((x, y))
+        if not to_clear:
+            return
+        for x, y in to_clear:
+            red, green, blue, _alpha = pixels[x, y]
+            pixels[x, y] = (red, green, blue, 0)
+
+
 def source_key_spill_mask(red: Any, green: Any, blue: Any, key: RGB) -> Any:
     key_red, key_green, key_blue = key
     if key_green > 220 and key_red < 40 and key_blue < 40:
@@ -197,10 +222,11 @@ def bad_edge_rgb_mask_array(array: Any, key: RGB | None) -> Any:
     )
     magenta = (red > 80) & (blue > 45) & (green < 120) & (red > green + 32) & (blue > green + 6)
     dark_magenta = (red > 44) & (blue > 34) & (green < 42) & (red > green + 24) & (blue > green + 14) & (red + blue > green * 2 + 48)
+    green_spill = (green > 100) & (green > red * 1.35) & (green > blue * 1.35) & (green - np.maximum(red, blue) > 28)
     source_key = np.zeros(red.shape, dtype=bool)
     if key is not None:
         source_key = source_key_spill_mask(red, green, blue, key)
-    return key_fringe | purple | dark_purple | magenta | dark_magenta | source_key
+    return key_fringe | purple | dark_purple | magenta | dark_magenta | green_spill | source_key
 
 
 def bleed_transparent_rgb_numpy(image: Image.Image, passes: int = 16, key: RGB | None = None) -> bool:
@@ -253,7 +279,10 @@ def bleed_transparent_rgb_python(image: Image.Image, passes: int = 16, key: RGB 
                         red, green, blue, neighbor_alpha = pixels[nx, ny]
                         source_key_bad = key is not None and is_source_key_spill_like(red, green, blue, key)
                         if neighbor_alpha > 12 or not (
-                            source_key_bad or is_key_fringe_like(red, green, blue) or is_any_purple_halo_like(red, green, blue)
+                            source_key_bad
+                            or is_green_screen_spill_like(red, green, blue)
+                            or is_key_fringe_like(red, green, blue)
+                            or is_any_purple_halo_like(red, green, blue)
                         ):
                             neighbors.append((red, green, blue))
                 if neighbors:
@@ -288,7 +317,12 @@ def repair_transparent_edge_rgb(image: Image.Image, radius: int = 4, key: RGB | 
         for x in range(width):
             red, green, blue, current_alpha = pixels[x, y]
             source_key_bad = key is not None and is_source_key_spill_like(red, green, blue, key)
-            if current_alpha > 12 or not (source_key_bad or is_key_fringe_like(red, green, blue) or is_any_purple_halo_like(red, green, blue)):
+            if current_alpha > 12 or not (
+                source_key_bad
+                or is_green_screen_spill_like(red, green, blue)
+                or is_key_fringe_like(red, green, blue)
+                or is_any_purple_halo_like(red, green, blue)
+            ):
                 continue
             if not touches_alpha(alpha_pixels, x, y, width, height, 0, visible=False):
                 continue
@@ -365,6 +399,7 @@ def key_to_alpha(
                     pixels[x, y] = (red, green, blue, alpha)
     remove_edge_fringe(rgba)
     remove_source_key_spill(rgba, key)
+    remove_green_screen_spill(rgba)
     repair_visible_halo(rgba, require_transparent_touch=not aggressive_visible_decontaminate)
     bleed_transparent_rgb(rgba, key=key)
     repair_transparent_edge_rgb(rgba, key=key)

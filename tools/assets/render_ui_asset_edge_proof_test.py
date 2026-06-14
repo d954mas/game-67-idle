@@ -11,6 +11,20 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools/assets/render_ui_asset_edge_proof.py"
 
 
+def count_mark_pixels(image: Image.Image, color_name: str) -> int:
+    rgba = image.convert("RGBA")
+    pixels = rgba.load()
+    marks = 0
+    for y in range(rgba.height):
+        for x in range(rgba.width):
+            red, green, blue, alpha = pixels[x, y]
+            if color_name == "red" and red > 240 and green < 80 and blue < 80 and alpha == 255:
+                marks += 1
+            elif color_name == "yellow" and red > 240 and green > 180 and blue < 80 and alpha == 255:
+                marks += 1
+    return marks
+
+
 class RenderUiAssetEdgeProofTests(unittest.TestCase):
     def test_renders_zoomed_edge_proof_and_marks_bad_pixels(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -66,16 +80,128 @@ class RenderUiAssetEdgeProofTests(unittest.TestCase):
             with Image.open(output) as proof:
                 self.assertGreater(proof.width, 64)
                 self.assertGreater(proof.height, 64)
-                proof_rgba = proof.convert("RGBA")
-            pixels = proof_rgba.load()
-            red_marks = 0
-            for y in range(proof_rgba.height):
-                for x in range(proof_rgba.width):
-                    red, green, blue, alpha = pixels[x, y]
-                    if red > 240 and green < 80 and blue < 80 and alpha == 255:
-                        red_marks += 1
+                red_marks = count_mark_pixels(proof, "red")
             self.assertGreater(red_marks, 0)
             self.assertIn("wrote edge proof", result.stdout)
+
+    def test_marks_green_screen_spill_without_manifest_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            image.putpixel((23, 16), (19, 205, 9, 255))
+            image.putpixel((24, 16), (0, 255, 0, 0))
+            image.save(out_dir / "icon.png")
+            manifest = {
+                "schema": "game.art_crop_manifest",
+                "version": 1,
+                "sources": [
+                    {
+                        "id": "source",
+                        "path": "source.png",
+                        "crops": [
+                            {
+                                "id": "icon_test",
+                                "kind": "icon",
+                                "rect": [0, 0, 32, 32],
+                                "output": "assets/icon.png",
+                            }
+                        ],
+                    }
+                ],
+            }
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            output = root / "proof.png"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--crop-manifest",
+                    str(manifest_path),
+                    "--output",
+                    str(output),
+                    "--asset-id",
+                    "icon_test",
+                    "--side",
+                    "right",
+                    "--zoom",
+                    "3",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            with Image.open(output) as proof:
+                self.assertGreater(count_mark_pixels(proof, "red"), 0)
+                self.assertGreater(count_mark_pixels(proof, "yellow"), 0)
+
+    def test_preserve_green_edges_suppresses_green_spill_marks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            image.putpixel((23, 16), (19, 205, 9, 255))
+            image.putpixel((24, 16), (0, 255, 0, 0))
+            image.save(out_dir / "icon.png")
+            manifest = {
+                "schema": "game.art_crop_manifest",
+                "version": 1,
+                "sources": [
+                    {
+                        "id": "source",
+                        "path": "source.png",
+                        "crops": [
+                            {
+                                "id": "icon_test",
+                                "kind": "icon",
+                                "rect": [0, 0, 32, 32],
+                                "output": "assets/icon.png",
+                                "preserve_green_edges": True,
+                            }
+                        ],
+                    }
+                ],
+            }
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            output = root / "proof.png"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--crop-manifest",
+                    str(manifest_path),
+                    "--output",
+                    str(output),
+                    "--asset-id",
+                    "icon_test",
+                    "--side",
+                    "right",
+                    "--zoom",
+                    "3",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            with Image.open(output) as proof:
+                self.assertEqual(count_mark_pixels(proof, "red"), 0)
+                self.assertEqual(count_mark_pixels(proof, "yellow"), 0)
 
     def test_can_filter_to_one_asset_side(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

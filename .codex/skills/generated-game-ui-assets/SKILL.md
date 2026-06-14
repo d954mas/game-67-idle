@@ -293,10 +293,13 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   pass alpha padding, key-fringe, purple edge-halo, and transparent-edge RGB
   bleed audit.
 - For disputed 1-2 pixel edges, generate an edge proof image with zoomed
-  top/right/bottom/left alpha-boundary strips on a checkerboard. Normal contact
-  sheets are too weak for this class of defect. Use `--asset-id` and `--side`
-  to create small proof images for the exact reported edge. Store accepted
-  proof paths in the art job rather than leaving them as scratch screenshots.
+  top/right/bottom/left alpha-boundary strips on a checkerboard. The proof
+  should mark the same bad edge classes as the pixel audit, including purple
+  halo, source-key spill, saturated green-screen spill, and hidden bad RGB in
+  transparent edge pixels. Normal contact sheets are too weak for this class of
+  defect. Use `--asset-id` and `--side` to create small proof images for the
+  exact reported edge. Store accepted proof paths in the art job rather than
+  leaving them as scratch screenshots.
 - Preserve intentional purple/magic colors with explicit manifest policy; do
   not globally delete interior colors because they resemble the key background.
 - Preserve intentional saturated green edge colors with explicit

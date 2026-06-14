@@ -15,8 +15,13 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[2]
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
-from tools.assets.audit_generated_ui_assets import alpha_bbox, crop_entries, touches_transparent
-from tools.assets.chroma_key_alpha import is_any_purple_halo_like, is_key_fringe_like
+from tools.assets.audit_generated_ui_assets import alpha_bbox, crop_entries, parse_hex_color, touches_transparent
+from tools.assets.chroma_key_alpha import (
+    is_any_purple_halo_like,
+    is_green_screen_spill_like,
+    is_key_fringe_like,
+    is_source_key_spill_like,
+)
 
 
 def project_path(path: str) -> Path:
@@ -65,13 +70,29 @@ def near_visible(alpha_pixels: Any, x: int, y: int, width: int, height: int, rad
     return False
 
 
-def is_bad_edge_pixel(image: Image.Image, x: int, y: int) -> str | None:
+def is_bad_edge_pixel(
+    image: Image.Image,
+    x: int,
+    y: int,
+    *,
+    source_key: tuple[int, int, int] | None,
+    preserve_purple: bool,
+    preserve_green: bool,
+    preserve_source_key: bool,
+) -> str | None:
     pixels = image.load()
     alpha = image.getchannel("A")
     alpha_pixels = alpha.load()
     width, height = image.size
     red, green, blue, current_alpha = pixels[x, y]
-    bad_color = is_key_fringe_like(red, green, blue) or is_any_purple_halo_like(red, green, blue)
+    purple_bad = not preserve_purple and (is_key_fringe_like(red, green, blue) or is_any_purple_halo_like(red, green, blue))
+    green_bad = not preserve_green and is_green_screen_spill_like(red, green, blue)
+    source_key_bad = (
+        source_key is not None
+        and not preserve_source_key
+        and is_source_key_spill_like(red, green, blue, source_key)
+    )
+    bad_color = purple_bad or green_bad or source_key_bad
     if not bad_color:
         return None
     if current_alpha > 12 and touches_transparent(alpha_pixels, x, y, width, height, 6):
@@ -81,7 +102,17 @@ def is_bad_edge_pixel(image: Image.Image, x: int, y: int) -> str | None:
     return None
 
 
-def render_strip(image: Image.Image, rect: tuple[int, int, int, int], zoom: int, mark_bad_pixels: bool) -> tuple[Image.Image, int]:
+def render_strip(
+    image: Image.Image,
+    rect: tuple[int, int, int, int],
+    zoom: int,
+    mark_bad_pixels: bool,
+    *,
+    source_key: tuple[int, int, int] | None,
+    preserve_purple: bool,
+    preserve_green: bool,
+    preserve_source_key: bool,
+) -> tuple[Image.Image, int]:
     crop = image.crop(rect).convert("RGBA")
     proof = checkerboard(crop.size)
     proof.alpha_composite(crop)
@@ -91,7 +122,15 @@ def render_strip(image: Image.Image, rect: tuple[int, int, int, int], zoom: int,
         left, top, _right, _bottom = rect
         for y in range(top, top + crop.height):
             for x in range(left, left + crop.width):
-                kind = is_bad_edge_pixel(image, x, y)
+                kind = is_bad_edge_pixel(
+                    image,
+                    x,
+                    y,
+                    source_key=source_key,
+                    preserve_purple=preserve_purple,
+                    preserve_green=preserve_green,
+                    preserve_source_key=preserve_source_key,
+                )
                 if kind is None:
                     continue
                 bad_count += 1
@@ -114,6 +153,7 @@ def render_edge_proof(
     font = ImageFont.load_default()
     rows: list[tuple[str, Image.Image, int]] = []
     sides = [side for side in ["top", "right", "bottom", "left"] if sides_filter is None or side in sides_filter]
+    source_key = parse_hex_color(manifest.get("green_screen", {}).get("key"))
     for crop in crop_entries(manifest):
         crop_id = str(crop.get("id", ""))
         if asset_ids is not None and crop_id not in asset_ids:
@@ -128,9 +168,21 @@ def render_edge_proof(
         bbox = alpha_bbox(image)
         if bbox is None:
             continue
+        preserve_purple = bool(crop.get("preserve_purple_edges"))
+        preserve_green = bool(crop.get("preserve_green_edges"))
+        preserve_source_key = bool(crop.get("preserve_source_key_edges"))
         for side in sides:
             rect = crop_rect_for_side(bbox, image.size, side, strip, pad)
-            strip_image, bad_count = render_strip(image, rect, zoom, mark_bad_pixels)
+            strip_image, bad_count = render_strip(
+                image,
+                rect,
+                zoom,
+                mark_bad_pixels,
+                source_key=source_key,
+                preserve_purple=preserve_purple,
+                preserve_green=preserve_green,
+                preserve_source_key=preserve_source_key,
+            )
             label = f"{crop_id or path.stem} / {side} / rect={list(rect)} / bad_marks={bad_count}"
             rows.append((label, strip_image, bad_count))
 

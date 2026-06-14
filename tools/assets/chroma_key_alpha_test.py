@@ -5,6 +5,7 @@ from PIL import Image, ImageDraw
 from tools.assets.chroma_key_alpha import (
     is_dark_magenta_edge_spill_like,
     is_dark_purple_halo_like,
+    is_green_screen_spill_like,
     is_magenta_edge_spill_like,
     key_to_alpha,
     resize_rgba_premultiplied,
@@ -85,6 +86,31 @@ class ChromaKeyAlphaTests(unittest.TestCase):
 
         self.assertEqual(alpha, 255)
         self.assertFalse(is_dark_magenta_edge_spill_like(red, green, blue))
+
+    def test_key_to_alpha_removes_visible_green_screen_edge_spill(self) -> None:
+        image = Image.new("RGBA", (24, 24), (255, 0, 255, 255))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((5, 5, 18, 18), fill=(142, 86, 38, 255))
+        image.putpixel((18, 12), (19, 205, 9, 255))
+
+        cleaned = key_to_alpha(image, aggressive_visible_decontaminate=True)
+        red, green, blue, alpha = cleaned.getpixel((18, 12))
+
+        self.assertEqual(alpha, 0)
+        self.assertFalse(is_green_screen_spill_like(red, green, blue))
+
+    def test_premultiplied_resize_does_not_sample_hidden_green(self) -> None:
+        image = Image.new("RGBA", (12, 12), (0, 255, 0, 0))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((3, 3, 8, 8), fill=(180, 120, 70, 255))
+
+        resized = resize_rgba_premultiplied(image, (6, 6))
+        pixels = resized.load()
+        for y in range(resized.height):
+            for x in range(resized.width):
+                red, green, blue, alpha = pixels[x, y]
+                if alpha > 12:
+                    self.assertFalse(is_green_screen_spill_like(red, green, blue))
 
     def test_premultiplied_resize_does_not_sample_hidden_magenta(self) -> None:
         image = Image.new("RGBA", (12, 12), (255, 0, 255, 0))

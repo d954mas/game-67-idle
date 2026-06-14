@@ -21,7 +21,13 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[2]
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
-from tools.assets.chroma_key_alpha import is_any_purple_halo_like, is_exact_key_like, is_key_fringe_like, is_source_key_spill_like
+from tools.assets.chroma_key_alpha import (
+    is_any_purple_halo_like,
+    is_exact_key_like,
+    is_green_screen_spill_like,
+    is_key_fringe_like,
+    is_source_key_spill_like,
+)
 
 
 def project_path(path: str) -> Path:
@@ -76,10 +82,6 @@ def purple_halo_mask_array(array: Any) -> Any:
     magenta = (red > 80) & (blue > 45) & (green < 120) & (red > green + 32) & (blue > green + 6)
     dark_magenta = (red > 44) & (blue > 34) & (green < 42) & (red > green + 24) & (blue > green + 14) & (red + blue > green * 2 + 48)
     return purple | dark_purple | magenta | dark_magenta
-
-
-def is_green_screen_spill_like(red: int, green: int, blue: int) -> bool:
-    return green > 100 and green > red * 1.35 and green > blue * 1.35 and green - max(red, blue) > 28
 
 
 def green_screen_spill_mask_array(array: Any) -> Any:
