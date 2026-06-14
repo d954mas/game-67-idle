@@ -205,6 +205,20 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None) -> dict
                     if intersects(padded, other):
                         atlas_problems.append(f"{entry_id} padded_rect overlaps {other_id}")
                 padded_rects.append((entry_id, padded))
+                if atlas_info.get("label_overlay"):
+                    review_label = entry.get("review_label")
+                    if not isinstance(review_label, dict) or not isinstance(review_label.get("text"), str):
+                        atlas_problems.append(f"{entry_id} needs review_label text for labeled review atlas")
+                    elif not rect_valid(review_label.get("rect")):
+                        atlas_problems.append(f"{entry_id} needs valid review_label rect")
+                    else:
+                        label_rect = rect_tuple(review_label["rect"])
+                        if intersects(padded, label_rect):
+                            atlas_problems.append(f"{entry_id} review_label rect overlaps padded_rect")
+                        if atlas is not None:
+                            lx, ly, lw, lh = label_rect
+                            if lx + lw > atlas.width or ly + lh > atlas.height:
+                                atlas_problems.append(f"{entry_id} review_label rect exceeds atlas bounds")
 
             if atlas is not None and rect_valid(entry.get("atlas_rect")) and rect_valid(entry.get("padded_rect")):
                 atlas_problems.extend(check_extrusion(atlas, entry))

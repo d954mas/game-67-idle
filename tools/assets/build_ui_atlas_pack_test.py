@@ -169,7 +169,19 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             pack = json.loads((root / "packed/atlas.json").read_text(encoding="utf-8"))
             self.assertEqual(pack["purpose"], "review_validation_atlas_not_engine_runtime_pack")
             self.assertTrue(pack["label_overlay"])
-            self.assertTrue(pack["atlases"][0]["label_overlay"])
+            atlas_info = pack["atlases"][0]
+            self.assertTrue(atlas_info["label_overlay"])
+            self.assertIn("labeled_preview_path", atlas_info)
+            entries = {entry["id"]: entry for entry in atlas_info["entries"]}
+            label = entries["panel"]["review_label"]
+            self.assertEqual(label["text"], "panel")
+            padded_x, padded_y, padded_w, padded_h = entries["panel"]["padded_rect"]
+            label_x, label_y, label_w, label_h = label["rect"]
+            self.assertGreaterEqual(label_y, padded_y + padded_h)
+            atlas = Image.open(root / atlas_info["path"]).convert("RGBA")
+            preview = Image.open(root / atlas_info["labeled_preview_path"]).convert("RGBA")
+            self.assertEqual(atlas.getpixel((label_x, label_y))[3], 0)
+            self.assertGreater(preview.getpixel((label_x, label_y))[3], 0)
 
     def test_fails_when_asset_exceeds_max_size(self):
         with tempfile.TemporaryDirectory() as tmp:

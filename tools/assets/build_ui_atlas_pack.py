@@ -14,6 +14,9 @@ from PIL import ImageDraw
 
 ROOT = Path.cwd()
 RESAMPLE_NEAREST = getattr(getattr(Image, "Resampling", Image), "NEAREST", Image.NEAREST)
+LABEL_PAD_X = 2
+LABEL_PAD_Y = 1
+LABEL_GAP_Y = 2
 
 
 def fail(message: str) -> None:
@@ -58,6 +61,40 @@ def positive_int(value: Any, fallback: int) -> int:
     except (TypeError, ValueError):
         return fallback
     return parsed if parsed >= 0 else fallback
+
+
+def measure_label(label: str) -> tuple[int, int]:
+    probe = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(probe)
+    bbox = draw.textbbox((0, 0), label)
+    return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
+
+
+def item_label(item: dict[str, Any], aliases_by_target: dict[str, list[str]] | None = None) -> str:
+    label = str(item["asset"]["id"])
+    aliases = aliases_by_target.get(label, []) if aliases_by_target else []
+    if aliases:
+        label = f"{label} (+{','.join(aliases)})"
+    return label
+
+
+def prepare_review_labels(items: list[dict[str, Any]], alias_items: list[dict[str, Any]], label_review: bool) -> None:
+    if not label_review:
+        return
+    aliases_by_target: dict[str, list[str]] = {}
+    for item in alias_items:
+        alias_of = item["asset"].get("alias_of")
+        if alias_of:
+            aliases_by_target.setdefault(str(alias_of), []).append(str(item["asset"]["id"]))
+    for item in items:
+        label = item_label(item, aliases_by_target)
+        label_width, label_height = measure_label(label)
+        item["review_label"] = {
+            "text": label,
+            "width": label_width + LABEL_PAD_X * 2,
+            "height": label_height + LABEL_PAD_Y * 2,
+            "gap_y": LABEL_GAP_Y,
+        }
 
 
 def load_assets(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -126,6 +163,20 @@ def paste_extruded(atlas: Image.Image, image: Image.Image, x: int, y: int, extru
         atlas.alpha_composite(corner, target)
 
 
+def packed_tile_size(item: dict[str, Any]) -> tuple[int, int]:
+    image = item["image"]
+    extrude = item["extrude"]
+    padded_width = image.width + extrude * 2
+    padded_height = image.height + extrude * 2
+    review_label = item.get("review_label") if isinstance(item.get("review_label"), dict) else None
+    label_width = int(review_label.get("width", 0)) if review_label else 0
+    label_height = int(review_label.get("height", 0)) if review_label else 0
+    label_gap_y = int(review_label.get("gap_y", 0)) if review_label else 0
+    tile_width = max(padded_width, label_width)
+    tile_height = padded_height + (label_gap_y + label_height if review_label else 0)
+    return tile_width, tile_height
+
+
 def try_pack(items: list[dict[str, Any]], target_width: int, border: int, shape_padding: int, max_size: int) -> tuple[list[dict[str, Any]], int, int] | None:
     x = border
     y = border
@@ -133,10 +184,7 @@ def try_pack(items: list[dict[str, Any]], target_width: int, border: int, shape_
     used_width = border
     placements: list[dict[str, Any]] = []
     for item in items:
-        image = item["image"]
-        extrude = item["extrude"]
-        tile_width = image.width + extrude * 2
-        tile_height = image.height + extrude * 2
+        tile_width, tile_height = packed_tile_size(item)
         if tile_width + border * 2 > max_size or tile_height + border * 2 > max_size:
             return None
         if x > border and x + tile_width + border > target_width:
@@ -183,34 +231,29 @@ def make_entry(item: dict[str, Any], x: int, y: int, image: Image.Image) -> dict
     }
     if asset.get("alias_of"):
         entry["alias_of"] = asset["alias_of"]
+    review_label = item.get("review_label")
+    if isinstance(review_label, dict):
+        label_x = x
+        label_y = y + image.height + extrude * 2 + int(review_label.get("gap_y", 0))
+        entry["review_label"] = {
+            "text": review_label["text"],
+            "rect": [label_x, label_y, int(review_label["width"]), int(review_label["height"])],
+        }
     return entry
 
 
 def draw_review_labels(atlas: Image.Image, entries: list[dict[str, Any]]) -> None:
     draw = ImageDraw.Draw(atlas)
-    aliases_by_target: dict[str, list[str]] = {}
-    for entry in entries:
-        alias_of = entry.get("alias_of")
-        if alias_of:
-            aliases_by_target.setdefault(str(alias_of), []).append(str(entry["id"]))
     for entry in entries:
         if entry.get("alias_of"):
             continue
         x, y, width, height = rect = [int(value) for value in entry["padded_rect"]]
-        label = str(entry["id"])
-        aliases = aliases_by_target.get(label, [])
-        if aliases:
-            label = f"{label} (+{','.join(aliases)})"
-        label_width = int(draw.textlength(label))
-        label_height = 10
-        label_x = x
-        label_y = y + height + 2
-        if label_y + label_height > atlas.height:
-            label_y = max(0, y - label_height - 2)
-        if label_x + label_width + 4 > atlas.width:
-            label_x = max(0, atlas.width - label_width - 4)
-        draw.rectangle([label_x, label_y, label_x + label_width + 4, label_y + label_height + 2], fill=(0, 0, 0, 170))
-        draw.text((label_x + 2, label_y + 1), label, fill=(255, 255, 255, 255))
+        review_label = entry.get("review_label")
+        if isinstance(review_label, dict) and isinstance(review_label.get("rect"), list):
+            label = str(review_label.get("text") or entry["id"])
+            label_x, label_y, label_width, label_height = [int(value) for value in review_label["rect"]]
+            draw.rectangle([label_x, label_y, label_x + label_width - 1, label_y + label_height - 1], fill=(0, 0, 0, 170))
+            draw.text((label_x + LABEL_PAD_X, label_y + LABEL_PAD_Y), label, fill=(255, 255, 255, 255))
         draw.rectangle([rect[0], rect[1], rect[0] + rect[2] - 1, rect[1] + rect[3] - 1], outline=(255, 255, 255, 110))
 
 
@@ -228,10 +271,12 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
             fail(f"asset {item['asset']['id']} aliases missing asset {alias_of} in pack group {group}")
 
     sorted_items = sorted(canonical_items, key=lambda item: (-item["image"].height, -item["image"].width, item["asset"]["id"]))
+    prepare_review_labels(sorted_items, alias_items, label_review)
     border = max(item["border_padding"] for item in sorted_items)
     shape_padding = max(item["shape_padding"] for item in sorted_items)
-    total_area = sum((item["image"].width + item["extrude"] * 2 + shape_padding) * (item["image"].height + item["extrude"] * 2 + shape_padding) for item in sorted_items)
-    widest = max(item["image"].width + item["extrude"] * 2 for item in sorted_items) + border * 2
+    tile_sizes = [packed_tile_size(item) for item in sorted_items]
+    total_area = sum((tile_width + shape_padding) * (tile_height + shape_padding) for tile_width, tile_height in tile_sizes)
+    widest = max(tile_width for tile_width, _ in tile_sizes) + border * 2
     target_width = min(max_size, max(widest, 256, int(math.sqrt(total_area) * 1.35)))
     placement_result = None
     while target_width <= max_size:
@@ -279,8 +324,7 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
     atlas.save(path)
     labeled_preview_path = None
     if label_review:
-        preview_height = min(max_size, height + 16)
-        preview = Image.new("RGBA", (width, preview_height), (0, 0, 0, 0))
+        preview = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         preview.alpha_composite(atlas, (0, 0))
         draw_review_labels(preview, sorted_entries)
         preview_path = output_dir / f"{clean_name(group)}-labeled.png"

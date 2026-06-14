@@ -110,14 +110,16 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     Record the JSON pack manifest in `expected_outputs.atlas_pack`; final-art
     validation requires it for generated UI. The manifest should preserve atlas
     rects, padded rects, extrusion, slice9 margins, content safe areas, source
-    paths, alias reuse, and label-review purpose. This is proof/review output,
+    paths, alias reuse, label-review purpose, and `review_label.rect` metadata
+    for names placed outside asset `padded_rect`s. This is proof/review output,
     not the game's final runtime atlas packer.
 21. Audit generated UI review atlases before final-art claims:
     `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
     Record passing JSON in `expected_outputs.atlas_pack_audit`; final-art
     validation requires it. This catches missing packed assets, out-of-bounds
     rects, padded-rect overlaps, alias mismatches, metadata mismatches, and
-    broken extrusion pixels.
+    broken extrusion pixels. For labeled review atlases, it also catches labels
+    missing from metadata or overlapping the art.
 
 ## Rules
 
@@ -201,11 +203,13 @@ Before UI assets are integrated:
   generation outputs.
 - Labeled review atlas evidence exists for final generated UI claims. It should
   group by `pack_group`, write clean atlas PNGs with extruded padded sprite
-  rects, write separate `labeled_preview_path` images for human review, and
+  rects, write separate `labeled_preview_path` images for human review, place
+  names in `review_label.rect` free space outside asset `padded_rect`s, and
   preserve slice9/content metadata without pretending to be the game's final
   runtime packer.
 - Atlas pack audit evidence exists and passes before final generated UI claims.
-  It should prove coverage, bounds, non-overlap, and extrusion pixels.
+  It should prove coverage, bounds, non-overlap, extrusion pixels, and
+  non-overlapping review labels.
 - Contact sheet or preview evidence exists for crops and stretched slice9
   states.
 - Pixel audit evidence exists for generated runtime PNGs and reports no clipped

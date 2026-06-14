@@ -165,7 +165,8 @@ reintroducing 1-2 pixel halos or broken slice margins.
 `tools/assets/build_ui_atlas_pack.py` builds review/proof atlas PNGs from a
 runtime asset manifest. It groups assets by `pack_group`, preserves
 slice9/content metadata in a `game.ui_atlas_pack` manifest, writes extruded
-padded rects around each sprite, can draw id labels with `--label-review`, and
+padded rects around each sprite, can draw id labels with `--label-review` in
+reserved `review_label.rect` free space outside the asset `padded_rect`, and
 reuses `alias_of` entries without duplicating the physical bitmap. This output
 is human validation evidence, not the game's final runtime atlas packer. Record
 the JSON manifest in `expected_outputs.atlas_pack`; final-art validation
@@ -173,7 +174,9 @@ requires it for generated UI.
 `tools/assets/audit_ui_atlas_pack.py` validates the built review atlas. It
 checks coverage against the runtime asset manifest, atlas image bounds, non-
 overlapping physical padded rects, alias rect reuse, metadata consistency, and
-that extrusion pixels match the source edge pixels. Record passing JSON in
+that extrusion pixels match the source edge pixels. For labeled review atlases,
+it also requires `review_label` metadata whose rect stays outside the asset
+`padded_rect` and inside the atlas. Record passing JSON in
 `expected_outputs.atlas_pack_audit`; final-art validation requires it.
 `tools/assets/audit_runtime_ui_asset_usage.mjs` is the runtime placement gate.
 It compares a `game.runtime_ui_asset_usage` file against an asset manifest's

@@ -56,19 +56,20 @@ def run(script: Path, cwd: Path, *args: str):
     )
 
 
-def build_pack(root: Path, assets):
+def build_pack(root: Path, assets, label_review: bool = False):
     manifest = root / "manifest.json"
     manifest.write_text(json.dumps({"schema": "game.asset_manifest", "version": 1, "assets": assets}), encoding="utf-8")
-    result = run(
-        PACKER,
-        root,
+    args = [
         "--asset-manifest",
         "manifest.json",
         "--output-dir",
         "packed",
         "--json-output",
         "packed/atlas.json",
-    )
+    ]
+    if label_review:
+        args.append("--label-review")
+    result = run(PACKER, root, *args)
     if result.returncode != 0:
         raise AssertionError(result.stdout + result.stderr)
     return manifest, root / "packed/atlas.json"
@@ -154,6 +155,29 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             audit = json.loads((root / "packed/audit.json").read_text(encoding="utf-8"))
             self.assertEqual(audit["verdict"], "pass")
             self.assertEqual(audit["atlases"][0]["alias_count"], 1)
+
+    def test_passes_labeled_review_rects_outside_assets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")], label_review=True)
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)), "--json-output", "packed/audit.json")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            audit = json.loads((root / "packed/audit.json").read_text(encoding="utf-8"))
+            self.assertEqual(audit["verdict"], "pass")
+
+    def test_rejects_labeled_review_rect_over_asset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")], label_review=True)
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            entry = pack_data["atlases"][0]["entries"][0]
+            entry["review_label"]["rect"] = list(entry["padded_rect"])
+            pack.write_text(json.dumps(pack_data), encoding="utf-8")
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("review_label rect overlaps padded_rect", result.stdout + result.stderr)
 
     def test_rejects_alias_rect_mismatch(self):
         with tempfile.TemporaryDirectory() as tmp:
