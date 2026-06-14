@@ -200,8 +200,9 @@ checks coverage against the runtime asset manifest, atlas image bounds, non-
 overlapping physical padded rects, alias rect reuse, metadata consistency, and
 that extrusion pixels match the source edge pixels. For labeled review atlases,
 it also requires exact `review_label` text, visible label pixels in the labeled
-preview, no label pixels in the clean atlas, and label rects that stay outside
-asset `padded_rect`s, outside other labels, and inside the atlas. Record passing JSON in
+preview, wrapped `review_label.lines` that fit inside `review_label.rect`, no
+label pixels in the clean atlas, and label rects that stay outside asset
+`padded_rect`s, outside other labels, and inside the atlas. Record passing JSON in
 `expected_outputs.atlas_pack_audit`; final-art validation requires it.
 `tools/assets/audit_runtime_ui_asset_usage.mjs` is the runtime placement gate.
 It compares a `game.runtime_ui_asset_usage` file against an asset manifest's

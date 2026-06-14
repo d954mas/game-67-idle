@@ -149,9 +149,10 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     validation requires it. This catches missing packed assets, out-of-bounds
     rects, padded-rect overlaps, alias mismatches, metadata mismatches, and
     broken extrusion pixels. For labeled review atlases, it also catches labels
-    missing from metadata, wrong label text, missing labeled preview images,
-    labels overlapping any art or other labels, labels accidentally baked into
-    the clean atlas, or label rects without visible pixels in the labeled preview.
+    missing from metadata, wrong label text, wrapped `review_label.lines` that
+    do not fit their label rects, missing labeled preview images, labels
+    overlapping any art or other labels, labels accidentally baked into the
+    clean atlas, or label rects without visible pixels in the labeled preview.
 
 ## Rules
 
@@ -253,8 +254,8 @@ Before UI assets are integrated:
 - Atlas pack audit evidence exists and passes before final generated UI claims.
   It should prove coverage, bounds, non-overlap, extrusion pixels, and
   exact non-overlapping review labels. For labeled review atlases, the audit
-  should prove that labels are visible only in the labeled preview and not in
-  the clean atlas texture.
+  should prove that wrapped `review_label.lines` fit their rects and labels are
+  visible only in the labeled preview, not in the clean atlas texture.
 - Contact sheet or preview evidence exists for crops and stretched slice9
   states.
 - Pixel audit evidence exists for generated runtime PNGs and reports no clipped

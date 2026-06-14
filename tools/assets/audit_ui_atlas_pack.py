@@ -8,9 +8,13 @@ from time import perf_counter
 from typing import Any
 
 from PIL import Image
+from PIL import ImageDraw
 
 
 ROOT = Path.cwd()
+LABEL_PAD_X = 2
+LABEL_PAD_Y = 1
+LABEL_LINE_GAP_Y = 1
 
 
 def fail(message: str) -> None:
@@ -76,6 +80,33 @@ def rect_has_visible_pixel(image: Image.Image, rect: tuple[int, int, int, int]) 
             if pixels[px, py] > 0:
                 return True
     return False
+
+
+def measure_label(label: str) -> tuple[int, int]:
+    probe = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(probe)
+    bbox = draw.textbbox((0, 0), label)
+    return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
+
+
+def check_review_label_lines(entry_id: str, review_label: dict[str, Any], label_rect: tuple[int, int, int, int]) -> list[str]:
+    problems: list[str] = []
+    _, _, label_width, label_height = label_rect
+    raw_lines = review_label.get("lines")
+    if raw_lines is None:
+        raw_lines = [review_label.get("text") or entry_id]
+    if not isinstance(raw_lines, list) or not raw_lines or not all(isinstance(line, str) and line for line in raw_lines):
+        return [f"{entry_id} review_label lines must be non-empty strings"]
+    line_sizes = [measure_label(line) for line in raw_lines]
+    text_width = max((width for width, _ in line_sizes), default=0)
+    text_line_height = max((height for _, height in line_sizes), default=0)
+    required_width = text_width + LABEL_PAD_X * 2
+    required_height = text_line_height * len(raw_lines) + LABEL_LINE_GAP_Y * max(0, len(raw_lines) - 1) + LABEL_PAD_Y * 2
+    if required_width > label_width:
+        problems.append(f"{entry_id} review_label lines exceed review_label rect width")
+    if required_height > label_height:
+        problems.append(f"{entry_id} review_label lines exceed review_label rect height")
+    return problems
 
 
 def expected_review_label_text(entry_id: str, entries_by_id: dict[str, dict[str, Any]], expected_assets: dict[str, dict[str, Any]]) -> str:
@@ -259,6 +290,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
                         if review_label["text"] != expected_label:
                             atlas_problems.append(f"{entry_id} review_label text must be `{expected_label}`")
                         label_rect = rect_tuple(review_label["rect"])
+                        atlas_problems.extend(check_review_label_lines(entry_id, review_label, label_rect))
                         if intersects(padded, label_rect):
                             atlas_problems.append(f"{entry_id} review_label rect overlaps padded_rect")
                         if atlas is not None:
