@@ -138,7 +138,9 @@ contract; strict mode requires every crop output to appear in the runtime
 manifest with matching `id`, `kind`, and `path`. It also requires
 `expected_outputs.asset_audit` and reads JSON reports for `verdict: pass`;
 those reports must reference the same crop manifest as the art job and cover
-every crop id. Use `--final-art` only when claiming final generated or artist
+every crop id. If `expected_outputs.edge_proofs` lists zoomed edge proof
+images, strict mode also requires matching structured JSON reports in
+`expected_outputs.edge_proof_reports`. Use `--final-art` only when claiming final generated or artist
 source art; it rejects procedural debug scaffolds, partial/unknown generation
 provenance, missing generated-source derivation, source-sheet intake audit,
 slice9 design policy, runtime composition proof, or source-family coverage

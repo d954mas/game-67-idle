@@ -103,6 +103,39 @@ function writeAtlasPackAudit(dir, path, overrides = {}) {
   writeFileSync(join(dir, path), `${JSON.stringify(audit, null, 2)}\n`, "utf8");
 }
 
+function writeEdgeProofReport(dir, path, imageOutput, overrides = {}) {
+  mkdirSync(join(dir, dirname(path)), { recursive: true });
+  const report = {
+    schema: "game.ui_asset_edge_proof",
+    version: 1,
+    crop_manifest: "gamedesign/projects/test/data/ui-kit-crop.json",
+    image_output: imageOutput,
+    counts: {
+      total: 2,
+      visible: 1,
+      transparent_rgb: 1,
+      reasons: { green_screen_spill: 2 },
+    },
+    rows: [
+      {
+        asset_id: "panel",
+        kind: "slice9",
+        output: "assets/runtime/ui-kit/panel.png",
+        side: "right",
+        rect: [90, 0, 6, 64],
+        counts: {
+          total: 2,
+          visible: 1,
+          transparent_rgb: 1,
+          reasons: { green_screen_spill: 2 },
+        },
+      },
+    ],
+    ...overrides,
+  };
+  writeFileSync(join(dir, path), `${JSON.stringify(report, null, 2)}\n`, "utf8");
+}
+
 function writeValidDraft(dir) {
   mkdirSync(join(dir, "gamedesign/projects/test/art_requests"), { recursive: true });
   mkdirSync(join(dir, "gamedesign/projects/test/data"), { recursive: true });
@@ -546,10 +579,23 @@ test("draft mode rejects malformed edge proof list", (t) => {
   assert.match(result.stdout, /expected_outputs.edge_proofs must be an array/);
 });
 
+test("draft mode rejects malformed edge proof report list", (t) => {
+  const dir = tempDir(t);
+  const job = writeValidDraft(dir);
+  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
+  jobData.expected_outputs.edge_proof_reports = "gamedesign/projects/test/reviews/edge-proof.json";
+  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
+
+  const result = run(["--job", job], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.edge_proof_reports must be an array/);
+});
+
 test("strict mode validates listed edge proof evidence", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);
   const proof = "gamedesign/projects/test/art/previews/ui-edge-proof.png";
+  const proofReport = "gamedesign/projects/test/reviews/ui-edge-proof.json";
   const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
   jobData.expected_outputs.edge_proofs = [proof];
   writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
@@ -561,8 +607,47 @@ test("strict mode validates listed edge proof evidence", (t) => {
   mkdirSync(join(dir, "gamedesign/projects/test/art/previews"), { recursive: true });
   writeFileSync(join(dir, proof), "fake-png", "utf8");
   result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /strict mode edge proofs require expected_outputs.edge_proof_reports/);
+
+  jobData.expected_outputs.edge_proof_reports = [proofReport];
+  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
+  result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.edge_proof_reports missing/);
+
+  writeEdgeProofReport(dir, proofReport, proof, { schema: "wrong.schema" });
+  result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON schema must be game\.ui_asset_edge_proof/);
+
+  writeEdgeProofReport(dir, proofReport, proof);
+  result = run(["--job", job, "--strict"], dir);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /strict-valid/);
+});
+
+test("strict mode rejects edge proof report for another crop manifest or image", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const proof = "gamedesign/projects/test/art/previews/ui-edge-proof.png";
+  const otherProof = "gamedesign/projects/test/art/previews/other-edge-proof.png";
+  const proofReport = "gamedesign/projects/test/reviews/ui-edge-proof.json";
+  mkdirSync(join(dir, "gamedesign/projects/test/art/previews"), { recursive: true });
+  writeFileSync(join(dir, proof), "fake-png", "utf8");
+  writeFileSync(join(dir, otherProof), "fake-png", "utf8");
+  writeEdgeProofReport(dir, proofReport, otherProof, {
+    crop_manifest: "gamedesign/projects/test/data/other-crop.json",
+  });
+  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
+  jobData.expected_outputs.edge_proofs = [proof];
+  jobData.expected_outputs.edge_proof_reports = [proofReport];
+  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON crop_manifest must match expected_outputs.crop_manifest/);
+  assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON image_output must match expected_outputs.edge_proofs/);
 });
 
 test("strict mode requires generated UI asset audit evidence", (t) => {

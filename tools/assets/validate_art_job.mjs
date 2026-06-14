@@ -343,6 +343,65 @@ function validateCompositionProofEvidence(paths, fieldName, root, problems, stri
   }
 }
 
+function validateEdgeProofReportEvidence(paths, fieldName, root, problems, strict, expected = {}) {
+  const items = asArrayField(paths, fieldName, problems);
+  if (!items) return;
+  let jsonReports = 0;
+  for (const item of items) {
+    if (!hasText(item)) {
+      problems.push(`${fieldName} path must be a non-empty string`);
+      continue;
+    }
+    const fullPath = projectPath(item, root);
+    if (!existsSync(fullPath)) {
+      if (strict) problems.push(`${fieldName} missing: ${item}`);
+      continue;
+    }
+    if (!item.toLowerCase().endsWith(".json")) continue;
+    jsonReports += 1;
+    const report = readJsonOrProblem(fullPath, problems, fieldName);
+    if (!report) continue;
+    if (report.schema !== "game.ui_asset_edge_proof") {
+      problems.push(`${fieldName} JSON schema must be game.ui_asset_edge_proof: ${item}`);
+    }
+    if (expected.cropManifest) {
+      if (!objectHasText(report, "crop_manifest")) {
+        problems.push(`${fieldName} JSON needs crop_manifest: ${item}`);
+      } else if (normalizePathForCompare(report.crop_manifest) !== normalizePathForCompare(expected.cropManifest)) {
+        problems.push(`${fieldName} JSON crop_manifest must match expected_outputs.crop_manifest: ${item}`);
+      }
+    }
+    if (!objectHasText(report, "image_output")) {
+      problems.push(`${fieldName} JSON needs image_output: ${item}`);
+    } else {
+      if (strict && !existsSync(projectPath(report.image_output, root))) {
+        problems.push(`${fieldName} JSON image_output missing: ${report.image_output}`);
+      }
+      if (expected.edgeProofImages?.size > 0 && !expected.edgeProofImages.has(normalizePathForCompare(report.image_output))) {
+        problems.push(`${fieldName} JSON image_output must match expected_outputs.edge_proofs: ${item}`);
+      }
+    }
+    if (!report.counts || typeof report.counts !== "object") {
+      problems.push(`${fieldName} JSON needs counts: ${item}`);
+    } else {
+      for (const key of ["total", "visible", "transparent_rgb"]) {
+        if (typeof report.counts[key] !== "number" || report.counts[key] < 0) {
+          problems.push(`${fieldName} JSON counts.${key} must be a non-negative number: ${item}`);
+        }
+      }
+      if (!report.counts.reasons || typeof report.counts.reasons !== "object" || Array.isArray(report.counts.reasons)) {
+        problems.push(`${fieldName} JSON counts.reasons must be an object: ${item}`);
+      }
+    }
+    if (!Array.isArray(report.rows)) {
+      problems.push(`${fieldName} JSON needs rows: ${item}`);
+    }
+  }
+  if (strict && items.length > 0 && jsonReports === 0) {
+    problems.push(`${fieldName} needs a JSON edge proof report`);
+  }
+}
+
 function validateAtlasPackEvidence(paths, fieldName, root, problems, strict, expected = {}) {
   const items = asArrayField(paths, fieldName, problems);
   if (!items) return;
@@ -694,6 +753,11 @@ function validateJob(job, jobPath, options = {}) {
   if (job.expected_outputs?.edge_proofs !== undefined && !Array.isArray(job.expected_outputs.edge_proofs)) {
     problems.push("expected_outputs.edge_proofs must be an array when provided");
   }
+  const edgeProofReportEvidence = asArrayField(
+    job.expected_outputs?.edge_proof_reports ?? job.expected_outputs?.edge_proof_report,
+    "expected_outputs.edge_proof_reports",
+    problems
+  );
   const assetAuditEvidence = asArrayField(job.expected_outputs?.asset_audit, "expected_outputs.asset_audit", problems);
   const sourceDerivationAuditEvidence = asArrayField(
     job.expected_outputs?.source_derivation_audit ?? job.expected_outputs?.source_derivation_audits,
@@ -901,6 +965,27 @@ function validateJob(job, jobPath, options = {}) {
       } else if (!existsSync(projectPath(proof, root))) {
         problems.push(`strict mode edge proof missing: ${proof}`);
       }
+    }
+    const expectedEdgeProofImages = new Set(
+      (job.expected_outputs?.edge_proofs || [])
+        .filter((item) => hasText(item))
+        .map((item) => normalizePathForCompare(item))
+    );
+    if ((job.expected_outputs?.edge_proofs || []).length > 0 && (!Array.isArray(edgeProofReportEvidence) || edgeProofReportEvidence.length === 0)) {
+      problems.push("strict mode edge proofs require expected_outputs.edge_proof_reports");
+    }
+    if (Array.isArray(edgeProofReportEvidence)) {
+      validateEdgeProofReportEvidence(
+        edgeProofReportEvidence,
+        "expected_outputs.edge_proof_reports",
+        root,
+        problems,
+        true,
+        {
+          cropManifest: job.expected_outputs?.crop_manifest,
+          edgeProofImages: expectedEdgeProofImages,
+        }
+      );
     }
     if (!crop || !Array.isArray(crop.sources) || crop.sources.length === 0) problems.push("strict mode requires crop manifest sources");
     for (const source of crop?.sources || []) {

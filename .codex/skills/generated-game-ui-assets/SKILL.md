@@ -30,7 +30,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    `node tools/assets/new_art_job.mjs --id <job-id> --family <family> --project-dir <project-dir>`.
    Keep accepted source sheet paths, expected crop/runtime manifests, and
    commands in that packet. For disputed edge cleanup, record durable edge
-   proof images in `expected_outputs.edge_proofs` or candidate evidence. The
+   proof images in `expected_outputs.edge_proofs` and matching JSON reports in
+   `expected_outputs.edge_proof_reports`, or keep both as candidate evidence. The
    packet must also record generator provenance:
    provider/model or workflow, workflow file/json, seed or no-seed reason, prompt, negative
    prompt, source family role, accepted source image, and rejected candidate
@@ -300,8 +301,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   defect. Use `--asset-id` and `--side` to create small proof images for the
   exact reported edge. Write `--json-output` and `--report` when comparing
   fixes so the review records per-side counts by reason, not only a screenshot.
-  Store accepted proof paths in the art job rather than leaving them as scratch
-  screenshots.
+  Store accepted proof image paths in `expected_outputs.edge_proofs` and JSON
+  report paths in `expected_outputs.edge_proof_reports` rather than leaving
+  them as scratch screenshots.
 - Preserve intentional purple/magic colors with explicit manifest policy; do
   not globally delete interior colors because they resemble the key background.
 - Preserve intentional saturated green edge colors with explicit
