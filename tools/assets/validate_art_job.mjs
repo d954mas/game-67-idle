@@ -341,6 +341,78 @@ function validateCompositionProofEvidence(paths, fieldName, root, problems, stri
   }
 }
 
+function validateAtlasPackEvidence(paths, fieldName, root, problems, strict, expected = {}) {
+  const items = asArrayField(paths, fieldName, problems);
+  if (!items) return;
+  let jsonReports = 0;
+  for (const item of items) {
+    if (!hasText(item)) {
+      problems.push(`${fieldName} path must be a non-empty string`);
+      continue;
+    }
+    const fullPath = projectPath(item, root);
+    if (!existsSync(fullPath)) {
+      if (strict) problems.push(`${fieldName} missing: ${item}`);
+      continue;
+    }
+    if (!item.toLowerCase().endsWith(".json")) continue;
+    jsonReports += 1;
+    const pack = readJsonOrProblem(fullPath, problems, fieldName);
+    if (!pack) continue;
+    if (pack.schema !== "game.ui_atlas_pack") {
+      problems.push(`${fieldName} JSON schema must be game.ui_atlas_pack: ${item}`);
+    }
+    if (expected.runtimeManifest) {
+      if (!objectHasText(pack, "asset_manifest")) {
+        problems.push(`${fieldName} JSON needs asset_manifest: ${item}`);
+      } else if (normalizePathForCompare(pack.asset_manifest) !== normalizePathForCompare(expected.runtimeManifest)) {
+        problems.push(`${fieldName} JSON asset_manifest must match expected_outputs.runtime_manifest: ${item}`);
+      }
+    }
+    if (!Array.isArray(pack.atlases) || pack.atlases.length === 0) {
+      problems.push(`${fieldName} JSON needs non-empty atlases: ${item}`);
+      continue;
+    }
+    const reportedIds = new Set();
+    for (const atlas of pack.atlases) {
+      if (!hasText(atlas?.pack_group)) problems.push(`${fieldName} atlas needs pack_group: ${item}`);
+      if (!hasText(atlas?.path)) {
+        problems.push(`${fieldName} atlas needs path: ${item}`);
+      } else if (strict && !existsSync(projectPath(atlas.path, root))) {
+        problems.push(`${fieldName} atlas image missing: ${atlas.path}`);
+      }
+      if (!Array.isArray(atlas?.size) || atlas.size.length !== 2 || atlas.size.some((value) => typeof value !== "number" || value <= 0)) {
+        problems.push(`${fieldName} atlas needs positive size [w,h]: ${item}`);
+      }
+      if (!Array.isArray(atlas?.entries) || atlas.entries.length === 0) {
+        problems.push(`${fieldName} atlas needs entries: ${item}`);
+        continue;
+      }
+      for (const entry of atlas.entries) {
+        if (!hasText(entry?.id)) problems.push(`${fieldName} atlas entry needs id: ${item}`);
+        else reportedIds.add(entry.id);
+        for (const rectName of ["atlas_rect", "padded_rect"]) {
+          const rect = entry?.[rectName];
+          if (!Array.isArray(rect) || rect.length !== 4 || rect.some((value, index) => typeof value !== "number" || value < 0 || (index >= 2 && value <= 0))) {
+            problems.push(`${fieldName} atlas entry ${entry?.id || "(unknown)"} needs valid ${rectName}: ${item}`);
+          }
+        }
+        if (typeof entry?.extrude !== "number" || entry.extrude < 1) problems.push(`${fieldName} atlas entry ${entry?.id || "(unknown)"} needs extrude >= 1: ${item}`);
+      }
+    }
+    if (expected.assetIds && expected.assetIds.size > 0) {
+      for (const id of expected.assetIds) {
+        if (!reportedIds.has(id)) {
+          problems.push(`${fieldName} JSON missing packed asset id ${id}: ${item}`);
+        }
+      }
+    }
+  }
+  if (strict && items.length > 0 && jsonReports === 0) {
+    problems.push(`${fieldName} needs a JSON atlas pack manifest`);
+  }
+}
+
 function collectCropIds(crop, allowedKinds = null) {
   const ids = new Set();
   for (const source of crop?.sources || []) {
@@ -586,6 +658,11 @@ function validateJob(job, jobPath, options = {}) {
     "expected_outputs.atlas_metadata_audit",
     problems
   );
+  const atlasPackEvidence = asArrayField(
+    job.expected_outputs?.atlas_pack ?? job.expected_outputs?.atlas_packs,
+    "expected_outputs.atlas_pack",
+    problems
+  );
   for (const kind of ["slice9", "icon", "sprite"]) {
     if (!hasRequiredGroup(job, kind)) problems.push(`required_asset_groups should include a ${kind} group`);
   }
@@ -689,6 +766,19 @@ function validateJob(job, jobPath, options = {}) {
         true,
         {
           assetManifest: job.expected_outputs?.runtime_manifest,
+          assetIds: expectedCropIds,
+        }
+      );
+    }
+    if (Array.isArray(atlasPackEvidence)) {
+      validateAtlasPackEvidence(
+        atlasPackEvidence,
+        "expected_outputs.atlas_pack",
+        root,
+        problems,
+        true,
+        {
+          runtimeManifest: job.expected_outputs?.runtime_manifest,
           assetIds: expectedCropIds,
         }
       );
@@ -798,6 +888,9 @@ function validateJob(job, jobPath, options = {}) {
       }
       if (!Array.isArray(atlasMetadataAuditEvidence) || atlasMetadataAuditEvidence.length === 0) {
         problems.push("final-art mode requires expected_outputs.atlas_metadata_audit");
+      }
+      if (!Array.isArray(atlasPackEvidence) || atlasPackEvidence.length === 0) {
+        problems.push("final-art mode requires expected_outputs.atlas_pack");
       }
       if (!Array.isArray(sourceFamilyCoverageEvidence) || sourceFamilyCoverageEvidence.length === 0) {
         problems.push("final-art mode requires expected_outputs.source_family_coverage_audit");

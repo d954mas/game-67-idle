@@ -51,6 +51,7 @@ game project:
 - `tools/assets/validate_art_job.mjs`
 - `tools/assets/audit_slice9_design_policy.mjs`
 - `tools/assets/audit_atlas_metadata.mjs`
+- `tools/assets/build_ui_atlas_pack.py`
 - `tools/assets/audit_runtime_ui_asset_usage.mjs`
 - `tools/assets/audit_source_family_coverage.mjs`
 - `tools/assets/chroma_key_alpha.py`
@@ -158,6 +159,12 @@ scale variant, and rotation policy. Slice9 entries must set
 `allow_rotation: false` and `trim_preserves_slice9: true`; aliases must point
 to existing asset ids. This is the gate for atlas space savings without
 reintroducing 1-2 pixel halos or broken slice margins.
+`tools/assets/build_ui_atlas_pack.py` builds atlas PNGs from a runtime asset
+manifest. It groups assets by `pack_group`, preserves slice9/content metadata
+in a `game.ui_atlas_pack` manifest, and writes extruded padded rects around
+each sprite so filtering cannot sample transparent or neighboring pixels.
+Record the JSON manifest in `expected_outputs.atlas_pack`; final-art validation
+requires it for generated UI.
 `tools/assets/audit_runtime_ui_asset_usage.mjs` is the runtime placement gate.
 It compares a `game.runtime_ui_asset_usage` file against an asset manifest's
 `usage_policy`, then fails generated UI assets drawn below `min_size`, in the

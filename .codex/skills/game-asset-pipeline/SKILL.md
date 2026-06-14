@@ -99,6 +99,13 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     `node tools/assets/plan_missing_source_family_prompts.mjs --job <art-job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`
     so the next generation pass has concrete prompt packets for the missing
     source families.
+20. For generated UI atlas readiness, build the atlas pack after the runtime
+    manifest passes atlas metadata audit:
+    `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <runtime-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md>`.
+    Record the JSON pack manifest in `expected_outputs.atlas_pack`; final-art
+    validation requires it for generated UI. The pack manifest should preserve
+    atlas rects, padded rects, extrusion, slice9 margins, content safe areas,
+    and source paths.
 
 ## Rules
 
@@ -179,6 +186,9 @@ Before UI assets are integrated:
   unless the manifest records why the asset is already clean.
 - The runtime manifest references only runtime-ready files, not temp
   generation outputs.
+- Atlas pack evidence exists for final generated UI claims. It should group by
+  `pack_group`, write atlas PNGs with extruded padded sprite rects, and preserve
+  slice9/content metadata for runtime loading.
 - Contact sheet or preview evidence exists for crops and stretched slice9
   states.
 - Pixel audit evidence exists for generated runtime PNGs and reports no clipped

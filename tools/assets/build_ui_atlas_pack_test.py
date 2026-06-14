@@ -1,0 +1,145 @@
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+from PIL import Image
+
+
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "tools/assets/build_ui_atlas_pack.py"
+
+
+def write_png(path: Path, size=(8, 6), color=(220, 40, 30, 255)) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGBA", size, color).save(path)
+
+
+def asset(asset_id: str, path: str, **overrides):
+    data = {
+        "id": asset_id,
+        "kind": "slice9",
+        "path": path,
+        "pack_group": "ui_common",
+        "source_crop": asset_id,
+        "original_size": [8, 6],
+        "trim_rect": [0, 0, 8, 6],
+        "slice9": {"left": 2, "top": 2, "right": 2, "bottom": 2},
+        "content": {"x": 2, "y": 2, "w": 4, "h": 2},
+        "usage_policy": {"size_class": "compact_only", "min_size": [32, 24]},
+        "atlas_policy": {
+            "trim_mode": "alpha",
+            "alpha_bleed": True,
+            "premultiply_alpha": True,
+            "extrude": 1,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "scale_variant": "1x",
+            "allow_rotation": False,
+            "trim_preserves_slice9": True,
+        },
+    }
+    data.update(overrides)
+    return data
+
+
+def run_pack(cwd: Path, *args: str):
+    return subprocess.run(
+        [sys.executable, str(SCRIPT), *args],
+        cwd=cwd,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
+class BuildUiAtlasPackTest(unittest.TestCase):
+    def test_packs_assets_with_extruded_padding_and_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png", color=(255, 0, 0, 255))
+            write_png(root / "assets/runtime/button.png", color=(0, 180, 80, 255))
+            manifest = root / "manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema": "game.asset_manifest",
+                        "version": 1,
+                        "assets": [
+                            asset("panel", "assets/runtime/panel.png"),
+                            asset("button", "assets/runtime/button.png"),
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = run_pack(
+                root,
+                "--asset-manifest",
+                "manifest.json",
+                "--output-dir",
+                "packed",
+                "--json-output",
+                "packed/atlas.json",
+                "--report",
+                "packed/atlas.md",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            pack = json.loads((root / "packed/atlas.json").read_text(encoding="utf-8"))
+            self.assertEqual(pack["schema"], "game.ui_atlas_pack")
+            self.assertEqual(len(pack["atlases"]), 1)
+            atlas_info = pack["atlases"][0]
+            self.assertEqual(atlas_info["entry_count"], 2)
+            atlas = Image.open(root / atlas_info["path"]).convert("RGBA")
+            entries = {entry["id"]: entry for entry in atlas_info["entries"]}
+            panel = entries["panel"]
+            self.assertEqual(panel["atlas_rect"][2:], [8, 6])
+            self.assertEqual(panel["padded_rect"][2:], [10, 8])
+            self.assertEqual(panel["slice9"]["left"], 2)
+            x, y, _, _ = panel["padded_rect"]
+            self.assertEqual(atlas.getpixel((x, y)), (255, 0, 0, 255))
+            self.assertTrue((root / "packed/atlas.md").exists())
+
+    def test_packs_separate_pack_groups(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            write_png(root / "assets/runtime/icon.png", size=(5, 5), color=(30, 60, 240, 255))
+            manifest = root / "manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema": "game.asset_manifest",
+                        "version": 1,
+                        "assets": [
+                            asset("panel", "assets/runtime/panel.png", pack_group="ui_panels"),
+                            asset("icon", "assets/runtime/icon.png", kind="icon", pack_group="ui_icons", original_size=[5, 5], trim_rect=[0, 0, 5, 5], atlas_policy={**asset("x", "x")["atlas_policy"], "allow_rotation": True}),
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = run_pack(root, "--asset-manifest", "manifest.json", "--output-dir", "packed")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            pack = json.loads((root / "packed/ui-atlas-pack.json").read_text(encoding="utf-8"))
+            self.assertEqual({atlas["pack_group"] for atlas in pack["atlases"]}, {"ui_panels", "ui_icons"})
+
+    def test_fails_when_asset_exceeds_max_size(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/huge.png", size=(80, 80))
+            manifest = root / "manifest.json"
+            manifest.write_text(
+                json.dumps({"schema": "game.asset_manifest", "version": 1, "assets": [asset("huge", "assets/runtime/huge.png", original_size=[80, 80], trim_rect=[0, 0, 80, 80])]}),
+                encoding="utf-8",
+            )
+            result = run_pack(root, "--asset-manifest", "manifest.json", "--output-dir", "packed", "--max-size", "64")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("exceeds max atlas size", result.stderr + result.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()
