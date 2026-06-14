@@ -111,10 +111,10 @@ function writeEdgeProofReport(dir, path, imageOutput, overrides = {}) {
     crop_manifest: "gamedesign/projects/test/data/ui-kit-crop.json",
     image_output: imageOutput,
     counts: {
-      total: 2,
-      visible: 1,
-      transparent_rgb: 1,
-      reasons: { green_screen_spill: 2 },
+      total: 0,
+      visible: 0,
+      transparent_rgb: 0,
+      reasons: {},
     },
     rows: [
       {
@@ -124,10 +124,10 @@ function writeEdgeProofReport(dir, path, imageOutput, overrides = {}) {
         side: "right",
         rect: [90, 0, 6, 64],
         counts: {
-          total: 2,
-          visible: 1,
-          transparent_rgb: 1,
-          reasons: { green_screen_spill: 2 },
+          total: 0,
+          visible: 0,
+          transparent_rgb: 0,
+          reasons: {},
         },
       },
     ],
@@ -625,6 +625,46 @@ test("strict mode validates listed edge proof evidence", (t) => {
   result = run(["--job", job, "--strict"], dir);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /strict-valid/);
+});
+
+test("strict mode rejects accepted edge proof report with bad marks", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const proof = "gamedesign/projects/test/art/previews/ui-edge-proof.png";
+  const proofReport = "gamedesign/projects/test/reviews/ui-edge-proof.json";
+  mkdirSync(join(dir, "gamedesign/projects/test/art/previews"), { recursive: true });
+  writeFileSync(join(dir, proof), "fake-png", "utf8");
+  writeEdgeProofReport(dir, proofReport, proof, {
+    counts: {
+      total: 2,
+      visible: 1,
+      transparent_rgb: 1,
+      reasons: { green_screen_spill: 2 },
+    },
+    rows: [
+      {
+        asset_id: "panel",
+        kind: "slice9",
+        output: "assets/runtime/ui-kit/panel.png",
+        side: "right",
+        rect: [90, 0, 6, 64],
+        counts: {
+          total: 2,
+          visible: 1,
+          transparent_rgb: 1,
+          reasons: { green_screen_spill: 2 },
+        },
+      },
+    ],
+  });
+  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
+  jobData.expected_outputs.edge_proofs = [proof];
+  jobData.expected_outputs.edge_proof_reports = [proofReport];
+  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs\.edge_proof_reports JSON total bad marks must be 0 for accepted edge proof/);
 });
 
 test("strict mode rejects edge proof report for another crop manifest or image", (t) => {

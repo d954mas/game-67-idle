@@ -31,8 +31,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    Keep accepted source sheet paths, expected crop/runtime manifests, and
    commands in that packet. For disputed edge cleanup, record durable edge
    proof images in `expected_outputs.edge_proofs` and matching JSON reports in
-   `expected_outputs.edge_proof_reports`, or keep both as candidate evidence. The
-   packet must also record generator provenance:
+   `expected_outputs.edge_proof_reports` only when the report has zero bad
+   marks; keep failing reports as candidate/rejected evidence. The packet must
+   also record generator provenance:
    provider/model or workflow, workflow file/json, seed or no-seed reason, prompt, negative
    prompt, source family role, accepted source image, and rejected candidate
    notes.
@@ -306,8 +307,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   exact reported edge. Write `--json-output` and `--report` when comparing
   fixes so the review records per-side counts by reason, not only a screenshot.
   Store accepted proof image paths in `expected_outputs.edge_proofs` and JSON
-  report paths in `expected_outputs.edge_proof_reports` rather than leaving
-  them as scratch screenshots.
+  report paths in `expected_outputs.edge_proof_reports` only when
+  `counts.total` is zero; reports with bad marks document candidates to reject
+  or keep debugging rather than accepted outputs.
 - Preserve intentional purple/magic colors with explicit manifest policy; do
   not globally delete interior colors because they resemble the key background.
 - Preserve intentional saturated green edge colors with explicit

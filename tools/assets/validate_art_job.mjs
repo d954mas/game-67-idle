@@ -389,6 +389,9 @@ function validateEdgeProofReportEvidence(paths, fieldName, root, problems, stric
           problems.push(`${fieldName} JSON counts.${key} must be a non-negative number: ${item}`);
         }
       }
+      if (expected.requireClean === true && report.counts.total !== 0) {
+        problems.push(`${fieldName} JSON total bad marks must be 0 for accepted edge proof: ${item}`);
+      }
       if (!report.counts.reasons || typeof report.counts.reasons !== "object" || Array.isArray(report.counts.reasons)) {
         problems.push(`${fieldName} JSON counts.reasons must be an object: ${item}`);
       }
@@ -984,6 +987,7 @@ function validateJob(job, jobPath, options = {}) {
         {
           cropManifest: job.expected_outputs?.crop_manifest,
           edgeProofImages: expectedEdgeProofImages,
+          requireClean: true,
         }
       );
     }

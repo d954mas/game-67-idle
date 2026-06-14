@@ -77,7 +77,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     Record durable proof paths in the art job (`expected_outputs.edge_proofs`
     for primary outputs or candidate evidence for non-primary candidates), and
     record matching JSON reports in `expected_outputs.edge_proof_reports` so
-    strict validation can verify the measured counts beside the image.
+    strict validation can verify the measured counts beside the image. Only
+    accepted reports with zero bad marks belong in `expected_outputs`; failing
+    reports stay in candidate/rejected evidence while cleanup continues.
 17. For generated-source UI crops, run the derivation audit after slicing:
     `py -3.12 tools/assets/audit_generated_source_derivation.py --crop-manifest <crop-manifest>`.
     This catches builders that read a generated sheet but output procedural
