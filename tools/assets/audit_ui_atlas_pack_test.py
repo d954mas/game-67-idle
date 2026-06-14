@@ -1,9 +1,11 @@
 import json
+import importlib.util
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -11,6 +13,14 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[2]
 PACKER = ROOT / "tools/assets/build_ui_atlas_pack.py"
 AUDIT = ROOT / "tools/assets/audit_ui_atlas_pack.py"
+
+
+def load_audit_module():
+    spec = importlib.util.spec_from_file_location("audit_ui_atlas_pack_module", AUDIT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def write_png(path: Path, size=(8, 6), color=(220, 40, 30, 255)) -> None:
@@ -183,6 +193,27 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertIn("profile: slowest atlas audit", result.stdout)
             markdown = (root / "packed/audit.md").read_text(encoding="utf-8")
             self.assertIn("## Timing", markdown)
+
+    def test_atomic_report_write_keeps_existing_text_on_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "audit.md"
+            target.write_text("old complete report\n", encoding="utf-8")
+            audit_module = load_audit_module()
+            original_write_text = Path.write_text
+
+            def failing_write_text(path, text, *args, **kwargs):
+                if Path(path).name.startswith(".audit.md."):
+                    Path(path).write_bytes(b"partial report")
+                    raise RuntimeError("simulated interrupted report write")
+                return original_write_text(path, text, *args, **kwargs)
+
+            with patch.object(Path, "write_text", failing_write_text):
+                with self.assertRaises(RuntimeError):
+                    audit_module.write_text(target, "new report\n")
+
+            self.assertEqual(target.read_text(encoding="utf-8"), "old complete report\n")
+            self.assertEqual(list(root.glob(".audit.md.*.tmp")), [])
 
     def test_rejects_labeled_review_pack_without_preview_image(self):
         with tempfile.TemporaryDirectory() as tmp:
