@@ -140,9 +140,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     validation requires it. This catches missing packed assets, out-of-bounds
     rects, padded-rect overlaps, alias mismatches, metadata mismatches, and
     broken extrusion pixels. For labeled review atlases, it also catches labels
-    missing from metadata, missing labeled preview images, labels overlapping
-    any art, labels accidentally baked into the clean atlas, or label rects
-    without visible pixels in the labeled preview.
+    missing from metadata, wrong label text, missing labeled preview images,
+    labels overlapping any art or other labels, labels accidentally baked into
+    the clean atlas, or label rects without visible pixels in the labeled preview.
 
 ## Rules
 
@@ -229,15 +229,16 @@ Before UI assets are integrated:
 - Labeled review atlas evidence exists for final generated UI claims. It should
   group by `pack_group`, write clean atlas PNGs with extruded padded sprite
   rects, write separate `labeled_preview_path` images for human review, place
-  names in `review_label.rect` free space outside asset `padded_rect`s, and
-  preserve slice9/content metadata without pretending to be the game's final
-  runtime packer. When atlas economy or speed is under review, build it with
-  `--profile` so occupancy/timing evidence is stored with the pack manifest.
+  exact names in `review_label.rect` free space outside asset `padded_rect`s,
+  list linked aliases on the physical source label, and preserve slice9/content
+  metadata without pretending to be the game's final runtime packer. When atlas
+  economy or speed is under review, build it with `--profile` so
+  occupancy/timing evidence is stored with the pack manifest.
 - Atlas pack audit evidence exists and passes before final generated UI claims.
   It should prove coverage, bounds, non-overlap, extrusion pixels, and
-  non-overlapping review labels. For labeled review atlases, the audit should
-  prove that labels are visible only in the labeled preview and not in the clean
-  atlas texture.
+  exact non-overlapping review labels. For labeled review atlases, the audit
+  should prove that labels are visible only in the labeled preview and not in
+  the clean atlas texture.
 - Contact sheet or preview evidence exists for crops and stretched slice9
   states.
 - Pixel audit evidence exists for generated runtime PNGs and reports no clipped

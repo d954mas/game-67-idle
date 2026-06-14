@@ -212,6 +212,48 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("review_label rect must be empty in clean atlas", result.stdout + result.stderr)
 
+    def test_rejects_wrong_review_label_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/button_base.png")
+            write_png(root / "assets/runtime/button_primary.png")
+            manifest, pack = build_pack(
+                root,
+                [
+                    asset("button_base", "assets/runtime/button_base.png"),
+                    asset("button_primary", "assets/runtime/button_primary.png", alias_of="button_base"),
+                ],
+                label_review=True,
+            )
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            entry = next(entry for entry in pack_data["atlases"][0]["entries"] if entry["id"] == "button_base")
+            entry["review_label"]["text"] = "wrong_button"
+            pack.write_text(json.dumps(pack_data), encoding="utf-8")
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("button_base review_label text must be `button_base (+button_primary)`", result.stdout + result.stderr)
+
+    def test_rejects_overlapping_review_label_rects(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            write_png(root / "assets/runtime/button.png", color=(0, 180, 80, 255))
+            manifest, pack = build_pack(
+                root,
+                [
+                    asset("panel", "assets/runtime/panel.png"),
+                    asset("button", "assets/runtime/button.png"),
+                ],
+                label_review=True,
+            )
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            entries = {entry["id"]: entry for entry in pack_data["atlases"][0]["entries"]}
+            entries["button"]["review_label"]["rect"] = list(entries["panel"]["review_label"]["rect"])
+            pack.write_text(json.dumps(pack_data), encoding="utf-8")
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("review_label rect overlaps review_label rect", result.stdout + result.stderr)
+
     def test_rejects_labeled_review_rect_over_asset(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

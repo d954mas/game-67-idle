@@ -194,8 +194,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
       Add `--profile` when atlas audit feels slow; it writes audit timing and
       prints the slowest atlas group. For labeled review atlases this audit must
-      also prove the labeled preview exists, label rects contain visible pixels
-      there, and the clean atlas has no label pixels.
+      also prove the labeled preview exists, label text matches the asset id
+      and linked aliases, label rects do not overlap art or other labels, label
+      rects contain visible pixels there, and the clean atlas has no label pixels.
       Record passing JSON reports in `expected_outputs.atlas_pack_audit`;
       final-art validation requires this evidence. This verifies runtime asset
       coverage, atlas bounds, padded-rect overlap, alias reuse, metadata
@@ -303,16 +304,17 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   before final-art claims when the lead needs to inspect outputs. This atlas is
   a proof/contact artifact: it records `atlas_rect`, `padded_rect`, extrusion,
   slice9 margins, content safe areas, source paths, physical entry count, and
-  alias count. The labeled preview must put asset names in `review_label.rect`
-  free space outside the asset `padded_rect`; do not place labels over the art.
+  alias count. The labeled preview must put exact asset names in
+  `review_label.rect` free space outside the asset `padded_rect`; do not place
+  labels over the art or over other labels.
   It must not be presented as the game's final runtime atlas. Use `--profile`
   while optimizing atlas economy so reports preserve occupancy and padded-asset
   ratios instead of relying on visual guessing.
 - Audit review atlases with `audit_ui_atlas_pack.py`; a proof image is not
   trusted until coverage, bounds, overlap, alias reuse, and extrusion pixel
-  checks pass, including non-overlapping review labels. Labeled review atlases
-  must keep labels out of the clean atlas image; labels belong only in
-  `labeled_preview_path`.
+  checks pass, including exact review-label text and non-overlapping review
+  labels. Labeled review atlases must keep labels out of the clean atlas image;
+  labels belong only in `labeled_preview_path`.
 - Use trim only with padding, alpha bleed, edge extrusion, and shape padding.
   Tight alpha crops without bleed/extrude are a known cause of 1-2 pixel halos
   and neighboring-pixel leaks.
@@ -322,7 +324,7 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
 - Alias duplicate regions where the same pixels serve different semantic ids.
   Store the semantic ids in metadata instead of duplicating the bitmap. In a
   review atlas, alias entries should point to the same rect as the physical
-  source and the physical source label should list linked aliases.
+  source and the physical source label must list linked aliases.
 - Record scale variants deliberately (`1x`, `2x`, mobile/desktop). Keep layout
   coordinates and atlas variants stable enough to avoid fractional artifacts.
 

@@ -158,6 +158,35 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             self.assertEqual(entries["button_primary"]["atlas_rect"], entries["button_base"]["atlas_rect"])
             self.assertEqual(entries["button_primary"]["padded_rect"], entries["button_base"]["padded_rect"])
 
+    def test_label_review_lists_alias_ids_on_physical_asset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/button_base.png")
+            write_png(root / "assets/runtime/button_primary.png")
+            write_png(root / "assets/runtime/button_secondary.png")
+            manifest = root / "manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema": "game.asset_manifest",
+                        "version": 1,
+                        "assets": [
+                            asset("button_base", "assets/runtime/button_base.png"),
+                            asset("button_secondary", "assets/runtime/button_secondary.png", alias_of="button_base"),
+                            asset("button_primary", "assets/runtime/button_primary.png", alias_of="button_base"),
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = run_pack(root, "--asset-manifest", "manifest.json", "--output-dir", "packed", "--json-output", "packed/atlas.json", "--label-review")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            pack = json.loads((root / "packed/atlas.json").read_text(encoding="utf-8"))
+            entries = {entry["id"]: entry for entry in pack["atlases"][0]["entries"]}
+            self.assertEqual(entries["button_base"]["review_label"]["text"], "button_base (+button_primary,button_secondary)")
+            self.assertNotIn("review_label", entries["button_primary"])
+            self.assertNotIn("review_label", entries["button_secondary"])
+
     def test_label_review_marks_manifest_as_review_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

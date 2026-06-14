@@ -75,7 +75,7 @@ def item_label(item: dict[str, Any], aliases_by_target: dict[str, list[str]] | N
     label = str(item["asset"]["id"])
     aliases = aliases_by_target.get(label, []) if aliases_by_target else []
     if aliases:
-        label = f"{label} (+{','.join(aliases)})"
+        label = f"{label} (+{','.join(sorted(aliases))})"
     return label
 
 

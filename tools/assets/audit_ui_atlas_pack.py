@@ -78,6 +78,19 @@ def rect_has_visible_pixel(image: Image.Image, rect: tuple[int, int, int, int]) 
     return False
 
 
+def expected_review_label_text(entry_id: str, entries_by_id: dict[str, dict[str, Any]], expected_assets: dict[str, dict[str, Any]]) -> str:
+    alias_ids: set[str] = set()
+    for other_id, other in entries_by_id.items():
+        if other_id != entry_id and other.get("alias_of") == entry_id:
+            alias_ids.add(other_id)
+    for asset_id, asset in expected_assets.items():
+        if asset_id != entry_id and asset.get("alias_of") == entry_id:
+            alias_ids.add(asset_id)
+    if not alias_ids:
+        return entry_id
+    return f"{entry_id} (+{','.join(sorted(alias_ids))})"
+
+
 def check_extrusion(atlas: Image.Image, entry: dict[str, Any]) -> list[str]:
     problems: list[str] = []
     entry_id = str(entry.get("id") or "(unknown)")
@@ -242,6 +255,9 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
                     elif not rect_valid(review_label.get("rect")):
                         atlas_problems.append(f"{entry_id} needs valid review_label rect")
                     else:
+                        expected_label = expected_review_label_text(entry_id, entries_by_id, expected_assets)
+                        if review_label["text"] != expected_label:
+                            atlas_problems.append(f"{entry_id} review_label text must be `{expected_label}`")
                         label_rect = rect_tuple(review_label["rect"])
                         if intersects(padded, label_rect):
                             atlas_problems.append(f"{entry_id} review_label rect overlaps padded_rect")
@@ -264,6 +280,10 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
             for padded_id, padded_rect in padded_rects:
                 if intersects(label_rect, padded_rect):
                     atlas_problems.append(f"{label_id} review_label rect overlaps padded_rect for {padded_id}")
+        for index, (label_id, label_rect) in enumerate(review_label_rects):
+            for other_id, other_label_rect in review_label_rects[index + 1 :]:
+                if intersects(label_rect, other_label_rect):
+                    atlas_problems.append(f"{label_id} review_label rect overlaps review_label rect for {other_id}")
 
         atlas_report = {
             "pack_group": atlas_info.get("pack_group") if isinstance(atlas_info, dict) else None,
