@@ -26,6 +26,71 @@ def count_mark_pixels(image: Image.Image, color_name: str) -> int:
 
 
 class RenderUiAssetEdgeProofTests(unittest.TestCase):
+    def run_source_key_preserve_purple_case(self, *, alpha: int, x: int) -> tuple[dict, int, int]:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            image.putpixel((x, 16), (0, 255, 0, alpha))
+            image.save(out_dir / "icon.png")
+            manifest = {
+                "schema": "game.art_crop_manifest",
+                "version": 1,
+                "green_screen": {"mode": "chroma_key", "key": "#00ff00"},
+                "sources": [
+                    {
+                        "id": "source",
+                        "path": "source.png",
+                        "crops": [
+                            {
+                                "id": "icon_test",
+                                "kind": "icon",
+                                "rect": [0, 0, 32, 32],
+                                "output": "assets/icon.png",
+                                "preserve_purple_edges": True,
+                            }
+                        ],
+                    }
+                ],
+            }
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            output = root / "proof.png"
+            json_output = root / "proof.json"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--crop-manifest",
+                    str(manifest_path),
+                    "--output",
+                    str(output),
+                    "--asset-id",
+                    "icon_test",
+                    "--side",
+                    "right",
+                    "--zoom",
+                    "3",
+                    "--json-output",
+                    str(json_output),
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads(json_output.read_text(encoding="utf-8"))
+            with Image.open(output) as proof:
+                red_marks = count_mark_pixels(proof, "red")
+                yellow_marks = count_mark_pixels(proof, "yellow")
+        return report, red_marks, yellow_marks
+
     def test_renders_zoomed_edge_proof_and_marks_bad_pixels(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -283,6 +348,18 @@ class RenderUiAssetEdgeProofTests(unittest.TestCase):
             with Image.open(output) as proof:
                 self.assertEqual(count_mark_pixels(proof, "red"), 0)
                 self.assertEqual(count_mark_pixels(proof, "yellow"), 0)
+
+    def test_preserve_purple_edges_still_marks_source_key_spill(self) -> None:
+        report, red_marks, _yellow_marks = self.run_source_key_preserve_purple_case(alpha=255, x=23)
+        self.assertGreater(report["counts"]["visible"], 0)
+        self.assertGreater(report["counts"]["reasons"]["source_key_spill"], 0)
+        self.assertGreater(red_marks, 0)
+
+    def test_preserve_purple_edges_still_marks_source_key_transparent_rgb(self) -> None:
+        report, _red_marks, yellow_marks = self.run_source_key_preserve_purple_case(alpha=0, x=24)
+        self.assertGreater(report["counts"]["transparent_rgb"], 0)
+        self.assertGreater(report["counts"]["reasons"]["source_key_spill"], 0)
+        self.assertGreater(yellow_marks, 0)
 
     def test_can_filter_to_one_asset_side(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
