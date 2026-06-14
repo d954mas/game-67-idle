@@ -6,10 +6,10 @@ verdict: **pass**
 
 ## Timing
 
-- render_items: 724.025 ms
-- render_sheet: 77.731 ms
-- save_output: 77.986 ms
-- total: 882.335 ms
+- render_items: 307.771 ms
+- render_sheet: 70.229 ms
+- save_output: 74.772 ms
+- total: 455.215 ms
 
 ## Cache
 
@@ -17,6 +17,8 @@ verdict: **pass**
 - image_misses: 7
 - slice_tile_hits: 14
 - slice_tile_misses: 7
+- resized_tile_hits: 24
+- resized_tile_misses: 81
 - panel_hits: 0
 - panel_misses: 21
 

@@ -23,7 +23,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 19.413
+        "total": 13.086
       }
     },
     {
@@ -43,7 +43,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 13.374
+        "total": 4.669
       }
     },
     {
@@ -63,7 +63,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 14.388
+        "total": 5.097
       }
     },
     {
@@ -83,7 +83,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 18.762
+        "total": 10.353
       }
     },
     {
@@ -103,7 +103,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 19.2
+        "total": 7.555
       }
     },
     {
@@ -123,7 +123,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 20.96
+        "total": 8.396
       }
     },
     {
@@ -143,7 +143,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 27.11
+        "total": 13.524
       }
     },
     {
@@ -163,7 +163,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 29.445
+        "total": 11.043
       }
     },
     {
@@ -183,7 +183,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 31.488
+        "total": 12.991
       }
     },
     {
@@ -203,7 +203,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 13.462
+        "total": 8.133
       }
     },
     {
@@ -223,7 +223,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 13.827
+        "total": 4.992
       }
     },
     {
@@ -243,7 +243,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 14.661
+        "total": 5.513
       }
     },
     {
@@ -263,7 +263,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 19.51
+        "total": 10.612
       }
     },
     {
@@ -283,7 +283,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 19.678
+        "total": 7.71
       }
     },
     {
@@ -303,7 +303,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 21.124
+        "total": 8.593
       }
     },
     {
@@ -323,7 +323,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 27.219
+        "total": 13.832
       }
     },
     {
@@ -343,7 +343,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 29.309
+        "total": 11.368
       }
     },
     {
@@ -363,7 +363,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 31.473
+        "total": 13.078
       }
     },
     {
@@ -383,7 +383,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 79.796
+        "total": 31.768
       }
     },
     {
@@ -403,7 +403,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 109.911
+        "total": 43.372
       }
     },
     {
@@ -423,21 +423,23 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 149.798
+        "total": 61.979
       }
     }
   ],
   "timing_ms": {
-    "render_items": 724.025,
-    "render_sheet": 77.731,
-    "save_output": 77.986,
-    "total": 882.335
+    "render_items": 307.771,
+    "render_sheet": 70.229,
+    "save_output": 74.772,
+    "total": 455.215
   },
   "cache_stats": {
     "image_hits": 14,
     "image_misses": 7,
     "slice_tile_hits": 14,
     "slice_tile_misses": 7,
+    "resized_tile_hits": 24,
+    "resized_tile_misses": 81,
     "panel_hits": 0,
     "panel_misses": 21
   }

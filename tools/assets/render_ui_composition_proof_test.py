@@ -124,6 +124,7 @@ class RenderUiCompositionProofTests(unittest.TestCase):
                 "items": [
                     {"base_id": "button", "size": [96, 40], "label": "One"},
                     {"base_id": "button", "size": [96, 40], "label": "Two"},
+                    {"base_id": "button", "size": [120, 40], "label": "Three"},
                 ],
             }
             (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
@@ -154,7 +155,9 @@ class RenderUiCompositionProofTests(unittest.TestCase):
             self.assertEqual(report["verdict"], "pass")
             self.assertGreaterEqual(report["cache_stats"]["image_hits"], 1)
             self.assertGreaterEqual(report["cache_stats"]["panel_hits"], 1)
-            self.assertEqual(report["cache_stats"]["panel_misses"], 1)
+            self.assertEqual(report["cache_stats"]["panel_misses"], 2)
+            self.assertGreater(report["cache_stats"]["resized_tile_hits"], 0)
+            self.assertGreater(report["cache_stats"]["resized_tile_misses"], 0)
 
     def test_fails_when_overlay_overlaps_content_without_allow_policy(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

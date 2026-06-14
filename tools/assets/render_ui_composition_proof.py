@@ -36,12 +36,15 @@ class CompositionRenderCache:
     def __init__(self) -> None:
         self.images: dict[str, Image.Image] = {}
         self.slice_tiles: dict[tuple[str, tuple[int, int, int, int], tuple[int, int]], list[list[Image.Image]]] = {}
+        self.resized_tiles: dict[tuple[str, tuple[int, int, int, int], tuple[int, int], int, int, tuple[int, int]], Image.Image] = {}
         self.panels: dict[tuple[str, tuple[int, int], tuple[int, int, int, int], tuple[int, int]], Image.Image] = {}
         self.stats = {
             "image_hits": 0,
             "image_misses": 0,
             "slice_tile_hits": 0,
             "slice_tile_misses": 0,
+            "resized_tile_hits": 0,
+            "resized_tile_misses": 0,
             "panel_hits": 0,
             "panel_misses": 0,
         }
@@ -154,6 +157,7 @@ def nine_slice_resize(
     dest_x = [0, left, out_width - right, out_width]
     dest_y = [0, top, out_height - bottom, out_height]
     source_tiles = nine_slice_source_tiles(image, margins, asset_id=asset_id, cache=cache)
+    margin_key = (left, top, right, bottom)
     for row in range(3):
         for col in range(3):
             dest_box = (dest_x[col], dest_y[row], dest_x[col + 1], dest_y[row + 1])
@@ -161,7 +165,16 @@ def nine_slice_resize(
             dest_height = max(1, dest_box[3] - dest_box[1])
             tile = source_tiles[row][col]
             if tile.size != (dest_width, dest_height):
-                tile = resize_rgba_premultiplied(tile, (dest_width, dest_height))
+                resized_key = (asset_id or "", margin_key, image.size, row, col, (dest_width, dest_height))
+                if cache is not None and asset_id and resized_key in cache.resized_tiles:
+                    cache.stats["resized_tile_hits"] += 1
+                    tile = cache.resized_tiles[resized_key]
+                else:
+                    if cache is not None and asset_id:
+                        cache.stats["resized_tile_misses"] += 1
+                    tile = resize_rgba_premultiplied(tile, (dest_width, dest_height))
+                    if cache is not None and asset_id:
+                        cache.resized_tiles[resized_key] = tile
             result.alpha_composite(tile, (dest_box[0], dest_box[1]))
     if cache is not None and asset_id:
         cache.panels[panel_key] = result.copy()

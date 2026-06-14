@@ -415,6 +415,22 @@ def key_to_alpha(
 
 def resize_rgba_premultiplied(image: Image.Image, size: tuple[int, int]) -> Image.Image:
     rgba = image.convert("RGBA")
+    if np is not None:
+        array = np.array(rgba, dtype=np.uint16)
+        alpha = array[..., 3:4]
+        array[..., :3] = (array[..., :3] * alpha) // 255
+        premultiplied = Image.fromarray(array.astype(np.uint8))
+        resized = premultiplied.resize(size, Image.Resampling.LANCZOS)
+        resized_array = np.array(resized, dtype=np.uint16)
+        resized_alpha = resized_array[..., 3]
+        visible = resized_alpha > 0
+        for channel in range(3):
+            values = resized_array[..., channel]
+            values[visible] = np.minimum(255, (values[visible] * 255) // resized_alpha[visible])
+        resized = Image.fromarray(resized_array.astype(np.uint8))
+        bleed_transparent_rgb(resized, passes=4)
+        repair_transparent_edge_rgb(resized)
+        return resized
     pixels = rgba.load()
     width, height = rgba.size
     premultiplied = Image.new("RGBA", rgba.size, (0, 0, 0, 0))
