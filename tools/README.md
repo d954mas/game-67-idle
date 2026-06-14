@@ -129,7 +129,7 @@ before extraction.
 `tools/assets/validate_art_job.mjs` validates the generated-art job contract:
 source families, generation records, reusable kinds, crop/runtime manifests,
 slice9 metadata, icon policies, listed edge-proof evidence, slice9 design
-policy evidence, and generated UI
+policy evidence, runtime composition proof evidence, and generated UI
 audit evidence. Use `--strict` after slicing to prove the runtime asset
 contract; strict mode requires every crop output to appear in the runtime
 manifest with matching `id`, `kind`, and `path`. It also requires
@@ -137,9 +137,10 @@ manifest with matching `id`, `kind`, and `path`. It also requires
 those reports must reference the same crop manifest as the art job and cover
 every crop id. Use `--final-art` only when claiming final generated or artist
 source art; it rejects procedural debug scaffolds, partial/unknown generation
-provenance, missing generated-source derivation or source-sheet intake audit
-evidence, missing slice9 design policy evidence, audit evidence that points at a different crop manifest or source
-sheet, and source-derivation reports that do not cover every source-derived
+provenance, missing generated-source derivation, source-sheet intake audit,
+slice9 design policy, runtime composition proof, or source-family coverage
+evidence, audit evidence that points at a different crop manifest/source/runtime
+manifest, and source-derivation reports that do not cover every source-derived
 `slice9`, `border`, `tile`, or `sprite` crop id.
 `tools/assets/audit_slice9_design_policy.mjs` is the manifest-level gate for
 slice9 art design. It requires each slice9 crop and runtime asset to declare

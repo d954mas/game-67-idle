@@ -145,7 +145,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       Record the proof image and report with preview/review evidence. This gate
       must fail if slice9 margins leave no usable content area at target sizes,
       runtime labels do not fit, overlays fall outside their anchored base, or
-      the UI only works as a static source-size crop.
+      the UI only works as a static source-size crop. Final-art validation
+      requires this evidence in `expected_outputs.composition_proof`, and the
+      JSON report must point at the same runtime manifest and cover every
+      slice9 base id.
     - source family coverage audit:
       `node tools/assets/audit_source_family_coverage.mjs --job <job> --json-output <audit.json> --report <audit.md>`
       Record passing reports in `expected_outputs.source_family_coverage_audit`;

@@ -273,6 +273,67 @@ function validateAuditEvidence(paths, fieldName, expectedSchema, root, problems,
   }
 }
 
+function validateCompositionProofEvidence(paths, fieldName, root, problems, strict, expected = {}) {
+  const items = asArrayField(paths, fieldName, problems);
+  if (!items) return;
+  let jsonReports = 0;
+  for (const item of items) {
+    if (!hasText(item)) {
+      problems.push(`${fieldName} path must be a non-empty string`);
+      continue;
+    }
+    const fullPath = projectPath(item, root);
+    if (!existsSync(fullPath)) {
+      if (strict) problems.push(`${fieldName} missing: ${item}`);
+      continue;
+    }
+    if (!item.toLowerCase().endsWith(".json")) continue;
+    jsonReports += 1;
+    const report = readJsonOrProblem(fullPath, problems, fieldName);
+    if (!report) continue;
+    if (report.schema !== "game.ui_composition_proof") {
+      problems.push(`${fieldName} JSON schema must be game.ui_composition_proof: ${item}`);
+    }
+    const status = report.verdict ?? report.status;
+    if (status !== "pass") {
+      problems.push(`${fieldName} JSON verdict/status must be pass: ${item}`);
+    }
+    if (expected.runtimeManifest) {
+      if (!objectHasText(report, "asset_manifest")) {
+        problems.push(`${fieldName} JSON needs asset_manifest: ${item}`);
+      } else if (normalizePathForCompare(report.asset_manifest) !== normalizePathForCompare(expected.runtimeManifest)) {
+        problems.push(`${fieldName} JSON asset_manifest must match expected_outputs.runtime_manifest: ${item}`);
+      }
+    }
+    if (objectHasText(report, "output") && strict && !existsSync(projectPath(report.output, root))) {
+      problems.push(`${fieldName} JSON output image missing: ${report.output}`);
+    }
+    if (!Array.isArray(report.items)) {
+      problems.push(`${fieldName} JSON needs items coverage list: ${item}`);
+      continue;
+    }
+    for (const entry of report.items) {
+      if ((entry?.verdict ?? entry?.status) !== "pass") {
+        problems.push(`${fieldName} JSON item ${entry?.base_id || "(unknown)"} must pass: ${item}`);
+      }
+      if (Array.isArray(entry?.problems) && entry.problems.length > 0) {
+        problems.push(`${fieldName} JSON item ${entry?.base_id || "(unknown)"} must not list problems: ${item}`);
+      }
+    }
+    if (expected.slice9Ids && expected.slice9Ids.size > 0) {
+      const reportedIds = new Set(report.items.map((entry) => String(entry?.base_id || "")).filter((id) => id.length > 0));
+      for (const id of expected.slice9Ids) {
+        if (!reportedIds.has(id)) {
+          problems.push(`${fieldName} JSON missing slice9 base id ${id}: ${item}`);
+        }
+      }
+    }
+  }
+  if (strict && items.length > 0 && jsonReports === 0) {
+    problems.push(`${fieldName} needs a JSON composition proof report`);
+  }
+}
+
 function collectCropIds(crop, allowedKinds = null) {
   const ids = new Set();
   for (const source of crop?.sources || []) {
@@ -508,6 +569,11 @@ function validateJob(job, jobPath, options = {}) {
     "expected_outputs.source_family_coverage_audit",
     problems
   );
+  const compositionProofEvidence = asArrayField(
+    job.expected_outputs?.composition_proof ?? job.expected_outputs?.composition_proofs,
+    "expected_outputs.composition_proof",
+    problems
+  );
   for (const kind of ["slice9", "icon", "sprite"]) {
     if (!hasRequiredGroup(job, kind)) problems.push(`required_asset_groups should include a ${kind} group`);
   }
@@ -601,6 +667,19 @@ function validateJob(job, jobPath, options = {}) {
         }
       );
     }
+    if (Array.isArray(compositionProofEvidence)) {
+      validateCompositionProofEvidence(
+        compositionProofEvidence,
+        "expected_outputs.composition_proof",
+        root,
+        problems,
+        true,
+        {
+          runtimeManifest: job.expected_outputs?.runtime_manifest,
+          slice9Ids: slice9CropIds,
+        }
+      );
+    }
     for (const [index, record] of (Array.isArray(generationRecords) ? generationRecords : []).entries()) {
       const loadedRecord = loadGenerationRecord(record, `generation record ${typeof record === "string" ? record : record?.id || index}`, root, problems, true);
       validateGenerationRecord(loadedRecord, `generation record ${loadedRecord?.id || index}`, root, problems, true, job);
@@ -687,6 +766,9 @@ function validateJob(job, jobPath, options = {}) {
       }
       if (!Array.isArray(slice9DesignAuditEvidence) || slice9DesignAuditEvidence.length === 0) {
         problems.push("final-art mode requires expected_outputs.slice9_design_audit");
+      }
+      if (!Array.isArray(compositionProofEvidence) || compositionProofEvidence.length === 0) {
+        problems.push("final-art mode requires expected_outputs.composition_proof");
       }
       if (!Array.isArray(sourceFamilyCoverageEvidence) || sourceFamilyCoverageEvidence.length === 0) {
         problems.push("final-art mode requires expected_outputs.source_family_coverage_audit");

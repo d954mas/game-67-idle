@@ -335,6 +335,11 @@ def write_manifests() -> None:
             "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.md",
             "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.json",
         ],
+        "composition_proof": [
+            "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png",
+            "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.md",
+            "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.json",
+        ],
     }
     RUNTIME_MANIFEST.write_text(json.dumps(runtime_manifest, indent=2) + "\n", encoding="utf-8")
 

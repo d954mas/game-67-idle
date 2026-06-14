@@ -211,32 +211,49 @@
       "gamedesign/projects/rune-marches/art/generation_records/rune-marches-blank-ui-bases-source-v2.json"
     ],
     "candidate_crop_manifests": [
-      "gamedesign/projects/rune-marches/data/rune-marches-ui-bases-v2-crop_manifest.json"
+      "gamedesign/projects/rune-marches/data/rune-marches-ui-bases-v2-crop_manifest.json",
+      "gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-crop_manifest.json"
     ],
     "candidate_runtime_manifests": [
-      "gamedesign/projects/rune-marches/data/rune-marches-ui-bases-v2-asset_manifest.json"
+      "gamedesign/projects/rune-marches/data/rune-marches-ui-bases-v2-asset_manifest.json",
+      "gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json"
     ],
     "candidate_runtime_dirs": [
-      "assets/runtime/rune-marches-ui-bases-v2"
+      "assets/runtime/rune-marches-ui-bases-v2",
+      "assets/runtime/rune-marches-ui-compact-bases-v5"
     ],
     "candidate_preview_evidence": [
       "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-bases-v2-contact-sheet.png",
       "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-bases-v2-slice9-preview.png",
       "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-bases-v2-edge-proof.png",
       "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-bases-v2-modal-top-right-edge-proof.png",
-      "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-bases-v2-journal-top-right-edge-proof-small.png"
+      "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-bases-v2-journal-top-right-edge-proof-small.png",
+      "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-contact-sheet.png",
+      "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-slice9-preview.png",
+      "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png"
     ],
     "candidate_asset_audits": [
       "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-asset-audit.md",
-      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-asset-audit.json"
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-asset-audit.json",
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-asset-audit.md",
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-asset-audit.json"
     ],
     "candidate_source_derivation_audits": [
       "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-source-derivation-audit.md",
-      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-source-derivation-audit.json"
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-source-derivation-audit.json",
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.md",
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-source-derivation-audit.json"
     ],
     "candidate_slice9_design_audits": [
       "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-slice9-design-audit.md",
-      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-slice9-design-audit.json"
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-bases-v2-slice9-design-audit.json",
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-slice9-design-audit.md",
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-slice9-design-audit.json"
+    ],
+    "candidate_composition_proofs": [
+      "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-compact-bases-v5-composition-proof.png",
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.md",
+      "gamedesign/projects/rune-marches/reviews/rune-marches-ui-compact-bases-v5-composition-proof.json"
     ],
     "candidate_runtime_usage": [
       "gamedesign/projects/rune-marches/data/rune-marches-native-ui-bases-v2-usage.json"
@@ -248,7 +265,7 @@
     "candidate_native_evidence": [
       "gamedesign/projects/rune-marches/art/screenshots/rune-marches-native-ui-bases-v2-first-screen-960x540.png"
     ],
-    "notes": "V1 is a rejected real generated bitmap candidate. V2 chroma-clean source passes source-sheet intake and has a separate generated-source runtime candidate pack with crop/runtime manifests, contact sheet, slice9 preview, pixel audit, slice9 policy audit, runtime usage audit, native screenshot proof, and green source-derivation audit proving runtime PNGs come from the generated crop rather than procedural redraw. Remaining gap: compact/mobile secondary controls still need a separate compact generated source family or split corner-cap overlays; do not stretch the large primary button family into dense compact rows."
+    "notes": "V1 is a rejected real generated bitmap candidate. V2 chroma-clean source passes source-sheet intake and has a separate generated-source runtime candidate pack with crop/runtime manifests, contact sheet, slice9 preview, pixel audit, slice9 policy audit, runtime usage audit, native screenshot proof, and green source-derivation audit proving runtime PNGs come from the generated crop rather than procedural redraw. Compact bases v5 add a separate compact/mobile generated-source candidate whose target preview sizes were raised to 72px height after composition proof showed smaller 48-64px button sizes collapsed the runtime content safe area; v5 passes pixel, slice9 policy, source-derivation, and composition-proof gates. Remaining gap: final UI still needs generated/artist decor overlay and icon source families before `--final-art` can pass."
   },
   "runtime_composition": {
     "first_screen": "top compact status, clean map, one journal/goal panel, one dominant primary action, hidden combat buttons until encounter",

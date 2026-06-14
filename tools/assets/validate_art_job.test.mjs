@@ -42,6 +42,11 @@ function writeAuditReport(dir, path, schema, verdict = "pass", problems = [], ex
   if (schema === "game.slice9_design_policy_audit") {
     report.assets = [{ id: "panel" }];
   }
+  if (schema === "game.ui_composition_proof") {
+    report.asset_manifest = "gamedesign/projects/test/data/ui-kit-assets.json";
+    report.output = "gamedesign/projects/test/art/previews/ui-kit-composition-proof.png";
+    report.items = [{ base_id: "panel", status: verdict, problems }];
+  }
   if (schema === "game.source_sheet_intake_audit") report.status = verdict;
   if (schema === "game.source_sheet_intake_audit") report.source = "gamedesign/projects/test/art/ui-source.png";
   Object.assign(report, extra);
@@ -149,12 +154,17 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
   const sourceSheetIntakeAudit = "gamedesign/projects/test/reviews/ui-kit-source-intake-audit.json";
   const sourceDerivationAudit = "gamedesign/projects/test/reviews/ui-kit-source-derivation-audit.json";
   const slice9DesignAudit = "gamedesign/projects/test/reviews/ui-kit-slice9-design-audit.json";
+  const compositionProof = "gamedesign/projects/test/reviews/ui-kit-composition-proof.json";
+  const compositionProofPng = "gamedesign/projects/test/art/previews/ui-kit-composition-proof.png";
   const sourceFamilyCoverageAudit = "gamedesign/projects/test/reviews/ui-kit-source-family-coverage-audit.json";
   writeAuditReport(dir, assetAudit, "game.generated_ui_asset_audit");
   writeAuditReport(dir, sourceSheetIntakeAudit, "game.source_sheet_intake_audit");
   writeAuditReport(dir, sourceDerivationAudit, "game.generated_source_derivation_audit");
   writeAuditReport(dir, slice9DesignAudit, "game.slice9_design_policy_audit");
+  writeAuditReport(dir, compositionProof, "game.ui_composition_proof");
   writeAuditReport(dir, sourceFamilyCoverageAudit, "game.source_family_coverage_audit");
+  mkdirSync(join(dir, dirname(compositionProofPng)), { recursive: true });
+  writeFileSync(join(dir, compositionProofPng), "fake-png", "utf8");
 
   const generationRecord = "gamedesign/projects/test/art/generation_records/ui-source.json";
   writeFileSync(join(dir, generationRecord), `${JSON.stringify({
@@ -180,6 +190,7 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
   jobData.expected_outputs.source_sheet_intake_audit = [sourceSheetIntakeAudit];
   jobData.expected_outputs.source_derivation_audit = [sourceDerivationAudit];
   jobData.expected_outputs.slice9_design_audit = [slice9DesignAudit];
+  jobData.expected_outputs.composition_proof = [compositionProof, compositionProofPng];
   jobData.expected_outputs.source_family_coverage_audit = [sourceFamilyCoverageAudit];
   writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
 
@@ -603,6 +614,18 @@ test("final-art mode requires slice9 design policy audit evidence", (t) => {
   assert.match(result.stdout, /final-art mode requires expected_outputs.slice9_design_audit/);
 });
 
+test("final-art mode requires composition proof evidence", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
+  delete jobData.expected_outputs.composition_proof;
+  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /final-art mode requires expected_outputs.composition_proof/);
+});
+
 test("final-art mode requires source family coverage audit evidence", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);
@@ -625,6 +648,31 @@ test("final-art mode rejects failing source family coverage audit evidence", (t)
   assert.equal(result.status, 1);
   assert.match(result.stdout, /expected_outputs.source_family_coverage_audit JSON verdict\/status must be pass/);
   assert.match(result.stdout, /expected_outputs.source_family_coverage_audit JSON must not list problems/);
+});
+
+test("strict mode rejects failing composition proof evidence", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const proof = "gamedesign/projects/test/reviews/ui-kit-composition-proof.json";
+  writeAuditReport(dir, proof, "game.ui_composition_proof", "fail", ["label does not fit content rect"]);
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.composition_proof JSON verdict\/status must be pass/);
+  assert.match(result.stdout, /expected_outputs.composition_proof JSON item panel must not list problems/);
+});
+
+test("strict mode rejects composition proof for another runtime manifest", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const proof = "gamedesign/projects/test/reviews/ui-kit-composition-proof.json";
+  writeAuditReport(dir, proof, "game.ui_composition_proof", "pass", [], {
+    asset_manifest: "gamedesign/projects/test/data/other-assets.json",
+  });
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.composition_proof JSON asset_manifest must match expected_outputs.runtime_manifest/);
 });
 
 test("strict mode rejects failing slice9 design policy audit evidence", (t) => {
