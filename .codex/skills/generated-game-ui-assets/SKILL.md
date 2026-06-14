@@ -103,7 +103,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
 11. Build runtime PNGs deterministically. For chroma-key art, remove only
    border-connected key color, isolate intended icon components, trim by alpha
    bounds, add padding, remove edge fringe, remove source-key color spill
-   according to the manifest key color, bleed non-key edge RGB into
+   according to the manifest key color, remove green-screen spill even when the
+   manifest does not declare a source key, bleed non-key edge RGB into
    transparent pixels, and resize previews in premultiplied-alpha space before
    packing. Reuse `tools/assets/chroma_key_alpha.py` for this cleanup instead
    of duplicating local keying logic in builders and audits.
@@ -298,6 +299,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   proof paths in the art job rather than leaving them as scratch screenshots.
 - Preserve intentional purple/magic colors with explicit manifest policy; do
   not globally delete interior colors because they resemble the key background.
+- Preserve intentional saturated green edge colors with explicit
+  `preserve_green_edges` manifest policy. Otherwise visible green-screen spill
+  and hidden green RGB in transparent edge pixels are extraction failures even
+  when the crop manifest did not declare `green_screen.key`.
 - Reject source sheets where the chroma/key background is too close to the
   intended art palette. Exact key-color pixels inside component bounds are a
   source failure unless deliberately authored and separately masked; broad

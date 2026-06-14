@@ -64,8 +64,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 14. For generated sprites/icons, treat crop extraction as a solved production
     step, not a visual guess: remove background by transparent/alpha or
     border-connected chroma, isolate the intended component, trim to alpha
-    bounds, add output padding, remove edge fringe, and preview the result
-    before runtime use.
+    bounds, add output padding, remove edge fringe, remove green-screen spill
+    even when the crop manifest does not declare a source key, and preview the
+    result before runtime use.
 15. For generated UI PNGs, run the pixel audit after slicing:
     `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`.
     The audit should pass before integrating or regenerating runtime headers.
@@ -146,8 +147,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
   explicit preserve/masking policy. Use the intake audit's suggested key color
   when regenerating source sheets.
 - Pixel audits must catch one- or two-pixel dark purple, dark maroon/magenta,
-  and red-blue halos on the outer alpha contour, not only bright magenta
-  fringe.
+  red-blue halos, and saturated green-screen spill on the outer alpha contour,
+  not only bright magenta fringe. Intentional saturated green edges need an
+  explicit `preserve_green_edges` manifest policy.
 - Slice9 crops need more than margins: record content safe area, target preview
   sizes, minimum size implications, whether the center/edges stretch or tile,
   fixed-ornament policy, and disallowed uses. If a generated asset is
@@ -205,8 +207,8 @@ Before UI assets are integrated:
 - Contact sheet or preview evidence exists for crops and stretched slice9
   states.
 - Pixel audit evidence exists for generated runtime PNGs and reports no clipped
-  icon alpha bounds, chroma-key edge fringe, purple edge halo, or unsafe
-  transparent-edge RGB.
+  icon alpha bounds, chroma-key edge fringe, purple edge halo, green-screen
+  spill, or unsafe transparent-edge RGB.
 - Edge proof preview evidence exists when the lead/user reports 1-2 pixel
   fringe, because ordinary contact sheets can hide single-pixel defects.
 - Generated-source derivation audit evidence exists when a runtime PNG is

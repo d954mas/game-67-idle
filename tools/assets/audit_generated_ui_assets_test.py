@@ -84,6 +84,7 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             self.assertEqual(report["verdict"], "pass")
             self.assertIn("timing_ms", report)
             self.assertIn("timing_ms", report["assets"][0])
+            self.assertIn("edge_green_spill", report["assets"][0]["timing_ms"])
             self.assertIn("transparent_edge_bad_rgb", report["assets"][0]["timing_ms"])
             markdown = (root / "audit.md").read_text(encoding="utf-8")
             self.assertIn("## Timing", markdown)
@@ -205,7 +206,52 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
 
             result = self.run_audit(root, self.write_manifest("assets/icon.png"))
             self.assertEqual(result.returncode, 1)
-            self.assertIn("transparent edge keeps key/purple RGB", result.stdout)
+            self.assertIn("transparent edge keeps key/purple/green RGB", result.stdout)
+
+    def test_default_green_screen_edge_spill_fails_without_manifest_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            image.putpixel((8, 16), (19, 205, 9, 255))
+            image.save(out_dir / "icon.png")
+
+            result = self.run_audit(root, self.write_manifest("assets/icon.png"))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("green-screen edge spill remains", result.stdout)
+
+    def test_default_green_screen_transparent_rgb_fails_without_manifest_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            image.putpixel((7, 16), (0, 255, 0, 0))
+            image.save(out_dir / "icon.png")
+
+            result = self.run_audit(root, self.write_manifest("assets/icon.png"))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("transparent edge keeps key/purple/green RGB", result.stdout)
+
+    def test_preserve_green_edges_allows_intentional_green_edge(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            image.putpixel((8, 16), (19, 205, 9, 255))
+            image.putpixel((7, 16), (0, 255, 0, 0))
+            image.save(out_dir / "icon.png")
+
+            result = self.run_audit(root, self.write_manifest("assets/icon.png", {"preserve_green_edges": True}))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_manifest_source_key_green_edge_fringe_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -256,7 +302,7 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             manifest["green_screen"] = {"mode": "chroma_key", "key": "#00ff00"}
             result = self.run_audit(root, manifest)
             self.assertEqual(result.returncode, 1)
-            self.assertIn("transparent edge keeps key/purple RGB", result.stdout)
+            self.assertIn("transparent edge keeps key/purple/green RGB", result.stdout)
 
 
 if __name__ == "__main__":

@@ -78,6 +78,17 @@ def purple_halo_mask_array(array: Any) -> Any:
     return purple | dark_purple | magenta | dark_magenta
 
 
+def is_green_screen_spill_like(red: int, green: int, blue: int) -> bool:
+    return green > 100 and green > red * 1.35 and green > blue * 1.35 and green - max(red, blue) > 28
+
+
+def green_screen_spill_mask_array(array: Any) -> Any:
+    red = array[..., 0].astype(np.int16)
+    green = array[..., 1].astype(np.int16)
+    blue = array[..., 2].astype(np.int16)
+    return (green > 100) & (green > red * 1.35) & (green > blue * 1.35) & (green - np.maximum(red, blue) > 28)
+
+
 def source_key_spill_mask_array(array: Any, key: tuple[int, int, int]) -> Any:
     red = array[..., 0].astype(np.int16)
     green = array[..., 1].astype(np.int16)
@@ -144,13 +155,28 @@ def count_edge_purple_halo(image: Image.Image) -> int:
     return count_edge_color(image, is_any_purple_halo_like, 6)
 
 
-def count_transparent_edge_bad_rgb(image: Image.Image, key: tuple[int, int, int] | None = None) -> int:
+def count_edge_green_spill(image: Image.Image) -> int:
+    vector_count = count_edge_color_numpy(image, green_screen_spill_mask_array, 2)
+    if vector_count is not None:
+        return vector_count
+    return count_edge_color(image, is_green_screen_spill_like, 2)
+
+
+def count_transparent_edge_bad_rgb(
+    image: Image.Image,
+    key: tuple[int, int, int] | None = None,
+    *,
+    preserve_green: bool = False,
+    preserve_source_key: bool = False,
+) -> int:
     if np is not None:
         array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
         alpha = array[..., 3]
         transparent = alpha <= 12
         bad = key_fringe_mask_array(array) | purple_halo_mask_array(array)
-        if key is not None:
+        if not preserve_green:
+            bad |= green_screen_spill_mask_array(array)
+        if key is not None and not preserve_source_key:
             bad |= source_key_spill_mask_array(array, key)
         near_visible = dilate_mask_numpy(alpha > 12, 2)
         return int(np.count_nonzero(transparent & bad & near_visible))
@@ -165,8 +191,14 @@ def count_transparent_edge_bad_rgb(image: Image.Image, key: tuple[int, int, int]
             red, green, blue, current_alpha = pixels[x, y]
             if current_alpha > 12:
                 continue
-            source_key_bad = key is not None and is_source_key_spill_like(red, green, blue, key)
-            if not (source_key_bad or is_key_fringe_like(red, green, blue) or is_any_purple_halo_like(red, green, blue)):
+            source_key_bad = key is not None and not preserve_source_key and is_source_key_spill_like(red, green, blue, key)
+            green_bad = not preserve_green and is_green_screen_spill_like(red, green, blue)
+            if not (
+                source_key_bad
+                or green_bad
+                or is_key_fringe_like(red, green, blue)
+                or is_any_purple_halo_like(red, green, blue)
+            ):
                 continue
             near_visible = False
             for ny in range(max(0, y - 2), min(height, y + 3)):
@@ -279,6 +311,8 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
     mark_timing("padding_policy")
 
     preserve_purple = bool(crop.get("preserve_purple_edges"))
+    preserve_green = bool(crop.get("preserve_green_edges"))
+    preserve_source_key = bool(crop.get("preserve_source_key_edges"))
     fringe_count = 0 if preserve_purple else count_edge_key_fringe(image)
     mark_timing("edge_key_fringe")
     result["edge_key_fringe_pixels"] = fringe_count
@@ -293,7 +327,14 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
     if isinstance(purple_halo_limit, int) and purple_halo_count > purple_halo_limit:
         result["problems"].append(f"purple edge halo remains: {purple_halo_count}px > {purple_halo_limit}px")
 
-    source_key_fringe_count = 0 if preserve_purple else count_edge_source_key_fringe(image, source_key)
+    green_spill_count = 0 if preserve_green else count_edge_green_spill(image)
+    mark_timing("edge_green_spill")
+    result["edge_green_spill_pixels"] = green_spill_count
+    green_spill_limit = crop.get("edge_green_spill_limit", 0)
+    if isinstance(green_spill_limit, int) and green_spill_count > green_spill_limit:
+        result["problems"].append(f"green-screen edge spill remains: {green_spill_count}px > {green_spill_limit}px")
+
+    source_key_fringe_count = 0 if (preserve_purple or preserve_source_key) else count_edge_source_key_fringe(image, source_key)
     mark_timing("edge_source_key_fringe")
     result["edge_source_key_fringe_pixels"] = source_key_fringe_count
     source_key_fringe_limit = crop.get("edge_source_key_fringe_limit", 0)
@@ -302,13 +343,22 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
             f"source key edge fringe remains: {source_key_fringe_count}px > {source_key_fringe_limit}px"
         )
 
-    transparent_bad_rgb_count = 0 if preserve_purple else count_transparent_edge_bad_rgb(image, source_key)
+    transparent_bad_rgb_count = (
+        0
+        if preserve_purple
+        else count_transparent_edge_bad_rgb(
+            image,
+            source_key,
+            preserve_green=preserve_green,
+            preserve_source_key=preserve_source_key,
+        )
+    )
     mark_timing("transparent_edge_bad_rgb")
     result["transparent_edge_bad_rgb_pixels"] = transparent_bad_rgb_count
     transparent_bad_rgb_limit = crop.get("transparent_edge_bad_rgb_limit", 0)
     if isinstance(transparent_bad_rgb_limit, int) and transparent_bad_rgb_count > transparent_bad_rgb_limit:
         result["problems"].append(
-            f"transparent edge keeps key/purple RGB that can bleed during filtering: "
+            f"transparent edge keeps key/purple/green RGB that can bleed during filtering: "
             f"{transparent_bad_rgb_count}px > {transparent_bad_rgb_limit}px"
         )
 
@@ -362,6 +412,7 @@ def render_markdown(report: dict[str, Any]) -> str:
             f"size={asset.get('size', '-')}, padding={padding}, "
             f"fringe={asset.get('edge_key_fringe_pixels', '-')}, "
             f"source_key_fringe={asset.get('edge_source_key_fringe_pixels', '-')}, "
+            f"green_spill={asset.get('edge_green_spill_pixels', '-')}, "
             f"purple_halo={asset.get('edge_purple_halo_pixels', '-')}, "
             f"transparent_bad_rgb={asset.get('transparent_edge_bad_rgb_pixels', '-')}"
         )

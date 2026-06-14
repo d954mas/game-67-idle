@@ -207,15 +207,17 @@ opens runtime PNG outputs and fails clipped icon alpha bounds or visible
 chroma-key fringe, including soft purple, very dark purple, and dark
 maroon/magenta one-pixel edge halos, including near-black purple edge pixels
 such as `#26022d`,
-before the assets reach gameplay code. It also reads `green_screen.key` from
-the crop manifest and fails visible source-key spill such as green-screen
-contamination on the alpha contour. It rejects transparent edge pixels that
-still store key/purple/source-key RGB, because texture filtering can sample
-that hidden color back into visible edges. Use `--profile` on slow or disputed
-runs to write per-asset timing into JSON/Markdown and print the slowest asset;
-the default run stays quiet and verdict-compatible. When NumPy is available,
-the edge color scans use vectorized masks with the same Python fallback kept for
-minimal portable installs.
+before the assets reach gameplay code. It reads `green_screen.key` from the
+crop manifest and fails visible source-key spill, but it also treats saturated
+green-screen spill as a default defect even when the manifest omitted the
+source key. Intentional saturated green edges require `preserve_green_edges`.
+It rejects transparent edge pixels that still store key/purple/green/source-key
+RGB, because texture filtering can sample that hidden color back into visible
+edges. Use `--profile` on slow or disputed runs to write per-asset timing into
+JSON/Markdown and print the slowest asset; the default run stays quiet and
+verdict-compatible. When NumPy is available, the edge color scans use
+vectorized masks with the same Python fallback kept for minimal portable
+installs.
 `tools/assets/render_ui_asset_edge_proof.py` renders zoomed top/right/bottom/left
 alpha-boundary strips on a checkerboard and marks detected bad edge pixels. Use
 it when 1-2 pixel fringe is reported or when a normal contact sheet is too small
