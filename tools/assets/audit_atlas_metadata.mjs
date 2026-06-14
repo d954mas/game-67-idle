@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 const TRIM_MODES = new Set(["none", "alpha", "source_rect", "manual"]);
+const ANCHORS = new Set(["top_left", "top_center", "top_right", "bottom_left", "bottom_center", "bottom_right", "left_mid", "right_mid", "center"]);
 
 function fail(message) {
   console.error(`error: ${message}`);
@@ -78,6 +79,38 @@ function validateRect(value, label, problems) {
   }
 }
 
+function validateNumberRange(value, label, problems) {
+  if (!Array.isArray(value) || value.length !== 2 || !Number.isFinite(Number(value[0])) || !Number.isFinite(Number(value[1]))) {
+    problems.push(`${label} must be [min,max] numbers`);
+    return;
+  }
+  if (Number(value[0]) > Number(value[1])) problems.push(`${label} min must be <= max`);
+}
+
+function validatePlacementMetadata(asset, problems) {
+  const id = asset.id || "(unknown)";
+  const isSpriteLike = ["sprite", "decor_overlay", "icon"].includes(asset.kind);
+  if (isSpriteLike && !asset.pivot && !asset.anchor) problems.push(`asset ${id} ${asset.kind} needs pivot or anchor`);
+
+  const isDecorOverlay = asset.kind === "decor_overlay" || Array.isArray(asset.allowed_base_ids);
+  if (!isDecorOverlay) return;
+
+  if (!hasText(asset.anchor) || !ANCHORS.has(asset.anchor)) {
+    problems.push(`asset ${id} decor overlay needs anchor one of ${Array.from(ANCHORS).join(", ")}`);
+  }
+  if (!Number.isFinite(Number(asset.z_order))) problems.push(`asset ${id} decor overlay needs numeric z_order`);
+  if (!Array.isArray(asset.allowed_base_ids) || asset.allowed_base_ids.length === 0 || !asset.allowed_base_ids.every(hasText)) {
+    problems.push(`asset ${id} decor overlay needs non-empty allowed_base_ids`);
+  }
+  const offsetBounds = asset.offset_bounds;
+  if (!offsetBounds || typeof offsetBounds !== "object") {
+    problems.push(`asset ${id} decor overlay needs offset_bounds with x/y min-max ranges`);
+  } else {
+    validateNumberRange(offsetBounds.x, `asset ${id} decor overlay offset_bounds.x`, problems);
+    validateNumberRange(offsetBounds.y, `asset ${id} decor overlay offset_bounds.y`, problems);
+  }
+}
+
 function validateAtlasPolicy(asset, assetIds) {
   const id = asset.id || "(unknown)";
   const problems = [];
@@ -124,6 +157,8 @@ function validateAtlasPolicy(asset, assetIds) {
       problems.push(`asset ${id} alias_of references missing asset ${asset.alias_of}`);
     }
   }
+
+  validatePlacementMetadata(asset, problems);
 
   return problems;
 }

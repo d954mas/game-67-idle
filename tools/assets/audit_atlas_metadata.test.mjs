@@ -96,3 +96,61 @@ test("rejects bad alias links", (t) => {
   assert.equal(result.status, 1);
   assert.match(result.stdout, /alias_of references missing asset missing/);
 });
+
+test("requires sprite placement metadata", (t) => {
+  const dir = tempDir(t);
+  const manifest = writeManifest(dir, [
+    asset({
+      id: "sparkle",
+      kind: "sprite",
+      path: "assets/sparkle.png",
+      source_crop: "sparkle",
+      atlas_policy: { ...asset().atlas_policy, allow_rotation: true },
+    }),
+  ]);
+  const result = run(["--asset-manifest", manifest], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /sprite needs pivot or anchor/);
+});
+
+test("passes decor overlay placement metadata", (t) => {
+  const dir = tempDir(t);
+  const manifest = writeManifest(dir, [
+    asset({
+      id: "panel_top_plaque",
+      kind: "decor_overlay",
+      path: "assets/panel-top-plaque.png",
+      source_crop: "panel_top_plaque",
+      atlas_policy: { ...asset().atlas_policy, allow_rotation: true },
+      anchor: "top_center",
+      z_order: 20,
+      allowed_base_ids: ["panel"],
+      offset_bounds: { x: [-8, 8], y: [-4, 12] },
+    }),
+  ]);
+  const result = run(["--asset-manifest", manifest], dir);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test("rejects incomplete decor overlay placement metadata", (t) => {
+  const dir = tempDir(t);
+  const manifest = writeManifest(dir, [
+    asset({
+      id: "panel_top_plaque",
+      kind: "decor_overlay",
+      path: "assets/panel-top-plaque.png",
+      source_crop: "panel_top_plaque",
+      atlas_policy: { ...asset().atlas_policy, allow_rotation: true },
+      anchor: "floating",
+      allowed_base_ids: [],
+      offset_bounds: { x: [8, -8] },
+    }),
+  ]);
+  const result = run(["--asset-manifest", manifest], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /decor overlay needs anchor/);
+  assert.match(result.stdout, /decor overlay needs numeric z_order/);
+  assert.match(result.stdout, /decor overlay needs non-empty allowed_base_ids/);
+  assert.match(result.stdout, /decor overlay offset_bounds.x min must be <= max/);
+  assert.match(result.stdout, /decor overlay offset_bounds.y must be \[min,max\] numbers/);
+});

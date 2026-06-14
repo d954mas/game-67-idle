@@ -188,7 +188,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       final-art validation requires this evidence. This gate checks
       `pack_group`, `source_crop`, `original_size`, `trim_rect`, trim mode,
       alpha bleed, premultiplied-alpha handling, extrusion, shape/border
-      padding, scale variant, alias links, and slice9-safe rotation policy.
+      padding, scale variant, alias links, slice9-safe rotation policy, and
+      sprite/decor-overlay placement metadata.
     - review atlas build:
       `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`
       Add `--profile` when optimizing atlas size or slow pack builds; it writes
@@ -318,7 +319,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   content safe area, state role, and source family.
 - Run `audit_atlas_metadata.mjs` before treating a generated UI kit as final
   art. The runtime manifest should make trim, bleed, extrusion, padding,
-  rotation, scale variant, and alias policy machine-readable.
+  rotation, scale variant, alias policy, and sprite/decor-overlay placement
+  metadata machine-readable.
 - Build a labeled review atlas with `build_ui_atlas_pack.py --label-review`
   before final-art claims when the lead needs to inspect outputs. This atlas is
   a proof/contact artifact: it records `atlas_rect`, `padded_rect`, extrusion,
