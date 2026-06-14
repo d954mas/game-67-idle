@@ -11,16 +11,19 @@ from typing import Any
 
 from PIL import Image
 from PIL import ImageDraw
+from PIL import ImageFont
 
 
 ROOT = Path.cwd()
 RESAMPLE_NEAREST = getattr(getattr(Image, "Resampling", Image), "NEAREST", Image.NEAREST)
-LABEL_PAD_X = 2
-LABEL_PAD_Y = 1
-LABEL_GAP_Y = 2
-LABEL_LINE_GAP_Y = 1
+LABEL_FONT_SIZE = 14
+LABEL_PAD_X = 4
+LABEL_PAD_Y = 2
+LABEL_GAP_Y = 3
+LABEL_LINE_GAP_Y = 2
 LABEL_MIN_WIDTH = 72
 LABEL_MAX_WIDTH = 220
+_LABEL_FONT: ImageFont.ImageFont | None = None
 
 
 def fail(message: str) -> None:
@@ -67,10 +70,24 @@ def positive_int(value: Any, fallback: int) -> int:
     return parsed if parsed >= 0 else fallback
 
 
+def label_font() -> ImageFont.ImageFont:
+    global _LABEL_FONT
+    if _LABEL_FONT is not None:
+        return _LABEL_FONT
+    for name in ("DejaVuSans.ttf", "Arial.ttf"):
+        try:
+            _LABEL_FONT = ImageFont.truetype(name, LABEL_FONT_SIZE)
+            return _LABEL_FONT
+        except OSError:
+            continue
+    _LABEL_FONT = ImageFont.load_default()
+    return _LABEL_FONT
+
+
 def measure_label(label: str) -> tuple[int, int]:
     probe = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
     draw = ImageDraw.Draw(probe)
-    bbox = draw.textbbox((0, 0), label)
+    bbox = draw.textbbox((0, 0), label, font=label_font())
     return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
 
 
@@ -168,6 +185,7 @@ def prepare_review_labels(items: list[dict[str, Any]], alias_items: list[dict[st
         item["review_label"] = {
             "text": label,
             "lines": lines,
+            "font_size": LABEL_FONT_SIZE,
             "width": label_width + LABEL_PAD_X * 2,
             "height": label_height + LABEL_PAD_Y * 2,
             "gap_y": LABEL_GAP_Y,
@@ -315,6 +333,7 @@ def make_entry(item: dict[str, Any], x: int, y: int, image: Image.Image) -> dict
         entry["review_label"] = {
             "text": review_label["text"],
             "lines": list(review_label.get("lines") or [review_label["text"]]),
+            "font_size": int(review_label.get("font_size") or LABEL_FONT_SIZE),
             "rect": [label_x, label_y, int(review_label["width"]), int(review_label["height"])],
         }
     return entry
@@ -336,8 +355,9 @@ def draw_review_labels(atlas: Image.Image, entries: list[dict[str, Any]]) -> Non
             draw.rectangle([label_x, label_y, label_x + label_width - 1, label_y + label_height - 1], fill=(0, 0, 0, 170))
             line_y = label_y + LABEL_PAD_Y
             line_height = max((measure_label(line)[1] for line in lines), default=0)
+            font = label_font()
             for line in lines:
-                draw.text((label_x + LABEL_PAD_X, line_y), line, fill=(255, 255, 255, 255))
+                draw.text((label_x + LABEL_PAD_X, line_y), line, fill=(255, 255, 255, 255), font=font)
                 line_y += line_height + LABEL_LINE_GAP_Y
         draw.rectangle([rect[0], rect[1], rect[0] + rect[2] - 1, rect[1] + rect[3] - 1], outline=(255, 255, 255, 110))
 

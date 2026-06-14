@@ -14,16 +14,16 @@
       "path": "assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5.png",
       "size": [
         803,
-        1020
+        1073
       ],
       "entry_count": 7,
       "physical_entry_count": 7,
       "alias_count": 0,
-      "atlas_area": 819060,
-      "reserved_tile_area": 523332,
+      "atlas_area": 861619,
+      "reserved_tile_area": 560731,
       "padded_asset_area": 491398,
-      "occupancy_ratio": 0.6389,
-      "padded_asset_ratio": 0.6,
+      "occupancy_ratio": 0.6508,
+      "padded_asset_ratio": 0.5703,
       "entries": [
         {
           "id": "compact_button_disabled_long_v5",
@@ -80,11 +80,16 @@
           "state": "disabled",
           "review_label": {
             "text": "compact_button_disabled_long_v5",
+            "lines": [
+              "compact_button_disabled_",
+              "long_v5"
+            ],
+            "font_size": 14,
             "rect": [
               353,
-              126,
-              164,
-              12
+              127,
+              198,
+              34
             ]
           }
         },
@@ -94,13 +99,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
           "atlas_rect": [
             453,
-            745,
+            752,
             298,
             119
           ],
           "padded_rect": [
             451,
-            743,
+            750,
             302,
             123
           ],
@@ -143,11 +148,16 @@
           "state": "disabled",
           "review_label": {
             "text": "compact_button_disabled_medium_v5",
+            "lines": [
+              "compact_button_disabled_",
+              "medium_v5"
+            ],
+            "font_size": 14,
             "rect": [
               451,
-              868,
-              183,
-              12
+              876,
+              198,
+              34
             ]
           }
         },
@@ -157,13 +167,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
           "atlas_rect": [
             307,
-            884,
+            914,
             211,
             119
           ],
           "padded_rect": [
             305,
-            882,
+            912,
             215,
             123
           ],
@@ -206,11 +216,16 @@
           "state": "disabled",
           "review_label": {
             "text": "compact_button_disabled_short_v5",
+            "lines": [
+              "compact_button_disabled_",
+              "short_v5"
+            ],
+            "font_size": 14,
             "rect": [
               305,
-              1007,
-              166,
-              12
+              1038,
+              198,
+              34
             ]
           }
         },
@@ -220,13 +235,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
           "atlas_rect": [
             3,
-            745,
+            752,
             444,
             119
           ],
           "padded_rect": [
             1,
-            743,
+            750,
             448,
             123
           ],
@@ -269,11 +284,15 @@
           "state": "idle",
           "review_label": {
             "text": "compact_button_idle_long_v5",
+            "lines": [
+              "compact_button_idle_long_v5"
+            ],
+            "font_size": 14,
             "rect": [
               1,
-              868,
-              143,
-              12
+              876,
+              218,
+              18
             ]
           }
         },
@@ -283,13 +302,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
           "atlas_rect": [
             3,
-            884,
+            914,
             298,
             119
           ],
           "padded_rect": [
             1,
-            882,
+            912,
             302,
             123
           ],
@@ -332,11 +351,16 @@
           "state": "idle",
           "review_label": {
             "text": "compact_button_idle_medium_v5",
+            "lines": [
+              "compact_button_idle_",
+              "medium_v5"
+            ],
+            "font_size": 14,
             "rect": [
               1,
-              1007,
-              162,
-              12
+              1038,
+              164,
+              34
             ]
           }
         },
@@ -346,13 +370,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
           "atlas_rect": [
             524,
-            884,
+            914,
             211,
             118
           ],
           "padded_rect": [
             522,
-            882,
+            912,
             215,
             122
           ],
@@ -395,11 +419,15 @@
           "state": "idle",
           "review_label": {
             "text": "compact_button_idle_short_v5",
+            "lines": [
+              "compact_button_idle_short_v5"
+            ],
+            "font_size": 14,
             "rect": [
               522,
-              1006,
-              145,
-              12
+              1037,
+              223,
+              18
             ]
           }
         },
@@ -458,36 +486,40 @@
           "state": "default",
           "review_label": {
             "text": "compact_journal_panel_v5",
+            "lines": [
+              "compact_journal_panel_v5"
+            ],
+            "font_size": 14,
             "rect": [
               1,
-              729,
-              129,
-              12
+              730,
+              198,
+              18
             ]
           }
         }
       ],
       "labeled_preview_path": "assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5-labeled.png",
       "timing_ms": {
-        "layout": 1.846,
-        "compose": 3.77,
-        "save_atlas": 38.972,
-        "save_labeled_preview": 43.629,
-        "total": 89.092
+        "layout": 3.645,
+        "compose": 3.03,
+        "save_atlas": 37.451,
+        "save_labeled_preview": 43.408,
+        "total": 88.032
       }
     }
   ],
   "atlas_efficiency": {
-    "atlas_area": 819060,
-    "reserved_tile_area": 523332,
+    "atlas_area": 861619,
+    "reserved_tile_area": 560731,
     "padded_asset_area": 491398,
-    "occupancy_ratio": 0.6389,
-    "padded_asset_ratio": 0.6
+    "occupancy_ratio": 0.6508,
+    "padded_asset_ratio": 0.5703
   },
   "timing_ms": {
-    "read_manifest": 0.218,
-    "load_assets": 17.75,
-    "pack_groups": 89.497,
-    "total": 108.016
+    "read_manifest": 0.613,
+    "load_assets": 25.701,
+    "pack_groups": 88.495,
+    "total": 115.329
   }
 }

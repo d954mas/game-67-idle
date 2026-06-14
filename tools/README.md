@@ -193,7 +193,9 @@ reuses `alias_of` entries without duplicating the physical bitmap. Physical
 source labels list linked aliases so the labeled preview can be used to choose
 asset ids without guessing; long labels keep exact `review_label.text` metadata
 but render wrapped `review_label.lines` so a single verbose id does not widen
-the atlas. This output is human validation evidence, not the game's final runtime atlas packer. Record the JSON manifest in
+the atlas. Labels should use readable review text, recorded as
+`review_label.font_size`, because the preview is meant for visual selection by
+the lead, not just machine validation. This output is human validation evidence, not the game's final runtime atlas packer. Record the JSON manifest in
 `expected_outputs.atlas_pack`; final-art validation requires it for generated UI.
 `tools/assets/audit_ui_atlas_pack.py` validates the built review atlas. It
 checks coverage against the runtime asset manifest, atlas image bounds, non-

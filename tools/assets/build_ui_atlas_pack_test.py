@@ -249,6 +249,7 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             entries = {entry["id"]: entry for entry in atlas_info["entries"]}
             label = entries["panel"]["review_label"]
             self.assertEqual(label["text"], "panel")
+            self.assertGreaterEqual(label["font_size"], 12)
             padded_x, padded_y, padded_w, padded_h = entries["panel"]["padded_rect"]
             label_x, label_y, label_w, label_h = label["rect"]
             self.assertGreaterEqual(label_y, padded_y + padded_h)

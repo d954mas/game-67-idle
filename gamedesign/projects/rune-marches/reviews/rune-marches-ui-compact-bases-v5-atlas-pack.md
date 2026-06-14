@@ -7,19 +7,19 @@ atlases: **1**
 
 ## Atlas Efficiency
 
-- occupancy_ratio: 0.6389
-- padded_asset_ratio: 0.6
-- atlas_area: 819060
-- reserved_tile_area: 523332
+- occupancy_ratio: 0.6508
+- padded_asset_ratio: 0.5703
+- atlas_area: 861619
+- reserved_tile_area: 560731
 - padded_asset_area: 491398
 
 ## Timing
 
-- read_manifest: 0.218 ms
-- load_assets: 17.75 ms
-- pack_groups: 89.497 ms
-- total: 108.016 ms
+- read_manifest: 0.613 ms
+- load_assets: 25.701 ms
+- pack_groups: 88.495 ms
+- total: 115.329 ms
 
 ## Atlases
 
-- `ui_rune_marches_compact_bases_v5` -> `assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5.png` 803x1020, entries=7, physical=7, aliases=0, occupancy=0.6389, labeled_preview=`assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5-labeled.png`
+- `ui_rune_marches_compact_bases_v5` -> `assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5.png` 803x1073, entries=7, physical=7, aliases=0, occupancy=0.6508, labeled_preview=`assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5-labeled.png`

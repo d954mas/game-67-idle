@@ -9,12 +9,15 @@ from typing import Any
 
 from PIL import Image
 from PIL import ImageDraw
+from PIL import ImageFont
 
 
 ROOT = Path.cwd()
-LABEL_PAD_X = 2
-LABEL_PAD_Y = 1
-LABEL_LINE_GAP_Y = 1
+LABEL_FONT_SIZE = 14
+LABEL_PAD_X = 4
+LABEL_PAD_Y = 2
+LABEL_LINE_GAP_Y = 2
+_LABEL_FONT: ImageFont.ImageFont | None = None
 
 
 def fail(message: str) -> None:
@@ -82,10 +85,24 @@ def rect_has_visible_pixel(image: Image.Image, rect: tuple[int, int, int, int]) 
     return False
 
 
+def label_font() -> ImageFont.ImageFont:
+    global _LABEL_FONT
+    if _LABEL_FONT is not None:
+        return _LABEL_FONT
+    for name in ("DejaVuSans.ttf", "Arial.ttf"):
+        try:
+            _LABEL_FONT = ImageFont.truetype(name, LABEL_FONT_SIZE)
+            return _LABEL_FONT
+        except OSError:
+            continue
+    _LABEL_FONT = ImageFont.load_default()
+    return _LABEL_FONT
+
+
 def measure_label(label: str) -> tuple[int, int]:
     probe = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
     draw = ImageDraw.Draw(probe)
-    bbox = draw.textbbox((0, 0), label)
+    bbox = draw.textbbox((0, 0), label, font=label_font())
     return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
 
 
