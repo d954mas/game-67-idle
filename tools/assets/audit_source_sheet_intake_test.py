@@ -284,11 +284,14 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("profile: slowest stage", result.stdout)
             data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertIn(data["analysis_engine"], {"numpy", "python"})
             self.assertIn("timing_ms", data)
             self.assertIn("find_components", data["timing_ms"])
             self.assertIn("candidate_key_scores", data["timing_ms"])
             self.assertIn("total", data["timing_ms"])
-            self.assertIn("## Timing", markdown.read_text(encoding="utf-8"))
+            markdown_text = markdown.read_text(encoding="utf-8")
+            self.assertIn("analysis_engine:", markdown_text)
+            self.assertIn("## Timing", markdown_text)
 
 
 if __name__ == "__main__":

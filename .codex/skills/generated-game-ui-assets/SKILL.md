@@ -90,7 +90,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    chroma colors and split/preserve the art or switch to dual-plate alpha.
    Use the key color from the prompt packet when auditing generated sheets.
    Add `--profile` when source-sheet intake feels slow or when comparing
-   component detection fixes; it records per-stage timing and the slowest stage
+   component detection fixes; it records per-stage timing, the analysis engine
+   (`numpy` fast path or portable `python` fallback), and the slowest stage
    without changing pass/fail semantics.
    Built-in image generation can produce a visually flat but pixel-varied
    chroma background; normalize it before intake instead of hand-tuning crop

@@ -234,7 +234,8 @@ generation pass. Use `next_prompt_key_color` when the action is
 `regenerate_with_next_prompt_key_color`; when the action is
 `split_preserve_or_dual_plate_alpha`, switch to explicit preserve/split policy
 or dual-plate alpha instead of cycling similar chroma colors. Use
-`--profile` on slow or disputed sheets to write per-stage timing into
+`--profile` on slow or disputed sheets to write per-stage timing and the
+analysis engine (`numpy` fast path or portable `python` fallback) into
 JSON/Markdown and print the slowest stage. Final-art validation requires
 passing JSON intake evidence in
 `expected_outputs.source_sheet_intake_audit`, and that report's `source` must
