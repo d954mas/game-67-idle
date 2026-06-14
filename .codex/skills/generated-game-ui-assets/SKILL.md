@@ -81,6 +81,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    Use the reported `suggested_key_color` as input to the next generation
    prompt when the current chroma color conflicts with the art palette.
    Use the key color from the prompt packet when auditing generated sheets.
+   Add `--profile` when source-sheet intake feels slow or when comparing
+   component detection fixes; it records per-stage timing and the slowest stage
+   without changing pass/fail semantics.
    Built-in image generation can produce a visually flat but pixel-varied
    chroma background; normalize it before intake instead of hand-tuning crop
    boxes around detector noise. Small satellite pieces of one icon can be
@@ -125,7 +128,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       Record passing JSON reports in `expected_outputs.source_sheet_intake_audit`
       for final-art claims. Strict validation checks this report if listed;
       final-art validation requires it. The report `source` must match the
-      art job's expected source art or crop source.
+      art job's expected source art or crop source. Add `--profile` for slow
+      intake runs so the report shows stage timings.
     - strict contract after slicing:
       `node tools/assets/validate_art_job.mjs --job <job> --strict`
       This strict gate requires `expected_outputs.asset_audit` evidence and

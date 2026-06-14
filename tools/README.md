@@ -203,8 +203,10 @@ source-sheet gate: it checks flat/chroma background, component count, border
 clearance, gutters, exact key-color holes inside components, and broad
 key/halo hue conflicts before crop rectangles are trusted. It also scores
 candidate key colors against the component palette and reports a
-`suggested_key_color` for the next source-sheet generation pass. Final-art
-validation requires passing JSON intake evidence in
+`suggested_key_color` for the next source-sheet generation pass. Use
+`--profile` on slow or disputed sheets to write per-stage timing into
+JSON/Markdown and print the slowest stage. Final-art validation requires
+passing JSON intake evidence in
 `expected_outputs.source_sheet_intake_audit`, and that report's `source` must
 match the art job's expected source art or crop source. The audit merges small
 satellite fragments near a larger component so multi-part icons can pass

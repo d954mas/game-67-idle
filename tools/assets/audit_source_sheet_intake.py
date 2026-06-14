@@ -8,6 +8,7 @@ import math
 import sys
 from collections import deque
 from pathlib import Path
+from time import perf_counter
 
 from PIL import Image
 
@@ -212,23 +213,27 @@ def score_candidate_key_colors(
     candidates: list[tuple[int, int, int]],
 ) -> list[dict[str, object]]:
     pixels = image.load()
+    visible_colors: list[tuple[int, int, int, float, float, float]] = []
+    for component in components:
+        x, y, width, height = component["bbox"]
+        for yy in range(y, y + height):
+            for xx in range(x, x + width):
+                red, green, blue, alpha = pixels[xx, yy]
+                if alpha <= 12 or is_key((red, green, blue, alpha), current_key, tolerance):
+                    continue
+                hue, sat, value = colorsys.rgb_to_hsv(red / 255, green / 255, blue / 255)
+                visible_colors.append((red, green, blue, hue, sat, value))
+    visible = len(visible_colors)
     scores: list[dict[str, object]] = []
     for candidate in candidates:
         exact = 0
         hue_band = 0
-        visible = 0
-        for component in components:
-            x, y, width, height = component["bbox"]
-            for yy in range(y, y + height):
-                for xx in range(x, x + width):
-                    red, green, blue, alpha = pixels[xx, yy]
-                    if alpha <= 12 or is_key((red, green, blue, alpha), current_key, tolerance):
-                        continue
-                    visible += 1
-                    if is_exact_key_like(red, green, blue, key=candidate, tolerance=24):
-                        exact += 1
-                    if is_generic_key_hue_like(red, green, blue, candidate):
-                        hue_band += 1
+        key_hue, key_sat, key_value = colorsys.rgb_to_hsv(candidate[0] / 255, candidate[1] / 255, candidate[2] / 255)
+        for red, green, blue, hue, sat, value in visible_colors:
+            if is_exact_key_like(red, green, blue, key=candidate, tolerance=24):
+                exact += 1
+            if key_sat >= 0.35 and sat >= 0.25 and value >= 0.12 and key_value >= 0.35 and hue_distance(hue, key_hue) <= 0.05:
+                hue_band += 1
         hue_ratio = hue_band / max(1, visible)
         exact_ratio = exact / max(1, visible)
         scores.append(
@@ -286,11 +291,27 @@ def add_key_conflict_metrics(
 
 
 def audit(args: argparse.Namespace) -> dict[str, object]:
+    started = perf_counter()
+    phase_started = started
+    timings: dict[str, float] = {}
+
+    def mark_timing(name: str) -> None:
+        nonlocal phase_started
+        if not getattr(args, "profile", False):
+            return
+        now = perf_counter()
+        timings[name] = round((now - phase_started) * 1000, 3)
+        phase_started = now
+
     image = Image.open(args.source).convert("RGBA")
+    mark_timing("load_image")
     width, height = image.size
     components = [component for component in find_components(image, args.key_color, args.key_tolerance) if component["area_px"] >= args.min_area]
+    mark_timing("find_components")
     components = merge_small_fragments(components, args.merge_fragments_distance, args.merge_fragment_area_ratio)
+    mark_timing("merge_fragments")
     add_key_conflict_metrics(image, components, args.key_color, args.key_tolerance)
+    mark_timing("key_conflicts")
     candidate_scores = score_candidate_key_colors(
         image,
         components,
@@ -298,6 +319,7 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
         args.key_tolerance,
         args.candidate_key_colors,
     )
+    mark_timing("candidate_key_scores")
     problems: list[str] = []
     if len(components) < args.min_components:
         problems.append(f"component_count {len(components)} is below required {args.min_components}")
@@ -320,6 +342,7 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
                 f"{component['id']} key/halo hue conflict ratio {key_hue_ratio:.3f} "
                 f"> allowed {args.max_key_hue_conflict_ratio:.3f}; choose a safer background or split/preserve this art"
             )
+    mark_timing("component_rules")
 
     min_gap = None
     closest_pair = None
@@ -331,8 +354,9 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
                 closest_pair = [component["id"], other["id"]]
     if min_gap is not None and min_gap < args.min_gutter:
         problems.append(f"closest component gap {min_gap}px is below required {args.min_gutter}px")
+    mark_timing("gutter_scan")
 
-    return {
+    result = {
         "schema": "game.source_sheet_intake_audit",
         "version": 1,
         "source": str(args.source).replace("\\", "/"),
@@ -353,6 +377,10 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
         "problems": problems,
         "status": "pass" if not problems else "fail",
     }
+    if getattr(args, "profile", False):
+        timings["total"] = round((perf_counter() - started) * 1000, 3)
+        result["timing_ms"] = timings
+    return result
 
 
 def write_report(path: Path, result: dict[str, object]) -> None:
@@ -391,6 +419,10 @@ def write_report(path: Path, result: dict[str, object]) -> None:
             f"exact_ratio={score['exact_conflict_ratio']} hue_band={score['hue_band_px']} "
             f"hue_ratio={score['hue_band_ratio']} score={score['score']}"
         )
+    if result.get("timing_ms"):
+        lines.extend(["", "## Timing"])
+        for name, elapsed in result["timing_ms"].items():
+            lines.append(f"- {name}: {elapsed} ms")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -411,6 +443,7 @@ def main() -> int:
     parser.add_argument("--candidate-key-colors", type=parse_color_list, default=parse_color_list(DEFAULT_CANDIDATE_KEY_COLORS))
     parser.add_argument("--json-output", type=Path)
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--profile", action="store_true", help="Record per-stage timing in JSON/Markdown and print the slowest stage.")
     args = parser.parse_args()
 
     result = audit(args)
@@ -425,6 +458,11 @@ def main() -> int:
     )
     for problem in result["problems"]:
         print(f"problem: {problem}")
+    if args.profile and result.get("timing_ms"):
+        timed_stages = {key: value for key, value in result["timing_ms"].items() if key != "total"}
+        if timed_stages:
+            slowest_name, slowest_ms = max(timed_stages.items(), key=lambda item: item[1])
+            print(f"profile: slowest stage `{slowest_name}` {slowest_ms} ms")
     return 0 if result["status"] == "pass" else 1
 
 

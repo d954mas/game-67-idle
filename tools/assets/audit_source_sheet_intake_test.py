@@ -242,6 +242,44 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_profile_writes_stage_timings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "sheet.png"
+            report = Path(tmp) / "report.json"
+            markdown = Path(tmp) / "report.md"
+            image = Image.new("RGBA", (160, 96), (255, 0, 255, 255))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((32, 24, 128, 72), fill=(80, 60, 40, 255))
+            image.save(source)
+            result = run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--source",
+                    str(source),
+                    "--min-components",
+                    "1",
+                    "--min-border",
+                    "16",
+                    "--json-output",
+                    str(report),
+                    "--report",
+                    str(markdown),
+                    "--profile",
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("profile: slowest stage", result.stdout)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertIn("timing_ms", data)
+            self.assertIn("find_components", data["timing_ms"])
+            self.assertIn("candidate_key_scores", data["timing_ms"])
+            self.assertIn("total", data["timing_ms"])
+            self.assertIn("## Timing", markdown.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()
