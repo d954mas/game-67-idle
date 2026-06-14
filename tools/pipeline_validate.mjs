@@ -86,7 +86,7 @@ if (existsSync(join(root, "tools", "assets", "new_generation_record.test.mjs")))
 let python = null;
 if (existsSync(join(root, "tools", "assets", "normalize_source_sheet_chroma_test.py"))) {
   python = findPythonRunner();
-  run("source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.chroma_key_alpha_test", "tools.assets.normalize_source_sheet_chroma_test", "tools.assets.audit_source_sheet_intake_test"], { exe: python.exe });
+  run("source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.chroma_key_alpha_test", "tools.assets.dual_plate_alpha_test", "tools.assets.normalize_source_sheet_chroma_test", "tools.assets.audit_source_sheet_intake_test"], { exe: python.exe });
 }
 if (existsSync(join(root, "tools", "assets", "audit_generated_ui_assets_test.py"))) {
   python ||= findPythonRunner();
@@ -133,7 +133,7 @@ if (existsSync(join(exportDir, "tools", "assets", "new_generation_record.test.mj
 }
 if (existsSync(join(exportDir, "tools", "assets", "normalize_source_sheet_chroma_test.py"))) {
   python ||= findPythonRunner();
-  run("exported source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.chroma_key_alpha_test", "tools.assets.normalize_source_sheet_chroma_test", "tools.assets.audit_source_sheet_intake_test"], {
+  run("exported source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.chroma_key_alpha_test", "tools.assets.dual_plate_alpha_test", "tools.assets.normalize_source_sheet_chroma_test", "tools.assets.audit_source_sheet_intake_test"], {
     cwd: exportDir,
     exe: python.exe,
   });

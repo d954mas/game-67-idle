@@ -53,6 +53,8 @@ const COPY = [
   "tools/assets/audit_source_family_coverage.test.mjs",
   "tools/assets/chroma_key_alpha.py",
   "tools/assets/chroma_key_alpha_test.py",
+  "tools/assets/dual_plate_alpha.py",
+  "tools/assets/dual_plate_alpha_test.py",
   "tools/assets/normalize_source_sheet_chroma.py",
   "tools/assets/normalize_source_sheet_chroma_test.py",
   "tools/assets/audit_source_sheet_intake.py",

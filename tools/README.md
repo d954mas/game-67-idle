@@ -53,6 +53,7 @@ game project:
 - `tools/assets/audit_runtime_ui_asset_usage.mjs`
 - `tools/assets/audit_source_family_coverage.mjs`
 - `tools/assets/chroma_key_alpha.py`
+- `tools/assets/dual_plate_alpha.py`
 - `tools/assets/normalize_source_sheet_chroma.py`
 - `tools/assets/audit_source_sheet_intake.py`
 - `tools/assets/audit_generated_ui_assets.py`
@@ -101,6 +102,28 @@ transparent RGB bleed, and premultiplied-alpha resizing in one tested place.
 Builders and audits should pass the crop manifest's actual key color; a green
 source sheet can fail with green edge spill even when the old magenta/purple
 checks pass.
+
+`tools/assets/dual_plate_alpha.py` extracts transparent PNGs from two
+pixel-aligned generated plates: one on a light background and one on a dark
+background. Use it when chroma-key source sheets repeatedly fail fringe audits
+or when the asset has delicate antialiasing, hair-like detail, glow, or soft
+ornate edges. It writes an RGBA PNG plus optional JSON/Markdown report with
+visible-pixel and cleanup stats:
+
+```powershell
+py -3.12 tools/assets/dual_plate_alpha.py `
+  --light path/to/light-plate.png `
+  --dark path/to/dark-plate.png `
+  --output path/to/output.png `
+  --json-output path/to/report.json `
+  --report path/to/report.md `
+  --blob-min-area 12
+```
+
+This mode requires a stronger generation contract than chroma: both plates must
+have the same dimensions and the same subject placement. If the generator
+changes the ornament shape, lighting, or pose between plates, reject the pair
+before extraction.
 
 `tools/assets/validate_art_job.mjs` validates the generated-art job contract:
 source families, generation records, reusable kinds, crop/runtime manifests,

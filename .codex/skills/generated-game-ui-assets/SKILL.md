@@ -82,7 +82,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    packet to a dual-plate alpha job instead of trying more chroma colors: one
    light-background plate and one dark-background plate, same dimensions and
    pixel-aligned subject, followed by difference matting, blob cleanup, alpha
-   hardening, and the same crop/slice/runtime audits.
+   hardening, and the same crop/slice/runtime audits. Use
+   `py -3.12 tools/assets/dual_plate_alpha.py --light <light.png> --dark <dark.png> --output <rgba.png>`
+   for the deterministic extraction step.
 10. Slice from a manifest. Every runtime UI asset needs a named crop entry:
    `id`, `kind`, `rect`, `output`; slice9 entries also need `slice9`,
    `content`, and `target_preview_sizes`; icons need semantic role, size class,
