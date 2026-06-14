@@ -51,9 +51,14 @@ def is_key(pixel: tuple[int, int, int, int], key: tuple[int, int, int], toleranc
     return alpha == 0 or max(abs(red - key[0]), abs(green - key[1]), abs(blue - key[2])) <= tolerance
 
 
-def find_components(image: Image.Image, key: tuple[int, int, int], tolerance: int) -> list[dict[str, object]]:
+def find_components(
+    image: Image.Image,
+    key: tuple[int, int, int],
+    tolerance: int,
+    array: object | None = None,
+) -> list[dict[str, object]]:
     if np is not None:
-        return find_components_numpy(image, key, tolerance)
+        return find_components_numpy(image, key, tolerance, array)
     return find_components_python(image, key, tolerance)
 
 
@@ -107,10 +112,15 @@ def find_components_python(image: Image.Image, key: tuple[int, int, int], tolera
     return components
 
 
-def find_components_numpy(image: Image.Image, key: tuple[int, int, int], tolerance: int) -> list[dict[str, object]]:
+def find_components_numpy(
+    image: Image.Image,
+    key: tuple[int, int, int],
+    tolerance: int,
+    array: object | None = None,
+) -> list[dict[str, object]]:
     if np is None:
         raise RuntimeError("numpy is required for find_components_numpy")
-    array = np.asarray(image.convert("RGBA"))
+    array = np.asarray(image.convert("RGBA")) if array is None else array
     height, width = array.shape[:2]
     art_mask = np.asarray(~key_like_mask(array, key, tolerance), dtype=bool)
     runs: list[tuple[int, int, int, int]] = []
@@ -463,41 +473,7 @@ def score_candidate_key_colors(
     if np is not None:
         array = np.asarray(image.convert("RGBA"))
         red_values, green_values, blue_values = visible_component_arrays(array, components, current_key, tolerance)
-        visible = int(red_values.size)
-        if visible:
-            hue, sat, value = hsv_arrays(red_values, green_values, blue_values)
-        scores: list[dict[str, object]] = []
-        for candidate in candidates:
-            if visible:
-                exact = int(np.count_nonzero(exact_key_mask(red_values, green_values, blue_values, candidate, 24)))
-                key_hue, key_sat, key_value = colorsys.rgb_to_hsv(candidate[0] / 255, candidate[1] / 255, candidate[2] / 255)
-                hue_delta = np.abs(hue - key_hue)
-                hue_band_mask = (
-                    (key_sat >= 0.35)
-                    & (sat >= 0.25)
-                    & (value >= 0.12)
-                    & (key_value >= 0.35)
-                    & (np.minimum(hue_delta, 1.0 - hue_delta) <= 0.05)
-                )
-                hue_band = int(np.count_nonzero(hue_band_mask))
-            else:
-                exact = 0
-                hue_band = 0
-            hue_ratio = hue_band / max(1, visible)
-            exact_ratio = exact / max(1, visible)
-            scores.append(
-                {
-                    "key_color": format_color(candidate),
-                    "visible_px": visible,
-                    "exact_conflict_px": exact,
-                    "exact_conflict_ratio": round(exact_ratio, 6),
-                    "hue_band_px": hue_band,
-                    "hue_band_ratio": round(hue_ratio, 6),
-                    "score": round(exact * 1000 + hue_band + hue_ratio * 100, 6),
-                }
-            )
-        scores.sort(key=lambda item: (item["score"], item["exact_conflict_px"], item["hue_band_ratio"], item["key_color"]))
-        return scores
+        return score_candidate_key_colors_from_rgb(red_values, green_values, blue_values, candidates)
 
     pixels = image.load()
     visible_colors: list[tuple[int, int, int, float, float, float]] = []
@@ -538,15 +514,62 @@ def score_candidate_key_colors(
     return scores
 
 
+def score_candidate_key_colors_from_rgb(
+    red_values: object,
+    green_values: object,
+    blue_values: object,
+    candidates: list[tuple[int, int, int]],
+) -> list[dict[str, object]]:
+    if np is None:
+        raise RuntimeError("numpy is required for score_candidate_key_colors_from_rgb")
+    visible = int(red_values.size)
+    if visible:
+        hue, sat, value = hsv_arrays(red_values, green_values, blue_values)
+    scores: list[dict[str, object]] = []
+    for candidate in candidates:
+        if visible:
+            exact = int(np.count_nonzero(exact_key_mask(red_values, green_values, blue_values, candidate, 24)))
+            key_hue, key_sat, key_value = colorsys.rgb_to_hsv(candidate[0] / 255, candidate[1] / 255, candidate[2] / 255)
+            hue_delta = np.abs(hue - key_hue)
+            hue_band_mask = (
+                (key_sat >= 0.35)
+                & (sat >= 0.25)
+                & (value >= 0.12)
+                & (key_value >= 0.35)
+                & (np.minimum(hue_delta, 1.0 - hue_delta) <= 0.05)
+            )
+            hue_band = int(np.count_nonzero(hue_band_mask))
+        else:
+            exact = 0
+            hue_band = 0
+        hue_ratio = hue_band / max(1, visible)
+        exact_ratio = exact / max(1, visible)
+        scores.append(
+            {
+                "key_color": format_color(candidate),
+                "visible_px": visible,
+                "exact_conflict_px": exact,
+                "exact_conflict_ratio": round(exact_ratio, 6),
+                "hue_band_px": hue_band,
+                "hue_band_ratio": round(hue_ratio, 6),
+                "score": round(exact * 1000 + hue_band + hue_ratio * 100, 6),
+            }
+        )
+    scores.sort(key=lambda item: (item["score"], item["exact_conflict_px"], item["hue_band_ratio"], item["key_color"]))
+    return scores
+
+
 def add_key_conflict_metrics(
     image: Image.Image,
     components: list[dict[str, object]],
     key: tuple[int, int, int],
     tolerance: int,
-) -> None:
+    array: object | None = None,
+) -> tuple[object, object, object] | None:
     if np is not None:
-        array = np.asarray(image.convert("RGBA"))
+        array = np.asarray(image.convert("RGBA")) if array is None else array
         flat = array.reshape((-1, 4))
+        visible_chunks = []
         for component in components:
             x, y, width, height = component["bbox"]
             crop = array[y : y + height, x : x + width]
@@ -569,6 +592,8 @@ def add_key_conflict_metrics(
                 component_blue = component_pixels[..., 2]
                 component_visible = (component_pixels[..., 3] > 12) & ~key_like_mask(component_pixels, key, tolerance)
                 visible = int(np.count_nonzero(component_visible))
+                if visible:
+                    visible_chunks.append(component_pixels[..., :3][component_visible])
                 key_fringe_conflicts = int(
                     np.count_nonzero(component_visible & key_fringe_mask(component_red, component_green, component_blue))
                 )
@@ -578,6 +603,8 @@ def add_key_conflict_metrics(
             else:
                 non_key_visible = visible_alpha & ~key_like_mask(crop, key, tolerance)
                 visible = int(np.count_nonzero(non_key_visible))
+                if visible:
+                    visible_chunks.append(crop[..., :3][non_key_visible])
                 key_fringe_conflicts = int(np.count_nonzero(non_key_visible & key_fringe_mask(red, green, blue)))
                 purple_halo_conflicts = int(np.count_nonzero(non_key_visible & purple_halo_mask(red, green, blue)))
             component["visible_px"] = visible
@@ -588,7 +615,11 @@ def add_key_conflict_metrics(
                 (exact_key_conflicts + key_fringe_conflicts + purple_halo_conflicts) / max(1, visible),
                 6,
             )
-        return
+        if not visible_chunks:
+            empty = np.array([], dtype=np.uint8)
+            return empty, empty, empty
+        visible_colors = np.concatenate(visible_chunks, axis=0)
+        return visible_colors[:, 0], visible_colors[:, 1], visible_colors[:, 2]
 
     image_width, _image_height = image.size
     border_key = find_border_connected_key(image, key, tolerance)
@@ -621,6 +652,7 @@ def add_key_conflict_metrics(
             (exact_key_conflicts + key_fringe_conflicts + purple_halo_conflicts) / max(1, visible),
             6,
         )
+    return None
 
 
 def audit(args: argparse.Namespace) -> dict[str, object]:
@@ -639,19 +671,27 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
     image = Image.open(args.source).convert("RGBA")
     mark_timing("load_image")
     width, height = image.size
-    components = [component for component in find_components(image, args.key_color, args.key_tolerance) if component["area_px"] >= args.min_area]
+    image_array = np.asarray(image) if np is not None else None
+    components = [
+        component
+        for component in find_components(image, args.key_color, args.key_tolerance, image_array)
+        if component["area_px"] >= args.min_area
+    ]
     mark_timing("find_components")
     components = merge_small_fragments(components, args.merge_fragments_distance, args.merge_fragment_area_ratio)
     mark_timing("merge_fragments")
-    add_key_conflict_metrics(image, components, args.key_color, args.key_tolerance)
+    visible_component_rgb = add_key_conflict_metrics(image, components, args.key_color, args.key_tolerance, image_array)
     mark_timing("key_conflicts")
-    candidate_scores = score_candidate_key_colors(
-        image,
-        components,
-        args.key_color,
-        args.key_tolerance,
-        args.candidate_key_colors,
-    )
+    if visible_component_rgb is not None and np is not None:
+        candidate_scores = score_candidate_key_colors_from_rgb(*visible_component_rgb, args.candidate_key_colors)
+    else:
+        candidate_scores = score_candidate_key_colors(
+            image,
+            components,
+            args.key_color,
+            args.key_tolerance,
+            args.candidate_key_colors,
+        )
     mark_timing("candidate_key_scores")
     problems: list[str] = []
     key_color_conflict_count = 0
