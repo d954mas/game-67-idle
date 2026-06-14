@@ -8,6 +8,7 @@ const EDGE_MODES = new Set(["solid", "plain_texture", "repeatable_texture", "str
 const CORNER_MODES = new Set(["none", "simple_fixed", "decorative_fixed"]);
 const ORNAMENT_MODES = new Set(["none", "corner_only", "separate_overlay_assets"]);
 const SIZE_CLASSES = new Set(["flexible", "large_only", "compact_only", "icon_slot_only", "status_strip_only"]);
+const OVERLAY_ANCHORS = new Set(["top_left", "top_center", "top_right", "bottom_left", "bottom_center", "bottom_right", "left_mid", "right_mid", "center"]);
 
 function fail(message) {
   console.error(`error: ${message}`);
@@ -194,6 +195,41 @@ function validateMinSize(value, label, problems) {
   return { width: value[0], height: value[1] };
 }
 
+function validateNumberRange(value, label, problems) {
+  if (!Array.isArray(value) || value.length !== 2 || !Number.isFinite(Number(value[0])) || !Number.isFinite(Number(value[1]))) {
+    problems.push(`${label} must be [min,max] numbers`);
+    return;
+  }
+  if (Number(value[0]) > Number(value[1])) problems.push(`${label} min must be <= max`);
+}
+
+function validateOverlayMetadata(overlay, overlayId, baseId, label, problems) {
+  const kind = String(overlay.kind || "");
+  if (!["sprite", "decor_overlay", "icon"].includes(kind)) {
+    problems.push(`${label} overlay_asset_id ${overlayId} kind must be sprite, decor_overlay, or icon`);
+  }
+
+  if (!hasText(overlay.anchor) || !OVERLAY_ANCHORS.has(overlay.anchor)) {
+    problems.push(`${label} overlay_asset_id ${overlayId} needs anchor one of ${Array.from(OVERLAY_ANCHORS).join(", ")}`);
+  }
+
+  if (!Number.isFinite(Number(overlay.z_order))) {
+    problems.push(`${label} overlay_asset_id ${overlayId} needs numeric z_order`);
+  }
+
+  if (!Array.isArray(overlay.allowed_base_ids) || !overlay.allowed_base_ids.includes(baseId)) {
+    problems.push(`${label} overlay_asset_id ${overlayId} allowed_base_ids must include ${baseId}`);
+  }
+
+  const offsetBounds = overlay.offset_bounds;
+  if (!offsetBounds || typeof offsetBounds !== "object") {
+    problems.push(`${label} overlay_asset_id ${overlayId} needs offset_bounds with x/y min-max ranges`);
+  } else {
+    validateNumberRange(offsetBounds.x, `${label} overlay_asset_id ${overlayId} offset_bounds.x`, problems);
+    validateNumberRange(offsetBounds.y, `${label} overlay_asset_id ${overlayId} offset_bounds.y`, problems);
+  }
+}
+
 function validateSlice9Policy(entry, label, knownAssetsById = new Map()) {
   const geometry = validateSlice9Geometry(entry, label);
   const problems = [...geometry.problems];
@@ -217,6 +253,8 @@ function validateSlice9Policy(entry, label, knownAssetsById = new Map()) {
           problems.push(`${label} overlay_asset_id ${overlayId} is not present in manifest`);
         } else if (overlay.kind === "slice9") {
           problems.push(`${label} overlay_asset_id ${overlayId} must reference a non-slice9 overlay asset`);
+        } else {
+          validateOverlayMetadata(overlay, overlayId, entry.id, label, problems);
         }
       }
     }

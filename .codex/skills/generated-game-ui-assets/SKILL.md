@@ -294,7 +294,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   chat notes instead of machine-readable policy.
 - Treat beautiful fixed decoration as composition data. A panel top plaque,
   side gem, screw, lock, rarity crest, divider, glow strip, or button cap needs
-  its own crop id, anchor, z-order, allowed base ids, and min/max offset rules.
+  its own crop id, `anchor`, `z_order`, `allowed_base_ids`, and
+  `offset_bounds` min/max rules.
   If it cannot be named as a separate overlay asset id that exists in the
   manifest, it is probably unsafe inside a resizable base.
 - Runtime composition proof must treat content safe areas as reserved for text,

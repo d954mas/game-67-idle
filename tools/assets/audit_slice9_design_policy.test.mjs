@@ -150,6 +150,47 @@ test("validates separate overlay ornament asset ids", (t) => {
         kind: "sprite",
         rect: [100, 0, 32, 16],
         output: "assets/runtime/ui/panel-top-plaque.png",
+        anchor: "top_center",
+        z_order: 20,
+        allowed_base_ids: ["panel"],
+        offset_bounds: { x: [-8, 8], y: [-4, 12] },
+      },
+    ],
+    extraRuntimeAssets: [
+      {
+        id: "panel_top_plaque",
+        kind: "sprite",
+        path: "assets/runtime/ui/panel-top-plaque.png",
+        anchor: "top_center",
+        z_order: 20,
+        allowed_base_ids: ["panel"],
+        offset_bounds: { x: [-8, 8], y: [-4, 12] },
+      },
+    ],
+  });
+  const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath], dir);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test("fails when separate overlay ornament metadata is not composable", (t) => {
+  const dir = tempDir(t);
+  const overlayPolicy = {
+    ...policy(),
+    non_stretch_ornaments: "separate_overlay_assets",
+    overlay_asset_ids: ["panel_top_plaque"],
+  };
+  const { cropPath, runtimePath } = writeValidManifests(dir, {
+    crop: { stretch_policy: overlayPolicy },
+    runtime: { stretch_policy: overlayPolicy },
+    extraCrops: [
+      {
+        id: "panel_top_plaque",
+        kind: "sprite",
+        rect: [100, 0, 32, 16],
+        output: "assets/runtime/ui/panel-top-plaque.png",
+        anchor: "floating",
+        allowed_base_ids: ["other_panel"],
+        offset_bounds: { x: [8, -8] },
       },
     ],
     extraRuntimeAssets: [
@@ -161,7 +202,12 @@ test("validates separate overlay ornament asset ids", (t) => {
     ],
   });
   const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath], dir);
-  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /overlay_asset_id panel_top_plaque needs anchor/);
+  assert.match(result.stdout, /overlay_asset_id panel_top_plaque needs numeric z_order/);
+  assert.match(result.stdout, /overlay_asset_id panel_top_plaque allowed_base_ids must include panel/);
+  assert.match(result.stdout, /overlay_asset_id panel_top_plaque offset_bounds.x min must be <= max/);
+  assert.match(result.stdout, /overlay_asset_id panel_top_plaque offset_bounds.y must be \[min,max\] numbers/);
 });
 
 test("fails when separate overlay ornament ids are missing or slice9 assets", (t) => {
