@@ -5,6 +5,7 @@ import argparse
 import json
 import math
 import re
+import tempfile
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -49,13 +50,41 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    text = json.dumps(data, indent=2) + "\n"
+    write_text(path, text)
 
 
 def write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    tmp_path = atomic_temp_path(path)
+    try:
+        tmp_path.write_text(text, encoding="utf-8")
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
+
+
+def atomic_temp_path(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        dir=path.parent,
+        delete=False,
+    ) as handle:
+        return Path(handle.name)
+
+
+def save_image_atomic(image: Image.Image, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = atomic_temp_path(path)
+    try:
+        image.save(tmp_path, format=path.suffix.lstrip(".").upper() or None)
+        tmp_path.replace(path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 def clean_name(value: str) -> str:
@@ -435,7 +464,7 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
     path.parent.mkdir(parents=True, exist_ok=True)
     sorted_entries = sorted(entries, key=lambda entry: entry["id"])
     save_started = perf_counter()
-    atlas.save(path)
+    save_image_atomic(atlas, path)
     if profile:
         timings["save_atlas"] = round((perf_counter() - save_started) * 1000, 3)
     labeled_preview_path = None
@@ -445,7 +474,7 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
         preview.alpha_composite(atlas, (0, 0))
         draw_review_labels(preview, sorted_entries)
         preview_path = output_dir / f"{clean_name(group)}-labeled.png"
-        preview.save(preview_path)
+        save_image_atomic(preview, preview_path)
         labeled_preview_path = norm_path(preview_path)
         if profile:
             timings["save_labeled_preview"] = round((perf_counter() - label_started) * 1000, 3)

@@ -195,6 +195,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       Add `--profile` when optimizing atlas size or slow pack builds; it writes
       timing plus atlas occupancy/asset-area ratios into JSON/Markdown and
       prints the slowest pack group.
+      The builder must write atlas PNGs, labeled previews, JSON manifests, and
+      Markdown reports atomically through temp-file replace so parallel audits
+      or human preview cannot read truncated output.
       Record the JSON manifest in `expected_outputs.atlas_pack`; final-art
       validation requires this evidence. This produces grouped review/proof
       atlas PNGs from `pack_group`, preserves slice9/content metadata, writes

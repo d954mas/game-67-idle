@@ -299,4 +299,8 @@ When editing a pack builder:
 - Add resource ids with stable names.
 - Keep cache directories and output paths project-relative.
 - Fail loudly on missing required source assets.
+- Write generated PNG/JSON/Markdown outputs atomically through a temp file in
+  the same directory followed by replace/rename. Audits, previews, or users may
+  read files while a build is running; they must see either the old complete
+  file or the new complete file, never a truncated image or partial manifest.
 - Print enough output for a user or agent to know what was generated.

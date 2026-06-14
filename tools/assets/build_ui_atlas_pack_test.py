@@ -1,15 +1,25 @@
 import json
+import importlib.util
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools/assets/build_ui_atlas_pack.py"
+
+
+def load_builder_module():
+    spec = importlib.util.spec_from_file_location("build_ui_atlas_pack_module", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def write_png(path: Path, size=(8, 6), color=(220, 40, 30, 255)) -> None:
@@ -265,6 +275,25 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             self.assertIn("- `panel`: kind=slice9", report)
             self.assertIn("label_rect=", report)
             self.assertIn("profile: slowest atlas group", result.stdout)
+
+    def test_atomic_image_write_keeps_existing_png_on_save_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "atlas.png"
+            write_png(target, size=(4, 4), color=(10, 20, 30, 255))
+            builder = load_builder_module()
+
+            def failing_save(_image, path, *args, **kwargs):
+                Path(path).write_bytes(b"partial-png")
+                raise RuntimeError("simulated interrupted save")
+
+            with patch.object(Image.Image, "save", failing_save):
+                with self.assertRaises(RuntimeError):
+                    builder.save_image_atomic(Image.new("RGBA", (4, 4), (200, 0, 0, 255)), target)
+
+            restored = Image.open(target).convert("RGBA")
+            self.assertEqual(restored.getpixel((0, 0)), (10, 20, 30, 255))
+            self.assertEqual(list(root.glob(".atlas.png.*.tmp")), [])
 
     def test_fails_when_asset_exceeds_max_size(self):
         with tempfile.TemporaryDirectory() as tmp:
