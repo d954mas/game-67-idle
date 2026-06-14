@@ -116,6 +116,53 @@ test("uses intake next prompt key color before legacy suggested key color", (t) 
   assert.equal(packet.intake_key_color_action, "regenerate_with_next_prompt_key_color");
 });
 
+test("refuses chroma prompt when intake says split preserve or dual plate", (t) => {
+  const dir = tempDir(t);
+  const job = writeJob(dir);
+  writeFileSync(join(dir, "intake.json"), `${JSON.stringify({
+    key_color: "#ff00ff",
+    suggested_key_color: "#00ffff",
+    key_color_action: "split_preserve_or_dual_plate_alpha",
+    next_prompt_key_color: null,
+  })}\n`, "utf8");
+
+  const result = run([
+    "--job", job,
+    "--source-family", "blank UI kit sheet",
+    "--intake-audit", "intake.json",
+    "--output", "prompt.md",
+  ], dir);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /refusing to create another chroma prompt/);
+});
+
+test("allows explicit diagnostic chroma override after preserve risk", (t) => {
+  const dir = tempDir(t);
+  const job = writeJob(dir);
+  writeFileSync(join(dir, "intake.json"), `${JSON.stringify({
+    key_color: "#ff00ff",
+    suggested_key_color: "#00ffff",
+    key_color_action: "split_preserve_or_dual_plate_alpha",
+    next_prompt_key_color: null,
+  })}\n`, "utf8");
+
+  const result = run([
+    "--job", job,
+    "--source-family", "blank UI kit sheet",
+    "--intake-audit", "intake.json",
+    "--allow-chroma-after-preserve-risk",
+    "--output", "prompt.md",
+    "--json-output", "prompt.json",
+  ], dir);
+
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const packet = JSON.parse(readFileSync(join(dir, "prompt.json"), "utf8"));
+  assert.equal(packet.suggested_key_color, "#00ffff");
+  assert.equal(packet.key_color_source, "intake_audit");
+  assert.equal(packet.intake_key_color_action, "split_preserve_or_dual_plate_alpha");
+});
+
 test("uses explicit key color over intake audit", (t) => {
   const dir = tempDir(t);
   const job = writeJob(dir);

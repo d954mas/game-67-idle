@@ -6,7 +6,7 @@ import { dirname, resolve } from "node:path";
 
 function usage() {
   console.log(`usage:
-  node tools/assets/plan_source_sheet_prompt.mjs --job <art-job.json> --source-family "<family>" --output <packet.md> [--json-output <packet.json>] [--intake-audit <audit.json>] [--key-color #00ff00] [--force]
+  node tools/assets/plan_source_sheet_prompt.mjs --job <art-job.json> --source-family "<family>" --output <packet.md> [--json-output <packet.json>] [--intake-audit <audit.json>] [--key-color #00ff00] [--allow-chroma-after-preserve-risk] [--force]
 
 Creates a deterministic prompt/negative-prompt/checklist packet for generating
 cuttable game source sheets. The packet is derived from the art job contract,
@@ -24,6 +24,7 @@ function parseArgs(argv) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") values.help = true;
     else if (arg === "--force") values.force = true;
+    else if (arg === "--allow-chroma-after-preserve-risk") values.allow_chroma_after_preserve_risk = true;
     else if (arg.startsWith("--")) {
       const key = arg.slice(2).replaceAll("-", "_");
       const value = argv[index + 1];
@@ -106,6 +107,12 @@ function buildPacket(job, sourceFamily, options) {
 
   const role = contract.source_family_roles?.[sourceFamily] || "";
   const auditKeyAdvice = keyColorAdviceFromAudit(options.intakeAudit);
+  if (auditKeyAdvice.action === "split_preserve_or_dual_plate_alpha" && options.allowChromaAfterPreserveRisk !== true) {
+    fail(
+      "intake audit recommends split/preserve or dual-plate alpha; refusing to create another chroma prompt. " +
+        "Use a dual-plate alpha workflow or pass --allow-chroma-after-preserve-risk for a diagnostic override."
+    );
+  }
   const keyColor = options.keyColor || auditKeyAdvice.color || "#00ff00";
   const keyColorSource = options.keyColor ? "explicit_override" : auditKeyAdvice.color ? "intake_audit" : "default";
   const constraints = uniqueStrings(contract.prompt_constraints || []);
@@ -236,6 +243,7 @@ const job = readJson(args.job);
 const packet = buildPacket(job, args.source_family, {
   intakeAudit: args.intake_audit,
   keyColor: args.key_color,
+  allowChromaAfterPreserveRisk: args.allow_chroma_after_preserve_risk,
 });
 writeText(args.output, renderMarkdown(packet), args.force === true);
 if (args.json_output) {

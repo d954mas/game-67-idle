@@ -36,9 +36,11 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
    found a safer chroma key. When recording the accepted source, pass the JSON
    prompt packet path to `new_generation_record.mjs --prompt-packet`. Prompt
    packets should preserve `key_color_source` and `intake_key_color_action` so
-   color decisions are not lost. Strict art-job validation reads that JSON and
-   checks its schema, required prompt fields, acceptance checklist, job identity,
-   and source-family match.
+   color decisions are not lost. If `intake_key_color_action` is
+   `split_preserve_or_dual_plate_alpha`, do not create another normal chroma
+   prompt unless this is an explicit diagnostic override. Strict art-job
+   validation reads that JSON and checks its schema, required prompt fields,
+   acceptance checklist, job identity, and source-family match.
 6. Read the existing pack/build script before adding new asset logic.
 7. Do not assume the pack/material path is too slow. If the engine or project
    has pack builders and caches, inspect the builder and run or measure the

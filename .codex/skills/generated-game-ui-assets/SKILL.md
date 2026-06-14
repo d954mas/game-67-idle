@@ -60,6 +60,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    prompt, negative prompt, and acceptance checklist instead of an ad hoc chat
    prompt. Prompt packets should record `key_color_source` and
    `intake_key_color_action` when an intake audit drives the next key color.
+   The prompt planner must refuse another chroma prompt when the intake action
+   is `split_preserve_or_dual_plate_alpha`; use dual-plate/split workflow
+   instead, or mark an intentional diagnostic override explicitly.
    Pass the JSON packet path into `new_generation_record.mjs` with
    `--prompt-packet` so provenance links back to the contract-derived prompt.
 7. Generate source families, not one gameplay screenshot or one mixed sheet:

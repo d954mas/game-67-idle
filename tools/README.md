@@ -92,7 +92,10 @@ the prompt, negative prompt, chroma key, source family role, no-bake rules, and
 acceptance checklist come from durable project data instead of chat memory.
 When fed an intake audit, it prefers `next_prompt_key_color`, records
 `key_color_source`, and carries `intake_key_color_action` into the prompt
-packet for provenance.
+packet for provenance. If the intake action is
+`split_preserve_or_dual_plate_alpha`, it refuses to create another chroma
+prompt by default; pass `--allow-chroma-after-preserve-risk` only for a
+diagnostic override, otherwise switch to split/preserve or dual-plate alpha.
 Generation records can then reference the packet with `prompt_packet`; strict
 art-job validation parses JSON prompt packets and checks schema, required
 fields, job identity, acceptance checklist, and source-family alignment.
