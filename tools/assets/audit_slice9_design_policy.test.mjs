@@ -134,6 +134,22 @@ test("fails when runtime policy diverges from crop policy", (t) => {
   assert.match(result.stdout, /stretch_policy must match crop manifest/);
 });
 
+test("fails when separate overlay ornaments only name an overlay family", (t) => {
+  const dir = tempDir(t);
+  const overlayPolicy = {
+    ...policy(),
+    non_stretch_ornaments: "separate_overlay_assets",
+    overlay_family: "ui decor overlay sheet",
+  };
+  const { cropPath, runtimePath } = writeValidManifests(dir, {
+    crop: { stretch_policy: overlayPolicy },
+    runtime: { stretch_policy: overlayPolicy },
+  });
+  const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /separate overlay ornaments need non-empty overlay_asset_ids/);
+});
+
 test("validates separate overlay ornament asset ids", (t) => {
   const dir = tempDir(t);
   const overlayPolicy = {

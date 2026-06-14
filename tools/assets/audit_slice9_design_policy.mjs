@@ -244,8 +244,8 @@ function validateSlice9Policy(entry, label, knownAssetsById = new Map()) {
     validateMode(stretch.non_stretch_ornaments, ORNAMENT_MODES, `${label} stretch_policy.non_stretch_ornaments`, problems);
     if (stretch.non_stretch_ornaments === "separate_overlay_assets") {
       const overlayIds = Array.isArray(stretch.overlay_asset_ids) ? stretch.overlay_asset_ids.filter(hasText) : [];
-      if (overlayIds.length === 0 && !hasText(stretch.overlay_family)) {
-        problems.push(`${label} separate overlay ornaments need overlay_asset_ids or overlay_family`);
+      if (overlayIds.length === 0) {
+        problems.push(`${label} separate overlay ornaments need non-empty overlay_asset_ids`);
       }
       for (const overlayId of overlayIds) {
         const overlay = knownAssetsById.get(overlayId);

@@ -298,6 +298,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   `offset_bounds` min/max rules.
   If it cannot be named as a separate overlay asset id that exists in the
   manifest, it is probably unsafe inside a resizable base.
+  `overlay_family` alone is planning prose, not proof: final slice9 policy
+  evidence needs concrete `overlay_asset_ids`.
 - Runtime composition proof must treat content safe areas as reserved for text,
   prices, counters, and state values. Decorative overlays that cross those
   bounds need explicit `allow_content_overlap`; otherwise the proof should fail
