@@ -99,19 +99,20 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     `node tools/assets/plan_missing_source_family_prompts.mjs --job <art-job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`
     so the next generation pass has concrete prompt packets for the missing
     source families.
-20. For generated UI atlas readiness, build the atlas pack after the runtime
-    manifest passes atlas metadata audit:
-    `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <runtime-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md>`.
+20. For generated UI review readiness, build the labeled review atlas after
+    the runtime manifest passes atlas metadata audit:
+    `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`.
     Record the JSON pack manifest in `expected_outputs.atlas_pack`; final-art
-    validation requires it for generated UI. The pack manifest should preserve
-    atlas rects, padded rects, extrusion, slice9 margins, content safe areas,
-    and source paths.
-21. Audit generated UI atlas packs before final-art claims:
+    validation requires it for generated UI. The manifest should preserve atlas
+    rects, padded rects, extrusion, slice9 margins, content safe areas, source
+    paths, alias reuse, and label-review purpose. This is proof/review output,
+    not the game's final runtime atlas packer.
+21. Audit generated UI review atlases before final-art claims:
     `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
     Record passing JSON in `expected_outputs.atlas_pack_audit`; final-art
     validation requires it. This catches missing packed assets, out-of-bounds
-    rects, padded-rect overlaps, metadata mismatches, and broken extrusion
-    pixels.
+    rects, padded-rect overlaps, alias mismatches, metadata mismatches, and
+    broken extrusion pixels.
 
 ## Rules
 

@@ -137,6 +137,45 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("missing packed asset id button", result.stdout + result.stderr)
 
+    def test_accepts_alias_entries_reusing_target_region(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/button_base.png")
+            write_png(root / "assets/runtime/button_primary.png")
+            manifest, pack = build_pack(
+                root,
+                [
+                    asset("button_base", "assets/runtime/button_base.png"),
+                    asset("button_primary", "assets/runtime/button_primary.png", alias_of="button_base"),
+                ],
+            )
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)), "--json-output", "packed/audit.json")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            audit = json.loads((root / "packed/audit.json").read_text(encoding="utf-8"))
+            self.assertEqual(audit["verdict"], "pass")
+            self.assertEqual(audit["atlases"][0]["alias_count"], 1)
+
+    def test_rejects_alias_rect_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/button_base.png")
+            write_png(root / "assets/runtime/button_primary.png")
+            manifest, pack = build_pack(
+                root,
+                [
+                    asset("button_base", "assets/runtime/button_base.png"),
+                    asset("button_primary", "assets/runtime/button_primary.png", alias_of="button_base"),
+                ],
+            )
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            for entry in pack_data["atlases"][0]["entries"]:
+                if entry["id"] == "button_primary":
+                    entry["atlas_rect"] = [value + 1 if index == 0 else value for index, value in enumerate(entry["atlas_rect"])]
+            pack.write_text(json.dumps(pack_data), encoding="utf-8")
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("atlas_rect must reuse alias target button_base", result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

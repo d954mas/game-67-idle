@@ -160,16 +160,18 @@ scale variant, and rotation policy. Slice9 entries must set
 `allow_rotation: false` and `trim_preserves_slice9: true`; aliases must point
 to existing asset ids. This is the gate for atlas space savings without
 reintroducing 1-2 pixel halos or broken slice margins.
-`tools/assets/build_ui_atlas_pack.py` builds atlas PNGs from a runtime asset
-manifest. It groups assets by `pack_group`, preserves slice9/content metadata
-in a `game.ui_atlas_pack` manifest, and writes extruded padded rects around
-each sprite so filtering cannot sample transparent or neighboring pixels.
-Record the JSON manifest in `expected_outputs.atlas_pack`; final-art validation
+`tools/assets/build_ui_atlas_pack.py` builds review/proof atlas PNGs from a
+runtime asset manifest. It groups assets by `pack_group`, preserves
+slice9/content metadata in a `game.ui_atlas_pack` manifest, writes extruded
+padded rects around each sprite, can draw id labels with `--label-review`, and
+reuses `alias_of` entries without duplicating the physical bitmap. This output
+is human validation evidence, not the game's final runtime atlas packer. Record
+the JSON manifest in `expected_outputs.atlas_pack`; final-art validation
 requires it for generated UI.
-`tools/assets/audit_ui_atlas_pack.py` validates the built atlas pack. It checks
-pack coverage against the runtime asset manifest, atlas image bounds, non-
-overlapping padded rects, metadata consistency, and that extrusion pixels match
-the source edge pixels. Record passing JSON in
+`tools/assets/audit_ui_atlas_pack.py` validates the built review atlas. It
+checks coverage against the runtime asset manifest, atlas image bounds, non-
+overlapping physical padded rects, alias rect reuse, metadata consistency, and
+that extrusion pixels match the source edge pixels. Record passing JSON in
 `expected_outputs.atlas_pack_audit`; final-art validation requires it.
 `tools/assets/audit_runtime_ui_asset_usage.mjs` is the runtime placement gate.
 It compares a `game.runtime_ui_asset_usage` file against an asset manifest's

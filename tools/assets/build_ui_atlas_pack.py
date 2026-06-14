@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image
+from PIL import ImageDraw
 
 
 ROOT = Path.cwd()
@@ -160,8 +161,73 @@ def try_pack(items: list[dict[str, Any]], target_width: int, border: int, shape_
     return placements, used_width, used_height
 
 
-def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_size: int) -> dict[str, Any]:
-    sorted_items = sorted(items, key=lambda item: (-item["image"].height, -item["image"].width, item["asset"]["id"]))
+def make_entry(item: dict[str, Any], x: int, y: int, image: Image.Image) -> dict[str, Any]:
+    asset = item["asset"]
+    extrude = item["extrude"]
+    entry = {
+        "id": asset["id"],
+        "kind": asset.get("kind"),
+        "source_path": item["source_path"],
+        "atlas_rect": [x + extrude, y + extrude, image.width, image.height],
+        "padded_rect": [x, y, image.width + extrude * 2, image.height + extrude * 2],
+        "extrude": extrude,
+        "shape_padding": item["shape_padding"],
+        "border_padding": item["border_padding"],
+        "trim_rect": asset.get("trim_rect"),
+        "original_size": asset.get("original_size"),
+        "slice9": asset.get("slice9"),
+        "content": asset.get("content") or asset.get("content_rect"),
+        "usage_policy": asset.get("usage_policy"),
+        "role": asset.get("role"),
+        "state": asset.get("state"),
+    }
+    if asset.get("alias_of"):
+        entry["alias_of"] = asset["alias_of"]
+    return entry
+
+
+def draw_review_labels(atlas: Image.Image, entries: list[dict[str, Any]]) -> None:
+    draw = ImageDraw.Draw(atlas)
+    aliases_by_target: dict[str, list[str]] = {}
+    for entry in entries:
+        alias_of = entry.get("alias_of")
+        if alias_of:
+            aliases_by_target.setdefault(str(alias_of), []).append(str(entry["id"]))
+    for entry in entries:
+        if entry.get("alias_of"):
+            continue
+        x, y, width, height = rect = [int(value) for value in entry["padded_rect"]]
+        label = str(entry["id"])
+        aliases = aliases_by_target.get(label, [])
+        if aliases:
+            label = f"{label} (+{','.join(aliases)})"
+        label_width = int(draw.textlength(label))
+        label_height = 10
+        label_x = x
+        label_y = y + height + 2
+        if label_y + label_height > atlas.height:
+            label_y = max(0, y - label_height - 2)
+        if label_x + label_width + 4 > atlas.width:
+            label_x = max(0, atlas.width - label_width - 4)
+        draw.rectangle([label_x, label_y, label_x + label_width + 4, label_y + label_height + 2], fill=(0, 0, 0, 170))
+        draw.text((label_x + 2, label_y + 1), label, fill=(255, 255, 255, 255))
+        draw.rectangle([rect[0], rect[1], rect[0] + rect[2] - 1, rect[1] + rect[3] - 1], outline=(255, 255, 255, 110))
+
+
+def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_size: int, label_review: bool) -> dict[str, Any]:
+    canonical_items = [item for item in items if not item["asset"].get("alias_of")]
+    alias_items = [item for item in items if item["asset"].get("alias_of")]
+    if not canonical_items:
+        fail(f"pack group {group} has only aliases and no physical source asset")
+    ids_in_group = {item["asset"]["id"] for item in items}
+    for item in alias_items:
+        alias_of = item["asset"].get("alias_of")
+        if not isinstance(alias_of, str) or not alias_of:
+            fail(f"asset {item['asset']['id']} has invalid alias_of")
+        if alias_of not in ids_in_group:
+            fail(f"asset {item['asset']['id']} aliases missing asset {alias_of} in pack group {group}")
+
+    sorted_items = sorted(canonical_items, key=lambda item: (-item["image"].height, -item["image"].width, item["asset"]["id"]))
     border = max(item["border_padding"] for item in sorted_items)
     shape_padding = max(item["shape_padding"] for item in sorted_items)
     total_area = sum((item["image"].width + item["extrude"] * 2 + shape_padding) * (item["image"].height + item["extrude"] * 2 + shape_padding) for item in sorted_items)
@@ -181,56 +247,73 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
     placements, width, height = placement_result
     atlas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     entries: list[dict[str, Any]] = []
+    entries_by_id: dict[str, dict[str, Any]] = {}
     for placement in placements:
-        asset = placement["asset"]
         image = placement["image"]
-        extrude = placement["extrude"]
         x = int(placement["x"])
         y = int(placement["y"])
-        paste_extruded(atlas, image, x, y, extrude)
-        entry = {
-            "id": asset["id"],
-            "kind": asset.get("kind"),
-            "source_path": placement["source_path"],
-            "atlas_rect": [x + extrude, y + extrude, image.width, image.height],
-            "padded_rect": [x, y, image.width + extrude * 2, image.height + extrude * 2],
-            "extrude": extrude,
-            "shape_padding": placement["shape_padding"],
-            "border_padding": placement["border_padding"],
-            "trim_rect": asset.get("trim_rect"),
-            "original_size": asset.get("original_size"),
-            "slice9": asset.get("slice9"),
-            "content": asset.get("content") or asset.get("content_rect"),
-            "usage_policy": asset.get("usage_policy"),
-            "role": asset.get("role"),
-            "state": asset.get("state"),
-        }
-        if asset.get("alias_of"):
-            entry["alias_of"] = asset["alias_of"]
+        paste_extruded(atlas, image, x, y, placement["extrude"])
+        entry = make_entry(placement, x, y, image)
+        entries.append(entry)
+        entries_by_id[entry["id"]] = entry
+
+    item_by_id = {item["asset"]["id"]: item for item in items}
+    for item in sorted(alias_items, key=lambda value: value["asset"]["id"]):
+        asset = item["asset"]
+        target_id = asset["alias_of"]
+        target_entry = entries_by_id.get(target_id)
+        target_item = item_by_id.get(target_id)
+        if target_entry is None or target_item is None:
+            fail(f"asset {asset['id']} aliases missing physical entry {target_id} in pack group {group}")
+        if item["image"].size != target_item["image"].size:
+            fail(f"asset {asset['id']} alias image size must match {target_id}")
+        entry = make_entry(item, target_entry["padded_rect"][0], target_entry["padded_rect"][1], target_item["image"])
+        entry["atlas_rect"] = list(target_entry["atlas_rect"])
+        entry["padded_rect"] = list(target_entry["padded_rect"])
+        entry["extrude"] = target_entry["extrude"]
         entries.append(entry)
 
     path = output_dir / f"{clean_name(group)}.png"
     path.parent.mkdir(parents=True, exist_ok=True)
+    sorted_entries = sorted(entries, key=lambda entry: entry["id"])
     atlas.save(path)
-    return {
+    labeled_preview_path = None
+    if label_review:
+        preview_height = min(max_size, height + 16)
+        preview = Image.new("RGBA", (width, preview_height), (0, 0, 0, 0))
+        preview.alpha_composite(atlas, (0, 0))
+        draw_review_labels(preview, sorted_entries)
+        preview_path = output_dir / f"{clean_name(group)}-labeled.png"
+        preview.save(preview_path)
+        labeled_preview_path = norm_path(preview_path)
+    result = {
         "pack_group": group,
+        "purpose": "review_validation_atlas_not_engine_runtime_pack",
+        "label_overlay": label_review,
         "path": norm_path(path),
         "size": [width, height],
         "entry_count": len(entries),
-        "entries": sorted(entries, key=lambda entry: entry["id"]),
+        "physical_entry_count": len(placements),
+        "alias_count": len(alias_items),
+        "entries": sorted_entries,
     }
+    if labeled_preview_path:
+        result["labeled_preview_path"] = labeled_preview_path
+    return result
 
 
-def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report_path: Path | None, max_size: int) -> dict[str, Any]:
+def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report_path: Path | None, max_size: int, label_review: bool) -> dict[str, Any]:
     manifest = read_json(asset_manifest)
     loaded = load_assets(manifest)
     groups: dict[str, list[dict[str, Any]]] = {}
     for item in loaded:
         groups.setdefault(item["pack_group"], []).append(item)
-    atlases = [pack_group(group, items, output_dir, max_size) for group, items in sorted(groups.items())]
+    atlases = [pack_group(group, items, output_dir, max_size, label_review) for group, items in sorted(groups.items())]
     pack_manifest = {
         "schema": "game.ui_atlas_pack",
         "version": 1,
+        "purpose": "review_validation_atlas_not_engine_runtime_pack",
+        "label_overlay": label_review,
         "asset_manifest": norm_path(asset_manifest),
         "output_dir": norm_path(output_dir),
         "max_size": max_size,
@@ -239,8 +322,9 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
     write_json(json_output, pack_manifest)
     if report_path:
         lines = [
-            "# UI Atlas Pack",
+            "# UI Atlas Review Pack",
             "",
+            "purpose: review/validation atlas, not the engine runtime pack",
             f"asset_manifest: `{pack_manifest['asset_manifest']}`",
             f"output_dir: `{pack_manifest['output_dir']}`",
             f"atlases: **{len(atlases)}**",
@@ -249,19 +333,23 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
             "",
         ]
         for atlas in atlases:
-            lines.append(f"- `{atlas['pack_group']}` -> `{atlas['path']}` {atlas['size'][0]}x{atlas['size'][1]}, entries={atlas['entry_count']}")
+            line = f"- `{atlas['pack_group']}` -> `{atlas['path']}` {atlas['size'][0]}x{atlas['size'][1]}, entries={atlas['entry_count']}, physical={atlas['physical_entry_count']}, aliases={atlas['alias_count']}"
+            if atlas.get("labeled_preview_path"):
+                line += f", labeled_preview=`{atlas['labeled_preview_path']}`"
+            lines.append(line)
         lines.append("")
         write_text(report_path, "\n".join(lines))
     return pack_manifest
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build UI atlas PNGs from a runtime asset manifest.")
+    parser = argparse.ArgumentParser(description="Build review UI atlas PNGs from a runtime asset manifest.")
     parser.add_argument("--asset-manifest", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--json-output")
     parser.add_argument("--report")
     parser.add_argument("--max-size", type=int, default=2048)
+    parser.add_argument("--label-review", action="store_true", help="Draw id labels in padding/free space for human review. Do not use this image as a runtime texture.")
     args = parser.parse_args()
 
     asset_manifest = project_path(args.asset_manifest)
@@ -270,9 +358,9 @@ def main() -> None:
     report_path = project_path(args.report) if args.report else None
     if args.max_size < 64:
         fail("--max-size must be >= 64")
-    pack = build_pack(asset_manifest, output_dir, json_output, report_path, args.max_size)
+    pack = build_pack(asset_manifest, output_dir, json_output, report_path, args.max_size, args.label_review)
     total_entries = sum(atlas["entry_count"] for atlas in pack["atlases"])
-    print(f"pass: packed {total_entries} UI asset(s) into {len(pack['atlases'])} atlas image(s)")
+    print(f"pass: packed {total_entries} UI asset id(s) into {len(pack['atlases'])} review atlas image(s)")
     print(f"wrote atlas manifest: {norm_path(json_output)}")
 
 

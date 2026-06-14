@@ -132,6 +132,10 @@ For generated game UI, request and build these as separate families:
 2. Store metadata with the atlas.
    Every entry needs id, rect, trim, original size, pivot/anchor, slice9
    margins, content safe area, state role, and source family.
+   For generated-art review, the proof atlas should also draw readable asset
+   ids in padding/free space so the reviewer can say exactly which named asset
+   is accepted or rejected. That label overlay is review evidence, not runtime
+   texture data.
 
 3. Use trim plus padding/bleed/extrude.
    Tight crops save space but cause sampling artifacts. Use transparent
@@ -140,7 +144,8 @@ For generated game UI, request and build these as separate families:
 4. Alias identical art.
    Shared borders, repeated button centers, disabled overlays, and generic
    chips should not be duplicated in the atlas. Store multiple ids pointing to
-   the same region when the runtime semantics differ.
+   the same region when the runtime semantics differ. Review manifests should
+   report both semantic entry count and physical bitmap count.
 
 5. Prefer overlays over duplicated full buttons.
    A primary/secondary/locked/selected button family can often be:
@@ -198,7 +203,10 @@ Generate source families with explicit separation:
 4. Add an overlay composition preview: base + decor + text + state overlays.
 5. Add atlas policy fields: `pack_group`, `trim`, `bleed`, `extrude`,
    `shape_padding`, `alias_of`, `variant_scale`, `anchor`.
-6. Add a design rejection gate: fail source sheets with unique non-corner
+6. Separate review atlas proof from game runtime packing. The review atlas is
+   for visible validation, labels, alias proof, extrusion proof, and handoff
+   names; the game can repack the accepted assets later using its own packer.
+7. Add a design rejection gate: fail source sheets with unique non-corner
    ornament inside stretch zones even if pixel audits pass.
-7. Keep performance fast by running quick gates during iteration and full
+8. Keep performance fast by running quick gates during iteration and full
    portable validation only before commit/release.

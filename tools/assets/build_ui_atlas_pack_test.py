@@ -127,6 +127,50 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             pack = json.loads((root / "packed/ui-atlas-pack.json").read_text(encoding="utf-8"))
             self.assertEqual({atlas["pack_group"] for atlas in pack["atlases"]}, {"ui_panels", "ui_icons"})
 
+    def test_alias_entries_reuse_physical_region(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/button_base.png")
+            write_png(root / "assets/runtime/button_primary.png")
+            manifest = root / "manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema": "game.asset_manifest",
+                        "version": 1,
+                        "assets": [
+                            asset("button_base", "assets/runtime/button_base.png"),
+                            asset("button_primary", "assets/runtime/button_primary.png", alias_of="button_base"),
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = run_pack(root, "--asset-manifest", "manifest.json", "--output-dir", "packed", "--json-output", "packed/atlas.json")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            pack = json.loads((root / "packed/atlas.json").read_text(encoding="utf-8"))
+            atlas_info = pack["atlases"][0]
+            entries = {entry["id"]: entry for entry in atlas_info["entries"]}
+            self.assertEqual(atlas_info["entry_count"], 2)
+            self.assertEqual(atlas_info["physical_entry_count"], 1)
+            self.assertEqual(atlas_info["alias_count"], 1)
+            self.assertEqual(entries["button_primary"]["alias_of"], "button_base")
+            self.assertEqual(entries["button_primary"]["atlas_rect"], entries["button_base"]["atlas_rect"])
+            self.assertEqual(entries["button_primary"]["padded_rect"], entries["button_base"]["padded_rect"])
+
+    def test_label_review_marks_manifest_as_review_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({"schema": "game.asset_manifest", "version": 1, "assets": [asset("panel", "assets/runtime/panel.png")]}), encoding="utf-8")
+            result = run_pack(root, "--asset-manifest", "manifest.json", "--output-dir", "packed", "--json-output", "packed/atlas.json", "--label-review")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            pack = json.loads((root / "packed/atlas.json").read_text(encoding="utf-8"))
+            self.assertEqual(pack["purpose"], "review_validation_atlas_not_engine_runtime_pack")
+            self.assertTrue(pack["label_overlay"])
+            self.assertTrue(pack["atlases"][0]["label_overlay"])
+
     def test_fails_when_asset_exceeds_max_size(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

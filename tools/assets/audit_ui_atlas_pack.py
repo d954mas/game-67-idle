@@ -159,6 +159,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None) -> dict
             atlas_problems.append("atlas needs non-empty entries")
             entries = []
 
+        entries_by_id = {str(entry.get("id") or ""): entry for entry in entries if isinstance(entry, dict)}
         padded_rects: list[tuple[str, tuple[int, int, int, int]]] = []
         for entry in entries:
             entry_id = str(entry.get("id") or "")
@@ -172,6 +173,9 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None) -> dict
                 expected_kind = expected_assets[entry_id].get("kind")
                 if entry.get("kind") != expected_kind:
                     atlas_problems.append(f"{entry_id} kind must match asset manifest")
+                expected_alias = expected_assets[entry_id].get("alias_of")
+                if expected_alias and entry.get("alias_of") != expected_alias:
+                    atlas_problems.append(f"{entry_id} alias_of must match asset manifest")
 
             for rect_name in ("atlas_rect", "padded_rect"):
                 if not rect_valid(entry.get(rect_name)):
@@ -180,6 +184,20 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None) -> dict
                 x, y, w, h = rect_tuple(entry[rect_name])
                 if atlas is not None and (x + w > atlas.width or y + h > atlas.height):
                     atlas_problems.append(f"{entry_id} {rect_name} exceeds atlas bounds")
+
+            alias_of = entry.get("alias_of")
+            if alias_of:
+                target = entries_by_id.get(str(alias_of))
+                if target is None:
+                    atlas_problems.append(f"{entry_id} aliases missing atlas entry {alias_of}")
+                elif rect_valid(entry.get("atlas_rect")) and rect_valid(entry.get("padded_rect")):
+                    if entry["atlas_rect"] != target.get("atlas_rect"):
+                        atlas_problems.append(f"{entry_id} atlas_rect must reuse alias target {alias_of}")
+                    if entry["padded_rect"] != target.get("padded_rect"):
+                        atlas_problems.append(f"{entry_id} padded_rect must reuse alias target {alias_of}")
+                    if entry.get("extrude") != target.get("extrude"):
+                        atlas_problems.append(f"{entry_id} extrude must reuse alias target {alias_of}")
+                continue
 
             if rect_valid(entry.get("padded_rect")):
                 padded = rect_tuple(entry["padded_rect"])
@@ -198,6 +216,8 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None) -> dict
                 "status": "pass" if not atlas_problems else "fail",
                 "problems": atlas_problems,
                 "entry_count": len(entries),
+                "physical_entry_count": atlas_info.get("physical_entry_count") if isinstance(atlas_info, dict) else None,
+                "alias_count": atlas_info.get("alias_count") if isinstance(atlas_info, dict) else None,
             }
         )
         problems.extend(atlas_problems)
@@ -246,7 +266,12 @@ def main() -> None:
         suffix = ""
         if atlas["problems"]:
             suffix = ": " + "; ".join(atlas["problems"])
-        lines.append(f"- {atlas['status'].upper()} `{atlas.get('pack_group')}` entries={atlas['entry_count']}{suffix}")
+        physical = atlas.get("physical_entry_count")
+        aliases = atlas.get("alias_count")
+        detail = f"entries={atlas['entry_count']}"
+        if physical is not None and aliases is not None:
+            detail += f", physical={physical}, aliases={aliases}"
+        lines.append(f"- {atlas['status'].upper()} `{atlas.get('pack_group')}` {detail}{suffix}")
     lines.append("")
     if args.report:
         write_text(project_path(args.report), "\n".join(lines))

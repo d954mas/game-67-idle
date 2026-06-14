@@ -156,19 +156,20 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       `pack_group`, `source_crop`, `original_size`, `trim_rect`, trim mode,
       alpha bleed, premultiplied-alpha handling, extrusion, shape/border
       padding, scale variant, alias links, and slice9-safe rotation policy.
-    - atlas pack build:
-      `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <runtime-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md>`
+    - review atlas build:
+      `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`
       Record the JSON manifest in `expected_outputs.atlas_pack`; final-art
-      validation requires this evidence. This produces grouped atlas PNGs from
-      `pack_group`, preserves slice9/content metadata in the pack manifest, and
-      writes extruded padded rects so runtime filtering does not sample
-      transparent or neighboring pixels.
-    - atlas pack audit:
+      validation requires this evidence. This produces grouped review/proof
+      atlas PNGs from `pack_group`, preserves slice9/content metadata, writes
+      extruded padded rects, reuses alias regions, and can draw id labels in
+      padding/free space so the lead can name which assets to take. This is
+      review evidence, not the game's final runtime packer.
+    - review atlas audit:
       `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
       Record passing JSON reports in `expected_outputs.atlas_pack_audit`;
       final-art validation requires this evidence. This verifies runtime asset
-      coverage, atlas bounds, padded-rect overlap, metadata consistency, and
-      extrusion pixels.
+      coverage, atlas bounds, padded-rect overlap, alias reuse, metadata
+      consistency, and extrusion pixels.
     - source family coverage audit:
       `node tools/assets/audit_source_family_coverage.mjs --job <job> --json-output <audit.json> --report <audit.md>`
       Record passing reports in `expected_outputs.source_family_coverage_audit`;
@@ -259,12 +260,14 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
 - Run `audit_atlas_metadata.mjs` before treating a generated UI kit as final
   art. The runtime manifest should make trim, bleed, extrusion, padding,
   rotation, scale variant, and alias policy machine-readable.
-- Build atlas packs with `build_ui_atlas_pack.py` before final-art claims.
-  The atlas pack manifest is the bridge from loose runtime PNGs to actual
-  runtime pack integration: it records `atlas_rect`, `padded_rect`, extrusion,
-  slice9 margins, content safe areas, and source paths.
-- Audit atlas packs with `audit_ui_atlas_pack.py`; a pack image is not trusted
-  until coverage, bounds, overlap, and extrusion pixel checks pass.
+- Build a labeled review atlas with `build_ui_atlas_pack.py --label-review`
+  before final-art claims when the lead needs to inspect outputs. This atlas is
+  a proof/contact artifact: it records `atlas_rect`, `padded_rect`, extrusion,
+  slice9 margins, content safe areas, source paths, physical entry count, and
+  alias count. It must not be presented as the game's final runtime atlas.
+- Audit review atlases with `audit_ui_atlas_pack.py`; a proof image is not
+  trusted until coverage, bounds, overlap, alias reuse, and extrusion pixel
+  checks pass.
 - Use trim only with padding, alpha bleed, edge extrusion, and shape padding.
   Tight alpha crops without bleed/extrude are a known cause of 1-2 pixel halos
   and neighboring-pixel leaks.
@@ -272,7 +275,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   base button + state overlay + selected/locked/affordable overlay + icon +
   runtime label unless the material or silhouette truly changes.
 - Alias duplicate regions where the same pixels serve different semantic ids.
-  Store the semantic ids in metadata instead of duplicating the bitmap.
+  Store the semantic ids in metadata instead of duplicating the bitmap. In a
+  review atlas, alias entries should point to the same rect as the physical
+  source and the label should show `alias -> target`.
 - Record scale variants deliberately (`1x`, `2x`, mobile/desktop). Keep layout
   coordinates and atlas variants stable enough to avoid fractional artifacts.
 
