@@ -10,6 +10,11 @@ from typing import Any
 
 from PIL import Image
 
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - fallback path is kept for portable minimal Python installs.
+    np = None
+
 
 ROOT = Path.cwd()
 SCRIPT_ROOT = Path(__file__).resolve().parents[2]
@@ -39,6 +44,66 @@ def touches_transparent(alpha_pixels: Any, x: int, y: int, width: int, height: i
     return False
 
 
+def dilate_mask_numpy(mask: Any, radius: int) -> Any:
+    padded = np.pad(mask, radius, mode="constant", constant_values=False)
+    result = np.zeros(mask.shape, dtype=bool)
+    size = radius * 2 + 1
+    for y in range(size):
+        for x in range(size):
+            result |= padded[y : y + mask.shape[0], x : x + mask.shape[1]]
+    return result
+
+
+def key_fringe_mask_array(array: Any) -> Any:
+    red = array[..., 0].astype(np.int16)
+    green = array[..., 1].astype(np.int16)
+    blue = array[..., 2].astype(np.int16)
+    return (red > 115) & (blue > 120) & (green < 145) & (red + blue > 300) & (red + blue > green * 3)
+
+
+def purple_halo_mask_array(array: Any) -> Any:
+    red = array[..., 0].astype(np.int16)
+    green = array[..., 1].astype(np.int16)
+    blue = array[..., 2].astype(np.int16)
+    purple = (red > 75) & (blue > 75) & (green < 120) & (np.minimum(red, blue) - green > 20) & (red + blue > green * 2 + 80)
+    dark_purple = (
+        (red >= 32)
+        & (blue >= 32)
+        & ((green < np.minimum(red, blue) * 0.55) | (green <= 12))
+        & (np.abs(red - blue) < 64)
+        & (red + blue > green * 3 + 38)
+    )
+    magenta = (red > 80) & (blue > 45) & (green < 120) & (red > green + 32) & (blue > green + 6)
+    dark_magenta = (red > 44) & (blue > 34) & (green < 42) & (red > green + 24) & (blue > green + 14) & (red + blue > green * 2 + 48)
+    return purple | dark_purple | magenta | dark_magenta
+
+
+def source_key_spill_mask_array(array: Any, key: tuple[int, int, int]) -> Any:
+    red = array[..., 0].astype(np.int16)
+    green = array[..., 1].astype(np.int16)
+    blue = array[..., 2].astype(np.int16)
+    key_red, key_green, key_blue = key
+    if key_green > 220 and key_red < 40 and key_blue < 40:
+        return (green > 90) & (green > red * 1.25) & (green > blue * 1.25) & (green - np.maximum(red, blue) > 22)
+    if key_red > 220 and key_blue > 220 and key_green < 40:
+        return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= 36
+    if key_red > 220 and key_green < 40 and key_blue < 40:
+        return (red > 90) & (red > green * 1.25) & (red > blue * 1.25) & (red - np.maximum(green, blue) > 22)
+    if key_blue > 220 and key_red < 40 and key_green < 40:
+        return (blue > 90) & (blue > red * 1.25) & (blue > green * 1.25) & (blue - np.maximum(red, green) > 22)
+    return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= 36
+
+
+def count_edge_color_numpy(image: Image.Image, mask_fn: Any, radius: int) -> int | None:
+    if np is None:
+        return None
+    array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
+    alpha = array[..., 3]
+    visible = alpha > 12
+    transparent_near = dilate_mask_numpy(alpha <= 12, radius)
+    return int(np.count_nonzero(visible & mask_fn(array) & transparent_near))
+
+
 def count_edge_color(image: Image.Image, predicate: Any, radius: int) -> int:
     rgba = image.convert("RGBA")
     pixels = rgba.load()
@@ -57,20 +122,38 @@ def count_edge_color(image: Image.Image, predicate: Any, radius: int) -> int:
 
 
 def count_edge_key_fringe(image: Image.Image) -> int:
+    vector_count = count_edge_color_numpy(image, key_fringe_mask_array, 1)
+    if vector_count is not None:
+        return vector_count
     return count_edge_color(image, is_key_fringe_like, 1)
 
 
 def count_edge_source_key_fringe(image: Image.Image, key: tuple[int, int, int] | None) -> int:
     if key is None:
         return 0
+    vector_count = count_edge_color_numpy(image, lambda array: source_key_spill_mask_array(array, key), 2)
+    if vector_count is not None:
+        return vector_count
     return count_edge_color(image, lambda red, green, blue: is_source_key_spill_like(red, green, blue, key), 2)
 
 
 def count_edge_purple_halo(image: Image.Image) -> int:
+    vector_count = count_edge_color_numpy(image, purple_halo_mask_array, 6)
+    if vector_count is not None:
+        return vector_count
     return count_edge_color(image, is_any_purple_halo_like, 6)
 
 
 def count_transparent_edge_bad_rgb(image: Image.Image, key: tuple[int, int, int] | None = None) -> int:
+    if np is not None:
+        array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
+        alpha = array[..., 3]
+        transparent = alpha <= 12
+        bad = key_fringe_mask_array(array) | purple_halo_mask_array(array)
+        if key is not None:
+            bad |= source_key_spill_mask_array(array, key)
+        near_visible = dilate_mask_numpy(alpha > 12, 2)
+        return int(np.count_nonzero(transparent & bad & near_visible))
     rgba = image.convert("RGBA")
     pixels = rgba.load()
     alpha = rgba.getchannel("A")
