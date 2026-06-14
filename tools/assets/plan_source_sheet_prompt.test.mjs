@@ -161,6 +161,7 @@ test("allows explicit diagnostic chroma override after preserve risk", (t) => {
   assert.equal(packet.suggested_key_color, "#00ffff");
   assert.equal(packet.key_color_source, "intake_audit");
   assert.equal(packet.intake_key_color_action, "split_preserve_or_dual_plate_alpha");
+  assert.equal(packet.diagnostic_chroma_override, true);
 });
 
 test("uses explicit key color over intake audit", (t) => {

@@ -115,6 +115,7 @@ function buildPacket(job, sourceFamily, options) {
   }
   const keyColor = options.keyColor || auditKeyAdvice.color || "#00ff00";
   const keyColorSource = options.keyColor ? "explicit_override" : auditKeyAdvice.color ? "intake_audit" : "default";
+  const diagnosticChromaOverride = auditKeyAdvice.action === "split_preserve_or_dual_plate_alpha" && options.allowChromaAfterPreserveRisk === true;
   const constraints = uniqueStrings(contract.prompt_constraints || []);
   const mustNotBake = uniqueStrings(job.must_not_bake || []);
   const rejects = uniqueStrings(job.qa_rejects || []);
@@ -174,6 +175,7 @@ function buildPacket(job, sourceFamily, options) {
     suggested_key_color: keyColor,
     key_color_source: keyColorSource,
     intake_key_color_action: auditKeyAdvice.action,
+    diagnostic_chroma_override: diagnosticChromaOverride,
     prompt: promptLines.join(" "),
     negative_prompt: negativeItems.join(", "),
     constraints,

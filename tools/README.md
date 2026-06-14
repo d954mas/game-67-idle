@@ -96,9 +96,12 @@ packet for provenance. If the intake action is
 `split_preserve_or_dual_plate_alpha`, it refuses to create another chroma
 prompt by default; pass `--allow-chroma-after-preserve-risk` only for a
 diagnostic override, otherwise switch to split/preserve or dual-plate alpha.
+The override is written as `diagnostic_chroma_override: true` so strict
+validation can distinguish deliberate diagnostics from accidental chroma loops.
 Generation records can then reference the packet with `prompt_packet`; strict
 art-job validation parses JSON prompt packets and checks schema, required
-fields, job identity, acceptance checklist, and source-family alignment.
+fields, job identity, acceptance checklist, source-family alignment, and unsafe
+chroma override policy.
 `tools/assets/plan_missing_source_family_prompts.mjs` turns a failing source
 family coverage audit into a concrete prompt queue. It emits prompt packets for
 required source families that do not yet have passing final-accepted generation

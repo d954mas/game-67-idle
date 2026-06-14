@@ -602,6 +602,21 @@ function validatePromptPacket(packet, packetPath, record, job, label, problems) 
   } else if (!packet.acceptance_checklist.every(hasText)) {
     problems.push(`${packetLabel} acceptance_checklist entries must be non-empty strings`);
   }
+  if (objectHasText(packet, "intake_key_color_action")) {
+    const allowedActions = ["keep_current_key_color", "regenerate_with_next_prompt_key_color", "split_preserve_or_dual_plate_alpha"];
+    if (!allowedActions.includes(packet.intake_key_color_action)) {
+      problems.push(`${packetLabel} intake_key_color_action is unknown: ${packet.intake_key_color_action}`);
+    }
+    if (packet.intake_key_color_action === "split_preserve_or_dual_plate_alpha" && packet.diagnostic_chroma_override !== true) {
+      problems.push(`${packetLabel} with split_preserve_or_dual_plate_alpha needs diagnostic_chroma_override true or a dual-plate/split workflow`);
+    }
+    if (packet.intake_key_color_action === "regenerate_with_next_prompt_key_color" && !objectHasText(packet, "suggested_key_color")) {
+      problems.push(`${packetLabel} needs suggested_key_color when regenerating from intake key color action`);
+    }
+    if (!objectHasText(packet, "key_color_source")) {
+      problems.push(`${packetLabel} needs key_color_source when intake_key_color_action is present`);
+    }
+  }
   if (hasText(packet.job_id) && hasText(job?.id) && packet.job_id !== job.id) {
     problems.push(`${packetLabel} job_id should match art job ${job.id}`);
   }

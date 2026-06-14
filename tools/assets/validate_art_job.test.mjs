@@ -1118,6 +1118,41 @@ test("strict mode rejects prompt packet from the wrong source family", (t) => {
   assert.match(result.stdout, /source_family\/source_family_role does not match record source_family_role/);
 });
 
+test("strict mode rejects unsafe chroma prompt packet without diagnostic override", (t) => {
+  const dir = tempDir(t);
+  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const { job } = writeStrictValidJob(dir, {
+    prompt_packet: promptPacket,
+  });
+  writePromptPacket(dir, promptPacket, {
+    key_color_source: "intake_audit",
+    intake_key_color_action: "split_preserve_or_dual_plate_alpha",
+    suggested_key_color: "#00ffff",
+  });
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /split_preserve_or_dual_plate_alpha needs diagnostic_chroma_override true/);
+});
+
+test("strict mode accepts explicit diagnostic chroma prompt packet override", (t) => {
+  const dir = tempDir(t);
+  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const { job } = writeStrictValidJob(dir, {
+    prompt_packet: promptPacket,
+  });
+  writePromptPacket(dir, promptPacket, {
+    key_color_source: "intake_audit",
+    intake_key_color_action: "split_preserve_or_dual_plate_alpha",
+    diagnostic_chroma_override: true,
+    suggested_key_color: "#00ffff",
+  });
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /strict-valid/);
+});
+
 test("strict mode accepts matching generation record prompt packet", (t) => {
   const dir = tempDir(t);
   const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
