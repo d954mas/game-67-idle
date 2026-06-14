@@ -227,3 +227,39 @@ test("fails when slice9 margins or content safe area are not valid", (t) => {
   assert.match(result.stdout, /content safe area exceeds source bounds/);
   assert.match(result.stdout, /needs content safe area/);
 });
+
+test("fails when content safe area overlaps fixed slice9 margins", (t) => {
+  const dir = tempDir(t);
+  const { cropPath, runtimePath } = writeValidManifests(dir, {
+    crop: {
+      content: { x: 4, y: 8, w: 82, h: 44 },
+    },
+    runtime: {
+      content: { x: 4, y: 8, w: 82, h: 44 },
+    },
+  });
+  const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /content safe area overlaps fixed left slice9 margin/);
+  assert.match(result.stdout, /content safe area overlaps fixed top slice9 margin/);
+  assert.match(result.stdout, /content safe area overlaps fixed right slice9 margin/);
+});
+
+test("fails when preview leaves no runtime content area", (t) => {
+  const dir = tempDir(t);
+  const { cropPath, runtimePath } = writeValidManifests(dir, {
+    crop: {
+      rect: [0, 0, 320, 120],
+      content: { x: 140, y: 18, w: 40, h: 50 },
+      target_preview_sizes: [[160, 96], [400, 160]],
+    },
+    runtime: {
+      original_size: [320, 120],
+      content: { x: 140, y: 18, w: 40, h: 50 },
+      target_preview_sizes: [[160, 96], [400, 160]],
+    },
+  });
+  const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /preview 160x96 leaves no runtime content width/);
+});

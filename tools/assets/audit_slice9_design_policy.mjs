@@ -114,6 +114,7 @@ function validateSlice9Geometry(entry, label) {
   }
 
   const content = entry.content || entry.content_rect;
+  let contentRect = null;
   if (!content || typeof content !== "object") {
     problems.push(`${label} needs content safe area`);
   } else {
@@ -131,7 +132,18 @@ function validateSlice9Geometry(entry, label) {
       if (rect.x + rect.w > size.width || rect.y + rect.h > size.height) {
         problems.push(`${label} content safe area exceeds source bounds ${size.width}x${size.height}`);
       }
+      if (margins) {
+        if (rect.x < margins.left) problems.push(`${label} content safe area overlaps fixed left slice9 margin`);
+        if (rect.y < margins.top) problems.push(`${label} content safe area overlaps fixed top slice9 margin`);
+        if (rect.x + rect.w > size.width - margins.right) {
+          problems.push(`${label} content safe area overlaps fixed right slice9 margin`);
+        }
+        if (rect.y + rect.h > size.height - margins.bottom) {
+          problems.push(`${label} content safe area overlaps fixed bottom slice9 margin`);
+        }
+      }
     }
+    if (Object.values(rect).every((value) => Number.isFinite(value))) contentRect = rect;
   }
 
   const previewSizes = Array.isArray(entry.target_preview_sizes || entry.preview_sizes) ? entry.target_preview_sizes || entry.preview_sizes : [];
@@ -149,6 +161,18 @@ function validateSlice9Geometry(entry, label) {
     if (margins) {
       if (margins.left + margins.right >= sizeValue.width) problems.push(`${label} preview ${sizeValue.width}x${sizeValue.height} leaves no horizontal stretch center`);
       if (margins.top + margins.bottom >= sizeValue.height) problems.push(`${label} preview ${sizeValue.width}x${sizeValue.height} leaves no vertical stretch center`);
+    }
+    if (contentRect && size) {
+      const rightPad = size.width - (contentRect.x + contentRect.w);
+      const bottomPad = size.height - (contentRect.y + contentRect.h);
+      const previewContentWidth = sizeValue.width - contentRect.x - rightPad;
+      const previewContentHeight = sizeValue.height - contentRect.y - bottomPad;
+      if (previewContentWidth <= 0) {
+        problems.push(`${label} preview ${sizeValue.width}x${sizeValue.height} leaves no runtime content width`);
+      }
+      if (previewContentHeight <= 0) {
+        problems.push(`${label} preview ${sizeValue.width}x${sizeValue.height} leaves no runtime content height`);
+      }
     }
   }
   return { problems, normalizedPreviewSizes };
