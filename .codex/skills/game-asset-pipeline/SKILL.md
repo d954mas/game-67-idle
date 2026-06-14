@@ -69,6 +69,8 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 15. For generated UI PNGs, run the pixel audit after slicing:
     `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`.
     The audit should pass before integrating or regenerating runtime headers.
+    Add `--profile` for slow or disputed runs so the JSON/Markdown report shows
+    per-asset timing and the slowest asset without changing audit verdicts.
 16. For 1-2 pixel edge disputes, generate a zoomed edge proof:
     `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png>`.
     Record durable proof paths in the art job (`expected_outputs.edge_proofs`

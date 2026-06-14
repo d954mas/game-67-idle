@@ -133,6 +133,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       `node tools/assets/validate_art_job.mjs --job <job> --final-art`
     - pixel audit:
       `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
+      Add `--profile` when a generated UI audit feels slow or when comparing
+      extraction fixes; it records per-asset timing and the slowest asset
+      without changing pass/fail semantics.
     - edge proof preview for 1-2px fringe review:
       `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png>`
     - slice9 design policy audit:

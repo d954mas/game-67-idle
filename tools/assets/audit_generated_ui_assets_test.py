@@ -15,11 +15,11 @@ SCRIPT = ROOT / "tools/assets/audit_generated_ui_assets.py"
 
 
 class GeneratedUiAssetAuditTest(unittest.TestCase):
-    def run_audit(self, root: Path, manifest: dict) -> subprocess.CompletedProcess[str]:
+    def run_audit(self, root: Path, manifest: dict, *extra_args: str) -> subprocess.CompletedProcess[str]:
         manifest_path = root / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         return subprocess.run(
-            ["python", str(SCRIPT), "--crop-manifest", str(manifest_path)],
+            ["python", str(SCRIPT), "--crop-manifest", str(manifest_path), *extra_args],
             cwd=root,
             text=True,
             capture_output=True,
@@ -58,6 +58,35 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             result = self.run_audit(root, self.write_manifest("assets/icon.png"))
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("pass: checked 1", result.stdout)
+
+    def test_profile_writes_timing_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.ellipse((8, 8, 23, 23), fill=(220, 40, 40, 255))
+            image.save(out_dir / "icon.png")
+
+            result = self.run_audit(
+                root,
+                self.write_manifest("assets/icon.png"),
+                "--profile",
+                "--json-output",
+                "audit.json",
+                "--report",
+                "audit.md",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("profile: slowest asset `icon_test`", result.stdout)
+            report = json.loads((root / "audit.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["verdict"], "pass")
+            self.assertIn("timing_ms", report)
+            self.assertIn("timing_ms", report["assets"][0])
+            self.assertIn("transparent_edge_bad_rgb", report["assets"][0]["timing_ms"])
+            markdown = (root / "audit.md").read_text(encoding="utf-8")
+            self.assertIn("## Timing", markdown)
 
     def test_clipped_icon_fails_padding_check(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

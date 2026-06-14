@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from time import perf_counter
 from pathlib import Path
 from typing import Any
 
@@ -122,7 +123,19 @@ def crop_entries(manifest: dict[str, Any]) -> list[dict[str, Any]]:
     return entries
 
 
-def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, int] | None) -> dict[str, Any]:
+def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, int] | None, *, profile: bool = False) -> dict[str, Any]:
+    started = perf_counter()
+    phase_start = started
+    timings: dict[str, float] = {}
+
+    def mark_timing(name: str) -> None:
+        nonlocal phase_start
+        if not profile:
+            return
+        now = perf_counter()
+        timings[name] = round((now - phase_start) * 1000, 3)
+        phase_start = now
+
     output = crop.get("output")
     result: dict[str, Any] = {
         "id": crop.get("id", ""),
@@ -140,10 +153,15 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
         return result
 
     image = Image.open(path).convert("RGBA")
+    mark_timing("load_image")
     result["size"] = [image.width, image.height]
     bbox = alpha_bbox(image)
+    mark_timing("alpha_bbox")
     if bbox is None:
         result["problems"].append("output has no visible alpha content")
+        if profile:
+            timings["total"] = round((perf_counter() - started) * 1000, 3)
+            result["timing_ms"] = timings
         return result
 
     left, top, right, bottom = bbox
@@ -175,21 +193,25 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
             min_padding = min_padding_by_side[side]
             if value < min_padding:
                 result["problems"].append(f"slice9 alpha content too close to {side} edge: {value}px < {min_padding}px")
+    mark_timing("padding_policy")
 
     preserve_purple = bool(crop.get("preserve_purple_edges"))
     fringe_count = 0 if preserve_purple else count_edge_key_fringe(image)
+    mark_timing("edge_key_fringe")
     result["edge_key_fringe_pixels"] = fringe_count
     fringe_limit = crop.get("edge_key_fringe_limit", 0)
     if isinstance(fringe_limit, int) and fringe_count > fringe_limit:
         result["problems"].append(f"key-color edge fringe remains: {fringe_count}px > {fringe_limit}px")
 
     purple_halo_count = 0 if preserve_purple else count_edge_purple_halo(image)
+    mark_timing("edge_purple_halo")
     result["edge_purple_halo_pixels"] = purple_halo_count
     purple_halo_limit = crop.get("edge_purple_halo_limit", 0)
     if isinstance(purple_halo_limit, int) and purple_halo_count > purple_halo_limit:
         result["problems"].append(f"purple edge halo remains: {purple_halo_count}px > {purple_halo_limit}px")
 
     source_key_fringe_count = 0 if preserve_purple else count_edge_source_key_fringe(image, source_key)
+    mark_timing("edge_source_key_fringe")
     result["edge_source_key_fringe_pixels"] = source_key_fringe_count
     source_key_fringe_limit = crop.get("edge_source_key_fringe_limit", 0)
     if isinstance(source_key_fringe_limit, int) and source_key_fringe_count > source_key_fringe_limit:
@@ -198,6 +220,7 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
         )
 
     transparent_bad_rgb_count = 0 if preserve_purple else count_transparent_edge_bad_rgb(image, source_key)
+    mark_timing("transparent_edge_bad_rgb")
     result["transparent_edge_bad_rgb_pixels"] = transparent_bad_rgb_count
     transparent_bad_rgb_limit = crop.get("transparent_edge_bad_rgb_limit", 0)
     if isinstance(transparent_bad_rgb_limit, int) and transparent_bad_rgb_count > transparent_bad_rgb_limit:
@@ -206,6 +229,9 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
             f"{transparent_bad_rgb_count}px > {transparent_bad_rgb_limit}px"
         )
 
+    if profile:
+        timings["total"] = round((perf_counter() - started) * 1000, 3)
+        result["timing_ms"] = timings
     return result
 
 
@@ -225,6 +251,20 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"Problems: {len(report['problems'])}",
         "",
     ]
+    if report.get("timing_ms"):
+        lines.extend(
+            [
+                "## Timing",
+                "",
+                f"Total: {report['timing_ms'].get('total', '-')} ms",
+                "",
+            ]
+        )
+        for asset in sorted(report["assets"], key=lambda item: item.get("timing_ms", {}).get("total", 0), reverse=True):
+            timing = asset.get("timing_ms")
+            if timing:
+                lines.append(f"- `{asset.get('id')}` total={timing.get('total', '-')} ms")
+        lines.append("")
     if report["problems"]:
         lines.extend(["## Problems", ""])
         for problem in report["problems"]:
@@ -251,15 +291,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--crop-manifest", required=True)
     parser.add_argument("--json-output")
     parser.add_argument("--report")
+    parser.add_argument("--profile", action="store_true", help="Record per-asset timing in JSON/Markdown and print the slowest asset.")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    started = perf_counter()
     manifest_path = project_path(args.crop_manifest)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     source_key = parse_hex_color(manifest.get("green_screen", {}).get("key"))
-    assets = [audit_asset(crop, ROOT, source_key) for crop in crop_entries(manifest)]
+    assets = [audit_asset(crop, ROOT, source_key, profile=args.profile) for crop in crop_entries(manifest)]
     problems = [f"{asset['id']}: {problem}" for asset in assets for problem in asset.get("problems", [])]
     report = {
         "schema": "game.generated_ui_asset_audit",
@@ -270,6 +312,11 @@ def main(argv: list[str]) -> int:
         "problems": problems,
         "assets": assets,
     }
+    if args.profile:
+        report["timing_ms"] = {
+            "total": round((perf_counter() - started) * 1000, 3),
+            "assets_total": round(sum(asset.get("timing_ms", {}).get("total", 0) for asset in assets), 3),
+        }
     if args.json_output:
         json_path = project_path(args.json_output)
         json_path.parent.mkdir(parents=True, exist_ok=True)
@@ -280,6 +327,9 @@ def main(argv: list[str]) -> int:
         report_path.write_text(render_markdown(report), encoding="utf-8")
 
     print(f"{report['verdict']}: checked {len(assets)} generated UI asset(s)")
+    if args.profile and assets:
+        slowest = max(assets, key=lambda asset: asset.get("timing_ms", {}).get("total", 0))
+        print(f"profile: slowest asset `{slowest.get('id')}` {slowest.get('timing_ms', {}).get('total', 0)} ms")
     for problem in problems:
         print(f"problem: {problem}")
     return 1 if problems else 0

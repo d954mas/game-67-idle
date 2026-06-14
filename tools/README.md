@@ -211,7 +211,9 @@ before the assets reach gameplay code. It also reads `green_screen.key` from
 the crop manifest and fails visible source-key spill such as green-screen
 contamination on the alpha contour. It rejects transparent edge pixels that
 still store key/purple/source-key RGB, because texture filtering can sample
-that hidden color back into visible edges.
+that hidden color back into visible edges. Use `--profile` on slow or disputed
+runs to write per-asset timing into JSON/Markdown and print the slowest asset;
+the default run stays quiet and verdict-compatible.
 `tools/assets/render_ui_asset_edge_proof.py` renders zoomed top/right/bottom/left
 alpha-boundary strips on a checkerboard and marks detected bad edge pixels. Use
 it when 1-2 pixel fringe is reported or when a normal contact sheet is too small
