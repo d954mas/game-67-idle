@@ -34,9 +34,11 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
    `node tools/assets/plan_source_sheet_prompt.mjs --job <art-job> --source-family "<family>" --output <prompt.md> --json-output <prompt.json>`.
    Use `--intake-audit` or `--key-color` when a previous source-sheet audit
    found a safer chroma key. When recording the accepted source, pass the JSON
-   prompt packet path to `new_generation_record.mjs --prompt-packet`. Strict
-   art-job validation reads that JSON and checks its schema, required prompt
-   fields, acceptance checklist, job identity, and source-family match.
+   prompt packet path to `new_generation_record.mjs --prompt-packet`. Prompt
+   packets should preserve `key_color_source` and `intake_key_color_action` so
+   color decisions are not lost. Strict art-job validation reads that JSON and
+   checks its schema, required prompt fields, acceptance checklist, job identity,
+   and source-family match.
 6. Read the existing pack/build script before adding new asset logic.
 7. Do not assume the pack/material path is too slow. If the engine or project
    has pack builders and caches, inspect the builder and run or measure the
@@ -171,8 +173,11 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 - Source-sheet intake must reject unsafe chroma choices before slicing: exact
   key-color holes inside component bounds are not normal background, and broad
   key/halo hue conflicts inside art need either a safer background color or an
-  explicit preserve/masking policy. Use the intake audit's suggested key color
-  when regenerating source sheets.
+  explicit preserve/masking policy. Use the intake audit's
+  `next_prompt_key_color` when `key_color_action` is
+  `regenerate_with_next_prompt_key_color`; if the action is
+  `split_preserve_or_dual_plate_alpha`, stop cycling chroma colors and switch
+  method.
 - Pixel audits must catch one- or two-pixel dark purple, dark maroon/magenta,
   red-blue halos, and saturated green-screen spill on the outer alpha contour,
   not only bright magenta fringe. Intentional saturated green edges need an

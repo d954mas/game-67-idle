@@ -58,7 +58,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    If source intake recommends a safer key color, pass
    `--intake-audit <audit.json>` or `--key-color <#rrggbb>`. Use the packet's
    prompt, negative prompt, and acceptance checklist instead of an ad hoc chat
-   prompt. Pass the JSON packet path into `new_generation_record.mjs` with
+   prompt. Prompt packets should record `key_color_source` and
+   `intake_key_color_action` when an intake audit drives the next key color.
+   Pass the JSON packet path into `new_generation_record.mjs` with
    `--prompt-packet` so provenance links back to the contract-derived prompt.
 7. Generate source families, not one gameplay screenshot or one mixed sheet:
    screen backgrounds, blank resizable bases, isolated icon sheet, UI decor
@@ -78,8 +80,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    gutters; it does not replace human slice9/art review. If a family truly
    needs purple/magic colors inside components, record an explicit preserve
    policy instead of relying on accidental chroma tolerance.
-   Use the reported `suggested_key_color` as input to the next generation
-   prompt when the current chroma color conflicts with the art palette.
+   Use the reported `next_prompt_key_color` as input to the next generation
+   prompt when `key_color_action` is `regenerate_with_next_prompt_key_color`.
+   If the action is `split_preserve_or_dual_plate_alpha`, stop trying adjacent
+   chroma colors and split/preserve the art or switch to dual-plate alpha.
    Use the key color from the prompt packet when auditing generated sheets.
    Add `--profile` when source-sheet intake feels slow or when comparing
    component detection fixes; it records per-stage timing and the slowest stage

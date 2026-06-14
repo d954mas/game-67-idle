@@ -72,6 +72,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
     def test_rejects_exact_key_color_inside_art_component(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "sheet.png"
+            report = Path(tmp) / "report.json"
             image = Image.new("RGBA", (128, 96), (255, 0, 255, 255))
             draw = ImageDraw.Draw(image)
             draw.rectangle((32, 24, 96, 72), fill=(80, 60, 40, 255))
@@ -89,6 +90,8 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
                     "24",
                     "--min-border",
                     "16",
+                    "--json-output",
+                    str(report),
                 ],
                 cwd=ROOT,
                 text=True,
@@ -96,6 +99,11 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("exact key-color-like art", result.stdout)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(data["key_color"], "#ff00ff")
+            self.assertEqual(data["key_color_action"], "regenerate_with_next_prompt_key_color")
+            self.assertNotEqual(data["next_prompt_key_color"], "#ff00ff")
+            self.assertGreater(data["key_color_conflict_count"], 0)
 
     def test_rejects_large_key_hue_band_inside_art_component(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -160,6 +168,8 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             scores = {item["key_color"]: item for item in data["candidate_key_scores"]}
             self.assertGreater(scores["#00ff00"]["hue_band_px"], 0)
             self.assertNotEqual(data["suggested_key_color"], "#00ff00")
+            self.assertEqual(data["key_color_action"], "keep_current_key_color")
+            self.assertEqual(data["next_prompt_key_color"], "#ff00ff")
 
     def test_merges_small_satellite_fragments_without_hiding_tight_icons(self):
         with tempfile.TemporaryDirectory() as tmp:

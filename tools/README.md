@@ -90,6 +90,9 @@ procedural debug records. If the provider does not expose a stable seed, record
 packet from an art job's generation contract. Use it before image generation so
 the prompt, negative prompt, chroma key, source family role, no-bake rules, and
 acceptance checklist come from durable project data instead of chat memory.
+When fed an intake audit, it prefers `next_prompt_key_color`, records
+`key_color_source`, and carries `intake_key_color_action` into the prompt
+packet for provenance.
 Generation records can then reference the packet with `prompt_packet`; strict
 art-job validation parses JSON prompt packets and checks schema, required
 fields, job identity, acceptance checklist, and source-family alignment.
@@ -213,8 +216,12 @@ key before slicing; keep the raw generated sheet alongside the cleaned copy.
 source-sheet gate: it checks flat/chroma background, component count, border
 clearance, gutters, exact key-color holes inside components, and broad
 key/halo hue conflicts before crop rectangles are trusted. It also scores
-candidate key colors against the component palette and reports a
-`suggested_key_color` for the next source-sheet generation pass. Use
+candidate key colors against the component palette and reports
+`key_color_action` plus `next_prompt_key_color` for the next source-sheet
+generation pass. Use `next_prompt_key_color` when the action is
+`regenerate_with_next_prompt_key_color`; when the action is
+`split_preserve_or_dual_plate_alpha`, switch to explicit preserve/split policy
+or dual-plate alpha instead of cycling similar chroma colors. Use
 `--profile` on slow or disputed sheets to write per-stage timing into
 JSON/Markdown and print the slowest stage. Final-art validation requires
 passing JSON intake evidence in

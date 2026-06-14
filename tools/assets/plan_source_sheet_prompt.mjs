@@ -83,10 +83,18 @@ function groupMatchesFamily(group, family) {
   return true;
 }
 
-function keyColorFromAudit(path) {
-  if (!path) return "";
+function keyColorAdviceFromAudit(path) {
+  if (!path) return { color: "", action: "" };
   const audit = readJson(path);
-  return hasText(audit.suggested_key_color) ? audit.suggested_key_color : "";
+  const color = hasText(audit.next_prompt_key_color)
+    ? audit.next_prompt_key_color
+    : hasText(audit.suggested_key_color)
+      ? audit.suggested_key_color
+      : "";
+  return {
+    color,
+    action: hasText(audit.key_color_action) ? audit.key_color_action : "",
+  };
 }
 
 function buildPacket(job, sourceFamily, options) {
@@ -97,7 +105,9 @@ function buildPacket(job, sourceFamily, options) {
   }
 
   const role = contract.source_family_roles?.[sourceFamily] || "";
-  const keyColor = options.keyColor || keyColorFromAudit(options.intakeAudit) || "#00ff00";
+  const auditKeyAdvice = keyColorAdviceFromAudit(options.intakeAudit);
+  const keyColor = options.keyColor || auditKeyAdvice.color || "#00ff00";
+  const keyColorSource = options.keyColor ? "explicit_override" : auditKeyAdvice.color ? "intake_audit" : "default";
   const constraints = uniqueStrings(contract.prompt_constraints || []);
   const mustNotBake = uniqueStrings(job.must_not_bake || []);
   const rejects = uniqueStrings(job.qa_rejects || []);
@@ -155,6 +165,8 @@ function buildPacket(job, sourceFamily, options) {
     source_family: sourceFamily,
     source_family_role: role,
     suggested_key_color: keyColor,
+    key_color_source: keyColorSource,
+    intake_key_color_action: auditKeyAdvice.action,
     prompt: promptLines.join(" "),
     negative_prompt: negativeItems.join(", "),
     constraints,
@@ -171,6 +183,8 @@ function renderMarkdown(packet) {
     `job_id: ${packet.job_id}`,
     `source_family: ${packet.source_family}`,
     `suggested_key_color: ${packet.suggested_key_color}`,
+    `key_color_source: ${packet.key_color_source}`,
+    `intake_key_color_action: ${packet.intake_key_color_action || "none"}`,
     "---",
     "",
     `# Source Sheet Prompt Packet: ${packet.source_family}`,

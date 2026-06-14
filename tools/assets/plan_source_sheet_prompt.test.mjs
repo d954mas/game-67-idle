@@ -84,8 +84,36 @@ test("writes prompt packet from art job and intake suggested key color", (t) => 
   assert.match(text, /no unique ornaments that will stretch/);
   const packet = JSON.parse(readFileSync(join(dir, json), "utf8"));
   assert.equal(packet.suggested_key_color, "#00ff00");
+  assert.equal(packet.key_color_source, "intake_audit");
   assert.equal(packet.relevant_asset_groups.length, 1);
   assert.equal(packet.relevant_asset_groups[0].id, "panel_slice9");
+});
+
+test("uses intake next prompt key color before legacy suggested key color", (t) => {
+  const dir = tempDir(t);
+  const job = writeJob(dir);
+  writeFileSync(join(dir, "intake.json"), `${JSON.stringify({
+    key_color: "#ff00ff",
+    suggested_key_color: "#00ff00",
+    key_color_action: "regenerate_with_next_prompt_key_color",
+    next_prompt_key_color: "#00ffff",
+  })}\n`, "utf8");
+
+  const result = run([
+    "--job", job,
+    "--source-family", "blank UI kit sheet",
+    "--intake-audit", "intake.json",
+    "--output", "prompt.md",
+    "--json-output", "prompt.json",
+  ], dir);
+
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const text = readFileSync(join(dir, "prompt.md"), "utf8");
+  assert.match(text, /flat chroma background #00ffff/);
+  const packet = JSON.parse(readFileSync(join(dir, "prompt.json"), "utf8"));
+  assert.equal(packet.suggested_key_color, "#00ffff");
+  assert.equal(packet.key_color_source, "intake_audit");
+  assert.equal(packet.intake_key_color_action, "regenerate_with_next_prompt_key_color");
 });
 
 test("uses explicit key color over intake audit", (t) => {
@@ -105,6 +133,7 @@ test("uses explicit key color over intake audit", (t) => {
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const packet = JSON.parse(readFileSync(join(dir, "prompt.json"), "utf8"));
   assert.equal(packet.suggested_key_color, "#00ffff");
+  assert.equal(packet.key_color_source, "explicit_override");
   assert.equal(packet.relevant_asset_groups[0].id, "resource_icons");
 });
 

@@ -321,6 +321,7 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
     )
     mark_timing("candidate_key_scores")
     problems: list[str] = []
+    key_color_conflict_count = 0
     if len(components) < args.min_components:
         problems.append(f"component_count {len(components)} is below required {args.min_components}")
 
@@ -332,12 +333,14 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
             problems.append(f"{component['id']} border gap {border_gap}px is below required {args.min_border}px")
         exact_conflicts = int(component["exact_key_conflict_px"])
         if exact_conflicts > args.max_exact_key_conflict_px:
+            key_color_conflict_count += 1
             problems.append(
                 f"{component['id']} contains {exact_conflicts}px of exact key-color-like art "
                 f"> allowed {args.max_exact_key_conflict_px}px"
             )
         key_hue_ratio = float(component["key_hue_conflict_ratio"])
         if key_hue_ratio > args.max_key_hue_conflict_ratio:
+            key_color_conflict_count += 1
             problems.append(
                 f"{component['id']} key/halo hue conflict ratio {key_hue_ratio:.3f} "
                 f"> allowed {args.max_key_hue_conflict_ratio:.3f}; choose a safer background or split/preserve this art"
@@ -356,12 +359,25 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
         problems.append(f"closest component gap {min_gap}px is below required {args.min_gutter}px")
     mark_timing("gutter_scan")
 
+    key_color_text = format_color(args.key_color)
+    suggested_key_color = candidate_scores[0]["key_color"] if candidate_scores else None
+    current_key_score = next((score for score in candidate_scores if score["key_color"] == key_color_text), None)
+    if key_color_conflict_count > 0 and isinstance(suggested_key_color, str) and suggested_key_color != key_color_text:
+        key_color_action = "regenerate_with_next_prompt_key_color"
+        next_prompt_key_color = suggested_key_color
+    elif key_color_conflict_count > 0:
+        key_color_action = "split_preserve_or_dual_plate_alpha"
+        next_prompt_key_color = None
+    else:
+        key_color_action = "keep_current_key_color"
+        next_prompt_key_color = key_color_text
+
     result = {
         "schema": "game.source_sheet_intake_audit",
         "version": 1,
         "source": str(args.source).replace("\\", "/"),
         "size": [width, height],
-        "key_color": "#{:02x}{:02x}{:02x}".format(*args.key_color),
+        "key_color": key_color_text,
         "key_tolerance": args.key_tolerance,
         "component_count": len(components),
         "min_component_area_px": args.min_area,
@@ -372,7 +388,11 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
         "closest_gap_px": min_gap,
         "closest_pair": closest_pair,
         "candidate_key_scores": candidate_scores,
-        "suggested_key_color": candidate_scores[0]["key_color"] if candidate_scores else None,
+        "current_key_score": current_key_score,
+        "suggested_key_color": suggested_key_color,
+        "key_color_conflict_count": key_color_conflict_count,
+        "key_color_action": key_color_action,
+        "next_prompt_key_color": next_prompt_key_color,
         "components": components,
         "problems": problems,
         "status": "pass" if not problems else "fail",
@@ -394,6 +414,8 @@ def write_report(path: Path, result: dict[str, object]) -> None:
         f"max_exact_key_conflict_px: {result['max_exact_key_conflict_px']}",
         f"max_key_hue_conflict_ratio: {result['max_key_hue_conflict_ratio']}",
         f"suggested_key_color: {result['suggested_key_color']}",
+        f"key_color_action: {result['key_color_action']}",
+        f"next_prompt_key_color: {result['next_prompt_key_color']}",
         "",
         "## Problems",
     ]
@@ -454,7 +476,7 @@ def main() -> int:
         write_report(args.report, result)
     print(
         f"{result['status']}: {result['component_count']} component(s), "
-        f"closest_gap={result['closest_gap_px']}, suggested_key={result['suggested_key_color']}"
+        f"closest_gap={result['closest_gap_px']}, next_prompt_key={result['next_prompt_key_color']}"
     )
     for problem in result["problems"]:
         print(f"problem: {problem}")
