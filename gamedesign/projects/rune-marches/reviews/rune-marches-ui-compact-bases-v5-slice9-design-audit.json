@@ -11,49 +11,73 @@
       "kind": "slice9",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
       "status": "pass",
-      "problems": []
+      "problems": [],
+      "timing_ms": {
+        "total": 0.455
+      }
     },
     {
       "id": "compact_button_idle_medium_v5",
       "kind": "slice9",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
       "status": "pass",
-      "problems": []
+      "problems": [],
+      "timing_ms": {
+        "total": 0.046
+      }
     },
     {
       "id": "compact_button_idle_long_v5",
       "kind": "slice9",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
       "status": "pass",
-      "problems": []
+      "problems": [],
+      "timing_ms": {
+        "total": 0.073
+      }
     },
     {
       "id": "compact_button_disabled_short_v5",
       "kind": "slice9",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
       "status": "pass",
-      "problems": []
+      "problems": [],
+      "timing_ms": {
+        "total": 0.022
+      }
     },
     {
       "id": "compact_button_disabled_medium_v5",
       "kind": "slice9",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
       "status": "pass",
-      "problems": []
+      "problems": [],
+      "timing_ms": {
+        "total": 0.019
+      }
     },
     {
       "id": "compact_button_disabled_long_v5",
       "kind": "slice9",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png",
       "status": "pass",
-      "problems": []
+      "problems": [],
+      "timing_ms": {
+        "total": 0.015
+      }
     },
     {
       "id": "compact_journal_panel_v5",
       "kind": "slice9",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png",
       "status": "pass",
-      "problems": []
+      "problems": [],
+      "timing_ms": {
+        "total": 0.014
+      }
     }
-  ]
+  ],
+  "timing_ms": {
+    "total": 2.054
+  }
 }

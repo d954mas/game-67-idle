@@ -150,6 +150,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       timing without changing defect counts.
     - slice9 design policy audit:
       `node tools/assets/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
+      Add `--profile` when comparing policy changes; it records total and
+      per-slice9 timing and prints the slowest asset.
       Record passing reports in `expected_outputs.slice9_design_audit`; final-art
       validation requires this evidence so cuttable but unscalable generated
       panels cannot pass as production UI.
@@ -260,6 +262,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
 - Minimum preview sizes must be product-realistic. If `left + right` or
   `top + bottom` margins leave no center at a listed target size, the asset is
   not valid for that size even if the PNG audit passes.
+- Every slice9 base must have a content safe area and target previews that
+  include the declared minimum runtime size plus at least one stress size
+  around 125% of a minimum dimension. A source-size contact sheet is not enough:
+  the design-policy audit should fail missing min/stress preview coverage.
 - Keep slice9 base art structurally boring: corners, straight edges, fill, and
   repeatable texture only. Unique center gems, side medallions, banners,
   badges, labels, locks, and cap ornaments must be exported as separate overlay

@@ -64,6 +64,7 @@ function writeValidManifests(dir, overrides = {}) {
     id: "panel",
     kind: "slice9",
     path: "assets/runtime/ui/panel.png",
+    original_size: [96, 64],
     slice9: { left: 12, top: 12, right: 12, bottom: 12 },
     content: { x: 18, y: 18, w: 60, h: 32 },
     target_preview_sizes: [[160, 96], [240, 160]],
@@ -91,12 +92,17 @@ test("passes when crop and runtime slice9 design policies match", (t) => {
   const dir = tempDir(t);
   const { cropPath, runtimePath } = writeValidManifests(dir);
   const reportPath = "gamedesign/projects/test/reviews/slice9-policy.json";
-  const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath, "--json-output", reportPath], dir);
+  const markdownPath = "gamedesign/projects/test/reviews/slice9-policy.md";
+  const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath, "--json-output", reportPath, "--report", markdownPath, "--profile"], dir);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const report = JSON.parse(readFileSync(join(dir, reportPath), "utf8"));
   assert.equal(report.schema, "game.slice9_design_policy_audit");
   assert.equal(report.verdict, "pass");
   assert.equal(report.assets[0].id, "panel");
+  assert.ok(report.timing_ms.total >= 0);
+  assert.ok(report.assets[0].timing_ms.total >= 0);
+  assert.match(result.stdout, /profile: slowest slice9 policy asset `panel`/);
+  assert.match(readFileSync(join(dir, markdownPath), "utf8"), /## Timing/);
 });
 
 test("fails when slice9 crop omits stretch and usage policy", (t) => {
@@ -124,4 +130,36 @@ test("fails when runtime policy diverges from crop policy", (t) => {
   const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath], dir);
   assert.equal(result.status, 1);
   assert.match(result.stdout, /stretch_policy must match crop manifest/);
+});
+
+test("fails when slice9 preview coverage omits min or stress size", (t) => {
+  const dir = tempDir(t);
+  const { cropPath, runtimePath } = writeValidManifests(dir, {
+    crop: { target_preview_sizes: [[180, 96]] },
+    runtime: { target_preview_sizes: [[180, 96]] },
+  });
+  const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /must include usage_policy\.min_size 160x96/);
+  assert.match(result.stdout, /at least two distinct sizes/);
+  assert.match(result.stdout, /needs a stress preview/);
+});
+
+test("fails when slice9 margins or content safe area are not valid", (t) => {
+  const dir = tempDir(t);
+  const { cropPath, runtimePath } = writeValidManifests(dir, {
+    crop: {
+      slice9: { left: 48, top: 12, right: 48, bottom: 12 },
+      content: { x: 80, y: 18, w: 40, h: 32 },
+    },
+    runtime: {
+      slice9: { left: 48, top: 12, right: 48, bottom: 12 },
+      content: undefined,
+    },
+  });
+  const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /horizontal margins leave no stretchable center/);
+  assert.match(result.stdout, /content safe area exceeds source bounds/);
+  assert.match(result.stdout, /needs content safe area/);
 });

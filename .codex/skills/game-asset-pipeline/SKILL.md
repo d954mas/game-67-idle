@@ -95,11 +95,14 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 18. For generated slice9 assets, run the design-policy audit after crop and
     runtime manifests are updated:
     `node tools/assets/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
+    Add `--profile` when comparing policy changes or investigating slow
+    manifests; it writes total/per-asset timing and prints the slowest slice9
+    asset.
     This gate does not judge beauty; it requires explicit stretch-zone,
-    fixed-ornament, overlay, min-size, and disallowed-use policy so ornate art
-    is not silently used in a size or role where it will stretch badly. Record
-    passing JSON reports in `expected_outputs.slice9_design_audit` before
-    final-art validation.
+    fixed-ornament, overlay, min-size, content safe area, min/stress preview
+    coverage, and disallowed-use policy so ornate art is not silently used in
+    a size or role where it will stretch badly. Record passing JSON reports in
+    `expected_outputs.slice9_design_audit` before final-art validation.
 19. For final generated UI claims, run the source-family coverage audit:
     `node tools/assets/audit_source_family_coverage.mjs --job <art-job> --json-output <audit.json> --report <audit.md>`.
     Jobs should declare `expected_outputs.required_source_families`, usually

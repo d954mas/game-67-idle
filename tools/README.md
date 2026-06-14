@@ -152,7 +152,11 @@ manifest, and source-derivation reports that do not cover every source-derived
 `tools/assets/audit_slice9_design_policy.mjs` is the manifest-level gate for
 slice9 art design. It requires each slice9 crop and runtime asset to declare
 stretch-zone material policy, fixed-corner/non-stretch ornament policy,
-allowed size class, minimum runtime size, and disallowed uses. This catches the
+allowed size class, minimum runtime size, content safe area, min-size preview,
+stress preview, and disallowed uses. It also validates slice9 margins against
+source and preview sizes so every checked size leaves a stretchable center.
+Run with `--profile` when comparing policy changes; the report records total
+and per-asset timing and prints the slowest slice9 asset. This catches the
 failure where a generated panel is technically cuttable but has medallions,
 gems, or heavy caps baked into areas that runtime resizing will stretch; those
 decorations must be corner-only or separate overlay sprites.
