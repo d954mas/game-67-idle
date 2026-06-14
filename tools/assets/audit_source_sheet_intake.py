@@ -72,9 +72,11 @@ def find_components(image: Image.Image, key: tuple[int, int, int], tolerance: in
             min_x = max_x = x
             min_y = max_y = y
             area = 0
+            pixel_offsets: list[int] = []
             while queue:
                 cx, cy = queue.popleft()
                 area += 1
+                pixel_offsets.append(offset(cx, cy))
                 min_x = min(min_x, cx)
                 max_x = max(max_x, cx)
                 min_y = min(min_y, cy)
@@ -93,6 +95,7 @@ def find_components(image: Image.Image, key: tuple[int, int, int], tolerance: in
                     "id": f"component_{len(components) + 1}",
                     "bbox": [min_x, min_y, max_x - min_x + 1, max_y - min_y + 1],
                     "area_px": area,
+                    "_pixel_offsets": pixel_offsets,
                 }
             )
     return components
@@ -146,12 +149,17 @@ def merge_component_pair(a: dict[str, object], b: dict[str, object], merged_id: 
     min_y = min(ay, by)
     max_x = max(ax + aw, bx + bw)
     max_y = max(ay + ah, by + bh)
-    return {
+    merged: dict[str, object] = {
         "id": merged_id,
         "bbox": [min_x, min_y, max_x - min_x, max_y - min_y],
         "area_px": int(a["area_px"]) + int(b["area_px"]),
         "merged_from": [*a.get("merged_from", [a["id"]]), *b.get("merged_from", [b["id"]])],
     }
+    a_offsets = a.get("_pixel_offsets")
+    b_offsets = b.get("_pixel_offsets")
+    if isinstance(a_offsets, list) and isinstance(b_offsets, list):
+        merged["_pixel_offsets"] = [*a_offsets, *b_offsets]
+    return merged
 
 
 def merge_small_fragments(
@@ -254,6 +262,40 @@ def key_like_mask(array: object, key: tuple[int, int, int], tolerance: int) -> o
     return (alpha == 0) | exact_key_mask(red, green, blue, key, tolerance)
 
 
+def local_border_connected_key_mask(crop: object, key: tuple[int, int, int], tolerance: int) -> object:
+    if np is None:
+        raise RuntimeError("numpy is required for local_border_connected_key_mask")
+    key_mask = key_like_mask(crop, key, tolerance)
+    height, width = key_mask.shape
+    connected = np.zeros((height, width), dtype=bool)
+    queue: deque[tuple[int, int]] = deque()
+
+    def push(x: int, y: int) -> None:
+        if connected[y, x] or not key_mask[y, x]:
+            return
+        connected[y, x] = True
+        queue.append((x, y))
+
+    for x in range(width):
+        push(x, 0)
+        push(x, height - 1)
+    for y in range(height):
+        push(0, y)
+        push(width - 1, y)
+
+    while queue:
+        x, y = queue.popleft()
+        if x > 0:
+            push(x - 1, y)
+        if x + 1 < width:
+            push(x + 1, y)
+        if y > 0:
+            push(x, y - 1)
+        if y + 1 < height:
+            push(x, y + 1)
+    return connected
+
+
 def key_fringe_mask(red: object, green: object, blue: object) -> object:
     if np is None:
         raise RuntimeError("numpy is required for key_fringe_mask")
@@ -281,7 +323,15 @@ def visible_component_arrays(
     if np is None:
         raise RuntimeError("numpy is required for visible_component_arrays")
     chunks = []
+    flat = array.reshape((-1, 4))
     for component in components:
+        pixel_offsets = component.get("_pixel_offsets")
+        if isinstance(pixel_offsets, list) and pixel_offsets:
+            pixels = flat[np.asarray(pixel_offsets, dtype=np.int64)]
+            visible = (pixels[..., 3] > 12) & ~key_like_mask(pixels, current_key, tolerance)
+            if np.any(visible):
+                chunks.append(pixels[..., :3][visible])
+            continue
         x, y, width, height = component["bbox"]
         crop = array[y : y + height, x : x + width]
         visible = (crop[..., 3] > 12) & ~key_like_mask(crop, current_key, tolerance)
@@ -387,8 +437,7 @@ def add_key_conflict_metrics(
 ) -> None:
     if np is not None:
         array = np.asarray(image.convert("RGBA"))
-        image_width, image_height = image.size
-        border_key = None
+        flat = array.reshape((-1, 4))
         for component in components:
             x, y, width, height = component["bbox"]
             crop = array[y : y + height, x : x + width]
@@ -399,16 +448,29 @@ def add_key_conflict_metrics(
             visible_alpha = alpha > 12
             exact_candidates = visible_alpha & exact_key_mask(red, green, blue, key, 24)
             if np.any(exact_candidates):
-                if border_key is None:
-                    border_key = np.frombuffer(find_border_connected_key(image, key, tolerance), dtype=np.uint8).reshape((image_height, image_width)).astype(bool)
-                crop_border = border_key[y : y + height, x : x + width]
+                crop_border = local_border_connected_key_mask(crop, key, tolerance)
                 exact_key_conflicts = int(np.count_nonzero(exact_candidates & ~crop_border))
             else:
                 exact_key_conflicts = 0
-            non_key_visible = visible_alpha & ~key_like_mask(crop, key, tolerance)
-            visible = int(np.count_nonzero(non_key_visible))
-            key_fringe_conflicts = int(np.count_nonzero(non_key_visible & key_fringe_mask(red, green, blue)))
-            purple_halo_conflicts = int(np.count_nonzero(non_key_visible & purple_halo_mask(red, green, blue)))
+            pixel_offsets = component.get("_pixel_offsets")
+            if isinstance(pixel_offsets, list) and pixel_offsets:
+                component_pixels = flat[np.asarray(pixel_offsets, dtype=np.int64)]
+                component_red = component_pixels[..., 0]
+                component_green = component_pixels[..., 1]
+                component_blue = component_pixels[..., 2]
+                component_visible = (component_pixels[..., 3] > 12) & ~key_like_mask(component_pixels, key, tolerance)
+                visible = int(np.count_nonzero(component_visible))
+                key_fringe_conflicts = int(
+                    np.count_nonzero(component_visible & key_fringe_mask(component_red, component_green, component_blue))
+                )
+                purple_halo_conflicts = int(
+                    np.count_nonzero(component_visible & purple_halo_mask(component_red, component_green, component_blue))
+                )
+            else:
+                non_key_visible = visible_alpha & ~key_like_mask(crop, key, tolerance)
+                visible = int(np.count_nonzero(non_key_visible))
+                key_fringe_conflicts = int(np.count_nonzero(non_key_visible & key_fringe_mask(red, green, blue)))
+                purple_halo_conflicts = int(np.count_nonzero(non_key_visible & purple_halo_mask(red, green, blue)))
             component["visible_px"] = visible
             component["exact_key_conflict_px"] = exact_key_conflicts
             component["key_fringe_hue_px"] = key_fringe_conflicts
@@ -534,6 +596,8 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
         key_color_action = "keep_current_key_color"
         next_prompt_key_color = key_color_text
 
+    public_components = [{key: value for key, value in component.items() if not str(key).startswith("_")} for component in components]
+
     result = {
         "schema": "game.source_sheet_intake_audit",
         "version": 1,
@@ -556,7 +620,7 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
         "key_color_conflict_count": key_color_conflict_count,
         "key_color_action": key_color_action,
         "next_prompt_key_color": next_prompt_key_color,
-        "components": components,
+        "components": public_components,
         "problems": problems,
         "status": "pass" if not problems else "fail",
     }

@@ -105,6 +105,72 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertNotEqual(data["next_prompt_key_color"], "#ff00ff")
             self.assertGreater(data["key_color_conflict_count"], 0)
 
+    def test_rejects_exact_key_color_hole_inside_component_bbox(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "sheet.png"
+            report = Path(tmp) / "report.json"
+            image = Image.new("RGBA", (128, 96), (255, 0, 255, 255))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((32, 24, 96, 72), fill=(80, 60, 40, 255))
+            draw.rectangle((56, 40, 72, 56), fill=(255, 0, 255, 255))
+            image.save(source)
+            result = run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--source",
+                    str(source),
+                    "--min-components",
+                    "1",
+                    "--min-gutter",
+                    "24",
+                    "--min-border",
+                    "16",
+                    "--json-output",
+                    str(report),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("exact key-color-like art", result.stdout)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertGreater(data["components"][0]["exact_key_conflict_px"], 0)
+
+    def test_component_pixel_offsets_do_not_leak_to_json_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "sheet.png"
+            report = Path(tmp) / "report.json"
+            image = Image.new("RGBA", (128, 96), (255, 0, 255, 255))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((32, 24, 96, 72), fill=(80, 60, 40, 255))
+            image.save(source)
+            result = run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--source",
+                    str(source),
+                    "--min-components",
+                    "1",
+                    "--min-gutter",
+                    "24",
+                    "--min-border",
+                    "16",
+                    "--json-output",
+                    str(report),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertTrue(data["components"])
+            for component in data["components"]:
+                self.assertFalse(any(key.startswith("_") for key in component))
+
     def test_rejects_large_key_hue_band_inside_art_component(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "sheet.png"
