@@ -70,7 +70,7 @@ def near_visible(alpha_pixels: Any, x: int, y: int, width: int, height: int, rad
     return False
 
 
-def is_bad_edge_pixel(
+def classify_bad_edge_pixel(
     image: Image.Image,
     x: int,
     y: int,
@@ -85,21 +85,40 @@ def is_bad_edge_pixel(
     alpha_pixels = alpha.load()
     width, height = image.size
     red, green, blue, current_alpha = pixels[x, y]
-    purple_bad = not preserve_purple and (is_key_fringe_like(red, green, blue) or is_any_purple_halo_like(red, green, blue))
-    green_bad = not preserve_green and is_green_screen_spill_like(red, green, blue)
     source_key_bad = (
         source_key is not None
         and not preserve_source_key
         and is_source_key_spill_like(red, green, blue, source_key)
     )
-    bad_color = purple_bad or green_bad or source_key_bad
-    if not bad_color:
+    green_bad = not preserve_green and is_green_screen_spill_like(red, green, blue)
+    key_fringe_bad = not preserve_purple and is_key_fringe_like(red, green, blue)
+    purple_bad = not preserve_purple and is_any_purple_halo_like(red, green, blue)
+    if source_key_bad:
+        reason = "source_key_spill"
+    elif green_bad:
+        reason = "green_screen_spill"
+    elif key_fringe_bad:
+        reason = "key_color_fringe"
+    elif purple_bad:
+        reason = "purple_halo"
+    else:
         return None
     if current_alpha > 12 and touches_transparent(alpha_pixels, x, y, width, height, 6):
-        return "visible"
+        return ("visible", reason)
     if current_alpha <= 12 and near_visible(alpha_pixels, x, y, width, height):
-        return "transparent_rgb"
+        return ("transparent_rgb", reason)
     return None
+
+
+def empty_counts() -> dict[str, Any]:
+    return {"total": 0, "visible": 0, "transparent_rgb": 0, "reasons": {}}
+
+
+def add_bad_mark(counts: dict[str, Any], kind: str, reason: str) -> None:
+    counts["total"] += 1
+    counts[kind] += 1
+    reasons = counts["reasons"]
+    reasons[reason] = int(reasons.get(reason, 0)) + 1
 
 
 def render_strip(
@@ -112,32 +131,45 @@ def render_strip(
     preserve_purple: bool,
     preserve_green: bool,
     preserve_source_key: bool,
-) -> tuple[Image.Image, int]:
+) -> tuple[Image.Image, dict[str, Any]]:
     crop = image.crop(rect).convert("RGBA")
     proof = checkerboard(crop.size)
     proof.alpha_composite(crop)
-    bad_count = 0
-    if mark_bad_pixels:
-        draw = ImageDraw.Draw(proof)
-        left, top, _right, _bottom = rect
-        for y in range(top, top + crop.height):
-            for x in range(left, left + crop.width):
-                kind = is_bad_edge_pixel(
-                    image,
-                    x,
-                    y,
-                    source_key=source_key,
-                    preserve_purple=preserve_purple,
-                    preserve_green=preserve_green,
-                    preserve_source_key=preserve_source_key,
-                )
-                if kind is None:
-                    continue
-                bad_count += 1
+    counts = empty_counts()
+    draw = ImageDraw.Draw(proof) if mark_bad_pixels else None
+    left, top, _right, _bottom = rect
+    for y in range(top, top + crop.height):
+        for x in range(left, left + crop.width):
+            classified = classify_bad_edge_pixel(
+                image,
+                x,
+                y,
+                source_key=source_key,
+                preserve_purple=preserve_purple,
+                preserve_green=preserve_green,
+                preserve_source_key=preserve_source_key,
+            )
+            if classified is None:
+                continue
+            kind, reason = classified
+            add_bad_mark(counts, kind, reason)
+            if draw is not None:
                 local = (x - left, y - top)
                 color = (255, 38, 38, 255) if kind == "visible" else (255, 220, 0, 255)
                 draw.point(local, fill=color)
-    return proof.resize((proof.width * zoom, proof.height * zoom), Image.Resampling.NEAREST), bad_count
+    return proof.resize((proof.width * zoom, proof.height * zoom), Image.Resampling.NEAREST), counts
+
+
+def aggregate_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    counts = empty_counts()
+    for row in rows:
+        row_counts = row["counts"]
+        counts["total"] += int(row_counts.get("total", 0))
+        counts["visible"] += int(row_counts.get("visible", 0))
+        counts["transparent_rgb"] += int(row_counts.get("transparent_rgb", 0))
+        for reason, value in row_counts.get("reasons", {}).items():
+            counts["reasons"][reason] = int(counts["reasons"].get(reason, 0)) + int(value)
+    return counts
 
 
 def render_edge_proof(
@@ -149,9 +181,10 @@ def render_edge_proof(
     mark_bad_pixels: bool,
     asset_ids: set[str] | None,
     sides_filter: set[str] | None,
-) -> Image.Image:
+) -> tuple[Image.Image, dict[str, Any]]:
     font = ImageFont.load_default()
-    rows: list[tuple[str, Image.Image, int]] = []
+    rows: list[tuple[str, Image.Image, dict[str, Any]]] = []
+    report_rows: list[dict[str, Any]] = []
     sides = [side for side in ["top", "right", "bottom", "left"] if sides_filter is None or side in sides_filter]
     source_key = parse_hex_color(manifest.get("green_screen", {}).get("key"))
     for crop in crop_entries(manifest):
@@ -173,7 +206,7 @@ def render_edge_proof(
         preserve_source_key = bool(crop.get("preserve_source_key_edges"))
         for side in sides:
             rect = crop_rect_for_side(bbox, image.size, side, strip, pad)
-            strip_image, bad_count = render_strip(
+            strip_image, counts = render_strip(
                 image,
                 rect,
                 zoom,
@@ -183,11 +216,31 @@ def render_edge_proof(
                 preserve_green=preserve_green,
                 preserve_source_key=preserve_source_key,
             )
-            label = f"{crop_id or path.stem} / {side} / rect={list(rect)} / bad_marks={bad_count}"
-            rows.append((label, strip_image, bad_count))
+            label = f"{crop_id or path.stem} / {side} / rect={list(rect)} / bad_marks={counts['total']}"
+            rows.append((label, strip_image, counts))
+            report_rows.append(
+                {
+                    "asset_id": crop_id,
+                    "kind": crop.get("kind", ""),
+                    "output": output,
+                    "side": side,
+                    "rect": list(rect),
+                    "counts": counts,
+                    "preserve": {
+                        "purple": preserve_purple,
+                        "green": preserve_green,
+                        "source_key": preserve_source_key,
+                    },
+                }
+            )
 
     if not rows:
-        return Image.new("RGBA", (480, 80), (24, 24, 24, 255))
+        return Image.new("RGBA", (480, 80), (24, 24, 24, 255)), {
+            "schema": "game.ui_asset_edge_proof",
+            "version": 1,
+            "rows": [],
+            "counts": empty_counts(),
+        }
 
     label_height = 18
     gutter = 12
@@ -197,13 +250,51 @@ def render_edge_proof(
     sheet = Image.new("RGBA", (width, height), (24, 24, 28, 255))
     draw = ImageDraw.Draw(sheet)
     y = margin
-    for label, image, bad_count in rows:
-        color = (255, 120, 120, 255) if bad_count else (235, 235, 235, 255)
+    for label, image, counts in rows:
+        color = (255, 120, 120, 255) if counts["total"] else (235, 235, 235, 255)
         draw.text((margin, y), label, font=font, fill=color)
         y += label_height
         sheet.alpha_composite(image, (margin, y))
         y += image.height + gutter
-    return sheet
+    return sheet, {
+        "schema": "game.ui_asset_edge_proof",
+        "version": 1,
+        "rows": report_rows,
+        "counts": aggregate_counts(report_rows),
+    }
+
+
+def render_markdown(report: dict[str, Any]) -> str:
+    lines = [
+        "---",
+        "type: UIAssetEdgeProof",
+        f"crop_manifest: {report.get('crop_manifest', '-')}",
+        f"image_output: {report.get('image_output', '-')}",
+        "---",
+        "",
+        "# UI Asset Edge Proof",
+        "",
+        f"Total bad marks: **{report['counts']['total']}**",
+        f"Visible edge marks: {report['counts']['visible']}",
+        f"Transparent RGB marks: {report['counts']['transparent_rgb']}",
+        "",
+    ]
+    reasons = report["counts"].get("reasons", {})
+    if reasons:
+        lines.extend(["## Reasons", ""])
+        for reason, count in sorted(reasons.items()):
+            lines.append(f"- `{reason}`: {count}")
+        lines.append("")
+    lines.extend(["## Rows", ""])
+    for row in report["rows"]:
+        counts = row["counts"]
+        lines.append(
+            f"- `{row['asset_id']}` {row['side']} rect={row['rect']} "
+            f"bad={counts['total']} visible={counts['visible']} "
+            f"transparent_rgb={counts['transparent_rgb']} reasons={counts.get('reasons', {})}"
+        )
+    lines.append("")
+    return "\n".join(lines)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -216,6 +307,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--asset-id", action="append", help="Limit proof to one asset id; can be repeated.")
     parser.add_argument("--side", action="append", choices=["top", "right", "bottom", "left"], help="Limit proof to one side; can be repeated.")
     parser.add_argument("--no-mark-bad-pixels", action="store_true")
+    parser.add_argument("--json-output", help="Write structured edge-proof counts by asset side and defect class.")
+    parser.add_argument("--report", help="Write a Markdown edge-proof report next to the proof image.")
     return parser.parse_args(argv)
 
 
@@ -223,7 +316,7 @@ def main(argv: list[str]) -> int:
     args = parse_args(argv)
     manifest_path = project_path(args.crop_manifest)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    proof = render_edge_proof(
+    proof, report = render_edge_proof(
         manifest,
         ROOT,
         max(1, args.zoom),
@@ -236,7 +329,19 @@ def main(argv: list[str]) -> int:
     output = project_path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     proof.save(output)
+    report["crop_manifest"] = args.crop_manifest.replace("\\", "/")
+    report["image_output"] = args.output.replace("\\", "/")
+    if args.json_output:
+        json_output = project_path(args.json_output)
+        json_output.parent.mkdir(parents=True, exist_ok=True)
+        json_output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    if args.report:
+        report_output = project_path(args.report)
+        report_output.parent.mkdir(parents=True, exist_ok=True)
+        report_output.write_text(render_markdown(report), encoding="utf-8")
     print(f"wrote edge proof: {output} size={proof.width}x{proof.height}")
+    if args.json_output or args.report:
+        print(f"edge proof marks: total={report['counts']['total']} reasons={report['counts']['reasons']}")
     return 0
 
 

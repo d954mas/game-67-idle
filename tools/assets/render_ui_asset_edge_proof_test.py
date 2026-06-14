@@ -143,6 +143,80 @@ class RenderUiAssetEdgeProofTests(unittest.TestCase):
                 self.assertGreater(count_mark_pixels(proof, "red"), 0)
                 self.assertGreater(count_mark_pixels(proof, "yellow"), 0)
 
+    def test_writes_json_and_markdown_reason_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            image.putpixel((23, 16), (19, 205, 9, 255))
+            image.putpixel((24, 16), (0, 255, 0, 0))
+            image.save(out_dir / "icon.png")
+            manifest = {
+                "schema": "game.art_crop_manifest",
+                "version": 1,
+                "sources": [
+                    {
+                        "id": "source",
+                        "path": "source.png",
+                        "crops": [
+                            {
+                                "id": "icon_test",
+                                "kind": "icon",
+                                "rect": [0, 0, 32, 32],
+                                "output": "assets/icon.png",
+                            }
+                        ],
+                    }
+                ],
+            }
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            output = root / "proof.png"
+            json_output = root / "proof.json"
+            markdown_output = root / "proof.md"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--crop-manifest",
+                    str(manifest_path),
+                    "--output",
+                    str(output),
+                    "--asset-id",
+                    "icon_test",
+                    "--side",
+                    "right",
+                    "--zoom",
+                    "3",
+                    "--json-output",
+                    str(json_output),
+                    "--report",
+                    str(markdown_output),
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads(json_output.read_text(encoding="utf-8"))
+            self.assertEqual(report["schema"], "game.ui_asset_edge_proof")
+            self.assertEqual(report["image_output"], str(output).replace("\\", "/"))
+            self.assertGreater(report["counts"]["total"], 0)
+            self.assertGreater(report["counts"]["visible"], 0)
+            self.assertGreater(report["counts"]["transparent_rgb"], 0)
+            self.assertGreater(report["counts"]["reasons"]["green_screen_spill"], 0)
+            self.assertEqual(report["rows"][0]["asset_id"], "icon_test")
+            markdown = markdown_output.read_text(encoding="utf-8")
+            self.assertIn("Total bad marks", markdown)
+            self.assertIn("green_screen_spill", markdown)
+            self.assertIn("edge proof marks", result.stdout)
+
     def test_preserve_green_edges_suppresses_green_spill_marks(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

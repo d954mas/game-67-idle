@@ -222,7 +222,9 @@ installs.
 alpha-boundary strips on a checkerboard and marks detected bad edge pixels. It
 uses the same key/purple/green/source-key edge classes as the generated UI
 asset audit, including hidden bad RGB in transparent pixels near visible
-edges. Use it when 1-2 pixel fringe is reported or when a normal contact sheet
+edges. Add `--json-output` and `--report` to write per-asset/per-side counts
+by reason so cleanup iterations can be compared without eyeballing every
+pixel. Use it when 1-2 pixel fringe is reported or when a normal contact sheet
 is too small to review edge quality. Use `--asset-id` and `--side` to create a
 small proof for the exact reported edge.
 `tools/assets/render_ui_composition_proof.py` renders runtime composition proof

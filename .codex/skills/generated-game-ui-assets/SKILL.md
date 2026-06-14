@@ -138,7 +138,7 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       extraction fixes; it records per-asset timing and the slowest asset
       without changing pass/fail semantics.
     - edge proof preview for 1-2px fringe review:
-      `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png>`
+      `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`
     - slice9 design policy audit:
       `node tools/assets/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
       Record passing reports in `expected_outputs.slice9_design_audit`; final-art
@@ -298,8 +298,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   halo, source-key spill, saturated green-screen spill, and hidden bad RGB in
   transparent edge pixels. Normal contact sheets are too weak for this class of
   defect. Use `--asset-id` and `--side` to create small proof images for the
-  exact reported edge. Store accepted proof paths in the art job rather than
-  leaving them as scratch screenshots.
+  exact reported edge. Write `--json-output` and `--report` when comparing
+  fixes so the review records per-side counts by reason, not only a screenshot.
+  Store accepted proof paths in the art job rather than leaving them as scratch
+  screenshots.
 - Preserve intentional purple/magic colors with explicit manifest policy; do
   not globally delete interior colors because they resemble the key background.
 - Preserve intentional saturated green edge colors with explicit

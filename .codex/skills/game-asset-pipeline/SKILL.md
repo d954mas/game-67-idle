@@ -73,9 +73,11 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     Add `--profile` for slow or disputed runs so the JSON/Markdown report shows
     per-asset timing and the slowest asset without changing audit verdicts.
 16. For 1-2 pixel edge disputes, generate a zoomed edge proof:
-    `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png>`.
+    `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`.
     Record durable proof paths in the art job (`expected_outputs.edge_proofs`
-    for primary outputs or candidate evidence for non-primary candidates).
+    for primary outputs or candidate evidence for non-primary candidates), and
+    keep the JSON/Markdown counts beside the image when comparing cleanup
+    iterations.
 17. For generated-source UI crops, run the derivation audit after slicing:
     `py -3.12 tools/assets/audit_generated_source_derivation.py --crop-manifest <crop-manifest>`.
     This catches builders that read a generated sheet but output procedural
