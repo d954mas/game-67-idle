@@ -173,7 +173,9 @@ Run with `--profile` when comparing policy changes; the report records total
 and per-asset timing and prints the slowest slice9 asset. This catches the
 failure where a generated panel is technically cuttable but has medallions,
 gems, or heavy caps baked into areas that runtime resizing will stretch; those
-decorations must be corner-only or separate overlay sprites.
+decorations must be corner-only or separate overlay sprites. When a policy uses
+`non_stretch_ornaments: separate_overlay_assets`, each `overlay_asset_id` must
+exist in the crop/runtime manifest and reference a non-slice9 overlay asset.
 `tools/assets/audit_atlas_metadata.mjs` checks runtime asset manifests before
 packing/reuse. Every asset must declare `pack_group`, `source_crop`,
 `original_size`, `trim_rect`, and `atlas_policy` fields for trim mode, alpha

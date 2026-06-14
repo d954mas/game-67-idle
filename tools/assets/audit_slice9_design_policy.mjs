@@ -170,7 +170,7 @@ function validateMinSize(value, label, problems) {
   return { width: value[0], height: value[1] };
 }
 
-function validateSlice9Policy(entry, label) {
+function validateSlice9Policy(entry, label, knownAssetsById = new Map()) {
   const geometry = validateSlice9Geometry(entry, label);
   const problems = [...geometry.problems];
   const stretch = entry.stretch_policy;
@@ -186,6 +186,14 @@ function validateSlice9Policy(entry, label) {
       const overlayIds = Array.isArray(stretch.overlay_asset_ids) ? stretch.overlay_asset_ids.filter(hasText) : [];
       if (overlayIds.length === 0 && !hasText(stretch.overlay_family)) {
         problems.push(`${label} separate overlay ornaments need overlay_asset_ids or overlay_family`);
+      }
+      for (const overlayId of overlayIds) {
+        const overlay = knownAssetsById.get(overlayId);
+        if (!overlay) {
+          problems.push(`${label} overlay_asset_id ${overlayId} is not present in manifest`);
+        } else if (overlay.kind === "slice9") {
+          problems.push(`${label} overlay_asset_id ${overlayId} must reference a non-slice9 overlay asset`);
+        }
       }
     }
   }
@@ -245,6 +253,16 @@ function collectSlice9Crops(crop) {
   return out;
 }
 
+function collectCropAssetsById(crop) {
+  const out = new Map();
+  for (const source of crop.sources || []) {
+    for (const item of source.crops || []) {
+      if (hasText(item.id)) out.set(item.id, { ...item, source_id: source.id, source_path: source.path });
+    }
+  }
+  return out;
+}
+
 function main() {
   const started = performance.now();
   const args = parseArgs(process.argv.slice(2));
@@ -258,18 +276,20 @@ function main() {
   if (runtimePath && !existsSync(runtimePath)) fail(`runtime manifest not found: ${runtimePath}`);
   const runtime = runtimePath ? readJson(runtimePath) : null;
   const runtimeById = new Map((runtime?.assets || []).filter((asset) => asset.kind === "slice9").map((asset) => [asset.id, asset]));
+  const cropAssetsById = collectCropAssetsById(crop);
+  const runtimeAssetsById = new Map((runtime?.assets || []).filter((asset) => hasText(asset.id)).map((asset) => [asset.id, asset]));
 
   const assets = [];
   const allProblems = [];
   for (const cropItem of collectSlice9Crops(crop)) {
     const assetStarted = performance.now();
-    const assetProblems = validateSlice9Policy(cropItem, `slice9 crop ${cropItem.id || "(unknown)"}`);
+    const assetProblems = validateSlice9Policy(cropItem, `slice9 crop ${cropItem.id || "(unknown)"}`, cropAssetsById);
     const runtimeAsset = runtimeById.get(cropItem.id);
     if (runtime) {
       if (!runtimeAsset) {
         assetProblems.push(`runtime manifest missing slice9 asset ${cropItem.id}`);
       } else {
-        assetProblems.push(...validateSlice9Policy(runtimeAsset, `runtime slice9 asset ${cropItem.id}`));
+        assetProblems.push(...validateSlice9Policy(runtimeAsset, `runtime slice9 asset ${cropItem.id}`, runtimeAssetsById));
         if (policyKey(runtimeAsset.stretch_policy) !== policyKey(cropItem.stretch_policy)) {
           assetProblems.push(`runtime slice9 asset ${cropItem.id} stretch_policy must match crop manifest`);
         }

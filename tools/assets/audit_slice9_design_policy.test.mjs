@@ -72,18 +72,20 @@ function writeValidManifests(dir, overrides = {}) {
     usage_policy: usage(),
     ...overrides.runtime,
   };
+  const extraCropEntries = Array.isArray(overrides.extraCrops) ? overrides.extraCrops : [];
+  const extraRuntimeEntries = Array.isArray(overrides.extraRuntimeAssets) ? overrides.extraRuntimeAssets : [];
   writeJson(dir, cropPath, {
     schema: "game.art_crop_manifest",
     version: 1,
     output_dir: "assets/runtime/ui",
-    sources: [{ id: "source", path: "source.png", crops: [cropEntry] }],
+    sources: [{ id: "source", path: "source.png", crops: [cropEntry, ...extraCropEntries] }],
   });
   writeJson(dir, runtimePath, {
     schema: "game.asset_manifest",
     version: 1,
     crop_manifest: cropPath,
     runtime_dir: "assets/runtime/ui",
-    assets: [runtimeEntry],
+    assets: [runtimeEntry, ...extraRuntimeEntries],
   });
   return { cropPath, runtimePath };
 }
@@ -130,6 +132,68 @@ test("fails when runtime policy diverges from crop policy", (t) => {
   const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath], dir);
   assert.equal(result.status, 1);
   assert.match(result.stdout, /stretch_policy must match crop manifest/);
+});
+
+test("validates separate overlay ornament asset ids", (t) => {
+  const dir = tempDir(t);
+  const overlayPolicy = {
+    ...policy(),
+    non_stretch_ornaments: "separate_overlay_assets",
+    overlay_asset_ids: ["panel_top_plaque"],
+  };
+  const { cropPath, runtimePath } = writeValidManifests(dir, {
+    crop: { stretch_policy: overlayPolicy },
+    runtime: { stretch_policy: overlayPolicy },
+    extraCrops: [
+      {
+        id: "panel_top_plaque",
+        kind: "sprite",
+        rect: [100, 0, 32, 16],
+        output: "assets/runtime/ui/panel-top-plaque.png",
+      },
+    ],
+    extraRuntimeAssets: [
+      {
+        id: "panel_top_plaque",
+        kind: "sprite",
+        path: "assets/runtime/ui/panel-top-plaque.png",
+      },
+    ],
+  });
+  const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath], dir);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test("fails when separate overlay ornament ids are missing or slice9 assets", (t) => {
+  const dir = tempDir(t);
+  const badOverlayPolicy = {
+    ...policy(),
+    non_stretch_ornaments: "separate_overlay_assets",
+    overlay_asset_ids: ["missing_plaque", "other_panel"],
+  };
+  const { cropPath, runtimePath } = writeValidManifests(dir, {
+    crop: { stretch_policy: badOverlayPolicy },
+    runtime: { stretch_policy: badOverlayPolicy },
+    extraCrops: [
+      {
+        id: "other_panel",
+        kind: "slice9",
+        rect: [100, 0, 48, 32],
+        output: "assets/runtime/ui/other-panel.png",
+      },
+    ],
+    extraRuntimeAssets: [
+      {
+        id: "other_panel",
+        kind: "slice9",
+        path: "assets/runtime/ui/other-panel.png",
+      },
+    ],
+  });
+  const result = run(["--crop-manifest", cropPath, "--runtime-manifest", runtimePath], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /overlay_asset_id missing_plaque is not present in manifest/);
+  assert.match(result.stdout, /overlay_asset_id other_panel must reference a non-slice9 overlay asset/);
 });
 
 test("fails when slice9 preview coverage omits min or stress size", (t) => {

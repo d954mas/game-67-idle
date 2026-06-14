@@ -113,7 +113,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     fixed-ornament, overlay, min-size, content safe area, min/stress preview
     coverage, and disallowed-use policy so ornate art is not silently used in
     a size or role where it will stretch badly. Record passing JSON reports in
-    `expected_outputs.slice9_design_audit` before final-art validation.
+    `expected_outputs.slice9_design_audit` before final-art validation. If the
+    policy declares `non_stretch_ornaments: separate_overlay_assets`, every
+    `overlay_asset_id` must reference a real non-slice9 crop/runtime asset.
 19. For final generated UI claims, run the source-family coverage audit:
     `node tools/assets/audit_source_family_coverage.mjs --job <art-job> --json-output <audit.json> --report <audit.md>`.
     Jobs should declare `expected_outputs.required_source_families`, usually
@@ -187,9 +189,11 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
   explicit `preserve_green_edges` manifest policy.
 - Slice9 crops need more than margins: record content safe area, target preview
   sizes, minimum size implications, whether the center/edges stretch or tile,
-  fixed-ornament policy, and disallowed uses. If a generated asset is
-  `large_only`, do not use it for compact secondary/mobile buttons; generate a
-  separate compact source family or split decoration into overlay sprites.
+  fixed-ornament policy, and disallowed uses. Separate overlay ornament ids
+  must point to real non-slice9 assets, not only prose notes. If a generated
+  asset is `large_only`, do not use it for compact secondary/mobile buttons;
+  generate a separate compact source family or split decoration into overlay
+  sprites.
 - Slice9 UI needs runtime composition proof at the smallest supported layout.
   A button/panel that passes standalone preview can still fail if portrait
   composition squeezes text or stacks controls without spacing. Composition

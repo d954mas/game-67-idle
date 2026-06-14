@@ -165,7 +165,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       per-slice9 timing and prints the slowest asset.
       Record passing reports in `expected_outputs.slice9_design_audit`; final-art
       validation requires this evidence so cuttable but unscalable generated
-      panels cannot pass as production UI.
+      panels cannot pass as production UI. If a slice9 base declares
+      `non_stretch_ornaments: separate_overlay_assets`, every
+      `overlay_asset_id` must reference a real non-slice9 crop/runtime asset.
     - runtime composition proof:
       `py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest <runtime-manifest> --output <proof.png> --json-output <proof.json> --report <proof.md>`
       Add `--profile` when composition proof feels slow; it writes timing and
@@ -287,8 +289,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
 - Treat beautiful fixed decoration as composition data. A panel top plaque,
   side gem, screw, lock, rarity crest, divider, glow strip, or button cap needs
   its own crop id, anchor, z-order, allowed base ids, and min/max offset rules.
-  If it cannot be named as a separate overlay, it is probably unsafe inside a
-  resizable base.
+  If it cannot be named as a separate overlay asset id that exists in the
+  manifest, it is probably unsafe inside a resizable base.
 - Runtime composition proof must treat content safe areas as reserved for text,
   prices, counters, and state values. Decorative overlays that cross those
   bounds need explicit `allow_content_overlap`; otherwise the proof should fail
