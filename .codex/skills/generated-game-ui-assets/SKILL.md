@@ -367,6 +367,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   or keep debugging rather than accepted outputs.
 - Preserve intentional purple/magic colors with explicit manifest policy; do
   not globally delete interior colors because they resemble the key background.
+  `preserve_purple_edges` only suppresses intentional purple/magenta edge
+  checks; source-key and green-screen edge leaks must still fail.
 - Preserve intentional saturated green edge colors with explicit
   `preserve_green_edges` manifest policy. Otherwise visible green-screen spill
   and hidden green RGB in transparent edge pixels are extraction failures even

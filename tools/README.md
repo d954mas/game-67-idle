@@ -250,7 +250,9 @@ green-screen spill as a default defect even when the manifest omitted the
 source key. Intentional saturated green edges require `preserve_green_edges`.
 It rejects transparent edge pixels that still store key/purple/green/source-key
 RGB, because texture filtering can sample that hidden color back into visible
-edges. Use `--profile` on slow or disputed runs to write per-asset timing into
+edges. `preserve_purple_edges` only suppresses intentional purple/magenta
+checks; source-key and green-screen leaks must still fail under that policy.
+Use `--profile` on slow or disputed runs to write per-asset timing into
 JSON/Markdown and print the slowest asset; the default run stays quiet and
 verdict-compatible. When NumPy is available, the edge color scans use
 vectorized masks with the same Python fallback kept for minimal portable

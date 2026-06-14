@@ -304,6 +304,54 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("transparent edge keeps key/purple/green RGB", result.stdout)
 
+    def test_preserve_purple_edges_still_fails_source_key_edge_fringe(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(120, 70, 180, 255))
+            image.putpixel((8, 16), (0, 255, 0, 255))
+            image.save(out_dir / "icon.png")
+
+            manifest = self.write_manifest("assets/icon.png", {"preserve_purple_edges": True})
+            manifest["green_screen"] = {"mode": "chroma_key", "key": "#00ff00"}
+            result = self.run_audit(root, manifest)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("source key edge fringe remains", result.stdout)
+
+    def test_preserve_purple_edges_still_fails_source_key_transparent_rgb(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(120, 70, 180, 255))
+            image.putpixel((7, 16), (0, 255, 0, 0))
+            image.save(out_dir / "icon.png")
+
+            manifest = self.write_manifest("assets/icon.png", {"preserve_purple_edges": True})
+            manifest["green_screen"] = {"mode": "chroma_key", "key": "#00ff00"}
+            result = self.run_audit(root, manifest)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("transparent edge keeps key/purple/green RGB", result.stdout)
+
+    def test_preserve_purple_edges_allows_purple_transparent_rgb_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(120, 70, 180, 255))
+            image.putpixel((7, 16), (64, 0, 64, 0))
+            image.save(out_dir / "icon.png")
+
+            result = self.run_audit(root, self.write_manifest("assets/icon.png", {"preserve_purple_edges": True}))
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

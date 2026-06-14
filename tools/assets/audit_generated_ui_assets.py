@@ -168,6 +168,7 @@ def count_transparent_edge_bad_rgb(
     image: Image.Image,
     key: tuple[int, int, int] | None = None,
     *,
+    preserve_purple: bool = False,
     preserve_green: bool = False,
     preserve_source_key: bool = False,
 ) -> int:
@@ -175,7 +176,9 @@ def count_transparent_edge_bad_rgb(
         array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
         alpha = array[..., 3]
         transparent = alpha <= 12
-        bad = key_fringe_mask_array(array) | purple_halo_mask_array(array)
+        bad = np.zeros(alpha.shape, dtype=bool)
+        if not preserve_purple:
+            bad |= key_fringe_mask_array(array) | purple_halo_mask_array(array)
         if not preserve_green:
             bad |= green_screen_spill_mask_array(array)
         if key is not None and not preserve_source_key:
@@ -195,11 +198,11 @@ def count_transparent_edge_bad_rgb(
                 continue
             source_key_bad = key is not None and not preserve_source_key and is_source_key_spill_like(red, green, blue, key)
             green_bad = not preserve_green and is_green_screen_spill_like(red, green, blue)
+            purple_bad = not preserve_purple and (is_key_fringe_like(red, green, blue) or is_any_purple_halo_like(red, green, blue))
             if not (
                 source_key_bad
                 or green_bad
-                or is_key_fringe_like(red, green, blue)
-                or is_any_purple_halo_like(red, green, blue)
+                or purple_bad
             ):
                 continue
             near_visible = False
@@ -336,7 +339,7 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
     if isinstance(green_spill_limit, int) and green_spill_count > green_spill_limit:
         result["problems"].append(f"green-screen edge spill remains: {green_spill_count}px > {green_spill_limit}px")
 
-    source_key_fringe_count = 0 if (preserve_purple or preserve_source_key) else count_edge_source_key_fringe(image, source_key)
+    source_key_fringe_count = 0 if preserve_source_key else count_edge_source_key_fringe(image, source_key)
     mark_timing("edge_source_key_fringe")
     result["edge_source_key_fringe_pixels"] = source_key_fringe_count
     source_key_fringe_limit = crop.get("edge_source_key_fringe_limit", 0)
@@ -345,15 +348,12 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
             f"source key edge fringe remains: {source_key_fringe_count}px > {source_key_fringe_limit}px"
         )
 
-    transparent_bad_rgb_count = (
-        0
-        if preserve_purple
-        else count_transparent_edge_bad_rgb(
-            image,
-            source_key,
-            preserve_green=preserve_green,
-            preserve_source_key=preserve_source_key,
-        )
+    transparent_bad_rgb_count = count_transparent_edge_bad_rgb(
+        image,
+        source_key,
+        preserve_purple=preserve_purple,
+        preserve_green=preserve_green,
+        preserve_source_key=preserve_source_key,
     )
     mark_timing("transparent_edge_bad_rgb")
     result["transparent_edge_bad_rgb_pixels"] = transparent_bad_rgb_count

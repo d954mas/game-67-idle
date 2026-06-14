@@ -189,7 +189,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 - Pixel audits must catch one- or two-pixel dark purple, dark maroon/magenta,
   red-blue halos, and saturated green-screen spill on the outer alpha contour,
   not only bright magenta fringe. Intentional saturated green edges need an
-  explicit `preserve_green_edges` manifest policy.
+  explicit `preserve_green_edges` manifest policy. Intentional purple edges
+  need `preserve_purple_edges`, but that policy must not suppress source-key or
+  green-screen leak checks.
 - Slice9 crops need more than margins: record content safe area, target preview
   sizes, minimum size implications, whether the center/edges stretch or tile,
   fixed-ornament policy, and disallowed uses. Separate overlay ornament ids
