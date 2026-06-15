@@ -323,6 +323,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
     for atlas_info in atlases:
         atlas_started = perf_counter()
         atlas_problems: list[str] = []
+        atlas_asset_ids: set[str] = set()
         atlas_path_value = atlas_info.get("path") if isinstance(atlas_info, dict) else None
         atlas_path = project_path(atlas_path_value) if isinstance(atlas_path_value, str) else None
         atlas = None
@@ -375,6 +376,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
             if entry_id in reported_ids:
                 atlas_problems.append(f"duplicate atlas entry id {entry_id}")
             reported_ids.add(entry_id)
+            atlas_asset_ids.add(entry_id)
             if entry_id in expected_assets:
                 expected_kind = expected_assets[entry_id].get("kind")
                 if entry.get("kind") != expected_kind:
@@ -382,6 +384,8 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
                 expected_alias = expected_assets[entry_id].get("alias_of")
                 if expected_alias and entry.get("alias_of") != expected_alias:
                     atlas_problems.append(f"{entry_id} alias_of must match asset manifest")
+            elif expected_assets:
+                atlas_problems.append(f"{entry_id} atlas entry missing from asset manifest")
 
             for rect_name in ("atlas_rect", "padded_rect"):
                 if not rect_valid(entry.get(rect_name)):
@@ -485,6 +489,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
             "status": "pass" if not atlas_problems else "fail",
             "problems": atlas_problems,
             "entry_count": len(entries),
+            "asset_ids": sorted(atlas_asset_ids),
             "physical_entry_count": atlas_info.get("physical_entry_count") if isinstance(atlas_info, dict) else None,
             "alias_count": atlas_info.get("alias_count") if isinstance(atlas_info, dict) else None,
             "transparent_nonzero_rgb_pixels": transparent_nonzero_rgb_pixels,
@@ -497,9 +502,12 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
         atlas_reports.append(atlas_report)
         problems.extend(atlas_problems)
 
+    missing_asset_ids: list[str] = []
     for asset_id in expected_assets:
         if asset_id not in reported_ids:
+            missing_asset_ids.append(asset_id)
             problems.append(f"missing packed asset id {asset_id}")
+    unexpected_asset_ids = sorted(asset_id for asset_id in reported_ids if expected_assets and asset_id not in expected_assets)
 
     result = {
         "schema": "game.ui_atlas_pack_audit",
@@ -508,6 +516,10 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
         "asset_manifest": norm_path(manifest_path) if manifest_path else pack.get("asset_manifest"),
         "verdict": "pass" if not problems else "fail",
         "problems": problems,
+        "expected_asset_ids": sorted(expected_assets),
+        "reported_asset_ids": sorted(reported_ids),
+        "missing_asset_ids": sorted(missing_asset_ids),
+        "unexpected_asset_ids": unexpected_asset_ids,
         "atlases": atlas_reports,
     }
     if labeled_preview_policy is not None:
@@ -560,6 +572,17 @@ def main() -> None:
                 "",
             ]
         )
+    lines.extend(
+        [
+            "## Asset Coverage",
+            "",
+            f"- expected_asset_ids: {len(audit.get('expected_asset_ids') or [])}",
+            f"- reported_asset_ids: {len(audit.get('reported_asset_ids') or [])}",
+            f"- missing_asset_ids: {', '.join(audit.get('missing_asset_ids') or []) or '-'}",
+            f"- unexpected_asset_ids: {', '.join(audit.get('unexpected_asset_ids') or []) or '-'}",
+            "",
+        ]
+    )
     lines.extend(["## Atlases", ""])
     for atlas in audit["atlases"]:
         suffix = ""
@@ -568,6 +591,8 @@ def main() -> None:
         physical = atlas.get("physical_entry_count")
         aliases = atlas.get("alias_count")
         detail = f"entries={atlas['entry_count']}"
+        if atlas.get("asset_ids"):
+            detail += f", asset_ids={','.join(atlas.get('asset_ids') or [])}"
         if physical is not None and aliases is not None:
             detail += f", physical={physical}, aliases={aliases}"
         detail += f", transparent_nonzero_rgb_pixels={atlas.get('transparent_nonzero_rgb_pixels', '-')}"

@@ -115,6 +115,11 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertEqual(audit["atlases"][0]["outside_padded_visible_pixels"], 0)
             self.assertEqual(audit["atlases"][0]["labeled_preview_delta_outside_label_pixels"], 0)
             self.assertIn(audit["atlases"][0]["analysis_engine"], {"numpy", "python"})
+            self.assertEqual(audit["expected_asset_ids"], ["button", "panel"])
+            self.assertEqual(audit["reported_asset_ids"], ["button", "panel"])
+            self.assertEqual(audit["missing_asset_ids"], [])
+            self.assertEqual(audit["unexpected_asset_ids"], [])
+            self.assertEqual(audit["atlases"][0]["asset_ids"], ["button", "panel"])
 
     def test_rejects_broken_extrusion_pixels(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -151,6 +156,31 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("missing packed asset id button", result.stdout + result.stderr)
+
+    def test_rejects_unknown_atlas_entry_not_in_asset_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")])
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            pack_data["atlases"][0]["entries"].append(
+                {**pack_data["atlases"][0]["entries"][0], "id": "orphan_label_or_sprite"}
+            )
+            pack.write_text(json.dumps(pack_data), encoding="utf-8")
+            result = run(
+                AUDIT,
+                root,
+                "--atlas-pack",
+                str(pack.relative_to(root)),
+                "--asset-manifest",
+                str(manifest.relative_to(root)),
+                "--json-output",
+                "packed/audit.json",
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("orphan_label_or_sprite atlas entry missing from asset manifest", result.stdout + result.stderr)
+            audit = json.loads((root / "packed/audit.json").read_text(encoding="utf-8"))
+            self.assertEqual(audit["unexpected_asset_ids"], ["orphan_label_or_sprite"])
 
     def test_accepts_alias_entries_reusing_target_region(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -205,6 +235,9 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             markdown = (root / "packed/audit.md").read_text(encoding="utf-8")
             self.assertIn("## Timing", markdown)
             self.assertIn("## Labeled Preview Policy", markdown)
+            self.assertIn("## Asset Coverage", markdown)
+            self.assertIn("- expected_asset_ids: 1", markdown)
+            self.assertIn("- reported_asset_ids: 1", markdown)
             self.assertIn("- mode: `label_overlay_only`", markdown)
             self.assertIn("- allowed_delta: `review_label_rects_only`", markdown)
             self.assertIn("- debug_outlines: `false`", markdown)
