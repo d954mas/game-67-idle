@@ -240,7 +240,7 @@ function lessonForFinding(finding, context = {}) {
     repeated_broad_final: {
       symptom: `${message} Unbatched broad/final occurrences: ${Number(repeatedSummary.unbatched_broad_final_occurrences || 0)}.`,
       cause: "Unbatched broad/final validation was repeated in the historical profile instead of being guarded by a validation plan or captured as a planned validation batch.",
-      fix: "Use node tools/ai.mjs validate --change <kind> --risk <risk> before rerunning broad/final gates; treat planned validation batches separately from ad hoc repeats.",
+      fix: "Use node tools/ai.mjs validate (quick; --full for broad/final gates) before rerunning broad gates; avoid ad hoc broad/final repeats.",
     },
     missing_context_inputs: {
       symptom: message,

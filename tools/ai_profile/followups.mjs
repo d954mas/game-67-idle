@@ -70,10 +70,10 @@ function buildSuggestions(review) {
       source: useCurrentScope ? "current_scope.repeated_unbatched_broad_final_commands" : "repeated_unbatched_broad_final_commands",
       why: `Unbatched broad/final commands repeated: ${commandList(commands) || "unknown"}.`,
       done_when: [
-        "`node tools/ai.mjs validate --change <kind> --risk <risk>` is the default path for broad/final gates.",
+        "`node tools/ai.mjs validate` runs quick validation; use `--full` for broad/final/export gates.",
         "A future profile shows broad/final repeats only after a failed gate, changed risk, or final batch boundary.",
       ],
-      next_action: "Use `node tools/ai.mjs validate --change <kind> --risk <risk>` for the next validation loop and inspect validation batch evidence before adding more rules.",
+      next_action: "Run `node tools/ai.mjs validate` (quick; `--full` for broad/final gates) for the next validation loop, and rerun the full gate only after a failed gate or before final handoff.",
       });
     }
   }

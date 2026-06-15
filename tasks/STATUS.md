@@ -69,13 +69,19 @@ profiling for the next game iteration.
 ## Next Priorities
 
 The 2026-06-15 review backlog `T0043`-`T0053` is complete (see Current Gate).
+Post-implementation review done: quick wins applied in `T0054` (fixed 6 stale
+`ai.mjs validate --change` advice strings, marked the slice-hygiene profiler
+guard advisory in tools/README, pruned closed-prototype tmp 120M -> 22M).
 
-Next:
-1. Post-implementation review: find and optimize any remaining pipeline
-   bottlenecks now that the obvious ones are fixed.
-2. Start the next prototype when the lead picks a concept: create a fresh
-   `gamedesign/projects/<id>/` wiki + tasks in `active/` (Stage 0 kickoff),
-   and apply the new binding visual definition of done from the first screen.
+Open follow-ups:
+1. `T0057` (lead decision): should the first-screen visual gate BLOCK, not just
+   advise? It is the one residual way a prototype could still ship unlike-ref
+   (the gate is self-attested/advisory). Options A-D in the task; lean C
+   (cheap auto image-similarity vs fake shot) layered on the advisory gate.
+2. `T0055` split the 531-line generated-game-ui-assets skill into references.
+3. `T0056` (P3) sweep non-pipeline-validate tmp scratch at prototype close.
+4. Start the next prototype when the lead picks a concept (Stage 0 kickoff),
+   applying the binding visual definition of done from the first screen.
 
 ## Validation Policy
 

@@ -85,11 +85,12 @@ enough, selected buttons do not overlap, and portrait primary actions use a
 full-width row above secondary actions.
 `tools/product_gate/slice_hygiene.mjs` is the pre-review/pre-commit audit for
 prototype slices. It reports diff size, evidence checklist coverage, push
-target visibility, profiler guard evidence, changed fail/stale review
-artifacts, and the 30-file normal-slice threshold. Use `--strict` with
-`--profile-guard` evidence from
-`node tools/ai.mjs status --require-current-scope-usable` before
-handoff/commit, and use `--snapshot` only when the lead intentionally wants an
+target visibility, changed fail/stale review artifacts, and the 30-file
+normal-slice threshold. Use `--strict` with build/probe evidence, the product
+gate, and a screenshot before handoff/commit. A profiler guard
+(`--profile-guard`, from `node tools/ai.mjs status --require-current-scope-usable`)
+is optional/advisory and never blocks the slice (passive profiling does not
+block normal work). Use `--snapshot` only when the lead intentionally wants an
 end-of-experiment snapshot instead of scoped phase commits.
 
 `tools/assets/new_generation_record.mjs` writes the provenance record for an

@@ -373,7 +373,7 @@ function classifyRepeatedCommands(records, repeatedCommands, commandScopes) {
     if (item.scope === "broad/final" && item.unbatched > 1) {
       classification = "validation_waste_risk";
       reason = "Broad/final command repeated outside a validation batch.";
-      next_action = "Use `node tools/ai.mjs validate --change <kind> --risk <risk>` and rerun broad/final gates only after a failed gate, changed risk, or final handoff.";
+      next_action = "Use `node tools/ai.mjs validate` (quick) and rerun the `--full` gate only after a failed gate or before final handoff.";
     } else if (item.batched > 0 && item.unbatched === 0) {
       classification = "planned_validation";
       reason = "All repeats are inside profiled validation batches.";
@@ -433,7 +433,7 @@ function currentScopeFindingsAndActions(currentScope) {
   }
   if (currentScope.repeated_unbatched_broad_final_commands.length > 0) {
     findings.push({ type: "current_repeated_broad_final", message: `${currentScope.repeated_unbatched_broad_final_commands.length} current-scope unbatched broad/final command(s) repeated.` });
-    actions.push("Use `node tools/ai.mjs validate --change <kind> --risk <risk>` for current-scope broad/final gates.");
+    actions.push("Use `node tools/ai.mjs validate` (quick; `--full` for broad/final gates).");
   }
   if (currentScope.missing_context_inputs > 0) {
     findings.push({ type: "current_missing_context_inputs", message: `${currentScope.missing_context_inputs} current-scope medium/high context record(s) lack context_inputs.` });
@@ -779,7 +779,7 @@ if (unresolvedFailed.length > 0) actions.push("For unresolved failed commands, d
 if (recoveredFailed.length > 0) actions.push("Use recovered_failure_classification to separate useful validation feedback, avoidable rework, and tool/environment noise.");
 if (repeatedUnbatchedBroadCommands.length > 0) {
   actions.push(
-    "Batch repeated broad/final validation with `node tools/ai.mjs validate --change <kind> --risk <risk>` before the next validation loop.",
+    "Batch repeated broad/final validation with `node tools/ai.mjs validate --full` before the next validation loop.",
   );
 } else if (repeatedCommands.length > 0) {
   actions.push("Review repeated scoped/preflight commands; keep them only when they guard a fresh edit or failed gate.");
