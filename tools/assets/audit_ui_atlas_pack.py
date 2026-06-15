@@ -312,8 +312,10 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
     if not isinstance(atlases, list) or not atlases:
         problems.append("atlas pack needs non-empty atlases")
         atlases = []
+    labeled_preview_policy = None
     if pack.get("label_overlay"):
-        problems.extend(check_labeled_preview_policy("atlas pack", pack.get("labeled_preview_policy")))
+        labeled_preview_policy = pack.get("labeled_preview_policy")
+        problems.extend(check_labeled_preview_policy("atlas pack", labeled_preview_policy))
 
     for atlas_info in atlases:
         atlas_started = perf_counter()
@@ -469,6 +471,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
             "pack_group": atlas_info.get("pack_group") if isinstance(atlas_info, dict) else None,
             "path": atlas_path_value,
             "labeled_preview_path": labeled_preview_path_value,
+            "labeled_preview_policy": atlas_info.get("labeled_preview_policy") if isinstance(atlas_info, dict) and atlas_info.get("label_overlay") else None,
             "status": "pass" if not atlas_problems else "fail",
             "problems": atlas_problems,
             "entry_count": len(entries),
@@ -497,6 +500,8 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
         "problems": problems,
         "atlases": atlas_reports,
     }
+    if labeled_preview_policy is not None:
+        result["labeled_preview_policy"] = labeled_preview_policy
     if profile:
         timings["total"] = round((perf_counter() - started) * 1000, 3)
         result["timing_ms"] = timings
@@ -532,6 +537,19 @@ def main() -> None:
         for name, elapsed in audit["timing_ms"].items():
             lines.append(f"- {name}: {elapsed} ms")
         lines.append("")
+    if audit.get("labeled_preview_policy"):
+        policy = audit["labeled_preview_policy"]
+        lines.extend(
+            [
+                "## Labeled Preview Policy",
+                "",
+                "Audit requires labeled preview pixels to differ from the clean atlas only inside declared review_label rects.",
+                f"- mode: `{policy.get('mode', '-')}`",
+                f"- allowed_delta: `{policy.get('allowed_delta', '-')}`",
+                f"- debug_outlines: `{str(policy.get('debug_outlines', '-')).lower()}`",
+                "",
+            ]
+        )
     lines.extend(["## Atlases", ""])
     for atlas in audit["atlases"]:
         suffix = ""
@@ -546,6 +564,16 @@ def main() -> None:
         detail += f", outside_padded_visible_pixels={atlas.get('outside_padded_visible_pixels', '-')}"
         detail += f", labeled_preview_delta_outside_label_pixels={atlas.get('labeled_preview_delta_outside_label_pixels', '-')}"
         detail += f", analysis_engine={atlas.get('analysis_engine', '-')}"
+        if atlas.get("labeled_preview_path"):
+            detail += f", labeled_preview=`{atlas.get('labeled_preview_path')}`"
+        if atlas.get("labeled_preview_policy"):
+            policy = atlas["labeled_preview_policy"]
+            detail += (
+                ", labels="
+                f"{policy.get('mode', '-')}/"
+                f"{policy.get('allowed_delta', '-')}/"
+                f"debug_outlines={str(policy.get('debug_outlines', '-')).lower()}"
+            )
         lines.append(f"- {atlas['status'].upper()} `{atlas.get('pack_group')}` {detail}{suffix}")
     lines.append("")
     if args.report:

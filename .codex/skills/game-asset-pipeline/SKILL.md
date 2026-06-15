@@ -156,7 +156,10 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     not the game's final runtime atlas packer. Labeled review packs must write
     `labeled_preview_policy` with `mode: label_overlay_only`,
     `allowed_delta: review_label_rects_only`, and `debug_outlines: false` at
-    pack and atlas level.
+    pack and atlas level. Markdown reports must expose the labeled preview
+    path, overlay-only policy, asset id index, `review_label.rect`, placement,
+    and wrapped `review_label.lines` so the lead can select asset ids from the
+    report without opening JSON.
 21. Audit generated UI review atlases before final-art claims:
     `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
     Add `--profile` when atlas audit feels slow so JSON/Markdown preserve audit

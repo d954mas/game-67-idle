@@ -216,7 +216,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       review evidence, not the game's final runtime packer. Labeled review
       packs must write `labeled_preview_policy` with `mode:
       label_overlay_only`, `allowed_delta: review_label_rects_only`, and
-      `debug_outlines: false` at pack and atlas level.
+      `debug_outlines: false` at pack and atlas level. Markdown reports must
+      expose the labeled preview path, overlay-only policy, asset id index,
+      `review_label.rect`, placement, and wrapped `review_label.lines` so the
+      lead can choose assets without opening JSON.
     - review atlas audit:
       `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
       Add `--profile` when atlas audit feels slow; it writes audit timing and
@@ -361,7 +364,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   list in `review_label.text`; wrap only the rendered preview text through
   `review_label.lines`; store `review_label.placement` as `right` or `bottom`;
   and keep labels readable enough for the lead to choose assets directly from
-  the atlas.
+  the atlas. The Markdown report must also include a human-readable asset id
+  index with the labeled preview path and label rectangles, because the lead
+  should be able to say which ids to integrate from one review artifact.
   It must not be presented as the game's final runtime atlas. Use `--profile`
   while optimizing atlas economy so reports preserve occupancy and padded-asset
   ratios instead of relying on visual guessing.

@@ -595,6 +595,19 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
             f"atlases: **{len(atlases)}**",
             "",
         ]
+        if pack_manifest.get("labeled_preview_policy"):
+            policy = pack_manifest["labeled_preview_policy"]
+            lines.extend(
+                [
+                    "## Labeled Preview Policy",
+                    "",
+                    "Names are drawn only on labeled preview PNGs, in reserved free-space label rects outside asset padded rects.",
+                    f"- mode: `{policy.get('mode', '-')}`",
+                    f"- allowed_delta: `{policy.get('allowed_delta', '-')}`",
+                    f"- debug_outlines: `{str(policy.get('debug_outlines', '-')).lower()}`",
+                    "",
+                ]
+            )
         if pack_manifest.get("atlas_efficiency"):
             efficiency = pack_manifest["atlas_efficiency"]
             lines.extend(
@@ -619,12 +632,23 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
             line = f"- `{atlas['pack_group']}` -> `{atlas['path']}` {atlas['size'][0]}x{atlas['size'][1]}, entries={atlas['entry_count']}, physical={atlas['physical_entry_count']}, aliases={atlas['alias_count']}, occupancy={atlas['occupancy_ratio']}"
             if atlas.get("labeled_preview_path"):
                 line += f", labeled_preview=`{atlas['labeled_preview_path']}`"
+            if atlas.get("labeled_preview_policy"):
+                policy = atlas["labeled_preview_policy"]
+                line += (
+                    ", labels="
+                    f"{policy.get('mode', '-')}/"
+                    f"{policy.get('allowed_delta', '-')}/"
+                    f"debug_outlines={str(policy.get('debug_outlines', '-')).lower()}"
+                )
             lines.append(line)
         lines.append("")
         lines.extend(["## Asset Id Index", ""])
         for atlas in atlases:
             lines.append(f"### {atlas['pack_group']}")
             lines.append("")
+            if atlas.get("labeled_preview_path"):
+                lines.append(f"labeled_preview: `{atlas['labeled_preview_path']}`")
+                lines.append("")
             for entry in atlas["entries"]:
                 details = [
                     f"kind={entry.get('kind') or '-'}",
@@ -638,6 +662,9 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
                 if review_label:
                     details.append(f"label_rect={review_label.get('rect')}")
                     details.append(f"label_placement={review_label.get('placement') or '-'}")
+                    details.append(f"label_lines={review_label.get('lines') or []}")
+                else:
+                    details.append("label=alias_reuses_physical_label")
                 lines.append(f"- `{entry['id']}`: " + ", ".join(details))
             lines.append("")
         write_text(report_path, "\n".join(lines))
