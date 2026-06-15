@@ -400,6 +400,20 @@ function validateEdgeProofReportEvidence(paths, fieldName, root, problems, stric
     }
     if (!Array.isArray(report.rows)) {
       problems.push(`${fieldName} JSON needs rows: ${item}`);
+    } else if (expected.requireFullCoverage === true && expected.assetIds && expected.assetIds.size > 0) {
+      const expectedSides = Array.isArray(expected.sides) && expected.sides.length > 0 ? expected.sides : ["top", "right", "bottom", "left"];
+      const covered = new Set(
+        report.rows
+          .filter((row) => objectHasText(row, "asset_id") && objectHasText(row, "side"))
+          .map((row) => `${row.asset_id}:${row.side}`)
+      );
+      for (const id of expected.assetIds) {
+        for (const side of expectedSides) {
+          if (!covered.has(`${id}:${side}`)) {
+            problems.push(`${fieldName} JSON missing edge row for ${id} ${side}: ${item}`);
+          }
+        }
+      }
     }
   }
   if (strict && items.length > 0 && jsonReports === 0) {
@@ -1138,6 +1152,9 @@ function validateJob(job, jobPath, options = {}) {
           cropManifest: job.expected_outputs?.crop_manifest,
           edgeProofImages: expectedEdgeProofImages,
           requireClean: true,
+          requireFullCoverage: true,
+          assetIds: expectedCropIds,
+          sides: ["top", "right", "bottom", "left"],
         }
       );
     }

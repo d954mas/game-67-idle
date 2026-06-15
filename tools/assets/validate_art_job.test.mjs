@@ -105,6 +105,28 @@ function writeAtlasPackAudit(dir, path, overrides = {}) {
 
 function writeEdgeProofReport(dir, path, imageOutput, overrides = {}) {
   mkdirSync(join(dir, dirname(path)), { recursive: true });
+  const defaultRows = [];
+  for (const asset of [
+    { id: "panel", kind: "slice9", output: "assets/runtime/ui-kit/panel.png" },
+    { id: "resource_icon", kind: "icon", output: "assets/runtime/ui-kit/icon.png" },
+    { id: "enemy", kind: "sprite", output: "assets/runtime/ui-kit/enemy.png" },
+  ]) {
+    for (const side of ["top", "right", "bottom", "left"]) {
+      defaultRows.push({
+        asset_id: asset.id,
+        kind: asset.kind,
+        output: asset.output,
+        side,
+        rect: [0, 0, 8, 8],
+        counts: {
+          total: 0,
+          visible: 0,
+          transparent_rgb: 0,
+          reasons: {},
+        },
+      });
+    }
+  }
   const report = {
     schema: "game.ui_asset_edge_proof",
     version: 1,
@@ -116,21 +138,7 @@ function writeEdgeProofReport(dir, path, imageOutput, overrides = {}) {
       transparent_rgb: 0,
       reasons: {},
     },
-    rows: [
-      {
-        asset_id: "panel",
-        kind: "slice9",
-        output: "assets/runtime/ui-kit/panel.png",
-        side: "right",
-        rect: [90, 0, 6, 64],
-        counts: {
-          total: 0,
-          visible: 0,
-          transparent_rgb: 0,
-          reasons: {},
-        },
-      },
-    ],
+    rows: defaultRows,
     ...overrides,
   };
   writeFileSync(join(dir, path), `${JSON.stringify(report, null, 2)}\n`, "utf8");
@@ -688,6 +696,36 @@ test("strict mode rejects edge proof report for another crop manifest or image",
   assert.equal(result.status, 1);
   assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON crop_manifest must match expected_outputs.crop_manifest/);
   assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON image_output must match expected_outputs.edge_proofs/);
+});
+
+test("strict mode rejects accepted edge proof report missing asset side coverage", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const proof = "gamedesign/projects/test/art/previews/ui-edge-proof.png";
+  const proofReport = "gamedesign/projects/test/reviews/ui-edge-proof.json";
+  mkdirSync(join(dir, "gamedesign/projects/test/art/previews"), { recursive: true });
+  writeFileSync(join(dir, proof), "fake-png", "utf8");
+  writeEdgeProofReport(dir, proofReport, proof, {
+    rows: [
+      {
+        asset_id: "panel",
+        kind: "slice9",
+        output: "assets/runtime/ui-kit/panel.png",
+        side: "top",
+        rect: [0, 0, 8, 8],
+        counts: { total: 0, visible: 0, transparent_rgb: 0, reasons: {} },
+      },
+    ],
+  });
+  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
+  jobData.expected_outputs.edge_proofs = [proof];
+  jobData.expected_outputs.edge_proof_reports = [proofReport];
+  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON missing edge row for panel right/);
+  assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON missing edge row for resource_icon top/);
 });
 
 test("strict mode requires generated UI asset audit evidence", (t) => {
