@@ -12,6 +12,11 @@ from typing import Literal
 from PIL import Image
 
 try:
+    import numpy as np
+except ImportError:  # pragma: no cover - exercised in environments without numpy.
+    np = None
+
+try:
     from tools.assets.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
 except ModuleNotFoundError:  # pragma: no cover - supports direct script execution by path.
     from atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
@@ -26,6 +31,10 @@ def flattened_pixel_data(image: Image.Image):
     if callable(getter):
         return getter()
     return image.getdata()
+
+
+def analysis_engine() -> str:
+    return "numpy" if np is not None else "python"
 
 
 def parse_color(value: str) -> RGB:
@@ -79,6 +88,46 @@ def extract_dual_plate_alpha(
     if not usable_channels:
         raise ValueError("bg-light and bg-dark must differ by at least 8 in one channel")
 
+    if np is not None:
+        return extract_dual_plate_alpha_numpy(
+            light_rgba,
+            dark_rgba,
+            bg_light=bg_light,
+            bg_dark=bg_dark,
+            bg_diff=bg_diff,
+            usable_channels=usable_channels,
+            alpha_combine=alpha_combine,
+            recovery_source=recovery_source,
+            alpha_cutoff=alpha_cutoff,
+            alpha_hardening=alpha_hardening,
+        )
+    return extract_dual_plate_alpha_python(
+        light_rgba,
+        dark_rgba,
+        bg_light=bg_light,
+        bg_dark=bg_dark,
+        bg_diff=bg_diff,
+        usable_channels=usable_channels,
+        alpha_combine=alpha_combine,
+        recovery_source=recovery_source,
+        alpha_cutoff=alpha_cutoff,
+        alpha_hardening=alpha_hardening,
+    )
+
+
+def extract_dual_plate_alpha_python(
+    light_rgba: Image.Image,
+    dark_rgba: Image.Image,
+    *,
+    bg_light: RGB,
+    bg_dark: RGB,
+    bg_diff: list[int],
+    usable_channels: list[int],
+    alpha_combine: AlphaCombine,
+    recovery_source: RecoverySource,
+    alpha_cutoff: int,
+    alpha_hardening: int,
+) -> Image.Image:
     output = Image.new("RGBA", light_rgba.size, (0, 0, 0, 0))
     light_pixels = light_rgba.load()
     dark_pixels = dark_rgba.load()
@@ -114,6 +163,57 @@ def extract_dual_plate_alpha(
             out_pixels[x, y] = (recovered[0], recovered[1], recovered[2], alpha_byte)
 
     return output
+
+
+def extract_dual_plate_alpha_numpy(
+    light_rgba: Image.Image,
+    dark_rgba: Image.Image,
+    *,
+    bg_light: RGB,
+    bg_dark: RGB,
+    bg_diff: list[int],
+    usable_channels: list[int],
+    alpha_combine: AlphaCombine,
+    recovery_source: RecoverySource,
+    alpha_cutoff: int,
+    alpha_hardening: int,
+) -> Image.Image:
+    assert np is not None
+    light_array = np.asarray(light_rgba, dtype=np.float32)
+    dark_array = np.asarray(dark_rgba, dtype=np.float32)
+    bg_diff_array = np.asarray([bg_diff[channel] for channel in usable_channels], dtype=np.float32)
+
+    observed_diff = light_array[..., usable_channels] - dark_array[..., usable_channels]
+    alpha_values = np.clip(1.0 - (observed_diff / bg_diff_array), 0.0, 1.0)
+    if alpha_combine == "min":
+        alpha = np.min(alpha_values, axis=-1)
+    elif alpha_combine == "max":
+        alpha = np.max(alpha_values, axis=-1)
+    else:
+        alpha = np.mean(alpha_values, axis=-1)
+    alpha_byte = np.rint(alpha * 255.0).clip(0, 255).astype(np.uint8)
+
+    visible_mask = alpha_byte > alpha_cutoff
+    if alpha_hardening > 0:
+        visible_mask &= alpha_byte >= alpha_hardening
+
+    bg_dark_array = np.asarray(bg_dark, dtype=np.float32)
+    bg_light_array = np.asarray(bg_light, dtype=np.float32)
+    alpha_safe = np.where(alpha > 0.0001, alpha, 1.0)[..., None]
+    dark_fg = (dark_array[..., :3] - (1.0 - alpha[..., None]) * bg_dark_array) / alpha_safe
+    light_fg = (light_array[..., :3] - (1.0 - alpha[..., None]) * bg_light_array) / alpha_safe
+    if recovery_source == "dark":
+        recovered = dark_fg
+    elif recovery_source == "light":
+        recovered = light_fg
+    else:
+        recovered = (dark_fg + light_fg) * 0.5
+
+    output = np.zeros((*alpha.shape, 4), dtype=np.uint8)
+    output[..., :3] = np.rint(recovered).clip(0, 255).astype(np.uint8)
+    output[..., 3] = alpha_byte
+    output[~visible_mask] = 0
+    return Image.fromarray(output, "RGBA")
 
 
 def cleanup_alpha_blobs(
@@ -189,7 +289,7 @@ def alpha_bbox(image: Image.Image) -> list[int] | None:
     return [left, top, right - left, bottom - top]
 
 
-def build_report(image: Image.Image, *, removed_blob_pixels: int, timings: dict[str, float] | None = None) -> dict:
+def build_report(image: Image.Image, *, removed_blob_pixels: int, timings: dict[str, float] | None = None, engine: str | None = None) -> dict:
     rgba = image.convert("RGBA")
     alphas = list(flattened_pixel_data(rgba.getchannel("A")))
     visible = [alpha for alpha in alphas if alpha > 0]
@@ -202,6 +302,7 @@ def build_report(image: Image.Image, *, removed_blob_pixels: int, timings: dict[
     report = {
         "schema": "game.dual_plate_alpha_report",
         "version": 1,
+        "analysis_engine": engine or analysis_engine(),
         "verdict": "pass" if not problems else "fail",
         "status": "pass" if not problems else "fail",
         "problems": problems,
@@ -234,6 +335,7 @@ def write_markdown_report(path: Path, report: dict) -> None:
                 "# Dual Plate Alpha Report",
                 "",
                 f"Verdict: **{report['verdict']}**",
+                f"Analysis engine: `{report['analysis_engine']}`",
                 f"Size: `{report['size'][0]}x{report['size'][1]}`",
                 f"Alpha bbox: `{report['alpha_bbox']}`",
                 f"Visible pixels: `{report['visible_pixels']}`",
@@ -299,7 +401,7 @@ def main() -> int:
         timings["save_output"] = round((perf_counter() - save_started) * 1000, 3)
 
     report_started = perf_counter()
-    report = build_report(result, removed_blob_pixels=removed_blob_pixels)
+    report = build_report(result, removed_blob_pixels=removed_blob_pixels, engine=analysis_engine())
     report.update(
         {
             "light": str(args.light),

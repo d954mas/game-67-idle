@@ -9,6 +9,7 @@ from pathlib import Path
 
 from PIL import Image
 
+import tools.assets.dual_plate_alpha as dual_plate
 from tools.assets.dual_plate_alpha import build_report, cleanup_alpha_blobs, extract_dual_plate_alpha
 
 
@@ -59,6 +60,35 @@ class DualPlateAlphaTests(unittest.TestCase):
         result = extract_dual_plate_alpha(light, dark, alpha_hardening=32)
 
         self.assertEqual(result.getpixel((0, 0)), (0, 0, 0, 0))
+
+    def test_numpy_fast_path_matches_python_fallback(self) -> None:
+        if dual_plate.np is None:
+            self.skipTest("numpy fast path unavailable")
+        light = Image.new("RGBA", (3, 2), (255, 255, 255, 255))
+        dark = Image.new("RGBA", (3, 2), (0, 0, 0, 255))
+        foregrounds = [
+            ((120, 80, 40), 64),
+            ((20, 180, 90), 128),
+            ((230, 40, 160), 220),
+            ((12, 140, 220), 255),
+            ((90, 90, 90), 16),
+            ((0, 0, 0), 0),
+        ]
+        for index, (foreground, alpha) in enumerate(foregrounds):
+            x = index % 3
+            y = index // 3
+            light.putpixel((x, y), composite_pixel(foreground, alpha, (255, 255, 255)))
+            dark.putpixel((x, y), composite_pixel(foreground, alpha, (0, 0, 0)))
+
+        numpy_result = extract_dual_plate_alpha(light, dark, alpha_combine="avg", recovery_source="average", alpha_cutoff=8, alpha_hardening=18)
+        original_np = dual_plate.np
+        try:
+            dual_plate.np = None
+            python_result = extract_dual_plate_alpha(light, dark, alpha_combine="avg", recovery_source="average", alpha_cutoff=8, alpha_hardening=18)
+        finally:
+            dual_plate.np = original_np
+
+        self.assertEqual(list(dual_plate.flattened_pixel_data(numpy_result)), list(dual_plate.flattened_pixel_data(python_result)))
 
     def test_rejects_dimension_mismatch(self) -> None:
         with self.assertRaisesRegex(ValueError, "plate dimensions differ"):
@@ -128,6 +158,7 @@ class DualPlateAlphaTests(unittest.TestCase):
             report = json.loads(json_path.read_text(encoding="utf-8"))
             self.assertEqual(report["schema"], "game.dual_plate_alpha_report")
             self.assertEqual(report["verdict"], "pass")
+            self.assertIn(report["analysis_engine"], {"numpy", "python"})
             self.assertEqual(report["problems"], [])
             self.assertEqual(report["visible_pixels"], 16)
             self.assertEqual(report["transparent_nonzero_rgb_pixels"], 0)
@@ -135,7 +166,9 @@ class DualPlateAlphaTests(unittest.TestCase):
             self.assertIn("timing_ms", report)
             self.assertIn("profile: dual-plate alpha total", result.stdout)
             self.assertIn("pass: wrote", result.stdout)
-            self.assertIn("## Timing", (root / "report.md").read_text(encoding="utf-8"))
+            markdown = (root / "report.md").read_text(encoding="utf-8")
+            self.assertIn("Analysis engine:", markdown)
+            self.assertIn("## Timing", markdown)
 
     def test_cli_fails_empty_extraction_unless_no_fail(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
