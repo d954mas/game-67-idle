@@ -103,6 +103,16 @@ If naming differs, infer the equivalent directories from the repository.
 - Do not create, serve, validate, or pivot to a web prototype for playable work unless the current user request explicitly asks for web/mobile/browser output or the user approves a clearly stated exception.
 - Before starting a web server, opening localhost for a web build, creating HTML/CSS/JS prototype files, or installing frontend/browser tooling, restate the explicit permission that allows it. If no such permission exists, continue on the primary native/game runtime path.
 - Make one coherent gameplay increment at a time.
+- Before writing code (game or tooling), climb the build-less ladder and stop at
+  the first rung that works: (1) Does this need to exist at all? Cut speculative
+  systems/scope first. (2) Can kept infra already do it -- an existing skill, the
+  engine, DevAPI, schema-first state (`tools/state_codegen`), the taskboard, or
+  an installed dependency? Reuse before building. (3) Is there a stdlib/native
+  way (C stdlib, node/python builtins)? (4) Can it be one small edit in an
+  existing file instead of a new module/tool/skill? (5) Only then write minimal
+  new code. Never cut corners on input/state validation, the visual + core-moment
+  bar, security, or anything the lead explicitly asked for -- those get full care
+  regardless of how lazy the rest of the solution is.
 - Write or infer a short task packet for work that spans design, code, visuals, or validation.
 - Keep code agent-readable: clear names, small functions, limited comments.
 - Preserve engine boundaries; do not edit submodules or vendored engine code unless explicitly requested.

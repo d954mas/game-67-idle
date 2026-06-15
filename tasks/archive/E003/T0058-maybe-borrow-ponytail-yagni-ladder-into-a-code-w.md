@@ -1,7 +1,7 @@
 ---
 id: T0058
 title: Maybe borrow ponytail YAGNI ladder into a code-writing skill
-status: idea
+status: done
 epic: E003
 priority: P3
 tags: [skills, process, decision]
@@ -29,13 +29,12 @@ features" guard.
 
 ## Done when
 
-- [ ] Lead decides: borrow the ladder into `game-feature-iteration` (Implementation Rules) / AGENTS.md Direction, or skip entirely.
-- [ ] If borrowed: ~5-line ladder + the "never lazy about X" guard added to one place (not a new skill), skills_eval + taskboard validate pass.
+- [x] Lead chose "apply our own way." Borrowed the idea (not the dependency) as a "build-less ladder" in `game-feature-iteration` Implementation Rules, in one place, no new skill/tool.
+- [x] Adapted to this project: rungs map to kept infra (skills, engine, DevAPI, state_codegen, taskboard, installed deps) and stdlib/native, then one small edit, then minimal code; the "never lazy about X" guard maps to OUR non-negotiables (input/state validation, the visual + core-moment bar, security, explicit lead asks). skills_eval 9/9, taskboard ok.
 
 ## Open questions
 
-- Is the ladder useful for THIS work (mostly small C game code + node/python tooling), or is it redundant with the existing "smallest playable slice" / "subtract not add" rules already in the skills? Lean: low value-add given those rules already exist; P3.
-
 ## Log
 
-- 2026-06-15: Captured from the lead's ponytail question. Research verdict: skip the dep, optionally steal the ladder; likely redundant with existing lean-slice rules, so P3.
+- 2026-06-15: Captured from the lead's ponytail question. Research verdict: skip the dep, optionally steal the ladder.
+- 2026-06-15: Lead said "apply our own way." Added the build-less ladder (5 rungs + non-negotiables guard) to game-feature-iteration Implementation Rules, adapted to this repo's kept infra and quality bar. Dependency NOT adopted (its hooks/statusline/adapters/competing AGENTS.md are the "second project" overhead we trimmed). skills_sync + skills_eval 9/9 + taskboard ok.
