@@ -10,6 +10,11 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - fallback keeps the tool portable.
+    np = None
+
 
 ROOT = Path.cwd()
 SCRIPT_ROOT = Path(__file__).resolve().parents[2]
@@ -17,7 +22,17 @@ if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
 from tools.assets.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
-from tools.assets.audit_generated_ui_assets import alpha_bbox, crop_entries, parse_hex_color, touches_transparent
+from tools.assets.audit_generated_ui_assets import (
+    alpha_bbox,
+    crop_entries,
+    dilate_mask_numpy,
+    green_screen_spill_mask_array,
+    key_fringe_mask_array,
+    parse_hex_color,
+    purple_halo_mask_array,
+    source_key_spill_mask_array,
+    touches_transparent,
+)
 from tools.assets.chroma_key_alpha import (
     is_any_purple_halo_like,
     is_green_screen_spill_like,
@@ -122,29 +137,36 @@ def add_bad_mark(counts: dict[str, Any], kind: str, reason: str) -> None:
     reasons[reason] = int(reasons.get(reason, 0)) + 1
 
 
-def render_strip(
+def analyze_strip(
     image: Image.Image,
     rect: tuple[int, int, int, int],
-    zoom: int,
-    mark_bad_pixels: bool,
     *,
     source_key: tuple[int, int, int] | None,
     preserve_purple: bool,
     preserve_green: bool,
     preserve_source_key: bool,
-) -> tuple[Image.Image, dict[str, Any]]:
-    crop = image.crop(rect).convert("RGBA")
-    proof = checkerboard(crop.size)
-    proof.alpha_composite(crop)
+    collect_marks: bool = False,
+    image_analysis: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[tuple[int, int, str]]]:
+    if np is not None and image_analysis is not None:
+        return analyze_strip_numpy(
+            image_analysis,
+            rect,
+            source_key=source_key,
+            preserve_purple=preserve_purple,
+            preserve_green=preserve_green,
+            preserve_source_key=preserve_source_key,
+            collect_marks=collect_marks,
+        )
     counts = empty_counts()
-    draw = ImageDraw.Draw(proof) if mark_bad_pixels else None
+    marks: list[tuple[int, int, str]] = []
     pixels = image.load()
     alpha = image.getchannel("A")
     alpha_pixels = alpha.load()
     image_size = image.size
     left, top, _right, _bottom = rect
-    for y in range(top, top + crop.height):
-        for x in range(left, left + crop.width):
+    for y in range(top, rect[3]):
+        for x in range(left, rect[2]):
             classified = classify_bad_edge_pixel(
                 pixels,
                 alpha_pixels,
@@ -160,11 +182,128 @@ def render_strip(
                 continue
             kind, reason = classified
             add_bad_mark(counts, kind, reason)
-            if draw is not None:
-                local = (x - left, y - top)
-                color = (255, 38, 38, 255) if kind == "visible" else (255, 220, 0, 255)
-                draw.point(local, fill=color)
-    return proof.resize((proof.width * zoom, proof.height * zoom), Image.Resampling.NEAREST), counts
+            if collect_marks:
+                marks.append((x - left, y - top, kind))
+    return counts, marks
+
+
+def build_numpy_image_analysis(image: Image.Image) -> dict[str, Any] | None:
+    if np is None:
+        return None
+    array = np.asarray(image, dtype=np.uint8)
+    alpha = array[..., 3]
+    return {
+        "array": array,
+        "visible_near_transparent": dilate_mask_numpy(alpha <= 12, 6),
+        "transparent_near_visible": dilate_mask_numpy(alpha > 12, 2),
+    }
+
+
+def add_numpy_count(counts: dict[str, Any], kind: str, reason: str, value: int) -> None:
+    if value <= 0:
+        return
+    counts["total"] += value
+    counts[kind] += value
+    reasons = counts["reasons"]
+    reasons[reason] = int(reasons.get(reason, 0)) + value
+
+
+def analyze_strip_numpy(
+    image_analysis: dict[str, Any],
+    rect: tuple[int, int, int, int],
+    *,
+    source_key: tuple[int, int, int] | None,
+    preserve_purple: bool,
+    preserve_green: bool,
+    preserve_source_key: bool,
+    collect_marks: bool = False,
+) -> tuple[dict[str, Any], list[tuple[int, int, str]]]:
+    if np is None:
+        raise RuntimeError("numpy is required for analyze_strip_numpy")
+    left, top, right, bottom = rect
+    array = image_analysis["array"][top:bottom, left:right, :]
+    visible_context = image_analysis["visible_near_transparent"][top:bottom, left:right]
+    transparent_context = image_analysis["transparent_near_visible"][top:bottom, left:right]
+    alpha = array[..., 3]
+    claimed = np.zeros(alpha.shape, dtype=bool)
+    reason_masks: list[tuple[str, Any]] = []
+
+    if source_key is not None and not preserve_source_key:
+        source_mask = source_key_spill_mask_array(array, source_key)
+        reason_masks.append(("source_key_spill", source_mask & ~claimed))
+        claimed |= source_mask
+    if not preserve_green:
+        green_mask = green_screen_spill_mask_array(array)
+        reason_masks.append(("green_screen_spill", green_mask & ~claimed))
+        claimed |= green_mask
+    if not preserve_purple:
+        key_mask = key_fringe_mask_array(array)
+        reason_masks.append(("key_color_fringe", key_mask & ~claimed))
+        claimed |= key_mask
+        purple_mask = purple_halo_mask_array(array)
+        reason_masks.append(("purple_halo", purple_mask & ~claimed))
+        claimed |= purple_mask
+
+    counts = empty_counts()
+    marks: list[tuple[int, int, str]] = []
+    visible_base = alpha > 12
+    transparent_base = alpha <= 12
+    for reason, reason_mask in reason_masks:
+        visible = reason_mask & visible_base & visible_context
+        transparent_rgb = reason_mask & transparent_base & transparent_context
+        visible_count = int(np.count_nonzero(visible))
+        transparent_count = int(np.count_nonzero(transparent_rgb))
+        add_numpy_count(counts, "visible", reason, visible_count)
+        add_numpy_count(counts, "transparent_rgb", reason, transparent_count)
+        if collect_marks:
+            for y, x in zip(*np.nonzero(visible)):
+                marks.append((int(x), int(y), "visible"))
+            for y, x in zip(*np.nonzero(transparent_rgb)):
+                marks.append((int(x), int(y), "transparent_rgb"))
+    return counts, marks
+
+
+def render_strip_image(
+    image: Image.Image,
+    rect: tuple[int, int, int, int],
+    zoom: int,
+    mark_bad_pixels: bool,
+    marks: list[tuple[int, int, str]] | None = None,
+) -> Image.Image:
+    crop = image.crop(rect).convert("RGBA")
+    proof = checkerboard(crop.size)
+    proof.alpha_composite(crop)
+    if mark_bad_pixels and marks:
+        draw = ImageDraw.Draw(proof)
+        for x, y, kind in marks:
+            color = (255, 38, 38, 255) if kind == "visible" else (255, 220, 0, 255)
+            draw.point((x, y), fill=color)
+    return proof.resize((proof.width * zoom, proof.height * zoom), Image.Resampling.NEAREST)
+
+
+def render_strip(
+    image: Image.Image,
+    rect: tuple[int, int, int, int],
+    zoom: int,
+    mark_bad_pixels: bool,
+    *,
+    source_key: tuple[int, int, int] | None,
+    preserve_purple: bool,
+    preserve_green: bool,
+    preserve_source_key: bool,
+    image_analysis: dict[str, Any] | None = None,
+) -> tuple[Image.Image, dict[str, Any]]:
+    counts, marks = analyze_strip(
+        image,
+        rect,
+        source_key=source_key,
+        preserve_purple=preserve_purple,
+        preserve_green=preserve_green,
+        preserve_source_key=preserve_source_key,
+        collect_marks=mark_bad_pixels,
+        image_analysis=image_analysis,
+    )
+    return render_strip_image(image, rect, zoom, mark_bad_pixels, marks), counts
 
 
 def aggregate_counts(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -200,6 +339,7 @@ def render_edge_proof(
     render_strips_ms = 0.0
     sides = [side for side in ["top", "right", "bottom", "left"] if sides_filter is None or side in sides_filter]
     source_key = parse_hex_color(manifest.get("green_screen", {}).get("key"))
+    analysis_engine = "numpy" if np is not None else "python"
     for crop in crop_entries(manifest):
         asset_started = perf_counter()
         asset_timing: dict[str, Any] = {}
@@ -222,27 +362,48 @@ def render_edge_proof(
             asset_timing["alpha_bbox"] = round((perf_counter() - bbox_started) * 1000, 3)
         if bbox is None:
             continue
+        numpy_started = perf_counter()
+        image_analysis = build_numpy_image_analysis(image)
+        if profile and image_analysis is not None:
+            asset_timing["numpy_masks"] = round((perf_counter() - numpy_started) * 1000, 3)
         preserve_purple = bool(crop.get("preserve_purple_edges"))
         preserve_green = bool(crop.get("preserve_green_edges"))
         preserve_source_key = bool(crop.get("preserve_source_key_edges"))
         for side in sides:
             rect = crop_rect_for_side(bbox, image.size, side, strip, pad)
             strip_started = perf_counter()
-            strip_image, counts = render_strip(
-                image,
-                rect,
-                zoom,
-                mark_bad_pixels,
-                source_key=source_key,
-                preserve_purple=preserve_purple,
-                preserve_green=preserve_green,
-                preserve_source_key=preserve_source_key,
-            )
+            strip_image = None
+            if only_problems:
+                counts, marks = analyze_strip(
+                    image,
+                    rect,
+                    source_key=source_key,
+                    preserve_purple=preserve_purple,
+                    preserve_green=preserve_green,
+                    preserve_source_key=preserve_source_key,
+                    collect_marks=mark_bad_pixels,
+                    image_analysis=image_analysis,
+                )
+                if counts["total"] > 0:
+                    strip_image = render_strip_image(image, rect, zoom, mark_bad_pixels, marks)
+            else:
+                strip_image, counts = render_strip(
+                    image,
+                    rect,
+                    zoom,
+                    mark_bad_pixels,
+                    source_key=source_key,
+                    preserve_purple=preserve_purple,
+                    preserve_green=preserve_green,
+                    preserve_source_key=preserve_source_key,
+                    image_analysis=image_analysis,
+                )
             strip_ms = round((perf_counter() - strip_started) * 1000, 3)
             if profile:
                 render_strips_ms += strip_ms
             label = f"{crop_id or path.stem} / {side} / rect={list(rect)} / bad_marks={counts['total']}"
-            rows.append((label, strip_image, counts))
+            if strip_image is not None:
+                rows.append((label, strip_image, counts))
             row = {
                 "asset_id": crop_id,
                 "kind": crop.get("kind", ""),
@@ -263,9 +424,9 @@ def render_edge_proof(
             asset_timing["total"] = round((perf_counter() - asset_started) * 1000, 3)
             asset_timings.append({"asset_id": crop_id, "output": output, "timing_ms": asset_timing})
 
-    rendered_rows = [row for row in rows if row[2]["total"] > 0] if only_problems else rows
-    omitted_clean_rows = len(rows) - len(rendered_rows)
-    if not rows:
+    rendered_rows = rows
+    omitted_clean_rows = max(0, len(report_rows) - len(rendered_rows)) if only_problems else 0
+    if not report_rows:
         report = {
             "schema": "game.ui_asset_edge_proof",
             "version": 1,
@@ -274,6 +435,7 @@ def render_edge_proof(
             "only_problems": only_problems,
             "rendered_rows": 0,
             "omitted_clean_rows": 0,
+            "analysis_engine": analysis_engine,
         }
         if profile:
             report["timing_ms"] = {"total": round((perf_counter() - started) * 1000, 3)}
@@ -310,8 +472,9 @@ def render_edge_proof(
         "rows": report_rows,
         "counts": aggregate,
         "only_problems": only_problems,
-        "rendered_rows": 0 if only_problems and aggregate["total"] == 0 else len(rendered_rows),
+        "rendered_rows": len(rows),
         "omitted_clean_rows": omitted_clean_rows,
+        "analysis_engine": analysis_engine,
     }
     if profile:
         report["timing_ms"] = timings
@@ -335,6 +498,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"Only problem rows in image: {report.get('only_problems', False)}",
         f"Rendered rows: {report.get('rendered_rows', len(report.get('rows', [])))}",
         f"Omitted clean rows: {report.get('omitted_clean_rows', 0)}",
+        f"Analysis engine: {report.get('analysis_engine', '-')}",
         "",
     ]
     reasons = report["counts"].get("reasons", {})

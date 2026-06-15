@@ -1,14 +1,24 @@
 import json
+import importlib.util
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image, ImageDraw
 
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools/assets/render_ui_asset_edge_proof.py"
+
+
+def load_edge_module():
+    spec = importlib.util.spec_from_file_location("render_ui_asset_edge_proof_module", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def count_mark_pixels(image: Image.Image, color_name: str) -> int:
@@ -273,6 +283,7 @@ class RenderUiAssetEdgeProofTests(unittest.TestCase):
             report = json.loads(json_output.read_text(encoding="utf-8"))
             self.assertEqual(report["schema"], "game.ui_asset_edge_proof")
             self.assertEqual(report["image_output"], str(output).replace("\\", "/"))
+            self.assertIn(report["analysis_engine"], {"numpy", "python"})
             self.assertGreater(report["counts"]["total"], 0)
             self.assertGreater(report["counts"]["visible"], 0)
             self.assertGreater(report["counts"]["transparent_rgb"], 0)
@@ -284,6 +295,7 @@ class RenderUiAssetEdgeProofTests(unittest.TestCase):
             self.assertIn("timing_ms", report["rows"][0])
             markdown = markdown_output.read_text(encoding="utf-8")
             self.assertIn("Total bad marks", markdown)
+            self.assertIn("Analysis engine:", markdown)
             self.assertIn("green_screen_spill", markdown)
             self.assertIn("## Timing", markdown)
             self.assertIn("edge proof marks", result.stdout)
@@ -483,6 +495,91 @@ class RenderUiAssetEdgeProofTests(unittest.TestCase):
             self.assertNotIn("`clean`", markdown)
             with Image.open(output) as proof:
                 self.assertLess(proof.height, 180)
+
+    def test_only_problems_skips_clean_strip_image_rendering(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            clean = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(clean)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            clean.save(out_dir / "clean.png")
+            manifest = {
+                "schema": "game.art_crop_manifest",
+                "version": 1,
+                "sources": [
+                    {
+                        "id": "source",
+                        "path": "source.png",
+                        "crops": [
+                            {"id": "clean", "kind": "icon", "rect": [0, 0, 32, 32], "output": "assets/clean.png"},
+                        ],
+                    }
+                ],
+            }
+            edge = load_edge_module()
+            with patch.object(edge, "render_strip_image", side_effect=AssertionError("clean strips should not render")):
+                _proof, report = edge.render_edge_proof(
+                    manifest,
+                    root,
+                    2,
+                    18,
+                    6,
+                    True,
+                    None,
+                    {"right"},
+                    False,
+                    True,
+                )
+
+            self.assertEqual(len(report["rows"]), 1)
+            self.assertEqual(report["counts"]["total"], 0)
+            self.assertEqual(report["rendered_rows"], 0)
+            self.assertEqual(report["omitted_clean_rows"], 1)
+
+    def test_python_fallback_counts_bad_edges_without_numpy(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            image.putpixel((23, 16), (64, 0, 64, 255))
+            image.save(out_dir / "bad.png")
+            manifest = {
+                "schema": "game.art_crop_manifest",
+                "version": 1,
+                "sources": [
+                    {
+                        "id": "source",
+                        "path": "source.png",
+                        "crops": [
+                            {"id": "bad", "kind": "icon", "rect": [0, 0, 32, 32], "output": "assets/bad.png"},
+                        ],
+                    }
+                ],
+            }
+            edge = load_edge_module()
+            with patch.object(edge, "np", None):
+                _proof, report = edge.render_edge_proof(
+                    manifest,
+                    root,
+                    2,
+                    18,
+                    6,
+                    True,
+                    None,
+                    {"right"},
+                    False,
+                    True,
+                )
+
+            self.assertEqual(report["analysis_engine"], "python")
+            self.assertGreater(report["counts"]["total"], 0)
+            self.assertEqual(report["rendered_rows"], 1)
+            self.assertEqual(report["omitted_clean_rows"], 0)
 
 
 if __name__ == "__main__":

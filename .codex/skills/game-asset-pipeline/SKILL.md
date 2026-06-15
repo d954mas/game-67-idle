@@ -90,7 +90,8 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`.
     Add `--profile` for slow or disputed cleanup runs so JSON/Markdown capture
     total, render-strip, compose, per-asset, and per-side timing, and stdout
-    prints the slowest asset side.
+    prints the slowest asset side. The profile also records the analysis engine
+    (`numpy` fast path or portable `python` fallback).
     Use `--only-problems` for large proof sheets when JSON keeps full coverage
     and the human PNG/Markdown should show only bad sides.
     Record durable proof paths in the art job (`expected_outputs.edge_proofs`
