@@ -52,11 +52,11 @@ recommended_next_step: slice_ready
 - #ff0000: exact=0 exact_ratio=0.0 hue_band=44168 hue_ratio=0.081114 score=44176.111409
 
 ## Timing
-- load_image: 20.822 ms
-- find_components: 29.233 ms
-- merge_fragments: 0.039 ms
-- key_conflicts: 47.524 ms
-- candidate_key_scores: 62.619 ms
-- component_rules: 0.019 ms
-- gutter_scan: 0.294 ms
-- total: 160.596 ms
+- load_image: 22.377 ms
+- find_components: 30.084 ms
+- merge_fragments: 0.042 ms
+- key_conflicts: 47.715 ms
+- candidate_key_scores: 62.769 ms
+- component_rules: 0.017 ms
+- gutter_scan: 0.041 ms
+- total: 163.091 ms

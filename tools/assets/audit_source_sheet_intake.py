@@ -278,7 +278,12 @@ def merge_component_pair(a: dict[str, object], b: dict[str, object], merged_id: 
     a_offsets = a.get("_pixel_offsets")
     b_offsets = b.get("_pixel_offsets")
     if isinstance(a_offsets, list) and isinstance(b_offsets, list):
-        merged["_pixel_offsets"] = [*a_offsets, *b_offsets]
+        if len(a_offsets) >= len(b_offsets):
+            a_offsets.extend(b_offsets)
+            merged["_pixel_offsets"] = a_offsets
+        else:
+            b_offsets.extend(a_offsets)
+            merged["_pixel_offsets"] = b_offsets
     return merged
 
 
@@ -308,6 +313,10 @@ def merge_small_fragments(
                 if best_gap is None or gap < best_gap:
                     best = (index, other_index)
                     best_gap = gap
+                    if best_gap == 0:
+                        break
+            if best_gap == 0:
+                break
         if best is None:
             continue
         left, right = best

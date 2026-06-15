@@ -1,4 +1,5 @@
 import json
+import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,6 +10,14 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "tools/assets/audit_source_sheet_intake.py"
+
+
+def load_intake_module():
+    spec = importlib.util.spec_from_file_location("audit_source_sheet_intake_module", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 class SourceSheetIntakeAuditTests(unittest.TestCase):
@@ -338,6 +347,35 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("closest component gap", result.stdout)
+
+    def test_merges_zero_gap_fragments_into_large_component(self):
+        module = load_intake_module()
+        components = [
+            {
+                "id": "component_1",
+                "bbox": [0, 0, 200, 200],
+                "area_px": 40000,
+                "_pixel_offsets": [0],
+            }
+        ]
+        for index in range(80):
+            x = 10 + (index % 10) * 12
+            y = 10 + (index // 10) * 12
+            components.append(
+                {
+                    "id": f"component_{index + 2}",
+                    "bbox": [x, y, 4, 4],
+                    "area_px": 16,
+                    "_pixel_offsets": [index + 1],
+                }
+            )
+
+        merged = module.merge_small_fragments(components, distance=24, max_fragment_ratio=0.2)
+
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["bbox"], [0, 0, 200, 200])
+        self.assertEqual(merged[0]["area_px"], 40000 + 80 * 16)
+        self.assertEqual(len(merged[0]["merged_from"]), 81)
 
     def test_diagonal_components_use_true_edge_distance(self):
         with tempfile.TemporaryDirectory() as tmp:

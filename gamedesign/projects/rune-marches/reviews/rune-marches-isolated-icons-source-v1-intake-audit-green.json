@@ -173,13 +173,13 @@
   ],
   "status": "fail",
   "timing_ms": {
-    "load_image": 26.078,
-    "find_components": 190.019,
-    "merge_fragments": 318.321,
-    "key_conflicts": 110.758,
-    "candidate_key_scores": 124.653,
-    "component_rules": 0.019,
-    "gutter_scan": 0.004,
-    "total": 769.88
+    "load_image": 30.198,
+    "find_components": 235.099,
+    "merge_fragments": 0.331,
+    "key_conflicts": 136.723,
+    "candidate_key_scores": 160.538,
+    "component_rules": 0.021,
+    "gutter_scan": 0.003,
+    "total": 562.94
   }
 }
