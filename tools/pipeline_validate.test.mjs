@@ -25,13 +25,25 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.match(result.stdout, /reusable pipeline quick validation passed/);
 });
 
-test("pipeline validation full dry-run keeps portable export checks", () => {
+test("pipeline validation full dry-run runs the minimal export check by default", () => {
   const result = run(["--full", "--dry-run"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /mode: full \(dry-run\)/);
   assert.match(result.stdout, /== portable export/);
-  assert.match(result.stdout, /== exported ai profile tests/);
+  assert.match(result.stdout, /== exported skill eval/);
   assert.match(result.stdout, /== exported taskboard validate/);
+  // Default --full skips the redundant in-export test battery.
+  assert.doesNotMatch(result.stdout, /== exported ai profile tests/);
+  assert.match(result.stdout, /skipped the in-export test battery/);
+  assert.match(result.stdout, /reusable pipeline validation passed/);
+});
+
+test("pipeline validation full --reexport-tests dry-run runs the full in-export battery", () => {
+  const result = run(["--full", "--reexport-tests", "--dry-run"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /mode: full \(dry-run\)/);
+  assert.match(result.stdout, /== exported ai profile tests/);
+  assert.doesNotMatch(result.stdout, /skipped the in-export test battery/);
   assert.match(result.stdout, /reusable pipeline validation passed/);
 });
 

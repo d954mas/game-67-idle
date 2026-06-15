@@ -15,13 +15,19 @@ const args = process.argv.slice(2);
 
 function usage() {
   console.error(`usage:
-  node tools/pipeline_validate.mjs [--quick] [--full] [--dry-run] [--keep-exports <n>] [--no-prune]
+  node tools/pipeline_validate.mjs [--quick] [--full] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune]
 
 Modes:
   --quick    core workflow validation only (default; use this after narrow edits)
-  --full     quick checks plus deep asset/runtime/export validation
-             (reserve for portable-base/export/runtime/release gates; it is heavy)
+  --full     quick checks plus deep asset/runtime validation + a minimal export
+             self-check (reserve for portable-base/export/runtime/release gates)
   --dry-run  print the selected commands without running them
+
+Export depth (with --full):
+  --reexport-tests  also re-run the full test battery inside the export. Default
+                    skips it (the suites already ran in-repo this invocation;
+                    the export + skill eval + taskboard validate already prove
+                    the copy is runnable). Use after export-tooling changes.
 
 Housekeeping:
   --keep-exports <n>  keep only the newest n tmp/pipeline-validate-* dirs (default 3)
@@ -42,7 +48,7 @@ let keepExports = 3;
 }
 const prune = !args.includes("--no-prune");
 
-const allowedArgs = new Set(["--quick", "--full", "--dry-run", "--no-prune", "--help", "-h"]);
+const allowedArgs = new Set(["--quick", "--full", "--dry-run", "--reexport-tests", "--no-prune", "--help", "-h"]);
 for (const arg of args) {
   if (!allowedArgs.has(arg)) usage();
 }
@@ -204,10 +210,21 @@ if (existsSync(join(root, "CMakePresets.json"))) {
   run("cmake configure", ["--preset", "native-debug"], { exe: "cmake" });
 }
 
+// Minimal export self-check (always): proves the copy/allowlist produced a
+// runnable project. The full test battery below already ran in-repo this same
+// invocation, so it is re-run in the export only with --reexport-tests.
 run("portable export", ["tools/bootstrap/export_base.mjs", "--target", exportDir]);
 run("exported skill eval", ["tools/skills_eval.mjs"], { cwd: exportDir });
-run("exported ai facade tests", ["--test", "tools/ai.test.mjs"], { cwd: exportDir });
 run("exported taskboard validate", ["tools/taskboard/cli.mjs", "validate"], { cwd: exportDir });
+
+if (!args.includes("--reexport-tests")) {
+  console.log(`\nskipped the in-export test battery (suites already ran in-repo); pass --reexport-tests to re-run them in the export`);
+  console.log(`\nok: reusable pipeline validation passed`);
+  console.log(`export: ${exportDir}`);
+  process.exit(0);
+}
+
+run("exported ai facade tests", ["--test", "tools/ai.test.mjs"], { cwd: exportDir });
 run("exported taskboard tests", ["--test", "tools/taskboard/test.mjs"], { cwd: exportDir });
 run("exported ai profile tests", ["--test", "tools/ai_profile/test.mjs"], { cwd: exportDir });
 if (existsSync(join(exportDir, "tools", "game_context", "test.mjs"))) {
