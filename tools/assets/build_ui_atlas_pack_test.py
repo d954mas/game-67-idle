@@ -242,11 +242,26 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             write_png(root / "assets/runtime/panel.png")
             manifest = root / "manifest.json"
             manifest.write_text(json.dumps({"schema": "game.asset_manifest", "version": 1, "assets": [asset("panel", "assets/runtime/panel.png")]}), encoding="utf-8")
-            result = run_pack(root, "--asset-manifest", "manifest.json", "--output-dir", "packed", "--json-output", "packed/atlas.json", "--report", "packed/atlas.md", "--label-review", "--profile")
+            result = run_pack(
+                root,
+                "--asset-manifest",
+                "manifest.json",
+                "--output-dir",
+                "packed",
+                "--json-output",
+                "packed/atlas.json",
+                "--report",
+                "packed/atlas.md",
+                "--label-review",
+                "--label-font-size",
+                "18",
+                "--profile",
+            )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             pack = json.loads((root / "packed/atlas.json").read_text(encoding="utf-8"))
             self.assertEqual(pack["purpose"], "review_validation_atlas_not_engine_runtime_pack")
             self.assertTrue(pack["label_overlay"])
+            self.assertEqual(pack["label_review_options"]["font_size"], 18)
             self.assertIn("atlas_efficiency", pack)
             self.assertGreater(pack["atlas_efficiency"]["occupancy_ratio"], 0)
             self.assertIn("timing_ms", pack)
@@ -259,7 +274,7 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             entries = {entry["id"]: entry for entry in atlas_info["entries"]}
             label = entries["panel"]["review_label"]
             self.assertEqual(label["text"], "panel")
-            self.assertGreaterEqual(label["font_size"], 12)
+            self.assertEqual(label["font_size"], 18)
             self.assertIn(label["placement"], {"bottom", "right"})
             padded_x, padded_y, padded_w, padded_h = entries["panel"]["padded_rect"]
             label_x, label_y, label_w, label_h = label["rect"]
@@ -279,6 +294,7 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             self.assertIn("- mode: `label_overlay_only`", report)
             self.assertIn("- allowed_delta: `review_label_rects_only`", report)
             self.assertIn("- debug_outlines: `false`", report)
+            self.assertIn("- font_size: `18`", report)
             self.assertIn("## Atlas Efficiency", report)
             self.assertIn("## Timing", report)
             self.assertIn("## Asset Id Index", report)

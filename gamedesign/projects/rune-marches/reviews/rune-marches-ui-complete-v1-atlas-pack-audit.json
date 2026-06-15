@@ -25,7 +25,7 @@
       "labeled_preview_delta_outside_label_pixels": 0,
       "analysis_engine": "numpy",
       "timing_ms": {
-        "total": 81.71
+        "total": 78.558
       }
     },
     {
@@ -47,7 +47,7 @@
       "labeled_preview_delta_outside_label_pixels": 0,
       "analysis_engine": "numpy",
       "timing_ms": {
-        "total": 72.034
+        "total": 71.747
       }
     },
     {
@@ -69,7 +69,7 @@
       "labeled_preview_delta_outside_label_pixels": 0,
       "analysis_engine": "numpy",
       "timing_ms": {
-        "total": 93.585
+        "total": 77.55
       }
     }
   ],
@@ -79,6 +79,6 @@
     "debug_outlines": false
   },
   "timing_ms": {
-    "total": 249.254
+    "total": 229.703
   }
 }

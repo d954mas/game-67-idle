@@ -21,14 +21,14 @@ except ModuleNotFoundError:  # pragma: no cover - supports direct script executi
 
 ROOT = Path.cwd()
 RESAMPLE_NEAREST = getattr(getattr(Image, "Resampling", Image), "NEAREST", Image.NEAREST)
-LABEL_FONT_SIZE = 14
+DEFAULT_LABEL_FONT_SIZE = 16
 LABEL_PAD_X = 4
 LABEL_PAD_Y = 2
 LABEL_GAP_Y = 3
 LABEL_LINE_GAP_Y = 2
 LABEL_MIN_WIDTH = 72
 LABEL_MAX_WIDTH = 220
-_LABEL_FONT: ImageFont.ImageFont | None = None
+_LABEL_FONTS: dict[int, ImageFont.ImageFont] = {}
 LABEL_PLACEMENTS = {"bottom", "right"}
 
 
@@ -74,33 +74,32 @@ def positive_int(value: Any, fallback: int) -> int:
     return parsed if parsed >= 0 else fallback
 
 
-def label_font() -> ImageFont.ImageFont:
-    global _LABEL_FONT
-    if _LABEL_FONT is not None:
-        return _LABEL_FONT
+def label_font(font_size: int = DEFAULT_LABEL_FONT_SIZE) -> ImageFont.ImageFont:
+    if font_size in _LABEL_FONTS:
+        return _LABEL_FONTS[font_size]
     for name in ("DejaVuSans.ttf", "Arial.ttf"):
         try:
-            _LABEL_FONT = ImageFont.truetype(name, LABEL_FONT_SIZE)
-            return _LABEL_FONT
+            _LABEL_FONTS[font_size] = ImageFont.truetype(name, font_size)
+            return _LABEL_FONTS[font_size]
         except OSError:
             continue
-    _LABEL_FONT = ImageFont.load_default()
-    return _LABEL_FONT
+    _LABEL_FONTS[font_size] = ImageFont.load_default()
+    return _LABEL_FONTS[font_size]
 
 
-def measure_label(label: str) -> tuple[int, int]:
+def measure_label(label: str, font_size: int = DEFAULT_LABEL_FONT_SIZE) -> tuple[int, int]:
     probe = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
     draw = ImageDraw.Draw(probe)
-    bbox = draw.textbbox((0, 0), label, font=label_font())
+    bbox = draw.textbbox((0, 0), label, font=label_font(font_size))
     return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
 
 
-def wrap_long_piece(piece: str, max_width: int) -> list[str]:
+def wrap_long_piece(piece: str, max_width: int, font_size: int = DEFAULT_LABEL_FONT_SIZE) -> list[str]:
     lines: list[str] = []
     current = ""
     for char in piece:
         candidate = current + char
-        if current and measure_label(candidate)[0] > max_width:
+        if current and measure_label(candidate, font_size)[0] > max_width:
             lines.append(current)
             current = char
         else:
@@ -128,14 +127,14 @@ def identifier_pieces(text: str) -> list[str]:
     return pieces or [text]
 
 
-def wrap_identifier_line(text: str, max_width: int) -> list[str]:
+def wrap_identifier_line(text: str, max_width: int, font_size: int = DEFAULT_LABEL_FONT_SIZE) -> list[str]:
     lines: list[str] = []
     current = ""
     for piece in identifier_pieces(text):
-        candidates = wrap_long_piece(piece, max_width) if measure_label(piece)[0] > max_width else [piece]
+        candidates = wrap_long_piece(piece, max_width, font_size) if measure_label(piece, font_size)[0] > max_width else [piece]
         for candidate_piece in candidates:
             candidate = current + candidate_piece
-            if current and measure_label(candidate)[0] > max_width:
+            if current and measure_label(candidate, font_size)[0] > max_width:
                 lines.append(current)
                 current = candidate_piece
             else:
@@ -145,19 +144,19 @@ def wrap_identifier_line(text: str, max_width: int) -> list[str]:
     return lines or [text]
 
 
-def label_display_lines(label: str, max_width: int) -> list[str]:
+def label_display_lines(label: str, max_width: int, font_size: int = DEFAULT_LABEL_FONT_SIZE) -> list[str]:
     source_lines = [label]
     alias_match = re.match(r"^(.+) \(\+(.+)\)$", label)
     if alias_match:
         source_lines = [alias_match.group(1), *[f"+{alias}" for alias in alias_match.group(2).split(",") if alias]]
     lines: list[str] = []
     for source_line in source_lines:
-        lines.extend(wrap_identifier_line(source_line, max_width))
+        lines.extend(wrap_identifier_line(source_line, max_width, font_size))
     return lines or [label]
 
 
-def measure_label_lines(lines: list[str]) -> tuple[int, int]:
-    line_sizes = [measure_label(line) for line in lines]
+def measure_label_lines(lines: list[str], font_size: int = DEFAULT_LABEL_FONT_SIZE) -> tuple[int, int]:
+    line_sizes = [measure_label(line, font_size) for line in lines]
     width = max((size[0] for size in line_sizes), default=0)
     line_height = max((size[1] for size in line_sizes), default=0)
     height = line_height * len(lines) + LABEL_LINE_GAP_Y * max(0, len(lines) - 1)
@@ -172,7 +171,12 @@ def item_label(item: dict[str, Any], aliases_by_target: dict[str, list[str]] | N
     return label
 
 
-def prepare_review_labels(items: list[dict[str, Any]], alias_items: list[dict[str, Any]], label_review: bool) -> None:
+def prepare_review_labels(
+    items: list[dict[str, Any]],
+    alias_items: list[dict[str, Any]],
+    label_review: bool,
+    label_font_size: int,
+) -> None:
     if not label_review:
         return
     aliases_by_target: dict[str, list[str]] = {}
@@ -184,8 +188,8 @@ def prepare_review_labels(items: list[dict[str, Any]], alias_items: list[dict[st
         label = item_label(item, aliases_by_target)
         padded_width = int(item["image"].width) + int(item["extrude"]) * 2
         max_text_width = min(LABEL_MAX_WIDTH, max(LABEL_MIN_WIDTH, padded_width))
-        lines = label_display_lines(label, max_text_width)
-        label_width, label_height = measure_label_lines(lines)
+        lines = label_display_lines(label, max_text_width, label_font_size)
+        label_width, label_height = measure_label_lines(lines, label_font_size)
         label_box_width = label_width + LABEL_PAD_X * 2
         label_box_height = label_height + LABEL_PAD_Y * 2
         placement, tile_width, tile_height = choose_label_placement(
@@ -198,7 +202,7 @@ def prepare_review_labels(items: list[dict[str, Any]], alias_items: list[dict[st
         item["review_label"] = {
             "text": label,
             "lines": lines,
-            "font_size": LABEL_FONT_SIZE,
+            "font_size": label_font_size,
             "width": label_box_width,
             "height": label_box_height,
             "gap_y": LABEL_GAP_Y,
@@ -399,7 +403,6 @@ def make_entry(item: dict[str, Any], x: int, y: int, image: Image.Image) -> dict
 
 
 def draw_review_labels(atlas: Image.Image, entries: list[dict[str, Any]]) -> None:
-    draw = ImageDraw.Draw(atlas)
     for entry in entries:
         if entry.get("alias_of"):
             continue
@@ -409,17 +412,29 @@ def draw_review_labels(atlas: Image.Image, entries: list[dict[str, Any]]) -> Non
             lines = review_label.get("lines")
             if not isinstance(lines, list) or not all(isinstance(line, str) for line in lines):
                 lines = [label]
+            font_size = int(review_label.get("font_size") or DEFAULT_LABEL_FONT_SIZE)
             label_x, label_y, label_width, label_height = [int(value) for value in review_label["rect"]]
-            draw.rectangle([label_x, label_y, label_x + label_width - 1, label_y + label_height - 1], fill=(0, 0, 0, 170))
-            line_y = label_y + LABEL_PAD_Y
-            line_height = max((measure_label(line)[1] for line in lines), default=0)
-            font = label_font()
+            label_layer = Image.new("RGBA", (label_width, label_height), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(label_layer)
+            draw.rectangle([0, 0, label_width - 1, label_height - 1], fill=(0, 0, 0, 170))
+            line_y = LABEL_PAD_Y
+            line_height = max((measure_label(line, font_size)[1] for line in lines), default=0)
+            font = label_font(font_size)
             for line in lines:
-                draw.text((label_x + LABEL_PAD_X, line_y), line, fill=(255, 255, 255, 255), font=font)
+                draw.text((LABEL_PAD_X, line_y), line, fill=(255, 255, 255, 255), font=font)
                 line_y += line_height + LABEL_LINE_GAP_Y
+            atlas.alpha_composite(label_layer, (label_x, label_y))
 
 
-def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_size: int, label_review: bool, profile: bool = False) -> dict[str, Any]:
+def pack_group(
+    group: str,
+    items: list[dict[str, Any]],
+    output_dir: Path,
+    max_size: int,
+    label_review: bool,
+    label_font_size: int,
+    profile: bool = False,
+) -> dict[str, Any]:
     started = perf_counter()
     timings: dict[str, float] = {}
     canonical_items = [item for item in items if not item["asset"].get("alias_of")]
@@ -436,7 +451,7 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
 
     layout_started = perf_counter()
     sorted_items = sorted(canonical_items, key=lambda item: (-item["image"].height, -item["image"].width, item["asset"]["id"]))
-    prepare_review_labels(sorted_items, alias_items, label_review)
+    prepare_review_labels(sorted_items, alias_items, label_review, label_font_size)
     border = max(item["border_padding"] for item in sorted_items)
     shape_padding = max(item["shape_padding"] for item in sorted_items)
     tile_sizes = [packed_tile_size(item) for item in sorted_items]
@@ -538,7 +553,16 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
     return result
 
 
-def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report_path: Path | None, max_size: int, label_review: bool, profile: bool = False) -> dict[str, Any]:
+def build_pack(
+    asset_manifest: Path,
+    output_dir: Path,
+    json_output: Path,
+    report_path: Path | None,
+    max_size: int,
+    label_review: bool,
+    label_font_size: int = DEFAULT_LABEL_FONT_SIZE,
+    profile: bool = False,
+) -> dict[str, Any]:
     started = perf_counter()
     read_started = started
     manifest = read_json(asset_manifest)
@@ -552,7 +576,7 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
     for item in loaded:
         groups.setdefault(item["pack_group"], []).append(item)
     pack_started = perf_counter()
-    atlases = [pack_group(group, items, output_dir, max_size, label_review, profile) for group, items in sorted(groups.items())]
+    atlases = [pack_group(group, items, output_dir, max_size, label_review, label_font_size, profile) for group, items in sorted(groups.items())]
     if profile:
         timings["pack_groups"] = round((perf_counter() - pack_started) * 1000, 3)
     pack_manifest = {
@@ -571,6 +595,7 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
             "allowed_delta": "review_label_rects_only",
             "debug_outlines": False,
         }
+        pack_manifest["label_review_options"] = {"font_size": label_font_size}
     if profile:
         efficiency = {
             "atlas_area": sum(int(atlas.get("atlas_area", 0)) for atlas in atlases),
@@ -605,6 +630,7 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
                     f"- mode: `{policy.get('mode', '-')}`",
                     f"- allowed_delta: `{policy.get('allowed_delta', '-')}`",
                     f"- debug_outlines: `{str(policy.get('debug_outlines', '-')).lower()}`",
+                    f"- font_size: `{pack_manifest.get('label_review_options', {}).get('font_size', '-')}`",
                     "",
                 ]
             )
@@ -679,6 +705,7 @@ def main() -> None:
     parser.add_argument("--report")
     parser.add_argument("--max-size", type=int, default=2048)
     parser.add_argument("--label-review", action="store_true", help="Draw id labels in padding/free space for human review. Do not use this image as a runtime texture.")
+    parser.add_argument("--label-font-size", type=int, default=DEFAULT_LABEL_FONT_SIZE, help="Font size for --label-review id labels.")
     parser.add_argument("--profile", action="store_true", help="Record atlas build timing and efficiency metrics in JSON/Markdown and print the slowest atlas group.")
     args = parser.parse_args()
 
@@ -688,7 +715,9 @@ def main() -> None:
     report_path = project_path(args.report) if args.report else None
     if args.max_size < 64:
         fail("--max-size must be >= 64")
-    pack = build_pack(asset_manifest, output_dir, json_output, report_path, args.max_size, args.label_review, args.profile)
+    if args.label_font_size < 8:
+        fail("--label-font-size must be >= 8")
+    pack = build_pack(asset_manifest, output_dir, json_output, report_path, args.max_size, args.label_review, args.label_font_size, args.profile)
     total_entries = sum(atlas["entry_count"] for atlas in pack["atlases"])
     print(f"pass: packed {total_entries} UI asset id(s) into {len(pack['atlases'])} review atlas image(s)")
     print(f"wrote atlas manifest: {norm_path(json_output)}")

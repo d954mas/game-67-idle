@@ -23,11 +23,11 @@ except ModuleNotFoundError:  # pragma: no cover - supports direct script executi
 
 
 ROOT = Path.cwd()
-LABEL_FONT_SIZE = 14
+DEFAULT_LABEL_FONT_SIZE = 16
 LABEL_PAD_X = 4
 LABEL_PAD_Y = 2
 LABEL_LINE_GAP_Y = 2
-_LABEL_FONT: ImageFont.ImageFont | None = None
+_LABEL_FONTS: dict[int, ImageFont.ImageFont] = {}
 
 
 def analysis_engine() -> str:
@@ -173,24 +173,23 @@ def changed_pixels_outside_rects_count(
     return count
 
 
-def label_font() -> ImageFont.ImageFont:
-    global _LABEL_FONT
-    if _LABEL_FONT is not None:
-        return _LABEL_FONT
+def label_font(font_size: int = DEFAULT_LABEL_FONT_SIZE) -> ImageFont.ImageFont:
+    if font_size in _LABEL_FONTS:
+        return _LABEL_FONTS[font_size]
     for name in ("DejaVuSans.ttf", "Arial.ttf"):
         try:
-            _LABEL_FONT = ImageFont.truetype(name, LABEL_FONT_SIZE)
-            return _LABEL_FONT
+            _LABEL_FONTS[font_size] = ImageFont.truetype(name, font_size)
+            return _LABEL_FONTS[font_size]
         except OSError:
             continue
-    _LABEL_FONT = ImageFont.load_default()
-    return _LABEL_FONT
+    _LABEL_FONTS[font_size] = ImageFont.load_default()
+    return _LABEL_FONTS[font_size]
 
 
-def measure_label(label: str) -> tuple[int, int]:
+def measure_label(label: str, font_size: int = DEFAULT_LABEL_FONT_SIZE) -> tuple[int, int]:
     probe = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
     draw = ImageDraw.Draw(probe)
-    bbox = draw.textbbox((0, 0), label, font=label_font())
+    bbox = draw.textbbox((0, 0), label, font=label_font(font_size))
     return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
 
 
@@ -202,7 +201,10 @@ def check_review_label_lines(entry_id: str, review_label: dict[str, Any], label_
         raw_lines = [review_label.get("text") or entry_id]
     if not isinstance(raw_lines, list) or not raw_lines or not all(isinstance(line, str) and line for line in raw_lines):
         return [f"{entry_id} review_label lines must be non-empty strings"]
-    line_sizes = [measure_label(line) for line in raw_lines]
+    raw_font_size = review_label.get("font_size", DEFAULT_LABEL_FONT_SIZE)
+    if not isinstance(raw_font_size, int) or raw_font_size < 8:
+        return [f"{entry_id} review_label font_size must be an integer >= 8"]
+    line_sizes = [measure_label(line, raw_font_size) for line in raw_lines]
     text_width = max((width for width, _ in line_sizes), default=0)
     text_line_height = max((height for _, height in line_sizes), default=0)
     required_width = text_width + LABEL_PAD_X * 2

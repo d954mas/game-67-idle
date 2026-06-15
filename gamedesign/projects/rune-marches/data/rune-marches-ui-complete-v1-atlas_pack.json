@@ -14,16 +14,16 @@
       "path": "gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-complete-v1/ui_rune_marches_compact_bases_v5.png",
       "size": [
         803,
-        1073
+        1113
       ],
       "entry_count": 7,
       "physical_entry_count": 7,
       "alias_count": 0,
-      "atlas_area": 861619,
-      "reserved_tile_area": 560731,
+      "atlas_area": 893739,
+      "reserved_tile_area": 594043,
       "padded_asset_area": 491398,
-      "occupancy_ratio": 0.6508,
-      "padded_asset_ratio": 0.5703,
+      "occupancy_ratio": 0.6647,
+      "padded_asset_ratio": 0.5498,
       "entries": [
         {
           "id": "compact_button_disabled_long_v5",
@@ -81,15 +81,15 @@
           "review_label": {
             "text": "compact_button_disabled_long_v5",
             "lines": [
-              "compact_button_disabled_",
-              "long_v5"
+              "compact_button_",
+              "disabled_long_v5"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               353,
               127,
-              198,
-              34
+              163,
+              42
             ],
             "placement": "bottom"
           }
@@ -100,13 +100,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
           "atlas_rect": [
             453,
-            752,
+            776,
             298,
             119
           ],
           "padded_rect": [
             451,
-            750,
+            774,
             302,
             123
           ],
@@ -150,15 +150,15 @@
           "review_label": {
             "text": "compact_button_disabled_medium_v5",
             "lines": [
-              "compact_button_disabled_",
-              "medium_v5"
+              "compact_button_",
+              "disabled_medium_v5"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               451,
-              876,
-              198,
-              34
+              900,
+              196,
+              42
             ],
             "placement": "bottom"
           }
@@ -169,13 +169,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
           "atlas_rect": [
             307,
-            914,
+            946,
             211,
             119
           ],
           "padded_rect": [
             305,
-            912,
+            944,
             215,
             123
           ],
@@ -219,15 +219,15 @@
           "review_label": {
             "text": "compact_button_disabled_short_v5",
             "lines": [
-              "compact_button_disabled_",
-              "short_v5"
+              "compact_button_",
+              "disabled_short_v5"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               305,
-              1038,
-              198,
-              34
+              1070,
+              167,
+              42
             ],
             "placement": "bottom"
           }
@@ -238,13 +238,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
           "atlas_rect": [
             3,
-            752,
+            776,
             444,
             119
           ],
           "padded_rect": [
             1,
-            750,
+            774,
             448,
             123
           ],
@@ -288,14 +288,15 @@
           "review_label": {
             "text": "compact_button_idle_long_v5",
             "lines": [
-              "compact_button_idle_long_v5"
+              "compact_button_idle_",
+              "long_v5"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               1,
-              876,
-              218,
-              18
+              900,
+              204,
+              42
             ],
             "placement": "bottom"
           }
@@ -306,13 +307,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
           "atlas_rect": [
             3,
-            914,
+            946,
             298,
             119
           ],
           "padded_rect": [
             1,
-            912,
+            944,
             302,
             123
           ],
@@ -359,12 +360,12 @@
               "compact_button_idle_",
               "medium_v5"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               1,
-              1038,
-              164,
-              34
+              1070,
+              204,
+              42
             ],
             "placement": "bottom"
           }
@@ -375,13 +376,13 @@
           "source_path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
           "atlas_rect": [
             524,
-            914,
+            946,
             211,
             118
           ],
           "padded_rect": [
             522,
-            912,
+            944,
             215,
             122
           ],
@@ -425,14 +426,15 @@
           "review_label": {
             "text": "compact_button_idle_short_v5",
             "lines": [
-              "compact_button_idle_short_v5"
+              "compact_button_idle_",
+              "short_v5"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               522,
-              1037,
-              223,
-              18
+              1069,
+              204,
+              42
             ],
             "placement": "bottom"
           }
@@ -493,14 +495,15 @@
           "review_label": {
             "text": "compact_journal_panel_v5",
             "lines": [
-              "compact_journal_panel_v5"
+              "compact_journal_panel_",
+              "v5"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               1,
               730,
-              198,
-              18
+              224,
+              42
             ],
             "placement": "bottom"
           }
@@ -513,11 +516,11 @@
         "debug_outlines": false
       },
       "timing_ms": {
-        "layout": 2.757,
-        "compose": 3.712,
-        "save_atlas": 46.883,
-        "save_labeled_preview": 48.434,
-        "total": 102.556
+        "layout": 2.587,
+        "compose": 3.817,
+        "save_atlas": 45.254,
+        "save_labeled_preview": 44.676,
+        "total": 96.873
       }
     },
     {
@@ -526,31 +529,31 @@
       "label_overlay": true,
       "path": "gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-complete-v1/ui_rune_marches_decor.png",
       "size": [
-        877,
-        879
+        1087,
+        777
       ],
       "entry_count": 12,
       "physical_entry_count": 12,
       "alias_count": 0,
-      "atlas_area": 770883,
-      "reserved_tile_area": 603786,
+      "atlas_area": 844599,
+      "reserved_tile_area": 646764,
       "padded_asset_area": 544095,
-      "occupancy_ratio": 0.7832,
-      "padded_asset_ratio": 0.7058,
+      "occupancy_ratio": 0.7658,
+      "padded_asset_ratio": 0.6442,
       "entries": [
         {
           "id": "decor_blue_diamond_v1",
           "kind": "decor_overlay",
           "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_blue_diamond_v1.png",
           "atlas_rect": [
-            449,
-            309,
+            197,
+            337,
             217,
             228
           ],
           "padded_rect": [
-            447,
-            307,
+            195,
+            335,
             221,
             232
           ],
@@ -577,12 +580,12 @@
             "lines": [
               "decor_blue_diamond_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
-              447,
-              542,
-              181,
-              18
+              195,
+              570,
+              223,
+              22
             ],
             "placement": "bottom"
           }
@@ -592,14 +595,14 @@
           "kind": "decor_overlay",
           "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_compass_badge_v1.png",
           "atlas_rect": [
+            838,
             3,
-            309,
             246,
             242
           ],
           "padded_rect": [
+            836,
             1,
-            307,
             250,
             246
           ],
@@ -624,14 +627,15 @@
           "review_label": {
             "text": "decor_compass_badge_v1",
             "lines": [
-              "decor_compass_badge_v1"
+              "decor_compass_badge_",
+              "v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
-              1,
-              556,
-              195,
-              18
+              836,
+              250,
+              220,
+              42
             ],
             "placement": "bottom"
           }
@@ -673,14 +677,15 @@
           "review_label": {
             "text": "decor_corner_top_left_v1",
             "lines": [
-              "decor_corner_top_left_v1"
+              "decor_corner_top_left_",
+              "v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               332,
               253,
-              187,
-              18
+              210,
+              42
             ],
             "placement": "bottom"
           }
@@ -722,14 +727,15 @@
           "review_label": {
             "text": "decor_corner_top_right_v1",
             "lines": [
-              "decor_corner_top_right_v1"
+              "decor_corner_top_right_",
+              "v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               584,
               253,
-              197,
-              18
+              222,
+              42
             ],
             "placement": "bottom"
           }
@@ -739,14 +745,14 @@
           "kind": "decor_overlay",
           "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_crystal_cluster_v1.png",
           "atlas_rect": [
-            672,
-            309,
+            422,
+            337,
             202,
             220
           ],
           "padded_rect": [
-            670,
-            307,
+            420,
+            335,
             206,
             224
           ],
@@ -771,14 +777,15 @@
           "review_label": {
             "text": "decor_crystal_cluster_v1",
             "lines": [
-              "decor_crystal_cluster_v1"
+              "decor_crystal_cluster_",
+              "v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
-              670,
-              534,
-              182,
-              18
+              420,
+              562,
+              206,
+              42
             ],
             "placement": "bottom"
           }
@@ -820,15 +827,16 @@
           "review_label": {
             "text": "decor_leather_tab_v1",
             "lines": [
-              "decor_leather_",
-              "tab_v1"
+              "decor_",
+              "leather_tab_",
+              "v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               1,
               271,
-              115,
-              34
+              119,
+              62
             ],
             "placement": "bottom"
           }
@@ -838,14 +846,14 @@
           "kind": "decor_overlay",
           "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_lock_plate_v1.png",
           "atlas_rect": [
-            255,
-            309,
+            3,
+            337,
             188,
             236
           ],
           "padded_rect": [
-            253,
-            307,
+            1,
+            335,
             192,
             240
           ],
@@ -872,12 +880,12 @@
             "lines": [
               "decor_lock_plate_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
-              253,
-              550,
-              152,
-              18
+              1,
+              578,
+              188,
+              22
             ],
             "placement": "bottom"
           }
@@ -921,12 +929,12 @@
             "lines": [
               "decor_red_seal_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               123,
               256,
-              140,
-              18
+              172,
+              22
             ],
             "placement": "bottom"
           }
@@ -936,14 +944,14 @@
           "kind": "decor_overlay",
           "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_ribbon_banner_v1.png",
           "atlas_rect": [
-            198,
-            578,
+            3,
+            608,
             313,
             121
           ],
           "padded_rect": [
-            196,
-            576,
+            1,
+            606,
             317,
             125
           ],
@@ -970,12 +978,12 @@
             "lines": [
               "decor_ribbon_banner_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
-              196,
-              704,
-              184,
-              18
+              1,
+              734,
+              225,
+              22
             ],
             "placement": "bottom"
           }
@@ -985,14 +993,14 @@
           "kind": "decor_overlay",
           "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_silver_divider_v1.png",
           "atlas_rect": [
-            3,
-            776,
+            604,
+            608,
             261,
             79
           ],
           "padded_rect": [
-            1,
-            774,
+            602,
+            606,
             265,
             83
           ],
@@ -1019,12 +1027,12 @@
             "lines": [
               "decor_silver_divider_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
-              1,
-              860,
-              174,
-              18
+              602,
+              692,
+              216,
+              22
             ],
             "placement": "bottom"
           }
@@ -1034,14 +1042,14 @@
           "kind": "decor_overlay",
           "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_sunburst_gem_v1.png",
           "atlas_rect": [
-            3,
-            578,
+            630,
+            337,
             189,
             171
           ],
           "padded_rect": [
-            1,
-            576,
+            628,
+            335,
             193,
             175
           ],
@@ -1066,14 +1074,15 @@
           "review_label": {
             "text": "decor_sunburst_gem_v1",
             "lines": [
-              "decor_sunburst_gem_v1"
+              "decor_sunburst_",
+              "gem_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
-              1,
-              754,
-              180,
-              18
+              628,
+              513,
+              153,
+              42
             ],
             "placement": "bottom"
           }
@@ -1083,14 +1092,14 @@
           "kind": "decor_overlay",
           "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_wooden_plaque_v1.png",
           "atlas_rect": [
-            517,
-            578,
+            322,
+            608,
             276,
             121
           ],
           "padded_rect": [
-            515,
-            576,
+            320,
+            606,
             280,
             125
           ],
@@ -1115,14 +1124,15 @@
           "review_label": {
             "text": "decor_wooden_plaque_v1",
             "lines": [
-              "decor_wooden_plaque_v1"
+              "decor_wooden_plaque_",
+              "v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
-              515,
-              704,
-              192,
-              18
+              320,
+              734,
+              216,
+              42
             ],
             "placement": "bottom"
           }
@@ -1135,11 +1145,11 @@
         "debug_outlines": false
       },
       "timing_ms": {
-        "layout": 2.817,
-        "compose": 3.322,
-        "save_atlas": 28.986,
-        "save_labeled_preview": 34.219,
-        "total": 69.96
+        "layout": 2.391,
+        "compose": 2.804,
+        "save_atlas": 26.059,
+        "save_labeled_preview": 34.494,
+        "total": 66.31
       }
     },
     {
@@ -1148,17 +1158,17 @@
       "label_overlay": true,
       "path": "gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-complete-v1/ui_rune_marches_icons.png",
       "size": [
-        1105,
-        792
+        1109,
+        822
       ],
       "entry_count": 12,
       "physical_entry_count": 12,
       "alias_count": 0,
-      "atlas_area": 875160,
-      "reserved_tile_area": 694919,
+      "atlas_area": 911598,
+      "reserved_tile_area": 710797,
       "padded_asset_area": 639479,
-      "occupancy_ratio": 0.794,
-      "padded_asset_ratio": 0.7307,
+      "occupancy_ratio": 0.7797,
+      "padded_asset_ratio": 0.7015,
       "entries": [
         {
           "id": "icon_health_v1",
@@ -1166,13 +1176,13 @@
           "source_path": "assets/runtime/rune-marches-ui-icons-v1/icon_health_v1.png",
           "atlas_rect": [
             221,
-            554,
+            580,
             232,
             212
           ],
           "padded_rect": [
             219,
-            552,
+            578,
             236,
             216
           ],
@@ -1199,12 +1209,12 @@
             "lines": [
               "icon_health_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               219,
-              771,
-              114,
-              18
+              797,
+              141,
+              22
             ],
             "placement": "bottom"
           }
@@ -1248,12 +1258,12 @@
             "lines": [
               "icon_locked_pin_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               244,
               267,
-              145,
-              18
+              179,
+              22
             ],
             "placement": "bottom"
           }
@@ -1264,13 +1274,13 @@
           "source_path": "assets/runtime/rune-marches-ui-icons-v1/icon_mana_v1.png",
           "atlas_rect": [
             695,
-            289,
+            311,
             170,
             234
           ],
           "padded_rect": [
             693,
-            287,
+            309,
             174,
             238
           ],
@@ -1297,12 +1307,12 @@
             "lines": [
               "icon_mana_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               693,
-              528,
-              110,
-              18
+              550,
+              136,
+              22
             ],
             "placement": "bottom"
           }
@@ -1313,13 +1323,13 @@
           "source_path": "assets/runtime/rune-marches-ui-icons-v1/icon_quest_scroll_v1.png",
           "atlas_rect": [
             245,
-            289,
+            311,
             239,
             235
           ],
           "padded_rect": [
             243,
-            287,
+            309,
             243,
             239
           ],
@@ -1346,12 +1356,12 @@
             "lines": [
               "icon_quest_scroll_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               243,
-              529,
-              153,
-              18
+              551,
+              190,
+              22
             ],
             "placement": "bottom"
           }
@@ -1362,13 +1372,13 @@
           "source_path": "assets/runtime/rune-marches-ui-icons-v1/icon_rune_crystal_v1.png",
           "atlas_rect": [
             3,
-            289,
+            311,
             236,
             238
           ],
           "padded_rect": [
             1,
-            287,
+            309,
             240,
             242
           ],
@@ -1395,12 +1405,12 @@
             "lines": [
               "icon_rune_crystal_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               1,
-              532,
-              156,
-              18
+              554,
+              194,
+              22
             ],
             "placement": "bottom"
           }
@@ -1411,13 +1421,13 @@
           "source_path": "assets/runtime/rune-marches-ui-icons-v1/icon_shield_v1.png",
           "atlas_rect": [
             490,
-            289,
+            311,
             199,
             235
           ],
           "padded_rect": [
             488,
-            287,
+            309,
             203,
             239
           ],
@@ -1444,12 +1454,12 @@
             "lines": [
               "icon_shield_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               488,
-              529,
-              111,
-              18
+              551,
+              137,
+              22
             ],
             "placement": "bottom"
           }
@@ -1460,13 +1470,13 @@
           "source_path": "assets/runtime/rune-marches-ui-icons-v1/icon_silver_v1.png",
           "atlas_rect": [
             3,
-            554,
+            580,
             212,
             214
           ],
           "padded_rect": [
             1,
-            552,
+            578,
             216,
             218
           ],
@@ -1493,12 +1503,12 @@
             "lines": [
               "icon_silver_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               1,
-              773,
-              107,
-              18
+              799,
+              133,
+              22
             ],
             "placement": "bottom"
           }
@@ -1508,13 +1518,13 @@
           "kind": "icon",
           "source_path": "assets/runtime/rune-marches-ui-icons-v1/icon_star_token_v1.png",
           "atlas_rect": [
-            857,
+            863,
             3,
             243,
             242
           ],
           "padded_rect": [
-            855,
+            861,
             1,
             247,
             246
@@ -1542,12 +1552,12 @@
             "lines": [
               "icon_star_token_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
-              855,
+              861,
               250,
-              143,
-              18
+              178,
+              22
             ],
             "placement": "bottom"
           }
@@ -1557,13 +1567,13 @@
           "kind": "icon",
           "source_path": "assets/runtime/rune-marches-ui-icons-v1/icon_sun_medallion_v1.png",
           "atlas_rect": [
-            603,
+            609,
             3,
             248,
             246
           ],
           "padded_rect": [
-            601,
+            607,
             1,
             252,
             250
@@ -1591,12 +1601,12 @@
             "lines": [
               "icon_sun_medallion_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
-              601,
+              607,
               254,
-              172,
-              18
+              213,
+              22
             ],
             "placement": "bottom"
           }
@@ -1640,12 +1650,12 @@
             "lines": [
               "icon_travel_boot_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               1,
               267,
-              149,
-              18
+              186,
+              22
             ],
             "placement": "bottom"
           }
@@ -1655,13 +1665,13 @@
           "kind": "icon",
           "source_path": "assets/runtime/rune-marches-ui-icons-v1/icon_unlocked_pin_v1.png",
           "atlas_rect": [
-            426,
+            427,
             3,
             171,
             257
           ],
           "padded_rect": [
-            424,
+            425,
             1,
             175,
             261
@@ -1687,14 +1697,15 @@
           "review_label": {
             "text": "icon_unlocked_pin_v1",
             "lines": [
-              "icon_unlocked_pin_v1"
+              "icon_unlocked_pin_",
+              "v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
-              424,
+              425,
               265,
-              163,
-              18
+              180,
+              42
             ],
             "placement": "bottom"
           }
@@ -1705,13 +1716,13 @@
           "source_path": "assets/runtime/rune-marches-ui-icons-v1/icon_warden_badge_v1.png",
           "atlas_rect": [
             871,
-            289,
+            311,
             231,
             233
           ],
           "padded_rect": [
             869,
-            287,
+            309,
             235,
             237
           ],
@@ -1738,12 +1749,12 @@
             "lines": [
               "icon_warden_badge_v1"
             ],
-            "font_size": 14,
+            "font_size": 18,
             "rect": [
               869,
-              527,
-              174,
-              18
+              549,
+              215,
+              22
             ],
             "placement": "bottom"
           }
@@ -1756,11 +1767,11 @@
         "debug_outlines": false
       },
       "timing_ms": {
-        "layout": 2.04,
-        "compose": 3.053,
-        "save_atlas": 34.61,
-        "save_labeled_preview": 41.355,
-        "total": 81.625
+        "layout": 1.97,
+        "compose": 3.019,
+        "save_atlas": 32.452,
+        "save_labeled_preview": 40.642,
+        "total": 78.688
       }
     }
   ],
@@ -1769,17 +1780,20 @@
     "allowed_delta": "review_label_rects_only",
     "debug_outlines": false
   },
+  "label_review_options": {
+    "font_size": 18
+  },
   "atlas_efficiency": {
-    "atlas_area": 2507662,
-    "reserved_tile_area": 1859436,
+    "atlas_area": 2649936,
+    "reserved_tile_area": 1951604,
     "padded_asset_area": 1674972,
-    "occupancy_ratio": 0.7415,
-    "padded_asset_ratio": 0.6679
+    "occupancy_ratio": 0.7365,
+    "padded_asset_ratio": 0.6321
   },
   "timing_ms": {
-    "read_manifest": 0.337,
-    "load_assets": 36.633,
-    "pack_groups": 255.641,
-    "total": 293.214
+    "read_manifest": 0.356,
+    "load_assets": 61.816,
+    "pack_groups": 243.266,
+    "total": 306.267
   }
 }
