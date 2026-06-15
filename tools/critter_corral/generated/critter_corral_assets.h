@@ -16,6 +16,7 @@
 #define ASSET_ATLAS_CORRAL ((nt_hash64_t){0xC248B522002B721CULL}) /* corral */
 
 /* --- ATLAS_REGION --- */
+#define ASSET_ATLAS_REGION_CORRAL_CRITTER_PNG ((nt_hash64_t){0xD27BB3F9FD7BF708ULL}) /* corral/critter.png */
 #define ASSET_ATLAS_REGION_CORRAL_CRITTER_A_PNG ((nt_hash64_t){0xBE5AEAE3525595DBULL}) /* corral/critter_a.png */
 #define ASSET_ATLAS_REGION_CORRAL_CRITTER_B_PNG ((nt_hash64_t){0xC2A6E5C99625930BULL}) /* corral/critter_b.png */
 #define ASSET_ATLAS_REGION_CORRAL_FLAG_PNG ((nt_hash64_t){0xE3AC243915A9B5ADULL}) /* corral/flag.png */
@@ -30,6 +31,7 @@ static inline void critter_corral_assets_register_labels(void) {
     (void)nt_hash64_str("assets/shaders/sprite.frag");
     (void)nt_hash64_str("assets/shaders/sprite.vert");
     (void)nt_hash64_str("corral");
+    (void)nt_hash64_str("corral/critter.png");
     (void)nt_hash64_str("corral/critter_a.png");
     (void)nt_hash64_str("corral/critter_b.png");
     (void)nt_hash64_str("corral/flag.png");

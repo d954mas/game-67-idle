@@ -164,6 +164,7 @@ if(NOT EMSCRIPTEN AND NOT TARGET build_critter_corral_packs)
     set(CORRAL_SPRITE_PNGS
         "${CORRAL_SPRITE_DIR}/critter_a.png"
         "${CORRAL_SPRITE_DIR}/critter_b.png"
+        "${CORRAL_SPRITE_DIR}/critter.png"
         "${CORRAL_SPRITE_DIR}/pen.png"
         "${CORRAL_SPRITE_DIR}/grass.png"
         "${CORRAL_SPRITE_DIR}/lure.png"

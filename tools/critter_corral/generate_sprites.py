@@ -124,6 +124,75 @@ def critter(size: int, body_rgb, rim_rgb, eye_dir: float):
     return out
 
 
+def critter_neutral(size: int):
+    """Neutral light-grey blob built so the runtime emit-color tint reproduces a
+    clean, distinct hue per color. Body is near-white (multiplies cleanly to the
+    target hue), rim/outline stay dark and eyes stay white+dark so they read on
+    any tint. One shape, N tint colors (see CORRAL_COLORS in clean_seed_main.c)."""
+    xs, ys, cx, cy = _grid(size)
+    r = np.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
+    radius = size * 0.46
+    out = np.zeros((size, size, 4), np.float32)
+
+    alpha = 1.0 - _smoothstep(radius - 2.0, radius + 1.5, r)
+
+    # body: near-white radial gradient (slightly darker toward the rim) so the
+    # emit tint multiplies to a saturated, even hue with a soft rounded shade.
+    t = np.clip(r / radius, 0.0, 1.0)[..., None]
+    centre = np.full((size, size, 3), 252.0, np.float32)
+    edge = np.full((size, size, 3), 188.0, np.float32)
+    rgb = centre * (1.0 - t) + edge * t
+
+    # dark contrast outline ring near the rim (stays dark under any tint).
+    outline = _smoothstep(radius - 4.0, radius - 1.0, r) * (
+        1.0 - _smoothstep(radius - 1.0, radius + 1.0, r)
+    )
+    dark = np.array([70.0, 70.0, 78.0], np.float32)
+    rgb = rgb * (1.0 - outline[..., None]) + dark[None, None, :] * outline[..., None]
+
+    # soft top-left highlight (cartoon shine) — pushes toward white so it stays
+    # bright under tint.
+    hx, hy = cx - radius * 0.34, cy - radius * 0.34
+    hr = radius * 0.44
+    hd = np.sqrt((xs - hx) ** 2 + (ys - hy) ** 2)
+    shine = (1.0 - _smoothstep(0.0, hr, hd)) * 0.5
+    rgb = rgb + (255.0 - rgb) * shine[..., None]
+
+    out[..., :3] = rgb
+    out[..., 3] = alpha * 255.0
+
+    # eyes: white sclera + dark pupil, centred (neutral, no travel bias) so the
+    # one shape reads the same for every color.
+    ex = cx
+    ey = cy - radius * 0.14
+    gap = radius * 0.32
+    for sign in (-1.0, 1.0):
+        scx = ex + sign * gap
+        sd = np.sqrt((xs - scx) ** 2 + (ys - ey) ** 2)
+        sr = radius * 0.24
+        ring_a = _smoothstep(sr - 0.5, sr + 1.0, sd) * (
+            1.0 - _smoothstep(sr + 1.5, sr + 3.0, sd)
+        )
+        for c in range(3):
+            out[..., c] = out[..., c] * (1.0 - ring_a) + 40.0 * ring_a
+        eye_a = (1.0 - _smoothstep(sr - 1.5, sr + 0.5, sd))
+        for c in range(3):
+            out[..., c] = out[..., c] * (1.0 - eye_a) + 250.0 * eye_a
+        out[..., 3] = np.maximum(out[..., 3], np.maximum(eye_a, ring_a) * 255.0)
+        pcx = scx
+        pd = np.sqrt((xs - pcx) ** 2 + (ys - ey) ** 2)
+        pr = sr * 0.56
+        pup_a = (1.0 - _smoothstep(pr - 1.0, pr + 0.8, pd))
+        pup = np.array([24.0, 24.0, 34.0], np.float32)
+        for c in range(3):
+            out[..., c] = out[..., c] * (1.0 - pup_a) + pup[c] * pup_a
+        ld = np.sqrt((xs - (pcx - pr * 0.4)) ** 2 + (ys - (ey - pr * 0.4)) ** 2)
+        lit = (1.0 - _smoothstep(0.0, pr * 0.5, ld)) * 0.9
+        for c in range(3):
+            out[..., c] = out[..., c] * (1.0 - lit) + 255.0 * lit
+    return out
+
+
 def _round_rect_mask(xs, ys, x0, y0, x1, y1, radius, soft=1.5):
     """Signed-distance rounded-rect -> soft [0,1] coverage mask."""
     rx = np.maximum(np.maximum(x0 + radius - xs, xs - (x1 - radius)), 0.0)
@@ -297,6 +366,8 @@ def main() -> None:
     # critter_a: warm red/orange; critter_b: cool blue. Bold, distinct hues.
     _save(critter(112, body_rgb=(255, 96, 64), rim_rgb=(196, 44, 36), eye_dir=1.0), "critter_a.png")
     _save(critter(112, body_rgb=(64, 150, 255), rim_rgb=(28, 86, 196), eye_dir=-1.0), "critter_b.png")
+    # neutral tintable critter: one shape, N hues via runtime emit color.
+    _save(critter_neutral(112), "critter.png")
     _save(pen(256, 200), "pen.png")
     _save(flag(64, 80), "flag.png")
     _save(grass(256), "grass.png")

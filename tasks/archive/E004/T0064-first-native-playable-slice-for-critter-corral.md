@@ -1,7 +1,7 @@
 ---
 id: T0064
 title: First native playable slice for Critter Corral
-status: doing
+status: done
 epic: E004
 priority: P1
 tags: [prototype, critter-corral, native-first]
@@ -31,3 +31,5 @@ Build the first native playable slice for `Critter Corral` after the Stage 0 sta
 ## Log
 
 - 2026-06-15: Built the mechanical core moment in src/clean_seed_main.c (critter sim: wander+separation+lure attraction; matching-color capture with squash+particle burst+pen flash+chain boost; continuous waves; score). Added DevAPI game.state / game.reset_playtest / game.capture.framebuffer (glReadPixels->PPM, unblocks automated screenshots). Builds clean under -Werror; ran via devapi running_game, captured build/captures/corral_core.png, pixel_health audit PASS, score 0->5/6. NOTE: rendered with the DEBUG shape renderer only — lead clarified shape renderer is debug-only; visual layer is being moved to free-asset sprites next (Codex bespoke art later).
+
+- 2026-06-15: First playable slice achieved. Sprite-rendered core moment (lure herds critters; matching color pops into its pen with squash+particles+flash+chain; continuous waves; fontless score/goal HUD). Visual gate PASS vs the concept DIRECTION (corral_review2.png; composition4/readability5/ui4/action4/art4/audience5; pixel audit stdev 24.4). Builds clean -Werror. Slice done; expansion tracked in T0065.
