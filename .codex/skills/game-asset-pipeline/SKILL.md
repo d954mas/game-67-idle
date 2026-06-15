@@ -91,6 +91,8 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     Add `--profile` for slow or disputed cleanup runs so JSON/Markdown capture
     total, render-strip, compose, per-asset, and per-side timing, and stdout
     prints the slowest asset side.
+    Use `--only-problems` for large proof sheets when JSON keeps full coverage
+    and the human PNG/Markdown should show only bad sides.
     Record durable proof paths in the art job (`expected_outputs.edge_proofs`
     for primary outputs or candidate evidence for non-primary candidates), and
     record matching JSON reports in `expected_outputs.edge_proof_reports` so

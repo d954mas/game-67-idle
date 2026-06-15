@@ -160,6 +160,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       Add `--profile` when edge proofs feel slow or when comparing cleanup
       fixes; it records total, render-strip, compose, per-asset, and per-side
       timing without changing defect counts.
+      Use `--only-problems` for large disputed sheets when the JSON report is
+      the coverage evidence and the human PNG should focus only on bad sides.
     - slice9 design policy audit:
       `node tools/assets/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
       Add `--profile` when comparing policy changes; it records total and
@@ -385,6 +387,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   fixes so the review records per-side counts by reason, not only a screenshot.
   Add `--profile` for slow proof runs so the slowest asset side is printed and
   timing is preserved in JSON/Markdown.
+  Add `--only-problems` when a full proof sheet is too tall to review; this
+  keeps every side in JSON while omitting clean sides from the PNG/Markdown.
   Store accepted proof image paths in `expected_outputs.edge_proofs` and JSON
   report paths in `expected_outputs.edge_proof_reports` only when
   `counts.total` is zero; reports with bad marks document candidates to reject

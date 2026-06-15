@@ -414,6 +414,76 @@ class RenderUiAssetEdgeProofTests(unittest.TestCase):
             with Image.open(output) as proof:
                 self.assertLess(proof.height, 220)
 
+    def test_only_problems_keeps_json_coverage_but_renders_focused_sheet(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            clean = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(clean)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            clean.save(out_dir / "clean.png")
+            bad = clean.copy()
+            bad.putpixel((23, 16), (64, 0, 64, 255))
+            bad.save(out_dir / "bad.png")
+            manifest = {
+                "schema": "game.art_crop_manifest",
+                "version": 1,
+                "sources": [
+                    {
+                        "id": "source",
+                        "path": "source.png",
+                        "crops": [
+                            {"id": "clean", "kind": "icon", "rect": [0, 0, 32, 32], "output": "assets/clean.png"},
+                            {"id": "bad", "kind": "icon", "rect": [0, 0, 32, 32], "output": "assets/bad.png"},
+                        ],
+                    }
+                ],
+            }
+            manifest_path = root / "manifest.json"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            output = root / "proof.png"
+            json_output = root / "proof.json"
+            markdown_output = root / "proof.md"
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--crop-manifest",
+                    str(manifest_path),
+                    "--output",
+                    str(output),
+                    "--side",
+                    "right",
+                    "--zoom",
+                    "2",
+                    "--json-output",
+                    str(json_output),
+                    "--report",
+                    str(markdown_output),
+                    "--only-problems",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            report = json.loads(json_output.read_text(encoding="utf-8"))
+            self.assertTrue(report["only_problems"])
+            self.assertEqual(len(report["rows"]), 2)
+            self.assertEqual(report["rendered_rows"], 1)
+            self.assertEqual(report["omitted_clean_rows"], 1)
+            self.assertEqual(report["counts"]["total"], report["rows"][1]["counts"]["total"])
+            markdown = markdown_output.read_text(encoding="utf-8")
+            self.assertIn("Omitted clean rows: 1", markdown)
+            self.assertIn("`bad`", markdown)
+            self.assertNotIn("`clean`", markdown)
+            with Image.open(output) as proof:
+                self.assertLess(proof.height, 180)
+
 
 if __name__ == "__main__":
     unittest.main()

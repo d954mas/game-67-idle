@@ -1,0 +1,26 @@
+{
+  "schema": "game.ui_atlas_pack_audit",
+  "version": 1,
+  "atlas_pack": "gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-compact-bases-v5/ui-atlas-pack.json",
+  "asset_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-compact-bases-v5-asset_manifest.json",
+  "verdict": "pass",
+  "problems": [],
+  "atlases": [
+    {
+      "pack_group": "ui_rune_marches_compact_bases_v5",
+      "path": "gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-compact-bases-v5/ui_rune_marches_compact_bases_v5.png",
+      "labeled_preview_path": "gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-compact-bases-v5/ui_rune_marches_compact_bases_v5-labeled.png",
+      "status": "pass",
+      "problems": [],
+      "entry_count": 7,
+      "physical_entry_count": 7,
+      "alias_count": 0,
+      "timing_ms": {
+        "total": 44.37
+      }
+    }
+  ],
+  "timing_ms": {
+    "total": 45.911
+  }
+}

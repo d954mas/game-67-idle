@@ -189,6 +189,7 @@ def render_edge_proof(
     asset_ids: set[str] | None,
     sides_filter: set[str] | None,
     profile: bool = False,
+    only_problems: bool = False,
 ) -> tuple[Image.Image, dict[str, Any]]:
     started = perf_counter()
     font = ImageFont.load_default()
@@ -262,12 +263,17 @@ def render_edge_proof(
             asset_timing["total"] = round((perf_counter() - asset_started) * 1000, 3)
             asset_timings.append({"asset_id": crop_id, "output": output, "timing_ms": asset_timing})
 
+    rendered_rows = [row for row in rows if row[2]["total"] > 0] if only_problems else rows
+    omitted_clean_rows = len(rows) - len(rendered_rows)
     if not rows:
         report = {
             "schema": "game.ui_asset_edge_proof",
             "version": 1,
             "rows": [],
             "counts": empty_counts(),
+            "only_problems": only_problems,
+            "rendered_rows": 0,
+            "omitted_clean_rows": 0,
         }
         if profile:
             report["timing_ms"] = {"total": round((perf_counter() - started) * 1000, 3)}
@@ -278,12 +284,14 @@ def render_edge_proof(
     label_height = 18
     gutter = 12
     margin = 12
-    width = max(image.width for _label, image, _bad in rows) + margin * 2
-    height = margin + sum(label_height + image.height + gutter for _label, image, _bad in rows)
+    if not rendered_rows:
+        rendered_rows = [("no bad edge marks; clean rows omitted by --only-problems", Image.new("RGBA", (420, 48), (24, 24, 28, 255)), empty_counts())]
+    width = max(image.width for _label, image, _bad in rendered_rows) + margin * 2
+    height = margin + sum(label_height + image.height + gutter for _label, image, _bad in rendered_rows)
     sheet = Image.new("RGBA", (width, height), (24, 24, 28, 255))
     draw = ImageDraw.Draw(sheet)
     y = margin
-    for label, image, counts in rows:
+    for label, image, counts in rendered_rows:
         color = (255, 120, 120, 255) if counts["total"] else (235, 235, 235, 255)
         draw.text((margin, y), label, font=font, fill=color)
         y += label_height
@@ -295,11 +303,15 @@ def render_edge_proof(
             "render_strips": round(render_strips_ms, 3),
             "compose_sheet": round((perf_counter() - compose_started) * 1000, 3),
         }
+    aggregate = aggregate_counts(report_rows)
     report = {
         "schema": "game.ui_asset_edge_proof",
         "version": 1,
         "rows": report_rows,
-        "counts": aggregate_counts(report_rows),
+        "counts": aggregate,
+        "only_problems": only_problems,
+        "rendered_rows": 0 if only_problems and aggregate["total"] == 0 else len(rendered_rows),
+        "omitted_clean_rows": omitted_clean_rows,
     }
     if profile:
         report["timing_ms"] = timings
@@ -320,6 +332,9 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"Total bad marks: **{report['counts']['total']}**",
         f"Visible edge marks: {report['counts']['visible']}",
         f"Transparent RGB marks: {report['counts']['transparent_rgb']}",
+        f"Only problem rows in image: {report.get('only_problems', False)}",
+        f"Rendered rows: {report.get('rendered_rows', len(report.get('rows', [])))}",
+        f"Omitted clean rows: {report.get('omitted_clean_rows', 0)}",
         "",
     ]
     reasons = report["counts"].get("reasons", {})
@@ -340,8 +355,13 @@ def render_markdown(report: dict[str, Any]) -> str:
                 timing = asset.get("timing_ms", {})
                 lines.append(f"- `{asset.get('asset_id')}` total={timing.get('total', '-')} ms output={asset.get('output')}")
         lines.append("")
+    row_list = report["rows"]
+    if report.get("only_problems"):
+        row_list = [row for row in row_list if row.get("counts", {}).get("total", 0) > 0]
     lines.extend(["## Rows", ""])
-    for row in report["rows"]:
+    if not row_list:
+        lines.append("- none")
+    for row in row_list:
         counts = row["counts"]
         lines.append(
             f"- `{row['asset_id']}` {row['side']} rect={row['rect']} "
@@ -362,6 +382,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--asset-id", action="append", help="Limit proof to one asset id; can be repeated.")
     parser.add_argument("--side", action="append", choices=["top", "right", "bottom", "left"], help="Limit proof to one side; can be repeated.")
     parser.add_argument("--no-mark-bad-pixels", action="store_true")
+    parser.add_argument("--only-problems", action="store_true", help="Keep full JSON coverage but render only rows with bad marks into the PNG/Markdown proof.")
     parser.add_argument("--json-output", help="Write structured edge-proof counts by asset side and defect class.")
     parser.add_argument("--report", help="Write a Markdown edge-proof report next to the proof image.")
     parser.add_argument("--profile", action="store_true", help="Record edge-proof timing in JSON/Markdown and print the slowest asset side.")
@@ -382,6 +403,7 @@ def main(argv: list[str]) -> int:
         set(args.asset_id) if args.asset_id else None,
         set(args.side) if args.side else None,
         args.profile,
+        args.only_problems,
     )
     output = project_path(args.output)
     save_image_atomic(proof, output)
