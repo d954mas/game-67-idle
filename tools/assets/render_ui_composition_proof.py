@@ -15,11 +15,12 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[2]
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
-from tools.assets.atomic_io import save_image_atomic, write_text_atomic
+from tools.assets.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
 from tools.assets.chroma_key_alpha import resize_rgba_premultiplied
 
 
 ROOT = Path.cwd()
+PROFILE_KEYS = {"timing_ms", "cache_stats"}
 ANCHORS = {
     "top_left",
     "top_center",
@@ -74,6 +75,40 @@ def read_json(path: Path) -> dict[str, Any]:
 
 def write_text(path: Path, text: str) -> None:
     write_text_atomic(path, text)
+
+
+def without_profile_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: without_profile_fields(item) for key, item in value.items() if key not in PROFILE_KEYS}
+    if isinstance(value, list):
+        return [without_profile_fields(item) for item in value]
+    return value
+
+
+def profile_report_from_composition(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": "game.ui_composition_proof_profile",
+        "version": 1,
+        "asset_manifest": report.get("asset_manifest"),
+        "layout": report.get("layout"),
+        "output": report.get("output"),
+        "require_overlay_resize_policy": report.get("require_overlay_resize_policy"),
+        "verdict": report.get("verdict"),
+        "item_count": len(report.get("items", [])),
+        "timing_ms": report.get("timing_ms"),
+        "cache_stats": report.get("cache_stats"),
+        "items": [
+            {
+                "base_id": item.get("base_id"),
+                "size": item.get("size"),
+                "status": item.get("status"),
+                "problem_count": len(item.get("problems", [])),
+                "timing_ms": item.get("timing_ms"),
+            }
+            for item in report.get("items", [])
+            if isinstance(item, dict)
+        ],
+    }
 
 
 def checkerboard(size: tuple[int, int], cell: int = 16) -> Image.Image:
@@ -566,13 +601,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--json-output")
     parser.add_argument("--report")
     parser.add_argument("--no-fail", action="store_true", help="Write proof even when composition problems are found.")
-    parser.add_argument("--profile", action="store_true", help="Record composition proof timing in JSON/Markdown and print the slowest item.")
+    parser.add_argument("--profile", action="store_true", help="Record composition proof timing and print the slowest item.")
+    parser.add_argument("--profile-output", help="Write composition proof timing/cache telemetry to a sidecar JSON file. When set, profile fields are not embedded in JSON/Markdown unless --profile-inline is also set.")
+    parser.add_argument("--profile-inline", action="store_true", help="Embed profile timing fields in composition proof JSON/Markdown even when --profile-output is used.")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
     started = perf_counter()
     args = parse_args(argv)
+    profile_enabled = bool(args.profile or args.profile_output)
+    profile_inline = bool(args.profile_inline or not args.profile_output)
     manifest_path = project_path(args.asset_manifest)
     if not manifest_path.exists():
         print(f"error: asset manifest not found: {normalize_path(manifest_path)}", file=sys.stderr)
@@ -595,7 +634,7 @@ def main(argv: list[str]) -> int:
         reports.append({"base_id": "(none)", "size": [0, 0], "label": "", "content_rect": [0, 0, 0, 0], "status": "fail", "problems": ["layout has no items"]})
     render_started = perf_counter()
     for item in items:
-        image, item_report = render_item(item, assets, proof_font, require_overlay_resize_policy, cache, args.profile)
+        image, item_report = render_item(item, assets, proof_font, require_overlay_resize_policy, cache, profile_enabled)
         reports.append(item_report)
         if image is not None:
             rendered.append((item_report, image))
@@ -620,7 +659,7 @@ def main(argv: list[str]) -> int:
         "verdict": verdict,
         "items": reports,
     }
-    if args.profile:
+    if profile_enabled:
         report["timing_ms"] = {
             "render_items": render_ms,
             "render_sheet": sheet_ms,
@@ -628,12 +667,17 @@ def main(argv: list[str]) -> int:
             "total": round((perf_counter() - started) * 1000, 3),
         }
         report["cache_stats"] = dict(cache.stats)
+    if args.profile_output:
+        write_json_atomic(project_path(args.profile_output), profile_report_from_composition(report))
+    output_report = report if profile_inline else without_profile_fields(report)
     if args.json_output:
-        write_text(project_path(args.json_output), json.dumps(report, indent=2) + "\n")
+        write_text(project_path(args.json_output), json.dumps(output_report, indent=2) + "\n")
     if args.report:
-        write_text(project_path(args.report), make_markdown(report))
+        write_text(project_path(args.report), make_markdown(output_report))
     print(f"{verdict}: wrote composition proof: {normalize_path(output)} items={len(reports)}")
-    if args.profile and reports:
+    if args.profile_output:
+        print(f"wrote profile telemetry: {normalize_path(args.profile_output)}")
+    if profile_enabled and reports:
         slowest = max(reports, key=lambda item: item.get("timing_ms", {}).get("total", 0))
         print(f"profile: slowest composition item `{slowest.get('base_id')}` {slowest.get('timing_ms', {}).get('total', 0)} ms")
     if verdict != "pass" and not args.no_fail:

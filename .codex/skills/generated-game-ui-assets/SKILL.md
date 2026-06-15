@@ -213,8 +213,11 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       `overlay_asset_id` must reference a real non-slice9 crop/runtime asset.
     - runtime composition proof:
       `py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest <runtime-manifest> --output <proof.png> --json-output <proof.json> --report <proof.md>`
-      Add `--profile` when composition proof feels slow; it writes timing,
-      cache-hit stats, and prints the slowest base/size item. Overlay sprites
+      Add `--profile --profile-output tmp/asset-profiles/<name>.json` when
+      composition proof feels slow; the sidecar writes timing, cache-hit stats,
+      and the slowest base/size item is printed without dirtying durable
+      JSON/Markdown proof evidence. Use `--profile-inline` only for throwaway
+      local debug reports. Overlay sprites
       must not overlap the content safe area unless the layout or overlay explicitly sets
       `allow_content_overlap`.
       For production generated UI layouts, set

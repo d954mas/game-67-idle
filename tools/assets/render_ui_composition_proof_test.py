@@ -167,6 +167,79 @@ class RenderUiCompositionProofTests(unittest.TestCase):
             self.assertGreater(report["cache_stats"]["resized_tile_hits"], 0)
             self.assertGreater(report["cache_stats"]["resized_tile_misses"], 0)
 
+    def test_writes_profile_sidecar_without_dirtying_main_reports(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            assets = root / "assets"
+            assets.mkdir()
+            write_panel(assets / "button.png")
+            write_overlay(assets / "gem.png")
+            manifest = {
+                "schema": "game.asset_manifest",
+                "version": 1,
+                "assets": [
+                    {
+                        "id": "button",
+                        "kind": "slice9",
+                        "path": "assets/button.png",
+                        "slice9": {"left": 8, "top": 8, "right": 8, "bottom": 8},
+                        "content": {"x": 9, "y": 9, "w": 22, "h": 14},
+                        "target_preview_sizes": [[96, 40]],
+                    },
+                    {"id": "gem", "kind": "decor_overlay", "path": "assets/gem.png", "anchor": "top_center"},
+                ],
+            }
+            layout = {
+                "schema": "game.ui_composition_proof_layout",
+                "version": 1,
+                "items": [{"base_id": "button", "size": [96, 40], "label": "Go", "decor_overlays": [{"id": "gem", "anchor": "top_center", "allow_content_overlap": True}]}],
+            }
+            (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (root / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--asset-manifest",
+                    "manifest.json",
+                    "--layout",
+                    "layout.json",
+                    "--output",
+                    "proof.png",
+                    "--json-output",
+                    "proof.json",
+                    "--report",
+                    "proof.md",
+                    "--profile",
+                    "--profile-output",
+                    "tmp/profile/composition-profile.json",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("wrote profile telemetry: tmp/profile/composition-profile.json", result.stdout)
+            self.assertIn("profile: slowest composition item `button`", result.stdout)
+            report = json.loads((root / "proof.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["verdict"], "pass")
+            self.assertNotIn("timing_ms", report)
+            self.assertNotIn("cache_stats", report)
+            self.assertNotIn("timing_ms", report["items"][0])
+            markdown = (root / "proof.md").read_text(encoding="utf-8")
+            self.assertNotIn("## Timing", markdown)
+            self.assertNotIn("## Cache", markdown)
+            profile = json.loads((root / "tmp/profile/composition-profile.json").read_text(encoding="utf-8"))
+            self.assertEqual(profile["schema"], "game.ui_composition_proof_profile")
+            self.assertEqual(profile["verdict"], "pass")
+            self.assertIn("timing_ms", profile)
+            self.assertIn("cache_stats", profile)
+            self.assertEqual(profile["items"][0]["base_id"], "button")
+            self.assertIn("timing_ms", profile["items"][0])
+
     def test_resizes_overlay_to_declared_runtime_size(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
