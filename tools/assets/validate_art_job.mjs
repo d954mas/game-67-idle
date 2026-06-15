@@ -565,6 +565,38 @@ function validateAtlasPackAuditEvidence(paths, fieldName, root, problems, strict
         problems.push(`${fieldName} JSON atlas_pack must match expected_outputs.atlas_pack: ${item}`);
       }
     }
+    if (expected.assetIds && expected.assetIds.size > 0) {
+      if (!Array.isArray(report.reported_asset_ids)) {
+        problems.push(`${fieldName} JSON needs reported_asset_ids coverage list: ${item}`);
+      } else {
+        const reportedIds = new Set(report.reported_asset_ids.map((id) => String(id || "")).filter((id) => id.length > 0));
+        for (const id of expected.assetIds) {
+          if (!reportedIds.has(id)) {
+            problems.push(`${fieldName} JSON missing reported asset id ${id}: ${item}`);
+          }
+        }
+      }
+      if (!Array.isArray(report.expected_asset_ids)) {
+        problems.push(`${fieldName} JSON needs expected_asset_ids coverage list: ${item}`);
+      } else {
+        const expectedIds = new Set(report.expected_asset_ids.map((id) => String(id || "")).filter((id) => id.length > 0));
+        for (const id of expected.assetIds) {
+          if (!expectedIds.has(id)) {
+            problems.push(`${fieldName} JSON missing expected asset id ${id}: ${item}`);
+          }
+        }
+      }
+      if (!Array.isArray(report.missing_asset_ids)) {
+        problems.push(`${fieldName} JSON needs missing_asset_ids list: ${item}`);
+      } else if (report.missing_asset_ids.length > 0) {
+        problems.push(`${fieldName} JSON missing_asset_ids must be empty: ${item}`);
+      }
+      if (!Array.isArray(report.unexpected_asset_ids)) {
+        problems.push(`${fieldName} JSON needs unexpected_asset_ids list: ${item}`);
+      } else if (report.unexpected_asset_ids.length > 0) {
+        problems.push(`${fieldName} JSON unexpected_asset_ids must be empty: ${item}`);
+      }
+    }
   }
 }
 
@@ -1115,6 +1147,7 @@ function validateJob(job, jobPath, options = {}) {
         {
           runtimeManifest: job.expected_outputs?.runtime_manifest,
           atlasPacks: expectedAtlasPacks,
+          assetIds: atlasPackIds,
         }
       );
     }

@@ -97,7 +97,19 @@ function writeAtlasPackAudit(dir, path, overrides = {}) {
     asset_manifest: "gamedesign/projects/test/data/ui-kit-assets.json",
     verdict: "pass",
     problems: [],
-    atlases: [{ pack_group: "ui_common", status: "pass", problems: [], entry_count: 3 }],
+    expected_asset_ids: ["enemy", "panel", "resource_icon"],
+    reported_asset_ids: ["enemy", "panel", "resource_icon"],
+    missing_asset_ids: [],
+    unexpected_asset_ids: [],
+    atlases: [
+      {
+        pack_group: "ui_common",
+        status: "pass",
+        problems: [],
+        entry_count: 3,
+        asset_ids: ["enemy", "panel", "resource_icon"],
+      },
+    ],
     ...overrides,
   };
   writeFileSync(join(dir, path), `${JSON.stringify(audit, null, 2)}\n`, "utf8");
@@ -1071,6 +1083,56 @@ test("final-art mode rejects atlas pack audit for another pack", (t) => {
   const result = run(["--job", job, "--final-art"], dir);
   assert.equal(result.status, 1);
   assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON atlas_pack must match expected_outputs.atlas_pack/);
+});
+
+test("final-art mode rejects atlas pack audit without asset coverage lists", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const audit = "gamedesign/projects/test/reviews/ui-kit-atlas-pack-audit.json";
+  writeAtlasPackAudit(dir, audit, {
+    expected_asset_ids: undefined,
+    reported_asset_ids: undefined,
+    missing_asset_ids: undefined,
+    unexpected_asset_ids: undefined,
+  });
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON needs reported_asset_ids coverage list/);
+  assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON needs expected_asset_ids coverage list/);
+  assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON needs missing_asset_ids list/);
+  assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON needs unexpected_asset_ids list/);
+});
+
+test("final-art mode rejects atlas pack audit missing a runtime asset id", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const audit = "gamedesign/projects/test/reviews/ui-kit-atlas-pack-audit.json";
+  writeAtlasPackAudit(dir, audit, {
+    expected_asset_ids: ["enemy", "panel"],
+    reported_asset_ids: ["enemy", "panel"],
+    missing_asset_ids: ["resource_icon"],
+  });
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON missing reported asset id resource_icon/);
+  assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON missing expected asset id resource_icon/);
+  assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON missing_asset_ids must be empty/);
+});
+
+test("final-art mode rejects atlas pack audit with unexpected asset ids", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const audit = "gamedesign/projects/test/reviews/ui-kit-atlas-pack-audit.json";
+  writeAtlasPackAudit(dir, audit, {
+    reported_asset_ids: ["enemy", "orphan_sprite", "panel", "resource_icon"],
+    unexpected_asset_ids: ["orphan_sprite"],
+  });
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.atlas_pack_audit JSON unexpected_asset_ids must be empty/);
 });
 
 test("final-art mode rejects failing source family coverage audit evidence", (t) => {
