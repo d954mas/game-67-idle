@@ -199,27 +199,19 @@ def remove_green_screen_spill(image: Image.Image, passes: int = 3, radius: int =
             pixels[x, y] = (red, green, blue, 0)
 
 
-def source_key_spill_mask(red: Any, green: Any, blue: Any, key: RGB) -> Any:
-    key_red, key_green, key_blue = key
-    if key_green > 220 and key_red < 40 and key_blue < 40:
-        saturated = (green > 90) & (green > red * 1.25) & (green > blue * 1.25) & (green - np.maximum(red, blue) > 22)
-        muted = (green >= 55) & (blue <= 32) & (green - blue >= 40) & (green - red >= 18)
-        return saturated | muted
-    if key_red > 220 and key_blue > 220 and key_green < 40:
-        return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= 36
-    if key_red > 220 and key_green < 40 and key_blue < 40:
-        return (red > 90) & (red > green * 1.25) & (red > blue * 1.25) & (red - np.maximum(green, blue) > 22)
-    if key_blue > 220 and key_red < 40 and key_green < 40:
-        return (blue > 90) & (blue > red * 1.25) & (blue > green * 1.25) & (blue - np.maximum(red, green) > 22)
-    return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= 36
+def key_fringe_mask_rgb(red: Any, green: Any, blue: Any) -> Any:
+    """Vectorized counterpart of ``is_key_fringe_like`` over int16 r/g/b arrays."""
+    return (red > 115) & (blue > 120) & (green < 145) & (red + blue > 300) & (red + blue > green * 3)
 
 
-def bad_edge_rgb_mask_array(array: Any, key: RGB | None) -> Any:
-    red = array[..., 0].astype(np.int16)
-    green = array[..., 1].astype(np.int16)
-    blue = array[..., 2].astype(np.int16)
-    key_fringe = (red > 115) & (blue > 120) & (green < 145) & (red + blue > 300) & (red + blue > green * 3)
-    purple = (red > 75) & (blue > 75) & (green < 120) & (np.minimum(red, blue) - green > 20) & (red + blue > green * 2 + 80)
+def purple_halo_only_mask_rgb(red: Any, green: Any, blue: Any) -> Any:
+    """Vectorized counterpart of the single ``is_purple_halo_like`` clause."""
+    return (red > 75) & (blue > 75) & (green < 120) & (np.minimum(red, blue) - green > 20) & (red + blue > green * 2 + 80)
+
+
+def any_purple_halo_mask_rgb(red: Any, green: Any, blue: Any) -> Any:
+    """Vectorized counterpart of ``is_any_purple_halo_like`` (purple+dark+magenta+dark_magenta)."""
+    purple = purple_halo_only_mask_rgb(red, green, blue)
     dark_purple = (
         (red >= 32)
         & (blue >= 32)
@@ -229,11 +221,40 @@ def bad_edge_rgb_mask_array(array: Any, key: RGB | None) -> Any:
     )
     magenta = (red > 80) & (blue > 45) & (green < 120) & (red > green + 32) & (blue > green + 6)
     dark_magenta = (red > 44) & (blue > 34) & (green < 42) & (red > green + 24) & (blue > green + 14) & (red + blue > green * 2 + 48)
-    green_spill = (green > 100) & (green > red * 1.35) & (green > blue * 1.35) & (green - np.maximum(red, blue) > 28)
+    return purple | dark_purple | magenta | dark_magenta
+
+
+def green_screen_spill_mask_rgb(red: Any, green: Any, blue: Any) -> Any:
+    """Vectorized counterpart of ``is_green_screen_spill_like`` over int16 r/g/b arrays."""
+    return (green > 100) & (green > red * 1.35) & (green > blue * 1.35) & (green - np.maximum(red, blue) > 28)
+
+
+def source_key_spill_mask(red: Any, green: Any, blue: Any, key: RGB, magenta_tolerance: int = 36) -> Any:
+    key_red, key_green, key_blue = key
+    if key_green > 220 and key_red < 40 and key_blue < 40:
+        saturated = (green > 90) & (green > red * 1.25) & (green > blue * 1.25) & (green - np.maximum(red, blue) > 22)
+        muted = (green >= 55) & (blue <= 32) & (green - blue >= 40) & (green - red >= 18)
+        return saturated | muted
+    if key_red > 220 and key_blue > 220 and key_green < 40:
+        return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= magenta_tolerance
+    if key_red > 220 and key_green < 40 and key_blue < 40:
+        return (red > 90) & (red > green * 1.25) & (red > blue * 1.25) & (red - np.maximum(green, blue) > 22)
+    if key_blue > 220 and key_red < 40 and key_green < 40:
+        return (blue > 90) & (blue > red * 1.25) & (blue > green * 1.25) & (blue - np.maximum(red, green) > 22)
+    return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= magenta_tolerance
+
+
+def bad_edge_rgb_mask_array(array: Any, key: RGB | None) -> Any:
+    red = array[..., 0].astype(np.int16)
+    green = array[..., 1].astype(np.int16)
+    blue = array[..., 2].astype(np.int16)
+    key_fringe = key_fringe_mask_rgb(red, green, blue)
+    purple_halo = any_purple_halo_mask_rgb(red, green, blue)
+    green_spill = green_screen_spill_mask_rgb(red, green, blue)
     source_key = np.zeros(red.shape, dtype=bool)
     if key is not None:
         source_key = source_key_spill_mask(red, green, blue, key)
-    return key_fringe | purple | dark_purple | magenta | dark_magenta | green_spill | source_key
+    return key_fringe | purple_halo | green_spill | source_key
 
 
 def bleed_transparent_rgb_numpy(image: Image.Image, passes: int = 16, key: RGB | None = None) -> bool:

@@ -23,11 +23,15 @@ if str(SCRIPT_ROOT) not in sys.path:
 
 from tools.assets.atomic_io import write_json_atomic, write_text_atomic
 from tools.assets.chroma_key_alpha import (
+    any_purple_halo_mask_rgb,
+    green_screen_spill_mask_rgb,
     is_any_purple_halo_like,
     is_exact_key_like,
     is_green_screen_spill_like,
     is_key_fringe_like,
     is_source_key_spill_like,
+    key_fringe_mask_rgb,
+    source_key_spill_mask,
 )
 
 
@@ -95,53 +99,32 @@ def dilate_mask_numpy(mask: Any, radius: int) -> Any:
     return result
 
 
+def _int16_rgb(array: Any) -> tuple[Any, Any, Any]:
+    return (
+        array[..., 0].astype(np.int16),
+        array[..., 1].astype(np.int16),
+        array[..., 2].astype(np.int16),
+    )
+
+
 def key_fringe_mask_array(array: Any) -> Any:
-    red = array[..., 0].astype(np.int16)
-    green = array[..., 1].astype(np.int16)
-    blue = array[..., 2].astype(np.int16)
-    return (red > 115) & (blue > 120) & (green < 145) & (red + blue > 300) & (red + blue > green * 3)
+    red, green, blue = _int16_rgb(array)
+    return key_fringe_mask_rgb(red, green, blue)
 
 
 def purple_halo_mask_array(array: Any) -> Any:
-    red = array[..., 0].astype(np.int16)
-    green = array[..., 1].astype(np.int16)
-    blue = array[..., 2].astype(np.int16)
-    purple = (red > 75) & (blue > 75) & (green < 120) & (np.minimum(red, blue) - green > 20) & (red + blue > green * 2 + 80)
-    dark_purple = (
-        (red >= 32)
-        & (blue >= 32)
-        & ((green < np.minimum(red, blue) * 0.55) | (green <= 12))
-        & (np.abs(red - blue) < 64)
-        & (red + blue > green * 3 + 38)
-    )
-    magenta = (red > 80) & (blue > 45) & (green < 120) & (red > green + 32) & (blue > green + 6)
-    dark_magenta = (red > 44) & (blue > 34) & (green < 42) & (red > green + 24) & (blue > green + 14) & (red + blue > green * 2 + 48)
-    return purple | dark_purple | magenta | dark_magenta
+    red, green, blue = _int16_rgb(array)
+    return any_purple_halo_mask_rgb(red, green, blue)
 
 
 def green_screen_spill_mask_array(array: Any) -> Any:
-    red = array[..., 0].astype(np.int16)
-    green = array[..., 1].astype(np.int16)
-    blue = array[..., 2].astype(np.int16)
-    return (green > 100) & (green > red * 1.35) & (green > blue * 1.35) & (green - np.maximum(red, blue) > 28)
+    red, green, blue = _int16_rgb(array)
+    return green_screen_spill_mask_rgb(red, green, blue)
 
 
 def source_key_spill_mask_array(array: Any, key: tuple[int, int, int]) -> Any:
-    red = array[..., 0].astype(np.int16)
-    green = array[..., 1].astype(np.int16)
-    blue = array[..., 2].astype(np.int16)
-    key_red, key_green, key_blue = key
-    if key_green > 220 and key_red < 40 and key_blue < 40:
-        saturated = (green > 90) & (green > red * 1.25) & (green > blue * 1.25) & (green - np.maximum(red, blue) > 22)
-        muted = (green >= 55) & (blue <= 32) & (green - blue >= 40) & (green - red >= 18)
-        return saturated | muted
-    if key_red > 220 and key_blue > 220 and key_green < 40:
-        return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= 36
-    if key_red > 220 and key_green < 40 and key_blue < 40:
-        return (red > 90) & (red > green * 1.25) & (red > blue * 1.25) & (red - np.maximum(green, blue) > 22)
-    if key_blue > 220 and key_red < 40 and key_green < 40:
-        return (blue > 90) & (blue > red * 1.25) & (blue > green * 1.25) & (blue - np.maximum(red, green) > 22)
-    return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= 36
+    red, green, blue = _int16_rgb(array)
+    return source_key_spill_mask(red, green, blue, key)
 
 
 def count_edge_color_numpy(image: Image.Image, mask_fn: Any, radius: int) -> int | None:

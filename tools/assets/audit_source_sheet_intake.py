@@ -24,7 +24,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.assets.atomic_io import write_json_atomic, write_text_atomic
-from tools.assets.chroma_key_alpha import is_exact_key_like, is_key_fringe_like, is_purple_halo_like
+from tools.assets.chroma_key_alpha import (
+    is_exact_key_like,
+    is_key_fringe_like,
+    is_purple_halo_like,
+    key_fringe_mask_rgb,
+    purple_halo_only_mask_rgb,
+)
 
 
 DEFAULT_CANDIDATE_KEY_COLORS = "#00ff00,#00ffff,#ff00ff,#ffff00,#ff0000,#0000ff"
@@ -462,19 +468,15 @@ def local_border_connected_key_mask(crop: object, key: tuple[int, int, int], tol
 def key_fringe_mask(red: object, green: object, blue: object) -> object:
     if np is None:
         raise RuntimeError("numpy is required for key_fringe_mask")
-    red_i = red.astype(np.int16)
-    green_i = green.astype(np.int16)
-    blue_i = blue.astype(np.int16)
-    return (red_i > 115) & (blue_i > 120) & (green_i < 145) & (red_i + blue_i > 300) & (red_i + blue_i > green_i * 3)
+    return key_fringe_mask_rgb(red.astype(np.int16), green.astype(np.int16), blue.astype(np.int16))
 
 
 def purple_halo_mask(red: object, green: object, blue: object) -> object:
+    # Intentionally only the single purple-halo clause; intake does NOT use the
+    # 4-clause is_any_purple_halo_like combination that audit/edge-proof apply.
     if np is None:
         raise RuntimeError("numpy is required for purple_halo_mask")
-    red_i = red.astype(np.int16)
-    green_i = green.astype(np.int16)
-    blue_i = blue.astype(np.int16)
-    return (red_i > 75) & (blue_i > 75) & (green_i < 120) & (np.minimum(red_i, blue_i) - green_i > 20) & (red_i + blue_i > green_i * 2 + 80)
+    return purple_halo_only_mask_rgb(red.astype(np.int16), green.astype(np.int16), blue.astype(np.int16))
 
 
 def component_pixels_from_private_runs(array: object, component: dict[str, object], flat: object | None = None) -> object | None:
