@@ -157,7 +157,8 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 21. Audit generated UI review atlases before final-art claims:
     `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
     Add `--profile` when atlas audit feels slow so JSON/Markdown preserve audit
-    timing and stdout prints the slowest atlas group.
+    timing, the analysis engine (`numpy` fast path or portable `python`
+    fallback), and stdout prints the slowest atlas group.
     Record passing JSON in `expected_outputs.atlas_pack_audit`; final-art
     validation requires it. This catches missing packed assets, out-of-bounds
     rects, padded-rect overlaps, alias mismatches, metadata mismatches, and

@@ -113,6 +113,7 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertEqual(audit["verdict"], "pass")
             self.assertEqual(audit["atlases"][0]["transparent_nonzero_rgb_pixels"], 0)
             self.assertEqual(audit["atlases"][0]["outside_padded_visible_pixels"], 0)
+            self.assertIn(audit["atlases"][0]["analysis_engine"], {"numpy", "python"})
 
     def test_rejects_broken_extrusion_pixels(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -197,6 +198,7 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertIn("## Timing", markdown)
             self.assertIn("transparent_nonzero_rgb_pixels=0", markdown)
             self.assertIn("outside_padded_visible_pixels=0", markdown)
+            self.assertIn("analysis_engine=", markdown)
 
     def test_atomic_report_write_keeps_existing_text_on_failure(self):
         with tempfile.TemporaryDirectory() as tmp:

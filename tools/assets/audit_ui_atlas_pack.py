@@ -30,6 +30,10 @@ LABEL_LINE_GAP_Y = 2
 _LABEL_FONT: ImageFont.ImageFont | None = None
 
 
+def analysis_engine() -> str:
+    return "numpy" if np is not None else "python"
+
+
 def fail(message: str) -> None:
     raise SystemExit(f"error: {message}")
 
@@ -413,6 +417,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
             "alias_count": atlas_info.get("alias_count") if isinstance(atlas_info, dict) else None,
             "transparent_nonzero_rgb_pixels": transparent_nonzero_rgb_pixels,
             "outside_padded_visible_pixels": outside_padded_visible_pixels,
+            "analysis_engine": analysis_engine(),
         }
         if profile:
             atlas_report["timing_ms"] = {"total": round((perf_counter() - atlas_started) * 1000, 3)}
@@ -479,6 +484,7 @@ def main() -> None:
             detail += f", physical={physical}, aliases={aliases}"
         detail += f", transparent_nonzero_rgb_pixels={atlas.get('transparent_nonzero_rgb_pixels', '-')}"
         detail += f", outside_padded_visible_pixels={atlas.get('outside_padded_visible_pixels', '-')}"
+        detail += f", analysis_engine={atlas.get('analysis_engine', '-')}"
         lines.append(f"- {atlas['status'].upper()} `{atlas.get('pack_group')}` {detail}{suffix}")
     lines.append("")
     if args.report:

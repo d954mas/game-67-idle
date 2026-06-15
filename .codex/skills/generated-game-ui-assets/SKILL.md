@@ -217,6 +217,7 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
     - review atlas audit:
       `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
       Add `--profile` when atlas audit feels slow; it writes audit timing and
+      analysis engine (`numpy` fast path or portable `python` fallback), and
       prints the slowest atlas group. For labeled review atlases this audit must
       write JSON/Markdown reports atomically through temp-file replace, and must
       also prove the labeled preview exists, label text matches the asset id
