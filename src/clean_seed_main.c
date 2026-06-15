@@ -73,14 +73,41 @@ typedef enum {
   CORRAL_PHASE_WIN,          /* soft "you did it!" milestone, then endless */
 } corral_phase_t;
 
+/* ---- Critter behavior variety (the depth that makes herding a decision) ----
+ * Each type forces a DIFFERENT herding read without precision/twitch demands:
+ *   NORMAL   — herds toward the lure (the teachable default; early waves).
+ *   SKITTISH — briefly FLEES when the lure gets very close, then can be herded;
+ *              rewards approaching gently (DON'T crowd it). Tell: lighter,
+ *              smaller, jittery micro-motion + wide darting eyes.
+ *   STUBBORN — steers toward the lure only slowly (high inertia); needs
+ *              SUSTAINED luring (commit longer). Tell: bigger, darker outline,
+ *              slow blink, slower.
+ *   FOLLOWER — weakly attracted to OTHER critters (clings to clumps, even other
+ *              colors), so it drifts with the crowd and resists being separated
+ *              (BREAK UP clumps). Tell: a soft link cue toward its nearest
+ *              neighbour. */
+typedef enum {
+  CORRAL_BEHAVIOR_NORMAL = 0,
+  CORRAL_BEHAVIOR_SKITTISH,
+  CORRAL_BEHAVIOR_STUBBORN,
+  CORRAL_BEHAVIOR_FOLLOWER,
+  CORRAL_BEHAVIOR_COUNT,
+} corral_behavior_t;
+
 typedef struct Critter {
   float x, y;
   float vx, vy;
-  float wander;  /* current wander heading (radians) */
-  float squash;  /* capture squash timer (seconds remaining) */
-  uint8_t color; /* index into CORRAL_COLORS */
-  bool alive;    /* still loose on the field */
-  bool parked;   /* captured and resting in a pen */
+  float wander;          /* current wander heading (radians) */
+  float squash;          /* capture squash timer (seconds remaining) */
+  float flee;            /* SKITTISH: flee-burst timer (seconds remaining) */
+  float jitter;          /* SKITTISH: free-running phase for nervous shimmer */
+  float blink;           /* STUBBORN: slow blink phase (free-running) */
+  float link_x, link_y;  /* FOLLOWER: smoothed nearest-neighbour point (tell) */
+  bool has_link;         /* FOLLOWER: a neighbour was found this frame */
+  uint8_t color;         /* index into CORRAL_COLORS */
+  uint8_t behavior;      /* corral_behavior_t */
+  bool alive;            /* still loose on the field */
+  bool parked;           /* captured and resting in a pen */
   int8_t parked_pen;
 } Critter;
 
@@ -275,6 +302,91 @@ static float wave_wander_scale(int wave) {
   return clampf(s, 1.0F, 1.6F);
 }
 
+/* ---- Progressive behavior introduction (calm escalation via VARIETY) ----
+ * Identity = CALM: escalate by adding a new herding READ, never by unfair
+ * difficulty. Behaviors unlock one at a time over successive waves and each
+ * stays a capped MINORITY so most critters remain the teachable default. The
+ * proportion is the difficulty knob — bounded so the field never turns hostile.
+ *
+ * Unlock schedule (when a behavior may appear at all):
+ *   waves 1-2  : NORMAL only            (FTUE + first waves stay teachable)
+ *   wave  3+   : + SKITTISH
+ *   wave  5+   : + STUBBORN
+ *   wave  7+   : + FOLLOWER
+ * Caps grow slowly with the wave but each behavior is held to a fair share, so
+ * a wave is, e.g., "mostly normal with a few skittish", never "all skittish". */
+static bool behavior_unlocked(int wave, corral_behavior_t b) {
+  switch (b) {
+  case CORRAL_BEHAVIOR_SKITTISH:
+    return wave >= 3;
+  case CORRAL_BEHAVIOR_STUBBORN:
+    return wave >= 5;
+  case CORRAL_BEHAVIOR_FOLLOWER:
+    return wave >= 7;
+  case CORRAL_BEHAVIOR_NORMAL:
+  case CORRAL_BEHAVIOR_COUNT:
+    break;
+  }
+  return true; /* NORMAL is always available */
+}
+
+/* Fraction (0..~0.4) of the wave allowed to be a given non-normal behavior.
+ * Ramps in gently from its unlock wave and is capped so it stays a minority. */
+static float behavior_cap_fraction(int wave, corral_behavior_t b) {
+  int unlock;
+  switch (b) {
+  case CORRAL_BEHAVIOR_SKITTISH:
+    unlock = 3;
+    break;
+  case CORRAL_BEHAVIOR_STUBBORN:
+    unlock = 5;
+    break;
+  case CORRAL_BEHAVIOR_FOLLOWER:
+    unlock = 7;
+    break;
+  default:
+    return 0.0F;
+  }
+  if (wave < unlock) {
+    return 0.0F;
+  }
+  /* start ~0.12 at unlock, +0.04 per wave after, capped at 0.34 so the sum of
+   * non-normal behaviors stays well under half the field (calm, not frantic). */
+  float f = 0.12F + 0.04F * (float)(wave - unlock);
+  return clampf(f, 0.0F, 0.34F);
+}
+
+/* Assign a behavior for critter slot `idx` of `count` this wave. The first
+ * critters of each color are NORMAL (so every color is always herdable the
+ * teachable way); the capped tail of the wave is sprinkled with unlocked
+ * behaviors. Deterministic via frand() so screenshots/playtests reproduce. */
+static corral_behavior_t pick_behavior(int wave, int idx, int count) {
+  /* keep the leading chunk of the wave fully normal for readability/FTUE. */
+  int normal_floor = count / 2; /* >= half the field is always plain NORMAL */
+  if (idx < normal_floor) {
+    return CORRAL_BEHAVIOR_NORMAL;
+  }
+  /* roll the unlocked behaviors against their caps, in unlock order. */
+  static const corral_behavior_t order[3] = {CORRAL_BEHAVIOR_SKITTISH,
+                                             CORRAL_BEHAVIOR_STUBBORN,
+                                             CORRAL_BEHAVIOR_FOLLOWER};
+  float r = frand();
+  float acc = 0.0F;
+  for (int k = 0; k < 3; ++k) {
+    corral_behavior_t b = order[k];
+    if (!behavior_unlocked(wave, b)) {
+      continue;
+    }
+    acc += behavior_cap_fraction(wave, b);
+    if (r < acc) {
+      return b;
+    }
+  }
+  return CORRAL_BEHAVIOR_NORMAL;
+}
+
+static int corral_behavior_loose_count(corral_behavior_t b);
+
 /* ---- Field / wave setup ---- */
 
 /* Lay out one pen per ACTIVE color around the field edges/corners, each with an
@@ -381,7 +493,15 @@ static void corral_spawn_wave(float w, float h) {
     c->vx = cosf(c->wander) * sp;
     c->vy = sinf(c->wander) * sp;
     c->squash = 0.0F;
+    c->flee = 0.0F;
+    c->jitter = frand_range(0.0F, 6.2831853F);
+    c->blink = frand_range(0.0F, 6.2831853F);
+    c->link_x = c->x;
+    c->link_y = c->y;
+    c->has_link = false;
     c->color = (uint8_t)(i % s_color_count);
+    /* progressive behavior variety: early waves normal, then a capped mix. */
+    c->behavior = (uint8_t)pick_behavior(s_wave, i, s_critter_count);
     c->alive = true;
     c->parked = false;
     c->parked_pen = -1;
@@ -465,6 +585,19 @@ static int corral_color_remaining(int color) {
   for (int i = 0; i < s_critter_count; ++i) {
     const Critter *c = &s_critters[i];
     if (c->alive && !c->parked && c->color == (uint8_t)color) {
+      ++n;
+    }
+  }
+  return n;
+}
+
+/* Count loose (alive, not parked) critters of a given behavior — drives the
+ * DevAPI behavior-mix report so a playtest can confirm progressive intro. */
+static int corral_behavior_loose_count(corral_behavior_t b) {
+  int n = 0;
+  for (int i = 0; i < s_critter_count; ++i) {
+    const Critter *c = &s_critters[i];
+    if (c->alive && !c->parked && c->behavior == (uint8_t)b) {
       ++n;
     }
   }
@@ -584,16 +717,39 @@ static void critter_update(float dt, float w, float h) {
     if (c->squash > 0.0F) {
       c->squash -= dt;
     }
+    /* free-running tells tick for every critter (even parked ones settle). */
+    c->jitter += dt * 11.0F;
+    c->blink += dt * 1.7F;
+    if (c->flee > 0.0F) {
+      c->flee -= dt;
+    }
     if (!c->alive || c->parked) {
       continue;
     }
 
-    /* --- random wander (smooth heading drift) --- */
-    c->wander += frand_range(-2.2F, 2.2F) * dt;
+    const corral_behavior_t bhv = (corral_behavior_t)c->behavior;
+
+    /* --- random wander (smooth heading drift) ---
+     * SKITTISH wanders a touch more nervously; STUBBORN a touch less. */
+    float wander_amp = (bhv == CORRAL_BEHAVIOR_SKITTISH)  ? 3.0F
+                       : (bhv == CORRAL_BEHAVIOR_STUBBORN) ? 1.4F
+                                                           : 2.2F;
+    c->wander += frand_range(-wander_amp, wander_amp) * dt;
     float ax = cosf(c->wander) * 22.0F;
     float ay = sinf(c->wander) * 22.0F;
 
-    /* --- separation: push off close neighbors so they don't overlap --- */
+    /* --- separation + (FOLLOWER) cohesion to the crowd ---
+     * One neighbour pass does double duty: push off close neighbours so they
+     * don't overlap, and for FOLLOWERs accumulate a clump centre + remember the
+     * nearest neighbour (for the visual "looking at neighbour" link tell). */
+    float clump_x = 0.0F;
+    float clump_y = 0.0F;
+    int clump_n = 0;
+    float near_d2 = 1.0e18F;
+    float near_x = c->x;
+    float near_y = c->y;
+    const bool is_follower = (bhv == CORRAL_BEHAVIOR_FOLLOWER);
+    const float clump_range = 130.0F; /* followers sense this far for the crowd */
     for (int j = 0; j < s_critter_count; ++j) {
       if (j == i) {
         continue;
@@ -612,17 +768,71 @@ static void critter_update(float dt, float w, float h) {
         ax += (dx / d) * push * 120.0F;
         ay += (dy / d) * push * 120.0F;
       }
+      if (is_follower && d2 < clump_range * clump_range) {
+        /* clings to ANY neighbour (including other colors) -> drifts w/ crowd */
+        clump_x += o->x;
+        clump_y += o->y;
+        ++clump_n;
+        if (d2 < near_d2) {
+          near_d2 = d2;
+          near_x = o->x;
+          near_y = o->y;
+        }
+      }
     }
 
-    /* --- lure attraction (the one action) --- */
+    /* --- FOLLOWER cohesion: weak pull toward the local clump centre. Weaker
+     * than the lure so the player CAN still herd one, but a lone follower drifts
+     * back to the crowd — so the decision is "break up the clump first". --- */
+    c->has_link = false;
+    if (is_follower && clump_n > 0) {
+      float cxw = clump_x / (float)clump_n;
+      float cyw = clump_y / (float)clump_n;
+      float dx = cxw - c->x;
+      float dy = cyw - c->y;
+      float d = sqrtf(dx * dx + dy * dy);
+      if (d > 1.0F) {
+        ax += (dx / d) * 60.0F; /* gentle cohesion (well under lure pull) */
+        ay += (dy / d) * 60.0F;
+      }
+      /* smooth the link point toward the nearest neighbour for a calm tell. */
+      c->link_x += (near_x - c->link_x) * clampf(dt * 8.0F, 0.0F, 1.0F);
+      c->link_y += (near_y - c->link_y) * clampf(dt * 8.0F, 0.0F, 1.0F);
+      c->has_link = true;
+    }
+
+    /* --- lure attraction (the one action), with per-behavior response ---
+     *   SKITTISH: if the lure crowds it (gets very close) it triggers a short
+     *             FLEE burst AWAY from the lure; outside that panic ring it
+     *             herds normally -> reward approaching gently / not crowding.
+     *   STUBBORN: only a fraction of the lure pull lands (high inertia) -> needs
+     *             sustained luring (commit longer).
+     *   FOLLOWER: herds normally to the lure, but the clump cohesion above
+     *             fights it -> break up the crowd first. */
     if (s_lure_active) {
       float dx = s_lure_x - c->x;
       float dy = s_lure_y - c->y;
       float d2 = dx * dx + dy * dy;
-      if (d2 < s_lure_radius * s_lure_radius && d2 > 1.0F) {
+      /* skittish panic ring: crowding it inside this radius spooks it. */
+      const float panic_r = 56.0F;
+      if (bhv == CORRAL_BEHAVIOR_SKITTISH && d2 < panic_r * panic_r &&
+          d2 > 1.0F) {
+        c->flee = 0.45F; /* short burst away, then it settles & can be herded */
+      }
+      if (c->flee > 0.0F && d2 > 1.0F) {
+        /* FLEE: push directly away from the lure (skittish only sets c->flee) */
+        float d = sqrtf(d2);
+        float panic = 170.0F * clampf(c->flee / 0.45F, 0.0F, 1.0F);
+        ax -= (dx / d) * panic;
+        ay -= (dy / d) * panic;
+      } else if (d2 < s_lure_radius * s_lure_radius && d2 > 1.0F) {
         float d = sqrtf(d2);
         float t = 1.0F - (d / s_lure_radius); /* stronger when closer */
         float pull = 140.0F * (0.4F + t);
+        /* stubborn resists steering: only part of the pull registers. */
+        if (bhv == CORRAL_BEHAVIOR_STUBBORN) {
+          pull *= 0.42F;
+        }
         ax += (dx / d) * pull;
         ay += (dy / d) * pull;
       }
@@ -644,11 +854,16 @@ static void critter_update(float dt, float w, float h) {
       }
     }
 
-    /* integrate velocity, clamp speed (gentle) */
-    c->vx += ax * dt;
-    c->vy += ay * dt;
+    /* integrate velocity, clamp speed (gentle), per-behavior feel:
+     *   STUBBORN: high inertia -> accel damped + lower top speed (slow, heavy).
+     *   SKITTISH: light/fast -> a slightly higher top speed for darty bursts. */
+    float accel_scale = (bhv == CORRAL_BEHAVIOR_STUBBORN) ? 0.55F : 1.0F;
+    c->vx += ax * dt * accel_scale;
+    c->vy += ay * dt * accel_scale;
     float speed = sqrtf(c->vx * c->vx + c->vy * c->vy);
-    float max_speed = 130.0F;
+    float max_speed = (bhv == CORRAL_BEHAVIOR_STUBBORN)  ? 95.0F
+                      : (bhv == CORRAL_BEHAVIOR_SKITTISH) ? 155.0F
+                                                          : 130.0F;
     if (speed > max_speed) {
       c->vx = c->vx / speed * max_speed;
       c->vy = c->vy / speed * max_speed;
@@ -742,7 +957,29 @@ static uint32_t critter_tint(int color) {
 }
 
 static void draw_critter_sprite(const Critter *c) {
-  const float base = 46.0F; /* on-screen diameter of a critter (bolder) */
+  const corral_behavior_t bhv = (corral_behavior_t)c->behavior;
+
+  /* Per-behavior READABLE tell (size + tint + motion), all on the sprite
+   * renderer (alpha) reusing existing regions + transform/color:
+   *   SKITTISH — lighter + smaller + nervous jitter (and a flee-flash).
+   *   STUBBORN — bigger + darker, framed by a dark outline ring (slow blink).
+   *   FOLLOWER — normal size + a soft link dot toward its nearest neighbour. */
+  float base = 46.0F; /* on-screen diameter of a critter (bolder) */
+  float jx = 0.0F;
+  float jy = 0.0F;
+  float tint_mul = 1.0F; /* >1 lightens (skittish), <1 darkens (stubborn) */
+  if (bhv == CORRAL_BEHAVIOR_SKITTISH) {
+    base = 40.0F;          /* lighter/smaller silhouette */
+    tint_mul = 1.18F;      /* paler, "nervous" */
+    /* jittery micro-motion (free-running), spiking while actually fleeing. */
+    float jamp = 1.4F + 6.0F * clampf(c->flee / 0.45F, 0.0F, 1.0F);
+    jx = sinf(c->jitter) * jamp;
+    jy = cosf(c->jitter * 1.3F) * jamp;
+  } else if (bhv == CORRAL_BEHAVIOR_STUBBORN) {
+    base = 54.0F;     /* bigger/heavier look */
+    tint_mul = 0.82F; /* darker body */
+  }
+
   /* squash: brief vertical squish on capture (scale the world transform) */
   float sx = 1.0F;
   float sy = 1.0F;
@@ -752,12 +989,62 @@ static void draw_critter_sprite(const Critter *c) {
     sx = 1.0F + s;        /* widen */
     sy = 1.0F - s * 0.7F; /* squish */
   }
+
+  float dx = c->x + jx;
+  float dy = c->y + jy;
+
+  /* FOLLOWER: a soft link line of dots toward the nearest neighbour — the
+   * "clinging to the crowd" tell. Drawn under the body so it reads as a leash. */
+  if (bhv == CORRAL_BEHAVIOR_FOLLOWER && c->has_link) {
+    for (int k = 1; k <= 3; ++k) {
+      float t = (float)k / 4.0F;
+      float lx = c->x + (c->link_x - c->x) * t;
+      float ly = c->y + (c->link_y - c->y) * t;
+      float a = 0.42F * (1.0F - t); /* fade toward the neighbour */
+      emit_sprite(CORRAL_RGN_SPARK, lx, ly, 12.0F, 12.0F,
+                  pack_white_alpha(a));
+    }
+  }
+
   /* soft ground shadow under the critter (pop against the calmed grass) */
-  emit_sprite(CORRAL_RGN_SPARK, c->x, c->y + base * 0.36F, base * 1.0F,
+  emit_sprite(CORRAL_RGN_SPARK, dx, dy + base * 0.36F, base * 1.0F,
               base * 0.46F, 0x66000000U /* AABBGGRR: dark, low alpha */);
-  /* one neutral critter sprite, tinted per color -> up to 5 distinct hues. */
-  emit_sprite(CORRAL_RGN_CRITTER, c->x, c->y, base * sx, base * sy,
-              critter_tint(c->color));
+
+  /* STUBBORN: a dark outline ring just behind the (larger) body = heavy look. */
+  if (bhv == CORRAL_BEHAVIOR_STUBBORN) {
+    emit_sprite(CORRAL_RGN_CRITTER, dx, dy, base * sx + 8.0F, base * sy + 8.0F,
+                0xCC101014U /* dark, framing outline */);
+  }
+
+  /* body tint = the color hue, lightened/darkened by behavior for the tell. */
+  const float *col = CORRAL_COLORS[c->color];
+  float body[4] = {clampf(col[0] * 1.05F * tint_mul, 0.0F, 1.0F),
+                   clampf(col[1] * 1.05F * tint_mul, 0.0F, 1.0F),
+                   clampf(col[2] * 1.05F * tint_mul, 0.0F, 1.0F), 1.0F};
+  emit_sprite(CORRAL_RGN_CRITTER, dx, dy, base * sx, base * sy, pack_rgba(body));
+
+  /* SKITTISH: wide, quick-darting eyes — two small bright pips that flick
+   * side-to-side (and widen while fleeing) for a clear "nervous" read. */
+  if (bhv == CORRAL_BEHAVIOR_SKITTISH) {
+    float dart = sinf(c->jitter * 0.7F) * (2.5F + base * 0.05F);
+    float eye = 7.0F + 3.0F * clampf(c->flee / 0.45F, 0.0F, 1.0F);
+    float ex = base * 0.20F;
+    float ey = -base * 0.10F;
+    emit_sprite(CORRAL_RGN_PIP, dx - ex + dart, dy + ey, eye, eye,
+                0xFFFFFFFFU);
+    emit_sprite(CORRAL_RGN_PIP, dx + ex + dart, dy + ey, eye, eye,
+                0xFFFFFFFFU);
+  } else if (bhv == CORRAL_BEHAVIOR_STUBBORN) {
+    /* STUBBORN: a slow blink — a dark lid pip that periodically covers a small
+     * sleepy eye, reinforcing the heavy/low-energy read. */
+    float blink = 0.5F + 0.5F * sinf(c->blink);
+    float lid = (blink > 0.78F) ? 1.0F : 0.0F; /* mostly open, slow closes */
+    float eye = 6.0F;
+    if (lid < 0.5F) {
+      emit_sprite(CORRAL_RGN_PIP, dx, dy - base * 0.06F, eye, eye,
+                  0xFF202024U /* sleepy dark eye */);
+    }
+  }
 }
 
 static void draw_pen_sprite(const Pen *pen) {
@@ -1180,6 +1467,19 @@ static cJSON *state_json(void) {
                          cJSON_CreateNumber(corral_color_remaining(i)));
     cJSON_AddItemToArray(penned, cJSON_CreateNumber(s_pens[i].parked));
   }
+
+  /* Behavior mix of LOOSE critters — lets a playtest confirm the progressive
+   * introduction (normal-only early -> skittish -> stubborn -> follower). */
+  cJSON *behaviors = cJSON_AddObjectToObject(root, "loose_by_behavior");
+  cJSON_AddNumberToObject(behaviors, "normal",
+                          corral_behavior_loose_count(CORRAL_BEHAVIOR_NORMAL));
+  cJSON_AddNumberToObject(behaviors, "skittish",
+                          corral_behavior_loose_count(CORRAL_BEHAVIOR_SKITTISH));
+  cJSON_AddNumberToObject(behaviors, "stubborn",
+                          corral_behavior_loose_count(CORRAL_BEHAVIOR_STUBBORN));
+  cJSON_AddNumberToObject(behaviors, "follower",
+                          corral_behavior_loose_count(CORRAL_BEHAVIOR_FOLLOWER));
+
   cJSON_AddBoolToObject(root, "wave_cleared",
                         corral_loose_count() == 0 && s_critter_count > 0);
   return root;
