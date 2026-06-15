@@ -938,6 +938,19 @@ test("final-art mode rejects atlas metadata audit for another runtime manifest",
   assert.match(result.stdout, /expected_outputs.atlas_metadata_audit JSON asset_manifest must match expected_outputs.runtime_manifest/);
 });
 
+test("final-art mode rejects atlas metadata audit missing a runtime asset id", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const audit = "gamedesign/projects/test/reviews/ui-kit-atlas-metadata-audit.json";
+  writeAuditReport(dir, audit, "game.atlas_metadata_audit", "pass", [], {
+    assets: [{ id: "panel" }, { id: "resource_icon" }],
+  });
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.atlas_metadata_audit JSON missing audited crop id enemy/);
+});
+
 test("final-art mode rejects atlas pack for another runtime manifest", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);

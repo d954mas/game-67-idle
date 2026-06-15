@@ -1015,9 +1015,11 @@ function validateJob(job, jobPath, options = {}) {
     if (hasText(source.path)) expectedSourcePaths.add(normalizePathForCompare(source.path));
   }
   const expectedCropIds = collectCropIds(crop);
+  const runtimeAssetIds = collectRuntimeAssetIds(runtime);
   const slice9CropIds = collectCropIds(crop, new Set(["slice9"]));
   const slice9RuntimeIds = collectRuntimeAssetIds(runtime, new Set(["slice9"]));
   const compositionSlice9Ids = slice9RuntimeIds.size > 0 ? slice9RuntimeIds : slice9CropIds;
+  const atlasMetadataIds = runtimeAssetIds.size > 0 ? runtimeAssetIds : expectedCropIds;
   const sourceDerivationCropIds = collectCropIds(crop, new Set(["slice9", "border", "tile", "sprite"]));
   const expectedCropOutputs = collectCropOutputs(crop);
 
@@ -1079,7 +1081,7 @@ function validateJob(job, jobPath, options = {}) {
         true,
         {
           assetManifest: job.expected_outputs?.runtime_manifest,
-          assetIds: expectedCropIds,
+          assetIds: atlasMetadataIds,
         }
       );
     }
