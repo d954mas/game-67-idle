@@ -116,8 +116,20 @@ standing footprint small so the agent compacts less:
   raw listing.
 - Use `cli.mjs summary`/`context` (compact) instead of full `list`/`STATUS`
   reads; use `--verbose` profiler/validator output only when debugging those.
-- Delegate broad multi-file investigation to a subagent and keep only its
-  conclusion; do not read across many files in the main context.
+- Delegate broad multi-file investigation, audits, and log/transcript parsing to
+  a subagent with a return contract: it returns a compact conclusion (a short
+  summary + decisions/evidence pointers, target a few hundred to ~2k tokens),
+  never the raw file trail. Keeping the raw trail out of the main window is the
+  single highest-ROI context move.
+- Model tiering: spawn search/exploration/audit subagents on a cheaper, faster
+  model (e.g. Haiku) and keep judgment/synthesis on the main model. Pass the
+  `model` arg when spawning; it cuts cost without hurting lookup-shaped tasks.
+- Protect prompt caching: keep the stable preamble (`AGENTS.md`/`CLAUDE.md`, tool
+  and skill definitions) byte-stable within a session; avoid churny mid-context
+  rewrites of those that bust the cache breakpoint. Keep each skill's frontmatter
+  `description` trigger precise so progressive disclosure loads a skill body only
+  when it actually applies (a vague trigger silently loads context you did not
+  need).
 - For long autonomous work, rely on durable state (task files, commits,
   `STATUS.md`) so a compaction can resume cleanly without re-reading history.
 - At prototype close (or when `tmp/` grows large), clear disposable scratch with
