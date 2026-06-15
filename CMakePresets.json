@@ -29,6 +29,15 @@
             }
         },
         {
+            "name": "native-debug-closed-prototypes",
+            "displayName": "Native Debug (Closed Prototypes)",
+            "inherits": "native-debug",
+            "binaryDir": "${sourceDir}/build/_cmake/native-debug-closed-prototypes",
+            "cacheVariables": {
+                "GAME_CLOSED_PROTOTYPES_ENABLED": "ON"
+            }
+        },
+        {
             "name": "wasm-debug",
             "displayName": "WASM Debug",
             "generator": "Ninja",
@@ -116,6 +125,12 @@
             "name": "native-release",
             "displayName": "Build native release",
             "configurePreset": "native-release",
+            "targets": ["game_seed"]
+        },
+        {
+            "name": "native-debug-closed-prototypes",
+            "displayName": "Build native debug closed prototypes",
+            "configurePreset": "native-debug-closed-prototypes",
             "targets": ["game_seed"]
         },
         {

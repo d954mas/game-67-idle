@@ -34,6 +34,7 @@ const COPY = [
   "tools/ai.test.mjs",
   "tools/skills_eval.mjs",
   "tools/pipeline_validate.mjs",
+  "tools/pipeline_validate.test.mjs",
   "tools/skills_sync.mjs",
   "tools/ai_profile",
   "tools/assets/new_art_job.mjs",
@@ -173,7 +174,7 @@ Source: \`tasks/README.md\`.
 
 \`\`\`powershell
 node tools/taskboard/cli.mjs summary
-node tools/pipeline_validate.mjs
+node tools/pipeline_validate.mjs --full
 \`\`\`
 
 Sources: \`tasks/README.md\`, \`AI_PIPELINE.md\`.

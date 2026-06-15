@@ -17,7 +17,12 @@ and runtime proof.
 ## Workflow
 
 1. Read local project rules and the active design docs before generating art.
-2. Identify the accepted visual target: references, fake shots, art bible,
+2. Write a 5-line visual session contract before coding or integrating art:
+   goal, non-goal, proof, stop condition, and likely files. The proof must name
+   a native screenshot/product gate/art audit. The stop condition must say that
+   product gate fail or lead rejection freezes feature/content expansion unless
+   the lead accepts the debt.
+3. Identify the accepted visual target: references, fake shots, art bible,
    lineup, or screenshots. If none exists, create one visual target first.
    If the target is a named reference, require a reference deconstruction with
    screenshots/video frames, screen grammar, visual composition, reward/UI
@@ -54,7 +59,12 @@ and runtime proof.
    native mismatch captures, but final reference-driven art generation or
    integration stays locked until the Reference Digest, mismatch audit,
    borrow/avoid/copy-risk, and next native proof exist.
-3. For multi-asset work, create or update an art request packet/art job before
+4. Before visual runtime changes, compare the current native screenshot or
+   capture plan against the accepted target and write a mismatch list. After
+   every meaningful render change, capture a new native screenshot, update the
+   mismatch list, and run or record the product-read gate verdict before adding
+   more features/content.
+5. For multi-asset work, create or update an art request packet/art job before
    generation. If no packet exists, scaffold one with
    `tools/assets/new_art_job.mjs`. Record intended use, reusable kind
    (`sprite`, `slice9`, `icon`, `tile`, `border`, `background`,
@@ -65,28 +75,28 @@ and runtime proof.
    sheet, isolated icon sheet, map/world layer sheet, and sprite/FX sheet.
    The job must pass `node tools/assets/validate_art_job.mjs --job <job>`
    in draft mode before final generation.
-4. State the runtime harness separately from the visual source of truth.
+6. State the runtime harness separately from the visual source of truth.
    Visual work may use generated images, but playable validation follows the
    project's primary runtime rules.
-5. Produce visual assets before polishing placeholder render code when the user
+7. Produce visual assets before polishing placeholder render code when the user
    asks for beautiful, final, generated, release-quality, or child-testable
    visuals.
-6. Save project-bound generated assets into durable project folders, not only
+8. Save project-bound generated assets into durable project folders, not only
    temp or default generator output paths.
-7. Inspect generated outputs before integration. Reject assets with unreadable
+9. Inspect generated outputs before integration. Reject assets with unreadable
    text, wrong subject, weak silhouettes, random logos, watermarks, or style
    drift.
    Reject procedural/programmer-art fallbacks as final generated art. They may
    unblock geometry tests, but they do not satisfy a visual-generation task
    unless the lead explicitly accepts a recorded exception.
-8. Create or update a small runtime asset checklist: which generated assets are
+10. Create or update a small runtime asset checklist: which generated assets are
    source art, which are cropped/packed runtime assets, and which screen uses
    them.
-9. Integrate the smallest asset path that proves the real visual direction in
+11. Integrate the smallest asset path that proves the real visual direction in
    the primary runtime.
-10. Validate with screenshots from the primary runtime and compare against the
+12. Validate with screenshots from the primary runtime and compare against the
     accepted visual target.
-11. If the lead rejects the current visuals as ugly, unclear, toy-like,
+13. If the lead rejects the current visuals as ugly, unclear, toy-like,
     debug-looking, or not product-quality, freeze feature expansion. Create a
     short visual/product failure report, a rescue task, and the next screenshot
     proof before writing more gameplay content.
@@ -141,6 +151,9 @@ release-quality, or child-testable game work:
   generated/runtime assets are being prepared.
 - If the current screenshot looks like tooling rather than a game, generate or
   improve the art/UI source assets first, then integrate them.
+- The first visual pass starts with screenshot-vs-target mismatch, not code
+  polish. Do not claim progress from technical changes unless the new native
+  screenshot closes a named mismatch.
 - The main gameplay screenshot must communicate the core action without the
   agent explaining it.
 - If the screenshot cannot pass the player-read questions (where am I, what do
@@ -148,7 +161,15 @@ release-quality, or child-testable game work:
   do not call visual work done and do not continue adding content. When
   available, create the durable gate with `node tools/product_gate/review.mjs`
   or `node tools/ai.mjs gate`, then use `node tools/ai.mjs close-slice` for
-  handoff evidence.
+  handoff evidence. For beautiful, casual, generated-UI, fake-shot, or
+  child-testable prototype work, use `--visual-strict` and score all six axes:
+  `composition`, `readability`, `ui_controls`, `action_direction`,
+  `art_quality`, and `audience_fit`. A pass needs every score at least 4/5 and
+  no blocker/major visual issue; otherwise record a fail with concrete
+  `--visual-issue` entries and freeze feature/content expansion.
+  When a separate design/UI critic pass would help, first generate a reusable
+  critic packet with `node tools/ai.mjs critic`; use the packet as the critic
+  prompt and convert the findings into the strict product gate.
 
 ## Reusable UI Gate
 
@@ -254,6 +275,9 @@ Before calling visual work done, check:
 - locked/unlocked/progress/affordable states are visually distinct;
 - the screenshot has no incoherent overlap or cropped important content;
 - native/runtime evidence exists for playable screens, not only source art.
+- screenshot-vs-target mismatches are updated after the latest render change.
+- strict visual product gates use the six-axis rubric and record blocker/major
+  issues instead of relying on generic "looks better" claims.
 
 ## Report Shape
 

@@ -1,7 +1,7 @@
 ---
 id: T0008
 title: Generated visual direction and UI art pipeline for fishing
-status: review
+status: done
 epic: E002
 priority: P0
 tags: [visuals, ui, generated-art, assets, profiling]
@@ -19,7 +19,7 @@ flat mockup.
 
 - [x] Art bible defines palette, materials, silhouettes, UI shape language, and
       no-go motifs.
-- [ ] One fake gameplay shot is generated or assembled and reviewed by the
+- [x] One fake gameplay shot is generated or assembled and reviewed by the
       lead before expanding.
 - [x] Runtime asset checklist separates source art, cropped/runtime assets,
       UI bases, icons, fish/cards, and world assets.
@@ -43,3 +43,7 @@ flat mockup.
   `assets/runtime/roblox-fishing-ui-v1/` and wired it into the native prototype.
   This is accepted as first proof only; final UI kit still needs cleaner source
   separation and crop validation.
+- 2026-06-15: Lead review completed through the fishing prototype test. The
+  fake shot remains useful as target/evidence, but the fishing game is now
+  closed and no final UI kit pass will be pursued for Splash Rods.
+- 2026-06-15: Closed with fishing test iteration; generated visual direction and partial UI pipeline evidence retained for E003 pipeline review.

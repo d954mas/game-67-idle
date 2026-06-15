@@ -253,6 +253,51 @@ test("gate forwards product-read review options", () => {
   }
 });
 
+test("critic forwards visual critique packet options", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    const output = join(dir, "critic.md");
+    const json = join(dir, "critic.json");
+    writeFileSync(screenshot, "png", "utf8");
+
+    const result = run([
+      "critic",
+      "--project", "rune-marches",
+      "--task", "T0006",
+      "--surface", "desktop",
+      "--screenshot", screenshot,
+      "--target", "gamedesign/projects/rune-marches/art/fake.png",
+      "--brief", "Bright casual screen with readable controls.",
+      "--output", output,
+      "--json-output", json,
+    ]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Visual Critic Packet/);
+    assert.equal(existsSync(output), true);
+    const packet = readJson(json);
+    assert.equal(packet.schema, "game.visual_critique_packet");
+    assert.match(packet.gate_command, /--visual-strict/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validate accepts file-only planning", () => {
+  const result = run([
+    "validate",
+    "--file",
+    "tools/game_context/new_prototype.mjs",
+    "--dry-run",
+  ]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Changes: game-context/);
+  assert.match(result.stdout, /game-context-tests/);
+  assert.match(result.stdout, /dry run/);
+});
+
 test("close-slice forwards product gate closeout options", () => {
   const dir = tempDir();
   try {

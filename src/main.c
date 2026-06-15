@@ -4,8 +4,9 @@
 #include "game_audio.h"
 #include "game_state_actions.h"
 #include "game_storage.h"
-#include "generated/game_state.h"
+#include "game_state.h"
 #include "generated/roblox_fishing_models.h"
+#include "generated/roblox_fishing_ui_assets.gen.h"
 #include "generated/rune_marches_assets.gen.h"
 #include "drawable_comp/nt_drawable_comp.h"
 #include "entity/nt_entity.h"
@@ -180,6 +181,7 @@ static struct RuneTextureRenderer {
     nt_pipeline_t pipeline;
     nt_buffer_t vbo;
     nt_texture_t textures[RUNE_ASSET_COUNT];
+    nt_texture_t fishing_textures[FISHING_ASSET_COUNT];
     float vp[16];
     bool initialized;
 } s_rune_tex;
@@ -260,6 +262,20 @@ static void rune_textures_create_gpu(void) {
             .label = asset->id,
         });
     }
+    for (int i = 0; i < FISHING_ASSET_COUNT; ++i) {
+        const FishingAssetImage *asset = &g_fishing_assets[i];
+        s_rune_tex.fishing_textures[i] = nt_gfx_make_texture(&(nt_texture_desc_t){
+            .width = asset->width,
+            .height = asset->height,
+            .data = asset->rgba,
+            .format = NT_PIXEL_RGBA8,
+            .min_filter = NT_FILTER_LINEAR,
+            .mag_filter = NT_FILTER_LINEAR,
+            .wrap_u = NT_WRAP_CLAMP_TO_EDGE,
+            .wrap_v = NT_WRAP_CLAMP_TO_EDGE,
+            .label = asset->id,
+        });
+    }
 }
 
 static void rune_textures_init(void) {
@@ -277,6 +293,11 @@ static void rune_textures_shutdown(void) {
     for (int i = 0; i < RUNE_ASSET_COUNT; ++i) {
         if (s_rune_tex.textures[i].id != 0) {
             nt_gfx_destroy_texture(s_rune_tex.textures[i]);
+        }
+    }
+    for (int i = 0; i < FISHING_ASSET_COUNT; ++i) {
+        if (s_rune_tex.fishing_textures[i].id != 0) {
+            nt_gfx_destroy_texture(s_rune_tex.fishing_textures[i]);
         }
     }
     if (s_rune_tex.vbo.id != 0) {
@@ -541,6 +562,7 @@ static void rune_textures_restore_gpu(void) {
     memset(&s_rune_tex.pipeline, 0, sizeof(s_rune_tex.pipeline));
     memset(&s_rune_tex.vbo, 0, sizeof(s_rune_tex.vbo));
     memset(s_rune_tex.textures, 0, sizeof(s_rune_tex.textures));
+    memset(s_rune_tex.fishing_textures, 0, sizeof(s_rune_tex.fishing_textures));
     rune_textures_create_gpu();
 }
 
@@ -577,6 +599,35 @@ static void rune_asset(RuneAssetId id, float x, float y, float w, float h, const
     rune_asset_region(id, x, y, w, h, 0.0F, 0.0F, 1.0F, 1.0F, color);
 }
 
+static void fishing_asset_region(FishingAssetId id, float x, float y, float w, float h, float u0, float v0, float u1, float v1, const float color[4]) {
+    if (!s_rune_tex.initialized || id < 0 || id >= FISHING_ASSET_COUNT || s_rune_tex.pipeline.id == 0 || s_rune_tex.vbo.id == 0 || s_rune_tex.fishing_textures[id].id == 0) {
+        return;
+    }
+    const float r = color ? color[0] : 1.0F;
+    const float g = color ? color[1] : 1.0F;
+    const float b = color ? color[2] : 1.0F;
+    const float a = color ? color[3] : 1.0F;
+    const RuneTexVertex vertices[6] = {
+        {{x, y}, {u0, v0}, {r, g, b, a}},
+        {{x + w, y}, {u1, v0}, {r, g, b, a}},
+        {{x + w, y + h}, {u1, v1}, {r, g, b, a}},
+        {{x + w, y + h}, {u1, v1}, {r, g, b, a}},
+        {{x, y + h}, {u0, v1}, {r, g, b, a}},
+        {{x, y}, {u0, v0}, {r, g, b, a}},
+    };
+    nt_gfx_orphan_buffer(s_rune_tex.vbo, vertices, sizeof(vertices));
+    nt_gfx_bind_pipeline(s_rune_tex.pipeline);
+    nt_gfx_bind_vertex_buffer(s_rune_tex.vbo);
+    nt_gfx_bind_texture(s_rune_tex.fishing_textures[id], 0);
+    nt_gfx_set_uniform_mat4("u_vp", s_rune_tex.vp);
+    nt_gfx_set_uniform_int("u_tex0", 0);
+    nt_gfx_draw(0, 6);
+}
+
+static void fishing_asset(FishingAssetId id, float x, float y, float w, float h, const float color[4]) {
+    fishing_asset_region(id, x, y, w, h, 0.0F, 0.0F, 1.0F, 1.0F, color);
+}
+
 static void rune_asset_slice9(RuneAssetId id, float x, float y, float w, float h, float left, float top, float right, float bottom, const float color[4]) {
     if (id < 0 || id >= RUNE_ASSET_COUNT || w <= 0.0F || h <= 0.0F) {
         return;
@@ -607,6 +658,41 @@ static void rune_asset_slice9(RuneAssetId id, float x, float y, float w, float h
             const float rh = dy[row + 1] - dy[row];
             if (rw > 0.0F && rh > 0.0F) {
                 rune_asset_region(id, dx[col], dy[row], rw, rh, du[col], dv[row], du[col + 1], dv[row + 1], color);
+            }
+        }
+    }
+}
+
+static void fishing_asset_slice9(FishingAssetId id, float x, float y, float w, float h, float left, float top, float right, float bottom, const float color[4]) {
+    if (id < 0 || id >= FISHING_ASSET_COUNT || w <= 0.0F || h <= 0.0F) {
+        return;
+    }
+    const FishingAssetImage *asset = &g_fishing_assets[id];
+    if (asset->width == 0 || asset->height == 0) {
+        return;
+    }
+    if (left + right > w && left + right > 0.0F) {
+        const float scale = w / (left + right);
+        left *= scale;
+        right *= scale;
+    }
+    if (top + bottom > h && top + bottom > 0.0F) {
+        const float scale = h / (top + bottom);
+        top *= scale;
+        bottom *= scale;
+    }
+    const float src_w = (float)asset->width;
+    const float src_h = (float)asset->height;
+    const float dx[4] = {x, x + left, x + w - right, x + w};
+    const float dy[4] = {y, y + top, y + h - bottom, y + h};
+    const float du[4] = {0.0F, left / src_w, (src_w - right) / src_w, 1.0F};
+    const float dv[4] = {0.0F, top / src_h, (src_h - bottom) / src_h, 1.0F};
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            const float rw = dx[col + 1] - dx[col];
+            const float rh = dy[row + 1] - dy[row];
+            if (rw > 0.0F && rh > 0.0F) {
+                fishing_asset_region(id, dx[col], dy[row], rw, rh, du[col], dv[row], du[col + 1], dv[row + 1], color);
             }
         }
     }
@@ -1293,14 +1379,14 @@ static void draw_fishing_world_3d(float w, float h) {
     draw_fishing_mesh_props((const float *)view, (const float *)proj, (const float *)vp, (float[3]){cam_pos[0], cam_pos[1], cam_pos[2]});
 }
 
-static void fishing_button(UiBox box, RuneAssetId asset, const char *label, bool enabled, float scale) {
+static void fishing_button(UiBox box, FishingAssetId asset, const char *label, bool enabled, float scale) {
     const float text_col[4] = {1.0F, 1.0F, 0.94F, enabled ? 1.0F : 0.52F};
     const float r = box.h * 0.42F;
     rect(box.x + r, box.y + 6.0F, box.w - r * 2.0F, box.h - 12.0F, (float[4]){0.02F, 0.08F, 0.14F, 0.38F});
     circle(box.x + r, box.y + box.h * 0.5F + 4.0F, r, (float[4]){0.02F, 0.08F, 0.14F, 0.38F});
     circle(box.x + box.w - r, box.y + box.h * 0.5F + 4.0F, r, (float[4]){0.02F, 0.08F, 0.14F, 0.38F});
     nt_shape_renderer_flush();
-    rune_asset_slice9(asset, box.x, box.y, box.w, box.h, 80.0F, 38.0F, 80.0F, 38.0F, enabled ? (float[4]){1.0F, 1.0F, 1.0F, 1.0F} : (float[4]){0.62F, 0.70F, 0.74F, 0.78F});
+    fishing_asset_slice9(asset, box.x, box.y, box.w, box.h, 80.0F, 38.0F, 80.0F, 38.0F, enabled ? (float[4]){1.0F, 1.0F, 1.0F, 1.0F} : (float[4]){0.62F, 0.70F, 0.74F, 0.78F});
     draw_ui_text_fit(label, box, scale * 10.0F, text_col);
 }
 
@@ -1311,13 +1397,13 @@ static void fishing_primary_button(UiBox box, const char *label, bool enabled, f
     circle(box.x + r, box.y + box.h * 0.5F + 5.0F, r, (float[4]){0.02F, 0.10F, 0.05F, 0.48F});
     circle(box.x + box.w - r, box.y + box.h * 0.5F + 5.0F, r, (float[4]){0.02F, 0.10F, 0.05F, 0.48F});
     nt_shape_renderer_flush();
-    rune_asset_slice9(RUNE_ASSET_FISHING_PRIMARY_BUTTON_SLICE9, box.x, box.y, box.w, box.h, 92.0F, 44.0F, 92.0F, 44.0F, enabled ? (float[4]){1.0F, 1.0F, 1.0F, 1.0F} : (float[4]){0.72F, 0.78F, 0.66F, 0.82F});
-    rune_asset(RUNE_ASSET_FISHING_ROD_ICON, box.x + box.h * 0.22F, box.y + box.h * 0.18F, box.h * 0.62F, box.h * 0.62F, (float[4]){1.0F, 1.0F, 1.0F, enabled ? 1.0F : 0.60F});
+    fishing_asset_slice9(FISHING_ASSET_PRIMARY_BUTTON_SLICE9, box.x, box.y, box.w, box.h, 92.0F, 44.0F, 92.0F, 44.0F, enabled ? (float[4]){1.0F, 1.0F, 1.0F, 1.0F} : (float[4]){0.72F, 0.78F, 0.66F, 0.82F});
+    fishing_asset(FISHING_ASSET_ROD_ICON, box.x + box.h * 0.22F, box.y + box.h * 0.18F, box.h * 0.62F, box.h * 0.62F, (float[4]){1.0F, 1.0F, 1.0F, enabled ? 1.0F : 0.60F});
     draw_ui_text_fit(label, (UiBox){box.x + box.h * 0.70F, box.y, box.w - box.h * 0.86F, box.h}, scale * 10.0F, text_col);
 }
 
-static void draw_fishing_panel_asset(RuneAssetId asset, float x, float y, float w, float h, float left, float top, float right, float bottom) {
-    rune_asset_slice9(asset, x, y, w, h, left, top, right, bottom, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
+static void draw_fishing_panel_asset(FishingAssetId asset, float x, float y, float w, float h, float left, float top, float right, float bottom) {
+    fishing_asset_slice9(asset, x, y, w, h, left, top, right, bottom, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
 }
 
 static void draw_fishing_scene(float w, float h) {
@@ -1356,8 +1442,8 @@ static void draw_fishing_scene(float w, float h) {
     const float hud_y = compact ? 10.0F : 12.0F;
     const float hud_h = compact ? 64.0F : 58.0F;
     const float title_w = compact ? w * 0.42F : 214.0F;
-    draw_fishing_panel_asset(RUNE_ASSET_FISHING_STATUS_PILL_SLICE9, 12.0F, hud_y, title_w, hud_h, 82.0F, 32.0F, 82.0F, 32.0F);
-    rune_asset(RUNE_ASSET_FISHING_ROD_ICON, 23.0F, hud_y + 9.0F, 34.0F, 34.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
+    draw_fishing_panel_asset(FISHING_ASSET_STATUS_PILL_SLICE9, 12.0F, hud_y, title_w, hud_h, 82.0F, 32.0F, 82.0F, 32.0F);
+    fishing_asset(FISHING_ASSET_ROD_ICON, 23.0F, hud_y + 9.0F, 34.0F, 34.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
     draw_ui_text("SPLASH RODS", 64.0F, hud_y + 17.0F, compact ? 15.0F : 17.0F, ink);
 
     const float chip_y = hud_y;
@@ -1367,20 +1453,20 @@ static void draw_fishing_scene(float w, float h) {
     const float bag_x = compact ? w * 0.48F : 560.0F;
     const float index_x = compact ? w * 0.73F : 736.0F;
     if (!compact) {
-        draw_fishing_panel_asset(RUNE_ASSET_FISHING_STATUS_PILL_SLICE9, coin_x, chip_y, 146.0F, chip_h, 82.0F, 32.0F, 82.0F, 32.0F);
-        draw_fishing_panel_asset(RUNE_ASSET_FISHING_STATUS_PILL_SLICE9, level_x, chip_y, 146.0F, chip_h, 82.0F, 32.0F, 82.0F, 32.0F);
-        draw_fishing_panel_asset(RUNE_ASSET_FISHING_STATUS_PILL_SLICE9, bag_x, chip_y, 162.0F, chip_h, 82.0F, 32.0F, 82.0F, 32.0F);
-        draw_fishing_panel_asset(RUNE_ASSET_FISHING_STATUS_PILL_SLICE9, index_x, chip_y, 142.0F, chip_h, 82.0F, 32.0F, 82.0F, 32.0F);
+        draw_fishing_panel_asset(FISHING_ASSET_STATUS_PILL_SLICE9, coin_x, chip_y, 146.0F, chip_h, 82.0F, 32.0F, 82.0F, 32.0F);
+        draw_fishing_panel_asset(FISHING_ASSET_STATUS_PILL_SLICE9, level_x, chip_y, 146.0F, chip_h, 82.0F, 32.0F, 82.0F, 32.0F);
+        draw_fishing_panel_asset(FISHING_ASSET_STATUS_PILL_SLICE9, bag_x, chip_y, 162.0F, chip_h, 82.0F, 32.0F, 82.0F, 32.0F);
+        draw_fishing_panel_asset(FISHING_ASSET_STATUS_PILL_SLICE9, index_x, chip_y, 142.0F, chip_h, 82.0F, 32.0F, 82.0F, 32.0F);
     }
-    rune_asset(RUNE_ASSET_FISHING_COIN_ICON, coin_x + 10.0F, hud_y + 10.0F, compact ? 28.0F : 34.0F, compact ? 28.0F : 34.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
+    fishing_asset(FISHING_ASSET_COIN_ICON, coin_x + 10.0F, hud_y + 10.0F, compact ? 28.0F : 34.0F, compact ? 28.0F : 34.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
     (void)snprintf(text, sizeof(text), "%d", g_game_state.fishing_coins);
     draw_ui_text(text, coin_x + 50.0F, hud_y + 18.0F, compact ? 15.0F : 17.0F, gold);
     (void)snprintf(text, sizeof(text), "LV %d", g_game_state.fishing_level);
     draw_ui_text(text, level_x + 28.0F, hud_y + 18.0F, compact ? 15.0F : 17.0F, ink);
-    rune_asset(RUNE_ASSET_FISHING_BACKPACK_ICON, bag_x + 10.0F, hud_y + 9.0F, compact ? 30.0F : 36.0F, compact ? 30.0F : 36.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
+    fishing_asset(FISHING_ASSET_BACKPACK_ICON, bag_x + 10.0F, hud_y + 9.0F, compact ? 30.0F : 36.0F, compact ? 30.0F : 36.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
     (void)snprintf(text, sizeof(text), "BAG %d/%d", g_game_state.fishing_backpack_count, g_game_state.fishing_backpack_slots);
     draw_ui_text(text, bag_x + 52.0F, hud_y + 18.0F, compact ? 15.0F : 16.0F, ink);
-    rune_asset(RUNE_ASSET_FISHING_FISH_ICON, index_x + 9.0F, hud_y + 10.0F, compact ? 32.0F : 38.0F, compact ? 28.0F : 32.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
+    fishing_asset(FISHING_ASSET_FISH_ICON, index_x + 9.0F, hud_y + 10.0F, compact ? 32.0F : 38.0F, compact ? 28.0F : 32.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
     (void)snprintf(text, sizeof(text), "IDX %d/5", g_game_state.fishing_index_count);
     draw_ui_text(text, index_x + 50.0F, hud_y + 18.0F, compact ? 15.0F : 16.0F, ink);
 
@@ -1389,12 +1475,12 @@ static void draw_fishing_scene(float w, float h) {
     const float catch_w = w * 0.29F;
     const float catch_h = compact ? 108.0F : 126.0F;
     if (!compact) {
-        rune_asset(RUNE_ASSET_FISHING_COIN_ICON, catch_x - 48.0F, catch_y + 76.0F, 34.0F, 34.0F, (float[4]){1.0F, 1.0F, 1.0F, 0.92F});
-        rune_asset(RUNE_ASSET_FISHING_COIN_ICON, catch_x - 24.0F, catch_y + 104.0F, 26.0F, 26.0F, (float[4]){1.0F, 1.0F, 1.0F, 0.86F});
-        rune_asset(RUNE_ASSET_FISHING_COIN_ICON, catch_x + catch_w + 6.0F, catch_y + 54.0F, 30.0F, 30.0F, (float[4]){1.0F, 1.0F, 1.0F, 0.86F});
+        fishing_asset(FISHING_ASSET_COIN_ICON, catch_x - 48.0F, catch_y + 76.0F, 34.0F, 34.0F, (float[4]){1.0F, 1.0F, 1.0F, 0.92F});
+        fishing_asset(FISHING_ASSET_COIN_ICON, catch_x - 24.0F, catch_y + 104.0F, 26.0F, 26.0F, (float[4]){1.0F, 1.0F, 1.0F, 0.86F});
+        fishing_asset(FISHING_ASSET_COIN_ICON, catch_x + catch_w + 6.0F, catch_y + 54.0F, 30.0F, 30.0F, (float[4]){1.0F, 1.0F, 1.0F, 0.86F});
     }
-    draw_fishing_panel_asset(RUNE_ASSET_FISHING_CATCH_CARD_SLICE9, catch_x, catch_y, catch_w, catch_h, 58.0F, 44.0F, 58.0F, 44.0F);
-    rune_asset(RUNE_ASSET_FISHING_FISH_ICON, catch_x + 12.0F, catch_y + 18.0F, compact ? 44.0F : 58.0F, compact ? 38.0F : 50.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
+    draw_fishing_panel_asset(FISHING_ASSET_CATCH_CARD_SLICE9, catch_x, catch_y, catch_w, catch_h, 58.0F, 44.0F, 58.0F, 44.0F);
+    fishing_asset(FISHING_ASSET_FISH_ICON, catch_x + 12.0F, catch_y + 18.0F, compact ? 44.0F : 58.0F, compact ? 38.0F : 50.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
     draw_ui_text("NEW CATCH", catch_x + 66.0F, catch_y + 16.0F, compact ? 15.0F : 16.0F, gold);
     draw_ui_text_fit(g_game_state.fishing_last_fish, (UiBox){catch_x + 66.0F, catch_y + 43.0F, catch_w - 82.0F, 32.0F}, compact ? 17.0F : 18.0F, white);
     draw_ui_text_fit(g_game_state.fishing_last_reward, (UiBox){catch_x + 66.0F, catch_y + 76.0F, catch_w - 82.0F, 26.0F}, compact ? 15.0F : 16.0F, gold);
@@ -1431,8 +1517,8 @@ static void draw_fishing_scene(float w, float h) {
     }
 
     fishing_primary_button(s_scout_box, fishing_primary_label(), true, compact ? 1.7F : 2.6F);
-    fishing_button(s_rest_box, RUNE_ASSET_FISHING_SECONDARY_BUTTON_SLICE9, "SELL", game_fishing_can_sell(&g_game_state), compact ? 1.24F : 1.72F);
-    fishing_button(s_upgrade_box, RUNE_ASSET_FISHING_UPGRADE_BUTTON_SLICE9, "LINE", game_fishing_can_buy_better_line(&g_game_state), compact ? 1.20F : 1.62F);
+    fishing_button(s_rest_box, FISHING_ASSET_SECONDARY_BUTTON_SLICE9, "SELL", game_fishing_can_sell(&g_game_state), compact ? 1.24F : 1.72F);
+    fishing_button(s_upgrade_box, FISHING_ASSET_UPGRADE_BUTTON_SLICE9, "LINE", game_fishing_can_buy_better_line(&g_game_state), compact ? 1.20F : 1.62F);
 
     (void)snprintf(text, sizeof(text), "NEXT %s", g_game_state.fishing_next_unlock);
     const UiBox next_box = {
@@ -1441,8 +1527,8 @@ static void draw_fishing_scene(float w, float h) {
         compact ? w - 36.0F : w * 0.32F,
         compact ? 42.0F : 52.0F,
     };
-    draw_fishing_panel_asset(RUNE_ASSET_FISHING_STATUS_PILL_SLICE9, next_box.x, next_box.y, next_box.w, next_box.h, 82.0F, 32.0F, 82.0F, 32.0F);
-    rune_asset(RUNE_ASSET_FISHING_ROD_ICON, next_box.x + 12.0F, next_box.y + 6.0F, next_box.h - 12.0F, next_box.h - 12.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
+    draw_fishing_panel_asset(FISHING_ASSET_STATUS_PILL_SLICE9, next_box.x, next_box.y, next_box.w, next_box.h, 82.0F, 32.0F, 82.0F, 32.0F);
+    fishing_asset(FISHING_ASSET_ROD_ICON, next_box.x + 12.0F, next_box.y + 6.0F, next_box.h - 12.0F, next_box.h - 12.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
     draw_ui_text_fit(text,
                      (UiBox){next_box.x + next_box.h, next_box.y + 7.0F, next_box.w - next_box.h - 16.0F, next_box.h - 14.0F},
                      compact ? 13.0F : 15.0F,

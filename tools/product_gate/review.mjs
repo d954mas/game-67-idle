@@ -16,6 +16,9 @@ Options:
   --response <text>      answer: what changed after input?
   --reward <text>        answer: what did I get / why continue?
   --game-look <text>     answer: why does this look like a game?
+  --visual-strict        require structured visual critique scores/issues
+  --visual-score <axis=n> repeatable; axes: composition, readability, ui_controls, action_direction, art_quality, audience_fit
+  --visual-issue <severity:axis:text> repeatable; severity: blocker, major, minor
   --problem <text>       required for strict fail
   --next <text>          required for strict fail
   --index-output <path>  latest-gate JSON index path
@@ -25,12 +28,24 @@ Options:
 }
 
 function parseArgs(argv) {
-  const values = {};
+  const values = { visualScores: [], visualIssues: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") values.help = true;
     else if (arg === "--strict") values.strict = true;
+    else if (arg === "--visual-strict") values.visualStrict = true;
     else if (arg === "--task-log") values.taskLog = true;
+    else if (arg === "--visual-score") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) fail(`${arg} requires a value`);
+      values.visualScores.push(value);
+      index += 1;
+    } else if (arg === "--visual-issue") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) fail(`${arg} requires a value`);
+      values.visualIssues.push(value);
+      index += 1;
+    }
     else if (arg.startsWith("--")) {
       const key = arg.slice(2);
       const value = argv[index + 1];
@@ -74,6 +89,55 @@ function hasUsefulAnswer(value) {
   return String(value || "").trim().length >= 8;
 }
 
+const VISUAL_AXES = [
+  "composition",
+  "readability",
+  "ui_controls",
+  "action_direction",
+  "art_quality",
+  "audience_fit",
+];
+const VISUAL_SEVERITIES = new Set(["blocker", "major", "minor"]);
+const VISUAL_PASS_THRESHOLD = 4;
+
+function parseVisualScores(rawScores) {
+  const scores = {};
+  const errors = [];
+  for (const raw of rawScores || []) {
+    const [axisRaw, scoreRaw] = String(raw || "").split("=");
+    const axis = String(axisRaw || "").trim();
+    const score = Number(String(scoreRaw || "").trim());
+    if (!VISUAL_AXES.includes(axis)) {
+      errors.push(`unknown visual score axis: ${axis || "(missing)"}`);
+      continue;
+    }
+    if (!Number.isInteger(score) || score < 1 || score > 5) {
+      errors.push(`visual score for ${axis} must be an integer 1-5`);
+      continue;
+    }
+    scores[axis] = score;
+  }
+  return { scores, errors };
+}
+
+function parseVisualIssues(rawIssues) {
+  const issues = [];
+  const errors = [];
+  for (const raw of rawIssues || []) {
+    const parts = String(raw || "").split(":");
+    const severity = String(parts.shift() || "").trim();
+    const axis = String(parts.shift() || "").trim();
+    const text = parts.join(":").trim();
+    if (!VISUAL_SEVERITIES.has(severity)) errors.push(`unknown visual issue severity: ${severity || "(missing)"}`);
+    if (!VISUAL_AXES.includes(axis)) errors.push(`unknown visual issue axis: ${axis || "(missing)"}`);
+    if (!hasUsefulAnswer(text)) errors.push(`visual issue for ${axis || "(missing)"} needs concrete text`);
+    if (VISUAL_SEVERITIES.has(severity) && VISUAL_AXES.includes(axis) && hasUsefulAnswer(text)) {
+      issues.push({ severity, axis, text });
+    }
+  }
+  return { issues, errors };
+}
+
 function relPath(path) {
   return resolve(path).startsWith(process.cwd()) ? resolve(path).slice(process.cwd().length + 1).replaceAll("\\", "/") : path;
 }
@@ -96,11 +160,33 @@ function validate(values) {
     if (!hasUsefulAnswer(values.problem)) errors.push("--problem is required for strict fail");
     if (!hasUsefulAnswer(values.next)) errors.push("--next is required for strict fail");
   }
+
+  const visualScores = parseVisualScores(values.visualScores);
+  const visualIssues = parseVisualIssues(values.visualIssues);
+  errors.push(...visualScores.errors, ...visualIssues.errors);
+  if (values.visualStrict) {
+    for (const axis of VISUAL_AXES) {
+      if (visualScores.scores[axis] === undefined) errors.push(`--visual-score ${axis}=1-5 is required for --visual-strict`);
+    }
+    if (values.verdict === "pass") {
+      for (const axis of VISUAL_AXES) {
+        const score = visualScores.scores[axis];
+        if (score !== undefined && score < VISUAL_PASS_THRESHOLD) {
+          errors.push(`visual pass requires ${axis} score >= ${VISUAL_PASS_THRESHOLD}`);
+        }
+      }
+      const blockingIssue = visualIssues.issues.find((issue) => issue.severity === "blocker" || issue.severity === "major");
+      if (blockingIssue) errors.push(`visual pass cannot include ${blockingIssue.severity} issue for ${blockingIssue.axis}`);
+    }
+    if (values.verdict === "fail" && visualIssues.issues.length === 0) {
+      errors.push("--visual-issue is required for --visual-strict fail");
+    }
+  }
   return errors;
 }
 
 function renderMarkdown(record) {
-  return [
+  const lines = [
     "---",
     "type: ProductReadGate",
     `project: ${record.project}`,
@@ -130,7 +216,29 @@ function renderMarkdown(record) {
     "",
     `Next: ${record.next || "(none)"}`,
     "",
-  ].join("\n");
+  ];
+  if (record.visual_critique.strict || Object.keys(record.visual_critique.scores).length > 0 || record.visual_critique.issues.length > 0) {
+    lines.push("## Visual Critique");
+    lines.push("");
+    lines.push(`Strict: ${record.visual_critique.strict ? "yes" : "no"}`);
+    lines.push(`Pass threshold: ${record.visual_critique.pass_threshold}`);
+    lines.push("");
+    lines.push("Scores:");
+    for (const axis of VISUAL_AXES) {
+      lines.push(`- ${axis}: ${record.visual_critique.scores[axis] ?? "(missing)"}`);
+    }
+    lines.push("");
+    lines.push("Issues:");
+    if (record.visual_critique.issues.length === 0) {
+      lines.push("- (none)");
+    } else {
+      for (const issue of record.visual_critique.issues) {
+        lines.push(`- ${issue.severity} / ${issue.axis}: ${issue.text}`);
+      }
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
 }
 
 function runTaskLog(record, markdownPath) {
@@ -161,6 +269,8 @@ const jsonOutput = values["json-output"] || defaultJsonOutput(output);
 const indexOutput = values["index-output"] || defaultIndexOutput(values.project);
 const errors = validate(values);
 if (errors.length > 0) fail(errors.join("\n"));
+const visualScores = parseVisualScores(values.visualScores);
+const visualIssues = parseVisualIssues(values.visualIssues);
 
 const record = {
   schema: "game.product_read_gate",
@@ -177,6 +287,13 @@ const record = {
     response: values.response || "",
     reward: values.reward || "",
     game_look: values["game-look"] || "",
+  },
+  visual_critique: {
+    strict: Boolean(values.visualStrict),
+    axes: VISUAL_AXES,
+    pass_threshold: VISUAL_PASS_THRESHOLD,
+    scores: visualScores.scores,
+    issues: visualIssues.issues,
   },
   problem: values.problem || "",
   next: values.next || "",

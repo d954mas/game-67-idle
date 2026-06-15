@@ -1,7 +1,7 @@
 ---
 id: E002
 title: Roblox-like casual 3D fishing prototype
-status: active
+status: done
 priority: P0
 tags: [fishing,3d,casual,visuals,gdd,native,profiling]
 created: 2026-06-15
@@ -37,3 +37,7 @@ and art pipeline proof, and passive profiling of the AI workflow.
 - 2026-06-15: Started from `/goal`: Roblox-like casual 3D fishing game with
   juicy visuals, research -> discussion -> concept/GDD -> native playable
   prototype. Active project folder: `gamedesign/projects/roblox-fishing/`.
+- 2026-06-15: Closed as a completed test iteration by lead direction. The
+  prototype/GDD/generated-art pipeline evidence is preserved for review, but
+  Splash Rods will not receive more product work; follow-up effort moves to
+  reusable pipeline optimization under E003.

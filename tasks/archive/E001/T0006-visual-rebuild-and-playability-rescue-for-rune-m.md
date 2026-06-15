@@ -1,12 +1,12 @@
 ---
 id: T0006
 title: Visual rebuild and playability rescue for Rune Marches native slice
-status: doing
+status: dropped
 epic: E001
 priority: P0
 tags: [visual, ux, ftue, native, rescue, review]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-15
 ---
 
 ## What
@@ -54,3 +54,4 @@ understand without an agent explaining it.
   `tmp/rune_marches/native_branch_landmark_portrait.png`, art direction
   `gamedesign/projects/rune-marches/art/art_direction.md`, passive profile
   `tmp/session_profiles/session_profile_2026-06-14.summary.md`.
+- 2026-06-15: Dropped during pipeline cleanup: Rune Marches visual rescue is legacy product work and should not appear as current P0 work.

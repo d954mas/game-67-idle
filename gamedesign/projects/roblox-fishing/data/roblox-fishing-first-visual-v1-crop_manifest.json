@@ -30,6 +30,7 @@
           ],
           "semantic_role": "fishing_primary_action_button",
           "source_family": "roblox-fishing-ui-icons-source-v2-magenta-clean",
+          "preserve_green_edges": true,
           "slice9": {
             "left": 76,
             "top": 40,

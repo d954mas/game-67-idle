@@ -1,7 +1,7 @@
 ---
 id: T0011
 title: Full GDD and implementation handoff for fishing prototype
-status: review
+status: done
 epic: E002
 priority: P1
 tags: [gdd, balance, ui-flow, handoff]
@@ -35,3 +35,7 @@ and implementation handoff for the first native prototype.
   asset planning manifest, and implementation handoff. Updated after lead
   direction: casual audience, simple gameplay, strong progression/grind, juicy
   bright visuals, no realism.
+- 2026-06-15: Closed with the fishing test iteration. Documents remain
+  evidence for pipeline review; they are not an active implementation handoff
+  anymore.
+- 2026-06-15: Closed with fishing test iteration; GDD/handoff documents remain evidence, not active product work.

@@ -6,7 +6,7 @@ epic: E001
 priority: P0
 tags: [art, assets, visual, runtime, web]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-15
 ---
 
 ## What
@@ -50,3 +50,4 @@ should still be prepared for web/mobile compression.
   desktop + portrait scenario screenshots:
   `tmp/rune_marches/native_first_slice_labeled.png`,
   `tmp/rune_marches/native_first_slice_portrait_current.png`.
+- 2026-06-15: Archived during pipeline cleanup; generated art runtime pack remains historical evidence.

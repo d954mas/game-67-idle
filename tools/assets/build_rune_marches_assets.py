@@ -6,9 +6,6 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
-from chroma_key_alpha import key_to_alpha, remove_edge_fringe, remove_source_key_spill, repair_visible_halo, resize_rgba_premultiplied, zero_fully_transparent_rgb
-
-
 ASSETS = [
     {
         "id": "map_background",
@@ -199,87 +196,6 @@ UI_COMPACT_BASES_V5_ASSETS = [
     },
 ]
 
-FISHING_UI_ASSETS = [
-    {
-        "id": "fishing_primary_button_slice9",
-        "crop": (67, 61, 606, 279),
-        "size": (320, 128),
-        "kind": "slice9",
-        "slice9": [76, 40, 76, 40],
-        "semantic_role": "fishing_primary_action_button",
-    },
-    {
-        "id": "fishing_secondary_button_slice9",
-        "crop": (664, 63, 1187, 280),
-        "size": (300, 112),
-        "kind": "slice9",
-        "slice9": [72, 34, 72, 34],
-        "semantic_role": "fishing_secondary_action_button",
-    },
-    {
-        "id": "fishing_upgrade_button_slice9",
-        "crop": (69, 316, 591, 506),
-        "size": (300, 112),
-        "kind": "slice9",
-        "slice9": [72, 34, 72, 34],
-        "semantic_role": "fishing_upgrade_action_button",
-        "source_note": "partial runtime slice; magenta-adjacent purple art is accepted for prototype only",
-    },
-    {
-        "id": "fishing_status_pill_slice9",
-        "crop": (647, 315, 1198, 508),
-        "size": (360, 104),
-        "kind": "slice9",
-        "slice9": [82, 32, 82, 32],
-        "semantic_role": "fishing_status_hud_pill",
-    },
-    {
-        "id": "fishing_catch_card_slice9",
-        "crop": (61, 536, 617, 750),
-        "size": (340, 132),
-        "kind": "slice9",
-        "slice9": [58, 44, 58, 44],
-        "semantic_role": "fishing_catch_reward_card",
-    },
-    {
-        "id": "fishing_meter_frame_slice9",
-        "crop": (682, 574, 1171, 719),
-        "size": (320, 72),
-        "kind": "slice9",
-        "slice9": [56, 24, 56, 24],
-        "semantic_role": "fishing_reel_meter_frame",
-    },
-    {
-        "id": "fishing_coin_icon",
-        "crop": (50, 783, 235, 969),
-        "size": (96, 96),
-        "kind": "icon",
-        "semantic_role": "fishing_coin_currency",
-    },
-    {
-        "id": "fishing_backpack_icon",
-        "crop": (280, 780, 475, 978),
-        "size": (96, 96),
-        "kind": "icon",
-        "semantic_role": "fishing_backpack",
-    },
-    {
-        "id": "fishing_fish_icon",
-        "crop": (502, 773, 727, 974),
-        "size": (112, 96),
-        "kind": "icon",
-        "semantic_role": "fishing_index_fish",
-    },
-    {
-        "id": "fishing_rod_icon",
-        "crop": (748, 761, 956, 981),
-        "size": (112, 112),
-        "kind": "icon",
-        "semantic_role": "fishing_rod_action",
-    },
-]
-
-
 HEADER = """#ifndef RUNE_MARCHES_ASSETS_GEN_H
 #define RUNE_MARCHES_ASSETS_GEN_H
 
@@ -371,124 +287,6 @@ def remove_border_chroma(image: Image.Image, key=(255, 0, 255), tolerance: int =
     return rgba
 
 
-def process_fishing_ui_asset(source: Image.Image, spec: dict) -> Image.Image:
-    image = source.crop(spec["crop"]).convert("RGBA")
-    image = key_to_alpha(image, key=(255, 0, 255), exact_tolerance=10, edge_tolerance=42, aggressive_visible_decontaminate=True)
-    pad = 8
-    inner_size = (max(1, spec["size"][0] - pad * 2), max(1, spec["size"][1] - pad * 2))
-    image = resize_rgba_premultiplied(image, inner_size)
-    padded = Image.new("RGBA", spec["size"], (0, 0, 0, 0))
-    padded.alpha_composite(image, (pad, pad))
-    image = padded
-    remove_edge_fringe(image, passes=4)
-    remove_source_key_spill(image, (255, 0, 255), passes=4, radius=3)
-    repair_visible_halo(image, radius=8, require_transparent_touch=True)
-    zero_fully_transparent_rgb(image)
-    image = ImageEnhance.Color(image).enhance(1.06)
-    image = ImageEnhance.Contrast(image).enhance(1.04)
-    zero_fully_transparent_rgb(image)
-    return image
-
-
-def build_fishing_ui_assets(source_path: Path, runtime_dir: Path) -> list[dict]:
-    if not source_path.exists():
-        return []
-    source = Image.open(source_path).convert("RGB")
-    runtime_dir.mkdir(parents=True, exist_ok=True)
-    built = []
-    for spec in FISHING_UI_ASSETS:
-        image = process_fishing_ui_asset(source, spec)
-        png_path = runtime_dir / f"{spec['id']}.png"
-        image.save(png_path, optimize=True)
-        built.append({
-            **spec,
-            "path": repo_path(png_path),
-            "png_size_bytes": png_path.stat().st_size,
-            "image": image,
-            "pivot": [0.5, 0.5],
-            "source_family": "roblox-fishing-ui-icons-source-v2-magenta-clean",
-        })
-    fishing_data_dir = Path("gamedesign/projects/roblox-fishing/data")
-    fishing_data_dir.mkdir(parents=True, exist_ok=True)
-    crop_manifest_path = fishing_data_dir / "roblox-fishing-first-visual-v1-crop_manifest.json"
-    asset_manifest_path = fishing_data_dir / "roblox-fishing-first-visual-v1-asset_manifest.json"
-    crops = []
-    assets = []
-    for spec in built:
-        crop = {
-            "id": spec["id"],
-            "kind": spec["kind"],
-            "rect": list(spec["crop"]),
-            "output": spec["path"],
-            "output_size": list(spec["size"]),
-            "semantic_role": spec.get("semantic_role"),
-            "source_family": spec["source_family"],
-        }
-        if spec.get("slice9"):
-            crop["slice9"] = {
-                "left": spec["slice9"][0],
-                "top": spec["slice9"][1],
-                "right": spec["slice9"][2],
-                "bottom": spec["slice9"][3],
-            }
-            crop["content"] = {
-                "x": spec["slice9"][0],
-                "y": spec["slice9"][1],
-                "w": max(1, spec["size"][0] - spec["slice9"][0] - spec["slice9"][2]),
-                "h": max(1, spec["size"][1] - spec["slice9"][1] - spec["slice9"][3]),
-            }
-            crop["target_preview_sizes"] = [list(spec["size"]), [max(spec["size"][0], 220), max(spec["size"][1], 64)]]
-        if spec["kind"] == "icon":
-            crop["trim_padding"] = 8
-            crop["isolate_component"] = "source crop contains one accepted icon component"
-            crop["preview_sizes"] = [[32, 32], [48, 48]]
-        crops.append(crop)
-        assets.append({
-            "id": spec["id"],
-            "kind": spec["kind"],
-            "path": spec["path"],
-            "dimensions": list(spec["size"]),
-            "png_size_bytes": spec["png_size_bytes"],
-            "slice9": crop.get("slice9"),
-            "semantic_role": spec.get("semantic_role"),
-            "pack_group": "roblox_fishing_ui_common",
-            "source_crop": spec["id"],
-            "runtime_usage": "native generated C texture array",
-        })
-    crop_manifest = {
-        "schema": "game.art_crop_manifest",
-        "version": 2,
-        "art_job": "gamedesign/projects/roblox-fishing/art_requests/roblox-fishing-first-visual-v1.json",
-        "output_dir": repo_path(runtime_dir),
-        "green_screen": {
-            "mode": "chroma_key",
-            "key": "#ff00ff",
-            "notes": "Fishing UI source is generated on magenta chroma; runtime assets use key_to_alpha edge cleanup before packing into C arrays.",
-        },
-        "sources": [
-            {
-                "id": "splash-rods-ui-icons-source-v2-magenta-clean",
-                "path": repo_path(source_path),
-                "source_role": "partial generated runtime UI sheet",
-                "crops": crops,
-            }
-        ],
-    }
-    crop_manifest_path.write_text(json.dumps(crop_manifest, indent=2) + "\n", encoding="utf-8")
-    asset_manifest = {
-        "schema": "game.asset_manifest",
-        "version": 2,
-        "art_job": "gamedesign/projects/roblox-fishing/art_requests/roblox-fishing-first-visual-v1.json",
-        "crop_manifest": repo_path(crop_manifest_path),
-        "runtime_dir": repo_path(runtime_dir),
-        "source_art": repo_path(source_path),
-        "source_policy": "partial generated bitmap UI source; not final source-family-complete art",
-        "assets": assets,
-    }
-    asset_manifest_path.write_text(json.dumps(asset_manifest, indent=2) + "\n", encoding="utf-8")
-    return built
-
-
 def load_ui_kit_v2(runtime_dir: Path) -> list[dict]:
     built = []
     for spec in UI_KIT_V2_ASSETS:
@@ -563,8 +361,6 @@ def main() -> int:
     parser.add_argument("--ui-kit-v2-dir", default="assets/runtime/rune-marches-ui-map-rescue-v2")
     parser.add_argument("--ui-bases-v2-dir", default="assets/runtime/rune-marches-ui-bases-v2")
     parser.add_argument("--ui-compact-bases-v5-dir", default="assets/runtime/rune-marches-ui-compact-bases-v5")
-    parser.add_argument("--fishing-ui-source", default="gamedesign/projects/roblox-fishing/art/source_sheets/splash-rods-ui-icons-source-v2-magenta-clean.png")
-    parser.add_argument("--fishing-ui-runtime-dir", default="assets/runtime/roblox-fishing-ui-v1")
     args = parser.parse_args()
 
     source_path = Path(args.source)
@@ -575,8 +371,6 @@ def main() -> int:
     ui_kit_v2_dir = Path(args.ui_kit_v2_dir)
     ui_bases_v2_dir = Path(args.ui_bases_v2_dir)
     ui_compact_bases_v5_dir = Path(args.ui_compact_bases_v5_dir)
-    fishing_ui_source = Path(args.fishing_ui_source)
-    fishing_ui_runtime_dir = Path(args.fishing_ui_runtime_dir)
 
     runtime_dir.mkdir(parents=True, exist_ok=True)
     generated_dir.mkdir(parents=True, exist_ok=True)
@@ -591,7 +385,6 @@ def main() -> int:
     built.extend(load_ui_kit_v2(ui_kit_v2_dir))
     built.extend(load_ui_bases_v2(ui_bases_v2_dir))
     built.extend(load_ui_compact_bases_v5(ui_compact_bases_v5_dir))
-    built.extend(build_fishing_ui_assets(fishing_ui_source, fishing_ui_runtime_dir))
 
     header_path = generated_dir / "rune_marches_assets.gen.h"
     source_c_path = generated_dir / "rune_marches_assets.gen.c"
@@ -650,7 +443,7 @@ extern const RuneAssetImage g_rune_assets[RUNE_ASSET_COUNT];
                 "semantic_role": spec.get("semantic_role"),
                 "status": "runtime_integrated_candidate" if "crop" in spec else "prebuilt_runtime_ui_kit_v2",
             }
-            for spec in built
+        for spec in built
         ],
     }
     crop_manifest_path.write_text(json.dumps(crop_manifest, indent=2) + "\n", encoding="utf-8")

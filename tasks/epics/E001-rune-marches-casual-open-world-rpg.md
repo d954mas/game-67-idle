@@ -1,7 +1,7 @@
 ---
 id: E001
 title: Rune Marches casual open-world RPG
-status: active
+status: dropped
 priority: P0
 tags: [rpg, casual, pc, web, mobile, poki]
 created: 2026-06-13
@@ -34,3 +34,6 @@ testing.
 ## Log
 
 - 2026-06-13: Created epic and project wiki for Rune Marches first iteration.
+- 2026-06-15: Dropped during reusable pipeline cleanup. Rune Marches remains
+  historical evidence for generated UI/runtime pipeline lessons; it is not an
+  active product lane.

@@ -1,7 +1,7 @@
 ---
 id: T0010
 title: Native PC playable 3D fishing prototype
-status: review
+status: done
 epic: E002
 priority: P1
 tags: [native, 3d, prototype, gameplay, visuals]
@@ -76,3 +76,7 @@ with bright visuals and screenshot/input proof.
   `mesh_draw_groups >= 6`, proving the GLTF/GLB model path renders during the
   captured gameplay screenshot.
 - 2026-06-15: product gate FAIL (desktop); review: gamedesign/projects/roblox-fishing/reviews/product_read_gate_2026-06-15T09-20-35-536Z_desktop.md; screenshot: tmp/roblox_fishing/native_first_slice.png; next: Freeze feature expansion; run a visual rescue pass from fake shot to art bible, separate UI/world asset families, and require a new native screenshot gate before claiming visual progress.
+- 2026-06-15: Closed by lead direction as a completed playable/profiling test
+  iteration despite the red visual product gate. The failure is preserved as
+  pipeline evidence; no further fishing prototype product work will be done.
+- 2026-06-15: Closed by lead direction as completed playable/profiling prototype evidence; red product gate retained for pipeline review, not product continuation.

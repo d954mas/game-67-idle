@@ -1,7 +1,7 @@
 ---
 id: T0012
 title: Visual product rescue for Splash Rods native slice
-status: doing
+status: dropped
 epic: E002
 priority: P0
 tags: [visuals, ui, ux, native, rescue, generated-art]
@@ -87,3 +87,8 @@ Roblox-like casual fishing game instead of a technical prototype.
   and artifact issues, but the product gate remains red because final generated
   UI/model art and fake-shot-level composition are still missing.
 - 2026-06-15: product gate FAIL (desktop); review: gamedesign/projects/roblox-fishing/reviews/product_read_gate_2026-06-15T10-00-17-910Z_desktop.md; screenshot: tmp/roblox_fishing/native_first_slice.png; next: Replace the focal world/character/water with stronger selected or generated 3D art assets and then rerun the native screenshot/product gate.
+- 2026-06-15: Fixed reported purple halo on generated UI art. Asset audit previously failed on `fishing_secondary_button_slice9` and `fishing_upgrade_button_slice9`; cleanup now reruns after color/contrast enhancement, `fishing_upgrade_button_slice9` remaps purple material to ocean blue, and the primary green button declares intentional green edge preservation. Verified with generated UI audit PASS, edge proof total=0, native build, and `py -3.12 tools/playtest/roblox_fishing_probe.py 9123`; screenshot: `tmp/roblox_fishing/native_first_slice.png`.
+- 2026-06-15: Dropped by lead direction: the fishing game test iteration is
+  complete and will not continue. The red product gate is retained as evidence
+  for pipeline improvement rather than a blocker for further Splash Rods work.
+- 2026-06-15: Dropped by lead direction: Splash Rods product rescue will not continue; use failures as pipeline-improvement evidence under E003.

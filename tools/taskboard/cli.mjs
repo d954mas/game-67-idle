@@ -351,5 +351,8 @@ function remediationHint(problem) {
   if (problem.includes("active epic needs")) {
     return "fill `## Goal`, `## In scope`, and `## Out of scope`, or move the epic back to `status: idea`";
   }
+  if (problem.includes("exceeds live status budget")) {
+    return "replace inline history with pointers to `tasks/archive/` or `gamedesign/projects/<game-id>/`; keep `STATUS.md` as a current index";
+  }
   return "";
 }

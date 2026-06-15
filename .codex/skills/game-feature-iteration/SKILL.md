@@ -14,8 +14,14 @@ Use this skill to make small, playable game changes without losing project conte
    `node tools/ai.mjs context` when available. This prints the compact game
    context and profiles the pre-code context cost. If the facade is absent,
    fall back to `node tools/game_context/iteration_context.mjs`.
-2. State the selected runtime harness before implementation, including why it is allowed by local rules.
-3. If the feature is based on a named reference, verify a reference deconstruction
+2. Select one task scope. For long implementation, visual, research, or
+   tooling work, run `node tools/ai.mjs start <task-id> <iteration>` before
+   editing so `node tools/ai.mjs status` can report current-scope coverage.
+   Treat `Review confidence: broken` as a blocker for using the profile as
+   review evidence; treat `partial` as a missing-telemetry warning that must be
+   named in handoff/review notes.
+3. State the selected runtime harness before implementation, including why it is allowed by local rules.
+4. If the feature is based on a named reference, verify a reference deconstruction
    exists before coding. It must include source evidence,
    first-10-seconds and first-60-seconds actions, 1-5 minute loop,
    screen grammar, mechanics/balance notes, reward/UI hierarchy,
@@ -63,8 +69,8 @@ Use this skill to make small, playable game changes without losing project conte
    visible transcript, and mismatch capture may run beside unrelated setup, but
    the reference-driven gameplay/UI/economy/balance implementation lane stays
    locked until the digest, mismatch audit, and next native proof exist.
-4. Identify the smallest playable slice that satisfies the request.
-5. If the request names visual quality, FTUE, feel, audience testing, or a
+5. Identify the smallest playable slice that satisfies the request.
+6. If the request names visual quality, FTUE, feel, audience testing, or a
    "casual" product target, capture or inspect the first playable screen before
    broadening scope. Do not add more locations, quests, systems, or content
    until the screen answers: where the player is, what they can do now, what
@@ -73,11 +79,24 @@ Use this skill to make small, playable game changes without losing project conte
    `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate` when that
    tool exists. Use `node tools/ai.mjs close-slice` before handoff when the
    slice depends on product-read evidence.
-6. For non-trivial work, use the iteration cycle in `references/iteration-cycle-playbook.md`.
-7. Keep implementation close to existing engine and game patterns.
-8. Avoid broad refactors unless the feature cannot be implemented safely without them.
-9. Validate the primary runtime target first; validate secondary targets only when relevant or requested.
-10. Capture evidence and report what changed, where to run it, and what was verified.
+   For visual-first work, write a 5-line session contract first: goal,
+   non-goal, proof, stop condition, and likely files. Before coding, compare
+   the current native screenshot or capture plan against the accepted fake
+   shot/reference/art target and list mismatches. After meaningful render
+   changes, capture a new screenshot and update the mismatch list before
+   expanding content.
+7. For non-trivial work, use the iteration cycle in `references/iteration-cycle-playbook.md`.
+8. Keep implementation close to existing engine and game patterns.
+9. Avoid broad refactors unless the feature cannot be implemented safely without them.
+10. Validate the primary runtime target first; validate secondary targets only when relevant or requested.
+11. Capture evidence and report what changed, where to run it, and what was verified.
+12. Before committing or handing off a prototype slice, run
+    `node tools/product_gate/slice_hygiene.mjs --strict` with build/probe
+    evidence, product gate, screenshot evidence, profiler guard evidence from
+    `node tools/ai.mjs status --require-current-scope-usable`, and known red
+    gates. Split a normal slice over 30 changed files unless the lead explicitly
+    requested an end-of-experiment snapshot. Do not promise push until
+    push/upstream state is checked.
 
 ## Discovery
 
@@ -104,12 +123,17 @@ If naming differs, infer the equivalent directories from the repository.
 - Treat a failed screenshot/player-read review as a stop condition. Fix the
   core screen or loop before adding more data, balance, quests, routes, or
   technical systems.
+- Product gate fail blocks feature/content expansion unless the lead explicitly
+  accepts the debt for the current slice.
 - Do not implement a "like reference X" feature from a feature list alone.
   Translate the reference into player-facing screen grammar and visible
   runtime evidence first.
 - Do not implement a reference-driven feature from memory unless sources are
   unavailable and the user accepts a clearly scoped memory-only exception.
 - Keep reusable workflow in skills; keep project-specific facts and run commands in project docs.
+- Do not commit stale fail audits as current proof. Refresh them, archive them
+  as historical evidence, or call them out in the slice hygiene report and
+  final/review notes.
 
 ## Build, Launch, And Release Tasks
 

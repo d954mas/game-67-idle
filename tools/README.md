@@ -69,13 +69,28 @@ game project:
 `tools/product_gate/review.mjs` creates the durable screenshot/player-read
 gate for visual, FTUE, and audience-test slices. Use it through
 `node tools/ai.mjs gate` before expanding game content when the task depends on
-whether the first screen reads as a product. `tools/product_gate/close_slice.mjs`
-is exposed as `node tools/ai.mjs close-slice`; use it before handoff/review so
-the task log records the product gate, validation evidence, and next action.
+whether the first screen reads as a product. Use `--visual-strict` for
+beautiful, casual, generated-UI, fake-shot, or child-testable prototype work;
+it requires six-axis visual scores and blocks a pass when text/readability,
+UI controls, action direction, art quality, composition, or audience fit are
+below the bar. `tools/product_gate/visual_critique_packet.mjs` creates a
+reusable critic prompt/packet from a screenshot and target before the final
+strict gate; use it through `node tools/ai.mjs critic` in normal agent work.
+`tools/product_gate/close_slice.mjs` is exposed as
+`node tools/ai.mjs close-slice`; use it before handoff/review so the task log
+records the product gate, validation evidence, and next action.
 `tools/product_gate/responsive_layout_audit.mjs` checks UI-tree geometry for
 responsive layouts: required action nodes exist, touch targets are large
 enough, selected buttons do not overlap, and portrait primary actions use a
 full-width row above secondary actions.
+`tools/product_gate/slice_hygiene.mjs` is the pre-review/pre-commit audit for
+prototype slices. It reports diff size, evidence checklist coverage, push
+target visibility, profiler guard evidence, changed fail/stale review
+artifacts, and the 30-file normal-slice threshold. Use `--strict` with
+`--profile-guard` evidence from
+`node tools/ai.mjs status --require-current-scope-usable` before
+handoff/commit, and use `--snapshot` only when the lead intentionally wants an
+end-of-experiment snapshot instead of scoped phase commits.
 
 `tools/assets/new_generation_record.mjs` writes the provenance record for an
 accepted generated or artist source sheet: provider/model or workflow,
@@ -335,4 +350,6 @@ For a clean new game:
 2. Decide whether `reusable_game_infrastructure` matches the selected runtime.
 3. Remove or archive `project_specific_67_world`.
 4. Delete generated caches.
-5. Run `node tools/pipeline_validate.mjs` after cleanup/export.
+5. Run `node tools/pipeline_validate.mjs` after normal cleanup, or
+   `node tools/pipeline_validate.mjs --full` after export/runtime template
+   changes.

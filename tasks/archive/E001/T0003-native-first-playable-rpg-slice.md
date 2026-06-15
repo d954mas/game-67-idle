@@ -1,12 +1,12 @@
 ---
 id: T0003
 title: Native first playable RPG slice
-status: review
+status: dropped
 epic: E001
 priority: P0
 tags: [native, gameplay, state, devapi, ftue]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-15
 ---
 
 ## What
@@ -175,3 +175,4 @@ Moss Shrine kindness payoff, Greenfen Causeway route hook, persistence, and
   `tmp/rune_marches/native_branch_landmark_labeled.png`, portrait screenshot
   `tmp/rune_marches/native_branch_landmark_portrait.png`, playtest probe
   `tmp/rune_marches/playtest_probe_report.json`, and taskboard validate.
+- 2026-06-15: Dropped during pipeline cleanup: Rune Marches playable slice remains historical evidence, not active product work.

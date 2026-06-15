@@ -14,6 +14,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
 1. Read project rules, active task, active project art direction, and current
    screenshots. Do not generate final UI before the target screen and runtime
    harness are known.
+   For visual-first UI work, write the 5-line session contract first: goal,
+   non-goal, proof, stop condition, and likely files. The proof must include
+   source/runtime manifests, pixel audit, and native screenshot/product gate
+   evidence.
 2. Research references first when the visual/gameplay target is new or the
    lead rejected the current result. Store reusable source notes under
    `gamedesign/sources/` and project-specific findings under the active
@@ -144,6 +148,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    assets. Slice9 crop and runtime entries also need explicit `stretch_policy`
    and `usage_policy`: what can stretch/tile, where fixed ornaments live, the
    minimum runtime size, and disallowed uses such as compact secondary buttons.
+   Do not integrate or claim runtime generated UI from an empty crop manifest,
+   empty runtime manifest, or unrun pixel audit. The order is source sheet,
+   intake, crop manifest, runtime manifest/assets, pixel audit, then runtime
+   integration.
 11. Build runtime PNGs deterministically. For chroma-key art, remove only
    border-connected key color, isolate intended icon components, trim by alpha
    bounds, add padding, remove edge fringe, remove source-key color spill

@@ -1,135 +1,103 @@
 # Project Status
 
 Short live project-status index. Workflow rules live in `tasks/README.md`.
+Historical task evidence belongs in `tasks/archive/`; project-specific design
+and review evidence belongs under `gamedesign/projects/<game-id>/`.
 
 ## Current Goal
 
-Build an original Roblox-like casual 3D fishing game: research references,
-discuss the direction with the lead, write the full concept/GDD, then implement
-a native PC playable prototype with bright juicy visuals and passive workflow
-profiling.
+Optimize the reusable AI-first game development pipeline after the Splash Rods
+fishing prototype test. The fishing game is closed; future work should improve
+task/status hygiene, asset pipeline boundaries, validation gates, and passive
+profiling for the next game iteration.
 
 ## Active Product State
 
-- Active game concept: `roblox-fishing` / working title `Splash Rods`.
-- Active project wiki: `gamedesign/projects/roblox-fishing/`.
-- Active runtime target: native PC first; current source now contains a playable
-  Splash Rods fishing slice with perspective/depth 3D scene, generated UI/icon
-  texture assets, and a native GLTF/GLB mesh-pack path through the engine
-  builder/resource/material/mesh-renderer pipeline.
-- Fishing task queue: `E002` active; `T0009` done/archived; `T0008` review;
-  `T0011` review; `T0010` review for technical playable proof; `T0012`
-  doing as the P0 visual/product rescue after lead rejection.
-- Older Rune Marches tasks may still appear in the global taskboard summary;
-  they are not the active goal for this thread.
-- Profiling: passive profiling is part of the task. Session notes begin at
-  `tmp/roblox_fishing_profile.md`; use `node tools/ai.mjs` facade for long or
-  repeated commands where practical.
+- Active game concept: none. This repository is in pipeline/template
+  improvement mode until the lead starts the next prototype.
+- Closed test concept: `roblox-fishing` / `Splash Rods`. Its GDD, fake shots,
+  runtime UI evidence, reviews, and failure reports remain under
+  `gamedesign/projects/roblox-fishing/`.
+- Legacy concept: `rune-marches`. Its old tasks are archived/dropped and
+  should be treated only as historical evidence unless the lead reopens it.
+- Active pipeline epic: `E003` reusable AI game pipeline cleanup.
 
 ## Source Pointers
 
-- Start here: `AGENTS.md`, `AI_PIPELINE.md`,
-  `AI_PIPELINE_SESSION_PROFILING.md`.
-- Concept draft: `gamedesign/projects/roblox-fishing/concept.md`.
-- Reference study:
-  `gamedesign/projects/roblox-fishing/references/fishing_reference_study.md`.
-- Visual direction brief:
-  `gamedesign/projects/roblox-fishing/art/visual_direction_brief.md`.
-- GDD:
-  `gamedesign/projects/roblox-fishing/gdd.md`.
-- First fake shot:
-  `gamedesign/projects/roblox-fishing/art/fake_shots/splash-rods-gameplay-v1.png`.
-- Implementation handoff draft:
-  `gamedesign/projects/roblox-fishing/game_implementation_plan.md`.
-- Runtime source: `src/` after GDD/implementation gate.
-- Task epic: `tasks/epics/E002-roblox-like-casual-3d-fishing-prototype.md`.
-
-## Current Evidence
-
-- Research sources checked on 2026-06-15:
-  Fisch Roblox page, Fishing Simulator Roblox page, WEBFISHING Steam page,
-  Russian Fishing 4 Steam page, PC Gamer current Fisch guide, and Kenney asset
-  pages for nature, watercraft, blocky characters, and fish pack.
-- Lead direction accepted on 2026-06-15: casual audience, strong
-  progression/grind, simple gameplay, feel and fake shot are important,
-  progression clarity matters, realism is forbidden.
-- Reference study status: ready enough for first native prototype after fake
-  shot review. It includes a screenshot walkthrough/evidence board and current
-  native mismatch capture.
-- First fake shot exists and needs lead review:
-  `gamedesign/projects/roblox-fishing/art/fake_shots/splash-rods-gameplay-v1.png`.
-- Runtime generated UI proof exists:
-  `gamedesign/projects/roblox-fishing/art/source_sheets/splash-rods-ui-icons-source-v2-magenta-clean.png`
-  -> `assets/runtime/roblox-fishing-ui-v1/` -> native HUD/buttons/icons.
-- Runtime GLTF/GLB model pipeline proof exists:
-  `tools/roblox_fishing/generate_model_sources.py` emits first-pass low-poly
-  fish/boat/shop-sign/palm-leaf/bobber source models under
-  `gamedesign/projects/roblox-fishing/art/models/`, and
-  `tools/roblox_fishing/build_packs.c` packs them plus the engine `cube.glb`
-  into `build/game_seed/native-debug/assets/roblox_fishing_models.ntpack`.
-  `src/main.c` loads the pack through an absolute native build path and renders
-  16 GLTF/GLB-backed props through `nt_mesh_renderer`; the playtest probe now
-  fails if mesh instances/draw groups are zero.
-- Current native visual/product gate is red:
-  `gamedesign/projects/roblox-fishing/reviews/product_read_gate_latest.json`.
-  The durable failure report is
-  `gamedesign/projects/roblox-fishing/reviews/visual_product_failure_report_2026-06-15.md`.
-  The next screenshot contract is
-  `gamedesign/projects/roblox-fishing/art/visual_rescue_screen_contract_v1.md`.
-- Machine-readable draft contracts exist:
-  `gamedesign/projects/roblox-fishing/data/balance.json`,
-  `gamedesign/projects/roblox-fishing/data/ui_flow.json`, and
-  `gamedesign/projects/roblox-fishing/data/game_asset_manifest.json`.
-- Current native mismatch capture:
-  `tmp/roblox_fishing/current_native_before_fishing.png`; it shows the current
-  Rune Marches RPG/map/combat screen, not a 3D fishing scene.
+- Reusable process: `AI_PIPELINE.md`, `tasks/README.md`, `.codex/skills/`.
+- Current taskboard: `node tools/taskboard/cli.mjs summary`.
+- Startup gate: `node tools/game_context/iteration_context.mjs`.
+- New prototype kickoff:
+  `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`.
+- Closed fishing project evidence: `gamedesign/projects/roblox-fishing/`.
+- Closed work logs: `tasks/archive/E001/`, `tasks/archive/E002/`,
+  `tasks/archive/E003/`, and `tasks/archive/unassigned/`.
 
 ## Blocking Work
 
-- Lead rejected the current native screenshot as visually bad. Feature
-  expansion is frozen under `T0012` until the native visual rescue screenshot
-  passes a product-read gate. Do not treat mesh/UI technical proof as visual
-  acceptance.
-- Generated UI is wired as a first runtime slice, but the current source sheet
-  is still a prototype/partial crop family; a final UI kit pass should separate
-  buttons, panels, meter, icons, and decor with cleaner gutters and no key-color
-  conflicts.
-- External CC0 fishing/location model integration is not wired yet. The engine
-  and builder support GLTF/GLB mesh packs, and the game now has generated
-  low-poly source-model props in the pack; the next model pass should replace
-  rough first-pass generated meshes with selected/final low-poly fishing,
-  island, shop, and character assets.
+- No active Splash Rods blocker remains. Fishing is closed as a test iteration.
+- Do not continue Splash Rods gameplay, world art, UI kit, model selection, or
+  visual rescue work unless the lead explicitly reopens that game.
+- Do not continue Rune Marches product work unless the lead explicitly reopens
+  that game.
 
 ## Current Gate
 
-- Gate: native visual/product rescue.
-- Status: first playable proof exists technically, but the current screenshot
-  fails the visual/product bar. `T0012` must produce a stronger fake-shot-aligned
-  native screenshot before more feature/content work.
-- Current proof: `tmp/roblox_fishing/native_first_slice.png` shows native 3D
-  water/dock/avatar/rod/bobber/fish, generated HUD/buttons/icons, catch reward,
-  currency/index/backpack, and first upgrade affordance, but this proof is
-  explicitly rejected for product visuals.
+- Gate: reusable pipeline cleanup.
+- Active cleanup task: none yet; pick the top open task below. The 2026-06-15
+  full pipeline review produced a prioritized backlog `T0043`-`T0052` covering
+  speed (default-quick validate, passive profiling, gate tiering, planner
+  retirement, doc/skill consolidation) and quality (continuous binding visual
+  fake-shot gate, a fun/reference-feel owner, runtime-art quality bar,
+  first-screen scope discipline). Core diagnosis: gates were advisory/post-hoc
+  and validated artifacts not fun/ref-match, and machinery grew additively.
+- Current review findings to fix, in order:
+  1. Visual prototype workflow must start from fake shot vs native screenshot,
+     not from code-first gameplay expansion.
+  2. Product gate fail must stop feature/content expansion unless the lead
+     explicitly accepts the debt.
+  3. Profiling coverage must stay current across task switches; the fishing
+     profile had near-zero wall-clock coverage, so review conclusions are
+     incomplete unless the missing telemetry is named. `T0023` added a
+     current-scope guard so future handoffs cannot silently use sparse
+     telemetry, and `T0028` made strict slice hygiene require profiler guard
+     evidence before handoff/commit.
+  4. Generated UI must prove non-empty crop/runtime manifests and pixel audit
+     before runtime integration claims.
+  5. Prototype commits need review hygiene: scoped diffs, current evidence,
+     known red gates, and checked push constraints.
+- Completed cleanup slices:
+  - `T0013`-`T0026`: closed fishing, cleaned old concept/status/state, added
+    startup/profile/slice-hygiene guards, and split project assets.
+  - `T0027`-`T0034`: added visual-first gates, strict product-read rubric,
+    visual critic packets, and `node tools/ai.mjs critic`.
+  - `T0035`-`T0042`: taught validation planning for product-gate,
+    game-context, and asset-tool checks; made low profiling coverage show
+    largest gaps, recovered validation checks by check id, and let
+    `node tools/ai.mjs validate` plan from touched files including the
+    pipeline validator, skill tooling, and state-codegen tests.
 
 ## Next Priorities
 
-1. Execute `T0012`: generate/select and integrate focal-area world/UI assets
-   from `visual_rescue_screen_contract_v1.md`, then produce a new native
-   screenshot that passes product-read gate.
-2. Replace rough generated low-poly mesh props with selected/final fishing
-   props: dock decor, shop props, boat/island pieces, fish silhouettes, and
-   blocky character pieces.
-3. Run a second generated UI-kit pass with cleaner source-family separation,
-   then replace the prototype/partial crops.
-4. Continue visual pass against fake shot: water polish, avatar silhouette,
-   fish scale/readability, and UI clarity.
+1. P0 speed: `T0043` default validate to quick; `T0044` make profiling passive.
+2. P0 quality: `T0045` continuous binding visual fake-shot gate (redefines
+   "done"); `T0046` add the fun/reference-feel owner.
+3. P1 subtraction: `T0047` retire validation-planner machinery; `T0048` merge UI
+   asset skills + shared reference deconstruction; `T0049` tier UI asset gates;
+   `T0050` runtime-art quality bar.
+4. P2: `T0051` consolidate AI_PIPELINE docs; `T0052` first-screen scope cap.
 
 ## Validation Policy
 
-- Research/docs: run `node tools/taskboard/cli.mjs validate`.
-- Visual/generated art: create source records, inspect outputs, and keep final
-  assets in the project folder; no final art from named refs until the reference
-  gate is ready or an exception is approved.
-- Playable prototype: native PC build and screenshot/input proof first.
+- Task/status change: `node tools/taskboard/cli.mjs validate`.
+- Taskboard tooling change: `node --test tools/taskboard/test.mjs`.
+- Game-context tooling change: `node --test tools/game_context/test.mjs`.
+- Product-gate tooling change: `node --test tools/product_gate/test.mjs`.
+- Asset tooling change: `node tools/ai_profile/plan_validation.mjs --change asset-tools`.
+- AI profiling/tooling change: `node --test tools/ai_profile/test.mjs`.
+- Skill/process change: `node tools/skills_eval.mjs`.
+- Reusable pipeline-base change: quick `node tools/pipeline_validate.mjs`;
+  full portable/export gate `node tools/pipeline_validate.mjs --full`.
+- Playable prototype change: native PC build and screenshot/input proof first.
 - Web/mobile/browser validation is out of scope unless the lead explicitly
-  approves web work for this fishing project.
+  approves web work for the current task.

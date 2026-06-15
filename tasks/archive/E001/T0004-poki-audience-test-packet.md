@@ -1,12 +1,12 @@
 ---
 id: T0004
 title: Poki audience test packet
-status: review
+status: dropped
 epic: E001
 priority: P1
 tags: [poki, playtest, ftue, telemetry]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-15
 ---
 
 ## What
@@ -56,3 +56,4 @@ telemetry events for the first Rune Marches slice.
   captures `tmp/rune_marches/playtest_probe.png`, and exits nonzero if required
   milestones are missing. Evidence: passive-profiled probe run, native rebuild,
   desktop + portrait scenarios, JSON parse, and taskboard validation.
+- 2026-06-15: Dropped during pipeline cleanup: Poki audience packet is historical Rune Marches work, not active validation lane.

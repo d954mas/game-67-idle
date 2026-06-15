@@ -158,6 +158,22 @@ Do not store current-game facts in reusable knowledge.
 Commit only intentional files. Prefer path-limited staging in repos with
 submodules, generated files, or large assets.
 
+Before commit or handoff for a prototype slice, run:
+
+```powershell
+node tools/product_gate/slice_hygiene.mjs --strict `
+  --build-evidence "<build command/result>" `
+  --probe-evidence "<probe/scenario result>" `
+  --product-gate "<gate.json>" `
+  --screenshot "<latest screenshot>"
+```
+
+If the normal slice changes more than 30 files, split by phase or rerun with
+`--snapshot` only when the lead explicitly asked for an end-of-experiment
+snapshot. If changed review/audit files still contain fail verdicts, refresh
+them, archive them as historical evidence, or pass `--known-red-gate` and name
+the debt in final notes. Check push/upstream state before promising push.
+
 Good commit boundaries:
 
 - one gameplay slice;
@@ -215,4 +231,3 @@ Use this report shape for game-director loops:
 - Product review done.
 - Durable state updated if useful.
 - Intentional commit made.
-

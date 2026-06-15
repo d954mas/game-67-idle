@@ -11,6 +11,7 @@ import { basename, join, resolve, dirname } from "node:path";
 export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done", "dropped"];
 export const EPIC_STATUSES = ["idea", "active", "done", "dropped"];
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
+export const LIVE_STATUS_MAX_CHARS = 6000;
 
 export function findRoot(start = process.cwd()) {
   if (process.env.TASKBOARD_ROOT) {
@@ -325,6 +326,13 @@ export function validateStore(root) {
   const problems = [];
   const tasks = listTasks(root);
   const epics = listEpics(root);
+  const statusFile = join(taskDir(root), "STATUS.md");
+  if (existsSync(statusFile)) {
+    const statusChars = readFileSync(statusFile, "utf8").length;
+    if (statusChars > LIVE_STATUS_MAX_CHARS) {
+      problems.push(`tasks/STATUS.md exceeds live status budget (${statusChars}/${LIVE_STATUS_MAX_CHARS} chars); move historical evidence to tasks/archive/ or gamedesign/projects/`);
+    }
+  }
   const seen = new Map();
   for (const d of [...tasks, ...epics]) {
     const id = d.fields.id;

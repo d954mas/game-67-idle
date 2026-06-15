@@ -52,6 +52,18 @@ Test task.
 `, "utf8");
 }
 
+function writeProfileGuard(rootDir, name = "profile-status.json", usable = true) {
+  const path = join(rootDir, name);
+  writeFileSync(path, `${JSON.stringify({
+    current_scope_review_confidence: {
+      level: usable ? "usable" : "broken",
+      usable_for_review: usable,
+      blocking_reasons: usable ? [] : ["scope_stale"],
+    },
+  })}\n`, "utf8");
+  return path;
+}
+
 test("product read gate writes markdown and json for strict fail", () => {
   const dir = tempDir();
   try {
@@ -207,6 +219,163 @@ test("product read gate refuses missing screenshots", () => {
   assert.match(result.stderr, /screenshot does not exist/);
 });
 
+test("product read gate visual strict requires full rubric scores", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    writeFileSync(screenshot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "visual-test",
+      "--screenshot", screenshot,
+      "--verdict", "pass",
+      "--where", "A bright island fishing screen.",
+      "--action", "Tap the cast button.",
+      "--response", "The bobber lands in the water.",
+      "--reward", "A fish reward card appears.",
+      "--game-look", "Colorful world art and game UI are visible.",
+      "--visual-strict",
+      "--visual-score", "composition=4",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /--visual-score readability=1-5 is required/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("product read gate visual strict rejects low-score pass", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    writeFileSync(screenshot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "visual-test",
+      "--screenshot", screenshot,
+      "--verdict", "pass",
+      "--where", "A bright island fishing screen.",
+      "--action", "Tap the cast button.",
+      "--response", "The bobber lands in the water.",
+      "--reward", "A fish reward card appears.",
+      "--game-look", "Colorful world art and game UI are visible.",
+      "--visual-strict",
+      "--visual-score", "composition=4",
+      "--visual-score", "readability=3",
+      "--visual-score", "ui_controls=4",
+      "--visual-score", "action_direction=4",
+      "--visual-score", "art_quality=4",
+      "--visual-score", "audience_fit=4",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /visual pass requires readability score >= 4/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("product read gate visual strict writes fail critique", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    const markdown = join(dir, "gate.md");
+    const json = join(dir, "gate.json");
+    const latest = join(dir, "latest.json");
+    writeFileSync(screenshot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "visual-test",
+      "--screenshot", screenshot,
+      "--verdict", "fail",
+      "--where", "A bright island fishing screen.",
+      "--action", "Tap the cast button.",
+      "--response", "The bobber lands in the water.",
+      "--reward", "A fish reward card appears.",
+      "--game-look", "Colorful world art and game UI are visible.",
+      "--problem", "Text, buttons, and action direction do not read.",
+      "--next", "Rebuild the HUD and cast pose before adding content.",
+      "--visual-strict",
+      "--visual-score", "composition=2",
+      "--visual-score", "readability=1",
+      "--visual-score", "ui_controls=1",
+      "--visual-score", "action_direction=2",
+      "--visual-score", "art_quality=2",
+      "--visual-score", "audience_fit=2",
+      "--visual-issue", "blocker:readability:Text is too small and low contrast at gameplay size.",
+      "--visual-issue", "major:ui_controls:Buttons look like debug rectangles instead of game UI.",
+      "--output", markdown,
+      "--json-output", json,
+      "--index-output", latest,
+      "--strict",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(readFileSync(json, "utf8"));
+    assert.equal(report.visual_critique.strict, true);
+    assert.equal(report.visual_critique.scores.readability, 1);
+    assert.equal(report.visual_critique.issues[0].severity, "blocker");
+    const md = readFileSync(markdown, "utf8");
+    assert.match(md, /## Visual Critique/);
+    assert.match(md, /blocker \/ readability: Text is too small/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("visual critique packet requires screenshot evidence", () => {
+  const dir = tempDir();
+  try {
+    const result = runRaw([
+      "tools/product_gate/visual_critique_packet.mjs",
+      "--project", "visual-test",
+      "--task", "T0001",
+      "--screenshot", join(dir, "missing.png"),
+      "--target", "gamedesign/projects/visual-test/art/fake.png",
+      "--output", join(dir, "packet.md"),
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /screenshot does not exist/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("visual critique packet writes strict rubric and gate command", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    const markdown = join(dir, "packet.md");
+    const json = join(dir, "packet.json");
+    writeFileSync(screenshot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/visual_critique_packet.mjs",
+      "--project", "visual-test",
+      "--task", "T0001",
+      "--surface", "desktop",
+      "--screenshot", screenshot,
+      "--target", "gamedesign/projects/visual-test/art/fake.png",
+      "--brief", "Bright casual game screen with readable UI.",
+      "--output", markdown,
+      "--json-output", json,
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const md = readFileSync(markdown, "utf8");
+    assert.match(md, /Visual Critic Packet/);
+    assert.match(md, /--visual-strict/);
+    assert.match(md, /composition: score 1-5/);
+    assert.match(md, /readability: score 1-5/);
+    assert.match(md, /ui_controls: score 1-5/);
+    assert.match(md, /action_direction: score 1-5/);
+    assert.match(md, /art_quality: score 1-5/);
+    assert.match(md, /audience_fit: score 1-5/);
+    const report = JSON.parse(readFileSync(json, "utf8"));
+    assert.equal(report.schema, "game.visual_critique_packet");
+    assert.ok(report.axes.includes("readability"));
+    assert.match(report.gate_command, /node tools\/ai\.mjs gate/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("responsive layout audit passes clean portrait action stack", () => {
   const dir = tempDir();
   try {
@@ -253,6 +422,218 @@ test("responsive layout audit rejects squeezed portrait action row", () => {
     assert.equal(result.status, 1);
     assert.match(result.stdout, /portrait width/);
     assert.match(result.stdout, /should sit below portrait primary action/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("slice hygiene fails broad normal diff in strict mode", () => {
+  const dir = tempDir();
+  try {
+    const json = join(dir, "hygiene.json");
+    const changed = [];
+    for (let index = 0; index < 31; index += 1) {
+      changed.push("--changed-file", `src/file-${index}.c`);
+    }
+    const result = runRaw([
+      "tools/product_gate/slice_hygiene.mjs",
+      "--root", dir,
+      "--threshold", "30",
+      "--strict",
+      "--json-output", json,
+      "--build-evidence", "cmake --build --preset native-debug",
+      "--probe-evidence", "playtest probe passed",
+      "--product-gate", "gate.json",
+      "--screenshot", "screen.png",
+      ...changed,
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /Changed files: 31 \/ threshold 30/);
+    const report = JSON.parse(readFileSync(json, "utf8"));
+    assert.equal(report.verdict, "fail");
+    assert.ok(report.problems.some((problem) => problem.includes("split the slice")));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("slice hygiene allows explicit snapshot over broad diff threshold", () => {
+  const dir = tempDir();
+  try {
+    writeFileSync(join(dir, "screen.png"), "png", "utf8");
+    writeFileSync(join(dir, "gate.json"), `${JSON.stringify({ verdict: "pass" })}\n`, "utf8");
+    const profileGuard = writeProfileGuard(dir);
+    const changed = [];
+    for (let index = 0; index < 31; index += 1) {
+      changed.push("--changed-file", `src/file-${index}.c`);
+    }
+    const result = runRaw([
+      "tools/product_gate/slice_hygiene.mjs",
+      "--root", dir,
+      "--threshold", "30",
+      "--strict",
+      "--snapshot",
+      "--build-evidence", "cmake --build --preset native-debug",
+      "--probe-evidence", "playtest probe passed",
+      "--product-gate", "gate.json",
+      "--screenshot", "screen.png",
+      "--profile-guard", profileGuard,
+      ...changed,
+    ]);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /snapshot accepted/);
+    assert.match(result.stdout, /Verdict: \*\*WARN\*\*/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("slice hygiene requires profiler guard evidence in strict mode", () => {
+  const dir = tempDir();
+  try {
+    writeFileSync(join(dir, "screen.png"), "png", "utf8");
+    writeFileSync(join(dir, "gate.json"), `${JSON.stringify({ verdict: "pass" })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/slice_hygiene.mjs",
+      "--root", dir,
+      "--strict",
+      "--changed-file", "src/main.c",
+      "--build-evidence", "build passed",
+      "--probe-evidence", "probe passed",
+      "--product-gate", "gate.json",
+      "--screenshot", "screen.png",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /missing --profile-guard/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("slice hygiene records passing profiler guard evidence", () => {
+  const dir = tempDir();
+  try {
+    writeFileSync(join(dir, "screen.png"), "png", "utf8");
+    writeFileSync(join(dir, "gate.json"), `${JSON.stringify({ verdict: "pass" })}\n`, "utf8");
+    const profileGuard = writeProfileGuard(dir);
+    const json = join(dir, "hygiene.json");
+    const result = runRaw([
+      "tools/product_gate/slice_hygiene.mjs",
+      "--root", dir,
+      "--strict",
+      "--changed-file", "src/main.c",
+      "--build-evidence", "build passed",
+      "--probe-evidence", "probe passed",
+      "--product-gate", "gate.json",
+      "--screenshot", "screen.png",
+      "--profile-guard", profileGuard,
+      "--json-output", json,
+    ]);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /profiler guard: .*profile-status\.json \(pass\)/);
+    const report = JSON.parse(readFileSync(json, "utf8"));
+    assert.equal(report.evidence.profile_guards[0].verdict, "pass");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("slice hygiene fails stale profiler guard unless accepted as known red", () => {
+  const dir = tempDir();
+  try {
+    writeFileSync(join(dir, "screen.png"), "png", "utf8");
+    writeFileSync(join(dir, "gate.json"), `${JSON.stringify({ verdict: "pass" })}\n`, "utf8");
+    const profileGuard = writeProfileGuard(dir, "stale-profile-status.json", false);
+    const result = runRaw([
+      "tools/product_gate/slice_hygiene.mjs",
+      "--root", dir,
+      "--strict",
+      "--changed-file", "src/main.c",
+      "--build-evidence", "build passed",
+      "--probe-evidence", "probe passed",
+      "--product-gate", "gate.json",
+      "--screenshot", "screen.png",
+      "--profile-guard", profileGuard,
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /profiler guard is fail/);
+    assert.match(result.stdout, /scope_stale/);
+
+    const accepted = runRaw([
+      "tools/product_gate/slice_hygiene.mjs",
+      "--root", dir,
+      "--strict",
+      "--changed-file", "src/main.c",
+      "--build-evidence", "build passed",
+      "--probe-evidence", "probe passed",
+      "--product-gate", "gate.json",
+      "--screenshot", "screen.png",
+      "--profile-guard", profileGuard,
+      "--known-red-gate", "accepted stale profiler guard for final note",
+    ]);
+    assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+    assert.match(accepted.stdout, /known red profiler guard accepted/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("slice hygiene requires fail audit callout or refresh", () => {
+  const dir = tempDir();
+  try {
+    mkdirSync(join(dir, "gamedesign", "projects", "test", "reviews"), { recursive: true });
+    const audit = join("gamedesign", "projects", "test", "reviews", "latest-audit.json");
+    writeFileSync(join(dir, audit), `${JSON.stringify({ verdict: "fail", problems: ["bad"] })}\n`, "utf8");
+    const profileGuard = writeProfileGuard(dir);
+    const result = runRaw([
+      "tools/product_gate/slice_hygiene.mjs",
+      "--root", dir,
+      "--strict",
+      "--changed-file", audit,
+      "--build-evidence", "build passed",
+      "--probe-evidence", "probe passed",
+      "--product-gate", audit,
+      "--screenshot", audit,
+      "--profile-guard", profileGuard,
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /changed fail\/stale review artifact/);
+
+    const accepted = runRaw([
+      "tools/product_gate/slice_hygiene.mjs",
+      "--root", dir,
+      "--strict",
+      "--changed-file", audit,
+      "--build-evidence", "build passed",
+      "--probe-evidence", "probe passed",
+      "--product-gate", audit,
+      "--screenshot", audit,
+      "--profile-guard", profileGuard,
+      "--known-red-gate", "accepted historical fail audit for review notes",
+    ]);
+    assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
+    assert.match(accepted.stdout, /known red review artifact/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("slice hygiene fails promised push when push target is unavailable", () => {
+  const dir = tempDir();
+  try {
+    const result = runRaw([
+      "tools/product_gate/slice_hygiene.mjs",
+      "--root", dir,
+      "--promise-push",
+      "--strict",
+      "--changed-file", "src/main.c",
+      "--build-evidence", "build passed",
+      "--probe-evidence", "probe passed",
+      "--product-gate", "gate.json",
+      "--screenshot", "screen.png",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /cannot promise push/);
   } finally {
     cleanup(dir);
   }

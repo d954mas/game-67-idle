@@ -1,12 +1,12 @@
 ---
 id: T0007
 title: Research generated art and UI/UX asset pipeline skill
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [visual, art, ui, ux, pipeline, skill]
 created: 2026-06-14
-updated: 2026-06-14
+updated: 2026-06-15
 ---
 
 ## What
@@ -81,3 +81,4 @@ before generating final art for a game screen.
 - 2026-06-14: Responsive UI composition pass: portrait no longer squeezes desktop layout; compact HUD hides nonessential road value, journal drops dense stat strings, primary action uses a full-width row with secondary buttons below. Desktop and portrait product gates now both pass for UI kit v2.
 - 2026-06-14: Added responsive UI layout audit: product_gate tool checks UI-tree action bounds, min touch sizes, non-overlap, and portrait full-width primary row. Rune Marches UI kit v2 desktop and portrait layout audits pass and are referenced from the art bible.
 - 2026-06-14: Created dedicated generated-game-ui-assets skill as the orchestrator for AI-generated runtime UI kits. Existing visual/art and asset pipeline skills now point to it for source sheets, slice9 manifests, pixel audits, responsive layout audits, and runtime proof.
+- 2026-06-15: Archived during pipeline cleanup: generated-game-ui-assets skill and related validators now exist and passed pipeline validation; future work continues under E003.

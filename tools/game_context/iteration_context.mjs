@@ -2,10 +2,14 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const toolRoot = dirname(scriptDir);
 
 function usage() {
   console.error(`usage:
-  node tools/game_context/iteration_context.mjs [--json-output <file>] [--status-max-chars <n>]
+  node tools/game_context/iteration_context.mjs [--root <repo>] [--json-output <file>] [--status-max-chars <n>]
 
 Builds a compact pre-implementation context pack for playable game work.`);
   process.exit(2);
@@ -89,9 +93,125 @@ function truncate(text, maxChars) {
   return `${clean.slice(0, Math.max(0, maxChars - 80)).replace(/\s+$/, "")}\n\n... truncated ${clean.length - maxChars} chars; inspect source file for full context.`;
 }
 
+function hasMeaningfulText(text) {
+  return Boolean(String(text || "").trim());
+}
+
+function isActiveConcept(text) {
+  const value = String(text || "");
+  return hasMeaningfulText(value) && !/no active|no concept|none selected|clean template/i.test(value);
+}
+
+function taskContextHasActionableWork(text) {
+  return /-\s+T\d{4}\s+(doing|todo|backlog)\s+/i.test(String(text || ""));
+}
+
+function hasProjectWikiSource(sources) {
+  return sources.some((source) => /^gamedesign\/projects\/[^/]+\//.test(source));
+}
+
+function mentionsProductProof(text) {
+  return /product[- ]read|product gate|fake shot|visual proof|screenshot proof|native proof|first playable screen/i.test(String(text || ""));
+}
+
+function buildStartupGate({ concept, designSources, runtimeSources, taskContext, currentGate, nextPriorities }) {
+  const activeConcept = isActiveConcept(concept);
+  const requirements = [
+    {
+      id: "active_concept",
+      ok: activeConcept,
+      evidence: concept || "No active concept found.",
+      fix: "Create or select one active game concept before implementation.",
+    },
+    {
+      id: "active_task",
+      ok: activeConcept && taskContextHasActionableWork(taskContext),
+      evidence: activeConcept && taskContextHasActionableWork(taskContext) ? "Taskboard has actionable work for the active concept." : "No active-concept task is ready.",
+      fix: "Create/refine one P0/P1 task for the active concept with checkable Done when and evidence gates.",
+    },
+    {
+      id: "project_wiki",
+      ok: activeConcept && hasProjectWikiSource(designSources),
+      evidence: activeConcept && hasProjectWikiSource(designSources) ? "Project wiki/design sources found for an active concept." : "No active-concept project wiki source found.",
+      fix: "Create gamedesign/projects/<game-id>/ for the active concept with concept/GDD/evidence before runtime work.",
+    },
+    {
+      id: "runtime_harness",
+      ok: runtimeSources.length > 0,
+      evidence: runtimeSources.length ? runtimeSources.join(", ") : "No runtime source/build files found.",
+      fix: "Identify the native/runtime harness and validation command.",
+    },
+    {
+      id: "visual_product_gate_plan",
+      ok: activeConcept && mentionsProductProof(`${currentGate}\n${nextPriorities}`),
+      evidence: activeConcept && mentionsProductProof(`${currentGate}\n${nextPriorities}`) ? "Status names visual/product/native proof for the active concept." : "No active-concept visual/product proof gate found in status.",
+      fix: "Name the first fake shot/product-read/native screenshot proof before broad implementation.",
+    },
+  ];
+  const missing = requirements.filter((requirement) => !requirement.ok);
+  return {
+    status: missing.length === 0 ? "ready_for_first_slice" : "not_ready_for_implementation",
+    hard_stop: missing.length > 0,
+    missing: missing.map((requirement) => requirement.id),
+    requirements,
+  };
+}
+
+function buildVisualFirstContract({ concept }) {
+  const activeConcept = isActiveConcept(concept);
+  return {
+    status: activeConcept ? "required_before_visual_runtime_work" : "inactive_until_active_concept",
+    session_contract_fields: [
+      {
+        id: "goal",
+        prompt: "One player-facing visual/product outcome for this slice.",
+      },
+      {
+        id: "non_goal",
+        prompt: "What feature/content expansion is explicitly out of scope.",
+      },
+      {
+        id: "proof",
+        prompt: "Native screenshot/product gate/art audit that proves the slice.",
+      },
+      {
+        id: "stop_condition",
+        prompt: "The red gate that stops expansion, including product gate fail or lead visual rejection.",
+      },
+      {
+        id: "likely_files",
+        prompt: "The small set of docs/assets/runtime files expected to change.",
+      },
+    ],
+    before_coding_required_evidence: [
+      "Accepted fake shot, reference digest, art bible, or visual target path.",
+      "Current native screenshot path, or the exact native capture command if the runtime does not exist yet.",
+      "Screenshot-vs-target mismatch list before runtime/code changes.",
+      "One vertical art slice plan: character/world/water/UI focal surface before broad content.",
+      "Product-read gate command/path that can fail the slice.",
+    ],
+    after_meaningful_render_change: [
+      "Capture a new native screenshot.",
+      "Update the screenshot-vs-target mismatch list.",
+      "Run or record the product-read gate verdict before adding features/content.",
+    ],
+    generated_ui_runtime_gate: [
+      "Non-empty crop manifest covering every runtime UI asset id.",
+      "Non-empty runtime manifest matching crop ids and output PNGs.",
+      "Passing pixel audit from audit_generated_ui_assets.py before runtime integration claims.",
+      "If the audit is red, fix source/crop/runtime assets before compensating in code.",
+    ],
+    stop_conditions: [
+      "Product gate fail blocks feature/content expansion unless the lead explicitly accepts the debt.",
+      "Lead rejection such as ugly, unclear, unreadable, or not like the fake shot blocks broad implementation.",
+      "Procedural/programmer art cannot satisfy generated/final visual work without a recorded exception.",
+    ],
+  };
+}
+
 function runTaskContext(root, maxChars) {
   const result = spawnSync(process.execPath, [
-    "tools/taskboard/cli.mjs",
+    join(toolRoot, "taskboard", "cli.mjs"),
     "context",
     "--status-max-chars",
     String(maxChars),
@@ -99,6 +219,7 @@ function runTaskContext(root, maxChars) {
     "12",
   ], {
     cwd: root,
+    env: { ...process.env, TASKBOARD_ROOT: root },
     encoding: "utf8",
     shell: false,
   });
@@ -126,6 +247,7 @@ function projectDesignSources(root) {
       `gamedesign/projects/${projectId}/gdd.md`,
       `gamedesign/projects/${projectId}/GDD.md`,
       `gamedesign/projects/${projectId}/art/art_direction.md`,
+      `gamedesign/projects/${projectId}/reviews/first_slice_visual_gate.md`,
       `gamedesign/projects/${projectId}/data/balance.json`,
     ]));
   }
@@ -150,8 +272,9 @@ function buildContext(root, options = {}) {
   const taskContext = runTaskContext(root, Math.max(1200, maxStatusChars));
 
   const concept = bulletContaining(project, [/No active game concept/i, /No concept selected/i, /Active game concept/i], "No active concept found in AGENTS.md.");
+  const activeConcept = isActiveConcept(concept);
   const productTarget = bulletContaining(direction, [/current product target/i, /release-quality/i, /product target/i, /Current runtime surface/i], "");
-  const runtimeSurface = bulletContaining(direction, [/current runtime surface/i, /src\/main\.c/i, /placeholder/i], "");
+  const runtimeSurface = bulletContaining(direction, [/current runtime surface/i, /src\/clean_seed_main\.c/i, /src\/main\.c/i, /placeholder/i], "");
   const nativeGate = bulletContaining(validation, [/Native desktop\/PC/i, /native PC/i, /preferred development/i], "");
   const webGate = bulletContaining(validation, [/web prototype/i, /web server/i, /localhost/i, /browser\/frontend/i], "");
   const referenceGate = bulletContaining(direction, [/Reference study is a hard implementation gate/i, /Reference Lock/i], "");
@@ -160,13 +283,22 @@ function buildContext(root, options = {}) {
   const designSources = existing(root, [
     "gamedesign/knowledge/README.md",
     "gamedesign/knowledge/reference_deconstruction.md",
-  ]).concat(projectDesignSources(root));
-  const runtimeSources = existing(root, [
-    "src/main.c",
-    "state/game_state.schema.json",
-    "CMakePresets.json",
-    "tools/devapi",
-  ]);
+  ]).concat(activeConcept ? projectDesignSources(root) : []);
+  const runtimeCandidates = activeConcept
+    ? [
+        "src/clean_seed_main.c",
+        "src/main.c",
+        "state/game_state.schema.json",
+        "CMakePresets.json",
+        "tools/devapi",
+      ]
+    : [
+        existsSync(join(root, "src", "clean_seed_main.c")) ? "src/clean_seed_main.c" : "src/main.c",
+        "state/game_state.schema.json",
+        "CMakePresets.json",
+        "tools/devapi",
+      ];
+  const runtimeSources = existing(root, runtimeCandidates);
 
   const currentGate = sectionText(taskContext, "Current Gate") || sectionText(taskContext, "Current Goal");
   const nextPriorities = sectionText(taskContext, "Next Priorities");
@@ -180,6 +312,16 @@ function buildContext(root, options = {}) {
     visualGate || "For polished/generated visual work, use an art target/job and reusable runtime assets before code polish.",
   ];
 
+  const startupGate = buildStartupGate({
+    concept,
+    designSources,
+    runtimeSources,
+    taskContext,
+    currentGate,
+    nextPriorities,
+  });
+  const visualFirstContract = buildVisualFirstContract({ concept });
+
   return {
     schema_version: 1,
     root,
@@ -191,12 +333,20 @@ function buildContext(root, options = {}) {
     design_sources: designSources,
     runtime_sources: runtimeSources,
     current_gate: truncate(currentGate, 1600),
+    prototype_startup_gate: startupGate,
+    visual_first_contract: visualFirstContract,
     next_priorities: truncate(nextPriorities, 1200),
     blockers: truncate(blockers, 1000),
     required_validation: truncate(requiredValidation, 1400),
     before_coding_checklist: [
+      "Check `prototype_startup_gate.status`; if it is not ready, do not start broad runtime implementation.",
+      "Write the 5-line visual session contract when the slice has visual, UI, FTUE, feel, or audience-test risk.",
+      "Open exactly one actionable task and one active project wiki before code.",
+      "Name the visual/product proof gate that can stop feature expansion.",
+      "Compare current native screenshot against the accepted fake shot/target and list mismatches before visual code.",
       "Name the selected runtime harness and why it is allowed.",
       "If reference-driven, cite the durable deconstruction/digest and next native proof.",
+      "If generated UI work, prove non-empty crop/runtime manifests and pixel audit before runtime integration claims.",
       "If visual/UI work, cite the accepted target or art request and reusable asset strategy.",
       "Name the smallest playable slice and the native screenshot/scenario that will prove it.",
       "Use passive AI profiling only for long or risky work where stall evidence would help.",
@@ -222,6 +372,31 @@ function renderMarkdown(context) {
   lines.push("## Current Project Gate");
   lines.push(context.current_gate || "- none found; run `node tools/taskboard/cli.mjs context`.");
   lines.push("");
+  lines.push("## Prototype Startup Gate");
+  lines.push(`- status: ${context.prototype_startup_gate.status}`);
+  lines.push(`- hard stop: ${context.prototype_startup_gate.hard_stop ? "yes" : "no"}`);
+  if (context.prototype_startup_gate.missing.length > 0) {
+    lines.push(`- missing: ${context.prototype_startup_gate.missing.join(", ")}`);
+  }
+  for (const requirement of context.prototype_startup_gate.requirements) {
+    lines.push(`- ${requirement.ok ? "PASS" : "FAIL"} ${requirement.id}: ${requirement.ok ? requirement.evidence : requirement.fix}`);
+  }
+  lines.push("");
+  lines.push("## Visual-First Contract");
+  lines.push(`- status: ${context.visual_first_contract.status}`);
+  lines.push("- session contract fields:");
+  for (const field of context.visual_first_contract.session_contract_fields) {
+    lines.push(`  - ${field.id}: ${field.prompt}`);
+  }
+  lines.push("- before coding evidence:");
+  for (const item of context.visual_first_contract.before_coding_required_evidence) lines.push(`  - ${item}`);
+  lines.push("- after render-change evidence:");
+  for (const item of context.visual_first_contract.after_meaningful_render_change) lines.push(`  - ${item}`);
+  lines.push("- generated UI runtime gate:");
+  for (const item of context.visual_first_contract.generated_ui_runtime_gate) lines.push(`  - ${item}`);
+  lines.push("- stop conditions:");
+  for (const item of context.visual_first_contract.stop_conditions) lines.push(`  - ${item}`);
+  lines.push("");
   lines.push("## Next Priorities");
   lines.push(context.next_priorities || "- none found.");
   lines.push("");
@@ -245,7 +420,7 @@ function renderMarkdown(context) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const root = findRoot();
+const root = args.root ? resolve(String(args.root)) : findRoot();
 const context = buildContext(root, { statusMaxChars: args["status-max-chars"] });
 const markdown = renderMarkdown(context);
 

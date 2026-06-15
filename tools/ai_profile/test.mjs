@@ -233,6 +233,214 @@ test("status recommends start helper for missing profiles", () => {
   }
 });
 
+test("status flags archived current scope as stale", () => {
+  const dir = tempDir();
+  try {
+    const taskRoot = join(dir, "task-root");
+    mkdirSync(join(taskRoot, "tasks", "archive", "E999"), { recursive: true });
+    writeFileSync(join(taskRoot, "tasks", "archive", "E999", "T9999-old-scope.md"), `---
+id: T9999
+title: Old scope
+status: done
+epic: E999
+priority: P1
+tags: []
+created: 2026-06-15
+updated: 2026-06-15
+---
+
+## What
+`, "utf8");
+    const scope = join(dir, "scope.json");
+    const profile = join(dir, "stale-scope.jsonl");
+    const statusJson = join(dir, "status.json");
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope",
+      scope,
+      "--profile",
+      profile,
+      "--work-item",
+      "T9999",
+      "--iteration",
+      "old",
+    ]);
+    const result = run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope, AI_PROFILE_TASK_ROOT: taskRoot },
+    });
+    const status = readJson(statusJson);
+    assert.equal(status.stale_scope, true);
+    assert.equal(status.scope_task.status, "done");
+    assert.match(status.next_action, /Reset profiling scope/);
+    assert.match(result.stdout, /Current scope task: done/);
+    assert.match(result.stdout, /stale/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status current-scope guard fails for slash-suffixed archived task ids", () => {
+  const dir = tempDir();
+  try {
+    const taskRoot = join(dir, "task-root");
+    mkdirSync(join(taskRoot, "tasks", "archive", "E999"), { recursive: true });
+    writeFileSync(join(taskRoot, "tasks", "archive", "E999", "T9998-old-scope.md"), `---
+id: T9998
+title: Old slash scope
+status: done
+epic: E999
+priority: P1
+tags: []
+created: 2026-06-15
+updated: 2026-06-15
+---
+
+## What
+`, "utf8");
+    const scope = join(dir, "scope.json");
+    const profile = join(dir, "stale-slash-scope.jsonl");
+    const statusJson = join(dir, "status.json");
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope",
+      scope,
+      "--profile",
+      profile,
+      "--work-item",
+      "T9998/old-slice",
+      "--iteration",
+      "old",
+      "--ts",
+      "2026-06-13T10:00:00+05:00",
+    ]);
+    writeFileSync(scope, `${JSON.stringify({
+      schema_version: 1,
+      work_item: "T9998/old-slice",
+      iteration: "old",
+      updated_at: "2026-06-13T10:00:00+05:00",
+    })}\n`, "utf8");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "validation",
+      "--category",
+      "validation",
+      "--intent",
+      "second scoped event",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--duration-ms",
+      "1000",
+      "--ts",
+      "2026-06-13T10:00:01+05:00",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+
+    const result = runRaw([
+      "tools/ai_profile/status.mjs",
+      "--profile",
+      profile,
+      "--json-output",
+      statusJson,
+      "--require-current-scope-usable",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope, AI_PROFILE_TASK_ROOT: taskRoot } });
+
+    assert.equal(result.status, 3);
+    assert.match(result.stderr, /scope_stale/);
+    const status = readJson(statusJson);
+    assert.equal(status.stale_scope, true);
+    assert.equal(status.scope_task.status, "done");
+    assert.match(status.scope_task.path, /T9998-old-scope\.md/);
+    assert.ok(status.current_scope_review_confidence.blocking_reasons.includes("scope_stale"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status current-scope guard allows slash-suffixed active task ids", () => {
+  const dir = tempDir();
+  try {
+    const taskRoot = join(dir, "task-root");
+    mkdirSync(join(taskRoot, "tasks", "active"), { recursive: true });
+    writeFileSync(join(taskRoot, "tasks", "active", "T9997-active-scope.md"), `---
+id: T9997
+title: Active slash scope
+status: doing
+epic: E999
+priority: P1
+tags: []
+created: 2026-06-15
+updated: 2026-06-15
+---
+
+## What
+`, "utf8");
+    const scope = join(dir, "scope.json");
+    const profile = join(dir, "active-slash-scope.jsonl");
+    const statusJson = join(dir, "status.json");
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope",
+      scope,
+      "--profile",
+      profile,
+      "--work-item",
+      "T9997/active-slice",
+      "--iteration",
+      "active",
+      "--ts",
+      "2026-06-13T10:00:00+05:00",
+    ]);
+    writeFileSync(scope, `${JSON.stringify({
+      schema_version: 1,
+      work_item: "T9997/active-slice",
+      iteration: "active",
+      updated_at: "2026-06-13T10:00:00+05:00",
+    })}\n`, "utf8");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "validation",
+      "--category",
+      "validation",
+      "--intent",
+      "measured active event",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--duration-ms",
+      "1000",
+      "--ts",
+      "2026-06-13T10:00:01+05:00",
+      "--command",
+      "node tools/taskboard/cli.mjs validate",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile",
+      profile,
+      "--json-output",
+      statusJson,
+      "--require-current-scope-usable",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope, AI_PROFILE_TASK_ROOT: taskRoot } });
+
+    const status = readJson(statusJson);
+    assert.equal(status.stale_scope, false);
+    assert.equal(status.scope_task.status, "doing");
+    assert.equal(status.current_scope_review_confidence.level, "usable");
+    assert.match(result.stdout, /Current scope review confidence: usable/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status does not ask for scope or context fixes when only historical records are incomplete", () => {
   const dir = tempDir();
   try {
@@ -373,15 +581,25 @@ test("status recommends checkpoint helper for low wall-clock coverage", () => {
       "--ts",
       futureTs,
     ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
-    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+    const result = run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
       env: { AI_PROFILE_SCOPE_FILE: scope },
     });
 
     const status = readJson(statusJson);
     assert.equal(status.low_profile_coverage, true);
     assert.equal(status.current_scope.low_profile_coverage, true);
+    assert.equal(status.wall_clock_coverage.largest_gaps.length, 1);
+    assert.equal(status.current_scope.wall_clock_coverage.largest_gaps.length, 1);
+    assert.match(status.wall_clock_coverage.largest_gaps[0].previous_intent, /phase start|Start/i);
+    assert.equal(status.wall_clock_coverage.largest_gaps[0].next_intent, "future sparse checkpoint");
+    assert.equal(status.review_confidence.level, "broken");
+    assert.ok(status.review_confidence.blocking_reasons.includes("current_scope_low_wall_clock_coverage"));
     assert.match(status.next_action, /ai\.mjs checkpoint/);
     assert.doesNotMatch(status.next_action, /event\.mjs/);
+    assert.match(result.stdout, /Largest Coverage Gaps/);
+    assert.match(result.stdout, /current scope/);
+    assert.match(result.stdout, /whole profile/);
+    assert.match(result.stdout, /future sparse checkpoint|lines 1-2/);
   } finally {
     cleanup(dir);
   }
@@ -441,14 +659,186 @@ test("status does not recommend checkpoint for historical low coverage only", ()
       "--ts",
       "2026-06-13T10:32:00+05:00",
     ]);
-    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
+    writeFileSync(scope, `${JSON.stringify({
+      schema_version: 1,
+      work_item: "STATUS5",
+      iteration: "current",
+      updated_at: "2026-06-13T10:32:00+05:00",
+    })}\n`, "utf8");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "planning",
+      "--category",
+      "planning",
+      "--intent",
+      "current measured event",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--duration-ms",
+      "1000",
+      "--ts",
+      "2026-06-13T10:32:01+05:00",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    const result = run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson], {
       env: { AI_PROFILE_SCOPE_FILE: scope },
     });
 
     const status = readJson(statusJson);
     assert.equal(status.low_profile_coverage, true);
     assert.equal(status.current_scope.low_profile_coverage, false);
+    assert.equal(status.wall_clock_coverage.largest_gaps.length, 1);
+    assert.equal(status.current_scope.wall_clock_coverage.largest_gaps.length, 0);
+    assert.equal(status.review_confidence.level, "partial");
+    assert.ok(status.review_confidence.partial_reasons.includes("whole_profile_low_wall_clock_coverage"));
     assert.doesNotMatch(status.next_action, /checkpoint\.mjs/);
+    assert.match(result.stdout, /Largest Coverage Gaps/);
+    assert.match(result.stdout, /whole profile/);
+    assert.doesNotMatch(status.passive_summary.normal_work_next_action, /No profiling maintenance needed/);
+    assert.match(status.passive_summary.normal_work_next_action, /Historical wall-clock coverage is incomplete/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status exposes usable current scope when historical coverage is partial", () => {
+  const dir = tempDir();
+  try {
+    const oldScope = join(dir, "old-scope.json");
+    const scope = join(dir, "scope.json");
+    const profile = join(dir, "historical-partial-current-usable.jsonl");
+    const statusJson = join(dir, "status.json");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "planning",
+      "--category",
+      "planning",
+      "--intent",
+      "old sparse event",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--ts",
+      "2026-06-13T10:00:00+05:00",
+    ], { env: { AI_PROFILE_SCOPE_FILE: oldScope } });
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "planning",
+      "--category",
+      "planning",
+      "--intent",
+      "old future sparse event",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--ts",
+      "2026-06-13T10:31:00+05:00",
+    ], { env: { AI_PROFILE_SCOPE_FILE: oldScope } });
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope",
+      scope,
+      "--profile",
+      profile,
+      "--work-item",
+      "STATUS6",
+      "--iteration",
+      "current",
+      "--ts",
+      "2026-06-13T10:32:00+05:00",
+    ]);
+    writeFileSync(scope, `${JSON.stringify({
+      schema_version: 1,
+      work_item: "STATUS6",
+      iteration: "current",
+      updated_at: "2026-06-13T10:32:00+05:00",
+    })}\n`, "utf8");
+    run([
+      "tools/ai_profile/event.mjs",
+      "--profile",
+      profile,
+      "--phase",
+      "validation",
+      "--category",
+      "validation",
+      "--intent",
+      "current measured command",
+      "--result",
+      "pass",
+      "--value",
+      "productive",
+      "--duration-ms",
+      "5000",
+      "--ts",
+      "2026-06-13T10:32:05+05:00",
+      "--command",
+      "node tools/taskboard/cli.mjs validate",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile",
+      profile,
+      "--json-output",
+      statusJson,
+      "--require-current-scope-usable",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+
+    const status = readJson(statusJson);
+    assert.equal(status.review_confidence.level, "partial");
+    assert.equal(status.current_scope_review_confidence.level, "usable");
+    assert.match(result.stdout, /Current scope review confidence: usable/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status current-scope guard fails when only start was recorded", () => {
+  const dir = tempDir();
+  try {
+    const scope = join(dir, "scope.json");
+    const profile = join(dir, "too-shallow-current-scope.jsonl");
+    const statusJson = join(dir, "status.json");
+    run([
+      "tools/ai_profile/start.mjs",
+      "--scope",
+      scope,
+      "--profile",
+      profile,
+      "--work-item",
+      "STATUS7",
+      "--iteration",
+      "start-only",
+    ]);
+
+    const result = runRaw([
+      "tools/ai_profile/status.mjs",
+      "--profile",
+      profile,
+      "--json-output",
+      statusJson,
+      "--require-current-scope-usable",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+
+    assert.equal(result.status, 3);
+    assert.match(result.stdout, /Current scope review confidence: broken/);
+    assert.match(result.stderr, /current_scope_too_shallow/);
+    assert.match(result.stderr, /node tools\/ai\.mjs checkpoint/);
+    const status = readJson(statusJson);
+    assert.equal(status.current_scope_review_confidence.level, "broken");
+    assert.ok(status.current_scope_review_confidence.blocking_reasons.includes("current_scope_too_shallow"));
   } finally {
     cleanup(dir);
   }
@@ -1587,6 +1977,261 @@ test("validation planner json output marks low risk broad checks as deferred", (
   }
 });
 
+test("validation planner recommends product gate scoped tests", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan-product-gate.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--change",
+      "product-gate",
+      "--risk",
+      "medium",
+      "--json-output",
+      output,
+    ]);
+
+    const plan = readJson(output);
+    assert.ok(plan.changes.includes("product-gate"));
+    assert.ok(plan.checks_by_tier.scoped.some((check) => check.id === "product-gate-tests"));
+    assert.ok(plan.checks_by_tier.scoped.some((check) => check.command === "node --test tools/product_gate/test.mjs"));
+    assert.equal(plan.broad_final_count, 0);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation planner infers product gate changes from files", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan-product-gate-file.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--file",
+      "tools/product_gate/review.mjs",
+      "--json-output",
+      output,
+    ]);
+
+    const plan = readJson(output);
+    assert.ok(plan.changes.includes("product-gate"));
+    assert.ok(plan.checks.some((check) => check.id === "product-gate-tests"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation planner recommends game context scoped tests", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan-game-context.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--change",
+      "game-context",
+      "--risk",
+      "medium",
+      "--json-output",
+      output,
+    ]);
+
+    const plan = readJson(output);
+    assert.ok(plan.changes.includes("game-context"));
+    assert.ok(plan.checks_by_tier.scoped.some((check) => check.id === "game-context-tests"));
+    assert.ok(plan.checks_by_tier.scoped.some((check) => check.command === "node --test tools/game_context/test.mjs"));
+    assert.equal(plan.broad_final_count, 0);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation planner infers game context changes from files", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan-game-context-file.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--file",
+      "tools/game_context/new_prototype.mjs",
+      "--json-output",
+      output,
+    ]);
+
+    const plan = readJson(output);
+    assert.ok(plan.changes.includes("game-context"));
+    assert.ok(plan.checks.some((check) => check.id === "game-context-tests"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation planner recommends asset tool scoped tests", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan-asset-tools.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--change",
+      "asset-tools",
+      "--risk",
+      "medium",
+      "--json-output",
+      output,
+    ]);
+
+    const plan = readJson(output);
+    const scopedIds = plan.checks_by_tier.scoped.map((check) => check.id);
+    assert.ok(plan.changes.includes("asset-tools"));
+    assert.ok(scopedIds.includes("asset-tool-node-tests"));
+    assert.ok(scopedIds.includes("asset-source-preprocess-tests"));
+    assert.ok(scopedIds.includes("generated-ui-asset-tests"));
+    assert.ok(scopedIds.includes("generated-source-derivation-tests"));
+    assert.equal(plan.broad_final_count, 0);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation planner infers asset tool changes from files", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan-asset-tools-file.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--file",
+      "tools/assets/validate_art_job.mjs",
+      "--json-output",
+      output,
+    ]);
+
+    const plan = readJson(output);
+    const ids = plan.checks.map((check) => check.id);
+    assert.ok(plan.changes.includes("asset-tools"));
+    assert.equal(plan.changes.includes("assets"), false);
+    assert.ok(ids.includes("asset-tool-node-tests"));
+    assert.equal(ids.includes("native-build"), false);
+    assert.equal(ids.includes("native-scenario"), false);
+    assert.equal(ids.includes("asset-pack"), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation planner infers AI facade changes from files", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan-ai-facade-file.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--file",
+      "tools/ai.mjs",
+      "--json-output",
+      output,
+    ]);
+
+    const plan = readJson(output);
+    assert.ok(plan.changes.includes("profiling"));
+    assert.ok(plan.checks.some((check) => check.id === "ai-facade-tests"));
+    assert.ok(plan.checks.some((check) => check.command === "node --test tools/ai.test.mjs"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation planner infers pipeline validator changes from files", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan-pipeline-validator-file.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--file",
+      "tools/pipeline_validate.mjs",
+      "--json-output",
+      output,
+    ]);
+
+    const plan = readJson(output);
+    assert.ok(plan.changes.includes("pipeline"));
+    assert.ok(plan.checks.some((check) => check.id === "pipeline-quick"));
+    assert.ok(plan.skipped_final.some((check) => check.id === "portable-pipeline"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation planner infers skill tooling changes from files", () => {
+  const dir = tempDir();
+  try {
+    const evalOutput = join(dir, "validation-plan-skills-eval-file.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--file",
+      "tools/skills_eval.mjs",
+      "--json-output",
+      evalOutput,
+    ]);
+
+    const evalPlan = readJson(evalOutput);
+    assert.ok(evalPlan.changes.includes("skills"));
+    assert.ok(evalPlan.checks.some((check) => check.id === "skills-sync"));
+    assert.ok(evalPlan.checks.some((check) => check.id === "skills-eval"));
+
+    const syncOutput = join(dir, "validation-plan-skills-sync-file.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--file",
+      "tools/skills_sync.mjs",
+      "--json-output",
+      syncOutput,
+    ]);
+
+    const syncPlan = readJson(syncOutput);
+    assert.ok(syncPlan.changes.includes("skills"));
+    assert.ok(syncPlan.checks.some((check) => check.id === "skills-sync"));
+    assert.ok(syncPlan.checks.some((check) => check.id === "skills-eval"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("validation planner includes state codegen tests for state codegen files", () => {
+  const dir = tempDir();
+  try {
+    const output = join(dir, "validation-plan-state-codegen-file.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--file",
+      "tools/state_codegen/generate_state.py",
+      "--json-output",
+      output,
+    ]);
+
+    const plan = readJson(output);
+    const ids = plan.checks.map((check) => check.id);
+    assert.ok(plan.changes.includes("state"));
+    assert.ok(ids.includes("state-codegen"));
+    assert.ok(ids.includes("state-codegen-tests"));
+    assert.ok(plan.checks.some((check) => check.command === "python tools/state_codegen/generate_state.py"));
+    assert.ok(plan.checks.some((check) => check.command === "python -m unittest tools.state_codegen.generate_state_test"));
+
+    const testOutput = join(dir, "validation-plan-state-codegen-test-file.json");
+    run([
+      "tools/ai_profile/plan_validation.mjs",
+      "--file",
+      "tools/state_codegen/generate_state_test.py",
+      "--json-output",
+      testOutput,
+    ]);
+    const testPlan = readJson(testOutput);
+    const testIds = testPlan.checks.map((check) => check.id);
+    assert.ok(testPlan.changes.includes("state"));
+    assert.ok(testIds.includes("state-codegen"));
+    assert.ok(testIds.includes("state-codegen-tests"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("validation runner profiles checks and stops final after failure", () => {
   const dir = tempDir();
   try {
@@ -1682,6 +2327,75 @@ test("validation runner compacts passing output but prints failures", () => {
   }
 });
 
+test("status and review recover failed validation checks when command changes", () => {
+  const dir = tempDir();
+  try {
+    const scope = join(dir, "scope.json");
+    const profile = join(dir, "validation-check-recovered.jsonl");
+    const statusJson = join(dir, "status.json");
+    const reviewJson = join(dir, "review.json");
+    writeFileSync(scope, `${JSON.stringify({
+      schema_version: 1,
+      work_item: "RECOVER",
+      iteration: "validation-check",
+      updated_at: "2026-06-13T10:00:00+05:00",
+    })}\n`, "utf8");
+    writeFileSync(profile, [
+      {
+        ts: "2026-06-13T10:00:01+05:00",
+        phase: "validation",
+        category: "validation",
+        intent: "old runner command",
+        result: "fail",
+        value: "productive",
+        work_item: "RECOVER",
+        iteration: "validation-check",
+        commands: ["py -3.12 -m unittest tools.assets.atomic_io_test"],
+        validation_check_id: "asset-source-preprocess-tests",
+      },
+      {
+        ts: "2026-06-13T10:00:02+05:00",
+        phase: "validation",
+        category: "validation",
+        intent: "fixed runner command",
+        result: "pass",
+        value: "productive",
+        work_item: "RECOVER",
+        iteration: "validation-check",
+        commands: ["python -m unittest tools.assets.atomic_io_test"],
+        validation_check_id: "asset-source-preprocess-tests",
+      },
+    ].map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
+
+    const statusResult = run([
+      "tools/ai_profile/status.mjs",
+      "--profile",
+      profile,
+      "--json-output",
+      statusJson,
+      "--require-current-scope-usable",
+    ], { env: { AI_PROFILE_SCOPE_FILE: scope } });
+    assert.match(statusResult.stdout, /Current scope review confidence: usable/);
+    const status = readJson(statusJson);
+    assert.equal(status.unresolved_failed_records, 0);
+    assert.equal(status.recovered_failed_records, 1);
+    assert.equal(status.current_scope.unresolved_failed_records, 0);
+    assert.equal(status.current_scope.recovered_failed_records, 1);
+
+    run(["tools/ai_profile/review.mjs", profile, "--json-output", reviewJson], {
+      env: { AI_PROFILE_SCOPE_FILE: scope },
+    });
+    const review = readJson(reviewJson);
+    assert.equal(review.unresolved_failed_records.length, 0);
+    assert.equal(review.recovered_failed_records.length, 1);
+    assert.equal(review.current_scope.unresolved_failed_records.length, 0);
+    assert.equal(review.current_scope.recovered_failed_records.length, 1);
+    assert.equal(review.current_scope.recovered_failed_records[0].recovered_by_line, 2);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("profile review summarizes validation batches", () => {
   const dir = tempDir();
   try {
@@ -1697,7 +2411,7 @@ test("profile review summarizes validation batches", () => {
         result: "pass",
         value: tier === "final" ? "necessary_overhead" : "productive",
         duration_ms: 1000 + index,
-        commands: [tier === "final" ? "node tools/pipeline_validate.mjs" : "node tools/skills_eval.mjs"],
+        commands: [tier === "final" ? "node tools/pipeline_validate.mjs --full" : "node tools/skills_eval.mjs"],
         validation_batch_id: "batch-review",
         validation_check_id: `check-${tier}`,
         validation_tier: tier,
@@ -1913,7 +2627,7 @@ test("profile review separates batched and unbatched broad final repeats", () =>
   try {
     const profile = join(dir, "broad-final-classification.jsonl");
     const reviewJson = join(dir, "review.json");
-    const command = "node tools/pipeline_validate.mjs";
+    const command = "node tools/pipeline_validate.mjs --full";
     for (const [index, batchId] of ["batch-a", "batch-b", ""].entries()) {
       appendFileSync(profile, `${JSON.stringify({
         ts: `2026-06-13T10:00:0${index}+05:00`,
@@ -1967,7 +2681,7 @@ test("profile review does not flag repeated broad final when repeats are batched
   try {
     const profile = join(dir, "batched-only-broad-final.jsonl");
     const reviewJson = join(dir, "review.json");
-    const command = "node tools/pipeline_validate.mjs";
+    const command = "node tools/pipeline_validate.mjs --full";
     for (const [index, batchId] of ["batch-a", "batch-b"].entries()) {
       appendFileSync(profile, `${JSON.stringify({
         ts: `2026-06-13T10:00:0${index}+05:00`,
@@ -2190,13 +2904,13 @@ test("compare review baseline ignores batched broad final repeats", () => {
     const currentReview = {
       ...baseReview,
       profile: "current.jsonl",
-      repeated_broad_final_commands: [{ command: "node tools/pipeline_validate.mjs", count: 2 }],
+      repeated_broad_final_commands: [{ command: "node tools/pipeline_validate.mjs --full", count: 2 }],
       repeated_unbatched_broad_final_commands: [],
-      batched_broad_final_commands: [{ command: "node tools/pipeline_validate.mjs", count: 2 }],
+      batched_broad_final_commands: [{ command: "node tools/pipeline_validate.mjs --full", count: 2 }],
       current_scope: {
         ...baseReview.current_scope,
         records: 4,
-        repeated_broad_final_commands: [{ command: "node tools/pipeline_validate.mjs", count: 2 }],
+        repeated_broad_final_commands: [{ command: "node tools/pipeline_validate.mjs --full", count: 2 }],
         repeated_unbatched_broad_final_commands: [],
       },
     };
@@ -2542,7 +3256,7 @@ test("reflection draft classifies repeated command evidence by scope", () => {
     writeFileSync(review, `${JSON.stringify({
       findings: [{ type: "repeated_commands", message: "3 repeated command(s) may need batching or narrower gates." }],
       repeated_commands: [
-        { command: "node tools/pipeline_validate.mjs", count: 4, scope: "broad/final" },
+        { command: "node tools/pipeline_validate.mjs --full", count: 4, scope: "broad/final" },
         { command: "git diff --check", count: 3, scope: "preflight" },
         { command: "node tools/skills_eval.mjs", count: 2, scope: "scoped" },
       ],
@@ -2552,21 +3266,21 @@ test("reflection draft classifies repeated command evidence by scope", () => {
         { scope: "scoped", count: 2 },
       ],
       repeated_command_classification: [
-        { command: "node tools/pipeline_validate.mjs", count: 4, scope: "broad/final", classification: "validation_waste_risk", reason: "Broad/final command repeated outside a validation batch.", next_action: "Use ai validation facade.", batched: 2, unbatched: 2, failed: 0 },
+        { command: "node tools/pipeline_validate.mjs --full", count: 4, scope: "broad/final", classification: "validation_waste_risk", reason: "Broad/final command repeated outside a validation batch.", next_action: "Use ai validation facade.", batched: 2, unbatched: 2, failed: 0 },
         { command: "git diff --check", count: 3, scope: "preflight", classification: "guardrail_rerun_review", reason: "Preflight guardrail rerun.", next_action: "Keep only after fresh edits.", batched: 0, unbatched: 3, failed: 0 },
       ],
       repeated_broad_final_commands: [
-        { command: "node tools/pipeline_validate.mjs", count: 4, scope: "broad/final" },
+        { command: "node tools/pipeline_validate.mjs --full", count: 4, scope: "broad/final" },
       ],
       repeated_unbatched_broad_final_commands: [
-        { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
+        { command: "node tools/pipeline_validate.mjs --full", count: 2, scope: "broad/final" },
       ],
       repeated_unbatched_broad_final_occurrences: 2,
       batched_broad_final_commands: [
-        { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
+        { command: "node tools/pipeline_validate.mjs --full", count: 2, scope: "broad/final" },
       ],
       repeated_broad_final_by_work_item: [
-        { work_item: "T0099", command: "node tools/pipeline_validate.mjs", count: 2 },
+        { work_item: "T0099", command: "node tools/pipeline_validate.mjs --full", count: 2 },
       ],
       validation_batches: [
         { batch_id: "batch-draft", records: 4, duration_ms: 12000, failed: 0, broad_final_commands: 1, risk: "medium", changes: ["profiling"] },
@@ -3003,7 +3717,7 @@ test("followups suppress historical-only issues when current scope is clean", ()
     const scope = join(dir, "scope.json");
     const reviewJson = join(dir, "review.json");
     const followupsJson = join(dir, "followups.json");
-    const broadCommand = "node tools/pipeline_validate.mjs";
+    const broadCommand = "node tools/pipeline_validate.mjs --full";
 
     run([
       "tools/ai_profile/event.mjs",
@@ -3283,13 +3997,13 @@ test("followups suppress historical broad final when current scope has only batc
         },
       ],
       repeated_broad_final_commands: [
-        { command: "node tools/pipeline_validate.mjs", count: 4, scope: "broad/final" },
+        { command: "node tools/pipeline_validate.mjs --full", count: 4, scope: "broad/final" },
       ],
       repeated_unbatched_broad_final_commands: [
-        { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
+        { command: "node tools/pipeline_validate.mjs --full", count: 2, scope: "broad/final" },
       ],
       batched_broad_final_commands: [
-        { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
+        { command: "node tools/pipeline_validate.mjs --full", count: 2, scope: "broad/final" },
       ],
       current_scope: {
         enabled: true,
@@ -3297,7 +4011,7 @@ test("followups suppress historical broad final when current scope has only batc
         findings: [],
         suggested_actions: ["Use current scope as clean baseline."],
         repeated_broad_final_commands: [
-          { command: "node tools/pipeline_validate.mjs", count: 2, scope: "broad/final" },
+          { command: "node tools/pipeline_validate.mjs --full", count: 2, scope: "broad/final" },
         ],
         repeated_unbatched_broad_final_commands: [],
         missing_context_inputs: 0,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Validate the reusable AI pipeline base in this repo and in a fresh export.
+// Validate the reusable AI pipeline base.
 //
-//   node tools/pipeline_validate.mjs
+//   node tools/pipeline_validate.mjs [--quick] [--full] [--dry-run]
 
 import { existsSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -11,11 +11,35 @@ import { spawnSync } from "node:child_process";
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const exportDir = join(root, "tmp", `pipeline-validate-${stamp}`);
+const args = process.argv.slice(2);
+
+function usage() {
+  console.error(`usage:
+  node tools/pipeline_validate.mjs [--quick] [--full] [--dry-run]
+
+Modes:
+  --quick    core workflow validation only (default)
+  --full     quick checks plus deep asset/runtime/export validation
+  --dry-run  print the selected commands without running them`);
+  process.exit(2);
+}
+
+const allowedArgs = new Set(["--quick", "--full", "--dry-run", "--help", "-h"]);
+for (const arg of args) {
+  if (!allowedArgs.has(arg)) usage();
+}
+if (args.includes("--help") || args.includes("-h")) usage();
+if (args.includes("--quick") && args.includes("--full")) usage();
+
+const fullMode = args.includes("--full");
+const mode = fullMode ? "full" : "quick";
+const dryRun = args.includes("--dry-run");
 
 function run(label, args, opts = {}) {
   const { cwd = root, exe = process.execPath } = opts;
   console.log(`\n== ${label}`);
   console.log(`$ ${[exe, ...args].map((arg) => (/\s/.test(arg) ? JSON.stringify(arg) : arg)).join(" ")}`);
+  if (dryRun) return;
   const result = spawnSync(exe, args, {
     cwd,
     stdio: "inherit",
@@ -32,6 +56,10 @@ function run(label, args, opts = {}) {
 }
 
 function findPythonRunner() {
+  if (dryRun) {
+    console.log("python runner: <dry-run>");
+    return { exe: "python", args: [] };
+  }
   const candidates = [
     { exe: "py", args: ["-3.12"] },
     { exe: "python", args: [] },
@@ -54,14 +82,19 @@ function findPythonRunner() {
   process.exit(1);
 }
 
-if (existsSync(exportDir)) {
+console.log(`mode: ${mode}${dryRun ? " (dry-run)" : ""}`);
+
+if (fullMode && existsSync(exportDir)) {
   rmSync(exportDir, { recursive: true, force: true });
 }
 
+// Quick core workflow checks. These are safe as the default validation path
+// after narrow pipeline/tooling edits.
 run("taskboard summary", ["tools/taskboard/cli.mjs", "summary"]);
 run("ai facade syntax", ["--check", "tools/ai.mjs"]);
 run("ai facade tests", ["--test", "tools/ai.test.mjs"]);
 run("skill eval", ["tools/skills_eval.mjs"]);
+run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
 run("taskboard tests", ["--test", "tools/taskboard/test.mjs"]);
 run("ai profile tests", ["--test", "tools/ai_profile/test.mjs"]);
@@ -71,6 +104,15 @@ if (existsSync(join(root, "tools", "game_context", "test.mjs"))) {
 if (existsSync(join(root, "tools", "product_gate", "test.mjs"))) {
   run("product gate tests", ["--test", "tools/product_gate/test.mjs"]);
 }
+
+if (!fullMode) {
+  console.log(`\nok: reusable pipeline quick validation passed`);
+  console.log(`hint: run node tools/pipeline_validate.mjs --full for portable export/runtime/deep asset gates`);
+  process.exit(0);
+}
+
+// Full validation is intentionally explicit: it repeats relevant checks in a
+// fresh export and includes heavy asset/runtime validation.
 if (existsSync(join(root, "tools", "assets", "new_generation_record.test.mjs"))) {
   run("generated art job node tests", [
     "--test",
@@ -81,6 +123,7 @@ if (existsSync(join(root, "tools", "assets", "new_generation_record.test.mjs")))
     "tools/assets/audit_slice9_design_policy.test.mjs",
     "tools/assets/audit_atlas_metadata.test.mjs",
     "tools/assets/audit_runtime_ui_asset_usage.test.mjs",
+    "tools/assets/audit_project_asset_boundaries.test.mjs",
     "tools/assets/audit_source_family_coverage.test.mjs",
   ]);
 }
@@ -103,6 +146,7 @@ if (existsSync(join(root, "tools", "assets", "audit_generated_source_derivation_
 if (existsSync(join(root, "state", "game_state.schema.json"))) {
   python ||= findPythonRunner();
   run("state codegen", [...python.args, "tools/state_codegen/generate_state.py"], { exe: python.exe });
+  run("state codegen variant tests", [...python.args, "-m", "unittest", "tools.state_codegen.generate_state_test"], { exe: python.exe });
 }
 if (existsSync(join(root, "CMakePresets.json"))) {
   run("cmake configure", ["--preset", "native-debug"], { exe: "cmake" });
@@ -130,6 +174,7 @@ if (existsSync(join(exportDir, "tools", "assets", "new_generation_record.test.mj
     "tools/assets/audit_slice9_design_policy.test.mjs",
     "tools/assets/audit_atlas_metadata.test.mjs",
     "tools/assets/audit_runtime_ui_asset_usage.test.mjs",
+    "tools/assets/audit_project_asset_boundaries.test.mjs",
     "tools/assets/audit_source_family_coverage.test.mjs",
   ], { cwd: exportDir });
 }
@@ -150,6 +195,17 @@ if (existsSync(join(exportDir, "tools", "assets", "audit_generated_ui_assets_tes
 if (existsSync(join(exportDir, "tools", "assets", "audit_generated_source_derivation_test.py"))) {
   python ||= findPythonRunner();
   run("exported generated source derivation audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_source_derivation_test"], {
+    cwd: exportDir,
+    exe: python.exe,
+  });
+}
+if (existsSync(join(exportDir, "state", "game_state.schema.json"))) {
+  python ||= findPythonRunner();
+  run("exported state codegen", [...python.args, "tools/state_codegen/generate_state.py"], {
+    cwd: exportDir,
+    exe: python.exe,
+  });
+  run("exported state codegen variant tests", [...python.args, "-m", "unittest", "tools.state_codegen.generate_state_test"], {
     cwd: exportDir,
     exe: python.exe,
   });

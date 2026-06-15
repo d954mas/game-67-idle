@@ -1,12 +1,12 @@
 ---
 id: T0002
 title: Reference gate and first slice GDD
-status: doing
+status: dropped
 epic: E001
 priority: P0
 tags: [gdd, references, balance, ftue]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-15
 ---
 
 ## What
@@ -44,3 +44,4 @@ contracts, and implementation handoff.
 - 2026-06-13: Added generated visual direction artifact and asset job after
   user approved generated/free assets with visual quality priority. Source:
   `gamedesign/projects/rune-marches/art/art_direction.md`.
+- 2026-06-15: Dropped during pipeline cleanup: Rune Marches GDD/reference gate is legacy product work, not current pipeline work.

@@ -2,100 +2,35 @@
   "schema": "game.generated_ui_asset_audit",
   "version": 1,
   "crop_manifest": "gamedesign/projects/roblox-fishing/data/roblox-fishing-first-visual-v1-crop_manifest.json",
-  "verdict": "fail",
+  "verdict": "pass",
   "assets_checked": 10,
-  "problems": [
-    "fishing_primary_button_slice9: slice9 alpha content too close to left edge: 0px < 6px",
-    "fishing_primary_button_slice9: slice9 alpha content too close to top edge: 0px < 6px",
-    "fishing_primary_button_slice9: slice9 alpha content too close to right edge: 0px < 6px",
-    "fishing_primary_button_slice9: slice9 alpha content too close to bottom edge: 0px < 6px",
-    "fishing_primary_button_slice9: key-color edge fringe remains: 2px > 0px",
-    "fishing_primary_button_slice9: purple edge halo remains: 2px > 0px",
-    "fishing_primary_button_slice9: source key edge fringe remains: 2px > 0px",
-    "fishing_secondary_button_slice9: slice9 alpha content too close to left edge: 0px < 6px",
-    "fishing_secondary_button_slice9: slice9 alpha content too close to top edge: 0px < 6px",
-    "fishing_secondary_button_slice9: slice9 alpha content too close to right edge: 0px < 6px",
-    "fishing_secondary_button_slice9: slice9 alpha content too close to bottom edge: 0px < 6px",
-    "fishing_secondary_button_slice9: key-color edge fringe remains: 1px > 0px",
-    "fishing_secondary_button_slice9: purple edge halo remains: 1px > 0px",
-    "fishing_secondary_button_slice9: source key edge fringe remains: 1px > 0px",
-    "fishing_upgrade_button_slice9: slice9 alpha content too close to left edge: 0px < 6px",
-    "fishing_upgrade_button_slice9: slice9 alpha content too close to top edge: 0px < 6px",
-    "fishing_upgrade_button_slice9: slice9 alpha content too close to right edge: 0px < 6px",
-    "fishing_upgrade_button_slice9: slice9 alpha content too close to bottom edge: 0px < 6px",
-    "fishing_upgrade_button_slice9: purple edge halo remains: 5px > 0px",
-    "fishing_status_pill_slice9: slice9 alpha content too close to left edge: 0px < 6px",
-    "fishing_status_pill_slice9: slice9 alpha content too close to top edge: 0px < 6px",
-    "fishing_status_pill_slice9: slice9 alpha content too close to right edge: 0px < 6px",
-    "fishing_status_pill_slice9: slice9 alpha content too close to bottom edge: 0px < 6px",
-    "fishing_catch_card_slice9: slice9 alpha content too close to left edge: 0px < 6px",
-    "fishing_catch_card_slice9: slice9 alpha content too close to top edge: 0px < 6px",
-    "fishing_catch_card_slice9: slice9 alpha content too close to right edge: 0px < 6px",
-    "fishing_catch_card_slice9: slice9 alpha content too close to bottom edge: 0px < 6px",
-    "fishing_catch_card_slice9: key-color edge fringe remains: 2px > 0px",
-    "fishing_catch_card_slice9: purple edge halo remains: 2px > 0px",
-    "fishing_catch_card_slice9: source key edge fringe remains: 2px > 0px",
-    "fishing_meter_frame_slice9: slice9 alpha content too close to left edge: 0px < 6px",
-    "fishing_meter_frame_slice9: slice9 alpha content too close to top edge: 0px < 6px",
-    "fishing_meter_frame_slice9: slice9 alpha content too close to right edge: 0px < 6px",
-    "fishing_meter_frame_slice9: slice9 alpha content too close to bottom edge: 0px < 6px",
-    "fishing_coin_icon: icon alpha content too close to left edge: 0px < 4px",
-    "fishing_coin_icon: icon alpha content too close to top edge: 0px < 4px",
-    "fishing_coin_icon: icon alpha content too close to right edge: 0px < 4px",
-    "fishing_coin_icon: icon alpha content too close to bottom edge: 0px < 4px",
-    "fishing_backpack_icon: icon alpha content too close to left edge: 0px < 4px",
-    "fishing_backpack_icon: icon alpha content too close to top edge: 0px < 4px",
-    "fishing_backpack_icon: icon alpha content too close to right edge: 0px < 4px",
-    "fishing_backpack_icon: icon alpha content too close to bottom edge: 0px < 4px",
-    "fishing_fish_icon: icon alpha content too close to left edge: 0px < 4px",
-    "fishing_fish_icon: icon alpha content too close to top edge: 0px < 4px",
-    "fishing_fish_icon: icon alpha content too close to right edge: 0px < 4px",
-    "fishing_fish_icon: icon alpha content too close to bottom edge: 0px < 4px",
-    "fishing_fish_icon: key-color edge fringe remains: 3px > 0px",
-    "fishing_fish_icon: purple edge halo remains: 3px > 0px",
-    "fishing_fish_icon: source key edge fringe remains: 3px > 0px",
-    "fishing_rod_icon: icon alpha content too close to left edge: 0px < 4px",
-    "fishing_rod_icon: icon alpha content too close to top edge: 0px < 4px",
-    "fishing_rod_icon: icon alpha content too close to right edge: 0px < 4px",
-    "fishing_rod_icon: icon alpha content too close to bottom edge: 0px < 4px",
-    "fishing_rod_icon: key-color edge fringe remains: 2px > 0px",
-    "fishing_rod_icon: purple edge halo remains: 2px > 0px",
-    "fishing_rod_icon: source key edge fringe remains: 2px > 0px"
-  ],
+  "problems": [],
   "assets": [
     {
       "id": "fishing_primary_button_slice9",
       "kind": "slice9",
       "output": "assets/runtime/roblox-fishing-ui-v1/fishing_primary_button_slice9.png",
-      "problems": [
-        "slice9 alpha content too close to left edge: 0px < 6px",
-        "slice9 alpha content too close to top edge: 0px < 6px",
-        "slice9 alpha content too close to right edge: 0px < 6px",
-        "slice9 alpha content too close to bottom edge: 0px < 6px",
-        "key-color edge fringe remains: 2px > 0px",
-        "purple edge halo remains: 2px > 0px",
-        "source key edge fringe remains: 2px > 0px"
-      ],
+      "problems": [],
       "size": [
         320,
         128
       ],
       "alpha_bbox": [
-        0,
-        0,
-        320,
-        128
+        8,
+        8,
+        312,
+        120
       ],
       "edge_padding": {
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
       },
-      "edge_key_fringe_pixels": 2,
-      "edge_purple_halo_pixels": 2,
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
       "edge_green_spill_pixels": 0,
-      "edge_source_key_fringe_pixels": 2,
+      "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
       "transparent_nonzero_rgb_pixels": 0
     },
@@ -103,35 +38,27 @@
       "id": "fishing_secondary_button_slice9",
       "kind": "slice9",
       "output": "assets/runtime/roblox-fishing-ui-v1/fishing_secondary_button_slice9.png",
-      "problems": [
-        "slice9 alpha content too close to left edge: 0px < 6px",
-        "slice9 alpha content too close to top edge: 0px < 6px",
-        "slice9 alpha content too close to right edge: 0px < 6px",
-        "slice9 alpha content too close to bottom edge: 0px < 6px",
-        "key-color edge fringe remains: 1px > 0px",
-        "purple edge halo remains: 1px > 0px",
-        "source key edge fringe remains: 1px > 0px"
-      ],
+      "problems": [],
       "size": [
         300,
         112
       ],
       "alpha_bbox": [
-        0,
-        0,
-        300,
-        112
+        8,
+        8,
+        292,
+        104
       ],
       "edge_padding": {
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
       },
-      "edge_key_fringe_pixels": 1,
-      "edge_purple_halo_pixels": 1,
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
       "edge_green_spill_pixels": 0,
-      "edge_source_key_fringe_pixels": 1,
+      "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
       "transparent_nonzero_rgb_pixels": 0
     },
@@ -139,31 +66,25 @@
       "id": "fishing_upgrade_button_slice9",
       "kind": "slice9",
       "output": "assets/runtime/roblox-fishing-ui-v1/fishing_upgrade_button_slice9.png",
-      "problems": [
-        "slice9 alpha content too close to left edge: 0px < 6px",
-        "slice9 alpha content too close to top edge: 0px < 6px",
-        "slice9 alpha content too close to right edge: 0px < 6px",
-        "slice9 alpha content too close to bottom edge: 0px < 6px",
-        "purple edge halo remains: 5px > 0px"
-      ],
+      "problems": [],
       "size": [
         300,
         112
       ],
       "alpha_bbox": [
-        0,
-        0,
-        300,
-        112
+        8,
+        8,
+        292,
+        104
       ],
       "edge_padding": {
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
       },
       "edge_key_fringe_pixels": 0,
-      "edge_purple_halo_pixels": 5,
+      "edge_purple_halo_pixels": 0,
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
@@ -173,27 +94,22 @@
       "id": "fishing_status_pill_slice9",
       "kind": "slice9",
       "output": "assets/runtime/roblox-fishing-ui-v1/fishing_status_pill_slice9.png",
-      "problems": [
-        "slice9 alpha content too close to left edge: 0px < 6px",
-        "slice9 alpha content too close to top edge: 0px < 6px",
-        "slice9 alpha content too close to right edge: 0px < 6px",
-        "slice9 alpha content too close to bottom edge: 0px < 6px"
-      ],
+      "problems": [],
       "size": [
         360,
         104
       ],
       "alpha_bbox": [
-        0,
-        0,
-        360,
-        104
+        8,
+        8,
+        352,
+        96
       ],
       "edge_padding": {
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
       },
       "edge_key_fringe_pixels": 0,
       "edge_purple_halo_pixels": 0,
@@ -206,35 +122,27 @@
       "id": "fishing_catch_card_slice9",
       "kind": "slice9",
       "output": "assets/runtime/roblox-fishing-ui-v1/fishing_catch_card_slice9.png",
-      "problems": [
-        "slice9 alpha content too close to left edge: 0px < 6px",
-        "slice9 alpha content too close to top edge: 0px < 6px",
-        "slice9 alpha content too close to right edge: 0px < 6px",
-        "slice9 alpha content too close to bottom edge: 0px < 6px",
-        "key-color edge fringe remains: 2px > 0px",
-        "purple edge halo remains: 2px > 0px",
-        "source key edge fringe remains: 2px > 0px"
-      ],
+      "problems": [],
       "size": [
         340,
         132
       ],
       "alpha_bbox": [
-        0,
-        0,
-        340,
-        132
+        8,
+        8,
+        332,
+        124
       ],
       "edge_padding": {
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
       },
-      "edge_key_fringe_pixels": 2,
-      "edge_purple_halo_pixels": 2,
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
       "edge_green_spill_pixels": 0,
-      "edge_source_key_fringe_pixels": 2,
+      "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
       "transparent_nonzero_rgb_pixels": 0
     },
@@ -242,27 +150,22 @@
       "id": "fishing_meter_frame_slice9",
       "kind": "slice9",
       "output": "assets/runtime/roblox-fishing-ui-v1/fishing_meter_frame_slice9.png",
-      "problems": [
-        "slice9 alpha content too close to left edge: 0px < 6px",
-        "slice9 alpha content too close to top edge: 0px < 6px",
-        "slice9 alpha content too close to right edge: 0px < 6px",
-        "slice9 alpha content too close to bottom edge: 0px < 6px"
-      ],
+      "problems": [],
       "size": [
         320,
         72
       ],
       "alpha_bbox": [
-        0,
-        0,
-        320,
-        72
+        8,
+        8,
+        312,
+        64
       ],
       "edge_padding": {
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
       },
       "edge_key_fringe_pixels": 0,
       "edge_purple_halo_pixels": 0,
@@ -275,27 +178,22 @@
       "id": "fishing_coin_icon",
       "kind": "icon",
       "output": "assets/runtime/roblox-fishing-ui-v1/fishing_coin_icon.png",
-      "problems": [
-        "icon alpha content too close to left edge: 0px < 4px",
-        "icon alpha content too close to top edge: 0px < 4px",
-        "icon alpha content too close to right edge: 0px < 4px",
-        "icon alpha content too close to bottom edge: 0px < 4px"
-      ],
+      "problems": [],
       "size": [
         96,
         96
       ],
       "alpha_bbox": [
-        0,
-        0,
-        96,
-        96
+        8,
+        8,
+        88,
+        88
       ],
       "edge_padding": {
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
       },
       "edge_key_fringe_pixels": 0,
       "edge_purple_halo_pixels": 0,
@@ -308,27 +206,22 @@
       "id": "fishing_backpack_icon",
       "kind": "icon",
       "output": "assets/runtime/roblox-fishing-ui-v1/fishing_backpack_icon.png",
-      "problems": [
-        "icon alpha content too close to left edge: 0px < 4px",
-        "icon alpha content too close to top edge: 0px < 4px",
-        "icon alpha content too close to right edge: 0px < 4px",
-        "icon alpha content too close to bottom edge: 0px < 4px"
-      ],
+      "problems": [],
       "size": [
         96,
         96
       ],
       "alpha_bbox": [
-        0,
-        0,
-        96,
-        96
+        8,
+        8,
+        88,
+        88
       ],
       "edge_padding": {
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
       },
       "edge_key_fringe_pixels": 0,
       "edge_purple_halo_pixels": 0,
@@ -341,35 +234,27 @@
       "id": "fishing_fish_icon",
       "kind": "icon",
       "output": "assets/runtime/roblox-fishing-ui-v1/fishing_fish_icon.png",
-      "problems": [
-        "icon alpha content too close to left edge: 0px < 4px",
-        "icon alpha content too close to top edge: 0px < 4px",
-        "icon alpha content too close to right edge: 0px < 4px",
-        "icon alpha content too close to bottom edge: 0px < 4px",
-        "key-color edge fringe remains: 3px > 0px",
-        "purple edge halo remains: 3px > 0px",
-        "source key edge fringe remains: 3px > 0px"
-      ],
+      "problems": [],
       "size": [
         112,
         96
       ],
       "alpha_bbox": [
-        0,
-        0,
-        112,
-        96
+        8,
+        8,
+        104,
+        88
       ],
       "edge_padding": {
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
       },
-      "edge_key_fringe_pixels": 3,
-      "edge_purple_halo_pixels": 3,
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
       "edge_green_spill_pixels": 0,
-      "edge_source_key_fringe_pixels": 3,
+      "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
       "transparent_nonzero_rgb_pixels": 0
     },
@@ -377,35 +262,27 @@
       "id": "fishing_rod_icon",
       "kind": "icon",
       "output": "assets/runtime/roblox-fishing-ui-v1/fishing_rod_icon.png",
-      "problems": [
-        "icon alpha content too close to left edge: 0px < 4px",
-        "icon alpha content too close to top edge: 0px < 4px",
-        "icon alpha content too close to right edge: 0px < 4px",
-        "icon alpha content too close to bottom edge: 0px < 4px",
-        "key-color edge fringe remains: 2px > 0px",
-        "purple edge halo remains: 2px > 0px",
-        "source key edge fringe remains: 2px > 0px"
-      ],
+      "problems": [],
       "size": [
         112,
         112
       ],
       "alpha_bbox": [
-        0,
-        0,
-        112,
-        112
+        8,
+        8,
+        104,
+        104
       ],
       "edge_padding": {
-        "left": 0,
-        "top": 0,
-        "right": 0,
-        "bottom": 0
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
       },
-      "edge_key_fringe_pixels": 2,
-      "edge_purple_halo_pixels": 2,
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
       "edge_green_spill_pixels": 0,
-      "edge_source_key_fringe_pixels": 2,
+      "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
       "transparent_nonzero_rgb_pixels": 0
     }

@@ -34,6 +34,13 @@ node tools/taskboard/cli.mjs show T0001
 node tools/taskboard/cli.mjs validate
 ```
 
+For a fresh game prototype, prefer the Stage 0 kickoff command instead of
+hand-creating the first wiki/task/status skeleton:
+
+```powershell
+node tools/game_context/new_prototype.mjs --game-id bubble-bay --title "Bubble Bay" --brief "Bright casual bubble fishing prototype with simple upgrades."
+```
+
 ## Live Status
 
 `STATUS.md` is the short operational project-status index. It answers what the
@@ -45,6 +52,11 @@ Keep `STATUS.md` current, but not large. It is an index to the truth, not a
 replacement for task logs, epics, design docs, runtime state schemas, or audit
 reports. Every concrete claim should point to a task, epic, design doc,
 command, or evidence path.
+
+`STATUS.md` has a hard live-context budget of 6000 characters enforced by
+`node tools/taskboard/cli.mjs validate`. When a prototype closes, replace
+detailed status sections with durable pointers to `tasks/archive/` and
+`gamedesign/projects/<game-id>/` instead of keeping old evidence inline.
 
 Agents must read `STATUS.md` at the start of long-running project work and
 update it after changes to:
@@ -123,6 +135,32 @@ one explicit working scope and state:
 - first action
 - out of scope
 
+For long-running implementation, visual, research, or tooling work, reset the
+passive profiler after selecting the task:
+
+```powershell
+node tools/ai.mjs start <task-id> <short-iteration-name>
+```
+
+Then use `node tools/ai.mjs status` as a health check. If it reports
+`Review confidence: broken`, do not use the profile as review evidence until
+the scope/coverage issue is fixed or explicitly called out. If it reports
+`partial`, final/review notes must name what telemetry is missing.
+
+For AI workflow, profiler, retrospective, or pipeline-review tasks, add the
+handoff guard before claiming profiling evidence:
+
+```powershell
+node tools/ai.mjs status --require-current-scope-usable
+```
+
+If the guard fails, record the concrete reason in the task log and either add a
+current-scope checkpoint/context measurement or state why the telemetry is
+irrecoverably missing.
+When coverage is low, record the largest coverage gaps from
+`node tools/ai.mjs status`; do not make bottleneck or time-spend claims for
+those intervals unless they were separately measured.
+
 If the request clearly maps to one current task or a small safe improvement,
 proceed after that short confirmation update.
 
@@ -185,11 +223,15 @@ Evidence should be the smallest reliable proof for the task:
   `node tools/taskboard/cli.mjs validate`
 - taskboard/tooling change: run `node --test tools/taskboard/test.mjs` and
   `node tools/taskboard/cli.mjs validate`
+- product-gate/tooling change: run `node --test tools/product_gate/test.mjs`
+  and `node tools/taskboard/cli.mjs validate`
 - AI profile/profiling tooling change: run the narrow facade/profile tests
   that cover the changed behavior, plus `node tools/taskboard/cli.mjs validate`
 - skill/process change: run `node tools/skills_eval.mjs` when changing reusable
   skill activation, required outputs, or portable workflow rules
-- full reusable pipeline-base change: run `node tools/pipeline_validate.mjs`
+- reusable pipeline-base change: run quick validation with
+  `node tools/pipeline_validate.mjs`; use `node tools/pipeline_validate.mjs --full`
+  only for final portable-base/export/runtime gates
 - portable pipeline/export change: validate the current repo, export a fresh
   project with `tools/bootstrap/export_base.mjs`, then validate the exported
   task store from inside the exported project
@@ -201,6 +243,13 @@ Evidence should be the smallest reliable proof for the task:
   handoff/review
 - release/build change: run the relevant build command and record the artifact
   or report path
+- prototype slice before commit/review: run
+  `node tools/product_gate/slice_hygiene.mjs --strict` with build/probe
+  evidence, product gate, screenshot evidence, profiler guard evidence from
+  `node tools/ai.mjs status --require-current-scope-usable`, and any known red
+  gates. Normal slices over 30 changed files should be split unless the lead
+  explicitly asked for an end-of-experiment snapshot. Check push/upstream state
+  before promising push.
 
 If a validation command is too slow, unavailable, or fails for an unrelated
 environment reason, record that explicitly in the task log and final report.

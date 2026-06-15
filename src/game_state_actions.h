@@ -1,7 +1,7 @@
 #ifndef GAME_STATE_ACTIONS_H
 #define GAME_STATE_ACTIONS_H
 
-#include "generated/game_state.h"
+#include "game_state.h"
 
 #include <stdbool.h>
 

@@ -1,5 +1,5 @@
-#include "generated/game_state.h"
-#include "generated/game_state_schema.gen.h"
+#include "game_state.h"
+#include "game_state_schema.gen.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -10,9 +10,10 @@ Use this skill to keep game state explicit, typed, migratable, and agent-legible
 ## Workflow
 
 1. Read `state/*.schema.json` first. Treat schemas as the source of truth for documents, fields, types, defaults, limits, DevAPI permissions, collections, and migrations.
-2. Inspect `tools/state_codegen/generate_state.py` and generated code under `src/generated/` before editing call sites. Do not guess path names.
-   Scalar fields (bool/int/float/string/enum, including dotted paths) are fully generated from the schema via `/*@GEN:...@*/` markers in the source template — adding such a field needs only a schema edit plus regeneration. Hand-edit the template only for structural patterns (owned-object maps, id lists, ref-checked optional strings).
-3. After schema edits, run `py -3.12 tools/state_codegen/generate_state.py`. The generator owns `src/generated/game_state.h`, `src/generated/game_state.c`, `src/generated/game_state_devapi.c`, and embedded schema JSON.
+2. Inspect `tools/state_codegen/generate_state.py` and the selected generated output before editing call sites. Do not guess path names.
+   Scalar fields (bool/int/float/string/enum, including dotted paths) are fully generated from the schema via `/*@GEN:...@*/` markers in the source template; adding such a field needs only a schema edit plus regeneration. Hand-edit the template only for structural patterns (owned-object maps, id lists, ref-checked optional strings).
+3. After default schema edits, run `py -3.12 tools/state_codegen/generate_state.py`. The source-tree default output under `src/generated/game_state.*` is the clean template baseline; CMake presets generate their selected state variant into the build tree with `--schema` and `--out-dir`.
+   Closed/archived prototypes must use their own schema file and build-local generated directory, not overwrite the clean template generated files.
 4. Keep runtime code working with the current `GameState` only. Old saves must be transformed before parsing into C structs.
 5. Add migrations as `state/migrations/vN_to_vN_plus_1.c`. Migrations receive old `cJSON *state`, mutate it to the next version, and must be deterministic.
 6. Add or update fixtures under `state/fixtures/` for every migration that moves, deletes, renames, or compensates data.
@@ -23,7 +24,8 @@ Use this skill to keep game state explicit, typed, migratable, and agent-legible
 
 ## Rules
 
-- Do not hand-edit `src/generated/game_state.h` or `src/generated/game_state_schema.gen.h`; change the schema/generator and regenerate.
+- Do not hand-edit generated `game_state.*` files in `src/generated/` or build directories; change the schema/generator and regenerate.
+- Do not let archived prototype state fields leak into the clean template schema or default generated baseline.
 - Do not store game-specific state rules inside this skill. Put schema, migrations, fixtures, and tests in the project.
 - Do not force all data into one global state. Use separate state documents when lifetime, ownership, save cadence, or migration policy differs.
 - Do not make migrations depend on network, wall-clock time, current live balance, mutable external data, or `game_state_actions`.
@@ -80,3 +82,4 @@ For detailed command and save contracts, read `references/state-contract.md`.
 - Check autosave load/save behavior with a restart scenario, and keep ordinary tests isolated from persisted state.
 - Check inventory/equipment references point to existing owned objects.
 - Check schema edits are reflected in generated headers, runtime C adapters, DevAPI paths, actions, fixtures, and scenarios.
+- When variants exist, check each variant generates into a separate directory and the default clean output has no archived prototype fields.

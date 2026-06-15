@@ -1,12 +1,12 @@
 ---
 id: T0001
 title: Web and mobile portrait playable build
-status: backlog
+status: dropped
 epic: E001
 priority: P1
 tags: [web, mobile, portrait, validation]
 created: 2026-06-13
-updated: 2026-06-13
+updated: 2026-06-15
 ---
 
 ## What
@@ -38,3 +38,4 @@ user explicitly requested "pc and web (pc and mobile)".
   briefly attempted after native proof, but the user questioned the web-build
   lane. Pause this task until web/mobile validation is explicitly the active
   lane again; continue native PC content/FTUE work meanwhile.
+- 2026-06-15: Dropped during pipeline cleanup: Rune Marches web/mobile product lane is no longer active; preserve history for reference only.

@@ -30,6 +30,7 @@ node tools/skills_sync.mjs
 
 | Stage | What happens | Skill / tool |
 |---|---|---|
+| 0. Startup gate | Before implementation, prove one active concept, one actionable task, one project wiki, a native/runtime harness, and a named visual/product proof gate | `tools/game_context/new_prototype.mjs`, `tools/game_context/iteration_context.mjs`, `task-manager`, `primary-gdd-pipeline` |
 | 1. Capture | Every stated idea becomes a task; deferred work is never lost | `task-manager`, `tasks/` store, `tools/taskboard/` |
 | 2. Refine | Questions to the lead + research; `idea` -> `backlog` with checkable done-when | `task-manager` |
 | 3. Design | Concept, GDD, refs, visual proof, data contracts | `primary-gdd-pipeline` (incl. design stewardship), `gamedesign/` |
@@ -95,6 +96,15 @@ node tools/skills_sync.mjs
   `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`
   after slicing; this catches clipped icon alpha bounds and chroma-key edge
   fringe that a JSON validator cannot see.
+- **Visual-first session contract.** For visual, UI, FTUE, feel, or
+  audience-test work, write a 5-line contract before coding: `goal`,
+  `non-goal`, `proof`, `stop condition`, and `likely files`. The proof must
+  name a native screenshot/product gate/art audit, not only a build command.
+  Before visual code changes, compare the current native screenshot or capture
+  plan against the accepted fake shot/reference/art target and list the visible
+  mismatches. After each meaningful render change, capture a new native
+  screenshot, update the mismatch list, and run or record the product-read gate
+  verdict before adding features or content.
 - **Product-read gates stop content expansion.** For game work where visual,
   FTUE, gameplay feel, or audience testing matters, the first playable screen
   must pass a screenshot/player-read review before adding more content or
@@ -105,7 +115,15 @@ node tools/skills_sync.mjs
   `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate` to write the
   durable gate artifact. Before handing off a slice, use
   `node tools/ai.mjs close-slice` so the task log records the gate, validation
-  evidence, and next action.
+  evidence, and next action. If the gate fails, feature/content expansion stays
+  frozen unless the lead explicitly accepts the debt for that slice.
+  For beautiful, casual, generated-UI, fake-shot, or child-testable prototype
+  work, add `--visual-strict` to the product gate and score composition,
+  readability, UI controls, action direction, art quality, and audience fit.
+  A pass requires all six scores at least 4/5 and no blocker/major visual issue.
+  If an independent visual/UI critic is needed, create a packet first with
+  `node tools/ai.mjs critic` and use its findings as the source for the strict
+  gate verdict.
 - **Responsive UI needs geometry evidence.** For desktop/mobile UI composition,
   pair screenshot gates with a UI-tree layout audit when the runtime exposes
   element bounds. Use `node tools/product_gate/responsive_layout_audit.mjs` to
@@ -132,7 +150,17 @@ node tools/skills_sync.mjs
   context reads, and long manual/research gaps. Do not fix stale profile
   bundles, packets, drafts, baselines, or follow-up artifacts during ordinary
   game development. Use `node tools/ai.mjs status` for the short passive
-  diagnostic. Use `node tools/ai.mjs reflect` for a short closeout only.
+  diagnostic. Before long prototype work, reset the current scope with
+  `node tools/ai.mjs start <task-id> <iteration>` after selecting the task.
+  Treat `Review confidence: broken` as a review blocker and `partial` as a
+  warning that conclusions must name the missing telemetry. Low wall-clock
+  coverage means the profile is not complete evidence of where the session time
+  went; review notes must cite the largest coverage gaps from
+  `node tools/ai.mjs status` or mark those intervals as unknown. For AI
+  workflow, profiler, or retrospective review slices, run
+  `node tools/ai.mjs status --require-current-scope-usable` before claiming
+  profiling evidence; if it fails, fix scope/checkpoints or explicitly record
+  the missing telemetry. Use `node tools/ai.mjs reflect` for a short closeout only.
   Full reflection handoff (`packet`/`draft`/`review`/baseline comparison) is
   opt-in with `node tools/ai.mjs reflect --deep` or direct
   `tools/ai_profile/*` commands when the task is explicitly about AI workflow,
@@ -152,7 +180,25 @@ node tools/skills_sync.mjs
   infrastructure for the clean seed. Do not delete them during game cleanup.
 - **Evidence or it did not happen.** A task is `done` only with ticked
   `## Done when` boxes and an evidence line in `## Log`.
+- **Prototype commit/review hygiene.** Before committing or handing off a
+  prototype slice, run the hygiene audit and record the result:
+  `node tools/product_gate/slice_hygiene.mjs --strict ...`. A normal slice over
+  30 changed files should be split by phase unless the lead explicitly asked
+  for an end-of-experiment snapshot; use `--snapshot` only for that case.
+  Include build/probe evidence, product gate, screenshot evidence, profiler
+  guard evidence from `node tools/ai.mjs status --require-current-scope-usable`,
+  taskboard validation, known red gates, and diff size in review notes. Do not
+  promise push until the command or `git status -sb`/remote checks show a usable
+  push target. Changed fail/stale audit artifacts must be refreshed, archived as
+  historical evidence, or called out with `--known-red-gate` and final notes.
 - **Small slices.** Prefer one playable iteration over broad speculative work.
+- **Startup gate before code.** At the start of a new prototype, prefer
+  `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`
+  to create the first wiki/task/status skeleton and gate evidence. After a
+  pivot or manual setup, run `node tools/game_context/iteration_context.mjs`.
+  If `prototype_startup_gate.status` is `not_ready_for_implementation`, do not
+  begin broad runtime implementation. First create/repair the active concept,
+  task, project wiki, runtime harness, and visual/product proof gate.
 - **Visual failure is a stop condition.** If the lead rejects a screenshot or
   runtime build as ugly, unclear, or unplayable, stop feature expansion. Create
   a rescue task, a visual/product failure report, and the smallest runtime
@@ -214,11 +260,14 @@ Default order for substantial work:
    `node tools/ai.mjs context -- node tools/taskboard/cli.mjs context` only
    when the summary is not enough; never read a large `tasks/STATUS.md`
    wholesale for orientation.
-2. Inspect only the files needed for the selected scope.
-3. Prefer scoped search before repo-wide search.
-4. Make the smallest coherent change.
-5. Run the narrowest validation that proves the change.
-6. Escalate to broader validation only when the scope or risk requires it.
+2. Select or create one task scope, then run
+   `node tools/ai.mjs start <task-id> <iteration>` for long implementation,
+   visual, research, or tooling work.
+3. Inspect only the files needed for the selected scope.
+4. Prefer scoped search before repo-wide search.
+5. Make the smallest coherent change.
+6. Run the narrowest validation that proves the change.
+7. Escalate to broader validation only when the scope or risk requires it.
 
 For reusable/process/tooling work, plan validation before running broad checks:
 
@@ -230,6 +279,17 @@ Use the output as a validation ladder: preflight first, scoped checks second,
 and broad/final checks once at the end of the batch. Re-running broad gates
 such as full portable pipeline validation after every small edit is waste
 unless the previous gate failed or new shared behavior changed.
+When touched files already define the scope, use the profiled facade directly:
+`node tools/ai.mjs validate --file <path> [--file <path> ...] --risk medium`.
+For product-read, visual critique, slice hygiene, or closeout gate changes, use
+`--change product-gate` or pass the touched `tools/product_gate/...` files so
+the planner selects `node --test tools/product_gate/test.mjs`. For iteration
+context, startup gate, or new prototype kickoff changes, use
+`--change game-context` or pass `tools/game_context/...` files so the planner
+selects `node --test tools/game_context/test.mjs`.
+For reusable generated-art or UI asset tooling changes under `tools/assets/`,
+use `--change asset-tools` or pass those files so the planner selects the asset
+pipeline JS/Python tests instead of runtime asset placeholder checks.
 
 For pipeline/tooling changes, prove both the current repository and the portable
 export path when the change affects future projects. For game/runtime changes,
@@ -240,13 +300,16 @@ For reusable skill/process changes, also run `node tools/skills_eval.mjs`. The
 eval is intentionally small and static: it checks that key skill activation
 phrases and required output/process anchors have not been lost.
 
-For the full reusable-base gate, run `node tools/pipeline_validate.mjs`. It
-validates this repo (including runtime seed checks: state codegen and CMake
-configure when those files are present), exports a fresh portable base, and
-validates the exported project from inside the exported folder. Treat this as a
-broad/final gate: run it once after narrower checks pass, unless debugging a
-failure in the exporter itself. The runtime seed checks skip automatically in
-workflow-only exports.
+For quick reusable-pipeline validation, run `node tools/pipeline_validate.mjs`.
+It validates the core workflow/tooling path without portable export, runtime
+configure, or deep generated-asset tests. For the full reusable-base gate, run
+`node tools/pipeline_validate.mjs --full`. Full mode validates this repo
+(including runtime seed checks: state codegen and CMake configure when those
+files are present), exports a fresh portable base, and validates the exported
+project from inside the exported folder. Treat full mode as a broad/final gate:
+run it once after narrower checks pass, unless debugging a failure in the
+exporter itself. The runtime seed checks skip automatically in workflow-only
+exports.
 
 Do not use old task logs, generated files, build outputs, or archived design
 handoffs as current truth unless they are linked from `STATUS.md`, an active

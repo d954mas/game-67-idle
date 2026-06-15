@@ -215,6 +215,16 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 ## Rules
 
 - Keep raw source assets separate from generated runtime assets.
+- Keep project-specific asset generation and generated C/runtime ids separate.
+  Do not embed one concept's runtime PNGs or enum ids into another concept's
+  generated header/source, even as a temporary shortcut. Crop specs, chroma
+  cleanup, remaps, manifests, source provenance, audit commands, and generated
+  C texture arrays belong to a project-specific builder such as
+  `tools/assets/build_<game_id>_ui_assets.py`; do not hide one game's asset
+  pipeline inside another game's builder.
+- When splitting or auditing this boundary, use
+  `node tools/assets/audit_project_asset_boundaries.mjs` to reject cross-project
+  ids/imports in builders or generated files.
 - Do not reference scratch/temp files as final game assets.
 - Generated headers and pack files should be reproducible from source assets and builder code.
 - If generated files are ignored by git, confirm the build task recreates them.

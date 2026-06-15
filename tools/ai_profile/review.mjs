@@ -497,7 +497,9 @@ function normalizeCommand(command) {
 }
 
 function commandKeys(record) {
-  return (record.commands || []).map(normalizeCommand).filter(Boolean);
+  const keys = (record.commands || []).map(normalizeCommand).filter(Boolean);
+  if (record.validation_check_id) keys.push(`validation_check:${record.validation_check_id}`);
+  return keys;
 }
 
 function classifyFailedRecords(records) {
@@ -578,7 +580,7 @@ function commandScope(command) {
     return "preflight";
   }
   if (
-    normalized === "node tools/pipeline_validate.mjs" ||
+    normalized === "node tools/pipeline_validate.mjs --full" ||
     normalized.includes("tools/project_67_world/release_candidate_audit.py") ||
     normalized.includes("tools/project_67_world/package_native_release.mjs")
   ) {
@@ -590,6 +592,8 @@ function commandScope(command) {
     normalized.includes("tools/taskboard/test.mjs") ||
     normalized.includes("tools/skills_eval.mjs") ||
     normalized.includes("tools/skills_sync.mjs") ||
+    normalized === "node tools/pipeline_validate.mjs" ||
+    normalized === "node tools/pipeline_validate.mjs --quick" ||
     normalized.includes("tools/ai_profile/") ||
     normalized.includes("tools/state_codegen/") ||
     normalized.startsWith("cmake --preset ") ||

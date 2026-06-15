@@ -129,10 +129,26 @@ small vertical slice instead of a large document set.
 ## Start Checklist
 
 1. Read `AGENTS.md`; locate or create the active project wiki. In this repo,
-   use `gamedesign/projects/<game-id>/` for game-specific GDD work.
+   use `gamedesign/projects/<game-id>/` for game-specific GDD work. For a fresh
+   concept, prefer
+   `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`
+   before hand-writing the first wiki/task/status skeleton.
 2. Check `git status` and ignore rules for `tmp/` and generation folders.
 3. Write the DoD: what must exist, what is out of scope, what proof is accepted.
 4. For visual asks, decide the tier up front: reference / fake shot / runtime asset pack.
+   For visual prototype work, also write the 5-line session contract: goal,
+   non-goal, proof, stop condition, and likely files. The proof must name the
+   fake shot/native screenshot/product gate or generated asset audit that will
+   decide the slice. For beautiful/casual/generated-UI/fake-shot first slices,
+   fill `reviews/first_slice_visual_gate.md` with the strict visual rubric and
+   plan `node tools/ai.mjs gate ... --visual-strict` before broad runtime work.
+   When the gate template names a visual critic packet, create that packet
+   with `node tools/ai.mjs critic` before the strict verdict if a separate/self
+   critique pass would reduce risk.
+5. Before implementation handoff or runtime coding, run
+   `node tools/game_context/iteration_context.mjs`. If
+   `prototype_startup_gate.status` is `not_ready_for_implementation`, repair
+   the missing concept/task/wiki/runtime/proof gate instead of coding.
 
 ## Stage Gates
 
@@ -158,6 +174,9 @@ revise the earlier gate instead of adding documents.
    fake shot, then a progression image, then (only if implementation is next)
    a runtime asset pack. Use the `imagegen` skill for raster art; move final
    images into the project. After the first shot, stop with a review packet.
+   Runtime implementation starts from a current native screenshot or capture
+   plan compared against the accepted fake shot/target; record the mismatch
+   list before coding and update it after meaningful render changes.
 4. **Create machine-readable contracts** once concept and visuals are stable:
    `data/balance.json`, `data/ui_flow.json`, `data/asset_manifest.json`; add
    `data/combat.json` (or equivalent) for any design with danger.

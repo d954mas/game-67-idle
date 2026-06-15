@@ -264,6 +264,14 @@ Make the backlog item executable.
   assert.deepEqual(validateStore(root), []);
 });
 
+test("validateStore rejects oversized live status", (t) => {
+  const root = tempRoot(t);
+  mkdirSync(join(root, "tasks"), { recursive: true });
+  writeFileSync(join(root, "tasks", "STATUS.md"), `# Project Status\n\n${"closed prototype evidence\n".repeat(400)}`);
+  const problems = validateStore(root);
+  assert.ok(problems.some((p) => p.includes("exceeds live status budget")), problems.join("; "));
+});
+
 test("validateStore rejects placeholder active epics but allows raw epic ideas", (t) => {
   const root = tempRoot(t);
   createEpic(root, { title: "Raw epic", status: "idea" });
@@ -292,12 +300,16 @@ Make the epic executable.
 
 test("cli validate prints remediation hints for common failures", (t) => {
   const root = tempRoot(t);
+  mkdirSync(join(root, "tasks"), { recursive: true });
+  writeFileSync(join(root, "tasks", "STATUS.md"), `# Project Status\n\n${"old evidence\n".repeat(700)}`);
   createTask(root, { title: "Empty backlog", status: "backlog" });
   const cli = join(import.meta.dirname, "cli.mjs");
   const result = spawnSync(process.execPath, [cli, "validate"], { cwd: root, encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /problem: T0001: actionable task needs/);
   assert.match(result.stdout, /hint: fill `## What` and at least one checkable `## Done when`/);
+  assert.match(result.stdout, /problem: tasks\/STATUS\.md exceeds live status budget/);
+  assert.match(result.stdout, /hint: replace inline history with pointers/);
 });
 
 test("markdown preview renders task syntax and escapes html", () => {

@@ -22,9 +22,22 @@ const CHANGE_ALIASES = new Map([
   ["package", "release"],
   ["asset", "assets"],
   ["art", "assets"],
+  ["asset-tools", "asset-tools"],
+  ["asset_tools", "asset-tools"],
+  ["asset-tooling", "asset-tools"],
+  ["art-tools", "asset-tools"],
   ["schema", "state"],
   ["save", "state"],
   ["test", "tests"],
+  ["gate", "product-gate"],
+  ["product_gate", "product-gate"],
+  ["productgate", "product-gate"],
+  ["product-read", "product-gate"],
+  ["game_context", "game-context"],
+  ["gamecontext", "game-context"],
+  ["prototype-startup", "game-context"],
+  ["startup-gate", "game-context"],
+  ["iteration-context", "game-context"],
 ]);
 
 const CHANGE_DESCRIPTIONS = new Map([
@@ -35,9 +48,12 @@ const CHANGE_DESCRIPTIONS = new Map([
   ["profiling", "AI profile collection/review tools"],
   ["runtime", "game/runtime source or native harness"],
   ["assets", "art, textures, manifests, or asset pack flow"],
+  ["asset-tools", "reusable asset generation, audit, manifest, or generated UI tooling"],
   ["state", "state schemas, migrations, save/load, or generated state"],
   ["release", "packaging, release audit, or handoff artifacts"],
   ["tests", "test harnesses or validation scripts"],
+  ["product-gate", "product-read, visual critique, slice hygiene, or closeout gates"],
+  ["game-context", "game iteration context, new prototype kickoff, or startup gates"],
   ["web", "web/mobile surface explicitly requested by the task"],
 ]);
 
@@ -53,7 +69,7 @@ const CHECKS = [
   {
     id: "js-syntax-touched",
     tier: "preflight",
-    changes: ["profiling", "pipeline", "taskboard", "tests"],
+    changes: ["profiling", "pipeline", "taskboard", "asset-tools", "tests"],
     command: "node tools/ai_profile/check_touched_js.mjs",
     why: "cheap syntax check for touched JavaScript tools",
     broad: false,
@@ -92,6 +108,14 @@ const CHECKS = [
     broad: false,
   },
   {
+    id: "ai-facade-tests",
+    tier: "scoped",
+    changes: ["profiling"],
+    command: "node --test tools/ai.test.mjs",
+    why: "prove the fast AI workflow facade routes profiling, validation, gate, critic, and closeout commands",
+    broad: false,
+  },
+  {
     id: "taskboard-validate",
     tier: "scoped",
     changes: ["taskboard", "docs", "pipeline", "profiling", "skills"],
@@ -127,8 +151,16 @@ const CHECKS = [
     id: "state-codegen",
     tier: "scoped",
     changes: ["state"],
-    command: "py -3.12 tools/state_codegen/generate_state.py",
+    command: "python tools/state_codegen/generate_state.py",
     why: "regenerate and verify schema-derived state code",
+    broad: false,
+  },
+  {
+    id: "state-codegen-tests",
+    tier: "scoped",
+    changes: ["state"],
+    command: "python -m unittest tools.state_codegen.generate_state_test",
+    why: "prove state codegen variants, output paths, and closed-prototype schema handling",
     broad: false,
   },
   {
@@ -158,6 +190,41 @@ const CHECKS = [
     placeholder: true,
   },
   {
+    id: "asset-tool-node-tests",
+    tier: "scoped",
+    changes: ["asset-tools"],
+    command:
+      "node --test tools/assets/plan_source_sheet_prompt.test.mjs tools/assets/plan_missing_source_family_prompts.test.mjs tools/assets/new_generation_record.test.mjs tools/assets/validate_art_job.test.mjs tools/assets/audit_slice9_design_policy.test.mjs tools/assets/audit_atlas_metadata.test.mjs tools/assets/audit_runtime_ui_asset_usage.test.mjs tools/assets/audit_project_asset_boundaries.test.mjs tools/assets/audit_source_family_coverage.test.mjs",
+    why: "prove reusable generated-art job, manifest, atlas, runtime-usage, and boundary tooling",
+    broad: false,
+  },
+  {
+    id: "asset-source-preprocess-tests",
+    tier: "scoped",
+    changes: ["asset-tools"],
+    command:
+      "python -m unittest tools.assets.atomic_io_test tools.assets.chroma_key_alpha_test tools.assets.dual_plate_alpha_test tools.assets.normalize_source_sheet_chroma_test tools.assets.audit_source_sheet_intake_test",
+    why: "prove source sheet preprocessing, chroma, alpha, and intake audits",
+    broad: false,
+  },
+  {
+    id: "generated-ui-asset-tests",
+    tier: "scoped",
+    changes: ["asset-tools"],
+    command:
+      "python -m unittest tools.assets.audit_generated_ui_assets_test tools.assets.render_ui_asset_edge_proof_test tools.assets.render_ui_composition_proof_test tools.assets.build_ui_atlas_pack_test tools.assets.audit_ui_atlas_pack_test tools.assets.plan_runtime_crops_from_intake_test tools.assets.build_runtime_assets_from_crop_plan_test",
+    why: "prove generated UI crop, edge, composition, atlas, and runtime pack tooling",
+    broad: false,
+  },
+  {
+    id: "generated-source-derivation-tests",
+    tier: "scoped",
+    changes: ["asset-tools"],
+    command: "python -m unittest tools.assets.audit_generated_source_derivation_test",
+    why: "prove generated-source derivation audits for final art evidence",
+    broad: false,
+  },
+  {
     id: "release-smoke",
     tier: "scoped",
     changes: ["release"],
@@ -176,10 +243,34 @@ const CHECKS = [
     placeholder: true,
   },
   {
+    id: "product-gate-tests",
+    tier: "scoped",
+    changes: ["product-gate"],
+    command: "node --test tools/product_gate/test.mjs",
+    why: "prove product-read, visual critique, slice hygiene, and closeout gates",
+    broad: false,
+  },
+  {
+    id: "game-context-tests",
+    tier: "scoped",
+    changes: ["game-context"],
+    command: "node --test tools/game_context/test.mjs",
+    why: "prove game iteration context, startup gate, and new prototype kickoff behavior",
+    broad: false,
+  },
+  {
+    id: "pipeline-quick",
+    tier: "scoped",
+    changes: ["pipeline"],
+    command: "node tools/pipeline_validate.mjs",
+    why: "prove core reusable workflow checks without portable export/runtime/deep asset gates",
+    broad: false,
+  },
+  {
     id: "portable-pipeline",
     tier: "final",
     changes: ["pipeline", "skills", "taskboard"],
-    command: "node tools/pipeline_validate.mjs",
+    command: "node tools/pipeline_validate.mjs --full",
     why: "prove the reusable base still exports and validates in a fresh project",
     broad: true,
   },
@@ -213,17 +304,36 @@ function normalizeChange(raw) {
 function inferChangesFromFile(file) {
   const normalized = file.replaceAll("\\", "/");
   const changes = new Set();
-  if (normalized.startsWith(".codex/skills/") || normalized.startsWith(".claude/skills/")) changes.add("skills");
+  if (
+    normalized.startsWith(".codex/skills/")
+    || normalized.startsWith(".claude/skills/")
+    || normalized === "tools/skills_eval.mjs"
+    || normalized === "tools/skills_sync.mjs"
+  ) {
+    changes.add("skills");
+  }
   if (normalized.startsWith("tasks/") || normalized.startsWith("tools/taskboard/")) changes.add("taskboard");
-  if (/^(AI_PIPELINE|AGENTS|CLAUDE)\.md$/.test(basename(normalized)) || normalized.startsWith("tools/bootstrap/")) {
+  if (
+    /^(AI_PIPELINE|AGENTS|CLAUDE)\.md$/.test(basename(normalized))
+    || normalized.startsWith("tools/bootstrap/")
+    || normalized === "tools/pipeline_validate.mjs"
+    || normalized === "tools/pipeline_validate.test.mjs"
+  ) {
     changes.add("pipeline");
   }
   if (normalized.startsWith("tools/ai_profile/") || basename(normalized) === "AI_PIPELINE_SESSION_PROFILING.md") {
     changes.add("profiling");
   }
+  if (normalized === "tools/ai.mjs" || normalized === "tools/ai.test.mjs") changes.add("profiling");
+  if (normalized.startsWith("tools/product_gate/")) changes.add("product-gate");
+  if (normalized.startsWith("tools/game_context/")) changes.add("game-context");
   if (normalized.startsWith("src/") || normalized.startsWith("external/")) changes.add("runtime");
   if (normalized.startsWith("state/") || normalized.startsWith("tools/state_codegen/")) changes.add("state");
-  if (normalized.startsWith("assets/") || normalized.includes("/asset") || normalized.startsWith("tools/assets/")) changes.add("assets");
+  if (normalized.startsWith("tools/assets/")) {
+    changes.add("asset-tools");
+  } else if (normalized.startsWith("assets/") || normalized.includes("/asset")) {
+    changes.add("assets");
+  }
   if (normalized.startsWith("tools/release") || normalized.startsWith("tools/package") || normalized.startsWith("build/release")) {
     changes.add("release");
   }
