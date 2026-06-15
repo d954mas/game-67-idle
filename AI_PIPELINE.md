@@ -269,27 +269,11 @@ Default order for substantial work:
 6. Run the narrowest validation that proves the change.
 7. Escalate to broader validation only when the scope or risk requires it.
 
-For reusable/process/tooling work, plan validation before running broad checks:
-
-```powershell
-node tools/ai_profile/plan_validation.mjs --change profiling --change skills --risk medium
-```
-
-Use the output as a validation ladder: preflight first, scoped checks second,
-and broad/final checks once at the end of the batch. Re-running broad gates
-such as full portable pipeline validation after every small edit is waste
-unless the previous gate failed or new shared behavior changed.
-When touched files already define the scope, use the profiled facade directly:
-`node tools/ai.mjs validate --file <path> [--file <path> ...] --risk medium`.
-For product-read, visual critique, slice hygiene, or closeout gate changes, use
-`--change product-gate` or pass the touched `tools/product_gate/...` files so
-the planner selects `node --test tools/product_gate/test.mjs`. For iteration
-context, startup gate, or new prototype kickoff changes, use
-`--change game-context` or pass `tools/game_context/...` files so the planner
-selects `node --test tools/game_context/test.mjs`.
-For reusable generated-art or UI asset tooling changes under `tools/assets/`,
-use `--change asset-tools` or pass those files so the planner selects the asset
-pipeline JS/Python tests instead of runtime asset placeholder checks.
+For reusable/process/tooling work, run the quick reusable-pipeline validation
+described below as the default gate, and only escalate to the full gate when the
+change affects shared behavior or the portable export path. Re-running the full
+gate after every small edit is waste unless the previous gate failed or new
+shared behavior changed.
 
 For pipeline/tooling changes, prove both the current repository and the portable
 export path when the change affects future projects. For game/runtime changes,
@@ -300,10 +284,12 @@ For reusable skill/process changes, also run `node tools/skills_eval.mjs`. The
 eval is intentionally small and static: it checks that key skill activation
 phrases and required output/process anchors have not been lost.
 
-For quick reusable-pipeline validation, run `node tools/pipeline_validate.mjs`.
-It validates the core workflow/tooling path without portable export, runtime
-configure, or deep generated-asset tests. For the full reusable-base gate, run
-`node tools/pipeline_validate.mjs --full`. Full mode validates this repo
+For quick reusable-pipeline validation, run `node tools/pipeline_validate.mjs`
+(or its alias `node tools/ai.mjs validate`). It validates the core
+workflow/tooling path without portable export, runtime configure, or deep
+generated-asset tests. For the full reusable-base gate, run
+`node tools/pipeline_validate.mjs --full` (alias: `node tools/ai.mjs validate
+--full`). Full mode validates this repo
 (including runtime seed checks: state codegen and CMake configure when those
 files are present), exports a fresh portable base, and validates the exported
 project from inside the exported folder. Treat full mode as a broad/final gate:

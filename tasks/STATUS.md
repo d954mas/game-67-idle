@@ -79,13 +79,17 @@ profiling for the next game iteration.
 
 ## Next Priorities
 
-1. P0 speed: `T0043` default validate to quick; `T0044` make profiling passive.
-2. P0 quality: `T0045` continuous binding visual fake-shot gate (redefines
-   "done"); `T0046` add the fun/reference-feel owner.
-3. P1 subtraction: `T0047` retire validation-planner machinery; `T0048` merge UI
+P0 done (2026-06-15): `T0043` quick-default + tmp prune; `T0044` passive
+profiling (advisory guard, supersedes T0028); `T0045` binding fake-shot gate +
+visual-first freeze (redefined "done" in AGENTS.md); `T0046` fun/reference-feel
+owner in `game-feature-iteration`.
+
+Remaining, in order:
+1. P1 subtraction: `T0047` retire validation-planner machinery; `T0048` merge UI
    asset skills + shared reference deconstruction; `T0049` tier UI asset gates;
-   `T0050` runtime-art quality bar.
-4. P2: `T0051` consolidate AI_PIPELINE docs; `T0052` first-screen scope cap.
+   `T0050` runtime-art quality bar; `T0053` cut per-session context load.
+2. P2: `T0051` consolidate AI_PIPELINE docs; `T0052` first-screen scope cap.
+3. Then: re-run a pipeline review pass and optimize remaining bottlenecks.
 
 ## Validation Policy
 
@@ -93,7 +97,8 @@ profiling for the next game iteration.
 - Taskboard tooling change: `node --test tools/taskboard/test.mjs`.
 - Game-context tooling change: `node --test tools/game_context/test.mjs`.
 - Product-gate tooling change: `node --test tools/product_gate/test.mjs`.
-- Asset tooling change: `node tools/ai_profile/plan_validation.mjs --change asset-tools`.
+- Asset tooling change: run the narrow asset test(s) for the changed tool, e.g.
+  `node --test tools/assets/validate_art_job.test.mjs`.
 - AI profiling/tooling change: `node --test tools/ai_profile/test.mjs`.
 - Skill/process change: `node tools/skills_eval.mjs`.
 - Reusable pipeline-base change: quick `node tools/pipeline_validate.mjs`;

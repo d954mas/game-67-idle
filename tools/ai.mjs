@@ -20,7 +20,7 @@ function usage() {
   node tools/ai.mjs context [context options] -- <command> [args...]
   node tools/ai.mjs checkpoint <intent> [--force] [--min-gap-min <n>] [checkpoint options]
   node tools/ai.mjs run [--profile-mode passive|full|off] [--profile-slow-ms <n>] [--phase <name>] [--category <name>] [--intent <text>] [--value <name>] -- <command> [args...]
-  node tools/ai.mjs validate (--change <kind>|--file <path>|--plan <plan.json>) [--risk low|medium|high] [--tier <name>] [--dry-run]
+  node tools/ai.mjs validate [--full] [--dry-run]
   node tools/ai.mjs critic --project <game-id> --task <task-id> --screenshot <path> --target <path|text> --output <packet.md> [critic options]
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail [gate options]
   node tools/ai.mjs close-slice --task <task-id> --project <game-id> --evidence <text> [close options]
@@ -34,7 +34,7 @@ Fast path:
   context  print or measure context; passive mode records only large/failing context
   checkpoint record a long manual/research/review gap without noisy short pauses
   run      run a command; passive mode records only slow/failing commands
-  validate run a planned validation batch with batch metadata
+  validate run quick reusable-pipeline validation (--full for the heavy export/runtime/release gate)
   critic   write a reusable visual/UI critic packet before strict product gate
   gate     write a product-read screenshot gate before expanding game content
   close-slice require product gate + evidence before handoff/review
@@ -395,10 +395,12 @@ if (command === "run") {
 }
 
 if (command === "validate") {
-  const args = [...argv];
-  if (!hasFlag(args, "--plan") && !hasFlag(args, "--change") && !hasFlag(args, "--file")) usage();
-  if (!hasFlag(args, "--plan") && !hasFlag(args, "--risk")) args.push("--risk", "medium");
-  run(["tools/ai_profile/validation_run.mjs", ...args]);
+  // Thin alias to the reusable pipeline validator. Quick by default; pass
+  // --full for the heavy export/runtime/release gate. --dry-run prints the plan.
+  const pipelineArgs = ["tools/pipeline_validate.mjs"];
+  if (hasFlag(argv, "--full")) pipelineArgs.push("--full");
+  if (hasFlag(argv, "--dry-run")) pipelineArgs.push("--dry-run");
+  run(pipelineArgs);
 }
 
 if (command === "gate") {

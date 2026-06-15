@@ -284,18 +284,11 @@ test("critic forwards visual critique packet options", () => {
   }
 });
 
-test("validate accepts file-only planning", () => {
-  const result = run([
-    "validate",
-    "--file",
-    "tools/game_context/new_prototype.mjs",
-    "--dry-run",
-  ]);
+test("validate forwards to the reusable pipeline validator", () => {
+  const result = run(["validate", "--dry-run"]);
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Changes: game-context/);
-  assert.match(result.stdout, /game-context-tests/);
-  assert.match(result.stdout, /dry run/);
+  assert.match(result.stdout, /mode: quick \(dry-run\)/);
 });
 
 test("close-slice forwards product gate closeout options", () => {
