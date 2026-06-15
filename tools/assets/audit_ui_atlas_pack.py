@@ -227,6 +227,19 @@ def expected_review_label_text(entry_id: str, entries_by_id: dict[str, dict[str,
     return f"{entry_id} (+{','.join(sorted(alias_ids))})"
 
 
+def check_labeled_preview_policy(owner: str, value: Any) -> list[str]:
+    if not isinstance(value, dict):
+        return [f"{owner} labeled_preview_policy must be present"]
+    problems: list[str] = []
+    if value.get("mode") != "label_overlay_only":
+        problems.append(f"{owner} labeled_preview_policy.mode must be label_overlay_only")
+    if value.get("allowed_delta") != "review_label_rects_only":
+        problems.append(f"{owner} labeled_preview_policy.allowed_delta must be review_label_rects_only")
+    if value.get("debug_outlines") is not False:
+        problems.append(f"{owner} labeled_preview_policy.debug_outlines must be false")
+    return problems
+
+
 def check_extrusion(atlas: Image.Image, entry: dict[str, Any]) -> list[str]:
     problems: list[str] = []
     entry_id = str(entry.get("id") or "(unknown)")
@@ -299,6 +312,8 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
     if not isinstance(atlases, list) or not atlases:
         problems.append("atlas pack needs non-empty atlases")
         atlases = []
+    if pack.get("label_overlay"):
+        problems.extend(check_labeled_preview_policy("atlas pack", pack.get("labeled_preview_policy")))
 
     for atlas_info in atlases:
         atlas_started = perf_counter()
@@ -316,6 +331,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
         labeled_preview = None
         labeled_preview_path_value = atlas_info.get("labeled_preview_path") if isinstance(atlas_info, dict) else None
         if atlas_info.get("label_overlay"):
+            atlas_problems.extend(check_labeled_preview_policy("atlas", atlas_info.get("labeled_preview_policy")))
             if not isinstance(labeled_preview_path_value, str) or not labeled_preview_path_value:
                 atlas_problems.append("labeled review atlas needs labeled_preview_path")
             else:

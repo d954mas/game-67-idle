@@ -153,7 +153,10 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     space without covering art. Long labels should preserve exact
     `review_label.text` metadata and render wrapped `review_label.lines` in the
     preview so verbose ids do not widen the atlas. This is proof/review output,
-    not the game's final runtime atlas packer.
+    not the game's final runtime atlas packer. Labeled review packs must write
+    `labeled_preview_policy` with `mode: label_overlay_only`,
+    `allowed_delta: review_label_rects_only`, and `debug_outlines: false` at
+    pack and atlas level.
 21. Audit generated UI review atlases before final-art claims:
     `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
     Add `--profile` when atlas audit feels slow so JSON/Markdown preserve audit
@@ -172,7 +175,8 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     so review labels, stains, or orphan sprites cannot leak into runtime art.
     The labeled preview may differ from the clean atlas only inside declared
     `review_label.rect`s; outside those rects it must preserve exact atlas
-    pixels and must not add debug outlines over packed art.
+    pixels and must not add debug outlines over packed art. The audit must
+    reject labeled review packs that omit or weaken `labeled_preview_policy`.
 
 ## Rules
 
@@ -204,7 +208,8 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
   reject visible pixels outside declared packed `padded_rect`s; clean atlas free
   space is not a place for labels, stains, or untracked art fragments. Labeled
   previews must be pixel-identical to clean atlases outside label rects, without
-  debug outlines over assets.
+  debug outlines over assets. The overlay-only label policy must be declared in
+  pack JSON, not carried only in prose or chat context.
 - Source-sheet intake must reject unsafe chroma choices before slicing: exact
   key-color holes inside component bounds are not normal background, and broad
   key/halo hue conflicts inside art need either a safer background color or an

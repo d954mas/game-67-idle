@@ -527,6 +527,11 @@ def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_si
     }
     if labeled_preview_path:
         result["labeled_preview_path"] = labeled_preview_path
+        result["labeled_preview_policy"] = {
+            "mode": "label_overlay_only",
+            "allowed_delta": "review_label_rects_only",
+            "debug_outlines": False,
+        }
     if profile:
         timings["total"] = round((perf_counter() - started) * 1000, 3)
         result["timing_ms"] = timings
@@ -560,6 +565,12 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
         "max_size": max_size,
         "atlases": atlases,
     }
+    if label_review:
+        pack_manifest["labeled_preview_policy"] = {
+            "mode": "label_overlay_only",
+            "allowed_delta": "review_label_rects_only",
+            "debug_outlines": False,
+        }
     if profile:
         efficiency = {
             "atlas_area": sum(int(atlas.get("atlas_area", 0)) for atlas in atlases),

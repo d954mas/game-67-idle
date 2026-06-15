@@ -213,7 +213,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       not widen the atlas. Labels must be
       readable at whole-atlas review size and record `review_label.font_size`;
       tiny debug-font labels are not acceptable review evidence. This is
-      review evidence, not the game's final runtime packer.
+      review evidence, not the game's final runtime packer. Labeled review
+      packs must write `labeled_preview_policy` with `mode:
+      label_overlay_only`, `allowed_delta: review_label_rects_only`, and
+      `debug_outlines: false` at pack and atlas level.
     - review atlas audit:
       `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
       Add `--profile` when atlas audit feels slow; it writes audit timing and
@@ -230,7 +233,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       sprites cannot masquerade as runtime art. The labeled preview may differ
       from the clean atlas only inside declared `review_label.rect`s, so review
       labels cannot accidentally repaint asset pixels or free atlas space; do
-      not draw debug outlines over packed art in the labeled preview.
+      not draw debug outlines over packed art in the labeled preview. The audit
+      must reject labeled review packs that omit or weaken
+      `labeled_preview_policy`.
       Record passing JSON reports in `expected_outputs.atlas_pack_audit`;
       final-art validation requires this evidence. This verifies runtime asset
       coverage, atlas bounds, padded-rect overlap, alias reuse, metadata
@@ -371,7 +376,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   orphan pixels in free atlas space are packing failures even when the image
   looks visually acceptable. The labeled preview must be pixel-identical to the
   clean atlas outside declared label rects; it is a review overlay, not a second
-  editable atlas, and it should not add debug outlines over assets.
+  editable atlas, and it should not add debug outlines over assets. The pack
+  JSON and each labeled atlas entry must declare the same
+  `labeled_preview_policy` so this is machine-readable, not chat context.
 - Use trim only with padding, alpha bleed, edge extrusion, and shape padding.
   Tight alpha crops without bleed/extrude are a known cause of 1-2 pixel halos
   and neighboring-pixel leaks.
