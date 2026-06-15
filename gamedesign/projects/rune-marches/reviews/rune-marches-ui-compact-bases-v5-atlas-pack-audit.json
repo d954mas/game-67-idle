@@ -10,17 +10,31 @@
       "pack_group": "ui_rune_marches_compact_bases_v5",
       "path": "assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5.png",
       "labeled_preview_path": "assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5-labeled.png",
+      "labeled_preview_policy": {
+        "mode": "label_overlay_only",
+        "allowed_delta": "review_label_rects_only",
+        "debug_outlines": false
+      },
       "status": "pass",
       "problems": [],
       "entry_count": 7,
       "physical_entry_count": 7,
       "alias_count": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "outside_padded_visible_pixels": 0,
+      "labeled_preview_delta_outside_label_pixels": 0,
+      "analysis_engine": "numpy",
       "timing_ms": {
-        "total": 41.788
+        "total": 72.126
       }
     }
   ],
+  "labeled_preview_policy": {
+    "mode": "label_overlay_only",
+    "allowed_delta": "review_label_rects_only",
+    "debug_outlines": false
+  },
   "timing_ms": {
-    "total": 43.095
+    "total": 73.502
   }
 }

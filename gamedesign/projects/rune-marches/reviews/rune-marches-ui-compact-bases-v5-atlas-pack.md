@@ -5,6 +5,13 @@ asset_manifest: `gamedesign/projects/rune-marches/data/rune-marches-ui-compact-b
 output_dir: `assets/runtime/rune-marches-ui-compact-bases-v5-atlas`
 atlases: **1**
 
+## Labeled Preview Policy
+
+Names are drawn only on labeled preview PNGs, in reserved free-space label rects outside asset padded rects.
+- mode: `label_overlay_only`
+- allowed_delta: `review_label_rects_only`
+- debug_outlines: `false`
+
 ## Atlas Efficiency
 
 - occupancy_ratio: 0.6508
@@ -15,23 +22,25 @@ atlases: **1**
 
 ## Timing
 
-- read_manifest: 0.189 ms
-- load_assets: 16.451 ms
-- pack_groups: 90.388 ms
-- total: 107.556 ms
+- read_manifest: 0.211 ms
+- load_assets: 20.015 ms
+- pack_groups: 89.855 ms
+- total: 110.521 ms
 
 ## Atlases
 
-- `ui_rune_marches_compact_bases_v5` -> `assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5.png` 803x1073, entries=7, physical=7, aliases=0, occupancy=0.6508, labeled_preview=`assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5-labeled.png`
+- `ui_rune_marches_compact_bases_v5` -> `assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5.png` 803x1073, entries=7, physical=7, aliases=0, occupancy=0.6508, labeled_preview=`assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5-labeled.png`, labels=label_overlay_only/review_label_rects_only/debug_outlines=false
 
 ## Asset Id Index
 
 ### ui_rune_marches_compact_bases_v5
 
-- `compact_button_disabled_long_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png`, atlas_rect=[355, 3, 445, 119], padded_rect=[353, 1, 449, 123], label_rect=[353, 127, 198, 34], label_placement=bottom
-- `compact_button_disabled_medium_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png`, atlas_rect=[453, 752, 298, 119], padded_rect=[451, 750, 302, 123], label_rect=[451, 876, 198, 34], label_placement=bottom
-- `compact_button_disabled_short_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png`, atlas_rect=[307, 914, 211, 119], padded_rect=[305, 912, 215, 123], label_rect=[305, 1038, 198, 34], label_placement=bottom
-- `compact_button_idle_long_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png`, atlas_rect=[3, 752, 444, 119], padded_rect=[1, 750, 448, 123], label_rect=[1, 876, 218, 18], label_placement=bottom
-- `compact_button_idle_medium_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png`, atlas_rect=[3, 914, 298, 119], padded_rect=[1, 912, 302, 123], label_rect=[1, 1038, 164, 34], label_placement=bottom
-- `compact_button_idle_short_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png`, atlas_rect=[524, 914, 211, 118], padded_rect=[522, 912, 215, 122], label_rect=[522, 1037, 223, 18], label_placement=bottom
-- `compact_journal_panel_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png`, atlas_rect=[3, 3, 346, 722], padded_rect=[1, 1, 350, 726], label_rect=[1, 730, 198, 18], label_placement=bottom
+labeled_preview: `assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5-labeled.png`
+
+- `compact_button_disabled_long_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png`, atlas_rect=[355, 3, 445, 119], padded_rect=[353, 1, 449, 123], label_rect=[353, 127, 198, 34], label_placement=bottom, label_lines=['compact_button_disabled_', 'long_v5']
+- `compact_button_disabled_medium_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png`, atlas_rect=[453, 752, 298, 119], padded_rect=[451, 750, 302, 123], label_rect=[451, 876, 198, 34], label_placement=bottom, label_lines=['compact_button_disabled_', 'medium_v5']
+- `compact_button_disabled_short_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png`, atlas_rect=[307, 914, 211, 119], padded_rect=[305, 912, 215, 123], label_rect=[305, 1038, 198, 34], label_placement=bottom, label_lines=['compact_button_disabled_', 'short_v5']
+- `compact_button_idle_long_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png`, atlas_rect=[3, 752, 444, 119], padded_rect=[1, 750, 448, 123], label_rect=[1, 876, 218, 18], label_placement=bottom, label_lines=['compact_button_idle_long_v5']
+- `compact_button_idle_medium_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png`, atlas_rect=[3, 914, 298, 119], padded_rect=[1, 912, 302, 123], label_rect=[1, 1038, 164, 34], label_placement=bottom, label_lines=['compact_button_idle_', 'medium_v5']
+- `compact_button_idle_short_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png`, atlas_rect=[524, 914, 211, 118], padded_rect=[522, 912, 215, 122], label_rect=[522, 1037, 223, 18], label_placement=bottom, label_lines=['compact_button_idle_short_v5']
+- `compact_journal_panel_v5`: kind=slice9, source=`assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png`, atlas_rect=[3, 3, 346, 722], padded_rect=[1, 1, 350, 726], label_rect=[1, 730, 198, 18], label_placement=bottom, label_lines=['compact_journal_panel_v5']
