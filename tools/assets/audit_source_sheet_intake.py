@@ -535,20 +535,26 @@ def score_candidate_key_colors_from_rgb(
     visible = int(red_values.size)
     if visible:
         hue, sat, value = hsv_arrays(red_values, green_values, blue_values)
+        red_i = red_values.astype(np.int16)
+        green_i = green_values.astype(np.int16)
+        blue_i = blue_values.astype(np.int16)
+        hue_eligible = (sat >= 0.25) & (value >= 0.12)
     scores: list[dict[str, object]] = []
     for candidate in candidates:
         if visible:
-            exact = int(np.count_nonzero(exact_key_mask(red_values, green_values, blue_values, candidate, 24)))
-            key_hue, key_sat, key_value = colorsys.rgb_to_hsv(candidate[0] / 255, candidate[1] / 255, candidate[2] / 255)
-            hue_delta = np.abs(hue - key_hue)
-            hue_band_mask = (
-                (key_sat >= 0.35)
-                & (sat >= 0.25)
-                & (value >= 0.12)
-                & (key_value >= 0.35)
-                & (np.minimum(hue_delta, 1.0 - hue_delta) <= 0.05)
+            exact = int(
+                np.count_nonzero(
+                    (np.abs(red_i - candidate[0]) <= 24)
+                    & (np.abs(green_i - candidate[1]) <= 24)
+                    & (np.abs(blue_i - candidate[2]) <= 24)
+                )
             )
-            hue_band = int(np.count_nonzero(hue_band_mask))
+            key_hue, key_sat, key_value = colorsys.rgb_to_hsv(candidate[0] / 255, candidate[1] / 255, candidate[2] / 255)
+            if key_sat >= 0.35 and key_value >= 0.35:
+                hue_delta = np.abs(hue - key_hue)
+                hue_band = int(np.count_nonzero(hue_eligible & (np.minimum(hue_delta, 1.0 - hue_delta) <= 0.05)))
+            else:
+                hue_band = 0
         else:
             exact = 0
             hue_band = 0

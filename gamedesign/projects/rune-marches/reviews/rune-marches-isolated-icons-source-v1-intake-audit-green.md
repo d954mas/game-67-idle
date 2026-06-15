@@ -44,11 +44,11 @@ recommended_next_step: regenerate_source_sheet_with_safer_key_color
 - #00ff00: exact=868612 exact_ratio=0.720915 hue_band=878715 hue_ratio=0.7293 score=869490787.930032
 
 ## Timing
-- load_image: 30.198 ms
-- find_components: 235.099 ms
-- merge_fragments: 0.331 ms
-- key_conflicts: 136.723 ms
-- candidate_key_scores: 160.538 ms
-- component_rules: 0.021 ms
+- load_image: 26.509 ms
+- find_components: 201.417 ms
+- merge_fragments: 0.265 ms
+- key_conflicts: 118.179 ms
+- candidate_key_scores: 115.864 ms
+- component_rules: 0.025 ms
 - gutter_scan: 0.003 ms
-- total: 562.94 ms
+- total: 462.29 ms
