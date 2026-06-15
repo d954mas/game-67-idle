@@ -144,6 +144,8 @@ typedef struct Pen {
   float gdx, gdy; /* inward gate normal (unit, points into the field) */
   float flash;    /* capture flash timer */
   float chain;    /* chain-boost timer (signature cascade) */
+  int chain_steps;/* captures during the CURRENT chain (drives rising pitch +
+                   * escalating burst — the signature satisfaction) */
   int parked;     /* count parked in this pen */
 } Pen;
 
@@ -521,7 +523,7 @@ static bool corral_pick_upgrade(int offer_index, float w, float h) {
   /* refresh anything cached from upgrade levels. */
   s_lure_radius = corral_effective_lure_radius();
   s_offer_count = 0;
-  game_audio_play(GAME_AUDIO_CUE_SUCCESS);
+  game_audio_play(GAME_AUDIO_CUE_CORRAL_CHIME); /* pleasant reward chime */
   corral_next_wave(w, h); /* chosen -> the next wave begins */
   return true;
 }
@@ -611,6 +613,7 @@ static void corral_spawn_wave(float w, float h) {
     s_pens[i].parked = 0;
     s_pens[i].flash = 0.0F;
     s_pens[i].chain = 0.0F;
+    s_pens[i].chain_steps = 0;
   }
   /* Critters spawn in the central pasture, away from pen gates. */
   s_critter_count = wave_critter_count(s_wave);
@@ -683,7 +686,7 @@ static void corral_start(float w, float h) {
   }
   (void)w;
   (void)h;
-  game_audio_play(GAME_AUDIO_CUE_NOTIFY);
+  game_audio_play(GAME_AUDIO_CUE_CORRAL_START); /* soft welcoming swell */
 }
 
 /* Advance to the next wave (clears celebratory beat state). */
@@ -791,11 +794,44 @@ static void capture_critter(Critter *c, Pen *pen) {
   c->squash = 0.22F; /* squash/scale on entry (~0.2s) */
   pen->parked += 1;
   pen->flash = 0.30F;
+  /* Is THIS capture continuing an in-flight chain (the pen was still pulling
+   * same-color friends in)? If so it's a chain step; otherwise a fresh pop that
+   * STARTS a new chain. chain_steps drives both the rising pitch and the
+   * escalating particle burst — the signature "satisfying chain" moment. */
+  const bool chaining = (pen->chain > 0.0F);
+  if (chaining) {
+    pen->chain_steps += 1;
+  } else {
+    pen->chain_steps = 0;
+  }
   /* CHAIN: briefly boost same-color attraction (CHAIN upgrade lengthens it). */
   pen->chain = corral_chain_time();
-  spawn_burst(pen->gx, pen->gy, CORRAL_COLORS[pen->color], 8);
+
+  /* AUDIO + JUICE (calm/ASMR identity): a soft "plip" on a fresh capture; for a
+   * continuing chain a brighter "chain" cue that RISES in pitch as the chain
+   * grows (escalating satisfaction). Even fresh pops get a small per-capture
+   * pitch wobble so repeats never fatigue. */
+  if (chaining) {
+    /* rise ~1 semitone per step, capped so it never gets shrill (~+9). */
+    float semis = 2.0F + 1.4F * (float)pen->chain_steps;
+    if (semis > 9.0F) {
+      semis = 9.0F;
+    }
+    game_audio_play_pitched(GAME_AUDIO_CUE_CORRAL_CHAIN, semis);
+  } else {
+    /* small symmetric wobble (~ +/-1.5 semitones) for variety on repeats. */
+    float wobble = (frand() - 0.5F) * 3.0F;
+    game_audio_play_pitched(GAME_AUDIO_CUE_CORRAL_POP, wobble);
+  }
+
+  /* escalating burst: more particles as the chain deepens (cap so it stays
+   * tasteful, not a screen-filling explosion). */
+  int burst = 8 + 3 * pen->chain_steps;
+  if (burst > 22) {
+    burst = 22;
+  }
+  spawn_burst(pen->gx, pen->gy, CORRAL_COLORS[pen->color], burst);
   s_score += 1;
-  game_audio_play(GAME_AUDIO_CUE_SUCCESS); /* soft "ding" */
 }
 
 static void critter_update(float dt, float w, float h) {
@@ -829,6 +865,9 @@ static void critter_update(float dt, float w, float h) {
     }
     if (s_pens[i].chain > 0.0F) {
       s_pens[i].chain -= dt;
+      if (s_pens[i].chain <= 0.0F) {
+        s_pens[i].chain_steps = 0; /* chain window lapsed -> reset escalation */
+      }
     }
   }
   if (s_cleared_flash > 0.0F) {
@@ -1103,8 +1142,15 @@ static void critter_update(float dt, float w, float h) {
           c->y = pen->y - crit_r;
           c->vy = -fabsf(c->vy) - 30.0F;
         }
+        /* Only voice the bonk on a FRESH contact (pen not already flashing from
+         * a very recent bonk) so a critter wedged against a gate doesn't
+         * machine-gun the sound — keeps it gentle, not punishing/annoying. A
+         * tiny pitch wobble softens repeats further. */
+        if (pen->flash <= 0.0F) {
+          game_audio_play_pitched(GAME_AUDIO_CUE_CORRAL_BONK,
+                                  (frand() - 0.5F) * 2.0F);
+        }
         pen->flash = 0.12F;
-        game_audio_play(GAME_AUDIO_CUE_ERROR); /* soft bonk */
       }
     }
 
@@ -1137,11 +1183,12 @@ static void critter_update(float dt, float w, float h) {
       s_win_shown = true;
       s_phase = CORRAL_PHASE_WIN;
       s_phase_timer = CORRAL_WIN_BEAT_TIME;
+      game_audio_play(GAME_AUDIO_CUE_CORRAL_WIN); /* bigger "you did it!" */
     } else {
       s_phase = CORRAL_PHASE_WAVE_CLEARED;
       s_phase_timer = CORRAL_WAVE_CLEARED_TIME;
+      game_audio_play(GAME_AUDIO_CUE_CORRAL_WAVE); /* short happy flourish */
     }
-    game_audio_play(GAME_AUDIO_CUE_NOTIFY);
   }
 }
 
@@ -1863,6 +1910,32 @@ static cJSON *state_json(void) {
   cJSON_AddNumberToObject(eff, "chain_time", (double)corral_chain_time());
   cJSON_AddBoolToObject(eff, "second_lure", corral_second_lure_active());
 
+  /* ---- AUDIO PROOF: an automated playtest can't HEAR the speaker, so surface
+   * the audio engine's play counters + last cue here. A rising total + the
+   * per-event cue counts PROVE each event actually fired a sound. ---- */
+  {
+    GameAudioStatus as = game_audio_status();
+    cJSON *audio = cJSON_AddObjectToObject(root, "audio");
+    cJSON_AddBoolToObject(audio, "implemented", as.implemented);
+    cJSON_AddBoolToObject(audio, "initialized", as.initialized);
+    cJSON_AddBoolToObject(audio, "device_enabled", as.device_enabled);
+    cJSON_AddStringToObject(audio, "backend",
+                            as.backend ? as.backend : "unknown");
+    cJSON_AddNumberToObject(audio, "total_play_count", as.total_play_count);
+    cJSON_AddNumberToObject(audio, "last_cue", as.last_cue);
+    cJSON_AddStringToObject(
+        audio, "last_cue_name",
+        (as.last_cue >= 0)
+            ? game_audio_cue_name((GameAudioCue)as.last_cue)
+            : "none");
+    cJSON_AddNumberToObject(audio, "last_semitones", (double)as.last_semitones);
+    cJSON *cues = cJSON_AddObjectToObject(audio, "cue_play_count");
+    for (int ci = 0; ci < GAME_AUDIO_CUE_COUNT; ++ci) {
+      cJSON_AddNumberToObject(cues, game_audio_cue_name((GameAudioCue)ci),
+                              as.cue_play_count[ci]);
+    }
+  }
+
   /* the pending pick-1-of-3 offer (only meaningful in the upgrade_choice phase;
    * reported whenever an offer is staged so a playtest can read the options). */
   cJSON *pending = cJSON_AddArrayToObject(root, "pending_choice");
@@ -1949,6 +2022,9 @@ static bool ep_game_debug_skip_wave(const cJSON *params, cJSON **result,
     s_cleared_flash = 0.85F;
     if (s_wave >= CORRAL_WIN_WAVE && !s_win_shown) {
       s_win_shown = true; /* fire the soft milestone once, then offer/advance */
+      game_audio_play(GAME_AUDIO_CUE_CORRAL_WIN);
+    } else {
+      game_audio_play(GAME_AUDIO_CUE_CORRAL_WAVE);
     }
     /* surface the upgrade choice (so the playtest picks), else advance. */
     corral_make_offer();
