@@ -6,21 +6,19 @@ and review evidence belongs under `gamedesign/projects/<game-id>/`.
 
 ## Current Goal
 
-Optimize the reusable AI-first game development pipeline after the Splash Rods
-fishing prototype test. The fishing game is closed; future work should improve
-task/status hygiene, asset pipeline boundaries, validation gates, and passive
-profiling for the next game iteration.
+Keep the reusable AI-first game pipeline lean and pointed at the right target
+(a game that reaches the fake shot's direction and is fun), and keep the
+template clean for the next prototype. The `E003` pipeline cleanup milestone is
+done.
 
 ## Active Product State
 
-- Active game concept: none. This repository is in pipeline/template
-  improvement mode until the lead starts the next prototype.
-- Closed test concept: `roblox-fishing` / `Splash Rods`. Its GDD, fake shots,
-  runtime UI evidence, reviews, and failure reports remain under
-  `gamedesign/projects/roblox-fishing/`.
-- Legacy concept: `rune-marches`. Its old tasks are archived/dropped and
-  should be treated only as historical evidence unless the lead reopens it.
-- Active pipeline epic: `E003` reusable AI game pipeline cleanup.
+- Active game concept: none. The repository is a clean reusable template ready
+  for the next prototype (`src/clean_seed_main.c`).
+- The Splash Rods (fishing) and Rune Marches test prototypes were removed
+  entirely -- code, runtime, tooling, and design folders. History is in git and
+  `tasks/archive/`; their durable lessons are encoded in `AGENTS.md` + skills.
+- Pipeline cleanup epic `E003` is essentially complete (see Current Gate).
 
 ## Source Pointers
 
@@ -29,17 +27,14 @@ profiling for the next game iteration.
 - Startup gate: `node tools/game_context/iteration_context.mjs`.
 - New prototype kickoff:
   `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`.
-- Closed fishing project evidence: `gamedesign/projects/roblox-fishing/`.
-- Closed work logs: `tasks/archive/E001/`, `tasks/archive/E002/`,
-  `tasks/archive/E003/`, and `tasks/archive/unassigned/`.
+- Closed work logs (history): `tasks/archive/E001/` (rune-marches),
+  `tasks/archive/E002/` (fishing), `tasks/archive/E003/`, `tasks/archive/unassigned/`.
 
 ## Blocking Work
 
-- No active Splash Rods blocker remains. Fishing is closed as a test iteration.
-- Do not continue Splash Rods gameplay, world art, UI kit, model selection, or
-  visual rescue work unless the lead explicitly reopens that game.
-- Do not continue Rune Marches product work unless the lead explicitly reopens
-  that game.
+- None. The closed prototypes are fully removed; do not re-add prototype-specific
+  game code/assets/tooling to the template. Start the next game as a fresh
+  project under `gamedesign/projects/<game-id>/`.
 
 ## Current Gate
 
@@ -53,8 +48,8 @@ profiling for the next game iteration.
   continuous visual gate and visual-first freeze; a fun/reference-feel owner in
   `game-feature-iteration`; runtime art must hit the fake-shot bar; first-screen
   scope cap (<=3 FTUE beats). Net principle applied: subtract, don't add.
-- Active cleanup task: none. Next = post-implementation review to find any
-  remaining bottlenecks, then the next prototype when the lead starts one.
+- Active cleanup task: none. E003 cleanup is essentially complete; the next
+  move is a fresh prototype, not more pipeline work.
 - Completed cleanup slices:
   - `T0013`-`T0034`: closed fishing, cleaned status/state, added startup/visual/
     slice gates, visual-strict rubric, and critic packets.
@@ -65,23 +60,24 @@ profiling for the next game iteration.
     freeze; fun/feel owner; validation-planner removal; merged asset skills +
     shared reference doc; tiered UI gates; runtime-art bar; 5 AI_PIPELINE docs
     -> 2; first-screen scope cap; context-budget guideline.
+  - `T0054`-`T0063`: post-review fixes; deep-reflection chain removed (-3.4k
+    LOC); `--full` skips redundant in-export reruns; python mask dedup; dropped
+    `tool_layers.json`; context practices (subagent return-contract, model
+    tiering, cache protection); ponytail build-less ladder borrowed (no dep);
+    `T0063` removed the closed prototypes entirely (clean template).
 
 ## Next Priorities
 
-The 2026-06-15 review backlog `T0043`-`T0053` is complete (see Current Gate).
-Post-implementation review done: quick wins applied in `T0054` (fixed 6 stale
-`ai.mjs validate --change` advice strings, marked the slice-hygiene profiler
-guard advisory in tools/README, pruned closed-prototype tmp 120M -> 22M).
+All E003 cleanup tasks `T0043`-`T0063` are done (see Current Gate). `T0057` was
+resolved: the visual gate stays QUALITATIVE/advisory -- the fake shot is
+inspiration, not a pixel target, so image-similarity scoring was rejected and
+removed. No open cleanup tasks remain.
 
-Open follow-ups:
-1. `T0057` (lead decision): should the first-screen visual gate BLOCK, not just
-   advise? It is the one residual way a prototype could still ship unlike-ref
-   (the gate is self-attested/advisory). Options A-D in the task; lean C
-   (cheap auto image-similarity vs fake shot) layered on the advisory gate.
-2. `T0055` split the 531-line generated-game-ui-assets skill into references.
-3. `T0056` (P3) sweep non-pipeline-validate tmp scratch at prototype close.
-4. Start the next prototype when the lead picks a concept (Stage 0 kickoff),
-   applying the binding visual definition of done from the first screen.
+Next move: **start the next prototype.** Pick a concept, create a fresh
+`gamedesign/projects/<game-id>/` wiki + tasks in `active/` (Stage 0 kickoff),
+and from the very first screen apply the binding visual definition of done
+(reaches the fake shot's direction + the core moment feels right; visual-first
+freeze; <=3 FTUE beats).
 
 ## Validation Policy
 

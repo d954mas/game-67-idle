@@ -35,9 +35,11 @@
 
 - Current runtime surface: native `Game Seed` template in
   `src/clean_seed_main.c`.
-- The closed Splash Rods / Rune Marches prototypes were removed from the
-  template (they were test runs); their design evidence is kept under
-  `gamedesign/projects/`.
+- The closed Splash Rods / Rune Marches prototypes were removed entirely (they
+  were test runs): code, runtime, tooling, and design folders. Their history is
+  in git and archived task logs under `tasks/archive/`; their durable lessons
+  are encoded in these rules and the skills. `gamedesign/projects/` is now empty
+  and ready for the next game.
 - The template is intentionally small: a shape-renderer screen, one cycle action,
   persistent state, DevAPI, screenshot capture, and smoke/full probes.
 - Start a new game iteration by creating a fresh project wiki/GDD under
