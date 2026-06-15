@@ -274,14 +274,12 @@ task, or fresh validation evidence.
 
 Profiling shows where an AI agent gets stuck without turning telemetry into a
 second project. It is passive by default: normal game work must not pause to
-repair stale summaries, bundles, packets, drafts, reviews, follow-ups, or
-baselines. Those are deep-retrospective artifacts, not everyday gates. No
-profiler step is a forced gate on normal work. `reflect`'s gap checkpoint is
-opt-in (`--gap-checkpoint`), and the slice-hygiene profiler guard is advisory
-(missing or stale guard is a warning, never a blocking problem). Run `start`,
-`status`, `reflect`, `review`, and gap checkpoints only when you choose to, or
-when the task is explicitly about AI workflow, profiler behavior, or a requested
-retrospective.
+repair stale summaries. No profiler step is a forced gate on normal work.
+`reflect`'s gap checkpoint is opt-in (`--gap-checkpoint`), and the slice-hygiene
+profiler guard is advisory (missing or stale guard is a warning, never a
+blocking problem). Run `start`, `status`, `reflect`, and gap checkpoints only
+when you choose to, or when the task is explicitly about AI workflow, profiler
+behavior, or a requested retrospective.
 
 **What to learn.** A useful profile answers: which commands failed; which were
 slow; which context reads were large; where long manual/research/review gaps
@@ -316,11 +314,11 @@ Passive defaults:
 - `status` prints the short diagnostic: unresolved failures, slowest recorded
   work, largest context input, and whether normal work needs action. It should
   usually end with `No profiling maintenance needed for normal game work.` If it
-  reports unresolved failures, inspect them; if it only reports low coverage,
-  stale bundles, missing packets, or old historical issues in verbose mode,
-  ignore that during normal game development.
-- `reflect` writes a short closeout summary; add `--gap-checkpoint` only when you
-  want it to record a long unprofiled work gap first.
+  reports unresolved failures, inspect them; if it only reports low coverage or
+  old historical issues in verbose mode, ignore that during normal game
+  development.
+- `reflect` writes a short session closeout summary; add `--gap-checkpoint` only
+  when you want it to record a long unprofiled work gap first.
 
 Before long prototype work, reset the current scope with
 `node tools/ai.mjs start <task-id> <iteration>` after selecting the task. Treat
@@ -337,19 +335,13 @@ Use `--profile-mode full` only when the task is explicitly about AI workflow,
 profiling, or a requested retrospective. Use `--profile-mode off` when even
 passive telemetry would be noise.
 
-**Deep retrospective (opt-in).** Use deep mode only when the user asks for AI
-workflow review, a long postmortem, or profiler debugging:
-
-```powershell
-node tools/ai.mjs reflect --deep
-node tools/ai.mjs status --verbose
-```
-
-Deep mode may use `tools/ai_profile/review.mjs`, `followups.mjs`,
-`capture_baseline.mjs`, `compare_reviews.mjs`, `reflection_packet.mjs`,
-`reflection_draft.mjs`, `reflection_review.mjs`, and `prepare_reflection.mjs`.
-Generated deep artifacts stay in `tmp/session_profiles/` unless the lead
-explicitly asks to preserve them.
+**AI workflow review (opt-in).** For a deeper look at a single session, run
+`node tools/ai.mjs status --verbose` for the full per-record breakdown. The old
+cross-session deep-retrospective chain (baseline capture, review/followups,
+baseline comparison, reflection packet/draft/review) was retired: each session
+here is a different game/task, so cross-session baselines are not comparable and
+were never captured. Keep profiling lightweight — passive JSONL log,
+`ai status`, and a short `ai reflect` closeout.
 
 **When to use it.** Use passive profiling when a session runs longer than about
 an hour; a command/build/test loop is repeating; packaging, release, art
@@ -360,9 +352,8 @@ friction.
 
 **Artifact policy.** Commit reusable profiling code and this policy. Do not
 commit raw telemetry by default: `tmp/session_profiles/*.jsonl`, generated
-summaries/reviews/followups/packets/drafts/comparisons, recovered thread dumps,
-or one-off timing extracts. Promote only durable lessons, task changes, rule
-changes, or tool fixes.
+session summaries, recovered thread dumps, or one-off timing extracts. Promote
+only durable lessons, task changes, rule changes, or tool fixes.
 
 **Validation.** After changing profiler behavior, run the narrow tests that
 cover the change (`node --test tools/ai.test.mjs`,

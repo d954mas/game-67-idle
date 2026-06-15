@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { defaultProfilePath, parseArgs, readProfileScope, stringArg } from "./profile_lib.mjs";
 
@@ -7,9 +7,8 @@ function usage() {
   console.error(`usage:
   node tools/ai_profile/status.mjs [--profile <profile.jsonl>] [--json-output <status.json>] [--verbose] [--require-review-usable|--require-current-scope-usable]
 
-Reports current AI profile health without appending records or generating a
-closeout bundle. Default output is a short passive diagnostic; --verbose shows
-the full reflection/baseline handoff state.
+Reports current AI profile health without appending records. Default output is
+a short passive diagnostic; --verbose shows the full per-record breakdown.
 
 Use --require-current-scope-usable before AI workflow/profiler review handoff
 so old low-coverage history does not hide an unmeasured current slice.`);
@@ -50,11 +49,6 @@ function formatMs(ms) {
 function formatPercent(value) {
   if (!Number.isFinite(value)) return "unknown";
   return `${(value * 100).toFixed(1)}%`;
-}
-
-function artifactPath(profilePath, suffix) {
-  const parsed = basename(profilePath).replace(/\.jsonl$/i, "");
-  return join(dirname(profilePath), `${parsed}.${suffix}`);
 }
 
 function coverageStats(records, gapThresholdMs = 5 * 60 * 1000) {
@@ -111,214 +105,6 @@ function coverageStats(records, gapThresholdMs = 5 * 60 * 1000) {
     coverage_ratio: wallClockSpanMs > 0 ? Math.min(1, mergedProfiledMs / wallClockSpanMs) : undefined,
     largest_gaps: largestGaps.slice(0, 10),
   };
-}
-
-function fileMtimeMs(path) {
-  try {
-    return statSync(path).mtimeMs;
-  } catch {
-    return undefined;
-  }
-}
-
-function bundleStatus(profilePath) {
-  const profileMtimeMs = fileMtimeMs(profilePath);
-  const artifacts = [
-    ["summary", artifactPath(profilePath, "summary.md")],
-    ["review", artifactPath(profilePath, "review.md")],
-    ["review_json", artifactPath(profilePath, "review.json")],
-    ["followups", artifactPath(profilePath, "followups.md")],
-    ["followups_json", artifactPath(profilePath, "followups.json")],
-  ].map(([name, path]) => {
-    const mtimeMs = fileMtimeMs(path);
-    const exists = mtimeMs !== undefined;
-    const stale = exists && profileMtimeMs !== undefined && mtimeMs + 1 < profileMtimeMs;
-    return { name, path, exists, mtime_ms: mtimeMs, stale };
-  });
-  const complete = artifacts.every((artifact) => artifact.exists);
-  return {
-    complete,
-    fresh: complete && artifacts.every((artifact) => !artifact.stale),
-    profile_mtime_ms: profileMtimeMs,
-    stale_artifacts: artifacts.filter((artifact) => artifact.stale).map((artifact) => artifact.name),
-    artifacts,
-  };
-}
-
-function readBaselineStatus(profilePath) {
-  const dir = join(dirname(profilePath), "baselines");
-  if (!existsSync(dir)) return { dir, count: 0, latest_manifest: null, errors: [] };
-  const manifests = [];
-  const errors = [];
-  for (const name of readdirSync(dir)) {
-    if (!name.endsWith(".manifest.json")) continue;
-    const path = join(dir, name);
-    try {
-      const parsed = JSON.parse(readFileSync(path, "utf8"));
-      const capturedMs = Date.parse(parsed.captured_at || "");
-      manifests.push({
-        manifest_path: path,
-        label: parsed.label || "",
-        captured_at: parsed.captured_at || "",
-        captured_ms: Number.isFinite(capturedMs) ? capturedMs : fileMtimeMs(path) || 0,
-        source_review: parsed.source_review || "",
-        baseline_review: parsed.baseline_review || "",
-        compare_command: parsed.compare_command || "",
-        summary: parsed.summary || {},
-      });
-    } catch (error) {
-      errors.push(`${path}: ${error.message}`);
-    }
-  }
-  manifests.sort((a, b) => b.captured_ms - a.captured_ms || b.manifest_path.localeCompare(a.manifest_path));
-  const latest = manifests[0] || null;
-  return {
-    dir,
-    count: manifests.length,
-    latest_manifest: latest ? {
-      manifest_path: latest.manifest_path,
-      label: latest.label,
-      captured_at: latest.captured_at,
-      source_review: latest.source_review,
-      baseline_review: latest.baseline_review,
-      compare_command: latest.compare_command,
-      summary: latest.summary,
-    } : null,
-    errors,
-  };
-}
-
-function compareArtifactPaths(profilePath, baseline) {
-  if (!baseline) return null;
-  const label = baseline.label || basename(baseline.baseline_review || "baseline").replace(/\.review\.json$/i, "");
-  const dir = dirname(profilePath);
-  return {
-    label,
-    review_json: artifactPath(profilePath, "review.json"),
-    compare_md: join(dir, `${label}.compare.md`),
-    compare_json: join(dir, `${label}.compare.json`),
-  };
-}
-
-function reflectionArtifactPaths(profilePath) {
-  const base = basename(profilePath).replace(/\.jsonl$/i, "");
-  const dir = dirname(profilePath);
-  return {
-    packet_md: join(dir, `${base}.reflection_packet.md`),
-    packet_json: join(dir, `${base}.reflection_packet.json`),
-    draft_md: join(dir, `${base}.reflection_draft.md`),
-    draft_json: join(dir, `${base}.reflection_draft.json`),
-    review_md: join(dir, `${base}.reflection_review.md`),
-    review_json: join(dir, `${base}.reflection_review.json`),
-  };
-}
-
-function latestMtime(paths) {
-  const mtimes = paths.map(fileMtimeMs).filter((mtime) => mtime !== undefined);
-  return mtimes.length > 0 ? Math.max(...mtimes) : undefined;
-}
-
-function artifactPairStatus(markdownPath, jsonPath, dependencyPaths, blockedReason = "") {
-  const markdownMtime = fileMtimeMs(markdownPath);
-  const jsonMtime = fileMtimeMs(jsonPath);
-  const markdownExists = markdownMtime !== undefined;
-  const jsonExists = jsonMtime !== undefined;
-  if (blockedReason) {
-    return {
-      status: "waiting",
-      reason: blockedReason,
-      markdown: markdownPath,
-      json: jsonPath,
-      markdown_exists: markdownExists,
-      json_exists: jsonExists,
-      stale: false,
-    };
-  }
-  if (!markdownExists || !jsonExists) {
-    return {
-      status: "missing",
-      reason: !markdownExists && !jsonExists ? "markdown and json are missing" : markdownExists ? "json is missing" : "markdown is missing",
-      markdown: markdownPath,
-      json: jsonPath,
-      markdown_exists: markdownExists,
-      json_exists: jsonExists,
-      stale: false,
-    };
-  }
-  const dependencyMtime = latestMtime(dependencyPaths);
-  const stale = dependencyMtime !== undefined && Math.min(markdownMtime, jsonMtime) + 1 < dependencyMtime;
-  return {
-    status: stale ? "stale" : "fresh",
-    reason: stale ? "artifact is older than reflection inputs" : "artifact is fresh",
-    markdown: markdownPath,
-    json: jsonPath,
-    markdown_exists: markdownExists,
-    json_exists: jsonExists,
-    stale,
-  };
-}
-
-function readReflectionStatus(profilePath, comparison) {
-  const paths = reflectionArtifactPaths(profilePath);
-  const packetDependencies = [
-    profilePath,
-    artifactPath(profilePath, "review.json"),
-    artifactPath(profilePath, "followups.json"),
-  ];
-  if (comparison?.paths?.compare_json) packetDependencies.push(comparison.paths.compare_json);
-  const packet = artifactPairStatus(paths.packet_md, paths.packet_json, packetDependencies);
-  const draftBlockedReason = packet.status === "fresh" ? "" : "packet is not fresh";
-  const draft = artifactPairStatus(paths.draft_md, paths.draft_json, [paths.packet_json, artifactPath(profilePath, "review.json")], draftBlockedReason);
-  const reviewBlockedReason = draft.status === "fresh" ? "" : "draft is not fresh";
-  const review = artifactPairStatus(paths.review_md, paths.review_json, [paths.draft_json], reviewBlockedReason);
-  return {
-    packet: {
-      ...packet,
-      command: `node tools/ai_profile/reflection_packet.mjs ${profilePath} --output ${paths.packet_md} --json-output ${paths.packet_json}`,
-    },
-    draft: {
-      ...draft,
-      command: `node tools/ai_profile/reflection_draft.mjs ${paths.packet_json} --output ${paths.draft_md} --json-output ${paths.draft_json}`,
-    },
-    review: {
-      ...review,
-      command: `node tools/ai_profile/reflection_review.mjs ${paths.draft_json} --output ${paths.review_md} --json-output ${paths.review_json}`,
-    },
-  };
-}
-
-function readComparisonStatus(profilePath, baseline) {
-  const paths = compareArtifactPaths(profilePath, baseline);
-  if (!paths || !baseline) {
-    return { available: false, status: "none", reason: "no baseline captured", paths: null, verdict: "", current_regressions: 0, compare_command: "" };
-  }
-  const compareCommand = `node tools/ai_profile/compare_reviews.mjs ${baseline.baseline_review} ${paths.review_json} --output ${paths.compare_md} --json-output ${paths.compare_json}`;
-  const reviewMtime = fileMtimeMs(paths.review_json);
-  const baselineMtime = fileMtimeMs(baseline.baseline_review);
-  const compareMtime = fileMtimeMs(paths.compare_json);
-  if (compareMtime === undefined) {
-    return { available: true, status: "missing", reason: "comparison json is missing", paths, verdict: "", current_regressions: 0, compare_command: compareCommand };
-  }
-  const staleAgainstReview = reviewMtime !== undefined && compareMtime + 1 < reviewMtime;
-  const staleAgainstBaseline = baselineMtime !== undefined && compareMtime + 1 < baselineMtime;
-  if (staleAgainstReview || staleAgainstBaseline) {
-    return { available: true, status: "stale", reason: staleAgainstReview ? "comparison is older than current review" : "comparison is older than baseline", paths, verdict: "", current_regressions: 0, compare_command: compareCommand };
-  }
-  try {
-    const parsed = JSON.parse(readFileSync(paths.compare_json, "utf8"));
-    const regressions = Array.isArray(parsed.current_regressions) ? parsed.current_regressions.length : 0;
-    return {
-      available: true,
-      status: regressions > 0 ? "regressed" : "fresh",
-      reason: regressions > 0 ? "current-scope regressions present" : "comparison is fresh",
-      paths,
-      verdict: parsed.verdict || "",
-      current_regressions: regressions,
-      compare_command: compareCommand,
-    };
-  } catch (error) {
-    return { available: true, status: "invalid", reason: `comparison json is invalid: ${error.message}`, paths, verdict: "", current_regressions: 0, compare_command: compareCommand };
-  }
 }
 
 function latestRecord(records) {
@@ -564,10 +350,6 @@ function buildStatus(profilePath) {
   const failedRecords = records.filter((record) => record.result === "fail").length;
   const failedClassification = classifyFailedRecords(records);
   const coverage = coverageStats(records);
-  const bundle = bundleStatus(profilePath);
-  const baselines = readBaselineStatus(profilePath);
-  const comparison = readComparisonStatus(profilePath, baselines.latest_manifest);
-  const reflection = readReflectionStatus(profilePath, comparison);
   const scope = readProfileScope();
   const latest = latestRecord(records);
   const slowest = records
@@ -581,13 +363,7 @@ function buildStatus(profilePath) {
     })))
     .sort((a, b) => Number(b.chars || 0) - Number(a.chars || 0))[0] || null;
 
-  let nextAction = baselines.latest_manifest
-    ? comparison.status === "fresh"
-      ? `Use fresh comparison ${comparison.paths.compare_json} as baseline trend evidence.`
-      : comparison.status === "regressed"
-        ? `Inspect current-scope regressions in ${comparison.paths.compare_json} before writing reflection.`
-        : `Run baseline comparison: ${comparison.compare_command}`
-    : `Capture this clean review with \`node tools/ai_profile/capture_baseline.mjs ${artifactPath(profilePath, "review.json")} --label <name>\`.`;
+  let nextAction = "No profiling maintenance needed for normal game work.";
   const scopeReady = scope.valid && Boolean(scope.work_item);
   const scopeTask = scopeReady ? findTaskStatus(scope.work_item) : { found: false, active: false, status: "", path: "" };
   const staleScope = scopeReady && scopeTask.found && !scopeTask.active;
@@ -648,23 +424,9 @@ function buildStatus(profilePath) {
   } else if (actionableLowCoverage) {
     nextAction = "Use node tools/ai.mjs checkpoint \"<intent>\" during long manual/research/design stretches so elapsed time is recorded with duration_ms.";
   } else if (!closeoutSeen) {
-    nextAction = "At session end, run closeout.mjs to generate the reflection bundle.";
-  } else if (!bundle.complete) {
-    nextAction = "Run closeout.mjs again, or rerun review/followups if the bundle was intentionally skipped.";
-  } else if (!bundle.fresh) {
-    nextAction = "Before reflection, rerun closeout.mjs so summary, review, and followups match the latest profile.";
-  } else if (baselines.latest_manifest && comparison.status !== "fresh" && comparison.status !== "regressed") {
-    nextAction = `Run baseline comparison: ${comparison.compare_command}`;
-  } else if (baselines.latest_manifest && comparison.status === "regressed") {
-    nextAction = `Inspect current-scope regressions in ${comparison.paths.compare_json} before writing reflection.`;
-  } else if (baselines.latest_manifest && comparison.status === "fresh" && reflection.packet.status !== "fresh") {
-    nextAction = `Generate reflection packet: ${reflection.packet.command}`;
-  } else if (baselines.latest_manifest && comparison.status === "fresh" && reflection.draft.status !== "fresh") {
-    nextAction = `Generate reflection draft: ${reflection.draft.command}`;
-  } else if (baselines.latest_manifest && comparison.status === "fresh" && reflection.review.status !== "fresh") {
-    nextAction = `Generate reflection review: ${reflection.review.command}`;
-  } else if (baselines.latest_manifest && comparison.status === "fresh" && comparison.paths) {
-    nextAction = `Use fresh reflection review ${reflection.review.markdown} as the first retrospective decision artifact.`;
+    nextAction = "At session end, run `node tools/ai.mjs reflect` to write a short session closeout.";
+  } else {
+    nextAction = "No profiling maintenance needed for normal game work.";
   }
 
   const passiveNextAction = failedClassification.unresolved > 0
@@ -697,10 +459,6 @@ function buildStatus(profilePath) {
     scope_task: scopeTask,
     stale_scope: staleScope,
     closeout_seen: closeoutSeen,
-    bundle,
-    baselines,
-    comparison,
-    reflection,
     work_item_coverage: {
       missing_records: missingWorkItem,
       coverage_ratio: records.length > 0 ? (records.length - missingWorkItem) / records.length : undefined,
@@ -844,13 +602,6 @@ function renderMarkdown(status) {
   if (status.scope_task?.found) {
     lines.push(`Scope task: ${status.scope_task.status || "unknown"} ${status.scope_task.path}${status.stale_scope ? " (stale)" : ""}`);
   }
-  lines.push(`Bundle complete: ${status.bundle.complete ? "yes" : "no"}`);
-  lines.push(`Bundle fresh: ${status.bundle.fresh ? "yes" : "no"}${status.bundle.stale_artifacts.length > 0 ? ` (${status.bundle.stale_artifacts.join(", ")} stale)` : ""}`);
-  lines.push(`Captured baselines: ${status.baselines.count}${status.baselines.latest_manifest ? ` (latest: ${status.baselines.latest_manifest.label || basename(status.baselines.latest_manifest.manifest_path)})` : ""}`);
-  lines.push(`Baseline comparison: ${status.comparison.status}${status.comparison.verdict ? ` (${status.comparison.verdict})` : ""}`);
-  lines.push(`Reflection packet: ${status.reflection.packet.status}`);
-  lines.push(`Reflection draft: ${status.reflection.draft.status}`);
-  lines.push(`Reflection review: ${status.reflection.review.status}`);
   lines.push(`Work-item coverage: ${formatPercent(status.work_item_coverage.coverage_ratio)} (${status.work_item_coverage.missing_records} missing)`);
   lines.push(`Missing context inputs: ${status.missing_context_inputs}`);
   lines.push(`Review confidence: ${status.review_confidence.level} (${status.review_confidence.usable_for_review ? "usable" : "not complete review evidence"})`);
@@ -885,52 +636,24 @@ function renderMarkdown(status) {
     }
   }
   lines.push("");
-  lines.push("## Bundle Artifacts");
-  for (const artifact of status.bundle.artifacts) {
-    lines.push(`- ${artifact.exists ? "yes" : "no"} ${artifact.name}: ${artifact.path}`);
-  }
-  lines.push("");
-  lines.push("## Baselines");
-  if (!status.baselines.latest_manifest) {
-    lines.push("- none");
+  lines.push("## Slowest Recorded Work");
+  const slowest = status.passive_summary.slowest_record;
+  if (slowest) {
+    lines.push(`- line ${slowest.line}: ${formatMs(slowest.duration_ms)} [${slowest.phase}/${slowest.category}] ${slowest.intent}`);
+    if (slowest.commands.length > 0) lines.push(`- command: ${slowest.commands[0]}`);
+    if (slowest.passive_reason) lines.push(`- reason: ${slowest.passive_reason}`);
   } else {
-    lines.push(`- latest label: ${status.baselines.latest_manifest.label || "(unlabeled)"}`);
-    lines.push(`- captured at: ${status.baselines.latest_manifest.captured_at || "unknown"}`);
-    lines.push(`- review: ${status.baselines.latest_manifest.baseline_review}`);
-    lines.push(`- manifest: ${status.baselines.latest_manifest.manifest_path}`);
-    if (status.baselines.latest_manifest.compare_command) {
-      lines.push(`- compare command: ${status.baselines.latest_manifest.compare_command}`);
-    }
-  }
-  if (status.baselines.errors.length > 0) {
-    lines.push("- errors:");
-    for (const error of status.baselines.errors) lines.push(`  - ${error}`);
+    lines.push("- none recorded");
   }
   lines.push("");
-  lines.push("## Baseline Comparison");
-  lines.push(`- status: ${status.comparison.status}`);
-  lines.push(`- reason: ${status.comparison.reason}`);
-  if (status.comparison.paths) {
-    lines.push(`- compare json: ${status.comparison.paths.compare_json}`);
-    lines.push(`- compare markdown: ${status.comparison.paths.compare_md}`);
+  lines.push("## Largest Context Input");
+  const largestContext = status.passive_summary.largest_context_input;
+  if (largestContext) {
+    lines.push(`- line ${largestContext.record_line}: ${largestContext.path} (${largestContext.chars} chars)`);
+    if (largestContext.reason) lines.push(`- reason: ${largestContext.reason}`);
+  } else {
+    lines.push("- none recorded");
   }
-  if (status.comparison.verdict) lines.push(`- verdict: ${status.comparison.verdict}`);
-  lines.push(`- current-scope regressions: ${status.comparison.current_regressions}`);
-  if (status.comparison.compare_command) lines.push(`- command: ${status.comparison.compare_command}`);
-  lines.push("");
-  lines.push("## Reflection Artifacts");
-  lines.push(`- packet: ${status.reflection.packet.status} (${status.reflection.packet.reason})`);
-  lines.push(`  - markdown: ${status.reflection.packet.markdown}`);
-  lines.push(`  - json: ${status.reflection.packet.json}`);
-  lines.push(`  - command: ${status.reflection.packet.command}`);
-  lines.push(`- draft: ${status.reflection.draft.status} (${status.reflection.draft.reason})`);
-  lines.push(`  - markdown: ${status.reflection.draft.markdown}`);
-  lines.push(`  - json: ${status.reflection.draft.json}`);
-  lines.push(`  - command: ${status.reflection.draft.command}`);
-  lines.push(`- review: ${status.reflection.review.status} (${status.reflection.review.reason})`);
-  lines.push(`  - markdown: ${status.reflection.review.markdown}`);
-  lines.push(`  - json: ${status.reflection.review.json}`);
-  lines.push(`  - command: ${status.reflection.review.command}`);
   if (status.errors.length > 0) {
     lines.push("");
     lines.push("## Errors");

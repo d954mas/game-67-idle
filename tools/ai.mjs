@@ -25,7 +25,7 @@ function usage() {
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail [gate options]
   node tools/ai.mjs close-slice --task <task-id> --project <game-id> --evidence <text> [close options]
   node tools/ai.mjs status [--verbose] [--require-review-usable|--require-current-scope-usable]
-  node tools/ai.mjs reflect [--deep] [--strict] [--no-gap-checkpoint]
+  node tools/ai.mjs reflect [--gap-checkpoint]
 
 Fast path:
   start    set current work item and append one profiling checkpoint
@@ -39,8 +39,8 @@ Fast path:
   gate     write a product-read screenshot gate before expanding game content
   close-slice require product gate + evidence before handoff/review
   status   show passive telemetry health; guard flags fail unsafe handoffs
-  reflect  write a short closeout by default; --gap-checkpoint records a long
-           unprofiled work gap first; --deep prepares the full handoff
+  reflect  write a short session closeout; --gap-checkpoint records a long
+           unprofiled work gap first
 
 Use tools/ai_profile/* directly only when debugging the profiler itself.`);
   process.exit(2);
@@ -422,13 +422,21 @@ if (command === "status") {
 if (command === "reflect") {
   // Passive by default: the gap checkpoint is opt-in via --gap-checkpoint so a
   // normal closeout adds no forced ceremony. --no-gap-checkpoint is still
-  // accepted (now a no-op) for backward compatibility.
+  // accepted (now a no-op) for backward compatibility. The cross-session deep
+  // reflection chain was retired (each session is a different game/task, so
+  // baseline comparisons are not comparable); --deep is now a no-op.
   const wantGapCheckpoint = argv.includes("--gap-checkpoint");
   const deep = argv.includes("--deep");
   const reflectArgs = withoutFlag(
-    withoutFlag(withoutFlag(argv, "--gap-checkpoint"), "--no-gap-checkpoint"),
-    "--deep",
+    withoutFlag(
+      withoutFlag(withoutFlag(argv, "--gap-checkpoint"), "--no-gap-checkpoint"),
+      "--deep",
+    ),
+    "--strict",
   );
+  if (deep) {
+    console.error("deep reflection retired; use `node tools/ai.mjs status` + short `node tools/ai.mjs reflect`");
+  }
   if (wantGapCheckpoint) {
     const gapArgs = [
       "tools/ai_profile/gap_checkpoint.mjs",
@@ -439,13 +447,7 @@ if (command === "reflect") {
     if (!hasFlag(gapArgs, "--min-gap-min")) gapArgs.push("--min-gap-min", "10");
     runOrExit(gapArgs);
   }
-  if (!deep) {
-    run(["tools/ai_profile/closeout.mjs", "--no-review", "--no-followups", ...reflectArgs.filter((arg) => arg !== "--quick")]);
-  }
-  const strict = reflectArgs.includes("--strict");
-  const args = reflectArgs.filter((arg) => arg !== "--strict");
-  if (!strict && !hasFlag(args, "--allow-regression")) args.push("--allow-regression");
-  run(["tools/ai_profile/prepare_reflection.mjs", ...args]);
+  run(["tools/ai_profile/closeout.mjs", ...reflectArgs.filter((arg) => arg !== "--quick")]);
 }
 
 usage();
