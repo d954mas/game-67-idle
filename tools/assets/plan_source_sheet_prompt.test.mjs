@@ -97,6 +97,18 @@ test("uses intake next prompt key color before legacy suggested key color", (t) 
     suggested_key_color: "#00ff00",
     key_color_action: "regenerate_with_next_prompt_key_color",
     next_prompt_key_color: "#00ffff",
+    recommended_next_step: {
+      action: "regenerate_source_sheet_with_safer_key_color",
+      reason: "current key color conflicts with visible component art or halo colors",
+      key_color: "#00ffff",
+    },
+    blocking_reasons: [
+      {
+        code: "key_color_conflict",
+        count: 1,
+        action: "regenerate_source_sheet_with_safer_key_color",
+      },
+    ],
   })}\n`, "utf8");
 
   const result = run([
@@ -114,6 +126,10 @@ test("uses intake next prompt key color before legacy suggested key color", (t) 
   assert.equal(packet.suggested_key_color, "#00ffff");
   assert.equal(packet.key_color_source, "intake_audit");
   assert.equal(packet.intake_key_color_action, "regenerate_with_next_prompt_key_color");
+  assert.equal(packet.intake_recommended_next_step.action, "regenerate_source_sheet_with_safer_key_color");
+  assert.equal(packet.intake_blocking_reasons[0].code, "key_color_conflict");
+  assert.match(text, /recommended_next_step: regenerate_source_sheet_with_safer_key_color/);
+  assert.match(text, /blocking_reasons: key_color_conflict/);
 });
 
 test("refuses chroma prompt when intake says split preserve or dual plate", (t) => {
@@ -124,6 +140,37 @@ test("refuses chroma prompt when intake says split preserve or dual plate", (t) 
     suggested_key_color: "#00ffff",
     key_color_action: "split_preserve_or_dual_plate_alpha",
     next_prompt_key_color: null,
+  })}\n`, "utf8");
+
+  const result = run([
+    "--job", job,
+    "--source-family", "blank UI kit sheet",
+    "--intake-audit", "intake.json",
+    "--output", "prompt.md",
+  ], dir);
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /refusing to create another chroma prompt/);
+});
+
+test("derives preserve refusal from intake recommended next step", (t) => {
+  const dir = tempDir(t);
+  const job = writeJob(dir);
+  writeFileSync(join(dir, "intake.json"), `${JSON.stringify({
+    key_color: "#ff00ff",
+    next_prompt_key_color: null,
+    recommended_next_step: {
+      action: "split_preserve_or_dual_plate_alpha",
+      reason: "key color conflicts exist but no safer candidate key color was found",
+      key_color: null,
+    },
+    blocking_reasons: [
+      {
+        code: "key_color_conflict",
+        count: 1,
+        action: "split_preserve_or_dual_plate_alpha",
+      },
+    ],
   })}\n`, "utf8");
 
   const result = run([

@@ -85,16 +85,29 @@ function groupMatchesFamily(group, family) {
 }
 
 function keyColorAdviceFromAudit(path) {
-  if (!path) return { color: "", action: "" };
+  if (!path) return { color: "", action: "", recommendedNextStep: null, blockingReasons: [] };
   const audit = readJson(path);
+  const recommendedNextStep = audit.recommended_next_step && typeof audit.recommended_next_step === "object" ? audit.recommended_next_step : null;
   const color = hasText(audit.next_prompt_key_color)
     ? audit.next_prompt_key_color
     : hasText(audit.suggested_key_color)
       ? audit.suggested_key_color
+      : hasText(recommendedNextStep?.key_color)
+        ? recommendedNextStep.key_color
       : "";
+  const recommendedAction = hasText(recommendedNextStep?.action) ? recommendedNextStep.action : "";
+  const action = hasText(audit.key_color_action)
+    ? audit.key_color_action
+    : recommendedAction === "split_preserve_or_dual_plate_alpha"
+      ? "split_preserve_or_dual_plate_alpha"
+      : recommendedAction === "regenerate_source_sheet_with_safer_key_color"
+        ? "regenerate_with_next_prompt_key_color"
+        : "";
   return {
     color,
-    action: hasText(audit.key_color_action) ? audit.key_color_action : "",
+    action,
+    recommendedNextStep,
+    blockingReasons: Array.isArray(audit.blocking_reasons) ? audit.blocking_reasons : [],
   };
 }
 
@@ -175,6 +188,8 @@ function buildPacket(job, sourceFamily, options) {
     suggested_key_color: keyColor,
     key_color_source: keyColorSource,
     intake_key_color_action: auditKeyAdvice.action,
+    intake_recommended_next_step: auditKeyAdvice.recommendedNextStep,
+    intake_blocking_reasons: auditKeyAdvice.blockingReasons,
     diagnostic_chroma_override: diagnosticChromaOverride,
     prompt: promptLines.join(" "),
     negative_prompt: negativeItems.join(", "),
@@ -210,6 +225,11 @@ function renderMarkdown(packet) {
     "",
     ...packet.acceptance_checklist.map((item) => `- ${item}`),
     "",
+    "## Intake Routing",
+    "",
+    `recommended_next_step: ${packet.intake_recommended_next_step?.action || "none"}`,
+    `blocking_reasons: ${renderBlockingReasons(packet.intake_blocking_reasons)}`,
+    "",
     "## Relevant Asset Groups",
     "",
   ];
@@ -222,6 +242,10 @@ function renderMarkdown(packet) {
   }
   lines.push("");
   return lines.join("\n");
+}
+
+function renderBlockingReasons(blockingReasons) {
+  return blockingReasons.length > 0 ? blockingReasons.map((reason) => reason.code || "unknown").join(", ") : "none";
 }
 
 function writeText(path, text, force) {
