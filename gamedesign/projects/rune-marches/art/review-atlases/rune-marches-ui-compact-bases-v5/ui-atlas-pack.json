@@ -508,11 +508,11 @@
       ],
       "labeled_preview_path": "gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-compact-bases-v5/ui_rune_marches_compact_bases_v5-labeled.png",
       "timing_ms": {
-        "layout": 2.736,
-        "compose": 3.234,
-        "save_atlas": 43.798,
-        "save_labeled_preview": 43.889,
-        "total": 95.946
+        "layout": 2.62,
+        "compose": 3.075,
+        "save_atlas": 42.538,
+        "save_labeled_preview": 42.998,
+        "total": 91.779
       }
     }
   ],
@@ -524,9 +524,9 @@
     "padded_asset_ratio": 0.5703
   },
   "timing_ms": {
-    "read_manifest": 0.235,
-    "load_assets": 18.098,
-    "pack_groups": 96.458,
-    "total": 115.365
+    "read_manifest": 0.211,
+    "load_assets": 19.358,
+    "pack_groups": 92.292,
+    "total": 112.422
   }
 }

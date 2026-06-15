@@ -403,7 +403,6 @@ def draw_review_labels(atlas: Image.Image, entries: list[dict[str, Any]]) -> Non
     for entry in entries:
         if entry.get("alias_of"):
             continue
-        x, y, width, height = rect = [int(value) for value in entry["padded_rect"]]
         review_label = entry.get("review_label")
         if isinstance(review_label, dict) and isinstance(review_label.get("rect"), list):
             label = str(review_label.get("text") or entry["id"])
@@ -418,7 +417,6 @@ def draw_review_labels(atlas: Image.Image, entries: list[dict[str, Any]]) -> Non
             for line in lines:
                 draw.text((label_x + LABEL_PAD_X, line_y), line, fill=(255, 255, 255, 255), font=font)
                 line_y += line_height + LABEL_LINE_GAP_Y
-        draw.rectangle([rect[0], rect[1], rect[0] + rect[2] - 1, rect[1] + rect[3] - 1], outline=(255, 255, 255, 110))
 
 
 def pack_group(group: str, items: list[dict[str, Any]], output_dir: Path, max_size: int, label_review: bool, profile: bool = False) -> dict[str, Any]:

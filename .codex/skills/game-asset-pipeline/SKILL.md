@@ -170,6 +170,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     hidden nonzero RGB under fully transparent clean-atlas pixels. It should
     also reject visible pixels outside packed `padded_rect`s in the clean atlas
     so review labels, stains, or orphan sprites cannot leak into runtime art.
+    The labeled preview may differ from the clean atlas only inside declared
+    `review_label.rect`s; outside those rects it must preserve exact atlas
+    pixels and must not add debug outlines over packed art.
 
 ## Rules
 
@@ -199,7 +202,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
   atlas; this catches key-color ghosts that are invisible in the PNG viewer but
   can leak back through filtering or premultiplied conversion. They must also
   reject visible pixels outside declared packed `padded_rect`s; clean atlas free
-  space is not a place for labels, stains, or untracked art fragments.
+  space is not a place for labels, stains, or untracked art fragments. Labeled
+  previews must be pixel-identical to clean atlases outside label rects, without
+  debug outlines over assets.
 - Source-sheet intake must reject unsafe chroma choices before slicing: exact
   key-color holes inside component bounds are not normal background, and broad
   key/halo hue conflicts inside art need either a safer background color or an

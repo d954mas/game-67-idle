@@ -227,7 +227,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       transparent clean-atlas pixels have zero RGB so hidden key colors cannot
       leak back through filtering. The clean atlas must also have no visible
       pixels outside packed `padded_rect`s, so stray labels, stains, or orphan
-      sprites cannot masquerade as runtime art.
+      sprites cannot masquerade as runtime art. The labeled preview may differ
+      from the clean atlas only inside declared `review_label.rect`s, so review
+      labels cannot accidentally repaint asset pixels or free atlas space; do
+      not draw debug outlines over packed art in the labeled preview.
       Record passing JSON reports in `expected_outputs.atlas_pack_audit`;
       final-art validation requires this evidence. This verifies runtime asset
       coverage, atlas bounds, padded-rect overlap, alias reuse, metadata
@@ -366,7 +369,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   have RGB 0, and visible clean-atlas pixels must be inside declared packed
   `padded_rect`s; hidden green/purple key colors under transparency or visible
   orphan pixels in free atlas space are packing failures even when the image
-  looks visually acceptable.
+  looks visually acceptable. The labeled preview must be pixel-identical to the
+  clean atlas outside declared label rects; it is a review overlay, not a second
+  editable atlas, and it should not add debug outlines over assets.
 - Use trim only with padding, alpha bleed, edge extrusion, and shape padding.
   Tight alpha crops without bleed/extrude are a known cause of 1-2 pixel halos
   and neighboring-pixel leaks.

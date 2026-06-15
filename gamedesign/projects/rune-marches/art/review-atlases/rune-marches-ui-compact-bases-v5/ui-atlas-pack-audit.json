@@ -15,12 +15,16 @@
       "entry_count": 7,
       "physical_entry_count": 7,
       "alias_count": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "outside_padded_visible_pixels": 0,
+      "labeled_preview_delta_outside_label_pixels": 0,
+      "analysis_engine": "numpy",
       "timing_ms": {
-        "total": 44.37
+        "total": 70.397
       }
     }
   ],
   "timing_ms": {
-    "total": 45.911
+    "total": 71.92
   }
 }

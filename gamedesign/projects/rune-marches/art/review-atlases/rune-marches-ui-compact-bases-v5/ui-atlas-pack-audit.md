@@ -6,8 +6,8 @@ verdict: **pass**
 
 ## Timing
 
-- total: 45.911 ms
+- total: 71.92 ms
 
 ## Atlases
 
-- PASS `ui_rune_marches_compact_bases_v5` entries=7, physical=7, aliases=0
+- PASS `ui_rune_marches_compact_bases_v5` entries=7, physical=7, aliases=0, transparent_nonzero_rgb_pixels=0, outside_padded_visible_pixels=0, labeled_preview_delta_outside_label_pixels=0, analysis_engine=numpy

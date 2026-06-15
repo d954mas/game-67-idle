@@ -113,6 +113,7 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertEqual(audit["verdict"], "pass")
             self.assertEqual(audit["atlases"][0]["transparent_nonzero_rgb_pixels"], 0)
             self.assertEqual(audit["atlases"][0]["outside_padded_visible_pixels"], 0)
+            self.assertEqual(audit["atlases"][0]["labeled_preview_delta_outside_label_pixels"], 0)
             self.assertIn(audit["atlases"][0]["analysis_engine"], {"numpy", "python"})
 
     def test_rejects_broken_extrusion_pixels(self):
@@ -198,6 +199,7 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertIn("## Timing", markdown)
             self.assertIn("transparent_nonzero_rgb_pixels=0", markdown)
             self.assertIn("outside_padded_visible_pixels=0", markdown)
+            self.assertIn("labeled_preview_delta_outside_label_pixels=0", markdown)
             self.assertIn("analysis_engine=", markdown)
 
     def test_atomic_report_write_keeps_existing_text_on_failure(self):
@@ -291,6 +293,36 @@ class AuditUiAtlasPackTest(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("clean atlas visible pixels must be inside packed padded_rects", result.stdout + result.stderr)
+
+    def test_rejects_labeled_preview_delta_outside_label_rects(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")], label_review=True)
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            atlas_path = root / pack_data["atlases"][0]["path"]
+            preview_path = root / pack_data["atlases"][0]["labeled_preview_path"]
+            label_rects = [entry["review_label"]["rect"] for entry in pack_data["atlases"][0]["entries"]]
+            changed_pixel = None
+            clean = Image.open(atlas_path).convert("RGBA")
+            for y in range(clean.height):
+                for x in range(clean.width):
+                    if not any(lx <= x < lx + lw and ly <= y < ly + lh for lx, ly, lw, lh in label_rects):
+                        changed_pixel = (x, y)
+                        break
+                if changed_pixel is not None:
+                    break
+            self.assertIsNotNone(changed_pixel)
+            preview = Image.open(preview_path).convert("RGBA")
+            px, py = changed_pixel
+            red, green, blue, alpha = clean.getpixel((px, py))
+            preview.putpixel((px, py), (255 - red, 255 - green, 255 - blue, max(alpha, 255)))
+            preview.save(preview_path)
+
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("labeled preview pixels may differ from clean atlas only inside review_label rects", result.stdout + result.stderr)
 
     def test_rejects_wrong_review_label_text(self):
         with tempfile.TemporaryDirectory() as tmp:

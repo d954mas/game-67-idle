@@ -15,10 +15,10 @@ atlases: **1**
 
 ## Timing
 
-- read_manifest: 0.235 ms
-- load_assets: 18.098 ms
-- pack_groups: 96.458 ms
-- total: 115.365 ms
+- read_manifest: 0.211 ms
+- load_assets: 19.358 ms
+- pack_groups: 92.292 ms
+- total: 112.422 ms
 
 ## Atlases
 

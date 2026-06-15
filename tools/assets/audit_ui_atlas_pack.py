@@ -140,6 +140,39 @@ def visible_pixels_outside_rects_count(image: Image.Image, allowed_rects: list[t
     return count
 
 
+def changed_pixels_outside_rects_count(
+    base: Image.Image, overlay: Image.Image, allowed_rects: list[tuple[int, int, int, int]]
+) -> int:
+    base_rgba = base.convert("RGBA")
+    overlay_rgba = overlay.convert("RGBA")
+    if base_rgba.size != overlay_rgba.size:
+        return 0
+    if np is not None:
+        base_array = np.asarray(base_rgba, dtype=np.uint8)
+        overlay_array = np.asarray(overlay_rgba, dtype=np.uint8)
+        changed = np.any(base_array != overlay_array, axis=2)
+        allowed = np.zeros(changed.shape, dtype=bool)
+        for x, y, width, height in allowed_rects:
+            x0 = max(0, x)
+            y0 = max(0, y)
+            x1 = min(base_rgba.width, x + width)
+            y1 = min(base_rgba.height, y + height)
+            if x0 < x1 and y0 < y1:
+                allowed[y0:y1, x0:x1] = True
+        return int(np.count_nonzero(changed & ~allowed))
+
+    base_pixels = base_rgba.load()
+    overlay_pixels = overlay_rgba.load()
+    count = 0
+    for y in range(base_rgba.height):
+        for x in range(base_rgba.width):
+            if base_pixels[x, y] == overlay_pixels[x, y]:
+                continue
+            if not any(rx <= x < rx + rw and ry <= y < ry + rh for rx, ry, rw, rh in allowed_rects):
+                count += 1
+    return count
+
+
 def label_font() -> ImageFont.ImageFont:
     global _LABEL_FONT
     if _LABEL_FONT is not None:
@@ -405,6 +438,16 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
                 atlas_problems.append(
                     f"clean atlas visible pixels must be inside packed padded_rects; found {outside_padded_visible_pixels}"
                 )
+        labeled_preview_delta_outside_label_pixels = 0
+        if atlas is not None and labeled_preview is not None and review_label_rects:
+            labeled_preview_delta_outside_label_pixels = changed_pixels_outside_rects_count(
+                atlas, labeled_preview, [rect for _, rect in review_label_rects]
+            )
+            if labeled_preview_delta_outside_label_pixels:
+                atlas_problems.append(
+                    "labeled preview pixels may differ from clean atlas only inside review_label rects; "
+                    f"found {labeled_preview_delta_outside_label_pixels}"
+                )
 
         atlas_report = {
             "pack_group": atlas_info.get("pack_group") if isinstance(atlas_info, dict) else None,
@@ -417,6 +460,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
             "alias_count": atlas_info.get("alias_count") if isinstance(atlas_info, dict) else None,
             "transparent_nonzero_rgb_pixels": transparent_nonzero_rgb_pixels,
             "outside_padded_visible_pixels": outside_padded_visible_pixels,
+            "labeled_preview_delta_outside_label_pixels": labeled_preview_delta_outside_label_pixels,
             "analysis_engine": analysis_engine(),
         }
         if profile:
@@ -484,6 +528,7 @@ def main() -> None:
             detail += f", physical={physical}, aliases={aliases}"
         detail += f", transparent_nonzero_rgb_pixels={atlas.get('transparent_nonzero_rgb_pixels', '-')}"
         detail += f", outside_padded_visible_pixels={atlas.get('outside_padded_visible_pixels', '-')}"
+        detail += f", labeled_preview_delta_outside_label_pixels={atlas.get('labeled_preview_delta_outside_label_pixels', '-')}"
         detail += f", analysis_engine={atlas.get('analysis_engine', '-')}"
         lines.append(f"- {atlas['status'].upper()} `{atlas.get('pack_group')}` {detail}{suffix}")
     lines.append("")
