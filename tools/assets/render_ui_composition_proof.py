@@ -314,6 +314,10 @@ def resized_overlay_image(
     return resized, report
 
 
+def has_overlay_resize_policy(overlay_data: dict[str, Any]) -> bool:
+    return any(overlay_data.get(key) is not None for key in ("size", "max_size", "scale"))
+
+
 def asset_map(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {str(asset.get("id")): asset for asset in manifest.get("assets", []) if asset.get("id")}
 
@@ -377,6 +381,7 @@ def render_item(
     item: dict[str, Any],
     assets: dict[str, dict[str, Any]],
     text_font: ImageFont.ImageFont,
+    require_overlay_resize_policy: bool = False,
     cache: CompositionRenderCache | None = None,
     profile: bool = False,
 ) -> tuple[Image.Image | None, dict[str, Any]]:
@@ -432,6 +437,8 @@ def render_item(
         if overlay_image is None:
             continue
         source_size = overlay_image.size
+        if require_overlay_resize_policy and not has_overlay_resize_policy(overlay_data):
+            problems.append(f"overlay {overlay_id} must declare size, max_size, or scale when layout requires overlay resize policy")
         overlay_image, resize_report = resized_overlay_image(str(overlay_id), overlay_data, overlay_image, problems, cache)
         anchor = str(overlay_data.get("anchor") or overlay.get("anchor") or "center")
         if anchor not in ANCHORS:
@@ -521,6 +528,7 @@ def make_markdown(report: dict[str, Any]) -> str:
         "",
         f"asset_manifest: `{report['asset_manifest']}`",
         f"output: `{report['output']}`",
+        f"require_overlay_resize_policy: `{str(report.get('require_overlay_resize_policy', False)).lower()}`",
         f"verdict: **{report['verdict']}**",
         "",
     ]
@@ -576,6 +584,8 @@ def main(argv: list[str]) -> int:
     layout_path = project_path(args.layout) if args.layout else None
     layout = read_json(layout_path) if layout_path else default_layout(manifest)
     items = layout.get("items") or []
+    layout_options = layout.get("options") if isinstance(layout.get("options"), dict) else {}
+    require_overlay_resize_policy = bool(layout.get("require_overlay_resize_policy") or layout_options.get("require_overlay_resize_policy"))
     assets = asset_map(manifest)
     proof_font = font(15)
     cache = CompositionRenderCache()
@@ -585,7 +595,7 @@ def main(argv: list[str]) -> int:
         reports.append({"base_id": "(none)", "size": [0, 0], "label": "", "content_rect": [0, 0, 0, 0], "status": "fail", "problems": ["layout has no items"]})
     render_started = perf_counter()
     for item in items:
-        image, item_report = render_item(item, assets, proof_font, cache, args.profile)
+        image, item_report = render_item(item, assets, proof_font, require_overlay_resize_policy, cache, args.profile)
         reports.append(item_report)
         if image is not None:
             rendered.append((item_report, image))
@@ -606,6 +616,7 @@ def main(argv: list[str]) -> int:
         "asset_manifest": normalize_path(manifest_path),
         "layout": normalize_path(layout_path) if layout_path else None,
         "output": normalize_path(output),
+        "require_overlay_resize_policy": require_overlay_resize_policy,
         "verdict": verdict,
         "items": reports,
     }

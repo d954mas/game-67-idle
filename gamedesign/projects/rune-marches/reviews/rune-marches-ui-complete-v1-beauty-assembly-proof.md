@@ -2,14 +2,15 @@
 
 asset_manifest: `gamedesign/projects/rune-marches/data/rune-marches-ui-complete-v1-asset_manifest.json`
 output: `gamedesign/projects/rune-marches/art/previews/rune-marches-ui-complete-v1-beauty-assembly-proof.png`
+require_overlay_resize_policy: `true`
 verdict: **pass**
 
 ## Timing
 
-- render_items: 160.741 ms
-- render_sheet: 13.758 ms
-- save_output: 27.199 ms
-- total: 208.214 ms
+- render_items: 150.682 ms
+- render_sheet: 13.571 ms
+- save_output: 26.717 ms
+- total: 203.795 ms
 
 ## Cache
 

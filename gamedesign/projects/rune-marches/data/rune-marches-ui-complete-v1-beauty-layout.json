@@ -2,6 +2,7 @@
   "schema": "game.ui_composition_proof_layout",
   "version": 1,
   "title": "Rune Marches Complete UI Kit Beauty Assembly",
+  "require_overlay_resize_policy": true,
   "items": [
     {
       "base_id": "compact_journal_panel_v5",

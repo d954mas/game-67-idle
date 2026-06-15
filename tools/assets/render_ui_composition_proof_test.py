@@ -239,7 +239,75 @@ class RenderUiCompositionProofTests(unittest.TestCase):
             self.assertEqual(overlay["render_size"], [16, 16])
             self.assertEqual(overlay["resize"]["mode"], "size")
             self.assertEqual(overlay["rect"], [2, 12, 16, 16])
+            self.assertFalse(report["require_overlay_resize_policy"])
             self.assertEqual(report["cache_stats"]["overlay_resize_misses"], 1)
+
+    def test_requires_overlay_resize_policy_when_layout_demands_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            assets = root / "assets"
+            assets.mkdir()
+            write_panel(assets / "button.png")
+            write_overlay(assets / "gem.png")
+            manifest = {
+                "schema": "game.asset_manifest",
+                "version": 1,
+                "assets": [
+                    {
+                        "id": "button",
+                        "kind": "slice9",
+                        "path": "assets/button.png",
+                        "slice9": {"left": 8, "top": 8, "right": 8, "bottom": 8},
+                        "content": {"x": 20, "y": 9, "w": 10, "h": 14},
+                        "target_preview_sizes": [[96, 40]],
+                    },
+                    {"id": "gem", "kind": "decor_overlay", "path": "assets/gem.png", "anchor": "left_mid"},
+                ],
+            }
+            layout = {
+                "schema": "game.ui_composition_proof_layout",
+                "version": 1,
+                "require_overlay_resize_policy": True,
+                "items": [
+                    {
+                        "base_id": "button",
+                        "size": [96, 40],
+                        "label": "Go",
+                        "decor_overlays": [{"id": "gem", "anchor": "left_mid", "offset": [2, 0]}],
+                    }
+                ],
+            }
+            (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            (root / "layout.json").write_text(json.dumps(layout), encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--asset-manifest",
+                    "manifest.json",
+                    "--layout",
+                    "layout.json",
+                    "--output",
+                    "proof.png",
+                    "--json-output",
+                    "proof.json",
+                    "--report",
+                    "proof.md",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report = json.loads((root / "proof.json").read_text(encoding="utf-8"))
+            self.assertTrue(report["require_overlay_resize_policy"])
+            self.assertEqual(report["verdict"], "fail")
+            self.assertIn("must declare size, max_size, or scale", report["items"][0]["problems"][0])
+            markdown = (root / "proof.md").read_text(encoding="utf-8")
+            self.assertIn("require_overlay_resize_policy: `true`", markdown)
 
     def test_fails_when_overlay_resize_policy_is_ambiguous(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

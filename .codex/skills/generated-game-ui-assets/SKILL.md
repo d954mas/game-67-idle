@@ -201,6 +201,12 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       cache-hit stats, and prints the slowest base/size item. Overlay sprites
       must not overlap the content safe area unless the layout or overlay explicitly sets
       `allow_content_overlap`.
+      For production generated UI layouts, set
+      `require_overlay_resize_policy: true` and give every decorative/icon
+      overlay exactly one of `size`, `max_size`, or `scale`; the proof report
+      must expose overlay source size, rendered size, resize mode, and rect.
+      This prevents source-size generated icons or ornaments from silently
+      forcing fake oversized panels/buttons.
       Record the proof image and report with preview/review evidence. This gate
       must fail if slice9 margins leave no usable content area at target sizes,
       runtime labels do not fit, overlays fall outside their anchored base, or

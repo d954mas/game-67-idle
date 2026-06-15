@@ -4,6 +4,7 @@
   "asset_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-complete-v1-asset_manifest.json",
   "layout": "gamedesign/projects/rune-marches/data/rune-marches-ui-complete-v1-beauty-layout.json",
   "output": "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-complete-v1-beauty-assembly-proof.png",
+  "require_overlay_resize_policy": true,
   "verdict": "pass",
   "items": [
     {
@@ -126,7 +127,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 101.804
+        "total": 101.989
       }
     },
     {
@@ -215,7 +216,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 34.478
+        "total": 29.794
       }
     },
     {
@@ -270,15 +271,15 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 24.433
+        "total": 18.876
       }
     }
   ],
   "timing_ms": {
-    "render_items": 160.741,
-    "render_sheet": 13.758,
-    "save_output": 27.199,
-    "total": 208.214
+    "render_items": 150.682,
+    "render_sheet": 13.571,
+    "save_output": 26.717,
+    "total": 203.795
   },
   "cache_stats": {
     "image_hits": 0,
