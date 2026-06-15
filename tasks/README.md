@@ -98,6 +98,29 @@ When asked "where are we" or "what next", start from `STATUS.md`, then summarize
 only relevant active epic progress, `doing`/`review` items, top backlog by
 priority, and unresolved ideas that need the user.
 
+## Context Budget
+
+Context windows overflow and compact when sessions over-load them. Keep the
+standing footprint small so the agent compacts less:
+
+- Default load is only: `AGENTS.md`, `node tools/taskboard/cli.mjs context`, the
+  active task file, and the ONE skill that matches the work. Nothing else by
+  default.
+- Skills are intentionally lean. Heavy method detail lives on demand in each
+  skill's `references/` and in `gamedesign/knowledge/` (e.g.
+  `reference_deconstruction.md`); load it only when the task needs that depth,
+  not every session.
+- Prefer summaries over dumps. Use `Grep`/`Glob` and `Read` with an offset/limit
+  to fetch the few relevant lines; do not paste whole files, `find`/`ls -R`, or
+  full `cat` output into context. Tool output should be the conclusion, not the
+  raw listing.
+- Use `cli.mjs summary`/`context` (compact) instead of full `list`/`STATUS`
+  reads; use `--verbose` profiler/validator output only when debugging those.
+- Delegate broad multi-file investigation to a subagent and keep only its
+  conclusion; do not read across many files in the main context.
+- For long autonomous work, rely on durable state (task files, commits,
+  `STATUS.md`) so a compaction can resume cleanly without re-reading history.
+
 ## Search Hygiene
 
 Search current context before history.
