@@ -42,6 +42,12 @@
 - Start a new game iteration by creating a fresh project wiki/GDD under
   `gamedesign/projects/<game-id>/` and fresh work items in `tasks/active/`.
 - Prefer small playable native iterations over broad speculative systems.
+- First-screen scope discipline: a first playable slice has one goal and one
+  primary action. Cap the first-session/FTUE chain at <=3 beats (default; the
+  lead may raise it for a specific game) - a 14-beat onboarding (the Rune
+  Marches failure) is over-scoped. Split runtime content (full world, routes,
+  systems) from first-session presentation; build the readable first screen and
+  core moment before expanding either. This pairs with the visual-first freeze.
 - For new GDD work, use `.codex/skills/primary-gdd-pipeline/`.
 - For polished/generated visual work, use `.codex/skills/game-visual-art-direction/`.
 - References are a build gate only when the user names a reference or says the

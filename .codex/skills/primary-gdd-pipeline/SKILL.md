@@ -172,3 +172,8 @@ positive summary.
 - Handoff says "ready" while combat/economy numbers are still vague.
 - Infrastructure work is consuming more time than design work.
 - Accepted decisions exist only in chat, not in durable files.
+- The first-session/FTUE chain grows past ~3 beats, or the first slice has more
+  than one goal and one primary action. Per AGENTS.md first-screen scope
+  discipline, split runtime content from first-session presentation and build
+  the readable first screen + core moment before expanding (the Rune Marches
+  14-beat FTUE is the failure to avoid).
