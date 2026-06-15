@@ -1022,6 +1022,29 @@ test("final-art mode rejects atlas pack missing a crop id", (t) => {
   assert.match(result.stdout, /expected_outputs.atlas_pack JSON missing packed asset id resource_icon/);
 });
 
+test("final-art mode rejects atlas pack missing a runtime-only asset id", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const runtime = "gamedesign/projects/test/data/ui-kit-assets.json";
+  const runtimeData = JSON.parse(readFileSync(join(dir, runtime), "utf8"));
+  runtimeData.assets.push({
+    id: "runtime_overlay",
+    kind: "icon",
+    path: "assets/runtime/ui-kit/runtime-overlay.png",
+    semantic_role: "runtime-only review marker",
+  });
+  writeFileSync(join(dir, "assets/runtime/ui-kit/runtime-overlay.png"), "fake-png", "utf8");
+  writeFileSync(join(dir, runtime), `${JSON.stringify(runtimeData, null, 2)}\n`, "utf8");
+  const atlasMetadataAudit = "gamedesign/projects/test/reviews/ui-kit-atlas-metadata-audit.json";
+  writeAuditReport(dir, atlasMetadataAudit, "game.atlas_metadata_audit", "pass", [], {
+    assets: [{ id: "panel" }, { id: "resource_icon" }, { id: "enemy" }, { id: "runtime_overlay" }],
+  });
+
+  const result = run(["--job", job, "--final-art"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.atlas_pack JSON missing packed asset id runtime_overlay/);
+});
+
 test("final-art mode rejects failing atlas pack audit evidence", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);
