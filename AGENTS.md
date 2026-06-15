@@ -35,8 +35,9 @@
 
 - Current runtime surface: native `Game Seed` template in
   `src/clean_seed_main.c`.
-- Closed prototype runtime history remains in `src/main.c` and is opt-in via
-  `GAME_CLOSED_PROTOTYPES_ENABLED` / `native-debug-closed-prototypes`.
+- The closed Splash Rods / Rune Marches prototypes were removed from the
+  template (they were test runs); their design evidence is kept under
+  `gamedesign/projects/`.
 - The template is intentionally small: a shape-renderer screen, one cycle action,
   persistent state, DevAPI, screenshot capture, and smoke/full probes.
 - Start a new game iteration by creating a fresh project wiki/GDD under

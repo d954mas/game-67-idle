@@ -13,7 +13,6 @@ if(NOT EMSCRIPTEN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(GAME_DEVAPI_DEFAULT ON)
 endif()
 option(GAME_DEVAPI_ENABLED "Enable game-side DevAPI command bus for agent playtests." ${GAME_DEVAPI_DEFAULT})
-option(GAME_CLOSED_PROTOTYPES_ENABLED "Build archived Splash Rods/Rune Marches runtime code and assets." OFF)
 
 if(EMSCRIPTEN)
     if(NT_WASM_QA)
@@ -35,11 +34,7 @@ if(EMSCRIPTEN)
 
     set(NT_PRESET_NAME "wasm-${_nt_wasm_tier}${_nt_wasm_mode_suffix}")
 else()
-    if(GAME_CLOSED_PROTOTYPES_ENABLED AND CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(NT_PRESET_NAME "native-release-closed-prototypes")
-    elseif(GAME_CLOSED_PROTOTYPES_ENABLED)
-        set(NT_PRESET_NAME "native-debug-closed-prototypes")
-    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
         set(NT_PRESET_NAME "native-release")
     else()
         set(NT_PRESET_NAME "native-debug")
@@ -60,74 +55,13 @@ add_library(game_cjson STATIC
 )
 target_include_directories(game_cjson SYSTEM PUBLIC external/cjson)
 
-if(GAME_CLOSED_PROTOTYPES_ENABLED)
-    set(GAME_STATE_SCHEMA "${CMAKE_SOURCE_DIR}/state/closed_prototypes_game_state.schema.json")
-else()
-    set(GAME_STATE_SCHEMA "${CMAKE_SOURCE_DIR}/state/game_state.schema.json")
-endif()
+set(GAME_STATE_SCHEMA "${CMAKE_SOURCE_DIR}/state/game_state.schema.json")
 set(GAME_STATE_CODEGEN "${CMAKE_SOURCE_DIR}/tools/state_codegen/generate_state.py")
 set(GAME_STATE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated")
 set(GAME_STATE_GENERATED_HEADER "${GAME_STATE_GENERATED_DIR}/game_state.h")
 set(GAME_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state.c")
 set(GAME_STATE_GENERATED_DEVAPI_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state_devapi.c")
 set(GAME_STATE_GENERATED_SCHEMA_HEADER "${GAME_STATE_GENERATED_DIR}/game_state_schema.gen.h")
-set(RUNE_MARCHES_ASSET_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/art/fake_shots/rune-marches-gameplay-v1.png")
-set(RUNE_MARCHES_ASSET_CODEGEN "${CMAKE_SOURCE_DIR}/tools/assets/build_rune_marches_assets.py")
-set(RUNE_MARCHES_UI_KIT_V2_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/art/source_sheets/rune-marches-ui-kit-source-v2.png")
-set(RUNE_MARCHES_UI_KIT_V2_CODEGEN "${CMAKE_SOURCE_DIR}/tools/assets/build_rune_marches_ui_kit_v2.py")
-set(RUNE_MARCHES_UI_BASES_V2_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/art/source_sheets/rune-marches-blank-ui-bases-source-v2-chroma-clean.png")
-set(RUNE_MARCHES_UI_BASES_V2_CODEGEN "${CMAKE_SOURCE_DIR}/tools/assets/build_rune_marches_ui_bases_v2.py")
-set(RUNE_MARCHES_UI_COMPACT_BASES_V5_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/art/source_sheets/rune-marches-compact-ui-bases-source-v5-chroma-clean.png")
-set(RUNE_MARCHES_UI_COMPACT_BASES_V5_CODEGEN "${CMAKE_SOURCE_DIR}/tools/assets/build_rune_marches_ui_compact_bases_v5.py")
-set(ROBLOX_FISHING_UI_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/roblox-fishing/art/source_sheets/splash-rods-ui-icons-source-v2-magenta-clean.png")
-set(ROBLOX_FISHING_UI_CODEGEN "${CMAKE_SOURCE_DIR}/tools/assets/build_roblox_fishing_ui_assets.py")
-set(ROBLOX_FISHING_UI_CROP_MANIFEST "${CMAKE_SOURCE_DIR}/gamedesign/projects/roblox-fishing/data/roblox-fishing-first-visual-v1-crop_manifest.json")
-set(ROBLOX_FISHING_UI_ASSET_MANIFEST "${CMAKE_SOURCE_DIR}/gamedesign/projects/roblox-fishing/data/roblox-fishing-first-visual-v1-asset_manifest.json")
-set(ROBLOX_FISHING_UI_RUNTIME_DIR "${CMAKE_SOURCE_DIR}/assets/runtime/roblox-fishing-ui-v1")
-set(ROBLOX_FISHING_UI_GENERATED_HEADER "${CMAKE_SOURCE_DIR}/src/generated/roblox_fishing_ui_assets.gen.h")
-set(ROBLOX_FISHING_UI_GENERATED_SOURCE "${CMAKE_SOURCE_DIR}/src/generated/roblox_fishing_ui_assets.gen.c")
-set(RUNE_MARCHES_ASSET_GENERATED_HEADER "${CMAKE_SOURCE_DIR}/src/generated/rune_marches_assets.gen.h")
-set(RUNE_MARCHES_ASSET_GENERATED_SOURCE "${CMAKE_SOURCE_DIR}/src/generated/rune_marches_assets.gen.c")
-set(RUNE_MARCHES_CROP_MANIFEST "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/data/rune-marches-v1-crop_manifest.json")
-set(RUNE_MARCHES_RUNTIME_MANIFEST "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/data/rune-marches-v1-runtime_asset_manifest.json")
-set(ROBLOX_FISHING_MODEL_PACK "${GAME_OUTPUT_DIR}/assets/roblox_fishing_models.ntpack")
-set(ROBLOX_FISHING_MODEL_HEADER "${CMAKE_SOURCE_DIR}/src/generated/roblox_fishing_models.h")
-set(ROBLOX_FISHING_MODEL_SOURCE_DIR "${CMAKE_SOURCE_DIR}/gamedesign/projects/roblox-fishing/art/models")
-set(ROBLOX_FISHING_MODEL_SOURCEGEN "${CMAKE_SOURCE_DIR}/tools/roblox_fishing/generate_model_sources.py")
-
-if(GAME_CLOSED_PROTOTYPES_ENABLED AND NOT EMSCRIPTEN)
-    add_executable(roblox_fishing_pack_builder tools/roblox_fishing/build_packs.c)
-    target_link_libraries(roblox_fishing_pack_builder PRIVATE nt_builder)
-    nt_set_warning_flags(roblox_fishing_pack_builder)
-    nt_set_sanitizer_flags(roblox_fishing_pack_builder)
-
-    add_custom_command(
-        OUTPUT
-            "${ROBLOX_FISHING_MODEL_PACK}"
-            "${ROBLOX_FISHING_MODEL_HEADER}"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${GAME_OUTPUT_DIR}/assets"
-        COMMAND "${Python3_EXECUTABLE}" "${ROBLOX_FISHING_MODEL_SOURCEGEN}"
-        COMMAND "$<TARGET_FILE:roblox_fishing_pack_builder>" "${GAME_OUTPUT_DIR}/assets" "${ROBLOX_FISHING_MODEL_SOURCE_DIR}"
-        DEPENDS
-            roblox_fishing_pack_builder
-            "${CMAKE_SOURCE_DIR}/tools/roblox_fishing/build_packs.c"
-            "${ROBLOX_FISHING_MODEL_SOURCEGEN}"
-            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/assets/meshes/cube.glb"
-            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/assets/shaders/mesh_inst.vert"
-            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/assets/shaders/mesh_inst.frag"
-            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/assets/shaders/slug_text.vert"
-            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/assets/shaders/slug_text.frag"
-            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/examples/ui_theme_demo/raw/font.ttf"
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        COMMENT "Building Splash Rods GLB model pack"
-        VERBATIM
-    )
-    add_custom_target(roblox_fishing_model_pack
-        DEPENDS
-            "${ROBLOX_FISHING_MODEL_PACK}"
-            "${ROBLOX_FISHING_MODEL_HEADER}"
-    )
-endif()
 
 add_custom_command(
     OUTPUT
@@ -153,78 +87,6 @@ add_custom_target(game_state_codegen
         "${GAME_STATE_GENERATED_DEVAPI_SOURCE}"
         "${GAME_STATE_GENERATED_SCHEMA_HEADER}"
 )
-
-if(GAME_CLOSED_PROTOTYPES_ENABLED)
-    add_custom_command(
-        OUTPUT
-            "${RUNE_MARCHES_ASSET_GENERATED_HEADER}"
-            "${RUNE_MARCHES_ASSET_GENERATED_SOURCE}"
-            "${RUNE_MARCHES_CROP_MANIFEST}"
-            "${RUNE_MARCHES_RUNTIME_MANIFEST}"
-        COMMAND "${Python3_EXECUTABLE}" "${RUNE_MARCHES_UI_KIT_V2_CODEGEN}"
-        COMMAND "${Python3_EXECUTABLE}" "${RUNE_MARCHES_UI_BASES_V2_CODEGEN}"
-        COMMAND "${Python3_EXECUTABLE}" "${RUNE_MARCHES_UI_COMPACT_BASES_V5_CODEGEN}"
-        COMMAND "${Python3_EXECUTABLE}" "${RUNE_MARCHES_ASSET_CODEGEN}"
-            --source "${RUNE_MARCHES_ASSET_SOURCE}"
-            --runtime-dir "${CMAKE_SOURCE_DIR}/assets/runtime/rune-marches-v1"
-            --generated-dir "${CMAKE_SOURCE_DIR}/src/generated"
-            --crop-manifest "${RUNE_MARCHES_CROP_MANIFEST}"
-            --runtime-manifest "${RUNE_MARCHES_RUNTIME_MANIFEST}"
-            --ui-kit-v2-dir "${CMAKE_SOURCE_DIR}/assets/runtime/rune-marches-ui-map-rescue-v2"
-            --ui-bases-v2-dir "${CMAKE_SOURCE_DIR}/assets/runtime/rune-marches-ui-bases-v2"
-            --ui-compact-bases-v5-dir "${CMAKE_SOURCE_DIR}/assets/runtime/rune-marches-ui-compact-bases-v5"
-        DEPENDS
-            "${RUNE_MARCHES_ASSET_SOURCE}"
-            "${RUNE_MARCHES_ASSET_CODEGEN}"
-            "${RUNE_MARCHES_UI_KIT_V2_SOURCE}"
-            "${RUNE_MARCHES_UI_KIT_V2_CODEGEN}"
-            "${RUNE_MARCHES_UI_BASES_V2_SOURCE}"
-            "${RUNE_MARCHES_UI_BASES_V2_CODEGEN}"
-            "${RUNE_MARCHES_UI_COMPACT_BASES_V5_SOURCE}"
-            "${RUNE_MARCHES_UI_COMPACT_BASES_V5_CODEGEN}"
-            "${CMAKE_SOURCE_DIR}/tools/assets/atomic_io.py"
-            "${CMAKE_SOURCE_DIR}/tools/assets/chroma_key_alpha.py"
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        COMMENT "Generating Rune Marches runtime art assets"
-        VERBATIM
-    )
-    add_custom_target(rune_marches_asset_codegen
-        DEPENDS
-            "${RUNE_MARCHES_ASSET_GENERATED_HEADER}"
-            "${RUNE_MARCHES_ASSET_GENERATED_SOURCE}"
-            "${RUNE_MARCHES_CROP_MANIFEST}"
-            "${RUNE_MARCHES_RUNTIME_MANIFEST}"
-    )
-
-    add_custom_command(
-        OUTPUT
-            "${ROBLOX_FISHING_UI_GENERATED_HEADER}"
-            "${ROBLOX_FISHING_UI_GENERATED_SOURCE}"
-            "${ROBLOX_FISHING_UI_CROP_MANIFEST}"
-            "${ROBLOX_FISHING_UI_ASSET_MANIFEST}"
-        COMMAND "${Python3_EXECUTABLE}" "${ROBLOX_FISHING_UI_CODEGEN}"
-            --source "${ROBLOX_FISHING_UI_SOURCE}"
-            --runtime-dir "${ROBLOX_FISHING_UI_RUNTIME_DIR}"
-            --crop-manifest "${ROBLOX_FISHING_UI_CROP_MANIFEST}"
-            --asset-manifest "${ROBLOX_FISHING_UI_ASSET_MANIFEST}"
-            --generated-dir "${CMAKE_SOURCE_DIR}/src/generated"
-        DEPENDS
-            "${ROBLOX_FISHING_UI_SOURCE}"
-            "${ROBLOX_FISHING_UI_CODEGEN}"
-            "${CMAKE_SOURCE_DIR}/tools/assets/atomic_io.py"
-            "${CMAKE_SOURCE_DIR}/tools/assets/chroma_key_alpha.py"
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        COMMENT "Generating Roblox Fishing UI runtime art assets"
-        VERBATIM
-    )
-    add_custom_target(roblox_fishing_ui_asset_codegen
-        DEPENDS
-            "${ROBLOX_FISHING_UI_GENERATED_HEADER}"
-            "${ROBLOX_FISHING_UI_GENERATED_SOURCE}"
-            "${ROBLOX_FISHING_UI_CROP_MANIFEST}"
-            "${ROBLOX_FISHING_UI_ASSET_MANIFEST}"
-    )
-endif()
 
 add_library(game_state STATIC
     src/game_storage.c
@@ -272,41 +134,11 @@ else()
     target_compile_definitions(game_devapi INTERFACE NT_DEVAPI_ENABLED=0)
 endif()
 
-set(GAME_MAIN_SOURCE src/clean_seed_main.c)
-set(GAME_CLOSED_PROTOTYPE_SOURCES "")
-if(GAME_CLOSED_PROTOTYPES_ENABLED)
-    set(GAME_MAIN_SOURCE src/main.c)
-    list(APPEND GAME_CLOSED_PROTOTYPE_SOURCES
-        src/game_state_actions.c
-        src/game_state_actions.h
-        "${RUNE_MARCHES_ASSET_GENERATED_SOURCE}"
-        "${RUNE_MARCHES_ASSET_GENERATED_HEADER}"
-        "${ROBLOX_FISHING_UI_GENERATED_SOURCE}"
-        "${ROBLOX_FISHING_UI_GENERATED_HEADER}"
-    )
-endif()
-
 add_executable(${GAME_TARGET}
-    "${GAME_MAIN_SOURCE}"
+    src/clean_seed_main.c
     src/game_audio.c
     src/game_audio.h
-    ${GAME_CLOSED_PROTOTYPE_SOURCES}
 )
-if(GAME_CLOSED_PROTOTYPES_ENABLED)
-    add_dependencies(${GAME_TARGET} rune_marches_asset_codegen)
-    add_dependencies(${GAME_TARGET} roblox_fishing_ui_asset_codegen)
-    if(NOT EMSCRIPTEN)
-        add_dependencies(${GAME_TARGET} roblox_fishing_model_pack)
-    endif()
-endif()
-if(NOT GAME_CLOSED_PROTOTYPES_ENABLED AND NOT EMSCRIPTEN)
-    add_custom_target(clean_seed_output_hygiene
-        COMMAND "${CMAKE_COMMAND}" -E remove -f "${GAME_OUTPUT_DIR}/assets/roblox_fishing_models.ntpack"
-        COMMENT "Removing stale closed-prototype assets from clean seed output"
-        VERBATIM
-    )
-    add_dependencies(${GAME_TARGET} clean_seed_output_hygiene)
-endif()
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core
     nt_app
@@ -345,10 +177,7 @@ target_include_directories(${GAME_TARGET} PRIVATE
     external/cjson
     external/neotolis-engine/deps/glfw/deps
 )
-target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=$<BOOL:${GAME_DEVAPI_ENABLED}> GAME_CLOSED_PROTOTYPES_ENABLED=$<BOOL:${GAME_CLOSED_PROTOTYPES_ENABLED}> _CRT_SECURE_NO_WARNINGS)
-if(GAME_CLOSED_PROTOTYPES_ENABLED AND NOT EMSCRIPTEN)
-    target_compile_definitions(${GAME_TARGET} PRIVATE ROBLOX_FISHING_MODEL_PACK_PATH="${ROBLOX_FISHING_MODEL_PACK}")
-endif()
+target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=$<BOOL:${GAME_DEVAPI_ENABLED}> _CRT_SECURE_NO_WARNINGS)
 
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_platform_web)

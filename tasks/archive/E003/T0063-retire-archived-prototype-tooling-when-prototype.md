@@ -1,7 +1,7 @@
 ---
 id: T0063
 title: Retire archived-prototype tooling when prototypes are formally closed
-status: idea
+status: done
 epic: E003
 priority: P3
 tags: [subtraction, tooling, cleanup]
@@ -24,11 +24,10 @@ in `src/main.c` and is opt-in"). So retiring this tooling = dropping the entire
 opt-in closed-prototype build/runtime from the template, which reverses that
 AGENTS decision and touches CMake + src/main.c + src/generated + assets/runtime.
 
-## Done when (lead decision first)
+## Done when
 
-- [ ] LEAD decides: keep the opt-in closed-prototype runtime as history (status quo, AGENTS as written) OR drop it entirely to make a cleaner template.
-- [ ] If DROP: remove the closed-prototype CMake blocks, the project-specific builders + probes + `tools/roblox_fishing/`, the generated sources, `assets/runtime/*`, the `GAME_CLOSED_PROTOTYPES_ENABLED` path in `src/main.c`, and update AGENTS.md; verify the clean-seed build + `pipeline_validate` still pass.
-- [ ] If KEEP: leave as-is (the tooling is part of the kept opt-in build); optionally still drop only the playtest probes if desired.
+- [x] LEAD decided: DROP the opt-in closed-prototype runtime/tooling from the template (test runs; design evidence kept under `gamedesign/projects/`).
+- [x] DROP executed: removed the closed-prototype CMake blocks + `GAME_CLOSED_PROTOTYPES_ENABLED`, the `*-closed-prototypes` presets, the project-specific builders + probes + `tools/roblox_fishing/` + `tools/playtest/`, `src/main.c` + `src/game_state_actions.*`, the closed generated sources in `src/generated/`, `assets/runtime/roblox-fishing-ui-v1` + `rune-marches-v1`, `state/closed_prototypes_game_state.schema.json`; updated AGENTS.md; clean-seed `native-debug` configures + builds and `pipeline_validate` passes.
 
 ## Open questions
 
@@ -37,3 +36,4 @@ AGENTS decision and touches CMake + src/main.c + src/generated + assets/runtime.
 ## Log
 
 - 2026-06-15: Captured from the second simplification/speed iteration. On execution found the builders are wired into the intentionally-kept opt-in closed-prototype build (CMakeLists.txt + GAME_CLOSED_PROTOTYPES_ENABLED). Re-scoped from "P3 cleanup" to a lead direction decision; NOT executed (would break the kept build + reverse AGENTS). Surfaced to lead.
+- 2026-06-15: LEAD approved DROP. Executed: removed `GAME_CLOSED_PROTOTYPES_ENABLED` + both closed codegen blocks + the `*-closed-prototypes` presets, deleted `src/main.c` (~2637 LOC), `src/game_state_actions.c/.h` (~1057 LOC), the closed generated sources in `src/generated/` (~785k LOC of committed art bytes), the rune/roblox builders + `tools/roblox_fishing/` + `tools/playtest/`, `assets/runtime/{roblox-fishing-ui-v1,rune-marches-v1}`, and `state/closed_prototypes_game_state.schema.json`. Updated AGENTS.md and the state-codegen unittest (clean-variant only). Clean-seed `native-debug` configures + builds `game_seed.exe`; state codegen + unittest + pipeline_validate pass. Not committed. Orphaned `assets/runtime/rune-marches-ui-*` dirs flagged to lead.
