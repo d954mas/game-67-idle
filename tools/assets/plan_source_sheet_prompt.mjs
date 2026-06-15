@@ -84,6 +84,123 @@ function groupMatchesFamily(group, family) {
   return true;
 }
 
+function familyKind(sourceFamily) {
+  const family = normalize(sourceFamily);
+  if (family.includes("blank ui") || family.includes("ui kit")) return "blank_ui";
+  if (family.includes("icon")) return "icon";
+  if (family.includes("decor") || family.includes("overlay")) return "decor";
+  if (family.includes("sprite") || family.includes("fx")) return "sprite";
+  if (family.includes("map") || family.includes("background")) return "map";
+  return "generic";
+}
+
+function layoutRowsForFamily(sourceFamily, relevantGroups) {
+  const kind = familyKind(sourceFamily);
+  const groupIds = relevantGroups.map((group) => group.id).filter(hasText);
+  if (kind === "blank_ui") {
+    return [
+      {
+        id: "large_slice9_bases",
+        purpose: "large blank panels, journals, modals, inventory frames",
+        item_policy: "one isolated base per slot; blank content area; no center badges or unique stretch-zone ornaments",
+        asset_group_ids: groupIds,
+      },
+      {
+        id: "button_and_chip_bases",
+        purpose: "primary/secondary button bases, chips, tabs, compact controls",
+        item_policy: "separate idle/pressed/disabled/selected states; no baked labels or icons",
+        asset_group_ids: groupIds,
+      },
+      {
+        id: "bar_and_strip_bases",
+        purpose: "progress tracks, status strips, separators, meter frames",
+        item_policy: "split caps and repeatable center strips where ornaments would stretch",
+        asset_group_ids: groupIds,
+      },
+    ];
+  }
+  if (kind === "icon") {
+    return [
+      {
+        id: "core_gameplay_icons",
+        purpose: "health, shield, currency, quest, travel, resource, lock/unlock icons",
+        item_policy: "one centered silhouette per slot; no frames fused into icons; readable at gameplay size",
+        asset_group_ids: groupIds,
+      },
+      {
+        id: "state_and_resource_variants",
+        purpose: "rarity/state/resource variants with shared visual language",
+        item_policy: "consistent lighting and padding; no touching shadows between neighboring slots",
+        asset_group_ids: groupIds,
+      },
+    ];
+  }
+  if (kind === "decor") {
+    return [
+      {
+        id: "corner_and_edge_overlays",
+        purpose: "corner caps, edge caps, dividers, glow strips, ornamental bars",
+        item_policy: "non-stretch overlays only; obvious anchor point; transparent/chroma padding around every sprite",
+        asset_group_ids: groupIds,
+      },
+      {
+        id: "badges_and_fixed_ornaments",
+        purpose: "badges, gems, locks, seals, medallions, plaques, banners",
+        item_policy: "each ornament isolated as its own sprite; never baked into panel centers",
+        asset_group_ids: groupIds,
+      },
+    ];
+  }
+  return [
+    {
+      id: "isolated_assets",
+      purpose: "all requested reusable runtime assets for this source family",
+      item_policy: "one isolated component per slot with clear gutters and no composed runtime screen",
+      asset_group_ids: groupIds,
+    },
+  ];
+}
+
+function buildSourceSheetLayout(sourceFamily, keyColor, relevantGroups) {
+  const kind = familyKind(sourceFamily);
+  return {
+    version: 1,
+    sheet_role: "cuttable_source_sheet",
+    family_kind: kind,
+    recommended_canvas: {
+      size_px: [2048, 2048],
+      background: keyColor,
+      background_policy: "perfectly flat chroma or true transparency only",
+    },
+    placement: {
+      mode: "row_major_grid",
+      edge_margin_px_min: 64,
+      gutter_px_min: kind === "icon" || kind === "decor" ? 64 : 48,
+      allow_overlap: false,
+      allow_composed_ui_screen: false,
+      allow_baked_runtime_text: false,
+    },
+    rows: layoutRowsForFamily(sourceFamily, relevantGroups),
+    cut_policy: {
+      one_component_per_slot: true,
+      preserve_empty_chroma_lanes: true,
+      crop_after_intake_not_by_prompt_coordinates: true,
+      fixed_ornaments_are_separate_overlays: true,
+    },
+  };
+}
+
+function renderLayoutInstruction(layout) {
+  const rowText = layout.rows
+    .map((row, index) => `Row ${index + 1} ${row.id}: ${row.purpose}; ${row.item_policy}.`)
+    .join(" ");
+  return (
+    `Arrange the sheet as a ${layout.placement.mode} with at least ${layout.placement.edge_margin_px_min}px outer margin ` +
+    `and ${layout.placement.gutter_px_min}px gutters between all visible pixels and shadows. ${rowText} ` +
+    "Leave empty chroma lanes between rows and slots. Do not compose these assets into a runtime screen."
+  );
+}
+
 function keyColorAdviceFromAudit(path) {
   if (!path) return { color: "", action: "", recommendedNextStep: null, blockingReasons: [] };
   const audit = readJson(path);
@@ -134,12 +251,14 @@ function buildPacket(job, sourceFamily, options) {
   const rejects = uniqueStrings(job.qa_rejects || []);
   const relevantGroups = (job.required_asset_groups || []).filter((group) => groupMatchesFamily(group, sourceFamily));
   const finalPolicy = contract.final_asset_policy || {};
+  const sourceSheetLayout = buildSourceSheetLayout(sourceFamily, keyColor, relevantGroups);
 
   const promptLines = [
     `Create a production source sheet for ${job.asset_family || job.id}.`,
     `Source family: ${sourceFamily}.`,
     role ? `Role: ${role}.` : "",
     "This is a cuttable source sheet, not a gameplay screenshot, mockup, landing page, or composed UI screen.",
+    renderLayoutInstruction(sourceSheetLayout),
     `Use a perfectly flat chroma background ${keyColor} or true transparency; do not use gradients, shadows, glow, or texture in the background.`,
     "Keep every asset isolated with generous gutters and no overlap between shadows.",
     "Keep all labels, numbers, quest text, counters, and state values blank for runtime composition.",
@@ -191,6 +310,7 @@ function buildPacket(job, sourceFamily, options) {
     intake_recommended_next_step: auditKeyAdvice.recommendedNextStep,
     intake_blocking_reasons: auditKeyAdvice.blockingReasons,
     diagnostic_chroma_override: diagnosticChromaOverride,
+    source_sheet_layout: sourceSheetLayout,
     prompt: promptLines.join(" "),
     negative_prompt: negativeItems.join(", "),
     constraints,
@@ -224,6 +344,17 @@ function renderMarkdown(packet) {
     "## Acceptance Checklist",
     "",
     ...packet.acceptance_checklist.map((item) => `- ${item}`),
+    "",
+    "## Source Sheet Layout",
+    "",
+    `sheet_role: ${packet.source_sheet_layout?.sheet_role || "none"}`,
+    `placement: ${packet.source_sheet_layout?.placement?.mode || "none"}`,
+    `outer_margin_px_min: ${packet.source_sheet_layout?.placement?.edge_margin_px_min || "none"}`,
+    `gutter_px_min: ${packet.source_sheet_layout?.placement?.gutter_px_min || "none"}`,
+    "",
+    ...(packet.source_sheet_layout?.rows || []).map((row, index) => {
+      return `- row ${index + 1} \`${row.id}\`: ${row.purpose}; ${row.item_policy}`;
+    }),
     "",
     "## Intake Routing",
     "",

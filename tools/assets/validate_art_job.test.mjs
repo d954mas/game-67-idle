@@ -1384,6 +1384,41 @@ test("strict mode rejects malformed prompt packet intake blocking reasons", (t) 
   assert.match(result.stdout, /intake_blocking_reasons\[0\] needs code/);
 });
 
+test("strict mode rejects malformed prompt packet source sheet layout", (t) => {
+  const dir = tempDir(t);
+  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const { job } = writeStrictValidJob(dir, {
+    prompt_packet: promptPacket,
+  });
+  writePromptPacket(dir, promptPacket, {
+    source_sheet_layout: {
+      sheet_role: "",
+      placement: {
+        mode: "",
+        edge_margin_px_min: 0,
+        gutter_px_min: -1,
+        allow_overlap: true,
+        allow_composed_ui_screen: true,
+        allow_baked_runtime_text: true,
+      },
+      rows: [{}],
+      cut_policy: {
+        one_component_per_slot: false,
+        preserve_empty_chroma_lanes: false,
+        crop_after_intake_not_by_prompt_coordinates: false,
+      },
+    },
+  });
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /source_sheet_layout needs sheet_role/);
+  assert.match(result.stdout, /source_sheet_layout\.placement\.gutter_px_min must be a positive number/);
+  assert.match(result.stdout, /source_sheet_layout\.placement\.allow_composed_ui_screen must be false/);
+  assert.match(result.stdout, /source_sheet_layout\.rows\[0\] needs id/);
+  assert.match(result.stdout, /source_sheet_layout\.cut_policy\.one_component_per_slot must be true/);
+});
+
 test("strict mode accepts matching generation record prompt packet", (t) => {
   const dir = tempDir(t);
   const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";

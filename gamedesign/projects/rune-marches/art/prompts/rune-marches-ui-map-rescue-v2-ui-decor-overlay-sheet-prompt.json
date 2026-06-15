@@ -6,7 +6,57 @@
   "source_family": "ui decor overlay sheet",
   "source_family_role": "non-stretch gems, badges, medallions, corner caps, and center ornaments with runtime anchors",
   "suggested_key_color": "#00ff00",
-  "prompt": "Create a production source sheet for runtime-ui-map-kit. Source family: ui decor overlay sheet. Role: non-stretch gems, badges, medallions, corner caps, and center ornaments with runtime anchors. This is a cuttable source sheet, not a gameplay screenshot, mockup, landing page, or composed UI screen. Use a perfectly flat chroma background #00ff00 or true transparency; do not use gradients, shadows, glow, or texture in the background. Keep every asset isolated with generous gutters and no overlap between shadows. Keep all labels, numbers, quest text, counters, and state values blank for runtime composition. Create only non-stretch decorative overlays: corner caps, badges, gems, medallions, locks, banners, dividers, and ornamental flourishes with clear transparent/chroma padding and anchorable silhouettes. Put unique gems, badges, medallions, locks, banners, and center ornaments in separate overlay sprites, not inside stretchable bases. Use consistent perspective, lighting, material language, and line weight across the sheet.",
+  "key_color_source": "explicit_override",
+  "intake_key_color_action": "",
+  "intake_recommended_next_step": null,
+  "intake_blocking_reasons": [],
+  "diagnostic_chroma_override": false,
+  "source_sheet_layout": {
+    "version": 1,
+    "sheet_role": "cuttable_source_sheet",
+    "family_kind": "decor",
+    "recommended_canvas": {
+      "size_px": [
+        2048,
+        2048
+      ],
+      "background": "#00ff00",
+      "background_policy": "perfectly flat chroma or true transparency only"
+    },
+    "placement": {
+      "mode": "row_major_grid",
+      "edge_margin_px_min": 64,
+      "gutter_px_min": 64,
+      "allow_overlap": false,
+      "allow_composed_ui_screen": false,
+      "allow_baked_runtime_text": false
+    },
+    "rows": [
+      {
+        "id": "corner_and_edge_overlays",
+        "purpose": "corner caps, edge caps, dividers, glow strips, ornamental bars",
+        "item_policy": "non-stretch overlays only; obvious anchor point; transparent/chroma padding around every sprite",
+        "asset_group_ids": [
+          "ui_decor_overlays"
+        ]
+      },
+      {
+        "id": "badges_and_fixed_ornaments",
+        "purpose": "badges, gems, locks, seals, medallions, plaques, banners",
+        "item_policy": "each ornament isolated as its own sprite; never baked into panel centers",
+        "asset_group_ids": [
+          "ui_decor_overlays"
+        ]
+      }
+    ],
+    "cut_policy": {
+      "one_component_per_slot": true,
+      "preserve_empty_chroma_lanes": true,
+      "crop_after_intake_not_by_prompt_coordinates": true,
+      "fixed_ornaments_are_separate_overlays": true
+    }
+  },
+  "prompt": "Create a production source sheet for runtime-ui-map-kit. Source family: ui decor overlay sheet. Role: non-stretch gems, badges, medallions, corner caps, and center ornaments with runtime anchors. This is a cuttable source sheet, not a gameplay screenshot, mockup, landing page, or composed UI screen. Arrange the sheet as a row_major_grid with at least 64px outer margin and 64px gutters between all visible pixels and shadows. Row 1 corner_and_edge_overlays: corner caps, edge caps, dividers, glow strips, ornamental bars; non-stretch overlays only; obvious anchor point; transparent/chroma padding around every sprite. Row 2 badges_and_fixed_ornaments: badges, gems, locks, seals, medallions, plaques, banners; each ornament isolated as its own sprite; never baked into panel centers. Leave empty chroma lanes between rows and slots. Do not compose these assets into a runtime screen. Use a perfectly flat chroma background #00ff00 or true transparency; do not use gradients, shadows, glow, or texture in the background. Keep every asset isolated with generous gutters and no overlap between shadows. Keep all labels, numbers, quest text, counters, and state values blank for runtime composition. Create only non-stretch decorative overlays: corner caps, badges, gems, medallions, locks, banners, dividers, and ornamental flourishes with clear transparent/chroma padding and anchorable silhouettes. Put unique gems, badges, medallions, locks, banners, and center ornaments in separate overlay sprites, not inside stretchable bases. Use consistent perspective, lighting, material language, and line weight across the sheet.",
   "negative_prompt": "button labels, resource counters, timer values, tutorial text, debug text, game state values, quest state, map labels, random letters, watermarks, labels fused into reusable backgrounds, icons fused into buttons, wrong subject, weak silhouette at gameplay size, opaque chroma-key background, baked board state, busy label overlaps, debug-looking button grid, fake-shot crop artifacts, slice9 edge ornament stretches visibly, magenta fringe after chroma removal, readable text, fake letters, watermark, fused icons inside buttons, cropped silhouettes, merged components, busy stretch centers, non-flat chroma background, purple or red-blue halo on transparent edges",
   "constraints": [
     "no readable text",

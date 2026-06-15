@@ -806,6 +806,7 @@ function validatePromptPacket(packet, packetPath, record, job, label, problems) 
     }
   }
   validatePromptPacketIntakeRouting(packet, packetLabel, problems);
+  validatePromptPacketSourceSheetLayout(packet, packetLabel, problems);
   if (hasText(packet.job_id) && hasText(job?.id) && packet.job_id !== job.id) {
     problems.push(`${packetLabel} job_id should match art job ${job.id}`);
   }
@@ -865,6 +866,61 @@ function validatePromptPacketIntakeRouting(packet, packetLabel, problems) {
         } else if (!hasText(reason.code)) {
           problems.push(`${packetLabel} intake_blocking_reasons[${index}] needs code`);
         }
+      }
+    }
+  }
+}
+
+function validatePromptPacketSourceSheetLayout(packet, packetLabel, problems) {
+  const layout = packet.source_sheet_layout;
+  if (layout === undefined || layout === null) return;
+  if (typeof layout !== "object" || Array.isArray(layout)) {
+    problems.push(`${packetLabel} source_sheet_layout must be an object`);
+    return;
+  }
+  if (!hasText(layout.sheet_role)) {
+    problems.push(`${packetLabel} source_sheet_layout needs sheet_role`);
+  }
+  const placement = layout.placement;
+  if (!placement || typeof placement !== "object" || Array.isArray(placement)) {
+    problems.push(`${packetLabel} source_sheet_layout needs placement object`);
+  } else {
+    if (!hasText(placement.mode)) {
+      problems.push(`${packetLabel} source_sheet_layout.placement needs mode`);
+    }
+    for (const key of ["edge_margin_px_min", "gutter_px_min"]) {
+      if (!Number.isFinite(placement[key]) || placement[key] <= 0) {
+        problems.push(`${packetLabel} source_sheet_layout.placement.${key} must be a positive number`);
+      }
+    }
+    for (const key of ["allow_overlap", "allow_composed_ui_screen", "allow_baked_runtime_text"]) {
+      if (placement[key] !== false) {
+        problems.push(`${packetLabel} source_sheet_layout.placement.${key} must be false`);
+      }
+    }
+  }
+  if (!Array.isArray(layout.rows) || layout.rows.length === 0) {
+    problems.push(`${packetLabel} source_sheet_layout needs non-empty rows`);
+  } else {
+    for (const [index, row] of layout.rows.entries()) {
+      if (!row || typeof row !== "object" || Array.isArray(row)) {
+        problems.push(`${packetLabel} source_sheet_layout.rows[${index}] must be an object`);
+        continue;
+      }
+      for (const key of ["id", "purpose", "item_policy"]) {
+        if (!hasText(row[key])) {
+          problems.push(`${packetLabel} source_sheet_layout.rows[${index}] needs ${key}`);
+        }
+      }
+    }
+  }
+  const cutPolicy = layout.cut_policy;
+  if (!cutPolicy || typeof cutPolicy !== "object" || Array.isArray(cutPolicy)) {
+    problems.push(`${packetLabel} source_sheet_layout needs cut_policy object`);
+  } else {
+    for (const key of ["one_component_per_slot", "preserve_empty_chroma_lanes", "crop_after_intake_not_by_prompt_coordinates"]) {
+      if (cutPolicy[key] !== true) {
+        problems.push(`${packetLabel} source_sheet_layout.cut_policy.${key} must be true`);
       }
     }
   }

@@ -35,8 +35,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
    Use `--intake-audit` or `--key-color` when a previous source-sheet audit
    found a safer chroma key. When recording the accepted source, pass the JSON
    prompt packet path to `new_generation_record.mjs --prompt-packet`. Prompt
-   packets should preserve `key_color_source` and `intake_key_color_action` so
-   color decisions are not lost. If `intake_key_color_action` is
+   packets should preserve `key_color_source`, `intake_key_color_action`, and
+   a machine-readable `source_sheet_layout` so color and source positioning
+   decisions are not lost. If `intake_key_color_action` is
    `split_preserve_or_dual_plate_alpha`, do not create another normal chroma
    prompt unless this is an explicit diagnostic override with
    `diagnostic_chroma_override: true`. Strict art-job validation reads that JSON

@@ -6,7 +6,71 @@
   "source_family": "blank UI kit sheet",
   "source_family_role": "stretchable bases: panels, button states, bars, frames, and chips without unique center decoration in slice9 stretch zones",
   "suggested_key_color": "#00ff00",
-  "prompt": "Create a production source sheet for runtime-ui-map-kit. Source family: blank UI kit sheet. Role: stretchable bases: panels, button states, bars, frames, and chips without unique center decoration in slice9 stretch zones. This is a cuttable source sheet, not a gameplay screenshot, mockup, landing page, or composed UI screen. Use a perfectly flat chroma background #00ff00 or true transparency; do not use gradients, shadows, glow, or texture in the background. Keep every asset isolated with generous gutters and no overlap between shadows. Keep all labels, numbers, quest text, counters, and state values blank for runtime composition. For slice9 bases, keep stretch zones structurally boring: corners, straight edges, fill, and repeatable texture only. Put unique gems, badges, medallions, locks, banners, and center ornaments in separate overlay sprites, not inside stretchable bases. Use consistent perspective, lighting, material language, and line weight across the sheet.",
+  "key_color_source": "intake_audit",
+  "intake_key_color_action": "",
+  "intake_recommended_next_step": null,
+  "intake_blocking_reasons": [],
+  "diagnostic_chroma_override": false,
+  "source_sheet_layout": {
+    "version": 1,
+    "sheet_role": "cuttable_source_sheet",
+    "family_kind": "blank_ui",
+    "recommended_canvas": {
+      "size_px": [
+        2048,
+        2048
+      ],
+      "background": "#00ff00",
+      "background_policy": "perfectly flat chroma or true transparency only"
+    },
+    "placement": {
+      "mode": "row_major_grid",
+      "edge_margin_px_min": 64,
+      "gutter_px_min": 48,
+      "allow_overlap": false,
+      "allow_composed_ui_screen": false,
+      "allow_baked_runtime_text": false
+    },
+    "rows": [
+      {
+        "id": "large_slice9_bases",
+        "purpose": "large blank panels, journals, modals, inventory frames",
+        "item_policy": "one isolated base per slot; blank content area; no center badges or unique stretch-zone ornaments",
+        "asset_group_ids": [
+          "exploration_ui",
+          "combat_ui",
+          "ui_decor_overlays"
+        ]
+      },
+      {
+        "id": "button_and_chip_bases",
+        "purpose": "primary/secondary button bases, chips, tabs, compact controls",
+        "item_policy": "separate idle/pressed/disabled/selected states; no baked labels or icons",
+        "asset_group_ids": [
+          "exploration_ui",
+          "combat_ui",
+          "ui_decor_overlays"
+        ]
+      },
+      {
+        "id": "bar_and_strip_bases",
+        "purpose": "progress tracks, status strips, separators, meter frames",
+        "item_policy": "split caps and repeatable center strips where ornaments would stretch",
+        "asset_group_ids": [
+          "exploration_ui",
+          "combat_ui",
+          "ui_decor_overlays"
+        ]
+      }
+    ],
+    "cut_policy": {
+      "one_component_per_slot": true,
+      "preserve_empty_chroma_lanes": true,
+      "crop_after_intake_not_by_prompt_coordinates": true,
+      "fixed_ornaments_are_separate_overlays": true
+    }
+  },
+  "prompt": "Create a production source sheet for runtime-ui-map-kit. Source family: blank UI kit sheet. Role: stretchable bases: panels, button states, bars, frames, and chips without unique center decoration in slice9 stretch zones. This is a cuttable source sheet, not a gameplay screenshot, mockup, landing page, or composed UI screen. Arrange the sheet as a row_major_grid with at least 64px outer margin and 48px gutters between all visible pixels and shadows. Row 1 large_slice9_bases: large blank panels, journals, modals, inventory frames; one isolated base per slot; blank content area; no center badges or unique stretch-zone ornaments. Row 2 button_and_chip_bases: primary/secondary button bases, chips, tabs, compact controls; separate idle/pressed/disabled/selected states; no baked labels or icons. Row 3 bar_and_strip_bases: progress tracks, status strips, separators, meter frames; split caps and repeatable center strips where ornaments would stretch. Leave empty chroma lanes between rows and slots. Do not compose these assets into a runtime screen. Use a perfectly flat chroma background #00ff00 or true transparency; do not use gradients, shadows, glow, or texture in the background. Keep every asset isolated with generous gutters and no overlap between shadows. Keep all labels, numbers, quest text, counters, and state values blank for runtime composition. For slice9 bases, keep stretch zones structurally boring: corners, straight edges, fill, and repeatable texture only. Put unique gems, badges, medallions, locks, banners, and center ornaments in separate overlay sprites, not inside stretchable bases. Use consistent perspective, lighting, material language, and line weight across the sheet.",
   "negative_prompt": "button labels, resource counters, timer values, tutorial text, debug text, game state values, quest state, map labels, random letters, watermarks, labels fused into reusable backgrounds, icons fused into buttons, wrong subject, weak silhouette at gameplay size, opaque chroma-key background, baked board state, busy label overlaps, debug-looking button grid, fake-shot crop artifacts, slice9 edge ornament stretches visibly, magenta fringe after chroma removal, readable text, fake letters, watermark, fused icons inside buttons, cropped silhouettes, merged components, busy stretch centers, non-flat chroma background, purple or red-blue halo on transparent edges",
   "constraints": [
     "no readable text",
@@ -29,6 +93,8 @@
         "selected"
       ],
       "content_policy": "runtime labels/icons stay inside recorded content safe area",
+      "stretch_zone_policy": "center and long edges must be plain or repeatable texture; unique medallions, gems, badges, caps, and center ornaments cannot live in stretch zones",
+      "decor_overlay_policy": "non-stretch ornaments must be corner-only or exported as separate ui decor overlay sheet sprites with runtime anchors",
       "target_preview_sizes": [
         [
           128,
@@ -62,6 +128,8 @@
         "disabled"
       ],
       "content_policy": "runtime combat labels/icons stay inside recorded content safe area",
+      "stretch_zone_policy": "combat panels and buttons use the same plain/repeatable stretch zones; encounter-specific ornamentation is composed as overlays",
+      "decor_overlay_policy": "enemy badges, danger caps, locks, and combat flourishes must be separate anchored sprites, not baked into resizable bases",
       "target_preview_sizes": [
         [
           128,
@@ -80,6 +148,12 @@
           380
         ]
       ]
+    },
+    {
+      "id": "ui_decor_overlays",
+      "kind": "sprite",
+      "need": "Separate non-stretch corner caps, gems, badges, medallions, lock plates, ribbon banners, dividers, and small fantasy flourishes with transparent/chroma padding.",
+      "anchor_policy": "record center or corner anchor before runtime composition; never bake these overlays into slice9 stretch zones"
     }
   ],
   "final_asset_policy": {

@@ -60,6 +60,11 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    prompt, negative prompt, and acceptance checklist instead of an ad hoc chat
    prompt. Prompt packets should record `key_color_source` and
    `intake_key_color_action` when an intake audit drives the next key color.
+   Prompt packets must also expose `source_sheet_layout`: a row-major
+   positioning contract with flat background policy, outer margin, gutter
+   minimums, rows/slots, and cut policy. The generator prompt may describe the
+   visual style, but the source sheet layout must stay machine-readable so
+   later intake/crop planning is not based on chat memory.
    The prompt planner must refuse another chroma prompt when the intake action
    is `split_preserve_or_dual_plate_alpha`; use dual-plate/split workflow
    instead, or mark an intentional diagnostic override explicitly with
@@ -71,7 +76,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    overlay sheet, state overlay sheet, bar/progress system sheet, map/world
    layer sheet, sprite/FX sheet if needed. Use full mockups only as visual
    targets; full mockups only as visual targets. Do not claim final generated
-   UI from a mixed source sheet.
+   UI from a mixed source sheet. Source-family prompts should position assets
+   in clean rows/columns with declared gutters and no composed runtime screen;
+   exact crop coordinates are still decided after source-sheet intake, not
+   trusted from the generator.
 8. Reject generated sheets with baked text, fake letters, fused icons/buttons,
    tight gutters, uncuttable ornate long edges, inconsistent states, weak
    icon silhouettes, watermarks, or chroma background not isolated from art.

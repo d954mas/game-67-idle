@@ -82,11 +82,21 @@ test("writes prompt packet from art job and intake suggested key color", (t) => 
   assert.match(text, /flat chroma background #00ff00/);
   assert.match(text, /not a gameplay screenshot/);
   assert.match(text, /no unique ornaments that will stretch/);
+  assert.match(text, /row_major_grid/);
+  assert.match(text, /48px gutters/);
+  assert.match(text, /Row 1 large_slice9_bases/);
+  assert.match(text, /## Source Sheet Layout/);
   const packet = JSON.parse(readFileSync(join(dir, json), "utf8"));
   assert.equal(packet.suggested_key_color, "#00ff00");
   assert.equal(packet.key_color_source, "intake_audit");
   assert.equal(packet.relevant_asset_groups.length, 1);
   assert.equal(packet.relevant_asset_groups[0].id, "panel_slice9");
+  assert.equal(packet.source_sheet_layout.sheet_role, "cuttable_source_sheet");
+  assert.equal(packet.source_sheet_layout.placement.mode, "row_major_grid");
+  assert.equal(packet.source_sheet_layout.placement.gutter_px_min, 48);
+  assert.equal(packet.source_sheet_layout.placement.allow_composed_ui_screen, false);
+  assert.equal(packet.source_sheet_layout.rows[0].id, "large_slice9_bases");
+  assert.equal(packet.source_sheet_layout.rows[1].id, "button_and_chip_bases");
 });
 
 test("uses intake next prompt key color before legacy suggested key color", (t) => {
@@ -230,6 +240,10 @@ test("uses explicit key color over intake audit", (t) => {
   assert.equal(packet.suggested_key_color, "#00ffff");
   assert.equal(packet.key_color_source, "explicit_override");
   assert.equal(packet.relevant_asset_groups[0].id, "resource_icons");
+  assert.equal(packet.source_sheet_layout.family_kind, "icon");
+  assert.equal(packet.source_sheet_layout.placement.gutter_px_min, 64);
+  assert.equal(packet.source_sheet_layout.rows[0].id, "core_gameplay_icons");
+  assert.match(packet.prompt, /one centered silhouette per slot/);
 });
 
 test("rejects source family outside generation contract", (t) => {
