@@ -92,6 +92,15 @@ Use this skill to make small, playable game changes without losing project conte
    freeze: while the first screen fails the gate, fix the screen to the
    reference bar before expanding systems, state, routes, content, or
    automation.
+   Core-moment feel check (cheap, mandatory for the first playable slice; this
+   skill owns "is it fun / does it play like the reference"): capture a short
+   sequence or recording of the single core action (the cast, the catch, the
+   hit, the upgrade). Confirm three felt criteria: (1) the action produces an
+   immediate, readable response; (2) the payoff reads as one satisfying moment,
+   not a silent state change; (3) in motion it resembles the named reference's
+   feel, not just its static layout. If any fails, the core moment - not more
+   content - is the next work. This is observation against a short capture, not
+   a new manifest or provenance artifact.
 7. For non-trivial work, use the iteration cycle in `references/iteration-cycle-playbook.md`.
 8. Keep implementation close to existing engine and game patterns.
 9. Avoid broad refactors unless the feature cannot be implemented safely without them.
@@ -130,6 +139,10 @@ If naming differs, infer the equivalent directories from the repository.
 - Treat a failed screenshot/player-read review as a stop condition. Fix the
   core screen or loop before adding more data, balance, quests, routes, or
   technical systems.
+- Build the core moment as a felt reveal, not a state transition. The payoff of
+  the core action must read as one satisfying event (animation, feedback,
+  juice), not appear silently in state. (Fishing failure: the catch had the
+  right object checklist but no premium reveal, so it did not read as one event.)
 - Product gate fail blocks feature/content expansion unless the lead explicitly
   accepts the debt for the current slice.
 - Do not implement a "like reference X" feature from a feature list alone.
