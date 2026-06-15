@@ -80,5 +80,11 @@
 - Visual-first freeze: while the first screen fails the visual gate, do not
   expand systems, state, routes, content, or automation. Fix the screen to the
   reference bar first, then expand. This is the default, not a rescue mode.
+- Generated/free art is allowed, but "allowed" means a polished runtime set, not
+  permission to integrate rough crops. Runtime art must reach the fake-shot
+  quality bar before it ships in a screen. Per-crop pixel/edge/transparency
+  audits prove crop hygiene, not art quality: the visual gate judges the
+  assembled screen against the art bible / fake shot. Clean crops of the wrong
+  art still fail the screen.
 - Pack building is explicit; do not wire pack generation into every normal game build.
 - If a task reveals repeated friction, propose updating `AGENTS.md` or creating/updating a project skill.

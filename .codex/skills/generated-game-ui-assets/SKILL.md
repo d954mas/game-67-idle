@@ -530,6 +530,11 @@ UI, unclear first action, or mobile density:
   or artist source sheets with complete provenance replace the scaffold.
 - Add a validator, audit, or skill rule for any repeated failure before moving
   on.
+- "Generated/free assets allowed" means a polished runtime set, not permission
+  to ship rough crops. Per-crop pixel/edge/transparency audits prove crop
+  hygiene, not art quality. A clean crop of the wrong or rough art still fails
+  the screen: the binding check is the assembled screen vs the art bible /
+  fake shot (AGENTS.md definition of done), not the per-crop audits.
 
 ## Report Shape
 
