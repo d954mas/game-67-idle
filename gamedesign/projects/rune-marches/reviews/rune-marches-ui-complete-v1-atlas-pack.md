@@ -24,10 +24,10 @@ Names are drawn only on labeled preview PNGs, in reserved free-space label rects
 
 ## Timing
 
-- read_manifest: 0.708 ms
-- load_assets: 62.629 ms
-- pack_groups: 281.06 ms
-- total: 345.424 ms
+- read_manifest: 0.374 ms
+- load_assets: 36.761 ms
+- pack_groups: 245.344 ms
+- total: 282.985 ms
 
 ## Atlases
 

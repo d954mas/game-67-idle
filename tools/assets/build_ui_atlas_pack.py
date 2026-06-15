@@ -21,7 +21,7 @@ except ModuleNotFoundError:  # pragma: no cover - supports direct script executi
 
 ROOT = Path.cwd()
 RESAMPLE_NEAREST = getattr(getattr(Image, "Resampling", Image), "NEAREST", Image.NEAREST)
-DEFAULT_LABEL_FONT_SIZE = 16
+DEFAULT_LABEL_FONT_SIZE = 18
 LABEL_PAD_X = 4
 LABEL_PAD_Y = 2
 LABEL_GAP_Y = 3
@@ -396,7 +396,7 @@ def make_entry(item: dict[str, Any], x: int, y: int, image: Image.Image) -> dict
         entry["review_label"] = {
             "text": review_label["text"],
             "lines": list(review_label.get("lines") or [review_label["text"]]),
-            "font_size": int(review_label.get("font_size") or LABEL_FONT_SIZE),
+            "font_size": int(review_label.get("font_size") or DEFAULT_LABEL_FONT_SIZE),
             "rect": [label_x, label_y, int(review_label["width"]), int(review_label["height"])],
             "placement": placement,
         }

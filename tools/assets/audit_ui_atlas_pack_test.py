@@ -199,6 +199,8 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             pack_data = json.loads(pack.read_text(encoding="utf-8"))
             self.assertEqual(pack_data["labeled_preview_policy"]["mode"], "label_overlay_only")
             self.assertEqual(pack_data["atlases"][0]["labeled_preview_policy"]["allowed_delta"], "review_label_rects_only")
+            self.assertEqual(pack_data["label_review_options"]["font_size"], 18)
+            self.assertEqual(pack_data["atlases"][0]["entries"][0]["review_label"]["font_size"], 18)
             self.assertIn("profile: slowest atlas audit", result.stdout)
             markdown = (root / "packed/audit.md").read_text(encoding="utf-8")
             self.assertIn("## Timing", markdown)

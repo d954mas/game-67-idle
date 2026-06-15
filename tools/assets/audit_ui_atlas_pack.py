@@ -23,7 +23,7 @@ except ModuleNotFoundError:  # pragma: no cover - supports direct script executi
 
 
 ROOT = Path.cwd()
-DEFAULT_LABEL_FONT_SIZE = 16
+DEFAULT_LABEL_FONT_SIZE = 18
 LABEL_PAD_X = 4
 LABEL_PAD_Y = 2
 LABEL_LINE_GAP_Y = 2
