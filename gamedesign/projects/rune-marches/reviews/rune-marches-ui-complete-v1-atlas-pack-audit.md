@@ -6,7 +6,7 @@ verdict: **pass**
 
 ## Timing
 
-- total: 229.703 ms
+- total: 262.405 ms
 
 ## Labeled Preview Policy
 

@@ -262,6 +262,7 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             self.assertEqual(pack["purpose"], "review_validation_atlas_not_engine_runtime_pack")
             self.assertTrue(pack["label_overlay"])
             self.assertEqual(pack["label_review_options"]["font_size"], 18)
+            self.assertEqual(pack["label_review_options"]["outer_margin"], 8)
             self.assertIn("atlas_efficiency", pack)
             self.assertGreater(pack["atlas_efficiency"]["occupancy_ratio"], 0)
             self.assertIn("timing_ms", pack)
@@ -278,6 +279,11 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             self.assertIn(label["placement"], {"bottom", "right"})
             padded_x, padded_y, padded_w, padded_h = entries["panel"]["padded_rect"]
             label_x, label_y, label_w, label_h = label["rect"]
+            atlas_w, atlas_h = atlas_info["size"]
+            self.assertGreaterEqual(label_x, 8)
+            self.assertGreaterEqual(label_y, 8)
+            self.assertGreaterEqual(atlas_w - (label_x + label_w), 8)
+            self.assertGreaterEqual(atlas_h - (label_y + label_h), 8)
             self.assertFalse(
                 label_x < padded_x + padded_w
                 and label_x + label_w > padded_x
@@ -295,6 +301,7 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             self.assertIn("- allowed_delta: `review_label_rects_only`", report)
             self.assertIn("- debug_outlines: `false`", report)
             self.assertIn("- font_size: `18`", report)
+            self.assertIn("- outer_margin: `8`", report)
             self.assertIn("## Atlas Efficiency", report)
             self.assertIn("## Timing", report)
             self.assertIn("## Asset Id Index", report)

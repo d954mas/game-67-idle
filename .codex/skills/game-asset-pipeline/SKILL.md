@@ -170,8 +170,10 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     `review_label.placement` as `right` or `bottom` so labels use nearby free
     space without covering art. Long labels should preserve exact
     `review_label.text` metadata and render wrapped `review_label.lines` in the
-    preview so verbose ids do not widen the atlas. This is proof/review output,
-    not the game's final runtime atlas packer. Labeled review packs must write
+    preview so verbose ids do not widen the atlas. Labels must also keep a
+    readable outer atlas edge margin, because 1-3 px bottom/right margins look
+    cropped in common image viewers. This is proof/review output, not the
+    game's final runtime atlas packer. Labeled review packs must write
     `labeled_preview_policy` with `mode: label_overlay_only`,
     `allowed_delta: review_label_rects_only`, and `debug_outlines: false` at
     pack and atlas level. Markdown reports must expose the labeled preview
@@ -188,12 +190,13 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     rects, padded-rect overlaps, alias mismatches, metadata mismatches, and
     broken extrusion pixels. For labeled review atlases, it also catches labels
     missing from metadata, wrong label text, wrapped `review_label.lines` that
-    do not fit their label rects, missing labeled preview images, labels
-    overlapping any art or other labels, labels accidentally baked into the
-    clean atlas, label rects without visible pixels in the labeled preview, or
-    hidden nonzero RGB under fully transparent clean-atlas pixels. It should
-    also reject visible pixels outside packed `padded_rect`s in the clean atlas
-    so review labels, stains, or orphan sprites cannot leak into runtime art.
+    do not fit their label rects, labels too close to the atlas edge, missing
+    labeled preview images, labels overlapping any art or other labels, labels
+    accidentally baked into the clean atlas, label rects without visible pixels
+    in the labeled preview, or hidden nonzero RGB under fully transparent
+    clean-atlas pixels. It should also reject visible pixels outside packed
+    `padded_rect`s in the clean atlas so review labels, stains, or orphan
+    sprites cannot leak into runtime art.
     The labeled preview may differ from the clean atlas only inside declared
     `review_label.rect`s; outside those rects it must preserve exact atlas
     pixels and must not add debug outlines over packed art. The audit must

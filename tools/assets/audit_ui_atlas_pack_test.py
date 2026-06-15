@@ -421,6 +421,20 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("review_label placement must be bottom or right", result.stdout + result.stderr)
 
+    def test_rejects_review_label_too_close_to_atlas_edge(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")], label_review=True)
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            entry = pack_data["atlases"][0]["entries"][0]
+            label = entry["review_label"]
+            label["rect"][1] = pack_data["atlases"][0]["size"][1] - label["rect"][3] - 1
+            pack.write_text(json.dumps(pack_data), encoding="utf-8")
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("review_label rect must keep 8px atlas edge margin", result.stdout + result.stderr)
+
     def test_rejects_overlapping_review_label_rects(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

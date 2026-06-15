@@ -239,11 +239,12 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       as `right` or `bottom` so the preview uses nearby free space without
       covering art. Long labels should keep exact `review_label.text` metadata
       and render wrapped `review_label.lines` in the preview so verbose ids do
-      not widen the atlas. Labels must be
-      readable at whole-atlas review size and record `review_label.font_size`;
-      tiny debug-font labels are not acceptable review evidence. This is
-      review evidence, not the game's final runtime packer. Labeled review
-      packs must write `labeled_preview_policy` with `mode:
+      not widen the atlas. Labels must be readable at whole-atlas review size,
+      keep a visible outer atlas edge margin so bottom/right labels do not look
+      cropped in image viewers, and record `review_label.font_size`; tiny
+      debug-font labels are not acceptable review evidence. This is review
+      evidence, not the game's final runtime packer. Labeled review packs must
+      write `labeled_preview_policy` with `mode:
       label_overlay_only`, `allowed_delta: review_label_rects_only`, and
       `debug_outlines: false` at pack and atlas level. Markdown reports must
       expose the labeled preview path, overlay-only policy, asset id index,
@@ -257,8 +258,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       write JSON/Markdown reports atomically through temp-file replace, and must
       also prove the labeled preview exists, label text matches the asset id
       and linked aliases, wrapped `review_label.lines` fit inside the label
-      rect, label rects do not overlap art or other labels, label rects contain
-      visible pixels there, the clean atlas has no label pixels, and fully
+      rect, label rects keep a readable atlas-edge margin, label rects do not
+      overlap art or other labels, label rects contain visible pixels there,
+      the clean atlas has no label pixels, and fully
       transparent clean-atlas pixels have zero RGB so hidden key colors cannot
       leak back through filtering. The clean atlas must also have no visible
       pixels outside packed `padded_rect`s, so stray labels, stains, or orphan

@@ -26,6 +26,7 @@ LABEL_PAD_X = 4
 LABEL_PAD_Y = 2
 LABEL_GAP_Y = 3
 LABEL_LINE_GAP_Y = 2
+LABEL_OUTER_MARGIN = 8
 LABEL_MIN_WIDTH = 72
 LABEL_MAX_WIDTH = 220
 _LABEL_FONTS: dict[int, ImageFont.ImageFont] = {}
@@ -453,6 +454,8 @@ def pack_group(
     sorted_items = sorted(canonical_items, key=lambda item: (-item["image"].height, -item["image"].width, item["asset"]["id"]))
     prepare_review_labels(sorted_items, alias_items, label_review, label_font_size)
     border = max(item["border_padding"] for item in sorted_items)
+    if label_review:
+        border = max(border, LABEL_OUTER_MARGIN)
     shape_padding = max(item["shape_padding"] for item in sorted_items)
     tile_sizes = [packed_tile_size(item) for item in sorted_items]
     total_area = sum((tile_width + shape_padding) * (tile_height + shape_padding) for tile_width, tile_height in tile_sizes)
@@ -595,7 +598,7 @@ def build_pack(
             "allowed_delta": "review_label_rects_only",
             "debug_outlines": False,
         }
-        pack_manifest["label_review_options"] = {"font_size": label_font_size}
+        pack_manifest["label_review_options"] = {"font_size": label_font_size, "outer_margin": LABEL_OUTER_MARGIN}
     if profile:
         efficiency = {
             "atlas_area": sum(int(atlas.get("atlas_area", 0)) for atlas in atlases),
@@ -631,6 +634,7 @@ def build_pack(
                     f"- allowed_delta: `{policy.get('allowed_delta', '-')}`",
                     f"- debug_outlines: `{str(policy.get('debug_outlines', '-')).lower()}`",
                     f"- font_size: `{pack_manifest.get('label_review_options', {}).get('font_size', '-')}`",
+                    f"- outer_margin: `{pack_manifest.get('label_review_options', {}).get('outer_margin', '-')}`",
                     "",
                 ]
             )

@@ -27,6 +27,7 @@ DEFAULT_LABEL_FONT_SIZE = 16
 LABEL_PAD_X = 4
 LABEL_PAD_Y = 2
 LABEL_LINE_GAP_Y = 2
+LABEL_OUTER_MARGIN = 8
 _LABEL_FONTS: dict[int, ImageFont.ImageFont] = {}
 
 
@@ -431,6 +432,13 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
                             lx, ly, lw, lh = label_rect
                             if lx + lw > atlas.width or ly + lh > atlas.height:
                                 atlas_problems.append(f"{entry_id} review_label rect exceeds atlas bounds")
+                            elif (
+                                lx < LABEL_OUTER_MARGIN
+                                or ly < LABEL_OUTER_MARGIN
+                                or atlas.width - (lx + lw) < LABEL_OUTER_MARGIN
+                                or atlas.height - (ly + lh) < LABEL_OUTER_MARGIN
+                            ):
+                                atlas_problems.append(f"{entry_id} review_label rect must keep {LABEL_OUTER_MARGIN}px atlas edge margin")
                             elif rect_has_visible_pixel(atlas, label_rect):
                                 atlas_problems.append(f"{entry_id} review_label rect must be empty in clean atlas")
                         if labeled_preview is not None:
