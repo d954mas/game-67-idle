@@ -60,6 +60,7 @@ game project:
 - `tools/assets/normalize_source_sheet_chroma.py`
 - `tools/assets/audit_source_sheet_intake.py`
 - `tools/assets/plan_runtime_crops_from_intake.py`
+- `tools/assets/build_runtime_assets_from_crop_plan.py`
 - `tools/assets/audit_generated_ui_assets.py`
 - `tools/assets/render_ui_asset_edge_proof.py`
 - `tools/assets/render_ui_composition_proof.py`
@@ -214,6 +215,12 @@ sheets do not require fragile long shell commands. The JSON/Markdown outputs
 record component ids, detected bboxes, padded crop rects, output paths, trim
 policy, chroma-key policy, and pack metadata skeletons. Use the plan as the
 reviewable bridge between detector output and the final runtime crop manifest.
+`tools/assets/build_runtime_assets_from_crop_plan.py` builds runtime PNGs,
+crop manifests, asset manifests, and contact sheets from those crop plans. It
+uses the shared chroma/alpha cleanup path, trims to alpha bounds with padding,
+scrubs fully transparent RGB to zero, maps decor plans to `decor_overlay`
+runtime metadata, and writes atlas fields so pixel audits and review-atlas
+packing can run immediately.
 `tools/assets/audit_runtime_ui_asset_usage.mjs` is the runtime placement gate.
 It compares a `game.runtime_ui_asset_usage` file against an asset manifest's
 `usage_policy`, then fails generated UI assets drawn below `min_size`, in the

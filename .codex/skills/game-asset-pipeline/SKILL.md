@@ -92,6 +92,10 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     non-empty, or where `transparent_nonzero_rgb_pixels` is above zero. Hidden
     RGB under transparent alpha can leak back as 1-2px fringe during
     premultiplied resizing or atlas filtering.
+    For accepted crop plans, use
+    `py -3.12 tools/assets/build_runtime_assets_from_crop_plan.py --crop-plan <crop-plan.json> --crop-manifest <crop-manifest.json> --asset-manifest <asset-manifest.json> --art-job <job.json> --contact-sheet <contact.png>`
+    instead of writing one-off cutters; then run the normal pixel audit and
+    atlas metadata/review-atlas gates on the generated manifests.
 15. For generated UI PNGs, run the pixel audit after slicing:
     `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`.
     The audit should pass before integrating or regenerating runtime headers.

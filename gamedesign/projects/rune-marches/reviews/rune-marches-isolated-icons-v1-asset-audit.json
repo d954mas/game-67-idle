@@ -1,0 +1,494 @@
+{
+  "schema": "game.generated_ui_asset_audit",
+  "version": 1,
+  "crop_manifest": "gamedesign/projects/rune-marches/data/rune-marches-isolated-icons-v1-crop_manifest.json",
+  "verdict": "pass",
+  "assets_checked": 12,
+  "problems": [],
+  "assets": [
+    {
+      "id": "icon_health_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_health_v1.png",
+      "problems": [],
+      "size": [
+        232,
+        212
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        224,
+        204
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 7.355,
+        "alpha_bbox": 0.106,
+        "padding_policy": 0.006,
+        "edge_key_fringe": 0.617,
+        "edge_purple_halo": 1.517,
+        "edge_green_spill": 0.742,
+        "edge_source_key_fringe": 0.774,
+        "transparent_edge_bad_rgb": 2.15,
+        "transparent_nonzero_rgb": 0.789,
+        "total": 14.059
+      }
+    },
+    {
+      "id": "icon_mana_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_mana_v1.png",
+      "problems": [],
+      "size": [
+        170,
+        234
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        162,
+        226
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 0.913,
+        "alpha_bbox": 0.075,
+        "padding_policy": 0.005,
+        "edge_key_fringe": 0.357,
+        "edge_purple_halo": 1.144,
+        "edge_green_spill": 0.555,
+        "edge_source_key_fringe": 0.617,
+        "transparent_edge_bad_rgb": 1.515,
+        "transparent_nonzero_rgb": 0.748,
+        "total": 5.932
+      }
+    },
+    {
+      "id": "icon_silver_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_silver_v1.png",
+      "problems": [],
+      "size": [
+        212,
+        214
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        204,
+        206
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.196,
+        "alpha_bbox": 0.107,
+        "padding_policy": 0.005,
+        "edge_key_fringe": 0.451,
+        "edge_purple_halo": 1.5,
+        "edge_green_spill": 0.661,
+        "edge_source_key_fringe": 0.678,
+        "transparent_edge_bad_rgb": 1.889,
+        "transparent_nonzero_rgb": 0.727,
+        "total": 7.216
+      }
+    },
+    {
+      "id": "icon_star_token_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_star_token_v1.png",
+      "problems": [],
+      "size": [
+        243,
+        242
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        235,
+        234
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.285,
+        "alpha_bbox": 0.095,
+        "padding_policy": 0.005,
+        "edge_key_fringe": 0.685,
+        "edge_purple_halo": 1.707,
+        "edge_green_spill": 0.892,
+        "edge_source_key_fringe": 0.917,
+        "transparent_edge_bad_rgb": 2.206,
+        "transparent_nonzero_rgb": 0.952,
+        "total": 8.746
+      }
+    },
+    {
+      "id": "icon_warden_badge_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_warden_badge_v1.png",
+      "problems": [],
+      "size": [
+        231,
+        233
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        223,
+        225
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.195,
+        "alpha_bbox": 0.073,
+        "padding_policy": 0.004,
+        "edge_key_fringe": 0.557,
+        "edge_purple_halo": 1.675,
+        "edge_green_spill": 0.897,
+        "edge_source_key_fringe": 0.833,
+        "transparent_edge_bad_rgb": 2.319,
+        "transparent_nonzero_rgb": 1.356,
+        "total": 8.913
+      }
+    },
+    {
+      "id": "icon_shield_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_shield_v1.png",
+      "problems": [],
+      "size": [
+        199,
+        235
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        191,
+        227
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.456,
+        "alpha_bbox": 0.087,
+        "padding_policy": 0.004,
+        "edge_key_fringe": 0.564,
+        "edge_purple_halo": 1.589,
+        "edge_green_spill": 0.737,
+        "edge_source_key_fringe": 0.643,
+        "transparent_edge_bad_rgb": 1.985,
+        "transparent_nonzero_rgb": 0.707,
+        "total": 7.774
+      }
+    },
+    {
+      "id": "icon_quest_scroll_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_quest_scroll_v1.png",
+      "problems": [],
+      "size": [
+        239,
+        235
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        231,
+        227
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.446,
+        "alpha_bbox": 0.079,
+        "padding_policy": 0.004,
+        "edge_key_fringe": 0.603,
+        "edge_purple_halo": 1.778,
+        "edge_green_spill": 0.919,
+        "edge_source_key_fringe": 0.951,
+        "transparent_edge_bad_rgb": 2.595,
+        "transparent_nonzero_rgb": 0.979,
+        "total": 9.356
+      }
+    },
+    {
+      "id": "icon_sun_medallion_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_sun_medallion_v1.png",
+      "problems": [],
+      "size": [
+        248,
+        246
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        240,
+        238
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.415,
+        "alpha_bbox": 0.081,
+        "padding_policy": 0.004,
+        "edge_key_fringe": 0.636,
+        "edge_purple_halo": 1.838,
+        "edge_green_spill": 1.157,
+        "edge_source_key_fringe": 1.103,
+        "transparent_edge_bad_rgb": 2.951,
+        "transparent_nonzero_rgb": 1.122,
+        "total": 10.31
+      }
+    },
+    {
+      "id": "icon_locked_pin_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_locked_pin_v1.png",
+      "problems": [],
+      "size": [
+        174,
+        259
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        166,
+        251
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.239,
+        "alpha_bbox": 0.081,
+        "padding_policy": 0.004,
+        "edge_key_fringe": 0.494,
+        "edge_purple_halo": 1.579,
+        "edge_green_spill": 0.721,
+        "edge_source_key_fringe": 0.7,
+        "transparent_edge_bad_rgb": 1.781,
+        "transparent_nonzero_rgb": 0.784,
+        "total": 7.385
+      }
+    },
+    {
+      "id": "icon_unlocked_pin_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_unlocked_pin_v1.png",
+      "problems": [],
+      "size": [
+        171,
+        257
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        163,
+        249
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.285,
+        "alpha_bbox": 0.081,
+        "padding_policy": 0.004,
+        "edge_key_fringe": 0.481,
+        "edge_purple_halo": 1.596,
+        "edge_green_spill": 0.639,
+        "edge_source_key_fringe": 0.752,
+        "transparent_edge_bad_rgb": 1.684,
+        "transparent_nonzero_rgb": 0.85,
+        "total": 7.374
+      }
+    },
+    {
+      "id": "icon_rune_crystal_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_rune_crystal_v1.png",
+      "problems": [],
+      "size": [
+        236,
+        238
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        228,
+        230
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 0.9,
+        "alpha_bbox": 0.085,
+        "padding_policy": 0.004,
+        "edge_key_fringe": 0.537,
+        "edge_purple_halo": 1.719,
+        "edge_green_spill": 0.792,
+        "edge_source_key_fringe": 0.874,
+        "transparent_edge_bad_rgb": 2.192,
+        "transparent_nonzero_rgb": 1.025,
+        "total": 8.129
+      }
+    },
+    {
+      "id": "icon_travel_boot_v1",
+      "kind": "icon",
+      "output": "assets/runtime/rune-marches-ui-icons-v1/icon_travel_boot_v1.png",
+      "problems": [],
+      "size": [
+        237,
+        259
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        229,
+        251
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.611,
+        "alpha_bbox": 0.088,
+        "padding_policy": 0.004,
+        "edge_key_fringe": 0.618,
+        "edge_purple_halo": 1.937,
+        "edge_green_spill": 0.976,
+        "edge_source_key_fringe": 1.014,
+        "transparent_edge_bad_rgb": 2.471,
+        "transparent_nonzero_rgb": 1.109,
+        "total": 9.831
+      }
+    }
+  ],
+  "timing_ms": {
+    "total": 105.761,
+    "assets_total": 105.025
+  }
+}

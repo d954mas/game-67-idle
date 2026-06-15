@@ -1,0 +1,93 @@
+{
+  "schema": "game.atlas_metadata_audit",
+  "version": 1,
+  "asset_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-decor-overlays-v1-asset_manifest.json",
+  "verdict": "pass",
+  "problems": [],
+  "assets": [
+    {
+      "id": "decor_corner_top_left_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "decor_blue_diamond_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "decor_red_seal_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "decor_corner_top_right_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "decor_compass_badge_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "decor_lock_plate_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "decor_ribbon_banner_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "decor_silver_divider_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "decor_crystal_cluster_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "decor_wooden_plaque_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "decor_leather_tab_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "decor_sunburst_gem_v1",
+      "kind": "decor_overlay",
+      "pack_group": "ui_rune_marches_decor",
+      "status": "pass",
+      "problems": []
+    }
+  ]
+}

@@ -1,0 +1,1393 @@
+{
+  "schema": "game.ui_asset_edge_proof",
+  "version": 1,
+  "rows": [
+    {
+      "asset_id": "decor_corner_top_left_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_left_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        244,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.663
+      }
+    },
+    {
+      "asset_id": "decor_corner_top_left_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_left_v1.png",
+      "side": "right",
+      "rect": [
+        220,
+        2,
+        246,
+        243
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.61
+      }
+    },
+    {
+      "asset_id": "decor_corner_top_left_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_left_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        219,
+        244,
+        245
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.538
+      }
+    },
+    {
+      "asset_id": "decor_corner_top_left_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_left_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        243
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.577
+      }
+    },
+    {
+      "asset_id": "decor_blue_diamond_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_blue_diamond_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        215,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.503
+      }
+    },
+    {
+      "asset_id": "decor_blue_diamond_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_blue_diamond_v1.png",
+      "side": "right",
+      "rect": [
+        191,
+        2,
+        217,
+        226
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.53
+      }
+    },
+    {
+      "asset_id": "decor_blue_diamond_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_blue_diamond_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        202,
+        215,
+        228
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.483
+      }
+    },
+    {
+      "asset_id": "decor_blue_diamond_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_blue_diamond_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        226
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.527
+      }
+    },
+    {
+      "asset_id": "decor_red_seal_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_red_seal_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        201,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.419
+      }
+    },
+    {
+      "asset_id": "decor_red_seal_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_red_seal_v1.png",
+      "side": "right",
+      "rect": [
+        177,
+        2,
+        203,
+        246
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.481
+      }
+    },
+    {
+      "asset_id": "decor_red_seal_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_red_seal_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        222,
+        201,
+        248
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.482
+      }
+    },
+    {
+      "asset_id": "decor_red_seal_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_red_seal_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        246
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.591
+      }
+    },
+    {
+      "asset_id": "decor_corner_top_right_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_right_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        244,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.584
+      }
+    },
+    {
+      "asset_id": "decor_corner_top_right_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_right_v1.png",
+      "side": "right",
+      "rect": [
+        220,
+        2,
+        246,
+        243
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.577
+      }
+    },
+    {
+      "asset_id": "decor_corner_top_right_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_right_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        219,
+        244,
+        245
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.525
+      }
+    },
+    {
+      "asset_id": "decor_corner_top_right_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_right_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        243
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.525
+      }
+    },
+    {
+      "asset_id": "decor_compass_badge_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_compass_badge_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        244,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.538
+      }
+    },
+    {
+      "asset_id": "decor_compass_badge_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_compass_badge_v1.png",
+      "side": "right",
+      "rect": [
+        220,
+        2,
+        246,
+        240
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.528
+      }
+    },
+    {
+      "asset_id": "decor_compass_badge_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_compass_badge_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        216,
+        244,
+        242
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.52
+      }
+    },
+    {
+      "asset_id": "decor_compass_badge_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_compass_badge_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        240
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.524
+      }
+    },
+    {
+      "asset_id": "decor_lock_plate_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_lock_plate_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        186,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.504
+      }
+    },
+    {
+      "asset_id": "decor_lock_plate_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_lock_plate_v1.png",
+      "side": "right",
+      "rect": [
+        162,
+        2,
+        188,
+        234
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.59
+      }
+    },
+    {
+      "asset_id": "decor_lock_plate_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_lock_plate_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        210,
+        186,
+        236
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.454
+      }
+    },
+    {
+      "asset_id": "decor_lock_plate_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_lock_plate_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        234
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.585
+      }
+    },
+    {
+      "asset_id": "decor_ribbon_banner_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_ribbon_banner_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        311,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.708
+      }
+    },
+    {
+      "asset_id": "decor_ribbon_banner_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_ribbon_banner_v1.png",
+      "side": "right",
+      "rect": [
+        287,
+        2,
+        313,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.351
+      }
+    },
+    {
+      "asset_id": "decor_ribbon_banner_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_ribbon_banner_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        95,
+        311,
+        121
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.683
+      }
+    },
+    {
+      "asset_id": "decor_ribbon_banner_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_ribbon_banner_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.337
+      }
+    },
+    {
+      "asset_id": "decor_silver_divider_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_silver_divider_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        259,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.642
+      }
+    },
+    {
+      "asset_id": "decor_silver_divider_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_silver_divider_v1.png",
+      "side": "right",
+      "rect": [
+        235,
+        2,
+        261,
+        77
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.291
+      }
+    },
+    {
+      "asset_id": "decor_silver_divider_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_silver_divider_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        53,
+        259,
+        79
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.59
+      }
+    },
+    {
+      "asset_id": "decor_silver_divider_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_silver_divider_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        77
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.263
+      }
+    },
+    {
+      "asset_id": "decor_crystal_cluster_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_crystal_cluster_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        200,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.526
+      }
+    },
+    {
+      "asset_id": "decor_crystal_cluster_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_crystal_cluster_v1.png",
+      "side": "right",
+      "rect": [
+        176,
+        2,
+        202,
+        218
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.598
+      }
+    },
+    {
+      "asset_id": "decor_crystal_cluster_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_crystal_cluster_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        194,
+        200,
+        220
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.523
+      }
+    },
+    {
+      "asset_id": "decor_crystal_cluster_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_crystal_cluster_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        218
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.552
+      }
+    },
+    {
+      "asset_id": "decor_wooden_plaque_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_wooden_plaque_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        274,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.632
+      }
+    },
+    {
+      "asset_id": "decor_wooden_plaque_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_wooden_plaque_v1.png",
+      "side": "right",
+      "rect": [
+        250,
+        2,
+        276,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.345
+      }
+    },
+    {
+      "asset_id": "decor_wooden_plaque_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_wooden_plaque_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        95,
+        274,
+        121
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.656
+      }
+    },
+    {
+      "asset_id": "decor_wooden_plaque_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_wooden_plaque_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        119
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.35
+      }
+    },
+    {
+      "asset_id": "decor_leather_tab_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_leather_tab_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        114,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.369
+      }
+    },
+    {
+      "asset_id": "decor_leather_tab_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_leather_tab_v1.png",
+      "side": "right",
+      "rect": [
+        90,
+        2,
+        116,
+        261
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.631
+      }
+    },
+    {
+      "asset_id": "decor_leather_tab_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_leather_tab_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        237,
+        114,
+        263
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.333
+      }
+    },
+    {
+      "asset_id": "decor_leather_tab_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_leather_tab_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        261
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.769
+      }
+    },
+    {
+      "asset_id": "decor_sunburst_gem_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_sunburst_gem_v1.png",
+      "side": "top",
+      "rect": [
+        2,
+        0,
+        187,
+        26
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.498
+      }
+    },
+    {
+      "asset_id": "decor_sunburst_gem_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_sunburst_gem_v1.png",
+      "side": "right",
+      "rect": [
+        163,
+        2,
+        189,
+        169
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.46
+      }
+    },
+    {
+      "asset_id": "decor_sunburst_gem_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_sunburst_gem_v1.png",
+      "side": "bottom",
+      "rect": [
+        2,
+        145,
+        187,
+        171
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.461
+      }
+    },
+    {
+      "asset_id": "decor_sunburst_gem_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_sunburst_gem_v1.png",
+      "side": "left",
+      "rect": [
+        0,
+        2,
+        26,
+        169
+      ],
+      "counts": {
+        "total": 0,
+        "visible": 0,
+        "transparent_rgb": 0,
+        "reasons": {}
+      },
+      "preserve": {
+        "purple": false,
+        "green": false,
+        "source_key": false
+      },
+      "timing_ms": {
+        "render_strip": 0.462
+      }
+    }
+  ],
+  "counts": {
+    "total": 0,
+    "visible": 0,
+    "transparent_rgb": 0,
+    "reasons": {}
+  },
+  "only_problems": false,
+  "rendered_rows": 48,
+  "omitted_clean_rows": 0,
+  "analysis_engine": "numpy",
+  "timing_ms": {
+    "total": 125.605,
+    "render_strips": 24.888,
+    "compose_sheet": 73.117
+  },
+  "asset_timings": [
+    {
+      "asset_id": "decor_corner_top_left_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_left_v1.png",
+      "timing_ms": {
+        "load_image": 6.254,
+        "alpha_bbox": 0.1,
+        "numpy_masks": 1.028,
+        "total": 10.08
+      }
+    },
+    {
+      "asset_id": "decor_blue_diamond_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_blue_diamond_v1.png",
+      "timing_ms": {
+        "load_image": 0.677,
+        "alpha_bbox": 0.073,
+        "numpy_masks": 0.813,
+        "total": 3.905
+      }
+    },
+    {
+      "asset_id": "decor_red_seal_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_red_seal_v1.png",
+      "timing_ms": {
+        "load_image": 0.896,
+        "alpha_bbox": 0.087,
+        "numpy_masks": 0.736,
+        "total": 3.97
+      }
+    },
+    {
+      "asset_id": "decor_corner_top_right_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_right_v1.png",
+      "timing_ms": {
+        "load_image": 0.96,
+        "alpha_bbox": 0.07,
+        "numpy_masks": 0.934,
+        "total": 4.454
+      }
+    },
+    {
+      "asset_id": "decor_compass_badge_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_compass_badge_v1.png",
+      "timing_ms": {
+        "load_image": 0.953,
+        "alpha_bbox": 0.071,
+        "numpy_masks": 0.787,
+        "total": 4.18
+      }
+    },
+    {
+      "asset_id": "decor_lock_plate_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_lock_plate_v1.png",
+      "timing_ms": {
+        "load_image": 0.91,
+        "alpha_bbox": 0.059,
+        "numpy_masks": 0.766,
+        "total": 4.114
+      }
+    },
+    {
+      "asset_id": "decor_ribbon_banner_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_ribbon_banner_v1.png",
+      "timing_ms": {
+        "load_image": 0.686,
+        "alpha_bbox": 0.061,
+        "numpy_masks": 0.616,
+        "total": 3.742
+      }
+    },
+    {
+      "asset_id": "decor_silver_divider_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_silver_divider_v1.png",
+      "timing_ms": {
+        "load_image": 0.343,
+        "alpha_bbox": 0.051,
+        "numpy_masks": 0.516,
+        "total": 3.11
+      }
+    },
+    {
+      "asset_id": "decor_crystal_cluster_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_crystal_cluster_v1.png",
+      "timing_ms": {
+        "load_image": 0.509,
+        "alpha_bbox": 0.087,
+        "numpy_masks": 0.786,
+        "total": 3.892
+      }
+    },
+    {
+      "asset_id": "decor_wooden_plaque_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_wooden_plaque_v1.png",
+      "timing_ms": {
+        "load_image": 0.632,
+        "alpha_bbox": 0.062,
+        "numpy_masks": 0.607,
+        "total": 3.557
+      }
+    },
+    {
+      "asset_id": "decor_leather_tab_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_leather_tab_v1.png",
+      "timing_ms": {
+        "load_image": 0.824,
+        "alpha_bbox": 0.063,
+        "numpy_masks": 0.699,
+        "total": 4.034
+      }
+    },
+    {
+      "asset_id": "decor_sunburst_gem_v1",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_sunburst_gem_v1.png",
+      "timing_ms": {
+        "load_image": 0.457,
+        "alpha_bbox": 0.062,
+        "numpy_masks": 0.666,
+        "total": 3.348
+      }
+    }
+  ],
+  "crop_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-decor-overlays-v1-crop_manifest.json",
+  "image_output": "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-decor-overlays-v1-edge-proof.png"
+}

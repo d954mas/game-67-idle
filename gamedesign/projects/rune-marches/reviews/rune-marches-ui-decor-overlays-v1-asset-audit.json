@@ -1,0 +1,494 @@
+{
+  "schema": "game.generated_ui_asset_audit",
+  "version": 1,
+  "crop_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-decor-overlays-v1-crop_manifest.json",
+  "verdict": "pass",
+  "assets_checked": 12,
+  "problems": [],
+  "assets": [
+    {
+      "id": "decor_corner_top_left_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_left_v1.png",
+      "problems": [],
+      "size": [
+        246,
+        245
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        238,
+        237
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 7.728,
+        "alpha_bbox": 0.141,
+        "padding_policy": 0.011,
+        "edge_key_fringe": 0.842,
+        "edge_purple_halo": 2.064,
+        "edge_green_spill": 0.979,
+        "edge_source_key_fringe": 1.031,
+        "transparent_edge_bad_rgb": 2.549,
+        "transparent_nonzero_rgb": 1.069,
+        "total": 16.418
+      }
+    },
+    {
+      "id": "decor_blue_diamond_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_blue_diamond_v1.png",
+      "problems": [],
+      "size": [
+        217,
+        228
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        209,
+        220
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.048,
+        "alpha_bbox": 0.093,
+        "padding_policy": 0.004,
+        "edge_key_fringe": 0.639,
+        "edge_purple_halo": 1.803,
+        "edge_green_spill": 0.788,
+        "edge_source_key_fringe": 0.846,
+        "transparent_edge_bad_rgb": 2.036,
+        "transparent_nonzero_rgb": 0.944,
+        "total": 8.204
+      }
+    },
+    {
+      "id": "decor_red_seal_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_red_seal_v1.png",
+      "problems": [],
+      "size": [
+        203,
+        248
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        195,
+        240
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.56,
+        "alpha_bbox": 0.079,
+        "padding_policy": 0.003,
+        "edge_key_fringe": 0.543,
+        "edge_purple_halo": 1.544,
+        "edge_green_spill": 0.768,
+        "edge_source_key_fringe": 0.838,
+        "transparent_edge_bad_rgb": 1.972,
+        "transparent_nonzero_rgb": 0.911,
+        "total": 8.22
+      }
+    },
+    {
+      "id": "decor_corner_top_right_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_right_v1.png",
+      "problems": [],
+      "size": [
+        246,
+        245
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        238,
+        237
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.25,
+        "alpha_bbox": 0.075,
+        "padding_policy": 0.002,
+        "edge_key_fringe": 0.58,
+        "edge_purple_halo": 1.784,
+        "edge_green_spill": 0.913,
+        "edge_source_key_fringe": 0.953,
+        "transparent_edge_bad_rgb": 2.383,
+        "transparent_nonzero_rgb": 0.989,
+        "total": 8.932
+      }
+    },
+    {
+      "id": "decor_compass_badge_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_compass_badge_v1.png",
+      "problems": [],
+      "size": [
+        246,
+        242
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        238,
+        234
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.431,
+        "alpha_bbox": 0.077,
+        "padding_policy": 0.003,
+        "edge_key_fringe": 0.607,
+        "edge_purple_halo": 1.666,
+        "edge_green_spill": 0.755,
+        "edge_source_key_fringe": 0.855,
+        "transparent_edge_bad_rgb": 2.236,
+        "transparent_nonzero_rgb": 0.963,
+        "total": 8.594
+      }
+    },
+    {
+      "id": "decor_lock_plate_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_lock_plate_v1.png",
+      "problems": [],
+      "size": [
+        188,
+        236
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        180,
+        228
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.372,
+        "alpha_bbox": 0.074,
+        "padding_policy": 0.004,
+        "edge_key_fringe": 0.524,
+        "edge_purple_halo": 1.465,
+        "edge_green_spill": 0.659,
+        "edge_source_key_fringe": 0.615,
+        "transparent_edge_bad_rgb": 2.029,
+        "transparent_nonzero_rgb": 0.766,
+        "total": 7.511
+      }
+    },
+    {
+      "id": "decor_ribbon_banner_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_ribbon_banner_v1.png",
+      "problems": [],
+      "size": [
+        313,
+        121
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        305,
+        113
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.099,
+        "alpha_bbox": 0.076,
+        "padding_policy": 0.003,
+        "edge_key_fringe": 0.377,
+        "edge_purple_halo": 1.09,
+        "edge_green_spill": 0.594,
+        "edge_source_key_fringe": 0.656,
+        "transparent_edge_bad_rgb": 1.377,
+        "transparent_nonzero_rgb": 0.676,
+        "total": 5.95
+      }
+    },
+    {
+      "id": "decor_silver_divider_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_silver_divider_v1.png",
+      "problems": [],
+      "size": [
+        261,
+        79
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        253,
+        71
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 0.643,
+        "alpha_bbox": 0.059,
+        "padding_policy": 0.003,
+        "edge_key_fringe": 0.19,
+        "edge_purple_halo": 0.638,
+        "edge_green_spill": 0.212,
+        "edge_source_key_fringe": 0.217,
+        "transparent_edge_bad_rgb": 0.55,
+        "transparent_nonzero_rgb": 0.353,
+        "total": 2.867
+      }
+    },
+    {
+      "id": "decor_crystal_cluster_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_crystal_cluster_v1.png",
+      "problems": [],
+      "size": [
+        202,
+        220
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        194,
+        212
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 0.933,
+        "alpha_bbox": 0.075,
+        "padding_policy": 0.003,
+        "edge_key_fringe": 0.514,
+        "edge_purple_halo": 1.482,
+        "edge_green_spill": 0.661,
+        "edge_source_key_fringe": 0.642,
+        "transparent_edge_bad_rgb": 2.297,
+        "transparent_nonzero_rgb": 0.813,
+        "total": 7.425
+      }
+    },
+    {
+      "id": "decor_wooden_plaque_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_wooden_plaque_v1.png",
+      "problems": [],
+      "size": [
+        276,
+        121
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        268,
+        113
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.038,
+        "alpha_bbox": 0.078,
+        "padding_policy": 0.003,
+        "edge_key_fringe": 0.218,
+        "edge_purple_halo": 0.916,
+        "edge_green_spill": 0.534,
+        "edge_source_key_fringe": 0.552,
+        "transparent_edge_bad_rgb": 1.225,
+        "transparent_nonzero_rgb": 0.617,
+        "total": 5.184
+      }
+    },
+    {
+      "id": "decor_leather_tab_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_leather_tab_v1.png",
+      "problems": [],
+      "size": [
+        116,
+        263
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        108,
+        255
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 1.12,
+        "alpha_bbox": 0.063,
+        "padding_policy": 0.003,
+        "edge_key_fringe": 0.249,
+        "edge_purple_halo": 0.977,
+        "edge_green_spill": 0.546,
+        "edge_source_key_fringe": 0.532,
+        "transparent_edge_bad_rgb": 1.104,
+        "transparent_nonzero_rgb": 0.582,
+        "total": 5.179
+      }
+    },
+    {
+      "id": "decor_sunburst_gem_v1",
+      "kind": "decor_overlay",
+      "output": "assets/runtime/rune-marches-ui-decor-v1/decor_sunburst_gem_v1.png",
+      "problems": [],
+      "size": [
+        189,
+        171
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        181,
+        163
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
+      "timing_ms": {
+        "load_image": 0.715,
+        "alpha_bbox": 0.077,
+        "padding_policy": 0.003,
+        "edge_key_fringe": 0.283,
+        "edge_purple_halo": 1.322,
+        "edge_green_spill": 0.618,
+        "edge_source_key_fringe": 0.613,
+        "transparent_edge_bad_rgb": 1.187,
+        "transparent_nonzero_rgb": 0.622,
+        "total": 5.443
+      }
+    }
+  ],
+  "timing_ms": {
+    "total": 90.735,
+    "assets_total": 89.927
+  }
+}

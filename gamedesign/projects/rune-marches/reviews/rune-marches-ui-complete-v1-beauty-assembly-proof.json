@@ -1,0 +1,179 @@
+{
+  "schema": "game.ui_composition_proof",
+  "version": 1,
+  "asset_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-complete-v1-asset_manifest.json",
+  "layout": "gamedesign/projects/rune-marches/data/rune-marches-ui-complete-v1-beauty-layout.json",
+  "output": "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-complete-v1-beauty-assembly-proof.png",
+  "verdict": "pass",
+  "items": [
+    {
+      "base_id": "compact_journal_panel_v5",
+      "size": [
+        300,
+        380
+      ],
+      "label": "Quest",
+      "content_rect": [
+        84,
+        82,
+        132,
+        216
+      ],
+      "overlays": [
+        {
+          "id": "decor_corner_top_left_v1",
+          "anchor": "top_left",
+          "offset": [
+            0,
+            0
+          ],
+          "rect": [
+            0,
+            0,
+            246,
+            245
+          ],
+          "allow_content_overlap": true
+        },
+        {
+          "id": "decor_corner_top_right_v1",
+          "anchor": "top_right",
+          "offset": [
+            0,
+            0
+          ],
+          "rect": [
+            54,
+            0,
+            246,
+            245
+          ],
+          "allow_content_overlap": true
+        },
+        {
+          "id": "decor_wooden_plaque_v1",
+          "anchor": "bottom_center",
+          "offset": [
+            0,
+            -10
+          ],
+          "rect": [
+            12,
+            249,
+            276,
+            121
+          ],
+          "allow_content_overlap": true
+        }
+      ],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 59.729
+      }
+    },
+    {
+      "base_id": "compact_button_idle_long_v5",
+      "size": [
+        720,
+        300
+      ],
+      "label": "Explore",
+      "content_rect": [
+        66,
+        63,
+        588,
+        174
+      ],
+      "overlays": [
+        {
+          "id": "decor_blue_diamond_v1",
+          "anchor": "left_mid",
+          "offset": [
+            30,
+            0
+          ],
+          "rect": [
+            30,
+            36,
+            217,
+            228
+          ],
+          "allow_content_overlap": true
+        },
+        {
+          "id": "icon_rune_crystal_v1",
+          "anchor": "right_mid",
+          "offset": [
+            -30,
+            0
+          ],
+          "rect": [
+            454,
+            31,
+            236,
+            238
+          ],
+          "allow_content_overlap": true
+        }
+      ],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 70.896
+      }
+    },
+    {
+      "base_id": "compact_button_disabled_medium_v5",
+      "size": [
+        420,
+        300
+      ],
+      "label": "Locked",
+      "content_rect": [
+        64,
+        63,
+        292,
+        174
+      ],
+      "overlays": [
+        {
+          "id": "icon_locked_pin_v1",
+          "anchor": "left_mid",
+          "offset": [
+            20,
+            0
+          ],
+          "rect": [
+            20,
+            20,
+            174,
+            259
+          ],
+          "allow_content_overlap": true
+        }
+      ],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 44.988
+      }
+    }
+  ],
+  "timing_ms": {
+    "render_items": 175.632,
+    "render_sheet": 15.847,
+    "save_output": 54.048,
+    "total": 249.544
+  },
+  "cache_stats": {
+    "image_hits": 0,
+    "image_misses": 9,
+    "slice_tile_hits": 0,
+    "slice_tile_misses": 3,
+    "resized_tile_hits": 0,
+    "resized_tile_misses": 15,
+    "panel_hits": 0,
+    "panel_misses": 3
+  }
+}

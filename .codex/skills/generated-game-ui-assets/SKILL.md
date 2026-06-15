@@ -123,6 +123,12 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    `id`, `kind`, `rect`, `output`; slice9 entries also need `slice9`,
    `content`, and `target_preview_sizes`; icons need semantic role, size class,
    trim padding, and component isolation policy.
+   For icon/decor/sprite crop plans produced from intake components, build
+   runtime PNGs and manifests with:
+   `py -3.12 tools/assets/build_runtime_assets_from_crop_plan.py --crop-plan <crop-plan.json> --crop-manifest <crop-manifest.json> --asset-manifest <asset-manifest.json> --art-job <job.json> --contact-sheet <contact.png>`.
+   This step must preserve generated source pixels, remove border-connected
+   chroma, trim to alpha bounds with padding, scrub transparent RGB, and write
+   atlas metadata so the normal pixel/atlas audits can run next.
    The runtime manifest must reference every crop output with the same `id`,
    `kind`, and `path`; strict validation rejects missing or mismatched runtime
    assets. Slice9 crop and runtime entries also need explicit `stretch_policy`

@@ -1,0 +1,64 @@
+{
+  "schema": "game.ui_composition_proof_layout",
+  "version": 1,
+  "title": "Rune Marches Complete UI Kit Beauty Assembly",
+  "items": [
+    {
+      "base_id": "compact_journal_panel_v5",
+      "size": [300, 380],
+      "label": "Quest",
+      "decor_overlays": [
+        {
+          "id": "decor_corner_top_left_v1",
+          "anchor": "top_left",
+          "offset": [0, 0],
+          "allow_content_overlap": true
+        },
+        {
+          "id": "decor_corner_top_right_v1",
+          "anchor": "top_right",
+          "offset": [0, 0],
+          "allow_content_overlap": true
+        },
+        {
+          "id": "decor_wooden_plaque_v1",
+          "anchor": "bottom_center",
+          "offset": [0, -10],
+          "allow_content_overlap": true
+        }
+      ]
+    },
+    {
+      "base_id": "compact_button_idle_long_v5",
+      "size": [720, 300],
+      "label": "Explore",
+      "decor_overlays": [
+        {
+          "id": "decor_blue_diamond_v1",
+          "anchor": "left_mid",
+          "offset": [30, 0],
+          "allow_content_overlap": true
+        },
+        {
+          "id": "icon_rune_crystal_v1",
+          "anchor": "right_mid",
+          "offset": [-30, 0],
+          "allow_content_overlap": true
+        }
+      ]
+    },
+    {
+      "base_id": "compact_button_disabled_medium_v5",
+      "size": [420, 300],
+      "label": "Locked",
+      "decor_overlays": [
+        {
+          "id": "icon_locked_pin_v1",
+          "anchor": "left_mid",
+          "offset": [20, 0],
+          "allow_content_overlap": true
+        }
+      ]
+    }
+  ]
+}

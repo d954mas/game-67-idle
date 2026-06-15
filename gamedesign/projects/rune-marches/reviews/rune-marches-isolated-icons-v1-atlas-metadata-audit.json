@@ -1,0 +1,93 @@
+{
+  "schema": "game.atlas_metadata_audit",
+  "version": 1,
+  "asset_manifest": "gamedesign/projects/rune-marches/data/rune-marches-isolated-icons-v1-asset_manifest.json",
+  "verdict": "pass",
+  "problems": [],
+  "assets": [
+    {
+      "id": "icon_health_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_mana_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_silver_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_star_token_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_warden_badge_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_shield_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_quest_scroll_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_sun_medallion_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_locked_pin_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_unlocked_pin_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_rune_crystal_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "icon_travel_boot_v1",
+      "kind": "icon",
+      "pack_group": "ui_rune_marches_icons",
+      "status": "pass",
+      "problems": []
+    }
+  ]
+}

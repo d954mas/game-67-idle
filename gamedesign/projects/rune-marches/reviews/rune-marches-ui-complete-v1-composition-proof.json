@@ -1,0 +1,446 @@
+{
+  "schema": "game.ui_composition_proof",
+  "version": 1,
+  "asset_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-complete-v1-asset_manifest.json",
+  "layout": null,
+  "output": "gamedesign/projects/rune-marches/art/previews/rune-marches-ui-complete-v1-composition-proof.png",
+  "verdict": "pass",
+  "items": [
+    {
+      "base_id": "compact_button_idle_short_v5",
+      "size": [
+        160,
+        72
+      ],
+      "label": "Map",
+      "content_rect": [
+        54,
+        27,
+        52,
+        18
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 15.486
+      }
+    },
+    {
+      "base_id": "compact_button_idle_short_v5",
+      "size": [
+        184,
+        72
+      ],
+      "label": "Map",
+      "content_rect": [
+        56,
+        27,
+        72,
+        18
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 5.688
+      }
+    },
+    {
+      "base_id": "compact_button_idle_short_v5",
+      "size": [
+        203,
+        72
+      ],
+      "label": "Map",
+      "content_rect": [
+        57,
+        27,
+        89,
+        18
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 6.268
+      }
+    },
+    {
+      "base_id": "compact_button_idle_medium_v5",
+      "size": [
+        220,
+        72
+      ],
+      "label": "Travel",
+      "content_rect": [
+        54,
+        26,
+        112,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 12.071
+      }
+    },
+    {
+      "base_id": "compact_button_idle_medium_v5",
+      "size": [
+        256,
+        72
+      ],
+      "label": "Travel",
+      "content_rect": [
+        56,
+        26,
+        144,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 8.634
+      }
+    },
+    {
+      "base_id": "compact_button_idle_medium_v5",
+      "size": [
+        290,
+        72
+      ],
+      "label": "Travel",
+      "content_rect": [
+        58,
+        26,
+        174,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 9.385
+      }
+    },
+    {
+      "base_id": "compact_button_idle_long_v5",
+      "size": [
+        320,
+        72
+      ],
+      "label": "Explore",
+      "content_rect": [
+        54,
+        26,
+        212,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 16.777
+      }
+    },
+    {
+      "base_id": "compact_button_idle_long_v5",
+      "size": [
+        376,
+        72
+      ],
+      "label": "Explore",
+      "content_rect": [
+        56,
+        26,
+        264,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 13.044
+      }
+    },
+    {
+      "base_id": "compact_button_idle_long_v5",
+      "size": [
+        436,
+        72
+      ],
+      "label": "Explore",
+      "content_rect": [
+        58,
+        26,
+        320,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 15.431
+      }
+    },
+    {
+      "base_id": "compact_button_disabled_short_v5",
+      "size": [
+        160,
+        72
+      ],
+      "label": "Lock",
+      "content_rect": [
+        54,
+        26,
+        52,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 8.918
+      }
+    },
+    {
+      "base_id": "compact_button_disabled_short_v5",
+      "size": [
+        184,
+        72
+      ],
+      "label": "Lock",
+      "content_rect": [
+        56,
+        26,
+        72,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 6.153
+      }
+    },
+    {
+      "base_id": "compact_button_disabled_short_v5",
+      "size": [
+        203,
+        72
+      ],
+      "label": "Lock",
+      "content_rect": [
+        57,
+        26,
+        89,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 6.702
+      }
+    },
+    {
+      "base_id": "compact_button_disabled_medium_v5",
+      "size": [
+        220,
+        72
+      ],
+      "label": "Locked",
+      "content_rect": [
+        54,
+        26,
+        112,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 11.637
+      }
+    },
+    {
+      "base_id": "compact_button_disabled_medium_v5",
+      "size": [
+        256,
+        72
+      ],
+      "label": "Locked",
+      "content_rect": [
+        56,
+        26,
+        144,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 8.28
+      }
+    },
+    {
+      "base_id": "compact_button_disabled_medium_v5",
+      "size": [
+        290,
+        72
+      ],
+      "label": "Locked",
+      "content_rect": [
+        58,
+        26,
+        174,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 9.091
+      }
+    },
+    {
+      "base_id": "compact_button_disabled_long_v5",
+      "size": [
+        320,
+        72
+      ],
+      "label": "Locked",
+      "content_rect": [
+        54,
+        26,
+        212,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 14.921
+      }
+    },
+    {
+      "base_id": "compact_button_disabled_long_v5",
+      "size": [
+        376,
+        72
+      ],
+      "label": "Locked",
+      "content_rect": [
+        56,
+        26,
+        264,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 12.346
+      }
+    },
+    {
+      "base_id": "compact_button_disabled_long_v5",
+      "size": [
+        437,
+        72
+      ],
+      "label": "Locked",
+      "content_rect": [
+        58,
+        26,
+        321,
+        20
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 14.118
+      }
+    },
+    {
+      "base_id": "compact_journal_panel_v5",
+      "size": [
+        220,
+        280
+      ],
+      "label": "Quest",
+      "content_rect": [
+        80,
+        79,
+        60,
+        121
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 34.123
+      }
+    },
+    {
+      "base_id": "compact_journal_panel_v5",
+      "size": [
+        300,
+        380
+      ],
+      "label": "Quest",
+      "content_rect": [
+        84,
+        82,
+        132,
+        216
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 46.546
+      }
+    },
+    {
+      "base_id": "compact_journal_panel_v5",
+      "size": [
+        338,
+        520
+      ],
+      "label": "Quest",
+      "content_rect": [
+        86,
+        85,
+        166,
+        349
+      ],
+      "overlays": [],
+      "status": "pass",
+      "problems": [],
+      "timing_ms": {
+        "total": 68.924
+      }
+    }
+  ],
+  "timing_ms": {
+    "render_items": 344.663,
+    "render_sheet": 77.651,
+    "save_output": 88.157,
+    "total": 513.364
+  },
+  "cache_stats": {
+    "image_hits": 14,
+    "image_misses": 7,
+    "slice_tile_hits": 14,
+    "slice_tile_misses": 7,
+    "resized_tile_hits": 24,
+    "resized_tile_misses": 81,
+    "panel_hits": 0,
+    "panel_misses": 21
+  }
+}

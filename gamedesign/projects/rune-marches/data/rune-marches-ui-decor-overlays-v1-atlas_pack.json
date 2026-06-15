@@ -1,0 +1,651 @@
+{
+  "schema": "game.ui_atlas_pack",
+  "version": 1,
+  "purpose": "review_validation_atlas_not_engine_runtime_pack",
+  "label_overlay": true,
+  "asset_manifest": "gamedesign/projects/rune-marches/data/rune-marches-ui-decor-overlays-v1-asset_manifest.json",
+  "output_dir": "gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-decor-overlays-v1",
+  "max_size": 2048,
+  "atlases": [
+    {
+      "pack_group": "ui_rune_marches_decor",
+      "purpose": "review_validation_atlas_not_engine_runtime_pack",
+      "label_overlay": true,
+      "path": "gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-decor-overlays-v1/ui_rune_marches_decor.png",
+      "size": [
+        877,
+        879
+      ],
+      "entry_count": 12,
+      "physical_entry_count": 12,
+      "alias_count": 0,
+      "atlas_area": 770883,
+      "reserved_tile_area": 603786,
+      "padded_asset_area": 544095,
+      "occupancy_ratio": 0.7832,
+      "padded_asset_ratio": 0.7058,
+      "entries": [
+        {
+          "id": "decor_blue_diamond_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_blue_diamond_v1.png",
+          "atlas_rect": [
+            449,
+            309,
+            217,
+            228
+          ],
+          "padded_rect": [
+            447,
+            307,
+            221,
+            232
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            7,
+            217,
+            228
+          ],
+          "original_size": [
+            217,
+            228
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_blue_diamond_v1",
+            "lines": [
+              "decor_blue_diamond_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              447,
+              542,
+              181,
+              18
+            ],
+            "placement": "bottom"
+          }
+        },
+        {
+          "id": "decor_compass_badge_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_compass_badge_v1.png",
+          "atlas_rect": [
+            3,
+            309,
+            246,
+            242
+          ],
+          "padded_rect": [
+            1,
+            307,
+            250,
+            246
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            7,
+            246,
+            242
+          ],
+          "original_size": [
+            246,
+            242
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_compass_badge_v1",
+            "lines": [
+              "decor_compass_badge_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              1,
+              556,
+              195,
+              18
+            ],
+            "placement": "bottom"
+          }
+        },
+        {
+          "id": "decor_corner_top_left_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_left_v1.png",
+          "atlas_rect": [
+            334,
+            3,
+            246,
+            245
+          ],
+          "padded_rect": [
+            332,
+            1,
+            250,
+            249
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            7,
+            246,
+            245
+          ],
+          "original_size": [
+            246,
+            245
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_corner_top_left_v1",
+            "lines": [
+              "decor_corner_top_left_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              332,
+              253,
+              187,
+              18
+            ],
+            "placement": "bottom"
+          }
+        },
+        {
+          "id": "decor_corner_top_right_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_corner_top_right_v1.png",
+          "atlas_rect": [
+            586,
+            3,
+            246,
+            245
+          ],
+          "padded_rect": [
+            584,
+            1,
+            250,
+            249
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            7,
+            246,
+            245
+          ],
+          "original_size": [
+            246,
+            245
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_corner_top_right_v1",
+            "lines": [
+              "decor_corner_top_right_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              584,
+              253,
+              197,
+              18
+            ],
+            "placement": "bottom"
+          }
+        },
+        {
+          "id": "decor_crystal_cluster_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_crystal_cluster_v1.png",
+          "atlas_rect": [
+            672,
+            309,
+            202,
+            220
+          ],
+          "padded_rect": [
+            670,
+            307,
+            206,
+            224
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            7,
+            202,
+            220
+          ],
+          "original_size": [
+            202,
+            220
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_crystal_cluster_v1",
+            "lines": [
+              "decor_crystal_cluster_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              670,
+              534,
+              182,
+              18
+            ],
+            "placement": "bottom"
+          }
+        },
+        {
+          "id": "decor_leather_tab_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_leather_tab_v1.png",
+          "atlas_rect": [
+            3,
+            3,
+            116,
+            263
+          ],
+          "padded_rect": [
+            1,
+            1,
+            120,
+            267
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            7,
+            116,
+            263
+          ],
+          "original_size": [
+            116,
+            263
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_leather_tab_v1",
+            "lines": [
+              "decor_leather_",
+              "tab_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              1,
+              271,
+              115,
+              34
+            ],
+            "placement": "bottom"
+          }
+        },
+        {
+          "id": "decor_lock_plate_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_lock_plate_v1.png",
+          "atlas_rect": [
+            255,
+            309,
+            188,
+            236
+          ],
+          "padded_rect": [
+            253,
+            307,
+            192,
+            240
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            7,
+            188,
+            236
+          ],
+          "original_size": [
+            188,
+            236
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_lock_plate_v1",
+            "lines": [
+              "decor_lock_plate_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              253,
+              550,
+              152,
+              18
+            ],
+            "placement": "bottom"
+          }
+        },
+        {
+          "id": "decor_red_seal_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_red_seal_v1.png",
+          "atlas_rect": [
+            125,
+            3,
+            203,
+            248
+          ],
+          "padded_rect": [
+            123,
+            1,
+            207,
+            252
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            6,
+            203,
+            248
+          ],
+          "original_size": [
+            203,
+            248
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_red_seal_v1",
+            "lines": [
+              "decor_red_seal_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              123,
+              256,
+              140,
+              18
+            ],
+            "placement": "bottom"
+          }
+        },
+        {
+          "id": "decor_ribbon_banner_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_ribbon_banner_v1.png",
+          "atlas_rect": [
+            198,
+            578,
+            313,
+            121
+          ],
+          "padded_rect": [
+            196,
+            576,
+            317,
+            125
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            7,
+            313,
+            121
+          ],
+          "original_size": [
+            313,
+            121
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_ribbon_banner_v1",
+            "lines": [
+              "decor_ribbon_banner_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              196,
+              704,
+              184,
+              18
+            ],
+            "placement": "bottom"
+          }
+        },
+        {
+          "id": "decor_silver_divider_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_silver_divider_v1.png",
+          "atlas_rect": [
+            3,
+            776,
+            261,
+            79
+          ],
+          "padded_rect": [
+            1,
+            774,
+            265,
+            83
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            7,
+            261,
+            79
+          ],
+          "original_size": [
+            261,
+            79
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_silver_divider_v1",
+            "lines": [
+              "decor_silver_divider_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              1,
+              860,
+              174,
+              18
+            ],
+            "placement": "bottom"
+          }
+        },
+        {
+          "id": "decor_sunburst_gem_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_sunburst_gem_v1.png",
+          "atlas_rect": [
+            3,
+            578,
+            189,
+            171
+          ],
+          "padded_rect": [
+            1,
+            576,
+            193,
+            175
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            7,
+            189,
+            171
+          ],
+          "original_size": [
+            189,
+            171
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_sunburst_gem_v1",
+            "lines": [
+              "decor_sunburst_gem_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              1,
+              754,
+              180,
+              18
+            ],
+            "placement": "bottom"
+          }
+        },
+        {
+          "id": "decor_wooden_plaque_v1",
+          "kind": "decor_overlay",
+          "source_path": "assets/runtime/rune-marches-ui-decor-v1/decor_wooden_plaque_v1.png",
+          "atlas_rect": [
+            517,
+            578,
+            276,
+            121
+          ],
+          "padded_rect": [
+            515,
+            576,
+            280,
+            125
+          ],
+          "extrude": 2,
+          "shape_padding": 2,
+          "border_padding": 1,
+          "trim_rect": [
+            7,
+            7,
+            276,
+            121
+          ],
+          "original_size": [
+            276,
+            121
+          ],
+          "slice9": null,
+          "content": null,
+          "usage_policy": null,
+          "role": null,
+          "state": null,
+          "review_label": {
+            "text": "decor_wooden_plaque_v1",
+            "lines": [
+              "decor_wooden_plaque_v1"
+            ],
+            "font_size": 14,
+            "rect": [
+              515,
+              704,
+              192,
+              18
+            ],
+            "placement": "bottom"
+          }
+        }
+      ],
+      "labeled_preview_path": "gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-decor-overlays-v1/ui_rune_marches_decor-labeled.png",
+      "labeled_preview_policy": {
+        "mode": "label_overlay_only",
+        "allowed_delta": "review_label_rects_only",
+        "debug_outlines": false
+      },
+      "timing_ms": {
+        "layout": 3.511,
+        "compose": 3.054,
+        "save_atlas": 34.384,
+        "save_labeled_preview": 37.382,
+        "total": 79.224
+      }
+    }
+  ],
+  "labeled_preview_policy": {
+    "mode": "label_overlay_only",
+    "allowed_delta": "review_label_rects_only",
+    "debug_outlines": false
+  },
+  "atlas_efficiency": {
+    "atlas_area": 770883,
+    "reserved_tile_area": 603786,
+    "padded_asset_area": 544095,
+    "occupancy_ratio": 0.7832,
+    "padded_asset_ratio": 0.7058
+  },
+  "timing_ms": {
+    "read_manifest": 0.206,
+    "load_assets": 15.694,
+    "pack_groups": 79.664,
+    "total": 96.113
+  }
+}
