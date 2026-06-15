@@ -138,42 +138,19 @@ node tools/skills_sync.mjs
   risk, current-build mismatch, and next native proof. Details live in
   `gamedesign/knowledge/reference_deconstruction.md` and
   `.codex/skills/primary-gdd-pipeline/references/reference-research-playbook.md`.
-- **Record process pain sparingly.** Use `AI_PIPELINE_ITERATION_LOG.md` for
-  occasional notes about time sinks, agent mistakes, and pipeline improvement
-  ideas. Use `chat-session-reflection` for deeper retrospectives of long
-  multi-turn sessions. Do not use the iteration log as a task board or project
-  status file.
+- **Record process pain sparingly.** Use `AI_PIPELINE_HISTORY.md` for
+  occasional dated notes about time sinks, agent mistakes, and pipeline
+  improvement ideas. Use `chat-session-reflection` for deeper retrospectives of
+  long multi-turn sessions. Do not use the history file as a task board or
+  project status file.
 - **Profiling is passive by default.** Its job is to reveal where an AI agent
-  gets stuck, not to become another workflow. Normal game work may use
-  `node tools/ai.mjs run -- <command>` and `node tools/ai.mjs checkpoint
-  "<intent>"`; the facade records only slow commands, failed commands, large
-  context reads, and long manual/research gaps. Do not fix stale profile
-  bundles, packets, drafts, baselines, or follow-up artifacts during ordinary
-  game development. Use `node tools/ai.mjs status` for the short passive
-  diagnostic. Before long prototype work, reset the current scope with
-  `node tools/ai.mjs start <task-id> <iteration>` after selecting the task.
-  Treat `Review confidence: broken` as a review blocker and `partial` as a
-  warning that conclusions must name the missing telemetry. Low wall-clock
-  coverage means the profile is not complete evidence of where the session time
-  went; review notes must cite the largest coverage gaps from
-  `node tools/ai.mjs status` or mark those intervals as unknown. For AI
-  workflow, profiler, or retrospective review slices, run
-  `node tools/ai.mjs status --require-current-scope-usable` before claiming
-  profiling evidence; if it fails, fix scope/checkpoints or explicitly record
-  the missing telemetry. Use `node tools/ai.mjs reflect` for a short closeout only.
-  Full reflection handoff (`packet`/`draft`/`review`/baseline comparison) is
-  opt-in with `node tools/ai.mjs reflect --deep` or direct
-  `tools/ai_profile/*` commands when the task is explicitly about AI workflow,
-  a long retrospective, or debugging the profiler itself. Raw telemetry stays
-  in `tmp/session_profiles/`.
-- **External AI observability is gated.** Do not add LangSmith, Phoenix,
-  Langfuse, Braintrust, OpenTelemetry export, or another tracing/eval platform
-  just because reflection needs more data. First use
-  `AI_PIPELINE_OBSERVABILITY_TOOLS.md` and
-  `node tools/ai_profile/observability_gate.mjs` to decide whether local JSONL
-  is enough, a bounded external pilot is justified, or pilot evidence makes an
-  external system an adoption candidate. Local JSONL remains the baseline
-  evidence source unless the lead explicitly changes that rule.
+  gets stuck, not to become another workflow. Normal work uses
+  `node tools/ai.mjs run`/`checkpoint`/`status`; deep reflection is opt-in. Full
+  policy and commands are in the "AI session profiling" section below. External
+  AI observability platforms (LangSmith, Phoenix, Langfuse, Braintrust, OTLP
+  export) stay gated: local JSONL in `tmp/session_profiles/` is the baseline
+  evidence source, and an external pilot needs a concrete trigger. Decision
+  criteria are in `AI_PIPELINE_HISTORY.md`.
 - **Runtime base is protected in this repository.** `state/`,
   `tools/state_codegen/`, `src/devapi/`, `tools/devapi/`,
   `src/game_storage.*`, and `external/cjson/` are reusable AI/runtime
@@ -242,16 +219,8 @@ The lead/integrator keeps responsibility for:
 
 Use tools to reduce uncertainty, not to collect context indiscriminately.
 
-For playable game work in this repository, the platform gate is strict:
-
-- Native PC is the default and primary development harness.
-- A web prototype is not an acceptable shortcut for making the game look or feel
-  better.
-- Web/mobile/browser work requires explicit user permission in the current
-  request, or a separate approval after the agent states why native PC cannot
-  answer the task.
-- If an agent is tempted to use web because PC rendering is rough, that is a
-  signal to improve the native PC slice, not to change platforms.
+The native-PC platform gate (native PC first; web/mobile only with explicit
+user permission) is a project rule in `AGENTS.md`; it is not repeated here.
 
 Default order for substantial work:
 
@@ -301,6 +270,105 @@ Do not use old task logs, generated files, build outputs, or archived design
 handoffs as current truth unless they are linked from `STATUS.md`, an active
 task, or fresh validation evidence.
 
+## AI session profiling
+
+Profiling shows where an AI agent gets stuck without turning telemetry into a
+second project. It is passive by default: normal game work must not pause to
+repair stale summaries, bundles, packets, drafts, reviews, follow-ups, or
+baselines. Those are deep-retrospective artifacts, not everyday gates. No
+profiler step is a forced gate on normal work. `reflect`'s gap checkpoint is
+opt-in (`--gap-checkpoint`), and the slice-hygiene profiler guard is advisory
+(missing or stale guard is a warning, never a blocking problem). Run `start`,
+`status`, `reflect`, `review`, and gap checkpoints only when you choose to, or
+when the task is explicitly about AI workflow, profiler behavior, or a requested
+retrospective.
+
+**What to learn.** A useful profile answers: which commands failed; which were
+slow; which context reads were large; where long manual/research/review gaps
+happened; and whether broad validation repeated without a good reason. If it
+does not answer one of those, do not collect it during normal game work.
+
+**Do not profile the profiler.** Do not perf-profile the profiler, the
+validators, or the asset-audit tools as default work. Optimizing how fast an
+audit runs is not game progress. (Anti-pattern from the fishing iteration: one
+source-sheet intake was re-profiled 22 times, and a day's telemetry was 70%
+validation records.) Only measure tool performance when the user explicitly asks
+to speed up a specific tool.
+
+Use the facade, not `tools/ai_profile/*`, for normal work:
+
+```powershell
+node tools/ai.mjs run -- <command>
+node tools/ai.mjs context --path <file>
+node tools/ai.mjs context -- <read-only-command>
+node tools/ai.mjs checkpoint "Reviewed generated assets"
+node tools/ai.mjs status
+node tools/ai.mjs reflect
+```
+
+Passive defaults:
+
+- `run` records only failed commands or commands slower than `--profile-slow-ms`
+  (default `30000`).
+- `context` records only failed or large context reads over
+  `--profile-context-chars` (default `10000`).
+- `checkpoint` records only long gaps over `--min-gap-min` (default `10`).
+- `status` prints the short diagnostic: unresolved failures, slowest recorded
+  work, largest context input, and whether normal work needs action. It should
+  usually end with `No profiling maintenance needed for normal game work.` If it
+  reports unresolved failures, inspect them; if it only reports low coverage,
+  stale bundles, missing packets, or old historical issues in verbose mode,
+  ignore that during normal game development.
+- `reflect` writes a short closeout summary; add `--gap-checkpoint` only when you
+  want it to record a long unprofiled work gap first.
+
+Before long prototype work, reset the current scope with
+`node tools/ai.mjs start <task-id> <iteration>` after selecting the task. Treat
+`Review confidence: broken` as a review blocker and `partial` as a warning that
+conclusions must name the missing telemetry. Low wall-clock coverage means the
+profile is not complete evidence of where session time went; review notes must
+cite the largest coverage gaps from `node tools/ai.mjs status` or mark those
+intervals as unknown. For AI workflow, profiler, or retrospective review slices,
+run `node tools/ai.mjs status --require-current-scope-usable` before claiming
+profiling evidence; if it fails, fix scope/checkpoints or explicitly record the
+missing telemetry.
+
+Use `--profile-mode full` only when the task is explicitly about AI workflow,
+profiling, or a requested retrospective. Use `--profile-mode off` when even
+passive telemetry would be noise.
+
+**Deep retrospective (opt-in).** Use deep mode only when the user asks for AI
+workflow review, a long postmortem, or profiler debugging:
+
+```powershell
+node tools/ai.mjs reflect --deep
+node tools/ai.mjs status --verbose
+```
+
+Deep mode may use `tools/ai_profile/review.mjs`, `followups.mjs`,
+`capture_baseline.mjs`, `compare_reviews.mjs`, `reflection_packet.mjs`,
+`reflection_draft.mjs`, `reflection_review.mjs`, and `prepare_reflection.mjs`.
+Generated deep artifacts stay in `tmp/session_profiles/` unless the lead
+explicitly asks to preserve them.
+
+**When to use it.** Use passive profiling when a session runs longer than about
+an hour; a command/build/test loop is repeating; packaging, release, art
+generation, or reference research has many steps; the user asks where the agent
+got stuck; or context compaction/repeated loading becomes a risk. Do not start
+profiling for a small direct code/doc change unless it is already showing
+friction.
+
+**Artifact policy.** Commit reusable profiling code and this policy. Do not
+commit raw telemetry by default: `tmp/session_profiles/*.jsonl`, generated
+summaries/reviews/followups/packets/drafts/comparisons, recovered thread dumps,
+or one-off timing extracts. Promote only durable lessons, task changes, rule
+changes, or tool fixes.
+
+**Validation.** After changing profiler behavior, run the narrow tests that
+cover the change (`node --test tools/ai.test.mjs`,
+`node --test tools/ai_profile/test.mjs`). Use broad validation only when the
+change affects the portable base or shared workflow behavior.
+
 ## Reuse in a new project
 
 This repository contains both:
@@ -334,9 +402,8 @@ Portable (copied by the exporter):
   validation, AI session profiling internals, game iteration context, generated
   art job scaffolding/validation, task store UI/CLI, and tool portability map.
 - `gamedesign/knowledge/` - accumulated design lessons.
-- `AI_PIPELINE.md`, `AI_PIPELINE_SESSION_PROFILING.md`,
-  `AI_PIPELINE_OBSERVABILITY_TOOLS.md`, `tasks/README.md`, starter
-  `tasks/STATUS.md`, starter `AGENTS.md` / `CLAUDE.md`.
+- `AI_PIPELINE.md`, `tasks/README.md`, starter `tasks/STATUS.md`, starter
+  `AGENTS.md` / `CLAUDE.md`.
 
 Stays behind in workflow-only exports: runtime `src/`, `state/` schemas,
 `tools/devapi/` scripts, build presets, and `gamedesign/<concept>/` docs/data.

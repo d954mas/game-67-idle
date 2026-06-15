@@ -172,176 +172,164 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    before integration. The composition proof must show base + anchored decor
    overlays + state overlays + runtime text at minimum, normal, large, and at
    least one hostile aspect/portrait size when responsive UI is in scope.
-13. Run gates in order:
-    - draft contract: `node tools/assets/validate_art_job.mjs --job <job>`
-    - source sheet intake before slicing:
-      `py -3.12 tools/assets/audit_source_sheet_intake.py --source <source-sheet> --json-output <audit.json> --report <audit.md>`
-      Record passing JSON reports in `expected_outputs.source_sheet_intake_audit`
-      for final-art claims. Strict validation checks this report if listed;
-      final-art validation requires it. The report `source` must match the
-      art job's expected source art or crop source. Add
-      `--profile --profile-output tmp/asset-profiles/<name>.json` for slow
-      intake runs so the sidecar shows stage timings without dirtying durable
-      review evidence.
-    - strict contract after slicing:
-      `node tools/assets/validate_art_job.mjs --job <job> --strict`
-      This strict gate requires `expected_outputs.asset_audit` evidence and
-      reads JSON audit reports to confirm `verdict: pass` with no listed
-      problems, a `crop_manifest` matching the art job, and coverage for every
-      crop id in the manifest.
-    - final generated/artist art gate before claiming visual completion:
-      `node tools/assets/validate_art_job.mjs --job <job> --final-art`
-    - pixel audit:
-      `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
-      Add `--profile --profile-output tmp/asset-profiles/<name>.json` when a
-      generated UI audit feels slow or when comparing extraction fixes; the
-      sidecar records per-asset timing and stdout prints the slowest asset
-      without churning durable JSON/Markdown evidence. Use `--profile-inline`
-      only for throwaway/local debug reports. This audit must fail final
-      runtime PNGs whose fully transparent pixels keep any nonzero RGB, not
-      only source-key/purple/green classified edge colors.
-    - edge proof preview for 1-2px fringe review:
-      `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`
-      Add `--profile --profile-output tmp/asset-profiles/<name>.json` when
-      edge proofs feel slow or when comparing cleanup fixes; the sidecar
-      records total, render-strip, compose, per-asset, and per-side timing plus
-      the analysis engine (`numpy` fast path or portable `python` fallback)
-      without churning durable JSON/Markdown evidence. Use `--profile-inline`
-      only for throwaway/local debug reports.
-      Use `--only-problems` for large disputed sheets when the JSON report is
-      the coverage evidence and the human PNG should focus only on bad sides.
-    - slice9 design policy audit:
-      `node tools/assets/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
-      Add `--profile` when comparing policy changes; it records total and
-      per-slice9 timing and prints the slowest asset.
-      Record passing reports in `expected_outputs.slice9_design_audit`; final-art
-      validation requires this evidence so cuttable but unscalable generated
-      panels cannot pass as production UI. If a slice9 base declares
-      `non_stretch_ornaments: separate_overlay_assets`, every
-      `overlay_asset_id` must reference a real non-slice9 crop/runtime asset.
-    - runtime composition proof:
-      `py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest <runtime-manifest> --output <proof.png> --json-output <proof.json> --report <proof.md>`
-      Add `--profile --profile-output tmp/asset-profiles/<name>.json` when
-      composition proof feels slow; the sidecar writes timing, cache-hit stats,
-      and the slowest base/size item is printed without dirtying durable
-      JSON/Markdown proof evidence. Use `--profile-inline` only for throwaway
-      local debug reports. Overlay sprites
-      must not overlap the content safe area unless the layout or overlay explicitly sets
-      `allow_content_overlap`.
-      For production generated UI layouts, set
-      `require_overlay_resize_policy: true` and give every decorative/icon
-      overlay exactly one of `size`, `max_size`, or `scale`; the proof report
-      must expose overlay source size, rendered size, resize mode, and rect.
-      This prevents source-size generated icons or ornaments from silently
-      forcing fake oversized panels/buttons.
-      Record the proof image and report with preview/review evidence. This gate
-      must fail if slice9 margins leave no usable content area at target sizes,
-      runtime labels do not fit, overlays fall outside their anchored base, or
-      the UI only works as a static source-size crop. Final-art validation
-      requires this evidence in `expected_outputs.composition_proof`, and the
-      JSON report must point at the same runtime manifest and cover every
-      slice9 base id.
-    - atlas metadata audit:
-      `node tools/assets/audit_atlas_metadata.mjs --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
-      Record passing reports in `expected_outputs.atlas_metadata_audit`;
-      final-art validation requires this evidence. This gate checks
-      `pack_group`, `source_crop`, `original_size`, `trim_rect`, trim mode,
-      alpha bleed, premultiplied-alpha handling, extrusion, shape/border
-      padding, scale variant, alias links, slice9-safe rotation policy, and
-      sprite/decor-overlay placement metadata.
-    - review atlas build:
-      `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`
-      Add `--profile --profile-output tmp/asset-profiles/<name>.json` when
-      optimizing atlas size or slow pack builds; the sidecar records timing
-      plus atlas occupancy/asset-area ratios and stdout prints the slowest pack
-      group without making the durable review JSON/Markdown dirty on every
-      rerun. Use `--profile-inline` only for throwaway/local debug reports.
-      The builder must write atlas PNGs, labeled previews, JSON manifests, and
-      Markdown reports atomically through temp-file replace so parallel audits
-      or human preview cannot read truncated output.
-      Record the JSON manifest in `expected_outputs.atlas_pack`; final-art
-      validation requires this evidence. This produces grouped review/proof
-      atlas PNGs from `pack_group`, preserves slice9/content metadata, writes
-      extruded padded rects, reuses alias regions, and can draw id labels in
-      reserved `review_label.rect` free space outside each asset `padded_rect`
-      so the lead can name which assets to take. Store `review_label.placement`
-      as `right` or `bottom` so the preview uses nearby free space without
-      covering art. Long labels should keep exact `review_label.text` metadata
-      and render wrapped `review_label.lines` in the preview so verbose ids do
-      not widen the atlas. Labels must be readable at whole-atlas review size,
-      keep a visible outer atlas edge margin so bottom/right labels do not look
-      cropped in image viewers, and record `review_label.font_size`; tiny
-      debug-font labels are not acceptable review evidence. This is review
-      evidence, not the game's final runtime packer. Labeled review packs must
-      write `labeled_preview_policy` with `mode:
-      label_overlay_only`, `allowed_delta: review_label_rects_only`, and
-      `debug_outlines: false` at pack and atlas level. Markdown reports must
-      expose the labeled preview path, overlay-only policy, asset id index,
-      `review_label.rect`, placement, and wrapped `review_label.lines` so the
-      lead can choose assets without opening JSON.
-    - review atlas audit:
-      `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
-      Add `--profile --profile-output tmp/asset-profiles/<name>.json` when
-      atlas audit feels slow; the sidecar records audit timing and analysis
-      engine (`numpy` fast path or portable `python` fallback), and stdout
-      prints the slowest atlas group without churning durable review evidence.
-      Use `--profile-inline` only for throwaway/local debug reports. For labeled review atlases this audit must
-      write JSON/Markdown reports atomically through temp-file replace, and must
-      also prove the labeled preview exists, label text matches the asset id
-      and linked aliases, wrapped `review_label.lines` fit inside the label
-      rect, label rects keep a readable atlas-edge margin, label rects do not
-      overlap art or other labels, label rects contain visible pixels there,
-      the clean atlas has no label pixels, and fully
-      transparent clean-atlas pixels have zero RGB so hidden key colors cannot
-      leak back through filtering. The clean atlas must also have no visible
-      pixels outside packed `padded_rect`s, so stray labels, stains, or orphan
-      sprites cannot masquerade as runtime art. The labeled preview may differ
-      from the clean atlas only inside declared `review_label.rect`s, so review
-      labels cannot accidentally repaint asset pixels or free atlas space; do
-      not draw debug outlines over packed art in the labeled preview. The audit
-      must reject labeled review packs that omit or weaken
-      `labeled_preview_policy`.
-      Record passing JSON reports in `expected_outputs.atlas_pack_audit`;
-      final-art validation requires this evidence. This verifies runtime asset
-      coverage, atlas bounds, padded-rect overlap, alias reuse, metadata
-      consistency, extrusion pixels, and labeled review rects staying outside
-      asset `padded_rect`s.
-    - source family coverage audit:
-      `node tools/assets/audit_source_family_coverage.mjs --job <job> --json-output <audit.json> --report <audit.md>`
-      Record passing reports in `expected_outputs.source_family_coverage_audit`;
-      final-art validation requires this evidence so one mixed generated sheet
-      cannot substitute for separate blank bases, icons, and decor overlays.
-      If the runtime manifest intentionally cuts only part of those source
-      families, declare `expected_outputs.runtime_scope.mode` as
-      `partial_runtime_slice`, with `included_source_families`,
-      `deferred_source_families`, and a concrete `reason`. Without that scoped
-      exception, final-art validation must fail when required icon or decor
-      source families do not have matching runtime-ready crop/runtime assets.
-      A scoped pass prints `partial-runtime-slice-valid`; report it as a
-      validated partial slice, not as a complete generated UI kit.
-      If this audit fails, create a generation prompt queue with
-      `node tools/assets/plan_missing_source_family_prompts.mjs --job <job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`
-      and generate the missing source families from those packets.
-    - generated-source derivation audit:
-      `py -3.12 tools/assets/audit_generated_source_derivation.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
-      Record this in `expected_outputs.source_derivation_audit` for final-art
-      claims; final-art validation requires a passing JSON report whose
-      `crop_manifest` matches the art job and covers every source-derived
-      `slice9`, `border`, `tile`, and `sprite` crop id.
-    - runtime usage audit after integration:
-      `node tools/assets/audit_runtime_ui_asset_usage.mjs --asset-manifest <runtime-manifest> --usage <runtime-usage.json> --json-output <audit.json> --report <audit.md>`
-      Create the `game.runtime_ui_asset_usage` file from actual runtime rects
-      and layout modes, not intended design sizes. This gate must fail if a
-      generated large-only panel/button is drawn below `usage_policy.min_size`
-      or used in compact dense UI.
-    - native/runtime build for playable work
-    - desktop and portrait screenshots when responsive/mobile is in scope
-    - product-read gates:
-      `node tools/product_gate/review.mjs ...`
-    - responsive layout audit when `ui.tree` is available:
-      `node tools/product_gate/responsive_layout_audit.mjs --ui-tree <tree.json> --surface portrait --primary <id> --button <id>...`
+13. Run the gates by tier; do NOT walk the whole battery every iteration.
+    The gates split into three tiers (see "Gate Tiers" below). A normal UI
+    iteration runs only DRAFT, plus INTEGRATE when wiring an asset into the
+    runtime screen. The full FINAL-ART battery is opt-in and only required when
+    shipping a reusable kit / claiming visual completion. To see the exact
+    ordered command sequence for a tier without running any image tool, use the
+    thin orchestrator:
+    `node tools/assets/run_ui_asset_tier.mjs --tier draft|integrate|final --plan --job <job> --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --source-sheet <source-sheet>`.
 14. Update the art bible and task log with source sheet, manifests, runtime
     outputs, previews, audits, screenshots, product gates, and remaining gaps.
+
+## Gate Tiers
+
+Tier the gates by what the iteration is actually doing. A normal UI iteration
+runs only DRAFT, plus INTEGRATE when wiring the asset into the runtime screen.
+It does NOT run the full battery. The full FINAL-ART battery is opt-in and
+required only when shipping a reusable kit / claiming visual completion. Use
+`run_ui_asset_tier.mjs --plan` to print the exact command sequence for a tier.
+
+Per-iteration cost: a normal iteration is ~2 commands (DRAFT) or ~5 commands
+(DRAFT + INTEGRATE), not the ~14-gate / 17-report final battery.
+
+### DRAFT tier (every iteration, cheap, <=2 commands)
+
+Goal: see the asset in context fast. Run only:
+
+- source-sheet intake (and normalize first if the background is non-flat):
+  `py -3.12 tools/assets/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>` (only when needed), then
+  `py -3.12 tools/assets/audit_source_sheet_intake.py --source <source-sheet> --json-output <audit.json> --report <audit.md>`
+- build runtime PNGs + a contact sheet to eyeball the cut:
+  `py -3.12 tools/assets/build_runtime_assets_from_crop_plan.py --crop-plan <crop-plan.json> --crop-manifest <crop-manifest.json> --asset-manifest <asset-manifest.json> --art-job <job.json> --contact-sheet <contact.png>`
+
+The draft contract `node tools/assets/validate_art_job.mjs --job <job>` (no
+flags) is a cheap structural check you may also run here. Do not run the strict
+or final-art battery, the pixel audit, or any proof PNG at this tier.
+
+### INTEGRATE tier (when wiring into the runtime screen, ~3 commands)
+
+Goal: prove the cut asset is clean and composes at real sizes before it lands
+in the screen. Run, in order:
+
+- strict contract after slicing:
+  `node tools/assets/validate_art_job.mjs --job <job> --strict`
+  This strict gate requires `expected_outputs.asset_audit` evidence and reads
+  JSON audit reports to confirm `verdict: pass` with no listed problems, a
+  `crop_manifest` matching the art job, and coverage for every crop id in the
+  manifest.
+- pixel audit:
+  `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
+  This audit must fail final runtime PNGs whose fully transparent pixels keep
+  any nonzero RGB, not only source-key/purple/green classified edge colors.
+- runtime composition proof:
+  `py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest <runtime-manifest> --output <proof.png> --json-output <proof.json> --report <proof.md>`
+  Overlay sprites must not overlap the content safe area unless the layout or
+  overlay explicitly sets `allow_content_overlap`. For production layouts set
+  `require_overlay_resize_policy: true` and give every decorative/icon overlay
+  exactly one of `size`, `max_size`, or `scale`. This gate must fail if slice9
+  margins leave no usable content area at target sizes, runtime labels do not
+  fit, overlays fall outside their anchored base, or the UI only works as a
+  static source-size crop.
+
+### FINAL-ART tier (only when shipping a reusable kit)
+
+Goal: a complete, reusable, production generated UI kit. This is the full
+battery and is the only tier that runs `--final-art`. Run all of:
+
+- source-sheet intake recorded in `expected_outputs.source_sheet_intake_audit`
+  (final-art validation requires it; the report `source` must match the art
+  job's expected source art or crop source).
+- strict contract (as above).
+- pixel audit (as above).
+- edge proof preview for 1-2px fringe review (conditional, see below):
+  `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md> --only-problems`
+  Store accepted proof image paths in `expected_outputs.edge_proofs` and JSON
+  report paths in `expected_outputs.edge_proof_reports` only when `counts.total`
+  is zero.
+- slice9 design policy audit:
+  `node tools/assets/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
+  Record passing reports in `expected_outputs.slice9_design_audit`; final-art
+  validation requires this evidence so cuttable but unscalable generated panels
+  cannot pass as production UI. If a slice9 base declares `non_stretch_ornaments:
+  separate_overlay_assets`, every `overlay_asset_id` must reference a real
+  non-slice9 crop/runtime asset.
+- runtime composition proof recorded in `expected_outputs.composition_proof`;
+  the JSON report must point at the same runtime manifest and cover every
+  slice9 base id.
+- atlas metadata audit:
+  `node tools/assets/audit_atlas_metadata.mjs --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
+  Record passing reports in `expected_outputs.atlas_metadata_audit`. This gate
+  checks `pack_group`, `source_crop`, `original_size`, `trim_rect`, trim mode,
+  alpha bleed, premultiplied-alpha handling, extrusion, shape/border padding,
+  scale variant, alias links, slice9-safe rotation policy, and
+  sprite/decor-overlay placement metadata.
+- review atlas build:
+  `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`
+  Record the JSON manifest in `expected_outputs.atlas_pack`. The builder writes
+  atlas PNGs, labeled previews, JSON manifests, and Markdown reports atomically
+  through temp-file replace. Labeled review packs must write
+  `labeled_preview_policy` with `mode: label_overlay_only`, `allowed_delta:
+  review_label_rects_only`, and `debug_outlines: false` at pack and atlas level;
+  put exact asset names in `review_label.rect` free space outside the asset
+  `padded_rect`, store `review_label.placement` as `right` or `bottom`, wrap
+  long labels through `review_label.lines`, and keep `review_label.font_size`
+  readable. This is review evidence, not the game's final runtime packer.
+- review atlas audit:
+  `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
+  Record passing JSON reports in `expected_outputs.atlas_pack_audit`. It proves
+  runtime asset coverage, atlas bounds, padded-rect overlap, alias reuse,
+  metadata consistency, extrusion pixels, that the clean atlas has no label
+  pixels and fully transparent clean-atlas pixels have zero RGB, and that
+  labeled review rects stay outside asset `padded_rect`s. The labeled preview
+  may differ from the clean atlas only inside declared `review_label.rect`s.
+- source family coverage audit:
+  `node tools/assets/audit_source_family_coverage.mjs --job <job> --json-output <audit.json> --report <audit.md>`
+  Record passing reports in `expected_outputs.source_family_coverage_audit` so
+  one mixed generated sheet cannot substitute for separate blank bases, icons,
+  and decor overlays. For an intentional partial cut, declare
+  `expected_outputs.runtime_scope.mode` as `partial_runtime_slice` with
+  `included_source_families`, `deferred_source_families`, and a concrete
+  `reason`; a scoped pass prints `partial-runtime-slice-valid`. If this audit
+  fails, queue prompts with
+  `node tools/assets/plan_missing_source_family_prompts.mjs --job <job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`.
+- generated-source derivation audit:
+  `py -3.12 tools/assets/audit_generated_source_derivation.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
+  Record this in `expected_outputs.source_derivation_audit`; final-art
+  validation requires a passing JSON report whose `crop_manifest` matches the
+  art job and covers every source-derived `slice9`, `border`, `tile`, and
+  `sprite` crop id. This is what proves source-derived PNGs were cut from the
+  accepted source rather than redrawn.
+- runtime usage audit after integration:
+  `node tools/assets/audit_runtime_ui_asset_usage.mjs --asset-manifest <runtime-manifest> --usage <runtime-usage.json> --json-output <audit.json> --report <audit.md>`
+  Build `game.runtime_ui_asset_usage` from actual runtime rects and layout
+  modes. This gate fails if a large-only panel/button is drawn below
+  `usage_policy.min_size` or used in compact dense UI.
+- final generated/artist art gate (the single verdict for the whole kit):
+  `node tools/assets/validate_art_job.mjs --job <job> --final-art`
+- native/runtime build for playable work; desktop and portrait screenshots when
+  responsive/mobile is in scope; product-read gates
+  `node tools/product_gate/review.mjs ...`; responsive layout audit when
+  `ui.tree` is available
+  `node tools/product_gate/responsive_layout_audit.mjs --ui-tree <tree.json> --surface portrait --primary <id> --button <id>...`.
+
+### Conditional proofs (do not render proof PNGs per asset per iteration)
+
+The edge-proof and composition-proof PNG artifacts exist for failure
+investigation, not as per-iteration deliverables:
+
+- Generate the edge-proof PNG only at FINAL-ART tier or when investigating a
+  reported 1-2px fringe. `render_ui_asset_edge_proof.py --only-problems` keeps
+  full JSON coverage but renders only the bad sides into the PNG/Markdown, so a
+  clean kit produces no per-asset proof noise.
+- The composition proof writes a PNG and FAILS on problems by default; that
+  failing image IS the on-failure artifact. Do not also bank a passing proof
+  PNG per asset per iteration. `--no-fail` only exists to capture an image when
+  you deliberately want one despite problems.
+- Profiling sidecars (`--profile --profile-output tmp/asset-profiles/<name>.json`,
+  `--profile-inline` only for throwaway debug) stay opt-in for slow runs and
+  must not churn durable JSON/Markdown review evidence.
 
 ## Slice9 Rules
 

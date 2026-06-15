@@ -1839,60 +1839,6 @@ test("gap checkpoint skips short gaps without writing a record", () => {
   }
 });
 
-test("observability gate stays local without concrete external needs", () => {
-  const dir = tempDir();
-  try {
-    const output = join(dir, "observability-local.json");
-    run([
-      "tools/ai_profile/observability_gate.mjs",
-      "--setup-cost",
-      "high",
-      "--sensitivity",
-      "high",
-      "--json-output",
-      output,
-    ]);
-
-    const decision = readJson(output);
-    assert.equal(decision.recommendation, "local_jsonl_only");
-    assert.equal(decision.keep_local_jsonl, true);
-    assert.deepEqual(decision.matched_external_needs, []);
-    assert.ok(decision.required_capture_fields.includes("context_inputs"));
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("observability gate recommends bounded pilot for shared eval needs", () => {
-  const dir = tempDir();
-  try {
-    const output = join(dir, "observability-pilot.json");
-    const result = run([
-      "tools/ai_profile/observability_gate.mjs",
-      "--need",
-      "human-review",
-      "--need",
-      "datasets",
-      "--team",
-      "small",
-      "--setup-cost",
-      "medium",
-      "--sensitivity",
-      "medium",
-      "--self-host-ok",
-      "--json-output",
-      output,
-    ]);
-
-    const decision = readJson(output);
-    assert.equal(decision.recommendation, "external_pilot");
-    assert.equal(decision.keep_local_jsonl, true);
-    assert.ok(result.stdout.includes("run a bounded pilot beside local JSONL"));
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("status and review recover failed validation checks when command changes", () => {
   const dir = tempDir();
   try {

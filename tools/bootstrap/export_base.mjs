@@ -88,8 +88,7 @@ const COPY = [
   "tools/bootstrap/export_base.mjs",
   "gamedesign/knowledge",
   "AI_PIPELINE.md",
-  "AI_PIPELINE_SESSION_PROFILING.md",
-  "AI_PIPELINE_OBSERVABILITY_TOOLS.md",
+  "AI_PIPELINE_HISTORY.md",
   "tasks/README.md",
 ];
 
@@ -110,11 +109,10 @@ const AGENTS_TEMPLATE = `# AGENTS.md
 - Work items and live project status live in \`tasks/\`; follow \`tasks/README.md\`.
 - Temporary generation, scripts, rejected images, screenshots, and audit logs go in \`tmp/\` or another ignored temp folder.
 - Final durable docs/data/assets go in their project folder.
-- The shared human/agent process lives in \`AI_PIPELINE.md\`.
-- Long-session AI development profiling uses \`AI_PIPELINE_SESSION_PROFILING.md\`;
-  raw telemetry stays in \`tmp/session_profiles/\`.
-- External AI observability/eval tools are gated by
-  \`AI_PIPELINE_OBSERVABILITY_TOOLS.md\`; start local-first and run only
+- The shared human/agent process, including AI session profiling, lives in
+  \`AI_PIPELINE.md\`; raw telemetry stays in \`tmp/session_profiles/\`.
+- AI workflow history, retrospectives, and the external observability decision
+  criteria live in \`AI_PIPELINE_HISTORY.md\`; start local-first and run only
   bounded pilots until a tool proves value.
 
 ## Direction

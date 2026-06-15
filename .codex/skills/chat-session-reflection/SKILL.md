@@ -22,8 +22,8 @@ Use durable evidence before memory:
 
 Avoid high-cost context reads. Treat full `tasks/STATUS.md`, old task logs,
 generated profile reviews, and archived material as optional evidence.
-If the reflection suggests external AI observability/eval tooling, consult
-`AI_PIPELINE_OBSERVABILITY_TOOLS.md` and `observability_gate.mjs` first.
+If the reflection suggests external AI observability/eval tooling, consult the
+External AI Observability Decision Criteria in `AI_PIPELINE_HISTORY.md` first.
 
 ## Workflow
 
@@ -77,6 +77,6 @@ deep mode says exactly which artifact is needed.
 
 ## Durable Capture
 
-If the reflection yields reusable process lessons, add a short entry to
-`AI_PIPELINE_ITERATION_LOG.md`. If it yields actionable project work, create or
+If the reflection yields reusable process lessons, add a short dated entry to
+`AI_PIPELINE_HISTORY.md`. If it yields actionable project work, create or
 update tasks in `tasks/`. Do not bury work only inside the retrospective.
