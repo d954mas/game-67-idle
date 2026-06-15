@@ -3,7 +3,7 @@
 ## Project
 
 - This is an AI-first game development base: improve the game and the AI workflow together.
-- No active game concept is selected. Treat this repository as a clean template for the next iteration.
+- Active game concept: `Critter Corral` (critter-corral), A loop sort-puzzle where you herd living colored critters into matching pens by influence (lures, scares, gusts) instead of placing them; primitives first, art skinned later.
 - The engine lives in `external/neotolis-engine` as a submodule; do not edit it unless explicitly asked.
 - Game design lives in `gamedesign/`; game code lives in `src/`.
 - Design folder map is documented in `gamedesign/README.md`.
