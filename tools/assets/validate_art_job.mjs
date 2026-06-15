@@ -225,6 +225,7 @@ function asArrayField(value, fieldName, problems) {
 function validateAuditEvidence(paths, fieldName, expectedSchema, root, problems, strict, expected = {}) {
   const items = asArrayField(paths, fieldName, problems);
   if (!items) return;
+  const coveredSources = new Set();
   for (const item of items) {
     if (!hasText(item)) {
       problems.push(`${fieldName} path must be a non-empty string`);
@@ -267,6 +268,8 @@ function validateAuditEvidence(paths, fieldName, expectedSchema, root, problems,
         problems.push(`${fieldName} JSON needs source: ${item}`);
       } else if (!expected.sourceArtPaths.has(normalizePathForCompare(report.source))) {
         problems.push(`${fieldName} JSON source must match expected source art or crop source: ${item}`);
+      } else {
+        coveredSources.add(normalizePathForCompare(report.source));
       }
     }
     if (expected.assetIds && expected.assetIds.size > 0) {
@@ -279,6 +282,13 @@ function validateAuditEvidence(paths, fieldName, expectedSchema, root, problems,
             problems.push(`${fieldName} JSON missing audited crop id ${id}: ${item}`);
           }
         }
+      }
+    }
+  }
+  if (expected.requireSourceCoverage === true && expected.sourceArtPaths && expected.sourceArtPaths.size > 0) {
+    for (const sourcePath of expected.sourceArtPaths) {
+      if (!coveredSources.has(sourcePath)) {
+        problems.push(`${fieldName} JSON missing source intake report for ${sourcePath}`);
       }
     }
   }
@@ -1028,7 +1038,7 @@ function validateJob(job, jobPath, options = {}) {
         root,
         problems,
         true,
-        { sourceArtPaths: expectedSourcePaths }
+        { sourceArtPaths: expectedSourcePaths, requireSourceCoverage: true }
       );
     }
     if (Array.isArray(sourceDerivationAuditEvidence)) {

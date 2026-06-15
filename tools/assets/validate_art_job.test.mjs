@@ -803,6 +803,20 @@ test("strict mode rejects source sheet intake audit for another source", (t) => 
   assert.match(result.stdout, /expected_outputs.source_sheet_intake_audit JSON source must match expected source art or crop source/);
 });
 
+test("strict mode rejects missing source sheet intake report for an expected source", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const otherSource = "gamedesign/projects/test/art/other-source.png";
+  writeFileSync(join(dir, otherSource), "fake-png", "utf8");
+  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
+  jobData.expected_outputs.source_art.push(otherSource);
+  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.source_sheet_intake_audit JSON missing source intake report for gamedesign\/projects\/test\/art\/other-source\.png/);
+});
+
 test("final-art mode requires source sheet intake audit evidence", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);
