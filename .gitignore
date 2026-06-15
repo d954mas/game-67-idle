@@ -10,3 +10,6 @@ compile_commands.json
 src/generated/
 __pycache__/
 *.pyc
+
+# Builder scratch for asset packs
+assets/runtime/*/_cache/

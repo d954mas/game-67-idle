@@ -1,13 +1,24 @@
 #include "app/nt_app.h"
+#include "atlas/nt_atlas.h"
 #include "core/nt_core.h"
 #include "core/nt_platform.h"
 #include "devapi/nt_devapi.h"
+#include "fs/nt_fs.h"
 #include "game_audio.h"
 #include "game_state.h"
 #include "graphics/nt_gfx.h"
+#include "hash/nt_hash.h"
+#include "http/nt_http.h"
 #include "input/nt_input.h"
+#include "material/nt_material.h"
+#include "nt_pack_format.h"
+#include "render/nt_render_defs.h"
 #include "renderers/nt_shape_renderer.h"
+#include "renderers/nt_sprite_renderer.h"
+#include "resource/nt_resource.h"
 #include "window/nt_window.h"
+
+#include "critter_corral_assets.h"
 
 #ifdef NT_PLATFORM_WEB
 #include "platform/web/nt_platform_web.h"
@@ -24,17 +35,22 @@
 
 #define CLEAN_SEED_DEVAPI_PORT_DEFAULT 9123
 
-/* ---- Critter Corral: first playable core moment (primitives only) ---- */
+/* ---- Critter Corral: first playable core moment (sprite-rendered) ---- */
 
 #define CORRAL_MAX_CRITTERS 64
 #define CORRAL_PEN_COUNT 2
 #define CORRAL_MAX_PARTICLES 256
 #define CORRAL_WAVE_CRITTERS 10 /* ~10 critters, 2 colors */
 
-/* Two bold, high-contrast critter colors (DIRECTION: bright, friendly). */
+#define CORRAL_PACK_PATH "assets/runtime/critter-corral/critter_corral.ntpack"
+
+/* Two bold, high-contrast critter colors (DIRECTION: bright, friendly).
+ * Sprite art carries its own coral/teal hue; emit color stays white so the
+ * texture shows true. These tints are still used for particles, pen lights,
+ * and the procedural fallback path. */
 static const float CORRAL_COLORS[CORRAL_PEN_COUNT][4] = {
-    {0.96F, 0.45F, 0.18F, 1.0F}, /* warm orange */
-    {0.20F, 0.55F, 0.95F, 1.0F}, /* sky blue */
+    {0.96F, 0.45F, 0.18F, 1.0F}, /* warm coral */
+    {0.20F, 0.55F, 0.95F, 1.0F}, /* teal/blue */
 };
 
 typedef struct Critter {
@@ -64,13 +80,6 @@ typedef struct Particle {
   const float *color;
 } Particle;
 
-typedef struct UiBox {
-  float x;
-  float y;
-  float w;
-  float h;
-} UiBox;
-
 static bool s_devapi_enabled;
 static uint16_t s_devapi_port = CLEAN_SEED_DEVAPI_PORT_DEFAULT;
 static int s_window_width = 960;
@@ -90,6 +99,32 @@ static float s_lure_x;
 static float s_lure_y;
 static float s_lure_radius = 150.0F;
 static bool s_lure_active;
+
+/* ---- Sprite-render plumbing ---- */
+
+static nt_buffer_t s_frame_ubo;
+static nt_hash32_t s_pack_id;
+static nt_resource_t s_atlas_handle;
+static nt_resource_t s_vs_handle;
+static nt_resource_t s_fs_handle;
+static nt_material_t s_sprite_material;
+
+/* Region indices resolved once the atlas is READY. */
+typedef enum {
+  CORRAL_RGN_CRITTER_A = 0,
+  CORRAL_RGN_CRITTER_B,
+  CORRAL_RGN_PEN,
+  CORRAL_RGN_GRASS,
+  CORRAL_RGN_LURE,
+  CORRAL_RGN_SPARK,
+  CORRAL_RGN_COUNT,
+} corral_region_t;
+
+static uint32_t s_region_idx[CORRAL_RGN_COUNT];
+static uint16_t s_region_w[CORRAL_RGN_COUNT];
+static uint16_t s_region_h[CORRAL_RGN_COUNT];
+static bool s_atlas_resolved;
+static bool s_sprites_ready; /* atlas + material both usable this frame */
 
 #if NT_DEVAPI_ENABLED && !defined(NT_PLATFORM_WEB)
 static bool s_capture_pending;
@@ -120,62 +155,60 @@ static float clampf(float v, float lo, float hi) {
   return v;
 }
 
-static void ortho(float left, float right, float bottom, float top,
-                  float near_z, float far_z, float out[16]) {
+/* Y-down ortho (top-left origin) so all game logic coordinates — which track
+ * top-down pointer pixels and lay pens out with y growing downward — map 1:1
+ * onto the sprite renderer's Globals VP without touching any sim math. */
+static void ortho_ydown(float w, float h, float out[16]) {
   memset(out, 0, sizeof(float) * 16);
-  out[0] = 2.0F / (right - left);
-  out[5] = 2.0F / (top - bottom);
-  out[10] = -2.0F / (far_z - near_z);
-  out[12] = -(right + left) / (right - left);
-  out[13] = -(top + bottom) / (top - bottom);
-  out[14] = -(far_z + near_z) / (far_z - near_z);
+  out[0] = 2.0F / w;
+  out[5] = -2.0F / h; /* flip Y: top-left origin */
+  out[10] = -1.0F;    /* near=-1,far=1 -> -2/(far-near) = -1 */
+  out[12] = -1.0F;
+  out[13] = 1.0F;
   out[15] = 1.0F;
 }
 
-/* ---- Primitive draw helpers (match the seed template's signatures) ---- */
+/* ---- Sprite emit helpers ---- */
 
-static void rect(float x, float y, float w, float h, const float color[4]) {
-  nt_shape_renderer_rect((float[3]){x + w * 0.5F, y + h * 0.5F, 0.0F},
-                         (float[2]){w, h}, color);
+static uint32_t pack_rgba(const float c[4]) {
+  /* 0xAABBGGRR; renderer/shader premultiply by alpha. */
+  uint32_t r = (uint32_t)clampf(c[0] * 255.0F + 0.5F, 0.0F, 255.0F);
+  uint32_t g = (uint32_t)clampf(c[1] * 255.0F + 0.5F, 0.0F, 255.0F);
+  uint32_t b = (uint32_t)clampf(c[2] * 255.0F + 0.5F, 0.0F, 255.0F);
+  uint32_t a = (uint32_t)clampf(c[3] * 255.0F + 0.5F, 0.0F, 255.0F);
+  return (a << 24) | (b << 16) | (g << 8) | r;
 }
 
-/* The shape renderer's circle/circle_wire live in the XZ plane, so they project
- * to a flat line in our 2D XY ortho setup. Build discs/rings directly in XY. */
-#define CORRAL_DISC_SEGS 20
-
-static void circle(float x, float y, float radius, const float color[4]) {
-  const float step = 6.2831853F / (float)CORRAL_DISC_SEGS;
-  float center[3] = {x, y, 0.0F};
-  for (int i = 0; i < CORRAL_DISC_SEGS; ++i) {
-    float a0 = (float)i * step;
-    float a1 = (float)(i + 1) * step;
-    float p0[3] = {x + cosf(a0) * radius, y + sinf(a0) * radius, 0.0F};
-    float p1[3] = {x + cosf(a1) * radius, y + sinf(a1) * radius, 0.0F};
-    nt_shape_renderer_triangle(center, p0, p1, color);
-  }
+static uint32_t pack_white_alpha(float alpha) {
+  uint32_t a = (uint32_t)clampf(alpha * 255.0F + 0.5F, 0.0F, 255.0F);
+  return (a << 24) | 0x00FFFFFFU;
 }
 
-/* Thick ring drawn from triangle quads so it stays visible regardless of GL
- * line-width support. */
-static void ring(float x, float y, float radius, float thickness,
-                 const float color[4]) {
-  const float step = 6.2831853F / (float)CORRAL_DISC_SEGS;
-  float r0 = radius - thickness * 0.5F;
-  float r1 = radius + thickness * 0.5F;
-  for (int i = 0; i < CORRAL_DISC_SEGS; ++i) {
-    float a0 = (float)i * step;
-    float a1 = (float)(i + 1) * step;
-    float c0 = cosf(a0);
-    float s0 = sinf(a0);
-    float c1 = cosf(a1);
-    float s1 = sinf(a1);
-    float inner0[3] = {x + c0 * r0, y + s0 * r0, 0.0F};
-    float outer0[3] = {x + c0 * r1, y + s0 * r1, 0.0F};
-    float inner1[3] = {x + c1 * r0, y + s1 * r0, 0.0F};
-    float outer1[3] = {x + c1 * r1, y + s1 * r1, 0.0F};
-    nt_shape_renderer_triangle(inner0, outer0, outer1, color);
-    nt_shape_renderer_triangle(inner0, outer1, inner1, color);
+/* Build a column-major mat4 with independent X/Y scale + translation. The
+ * sprite renderer reads columns 0/1 (scale/rot) and m[12/13] (translate). */
+static void sprite_mat(float cx, float cy, float sx, float sy, float out[16]) {
+  memset(out, 0, sizeof(float) * 16);
+  out[0] = sx;
+  out[5] = sy;
+  out[10] = 1.0F;
+  out[12] = cx;
+  out[13] = cy;
+  out[15] = 1.0F;
+}
+
+/* Emit one centred sprite at (cx,cy) scaled so its source covers (dst_w,dst_h)
+ * pixels, tinted by color_packed. Region is centre-pivot in the atlas. */
+static void emit_sprite(corral_region_t rgn, float cx, float cy, float dst_w,
+                        float dst_h, uint32_t color_packed) {
+  uint16_t sw = s_region_w[rgn];
+  uint16_t sh = s_region_h[rgn];
+  if (sw == 0 || sh == 0) {
+    return;
   }
+  float m[16];
+  sprite_mat(cx, cy, dst_w / (float)sw, dst_h / (float)sh, m);
+  nt_sprite_renderer_emit_region(s_atlas_handle, s_region_idx[rgn], m, 0.5F,
+                                 0.5F, color_packed, 0);
 }
 
 /* ---- Field / wave setup ---- */
@@ -506,180 +539,169 @@ static void critter_update(float dt, float w, float h) {
   }
 }
 
-/* ---- Render ---- */
+/* ---- Sprite render ---- */
 
-static void draw_critter(const Critter *c, float w_unused, float h_unused) {
-  (void)w_unused;
-  (void)h_unused;
-  const float *col = CORRAL_COLORS[c->color];
-  const float r = 13.0F;
-  /* squash: brief vertical squish on capture */
-  float sq = 1.0F;
+static void draw_critter_sprite(const Critter *c) {
+  corral_region_t rgn =
+      (c->color == 0) ? CORRAL_RGN_CRITTER_A : CORRAL_RGN_CRITTER_B;
+  const float base = 36.0F; /* on-screen diameter of a critter */
+  /* squash: brief vertical squish on capture (scale the world transform) */
+  float sx = 1.0F;
+  float sy = 1.0F;
   if (c->squash > 0.0F) {
     float t = c->squash / 0.22F;
-    sq = 1.0F + 0.45F * sinf(t * 3.14159F);
+    float s = 0.30F * sinf(t * 3.14159F);
+    sx = 1.0F + s;       /* widen */
+    sy = 1.0F - s * 0.7F; /* squish */
   }
-  const float shadow[4] = {0.34F, 0.52F, 0.30F, 1.0F}; /* opaque darker-grass */
-  circle(c->x + 2.0F, c->y + r * 0.55F, r * 0.92F, shadow);
-  /* body */
-  float br = r * (2.0F - sq);
-  circle(c->x, c->y, br, col);
-  /* highlight (opaque white dot reads as a cartoon shine) */
-  circle(c->x - r * 0.32F, c->y - r * 0.32F, r * 0.30F,
-         (float[4]){1.0F, 1.0F, 1.0F, 1.0F});
-  /* two tiny eyes (white + dark pupil), biased toward travel direction */
-  const float white[4] = {1.0F, 1.0F, 1.0F, 1.0F};
-  const float eye[4] = {0.10F, 0.10F, 0.14F, 1.0F};
-  float dir = (c->vx >= 0.0F) ? 1.0F : -1.0F;
-  float ex = c->x + dir * r * 0.18F;
-  float ey = c->y - r * 0.18F;
-  float gap = r * 0.34F;
-  circle(ex - gap, ey, r * 0.20F, white);
-  circle(ex + gap, ey, r * 0.20F, white);
-  circle(ex - gap + dir * r * 0.05F, ey, r * 0.10F, eye);
-  circle(ex + gap + dir * r * 0.05F, ey, r * 0.10F, eye);
+  /* soft ground shadow under the critter */
+  emit_sprite(CORRAL_RGN_SPARK, c->x, c->y + base * 0.34F, base * 0.9F,
+              base * 0.42F, 0x55000000U /* AABBGGRR: dark, low alpha */);
+  emit_sprite(rgn, c->x, c->y, base * sx, base * sy, 0xFFFFFFFFU);
 }
 
-static void draw_pen(const Pen *pen) {
-  const float *col = CORRAL_COLORS[pen->color];
+static void draw_pen_sprite(const Pen *pen) {
   float flash =
       pen->flash > 0.0F ? clampf(pen->flash / 0.30F, 0.0F, 1.0F) : 0.0F;
   float chain =
       pen->chain > 0.0F ? clampf(pen->chain / 0.85F, 0.0F, 1.0F) : 0.0F;
+  const float *col = CORRAL_COLORS[pen->color];
 
-  /* floor (opaque: shape renderer does not alpha-blend). A pale wash of the
-   * pen color, brightened on capture flash / chain so the pen "lights up". */
+  /* Color wash for the panel: tint toward the pen color, brighten on flash. */
   float lit = 0.45F * flash + 0.18F * chain;
-  float floor[4] = {
-      clampf(0.74F + col[0] * 0.18F + lit, 0.0F, 1.0F),
-      clampf(0.80F + col[1] * 0.10F + lit, 0.0F, 1.0F),
-      clampf(0.62F + col[2] * 0.18F + lit, 0.0F, 1.0F),
+  float tint[4] = {
+      clampf(col[0] * 0.55F + 0.45F + lit, 0.0F, 1.0F),
+      clampf(col[1] * 0.55F + 0.45F + lit, 0.0F, 1.0F),
+      clampf(col[2] * 0.55F + 0.45F + lit, 0.0F, 1.0F),
       1.0F,
   };
-  rect(pen->x, pen->y, pen->w, pen->h, floor);
+  float cx = pen->x + pen->w * 0.5F;
+  float cy = pen->y + pen->h * 0.5F;
+  /* The panel art has its open gate at the top; rotate the gate to face the
+   * field by mirroring horizontally is not needed — the gate-mouth logic uses
+   * the inner vertical face. Draw the panel filling the pen rect, tinted. */
+  emit_sprite(CORRAL_RGN_PEN, cx, cy, pen->w, pen->h, pack_rgba(tint));
 
-  /* thick walls on 3 sides; the gate side is open */
-  const float t = 10.0F;
-  float wall[4] = {col[0] * 0.85F, col[1] * 0.85F, col[2] * 0.85F, 1.0F};
-  if (flash > 0.0F) {
-    wall[0] = clampf(wall[0] + flash * 0.4F, 0.0F, 1.0F);
-    wall[1] = clampf(wall[1] + flash * 0.4F, 0.0F, 1.0F);
-    wall[2] = clampf(wall[2] + flash * 0.4F, 0.0F, 1.0F);
-  }
-  rect(pen->x, pen->y, pen->w, t, wall);              /* top */
-  rect(pen->x, pen->y + pen->h - t, pen->w, t, wall); /* bottom */
-  if (pen->color == 0) {
-    rect(pen->x, pen->y, t, pen->h, wall); /* left solid, opens right */
-  } else {
-    rect(pen->x + pen->w - t, pen->y, t, pen->h,
-         wall); /* right solid, opens left */
-  }
-
-  /* bright gate posts flanking the open side so the entrance reads clearly */
-  float post[4] = {clampf(col[0] + 0.2F, 0.0F, 1.0F),
-                   clampf(col[1] + 0.2F, 0.0F, 1.0F),
-                   clampf(col[2] + 0.2F, 0.0F, 1.0F), 1.0F};
-  float gx = (pen->color == 0) ? pen->x + pen->w - t : pen->x;
-  rect(gx, pen->y, t, t * 1.8F, post);
-  rect(gx, pen->y + pen->h - t * 1.8F, t, t * 1.8F, post);
+  /* bright gate marker on the open (inner) face so the entrance reads */
+  float gx;
+  float gy;
+  pen_gate_point(pen, &gx, &gy);
+  float glow = 0.55F + 0.45F * flash;
+  float gate_col[4] = {clampf(col[0] + 0.35F, 0.0F, 1.0F),
+                       clampf(col[1] + 0.35F, 0.0F, 1.0F),
+                       clampf(col[2] + 0.35F, 0.0F, 1.0F), glow};
+  emit_sprite(CORRAL_RGN_LURE, gx, gy, 54.0F, pen->h * 0.85F,
+              pack_rgba(gate_col));
 
   /* parked critters stacked inside the pen */
-  const float pr = 9.0F;
-  int cols = (int)((pen->w - t * 2.0F) / (pr * 2.4F));
+  corral_region_t rgn =
+      (pen->color == 0) ? CORRAL_RGN_CRITTER_A : CORRAL_RGN_CRITTER_B;
+  const float pr = 22.0F; /* parked critter on-screen size */
+  int cols = (int)((pen->w - 24.0F) / (pr * 0.9F));
   if (cols < 1) {
     cols = 1;
   }
   for (int i = 0; i < pen->parked; ++i) {
-    int cx = i % cols;
-    int cy = i / cols;
-    float px = pen->x + t + pr * 1.4F + (float)cx * pr * 2.4F;
-    float py = pen->y + t + pr * 1.6F + (float)cy * pr * 2.2F;
-    if (py > pen->y + pen->h - pr) {
+    int gxx = i % cols;
+    int gyy = i / cols;
+    float px = pen->x + 14.0F + pr * 0.5F + (float)gxx * pr * 0.9F;
+    float py = pen->y + 18.0F + pr * 0.5F + (float)gyy * pr * 0.85F;
+    if (py > pen->y + pen->h - pr * 0.5F) {
       break;
     }
-    circle(px, py, pr, col);
-    circle(px - pr * 0.3F, py - pr * 0.3F, pr * 0.32F, (float[4]){1, 1, 1, 1});
+    emit_sprite(rgn, px, py, pr, pr, 0xFFFFFFFFU);
   }
 }
 
-static void corral_draw(float w, float h) {
-  /* Open pasture: calm green field, soft sky band, hill horizon for depth. */
-  rect(0.0F, 0.0F, w, h, (float[4]){0.50F, 0.78F, 0.40F, 1.0F});
-  rect(0.0F, 0.0F, w, h * 0.12F, (float[4]){0.62F, 0.86F, 0.96F, 1.0F});
-  rect(0.0F, h * 0.12F, w, h * 0.05F,
-       (float[4]){0.42F, 0.70F, 0.34F, 1.0F}); /* distant hill */
-  rect(0.0F, h * 0.17F, w, h * 0.04F,
-       (float[4]){0.56F, 0.82F, 0.45F, 1.0F}); /* grass highlight band */
-  /* a few lighter grass patches for texture (opaque, close to field tone) */
-  rect(w * 0.20F, h * 0.30F, w * 0.18F, h * 0.10F,
-       (float[4]){0.58F, 0.82F, 0.46F, 1.0F});
-  rect(w * 0.62F, h * 0.58F, w * 0.16F, h * 0.09F,
-       (float[4]){0.58F, 0.82F, 0.46F, 1.0F});
+static void corral_draw_sprites(float w, float h) {
+  nt_sprite_renderer_set_material(s_sprite_material);
 
-  for (int i = 0; i < CORRAL_PEN_COUNT; ++i) {
-    draw_pen(&s_pens[i]);
+  /* Pasture background: tile the soft grass across the field. */
+  {
+    const float tile = 160.0F;
+    int nx = (int)(w / tile) + 1;
+    int ny = (int)(h / tile) + 1;
+    for (int j = 0; j < ny; ++j) {
+      for (int i = 0; i < nx; ++i) {
+        emit_sprite(CORRAL_RGN_GRASS, (float)i * tile + tile * 0.5F,
+                    (float)j * tile + tile * 0.5F, tile + 1.0F, tile + 1.0F,
+                    0xFFFFFFFFU);
+      }
+    }
   }
 
-  /* lure ring (attract radius) at the cursor */
+  for (int i = 0; i < CORRAL_PEN_COUNT; ++i) {
+    draw_pen_sprite(&s_pens[i]);
+  }
+
+  /* lure ring (attract radius) at the cursor — soft glowing orb */
   if (s_lure_active) {
-    ring(s_lure_x, s_lure_y, s_lure_radius, 5.0F,
-         (float[4]){1.0F, 0.85F, 0.20F, 1.0F});
-    ring(s_lure_x, s_lure_y, s_lure_radius * 0.55F, 3.0F,
-         (float[4]){1.0F, 0.93F, 0.55F, 1.0F});
-    circle(s_lure_x, s_lure_y, 8.0F, (float[4]){1.0F, 0.97F, 0.65F, 1.0F});
-    circle(s_lure_x, s_lure_y, 4.0F, (float[4]){0.95F, 0.55F, 0.10F, 1.0F});
+    emit_sprite(CORRAL_RGN_LURE, s_lure_x, s_lure_y, s_lure_radius * 2.0F,
+                s_lure_radius * 2.0F, 0x66FFFFFFU /* faint outer halo */);
+    emit_sprite(CORRAL_RGN_LURE, s_lure_x, s_lure_y, 64.0F, 64.0F,
+                0xFFFFFFFFU /* bright core */);
   }
 
   for (int i = 0; i < s_critter_count; ++i) {
     const Critter *c = &s_critters[i];
     if (c->alive && !c->parked) {
-      draw_critter(c, w, h);
+      draw_critter_sprite(c);
     }
   }
 
-  /* particles (fade out) */
+  /* particles (fade out) — tinted spark sprites */
   for (int i = 0; i < CORRAL_MAX_PARTICLES; ++i) {
     const Particle *p = &s_particles[i];
     if (p->life <= 0.0F) {
       continue;
     }
     float a = clampf(p->life / p->max_life, 0.0F, 1.0F);
-    circle(p->x, p->y, 4.0F * a + 1.0F,
-           (float[4]){p->color[0], p->color[1], p->color[2], a});
+    float col[4] = {p->color[0], p->color[1], p->color[2], a};
+    float sz = 18.0F * a + 4.0F;
+    emit_sprite(CORRAL_RGN_SPARK, p->x, p->y, sz, sz, pack_rgba(col));
   }
 
-  /* score as a row of dots (no font): one dot per capture, wrapping. */
-  const float dot_r = 5.0F;
-  const float sx = 16.0F;
-  const float sy = 14.0F;
-  int per_row = (int)((w - sx * 2.0F) / (dot_r * 2.6F));
-  if (per_row < 1) {
-    per_row = 1;
-  }
-  for (int i = 0; i < s_score; ++i) {
-    int cx = i % per_row;
-    int cy = i / per_row;
-    const float *col = CORRAL_COLORS[i % CORRAL_PEN_COUNT];
-    circle(sx + dot_r + (float)cx * dot_r * 2.6F,
-           sy + dot_r + (float)cy * dot_r * 2.6F, dot_r, col);
+  /* score as a row of small critter icons (alternating colors), wrapping. */
+  {
+    const float dot = 12.0F;
+    const float sx = 16.0F;
+    const float sy = 14.0F;
+    int per_row = (int)((w - sx * 2.0F) / (dot * 1.3F));
+    if (per_row < 1) {
+      per_row = 1;
+    }
+    for (int i = 0; i < s_score; ++i) {
+      int cx = i % per_row;
+      int cy = i / per_row;
+      corral_region_t rgn =
+          (i % CORRAL_PEN_COUNT == 0) ? CORRAL_RGN_CRITTER_A
+                                      : CORRAL_RGN_CRITTER_B;
+      emit_sprite(rgn, sx + dot * 0.5F + (float)cx * dot * 1.3F,
+                  sy + dot * 0.5F + (float)cy * dot * 1.3F, dot, dot,
+                  0xFFFFFFFFU);
+    }
   }
 
-  /* wave indicator: small bars top-right */
+  /* wave indicator: small spark pips top-right */
   for (int i = 0; i < s_wave && i < 12; ++i) {
-    rect(w - 18.0F - (float)i * 12.0F, 12.0F, 8.0F, 16.0F,
-         (float[4]){0.20F, 0.20F, 0.26F, 0.85F});
+    emit_sprite(CORRAL_RGN_SPARK, w - 18.0F - (float)i * 16.0F, 20.0F, 12.0F,
+                12.0F, 0xFFE0D8C8U);
   }
 
-  /* wave-clear celebration: a bright pulsing frame border (opaque-safe) */
+  /* wave-clear celebration: bright pulsing gold sparks along the frame */
   if (s_cleared_flash > 0.0F) {
     float pulse = 0.5F + 0.5F * sinf(s_cleared_flash * 24.0F);
-    float t = 10.0F + 18.0F * pulse;
-    const float gold[4] = {1.0F, 0.92F, 0.35F, 1.0F};
-    rect(0.0F, 0.0F, w, t, gold);
-    rect(0.0F, h - t, w, t, gold);
-    rect(0.0F, 0.0F, t, h, gold);
-    rect(w - t, 0.0F, t, h, gold);
+    uint32_t gold = pack_white_alpha(0.6F + 0.4F * pulse);
+    float sz = 26.0F + 18.0F * pulse;
+    int n = 10;
+    for (int i = 0; i < n; ++i) {
+      float t = (float)i / (float)(n - 1);
+      emit_sprite(CORRAL_RGN_LURE, t * w, 18.0F, sz, sz, gold);
+      emit_sprite(CORRAL_RGN_LURE, t * w, h - 18.0F, sz, sz, gold);
+    }
   }
+
+  nt_sprite_renderer_flush();
 }
 
 #if NT_DEVAPI_ENABLED && !defined(NT_PLATFORM_WEB)
@@ -738,6 +760,7 @@ static cJSON *state_json(void) {
   cJSON_AddNumberToObject(root, "loose", corral_loose_count());
   cJSON_AddNumberToObject(root, "score", s_score);
   cJSON_AddNumberToObject(root, "wave", s_wave);
+  cJSON_AddBoolToObject(root, "sprites_ready", s_sprites_ready);
 
   cJSON *remaining = cJSON_AddArrayToObject(root, "remaining_by_color");
   cJSON *penned = cJSON_AddArrayToObject(root, "penned_by_color");
@@ -867,6 +890,32 @@ static void handle_input(void) {
 #endif
 }
 
+/* Resolve atlas region indices + source sizes once the atlas is READY. */
+static void resolve_atlas_regions(void) {
+  if (s_atlas_resolved || !nt_resource_is_ready(s_atlas_handle)) {
+    return;
+  }
+  static const nt_hash64_t names[CORRAL_RGN_COUNT] = {
+      ASSET_ATLAS_REGION_CORRAL_CRITTER_A_PNG,
+      ASSET_ATLAS_REGION_CORRAL_CRITTER_B_PNG,
+      ASSET_ATLAS_REGION_CORRAL_PEN_PNG,
+      ASSET_ATLAS_REGION_CORRAL_GRASS_PNG,
+      ASSET_ATLAS_REGION_CORRAL_LURE_PNG,
+      ASSET_ATLAS_REGION_CORRAL_SPARK_PNG,
+  };
+  for (int i = 0; i < CORRAL_RGN_COUNT; ++i) {
+    uint32_t idx = nt_atlas_find_region(s_atlas_handle, names[i].value);
+    if (idx == NT_ATLAS_INVALID_REGION) {
+      return; /* atlas not fully merged yet — retry next frame */
+    }
+    const nt_texture_region_t *r = nt_atlas_get_region(s_atlas_handle, idx);
+    s_region_idx[i] = idx;
+    s_region_w[i] = r->source_w;
+    s_region_h[i] = r->source_h;
+  }
+  s_atlas_resolved = true;
+}
+
 static void frame(void) {
   nt_window_poll();
 #if NT_DEVAPI_ENABLED
@@ -880,6 +929,11 @@ static void frame(void) {
     nt_devapi_apply_pending();
   }
 #endif
+
+  /* Resource/material pumps for the sprite pipeline. */
+  nt_resource_step();
+  nt_material_step();
+  resolve_atlas_regions();
 
   const float w =
       (float)(g_nt_window.fb_width ? g_nt_window.fb_width : g_nt_window.width);
@@ -903,23 +957,41 @@ static void frame(void) {
   }
 #endif
 
+  const nt_material_info_t *mat_info = nt_material_get_info(s_sprite_material);
+  s_sprites_ready =
+      s_atlas_resolved && mat_info != NULL && mat_info->ready;
+
   nt_gfx_begin_frame();
   if (g_nt_gfx.context_restored) {
     nt_shape_renderer_restore_gpu();
+    nt_sprite_renderer_restore_gpu();
+    nt_resource_invalidate(NT_ASSET_TEXTURE);
+    nt_resource_invalidate(NT_ASSET_SHADER_CODE);
+    nt_resource_invalidate(NT_ASSET_ATLAS);
+    s_sprites_ready = false;
   }
+  /* Pasture-green clear so the field reads even before the atlas resolves. */
   nt_gfx_begin_pass(&(nt_pass_desc_t){
-      .clear_color = {0.55F, 0.80F, 0.42F, 1.0F}, .clear_depth = 1.0F});
+      .clear_color = {0.49F, 0.77F, 0.40F, 1.0F}, .clear_depth = 1.0F});
 
+  /* Globals UBO (Y-down ortho) for the sprite shader, bound at slot 0. */
   float vp[16];
-  ortho(0.0F, w, h, 0.0F, -1.0F, 1.0F, vp);
-  nt_shape_renderer_set_vp(vp);
-  nt_shape_renderer_set_cam_pos((float[3]){0.0F, 0.0F, 1.0F});
-  nt_shape_renderer_set_depth(false);
-  nt_shape_renderer_set_line_width(3.0F);
+  ortho_ydown(w, h, vp);
+  nt_frame_uniforms_t uniforms = {0};
+  memcpy(uniforms.view_proj, vp, sizeof(vp));
+  uniforms.resolution[0] = w;
+  uniforms.resolution[1] = h;
+  uniforms.resolution[2] = (w > 0.0F) ? 1.0F / w : 0.0F;
+  uniforms.resolution[3] = (h > 0.0F) ? 1.0F / h : 0.0F;
+  uniforms.near_far[0] = -1.0F;
+  uniforms.near_far[1] = 1.0F;
 
-  corral_draw(w, h);
+  if (s_sprites_ready) {
+    nt_gfx_update_buffer(s_frame_ubo, &uniforms, sizeof(uniforms));
+    nt_gfx_bind_uniform_buffer(s_frame_ubo, 0);
+    corral_draw_sprites(w, h);
+  }
 
-  nt_shape_renderer_flush();
   nt_gfx_end_pass();
 
 #if NT_DEVAPI_ENABLED && !defined(NT_PLATFORM_WEB)
@@ -940,6 +1012,9 @@ int main(int argc, char **argv) {
 
   parse_args(argc, argv);
 
+  /* Pattern 7 init order: window → input → gfx + globals UBO register →
+   * I/O (http/fs/hash/resource) → activators → atlas → component subsystems →
+   * material/renderer modules → mount pack → run frame loop. */
   g_nt_window.title = "Critter Corral";
   g_nt_window.width = (uint32_t)s_window_width;
   g_nt_window.height = (uint32_t)s_window_height;
@@ -949,8 +1024,61 @@ int main(int argc, char **argv) {
   nt_gfx_desc_t gfx_desc = nt_gfx_desc_defaults();
   gfx_desc.depth = true;
   nt_gfx_init(&gfx_desc);
-  nt_shape_renderer_init();
+  nt_gfx_register_global_block("Globals", 0);
+  nt_shape_renderer_init(); /* kept for optional debug overlays */
+
+  nt_http_init();
+  nt_fs_init();
+  nt_hash_init(&(nt_hash_desc_t){0});
+  nt_resource_init(&(nt_resource_desc_t){0});
+  nt_resource_set_activator(NT_ASSET_TEXTURE, nt_gfx_activate_texture,
+                            nt_gfx_deactivate_texture);
+  nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader,
+                            nt_gfx_deactivate_shader);
+  nt_atlas_init();
+
+  /* Immediate-mode sprite emit only — no ECS components needed. */
+  nt_material_init(&(nt_material_desc_t){.max_materials = 4});
+  nt_sprite_renderer_desc_t sr_desc = nt_sprite_renderer_desc_defaults();
+  nt_sprite_renderer_init(&sr_desc);
+
   game_audio_init();
+
+  s_frame_ubo = nt_gfx_make_buffer(&(nt_buffer_desc_t){
+      .type = NT_BUFFER_UNIFORM,
+      .usage = NT_USAGE_DYNAMIC,
+      .size = sizeof(nt_frame_uniforms_t),
+      .label = "corral_frame_uniforms",
+  });
+
+  /* Mount + load the sprite pack (relative to CWD = project root). */
+  s_pack_id = nt_hash32_str("critter_corral");
+  nt_resource_mount(s_pack_id, 100);
+  nt_resource_load_auto(s_pack_id, CORRAL_PACK_PATH);
+
+  s_vs_handle =
+      nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_SPRITE_VERT,
+                          NT_ASSET_SHADER_CODE);
+  s_fs_handle =
+      nt_resource_request(ASSET_SHADER_ASSETS_SHADERS_SPRITE_FRAG,
+                          NT_ASSET_SHADER_CODE);
+  s_atlas_handle = nt_resource_request(ASSET_ATLAS_CORRAL, NT_ASSET_ATLAS);
+  nt_resource_t atlas_tex =
+      nt_resource_request(ASSET_TEXTURE_CORRAL_TEX0, NT_ASSET_TEXTURE);
+
+  s_sprite_material = nt_material_create(&(nt_material_create_desc_t){
+      .vs = s_vs_handle,
+      .fs = s_fs_handle,
+      .textures = {{.name = "u_texture", .resource = atlas_tex}},
+      .texture_count = 1,
+      .blend_mode = NT_BLEND_MODE_ALPHA,
+      .depth_test = false,
+      .depth_write = false,
+      .cull_mode = NT_CULL_NONE,
+      .label = "corral_sprite",
+  });
+
+  nt_resource_set_activate_time_budget(0);
 
   corral_reset((float)s_window_width, (float)s_window_height);
 
@@ -980,7 +1108,15 @@ int main(int argc, char **argv) {
   }
 #endif
   game_audio_shutdown();
+  nt_sprite_renderer_shutdown();
+  nt_material_destroy(s_sprite_material);
+  nt_material_shutdown();
   nt_shape_renderer_shutdown();
+  nt_resource_shutdown();
+  nt_fs_shutdown();
+  nt_http_shutdown();
+  nt_hash_shutdown();
+  nt_gfx_destroy_buffer(s_frame_ubo);
   nt_gfx_shutdown();
   nt_input_shutdown();
   nt_window_shutdown();

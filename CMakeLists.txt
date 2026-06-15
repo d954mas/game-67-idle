@@ -134,6 +134,54 @@ else()
     target_compile_definitions(game_devapi INTERFACE NT_DEVAPI_ENABLED=0)
 endif()
 
+# ---- Critter Corral sprite pack ----
+# Real sprite visuals are drawn through nt_sprite_renderer + nt_atlas from an
+# offline-built .ntpack. The pack builder is native-only (nt_builder). The pack
+# is written to a tracked runtime location and mounted at that relative path by
+# the game at startup. Pack building is explicit: a missing pack downgrades the
+# game to a procedural fallback (see clean_seed_main.c) instead of failing the
+# build, matching the bunnymark "packer is invoked manually" pattern.
+set(CORRAL_PACK_DIR "${CMAKE_SOURCE_DIR}/assets/runtime/critter-corral")
+set(CORRAL_PACK "${CORRAL_PACK_DIR}/critter_corral.ntpack")
+set(CORRAL_GENERATED_DIR "${CMAKE_SOURCE_DIR}/tools/critter_corral/generated")
+set(CORRAL_SPRITE_SCRIPT "${CMAKE_SOURCE_DIR}/tools/critter_corral/generate_sprites.py")
+set(CORRAL_SPRITE_DIR "${CMAKE_SOURCE_DIR}/gamedesign/projects/critter-corral/art/sprites")
+
+if(NOT EMSCRIPTEN AND NOT TARGET build_critter_corral_packs)
+    add_executable(build_critter_corral_packs tools/critter_corral/build_packs.c)
+    target_link_libraries(build_critter_corral_packs PRIVATE nt_builder)
+    target_compile_definitions(build_critter_corral_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(build_critter_corral_packs PRIVATE -U_DLL)
+    nt_set_warning_flags(build_critter_corral_packs)
+    nt_set_sanitizer_flags(build_critter_corral_packs)
+
+    # (Re)build the pack from the durable source PNGs. Runs from the project
+    # root so the builder resolves engine shaders (via asset root) and source
+    # PNGs by their project-relative paths. The sprite PNGs are durable source
+    # assets; regenerate them with `py -3.12 ${CORRAL_SPRITE_SCRIPT}` (needs
+    # PIL+numpy) when art changes. Wired as a custom target the user invokes
+    # explicitly (e.g. cmake --build ... --target critter_corral_packs).
+    set(CORRAL_SPRITE_PNGS
+        "${CORRAL_SPRITE_DIR}/critter_a.png"
+        "${CORRAL_SPRITE_DIR}/critter_b.png"
+        "${CORRAL_SPRITE_DIR}/pen.png"
+        "${CORRAL_SPRITE_DIR}/grass.png"
+        "${CORRAL_SPRITE_DIR}/lure.png"
+        "${CORRAL_SPRITE_DIR}/spark.png"
+    )
+    add_custom_command(
+        OUTPUT "${CORRAL_PACK}"
+        COMMAND "$<TARGET_FILE:build_critter_corral_packs>" "${CORRAL_PACK_DIR}"
+        DEPENDS
+            build_critter_corral_packs
+            ${CORRAL_SPRITE_PNGS}
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Building critter_corral.ntpack from source sprites"
+        VERBATIM
+    )
+    add_custom_target(critter_corral_packs DEPENDS "${CORRAL_PACK}")
+endif()
+
 add_executable(${GAME_TARGET}
     src/clean_seed_main.c
     src/game_audio.c
@@ -148,6 +196,9 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_shape_renderer
     nt_mesh_renderer
     nt_text_renderer
+    nt_sprite_renderer
+    nt_atlas
+    nt_sprite_comp
     nt_font
     nt_resource
     nt_material
@@ -173,6 +224,7 @@ else()
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_DIR}"
+    "${CORRAL_GENERATED_DIR}"
     src
     external/cjson
     external/neotolis-engine/deps/glfw/deps
