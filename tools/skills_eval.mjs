@@ -318,7 +318,7 @@ const SKILL_CHECKS = [
       "component isolation",
       "border-connected key color",
       "must not redraw panels",
-      "drawing primitives",
+      "procedural shapes",
       "contact sheet",
       "validate_art_job.mjs",
       "new_generation_record.mjs",

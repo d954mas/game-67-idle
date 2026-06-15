@@ -54,13 +54,16 @@ Use this skill to make small, playable game changes without losing project conte
    changes, capture a new screenshot and update the mismatch list before
    expanding content.
    Apply the AGENTS.md definition of done for playable/visual work: the slice
-   is done when the native screenshot matches the named fake shot/reference and
-   the core moment feels right, NOT when probes are green. Score the screenshot
-   against the fake shot every visual iteration (continuous gate), not once at
-   the end, and treat divergence as a failing build. Hold the visual-first
-   freeze: while the first screen fails the gate, fix the screen to the
-   reference bar before expanding systems, state, routes, content, or
-   automation.
+   is done when the native screen reaches the direction and quality bar the fake
+   shot points to and the core moment feels right, NOT when probes are green.
+   The fake shot is aspirational inspiration, not a pixel target -- the real game
+   will never pixel-match it, so judge it qualitatively (composition,
+   readability, art quality, mood/palette, "looks like a game"), never by image
+   similarity. Judge the screenshot against that direction every visual
+   iteration (continuous gate), not once at the end, and treat a screen that
+   does not reach the bar as a failing build. Hold the visual-first freeze:
+   while the first screen fails the gate, fix the screen to the reference bar
+   before expanding systems, state, routes, content, or automation.
    Core-moment feel check (cheap, mandatory for the first playable slice; this
    skill owns "is it fun / does it play like the reference"): capture a short
    sequence or recording of the single core action (the cast, the catch, the

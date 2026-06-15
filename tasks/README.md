@@ -120,6 +120,10 @@ standing footprint small so the agent compacts less:
   conclusion; do not read across many files in the main context.
 - For long autonomous work, rely on durable state (task files, commits,
   `STATUS.md`) so a compaction can resume cleanly without re-reading history.
+- At prototype close (or when `tmp/` grows large), clear disposable scratch with
+  `node tools/tmp_sweep.mjs --list` then `--all-scratch` (keeps the newest
+  pipeline-validate dirs; durable evidence already lives under
+  `gamedesign/projects/<id>/`).
 
 ## Search Hygiene
 
