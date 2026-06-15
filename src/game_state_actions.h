@@ -9,6 +9,17 @@ void game_seed_reset_playtest(GameState *state);
 void game_seed_cycle(GameState *state);
 const char *game_seed_shape_label(const GameState *state);
 
+void game_fishing_reset_playtest(GameState *state);
+void game_fishing_primary_action(GameState *state);
+void game_fishing_cast(GameState *state);
+void game_fishing_reel(GameState *state);
+void game_fishing_sell_all(GameState *state);
+void game_fishing_buy_better_line(GameState *state);
+bool game_fishing_can_cast(const GameState *state);
+bool game_fishing_can_reel(const GameState *state);
+bool game_fishing_can_sell(const GameState *state);
+bool game_fishing_can_buy_better_line(const GameState *state);
+
 void game_rune_reset_playtest(GameState *state);
 void game_rune_scout(GameState *state);
 void game_rune_scout_east(GameState *state);

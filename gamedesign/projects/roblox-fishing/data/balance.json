@@ -1,0 +1,159 @@
+{
+  "schema": "game.balance",
+  "version": 1,
+  "project": "roblox-fishing",
+  "status": "direction-accepted-for-first-fake-shot",
+  "currencies": [
+    {
+      "id": "coins",
+      "display": "Coins",
+      "type": "soft",
+      "sources": ["fish_sale", "first_catch_bonus"],
+      "sinks": ["rod_upgrade", "bait_upgrade", "boat_unlock"]
+    },
+    {
+      "id": "xp",
+      "display": "XP",
+      "type": "progress",
+      "sources": ["catch_complete"],
+      "sinks": []
+    }
+  ],
+  "player_start": {
+    "coins": 0,
+    "xp": 0,
+    "level": 1,
+    "backpack_slots": 3,
+    "rod_control": 1.0,
+    "bait_luck": 1.0
+  },
+  "fish": [
+    {
+      "id": "bubble_guppy",
+      "name": "Bubble Guppy",
+      "rarity": "common",
+      "base_value": 8,
+      "xp": 4,
+      "min_weight_kg": 0.2,
+      "max_weight_kg": 0.8,
+      "difficulty": 1,
+      "catch_weight": 45
+    },
+    {
+      "id": "mango_minnow",
+      "name": "Mango Minnow",
+      "rarity": "common",
+      "base_value": 10,
+      "xp": 5,
+      "min_weight_kg": 0.3,
+      "max_weight_kg": 1.0,
+      "difficulty": 1,
+      "catch_weight": 35
+    },
+    {
+      "id": "stripe_snapper",
+      "name": "Stripe Snapper",
+      "rarity": "uncommon",
+      "base_value": 18,
+      "xp": 8,
+      "min_weight_kg": 1.0,
+      "max_weight_kg": 2.5,
+      "difficulty": 2,
+      "catch_weight": 15
+    },
+    {
+      "id": "jellybean_koi",
+      "name": "Jellybean Koi",
+      "rarity": "uncommon",
+      "base_value": 24,
+      "xp": 10,
+      "min_weight_kg": 0.8,
+      "max_weight_kg": 2.2,
+      "difficulty": 2,
+      "catch_weight": 4
+    },
+    {
+      "id": "crown_catfish",
+      "name": "Crown Catfish",
+      "rarity": "rare",
+      "base_value": 55,
+      "xp": 20,
+      "min_weight_kg": 3.0,
+      "max_weight_kg": 6.5,
+      "difficulty": 3,
+      "catch_weight": 1
+    }
+  ],
+  "activities": [
+    {
+      "id": "cast_starter_cove",
+      "name": "Cast at Starter Cove",
+      "unlock": "start",
+      "input": "primary_cast",
+      "bite_time_seconds": {
+        "min": 1.5,
+        "max": 3.0
+      },
+      "reel": {
+        "target_fill_seconds": 4.0,
+        "miss_drain_per_second": 0.12,
+        "escape_at_progress": 0.0,
+        "initial_progress": 0.2,
+        "complexity_ceiling": "one_meter_one_input"
+      },
+      "blocked_states": [
+        {
+          "id": "backpack_full",
+          "condition": "backpack_count >= backpack_slots",
+          "message": "Backpack full. Sell fish at the dock sign."
+        }
+      ]
+    }
+  ],
+  "upgrades": [
+    {
+      "id": "better_line_1",
+      "name": "Better Line I",
+      "unlock": "start",
+      "cost": {
+        "coins": 30
+      },
+      "effect": {
+        "rod_control_add": 0.25,
+        "reel_target_width_multiplier": 1.15
+      },
+      "why": "Makes the reel zone wider and enables the first rare hint.",
+      "max_level": 1
+    },
+    {
+      "id": "lucky_bait_1",
+      "name": "Lucky Bait I",
+      "unlock": "after_better_line_1",
+      "cost": {
+        "coins": 55
+      },
+      "effect": {
+        "bait_luck_add": 0.2,
+        "rare_weight_bonus": 1
+      },
+      "why": "Makes uncommon and rare fish show up sooner.",
+      "max_level": 1
+    }
+  ],
+  "unlocks": [
+    {
+      "id": "boat_to_coral_pier",
+      "name": "Boat to Coral Pier",
+      "requirements": {
+        "coins": 80,
+        "unique_fish": 3
+      },
+      "prototype_state": "locked_teaser"
+    }
+  ],
+  "tuning_questions": [
+    "Should fish ever escape in the first prototype, or only delay reward?",
+    "Should selling happen automatically after catch, or should keep/sell teach backpack pressure?",
+    "Should first upgrade be rod control or bait luck?"
+  ]
+}

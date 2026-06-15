@@ -69,10 +69,49 @@ set(RUNE_MARCHES_UI_BASES_V2_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/run
 set(RUNE_MARCHES_UI_BASES_V2_CODEGEN "${CMAKE_SOURCE_DIR}/tools/assets/build_rune_marches_ui_bases_v2.py")
 set(RUNE_MARCHES_UI_COMPACT_BASES_V5_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/art/source_sheets/rune-marches-compact-ui-bases-source-v5-chroma-clean.png")
 set(RUNE_MARCHES_UI_COMPACT_BASES_V5_CODEGEN "${CMAKE_SOURCE_DIR}/tools/assets/build_rune_marches_ui_compact_bases_v5.py")
+set(ROBLOX_FISHING_UI_SOURCE "${CMAKE_SOURCE_DIR}/gamedesign/projects/roblox-fishing/art/source_sheets/splash-rods-ui-icons-source-v2-magenta-clean.png")
 set(RUNE_MARCHES_ASSET_GENERATED_HEADER "${CMAKE_SOURCE_DIR}/src/generated/rune_marches_assets.gen.h")
 set(RUNE_MARCHES_ASSET_GENERATED_SOURCE "${CMAKE_SOURCE_DIR}/src/generated/rune_marches_assets.gen.c")
 set(RUNE_MARCHES_CROP_MANIFEST "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/data/rune-marches-v1-crop_manifest.json")
 set(RUNE_MARCHES_RUNTIME_MANIFEST "${CMAKE_SOURCE_DIR}/gamedesign/projects/rune-marches/data/rune-marches-v1-runtime_asset_manifest.json")
+set(ROBLOX_FISHING_MODEL_PACK "${GAME_OUTPUT_DIR}/assets/roblox_fishing_models.ntpack")
+set(ROBLOX_FISHING_MODEL_HEADER "${CMAKE_SOURCE_DIR}/src/generated/roblox_fishing_models.h")
+set(ROBLOX_FISHING_MODEL_SOURCE_DIR "${CMAKE_SOURCE_DIR}/gamedesign/projects/roblox-fishing/art/models")
+set(ROBLOX_FISHING_MODEL_SOURCEGEN "${CMAKE_SOURCE_DIR}/tools/roblox_fishing/generate_model_sources.py")
+
+if(NOT EMSCRIPTEN)
+    add_executable(roblox_fishing_pack_builder tools/roblox_fishing/build_packs.c)
+    target_link_libraries(roblox_fishing_pack_builder PRIVATE nt_builder)
+    nt_set_warning_flags(roblox_fishing_pack_builder)
+    nt_set_sanitizer_flags(roblox_fishing_pack_builder)
+
+    add_custom_command(
+        OUTPUT
+            "${ROBLOX_FISHING_MODEL_PACK}"
+            "${ROBLOX_FISHING_MODEL_HEADER}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${GAME_OUTPUT_DIR}/assets"
+        COMMAND "${Python3_EXECUTABLE}" "${ROBLOX_FISHING_MODEL_SOURCEGEN}"
+        COMMAND "$<TARGET_FILE:roblox_fishing_pack_builder>" "${GAME_OUTPUT_DIR}/assets" "${ROBLOX_FISHING_MODEL_SOURCE_DIR}"
+        DEPENDS
+            roblox_fishing_pack_builder
+            "${CMAKE_SOURCE_DIR}/tools/roblox_fishing/build_packs.c"
+            "${ROBLOX_FISHING_MODEL_SOURCEGEN}"
+            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/assets/meshes/cube.glb"
+            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/assets/shaders/mesh_inst.vert"
+            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/assets/shaders/mesh_inst.frag"
+            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/assets/shaders/slug_text.vert"
+            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/assets/shaders/slug_text.frag"
+            "${CMAKE_SOURCE_DIR}/external/neotolis-engine/examples/ui_theme_demo/raw/font.ttf"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Building Splash Rods GLB model pack"
+        VERBATIM
+    )
+    add_custom_target(roblox_fishing_model_pack
+        DEPENDS
+            "${ROBLOX_FISHING_MODEL_PACK}"
+            "${ROBLOX_FISHING_MODEL_HEADER}"
+    )
+endif()
 
 add_custom_command(
     OUTPUT
@@ -115,6 +154,8 @@ add_custom_command(
         --ui-kit-v2-dir "${CMAKE_SOURCE_DIR}/assets/runtime/rune-marches-ui-map-rescue-v2"
         --ui-bases-v2-dir "${CMAKE_SOURCE_DIR}/assets/runtime/rune-marches-ui-bases-v2"
         --ui-compact-bases-v5-dir "${CMAKE_SOURCE_DIR}/assets/runtime/rune-marches-ui-compact-bases-v5"
+        --fishing-ui-source "${ROBLOX_FISHING_UI_SOURCE}"
+        --fishing-ui-runtime-dir "${CMAKE_SOURCE_DIR}/assets/runtime/roblox-fishing-ui-v1"
     DEPENDS
         "${RUNE_MARCHES_ASSET_SOURCE}"
         "${RUNE_MARCHES_ASSET_CODEGEN}"
@@ -124,6 +165,7 @@ add_custom_command(
         "${RUNE_MARCHES_UI_BASES_V2_CODEGEN}"
         "${RUNE_MARCHES_UI_COMPACT_BASES_V5_SOURCE}"
         "${RUNE_MARCHES_UI_COMPACT_BASES_V5_CODEGEN}"
+        "${ROBLOX_FISHING_UI_SOURCE}"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
     COMMENT "Generating Rune Marches runtime art assets"
     VERBATIM
@@ -192,6 +234,9 @@ add_executable(${GAME_TARGET}
     "${RUNE_MARCHES_ASSET_GENERATED_HEADER}"
 )
 add_dependencies(${GAME_TARGET} rune_marches_asset_codegen)
+if(NOT EMSCRIPTEN)
+    add_dependencies(${GAME_TARGET} roblox_fishing_model_pack)
+endif()
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core
     nt_app
@@ -199,6 +244,20 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_window
     nt_gfx
     nt_shape_renderer
+    nt_mesh_renderer
+    nt_text_renderer
+    nt_font
+    nt_resource
+    nt_material
+    nt_shared
+    nt_entity
+    nt_transform_comp
+    nt_mesh_comp
+    nt_material_comp
+    nt_drawable_comp
+    nt_render
+    nt_hash
+    nt_fs
     nt_log
     nt_math
     game_devapi
@@ -216,6 +275,9 @@ target_include_directories(${GAME_TARGET} PRIVATE
     external/neotolis-engine/deps/glfw/deps
 )
 target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=$<BOOL:${GAME_DEVAPI_ENABLED}> _CRT_SECURE_NO_WARNINGS)
+if(NOT EMSCRIPTEN)
+    target_compile_definitions(${GAME_TARGET} PRIVATE ROBLOX_FISHING_MODEL_PACK_PATH="${ROBLOX_FISHING_MODEL_PACK}")
+endif()
 
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_platform_web)

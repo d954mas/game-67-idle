@@ -11,6 +11,7 @@
   "commands": {
     "slice_assets": "py -3.12 tools/assets/build_rune_marches_assets.py --source gamedesign/projects/rune-marches/art/fake_shots/rune-marches-gameplay-v1.png --runtime-dir assets/runtime/rune-marches-v1 --generated-dir src/generated --crop-manifest gamedesign/projects/rune-marches/data/rune-marches-v1-crop_manifest.json --runtime-manifest gamedesign/projects/rune-marches/data/rune-marches-v1-runtime_asset_manifest.json",
     "source_ui_bases_v2": "py -3.12 tools/assets/build_rune_marches_ui_bases_v2.py",
+    "source_ui_compact_bases_v5": "py -3.12 tools/assets/build_rune_marches_ui_compact_bases_v5.py",
     "build_pack": "not wired yet; native proof uses generated C texture arrays",
     "native_evidence_desktop": "py -3.12 tmp/rune_marches_scenario.py tmp/rune_marches/native_first_slice_labeled.png 960x540",
     "native_evidence_portrait": "py -3.12 tmp/rune_marches_scenario.py tmp/rune_marches/native_first_slice_portrait_current.png 360x640"
@@ -18,7 +19,7 @@
   "web_mobile_size_plan": {
     "first_test": "ship PNG-derived RGBA proof for native, then encode runtime PNG/WebP or engine compressed pack before T0001 web validation",
     "budget_note": "visual quality wins for first audience test; keep individual UI/icon assets small and avoid full-screen baked UI as the dynamic runtime surface matures",
-    "current_png_total_bytes": 2318010
+    "current_png_total_bytes": 3434537
   },
   "assets": [
     {
@@ -487,7 +488,7 @@
         709,
         592
       ],
-      "png_size_bytes": 711705,
+      "png_size_bytes": 694924,
       "slice9": [
         104,
         100,
@@ -505,7 +506,7 @@
         357,
         639
       ],
-      "png_size_bytes": 402672,
+      "png_size_bytes": 389477,
       "slice9": [
         84,
         104,
@@ -523,7 +524,7 @@
         504,
         246
       ],
-      "png_size_bytes": 208460,
+      "png_size_bytes": 195169,
       "slice9": [
         96,
         44,
@@ -541,7 +542,7 @@
         502,
         246
       ],
-      "png_size_bytes": 217463,
+      "png_size_bytes": 204352,
       "slice9": [
         96,
         44,
@@ -549,6 +550,292 @@
         44
       ],
       "semantic_role": "large_primary_button_disabled",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_compact_bases_v5_button_idle_short_slice9",
+      "path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        211,
+        118
+      ],
+      "png_size_bytes": 52478,
+      "slice9": [
+        48,
+        22,
+        48,
+        22
+      ],
+      "semantic_role": "compact_button_idle_short",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_compact_bases_v5_button_idle_medium_slice9",
+      "path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        298,
+        119
+      ],
+      "png_size_bytes": 72390,
+      "slice9": [
+        48,
+        22,
+        48,
+        22
+      ],
+      "semantic_role": "compact_button_idle_medium",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_compact_bases_v5_button_idle_long_slice9",
+      "path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        444,
+        119
+      ],
+      "png_size_bytes": 105034,
+      "slice9": [
+        48,
+        22,
+        48,
+        22
+      ],
+      "semantic_role": "compact_button_idle_long",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_compact_bases_v5_button_disabled_short_slice9",
+      "path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        211,
+        119
+      ],
+      "png_size_bytes": 47282,
+      "slice9": [
+        48,
+        22,
+        48,
+        22
+      ],
+      "semantic_role": "compact_button_disabled_short",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_compact_bases_v5_button_disabled_medium_slice9",
+      "path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        298,
+        119
+      ],
+      "png_size_bytes": 64776,
+      "slice9": [
+        48,
+        22,
+        48,
+        22
+      ],
+      "semantic_role": "compact_button_disabled_medium",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_compact_bases_v5_button_disabled_long_slice9",
+      "path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        445,
+        119
+      ],
+      "png_size_bytes": 93104,
+      "slice9": [
+        48,
+        22,
+        48,
+        22
+      ],
+      "semantic_role": "compact_button_disabled_long",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "ui_compact_bases_v5_journal_panel_slice9",
+      "path": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        346,
+        722
+      ],
+      "png_size_bytes": 525392,
+      "slice9": [
+        76,
+        76,
+        76,
+        76
+      ],
+      "semantic_role": "compact_journal_panel",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "fishing_primary_button_slice9",
+      "path": "assets/runtime/roblox-fishing-ui-v1/fishing_primary_button_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        320,
+        128
+      ],
+      "png_size_bytes": 33317,
+      "slice9": [
+        76,
+        40,
+        76,
+        40
+      ],
+      "semantic_role": "fishing_primary_action_button",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "fishing_secondary_button_slice9",
+      "path": "assets/runtime/roblox-fishing-ui-v1/fishing_secondary_button_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        300,
+        112
+      ],
+      "png_size_bytes": 19466,
+      "slice9": [
+        72,
+        34,
+        72,
+        34
+      ],
+      "semantic_role": "fishing_secondary_action_button",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "fishing_upgrade_button_slice9",
+      "path": "assets/runtime/roblox-fishing-ui-v1/fishing_upgrade_button_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        300,
+        112
+      ],
+      "png_size_bytes": 24920,
+      "slice9": [
+        72,
+        34,
+        72,
+        34
+      ],
+      "semantic_role": "fishing_upgrade_action_button",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "fishing_status_pill_slice9",
+      "path": "assets/runtime/roblox-fishing-ui-v1/fishing_status_pill_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        360,
+        104
+      ],
+      "png_size_bytes": 34475,
+      "slice9": [
+        82,
+        32,
+        82,
+        32
+      ],
+      "semantic_role": "fishing_status_hud_pill",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "fishing_catch_card_slice9",
+      "path": "assets/runtime/roblox-fishing-ui-v1/fishing_catch_card_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        340,
+        132
+      ],
+      "png_size_bytes": 33413,
+      "slice9": [
+        58,
+        44,
+        58,
+        44
+      ],
+      "semantic_role": "fishing_catch_reward_card",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "fishing_meter_frame_slice9",
+      "path": "assets/runtime/roblox-fishing-ui-v1/fishing_meter_frame_slice9.png",
+      "kind": "slice9",
+      "dimensions": [
+        320,
+        72
+      ],
+      "png_size_bytes": 17012,
+      "slice9": [
+        56,
+        24,
+        56,
+        24
+      ],
+      "semantic_role": "fishing_reel_meter_frame",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "fishing_coin_icon",
+      "path": "assets/runtime/roblox-fishing-ui-v1/fishing_coin_icon.png",
+      "kind": "icon",
+      "dimensions": [
+        96,
+        96
+      ],
+      "png_size_bytes": 10596,
+      "slice9": null,
+      "semantic_role": "fishing_coin_currency",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "fishing_backpack_icon",
+      "path": "assets/runtime/roblox-fishing-ui-v1/fishing_backpack_icon.png",
+      "kind": "icon",
+      "dimensions": [
+        96,
+        96
+      ],
+      "png_size_bytes": 12513,
+      "slice9": null,
+      "semantic_role": "fishing_backpack",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "fishing_fish_icon",
+      "path": "assets/runtime/roblox-fishing-ui-v1/fishing_fish_icon.png",
+      "kind": "icon",
+      "dimensions": [
+        112,
+        96
+      ],
+      "png_size_bytes": 13868,
+      "slice9": null,
+      "semantic_role": "fishing_index_fish",
+      "runtime_usage": "native nt_gfx texture"
+    },
+    {
+      "id": "fishing_rod_icon",
+      "path": "assets/runtime/roblox-fishing-ui-v1/fishing_rod_icon.png",
+      "kind": "icon",
+      "dimensions": [
+        112,
+        112
+      ],
+      "png_size_bytes": 12869,
+      "slice9": null,
+      "semantic_role": "fishing_rod_action",
       "runtime_usage": "native nt_gfx texture"
     }
   ]

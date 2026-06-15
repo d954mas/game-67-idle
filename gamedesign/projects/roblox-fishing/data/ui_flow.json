@@ -1,0 +1,82 @@
+{
+  "schema": "game.ui_flow",
+  "version": 1,
+  "project": "roblox-fishing",
+  "status": "direction-accepted-for-first-fake-shot",
+  "screens": [
+    {
+      "id": "main_fishing",
+      "type": "gameplay",
+      "player_intent": "catch a fish",
+      "persistent_hud": ["coins", "level_xp", "backpack", "index_progress"],
+      "contextual_hud": ["cast_button", "bite_prompt", "reel_meter"],
+      "primary_action": "action.cast_or_reel",
+      "secondary_actions": ["panel.shop", "panel.index", "action.sell_all"],
+      "feedback": ["toast.reward", "fx.coin_burst", "fx.water_splash"],
+      "blocked_states": ["backpack_full", "upgrade_not_affordable"]
+    },
+    {
+      "id": "catch_result",
+      "type": "modal",
+      "player_intent": "understand reward",
+      "persistent_hud": ["coins", "backpack"],
+      "primary_action": "action.keep_or_close",
+      "secondary_actions": ["action.sell_now"],
+      "feedback": ["fish_card", "rarity_badge", "index_new_chip"]
+    },
+    {
+      "id": "shop_panel",
+      "type": "panel",
+      "player_intent": "buy a visible improvement",
+      "primary_action": "upgrade.better_line_1",
+      "secondary_actions": ["upgrade.lucky_bait_1_locked"],
+      "feedback": ["affordable_state", "locked_state", "before_after_hint"]
+    },
+    {
+      "id": "fish_index",
+      "type": "panel",
+      "player_intent": "see collection progress",
+      "primary_action": "close_panel",
+      "feedback": ["caught_slots", "unknown_slots", "next_unlock_hint"]
+    }
+  ],
+  "actions": [
+    {
+      "id": "action.cast_or_reel",
+      "label_runtime": "Cast/Reel",
+      "screen": "main_fishing",
+      "states": ["cast_ready", "waiting_bite", "bite_ready", "reeling"],
+      "minimum_hit_size": [180, 56],
+      "desktop_position": "bottom_center",
+      "portrait_position": "bottom_full_width"
+    },
+    {
+      "id": "action.sell_all",
+      "label_runtime": "Sell",
+      "screen": "main_fishing",
+      "states": ["available", "disabled_empty"],
+      "minimum_hit_size": [120, 48],
+      "desktop_position": "right_dock_sign",
+      "portrait_position": "bottom_secondary"
+    },
+    {
+      "id": "upgrade.better_line_1",
+      "label_runtime": "Better Line I",
+      "screen": "shop_panel",
+      "states": ["affordable", "not_affordable", "owned"],
+      "minimum_hit_size": [220, 72]
+    }
+  ],
+  "first_screenshot_questions": [
+    "Where am I?",
+    "What do I press first?",
+    "What fish/reward did I get?",
+    "What changed in coins/index/backpack?",
+    "What upgrade or next goal is visible?",
+    "Does the screen look bright, juicy, and non-realistic?"
+  ],
+  "runtime_text_policy": {
+    "source_art_must_not_bake": ["labels", "numbers", "prices", "quest_text"],
+    "all_labels_are_runtime": true
+  }
+}

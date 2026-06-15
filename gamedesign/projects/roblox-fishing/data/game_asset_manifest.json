@@ -1,0 +1,70 @@
+{
+  "schema": "game.prototype_asset_manifest",
+  "version": 1,
+  "project": "roblox-fishing",
+  "status": "planning",
+  "visual_target": "gamedesign/projects/roblox-fishing/art/visual_direction_brief.md",
+  "art_job": "gamedesign/projects/roblox-fishing/art_requests/roblox-fishing-first-visual-v1.json",
+  "external_candidates": [
+    {
+      "id": "kenney_nature_kit",
+      "source": "https://kenney.nl/assets/nature-kit",
+      "license": "CC0",
+      "intended_use": ["island", "rocks", "grass", "foliage"],
+      "status": "candidate"
+    },
+    {
+      "id": "kenney_watercraft_kit",
+      "source": "https://kenney.nl/assets/watercraft-kit",
+      "license": "CC0",
+      "intended_use": ["boat_teaser", "dock_props"],
+      "status": "candidate"
+    },
+    {
+      "id": "kenney_blocky_characters",
+      "source": "https://kenney.nl/assets/blocky-characters",
+      "license": "CC0",
+      "intended_use": ["avatar_placeholder", "cast_pose_reference"],
+      "status": "candidate"
+    },
+    {
+      "id": "kenney_fish_pack",
+      "source": "https://kenney.nl/assets/fish-pack",
+      "license": "CC0",
+      "intended_use": ["fish_index_icons", "catch_cards"],
+      "status": "candidate_2d_only"
+    }
+  ],
+  "generated_source_families": [
+    {
+      "id": "fake_shot",
+      "kind": "full_mockup",
+      "purpose": "visual target only, not runtime asset",
+      "expected_path": "gamedesign/projects/roblox-fishing/art/fake_shots/splash-rods-gameplay-v1.png",
+      "status": "generated_needs_lead_review"
+    },
+    {
+      "id": "blank_ui_kit_sheet",
+      "kind": "slice9_source",
+      "purpose": "panels, buttons, bars with no baked text",
+      "expected_path": "gamedesign/projects/roblox-fishing/art/source/splash-rods-blank-ui-kit-v1.png"
+    },
+    {
+      "id": "isolated_icon_sheet",
+      "kind": "icon_source",
+      "purpose": "coins, fish index, backpack, rod, bait, shop, rarity icons",
+      "expected_path": "gamedesign/projects/roblox-fishing/art/source/splash-rods-icons-v1.png"
+    },
+    {
+      "id": "fish_card_sheet",
+      "kind": "sprite_source",
+      "purpose": "fish portraits/cards and rarity accents",
+      "expected_path": "gamedesign/projects/roblox-fishing/art/source/splash-rods-fish-cards-v1.png"
+    }
+  ],
+  "runtime_placeholder_policy": {
+    "procedural_geometry": "allowed for early 3D placement and collision tests",
+    "procedural_ui": "debug only, not final visual claim",
+    "generated_or_artist_source_required_for_final_visual_gate": true
+  }
+}

@@ -16,7 +16,8 @@
     "RenderMode": ["solid_wire", "solid", "wire"],
     "RuneLocation": ["miregate", "wispfen_road", "old_bell_tower", "reedmere_crossing", "greenfen_causeway", "briar_gate", "moonwell", "ashen_cairn", "starfall_grotto"],
     "RuneRouteChoice": ["none", "briar_gate", "moonwell"],
-    "RuneEncounter": ["none", "mire_wisp", "reed_raider", "fen_shade", "briar_stalker", "moonwell_sentinel"]
+    "RuneEncounter": ["none", "mire_wisp", "reed_raider", "fen_shade", "briar_stalker", "moonwell_sentinel"],
+    "FishingPhase": ["ready", "bite", "reeling", "full"]
   },
   "fields": [
     {"path": "shape_index", "id": 1, "type": "enum", "enum": "Shape", "default": "cube", "devapi": "read_write"},
@@ -71,7 +72,25 @@
     {"path": "rune.briar_gate_safety", "id": 50, "type": "int", "default": 0, "min": 0, "max": 99, "devapi": "read_write"},
     {"path": "rune.moonwell_safety", "id": 51, "type": "int", "default": 0, "min": 0, "max": 99, "devapi": "read_write"},
     {"path": "rune.ashen_cairn_unlocked", "id": 52, "type": "bool", "default": false, "devapi": "read_write"},
-    {"path": "rune.starfall_grotto_unlocked", "id": 53, "type": "bool", "default": false, "devapi": "read_write"}
+    {"path": "rune.starfall_grotto_unlocked", "id": 53, "type": "bool", "default": false, "devapi": "read_write"},
+    {"path": "fishing.phase", "id": 54, "type": "enum", "enum": "FishingPhase", "default": "ready", "devapi": "read_write"},
+    {"path": "fishing.coins", "id": 55, "type": "int", "default": 0, "min": 0, "max": 2147483647, "devapi": "read_write"},
+    {"path": "fishing.xp", "id": 56, "type": "int", "default": 0, "min": 0, "max": 2147483647, "devapi": "read_write"},
+    {"path": "fishing.level", "id": 57, "type": "int", "default": 1, "min": 1, "max": 99, "devapi": "read_write"},
+    {"path": "fishing.backpack_count", "id": 58, "type": "int", "default": 0, "min": 0, "max": 99, "devapi": "read_write"},
+    {"path": "fishing.backpack_slots", "id": 59, "type": "int", "default": 5, "min": 1, "max": 99, "devapi": "read_write"},
+    {"path": "fishing.backpack_value", "id": 60, "type": "int", "default": 0, "min": 0, "max": 2147483647, "devapi": "read_write"},
+    {"path": "fishing.index_count", "id": 61, "type": "int", "default": 0, "min": 0, "max": 64, "devapi": "read_write"},
+    {"path": "fishing.total_catches", "id": 62, "type": "int", "default": 0, "min": 0, "max": 2147483647, "devapi": "read_write"},
+    {"path": "fishing.better_line_level", "id": 63, "type": "int", "default": 0, "min": 0, "max": 9, "devapi": "read_write"},
+    {"path": "fishing.catch_progress", "id": 64, "type": "int", "default": 0, "min": 0, "max": 100, "devapi": "read_write"},
+    {"path": "fishing.combo", "id": 65, "type": "int", "default": 0, "min": 0, "max": 99, "devapi": "read_write"},
+    {"path": "fishing.best_weight", "id": 66, "type": "int", "default": 0, "min": 0, "max": 9999, "devapi": "read_write"},
+    {"path": "fishing.last_fish", "id": 67, "type": "string", "default": "None yet", "max_length": 63, "devapi": "read_write"},
+    {"path": "fishing.last_rarity", "id": 68, "type": "string", "default": "Common", "max_length": 63, "devapi": "read_write"},
+    {"path": "fishing.last_reward", "id": 69, "type": "string", "default": "Cast near sparkle rings", "max_length": 63, "devapi": "read_write"},
+    {"path": "fishing.objective", "id": 70, "type": "string", "default": "Cast from the dock", "max_length": 63, "devapi": "read_write"},
+    {"path": "fishing.next_unlock", "id": 71, "type": "string", "default": "Better Line: 30 coins", "max_length": 63, "devapi": "read_write"}
   ],
   "types": {
     "ItemInstance": {

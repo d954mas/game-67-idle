@@ -4,149 +4,132 @@ Short live project-status index. Workflow rules live in `tasks/README.md`.
 
 ## Current Goal
 
-Build `Rune Marches`, an original casual Skyrim-like open-world fantasy RPG
-for native PC and web/mobile, with strong visual direction, gameplay, balance,
-FTUE, and a path to Poki-audience testing.
+Build an original Roblox-like casual 3D fishing game: research references,
+discuss the direction with the lead, write the full concept/GDD, then implement
+a native PC playable prototype with bright juicy visuals and passive workflow
+profiling.
 
 ## Active Product State
 
-- Active game concept: `Rune Marches`.
-- Active runtime: native Rune Marches playable slice in `src/main.c` with
-  generated bitmap runtime assets, side quest choice, Old Bell Tower inspect
-  action, Reedmere Crossing second road, Moss Shrine kindness payoff, Greenfen
-  Causeway route hook, first Greenfen combat beat, Warden Rank II level-up,
-  Spark Ward II lore sink, Briar Gate/Moonwell route choice, first
-  chosen-route encounters, branch landmark discovery, reward clarity chip, and
-  an in-game journal panel.
-- Current build target: `game_seed`.
-- Current task queue: `E001` active; `T0006` doing; `T0002` doing; `T0003`
-  review; `T0004` review; `T0005` done; `T0001` backlog; `T0007` backlog.
+- Active game concept: `roblox-fishing` / working title `Splash Rods`.
+- Active project wiki: `gamedesign/projects/roblox-fishing/`.
+- Active runtime target: native PC first; current source now contains a playable
+  Splash Rods fishing slice with perspective/depth 3D scene, generated UI/icon
+  texture assets, and a native GLTF/GLB mesh-pack path through the engine
+  builder/resource/material/mesh-renderer pipeline.
+- Fishing task queue: `E002` active; `T0009` done/archived; `T0008` review;
+  `T0011` review; `T0010` review for technical playable proof; `T0012`
+  doing as the P0 visual/product rescue after lead rejection.
+- Older Rune Marches tasks may still appear in the global taskboard summary;
+  they are not the active goal for this thread.
+- Profiling: passive profiling is part of the task. Session notes begin at
+  `tmp/roblox_fishing_profile.md`; use `node tools/ai.mjs` facade for long or
+  repeated commands where practical.
 
 ## Source Pointers
 
-- Start here: `README.md`, `AGENTS.md`, `AI_PIPELINE.md`.
-- Active project wiki: `gamedesign/projects/rune-marches/README.md`.
-- Current handoff: `gamedesign/projects/rune-marches/handoff_status.md`.
-- First slice plan:
-  `gamedesign/projects/rune-marches/game_implementation_plan.md`.
-- First playtest packet:
-  `gamedesign/projects/rune-marches/playtest/first_session_poki_packet.md`.
-- Reusable design knowledge: `gamedesign/knowledge/`.
-- Runtime state schema: `state/game_state.schema.json`.
-- DevAPI probes: `tools/devapi/smoke_test.py`, `tools/devapi/full_probe.py`.
+- Start here: `AGENTS.md`, `AI_PIPELINE.md`,
+  `AI_PIPELINE_SESSION_PROFILING.md`.
+- Concept draft: `gamedesign/projects/roblox-fishing/concept.md`.
+- Reference study:
+  `gamedesign/projects/roblox-fishing/references/fishing_reference_study.md`.
+- Visual direction brief:
+  `gamedesign/projects/roblox-fishing/art/visual_direction_brief.md`.
+- GDD:
+  `gamedesign/projects/roblox-fishing/gdd.md`.
+- First fake shot:
+  `gamedesign/projects/roblox-fishing/art/fake_shots/splash-rods-gameplay-v1.png`.
+- Implementation handoff draft:
+  `gamedesign/projects/roblox-fishing/game_implementation_plan.md`.
+- Runtime source: `src/` after GDD/implementation gate.
+- Task epic: `tasks/epics/E002-roblox-like-casual-3d-fishing-prototype.md`.
 
 ## Current Evidence
 
-- Template runtime is expected to build with `cmake --build --preset native-debug`.
-- DevAPI smoke should validate `ui.tree`, `ui.click`, `game.state`, state set/get, and screenshot capture.
-- Rune Marches design gate exists under `gamedesign/projects/rune-marches/`.
-- Native placeholder slice builds and passes DevAPI scenario proof:
-  `cmake --build --preset native-debug`, `py -3.12
-  tools/devapi/smoke_test.py 9123`, `py -3.12 tools/devapi/full_probe.py
-  9123`, and `py -3.12 tmp/rune_marches_scenario.py`.
-- Latest screenshot evidence:
-  `tmp/rune_marches/native_first_slice_labeled.png` and
-  `tmp/rune_marches/native_first_slice_portrait_current.png`.
-- Generated visual direction:
-  `gamedesign/projects/rune-marches/art/fake_shots/rune-marches-gameplay-v1.png`
-  with guidance in `gamedesign/projects/rune-marches/art/art_direction.md`.
-- Generated runtime asset path:
-  `tools/assets/build_rune_marches_assets.py` slices the accepted fake shot into
-  `assets/runtime/rune-marches-v1/` PNGs and ignored C texture arrays consumed
-  by the native `nt_gfx` quad renderer.
-- Native quest expansion:
-  `tmp/rune_marches_scenario.py` now proves scout -> combat -> second reward
-  -> bell rope side choice -> Spark Ward I -> tower inspect -> Reedmere
-  Crossing -> Reed Raider win -> Moss Shrine blessing -> Greenfen Causeway ->
-  Fen Shade win -> Warden Rank II -> Spark Ward II -> Briar Gate/Moonwell
-  route choice -> Briar Stalker/Moonwell Sentinel -> Ashen Cairn/Starfall
-  Grotto -> save/load.
-- Latest Moss Shrine evidence:
-  `tmp/rune_marches/native_moss_shrine_labeled.png` and
-  `tmp/rune_marches/native_moss_shrine_portrait.png`.
-- Latest Greenfen Causeway evidence:
-  `tmp/rune_marches/native_greenfen_causeway_labeled.png` and
-  `tmp/rune_marches/native_greenfen_causeway_portrait.png`.
-- Latest first Greenfen beat evidence:
-  `tmp/rune_marches/native_greenfen_beat_labeled.png` and
-  `tmp/rune_marches/native_greenfen_beat_portrait.png`.
-- Latest Spark Ward II evidence:
-  `tmp/rune_marches/native_spark_ward_2_labeled.png` and
-  `tmp/rune_marches/native_spark_ward_2_portrait.png`.
-- Latest Warden Rank II evidence:
-  `tmp/rune_marches/native_warden_rank_2_labeled.png` and
-  `tmp/rune_marches/native_warden_rank_2_portrait.png`.
-- Latest reward clarity evidence:
-  `tmp/rune_marches/native_reward_chip_labeled.png` and
-  `tmp/rune_marches/native_reward_chip_portrait.png`.
-- Latest route choice evidence:
-  `tmp/rune_marches/native_route_choice_labeled.png` and
-  `tmp/rune_marches/native_route_choice_portrait.png`.
-- Latest route encounter evidence:
-  `tmp/rune_marches/native_route_encounter_labeled.png` and
-  `tmp/rune_marches/native_route_encounter_portrait.png`.
-- Latest branch landmark evidence:
-  `tmp/rune_marches/native_branch_landmark_labeled.png` and
-  `tmp/rune_marches/native_branch_landmark_portrait.png`.
-- Passive tooling profile:
-  `tmp/session_profiles/session_profile_2026-06-13.jsonl`; current scope
-  `T0003/chosen-route-encounter`.
-- First Poki-audience test packet:
-  `gamedesign/projects/rune-marches/playtest/first_session_poki_packet.md`;
-  telemetry map:
-  `gamedesign/projects/rune-marches/data/playtest_telemetry.json`.
-- Native playtest telemetry endpoint:
-  `game.rune.telemetry` tracks the first-session FTUE milestones defined in the
-  packet; latest proof screenshots are
-  `tmp/rune_marches/native_telemetry_labeled.png` and
-  `tmp/rune_marches/native_telemetry_portrait.png`.
-- Native playtest probe:
-  `tools/playtest/rune_marches_probe.py`; latest report
-  `tmp/rune_marches/playtest_probe_report.json` and screenshot
-  `tmp/rune_marches/playtest_probe.png`.
+- Research sources checked on 2026-06-15:
+  Fisch Roblox page, Fishing Simulator Roblox page, WEBFISHING Steam page,
+  Russian Fishing 4 Steam page, PC Gamer current Fisch guide, and Kenney asset
+  pages for nature, watercraft, blocky characters, and fish pack.
+- Lead direction accepted on 2026-06-15: casual audience, strong
+  progression/grind, simple gameplay, feel and fake shot are important,
+  progression clarity matters, realism is forbidden.
+- Reference study status: ready enough for first native prototype after fake
+  shot review. It includes a screenshot walkthrough/evidence board and current
+  native mismatch capture.
+- First fake shot exists and needs lead review:
+  `gamedesign/projects/roblox-fishing/art/fake_shots/splash-rods-gameplay-v1.png`.
+- Runtime generated UI proof exists:
+  `gamedesign/projects/roblox-fishing/art/source_sheets/splash-rods-ui-icons-source-v2-magenta-clean.png`
+  -> `assets/runtime/roblox-fishing-ui-v1/` -> native HUD/buttons/icons.
+- Runtime GLTF/GLB model pipeline proof exists:
+  `tools/roblox_fishing/generate_model_sources.py` emits first-pass low-poly
+  fish/boat/shop-sign/palm-leaf/bobber source models under
+  `gamedesign/projects/roblox-fishing/art/models/`, and
+  `tools/roblox_fishing/build_packs.c` packs them plus the engine `cube.glb`
+  into `build/game_seed/native-debug/assets/roblox_fishing_models.ntpack`.
+  `src/main.c` loads the pack through an absolute native build path and renders
+  16 GLTF/GLB-backed props through `nt_mesh_renderer`; the playtest probe now
+  fails if mesh instances/draw groups are zero.
+- Current native visual/product gate is red:
+  `gamedesign/projects/roblox-fishing/reviews/product_read_gate_latest.json`.
+  The durable failure report is
+  `gamedesign/projects/roblox-fishing/reviews/visual_product_failure_report_2026-06-15.md`.
+  The next screenshot contract is
+  `gamedesign/projects/roblox-fishing/art/visual_rescue_screen_contract_v1.md`.
+- Machine-readable draft contracts exist:
+  `gamedesign/projects/roblox-fishing/data/balance.json`,
+  `gamedesign/projects/roblox-fishing/data/ui_flow.json`, and
+  `gamedesign/projects/roblox-fishing/data/game_asset_manifest.json`.
+- Current native mismatch capture:
+  `tmp/roblox_fishing/current_native_before_fishing.png`; it shows the current
+  Rune Marches RPG/map/combat screen, not a 3D fishing scene.
 
 ## Blocking Work
 
-- Current native visuals/UX are rejected by lead review. The build passes
-  automation but does not meet the casual Skyrim visual/playability bar. P0
-  rescue task: `tasks/active/T0006-visual-rebuild-and-playability-rescue-for-rune-m.md`;
-  review report:
-  `gamedesign/projects/rune-marches/reviews/visual_product_profile_review_2026-06-13.md`.
-- Final UI/art/economy pacing should not claim reference readiness until
-  `T0002` adds stronger raw gameplay frame/timestamp evidence or the user
-  approves a narrow exception.
-- Web/mobile proof is still unstarted and currently paused after the user
-  questioned why the web-build lane started. Native PC remains the active
-  implementation harness.
-- Runtime art is a first integrated pass, not a final compressed pack. Before
-  web validation, decide whether to keep PNGs, encode WebP/compressed variants,
-  or wire the engine pack builder.
+- Lead rejected the current native screenshot as visually bad. Feature
+  expansion is frozen under `T0012` until the native visual rescue screenshot
+  passes a product-read gate. Do not treat mesh/UI technical proof as visual
+  acceptance.
+- Generated UI is wired as a first runtime slice, but the current source sheet
+  is still a prototype/partial crop family; a final UI kit pass should separate
+  buttons, panels, meter, icons, and decor with cleaner gutters and no key-color
+  conflicts.
+- External CC0 fishing/location model integration is not wired yet. The engine
+  and builder support GLTF/GLB mesh packs, and the game now has generated
+  low-poly source-model props in the pack; the next model pass should replace
+  rough first-pass generated meshes with selected/final low-poly fishing,
+  island, shop, and character assets.
 
 ## Current Gate
 
-- Visual/FTUE rescue work must use `node tools/ai.mjs gate` after screenshot
-  capture and `node tools/ai.mjs close-slice` before handoff/review. If the
-  product-read gate fails, content expansion stays frozen.
+- Gate: native visual/product rescue.
+- Status: first playable proof exists technically, but the current screenshot
+  fails the visual/product bar. `T0012` must produce a stronger fake-shot-aligned
+  native screenshot before more feature/content work.
+- Current proof: `tmp/roblox_fishing/native_first_slice.png` shows native 3D
+  water/dock/avatar/rod/bobber/fish, generated HUD/buttons/icons, catch reward,
+  currency/index/backpack, and first upgrade affordance, but this proof is
+  explicitly rejected for product visuals.
 
 ## Next Priorities
 
-1. Stop content expansion and execute `T0006`: visual rebuild and playability
-   rescue for the native slice.
-2. Rebuild the first screen around one readable player goal, one dominant
-   primary action, clean map hierarchy, and separate exploration/combat UI.
-3. Finish `T0002` raw gameplay reference evidence gaps for final UI/art/economy.
-4. Review the Poki audience test packet in `T0004`, then connect the existing
-   native telemetry events to Poki SDK hooks when web/mobile is active.
-5. Resume `T0001` web/mobile only when that lane is explicitly active again.
-6. Replace first-pass cropped sprites with cleaner transparent source sheets if
-   visual QA demands it.
-7. Execute `T0007` after the current pipeline utility pass: research and build
-   a reusable generated-art/UI asset production skill so future art passes
-   produce sliceable/stretchable runtime assets, not only attractive images.
+1. Execute `T0012`: generate/select and integrate focal-area world/UI assets
+   from `visual_rescue_screen_contract_v1.md`, then produce a new native
+   screenshot that passes product-read gate.
+2. Replace rough generated low-poly mesh props with selected/final fishing
+   props: dock decor, shop props, boat/island pieces, fish silhouettes, and
+   blocky character pieces.
+3. Run a second generated UI-kit pass with cleaner source-family separation,
+   then replace the prototype/partial crops.
+4. Continue visual pass against fake shot: water polish, avatar silhouette,
+   fish scale/readability, and UI clarity.
 
 ## Validation Policy
 
-- Normal game work: run the narrow native scenario or probe that proves the changed behavior.
-- AI/tooling work: use passive, narrow tests first. Broad portable validation requires explicit release/portable/shared-behavior need.
-- Web work is in scope for Rune Marches because the user explicitly requested
-  web/mobile, but native PC validation remains the first implementation proof.
+- Research/docs: run `node tools/taskboard/cli.mjs validate`.
+- Visual/generated art: create source records, inspect outputs, and keep final
+  assets in the project folder; no final art from named refs until the reference
+  gate is ready or an exception is approved.
+- Playable prototype: native PC build and screenshot/input proof first.
+- Web/mobile/browser validation is out of scope unless the lead explicitly
+  approves web work for this fishing project.

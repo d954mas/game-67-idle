@@ -88,6 +88,206 @@ static void mark_rune_dirty(GameState *state) {
     game_state_mark_dirty();
 }
 
+static void sync_fishing_compatibility(GameState *state) {
+    state->wallet_soft = state->fishing_coins;
+    if (state->fishing_phase == GAME_STATE_FISHING_PHASE_BITE) {
+        set_text(state->test_button_text, sizeof(state->test_button_text), "Hook");
+    } else if (state->fishing_phase == GAME_STATE_FISHING_PHASE_REELING) {
+        set_text(state->test_button_text, sizeof(state->test_button_text), "Reel");
+    } else if (state->fishing_phase == GAME_STATE_FISHING_PHASE_FULL) {
+        set_text(state->test_button_text, sizeof(state->test_button_text), "Sell");
+    } else {
+        set_text(state->test_button_text, sizeof(state->test_button_text), "Cast");
+    }
+    (void)snprintf(
+        state->test_label_text,
+        sizeof(state->test_label_text),
+        "Splash Rods: %s",
+        state->fishing_objective);
+}
+
+static void mark_fishing_dirty(GameState *state) {
+    sync_fishing_compatibility(state);
+    game_state_mark_dirty();
+}
+
+static int fishing_level_for_xp(int xp) {
+    if (xp >= 120) {
+        return 4;
+    }
+    if (xp >= 60) {
+        return 3;
+    }
+    if (xp >= 20) {
+        return 2;
+    }
+    return 1;
+}
+
+static void fishing_set_ready(GameState *state, const char *objective) {
+    state->fishing_phase = state->fishing_backpack_count >= state->fishing_backpack_slots ? GAME_STATE_FISHING_PHASE_FULL : GAME_STATE_FISHING_PHASE_READY;
+    state->fishing_catch_progress = 0;
+    set_text(state->fishing_objective, sizeof(state->fishing_objective), objective);
+}
+
+bool game_fishing_can_cast(const GameState *state) {
+    return state->fishing_phase == GAME_STATE_FISHING_PHASE_READY && state->fishing_backpack_count < state->fishing_backpack_slots;
+}
+
+bool game_fishing_can_reel(const GameState *state) {
+    return state->fishing_phase == GAME_STATE_FISHING_PHASE_BITE || state->fishing_phase == GAME_STATE_FISHING_PHASE_REELING;
+}
+
+bool game_fishing_can_sell(const GameState *state) {
+    return state->fishing_backpack_count > 0 && state->fishing_backpack_value > 0;
+}
+
+bool game_fishing_can_buy_better_line(const GameState *state) {
+    const int cost = 30 + state->fishing_better_line_level * 45;
+    return state->fishing_better_line_level < 3 && state->fishing_coins >= cost;
+}
+
+void game_fishing_reset_playtest(GameState *state) {
+    game_state_init_defaults(state);
+    state->fishing_phase = GAME_STATE_FISHING_PHASE_READY;
+    state->fishing_coins = 0;
+    state->fishing_xp = 0;
+    state->fishing_level = 1;
+    state->fishing_backpack_count = 0;
+    state->fishing_backpack_slots = 5;
+    state->fishing_backpack_value = 0;
+    state->fishing_index_count = 0;
+    state->fishing_total_catches = 0;
+    state->fishing_better_line_level = 0;
+    state->fishing_catch_progress = 0;
+    state->fishing_combo = 0;
+    state->fishing_best_weight = 0;
+    set_text(state->fishing_last_fish, sizeof(state->fishing_last_fish), "None yet");
+    set_text(state->fishing_last_rarity, sizeof(state->fishing_last_rarity), "Common");
+    set_text(state->fishing_last_reward, sizeof(state->fishing_last_reward), "Cast near sparkle rings");
+    set_text(state->fishing_objective, sizeof(state->fishing_objective), "Cast from the dock");
+    set_text(state->fishing_next_unlock, sizeof(state->fishing_next_unlock), "Better Line: 30 coins");
+    sync_fishing_compatibility(state);
+    game_state_mark_dirty();
+}
+
+void game_fishing_cast(GameState *state) {
+    if (state->fishing_backpack_count >= state->fishing_backpack_slots) {
+        state->fishing_phase = GAME_STATE_FISHING_PHASE_FULL;
+        set_text(state->fishing_objective, sizeof(state->fishing_objective), "Backpack full - sell fish");
+        set_text(state->fishing_last_reward, sizeof(state->fishing_last_reward), "Backpack full");
+        mark_fishing_dirty(state);
+        return;
+    }
+    if (!game_fishing_can_cast(state)) {
+        game_fishing_reel(state);
+        return;
+    }
+    state->fishing_phase = GAME_STATE_FISHING_PHASE_BITE;
+    state->fishing_catch_progress = 18 + state->fishing_better_line_level * 6;
+    state->fishing_combo = 0;
+    set_text(state->fishing_objective, sizeof(state->fishing_objective), "Bite! tap reel");
+    set_text(state->fishing_last_reward, sizeof(state->fishing_last_reward), "Bobber splash!");
+    mark_fishing_dirty(state);
+}
+
+void game_fishing_reel(GameState *state) {
+    if (!game_fishing_can_reel(state)) {
+        game_fishing_cast(state);
+        return;
+    }
+    state->fishing_phase = GAME_STATE_FISHING_PHASE_REELING;
+    state->fishing_combo += 1;
+    if (state->fishing_combo > 99) {
+        state->fishing_combo = 99;
+    }
+    state->fishing_catch_progress += 34 + state->fishing_better_line_level * 9;
+    if (state->fishing_catch_progress < 100) {
+        set_text(state->fishing_objective, sizeof(state->fishing_objective), "Keep reeling");
+        set_text(state->fishing_last_reward, sizeof(state->fishing_last_reward), "Fish is close!");
+        mark_fishing_dirty(state);
+        return;
+    }
+
+    static const char *const fish_names[] = {"Bubble Guppy", "Mango Koi", "Candyfin", "Star Tuna", "Gem Ray"};
+    static const char *const rarities[] = {"Common", "Common", "Rare", "Rare", "Epic"};
+    static const int values[] = {8, 10, 16, 18, 28};
+    const int fish_count = (int)(sizeof(fish_names) / sizeof(fish_names[0]));
+    const int index = (state->fishing_total_catches + state->fishing_better_line_level) % fish_count;
+    const int value = values[index] + state->fishing_better_line_level * 5 + state->fishing_level * 2;
+    const int weight = 12 + index * 7 + state->fishing_total_catches * 3 + state->fishing_better_line_level * 6;
+
+    state->fishing_total_catches += 1;
+    state->fishing_backpack_count += 1;
+    state->fishing_backpack_value += value;
+    state->fishing_xp += 8 + index * 2;
+    state->fishing_level = fishing_level_for_xp(state->fishing_xp);
+    if (state->fishing_index_count < fish_count) {
+        state->fishing_index_count += 1;
+    }
+    if (weight > state->fishing_best_weight) {
+        state->fishing_best_weight = weight;
+    }
+    set_text(state->fishing_last_fish, sizeof(state->fishing_last_fish), fish_names[index]);
+    set_text(state->fishing_last_rarity, sizeof(state->fishing_last_rarity), rarities[index]);
+    (void)snprintf(state->fishing_last_reward, sizeof(state->fishing_last_reward), "+%d value  %s", value, fish_names[index]);
+    if (state->fishing_backpack_count >= state->fishing_backpack_slots) {
+        fishing_set_ready(state, "Backpack full - sell fish");
+    } else {
+        fishing_set_ready(state, "Catch another or sell");
+    }
+    mark_fishing_dirty(state);
+}
+
+void game_fishing_sell_all(GameState *state) {
+    if (!game_fishing_can_sell(state)) {
+        set_text(state->fishing_last_reward, sizeof(state->fishing_last_reward), "No fish to sell");
+        set_text(state->fishing_objective, sizeof(state->fishing_objective), "Catch fish first");
+        mark_fishing_dirty(state);
+        return;
+    }
+    const int earned = state->fishing_backpack_value;
+    state->fishing_coins += earned;
+    state->fishing_backpack_count = 0;
+    state->fishing_backpack_value = 0;
+    state->fishing_phase = GAME_STATE_FISHING_PHASE_READY;
+    state->fishing_catch_progress = 0;
+    (void)snprintf(state->fishing_last_reward, sizeof(state->fishing_last_reward), "Sold fish +%d coins", earned);
+    if (state->fishing_better_line_level == 0 && state->fishing_coins >= 30) {
+        set_text(state->fishing_objective, sizeof(state->fishing_objective), "Buy Better Line");
+    } else {
+        set_text(state->fishing_objective, sizeof(state->fishing_objective), "Cast from the dock");
+    }
+    mark_fishing_dirty(state);
+}
+
+void game_fishing_buy_better_line(GameState *state) {
+    const int cost = 30 + state->fishing_better_line_level * 45;
+    if (!game_fishing_can_buy_better_line(state)) {
+        (void)snprintf(state->fishing_last_reward, sizeof(state->fishing_last_reward), "Need %d coins", cost);
+        set_text(state->fishing_objective, sizeof(state->fishing_objective), "Sell catches for coins");
+        mark_fishing_dirty(state);
+        return;
+    }
+    state->fishing_coins -= cost;
+    state->fishing_better_line_level += 1;
+    state->fishing_backpack_slots += 1;
+    (void)snprintf(state->fishing_last_reward, sizeof(state->fishing_last_reward), "Better Line Lv%d!", state->fishing_better_line_level);
+    (void)snprintf(state->fishing_next_unlock, sizeof(state->fishing_next_unlock), state->fishing_better_line_level >= 3 ? "Lagoon Island: prototype gate" : "Better Line: %d coins", 30 + state->fishing_better_line_level * 45);
+    set_text(state->fishing_objective, sizeof(state->fishing_objective), "Cast faster catches");
+    mark_fishing_dirty(state);
+}
+
+void game_fishing_primary_action(GameState *state) {
+    if (state->fishing_phase == GAME_STATE_FISHING_PHASE_FULL) {
+        game_fishing_sell_all(state);
+    } else if (game_fishing_can_reel(state)) {
+        game_fishing_reel(state);
+    } else {
+        game_fishing_cast(state);
+    }
+}
+
 static bool rune_in_combat(const GameState *state) {
     return state->rune_encounter != GAME_STATE_RUNE_ENCOUNTER_NONE;
 }
@@ -257,12 +457,11 @@ static void rune_damage_enemy(GameState *state, int damage, const char *log, int
 }
 
 void game_seed_reset_playtest(GameState *state) {
-    game_rune_reset_playtest(state);
+    game_fishing_reset_playtest(state);
 }
 
 void game_seed_cycle(GameState *state) {
-    state->shape_index = (state->shape_index + 1) % GAME_STATE_SHAPE_COUNT;
-    game_rune_scout(state);
+    game_fishing_primary_action(state);
 }
 
 const char *game_seed_shape_label(const GameState *state) {
