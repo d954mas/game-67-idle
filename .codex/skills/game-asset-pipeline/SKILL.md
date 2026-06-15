@@ -72,6 +72,11 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     `problem_summary` and `recommended_next_step` so the next pipeline move is
     explicit: safer prompt key, more gutter/border regeneration, or
     dual-plate/split alpha extraction.
+    For accepted multi-component source sheets, generate a named crop plan
+    from the intake report before manual slicing:
+    `py -3.12 tools/assets/plan_runtime_crops_from_intake.py --intake-audit <audit.json> --ids-file <ids.txt> --kind <icon|decor|sprite> --source-id <source-id> --source-role <role> --output-dir <runtime-dir> --json-output <crop-plan.json> --report <crop-plan.md>`.
+    Prefer `--ids-file` over long comma-separated CLI ids; it is faster to
+    review, reproducible, and avoids shell/launcher command length failures.
 14. For generated sprites/icons, treat crop extraction as a solved production
     step, not a visual guess: remove background by transparent/alpha or
     border-connected chroma, isolate the intended component, trim to alpha

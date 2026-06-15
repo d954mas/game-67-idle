@@ -59,6 +59,7 @@ game project:
 - `tools/assets/dual_plate_alpha.py`
 - `tools/assets/normalize_source_sheet_chroma.py`
 - `tools/assets/audit_source_sheet_intake.py`
+- `tools/assets/plan_runtime_crops_from_intake.py`
 - `tools/assets/audit_generated_ui_assets.py`
 - `tools/assets/render_ui_asset_edge_proof.py`
 - `tools/assets/render_ui_composition_proof.py`
@@ -206,6 +207,13 @@ preview, wrapped `review_label.lines` that fit inside `review_label.rect`, no
 label pixels in the clean atlas, and label rects that stay outside asset
 `padded_rect`s, outside other labels, and inside the atlas. Record passing JSON in
 `expected_outputs.atlas_pack_audit`; final-art validation requires it.
+`tools/assets/plan_runtime_crops_from_intake.py` converts a passing source
+sheet intake audit into a named crop plan for icon, decor, or sprite sheets.
+Pass an ids file in visual row-major order with `--ids-file` so large source
+sheets do not require fragile long shell commands. The JSON/Markdown outputs
+record component ids, detected bboxes, padded crop rects, output paths, trim
+policy, chroma-key policy, and pack metadata skeletons. Use the plan as the
+reviewable bridge between detector output and the final runtime crop manifest.
 `tools/assets/audit_runtime_ui_asset_usage.mjs` is the runtime placement gate.
 It compares a `game.runtime_ui_asset_usage` file against an asset manifest's
 `usage_policy`, then fails generated UI assets drawn below `min_size`, in the

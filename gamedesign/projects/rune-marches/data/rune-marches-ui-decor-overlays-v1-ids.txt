@@ -1,0 +1,12 @@
+decor_corner_top_left_v1
+decor_blue_diamond_v1
+decor_red_seal_v1
+decor_corner_top_right_v1
+decor_compass_badge_v1
+decor_lock_plate_v1
+decor_ribbon_banner_v1
+decor_silver_divider_v1
+decor_crystal_cluster_v1
+decor_wooden_plaque_v1
+decor_leather_tab_v1
+decor_sunburst_gem_v1

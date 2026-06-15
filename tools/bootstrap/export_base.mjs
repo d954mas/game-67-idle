@@ -53,6 +53,8 @@ const COPY = [
   "tools/assets/build_ui_atlas_pack_test.py",
   "tools/assets/audit_ui_atlas_pack.py",
   "tools/assets/audit_ui_atlas_pack_test.py",
+  "tools/assets/plan_runtime_crops_from_intake.py",
+  "tools/assets/plan_runtime_crops_from_intake_test.py",
   "tools/assets/audit_runtime_ui_asset_usage.mjs",
   "tools/assets/audit_runtime_ui_asset_usage.test.mjs",
   "tools/assets/audit_source_family_coverage.mjs",

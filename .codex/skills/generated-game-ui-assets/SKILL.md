@@ -112,6 +112,13 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    pass`, no problems, and `transparent_nonzero_rgb_pixels: 0`; hidden RGB
    under transparent alpha can reappear as 1-2px fringe after premultiplied
    resize or atlas filtering.
+   When intake passes for a multi-component icon/decor/sprite source sheet,
+   create a named crop plan from the detected components before hand-writing
+   crop rectangles:
+   `py -3.12 tools/assets/plan_runtime_crops_from_intake.py --intake-audit <audit.json> --ids-file <ids.txt> --kind <icon|decor|sprite> --source-id <source-id> --source-role <role> --output-dir <runtime-dir> --json-output <crop-plan.json> --report <crop-plan.md>`.
+   Keep ids in visual row-major order in an ids file so long source sheets do
+   not depend on fragile long CLI strings, and review the Markdown plan before
+   writing the runtime crop manifest.
 10. Slice from a manifest. Every runtime UI asset needs a named crop entry:
    `id`, `kind`, `rect`, `output`; slice9 entries also need `slice9`,
    `content`, and `target_preview_sizes`; icons need semantic role, size class,
