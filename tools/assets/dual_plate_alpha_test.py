@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image
 
 import tools.assets.dual_plate_alpha as dual_plate
-from tools.assets.dual_plate_alpha import build_report, cleanup_alpha_blobs, extract_dual_plate_alpha
+from tools.assets.dual_plate_alpha import build_report, cleanup_alpha_blobs, extract_dual_plate_alpha, report_image_stats
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -119,6 +119,25 @@ class DualPlateAlphaTests(unittest.TestCase):
         self.assertEqual(report["verdict"], "fail")
         self.assertTrue(any("no visible alpha pixels" in problem for problem in report["problems"]))
         self.assertTrue(any("transparent pixels retain non-zero RGB" in problem for problem in report["problems"]))
+
+    def test_numpy_report_stats_match_python_fallback(self) -> None:
+        if dual_plate.np is None:
+            self.skipTest("numpy stats path unavailable")
+        image = Image.new("RGBA", (4, 3), (0, 0, 0, 0))
+        image.putpixel((0, 0), (10, 20, 30, 0))
+        image.putpixel((1, 1), (120, 80, 40, 64))
+        image.putpixel((2, 1), (20, 180, 90, 128))
+        image.putpixel((3, 2), (230, 40, 160, 255))
+
+        numpy_stats = report_image_stats(image)
+        original_np = dual_plate.np
+        try:
+            dual_plate.np = None
+            python_stats = report_image_stats(image)
+        finally:
+            dual_plate.np = original_np
+
+        self.assertEqual(numpy_stats, python_stats)
 
     def test_cli_writes_png_and_json_report(self) -> None:
         foreground = (100, 70, 40)

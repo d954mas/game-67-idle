@@ -277,8 +277,7 @@ def cleanup_alpha_blobs(
 
 
 def count_transparent_nonzero_rgb(image: Image.Image) -> int:
-    rgba = image.convert("RGBA")
-    return sum(1 for red, green, blue, alpha in flattened_pixel_data(rgba) if alpha == 0 and (red != 0 or green != 0 or blue != 0))
+    return int(report_image_stats(image)["transparent_nonzero_rgb_pixels"])
 
 
 def alpha_bbox(image: Image.Image) -> list[int] | None:
@@ -289,16 +288,71 @@ def alpha_bbox(image: Image.Image) -> list[int] | None:
     return [left, top, right - left, bottom - top]
 
 
-def build_report(image: Image.Image, *, removed_blob_pixels: int, timings: dict[str, float] | None = None, engine: str | None = None) -> dict:
+def report_image_stats(image: Image.Image) -> dict[str, int | float | list[int] | None]:
     rgba = image.convert("RGBA")
+    if np is not None:
+        return report_image_stats_numpy(rgba)
+    return report_image_stats_python(rgba)
+
+
+def report_image_stats_python(rgba: Image.Image) -> dict[str, int | float | list[int] | None]:
     alphas = list(flattened_pixel_data(rgba.getchannel("A")))
     visible = [alpha for alpha in alphas if alpha > 0]
-    hidden_rgb_pixels = count_transparent_nonzero_rgb(rgba)
+    hidden_rgb_pixels = sum(1 for red, green, blue, alpha in flattened_pixel_data(rgba) if alpha == 0 and (red != 0 or green != 0 or blue != 0))
+    return {
+        "alpha_bbox": alpha_bbox(rgba),
+        "visible_pixels": len(visible),
+        "transparent_pixels": len(alphas) - len(visible),
+        "transparent_nonzero_rgb_pixels": hidden_rgb_pixels,
+        "min_visible_alpha": min(visible) if visible else 0,
+        "max_visible_alpha": max(visible) if visible else 0,
+        "mean_visible_alpha": round(mean(visible), 3) if visible else 0,
+    }
+
+
+def report_image_stats_numpy(rgba: Image.Image) -> dict[str, int | float | list[int] | None]:
+    assert np is not None
+    pixels = np.asarray(rgba, dtype=np.uint8)
+    alpha = pixels[..., 3]
+    visible_mask = alpha > 0
+    visible_pixels = int(np.count_nonzero(visible_mask))
+    transparent_pixels = int(alpha.size - visible_pixels)
+    hidden_rgb_pixels = int(np.count_nonzero((alpha == 0) & np.any(pixels[..., :3] != 0, axis=-1)))
+    alpha_bbox_value: list[int] | None = None
+    if visible_pixels:
+        ys, xs = np.nonzero(visible_mask)
+        left = int(xs.min())
+        top = int(ys.min())
+        right = int(xs.max()) + 1
+        bottom = int(ys.max()) + 1
+        alpha_bbox_value = [left, top, right - left, bottom - top]
+        visible_alpha = alpha[visible_mask]
+        min_visible_alpha = int(visible_alpha.min())
+        max_visible_alpha = int(visible_alpha.max())
+        mean_visible_alpha = round(float(visible_alpha.mean()), 3)
+    else:
+        min_visible_alpha = 0
+        max_visible_alpha = 0
+        mean_visible_alpha = 0
+    return {
+        "alpha_bbox": alpha_bbox_value,
+        "visible_pixels": visible_pixels,
+        "transparent_pixels": transparent_pixels,
+        "transparent_nonzero_rgb_pixels": hidden_rgb_pixels,
+        "min_visible_alpha": min_visible_alpha,
+        "max_visible_alpha": max_visible_alpha,
+        "mean_visible_alpha": mean_visible_alpha,
+    }
+
+
+def build_report(image: Image.Image, *, removed_blob_pixels: int, timings: dict[str, float] | None = None, engine: str | None = None) -> dict:
+    rgba = image.convert("RGBA")
+    stats = report_image_stats(rgba)
     problems: list[str] = []
-    if not visible:
+    if not stats["visible_pixels"]:
         problems.append("extraction produced no visible alpha pixels")
-    if hidden_rgb_pixels > 0:
-        problems.append(f"transparent pixels retain non-zero RGB: {hidden_rgb_pixels}")
+    if stats["transparent_nonzero_rgb_pixels"] > 0:
+        problems.append(f"transparent pixels retain non-zero RGB: {stats['transparent_nonzero_rgb_pixels']}")
     report = {
         "schema": "game.dual_plate_alpha_report",
         "version": 1,
@@ -307,13 +361,7 @@ def build_report(image: Image.Image, *, removed_blob_pixels: int, timings: dict[
         "status": "pass" if not problems else "fail",
         "problems": problems,
         "size": list(rgba.size),
-        "alpha_bbox": alpha_bbox(rgba),
-        "visible_pixels": len(visible),
-        "transparent_pixels": len(alphas) - len(visible),
-        "transparent_nonzero_rgb_pixels": hidden_rgb_pixels,
-        "min_visible_alpha": min(visible) if visible else 0,
-        "max_visible_alpha": max(visible) if visible else 0,
-        "mean_visible_alpha": round(mean(visible), 3) if visible else 0,
+        **stats,
         "removed_blob_pixels": removed_blob_pixels,
     }
     if timings:
