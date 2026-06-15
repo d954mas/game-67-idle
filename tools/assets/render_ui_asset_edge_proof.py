@@ -16,6 +16,7 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[2]
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
+from tools.assets.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
 from tools.assets.audit_generated_ui_assets import alpha_bbox, crop_entries, parse_hex_color, touches_transparent
 from tools.assets.chroma_key_alpha import (
     is_any_purple_halo_like,
@@ -383,18 +384,13 @@ def main(argv: list[str]) -> int:
         args.profile,
     )
     output = project_path(args.output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    proof.save(output)
+    save_image_atomic(proof, output)
     report["crop_manifest"] = args.crop_manifest.replace("\\", "/")
     report["image_output"] = args.output.replace("\\", "/")
     if args.json_output:
-        json_output = project_path(args.json_output)
-        json_output.parent.mkdir(parents=True, exist_ok=True)
-        json_output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        write_json_atomic(project_path(args.json_output), report)
     if args.report:
-        report_output = project_path(args.report)
-        report_output.parent.mkdir(parents=True, exist_ok=True)
-        report_output.write_text(render_markdown(report), encoding="utf-8")
+        write_text_atomic(project_path(args.report), render_markdown(report))
     print(f"wrote edge proof: {output} size={proof.width}x{proof.height}")
     if args.json_output or args.report:
         print(f"edge proof marks: total={report['counts']['total']} reasons={report['counts']['reasons']}")

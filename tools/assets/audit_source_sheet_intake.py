@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.assets.atomic_io import write_json_atomic, write_text_atomic
 from tools.assets.chroma_key_alpha import is_exact_key_like, is_key_fringe_like, is_purple_halo_like
 
 
@@ -822,8 +823,7 @@ def write_report(path: Path, result: dict[str, object]) -> None:
         lines.extend(["", "## Timing"])
         for name, elapsed in result["timing_ms"].items():
             lines.append(f"- {name}: {elapsed} ms")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_text_atomic(path, "\n".join(lines) + "\n")
 
 
 def main() -> int:
@@ -847,8 +847,7 @@ def main() -> int:
 
     result = audit(args)
     if args.json_output:
-        args.json_output.parent.mkdir(parents=True, exist_ok=True)
-        args.json_output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        write_json_atomic(args.json_output, result)
     if args.report:
         write_report(args.report, result)
     print(

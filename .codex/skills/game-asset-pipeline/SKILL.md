@@ -307,6 +307,8 @@ When editing a pack builder:
   the same directory followed by replace/rename. Audits, previews, or users may
   read files while a build is running; they must see either the old complete
   file or the new complete file, never a truncated image or partial manifest.
+- Reuse `tools/assets/atomic_io.py` for Python asset tools instead of copying
+  local temp-file helpers into each script.
 - Apply the same atomic write rule to audit/report tools, not only pack
   builders; review loops often run build, audit, and preview commands close
   together.

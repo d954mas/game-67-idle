@@ -21,6 +21,7 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[2]
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
+from tools.assets.atomic_io import write_json_atomic, write_text_atomic
 from tools.assets.chroma_key_alpha import (
     is_any_purple_halo_like,
     is_exact_key_like,
@@ -456,13 +457,9 @@ def main(argv: list[str]) -> int:
             "assets_total": round(sum(asset.get("timing_ms", {}).get("total", 0) for asset in assets), 3),
         }
     if args.json_output:
-        json_path = project_path(args.json_output)
-        json_path.parent.mkdir(parents=True, exist_ok=True)
-        json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        write_json_atomic(project_path(args.json_output), report)
     if args.report:
-        report_path = project_path(args.report)
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(render_markdown(report), encoding="utf-8")
+        write_text_atomic(project_path(args.report), render_markdown(report))
 
     print(f"{report['verdict']}: checked {len(assets)} generated UI asset(s)")
     if args.profile and assets:

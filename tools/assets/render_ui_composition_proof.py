@@ -15,6 +15,7 @@ SCRIPT_ROOT = Path(__file__).resolve().parents[2]
 if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
+from tools.assets.atomic_io import save_image_atomic, write_text_atomic
 from tools.assets.chroma_key_alpha import resize_rgba_premultiplied
 
 
@@ -69,8 +70,7 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def write_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    write_text_atomic(path, text)
 
 
 def checkerboard(size: tuple[int, int], cell: int = 16) -> Image.Image:
@@ -503,12 +503,11 @@ def main(argv: list[str]) -> int:
     if not rendered:
         rendered.append(({"base_id": "(none)", "size": [320, 80], "status": "fail"}, Image.new("RGBA", (320, 80), (70, 24, 24, 255))))
     output = project_path(args.output)
-    output.parent.mkdir(parents=True, exist_ok=True)
     sheet_started = perf_counter()
     sheet = render_sheet(rendered, str(layout.get("title") or "Runtime UI Composition Proof"))
     sheet_ms = round((perf_counter() - sheet_started) * 1000, 3)
     save_started = perf_counter()
-    sheet.save(output)
+    save_image_atomic(sheet, output)
     save_ms = round((perf_counter() - save_started) * 1000, 3)
     verdict = "pass" if all(item["status"] == "pass" for item in reports) else "fail"
     report = {

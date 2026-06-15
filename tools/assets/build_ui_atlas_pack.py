@@ -5,7 +5,6 @@ import argparse
 import json
 import math
 import re
-import tempfile
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -13,6 +12,11 @@ from typing import Any
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
+
+try:
+    from tools.assets.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
+except ModuleNotFoundError:  # pragma: no cover - supports direct script execution by path.
+    from atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
 
 
 ROOT = Path.cwd()
@@ -51,41 +55,11 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
-    text = json.dumps(data, indent=2) + "\n"
-    write_text(path, text)
+    write_json_atomic(path, data)
 
 
 def write_text(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = atomic_temp_path(path)
-    try:
-        tmp_path.write_text(text, encoding="utf-8")
-        tmp_path.replace(path)
-    finally:
-        if tmp_path.exists():
-            tmp_path.unlink()
-
-
-def atomic_temp_path(path: Path) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        prefix=f".{path.name}.",
-        suffix=".tmp",
-        dir=path.parent,
-        delete=False,
-    ) as handle:
-        return Path(handle.name)
-
-
-def save_image_atomic(image: Image.Image, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = atomic_temp_path(path)
-    try:
-        image.save(tmp_path, format=path.suffix.lstrip(".").upper() or None)
-        tmp_path.replace(path)
-    finally:
-        if tmp_path.exists():
-            tmp_path.unlink()
+    write_text_atomic(path, text)
 
 
 def clean_name(value: str) -> str:

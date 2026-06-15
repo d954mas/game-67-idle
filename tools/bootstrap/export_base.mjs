@@ -57,6 +57,8 @@ const COPY = [
   "tools/assets/audit_runtime_ui_asset_usage.test.mjs",
   "tools/assets/audit_source_family_coverage.mjs",
   "tools/assets/audit_source_family_coverage.test.mjs",
+  "tools/assets/atomic_io.py",
+  "tools/assets/atomic_io_test.py",
   "tools/assets/chroma_key_alpha.py",
   "tools/assets/chroma_key_alpha_test.py",
   "tools/assets/dual_plate_alpha.py",

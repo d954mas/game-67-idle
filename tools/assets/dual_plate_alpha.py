@@ -11,6 +11,10 @@ from typing import Literal
 
 from PIL import Image
 
+try:
+    from tools.assets.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
+except ModuleNotFoundError:  # pragma: no cover - supports direct script execution by path.
+    from atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
 
 RGB = tuple[int, int, int]
 AlphaCombine = Literal["min", "max", "avg"]
@@ -210,8 +214,8 @@ def build_report(image: Image.Image, *, removed_blob_pixels: int, timings: dict[
 
 
 def write_markdown_report(path: Path, report: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    write_text_atomic(
+        path,
         "\n".join(
             [
                 "---",
@@ -235,8 +239,7 @@ def write_markdown_report(path: Path, report: dict) -> None:
                 *(["", "## Timing", *[f"- {name}: {elapsed} ms" for name, elapsed in report["timing_ms"].items()]] if report.get("timing_ms") else []),
                 "",
             ]
-        ),
-        encoding="utf-8",
+        )
     )
 
 
@@ -283,9 +286,8 @@ def main() -> int:
     )
     if args.profile:
         timings["cleanup"] = round((perf_counter() - cleanup_started) * 1000, 3)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
     save_started = perf_counter()
-    result.save(args.output)
+    save_image_atomic(result, args.output)
     if args.profile:
         timings["save_output"] = round((perf_counter() - save_started) * 1000, 3)
 
@@ -311,8 +313,7 @@ def main() -> int:
         timings["total"] = round((perf_counter() - started) * 1000, 3)
         report["timing_ms"] = timings
     if args.json_output:
-        args.json_output.parent.mkdir(parents=True, exist_ok=True)
-        args.json_output.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        write_json_atomic(args.json_output, report, trailing_newline=False)
     if args.report:
         write_markdown_report(args.report, report)
     print(f"{report['verdict']}: wrote {args.output} ({report['visible_pixels']} visible pixels)")

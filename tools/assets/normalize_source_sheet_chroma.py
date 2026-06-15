@@ -7,6 +7,11 @@ from pathlib import Path
 
 from PIL import Image
 
+try:
+    from tools.assets.atomic_io import save_image_atomic
+except ModuleNotFoundError:  # pragma: no cover - supports direct script execution by path.
+    from atomic_io import save_image_atomic
+
 
 def parse_color(value: str) -> tuple[int, int, int]:
     text = value.strip().lstrip("#")
@@ -56,8 +61,7 @@ def normalize_background(source: Path, output: Path, key: tuple[int, int, int], 
             if 0 <= nx < width and 0 <= ny < height:
                 push(nx, ny)
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    image.save(output)
+    save_image_atomic(image, output)
     return changed
 
 
