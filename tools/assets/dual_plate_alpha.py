@@ -21,6 +21,13 @@ AlphaCombine = Literal["min", "max", "avg"]
 RecoverySource = Literal["dark", "light", "average"]
 
 
+def flattened_pixel_data(image: Image.Image):
+    getter = getattr(image, "get_flattened_data", None)
+    if callable(getter):
+        return getter()
+    return image.getdata()
+
+
 def parse_color(value: str) -> RGB:
     text = value.strip().lstrip("#")
     if len(text) != 6:
@@ -171,7 +178,7 @@ def cleanup_alpha_blobs(
 
 def count_transparent_nonzero_rgb(image: Image.Image) -> int:
     rgba = image.convert("RGBA")
-    return sum(1 for red, green, blue, alpha in rgba.getdata() if alpha == 0 and (red != 0 or green != 0 or blue != 0))
+    return sum(1 for red, green, blue, alpha in flattened_pixel_data(rgba) if alpha == 0 and (red != 0 or green != 0 or blue != 0))
 
 
 def alpha_bbox(image: Image.Image) -> list[int] | None:
@@ -184,7 +191,7 @@ def alpha_bbox(image: Image.Image) -> list[int] | None:
 
 def build_report(image: Image.Image, *, removed_blob_pixels: int, timings: dict[str, float] | None = None) -> dict:
     rgba = image.convert("RGBA")
-    alphas = list(rgba.getchannel("A").getdata())
+    alphas = list(flattened_pixel_data(rgba.getchannel("A")))
     visible = [alpha for alpha in alphas if alpha > 0]
     hidden_rgb_pixels = count_transparent_nonzero_rgb(rgba)
     problems: list[str] = []
