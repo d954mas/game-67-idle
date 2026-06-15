@@ -1,15 +1,34 @@
 # Source Sheet Intake Audit: rune-marches-compact-ui-bases-source-v5-chroma-clean.png
 
 status: pass
+analysis_engine: numpy
 size: 1536x1024
 component_count: 11
 closest_gap_px: 40
 max_exact_key_conflict_px: 0
 max_key_hue_conflict_ratio: 0.05
 suggested_key_color: #ff00ff
+key_color_action: keep_current_key_color
+next_prompt_key_color: #00ff00
+recommended_next_step: slice_ready
 
 ## Problems
 - none
+
+## Problem Summary
+- components_with_border_gap: 0
+- components_with_exact_key_conflict: 0
+- components_with_key_hue_conflict: 0
+- total_exact_key_conflict_px: 0
+- total_key_fringe_hue_px: 0
+- total_purple_halo_hue_px: 0
+- gutter_below_min: false
+- worst_key_hue_component: {'id': 'component_1', 'ratio': 0.0, 'bbox': [1149, 131, 338, 714]}
+
+## Recommended Next Step
+- action: slice_ready
+- reason: source sheet passed intake checks
+- key_color: #00ff00
 
 ## Components
 - component_1: bbox=[1149, 131, 338, 714] area=239210 border_gap=49 visible=239210 exact_key=0 key_fringe_hue=0 purple_halo_hue=0 key_hue_ratio=0.0
@@ -26,8 +45,18 @@ suggested_key_color: #ff00ff
 
 ## Candidate Key Colors
 - #ff00ff: exact=0 exact_ratio=0.0 hue_band=16 hue_ratio=2.9e-05 score=16.002938
-- #0000ff: exact=0 exact_ratio=0.0 hue_band=18 hue_ratio=3.3e-05 score=18.003306
-- #00ffff: exact=0 exact_ratio=0.0 hue_band=3106 hue_ratio=0.005704 score=3106.570414
-- #00ff00: exact=0 exact_ratio=0.0 hue_band=5623 hue_ratio=0.010327 score=5624.032658
-- #ffff00: exact=0 exact_ratio=0.0 hue_band=9101 hue_ratio=0.016714 score=9102.67139
-- #ff0000: exact=0 exact_ratio=0.0 hue_band=43405 hue_ratio=0.079713 score=43412.971285
+- #0000ff: exact=0 exact_ratio=0.0 hue_band=17 hue_ratio=3.1e-05 score=17.003122
+- #00ffff: exact=0 exact_ratio=0.0 hue_band=3095 hue_ratio=0.005684 score=3095.568394
+- #00ff00: exact=0 exact_ratio=0.0 hue_band=5606 hue_ratio=0.010295 score=5607.029536
+- #ffff00: exact=0 exact_ratio=0.0 hue_band=9052 hue_ratio=0.016624 score=9053.662391
+- #ff0000: exact=0 exact_ratio=0.0 hue_band=44168 hue_ratio=0.081114 score=44176.111409
+
+## Timing
+- load_image: 20.822 ms
+- find_components: 29.233 ms
+- merge_fragments: 0.039 ms
+- key_conflicts: 47.524 ms
+- candidate_key_scores: 62.619 ms
+- component_rules: 0.019 ms
+- gutter_scan: 0.294 ms
+- total: 160.596 ms

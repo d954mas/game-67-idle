@@ -93,6 +93,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    component detection fixes; it records per-stage timing, the analysis engine
    (`numpy` fast path or portable `python` fallback), and the slowest stage
    without changing pass/fail semantics.
+   Intake JSON/Markdown must expose `problem_summary` and
+   `recommended_next_step` so key-color failures route quickly to either a
+   safer prompt key, more gutter/border regeneration, or dual-plate/split
+   alpha extraction instead of burying the decision in many component errors.
    Built-in image generation can produce a visually flat but pixel-varied
    chroma background; normalize it before intake instead of hand-tuning crop
    boxes around detector noise. Small satellite pieces of one icon can be

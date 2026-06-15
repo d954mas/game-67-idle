@@ -68,7 +68,10 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     report source must match the art job source art or crop source. Add
     `--profile` for slow or disputed intake runs so JSON/Markdown show
     per-stage timing, the analysis engine (`numpy` fast path or portable
-    `python` fallback), and the slowest stage.
+    `python` fallback), and the slowest stage. Intake reports should also show
+    `problem_summary` and `recommended_next_step` so the next pipeline move is
+    explicit: safer prompt key, more gutter/border regeneration, or
+    dual-plate/split alpha extraction.
 14. For generated sprites/icons, treat crop extraction as a solved production
     step, not a visual guess: remove background by transparent/alpha or
     border-connected chroma, isolate the intended component, trim to alpha

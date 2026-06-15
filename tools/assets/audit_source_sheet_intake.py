@@ -745,6 +745,69 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
     else:
         key_color_action = "keep_current_key_color"
         next_prompt_key_color = key_color_text
+    components_with_border_gap = [
+        component for component in components if int(component.get("border_gap_px") or 0) < args.min_border
+    ]
+    components_with_exact_key_conflict = [
+        component for component in components if int(component.get("exact_key_conflict_px") or 0) > args.max_exact_key_conflict_px
+    ]
+    components_with_key_hue_conflict = [
+        component for component in components if float(component.get("key_hue_conflict_ratio") or 0.0) > args.max_key_hue_conflict_ratio
+    ]
+    worst_key_hue_component = max(
+        components,
+        key=lambda component: float(component.get("key_hue_conflict_ratio") or 0.0),
+        default=None,
+    )
+    total_exact_key_conflict_px = sum(int(component.get("exact_key_conflict_px") or 0) for component in components)
+    total_key_fringe_hue_px = sum(int(component.get("key_fringe_hue_px") or 0) for component in components)
+    total_purple_halo_hue_px = sum(int(component.get("purple_halo_hue_px") or 0) for component in components)
+    problem_summary = {
+        "components_with_border_gap": len(components_with_border_gap),
+        "components_with_exact_key_conflict": len(components_with_exact_key_conflict),
+        "components_with_key_hue_conflict": len(components_with_key_hue_conflict),
+        "total_exact_key_conflict_px": total_exact_key_conflict_px,
+        "total_key_fringe_hue_px": total_key_fringe_hue_px,
+        "total_purple_halo_hue_px": total_purple_halo_hue_px,
+        "gutter_below_min": bool(min_gap is not None and min_gap < args.min_gutter),
+        "worst_key_hue_component": None
+        if worst_key_hue_component is None
+        else {
+            "id": worst_key_hue_component["id"],
+            "ratio": worst_key_hue_component["key_hue_conflict_ratio"],
+            "bbox": worst_key_hue_component["bbox"],
+        },
+    }
+    if key_color_action == "regenerate_with_next_prompt_key_color":
+        recommended_next_step = {
+            "action": "regenerate_source_sheet_with_safer_key_color",
+            "reason": "current key color conflicts with visible component art or halo colors",
+            "key_color": suggested_key_color,
+        }
+    elif key_color_action == "split_preserve_or_dual_plate_alpha":
+        recommended_next_step = {
+            "action": "split_preserve_or_dual_plate_alpha",
+            "reason": "key color conflicts exist but no safer candidate key color was found",
+            "key_color": None,
+        }
+    elif len(components) < args.min_components:
+        recommended_next_step = {
+            "action": "regenerate_source_sheet_with_clearer_separation",
+            "reason": "detected component count is below the expected minimum",
+            "key_color": key_color_text,
+        }
+    elif components_with_border_gap or problem_summary["gutter_below_min"]:
+        recommended_next_step = {
+            "action": "regenerate_source_sheet_with_more_gutter_and_safe_border",
+            "reason": "components are too close to sheet borders or each other for reliable slicing",
+            "key_color": key_color_text,
+        }
+    else:
+        recommended_next_step = {
+            "action": "slice_ready",
+            "reason": "source sheet passed intake checks",
+            "key_color": key_color_text,
+        }
 
     public_components = [{key: value for key, value in component.items() if not str(key).startswith("_")} for component in components]
 
@@ -770,6 +833,8 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
         "key_color_conflict_count": key_color_conflict_count,
         "key_color_action": key_color_action,
         "next_prompt_key_color": next_prompt_key_color,
+        "problem_summary": problem_summary,
+        "recommended_next_step": recommended_next_step,
         "components": public_components,
         "problems": problems,
         "status": "pass" if not problems else "fail",
@@ -794,6 +859,7 @@ def write_report(path: Path, result: dict[str, object]) -> None:
         f"suggested_key_color: {result['suggested_key_color']}",
         f"key_color_action: {result['key_color_action']}",
         f"next_prompt_key_color: {result['next_prompt_key_color']}",
+        f"recommended_next_step: {result['recommended_next_step']['action']}",
         "",
         "## Problems",
     ]
@@ -802,6 +868,26 @@ def write_report(path: Path, result: dict[str, object]) -> None:
         lines.extend(f"- {problem}" for problem in problems)
     else:
         lines.append("- none")
+    summary = result["problem_summary"]
+    lines.extend(
+        [
+            "",
+            "## Problem Summary",
+            f"- components_with_border_gap: {summary['components_with_border_gap']}",
+            f"- components_with_exact_key_conflict: {summary['components_with_exact_key_conflict']}",
+            f"- components_with_key_hue_conflict: {summary['components_with_key_hue_conflict']}",
+            f"- total_exact_key_conflict_px: {summary['total_exact_key_conflict_px']}",
+            f"- total_key_fringe_hue_px: {summary['total_key_fringe_hue_px']}",
+            f"- total_purple_halo_hue_px: {summary['total_purple_halo_hue_px']}",
+            f"- gutter_below_min: {str(summary['gutter_below_min']).lower()}",
+            f"- worst_key_hue_component: {summary['worst_key_hue_component']}",
+            "",
+            "## Recommended Next Step",
+            f"- action: {result['recommended_next_step']['action']}",
+            f"- reason: {result['recommended_next_step']['reason']}",
+            f"- key_color: {result['recommended_next_step']['key_color']}",
+        ]
+    )
     lines.extend(["", "## Components"])
     for component in result["components"]:
         lines.append(

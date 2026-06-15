@@ -104,6 +104,9 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertEqual(data["key_color_action"], "regenerate_with_next_prompt_key_color")
             self.assertNotEqual(data["next_prompt_key_color"], "#ff00ff")
             self.assertGreater(data["key_color_conflict_count"], 0)
+            self.assertGreater(data["problem_summary"]["components_with_exact_key_conflict"], 0)
+            self.assertEqual(data["recommended_next_step"]["action"], "regenerate_source_sheet_with_safer_key_color")
+            self.assertEqual(data["recommended_next_step"]["key_color"], data["next_prompt_key_color"])
 
     def test_rejects_exact_key_color_hole_inside_component_bbox(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -137,6 +140,50 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertIn("exact key-color-like art", result.stdout)
             data = json.loads(report.read_text(encoding="utf-8"))
             self.assertGreater(data["components"][0]["exact_key_conflict_px"], 0)
+
+    def test_recommends_dual_plate_when_no_safer_key_candidate_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "sheet.png"
+            report = Path(tmp) / "report.json"
+            markdown = Path(tmp) / "report.md"
+            image = Image.new("RGBA", (128, 96), (255, 0, 255, 255))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((32, 24, 96, 72), fill=(80, 60, 40, 255))
+            draw.rectangle((56, 40, 72, 56), fill=(250, 4, 250, 255))
+            image.save(source)
+            result = run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--source",
+                    str(source),
+                    "--min-components",
+                    "1",
+                    "--min-gutter",
+                    "24",
+                    "--min-border",
+                    "16",
+                    "--candidate-key-colors",
+                    "#ff00ff",
+                    "--json-output",
+                    str(report),
+                    "--report",
+                    str(markdown),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(data["key_color_action"], "split_preserve_or_dual_plate_alpha")
+            self.assertIsNone(data["next_prompt_key_color"])
+            self.assertEqual(data["recommended_next_step"]["action"], "split_preserve_or_dual_plate_alpha")
+            self.assertGreater(data["problem_summary"]["components_with_key_hue_conflict"], 0)
+            markdown_text = markdown.read_text(encoding="utf-8")
+            self.assertIn("## Problem Summary", markdown_text)
+            self.assertIn("## Recommended Next Step", markdown_text)
+            self.assertIn("- action: split_preserve_or_dual_plate_alpha", markdown_text)
 
     def test_component_pixel_offsets_do_not_leak_to_json_report(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -236,6 +283,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertNotEqual(data["suggested_key_color"], "#00ff00")
             self.assertEqual(data["key_color_action"], "keep_current_key_color")
             self.assertEqual(data["next_prompt_key_color"], "#ff00ff")
+            self.assertEqual(data["recommended_next_step"]["action"], "slice_ready")
 
     def test_merges_small_satellite_fragments_without_hiding_tight_icons(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -357,6 +405,9 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertIn("total", data["timing_ms"])
             markdown_text = markdown.read_text(encoding="utf-8")
             self.assertIn("analysis_engine:", markdown_text)
+            self.assertIn("recommended_next_step: slice_ready", markdown_text)
+            self.assertIn("## Problem Summary", markdown_text)
+            self.assertIn("## Recommended Next Step", markdown_text)
             self.assertIn("## Timing", markdown_text)
 
 
