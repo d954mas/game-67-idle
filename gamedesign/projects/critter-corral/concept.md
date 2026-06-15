@@ -92,17 +92,14 @@ Reads in 5 seconds; obviously "a game," not a debug screen. Mood: cheerful,
 squishy, satisfying. Theme skin (slimes / chicks / bugs / ore-blobs) is TBD and
 applied later by Codex; the mechanic reads the same regardless.
 
-## Open design forks (lead review — Stage Gate 1)
+## Design forks — RESOLVED (lead, 2026-06-15)
 
-1. **Field shape / identity:** open pasture (free 2D field — maximizes the
-   herding/flock feel) **vs** the literal conveyor/loop belt (critters ride a
-   belt; you divert them off into pens — keeps the genre's "loop" identity +
-   timing pressure). This is the biggest fork; it sets the whole feel. `[A]`
-   leaning open pasture for the standout herding identity.
-2. **First-slice tool:** start with the single **lure** (above) — agree, or a
-   different single primary action (gust/push)?
-3. **Slice pressure:** calm clear-the-wave (puzzle) vs gentle overflow/timer
-   (arcade). `[A]` calm first, to judge the moment without pressure noise.
+1. **Field shape / identity: OPEN PASTURE.** A free 2D field, not a conveyor
+   belt — maximize the herding / flocking feel; that is the standout identity.
+2. **First-slice tool: ONE LURE.** Place/move a lure; nearby critters move
+   toward it; sweep clumps to pens. Other tools (scare/gust) are later depth.
+3. **Slice pressure: CALM.** Clear-the-wave, no timer/overflow yet — judge the
+   core moment without pressure noise. Pressure is a later layer.
 
 ## Next gates (not started)
 
