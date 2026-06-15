@@ -4,7 +4,7 @@ runtime_manifest: `gamedesign/projects/rune-marches/data/rune-marches-ui-compact
 verdict: **pass**
 ## Timing
 
-- total: 1.084 ms
+- total: 1.483 ms
 
 ## Assets
 - PASS `compact_button_idle_short_v5`

@@ -221,6 +221,24 @@ def count_transparent_edge_bad_rgb(
     return count
 
 
+def count_fully_transparent_nonzero_rgb(image: Image.Image) -> int:
+    if np is not None:
+        array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
+        transparent = array[..., 3] == 0
+        nonzero_rgb = np.any(array[..., :3] != 0, axis=2)
+        return int(np.count_nonzero(transparent & nonzero_rgb))
+    rgba = image.convert("RGBA")
+    pixels = rgba.load()
+    width, height = rgba.size
+    count = 0
+    for y in range(height):
+        for x in range(width):
+            red, green, blue, alpha = pixels[x, y]
+            if alpha == 0 and (red != 0 or green != 0 or blue != 0):
+                count += 1
+    return count
+
+
 def parse_hex_color(value: Any) -> tuple[int, int, int] | None:
     if not isinstance(value, str):
         return None
@@ -367,6 +385,16 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
             f"{transparent_bad_rgb_count}px > {transparent_bad_rgb_limit}px"
         )
 
+    transparent_nonzero_rgb_count = count_fully_transparent_nonzero_rgb(image)
+    mark_timing("transparent_nonzero_rgb")
+    result["transparent_nonzero_rgb_pixels"] = transparent_nonzero_rgb_count
+    transparent_nonzero_rgb_limit = crop.get("transparent_nonzero_rgb_limit", 0)
+    if isinstance(transparent_nonzero_rgb_limit, int) and transparent_nonzero_rgb_count > transparent_nonzero_rgb_limit:
+        result["problems"].append(
+            f"fully transparent pixels keep nonzero RGB that can bleed during filtering: "
+            f"{transparent_nonzero_rgb_count}px > {transparent_nonzero_rgb_limit}px"
+        )
+
     if profile:
         timings["total"] = round((perf_counter() - started) * 1000, 3)
         result["timing_ms"] = timings
@@ -419,7 +447,8 @@ def render_markdown(report: dict[str, Any]) -> str:
             f"source_key_fringe={asset.get('edge_source_key_fringe_pixels', '-')}, "
             f"green_spill={asset.get('edge_green_spill_pixels', '-')}, "
             f"purple_halo={asset.get('edge_purple_halo_pixels', '-')}, "
-            f"transparent_bad_rgb={asset.get('transparent_edge_bad_rgb_pixels', '-')}"
+            f"transparent_bad_rgb={asset.get('transparent_edge_bad_rgb_pixels', '-')}, "
+            f"transparent_nonzero_rgb={asset.get('transparent_nonzero_rgb_pixels', '-')}"
         )
     lines.append("")
     return "\n".join(lines)

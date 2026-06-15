@@ -129,6 +129,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    transparent pixels, and resize previews in premultiplied-alpha space before
    packing. Reuse `tools/assets/chroma_key_alpha.py` for this cleanup instead
    of duplicating local keying logic in builders and audits.
+   Alpha bleed can be an intermediate cleanup step, but final runtime PNGs and
+   clean atlases must scrub `alpha == 0` pixels back to RGB 0 so hidden colors
+   cannot reappear during premultiplied conversion, mip/filtering, or atlas
+   repacking.
    Runtime builders for generated-source art must not redraw panels, buttons,
    icons, or textures with procedural shapes and present them as generated
    outputs; procedural drawing is allowed only for debug overlays, labels,
@@ -158,7 +162,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
       Add `--profile` when a generated UI audit feels slow or when comparing
       extraction fixes; it records per-asset timing and the slowest asset
-      without changing pass/fail semantics.
+      without changing pass/fail semantics. This audit must fail final runtime
+      PNGs whose fully transparent pixels keep any nonzero RGB, not only
+      source-key/purple/green classified edge colors.
     - edge proof preview for 1-2px fringe review:
       `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`
       Add `--profile` when edge proofs feel slow or when comparing cleanup
@@ -406,8 +412,8 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
 - Generated icon sheets need generous gutters. If expanded crop rects catch
   neighboring shadows, reject the source or isolate the intended component.
 - Manual crop rectangles are only a starting point. Runtime icon output must
-  pass alpha padding, key-fringe, purple edge-halo, and transparent-edge RGB
-  bleed audit.
+  pass alpha padding, key-fringe, purple edge-halo, transparent-edge RGB bleed
+  audit, and fully transparent RGB-zero audit.
 - For disputed 1-2 pixel edges, generate an edge proof image with zoomed
   top/right/bottom/left alpha-boundary strips on a checkerboard. The proof
   should mark the same bad edge classes as the pixel audit, including purple

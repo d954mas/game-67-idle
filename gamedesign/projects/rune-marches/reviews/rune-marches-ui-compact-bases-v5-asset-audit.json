@@ -32,16 +32,18 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
       "timing_ms": {
-        "load_image": 6.83,
-        "alpha_bbox": 0.079,
-        "padding_policy": 0.006,
-        "edge_key_fringe": 0.355,
-        "edge_purple_halo": 0.728,
-        "edge_green_spill": 0.238,
-        "edge_source_key_fringe": 0.245,
-        "transparent_edge_bad_rgb": 0.677,
-        "total": 9.16
+        "load_image": 8.406,
+        "alpha_bbox": 0.083,
+        "padding_policy": 0.007,
+        "edge_key_fringe": 0.448,
+        "edge_purple_halo": 0.796,
+        "edge_green_spill": 0.248,
+        "edge_source_key_fringe": 0.266,
+        "transparent_edge_bad_rgb": 0.749,
+        "transparent_nonzero_rgb": 0.482,
+        "total": 11.488
       }
     },
     {
@@ -70,16 +72,18 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
       "timing_ms": {
-        "load_image": 1.191,
-        "alpha_bbox": 0.064,
+        "load_image": 1.263,
+        "alpha_bbox": 0.066,
         "padding_policy": 0.006,
-        "edge_key_fringe": 0.316,
-        "edge_purple_halo": 0.893,
-        "edge_green_spill": 0.473,
-        "edge_source_key_fringe": 0.594,
-        "transparent_edge_bad_rgb": 1.289,
-        "total": 4.83
+        "edge_key_fringe": 0.424,
+        "edge_purple_halo": 1.061,
+        "edge_green_spill": 0.515,
+        "edge_source_key_fringe": 0.634,
+        "transparent_edge_bad_rgb": 1.436,
+        "transparent_nonzero_rgb": 0.594,
+        "total": 6.0
       }
     },
     {
@@ -108,16 +112,18 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
       "timing_ms": {
-        "load_image": 1.548,
-        "alpha_bbox": 0.078,
-        "padding_policy": 0.005,
-        "edge_key_fringe": 0.508,
-        "edge_purple_halo": 1.405,
-        "edge_green_spill": 0.76,
-        "edge_source_key_fringe": 0.766,
-        "transparent_edge_bad_rgb": 1.983,
-        "total": 7.054
+        "load_image": 1.969,
+        "alpha_bbox": 0.112,
+        "padding_policy": 0.011,
+        "edge_key_fringe": 0.62,
+        "edge_purple_halo": 1.696,
+        "edge_green_spill": 0.772,
+        "edge_source_key_fringe": 0.844,
+        "transparent_edge_bad_rgb": 2.242,
+        "transparent_nonzero_rgb": 0.926,
+        "total": 9.194
       }
     },
     {
@@ -146,16 +152,18 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
       "timing_ms": {
-        "load_image": 0.91,
-        "alpha_bbox": 0.057,
+        "load_image": 1.112,
+        "alpha_bbox": 0.061,
         "padding_policy": 0.005,
-        "edge_key_fringe": 0.204,
-        "edge_purple_halo": 0.763,
-        "edge_green_spill": 0.353,
-        "edge_source_key_fringe": 0.234,
-        "transparent_edge_bad_rgb": 0.621,
-        "total": 3.147
+        "edge_key_fringe": 0.301,
+        "edge_purple_halo": 0.807,
+        "edge_green_spill": 0.447,
+        "edge_source_key_fringe": 0.246,
+        "transparent_edge_bad_rgb": 0.734,
+        "transparent_nonzero_rgb": 0.38,
+        "total": 4.095
       }
     },
     {
@@ -184,16 +192,18 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
       "timing_ms": {
-        "load_image": 1.122,
-        "alpha_bbox": 0.061,
-        "padding_policy": 0.005,
-        "edge_key_fringe": 0.323,
-        "edge_purple_halo": 0.926,
-        "edge_green_spill": 0.469,
-        "edge_source_key_fringe": 0.524,
-        "transparent_edge_bad_rgb": 1.316,
-        "total": 4.749
+        "load_image": 1.416,
+        "alpha_bbox": 0.07,
+        "padding_policy": 0.006,
+        "edge_key_fringe": 0.46,
+        "edge_purple_halo": 1.072,
+        "edge_green_spill": 0.535,
+        "edge_source_key_fringe": 0.581,
+        "transparent_edge_bad_rgb": 1.319,
+        "transparent_nonzero_rgb": 0.609,
+        "total": 6.07
       }
     },
     {
@@ -222,16 +232,18 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
       "timing_ms": {
-        "load_image": 1.465,
-        "alpha_bbox": 0.066,
+        "load_image": 1.626,
+        "alpha_bbox": 0.067,
         "padding_policy": 0.005,
-        "edge_key_fringe": 0.555,
-        "edge_purple_halo": 1.49,
-        "edge_green_spill": 0.735,
-        "edge_source_key_fringe": 0.847,
-        "transparent_edge_bad_rgb": 2.016,
-        "total": 7.181
+        "edge_key_fringe": 0.556,
+        "edge_purple_halo": 1.476,
+        "edge_green_spill": 0.774,
+        "edge_source_key_fringe": 0.832,
+        "transparent_edge_bad_rgb": 2.24,
+        "transparent_nonzero_rgb": 0.926,
+        "total": 8.504
       }
     },
     {
@@ -260,21 +272,23 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0,
       "timing_ms": {
-        "load_image": 5.926,
-        "alpha_bbox": 0.208,
-        "padding_policy": 0.011,
-        "edge_key_fringe": 2.467,
-        "edge_purple_halo": 7.61,
-        "edge_green_spill": 4.116,
-        "edge_source_key_fringe": 4.537,
-        "transparent_edge_bad_rgb": 11.478,
-        "total": 36.361
+        "load_image": 7.578,
+        "alpha_bbox": 0.523,
+        "padding_policy": 0.01,
+        "edge_key_fringe": 3.02,
+        "edge_purple_halo": 8.732,
+        "edge_green_spill": 4.89,
+        "edge_source_key_fringe": 5.282,
+        "transparent_edge_bad_rgb": 17.058,
+        "transparent_nonzero_rgb": 5.428,
+        "total": 52.53
       }
     }
   ],
   "timing_ms": {
-    "total": 72.927,
-    "assets_total": 72.482
+    "total": 98.493,
+    "assets_total": 97.881
   }
 }

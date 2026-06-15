@@ -314,6 +314,23 @@ def bleed_transparent_rgb(image: Image.Image, passes: int = 16, key: RGB | None 
     bleed_transparent_rgb_python(image, passes=passes, key=key)
 
 
+def zero_fully_transparent_rgb(image: Image.Image) -> None:
+    if np is not None:
+        array = np.array(image.convert("RGBA"), dtype=np.uint8)
+        transparent = array[..., 3] == 0
+        if np.any(transparent):
+            array[..., :3][transparent] = 0
+            image.paste(Image.fromarray(array))
+        return
+    pixels = image.load()
+    width, height = image.size
+    for y in range(height):
+        for x in range(width):
+            red, green, blue, alpha = pixels[x, y]
+            if alpha == 0 and (red != 0 or green != 0 or blue != 0):
+                pixels[x, y] = (0, 0, 0, 0)
+
+
 def repair_transparent_edge_rgb(image: Image.Image, radius: int = 4, key: RGB | None = None) -> None:
     pixels = image.load()
     alpha = image.getchannel("A")
@@ -410,6 +427,7 @@ def key_to_alpha(
     repair_visible_halo(rgba, require_transparent_touch=not aggressive_visible_decontaminate)
     bleed_transparent_rgb(rgba, key=key)
     repair_transparent_edge_rgb(rgba, key=key)
+    zero_fully_transparent_rgb(rgba)
     return rgba
 
 
@@ -430,6 +448,7 @@ def resize_rgba_premultiplied(image: Image.Image, size: tuple[int, int]) -> Imag
         resized = Image.fromarray(resized_array.astype(np.uint8))
         bleed_transparent_rgb(resized, passes=4)
         repair_transparent_edge_rgb(resized)
+        zero_fully_transparent_rgb(resized)
         return resized
     pixels = rgba.load()
     width, height = rgba.size
@@ -458,4 +477,5 @@ def resize_rgba_premultiplied(image: Image.Image, size: tuple[int, int]) -> Imag
                 )
     bleed_transparent_rgb(resized, passes=4)
     repair_transparent_edge_rgb(resized)
+    zero_fully_transparent_rgb(resized)
     return resized

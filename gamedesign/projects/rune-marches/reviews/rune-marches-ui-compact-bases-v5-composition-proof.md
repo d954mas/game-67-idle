@@ -6,10 +6,10 @@ verdict: **pass**
 
 ## Timing
 
-- render_items: 307.771 ms
-- render_sheet: 70.229 ms
-- save_output: 74.772 ms
-- total: 455.215 ms
+- render_items: 416.985 ms
+- render_sheet: 91.963 ms
+- save_output: 98.516 ms
+- total: 610.521 ms
 
 ## Cache
 

@@ -25,7 +25,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 2.978
+        "render_strip": 1.14
       }
     },
     {
@@ -51,7 +51,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 1.807
+        "render_strip": 0.48
       }
     },
     {
@@ -77,7 +77,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 2.663
+        "render_strip": 0.535
       }
     },
     {
@@ -103,7 +103,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 1.796
+        "render_strip": 0.378
       }
     },
     {
@@ -129,7 +129,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 4.345
+        "render_strip": 0.708
       }
     },
     {
@@ -155,7 +155,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 1.73
+        "render_strip": 0.416
       }
     },
     {
@@ -181,7 +181,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 3.745
+        "render_strip": 0.677
       }
     },
     {
@@ -207,7 +207,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 1.825
+        "render_strip": 0.413
       }
     },
     {
@@ -233,7 +233,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 6.25
+        "render_strip": 0.952
       }
     },
     {
@@ -259,7 +259,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 1.926
+        "render_strip": 0.365
       }
     },
     {
@@ -285,7 +285,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 5.496
+        "render_strip": 0.978
       }
     },
     {
@@ -311,7 +311,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 1.768
+        "render_strip": 0.362
       }
     },
     {
@@ -337,7 +337,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 3.549
+        "render_strip": 0.469
       }
     },
     {
@@ -363,7 +363,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 1.883
+        "render_strip": 0.406
       }
     },
     {
@@ -389,7 +389,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 2.876
+        "render_strip": 0.51
       }
     },
     {
@@ -415,7 +415,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 1.897
+        "render_strip": 0.36
       }
     },
     {
@@ -441,7 +441,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 4.777
+        "render_strip": 0.691
       }
     },
     {
@@ -467,7 +467,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 1.881
+        "render_strip": 0.362
       }
     },
     {
@@ -493,7 +493,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 4.081
+        "render_strip": 0.626
       }
     },
     {
@@ -519,7 +519,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 1.986
+        "render_strip": 0.371
       }
     },
     {
@@ -545,7 +545,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 6.826
+        "render_strip": 0.922
       }
     },
     {
@@ -571,7 +571,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 2.267
+        "render_strip": 0.352
       }
     },
     {
@@ -597,7 +597,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 6.048
+        "render_strip": 0.88
       }
     },
     {
@@ -623,7 +623,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 1.853
+        "render_strip": 0.454
       }
     },
     {
@@ -649,7 +649,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 5.134
+        "render_strip": 0.706
       }
     },
     {
@@ -675,7 +675,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 10.036
+        "render_strip": 1.477
       }
     },
     {
@@ -701,7 +701,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 4.633
+        "render_strip": 0.736
       }
     },
     {
@@ -727,7 +727,7 @@
         "source_key": false
       },
       "timing_ms": {
-        "render_strip": 10.21
+        "render_strip": 1.47
       }
     }
   ],
@@ -737,46 +737,54 @@
     "transparent_rgb": 0,
     "reasons": {}
   },
+  "only_problems": false,
+  "rendered_rows": 28,
+  "omitted_clean_rows": 0,
+  "analysis_engine": "numpy",
   "timing_ms": {
-    "total": 174.59,
-    "render_strips": 106.266,
-    "compose_sheet": 47.644
+    "total": 113.795,
+    "render_strips": 18.196,
+    "compose_sheet": 64.756
   },
   "asset_timings": [
     {
       "asset_id": "compact_button_idle_short_v5",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png",
       "timing_ms": {
-        "load_image": 5.981,
-        "alpha_bbox": 0.065,
-        "total": 15.521
+        "load_image": 7.459,
+        "alpha_bbox": 0.088,
+        "numpy_masks": 0.798,
+        "total": 11.192
       }
     },
     {
       "asset_id": "compact_button_idle_medium_v5",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png",
       "timing_ms": {
-        "load_image": 1.076,
-        "alpha_bbox": 0.066,
-        "total": 13.337
+        "load_image": 1.143,
+        "alpha_bbox": 0.09,
+        "numpy_masks": 0.726,
+        "total": 4.504
       }
     },
     {
       "asset_id": "compact_button_idle_long_v5",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png",
       "timing_ms": {
-        "load_image": 1.472,
-        "alpha_bbox": 0.076,
-        "total": 17.284
+        "load_image": 1.519,
+        "alpha_bbox": 0.078,
+        "numpy_masks": 0.823,
+        "total": 5.408
       }
     },
     {
       "asset_id": "compact_button_disabled_short_v5",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png",
       "timing_ms": {
-        "load_image": 0.798,
-        "alpha_bbox": 0.06,
-        "total": 11.515
+        "load_image": 0.776,
+        "alpha_bbox": 0.062,
+        "numpy_masks": 0.635,
+        "total": 3.551
       }
     },
     {
@@ -784,26 +792,29 @@
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png",
       "timing_ms": {
         "load_image": 0.991,
-        "alpha_bbox": 0.057,
-        "total": 14.038
+        "alpha_bbox": 0.068,
+        "numpy_masks": 0.751,
+        "total": 4.207
       }
     },
     {
       "asset_id": "compact_button_disabled_long_v5",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png",
       "timing_ms": {
-        "load_image": 1.25,
-        "alpha_bbox": 0.063,
-        "total": 18.598
+        "load_image": 1.367,
+        "alpha_bbox": 0.076,
+        "numpy_masks": 0.792,
+        "total": 5.151
       }
     },
     {
       "asset_id": "compact_journal_panel_v5",
       "output": "assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png",
       "timing_ms": {
-        "load_image": 6.037,
-        "alpha_bbox": 0.169,
-        "total": 36.542
+        "load_image": 6.758,
+        "alpha_bbox": 0.202,
+        "numpy_masks": 3.161,
+        "total": 14.884
       }
     }
   ],

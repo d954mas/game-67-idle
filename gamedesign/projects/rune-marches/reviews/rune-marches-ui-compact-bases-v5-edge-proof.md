@@ -9,21 +9,25 @@ image_output: gamedesign/projects/rune-marches/art/previews/rune-marches-ui-comp
 Total bad marks: **0**
 Visible edge marks: 0
 Transparent RGB marks: 0
+Only problem rows in image: False
+Rendered rows: 28
+Omitted clean rows: 0
+Analysis engine: numpy
 
 ## Timing
 
-Total: 174.59 ms
+Total: 113.795 ms
 
-- render_strips: 106.266 ms
-- compose_sheet: 47.644 ms
+- render_strips: 18.196 ms
+- compose_sheet: 64.756 ms
 
-- `compact_journal_panel_v5` total=36.542 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png
-- `compact_button_disabled_long_v5` total=18.598 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png
-- `compact_button_idle_long_v5` total=17.284 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png
-- `compact_button_idle_short_v5` total=15.521 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png
-- `compact_button_disabled_medium_v5` total=14.038 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png
-- `compact_button_idle_medium_v5` total=13.337 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png
-- `compact_button_disabled_short_v5` total=11.515 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png
+- `compact_journal_panel_v5` total=14.884 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png
+- `compact_button_idle_short_v5` total=11.192 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png
+- `compact_button_idle_long_v5` total=5.408 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png
+- `compact_button_disabled_long_v5` total=5.151 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png
+- `compact_button_idle_medium_v5` total=4.504 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png
+- `compact_button_disabled_medium_v5` total=4.207 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png
+- `compact_button_disabled_short_v5` total=3.551 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png
 
 ## Rows
 

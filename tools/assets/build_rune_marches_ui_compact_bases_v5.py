@@ -13,7 +13,13 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.assets.chroma_key_alpha import bleed_transparent_rgb, key_to_alpha, repair_transparent_edge_rgb, resize_rgba_premultiplied
+from tools.assets.chroma_key_alpha import (
+    bleed_transparent_rgb,
+    key_to_alpha,
+    repair_transparent_edge_rgb,
+    resize_rgba_premultiplied,
+    zero_fully_transparent_rgb,
+)
 
 
 PROJECT_DIR = ROOT / "gamedesign/projects/rune-marches"
@@ -192,6 +198,7 @@ def crop_asset(source: Image.Image, crop: dict[str, Any]) -> Image.Image:
                 pixels[px, py] = (0, 0, 0, 0)
     bleed_transparent_rgb(image, key=(0, 255, 0))
     repair_transparent_edge_rgb(image, key=(0, 255, 0))
+    zero_fully_transparent_rgb(image)
     return image
 
 

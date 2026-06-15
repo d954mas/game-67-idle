@@ -13,7 +13,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 0.364
+        "total": 0.441
       }
     },
     {
@@ -23,7 +23,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 0.038
+        "total": 0.055
       }
     },
     {
@@ -33,7 +33,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 0.043
+        "total": 0.049
       }
     },
     {
@@ -43,7 +43,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 0.027
+        "total": 0.03
       }
     },
     {
@@ -53,7 +53,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 0.018
+        "total": 0.082
       }
     },
     {
@@ -63,7 +63,7 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 0.014
+        "total": 0.017
       }
     },
     {
@@ -78,6 +78,6 @@
     }
   ],
   "timing_ms": {
-    "total": 1.084
+    "total": 1.483
   }
 }

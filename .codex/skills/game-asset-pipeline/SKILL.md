@@ -77,7 +77,10 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     border-connected chroma, isolate the intended component, trim to alpha
     bounds, add output padding, remove edge fringe, remove green-screen spill
     even when the crop manifest does not declare a source key, and preview the
-    result before runtime use.
+    result before runtime use. Alpha bleed can be used during cleanup, but
+    final runtime PNGs must scrub fully transparent pixels back to RGB 0 so
+    hidden colors cannot leak during premultiplied conversion, mip/filtering,
+    or atlas repacking.
     For dual-plate extraction, run
     `py -3.12 tools/assets/dual_plate_alpha.py --light <light.png> --dark <dark.png> --output <rgba.png> --json-output <report.json> --report <report.md> --profile`
     and reject reports whose `verdict` is not `pass`, whose `problems` list is
@@ -89,6 +92,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     The audit should pass before integrating or regenerating runtime headers.
     Add `--profile` for slow or disputed runs so the JSON/Markdown report shows
     per-asset timing and the slowest asset without changing audit verdicts.
+    This audit must reject any final runtime PNG with nonzero RGB under
+    `alpha == 0`, even when the color is not classified as source-key, green,
+    or purple spill.
 16. For 1-2 pixel edge disputes, generate a zoomed edge proof:
     `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`.
     Add `--profile` for slow or disputed cleanup runs so JSON/Markdown capture
@@ -205,9 +211,11 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
   are not deleted. Remove antialias/key fringe at transparent edges before
   packing. Also audit and remove soft purple edge halos, not only exact
   chroma-key pixels. Fill transparent edge RGB with neighboring non-key edge
-  colors and resize/downscale in premultiplied-alpha space so filtering cannot
-  sample the old key color back into visible pixels. Reuse
-  `tools/assets/chroma_key_alpha.py` for this shared cleanup.
+  colors as an intermediate cleanup step and resize/downscale in
+  premultiplied-alpha space so filtering cannot sample the old key color back
+  into visible pixels. Before writing final runtime PNGs, scrub fully
+  transparent pixels back to RGB 0. Reuse `tools/assets/chroma_key_alpha.py`
+  for this shared cleanup.
 - Final review atlas audits must reject hidden RGB under alpha 0 in the clean
   atlas; this catches key-color ghosts that are invisible in the PNG viewer but
   can leak back through filtering or premultiplied conversion. They must also
@@ -310,7 +318,8 @@ Before UI assets are integrated:
   states.
 - Pixel audit evidence exists for generated runtime PNGs and reports no clipped
   icon alpha bounds, chroma-key edge fringe, purple edge halo, green-screen
-  spill, or unsafe transparent-edge RGB.
+  spill, unsafe transparent-edge RGB, or nonzero RGB under fully transparent
+  pixels.
 - Edge proof preview evidence exists when the lead/user reports 1-2 pixel
   fringe, because ordinary contact sheets can hide single-pixel defects.
   Slow edge-proof runs should include `--profile` evidence so bottlenecks are

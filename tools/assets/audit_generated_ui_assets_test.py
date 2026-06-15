@@ -86,6 +86,7 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             self.assertIn("timing_ms", report["assets"][0])
             self.assertIn("edge_green_spill", report["assets"][0]["timing_ms"])
             self.assertIn("transparent_edge_bad_rgb", report["assets"][0]["timing_ms"])
+            self.assertIn("transparent_nonzero_rgb", report["assets"][0]["timing_ms"])
             markdown = (root / "audit.md").read_text(encoding="utf-8")
             self.assertIn("## Timing", markdown)
 
@@ -208,6 +209,21 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("transparent edge keeps key/purple/green RGB", result.stdout)
 
+    def test_fully_transparent_nonzero_rgb_fails_even_when_color_is_neutral(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            image.putpixel((2, 2), (12, 9, 7, 0))
+            image.save(out_dir / "icon.png")
+
+            result = self.run_audit(root, self.write_manifest("assets/icon.png"))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("fully transparent pixels keep nonzero RGB", result.stdout)
+
     def test_default_green_screen_edge_spill_fails_without_manifest_key(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -238,7 +254,7 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("transparent edge keeps key/purple/green RGB", result.stdout)
 
-    def test_preserve_green_edges_allows_intentional_green_edge(self) -> None:
+    def test_preserve_green_edges_allows_visible_green_but_not_transparent_rgb(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             out_dir = root / "assets"
@@ -248,6 +264,21 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
             image.putpixel((8, 16), (19, 205, 9, 255))
             image.putpixel((7, 16), (0, 255, 0, 0))
+            image.save(out_dir / "icon.png")
+
+            result = self.run_audit(root, self.write_manifest("assets/icon.png", {"preserve_green_edges": True}))
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("fully transparent pixels keep nonzero RGB", result.stdout)
+
+    def test_preserve_green_edges_allows_visible_green_when_transparent_rgb_is_clean(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((8, 8, 23, 23), fill=(180, 120, 60, 255))
+            image.putpixel((8, 16), (19, 205, 9, 255))
             image.save(out_dir / "icon.png")
 
             result = self.run_audit(root, self.write_manifest("assets/icon.png", {"preserve_green_edges": True}))
@@ -355,7 +386,7 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("transparent edge keeps key/purple/green RGB", result.stdout)
 
-    def test_preserve_purple_edges_allows_purple_transparent_rgb_only(self) -> None:
+    def test_preserve_purple_edges_does_not_allow_transparent_rgb(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             out_dir = root / "assets"
@@ -367,7 +398,8 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             image.save(out_dir / "icon.png")
 
             result = self.run_audit(root, self.write_manifest("assets/icon.png", {"preserve_purple_edges": True}))
-            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("fully transparent pixels keep nonzero RGB", result.stdout)
 
 
 if __name__ == "__main__":

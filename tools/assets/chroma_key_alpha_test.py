@@ -14,7 +14,7 @@ from tools.assets.chroma_key_alpha import (
 
 
 class ChromaKeyAlphaTests(unittest.TestCase):
-    def test_key_to_alpha_bleeds_transparent_edge_rgb(self) -> None:
+    def test_key_to_alpha_zeroes_fully_transparent_rgb_after_cleanup(self) -> None:
         image = Image.new("RGBA", (24, 24), (255, 0, 255, 255))
         draw = ImageDraw.Draw(image)
         draw.rectangle((6, 6, 17, 17), fill=(150, 90, 50, 255))
@@ -23,10 +23,7 @@ class ChromaKeyAlphaTests(unittest.TestCase):
         red, green, blue, alpha = cleaned.getpixel((5, 12))
 
         self.assertEqual(alpha, 0)
-        self.assertNotEqual((red, green, blue), (255, 0, 255))
-        self.assertLess(abs(red - 150), 40)
-        self.assertLess(abs(green - 90), 40)
-        self.assertLess(abs(blue - 50), 40)
+        self.assertEqual((red, green, blue), (0, 0, 0))
 
     def test_aggressive_decontamination_repairs_visible_purple_specks(self) -> None:
         image = Image.new("RGBA", (24, 24), (255, 0, 255, 255))
@@ -125,6 +122,8 @@ class ChromaKeyAlphaTests(unittest.TestCase):
                 red, green, blue, alpha = pixels[x, y]
                 if alpha > 12:
                     self.assertFalse(is_green_screen_spill_like(red, green, blue))
+                if alpha == 0:
+                    self.assertEqual((red, green, blue), (0, 0, 0))
 
     def test_premultiplied_resize_does_not_sample_hidden_magenta(self) -> None:
         image = Image.new("RGBA", (12, 12), (255, 0, 255, 0))
@@ -138,6 +137,8 @@ class ChromaKeyAlphaTests(unittest.TestCase):
                 red, green, blue, alpha = pixels[x, y]
                 if alpha > 12:
                     self.assertFalse(red > 115 and blue > 120 and green < 145)
+                if alpha == 0:
+                    self.assertEqual((red, green, blue), (0, 0, 0))
 
 
 if __name__ == "__main__":

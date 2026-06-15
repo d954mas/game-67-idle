@@ -25,7 +25,7 @@
       "labeled_preview_delta_outside_label_pixels": 0,
       "analysis_engine": "numpy",
       "timing_ms": {
-        "total": 72.126
+        "total": 87.7
       }
     }
   ],
@@ -35,6 +35,6 @@
     "debug_outlines": false
   },
   "timing_ms": {
-    "total": 73.502
+    "total": 89.276
   }
 }
