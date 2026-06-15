@@ -21,53 +21,22 @@ Use this skill to make small, playable game changes without losing project conte
    retrospective; if you rely on its evidence, name any low/broken coverage.
 3. State the selected runtime harness before implementation, including why it is allowed by local rules.
 4. If the feature is based on a named reference, verify a reference deconstruction
-   exists before coding. It must include source evidence,
-   first-10-seconds and first-60-seconds actions, 1-5 minute loop,
-   screen grammar, mechanics/balance notes, reward/UI hierarchy,
-   borrow/avoid/copy-risk, and mismatch audit against the current build.
-   For a central gameplay reference, the deconstruction must be
-   observation-first and include official/store/trailer visuals, gameplay
-   video/walkthrough or a long screenshot sequence, and a current build capture.
-   It must also follow the four-pass method: source packet, player transcript,
-   systems extraction, and translation gate. If the translation gate does not
-   name the next screenshot/scenario proof, do not code yet. If the user asks
-   whether the ref was studied or rejects the current gameplay as unlike the
-   ref, answer from the deconstruction doc; if the doc cannot answer, improve
-   the study before coding. Do not claim a gameplay ref was studied unless the
-   doc records source links/paths, checked dates, timestamps/frames or
-   screenshot ids for observed beats, supporting guide/review/deconstruction
-   sources used for balance claims, and the current native capture. Treat the
-   Reference Study Definition of Ready as a pre-code gate: if mode, doc path,
-   Reference Lock, source matrix, current native capture, observation ledger,
-   borrow/avoid/copy-risk, current-build mismatch, or next native proof are
-   missing, state that the reference study is not ready for implementation and
-   gather sources or ask for user material instead of coding.
-   The deconstruction must also record the Source Ladder before conclusions:
-   user-provided material, official/store/trailer visuals, raw gameplay
-   video/walkthrough or long screenshot sequence, then supporting guides,
-   reviews, lectures, deconstructions, wikis, or community notes. Secondary
-   summaries cannot replace raw gameplay evidence for first-screen, control,
-   loop, reward, or UI hierarchy claims.
-   The deconstruction must include a Reference Evidence Board for central/deep
-   refs: at least six cited frames/screenshots for first screen, first input,
-   visible response, reward feedback, upgrade/progression UI, and
-   friction/blocked state, plus raw gameplay/walkthrough timing evidence. If
-   those frames/timestamps cannot be named, the reference is not studied enough
-   to implement.
-   If the user says the current build is not like the reference, run Reference Intake
-   before defending or making another pass: state the reference question, mode,
-   durable doc path, source packet, current native capture plan/path,
-   no-coding/no-final-art boundary, and first proof. Treat observed and
-   user-provided claims as usable; inferred/unknown claims must stay out of
-   implementation unless accepted as a narrow exception.
-   Before coding resumes, provide a Reference Digest with the mode, sources
-   checked, 3-5 observed facts, current-build mismatch, borrow/avoid/copy-risk,
-   and next native screenshot/scenario proof. If the digest cannot be written
-   from the durable doc, the reference is not implementation-ready.
-   Parallel reference work is research-only: source collection, frame capture,
-   visible transcript, and mismatch capture may run beside unrelated setup, but
-   the reference-driven gameplay/UI/economy/balance implementation lane stays
-   locked until the digest, mismatch audit, and next native proof exist.
+   exists in the active project wiki before coding, and keep the
+   reference-driven gameplay/UI/economy/balance lane locked until it is ready.
+   In brief, the durable doc must: declare a study mode; gather evidence through
+   the Source Ladder and Reference Evidence Board (observed frames, not secondary
+   summaries) covering first screen, first-60-seconds and the 1-5 minute loop,
+   control, response, reward, progression UI, and friction; record screen
+   grammar, mechanics/balance notes, reward/UI hierarchy, borrow/avoid/copy-risk,
+   and a mismatch audit against the current build; reach its Definition of Ready
+   as a pre-code gate; and end in a Reference Digest (mode, sources checked,
+   observed facts, current-build mismatch, borrow/avoid/copy-risk, next native
+   screenshot/scenario proof). Run Reference Intake when the user names a ref or
+   says the build is not like it. If any part is missing, state that the
+   reference study is not ready for implementation and gather sources instead of
+   coding. Parallel reference work is research-only; the implementation lane
+   stays locked until the digest, mismatch audit, and next native proof exist.
+   Full reference-deconstruction method and gates: `gamedesign/knowledge/reference_deconstruction.md`.
 5. Identify the smallest playable slice that satisfies the request.
 6. If the request names visual quality, FTUE, feel, audience testing, or a
    "casual" product target, capture or inspect the first playable screen before

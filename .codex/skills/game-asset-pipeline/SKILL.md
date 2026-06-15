@@ -50,167 +50,22 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 8. Add the smallest asset path that proves the runtime integration.
 9. Regenerate packs with the project task or preset.
 10. Verify both generated files and runtime loading behavior when possible.
-11. For UI assets, run strict validation after source art is accepted and cut:
-   `node tools/assets/validate_art_job.mjs --job <art-job> --strict`.
-   Strict mode should pass before runtime integration is considered done. It
-   requires `expected_outputs.asset_audit` and reads JSON reports to confirm
-   they passed, reference the art job's crop manifest, and cover every crop id.
-12. Before claiming a final generated/artist art pass, run:
+11. For reusable generated runtime UI kits (source sheets, slice9 panels/
+    buttons, icons, decor overlays, review atlases), do not re-walk the UI gate
+    sequence here. Follow `.codex/skills/generated-game-ui-assets/` for the full,
+    ordered UI-asset gate sequence: source-sheet intake, named crop plan, runtime
+    asset build, pixel audit, edge proof, generated-source derivation audit,
+    slice9 design-policy audit, source-family coverage audit, atlas metadata
+    audit, labeled review atlas build/audit, and runtime usage audit. This skill
+    owns the general asset hygiene around those gates (locations, provenance,
+    pack building) and defers the UI-specific gate details to that skill so the
+    sequence is documented in exactly one place.
+12. Before claiming a final generated/artist art pass for any asset, run:
     `node tools/assets/validate_art_job.mjs --job <art-job> --final-art`.
     This must fail while any runtime source is procedural debug art or has
-    partial/unknown generation provenance.
-13. Before writing crop rectangles for generated source sheets, run:
-    `py -3.12 tools/assets/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>`
-    if the source has a non-flat chroma background, then run:
-    `py -3.12 tools/assets/audit_source_sheet_intake.py --source <source-sheet>`.
-    This catches merged components, clipped items, bad chroma backgrounds, and
-    too-small gutters before slicing work begins. Record passing JSON reports
-    in `expected_outputs.source_sheet_intake_audit` for final-art claims. The
-    report source must match the art job source art or crop source. Add
-    `--profile --profile-output tmp/asset-profiles/<name>.json` for slow or
-    disputed intake runs so sidecar telemetry shows per-stage timing, the
-    analysis engine (`numpy` fast path or portable `python` fallback), and the
-    slowest stage without churning durable JSON/Markdown evidence. Use
-    `--profile-inline` only for throwaway/local debug reports. Intake reports should also show
-    `problem_summary` and `recommended_next_step` so the next pipeline move is
-    explicit: safer prompt key, more gutter/border regeneration, or
-    dual-plate/split alpha extraction.
-    For accepted multi-component source sheets, generate a named crop plan
-    from the intake report before manual slicing:
-    `py -3.12 tools/assets/plan_runtime_crops_from_intake.py --intake-audit <audit.json> --ids-file <ids.txt> --kind <icon|decor|sprite> --source-id <source-id> --source-role <role> --output-dir <runtime-dir> --json-output <crop-plan.json> --report <crop-plan.md>`.
-    Prefer `--ids-file` over long comma-separated CLI ids; it is faster to
-    review, reproducible, and avoids shell/launcher command length failures.
-14. For generated sprites/icons, treat crop extraction as a solved production
-    step, not a visual guess: remove background by transparent/alpha or
-    border-connected chroma, isolate the intended component, trim to alpha
-    bounds, add output padding, remove edge fringe, remove green-screen spill
-    even when the crop manifest does not declare a source key, and preview the
-    result before runtime use. Alpha bleed can be used during cleanup, but
-    final runtime PNGs must scrub fully transparent pixels back to RGB 0 so
-    hidden colors cannot leak during premultiplied conversion, mip/filtering,
-    or atlas repacking.
-    For dual-plate extraction, run
-    `py -3.12 tools/assets/dual_plate_alpha.py --light <light.png> --dark <dark.png> --output <rgba.png> --json-output <report.json> --report <report.md> --profile`
-    and reject reports whose `verdict` is not `pass`, whose `problems` list is
-    non-empty, or where `transparent_nonzero_rgb_pixels` is above zero. Hidden
-    RGB under transparent alpha can leak back as 1-2px fringe during
-    premultiplied resizing or atlas filtering.
-    For accepted crop plans, use
-    `py -3.12 tools/assets/build_runtime_assets_from_crop_plan.py --crop-plan <crop-plan.json> --crop-manifest <crop-manifest.json> --asset-manifest <asset-manifest.json> --art-job <job.json> --contact-sheet <contact.png>`
-    instead of writing one-off cutters; then run the normal pixel audit and
-    atlas metadata/review-atlas gates on the generated manifests.
-15. For generated UI PNGs, run the pixel audit after slicing:
-    `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`.
-    The audit should pass before integrating or regenerating runtime headers.
-    Add `--profile --profile-output tmp/asset-profiles/<name>.json` for slow
-    or disputed runs so sidecar telemetry shows per-asset timing and stdout
-    prints the slowest asset without churning durable JSON/Markdown evidence.
-    Use `--profile-inline` only for throwaway/local debug reports.
-    This audit must reject any final runtime PNG with nonzero RGB under
-    `alpha == 0`, even when the color is not classified as source-key, green,
-    or purple spill.
-16. For 1-2 pixel edge disputes, generate a zoomed edge proof:
-    `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`.
-    Add `--profile --profile-output tmp/asset-profiles/<name>.json` for slow
-    or disputed cleanup runs so sidecar telemetry captures total, render-strip,
-    compose, per-asset, and per-side timing, and stdout prints the slowest
-    asset side. The profile also records the analysis engine (`numpy` fast path
-    or portable `python` fallback). Use `--profile-inline` only for
-    throwaway/local debug reports.
-    Use `--only-problems` for large proof sheets when JSON keeps full coverage
-    and the human PNG/Markdown should show only bad sides.
-    Record durable proof paths in the art job (`expected_outputs.edge_proofs`
-    for primary outputs or candidate evidence for non-primary candidates), and
-    record matching JSON reports in `expected_outputs.edge_proof_reports` so
-    strict validation can verify the measured counts beside the image. Only
-    accepted reports with zero bad marks belong in `expected_outputs`; failing
-    reports stay in candidate/rejected evidence while cleanup continues.
-17. For generated-source UI crops, run the derivation audit after slicing:
-    `py -3.12 tools/assets/audit_generated_source_derivation.py --crop-manifest <crop-manifest>`.
-    This catches builders that read a generated sheet but output procedural
-    redraws instead of source-derived PNGs. Record passing JSON reports in
-    `expected_outputs.source_derivation_audit` before claiming final art. The
-    report crop manifest must match the art job crop manifest and cover every
-    source-derived `slice9`, `border`, `tile`, and `sprite` crop id.
-18. For generated slice9 assets, run the design-policy audit after crop and
-    runtime manifests are updated:
-    `node tools/assets/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
-    Add `--profile` when comparing policy changes or investigating slow
-    manifests; it writes total/per-asset timing and prints the slowest slice9
-    asset.
-    This gate does not judge beauty; it requires explicit stretch-zone,
-    fixed-ornament, overlay, min-size, content safe area, min/stress preview
-    coverage, and disallowed-use policy so ornate art is not silently used in
-    a size or role where it will stretch badly. Record passing JSON reports in
-    `expected_outputs.slice9_design_audit` before final-art validation. If the
-    policy declares `non_stretch_ornaments: separate_overlay_assets`, every
-    `overlay_asset_id` must reference a real non-slice9 crop/runtime asset.
-19. For final generated UI claims, run the source-family coverage audit:
-    `node tools/assets/audit_source_family_coverage.mjs --job <art-job> --json-output <audit.json> --report <audit.md>`.
-    Jobs should declare `expected_outputs.required_source_families`, usually
-    blank UI kit sheet, isolated icon sheet, and UI decor overlay sheet. This
-    gate fails one mixed source sheet, candidate/debug records, and missing
-    accepted source families. Record passing JSON reports in
-    `expected_outputs.source_family_coverage_audit` before final-art
-    validation. If the runtime manifest intentionally cuts only part of those
-    source families, declare `expected_outputs.runtime_scope.mode` as
-    `partial_runtime_slice`, with `included_source_families`,
-    `deferred_source_families`, and a concrete `reason`; otherwise final-art
-    validation must fail when required icon or decor source families have no
-    runtime-ready crop/runtime assets. A scoped pass prints
-    `partial-runtime-slice-valid`; report it as a validated partial slice, not
-    as a complete generated UI kit. If it fails, run
-    `node tools/assets/plan_missing_source_family_prompts.mjs --job <art-job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`
-    so the next generation pass has concrete prompt packets for the missing
-    source families.
-20. For generated UI review readiness, build the labeled review atlas after
-    the runtime manifest passes atlas metadata audit:
-    `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`.
-    Add `--profile --profile-output tmp/asset-profiles/<name>.json` while
-    optimizing atlas size or slow pack builds so telemetry captures timing,
-    occupancy ratio, and padded-asset ratio, and stdout prints the slowest pack
-    group without making durable review JSON/Markdown dirty on every rerun.
-    Use `--profile-inline` only for throwaway/local debug reports.
-    Record the JSON pack manifest in `expected_outputs.atlas_pack`; final-art
-    validation requires it for generated UI. The manifest should preserve atlas
-    rects, padded rects, extrusion, slice9 margins, content safe areas, source
-    paths, alias reuse, label-review purpose, and `review_label.rect` metadata
-    for names placed outside asset `padded_rect`s. Store
-    `review_label.placement` as `right` or `bottom` so labels use nearby free
-    space without covering art. Long labels should preserve exact
-    `review_label.text` metadata and render wrapped `review_label.lines` in the
-    preview so verbose ids do not widen the atlas. Labels must also keep a
-    readable outer atlas edge margin, because 1-3 px bottom/right margins look
-    cropped in common image viewers. This is proof/review output, not the
-    game's final runtime atlas packer. Labeled review packs must write
-    `labeled_preview_policy` with `mode: label_overlay_only`,
-    `allowed_delta: review_label_rects_only`, and `debug_outlines: false` at
-    pack and atlas level. Markdown reports must expose the labeled preview
-    path, overlay-only policy, asset id index, `review_label.rect`, placement,
-    and wrapped `review_label.lines` so the lead can select asset ids from the
-    report without opening JSON.
-21. Audit generated UI review atlases before final-art claims:
-    `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
-    Add `--profile --profile-output tmp/asset-profiles/<name>.json` when atlas
-    audit feels slow so sidecar telemetry preserves audit timing, the analysis
-    engine (`numpy` fast path or portable `python` fallback), and stdout prints
-    the slowest atlas group without committed timing-only churn.
-    Record passing JSON in `expected_outputs.atlas_pack_audit`; final-art
-    validation requires it. This catches missing packed assets, out-of-bounds
-    rects, padded-rect overlaps, alias mismatches, metadata mismatches, and
-    broken extrusion pixels. For labeled review atlases, it also catches labels
-    missing from metadata, wrong label text, wrapped `review_label.lines` that
-    do not fit their label rects, labels too close to the atlas edge, missing
-    labeled preview images, labels overlapping any art or other labels, labels
-    accidentally baked into the clean atlas, label rects without visible pixels
-    in the labeled preview, or hidden nonzero RGB under fully transparent
-    clean-atlas pixels. It should also reject visible pixels outside packed
-    `padded_rect`s in the clean atlas so review labels, stains, or orphan
-    sprites cannot leak into runtime art.
-    The labeled preview may differ from the clean atlas only inside declared
-    `review_label.rect`s; outside those rects it must preserve exact atlas
-    pixels and must not add debug outlines over packed art. The audit must
-    reject labeled review packs that omit or weaken `labeled_preview_policy`.
+    partial/unknown generation provenance, and (for UI kits) while the
+    UI-asset gates above have not all recorded passing evidence in the job's
+    `expected_outputs`.
 
 ## Rules
 
@@ -299,76 +154,24 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 
 ## Generated UI Production Gate
 
-Before UI assets are integrated:
+The full per-gate checklist for integrating reusable generated UI assets lives
+in `.codex/skills/generated-game-ui-assets/` (its Workflow gate order and
+Report Shape). Do not duplicate that checklist here. From the general asset
+pipeline's side, hold these cross-cutting rules:
 
-- The art job draft validator passes.
-- Accepted generated/artist source sheets have generation records created with
-  `tools/assets/new_generation_record.mjs`; procedural source is recorded only
-  as a debug exception.
-- The final-art validator passes before the work is described as final
-  generated or artist art.
-- Source-sheet intake audit exists and passes before crop rectangles are
-  treated as production slicing data.
-- Source families are accepted: blank UI kit, isolated icons, map/world layer,
-  and sprite/FX where needed.
-- Final UI art has source-family coverage evidence proving blank bases, icons,
-  and decor overlays are separate accepted source families rather than one
-  mixed sheet.
-- The crop manifest has named entries with `id`, `kind`, `rect`, `output`, and
-  kind-specific metadata.
-- The runtime manifest references every crop output with the same `id`, `kind`,
-  and `path`; missing crop outputs are strict-validation failures.
-- Slice9 crop/runtime entries have matching `stretch_policy` and `usage_policy`;
-  a passing `slice9_design_audit` is required before final generated/artist art
-  can be claimed.
-- Every `slice9` entry has margins, content safe area, and target preview sizes.
-- Every generated `icon` entry has trim padding and component isolation policy
-  unless the manifest records why the asset is already clean.
-- The runtime manifest references only runtime-ready files, not temp
-  generation outputs.
-- Labeled review atlas evidence exists for final generated UI claims. It should
-  group by `pack_group`, write clean atlas PNGs with extruded padded sprite
-  rects, write separate `labeled_preview_path` images for human review, place
-  exact names in `review_label.rect` free space outside asset `padded_rect`s,
-  list linked aliases on the physical source label, preserve exact
-  `review_label.text`, wrap rendered preview names through `review_label.lines`,
-  store `review_label.placement` as `right` or `bottom`, and preserve
-  slice9/content metadata without pretending to be the game's final runtime
-  packer. When atlas economy or speed is under review, build it with
-  `--profile --profile-output tmp/asset-profiles/<name>.json` so
-  occupancy/timing evidence is stored in a sidecar instead of dirtying the
-  durable pack manifest.
-- Atlas pack audit evidence exists and passes before final generated UI claims.
-  It should prove coverage, bounds, non-overlap, extrusion pixels, and
-  exact non-overlapping review labels. For labeled review atlases, the audit
-  should prove that `review_label.placement` is valid, wrapped
-  `review_label.lines` fit their rects, and labels are visible only in the
-  labeled preview, not in the clean atlas texture.
-- A full UI kit claim requires runtime-ready assets for every required runtime
-  source family. If icons or decor overlays are accepted as source art but not
-  cut into the runtime crop/asset manifests, record the work as
-  `partial_runtime_slice` and do not describe it as the complete generated UI
-  kit.
-- Contact sheet or preview evidence exists for crops and stretched slice9
-  states.
-- Pixel audit evidence exists for generated runtime PNGs and reports no clipped
-  icon alpha bounds, chroma-key edge fringe, purple edge halo, green-screen
-  spill, unsafe transparent-edge RGB, or nonzero RGB under fully transparent
-  pixels.
-- Edge proof preview evidence exists when the lead/user reports 1-2 pixel
-  fringe, because ordinary contact sheets can hide single-pixel defects.
-  Slow edge-proof runs should include
-  `--profile --profile-output tmp/asset-profiles/<name>.json` evidence so
-  bottlenecks are visible before rewriting tools without churning durable
-  review reports.
-- Generated-source derivation audit evidence exists when a runtime PNG is
-  claimed to come from generated source art rather than a procedural scaffold.
-- Native screenshot proof exists for playable/native work once integrated.
-- When mobile/portrait is in scope, native portrait screenshot proof exists and
-  demonstrates a distinct compact composition rather than a scaled desktop HUD.
-- When a DevAPI/UI tree exists, responsive layout audit evidence exists for
-  the key slice9 action nodes: minimum touch size, no overlap, and portrait
-  primary action above secondary choices.
+- Treat the UI-asset gate evidence as the integration bar: a UI kit is not
+  final art until that skill's source-sheet intake, slicing, pixel, edge,
+  derivation, slice9 design-policy, source-family coverage, atlas metadata, and
+  review-atlas gates have recorded passing JSON in the art job's
+  `expected_outputs`, and `validate_art_job.mjs --final-art` passes.
+- Procedural/programmer-art source is only ever a recorded debug exception, not
+  a closed generated-art task.
+- A full UI kit claim requires runtime-ready assets for every required source
+  family; if icons or decor overlays are accepted as source art but not cut
+  into the runtime manifests, record the work as `partial_runtime_slice` rather
+  than calling it the complete kit.
+- Native screenshot proof exists for playable/native work once integrated, with
+  a distinct compact portrait composition when mobile/portrait is in scope.
 
 ## Pack Builder Changes
 

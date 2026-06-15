@@ -41,75 +41,22 @@ small vertical slice instead of a large document set.
 - Temp generation, rejected images, screenshots, audit logs -> `tmp/`; only durable outputs in the design folder.
 - Stop for user review after the first strong fake shot or direction board before expanding the GDD.
 - Map every major system to a player verb, design pillar, or first-slice test.
-- When a named reference drives gameplay, UI, or visual implementation, create
-  a reference deconstruction first: source evidence, first 10 seconds, first
-  60 seconds, 1-5 minute loop, screen grammar, mechanics/balance notes,
-  reward/UI hierarchy, borrow/avoid/copy-risk, and mismatch audit against the
-  current build.
-- Reference deconstruction must follow the four-pass study method: source
-  packet, player transcript, systems extraction, and translation gate. Do not
-  implement from the systems extraction unless the translation gate names the
-  current-build mismatch and the next screenshot/scenario proof.
-- Central gameplay reference study must start with an observation ledger:
-  at least 5 timestamped/framed beats covering visible screen state, player
-  action, visible response, reward/UI feedback, and inferred meaning. Fill the
-  visible observations before the inference column.
-- Central reference study must be auditable: a durable deconstruction doc in
-  the active project wiki must include a source matrix with source quality,
-  checked date, evidence value, and uncertainty. If the user challenges whether
-  the ref was studied, answer from that doc; if the doc cannot answer, improve
-  the study before implementation.
-- Reference study must declare a mode before research: quick check, central
-  deconstruction, or deep deconstruction. Quick checks are only for narrow UI,
-  visual, wording, meme, or screen-composition details and cannot unlock core
-  gameplay/economy/balance/art-direction implementation. Central is the default
-  for a named gameplay or art driver. Deep is required for first-session pacing,
-  one-hour balance, child-test UX, retention pressure, or release-critical
-  readability.
-- Reference study starts with a Reference Lock before implementation or final
-  art: study mode, reference question, durable doc path, source packet, current
-  native capture plan/path, no-coding/no-final-art boundary, and expected
-  native proof. The lock opens only when the doc records at least three observed
-  source facts, one current-build mismatch, borrow/avoid/copy-risk, and one
-  scoped next pass tied to screenshot/scenario evidence.
-- Reference Intake comes before implementation and before defending the current
-  build. When a user names a ref or says the result does not match it, state
-  the reference question, study mode, durable doc path, source packet, current
-  native capture plan/path, no-coding/no-final-art boundary, and first proof.
-  Label claims as observed, inferred, user-provided, or unknown; unknown or
-  unsupported inferred claims cannot drive code, balance, UI, or final art.
-- Reference study has a Definition of Ready before code or final art: mode,
-  doc path, Reference Lock, source matrix, current native capture, observation
-  ledger for central/deep refs, borrow/avoid/copy-risk, current-build mismatch,
-  and next native proof. If any part is missing, say the study is not ready for
-  implementation; status: not ready for implementation. Gather sources or ask
-  for user material instead of coding.
-- Reference study must be inspectable before implementation resumes. After
-  Reference Intake or deconstruction, provide a short Reference Digest: study
-  mode, sources checked, 3-5 observed facts, current-build mismatch,
-  borrow/avoid/copy-risk, and next native screenshot/scenario proof. If this
-  digest would be vague, the study is not ready.
-- Study central/deep references through a Source Ladder before conclusions:
-  user-provided material, official/store/trailer visuals, raw gameplay
-  video/walkthrough or long screenshot sequence, then supporting guides,
-  reviews, lectures, deconstructions, wikis, and community notes. Record source
-  role, checked date, watched/read scope, what each source proves, and whether
-  it is observation evidence or secondary interpretation. Secondary summaries
-  cannot replace observed gameplay frames for first-screen, control, reward,
-  loop, or UI hierarchy claims.
-- Central/deep references require a Reference Evidence Board before
-  conclusions: cite at least six frames/screenshots for first screen, first
-  input, visible response, reward feedback, upgrade/progression UI, and a
-  friction or blocked state; pair them with raw gameplay/walkthrough timing
-  evidence; use guides, reviews, lectures, wikis, or deconstructions only as
-  supporting interpretation for balance, pacing, or player-friction claims. If
-  those frames/timestamps cannot be named, say the ref is not studied enough to
-  implement and keep code/final art locked.
-- Parallel reference work may collect sources, frames, transcripts, and native
-  mismatch captures, but it cannot run beside the implementation or final-art
-  lane it is meant to guide. Keep reference-driven gameplay/UI/economy/balance
-  and final art locked until the durable doc has the digest, mismatch audit,
-  borrow/avoid/copy-risk, and next native proof.
+- When a named reference drives gameplay, UI, economy, balance, or final art,
+  run a reference deconstruction first and keep code/final art locked until its
+  durable doc in the active project wiki is ready. The required workflow, in
+  brief: declare a study mode; check sources through the Source Ladder and the
+  Reference Evidence Board (observed frames, not secondary summaries); record at
+  least three observed facts, the screen grammar, borrow/avoid/copy-risk, and a
+  mismatch audit against the current build; then a Reference Digest (mode,
+  sources checked, observed facts, borrow/avoid/copy-risk, current-build
+  mismatch, next native screenshot/scenario proof). Run Reference Intake when
+  the user names a ref or says the build does not match it. The study has a
+  Definition of Ready before code or final art; if any part is missing, say the
+  study is not ready for implementation (status: not ready for implementation)
+  and gather sources instead of coding. Parallel reference work (collecting
+  sources/frames/transcripts/native mismatch captures) may run, but never beside
+  the implementation lane it guides.
+- Full reference-deconstruction method and gates: `gamedesign/knowledge/reference_deconstruction.md`.
 - Treat the GDD as a living source of truth, not a static essay.
 - Validators prove consistency, not quality; require visual/runtime evidence when possible.
 - Before handoff, run a mechanics-depth audit: combat/challenge, economy deltas, fail states, unlocks, and UI feedback must be implementable from files, not invented in the next chat.

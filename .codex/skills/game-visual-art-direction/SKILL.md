@@ -24,41 +24,21 @@ and runtime proof.
    the lead accepts the debt.
 3. Identify the accepted visual target: references, fake shots, art bible,
    lineup, or screenshots. If none exists, create one visual target first.
-   If the target is a named reference, require a reference deconstruction with
-   screenshots/video frames, screen grammar, visual composition, reward/UI
-   hierarchy, copy-risk, and mismatch audit against the current build before
-   generating or integrating art. For central visual references, require the
-   four-pass method: source packet, player transcript, systems extraction, and
-   translation gate with the next screenshot proof. Treat the Reference Study
-   Definition of Ready as a final-art gate: if the durable doc cannot name the
-   source matrix, observed frames/screenshots, current native capture,
-   borrow/avoid/copy-risk, current-build mismatch, and next native proof, do not
-   generate or integrate final art from that reference yet.
-   If the user rejects the visuals as unlike the reference, run Reference Intake
-   before another generation/integration pass: state the visual question,
-   selected study mode, durable doc path, source packet, current native capture
-   plan/path, no-final-art boundary, and first proof screenshot. Label claims as
-   observed, inferred, user-provided, or unknown; unknown/inferred visual claims
-   cannot become final-art direction without a recorded exception.
-   Before generating or integrating final reference-driven art, provide a
-   Reference Digest with the mode, sources checked, 3-5 observed visual facts,
-   current-build mismatch, borrow/avoid/copy-risk, and next native screenshot
-   proof. If the digest is vague, the visual reference is not ready.
-   For central/deep visual refs, require the Source Ladder before conclusions:
-   user-provided material, official/store/trailer visuals, raw gameplay or
-   screenshot evidence, then supporting guides, reviews, lectures,
-   deconstructions, wikis, or community notes. Secondary summaries cannot
-   replace actual screenshots/frames for composition, control target, reward
-   placement, or UI hierarchy claims.
-   Central/deep visual refs also need a Reference Evidence Board: cite frames
-   or screenshots for first screen, first input/control target, visible
-   response, reward feedback, upgrade/progression UI, and friction/blocked
-   state before deriving final art direction. If the frames/timestamps cannot
-   be named, do not generate or integrate final reference-driven art yet.
-   Parallel reference work may gather images, frames, transcripts, and current
-   native mismatch captures, but final reference-driven art generation or
-   integration stays locked until the Reference Digest, mismatch audit,
-   borrow/avoid/copy-risk, and next native proof exist.
+   If the target is a named reference, keep final-art generation/integration
+   locked behind a reference deconstruction in the active project wiki. In
+   brief, the durable doc must reach its Definition of Ready before final art:
+   declare a study mode; gather evidence through the Source Ladder and the
+   Reference Evidence Board (observed frames/screenshots, not secondary
+   summaries) for first screen, control target, response, reward, progression
+   UI, and friction; record screen grammar, visual composition, reward/UI hierarchy,
+   borrow/avoid/copy-risk, and a mismatch audit against the current build; then
+   a Reference Digest (mode, sources checked, 3-5 observed visual facts,
+   current-build mismatch, borrow/avoid/copy-risk, next native screenshot
+   proof). Run Reference Intake when the user rejects the visuals as unlike the
+   reference. Parallel reference work (gathering images/frames/transcripts/
+   native mismatch captures) may run, but final reference-driven art stays
+   locked until the digest, mismatch audit, and next native proof exist.
+   Full reference-deconstruction method and gates: `gamedesign/knowledge/reference_deconstruction.md`.
 4. Before visual runtime changes, compare the current native screenshot or
    capture plan against the accepted target and write a mismatch list. After
    every meaningful render change, capture a new native screenshot, update the
