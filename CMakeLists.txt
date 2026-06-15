@@ -169,6 +169,13 @@ if(NOT EMSCRIPTEN AND NOT TARGET build_critter_corral_packs)
         "${CORRAL_SPRITE_DIR}/grass.png"
         "${CORRAL_SPRITE_DIR}/lure.png"
         "${CORRAL_SPRITE_DIR}/spark.png"
+        "${CORRAL_SPRITE_DIR}/icon_radius.png"
+        "${CORRAL_SPRITE_DIR}/icon_pull.png"
+        "${CORRAL_SPRITE_DIR}/icon_second_lure.png"
+        "${CORRAL_SPRITE_DIR}/icon_gate.png"
+        "${CORRAL_SPRITE_DIR}/icon_calm.png"
+        "${CORRAL_SPRITE_DIR}/icon_chain.png"
+        "${CORRAL_SPRITE_DIR}/card.png"
     )
     add_custom_command(
         OUTPUT "${CORRAL_PACK}"

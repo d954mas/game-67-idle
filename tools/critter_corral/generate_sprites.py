@@ -361,6 +361,152 @@ def pip(size: int):
     return out
 
 
+def _disc(xs, ys, cx, cy, r, soft=1.5):
+    """Soft filled disc coverage mask."""
+    d = np.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
+    return 1.0 - _smoothstep(r - soft, r + soft, d)
+
+
+def _ring(xs, ys, cx, cy, r, thick, soft=1.5):
+    """Soft hollow ring (annulus) coverage mask."""
+    d = np.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
+    inner = _smoothstep(r - thick - soft, r - thick + soft, d)
+    outer = 1.0 - _smoothstep(r + thick - soft, r + thick + soft, d)
+    return np.clip(inner * outer, 0.0, 1.0)
+
+
+def _seg(xs, ys, ax, ay, bx, by, half_w, soft=1.5):
+    """Soft thick line segment coverage mask (capsule)."""
+    dx = bx - ax
+    dy = by - ay
+    ll = max(1e-6, dx * dx + dy * dy)
+    t = np.clip(((xs - ax) * dx + (ys - ay) * dy) / ll, 0.0, 1.0)
+    px = ax + t * dx
+    py = ay + t * dy
+    d = np.sqrt((xs - px) ** 2 + (ys - py) ** 2)
+    return 1.0 - _smoothstep(half_w - soft, half_w + soft, d)
+
+
+def _icon_base(size: int):
+    """White RGBA canvas + grid; icons are white so the runtime emit-color tints
+    them (we draw them bright so a card backdrop reads behind)."""
+    ys, xs = np.mgrid[0:size, 0:size].astype(np.float32)
+    out = np.zeros((size, size, 4), np.float32)
+    out[..., :3] = 255.0
+    return out, xs, ys
+
+
+def _stamp(out, mask):
+    out[..., 3] = np.maximum(out[..., 3], np.clip(mask, 0.0, 1.0) * 255.0)
+
+
+def icon_radius(size: int):
+    """A RING = lure radius +. Big soft ring with a small centre dot (the lure)."""
+    out, xs, ys = _icon_base(size)
+    c = (size - 1) * 0.5
+    _stamp(out, _ring(xs, ys, c, c, size * 0.34, size * 0.055))
+    _stamp(out, _disc(xs, ys, c, c, size * 0.07))
+    return out
+
+
+def icon_pull(size: int):
+    """An ARROW = pull strength +. A bold arrow pointing toward a centre dot."""
+    out, xs, ys = _icon_base(size)
+    c = (size - 1) * 0.5
+    # shaft from upper-left toward centre
+    ax, ay = size * 0.22, size * 0.22
+    bx, by = size * 0.60, size * 0.60
+    _stamp(out, _seg(xs, ys, ax, ay, bx, by, size * 0.05))
+    # arrowhead barbs at the tip (pointing to bottom-right toward target)
+    _stamp(out, _seg(xs, ys, bx, by, bx - size * 0.18, by, size * 0.05))
+    _stamp(out, _seg(xs, ys, bx, by, bx, by - size * 0.18, size * 0.05))
+    # the target dot (lure point) it pulls toward
+    _stamp(out, _disc(xs, ys, size * 0.74, size * 0.74, size * 0.07))
+    return out
+
+
+def icon_second_lure(size: int):
+    """TWO DOTS = a second (trailing) lure. Two rings linked by a faint trail."""
+    out, xs, ys = _icon_base(size)
+    cy = (size - 1) * 0.5
+    x0, x1 = size * 0.34, size * 0.66
+    # link trail between them
+    _stamp(out, _seg(xs, ys, x0, cy, x1, cy, size * 0.025) * 0.7)
+    # leading ring (bigger) + trailing ring (smaller)
+    _stamp(out, _ring(xs, ys, x0, cy, size * 0.18, size * 0.05))
+    _stamp(out, _disc(xs, ys, x0, cy, size * 0.05))
+    _stamp(out, _ring(xs, ys, x1, cy, size * 0.13, size * 0.045))
+    _stamp(out, _disc(xs, ys, x1, cy, size * 0.04))
+    return out
+
+
+def icon_gate(size: int):
+    """A WIDE GATE = wider pen gates. Two posts with arrows spreading them open."""
+    out, xs, ys = _icon_base(size)
+    cy = (size - 1) * 0.5
+    top, bot = size * 0.24, size * 0.76
+    lx, rx = size * 0.30, size * 0.70
+    # two gate posts
+    _stamp(out, _seg(xs, ys, lx, top, lx, bot, size * 0.05))
+    _stamp(out, _seg(xs, ys, rx, top, rx, bot, size * 0.05))
+    # outward arrows (the "wider" cue): left arrow pointing left, right pointing right
+    _stamp(out, _seg(xs, ys, lx, cy, lx - size * 0.16, cy, size * 0.04))
+    _stamp(out, _seg(xs, ys, lx - size * 0.16, cy, lx - size * 0.08, cy - size * 0.08, size * 0.04))
+    _stamp(out, _seg(xs, ys, lx - size * 0.16, cy, lx - size * 0.08, cy + size * 0.08, size * 0.04))
+    _stamp(out, _seg(xs, ys, rx, cy, rx + size * 0.16, cy, size * 0.04))
+    _stamp(out, _seg(xs, ys, rx + size * 0.16, cy, rx + size * 0.08, cy - size * 0.08, size * 0.04))
+    _stamp(out, _seg(xs, ys, rx + size * 0.16, cy, rx + size * 0.08, cy + size * 0.08, size * 0.04))
+    return out
+
+
+def icon_calm(size: int):
+    """A 'Zzz' = calmer critters. Three descending Z glyphs (sleepy / relaxed)."""
+    out, xs, ys = _icon_base(size)
+
+    def draw_z( cx, cy, s, w):
+        # top bar, diagonal, bottom bar
+        _stamp(out, _seg(xs, ys, cx - s, cy - s, cx + s, cy - s, w))
+        _stamp(out, _seg(xs, ys, cx + s, cy - s, cx - s, cy + s, w))
+        _stamp(out, _seg(xs, ys, cx - s, cy + s, cx + s, cy + s, w))
+
+    draw_z(size * 0.34, size * 0.66, size * 0.10, size * 0.035)
+    draw_z(size * 0.56, size * 0.46, size * 0.075, size * 0.030)
+    draw_z(size * 0.72, size * 0.30, size * 0.055, size * 0.024)
+    return out
+
+
+def icon_chain(size: int):
+    """A CHAIN = longer chain. Three interlocked ring links across the icon."""
+    out, xs, ys = _icon_base(size)
+    cy = (size - 1) * 0.5
+    for i, x in enumerate((size * 0.30, size * 0.50, size * 0.70)):
+        yo = cy + (size * 0.06 if i % 2 else -size * 0.06)
+        _stamp(out, _ring(xs, ys, x, yo, size * 0.135, size * 0.05))
+    return out
+
+
+def card(w: int, h: int):
+    """A rounded card backdrop tile for an upgrade choice. Near-white so the
+    runtime emit-color can tint each card; a soft inner border frames it."""
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+    out = np.zeros((h, w, 4), np.float32)
+    pad = 6.0
+    radius = 26.0
+    panel = _round_rect_mask(xs, ys, pad, pad, w - pad, h - pad, radius, soft=2.0)
+    # gentle top-to-bottom sheen
+    sheen = 0.90 + 0.10 * (1.0 - ys / h)
+    base = 252.0
+    out[..., :3] = (np.full((h, w, 3), base) * sheen[..., None])
+    out[..., 3] = panel * 255.0
+    # darker inner border so the card reads as a tactile tile under any tint
+    inner = _round_rect_mask(xs, ys, pad + 9, pad + 9,
+                             w - pad - 9, h - pad - 9, radius * 0.7, soft=2.0)
+    rim = np.clip(panel - inner, 0.0, 1.0)
+    for c in range(3):
+        out[..., c] = out[..., c] * (1.0 - rim * 0.5)
+    return out
+
+
 def main() -> None:
     print(f"Generating Critter Corral sprites -> {OUT_DIR}")
     # critter_a: warm red/orange; critter_b: cool blue. Bold, distinct hues.
@@ -374,6 +520,15 @@ def main() -> None:
     _save(lure(128), "lure.png")
     _save(spark(32), "spark.png")
     _save(pip(32), "pip.png")
+    # Light-meta upgrade icons (fontless, white -> tinted at emit time). Each
+    # icon conveys its effect at a glance for the pick-1-of-3 between waves.
+    _save(icon_radius(96), "icon_radius.png")        # ring   = lure radius +
+    _save(icon_pull(96), "icon_pull.png")            # arrow  = pull strength +
+    _save(icon_second_lure(96), "icon_second_lure.png")  # two dots = 2nd lure
+    _save(icon_gate(96), "icon_gate.png")            # gate   = wider pen gates
+    _save(icon_calm(96), "icon_calm.png")            # Zzz    = calmer critters
+    _save(icon_chain(96), "icon_chain.png")          # chain  = longer chain
+    _save(card(192, 240), "card.png")                # rounded card backdrop
     print("Done.")
 
 

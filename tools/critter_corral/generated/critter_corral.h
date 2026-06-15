@@ -16,11 +16,18 @@
 #define ASSET_ATLAS_CORRAL ((nt_hash64_t){0xC248B522002B721CULL}) /* corral */
 
 /* --- ATLAS_REGION --- */
+#define ASSET_ATLAS_REGION_CORRAL_CARD_PNG ((nt_hash64_t){0x4B4BDF896F55202EULL}) /* corral/card.png */
 #define ASSET_ATLAS_REGION_CORRAL_CRITTER_PNG ((nt_hash64_t){0xD27BB3F9FD7BF708ULL}) /* corral/critter.png */
 #define ASSET_ATLAS_REGION_CORRAL_CRITTER_A_PNG ((nt_hash64_t){0xBE5AEAE3525595DBULL}) /* corral/critter_a.png */
 #define ASSET_ATLAS_REGION_CORRAL_CRITTER_B_PNG ((nt_hash64_t){0xC2A6E5C99625930BULL}) /* corral/critter_b.png */
 #define ASSET_ATLAS_REGION_CORRAL_FLAG_PNG ((nt_hash64_t){0xE3AC243915A9B5ADULL}) /* corral/flag.png */
 #define ASSET_ATLAS_REGION_CORRAL_GRASS_PNG ((nt_hash64_t){0xB1A2F1D7B808E5B7ULL}) /* corral/grass.png */
+#define ASSET_ATLAS_REGION_CORRAL_ICON_CALM_PNG ((nt_hash64_t){0xCD06172A56219A14ULL}) /* corral/icon_calm.png */
+#define ASSET_ATLAS_REGION_CORRAL_ICON_CHAIN_PNG ((nt_hash64_t){0x0A3B8E1674AED405ULL}) /* corral/icon_chain.png */
+#define ASSET_ATLAS_REGION_CORRAL_ICON_GATE_PNG ((nt_hash64_t){0x48AA72FEBF983BF8ULL}) /* corral/icon_gate.png */
+#define ASSET_ATLAS_REGION_CORRAL_ICON_PULL_PNG ((nt_hash64_t){0x362DD8D77616BDAEULL}) /* corral/icon_pull.png */
+#define ASSET_ATLAS_REGION_CORRAL_ICON_RADIUS_PNG ((nt_hash64_t){0x11E699D737B4A86FULL}) /* corral/icon_radius.png */
+#define ASSET_ATLAS_REGION_CORRAL_ICON_SECOND_LURE_PNG ((nt_hash64_t){0x9A3AB64050A9D21CULL}) /* corral/icon_second_lure.png */
 #define ASSET_ATLAS_REGION_CORRAL_LURE_PNG ((nt_hash64_t){0xF2B960B0E7B207F8ULL}) /* corral/lure.png */
 #define ASSET_ATLAS_REGION_CORRAL_PEN_PNG ((nt_hash64_t){0x5AB3D245EC7C99B6ULL}) /* corral/pen.png */
 #define ASSET_ATLAS_REGION_CORRAL_PIP_PNG ((nt_hash64_t){0xDB98A2D1CB94A240ULL}) /* corral/pip.png */
@@ -31,11 +38,18 @@ static inline void critter_corral_register_labels(void) {
     (void)nt_hash64_str("assets/shaders/sprite.frag");
     (void)nt_hash64_str("assets/shaders/sprite.vert");
     (void)nt_hash64_str("corral");
+    (void)nt_hash64_str("corral/card.png");
     (void)nt_hash64_str("corral/critter.png");
     (void)nt_hash64_str("corral/critter_a.png");
     (void)nt_hash64_str("corral/critter_b.png");
     (void)nt_hash64_str("corral/flag.png");
     (void)nt_hash64_str("corral/grass.png");
+    (void)nt_hash64_str("corral/icon_calm.png");
+    (void)nt_hash64_str("corral/icon_chain.png");
+    (void)nt_hash64_str("corral/icon_gate.png");
+    (void)nt_hash64_str("corral/icon_pull.png");
+    (void)nt_hash64_str("corral/icon_radius.png");
+    (void)nt_hash64_str("corral/icon_second_lure.png");
     (void)nt_hash64_str("corral/lure.png");
     (void)nt_hash64_str("corral/pen.png");
     (void)nt_hash64_str("corral/pip.png");

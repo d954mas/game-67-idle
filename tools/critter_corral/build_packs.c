@@ -116,9 +116,17 @@ int main(int argc, char *argv[]) {
     nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/lure.png", &centre);
     nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/spark.png", &centre);
     nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/pip.png", &centre);
+    /* Light-meta upgrade icons + card backdrop (between-wave pick-1-of-3). */
+    nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/icon_radius.png", &centre);
+    nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/icon_pull.png", &centre);
+    nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/icon_second_lure.png", &centre);
+    nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/icon_gate.png", &centre);
+    nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/icon_calm.png", &centre);
+    nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/icon_chain.png", &centre);
+    nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/card.png", &centre);
 
     nt_builder_end_atlas(ctx);
-    (void)printf("  Atlas 'corral' added: 9 sprites (RECT, ppu=1.0)\n");
+    (void)printf("  Atlas 'corral' added: 16 sprites (RECT, ppu=1.0)\n");
     // #endregion
 
     // #region finish + codegen
