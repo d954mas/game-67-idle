@@ -19,6 +19,9 @@ right page; it does not replace the pages.
   definition of done tight.
 - [Content Planning](content_planning.md) - structure content roles, matrices,
   and production scope.
+- [Hybrid-Casual Patterns](hybrid_casual_patterns.md) - pick a satisfying core
+  loop + one twist on a proven genre; hybrid-casual monetization/retention shape
+  (2026 market evidence).
 - [Design Review](design_review.md) - review design docs before implementation.
 
 ## Gameplay Systems

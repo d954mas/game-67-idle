@@ -23,3 +23,12 @@ humans should use the knowledge base.
   knowledge.
 - Added this log so knowledge-base changes are visible without turning design
   docs into status tracking.
+
+## 2026-06-15
+
+- Added source note `sources/voodoo_new_big_three_hybrid_casual_2026-06-15.md`
+  (AppMagic: VOODOO's 2026 hits Castle Busters / Marble Sort! / Sand Loop; the
+  loop Sort Puzzle wave and hybrid-casual monetization).
+- Promoted reusable conclusions to [Hybrid-Casual Patterns](hybrid_casual_patterns.md)
+  (satisfying core loop + one twist on a proven genre; IAP-led monetization
+  shape) and registered it in [Index](index.md).
