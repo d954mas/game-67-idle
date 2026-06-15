@@ -32,19 +32,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 7.403,
-        "alpha_bbox": 0.082,
-        "padding_policy": 0.006,
-        "edge_key_fringe": 0.456,
-        "edge_purple_halo": 0.797,
-        "edge_green_spill": 0.247,
-        "edge_source_key_fringe": 0.238,
-        "transparent_edge_bad_rgb": 0.658,
-        "transparent_nonzero_rgb": 0.449,
-        "total": 10.338
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "compact_button_idle_medium_v5",
@@ -72,19 +60,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.091,
-        "alpha_bbox": 0.058,
-        "padding_policy": 0.005,
-        "edge_key_fringe": 0.302,
-        "edge_purple_halo": 1.109,
-        "edge_green_spill": 0.506,
-        "edge_source_key_fringe": 0.6,
-        "transparent_edge_bad_rgb": 1.273,
-        "transparent_nonzero_rgb": 0.613,
-        "total": 5.561
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "compact_button_idle_long_v5",
@@ -112,19 +88,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 2.551,
-        "alpha_bbox": 0.244,
-        "padding_policy": 0.014,
-        "edge_key_fringe": 1.022,
-        "edge_purple_halo": 2.404,
-        "edge_green_spill": 1.112,
-        "edge_source_key_fringe": 1.187,
-        "transparent_edge_bad_rgb": 2.762,
-        "transparent_nonzero_rgb": 1.184,
-        "total": 12.486
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "compact_button_disabled_short_v5",
@@ -152,19 +116,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.414,
-        "alpha_bbox": 0.068,
-        "padding_policy": 0.006,
-        "edge_key_fringe": 0.351,
-        "edge_purple_halo": 1.004,
-        "edge_green_spill": 0.472,
-        "edge_source_key_fringe": 0.294,
-        "transparent_edge_bad_rgb": 0.773,
-        "transparent_nonzero_rgb": 0.442,
-        "total": 4.826
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "compact_button_disabled_medium_v5",
@@ -192,19 +144,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.385,
-        "alpha_bbox": 0.068,
-        "padding_policy": 0.006,
-        "edge_key_fringe": 0.518,
-        "edge_purple_halo": 1.175,
-        "edge_green_spill": 0.593,
-        "edge_source_key_fringe": 0.66,
-        "transparent_edge_bad_rgb": 1.435,
-        "transparent_nonzero_rgb": 0.667,
-        "total": 6.51
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "compact_button_disabled_long_v5",
@@ -232,19 +172,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.496,
-        "alpha_bbox": 0.08,
-        "padding_policy": 0.005,
-        "edge_key_fringe": 0.527,
-        "edge_purple_halo": 1.521,
-        "edge_green_spill": 0.795,
-        "edge_source_key_fringe": 0.782,
-        "transparent_edge_bad_rgb": 1.962,
-        "transparent_nonzero_rgb": 0.834,
-        "total": 8.004
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "compact_journal_panel_v5",
@@ -272,19 +200,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 5.947,
-        "alpha_bbox": 0.269,
-        "padding_policy": 0.007,
-        "edge_key_fringe": 2.4,
-        "edge_purple_halo": 7.243,
-        "edge_green_spill": 3.82,
-        "edge_source_key_fringe": 4.592,
-        "transparent_edge_bad_rgb": 11.882,
-        "transparent_nonzero_rgb": 4.476,
-        "total": 40.642
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_health_v1",
@@ -312,19 +228,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.19,
-        "alpha_bbox": 0.088,
-        "padding_policy": 0.006,
-        "edge_key_fringe": 0.527,
-        "edge_purple_halo": 1.529,
-        "edge_green_spill": 0.794,
-        "edge_source_key_fringe": 0.925,
-        "transparent_edge_bad_rgb": 2.052,
-        "transparent_nonzero_rgb": 0.842,
-        "total": 7.954
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_mana_v1",
@@ -352,19 +256,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.022,
-        "alpha_bbox": 0.09,
-        "padding_policy": 0.005,
-        "edge_key_fringe": 0.358,
-        "edge_purple_halo": 1.075,
-        "edge_green_spill": 0.544,
-        "edge_source_key_fringe": 0.58,
-        "transparent_edge_bad_rgb": 1.465,
-        "transparent_nonzero_rgb": 0.724,
-        "total": 5.866
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_silver_v1",
@@ -392,19 +284,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.273,
-        "alpha_bbox": 0.069,
-        "padding_policy": 0.004,
-        "edge_key_fringe": 0.477,
-        "edge_purple_halo": 1.344,
-        "edge_green_spill": 0.598,
-        "edge_source_key_fringe": 0.714,
-        "transparent_edge_bad_rgb": 1.713,
-        "transparent_nonzero_rgb": 0.749,
-        "total": 6.943
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_star_token_v1",
@@ -432,19 +312,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 0.994,
-        "alpha_bbox": 0.073,
-        "padding_policy": 0.004,
-        "edge_key_fringe": 0.46,
-        "edge_purple_halo": 1.505,
-        "edge_green_spill": 0.784,
-        "edge_source_key_fringe": 0.763,
-        "transparent_edge_bad_rgb": 2.086,
-        "transparent_nonzero_rgb": 0.943,
-        "total": 7.614
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_warden_badge_v1",
@@ -472,19 +340,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.17,
-        "alpha_bbox": 0.068,
-        "padding_policy": 0.004,
-        "edge_key_fringe": 0.492,
-        "edge_purple_halo": 1.436,
-        "edge_green_spill": 0.697,
-        "edge_source_key_fringe": 0.814,
-        "transparent_edge_bad_rgb": 2.078,
-        "transparent_nonzero_rgb": 0.849,
-        "total": 7.61
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_shield_v1",
@@ -512,19 +368,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.127,
-        "alpha_bbox": 0.066,
-        "padding_policy": 0.004,
-        "edge_key_fringe": 0.411,
-        "edge_purple_halo": 1.464,
-        "edge_green_spill": 0.65,
-        "edge_source_key_fringe": 0.618,
-        "transparent_edge_bad_rgb": 1.722,
-        "transparent_nonzero_rgb": 0.773,
-        "total": 6.836
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_quest_scroll_v1",
@@ -552,19 +396,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.261,
-        "alpha_bbox": 0.075,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.493,
-        "edge_purple_halo": 1.62,
-        "edge_green_spill": 0.755,
-        "edge_source_key_fringe": 0.785,
-        "transparent_edge_bad_rgb": 2.096,
-        "transparent_nonzero_rgb": 0.93,
-        "total": 8.021
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_sun_medallion_v1",
@@ -592,19 +424,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.21,
-        "alpha_bbox": 0.077,
-        "padding_policy": 0.004,
-        "edge_key_fringe": 0.563,
-        "edge_purple_halo": 1.729,
-        "edge_green_spill": 0.695,
-        "edge_source_key_fringe": 0.827,
-        "transparent_edge_bad_rgb": 2.119,
-        "transparent_nonzero_rgb": 1.01,
-        "total": 8.236
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_locked_pin_v1",
@@ -632,19 +452,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.068,
-        "alpha_bbox": 0.075,
-        "padding_policy": 0.004,
-        "edge_key_fringe": 0.407,
-        "edge_purple_halo": 1.358,
-        "edge_green_spill": 0.62,
-        "edge_source_key_fringe": 0.598,
-        "transparent_edge_bad_rgb": 1.645,
-        "transparent_nonzero_rgb": 0.765,
-        "total": 6.544
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_unlocked_pin_v1",
@@ -672,19 +480,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 0.97,
-        "alpha_bbox": 0.062,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.333,
-        "edge_purple_halo": 1.198,
-        "edge_green_spill": 0.547,
-        "edge_source_key_fringe": 0.608,
-        "transparent_edge_bad_rgb": 1.555,
-        "transparent_nonzero_rgb": 0.637,
-        "total": 5.914
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_rune_crystal_v1",
@@ -712,19 +508,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 0.79,
-        "alpha_bbox": 0.08,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.473,
-        "edge_purple_halo": 1.491,
-        "edge_green_spill": 0.736,
-        "edge_source_key_fringe": 0.77,
-        "transparent_edge_bad_rgb": 2.022,
-        "transparent_nonzero_rgb": 0.901,
-        "total": 7.268
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "icon_travel_boot_v1",
@@ -752,19 +536,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.387,
-        "alpha_bbox": 0.073,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.647,
-        "edge_purple_halo": 1.614,
-        "edge_green_spill": 0.708,
-        "edge_source_key_fringe": 0.831,
-        "transparent_edge_bad_rgb": 2.125,
-        "transparent_nonzero_rgb": 0.99,
-        "total": 8.379
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_corner_top_left_v1",
@@ -792,19 +564,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.0,
-        "alpha_bbox": 0.068,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.49,
-        "edge_purple_halo": 1.599,
-        "edge_green_spill": 0.656,
-        "edge_source_key_fringe": 0.79,
-        "transparent_edge_bad_rgb": 2.041,
-        "transparent_nonzero_rgb": 0.97,
-        "total": 7.619
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_blue_diamond_v1",
@@ -832,19 +592,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 0.851,
-        "alpha_bbox": 0.066,
-        "padding_policy": 0.002,
-        "edge_key_fringe": 0.456,
-        "edge_purple_halo": 1.403,
-        "edge_green_spill": 0.989,
-        "edge_source_key_fringe": 0.767,
-        "transparent_edge_bad_rgb": 2.467,
-        "transparent_nonzero_rgb": 1.893,
-        "total": 8.898
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_red_seal_v1",
@@ -872,19 +620,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.259,
-        "alpha_bbox": 0.068,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.492,
-        "edge_purple_halo": 1.356,
-        "edge_green_spill": 0.725,
-        "edge_source_key_fringe": 0.741,
-        "transparent_edge_bad_rgb": 1.833,
-        "transparent_nonzero_rgb": 0.791,
-        "total": 7.27
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_corner_top_right_v1",
@@ -912,19 +648,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.361,
-        "alpha_bbox": 0.077,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.578,
-        "edge_purple_halo": 1.596,
-        "edge_green_spill": 0.732,
-        "edge_source_key_fringe": 0.84,
-        "transparent_edge_bad_rgb": 2.119,
-        "transparent_nonzero_rgb": 0.963,
-        "total": 8.271
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_compass_badge_v1",
@@ -952,19 +676,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.21,
-        "alpha_bbox": 0.072,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.525,
-        "edge_purple_halo": 1.61,
-        "edge_green_spill": 0.783,
-        "edge_source_key_fringe": 0.808,
-        "transparent_edge_bad_rgb": 2.145,
-        "transparent_nonzero_rgb": 0.971,
-        "total": 8.13
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_lock_plate_v1",
@@ -992,19 +704,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.8,
-        "alpha_bbox": 0.07,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.433,
-        "edge_purple_halo": 1.281,
-        "edge_green_spill": 0.547,
-        "edge_source_key_fringe": 0.639,
-        "transparent_edge_bad_rgb": 1.495,
-        "transparent_nonzero_rgb": 0.724,
-        "total": 6.994
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_ribbon_banner_v1",
@@ -1032,19 +732,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 0.915,
-        "alpha_bbox": 0.057,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.305,
-        "edge_purple_halo": 0.912,
-        "edge_green_spill": 0.438,
-        "edge_source_key_fringe": 0.527,
-        "transparent_edge_bad_rgb": 1.269,
-        "transparent_nonzero_rgb": 0.615,
-        "total": 5.042
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_silver_divider_v1",
@@ -1072,19 +760,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 0.499,
-        "alpha_bbox": 0.053,
-        "padding_policy": 0.002,
-        "edge_key_fringe": 0.209,
-        "edge_purple_halo": 0.595,
-        "edge_green_spill": 0.183,
-        "edge_source_key_fringe": 0.192,
-        "transparent_edge_bad_rgb": 0.493,
-        "transparent_nonzero_rgb": 0.295,
-        "total": 2.524
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_crystal_cluster_v1",
@@ -1112,19 +788,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 0.727,
-        "alpha_bbox": 0.062,
-        "padding_policy": 0.002,
-        "edge_key_fringe": 0.338,
-        "edge_purple_halo": 1.883,
-        "edge_green_spill": 0.688,
-        "edge_source_key_fringe": 0.734,
-        "transparent_edge_bad_rgb": 1.423,
-        "transparent_nonzero_rgb": 0.744,
-        "total": 6.604
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_wooden_plaque_v1",
@@ -1152,19 +816,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 0.835,
-        "alpha_bbox": 0.058,
-        "padding_policy": 0.002,
-        "edge_key_fringe": 0.199,
-        "edge_purple_halo": 0.882,
-        "edge_green_spill": 0.461,
-        "edge_source_key_fringe": 0.49,
-        "transparent_edge_bad_rgb": 1.009,
-        "transparent_nonzero_rgb": 0.575,
-        "total": 4.513
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_leather_tab_v1",
@@ -1192,19 +844,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 1.031,
-        "alpha_bbox": 0.058,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.225,
-        "edge_purple_halo": 0.934,
-        "edge_green_spill": 0.487,
-        "edge_source_key_fringe": 0.507,
-        "transparent_edge_bad_rgb": 1.014,
-        "transparent_nonzero_rgb": 0.548,
-        "total": 4.808
-      }
+      "transparent_nonzero_rgb_pixels": 0
     },
     {
       "id": "decor_sunburst_gem_v1",
@@ -1232,23 +872,7 @@
       "edge_green_spill_pixels": 0,
       "edge_source_key_fringe_pixels": 0,
       "transparent_edge_bad_rgb_pixels": 0,
-      "transparent_nonzero_rgb_pixels": 0,
-      "timing_ms": {
-        "load_image": 0.763,
-        "alpha_bbox": 0.067,
-        "padding_policy": 0.003,
-        "edge_key_fringe": 0.272,
-        "edge_purple_halo": 0.967,
-        "edge_green_spill": 0.529,
-        "edge_source_key_fringe": 0.529,
-        "transparent_edge_bad_rgb": 1.084,
-        "transparent_nonzero_rgb": 0.588,
-        "total": 4.804
-      }
+      "transparent_nonzero_rgb_pixels": 0
     }
-  ],
-  "timing_ms": {
-    "total": 252.372,
-    "assets_total": 251.029
-  }
+  ]
 }

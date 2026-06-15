@@ -100,8 +100,10 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 15. For generated UI PNGs, run the pixel audit after slicing:
     `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`.
     The audit should pass before integrating or regenerating runtime headers.
-    Add `--profile` for slow or disputed runs so the JSON/Markdown report shows
-    per-asset timing and the slowest asset without changing audit verdicts.
+    Add `--profile --profile-output tmp/asset-profiles/<name>.json` for slow
+    or disputed runs so sidecar telemetry shows per-asset timing and stdout
+    prints the slowest asset without churning durable JSON/Markdown evidence.
+    Use `--profile-inline` only for throwaway/local debug reports.
     This audit must reject any final runtime PNG with nonzero RGB under
     `alpha == 0`, even when the color is not classified as source-key, green,
     or purple spill.
@@ -316,9 +318,10 @@ Before UI assets are integrated:
   `review_label.text`, wrap rendered preview names through `review_label.lines`,
   store `review_label.placement` as `right` or `bottom`, and preserve
   slice9/content metadata without pretending to be the game's final runtime
-  packer. When atlas
-  economy or speed is under review, build it with `--profile` so
-  occupancy/timing evidence is stored with the pack manifest.
+  packer. When atlas economy or speed is under review, build it with
+  `--profile --profile-output tmp/asset-profiles/<name>.json` so
+  occupancy/timing evidence is stored in a sidecar instead of dirtying the
+  durable pack manifest.
 - Atlas pack audit evidence exists and passes before final generated UI claims.
   It should prove coverage, bounds, non-overlap, extrusion pixels, and
   exact non-overlapping review labels. For labeled review atlases, the audit

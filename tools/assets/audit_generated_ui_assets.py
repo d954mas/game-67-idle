@@ -31,11 +31,45 @@ from tools.assets.chroma_key_alpha import (
 )
 
 
+PROFILE_KEYS = {"timing_ms"}
+
+
 def project_path(path: str) -> Path:
     candidate = Path(path)
     if candidate.is_absolute():
         return candidate
     return ROOT / candidate
+
+
+def without_profile_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: without_profile_fields(item) for key, item in value.items() if key not in PROFILE_KEYS}
+    if isinstance(value, list):
+        return [without_profile_fields(item) for item in value]
+    return value
+
+
+def profile_report_from_audit(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": "game.generated_ui_asset_audit_profile",
+        "version": 1,
+        "crop_manifest": report.get("crop_manifest"),
+        "verdict": report.get("verdict"),
+        "assets_checked": report.get("assets_checked"),
+        "timing_ms": report.get("timing_ms"),
+        "assets": [
+            {
+                "id": asset.get("id"),
+                "kind": asset.get("kind"),
+                "output": asset.get("output"),
+                "size": asset.get("size"),
+                "problem_count": len(asset.get("problems", [])),
+                "timing_ms": asset.get("timing_ms"),
+            }
+            for asset in report.get("assets", [])
+            if isinstance(asset, dict)
+        ],
+    }
 
 
 def alpha_bbox(image: Image.Image, threshold: int = 12) -> tuple[int, int, int, int] | None:
@@ -460,16 +494,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--json-output")
     parser.add_argument("--report")
     parser.add_argument("--profile", action="store_true", help="Record per-asset timing in JSON/Markdown and print the slowest asset.")
+    parser.add_argument("--profile-output", help="Write per-asset timing telemetry to a sidecar JSON file. When set, profile fields are not embedded in the audit JSON/Markdown unless --profile-inline is also set.")
+    parser.add_argument("--profile-inline", action="store_true", help="Embed profile timing fields in audit JSON/Markdown even when --profile-output is used.")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     started = perf_counter()
+    profile_enabled = args.profile or args.profile_output is not None
+    profile_inline = args.profile_inline or args.profile_output is None
     manifest_path = project_path(args.crop_manifest)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     source_key = parse_hex_color(manifest.get("green_screen", {}).get("key"))
-    assets = [audit_asset(crop, ROOT, source_key, profile=args.profile) for crop in crop_entries(manifest)]
+    assets = [audit_asset(crop, ROOT, source_key, profile=profile_enabled) for crop in crop_entries(manifest)]
     problems = [f"{asset['id']}: {problem}" for asset in assets for problem in asset.get("problems", [])]
     report = {
         "schema": "game.generated_ui_asset_audit",
@@ -480,18 +518,24 @@ def main(argv: list[str]) -> int:
         "problems": problems,
         "assets": assets,
     }
-    if args.profile:
+    if profile_enabled:
         report["timing_ms"] = {
             "total": round((perf_counter() - started) * 1000, 3),
             "assets_total": round(sum(asset.get("timing_ms", {}).get("total", 0) for asset in assets), 3),
         }
+    if args.profile_output and profile_enabled:
+        write_json_atomic(project_path(args.profile_output), profile_report_from_audit(report))
+    output_report = report if profile_inline else without_profile_fields(report)
     if args.json_output:
-        write_json_atomic(project_path(args.json_output), report)
+        write_json_atomic(project_path(args.json_output), output_report)
     if args.report:
-        write_text_atomic(project_path(args.report), render_markdown(report))
+        write_text_atomic(project_path(args.report), render_markdown(output_report))
 
     print(f"{report['verdict']}: checked {len(assets)} generated UI asset(s)")
-    if args.profile and assets:
+    if args.profile_output:
+        profile_output_path = args.profile_output.replace("\\", "/")
+        print(f"wrote profile telemetry: {profile_output_path}")
+    if profile_enabled and assets:
         slowest = max(assets, key=lambda asset: asset.get("timing_ms", {}).get("total", 0))
         print(f"profile: slowest asset `{slowest.get('id')}` {slowest.get('timing_ms', {}).get('total', 0)} ms")
     for problem in problems:

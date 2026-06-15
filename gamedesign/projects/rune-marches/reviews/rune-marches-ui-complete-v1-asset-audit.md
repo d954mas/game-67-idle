@@ -11,42 +11,6 @@ Verdict: **PASS**
 Assets checked: 31
 Problems: 0
 
-## Timing
-
-Total: 252.372 ms
-
-- `compact_journal_panel_v5` total=40.642 ms
-- `compact_button_idle_long_v5` total=12.486 ms
-- `compact_button_idle_short_v5` total=10.338 ms
-- `decor_blue_diamond_v1` total=8.898 ms
-- `icon_travel_boot_v1` total=8.379 ms
-- `decor_corner_top_right_v1` total=8.271 ms
-- `icon_sun_medallion_v1` total=8.236 ms
-- `decor_compass_badge_v1` total=8.13 ms
-- `icon_quest_scroll_v1` total=8.021 ms
-- `compact_button_disabled_long_v5` total=8.004 ms
-- `icon_health_v1` total=7.954 ms
-- `decor_corner_top_left_v1` total=7.619 ms
-- `icon_star_token_v1` total=7.614 ms
-- `icon_warden_badge_v1` total=7.61 ms
-- `decor_red_seal_v1` total=7.27 ms
-- `icon_rune_crystal_v1` total=7.268 ms
-- `decor_lock_plate_v1` total=6.994 ms
-- `icon_silver_v1` total=6.943 ms
-- `icon_shield_v1` total=6.836 ms
-- `decor_crystal_cluster_v1` total=6.604 ms
-- `icon_locked_pin_v1` total=6.544 ms
-- `compact_button_disabled_medium_v5` total=6.51 ms
-- `icon_unlocked_pin_v1` total=5.914 ms
-- `icon_mana_v1` total=5.866 ms
-- `compact_button_idle_medium_v5` total=5.561 ms
-- `decor_ribbon_banner_v1` total=5.042 ms
-- `compact_button_disabled_short_v5` total=4.826 ms
-- `decor_leather_tab_v1` total=4.808 ms
-- `decor_sunburst_gem_v1` total=4.804 ms
-- `decor_wooden_plaque_v1` total=4.513 ms
-- `decor_silver_divider_v1` total=2.524 ms
-
 ## Asset Summary
 
 - PASS `compact_button_idle_short_v5` (slice9): size=[211, 118], padding={'left': 5, 'top': 4, 'right': 5, 'bottom': 4}, fringe=0, source_key_fringe=0, green_spill=0, purple_halo=0, transparent_bad_rgb=0, transparent_nonzero_rgb=0

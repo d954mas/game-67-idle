@@ -181,11 +181,13 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       `node tools/assets/validate_art_job.mjs --job <job> --final-art`
     - pixel audit:
       `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
-      Add `--profile` when a generated UI audit feels slow or when comparing
-      extraction fixes; it records per-asset timing and the slowest asset
-      without changing pass/fail semantics. This audit must fail final runtime
-      PNGs whose fully transparent pixels keep any nonzero RGB, not only
-      source-key/purple/green classified edge colors.
+      Add `--profile --profile-output tmp/asset-profiles/<name>.json` when a
+      generated UI audit feels slow or when comparing extraction fixes; the
+      sidecar records per-asset timing and stdout prints the slowest asset
+      without churning durable JSON/Markdown evidence. Use `--profile-inline`
+      only for throwaway/local debug reports. This audit must fail final
+      runtime PNGs whose fully transparent pixels keep any nonzero RGB, not
+      only source-key/purple/green classified edge colors.
     - edge proof preview for 1-2px fringe review:
       `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`
       Add `--profile` when edge proofs feel slow or when comparing cleanup

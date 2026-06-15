@@ -90,6 +90,42 @@ class GeneratedUiAssetAuditTest(unittest.TestCase):
             markdown = (root / "audit.md").read_text(encoding="utf-8")
             self.assertIn("## Timing", markdown)
 
+    def test_profile_output_keeps_audit_report_stable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            out_dir = root / "assets"
+            out_dir.mkdir()
+            image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+            draw = ImageDraw.Draw(image)
+            draw.ellipse((8, 8, 23, 23), fill=(220, 40, 40, 255))
+            image.save(out_dir / "icon.png")
+
+            result = self.run_audit(
+                root,
+                self.write_manifest("assets/icon.png"),
+                "--profile",
+                "--profile-output",
+                "tmp/profile/generated-ui-audit-profile.json",
+                "--json-output",
+                "audit.json",
+                "--report",
+                "audit.md",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("wrote profile telemetry: tmp/profile/generated-ui-audit-profile.json", result.stdout)
+            self.assertIn("profile: slowest asset `icon_test`", result.stdout)
+            report = json.loads((root / "audit.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["verdict"], "pass")
+            self.assertNotIn("timing_ms", report)
+            self.assertNotIn("timing_ms", report["assets"][0])
+            markdown = (root / "audit.md").read_text(encoding="utf-8")
+            self.assertNotIn("## Timing", markdown)
+            profile = json.loads((root / "tmp/profile/generated-ui-audit-profile.json").read_text(encoding="utf-8"))
+            self.assertEqual(profile["schema"], "game.generated_ui_asset_audit_profile")
+            self.assertEqual(profile["verdict"], "pass")
+            self.assertIn("timing_ms", profile)
+            self.assertIn("timing_ms", profile["assets"][0])
+
     def test_clipped_icon_fails_padding_check(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
