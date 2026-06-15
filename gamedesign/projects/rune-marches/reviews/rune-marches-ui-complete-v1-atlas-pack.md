@@ -14,21 +14,6 @@ Names are drawn only on labeled preview PNGs, in reserved free-space label rects
 - font_size: `18`
 - outer_margin: `8`
 
-## Atlas Efficiency
-
-- occupancy_ratio: 0.7112
-- padded_asset_ratio: 0.6104
-- atlas_area: 2744131
-- reserved_tile_area: 1951604
-- padded_asset_area: 1674972
-
-## Timing
-
-- read_manifest: 0.374 ms
-- load_assets: 36.761 ms
-- pack_groups: 245.344 ms
-- total: 282.985 ms
-
 ## Atlases
 
 - `ui_rune_marches_compact_bases_v5` -> `gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-complete-v1/ui_rune_marches_compact_bases_v5.png` 817x1127, entries=7, physical=7, aliases=0, occupancy=0.6452, labeled_preview=`gamedesign/projects/rune-marches/art/review-atlases/rune-marches-ui-complete-v1/ui_rune_marches_compact_bases_v5-labeled.png`, labels=label_overlay_only/review_label_rects_only/debug_outlines=false

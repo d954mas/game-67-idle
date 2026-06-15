@@ -159,9 +159,11 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 20. For generated UI review readiness, build the labeled review atlas after
     the runtime manifest passes atlas metadata audit:
     `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`.
-    Add `--profile` while optimizing atlas size or slow pack builds so the
-    JSON/Markdown report captures timing, occupancy ratio, and padded-asset
-    ratio, and stdout prints the slowest pack group.
+    Add `--profile --profile-output tmp/asset-profiles/<name>.json` while
+    optimizing atlas size or slow pack builds so telemetry captures timing,
+    occupancy ratio, and padded-asset ratio, and stdout prints the slowest pack
+    group without making durable review JSON/Markdown dirty on every rerun.
+    Use `--profile-inline` only for throwaway/local debug reports.
     Record the JSON pack manifest in `expected_outputs.atlas_pack`; final-art
     validation requires it for generated UI. The manifest should preserve atlas
     rects, padded rects, extrusion, slice9 margins, content safe areas, source
@@ -182,9 +184,10 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     report without opening JSON.
 21. Audit generated UI review atlases before final-art claims:
     `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
-    Add `--profile` when atlas audit feels slow so JSON/Markdown preserve audit
-    timing, the analysis engine (`numpy` fast path or portable `python`
-    fallback), and stdout prints the slowest atlas group.
+    Add `--profile --profile-output tmp/asset-profiles/<name>.json` when atlas
+    audit feels slow so sidecar telemetry preserves audit timing, the analysis
+    engine (`numpy` fast path or portable `python` fallback), and stdout prints
+    the slowest atlas group without committed timing-only churn.
     Record passing JSON in `expected_outputs.atlas_pack_audit`; final-art
     validation requires it. This catches missing packed assets, out-of-bounds
     rects, padded-rect overlaps, alias mismatches, metadata mismatches, and

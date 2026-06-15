@@ -248,6 +248,41 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertIn("labeled_preview=`packed/ui_common-labeled.png`", markdown)
             self.assertIn("labels=label_overlay_only/review_label_rects_only/debug_outlines=false", markdown)
 
+    def test_profile_output_keeps_audit_report_stable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")], label_review=True)
+            result = run(
+                AUDIT,
+                root,
+                "--atlas-pack",
+                str(pack.relative_to(root)),
+                "--asset-manifest",
+                str(manifest.relative_to(root)),
+                "--json-output",
+                "packed/audit.json",
+                "--report",
+                "packed/audit.md",
+                "--profile",
+                "--profile-output",
+                "tmp/profile/audit-profile.json",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            audit = json.loads((root / "packed/audit.json").read_text(encoding="utf-8"))
+            self.assertEqual(audit["verdict"], "pass")
+            self.assertNotIn("timing_ms", audit)
+            self.assertNotIn("timing_ms", audit["atlases"][0])
+            markdown = (root / "packed/audit.md").read_text(encoding="utf-8")
+            self.assertNotIn("## Timing", markdown)
+            profile = json.loads((root / "tmp/profile/audit-profile.json").read_text(encoding="utf-8"))
+            self.assertEqual(profile["schema"], "game.ui_atlas_pack_audit_profile")
+            self.assertEqual(profile["verdict"], "pass")
+            self.assertIn("timing_ms", profile)
+            self.assertIn("timing_ms", profile["atlases"][0])
+            self.assertIn("wrote profile telemetry: tmp/profile/audit-profile.json", result.stdout)
+            self.assertIn("profile: slowest atlas audit", result.stdout)
+
     def test_atomic_report_write_keeps_existing_text_on_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

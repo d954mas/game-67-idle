@@ -224,9 +224,11 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       sprite/decor-overlay placement metadata.
     - review atlas build:
       `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`
-      Add `--profile` when optimizing atlas size or slow pack builds; it writes
-      timing plus atlas occupancy/asset-area ratios into JSON/Markdown and
-      prints the slowest pack group.
+      Add `--profile --profile-output tmp/asset-profiles/<name>.json` when
+      optimizing atlas size or slow pack builds; the sidecar records timing
+      plus atlas occupancy/asset-area ratios and stdout prints the slowest pack
+      group without making the durable review JSON/Markdown dirty on every
+      rerun. Use `--profile-inline` only for throwaway/local debug reports.
       The builder must write atlas PNGs, labeled previews, JSON manifests, and
       Markdown reports atomically through temp-file replace so parallel audits
       or human preview cannot read truncated output.
@@ -252,9 +254,11 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       lead can choose assets without opening JSON.
     - review atlas audit:
       `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
-      Add `--profile` when atlas audit feels slow; it writes audit timing and
-      analysis engine (`numpy` fast path or portable `python` fallback), and
-      prints the slowest atlas group. For labeled review atlases this audit must
+      Add `--profile --profile-output tmp/asset-profiles/<name>.json` when
+      atlas audit feels slow; the sidecar records audit timing and analysis
+      engine (`numpy` fast path or portable `python` fallback), and stdout
+      prints the slowest atlas group without churning durable review evidence.
+      Use `--profile-inline` only for throwaway/local debug reports. For labeled review atlases this audit must
       write JSON/Markdown reports atomically through temp-file replace, and must
       also prove the labeled preview exists, label text matches the asset id
       and linked aliases, wrapped `review_label.lines` fit inside the label
@@ -398,9 +402,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   the atlas. The Markdown report must also include a human-readable asset id
   index with the labeled preview path and label rectangles, because the lead
   should be able to say which ids to integrate from one review artifact.
-  It must not be presented as the game's final runtime atlas. Use `--profile`
-  while optimizing atlas economy so reports preserve occupancy and padded-asset
-  ratios instead of relying on visual guessing.
+  It must not be presented as the game's final runtime atlas. Use
+  `--profile --profile-output tmp/asset-profiles/<name>.json` while optimizing
+  atlas economy so telemetry preserves occupancy and padded-asset ratios
+  without committing timing-only evidence churn.
 - Audit review atlases with `audit_ui_atlas_pack.py`; a proof image is not
   trusted until coverage, bounds, overlap, alias reuse, and extrusion pixel
   checks pass, including exact review-label text and non-overlapping review

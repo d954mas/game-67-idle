@@ -514,13 +514,6 @@
         "mode": "label_overlay_only",
         "allowed_delta": "review_label_rects_only",
         "debug_outlines": false
-      },
-      "timing_ms": {
-        "layout": 2.859,
-        "compose": 3.283,
-        "save_atlas": 43.673,
-        "save_labeled_preview": 47.737,
-        "total": 98.265
       }
     },
     {
@@ -1143,13 +1136,6 @@
         "mode": "label_overlay_only",
         "allowed_delta": "review_label_rects_only",
         "debug_outlines": false
-      },
-      "timing_ms": {
-        "layout": 2.599,
-        "compose": 2.665,
-        "save_atlas": 26.611,
-        "save_labeled_preview": 34.613,
-        "total": 67.083
       }
     },
     {
@@ -1765,13 +1751,6 @@
         "mode": "label_overlay_only",
         "allowed_delta": "review_label_rects_only",
         "debug_outlines": false
-      },
-      "timing_ms": {
-        "layout": 1.951,
-        "compose": 2.977,
-        "save_atlas": 33.063,
-        "save_labeled_preview": 40.703,
-        "total": 79.168
       }
     }
   ],
@@ -1783,18 +1762,5 @@
   "label_review_options": {
     "font_size": 18,
     "outer_margin": 8
-  },
-  "atlas_efficiency": {
-    "atlas_area": 2744131,
-    "reserved_tile_area": 1951604,
-    "padded_asset_area": 1674972,
-    "occupancy_ratio": 0.7112,
-    "padded_asset_ratio": 0.6104
-  },
-  "timing_ms": {
-    "read_manifest": 0.374,
-    "load_assets": 36.761,
-    "pack_groups": 245.344,
-    "total": 282.985
   }
 }

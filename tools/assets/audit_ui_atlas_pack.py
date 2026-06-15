@@ -65,6 +65,36 @@ def write_text(path: Path, text: str) -> None:
     write_text_atomic(path, text)
 
 
+def without_profile_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: without_profile_fields(item) for key, item in value.items() if key != "timing_ms"}
+    if isinstance(value, list):
+        return [without_profile_fields(item) for item in value]
+    return value
+
+
+def profile_report_from_audit(audit: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": "game.ui_atlas_pack_audit_profile",
+        "version": 1,
+        "atlas_pack": audit.get("atlas_pack"),
+        "asset_manifest": audit.get("asset_manifest"),
+        "verdict": audit.get("verdict"),
+        "timing_ms": audit.get("timing_ms"),
+        "atlases": [
+            {
+                "pack_group": atlas.get("pack_group"),
+                "path": atlas.get("path"),
+                "entry_count": atlas.get("entry_count"),
+                "analysis_engine": atlas.get("analysis_engine"),
+                "timing_ms": atlas.get("timing_ms"),
+            }
+            for atlas in audit.get("atlases", [])
+            if isinstance(atlas, dict)
+        ],
+    }
+
+
 def rect_valid(rect: Any) -> bool:
     return (
         isinstance(rect, list)
@@ -537,30 +567,39 @@ def main() -> None:
     parser.add_argument("--json-output")
     parser.add_argument("--report")
     parser.add_argument("--profile", action="store_true", help="Record atlas audit timing in JSON/Markdown and print the slowest atlas group.")
+    parser.add_argument("--profile-output", help="Write atlas audit timing telemetry to a sidecar JSON file. When set, profile fields are not embedded in the audit JSON/Markdown unless --profile-inline is also set.")
+    parser.add_argument("--profile-inline", action="store_true", help="Embed profile timing fields in the audit JSON/Markdown even when --profile-output is used.")
     args = parser.parse_args()
 
     pack_path = project_path(args.atlas_pack)
     if not pack_path.exists():
         fail(f"atlas pack not found: {args.atlas_pack}")
     manifest_path = project_path(args.asset_manifest) if args.asset_manifest else None
-    audit = audit_pack(pack_path, manifest_path, args.profile)
+    profile_output = project_path(args.profile_output) if args.profile_output else None
+    profile_enabled = args.profile or profile_output is not None
+    profile_inline = args.profile_inline or profile_output is None
+    audit = audit_pack(pack_path, manifest_path, profile_enabled)
+    profile_report = profile_report_from_audit(audit) if profile_enabled else None
+    if profile_output and profile_report:
+        write_json(profile_output, profile_report)
+    output_audit = audit if profile_inline else without_profile_fields(audit)
     if args.json_output:
-        write_json(project_path(args.json_output), audit)
+        write_json(project_path(args.json_output), output_audit)
     lines = [
         "# UI Atlas Pack Audit",
         "",
-        f"atlas_pack: `{audit['atlas_pack']}`",
-        f"asset_manifest: `{audit.get('asset_manifest')}`",
-        f"verdict: **{audit['verdict']}**",
+        f"atlas_pack: `{output_audit['atlas_pack']}`",
+        f"asset_manifest: `{output_audit.get('asset_manifest')}`",
+        f"verdict: **{output_audit['verdict']}**",
         "",
     ]
-    if audit.get("timing_ms"):
+    if output_audit.get("timing_ms"):
         lines.extend(["## Timing", ""])
-        for name, elapsed in audit["timing_ms"].items():
+        for name, elapsed in output_audit["timing_ms"].items():
             lines.append(f"- {name}: {elapsed} ms")
         lines.append("")
-    if audit.get("labeled_preview_policy"):
-        policy = audit["labeled_preview_policy"]
+    if output_audit.get("labeled_preview_policy"):
+        policy = output_audit["labeled_preview_policy"]
         lines.extend(
             [
                 "## Labeled Preview Policy",
@@ -576,15 +615,15 @@ def main() -> None:
         [
             "## Asset Coverage",
             "",
-            f"- expected_asset_ids: {len(audit.get('expected_asset_ids') or [])}",
-            f"- reported_asset_ids: {len(audit.get('reported_asset_ids') or [])}",
-            f"- missing_asset_ids: {', '.join(audit.get('missing_asset_ids') or []) or '-'}",
-            f"- unexpected_asset_ids: {', '.join(audit.get('unexpected_asset_ids') or []) or '-'}",
+            f"- expected_asset_ids: {len(output_audit.get('expected_asset_ids') or [])}",
+            f"- reported_asset_ids: {len(output_audit.get('reported_asset_ids') or [])}",
+            f"- missing_asset_ids: {', '.join(output_audit.get('missing_asset_ids') or []) or '-'}",
+            f"- unexpected_asset_ids: {', '.join(output_audit.get('unexpected_asset_ids') or []) or '-'}",
             "",
         ]
     )
     lines.extend(["## Atlases", ""])
-    for atlas in audit["atlases"]:
+    for atlas in output_audit["atlases"]:
         suffix = ""
         if atlas["problems"]:
             suffix = ": " + "; ".join(atlas["problems"])
@@ -614,11 +653,13 @@ def main() -> None:
     if args.report:
         write_text(project_path(args.report), "\n".join(lines))
     else:
-        print(json.dumps(audit, indent=2))
+        print(json.dumps(output_audit, indent=2))
     if audit["problems"]:
         raise SystemExit(1)
     print(f"pass: audited {sum(atlas['entry_count'] for atlas in audit['atlases'])} packed UI asset(s)")
-    if args.profile and audit["atlases"]:
+    if profile_output:
+        print(f"wrote profile telemetry: {norm_path(profile_output)}")
+    if profile_enabled and audit["atlases"]:
         slowest = max(audit["atlases"], key=lambda atlas: atlas.get("timing_ms", {}).get("total", 0))
         print(f"profile: slowest atlas audit `{slowest.get('pack_group')}` {slowest.get('timing_ms', {}).get('total', 0)} ms")
 

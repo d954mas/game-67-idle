@@ -313,6 +313,43 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             self.assertIn("label_lines=['panel']", report)
             self.assertIn("profile: slowest atlas group", result.stdout)
 
+    def test_profile_output_keeps_review_manifest_stable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({"schema": "game.asset_manifest", "version": 1, "assets": [asset("panel", "assets/runtime/panel.png")]}), encoding="utf-8")
+            result = run_pack(
+                root,
+                "--asset-manifest",
+                "manifest.json",
+                "--output-dir",
+                "packed",
+                "--json-output",
+                "packed/atlas.json",
+                "--report",
+                "packed/atlas.md",
+                "--label-review",
+                "--profile",
+                "--profile-output",
+                "tmp/profile/atlas-profile.json",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            pack = json.loads((root / "packed/atlas.json").read_text(encoding="utf-8"))
+            self.assertNotIn("timing_ms", pack)
+            self.assertNotIn("atlas_efficiency", pack)
+            self.assertNotIn("timing_ms", pack["atlases"][0])
+            report = (root / "packed/atlas.md").read_text(encoding="utf-8")
+            self.assertNotIn("## Timing", report)
+            self.assertNotIn("## Atlas Efficiency", report)
+            profile = json.loads((root / "tmp/profile/atlas-profile.json").read_text(encoding="utf-8"))
+            self.assertEqual(profile["schema"], "game.ui_atlas_pack_profile")
+            self.assertIn("timing_ms", profile)
+            self.assertIn("atlas_efficiency", profile)
+            self.assertIn("timing_ms", profile["atlases"][0])
+            self.assertIn("wrote profile telemetry: tmp/profile/atlas-profile.json", result.stdout)
+            self.assertIn("profile: slowest atlas group", result.stdout)
+
     def test_label_review_can_use_right_side_free_space_for_small_assets(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

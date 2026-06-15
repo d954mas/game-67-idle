@@ -100,10 +100,7 @@
       "transparent_nonzero_rgb_pixels": 0,
       "outside_padded_visible_pixels": 0,
       "labeled_preview_delta_outside_label_pixels": 0,
-      "analysis_engine": "numpy",
-      "timing_ms": {
-        "total": 81.025
-      }
+      "analysis_engine": "numpy"
     },
     {
       "pack_group": "ui_rune_marches_decor",
@@ -136,10 +133,7 @@
       "transparent_nonzero_rgb_pixels": 0,
       "outside_padded_visible_pixels": 0,
       "labeled_preview_delta_outside_label_pixels": 0,
-      "analysis_engine": "numpy",
-      "timing_ms": {
-        "total": 77.225
-      }
+      "analysis_engine": "numpy"
     },
     {
       "pack_group": "ui_rune_marches_icons",
@@ -172,18 +166,12 @@
       "transparent_nonzero_rgb_pixels": 0,
       "outside_padded_visible_pixels": 0,
       "labeled_preview_delta_outside_label_pixels": 0,
-      "analysis_engine": "numpy",
-      "timing_ms": {
-        "total": 90.705
-      }
+      "analysis_engine": "numpy"
     }
   ],
   "labeled_preview_policy": {
     "mode": "label_overlay_only",
     "allowed_delta": "review_label_rects_only",
     "debug_outlines": false
-  },
-  "timing_ms": {
-    "total": 250.983
   }
 }

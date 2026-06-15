@@ -4,10 +4,6 @@ atlas_pack: `gamedesign/projects/rune-marches/data/rune-marches-ui-complete-v1-a
 asset_manifest: `gamedesign/projects/rune-marches/data/rune-marches-ui-complete-v1-asset_manifest.json`
 verdict: **pass**
 
-## Timing
-
-- total: 250.983 ms
-
 ## Labeled Preview Policy
 
 Audit requires labeled preview pixels to differ from the clean atlas only inside declared review_label rects.

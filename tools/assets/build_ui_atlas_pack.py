@@ -63,6 +63,46 @@ def write_text(path: Path, text: str) -> None:
     write_text_atomic(path, text)
 
 
+def without_profile_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: without_profile_fields(item)
+            for key, item in value.items()
+            if key not in {"timing_ms", "atlas_efficiency"}
+        }
+    if isinstance(value, list):
+        return [without_profile_fields(item) for item in value]
+    return value
+
+
+def profile_report_from_pack(pack_manifest: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": "game.ui_atlas_pack_profile",
+        "version": 1,
+        "asset_manifest": pack_manifest.get("asset_manifest"),
+        "output_dir": pack_manifest.get("output_dir"),
+        "label_overlay": pack_manifest.get("label_overlay"),
+        "atlas_efficiency": pack_manifest.get("atlas_efficiency"),
+        "timing_ms": pack_manifest.get("timing_ms"),
+        "atlases": [
+            {
+                "pack_group": atlas.get("pack_group"),
+                "path": atlas.get("path"),
+                "labeled_preview_path": atlas.get("labeled_preview_path"),
+                "size": atlas.get("size"),
+                "entry_count": atlas.get("entry_count"),
+                "physical_entry_count": atlas.get("physical_entry_count"),
+                "alias_count": atlas.get("alias_count"),
+                "occupancy_ratio": atlas.get("occupancy_ratio"),
+                "padded_asset_ratio": atlas.get("padded_asset_ratio"),
+                "timing_ms": atlas.get("timing_ms"),
+            }
+            for atlas in pack_manifest.get("atlases", [])
+            if isinstance(atlas, dict)
+        ],
+    }
+
+
 def clean_name(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_.-]+", "-", value).strip("-") or "ui_atlas"
 
@@ -565,6 +605,8 @@ def build_pack(
     label_review: bool,
     label_font_size: int = DEFAULT_LABEL_FONT_SIZE,
     profile: bool = False,
+    profile_output: Path | None = None,
+    profile_inline: bool = True,
 ) -> dict[str, Any]:
     started = perf_counter()
     read_started = started
@@ -612,19 +654,23 @@ def build_pack(
         timings["total"] = round((perf_counter() - started) * 1000, 3)
         pack_manifest["atlas_efficiency"] = efficiency
         pack_manifest["timing_ms"] = timings
-    write_json(json_output, pack_manifest)
+    profile_report = profile_report_from_pack(pack_manifest) if profile else None
+    if profile_output and profile_report:
+        write_json(profile_output, profile_report)
+    output_manifest = pack_manifest if profile_inline else without_profile_fields(pack_manifest)
+    write_json(json_output, output_manifest)
     if report_path:
         lines = [
             "# UI Atlas Review Pack",
             "",
             "purpose: review/validation atlas, not the engine runtime pack",
-            f"asset_manifest: `{pack_manifest['asset_manifest']}`",
-            f"output_dir: `{pack_manifest['output_dir']}`",
-            f"atlases: **{len(atlases)}**",
+            f"asset_manifest: `{output_manifest['asset_manifest']}`",
+            f"output_dir: `{output_manifest['output_dir']}`",
+            f"atlases: **{len(output_manifest['atlases'])}**",
             "",
         ]
-        if pack_manifest.get("labeled_preview_policy"):
-            policy = pack_manifest["labeled_preview_policy"]
+        if output_manifest.get("labeled_preview_policy"):
+            policy = output_manifest["labeled_preview_policy"]
             lines.extend(
                 [
                     "## Labeled Preview Policy",
@@ -633,13 +679,13 @@ def build_pack(
                     f"- mode: `{policy.get('mode', '-')}`",
                     f"- allowed_delta: `{policy.get('allowed_delta', '-')}`",
                     f"- debug_outlines: `{str(policy.get('debug_outlines', '-')).lower()}`",
-                    f"- font_size: `{pack_manifest.get('label_review_options', {}).get('font_size', '-')}`",
-                    f"- outer_margin: `{pack_manifest.get('label_review_options', {}).get('outer_margin', '-')}`",
+                    f"- font_size: `{output_manifest.get('label_review_options', {}).get('font_size', '-')}`",
+                    f"- outer_margin: `{output_manifest.get('label_review_options', {}).get('outer_margin', '-')}`",
                     "",
                 ]
             )
-        if pack_manifest.get("atlas_efficiency"):
-            efficiency = pack_manifest["atlas_efficiency"]
+        if output_manifest.get("atlas_efficiency"):
+            efficiency = output_manifest["atlas_efficiency"]
             lines.extend(
                 [
                     "## Atlas Efficiency",
@@ -652,13 +698,13 @@ def build_pack(
                     "",
                 ]
             )
-        if pack_manifest.get("timing_ms"):
+        if output_manifest.get("timing_ms"):
             lines.extend(["## Timing", ""])
-            for name, elapsed in pack_manifest["timing_ms"].items():
+            for name, elapsed in output_manifest["timing_ms"].items():
                 lines.append(f"- {name}: {elapsed} ms")
             lines.append("")
         lines.extend(["## Atlases", ""])
-        for atlas in atlases:
+        for atlas in output_manifest["atlases"]:
             line = f"- `{atlas['pack_group']}` -> `{atlas['path']}` {atlas['size'][0]}x{atlas['size'][1]}, entries={atlas['entry_count']}, physical={atlas['physical_entry_count']}, aliases={atlas['alias_count']}, occupancy={atlas['occupancy_ratio']}"
             if atlas.get("labeled_preview_path"):
                 line += f", labeled_preview=`{atlas['labeled_preview_path']}`"
@@ -673,7 +719,7 @@ def build_pack(
             lines.append(line)
         lines.append("")
         lines.extend(["## Asset Id Index", ""])
-        for atlas in atlases:
+        for atlas in output_manifest["atlases"]:
             lines.append(f"### {atlas['pack_group']}")
             lines.append("")
             if atlas.get("labeled_preview_path"):
@@ -711,21 +757,39 @@ def main() -> None:
     parser.add_argument("--label-review", action="store_true", help="Draw id labels in padding/free space for human review. Do not use this image as a runtime texture.")
     parser.add_argument("--label-font-size", type=int, default=DEFAULT_LABEL_FONT_SIZE, help="Font size for --label-review id labels.")
     parser.add_argument("--profile", action="store_true", help="Record atlas build timing and efficiency metrics in JSON/Markdown and print the slowest atlas group.")
+    parser.add_argument("--profile-output", help="Write timing/efficiency telemetry to a sidecar JSON file. When set, profile fields are not embedded in the atlas JSON/Markdown unless --profile-inline is also set.")
+    parser.add_argument("--profile-inline", action="store_true", help="Embed profile timing fields in the atlas JSON/Markdown even when --profile-output is used.")
     args = parser.parse_args()
 
     asset_manifest = project_path(args.asset_manifest)
     output_dir = project_path(args.output_dir)
     json_output = project_path(args.json_output) if args.json_output else output_dir / "ui-atlas-pack.json"
     report_path = project_path(args.report) if args.report else None
+    profile_output = project_path(args.profile_output) if args.profile_output else None
+    profile_enabled = args.profile or profile_output is not None
+    profile_inline = args.profile_inline or profile_output is None
     if args.max_size < 64:
         fail("--max-size must be >= 64")
     if args.label_font_size < 8:
         fail("--label-font-size must be >= 8")
-    pack = build_pack(asset_manifest, output_dir, json_output, report_path, args.max_size, args.label_review, args.label_font_size, args.profile)
+    pack = build_pack(
+        asset_manifest,
+        output_dir,
+        json_output,
+        report_path,
+        args.max_size,
+        args.label_review,
+        args.label_font_size,
+        profile_enabled,
+        profile_output,
+        profile_inline,
+    )
     total_entries = sum(atlas["entry_count"] for atlas in pack["atlases"])
     print(f"pass: packed {total_entries} UI asset id(s) into {len(pack['atlases'])} review atlas image(s)")
     print(f"wrote atlas manifest: {norm_path(json_output)}")
-    if args.profile and pack["atlases"]:
+    if profile_output:
+        print(f"wrote profile telemetry: {norm_path(profile_output)}")
+    if profile_enabled and pack["atlases"]:
         slowest = max(pack["atlases"], key=lambda atlas: atlas.get("timing_ms", {}).get("total", 0))
         print(f"profile: slowest atlas group `{slowest['pack_group']}` {slowest.get('timing_ms', {}).get('total', 0)} ms occupancy={slowest.get('occupancy_ratio')}")
 
