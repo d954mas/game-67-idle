@@ -44,13 +44,14 @@
 
 #define CORRAL_PACK_PATH "assets/runtime/critter-corral/critter_corral.ntpack"
 
-/* Two bold, high-contrast critter colors (DIRECTION: bright, friendly).
- * Sprite art carries its own coral/teal hue; emit color stays white so the
- * texture shows true. These tints are still used for particles, pen lights,
- * and the procedural fallback path. */
+/* Two bold, clearly-distinct critter hues (DIRECTION: bright, friendly).
+ * Warm RED/orange vs cool BLUE — chosen to match the sprite body colors in
+ * tools/critter_corral/generate_sprites.py so the pen tint reproduces the
+ * critter's exact hue. Used for the pen color wash, flag, gate glow, and
+ * particles. */
 static const float CORRAL_COLORS[CORRAL_PEN_COUNT][4] = {
-    {0.96F, 0.45F, 0.18F, 1.0F}, /* warm coral */
-    {0.20F, 0.55F, 0.95F, 1.0F}, /* teal/blue */
+    {0.98F, 0.34F, 0.24F, 1.0F}, /* warm red (critter_a) */
+    {0.22F, 0.56F, 1.0F, 1.0F},  /* cool blue (critter_b) */
 };
 
 typedef struct Critter {
@@ -114,9 +115,11 @@ typedef enum {
   CORRAL_RGN_CRITTER_A = 0,
   CORRAL_RGN_CRITTER_B,
   CORRAL_RGN_PEN,
+  CORRAL_RGN_FLAG,
   CORRAL_RGN_GRASS,
   CORRAL_RGN_LURE,
   CORRAL_RGN_SPARK,
+  CORRAL_RGN_PIP,
   CORRAL_RGN_COUNT,
 } corral_region_t;
 
@@ -197,7 +200,8 @@ static void sprite_mat(float cx, float cy, float sx, float sy, float out[16]) {
 }
 
 /* Emit one centred sprite at (cx,cy) scaled so its source covers (dst_w,dst_h)
- * pixels, tinted by color_packed. Region is centre-pivot in the atlas. */
+ * pixels, tinted by color_packed. Region is centre-pivot in the atlas. A
+ * negative dst_w mirrors the sprite horizontally about its centre. */
 static void emit_sprite(corral_region_t rgn, float cx, float cy, float dst_w,
                         float dst_h, uint32_t color_packed) {
   uint16_t sw = s_region_w[rgn];
@@ -544,7 +548,7 @@ static void critter_update(float dt, float w, float h) {
 static void draw_critter_sprite(const Critter *c) {
   corral_region_t rgn =
       (c->color == 0) ? CORRAL_RGN_CRITTER_A : CORRAL_RGN_CRITTER_B;
-  const float base = 36.0F; /* on-screen diameter of a critter */
+  const float base = 46.0F; /* on-screen diameter of a critter (bolder) */
   /* squash: brief vertical squish on capture (scale the world transform) */
   float sx = 1.0F;
   float sy = 1.0F;
@@ -554,9 +558,9 @@ static void draw_critter_sprite(const Critter *c) {
     sx = 1.0F + s;       /* widen */
     sy = 1.0F - s * 0.7F; /* squish */
   }
-  /* soft ground shadow under the critter */
-  emit_sprite(CORRAL_RGN_SPARK, c->x, c->y + base * 0.34F, base * 0.9F,
-              base * 0.42F, 0x55000000U /* AABBGGRR: dark, low alpha */);
+  /* soft ground shadow under the critter (pop against the calmed grass) */
+  emit_sprite(CORRAL_RGN_SPARK, c->x, c->y + base * 0.36F, base * 1.0F,
+              base * 0.46F, 0x66000000U /* AABBGGRR: dark, low alpha */);
   emit_sprite(rgn, c->x, c->y, base * sx, base * sy, 0xFFFFFFFFU);
 }
 
@@ -567,45 +571,59 @@ static void draw_pen_sprite(const Pen *pen) {
       pen->chain > 0.0F ? clampf(pen->chain / 0.85F, 0.0F, 1.0F) : 0.0F;
   const float *col = CORRAL_COLORS[pen->color];
 
-  /* Color wash for the panel: tint toward the pen color, brighten on flash. */
-  float lit = 0.45F * flash + 0.18F * chain;
+  /* Panel = the pen's EXACT critter hue. The sprite is near-white with a dark
+   * fence rim, so a near-saturated tint reads as "the red pen" / "the blue pen"
+   * while the dark fence/posts (already baked dark) still frame it. Lighten a
+   * touch + brighten on flash/chain so the pen stays inviting, not muddy. */
+  float lit = 0.30F * flash + 0.12F * chain;
   float tint[4] = {
-      clampf(col[0] * 0.55F + 0.45F + lit, 0.0F, 1.0F),
-      clampf(col[1] * 0.55F + 0.45F + lit, 0.0F, 1.0F),
-      clampf(col[2] * 0.55F + 0.45F + lit, 0.0F, 1.0F),
+      clampf(col[0] * 0.82F + 0.16F + lit, 0.0F, 1.0F),
+      clampf(col[1] * 0.82F + 0.16F + lit, 0.0F, 1.0F),
+      clampf(col[2] * 0.82F + 0.16F + lit, 0.0F, 1.0F),
       1.0F,
   };
   float cx = pen->x + pen->w * 0.5F;
   float cy = pen->y + pen->h * 0.5F;
-  /* The panel art has its open gate at the top; rotate the gate to face the
-   * field by mirroring horizontally is not needed — the gate-mouth logic uses
-   * the inner vertical face. Draw the panel filling the pen rect, tinted. */
-  emit_sprite(CORRAL_RGN_PEN, cx, cy, pen->w, pen->h, pack_rgba(tint));
+  /* The panel art carves its gate out of the RIGHT face. Pen 0 opens right
+   * (toward the field) -> draw as-is. Pen 1 opens left -> mirror horizontally
+   * by passing a negative width so the gate faces the field. */
+  float draw_w = (pen->color == 0) ? pen->w : -pen->w;
+  emit_sprite(CORRAL_RGN_PEN, cx, cy, draw_w, pen->h, pack_rgba(tint));
 
-  /* bright gate marker on the open (inner) face so the entrance reads */
+  /* color flag marker above the pen so the pen<->color mapping is unmistakable.
+   * Tinted to the pen hue; flips to point inward toward the field. */
+  float flag_w = 40.0F;
+  float flag_h = 50.0F;
+  float fcol[4] = {col[0], col[1], col[2], 1.0F};
+  float flag_draw_w = (pen->color == 0) ? flag_w : -flag_w;
+  emit_sprite(CORRAL_RGN_FLAG, cx, pen->y - flag_h * 0.42F, flag_draw_w, flag_h,
+              pack_rgba(fcol));
+
+  /* soft gate glow on the open (inner) face so the entrance reads (warm, low
+   * intensity halo — not a hard marker). */
   float gx;
   float gy;
   pen_gate_point(pen, &gx, &gy);
-  float glow = 0.55F + 0.45F * flash;
+  float glow = 0.40F + 0.45F * flash;
   float gate_col[4] = {clampf(col[0] + 0.35F, 0.0F, 1.0F),
                        clampf(col[1] + 0.35F, 0.0F, 1.0F),
                        clampf(col[2] + 0.35F, 0.0F, 1.0F), glow};
-  emit_sprite(CORRAL_RGN_LURE, gx, gy, 54.0F, pen->h * 0.85F,
+  emit_sprite(CORRAL_RGN_LURE, gx, gy, 60.0F, pen->h * 0.7F,
               pack_rgba(gate_col));
 
   /* parked critters stacked inside the pen */
   corral_region_t rgn =
       (pen->color == 0) ? CORRAL_RGN_CRITTER_A : CORRAL_RGN_CRITTER_B;
-  const float pr = 22.0F; /* parked critter on-screen size */
-  int cols = (int)((pen->w - 24.0F) / (pr * 0.9F));
+  const float pr = 24.0F; /* parked critter on-screen size */
+  int cols = (int)((pen->w - 28.0F) / (pr * 0.92F));
   if (cols < 1) {
     cols = 1;
   }
   for (int i = 0; i < pen->parked; ++i) {
     int gxx = i % cols;
     int gyy = i / cols;
-    float px = pen->x + 14.0F + pr * 0.5F + (float)gxx * pr * 0.9F;
-    float py = pen->y + 18.0F + pr * 0.5F + (float)gyy * pr * 0.85F;
+    float px = pen->x + 16.0F + pr * 0.5F + (float)gxx * pr * 0.92F;
+    float py = pen->y + 22.0F + pr * 0.5F + (float)gyy * pr * 0.88F;
     if (py > pen->y + pen->h - pr * 0.5F) {
       break;
     }
@@ -634,12 +652,14 @@ static void corral_draw_sprites(float w, float h) {
     draw_pen_sprite(&s_pens[i]);
   }
 
-  /* lure ring (attract radius) at the cursor — soft glowing orb */
+  /* lure ring (attract radius) at the cursor — soft glowing orb. The center is
+   * intentionally soft (no harsh bright dot); the halo shows the attract zone.
+   * "lure follows cursor" affordance = the gentle radius ring tracking input. */
   if (s_lure_active) {
     emit_sprite(CORRAL_RGN_LURE, s_lure_x, s_lure_y, s_lure_radius * 2.0F,
-                s_lure_radius * 2.0F, 0x66FFFFFFU /* faint outer halo */);
-    emit_sprite(CORRAL_RGN_LURE, s_lure_x, s_lure_y, 64.0F, 64.0F,
-                0xFFFFFFFFU /* bright core */);
+                s_lure_radius * 2.0F, 0x55FFFFFFU /* faint outer radius halo */);
+    emit_sprite(CORRAL_RGN_LURE, s_lure_x, s_lure_y, 72.0F, 72.0F,
+                0x99FFFFFFU /* soft inner glow, no hot dot */);
   }
 
   for (int i = 0; i < s_critter_count; ++i) {
@@ -661,31 +681,90 @@ static void corral_draw_sprites(float w, float h) {
     emit_sprite(CORRAL_RGN_SPARK, p->x, p->y, sz, sz, pack_rgba(col));
   }
 
-  /* score as a row of small critter icons (alternating colors), wrapping. */
+  /* ---- HUD: score + per-color GOAL, fontless (crisp pips + bars) ---- */
   {
-    const float dot = 12.0F;
-    const float sx = 16.0F;
-    const float sy = 14.0F;
-    int per_row = (int)((w - sx * 2.0F) / (dot * 1.3F));
-    if (per_row < 1) {
-      per_row = 1;
+    const float strip_h = h * 0.085F;
+    /* dark translucent top strip so the HUD reads over any field color and
+     * gives the composition a clear header band (focal hierarchy). */
+    emit_sprite(CORRAL_RGN_PIP, w * 0.5F, strip_h * 0.5F, w, strip_h,
+                0x99201810U /* AABBGGRR: dark, semi-transparent */);
+
+    const float cy = strip_h * 0.5F;
+
+    /* SCORE (left): a soft warm bar + bright pips counting total captured.
+     * The bar grows with score so the at-a-glance "progress" reads even when
+     * pips wrap. */
+    {
+      const float dot = 14.0F;
+      const float gap = dot * 1.25F;
+      float x0 = 18.0F;
+      int max_pips = 18;
+      int shown = s_score < max_pips ? s_score : max_pips;
+      /* backing label chip */
+      emit_sprite(CORRAL_RGN_PIP, x0 + 6.0F, cy, 16.0F, 16.0F, 0xFF66CCFFU);
+      x0 += 24.0F;
+      for (int i = 0; i < shown; ++i) {
+        float px = x0 + dot * 0.5F + (float)i * gap;
+        emit_sprite(CORRAL_RGN_PIP, px, cy, dot, dot, 0xFFF0F0F0U /* white */);
+      }
     }
-    for (int i = 0; i < s_score; ++i) {
-      int cx = i % per_row;
-      int cy = i / per_row;
-      corral_region_t rgn =
-          (i % CORRAL_PEN_COUNT == 0) ? CORRAL_RGN_CRITTER_A
-                                      : CORRAL_RGN_CRITTER_B;
-      emit_sprite(rgn, sx + dot * 0.5F + (float)cx * dot * 1.3F,
-                  sy + dot * 0.5F + (float)cy * dot * 1.3F, dot, dot,
-                  0xFFFFFFFFU);
+
+    /* PER-COLOR GOAL (right): for each color, show "remaining loose" as that
+     * color's pips. Empty = wave goal met for that color. This is the wave
+     * goal at a glance: clear all loose critters of both colors. */
+    {
+      const float dot = 16.0F;
+      const float gap = dot * 1.2F;
+      float xr = w - 18.0F;
+      for (int p = CORRAL_PEN_COUNT - 1; p >= 0; --p) {
+        const float *col = CORRAL_COLORS[p];
+        float ccol[4] = {col[0], col[1], col[2], 1.0F};
+        int rem = corral_color_remaining(p);
+        int total = CORRAL_WAVE_CRITTERS / CORRAL_PEN_COUNT;
+        if (total < 1) {
+          total = 1;
+        }
+        /* draw `total` slots; loose ones filled bright, captured ones dim. */
+        for (int i = 0; i < total; ++i) {
+          float px = xr - dot * 0.5F - (float)i * gap;
+          bool loose = i < rem;
+          uint32_t cp = loose
+                            ? pack_rgba(ccol)
+                            : (pack_rgba((float[4]){col[0] * 0.35F,
+                                                    col[1] * 0.35F,
+                                                    col[2] * 0.35F, 0.85F}));
+          emit_sprite(CORRAL_RGN_PIP, px, cy, dot, dot, cp);
+        }
+        xr -= (float)total * gap + dot * 0.8F;
+      }
     }
   }
 
-  /* wave indicator: small spark pips top-right */
+  /* per-pen mini counter: a small color pip + remaining count above each pen
+   * gate so "how many of THIS color are still loose" reads right where the
+   * player is aiming. */
+  for (int p = 0; p < CORRAL_PEN_COUNT; ++p) {
+    const Pen *pen = &s_pens[p];
+    const float *col = CORRAL_COLORS[pen->color];
+    int rem = corral_color_remaining(pen->color);
+    float ccol[4] = {col[0], col[1], col[2], 1.0F};
+    float bx = pen->x + pen->w * 0.5F;
+    float by = pen->y + pen->h + 22.0F;
+    const float dot = 11.0F;
+    const float gap = dot * 1.15F;
+    /* center the row */
+    float row_w = (float)rem * gap;
+    float sx0 = bx - row_w * 0.5F + dot * 0.5F;
+    for (int i = 0; i < rem && i < 12; ++i) {
+      emit_sprite(CORRAL_RGN_PIP, sx0 + (float)i * gap, by, dot, dot,
+                  pack_rgba(ccol));
+    }
+  }
+
+  /* wave indicator: small bright pips top-center */
   for (int i = 0; i < s_wave && i < 12; ++i) {
-    emit_sprite(CORRAL_RGN_SPARK, w - 18.0F - (float)i * 16.0F, 20.0F, 12.0F,
-                12.0F, 0xFFE0D8C8U);
+    emit_sprite(CORRAL_RGN_PIP, w * 0.5F - 6.0F + (float)i * 14.0F,
+                h * 0.085F * 0.5F, 9.0F, 9.0F, 0xFFC8D8E0U);
   }
 
   /* wave-clear celebration: bright pulsing gold sparks along the frame */
@@ -899,9 +978,11 @@ static void resolve_atlas_regions(void) {
       ASSET_ATLAS_REGION_CORRAL_CRITTER_A_PNG,
       ASSET_ATLAS_REGION_CORRAL_CRITTER_B_PNG,
       ASSET_ATLAS_REGION_CORRAL_PEN_PNG,
+      ASSET_ATLAS_REGION_CORRAL_FLAG_PNG,
       ASSET_ATLAS_REGION_CORRAL_GRASS_PNG,
       ASSET_ATLAS_REGION_CORRAL_LURE_PNG,
       ASSET_ATLAS_REGION_CORRAL_SPARK_PNG,
+      ASSET_ATLAS_REGION_CORRAL_PIP_PNG,
   };
   for (int i = 0; i < CORRAL_RGN_COUNT; ++i) {
     uint32_t idx = nt_atlas_find_region(s_atlas_handle, names[i].value);

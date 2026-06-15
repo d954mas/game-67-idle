@@ -1,7 +1,7 @@
 /*
  * Build the Critter Corral sprite pack:
- *   critter_corral.ntpack -- sprite.vert + sprite.frag + atlas with 6 sprites
- *   (critter_a, critter_b, pen, grass, lure, spark).
+ *   critter_corral.ntpack -- sprite.vert + sprite.frag + atlas with 8 sprites
+ *   (critter_a, critter_b, pen, flag, grass, lure, spark, pip).
  *
  * The sprite shaders are the engine-shipped assets/shaders/sprite.{vert,frag}
  * (resolved via an asset root pointing at external/neotolis-engine so the
@@ -110,12 +110,14 @@ int main(int argc, char *argv[]) {
     nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/critter_a.png", &centre);
     nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/critter_b.png", &centre);
     nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/pen.png", &centre);
+    nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/flag.png", &centre);
     nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/grass.png", &centre);
     nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/lure.png", &centre);
     nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/spark.png", &centre);
+    nt_builder_atlas_add(ctx, SPRITE_SRC_DIR "/pip.png", &centre);
 
     nt_builder_end_atlas(ctx);
-    (void)printf("  Atlas 'corral' added: 6 sprites (RECT, ppu=1.0)\n");
+    (void)printf("  Atlas 'corral' added: 8 sprites (RECT, ppu=1.0)\n");
     // #endregion
 
     // #region finish + codegen

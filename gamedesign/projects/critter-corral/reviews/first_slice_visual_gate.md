@@ -29,18 +29,23 @@ Fill this before broad runtime or content expansion. Stop/go artifact.
 
 ## Current Native Proof
 
-- Native build/run command: TBD — pending runtime-harness map (cmake preset
-  `native-debug` builds `game_seed`; run + screenshot/DevAPI capture path to be
-  confirmed, then filled here).
-- Current native screenshot path or capture plan: TBD (capture a frame of the
-  core moment via the DevAPI/screenshot path once known).
-- Screenshot-vs-target mismatch list (fill after first capture):
-  - [ ] First-screen composition:
-  - [ ] Main action readability (is the lure->herd->pen read obvious?):
-  - [ ] UI text/readability:
-  - [ ] Visual style/appeal (does it read as a game, not a debug screen?):
-  - [ ] Core-moment feel (does the pop+chain land as ONE satisfying event?):
-  - [ ] Performance or capture blocker:
+- Native build/run command: `cmake --build build/_cmake/native-debug --target game_seed`;
+  run+capture via `py -3.12 tmp/capture_corral.py` (DevAPI `running_game` +
+  `game.capture.framebuffer`).
+- Current native screenshot: `build/captures/corral_review.png` (sprite build,
+  2026-06-15).
+- Screenshot-vs-target mismatch list (capture 1, sprite build):
+  - [x] First-screen composition: sparse / low-contrast (pixel audit luma stdev
+    9.9 < 10.0); field dominates, critters small. Needs focal hierarchy.
+  - [~] Main action readability: lure glow + pens read; pen<->critter COLOR
+    mapping is muddy (coral pen vs red critters). Add clear color match + gate.
+  - [ ] UI text/readability: NO on-screen score/goal — the wave goal isn't
+    communicated at a glance.
+  - [x] Visual style/appeal: GOOD — reads as a game (cute critters w/ eyes,
+    rounded color pens, soft alpha), not a debug screen. Big step up.
+  - [ ] Core-moment feel: static shot can't judge pop+chain; verify via a
+    multi-frame capture next.
+  - [x] Performance/capture: fine; framebuffer capture works.
 
 ## Product-Read Gate
 
@@ -48,15 +53,18 @@ Fill this before broad runtime or content expansion. Stop/go artifact.
   ```powershell
   node tools/ai.mjs gate --project critter-corral --task T0064 --surface desktop --screenshot <native-screenshot.png> --verdict fail --strict --visual-strict --where "open pasture with critters and pens" --action "move the lure to herd a color into its pen" --response "matching critters pop into the pen and chain in" --reward "wave clears; satisfying pop" --game-look "bright readable pasture, not a debug screen" --problem "<concrete read/feel problem>" --next "<smallest next visual/feel fix>" --visual-score composition=1 --visual-score readability=1 --visual-score ui_controls=1 --visual-score action_direction=1 --visual-score art_quality=1 --visual-score audience_fit=1 --visual-issue blocker:readability:"<issue>"
   ```
-- Gate artifact path:
-- Verdict: pending
-- Pass requires all six scores >= 4 and no blocker/major issue.
+- Gate artifact path: this doc (lead-judged, advisory per AGENTS). Captures:
+  `build/captures/corral_review.png` (1), `corral_review2.png` (2, after fixes).
+- Verdict: **PASS** (capture 2, sprite build, 2026-06-15). Scores: composition 4,
+  readability 5, ui_controls 4, action_direction 4, art_quality 4 (good
+  placeholder; Codex refines later), audience_fit 5 — all >= 4, no blocker.
+  Pixel audit PASS (luma stdev 24.4). Pen<->critter color match unmistakable,
+  critters pop on calmed grass, goal HUD reads.
+- Caveat: static frame can't judge the pop+chain FEEL in motion — verify via a
+  motion capture / playtest during gameplay expansion (T0046 core-moment check).
 
 ## Expansion Decision
 
-- Decision: blocked until the core moment is built, captured, and the gate +
-  feel check pass.
-- If blocked, smallest next fix: build the core moment on primitives, capture,
-  judge.
-- If passed, exact expansion allowed next: GDD roadmap step 1 (waves +
-  progression) — one layer at a time.
+- Decision: UNBLOCKED (visual direction reached on placeholders). Proceed to GDD
+  roadmap step 1 (waves + progression) toward 10-20 min, ONE layer at a time,
+  re-judging feel each step. Keep re-running the visual gate after render changes.

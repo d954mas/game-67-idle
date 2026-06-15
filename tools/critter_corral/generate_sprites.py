@@ -5,6 +5,17 @@ DIRECTION: bright, high-contrast, friendly, soft-edged, tactile, "looks like a
 game". These are placeholders (Codex refines later) — quality bar = reads as a
 game, not a debug screen. Output PNGs are RGBA with transparent backgrounds.
 
+READABILITY PASS:
+  - pen.png is white/near-white so the runtime emit-color tint reproduces the
+    *exact* critter hue, with a darker fence rim and a clear open gate so
+    "red critters go in the red pen" reads instantly.
+  - grass.png is softer and lower-contrast so the field recedes and the
+    critters/pens/lure are the focus.
+  - critters are bolder (radial gradient + dark rim + clear eyes), drawn bigger
+    and with a soft drop shadow at runtime.
+  - lure has a soft center (no harsh bright dot), keeping the halo.
+  - flag.png is a small white pennant (tinted to the pen hue) used as a marker.
+
 Run: py -3.12 tools/critter_corral/generate_sprites.py
 """
 from __future__ import annotations
@@ -41,7 +52,8 @@ def _smoothstep(edge0: float, edge1: float, x: np.ndarray) -> np.ndarray:
 
 
 def critter(size: int, body_rgb, rim_rgb, eye_dir: float):
-    """Round blob: radial-gradient body, soft darker rim, highlight, two eyes."""
+    """Bold round blob: radial-gradient body, dark contrast rim, glossy shine,
+    two big clear eyes. Higher contrast so it pops on the calmed grass."""
     xs, ys, cx, cy = _grid(size)
     r = np.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
     radius = size * 0.46
@@ -55,39 +67,60 @@ def critter(size: int, body_rgb, rim_rgb, eye_dir: float):
     body = np.array(body_rgb, np.float32)
     rim = np.array(rim_rgb, np.float32)
     # lift centre for a glossy, rounded read
-    centre = np.clip(body * 1.18, 0, 255)
+    centre = np.clip(body * 1.22, 0, 255)
     rgb = centre * (1.0 - t) + rim * t
+
+    # dark contrast outline ring near the rim so the silhouette stays crisp
+    # against bright or busy backgrounds (readability).
+    outline = _smoothstep(radius - 4.0, radius - 1.0, r) * (
+        1.0 - _smoothstep(radius - 1.0, radius + 1.0, r)
+    )
+    dark = rim * 0.45
+    rgb = rgb * (1.0 - outline[..., None]) + dark[None, None, :] * outline[..., None]
 
     # soft top-left highlight (cartoon shine)
     hx, hy = cx - radius * 0.34, cy - radius * 0.34
-    hr = radius * 0.42
+    hr = radius * 0.44
     hd = np.sqrt((xs - hx) ** 2 + (ys - hy) ** 2)
-    shine = (1.0 - _smoothstep(0.0, hr, hd)) * 0.55
+    shine = (1.0 - _smoothstep(0.0, hr, hd)) * 0.6
     rgb = rgb + (255.0 - rgb) * shine[..., None]
 
     out[..., :3] = rgb
     out[..., 3] = alpha * 255.0
 
-    # eyes: white sclera + dark pupil, biased toward travel direction
-    ex = cx + eye_dir * radius * 0.16
-    ey = cy - radius * 0.16
-    gap = radius * 0.30
+    # eyes: white sclera + dark pupil, biased toward travel direction. Bigger +
+    # a thin dark ring so they read clearly even when small on screen.
+    ex = cx + eye_dir * radius * 0.14
+    ey = cy - radius * 0.14
+    gap = radius * 0.32
     for sign in (-1.0, 1.0):
         scx = ex + sign * gap
         sd = np.sqrt((xs - scx) ** 2 + (ys - ey) ** 2)
-        sr = radius * 0.20
-        eye_a = (1.0 - _smoothstep(sr - 1.5, sr + 1.0, sd))
+        sr = radius * 0.24
+        # dark eye ring (contrast)
+        ring_a = _smoothstep(sr - 0.5, sr + 1.0, sd) * (
+            1.0 - _smoothstep(sr + 1.5, sr + 3.0, sd)
+        )
         for c in range(3):
-            out[..., c] = out[..., c] * (1.0 - eye_a) + 255.0 * eye_a
-        out[..., 3] = np.maximum(out[..., 3], eye_a * 255.0)
+            out[..., c] = out[..., c] * (1.0 - ring_a) + 40.0 * ring_a
+        # white sclera
+        eye_a = (1.0 - _smoothstep(sr - 1.5, sr + 0.5, sd))
+        for c in range(3):
+            out[..., c] = out[..., c] * (1.0 - eye_a) + 250.0 * eye_a
+        out[..., 3] = np.maximum(out[..., 3], np.maximum(eye_a, ring_a) * 255.0)
         # pupil
-        pcx = scx + eye_dir * sr * 0.35
+        pcx = scx + eye_dir * sr * 0.30
         pd = np.sqrt((xs - pcx) ** 2 + (ys - ey) ** 2)
-        pr = sr * 0.52
+        pr = sr * 0.56
         pup_a = (1.0 - _smoothstep(pr - 1.0, pr + 0.8, pd))
-        pup = np.array([26.0, 26.0, 36.0], np.float32)
+        pup = np.array([24.0, 24.0, 34.0], np.float32)
         for c in range(3):
             out[..., c] = out[..., c] * (1.0 - pup_a) + pup[c] * pup_a
+        # tiny catchlight
+        ld = np.sqrt((xs - (pcx - pr * 0.4)) ** 2 + (ys - (ey - pr * 0.4)) ** 2)
+        lit = (1.0 - _smoothstep(0.0, pr * 0.5, ld)) * 0.9
+        for c in range(3):
+            out[..., c] = out[..., c] * (1.0 - lit) + 255.0 * lit
     return out
 
 
@@ -101,81 +134,134 @@ def _round_rect_mask(xs, ys, x0, y0, x1, y1, radius, soft=1.5):
 
 
 def pen(w: int, h: int):
-    """Soft rounded pen panel, white/tintable, with an open top gate + posts."""
+    """Tintable pen panel: near-WHITE fill so the runtime emit-color reproduces
+    the exact critter hue. A darker fence rim frames it, and an open gate is
+    carved out of the right face (the field-facing side) so the entrance reads.
+    The runtime draws the panel for both pens and only the gate side differs;
+    we put the gate on the right and let the runtime add the directional
+    gate-glow marker on the correct inner face."""
     ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
     out = np.zeros((h, w, 4), np.float32)
-    pad = 6.0
-    radius = 26.0
+    pad = 7.0
+    radius = 22.0
     panel = _round_rect_mask(xs, ys, pad, pad, w - pad, h - pad, radius, soft=2.0)
 
-    # light fill with a soft vertical sheen (top brighter)
-    sheen = 0.86 + 0.14 * (1.0 - ys / h)
-    fill_rgb = np.stack([np.full((h, w), 246.0) * sheen,
-                         np.full((h, w), 248.0) * sheen,
-                         np.full((h, w), 250.0) * sheen], axis=-1)
+    # near-white fill with a faint vertical sheen. White means the emit tint
+    # multiplies cleanly to the exact pen hue at runtime.
+    sheen = 0.92 + 0.08 * (1.0 - ys / h)
+    base = 252.0
+    fill_rgb = np.stack([np.full((h, w), base) * sheen,
+                         np.full((h, w), base) * sheen,
+                         np.full((h, w), base) * sheen], axis=-1)
     out[..., :3] = fill_rgb
     out[..., 3] = panel * 255.0
 
-    # darker rounded rim ring so the panel reads as a tactile object
-    inner = _round_rect_mask(xs, ys, pad + 12, pad + 12, w - pad - 12, h - pad - 12, radius * 0.7, soft=2.0)
+    # bold darker fence rim so the panel reads as a framed pen (tactile object).
+    inner = _round_rect_mask(xs, ys, pad + 16, pad + 16,
+                             w - pad - 16, h - pad - 16, radius * 0.7, soft=2.0)
     rim = np.clip(panel - inner, 0.0, 1.0)
-    rim_rgb = np.array([205.0, 212.0, 220.0], np.float32)
+    # darken (not recolor) so the tint still shows but the frame is distinct.
     for c in range(3):
-        out[..., c] = out[..., c] * (1.0 - rim * 0.9) + rim_rgb[c] * rim * 0.9
+        out[..., c] = out[..., c] * (1.0 - rim * 0.55)
 
-    # open top gate: carve a notch out of the top-centre so the entrance reads
-    gate_w = w * 0.42
-    gx0 = (w - gate_w) * 0.5
-    gx1 = gx0 + gate_w
-    gate = ((xs > gx0) & (xs < gx1) & (ys < pad + 30.0)).astype(np.float32)
-    gate_soft = _smoothstep(0.0, 6.0, np.minimum(xs - gx0, gx1 - xs)) * (1.0 - _smoothstep(pad + 22.0, pad + 32.0, ys))
-    carve = np.clip(gate * gate_soft, 0.0, 1.0)
+    # vertical fence posts inside the rim (gives the "pen" read, stays tintable)
+    n_posts = 5
+    post_mask = np.zeros((h, w), np.float32)
+    for k in range(n_posts):
+        px = pad + 18 + (w - 2 * (pad + 18)) * (k / (n_posts - 1))
+        post_mask = np.maximum(post_mask, np.exp(-((xs - px) ** 2) / (2.0 * 3.0 ** 2)))
+    post_mask *= inner  # only inside the fenced area
+    for c in range(3):
+        out[..., c] = out[..., c] * (1.0 - post_mask * 0.28)
+
+    # open GATE: carve a tall notch out of the RIGHT face (centre vertically) so
+    # the entrance reads as an opening. Runtime mirrors which side faces field.
+    gate_h = h * 0.5
+    gy0 = (h - gate_h) * 0.5
+    gy1 = gy0 + gate_h
+    in_band = ((ys > gy0) & (ys < gy1)).astype(np.float32)
+    band_soft = _smoothstep(0.0, 8.0, np.minimum(ys - gy0, gy1 - ys))
+    # carve from the right edge inward
+    carve_x = 1.0 - _smoothstep(w - pad - 30.0, w - pad - 8.0, xs)
+    carve_x = 1.0 - carve_x  # 1 near the right edge
+    carve = np.clip(in_band * band_soft * carve_x, 0.0, 1.0)
     out[..., 3] = out[..., 3] * (1.0 - carve)
 
-    # bright rounded posts flanking the gate
-    for px in (gx0, gx1):
-        pd = np.sqrt((xs - px) ** 2 + (ys - (pad + 18.0)) ** 2)
-        pr = 13.0
+    # bright rounded gate posts flanking the right-face opening
+    for py in (gy0, gy1):
+        pd = np.sqrt((xs - (w - pad - 10.0)) ** 2 + (ys - py) ** 2)
+        pr = 12.0
         post_a = (1.0 - _smoothstep(pr - 2.0, pr + 1.0, pd))
-        post_rgb = np.array([255.0, 255.0, 255.0], np.float32)
         for c in range(3):
-            out[..., c] = out[..., c] * (1.0 - post_a) + post_rgb[c] * post_a
+            out[..., c] = out[..., c] * (1.0 - post_a) + 255.0 * post_a
         out[..., 3] = np.maximum(out[..., 3], post_a * 255.0)
     return out
 
 
+def flag(w: int, h: int):
+    """Small white pennant on a pole (tinted to pen hue at emit time). Marks
+    each pen with its color so the color mapping is unmistakable."""
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+    out = np.zeros((h, w, 4), np.float32)
+    # pole on the left
+    pole_x = w * 0.16
+    pole = (1.0 - _smoothstep(2.0, 4.0, np.abs(xs - pole_x))) * (
+        _smoothstep(2.0, 6.0, ys) * (1.0 - _smoothstep(h - 6.0, h - 2.0, ys))
+    )
+    # triangular pennant pointing right from the top of the pole
+    tip_x = w * 0.92
+    top = h * 0.10
+    bot = h * 0.52
+    # flag occupies x in [pole_x, tip_x]; height shrinks toward the tip
+    fx = np.clip((xs - pole_x) / max(1.0, (tip_x - pole_x)), 0.0, 1.0)
+    half = (bot - top) * 0.5 * (1.0 - fx)
+    mid = (top + bot) * 0.5
+    in_flag = ((xs >= pole_x) & (xs <= tip_x) &
+               (np.abs(ys - mid) <= half)).astype(np.float32)
+    flag_soft = (1.0 - _smoothstep(0.0, 2.0, np.abs(ys - mid) - (half - 1.5)))
+    flag_a = np.clip(in_flag * flag_soft, 0.0, 1.0)
+    # white flag + slightly darker pole so it reads as a marker
+    rgb = np.full((h, w, 3), 255.0, np.float32)
+    a = np.clip(np.maximum(flag_a, pole), 0.0, 1.0)
+    # darken the pole a touch
+    out[..., :3] = rgb * (1.0 - pole[..., None] * 0.35)
+    out[..., 3] = a * 255.0
+    return out
+
+
 def grass(size: int):
-    """Seamless-ish soft pasture tile: green base + gentle lighter blotches."""
-    rng = np.random.default_rng(7)
+    """Soft, low-contrast pasture tile so the field RECEDES. Gentle muted green
+    with very subtle large-scale mottling (no busy hatch pattern)."""
     ys, xs = np.mgrid[0:size, 0:size].astype(np.float32)
-    base = np.array([124.0, 196.0, 102.0], np.float32)  # bright friendly green
+    base = np.array([120.0, 178.0, 108.0], np.float32)  # muted, slightly desat green
     out = np.zeros((size, size, 4), np.float32)
     field = np.tile(base, (size, size, 1))
-    # soft sine blotches (tileable) for gentle texture
-    tex = (np.sin(xs / size * math.tau * 3.0) * np.cos(ys / size * math.tau * 3.0))
-    tex += 0.6 * np.sin(xs / size * math.tau * 7.0 + 1.3) * np.cos(ys / size * math.tau * 5.0)
-    tex = tex * 10.0
-    field += tex[..., None] * np.array([0.6, 1.0, 0.5], np.float32)
+    # one slow tileable wave only -> soft mottling, very low amplitude
+    tex = np.sin(xs / size * math.tau * 1.0 + 0.4) * np.cos(ys / size * math.tau * 1.0 - 0.7)
+    tex *= 4.0  # low contrast (was ~16 across two octaves)
+    field += tex[..., None] * np.array([0.5, 0.8, 0.4], np.float32)
     out[..., :3] = field
     out[..., 3] = 255.0
     return out
 
 
 def lure(size: int):
-    """Soft glowing ring/orb with soft alpha falloff (warm gold)."""
+    """Soft glowing ring/orb. Keeps the halo but the CENTER is soft (no harsh
+    bright dot) — gentle warm gold falloff."""
     xs, ys, cx, cy = _grid(size)
     r = np.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
     radius = size * 0.46
     out = np.zeros((size, size, 4), np.float32)
-    # glowing ring near the rim
-    ring_r = radius * 0.78
-    ring = np.exp(-((r - ring_r) ** 2) / (2.0 * (radius * 0.12) ** 2))
-    # warm core glow
-    core = np.exp(-(r ** 2) / (2.0 * (radius * 0.30) ** 2))
-    glow = np.clip(ring * 0.9 + core * 0.7, 0.0, 1.0)
-    gold = np.array([255.0, 226.0, 120.0], np.float32)
-    hot = np.array([255.0, 250.0, 220.0], np.float32)
-    rgb = gold[None, None, :] * (1.0 - core[..., None]) + hot[None, None, :] * core[..., None]
+    # glowing ring near the rim (the main affordance)
+    ring_r = radius * 0.74
+    ring = np.exp(-((r - ring_r) ** 2) / (2.0 * (radius * 0.14) ** 2))
+    # very soft, low-intensity core (no hot dot)
+    core = np.exp(-(r ** 2) / (2.0 * (radius * 0.40) ** 2)) * 0.35
+    glow = np.clip(ring * 0.85 + core, 0.0, 1.0)
+    gold = np.array([255.0, 224.0, 130.0], np.float32)
+    warm = np.array([255.0, 238.0, 190.0], np.float32)
+    cmix = np.clip(core, 0.0, 1.0)[..., None]
+    rgb = gold[None, None, :] * (1.0 - cmix) + warm[None, None, :] * cmix
     out[..., :3] = rgb
     out[..., 3] = np.clip(glow * 255.0 * (1.0 - _smoothstep(radius - 2.0, radius + 2.0, r)), 0, 255)
     return out
@@ -193,15 +279,30 @@ def spark(size: int):
     return out
 
 
+def pip(size: int):
+    """Solid soft rounded square pip (white, tinted at emit). Crisp UI marker
+    for score / per-color remaining bars — reads better than a fuzzy dot."""
+    ys, xs = np.mgrid[0:size, 0:size].astype(np.float32)
+    out = np.zeros((size, size, 4), np.float32)
+    pad = size * 0.12
+    radius = size * 0.30
+    mask = _round_rect_mask(xs, ys, pad, pad, size - pad, size - pad, radius, soft=1.5)
+    out[..., :3] = 255.0
+    out[..., 3] = mask * 255.0
+    return out
+
+
 def main() -> None:
     print(f"Generating Critter Corral sprites -> {OUT_DIR}")
-    # critter_a: warm coral; critter_b: teal. Bold, high-contrast.
-    _save(critter(96, body_rgb=(255, 122, 86), rim_rgb=(206, 70, 52), eye_dir=1.0), "critter_a.png")
-    _save(critter(96, body_rgb=(70, 198, 196), rim_rgb=(34, 130, 150), eye_dir=-1.0), "critter_b.png")
-    _save(pen(256, 192), "pen.png")
+    # critter_a: warm red/orange; critter_b: cool blue. Bold, distinct hues.
+    _save(critter(112, body_rgb=(255, 96, 64), rim_rgb=(196, 44, 36), eye_dir=1.0), "critter_a.png")
+    _save(critter(112, body_rgb=(64, 150, 255), rim_rgb=(28, 86, 196), eye_dir=-1.0), "critter_b.png")
+    _save(pen(256, 200), "pen.png")
+    _save(flag(64, 80), "flag.png")
     _save(grass(256), "grass.png")
     _save(lure(128), "lure.png")
     _save(spark(32), "spark.png")
+    _save(pip(32), "pip.png")
     print("Done.")
 
 
