@@ -2,11 +2,12 @@
 
 ## Current Goal
 
-Start the `Critter Corral` (critter-corral) native-first prototype from a clean Stage 0
-startup gate. Do not expand broad systems until the first fake shot/product-read
-gate, native screenshot proof, and screenshot-vs-target mismatch list are
-named. For beautiful/casual/generated-UI/fake-shot slices, the product gate
-uses `--visual-strict`.
+`Critter Corral` (critter-corral, epic E004) is a **gameplay release-candidate**:
+a complete native casual herd-sort game (core moment + run structure + 2->5
+colors + 4 behaviors + between-wave upgrades + audio + fontless HUD), rendered
+on free placeholder sprites, code review CLEAN, visual gate PASS. Remaining for
+a hard release (out of autonomous reach, by design): a HUMAN fun/balance
+playtest, and bespoke art via Codex (swap placeholder PNGs in-place).
 
 ## Blocking Work
 
@@ -19,12 +20,11 @@ uses `--visual-strict`.
 
 ## Current Gate
 
-Stage 0 startup gate for critter-corral: active concept, actionable task T0064,
-project wiki, native/runtime harness, and fake shot/product-read/native
-screenshot proof plan must be visible before implementation. For visual work,
-the 5-line session contract and screenshot-vs-target mismatch list are required
-before runtime visual coding. Strict visual product gates require six scores
-and blocker/major issue reporting before any pass.
+Critter Corral gameplay is built + reviewed (T0064 first slice, T0065 expansion,
+both done). Visual gate PASS (`reviews/first_slice_visual_gate.md`,
+`build/captures/corral_review2.png`). Next gate is the LEAD's: play a real-time
+10-20 min run and judge fun/balance; then commission the Codex art pass. No
+open implementation task.
 
 ## Required Validation
 
@@ -35,18 +35,17 @@ node tools/taskboard/cli.mjs validate
 
 ## Last Known Good Evidence
 
-- `tmp/prototype_startup_gate_context.json` after kickoff.
-- `gamedesign/projects/critter-corral/reviews/first_slice_visual_gate.md` is the
-  first-slice visual/product gate template and must be filled before broad
-  runtime work; it names the optional visual critic packet command.
+- Build/run/handoff: `gamedesign/projects/critter-corral/game_implementation_plan.md`
+  (cmake targets `critter_corral_packs` + `game_seed`; exe
+  `build/game_seed/native-debug/game_seed.exe --devapi 9123`).
+- Visual gate PASS: `reviews/first_slice_visual_gate.md`; captures
+  `build/captures/corral_review2.png` (readability), `corral_run.png` (5 colors),
+  `corral_behaviors.png`, `corral_upgrade.png`.
+- Code review CLEAN (T0065 log); -Werror clean build.
 
 ## Next Priorities
 
-1. Fill `gamedesign/projects/critter-corral/gdd.md` with the first playable loop,
-   references/fake shot target, visual/product proof gate, and stop condition.
-2. Fill `gamedesign/projects/critter-corral/reviews/first_slice_visual_gate.md`
-   with the target, native screenshot/capture plan, mismatch list, gate command,
-   critic packet command, strict visual rubric, and expansion decision.
-3. Identify the native build/run command for this prototype.
-4. Capture or plan the first native screenshot, compare it with the accepted
-   target, and record the mismatch list before broad content.
+1. LEAD: play a real-time 10-20 min run; judge fun/balance/pacing; note fixes.
+2. Codex bespoke art pass: replace placeholder sprite PNGs in-place (same atlas
+   regions) per `game_implementation_plan.md`; rebuild the pack, no code change.
+3. Optional later: a polished audio/SFX pass; balance tuning from the playtest.

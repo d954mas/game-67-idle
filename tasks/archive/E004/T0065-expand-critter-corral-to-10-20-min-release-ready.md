@@ -1,7 +1,7 @@
 ---
 id: T0065
 title: Expand Critter Corral to 10-20 min release-ready gameplay
-status: doing
+status: done
 epic: E004
 priority: P1
 tags: [prototype, critter-corral, gameplay, release]
@@ -19,21 +19,22 @@ art later.
 
 ## Done when
 
-- [ ] Run structure: an escalating sequence of waves that totals ~10-20 minutes;
-      clear win/advance + lose/restart flow; a title/start beat and restart.
-- [ ] Progression curve: more critters + +1 color over time (up to ~5), with a
-      pacing that ramps without feeling unfair (calm-first identity kept).
-- [ ] Critter behavior variety (the twist's depth): e.g. skittish (briefly flee
-      the lure), stubborn (slow to steer), follower (clings to other colors) —
-      each forces a different herding read.
-- [ ] Light meta between waves: one readable upgrade pick (bigger lure radius,
-      second lure, calmer critters, wider gate), earned from corralled count.
-- [ ] FTUE <=3 beats, tutorial-by-doing (lure moves critters -> match pen =
-      pop+chain -> clear the wave). No walls.
-- [ ] Release polish: consistent juice + audio pass + perf; visual gate stays
-      PASS; a full run is completable.
-- [ ] Playtest evidence: a ~10-20 min run is completable and reads as fun; the
-      core moment + escalation verified via capture/playtest (not just static).
+- [x] Run structure: TITLE -> waves -> WAVE_CLEARED -> upgrade -> soft WIN (wave
+      10) -> endless; restart (R/marker); ~10-20 min to/through the win. (inc 1)
+- [x] Progression: 2->5 colors, ~4->40 critters (cap 64), gentle speed-up; calm
+      ramp. (inc 1)
+- [x] Behavior variety: normal/skittish/stubborn/follower, progressive+capped,
+      readable tells, each changes the herding decision. (inc 2)
+- [x] Light meta: between-wave pick-1-of-3 upgrades (6 capped/stacking types),
+      visible in HUD. (inc 3)
+- [x] FTUE <=3 beats, tutorial-by-doing (tiny wave 1 + pulsing lure hint). (inc 1)
+- [x] Release polish: 7 procedural SFX (chain rising pitch), juice, smooth
+      transitions, perf fine; visual gate PASS; run completable. (inc 4)
+- [~] Playtest evidence: completability + escalation VERIFIED (devapi to wave 13+;
+      chain 137/win 1). Subjective FUN/balance over a real-time run needs a HUMAN
+      playtest -> handed to lead.
+- [x] Code review CLEAN: no critical/high/medium; LOW findings cosmetic (LOW-1
+      confirmed non-issue vs engine result-ownership convention).
 
 ## Open questions
 
@@ -52,3 +53,5 @@ art later.
 - 2026-06-16: Increment 3 (light meta). Between-wave pick-1-of-3 upgrades, 6 types (lure radius/pull, second lure, wider gates, calmer critters, longer chain), capped lvl3, stacking, effects wired + visible (HUD acquired-row, second-lure renders). Fontless icon cards (PIL icons added; pack=16 sprites). DevAPI: upgrades + effective{} + pending_choice; game.debug.pick_upgrade. Fixed a real bug: resolve_atlas_regions names[] was undersized after new regions (broke rendering) -> fixed. Builds clean -Werror; playtest shows upgrades accumulate + apply (lure_radius 150->196, second_lure on). corral_upgrade.png audit pass, cards clearly readable. Visual gate PASS.
 
 - 2026-06-16: Increment 4 (audio + polish). Engine audio is procedural PCM (winmm) -> added 7 soft synth SFX via game_audio: pop (pitch wobble), chain (rising pitch per link), gated bonk, upgrade chime, wave/win flourishes, start pad. Particle burst grows with chain depth. game.state.audio counters prove firing (pop 38/chain 137/win 1 in a run). Smooth transitions; perf fine (60fps cap, no hot-path alloc). Builds clean -Werror; corral_polish.png audit pass.
+
+- 2026-06-16: RELEASE-CANDIDATE. All roadmap layers shipped (inc 1-4): run structure/progression, behavior variety, meta upgrades, audio+polish. Code review CLEAN (no critical/high/medium; LOW cosmetic). Visual gate PASS. Builds clean -Werror. Handoff: game_implementation_plan.md. Honest remaining (out of autonomous reach, by design): subjective fun/balance over a real-time 10-20 min run = lead playtest; bespoke art = Codex (swap placeholder PNGs in-place). Closing implementation; gameplay is release-shaped.
