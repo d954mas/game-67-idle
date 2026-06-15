@@ -111,6 +111,7 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             audit = json.loads((root / "packed/audit.json").read_text(encoding="utf-8"))
             self.assertEqual(audit["verdict"], "pass")
+            self.assertEqual(audit["atlases"][0]["transparent_nonzero_rgb_pixels"], 0)
 
     def test_rejects_broken_extrusion_pixels(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -193,6 +194,7 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertIn("profile: slowest atlas audit", result.stdout)
             markdown = (root / "packed/audit.md").read_text(encoding="utf-8")
             self.assertIn("## Timing", markdown)
+            self.assertIn("transparent_nonzero_rgb_pixels=0", markdown)
 
     def test_atomic_report_write_keeps_existing_text_on_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -242,6 +244,22 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("review_label rect must be empty in clean atlas", result.stdout + result.stderr)
+
+    def test_rejects_hidden_rgb_in_clean_atlas_transparency(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")])
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            atlas_path = root / pack_data["atlases"][0]["path"]
+            atlas = Image.open(atlas_path).convert("RGBA")
+            atlas.putpixel((atlas.width - 1, atlas.height - 1), (0, 255, 0, 0))
+            atlas.save(atlas_path)
+
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("clean atlas transparent pixels must have zero RGB", result.stdout + result.stderr)
 
     def test_rejects_wrong_review_label_text(self):
         with tempfile.TemporaryDirectory() as tmp:

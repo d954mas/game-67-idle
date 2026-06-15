@@ -165,7 +165,8 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     missing from metadata, wrong label text, wrapped `review_label.lines` that
     do not fit their label rects, missing labeled preview images, labels
     overlapping any art or other labels, labels accidentally baked into the
-    clean atlas, or label rects without visible pixels in the labeled preview.
+    clean atlas, label rects without visible pixels in the labeled preview, or
+    hidden nonzero RGB under fully transparent clean-atlas pixels.
 
 ## Rules
 
@@ -191,6 +192,9 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
   colors and resize/downscale in premultiplied-alpha space so filtering cannot
   sample the old key color back into visible pixels. Reuse
   `tools/assets/chroma_key_alpha.py` for this shared cleanup.
+- Final review atlas audits must reject hidden RGB under alpha 0 in the clean
+  atlas; this catches key-color ghosts that are invisible in the PNG viewer but
+  can leak back through filtering or premultiplied conversion.
 - Source-sheet intake must reject unsafe chroma choices before slicing: exact
   key-color holes inside component bounds are not normal background, and broad
   key/halo hue conflicts inside art need either a safer background color or an

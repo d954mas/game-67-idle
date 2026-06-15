@@ -12,6 +12,11 @@ from PIL import ImageDraw
 from PIL import ImageFont
 
 try:
+    import numpy as np
+except ImportError:  # pragma: no cover - fallback keeps the tool portable.
+    np = None
+
+try:
     from tools.assets.atomic_io import write_json_atomic, write_text_atomic
 except ModuleNotFoundError:  # pragma: no cover - supports direct script execution by path.
     from atomic_io import write_json_atomic, write_text_atomic
@@ -86,6 +91,23 @@ def rect_has_visible_pixel(image: Image.Image, rect: tuple[int, int, int, int]) 
             if pixels[px, py] > 0:
                 return True
     return False
+
+
+def transparent_nonzero_rgb_count(image: Image.Image) -> int:
+    if np is not None:
+        array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
+        alpha = array[..., 3]
+        rgb_nonzero = np.any(array[..., :3] != 0, axis=2)
+        return int(np.count_nonzero((alpha == 0) & rgb_nonzero))
+    rgba = image.convert("RGBA")
+    pixels = rgba.load()
+    count = 0
+    for y in range(rgba.height):
+        for x in range(rgba.width):
+            red, green, blue, alpha = pixels[x, y]
+            if alpha == 0 and (red != 0 or green != 0 or blue != 0):
+                count += 1
+    return count
 
 
 def label_font() -> ImageFont.ImageFont:
@@ -241,9 +263,15 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
                     labeled_preview = Image.open(labeled_preview_path).convert("RGBA")
 
         size = atlas_info.get("size") if isinstance(atlas_info, dict) else None
+        transparent_nonzero_rgb_pixels = 0
         if atlas is not None:
             if not isinstance(size, list) or len(size) != 2 or [int(size[0]), int(size[1])] != [atlas.width, atlas.height]:
                 atlas_problems.append(f"atlas size metadata must match image {atlas.width}x{atlas.height}")
+            transparent_nonzero_rgb_pixels = transparent_nonzero_rgb_count(atlas)
+            if transparent_nonzero_rgb_pixels:
+                atlas_problems.append(
+                    f"clean atlas transparent pixels must have zero RGB; found {transparent_nonzero_rgb_pixels}"
+                )
         if atlas is not None and labeled_preview is not None and labeled_preview.size != atlas.size:
             atlas_problems.append("labeled preview size must match atlas image")
 
@@ -349,6 +377,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
             "entry_count": len(entries),
             "physical_entry_count": atlas_info.get("physical_entry_count") if isinstance(atlas_info, dict) else None,
             "alias_count": atlas_info.get("alias_count") if isinstance(atlas_info, dict) else None,
+            "transparent_nonzero_rgb_pixels": transparent_nonzero_rgb_pixels,
         }
         if profile:
             atlas_report["timing_ms"] = {"total": round((perf_counter() - atlas_started) * 1000, 3)}
@@ -413,6 +442,7 @@ def main() -> None:
         detail = f"entries={atlas['entry_count']}"
         if physical is not None and aliases is not None:
             detail += f", physical={physical}, aliases={aliases}"
+        detail += f", transparent_nonzero_rgb_pixels={atlas.get('transparent_nonzero_rgb_pixels', '-')}"
         lines.append(f"- {atlas['status'].upper()} `{atlas.get('pack_group')}` {detail}{suffix}")
     lines.append("")
     if args.report:

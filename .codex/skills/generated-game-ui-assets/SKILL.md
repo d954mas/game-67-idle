@@ -222,7 +222,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       also prove the labeled preview exists, label text matches the asset id
       and linked aliases, wrapped `review_label.lines` fit inside the label
       rect, label rects do not overlap art or other labels, label rects contain
-      visible pixels there, and the clean atlas has no label pixels.
+      visible pixels there, the clean atlas has no label pixels, and fully
+      transparent clean-atlas pixels have zero RGB so hidden key colors cannot
+      leak back through filtering.
       Record passing JSON reports in `expected_outputs.atlas_pack_audit`;
       final-art validation requires this evidence. This verifies runtime asset
       coverage, atlas bounds, padded-rect overlap, alias reuse, metadata
@@ -357,7 +359,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   checks pass, including exact review-label text and non-overlapping review
   labels. Labeled review atlases must prove wrapped `review_label.lines` fit in
   their label rects and keep labels out of the clean atlas image; labels belong
-  only in `labeled_preview_path`.
+  only in `labeled_preview_path`. Clean atlas pixels with alpha 0 must also
+  have RGB 0; hidden green/purple key colors under transparency are a packing
+  failure even when the image looks visually transparent.
 - Use trim only with padding, alpha bleed, edge extrusion, and shape padding.
   Tight alpha crops without bleed/extrude are a known cause of 1-2 pixel halos
   and neighboring-pixel leaks.
