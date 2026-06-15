@@ -273,6 +273,84 @@ def count_fully_transparent_nonzero_rgb(image: Image.Image) -> int:
     return count
 
 
+def audit_color_metrics_numpy(
+    image: Image.Image,
+    key: tuple[int, int, int] | None,
+    *,
+    preserve_purple: bool,
+    preserve_green: bool,
+    preserve_source_key: bool,
+    profile: bool = False,
+) -> tuple[dict[str, int], dict[str, float]] | None:
+    if np is None:
+        return None
+
+    phase_start = perf_counter()
+    timings: dict[str, float] = {}
+
+    def mark_timing(name: str) -> None:
+        nonlocal phase_start
+        if not profile:
+            return
+        now = perf_counter()
+        timings[name] = round((now - phase_start) * 1000, 3)
+        phase_start = now
+
+    array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
+    alpha = array[..., 3]
+    visible = alpha > 12
+    transparent = alpha <= 12
+
+    key_fringe = key_fringe_mask_array(array) if not preserve_purple else np.zeros(alpha.shape, dtype=bool)
+    near_transparent_radius_1 = dilate_mask_numpy(transparent, 1)
+    edge_key_fringe = int(np.count_nonzero(visible & key_fringe & near_transparent_radius_1))
+    mark_timing("edge_key_fringe")
+
+    purple_halo = purple_halo_mask_array(array) if not preserve_purple else np.zeros(alpha.shape, dtype=bool)
+    near_transparent_radius_6 = dilate_mask_numpy(transparent, 6)
+    edge_purple_halo = int(np.count_nonzero(visible & purple_halo & near_transparent_radius_6))
+    mark_timing("edge_purple_halo")
+
+    green_spill = green_screen_spill_mask_array(array) if not preserve_green else np.zeros(alpha.shape, dtype=bool)
+    near_transparent_radius_2 = dilate_mask_numpy(transparent, 2)
+    edge_green_spill = int(np.count_nonzero(visible & green_spill & near_transparent_radius_2))
+    mark_timing("edge_green_spill")
+
+    source_key_spill = (
+        source_key_spill_mask_array(array, key)
+        if key is not None and not preserve_source_key
+        else np.zeros(alpha.shape, dtype=bool)
+    )
+    edge_source_key_fringe = int(np.count_nonzero(visible & source_key_spill & near_transparent_radius_2))
+    mark_timing("edge_source_key_fringe")
+
+    bad_transparent_rgb = np.zeros(alpha.shape, dtype=bool)
+    if not preserve_purple:
+        bad_transparent_rgb |= key_fringe | purple_halo
+    if not preserve_green:
+        bad_transparent_rgb |= green_spill
+    if key is not None and not preserve_source_key:
+        bad_transparent_rgb |= source_key_spill
+    near_visible_radius_2 = dilate_mask_numpy(visible, 2)
+    transparent_edge_bad_rgb = int(np.count_nonzero(transparent & bad_transparent_rgb & near_visible_radius_2))
+    mark_timing("transparent_edge_bad_rgb")
+
+    transparent_nonzero_rgb = int(np.count_nonzero((alpha == 0) & np.any(array[..., :3] != 0, axis=2)))
+    mark_timing("transparent_nonzero_rgb")
+
+    return (
+        {
+            "edge_key_fringe": edge_key_fringe,
+            "edge_purple_halo": edge_purple_halo,
+            "edge_green_spill": edge_green_spill,
+            "edge_source_key_fringe": edge_source_key_fringe,
+            "transparent_edge_bad_rgb": transparent_edge_bad_rgb,
+            "transparent_nonzero_rgb": transparent_nonzero_rgb,
+        },
+        timings,
+    )
+
+
 def parse_hex_color(value: Any) -> tuple[int, int, int] | None:
     if not isinstance(value, str):
         return None
@@ -373,29 +451,55 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
     preserve_purple = bool(crop.get("preserve_purple_edges"))
     preserve_green = bool(crop.get("preserve_green_edges"))
     preserve_source_key = bool(crop.get("preserve_source_key_edges"))
-    fringe_count = 0 if preserve_purple else count_edge_key_fringe(image)
-    mark_timing("edge_key_fringe")
+    color_metrics = audit_color_metrics_numpy(
+        image,
+        source_key,
+        preserve_purple=preserve_purple,
+        preserve_green=preserve_green,
+        preserve_source_key=preserve_source_key,
+        profile=profile,
+    )
+    if color_metrics is None:
+        counts: dict[str, int] = {}
+    else:
+        counts, color_timings = color_metrics
+        timings.update(color_timings)
+
+    def color_count(name: str, fallback: Any) -> int:
+        if color_metrics is not None:
+            return counts[name]
+        return int(fallback())
+
+    fringe_count = color_count("edge_key_fringe", lambda: 0 if preserve_purple else count_edge_key_fringe(image))
+    if color_metrics is None:
+        mark_timing("edge_key_fringe")
     result["edge_key_fringe_pixels"] = fringe_count
     fringe_limit = crop.get("edge_key_fringe_limit", 0)
     if isinstance(fringe_limit, int) and fringe_count > fringe_limit:
         result["problems"].append(f"key-color edge fringe remains: {fringe_count}px > {fringe_limit}px")
 
-    purple_halo_count = 0 if preserve_purple else count_edge_purple_halo(image)
-    mark_timing("edge_purple_halo")
+    purple_halo_count = color_count("edge_purple_halo", lambda: 0 if preserve_purple else count_edge_purple_halo(image))
+    if color_metrics is None:
+        mark_timing("edge_purple_halo")
     result["edge_purple_halo_pixels"] = purple_halo_count
     purple_halo_limit = crop.get("edge_purple_halo_limit", 0)
     if isinstance(purple_halo_limit, int) and purple_halo_count > purple_halo_limit:
         result["problems"].append(f"purple edge halo remains: {purple_halo_count}px > {purple_halo_limit}px")
 
-    green_spill_count = 0 if preserve_green else count_edge_green_spill(image)
-    mark_timing("edge_green_spill")
+    green_spill_count = color_count("edge_green_spill", lambda: 0 if preserve_green else count_edge_green_spill(image))
+    if color_metrics is None:
+        mark_timing("edge_green_spill")
     result["edge_green_spill_pixels"] = green_spill_count
     green_spill_limit = crop.get("edge_green_spill_limit", 0)
     if isinstance(green_spill_limit, int) and green_spill_count > green_spill_limit:
         result["problems"].append(f"green-screen edge spill remains: {green_spill_count}px > {green_spill_limit}px")
 
-    source_key_fringe_count = 0 if preserve_source_key else count_edge_source_key_fringe(image, source_key)
-    mark_timing("edge_source_key_fringe")
+    source_key_fringe_count = color_count(
+        "edge_source_key_fringe",
+        lambda: 0 if preserve_source_key else count_edge_source_key_fringe(image, source_key),
+    )
+    if color_metrics is None:
+        mark_timing("edge_source_key_fringe")
     result["edge_source_key_fringe_pixels"] = source_key_fringe_count
     source_key_fringe_limit = crop.get("edge_source_key_fringe_limit", 0)
     if isinstance(source_key_fringe_limit, int) and source_key_fringe_count > source_key_fringe_limit:
@@ -403,14 +507,18 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
             f"source key edge fringe remains: {source_key_fringe_count}px > {source_key_fringe_limit}px"
         )
 
-    transparent_bad_rgb_count = count_transparent_edge_bad_rgb(
-        image,
-        source_key,
-        preserve_purple=preserve_purple,
-        preserve_green=preserve_green,
-        preserve_source_key=preserve_source_key,
+    transparent_bad_rgb_count = color_count(
+        "transparent_edge_bad_rgb",
+        lambda: count_transparent_edge_bad_rgb(
+            image,
+            source_key,
+            preserve_purple=preserve_purple,
+            preserve_green=preserve_green,
+            preserve_source_key=preserve_source_key,
+        ),
     )
-    mark_timing("transparent_edge_bad_rgb")
+    if color_metrics is None:
+        mark_timing("transparent_edge_bad_rgb")
     result["transparent_edge_bad_rgb_pixels"] = transparent_bad_rgb_count
     transparent_bad_rgb_limit = crop.get("transparent_edge_bad_rgb_limit", 0)
     if isinstance(transparent_bad_rgb_limit, int) and transparent_bad_rgb_count > transparent_bad_rgb_limit:
@@ -419,8 +527,9 @@ def audit_asset(crop: dict[str, Any], root: Path, source_key: tuple[int, int, in
             f"{transparent_bad_rgb_count}px > {transparent_bad_rgb_limit}px"
         )
 
-    transparent_nonzero_rgb_count = count_fully_transparent_nonzero_rgb(image)
-    mark_timing("transparent_nonzero_rgb")
+    transparent_nonzero_rgb_count = color_count("transparent_nonzero_rgb", lambda: count_fully_transparent_nonzero_rgb(image))
+    if color_metrics is None:
+        mark_timing("transparent_nonzero_rgb")
     result["transparent_nonzero_rgb_pixels"] = transparent_nonzero_rgb_count
     transparent_nonzero_rgb_limit = crop.get("transparent_nonzero_rgb_limit", 0)
     if isinstance(transparent_nonzero_rgb_limit, int) and transparent_nonzero_rgb_count > transparent_nonzero_rgb_limit:
