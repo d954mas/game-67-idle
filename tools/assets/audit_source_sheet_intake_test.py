@@ -114,6 +114,8 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertNotEqual(data["next_prompt_key_color"], "#ff00ff")
             self.assertGreater(data["key_color_conflict_count"], 0)
             self.assertGreater(data["problem_summary"]["components_with_exact_key_conflict"], 0)
+            self.assertEqual(data["blocking_reasons"][0]["code"], "key_color_conflict")
+            self.assertEqual(data["blocking_reasons"][0]["action"], "regenerate_source_sheet_with_safer_key_color")
             self.assertEqual(data["recommended_next_step"]["action"], "regenerate_source_sheet_with_safer_key_color")
             self.assertEqual(data["recommended_next_step"]["key_color"], data["next_prompt_key_color"])
 
@@ -189,8 +191,11 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertIsNone(data["next_prompt_key_color"])
             self.assertEqual(data["recommended_next_step"]["action"], "split_preserve_or_dual_plate_alpha")
             self.assertGreater(data["problem_summary"]["components_with_key_hue_conflict"], 0)
+            self.assertEqual(data["blocking_reasons"][0]["code"], "key_color_conflict")
+            self.assertEqual(data["blocking_reasons"][0]["action"], "split_preserve_or_dual_plate_alpha")
             markdown_text = markdown.read_text(encoding="utf-8")
             self.assertIn("## Problem Summary", markdown_text)
+            self.assertIn("## Blocking Reasons", markdown_text)
             self.assertIn("## Recommended Next Step", markdown_text)
             self.assertIn("- action: split_preserve_or_dual_plate_alpha", markdown_text)
 
@@ -467,6 +472,8 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertIn("analysis_engine:", markdown_text)
             self.assertIn("recommended_next_step: slice_ready", markdown_text)
             self.assertIn("## Problem Summary", markdown_text)
+            self.assertIn("## Blocking Reasons", markdown_text)
+            self.assertIn("- none", markdown_text)
             self.assertIn("## Recommended Next Step", markdown_text)
             self.assertIn("## Timing", markdown_text)
 

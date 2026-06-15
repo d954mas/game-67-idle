@@ -854,6 +854,48 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
             "reason": "source sheet passed intake checks",
             "key_color": key_color_text,
         }
+    blocking_reasons: list[dict[str, object]] = []
+    if key_color_conflict_count > 0:
+        key_conflict_action = (
+            recommended_next_step["action"]
+            if recommended_next_step["action"] in {"regenerate_source_sheet_with_safer_key_color", "split_preserve_or_dual_plate_alpha"}
+            else key_color_action
+        )
+        blocking_reasons.append(
+            {
+                "code": "key_color_conflict",
+                "count": key_color_conflict_count,
+                "action": key_conflict_action,
+            }
+        )
+    if len(components) < args.min_components:
+        blocking_reasons.append(
+            {
+                "code": "too_few_components",
+                "count": len(components),
+                "minimum": args.min_components,
+                "action": "regenerate_source_sheet_with_clearer_separation",
+            }
+        )
+    if components_with_border_gap:
+        blocking_reasons.append(
+            {
+                "code": "unsafe_border",
+                "count": len(components_with_border_gap),
+                "minimum_px": args.min_border,
+                "action": "regenerate_source_sheet_with_more_gutter_and_safe_border",
+            }
+        )
+    if problem_summary["gutter_below_min"]:
+        blocking_reasons.append(
+            {
+                "code": "unsafe_gutter",
+                "closest_gap_px": min_gap,
+                "minimum_px": args.min_gutter,
+                "closest_pair": closest_pair,
+                "action": "regenerate_source_sheet_with_more_gutter_and_safe_border",
+            }
+        )
 
     public_components = [{key: value for key, value in component.items() if not str(key).startswith("_")} for component in components]
 
@@ -880,6 +922,7 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
         "key_color_action": key_color_action,
         "next_prompt_key_color": next_prompt_key_color,
         "problem_summary": problem_summary,
+        "blocking_reasons": blocking_reasons,
         "recommended_next_step": recommended_next_step,
         "components": public_components,
         "problems": problems,
@@ -927,6 +970,19 @@ def write_report(path: Path, result: dict[str, object]) -> None:
             f"- total_purple_halo_hue_px: {summary['total_purple_halo_hue_px']}",
             f"- gutter_below_min: {str(summary['gutter_below_min']).lower()}",
             f"- worst_key_hue_component: {summary['worst_key_hue_component']}",
+            "",
+            "## Blocking Reasons",
+            *(
+                [
+                    "- none",
+                ]
+                if not result["blocking_reasons"]
+                else [
+                    "- "
+                    + ", ".join(f"{key}: {value}" for key, value in reason.items())
+                    for reason in result["blocking_reasons"]
+                ]
+            ),
             "",
             "## Recommended Next Step",
             f"- action: {result['recommended_next_step']['action']}",
