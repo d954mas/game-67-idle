@@ -805,6 +805,7 @@ function validatePromptPacket(packet, packetPath, record, job, label, problems) 
       problems.push(`${packetLabel} needs key_color_source when intake_key_color_action is present`);
     }
   }
+  validatePromptPacketIntakeRouting(packet, packetLabel, problems);
   if (hasText(packet.job_id) && hasText(job?.id) && packet.job_id !== job.id) {
     problems.push(`${packetLabel} job_id should match art job ${job.id}`);
   }
@@ -827,6 +828,45 @@ function validatePromptPacket(packet, packetPath, record, job, label, problems) 
   }
   if (!packetPath.endsWith(".json")) {
     problems.push(`${packetLabel} should reference the JSON prompt packet, not ${packetPath}`);
+  }
+}
+
+function validatePromptPacketIntakeRouting(packet, packetLabel, problems) {
+  const recommendedStep = packet.intake_recommended_next_step;
+  if (recommendedStep !== undefined && recommendedStep !== null) {
+    if (typeof recommendedStep !== "object" || Array.isArray(recommendedStep)) {
+      problems.push(`${packetLabel} intake_recommended_next_step must be an object`);
+    } else if (!hasText(recommendedStep.action)) {
+      problems.push(`${packetLabel} intake_recommended_next_step needs action`);
+    } else {
+      const expectedActions = {
+        regenerate_source_sheet_with_safer_key_color: "regenerate_with_next_prompt_key_color",
+        split_preserve_or_dual_plate_alpha: "split_preserve_or_dual_plate_alpha",
+        slice_ready: "keep_current_key_color",
+      };
+      const expectedAction = expectedActions[recommendedStep.action];
+      if (
+        expectedAction &&
+        hasText(packet.intake_key_color_action) &&
+        packet.intake_key_color_action !== expectedAction
+      ) {
+        problems.push(`${packetLabel} intake_key_color_action must match intake_recommended_next_step.action`);
+      }
+    }
+  }
+  const blockingReasons = packet.intake_blocking_reasons;
+  if (blockingReasons !== undefined) {
+    if (!Array.isArray(blockingReasons)) {
+      problems.push(`${packetLabel} intake_blocking_reasons must be an array`);
+    } else {
+      for (const [index, reason] of blockingReasons.entries()) {
+        if (!reason || typeof reason !== "object" || Array.isArray(reason)) {
+          problems.push(`${packetLabel} intake_blocking_reasons[${index}] must be an object`);
+        } else if (!hasText(reason.code)) {
+          problems.push(`${packetLabel} intake_blocking_reasons[${index}] needs code`);
+        }
+      }
+    }
   }
 }
 

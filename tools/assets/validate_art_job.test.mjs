@@ -1316,11 +1316,72 @@ test("strict mode accepts explicit diagnostic chroma prompt packet override", (t
     intake_key_color_action: "split_preserve_or_dual_plate_alpha",
     diagnostic_chroma_override: true,
     suggested_key_color: "#00ffff",
+    intake_recommended_next_step: {
+      action: "split_preserve_or_dual_plate_alpha",
+      reason: "key color conflicts exist but no safer candidate key color was found",
+      key_color: null,
+    },
+    intake_blocking_reasons: [
+      {
+        code: "key_color_conflict",
+        action: "split_preserve_or_dual_plate_alpha",
+      },
+    ],
   });
 
   const result = run(["--job", job, "--strict"], dir);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /strict-valid/);
+});
+
+test("strict mode rejects inconsistent prompt packet intake routing", (t) => {
+  const dir = tempDir(t);
+  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const { job } = writeStrictValidJob(dir, {
+    prompt_packet: promptPacket,
+  });
+  writePromptPacket(dir, promptPacket, {
+    key_color_source: "intake_audit",
+    intake_key_color_action: "keep_current_key_color",
+    intake_recommended_next_step: {
+      action: "split_preserve_or_dual_plate_alpha",
+      reason: "key color conflicts exist but no safer candidate key color was found",
+      key_color: null,
+    },
+    intake_blocking_reasons: [
+      {
+        code: "key_color_conflict",
+        action: "split_preserve_or_dual_plate_alpha",
+      },
+    ],
+  });
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /intake_key_color_action must match intake_recommended_next_step\.action/);
+});
+
+test("strict mode rejects malformed prompt packet intake blocking reasons", (t) => {
+  const dir = tempDir(t);
+  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const { job } = writeStrictValidJob(dir, {
+    prompt_packet: promptPacket,
+  });
+  writePromptPacket(dir, promptPacket, {
+    key_color_source: "intake_audit",
+    intake_key_color_action: "regenerate_with_next_prompt_key_color",
+    suggested_key_color: "#00ffff",
+    intake_recommended_next_step: {
+      action: "regenerate_source_sheet_with_safer_key_color",
+      reason: "source sheet intake found a safer key color candidate",
+      key_color: "#00ffff",
+    },
+    intake_blocking_reasons: [{}],
+  });
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /intake_blocking_reasons\[0\] needs code/);
 });
 
 test("strict mode accepts matching generation record prompt packet", (t) => {
