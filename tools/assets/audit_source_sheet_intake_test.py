@@ -477,6 +477,53 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertIn("## Recommended Next Step", markdown_text)
             self.assertIn("## Timing", markdown_text)
 
+    def test_profile_output_keeps_intake_report_stable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "sheet.png"
+            report = Path(tmp) / "report.json"
+            markdown = Path(tmp) / "report.md"
+            profile = Path(tmp) / "tmp/profile/intake-profile.json"
+            image = Image.new("RGBA", (160, 96), (255, 0, 255, 255))
+            draw = ImageDraw.Draw(image)
+            draw.rectangle((32, 24, 128, 72), fill=(80, 60, 40, 255))
+            image.save(source)
+            result = run(
+                [
+                    "python",
+                    str(SCRIPT),
+                    "--source",
+                    str(source),
+                    "--min-components",
+                    "1",
+                    "--min-border",
+                    "16",
+                    "--json-output",
+                    str(report),
+                    "--report",
+                    str(markdown),
+                    "--profile",
+                    "--profile-output",
+                    str(profile),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("wrote profile telemetry:", result.stdout)
+            self.assertIn("profile: slowest stage", result.stdout)
+            data = json.loads(report.read_text(encoding="utf-8"))
+            self.assertEqual(data["status"], "pass")
+            self.assertNotIn("timing_ms", data)
+            markdown_text = markdown.read_text(encoding="utf-8")
+            self.assertNotIn("## Timing", markdown_text)
+            profile_data = json.loads(profile.read_text(encoding="utf-8"))
+            self.assertEqual(profile_data["schema"], "game.source_sheet_intake_profile")
+            self.assertEqual(profile_data["status"], "pass")
+            self.assertEqual(profile_data["recommended_next_step"]["action"], "slice_ready")
+            self.assertIn("timing_ms", profile_data)
+            self.assertIn("find_components", profile_data["timing_ms"])
+
 
 if __name__ == "__main__":
     unittest.main()

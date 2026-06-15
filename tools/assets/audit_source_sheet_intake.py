@@ -9,6 +9,7 @@ import sys
 from collections import deque
 from pathlib import Path
 from time import perf_counter
+from typing import Any
 
 from PIL import Image
 
@@ -27,6 +28,31 @@ from tools.assets.chroma_key_alpha import is_exact_key_like, is_key_fringe_like,
 
 
 DEFAULT_CANDIDATE_KEY_COLORS = "#00ff00,#00ffff,#ff00ff,#ffff00,#ff0000,#0000ff"
+PROFILE_KEYS = {"timing_ms"}
+
+
+def without_profile_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: without_profile_fields(item) for key, item in value.items() if key not in PROFILE_KEYS}
+    if isinstance(value, list):
+        return [without_profile_fields(item) for item in value]
+    return value
+
+
+def profile_report_from_intake(result: dict[str, object]) -> dict[str, object]:
+    return {
+        "schema": "game.source_sheet_intake_profile",
+        "version": 1,
+        "source": result.get("source"),
+        "status": result.get("status"),
+        "analysis_engine": result.get("analysis_engine"),
+        "component_count": result.get("component_count"),
+        "key_color": result.get("key_color"),
+        "key_color_action": result.get("key_color_action"),
+        "recommended_next_step": result.get("recommended_next_step"),
+        "problem_summary": result.get("problem_summary"),
+        "timing_ms": result.get("timing_ms"),
+    }
 
 
 def parse_color(value: str) -> tuple[int, int, int]:
@@ -1031,20 +1057,31 @@ def main() -> int:
     parser.add_argument("--json-output", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--profile", action="store_true", help="Record per-stage timing in JSON/Markdown and print the slowest stage.")
+    parser.add_argument("--profile-output", type=Path, help="Write per-stage timing telemetry to a sidecar JSON file. When set, profile fields are not embedded in JSON/Markdown unless --profile-inline is also set.")
+    parser.add_argument("--profile-inline", action="store_true", help="Embed profile timing fields in JSON/Markdown even when --profile-output is used.")
     args = parser.parse_args()
 
+    profile_enabled = args.profile or args.profile_output is not None
+    profile_inline = args.profile_inline or args.profile_output is None
+    args.profile = profile_enabled
     result = audit(args)
+    if args.profile_output and profile_enabled:
+        write_json_atomic(args.profile_output, profile_report_from_intake(result))
+    output_result = result if profile_inline else without_profile_fields(result)
     if args.json_output:
-        write_json_atomic(args.json_output, result)
+        write_json_atomic(args.json_output, output_result)
     if args.report:
-        write_report(args.report, result)
+        write_report(args.report, output_result)
     print(
         f"{result['status']}: {result['component_count']} component(s), "
         f"closest_gap={result['closest_gap_px']}, next_prompt_key={result['next_prompt_key_color']}"
     )
     for problem in result["problems"]:
         print(f"problem: {problem}")
-    if args.profile and result.get("timing_ms"):
+    if args.profile_output:
+        profile_output_path = str(args.profile_output).replace("\\", "/")
+        print(f"wrote profile telemetry: {profile_output_path}")
+    if profile_enabled and result.get("timing_ms"):
         timed_stages = {key: value for key, value in result["timing_ms"].items() if key != "total"}
         if timed_stages:
             slowest_name, slowest_ms = max(timed_stages.items(), key=lambda item: item[1])

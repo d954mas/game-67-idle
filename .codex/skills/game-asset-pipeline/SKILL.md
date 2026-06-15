@@ -67,9 +67,11 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     too-small gutters before slicing work begins. Record passing JSON reports
     in `expected_outputs.source_sheet_intake_audit` for final-art claims. The
     report source must match the art job source art or crop source. Add
-    `--profile` for slow or disputed intake runs so JSON/Markdown show
-    per-stage timing, the analysis engine (`numpy` fast path or portable
-    `python` fallback), and the slowest stage. Intake reports should also show
+    `--profile --profile-output tmp/asset-profiles/<name>.json` for slow or
+    disputed intake runs so sidecar telemetry shows per-stage timing, the
+    analysis engine (`numpy` fast path or portable `python` fallback), and the
+    slowest stage without churning durable JSON/Markdown evidence. Use
+    `--profile-inline` only for throwaway/local debug reports. Intake reports should also show
     `problem_summary` and `recommended_next_step` so the next pipeline move is
     explicit: safer prompt key, more gutter/border regeneration, or
     dual-plate/split alpha extraction.

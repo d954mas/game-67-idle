@@ -97,10 +97,12 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
    If the action is `split_preserve_or_dual_plate_alpha`, stop trying adjacent
    chroma colors and split/preserve the art or switch to dual-plate alpha.
    Use the key color from the prompt packet when auditing generated sheets.
-   Add `--profile` when source-sheet intake feels slow or when comparing
-   component detection fixes; it records per-stage timing, the analysis engine
-   (`numpy` fast path or portable `python` fallback), and the slowest stage
-   without changing pass/fail semantics.
+   Add `--profile --profile-output tmp/asset-profiles/<name>.json` when
+   source-sheet intake feels slow or when comparing component detection fixes;
+   the sidecar records per-stage timing, the analysis engine (`numpy` fast
+   path or portable `python` fallback), and the slowest stage without churning
+   durable JSON/Markdown evidence. Use `--profile-inline` only for
+   throwaway/local debug reports.
    Intake JSON/Markdown must expose `problem_summary` and
    `recommended_next_step` so key-color failures route quickly to either a
    safer prompt key, more gutter/border regeneration, or dual-plate/split
@@ -169,8 +171,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       Record passing JSON reports in `expected_outputs.source_sheet_intake_audit`
       for final-art claims. Strict validation checks this report if listed;
       final-art validation requires it. The report `source` must match the
-      art job's expected source art or crop source. Add `--profile` for slow
-      intake runs so the report shows stage timings.
+      art job's expected source art or crop source. Add
+      `--profile --profile-output tmp/asset-profiles/<name>.json` for slow
+      intake runs so the sidecar shows stage timings without dirtying durable
+      review evidence.
     - strict contract after slicing:
       `node tools/assets/validate_art_job.mjs --job <job> --strict`
       This strict gate requires `expected_outputs.asset_audit` evidence and
