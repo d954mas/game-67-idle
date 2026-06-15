@@ -303,6 +303,19 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("review_label lines must be non-empty strings", result.stdout + result.stderr)
 
+    def test_rejects_missing_review_label_placement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")], label_review=True)
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            entry = pack_data["atlases"][0]["entries"][0]
+            entry["review_label"].pop("placement")
+            pack.write_text(json.dumps(pack_data), encoding="utf-8")
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("review_label placement must be bottom or right", result.stdout + result.stderr)
+
     def test_rejects_overlapping_review_label_rects(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

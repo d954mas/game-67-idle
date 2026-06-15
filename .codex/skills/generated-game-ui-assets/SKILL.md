@@ -203,9 +203,11 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       atlas PNGs from `pack_group`, preserves slice9/content metadata, writes
       extruded padded rects, reuses alias regions, and can draw id labels in
       reserved `review_label.rect` free space outside each asset `padded_rect`
-      so the lead can name which assets to take. Long labels should keep exact
-      `review_label.text` metadata and render wrapped `review_label.lines` in
-      the preview so verbose ids do not widen the atlas. Labels must be
+      so the lead can name which assets to take. Store `review_label.placement`
+      as `right` or `bottom` so the preview uses nearby free space without
+      covering art. Long labels should keep exact `review_label.text` metadata
+      and render wrapped `review_label.lines` in the preview so verbose ids do
+      not widen the atlas. Labels must be
       readable at whole-atlas review size and record `review_label.font_size`;
       tiny debug-font labels are not acceptable review evidence. This is
       review evidence, not the game's final runtime packer.
@@ -341,8 +343,9 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   `review_label.rect` free space outside the asset `padded_rect`; do not place
   labels over the art or over other labels. Preserve the exact id and alias
   list in `review_label.text`; wrap only the rendered preview text through
-  `review_label.lines`, and keep labels readable enough for the lead to choose
-  assets directly from the atlas.
+  `review_label.lines`; store `review_label.placement` as `right` or `bottom`;
+  and keep labels readable enough for the lead to choose assets directly from
+  the atlas.
   It must not be presented as the game's final runtime atlas. Use `--profile`
   while optimizing atlas economy so reports preserve occupancy and padded-asset
   ratios instead of relying on visual guessing.

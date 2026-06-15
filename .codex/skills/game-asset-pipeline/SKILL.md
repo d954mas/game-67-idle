@@ -145,10 +145,12 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     validation requires it for generated UI. The manifest should preserve atlas
     rects, padded rects, extrusion, slice9 margins, content safe areas, source
     paths, alias reuse, label-review purpose, and `review_label.rect` metadata
-    for names placed outside asset `padded_rect`s. Long labels should preserve
-    exact `review_label.text` metadata and render wrapped `review_label.lines`
-    in the preview so verbose ids do not widen the atlas. This is proof/review
-    output, not the game's final runtime atlas packer.
+    for names placed outside asset `padded_rect`s. Store
+    `review_label.placement` as `right` or `bottom` so labels use nearby free
+    space without covering art. Long labels should preserve exact
+    `review_label.text` metadata and render wrapped `review_label.lines` in the
+    preview so verbose ids do not widen the atlas. This is proof/review output,
+    not the game's final runtime atlas packer.
 21. Audit generated UI review atlases before final-art claims:
     `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`.
     Add `--profile` when atlas audit feels slow so JSON/Markdown preserve audit
@@ -260,15 +262,17 @@ Before UI assets are integrated:
   exact names in `review_label.rect` free space outside asset `padded_rect`s,
   list linked aliases on the physical source label, preserve exact
   `review_label.text`, wrap rendered preview names through `review_label.lines`,
-  and preserve slice9/content metadata without pretending to be the game's final
-  runtime packer. When atlas
+  store `review_label.placement` as `right` or `bottom`, and preserve
+  slice9/content metadata without pretending to be the game's final runtime
+  packer. When atlas
   economy or speed is under review, build it with `--profile` so
   occupancy/timing evidence is stored with the pack manifest.
 - Atlas pack audit evidence exists and passes before final generated UI claims.
   It should prove coverage, bounds, non-overlap, extrusion pixels, and
   exact non-overlapping review labels. For labeled review atlases, the audit
-  should prove that wrapped `review_label.lines` fit their rects and labels are
-  visible only in the labeled preview, not in the clean atlas texture.
+  should prove that `review_label.placement` is valid, wrapped
+  `review_label.lines` fit their rects, and labels are visible only in the
+  labeled preview, not in the clean atlas texture.
 - A full UI kit claim requires runtime-ready assets for every required runtime
   source family. If icons or decor overlays are accepted as source art but not
   cut into the runtime crop/asset manifests, record the work as

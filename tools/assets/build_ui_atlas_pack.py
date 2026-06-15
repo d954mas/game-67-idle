@@ -25,6 +25,7 @@ LABEL_LINE_GAP_Y = 2
 LABEL_MIN_WIDTH = 72
 LABEL_MAX_WIDTH = 220
 _LABEL_FONT: ImageFont.ImageFont | None = None
+LABEL_PLACEMENTS = {"bottom", "right"}
 
 
 def fail(message: str) -> None:
@@ -211,14 +212,52 @@ def prepare_review_labels(items: list[dict[str, Any]], alias_items: list[dict[st
         max_text_width = min(LABEL_MAX_WIDTH, max(LABEL_MIN_WIDTH, padded_width))
         lines = label_display_lines(label, max_text_width)
         label_width, label_height = measure_label_lines(lines)
+        label_box_width = label_width + LABEL_PAD_X * 2
+        label_box_height = label_height + LABEL_PAD_Y * 2
+        placement, tile_width, tile_height = choose_label_placement(
+            padded_width,
+            int(item["image"].height) + int(item["extrude"]) * 2,
+            label_box_width,
+            label_box_height,
+            LABEL_GAP_Y,
+        )
         item["review_label"] = {
             "text": label,
             "lines": lines,
             "font_size": LABEL_FONT_SIZE,
-            "width": label_width + LABEL_PAD_X * 2,
-            "height": label_height + LABEL_PAD_Y * 2,
+            "width": label_box_width,
+            "height": label_box_height,
             "gap_y": LABEL_GAP_Y,
+            "placement": placement,
+            "tile_width": tile_width,
+            "tile_height": tile_height,
         }
+
+
+def choose_label_placement(
+    padded_width: int,
+    padded_height: int,
+    label_width: int,
+    label_height: int,
+    gap: int,
+) -> tuple[str, int, int]:
+    bottom = {
+        "placement": "bottom",
+        "tile_width": max(padded_width, label_width),
+        "tile_height": padded_height + gap + label_height,
+    }
+    right = {
+        "placement": "right",
+        "tile_width": padded_width + gap + label_width,
+        "tile_height": max(padded_height, label_height),
+    }
+    bottom_area = bottom["tile_width"] * bottom["tile_height"]
+    right_area = right["tile_width"] * right["tile_height"]
+    if right_area < bottom_area:
+        selected = right
+    else:
+        selected = bottom
+    return str(selected["placement"]), int(selected["tile_width"]), int(selected["tile_height"])
 
 
 def load_assets(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -296,8 +335,17 @@ def packed_tile_size(item: dict[str, Any]) -> tuple[int, int]:
     label_width = int(review_label.get("width", 0)) if review_label else 0
     label_height = int(review_label.get("height", 0)) if review_label else 0
     label_gap_y = int(review_label.get("gap_y", 0)) if review_label else 0
-    tile_width = max(padded_width, label_width)
-    tile_height = padded_height + (label_gap_y + label_height if review_label else 0)
+    if review_label:
+        placement = str(review_label.get("placement") or "bottom")
+        if placement == "right":
+            tile_width = padded_width + label_gap_y + label_width
+            tile_height = max(padded_height, label_height)
+        else:
+            tile_width = max(padded_width, label_width)
+            tile_height = padded_height + label_gap_y + label_height
+    else:
+        tile_width = padded_width
+        tile_height = padded_height
     return tile_width, tile_height
 
 
@@ -357,13 +405,21 @@ def make_entry(item: dict[str, Any], x: int, y: int, image: Image.Image) -> dict
         entry["alias_of"] = asset["alias_of"]
     review_label = item.get("review_label")
     if isinstance(review_label, dict):
-        label_x = x
-        label_y = y + image.height + extrude * 2 + int(review_label.get("gap_y", 0))
+        placement = str(review_label.get("placement") or "bottom")
+        if placement not in LABEL_PLACEMENTS:
+            placement = "bottom"
+        if placement == "right":
+            label_x = x + image.width + extrude * 2 + int(review_label.get("gap_y", 0))
+            label_y = y
+        else:
+            label_x = x
+            label_y = y + image.height + extrude * 2 + int(review_label.get("gap_y", 0))
         entry["review_label"] = {
             "text": review_label["text"],
             "lines": list(review_label.get("lines") or [review_label["text"]]),
             "font_size": int(review_label.get("font_size") or LABEL_FONT_SIZE),
             "rect": [label_x, label_y, int(review_label["width"]), int(review_label["height"])],
+            "placement": placement,
         }
     return entry
 
@@ -598,6 +654,7 @@ def build_pack(asset_manifest: Path, output_dir: Path, json_output: Path, report
                 review_label = entry.get("review_label") if isinstance(entry.get("review_label"), dict) else None
                 if review_label:
                     details.append(f"label_rect={review_label.get('rect')}")
+                    details.append(f"label_placement={review_label.get('placement') or '-'}")
                 lines.append(f"- `{entry['id']}`: " + ", ".join(details))
             lines.append("")
         write_text(report_path, "\n".join(lines))

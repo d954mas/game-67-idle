@@ -260,9 +260,15 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             label = entries["panel"]["review_label"]
             self.assertEqual(label["text"], "panel")
             self.assertGreaterEqual(label["font_size"], 12)
+            self.assertIn(label["placement"], {"bottom", "right"})
             padded_x, padded_y, padded_w, padded_h = entries["panel"]["padded_rect"]
             label_x, label_y, label_w, label_h = label["rect"]
-            self.assertGreaterEqual(label_y, padded_y + padded_h)
+            self.assertFalse(
+                label_x < padded_x + padded_w
+                and label_x + label_w > padded_x
+                and label_y < padded_y + padded_h
+                and label_y + label_h > padded_y
+            )
             atlas = Image.open(root / atlas_info["path"]).convert("RGBA")
             preview = Image.open(root / atlas_info["labeled_preview_path"]).convert("RGBA")
             self.assertEqual(atlas.getpixel((label_x, label_y))[3], 0)
@@ -274,7 +280,42 @@ class BuildUiAtlasPackTest(unittest.TestCase):
             self.assertIn("### ui_common", report)
             self.assertIn("- `panel`: kind=slice9", report)
             self.assertIn("label_rect=", report)
+            self.assertIn("label_placement=", report)
             self.assertIn("profile: slowest atlas group", result.stdout)
+
+    def test_label_review_can_use_right_side_free_space_for_small_assets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/tiny_icon.png", size=(12, 12), color=(40, 120, 220, 255))
+            manifest = root / "manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema": "game.asset_manifest",
+                        "version": 1,
+                        "assets": [
+                            asset(
+                                "tiny_icon",
+                                "assets/runtime/tiny_icon.png",
+                                kind="icon",
+                                original_size=[12, 12],
+                                trim_rect=[0, 0, 12, 12],
+                            )
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = run_pack(root, "--asset-manifest", "manifest.json", "--output-dir", "packed", "--json-output", "packed/atlas.json", "--label-review")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            pack = json.loads((root / "packed/atlas.json").read_text(encoding="utf-8"))
+            entry = pack["atlases"][0]["entries"][0]
+            label = entry["review_label"]
+            self.assertEqual(label["placement"], "right")
+            padded_x, padded_y, padded_w, padded_h = entry["padded_rect"]
+            label_x, label_y, _, _ = label["rect"]
+            self.assertGreaterEqual(label_x, padded_x + padded_w)
+            self.assertEqual(label_y, padded_y)
 
     def test_atomic_image_write_keeps_existing_png_on_save_failure(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -90,7 +90,8 @@
               127,
               198,
               34
-            ]
+            ],
+            "placement": "bottom"
           }
         },
         {
@@ -158,7 +159,8 @@
               876,
               198,
               34
-            ]
+            ],
+            "placement": "bottom"
           }
         },
         {
@@ -226,7 +228,8 @@
               1038,
               198,
               34
-            ]
+            ],
+            "placement": "bottom"
           }
         },
         {
@@ -293,7 +296,8 @@
               876,
               218,
               18
-            ]
+            ],
+            "placement": "bottom"
           }
         },
         {
@@ -361,7 +365,8 @@
               1038,
               164,
               34
-            ]
+            ],
+            "placement": "bottom"
           }
         },
         {
@@ -428,7 +433,8 @@
               1037,
               223,
               18
-            ]
+            ],
+            "placement": "bottom"
           }
         },
         {
@@ -495,17 +501,18 @@
               730,
               198,
               18
-            ]
+            ],
+            "placement": "bottom"
           }
         }
       ],
       "labeled_preview_path": "assets/runtime/rune-marches-ui-compact-bases-v5-atlas/ui_rune_marches_compact_bases_v5-labeled.png",
       "timing_ms": {
-        "layout": 3.039,
-        "compose": 3.254,
-        "save_atlas": 41.184,
-        "save_labeled_preview": 42.8,
-        "total": 91.001
+        "layout": 2.671,
+        "compose": 3.15,
+        "save_atlas": 40.898,
+        "save_labeled_preview": 42.723,
+        "total": 89.934
       }
     }
   ],
@@ -517,9 +524,9 @@
     "padded_asset_ratio": 0.5703
   },
   "timing_ms": {
-    "read_manifest": 0.25,
-    "load_assets": 19.68,
-    "pack_groups": 91.207,
-    "total": 111.655
+    "read_manifest": 0.189,
+    "load_assets": 16.451,
+    "pack_groups": 90.388,
+    "total": 107.556
   }
 }

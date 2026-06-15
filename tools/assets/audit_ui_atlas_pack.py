@@ -323,6 +323,9 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
                         expected_label = expected_review_label_text(entry_id, entries_by_id, expected_assets)
                         if review_label["text"] != expected_label:
                             atlas_problems.append(f"{entry_id} review_label text must be `{expected_label}`")
+                        placement = review_label.get("placement")
+                        if placement not in {"bottom", "right"}:
+                            atlas_problems.append(f"{entry_id} review_label placement must be bottom or right")
                         label_rect = rect_tuple(review_label["rect"])
                         atlas_problems.extend(check_review_label_lines(entry_id, review_label, label_rect))
                         if intersects(padded, label_rect):
