@@ -11,18 +11,21 @@
         {
           "id": "decor_corner_top_left_v1",
           "anchor": "top_left",
+          "size": [76, 76],
           "offset": [0, 0],
           "allow_content_overlap": true
         },
         {
           "id": "decor_corner_top_right_v1",
           "anchor": "top_right",
+          "size": [76, 76],
           "offset": [0, 0],
           "allow_content_overlap": true
         },
         {
           "id": "decor_wooden_plaque_v1",
           "anchor": "bottom_center",
+          "size": [150, 66],
           "offset": [0, -10],
           "allow_content_overlap": true
         }
@@ -30,32 +33,35 @@
     },
     {
       "base_id": "compact_button_idle_long_v5",
-      "size": [720, 300],
+      "size": [376, 72],
       "label": "Explore",
       "decor_overlays": [
         {
           "id": "decor_blue_diamond_v1",
           "anchor": "left_mid",
-          "offset": [30, 0],
+          "size": [44, 46],
+          "offset": [10, 0],
           "allow_content_overlap": true
         },
         {
           "id": "icon_rune_crystal_v1",
           "anchor": "right_mid",
-          "offset": [-30, 0],
+          "size": [42, 42],
+          "offset": [-10, 0],
           "allow_content_overlap": true
         }
       ]
     },
     {
       "base_id": "compact_button_disabled_medium_v5",
-      "size": [420, 300],
+      "size": [256, 72],
       "label": "Locked",
       "decor_overlays": [
         {
           "id": "icon_locked_pin_v1",
           "anchor": "left_mid",
-          "offset": [20, 0],
+          "size": [34, 50],
+          "offset": [12, 0],
           "allow_content_overlap": true
         }
       ]

@@ -27,11 +27,30 @@
             0,
             0
           ],
+          "source_size": [
+            246,
+            245
+          ],
+          "render_size": [
+            76,
+            76
+          ],
+          "resize": {
+            "mode": "size",
+            "source_size": [
+              246,
+              245
+            ],
+            "render_size": [
+              76,
+              76
+            ]
+          },
           "rect": [
             0,
             0,
-            246,
-            245
+            76,
+            76
           ],
           "allow_content_overlap": true
         },
@@ -42,11 +61,30 @@
             0,
             0
           ],
-          "rect": [
-            54,
-            0,
+          "source_size": [
             246,
             245
+          ],
+          "render_size": [
+            76,
+            76
+          ],
+          "resize": {
+            "mode": "size",
+            "source_size": [
+              246,
+              245
+            ],
+            "render_size": [
+              76,
+              76
+            ]
+          },
+          "rect": [
+            224,
+            0,
+            76,
+            76
           ],
           "allow_content_overlap": true
         },
@@ -57,11 +95,30 @@
             0,
             -10
           ],
-          "rect": [
-            12,
-            249,
+          "source_size": [
             276,
             121
+          ],
+          "render_size": [
+            150,
+            66
+          ],
+          "resize": {
+            "mode": "size",
+            "source_size": [
+              276,
+              121
+            ],
+            "render_size": [
+              150,
+              66
+            ]
+          },
+          "rect": [
+            75,
+            304,
+            150,
+            66
           ],
           "allow_content_overlap": true
         }
@@ -69,35 +126,54 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 59.729
+        "total": 101.804
       }
     },
     {
       "base_id": "compact_button_idle_long_v5",
       "size": [
-        720,
-        300
+        376,
+        72
       ],
       "label": "Explore",
       "content_rect": [
-        66,
-        63,
-        588,
-        174
+        56,
+        26,
+        264,
+        20
       ],
       "overlays": [
         {
           "id": "decor_blue_diamond_v1",
           "anchor": "left_mid",
           "offset": [
-            30,
+            10,
             0
           ],
-          "rect": [
-            30,
-            36,
+          "source_size": [
             217,
             228
+          ],
+          "render_size": [
+            44,
+            46
+          ],
+          "resize": {
+            "mode": "size",
+            "source_size": [
+              217,
+              228
+            ],
+            "render_size": [
+              44,
+              46
+            ]
+          },
+          "rect": [
+            10,
+            13,
+            44,
+            46
           ],
           "allow_content_overlap": true
         },
@@ -105,14 +181,33 @@
           "id": "icon_rune_crystal_v1",
           "anchor": "right_mid",
           "offset": [
-            -30,
+            -10,
             0
           ],
-          "rect": [
-            454,
-            31,
+          "source_size": [
             236,
             238
+          ],
+          "render_size": [
+            42,
+            42
+          ],
+          "resize": {
+            "mode": "size",
+            "source_size": [
+              236,
+              238
+            ],
+            "render_size": [
+              42,
+              42
+            ]
+          },
+          "rect": [
+            324,
+            15,
+            42,
+            42
           ],
           "allow_content_overlap": true
         }
@@ -120,35 +215,54 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 70.896
+        "total": 34.478
       }
     },
     {
       "base_id": "compact_button_disabled_medium_v5",
       "size": [
-        420,
-        300
+        256,
+        72
       ],
       "label": "Locked",
       "content_rect": [
-        64,
-        63,
-        292,
-        174
+        56,
+        26,
+        144,
+        20
       ],
       "overlays": [
         {
           "id": "icon_locked_pin_v1",
           "anchor": "left_mid",
           "offset": [
-            20,
+            12,
             0
           ],
-          "rect": [
-            20,
-            20,
+          "source_size": [
             174,
             259
+          ],
+          "render_size": [
+            34,
+            50
+          ],
+          "resize": {
+            "mode": "size",
+            "source_size": [
+              174,
+              259
+            ],
+            "render_size": [
+              34,
+              50
+            ]
+          },
+          "rect": [
+            12,
+            11,
+            34,
+            50
           ],
           "allow_content_overlap": true
         }
@@ -156,15 +270,15 @@
       "status": "pass",
       "problems": [],
       "timing_ms": {
-        "total": 44.988
+        "total": 24.433
       }
     }
   ],
   "timing_ms": {
-    "render_items": 175.632,
-    "render_sheet": 15.847,
-    "save_output": 54.048,
-    "total": 249.544
+    "render_items": 160.741,
+    "render_sheet": 13.758,
+    "save_output": 27.199,
+    "total": 208.214
   },
   "cache_stats": {
     "image_hits": 0,
@@ -174,6 +288,8 @@
     "resized_tile_hits": 0,
     "resized_tile_misses": 15,
     "panel_hits": 0,
-    "panel_misses": 3
+    "panel_misses": 3,
+    "overlay_resize_hits": 0,
+    "overlay_resize_misses": 6
   }
 }

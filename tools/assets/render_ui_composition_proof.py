@@ -39,6 +39,7 @@ class CompositionRenderCache:
         self.slice_tiles: dict[tuple[str, tuple[int, int, int, int], tuple[int, int]], list[list[Image.Image]]] = {}
         self.resized_tiles: dict[tuple[str, tuple[int, int, int, int], tuple[int, int], int, int, tuple[int, int]], Image.Image] = {}
         self.panels: dict[tuple[str, tuple[int, int], tuple[int, int, int, int], tuple[int, int]], Image.Image] = {}
+        self.resized_overlays: dict[tuple[str, tuple[int, int], tuple[int, int]], Image.Image] = {}
         self.stats = {
             "image_hits": 0,
             "image_misses": 0,
@@ -48,6 +49,8 @@ class CompositionRenderCache:
             "resized_tile_misses": 0,
             "panel_hits": 0,
             "panel_misses": 0,
+            "overlay_resize_hits": 0,
+            "overlay_resize_misses": 0,
         }
 
 
@@ -238,6 +241,79 @@ def anchor_position(anchor: str, base_size: tuple[int, int], overlay_size: tuple
     return x + offset[0], y + offset[1]
 
 
+def positive_pair(value: Any) -> tuple[int, int] | None:
+    if not isinstance(value, list) or len(value) != 2:
+        return None
+    try:
+        width = int(value[0])
+        height = int(value[1])
+    except (TypeError, ValueError):
+        return None
+    if width <= 0 or height <= 0:
+        return None
+    return width, height
+
+
+def resized_overlay_image(
+    overlay_id: str,
+    overlay_data: dict[str, Any],
+    image: Image.Image,
+    problems: list[str],
+    cache: CompositionRenderCache | None = None,
+) -> tuple[Image.Image, dict[str, Any]]:
+    source_size = image.size
+    requested_size = overlay_data.get("size")
+    requested_max_size = overlay_data.get("max_size")
+    requested_scale = overlay_data.get("scale")
+    resize_keys = [key for key, value in (("size", requested_size), ("max_size", requested_max_size), ("scale", requested_scale)) if value is not None]
+    if len(resize_keys) > 1:
+        problems.append(f"overlay {overlay_id} must use only one of size, max_size, or scale")
+        return image, {"mode": "source", "source_size": list(source_size), "render_size": list(source_size)}
+
+    target_size = source_size
+    mode = "source"
+    if requested_size is not None:
+        parsed = positive_pair(requested_size)
+        if parsed is None:
+            problems.append(f"overlay {overlay_id} size must be [width,height] with positive integers")
+        else:
+            target_size = parsed
+            mode = "size"
+    elif requested_max_size is not None:
+        parsed = positive_pair(requested_max_size)
+        if parsed is None:
+            problems.append(f"overlay {overlay_id} max_size must be [width,height] with positive integers")
+        else:
+            max_width, max_height = parsed
+            scale = min(1.0, max_width / source_size[0], max_height / source_size[1])
+            target_size = (max(1, round(source_size[0] * scale)), max(1, round(source_size[1] * scale)))
+            mode = "max_size"
+    elif requested_scale is not None:
+        try:
+            scale = float(requested_scale)
+        except (TypeError, ValueError):
+            scale = 0
+        if scale <= 0:
+            problems.append(f"overlay {overlay_id} scale must be a positive number")
+        else:
+            target_size = (max(1, round(source_size[0] * scale)), max(1, round(source_size[1] * scale)))
+            mode = "scale"
+
+    report = {"mode": mode, "source_size": list(source_size), "render_size": list(target_size)}
+    if target_size == source_size:
+        return image, report
+    cache_key = (overlay_id, source_size, target_size)
+    if cache is not None and cache_key in cache.resized_overlays:
+        cache.stats["overlay_resize_hits"] += 1
+        return cache.resized_overlays[cache_key], report
+    if cache is not None:
+        cache.stats["overlay_resize_misses"] += 1
+    resized = resize_rgba_premultiplied(image, target_size)
+    if cache is not None:
+        cache.resized_overlays[cache_key] = resized
+    return resized, report
+
+
 def asset_map(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {str(asset.get("id")): asset for asset in manifest.get("assets", []) if asset.get("id")}
 
@@ -355,6 +431,8 @@ def render_item(
         overlay_image = load_image(overlay, problems, cache)
         if overlay_image is None:
             continue
+        source_size = overlay_image.size
+        overlay_image, resize_report = resized_overlay_image(str(overlay_id), overlay_data, overlay_image, problems, cache)
         anchor = str(overlay_data.get("anchor") or overlay.get("anchor") or "center")
         if anchor not in ANCHORS:
             problems.append(f"overlay {overlay_id} has unsupported anchor {anchor}")
@@ -376,6 +454,9 @@ def render_item(
                 "id": overlay_id,
                 "anchor": anchor,
                 "offset": [int(offset_value[0]), int(offset_value[1])],
+                "source_size": list(source_size),
+                "render_size": [overlay_image.width, overlay_image.height],
+                "resize": resize_report,
                 "rect": list(overlay_rect),
                 "allow_content_overlap": allow_content_overlap,
             }
@@ -457,6 +538,15 @@ def make_markdown(report: dict[str, Any]) -> str:
     for item in report["items"]:
         suffix = f": {'; '.join(item['problems'])}" if item["problems"] else ""
         lines.append(f"- {item['status'].upper()} `{item['base_id']}` {item['size'][0]}x{item['size'][1]}{suffix}")
+        for overlay in item.get("overlays", []):
+            resize = overlay.get("resize") if isinstance(overlay.get("resize"), dict) else {}
+            lines.append(
+                "  "
+                f"- overlay `{overlay.get('id')}` "
+                f"source={overlay.get('source_size')} render={overlay.get('render_size')} "
+                f"mode={resize.get('mode', 'source')} rect={overlay.get('rect')} "
+                f"anchor={overlay.get('anchor')}"
+            )
     return "\n".join(lines) + "\n"
 
 
