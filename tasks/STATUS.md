@@ -43,53 +43,39 @@ profiling for the next game iteration.
 
 ## Current Gate
 
-- Gate: reusable pipeline cleanup.
-- Active cleanup task: none yet; pick the top open task below. The 2026-06-15
-  full pipeline review produced a prioritized backlog `T0043`-`T0052` covering
-  speed (default-quick validate, passive profiling, gate tiering, planner
-  retirement, doc/skill consolidation) and quality (continuous binding visual
-  fake-shot gate, a fun/reference-feel owner, runtime-art quality bar,
-  first-screen scope discipline). Core diagnosis: gates were advisory/post-hoc
-  and validated artifacts not fun/ref-match, and machinery grew additively.
-- Current review findings to fix, in order:
-  1. Visual prototype workflow must start from fake shot vs native screenshot,
-     not from code-first gameplay expansion.
-  2. Product gate fail must stop feature/content expansion unless the lead
-     explicitly accepts the debt.
-  3. Profiling coverage must stay current across task switches; the fishing
-     profile had near-zero wall-clock coverage, so review conclusions are
-     incomplete unless the missing telemetry is named. `T0023` added a
-     current-scope guard so future handoffs cannot silently use sparse
-     telemetry, and `T0028` made strict slice hygiene require profiler guard
-     evidence before handoff/commit.
-  4. Generated UI must prove non-empty crop/runtime manifests and pixel audit
-     before runtime integration claims.
-  5. Prototype commits need review hygiene: scoped diffs, current evidence,
-     known red gates, and checked push constraints.
+- Gate: reusable pipeline cleanup -- 2026-06-15 review milestone DONE.
+- The full pipeline review backlog `T0043`-`T0053` is complete. Speed: quick is
+  the validate default + tmp auto-prune; profiling is passive/advisory (no
+  forced ceremony); the validation-planner machinery was removed; UI-asset
+  gates are tiered (normal iteration ~2 cmds, full battery final-only); 5
+  AI_PIPELINE docs -> 2; a Context Budget guideline. Quality: "done" redefined
+  in AGENTS.md as screen-vs-fake-shot match + core moment feels right, with a
+  continuous visual gate and visual-first freeze; a fun/reference-feel owner in
+  `game-feature-iteration`; runtime art must hit the fake-shot bar; first-screen
+  scope cap (<=3 FTUE beats). Net principle applied: subtract, don't add.
+- Active cleanup task: none. Next = post-implementation review to find any
+  remaining bottlenecks, then the next prototype when the lead starts one.
 - Completed cleanup slices:
-  - `T0013`-`T0026`: closed fishing, cleaned old concept/status/state, added
-    startup/profile/slice-hygiene guards, and split project assets.
-  - `T0027`-`T0034`: added visual-first gates, strict product-read rubric,
-    visual critic packets, and `node tools/ai.mjs critic`.
-  - `T0035`-`T0042`: taught validation planning for product-gate,
-    game-context, and asset-tool checks; made low profiling coverage show
-    largest gaps, recovered validation checks by check id, and let
-    `node tools/ai.mjs validate` plan from touched files including the
-    pipeline validator, skill tooling, and state-codegen tests.
+  - `T0013`-`T0034`: closed fishing, cleaned status/state, added startup/visual/
+    slice gates, visual-strict rubric, and critic packets.
+  - `T0035`-`T0042`: built a validation planner -- SUPERSEDED and removed by
+    `T0047`.
+  - `T0043`-`T0053`: quick-default validate + tmp prune; passive profiling
+    (advisory guard, supersedes `T0028`); binding fake-shot gate + visual-first
+    freeze; fun/feel owner; validation-planner removal; merged asset skills +
+    shared reference doc; tiered UI gates; runtime-art bar; 5 AI_PIPELINE docs
+    -> 2; first-screen scope cap; context-budget guideline.
 
 ## Next Priorities
 
-P0 done (2026-06-15): `T0043` quick-default + tmp prune; `T0044` passive
-profiling (advisory guard, supersedes T0028); `T0045` binding fake-shot gate +
-visual-first freeze (redefined "done" in AGENTS.md); `T0046` fun/reference-feel
-owner in `game-feature-iteration`.
+The 2026-06-15 review backlog `T0043`-`T0053` is complete (see Current Gate).
 
-Remaining, in order:
-1. P1 subtraction: `T0047` retire validation-planner machinery; `T0048` merge UI
-   asset skills + shared reference deconstruction; `T0049` tier UI asset gates;
-   `T0050` runtime-art quality bar; `T0053` cut per-session context load.
-2. P2: `T0051` consolidate AI_PIPELINE docs; `T0052` first-screen scope cap.
-3. Then: re-run a pipeline review pass and optimize remaining bottlenecks.
+Next:
+1. Post-implementation review: find and optimize any remaining pipeline
+   bottlenecks now that the obvious ones are fixed.
+2. Start the next prototype when the lead picks a concept: create a fresh
+   `gamedesign/projects/<id>/` wiki + tasks in `active/` (Stage 0 kickoff),
+   and apply the new binding visual definition of done from the first screen.
 
 ## Validation Policy
 
