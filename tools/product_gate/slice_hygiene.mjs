@@ -249,7 +249,9 @@ function buildReport(options) {
   if (options.strict && options.probeEvidence.length === 0) problems.push("missing --probe-evidence");
   if (options.strict && options.productGates.length === 0) problems.push("missing --product-gate");
   if (options.strict && options.screenshots.length === 0) problems.push("missing --screenshot");
-  if (options.strict && options.profileGuards.length === 0) problems.push("missing --profile-guard");
+  // Profiler guard is advisory: passive profiling must not block normal game
+  // work (supersedes T0028's strict requirement). Missing/weak guard -> warning.
+  if (options.strict && options.profileGuards.length === 0) warnings.push("no --profile-guard (advisory: passive profiling does not block handoff)");
   if (missingScreenshots.length > 0) problems.push(`missing screenshot file(s): ${missingScreenshots.join(", ")}`);
 
   for (const gate of productGates) {
@@ -262,13 +264,12 @@ function buildReport(options) {
     }
   }
 
+  // Profiler guard findings are advisory warnings, never blocking problems.
   for (const guard of profileGuards) {
-    if (guard.verdict === "fail" && !knownRedGateAccepted) {
-      problems.push(`profiler guard is fail: ${guard.path}${guard.reason ? ` (${guard.reason})` : ""}; add --known-red-gate only if explicitly accepting sparse/stale telemetry`);
-    } else if (guard.verdict === "fail" && knownRedGateAccepted) {
-      warnings.push(`known red profiler guard accepted for this handoff: ${guard.path}${guard.reason ? ` (${guard.reason})` : ""}`);
+    if (guard.verdict === "fail") {
+      warnings.push(`profiler guard is fail (advisory): ${guard.path}${guard.reason ? ` (${guard.reason})` : ""}`);
     } else if (guard.verdict !== "pass") {
-      problems.push(`profiler guard evidence is inconclusive: ${guard.path}${guard.reason ? ` (${guard.reason})` : ""}`);
+      warnings.push(`profiler guard evidence is inconclusive (advisory): ${guard.path}${guard.reason ? ` (${guard.reason})` : ""}`);
     }
   }
 

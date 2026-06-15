@@ -345,21 +345,45 @@ Test task.
   }
 });
 
-test("reflect captures long pre-reflection gap before closeout", () => {
+function seedOldWorkRecord(profile) {
+  writeFileSync(profile, `${JSON.stringify({
+    ts: "2026-06-13T10:00:00+05:00",
+    phase: "implementation",
+    category: "implementation",
+    intent: "Seed old work record",
+    result: "pass",
+    value: "productive",
+    tools: ["shell_command"],
+  })}\n`, "utf8");
+}
+
+test("reflect is passive by default: no forced gap checkpoint", () => {
   const dir = tempDir();
   try {
     const profile = join(dir, "profile.jsonl");
-    writeFileSync(profile, `${JSON.stringify({
-      ts: "2026-06-13T10:00:00+05:00",
-      phase: "implementation",
-      category: "implementation",
-      intent: "Seed old work record",
-      result: "pass",
-      value: "productive",
-      tools: ["shell_command"],
-    })}\n`, "utf8");
+    seedOldWorkRecord(profile);
 
     const result = run(["reflect", "--quick", "--profile", profile]);
+
+    assert.equal(result.status, 0, result.stderr);
+    const records = readJsonl(profile);
+    const gap = records.find((record) => record.event_type === "gap_checkpoint");
+    const closeout = records.find((record) => record.phase === "session_closeout");
+    assert.equal(gap, undefined, "default reflect must not force a gap checkpoint");
+    assert.ok(closeout);
+    assert.ok(closeout.tools.includes("ai_profile/closeout.mjs"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("reflect --gap-checkpoint records the pre-reflection gap before closeout", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    seedOldWorkRecord(profile);
+
+    const result = run(["reflect", "--gap-checkpoint", "--quick", "--profile", profile]);
 
     assert.equal(result.status, 0, result.stderr);
     const records = readJsonl(profile);

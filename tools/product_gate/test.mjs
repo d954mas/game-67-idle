@@ -488,7 +488,7 @@ test("slice hygiene allows explicit snapshot over broad diff threshold", () => {
   }
 });
 
-test("slice hygiene requires profiler guard evidence in strict mode", () => {
+test("slice hygiene treats missing profiler guard as advisory in strict mode", () => {
   const dir = tempDir();
   try {
     writeFileSync(join(dir, "screen.png"), "png", "utf8");
@@ -503,8 +503,10 @@ test("slice hygiene requires profiler guard evidence in strict mode", () => {
       "--product-gate", "gate.json",
       "--screenshot", "screen.png",
     ]);
-    assert.equal(result.status, 1);
-    assert.match(result.stdout, /missing --profile-guard/);
+    // Passive profiling must not block normal work: a missing profiler guard is
+    // an advisory warning, not a blocking problem (supersedes T0028).
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /no --profile-guard \(advisory/);
   } finally {
     cleanup(dir);
   }
@@ -538,7 +540,7 @@ test("slice hygiene records passing profiler guard evidence", () => {
   }
 });
 
-test("slice hygiene fails stale profiler guard unless accepted as known red", () => {
+test("slice hygiene treats a stale profiler guard as advisory, not blocking", () => {
   const dir = tempDir();
   try {
     writeFileSync(join(dir, "screen.png"), "png", "utf8");
@@ -555,24 +557,11 @@ test("slice hygiene fails stale profiler guard unless accepted as known red", ()
       "--screenshot", "screen.png",
       "--profile-guard", profileGuard,
     ]);
-    assert.equal(result.status, 1);
-    assert.match(result.stdout, /profiler guard is fail/);
+    // A stale/broken profiler guard surfaces as an advisory warning and does not
+    // fail the slice (passive profiling does not block normal work).
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /profiler guard is fail \(advisory\)/);
     assert.match(result.stdout, /scope_stale/);
-
-    const accepted = runRaw([
-      "tools/product_gate/slice_hygiene.mjs",
-      "--root", dir,
-      "--strict",
-      "--changed-file", "src/main.c",
-      "--build-evidence", "build passed",
-      "--probe-evidence", "probe passed",
-      "--product-gate", "gate.json",
-      "--screenshot", "screen.png",
-      "--profile-guard", profileGuard,
-      "--known-red-gate", "accepted stale profiler guard for final note",
-    ]);
-    assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
-    assert.match(accepted.stdout, /known red profiler guard accepted/);
   } finally {
     cleanup(dir);
   }

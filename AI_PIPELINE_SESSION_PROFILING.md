@@ -7,6 +7,13 @@ Profiling is passive by default. Normal game work must not pause to repair
 stale summaries, bundles, packets, drafts, reviews, follow-ups, or baselines.
 Those are deep-retrospective artifacts, not everyday gates.
 
+No profiler step is a forced gate on normal work. `reflect`'s gap checkpoint is
+opt-in (`--gap-checkpoint`), and the slice-hygiene profiler guard is advisory
+(missing or stale guard is a warning, never a blocking problem). Run `start`,
+`status`, `reflect`, `review`, and gap checkpoints only when you choose to, or
+when the task is explicitly about AI workflow, profiler behavior, or a
+requested retrospective.
+
 ## What To Learn
 
 A useful profile answers:
@@ -19,6 +26,14 @@ A useful profile answers:
 
 If it does not answer one of those questions, do not collect it during normal
 game work.
+
+## Do Not Profile The Profiler
+
+Do not perf-profile the profiler, the validators, or the asset-audit tools as
+default work. Optimizing how fast an audit runs is not game progress. (Anti-
+pattern from the fishing iteration: one source-sheet intake was re-profiled 22
+times, and a day's telemetry was 70% validation records.) Only measure tool
+performance when the user explicitly asks to speed up a specific tool.
 
 ## Default Use
 
@@ -42,7 +57,8 @@ Passive defaults:
 - `checkpoint` records only long gaps over `--min-gap-min` (default `10`).
 - `status` prints the short diagnostic: unresolved failures, slowest recorded
   work, largest context input, and whether normal work needs action.
-- `reflect` writes a short closeout summary.
+- `reflect` writes a short closeout summary; add `--gap-checkpoint` only when
+  you want it to record a long unprofiled work gap first.
 
 Use `--profile-mode full` only when the task is explicitly about AI workflow,
 profiling, or a requested retrospective. Use `--profile-mode off` when even

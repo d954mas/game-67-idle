@@ -39,7 +39,8 @@ Fast path:
   gate     write a product-read screenshot gate before expanding game content
   close-slice require product gate + evidence before handoff/review
   status   show passive telemetry health; guard flags fail unsafe handoffs
-  reflect  write a short closeout by default; --deep prepares the full handoff
+  reflect  write a short closeout by default; --gap-checkpoint records a long
+           unprofiled work gap first; --deep prepares the full handoff
 
 Use tools/ai_profile/* directly only when debugging the profiler itself.`);
   process.exit(2);
@@ -417,10 +418,16 @@ if (command === "status") {
 }
 
 if (command === "reflect") {
-  const skipGapCheckpoint = argv.includes("--no-gap-checkpoint");
+  // Passive by default: the gap checkpoint is opt-in via --gap-checkpoint so a
+  // normal closeout adds no forced ceremony. --no-gap-checkpoint is still
+  // accepted (now a no-op) for backward compatibility.
+  const wantGapCheckpoint = argv.includes("--gap-checkpoint");
   const deep = argv.includes("--deep");
-  const reflectArgs = withoutFlag(withoutFlag(argv, "--no-gap-checkpoint"), "--deep");
-  if (!skipGapCheckpoint) {
+  const reflectArgs = withoutFlag(
+    withoutFlag(withoutFlag(argv, "--gap-checkpoint"), "--no-gap-checkpoint"),
+    "--deep",
+  );
+  if (wantGapCheckpoint) {
     const gapArgs = [
       "tools/ai_profile/gap_checkpoint.mjs",
       "--intent",

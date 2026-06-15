@@ -135,31 +135,19 @@ one explicit working scope and state:
 - first action
 - out of scope
 
-For long-running implementation, visual, research, or tooling work, reset the
-passive profiler after selecting the task:
+Profiling is passive and optional. For long-running implementation, visual,
+research, or tooling work you may start a profiler scope after selecting the
+task, but it is never required to begin or finish work:
 
 ```powershell
 node tools/ai.mjs start <task-id> <short-iteration-name>
 ```
 
-Then use `node tools/ai.mjs status` as a health check. If it reports
-`Review confidence: broken`, do not use the profile as review evidence until
-the scope/coverage issue is fixed or explicitly called out. If it reports
-`partial`, final/review notes must name what telemetry is missing.
-
-For AI workflow, profiler, retrospective, or pipeline-review tasks, add the
-handoff guard before claiming profiling evidence:
-
-```powershell
-node tools/ai.mjs status --require-current-scope-usable
-```
-
-If the guard fails, record the concrete reason in the task log and either add a
-current-scope checkpoint/context measurement or state why the telemetry is
-irrecoverably missing.
-When coverage is low, record the largest coverage gaps from
-`node tools/ai.mjs status`; do not make bottleneck or time-spend claims for
-those intervals unless they were separately measured.
+`node tools/ai.mjs status` (and the `--require-current-scope-usable` guard) is
+an optional health check; use it only when the task is explicitly about AI
+workflow, profiler behavior, or a requested retrospective. If you do rely on
+profiling evidence and coverage is low or broken, record the largest gaps and
+do not make bottleneck or time-spend claims for unmeasured intervals.
 
 If the request clearly maps to one current task or a small safe improvement,
 proceed after that short confirmation update.
@@ -245,9 +233,9 @@ Evidence should be the smallest reliable proof for the task:
   or report path
 - prototype slice before commit/review: run
   `node tools/product_gate/slice_hygiene.mjs --strict` with build/probe
-  evidence, product gate, screenshot evidence, profiler guard evidence from
-  `node tools/ai.mjs status --require-current-scope-usable`, and any known red
-  gates. Normal slices over 30 changed files should be split unless the lead
+  evidence, product gate, screenshot evidence, and any known red gates. A
+  profiler guard (`--profile-guard`) is optional/advisory and never blocks the
+  slice. Normal slices over 30 changed files should be split unless the lead
   explicitly asked for an end-of-experiment snapshot. Check push/upstream state
   before promising push.
 
