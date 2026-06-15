@@ -556,6 +556,16 @@ function collectCropIds(crop, allowedKinds = null) {
   return ids;
 }
 
+function collectRuntimeAssetIds(runtime, allowedKinds = null) {
+  const ids = new Set();
+  for (const asset of runtime?.assets || []) {
+    if (!hasText(asset.id)) continue;
+    if (allowedKinds && !allowedKinds.has(asset.kind)) continue;
+    ids.add(asset.id);
+  }
+  return ids;
+}
+
 function collectCropOutputs(crop) {
   const outputs = new Map();
   for (const source of crop?.sources || []) {
@@ -982,6 +992,8 @@ function validateJob(job, jobPath, options = {}) {
   }
   const expectedCropIds = collectCropIds(crop);
   const slice9CropIds = collectCropIds(crop, new Set(["slice9"]));
+  const slice9RuntimeIds = collectRuntimeAssetIds(runtime, new Set(["slice9"]));
+  const compositionSlice9Ids = slice9RuntimeIds.size > 0 ? slice9RuntimeIds : slice9CropIds;
   const sourceDerivationCropIds = collectCropIds(crop, new Set(["slice9", "border", "tile", "sprite"]));
   const expectedCropOutputs = collectCropOutputs(crop);
 
@@ -1088,7 +1100,7 @@ function validateJob(job, jobPath, options = {}) {
         true,
         {
           runtimeManifest: job.expected_outputs?.runtime_manifest,
-          slice9Ids: slice9CropIds,
+          slice9Ids: compositionSlice9Ids,
         }
       );
     }

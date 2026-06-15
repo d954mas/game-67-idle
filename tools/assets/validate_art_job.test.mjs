@@ -1022,6 +1022,26 @@ test("strict mode rejects composition proof for another runtime manifest", (t) =
   assert.match(result.stdout, /expected_outputs.composition_proof JSON asset_manifest must match expected_outputs.runtime_manifest/);
 });
 
+test("strict mode rejects composition proof missing runtime slice9 base id", (t) => {
+  const dir = tempDir(t);
+  const { job } = writeStrictValidJob(dir);
+  const runtime = "gamedesign/projects/test/data/ui-kit-assets.json";
+  const runtimeData = JSON.parse(readFileSync(join(dir, runtime), "utf8"));
+  runtimeData.assets.push({
+    id: "secondary_panel",
+    kind: "slice9",
+    path: "assets/runtime/ui-kit/panel.png",
+    slice9: { left: 12, top: 12, right: 12, bottom: 12 },
+    content: { x: 18, y: 18, w: 60, h: 32 },
+    target_preview_sizes: [[160, 96], [240, 160]],
+  });
+  writeFileSync(join(dir, runtime), `${JSON.stringify(runtimeData, null, 2)}\n`, "utf8");
+
+  const result = run(["--job", job, "--strict"], dir);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /expected_outputs.composition_proof JSON missing slice9 base id secondary_panel/);
+});
+
 test("strict mode rejects failing slice9 design policy audit evidence", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);
