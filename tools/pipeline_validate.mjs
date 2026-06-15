@@ -3,7 +3,7 @@
 //
 //   node tools/pipeline_validate.mjs [--quick] [--full] [--dry-run]
 
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, rmSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -15,16 +15,34 @@ const args = process.argv.slice(2);
 
 function usage() {
   console.error(`usage:
-  node tools/pipeline_validate.mjs [--quick] [--full] [--dry-run]
+  node tools/pipeline_validate.mjs [--quick] [--full] [--dry-run] [--keep-exports <n>] [--no-prune]
 
 Modes:
-  --quick    core workflow validation only (default)
+  --quick    core workflow validation only (default; use this after narrow edits)
   --full     quick checks plus deep asset/runtime/export validation
-  --dry-run  print the selected commands without running them`);
+             (reserve for portable-base/export/runtime/release gates; it is heavy)
+  --dry-run  print the selected commands without running them
+
+Housekeeping:
+  --keep-exports <n>  keep only the newest n tmp/pipeline-validate-* dirs (default 3)
+  --no-prune          do not prune old tmp/pipeline-validate-* dirs`);
   process.exit(2);
 }
 
-const allowedArgs = new Set(["--quick", "--full", "--dry-run", "--help", "-h"]);
+// Pull out the optional --keep-exports <n> value before the unknown-arg check.
+let keepExports = 3;
+{
+  const idx = args.indexOf("--keep-exports");
+  if (idx !== -1) {
+    const value = Number.parseInt(args[idx + 1], 10);
+    if (!Number.isInteger(value) || value < 0) usage();
+    keepExports = value;
+    args.splice(idx, 2);
+  }
+}
+const prune = !args.includes("--no-prune");
+
+const allowedArgs = new Set(["--quick", "--full", "--dry-run", "--no-prune", "--help", "-h"]);
 for (const arg of args) {
   if (!allowedArgs.has(arg)) usage();
 }
@@ -82,7 +100,41 @@ function findPythonRunner() {
   process.exit(1);
 }
 
+// Full mode copies the repo into tmp/pipeline-validate-<stamp>/. Left unchecked
+// these accumulate (observed: 126 dirs / 362MB). Prune to the newest N.
+function pruneOldExports(keep) {
+  const tmpDir = join(root, "tmp");
+  if (!existsSync(tmpDir)) return;
+  let dirs = [];
+  try {
+    dirs = readdirSync(tmpDir)
+      .filter((name) => name.startsWith("pipeline-validate-"))
+      .map((name) => join(tmpDir, name))
+      .filter((path) => {
+        try {
+          return statSync(path).isDirectory();
+        } catch {
+          return false;
+        }
+      })
+      .sort(); // names are ISO timestamps, so lexical sort == chronological
+  } catch {
+    return;
+  }
+  const stale = dirs.slice(0, Math.max(0, dirs.length - keep));
+  for (const dir of stale) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  if (stale.length > 0) {
+    console.log(`pruned ${stale.length} old tmp/pipeline-validate-* dir(s); kept newest ${keep}`);
+  }
+}
+
 console.log(`mode: ${mode}${dryRun ? " (dry-run)" : ""}`);
+
+if (prune && !dryRun) {
+  pruneOldExports(keepExports);
+}
 
 if (fullMode && existsSync(exportDir)) {
   rmSync(exportDir, { recursive: true, force: true });

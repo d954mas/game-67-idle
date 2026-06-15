@@ -40,3 +40,21 @@ test("pipeline validation rejects conflicting modes", () => {
   assert.equal(result.status, 2);
   assert.match(result.stderr, /usage:/);
 });
+
+test("pipeline validation does not prune during dry-run", () => {
+  const result = run(["--dry-run"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /pruned .* old tmp/);
+});
+
+test("pipeline validation rejects a non-integer --keep-exports", () => {
+  const result = run(["--keep-exports", "nope", "--dry-run"]);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /usage:/);
+});
+
+test("pipeline validation accepts --keep-exports and --no-prune", () => {
+  const result = run(["--keep-exports", "2", "--no-prune", "--dry-run"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /mode: quick \(dry-run\)/);
+});

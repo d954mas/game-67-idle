@@ -353,3 +353,10 @@ For a clean new game:
 5. Run `node tools/pipeline_validate.mjs` after normal cleanup, or
    `node tools/pipeline_validate.mjs --full` after export/runtime template
    changes.
+
+`--quick` is the default and is the right mode after narrow pipeline/tooling
+edits. `--full` is heavy (it exports the repo into `tmp/` and re-runs every
+suite inside the export) and is reserved for portable-base/export/runtime/
+release gates. Each `--full` run leaves a `tmp/pipeline-validate-<stamp>/` copy;
+every run now prunes those to the newest 3 by default (`--keep-exports <n>` to
+change, `--no-prune` to disable).
