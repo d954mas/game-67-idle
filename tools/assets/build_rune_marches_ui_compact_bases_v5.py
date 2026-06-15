@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import sys
 from typing import Any
@@ -13,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from tools.assets.atomic_io import save_image_atomic, write_json_atomic
 from tools.assets.chroma_key_alpha import (
     bleed_transparent_rgb,
     key_to_alpha,
@@ -335,7 +335,7 @@ def write_manifests() -> None:
             rel(EDGE_PROOF_PNG),
         ],
     }
-    CROP_MANIFEST.write_text(json.dumps(crop_manifest, indent=2) + "\n", encoding="utf-8")
+    write_json_atomic(CROP_MANIFEST, crop_manifest)
     runtime_manifest = {
         "schema": "game.asset_manifest",
         "version": 1,
@@ -412,7 +412,7 @@ def write_manifests() -> None:
             rel(ATLAS_PACK_AUDIT_JSON),
         ],
     }
-    RUNTIME_MANIFEST.write_text(json.dumps(runtime_manifest, indent=2) + "\n", encoding="utf-8")
+    write_json_atomic(RUNTIME_MANIFEST, runtime_manifest)
 
 
 def main() -> None:
@@ -430,11 +430,17 @@ def main() -> None:
         validate_crop(crop, image)
         output_path = ROOT / crop["output"]
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        image.save(output_path)
+        save_image_atomic(image, output_path)
         outputs.append((crop, image))
         outputs_by_id[crop["id"]] = image
-    make_contact_sheet(outputs).save(PREVIEW_DIR / "rune-marches-ui-compact-bases-v5-contact-sheet.png")
-    make_slice_preview(outputs_by_id).save(PREVIEW_DIR / "rune-marches-ui-compact-bases-v5-slice9-preview.png")
+    save_image_atomic(
+        make_contact_sheet(outputs),
+        PREVIEW_DIR / "rune-marches-ui-compact-bases-v5-contact-sheet.png",
+    )
+    save_image_atomic(
+        make_slice_preview(outputs_by_id),
+        PREVIEW_DIR / "rune-marches-ui-compact-bases-v5-slice9-preview.png",
+    )
     write_manifests()
     print(f"wrote {len(outputs)} generated-source compact UI assets to {rel(OUT_DIR)}")
     print(f"wrote crop manifest: {rel(CROP_MANIFEST)}")
