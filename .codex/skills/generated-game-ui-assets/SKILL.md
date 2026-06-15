@@ -190,10 +190,12 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
       only source-key/purple/green classified edge colors.
     - edge proof preview for 1-2px fringe review:
       `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`
-      Add `--profile` when edge proofs feel slow or when comparing cleanup
-      fixes; it records total, render-strip, compose, per-asset, and per-side
-      timing plus the analysis engine (`numpy` fast path or portable
-      `python` fallback) without changing defect counts.
+      Add `--profile --profile-output tmp/asset-profiles/<name>.json` when
+      edge proofs feel slow or when comparing cleanup fixes; the sidecar
+      records total, render-strip, compose, per-asset, and per-side timing plus
+      the analysis engine (`numpy` fast path or portable `python` fallback)
+      without churning durable JSON/Markdown evidence. Use `--profile-inline`
+      only for throwaway/local debug reports.
       Use `--only-problems` for large disputed sheets when the JSON report is
       the coverage evidence and the human PNG should focus only on bad sides.
     - slice9 design policy audit:
@@ -458,9 +460,10 @@ It coordinates `game-visual-art-direction`, `game-asset-pipeline`, and
   defect. Use `--asset-id` and `--side` to create small proof images for the
   exact reported edge. Write `--json-output` and `--report` when comparing
   fixes so the review records per-side counts by reason, not only a screenshot.
-  Add `--profile` for slow proof runs so the slowest asset side is printed and
-  timing plus the analysis engine (`numpy` fast path or portable `python`
-  fallback) is preserved in JSON/Markdown.
+  Add `--profile --profile-output tmp/asset-profiles/<name>.json` for slow
+  proof runs so the slowest asset side is printed and timing plus the analysis
+  engine (`numpy` fast path or portable `python` fallback) is preserved in a
+  sidecar instead of dirtying durable JSON/Markdown evidence.
   Add `--only-problems` when a full proof sheet is too tall to review; this
   keeps every side in JSON while omitting clean sides from the PNG/Markdown.
   Store accepted proof image paths in `expected_outputs.edge_proofs` and JSON

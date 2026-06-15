@@ -109,10 +109,12 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     or purple spill.
 16. For 1-2 pixel edge disputes, generate a zoomed edge proof:
     `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md>`.
-    Add `--profile` for slow or disputed cleanup runs so JSON/Markdown capture
-    total, render-strip, compose, per-asset, and per-side timing, and stdout
-    prints the slowest asset side. The profile also records the analysis engine
-    (`numpy` fast path or portable `python` fallback).
+    Add `--profile --profile-output tmp/asset-profiles/<name>.json` for slow
+    or disputed cleanup runs so sidecar telemetry captures total, render-strip,
+    compose, per-asset, and per-side timing, and stdout prints the slowest
+    asset side. The profile also records the analysis engine (`numpy` fast path
+    or portable `python` fallback). Use `--profile-inline` only for
+    throwaway/local debug reports.
     Use `--only-problems` for large proof sheets when JSON keeps full coverage
     and the human PNG/Markdown should show only bad sides.
     Record durable proof paths in the art job (`expected_outputs.edge_proofs`
@@ -341,8 +343,10 @@ Before UI assets are integrated:
   pixels.
 - Edge proof preview evidence exists when the lead/user reports 1-2 pixel
   fringe, because ordinary contact sheets can hide single-pixel defects.
-  Slow edge-proof runs should include `--profile` evidence so bottlenecks are
-  visible before rewriting tools.
+  Slow edge-proof runs should include
+  `--profile --profile-output tmp/asset-profiles/<name>.json` evidence so
+  bottlenecks are visible before rewriting tools without churning durable
+  review reports.
 - Generated-source derivation audit evidence exists when a runtime PNG is
   claimed to come from generated source art rather than a procedural scaffold.
 - Native screenshot proof exists for playable/native work once integrated.

@@ -41,11 +41,46 @@ from tools.assets.chroma_key_alpha import (
 )
 
 
+PROFILE_KEYS = {"timing_ms", "asset_timings"}
+
+
 def project_path(path: str) -> Path:
     candidate = Path(path)
     if candidate.is_absolute():
         return candidate
     return ROOT / candidate
+
+
+def without_profile_fields(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: without_profile_fields(item) for key, item in value.items() if key not in PROFILE_KEYS}
+    if isinstance(value, list):
+        return [without_profile_fields(item) for item in value]
+    return value
+
+
+def profile_report_from_edge_proof(report: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": "game.ui_asset_edge_proof_profile",
+        "version": 1,
+        "crop_manifest": report.get("crop_manifest"),
+        "image_output": report.get("image_output"),
+        "counts": report.get("counts"),
+        "analysis_engine": report.get("analysis_engine"),
+        "timing_ms": report.get("timing_ms"),
+        "asset_timings": report.get("asset_timings", []),
+        "rows": [
+            {
+                "asset_id": row.get("asset_id"),
+                "side": row.get("side"),
+                "rect": row.get("rect"),
+                "bad_marks": row.get("counts", {}).get("total", 0),
+                "timing_ms": row.get("timing_ms"),
+            }
+            for row in report.get("rows", [])
+            if isinstance(row, dict)
+        ],
+    }
 
 
 def checkerboard(size: tuple[int, int], cell: int = 8) -> Image.Image:
@@ -550,11 +585,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--json-output", help="Write structured edge-proof counts by asset side and defect class.")
     parser.add_argument("--report", help="Write a Markdown edge-proof report next to the proof image.")
     parser.add_argument("--profile", action="store_true", help="Record edge-proof timing in JSON/Markdown and print the slowest asset side.")
+    parser.add_argument("--profile-output", help="Write edge-proof timing telemetry to a sidecar JSON file. When set, profile fields are not embedded in the main JSON/Markdown unless --profile-inline is also set.")
+    parser.add_argument("--profile-inline", action="store_true", help="Embed profile timing fields in edge-proof JSON/Markdown even when --profile-output is used.")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
+    profile_enabled = args.profile or args.profile_output is not None
+    profile_inline = args.profile_inline or args.profile_output is None
     manifest_path = project_path(args.crop_manifest)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     proof, report = render_edge_proof(
@@ -566,21 +605,27 @@ def main(argv: list[str]) -> int:
         not args.no_mark_bad_pixels,
         set(args.asset_id) if args.asset_id else None,
         set(args.side) if args.side else None,
-        args.profile,
+        profile_enabled,
         args.only_problems,
     )
     output = project_path(args.output)
     save_image_atomic(proof, output)
     report["crop_manifest"] = args.crop_manifest.replace("\\", "/")
     report["image_output"] = args.output.replace("\\", "/")
+    if args.profile_output and profile_enabled:
+        write_json_atomic(project_path(args.profile_output), profile_report_from_edge_proof(report))
+    output_report = report if profile_inline else without_profile_fields(report)
     if args.json_output:
-        write_json_atomic(project_path(args.json_output), report)
+        write_json_atomic(project_path(args.json_output), output_report)
     if args.report:
-        write_text_atomic(project_path(args.report), render_markdown(report))
+        write_text_atomic(project_path(args.report), render_markdown(output_report))
     print(f"wrote edge proof: {output} size={proof.width}x{proof.height}")
     if args.json_output or args.report:
         print(f"edge proof marks: total={report['counts']['total']} reasons={report['counts']['reasons']}")
-    if args.profile and report.get("rows"):
+    if args.profile_output:
+        profile_output_path = args.profile_output.replace("\\", "/")
+        print(f"wrote profile telemetry: {profile_output_path}")
+    if profile_enabled and report.get("rows"):
         slowest = max(report["rows"], key=lambda row: row.get("timing_ms", {}).get("render_strip", 0))
         print(
             "profile: slowest edge strip "

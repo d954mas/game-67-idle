@@ -14,21 +14,6 @@ Rendered rows: 28
 Omitted clean rows: 0
 Analysis engine: numpy
 
-## Timing
-
-Total: 113.795 ms
-
-- render_strips: 18.196 ms
-- compose_sheet: 64.756 ms
-
-- `compact_journal_panel_v5` total=14.884 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_journal_panel_v5_slice9.png
-- `compact_button_idle_short_v5` total=11.192 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_short_v5_slice9.png
-- `compact_button_idle_long_v5` total=5.408 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_long_v5_slice9.png
-- `compact_button_disabled_long_v5` total=5.151 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_long_v5_slice9.png
-- `compact_button_idle_medium_v5` total=4.504 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_idle_medium_v5_slice9.png
-- `compact_button_disabled_medium_v5` total=4.207 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_medium_v5_slice9.png
-- `compact_button_disabled_short_v5` total=3.551 ms output=assets/runtime/rune-marches-ui-compact-bases-v5/compact_button_disabled_short_v5_slice9.png
-
 ## Rows
 
 - `compact_button_idle_short_v5` top rect=[0, 0, 211, 22] bad=0 visible=0 transparent_rgb=0 reasons={}
