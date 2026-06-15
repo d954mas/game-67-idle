@@ -83,7 +83,6 @@ const COPY = [
   "tools/game_context",
   "tools/product_gate",
   "tools/README.md",
-  "tools/tool_layers.json",
   "tools/taskboard",
   "tools/bootstrap/export_base.mjs",
   "gamedesign/knowledge",

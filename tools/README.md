@@ -1,9 +1,8 @@
 # Tools Layout
 
 `tools/` intentionally contains several layers. Do not treat every file here as
-equally portable.
-
-The machine-readable map is `tools/tool_layers.json`.
+equally portable. This file is the source of truth for the layers; the sections
+below describe what moves to a new game vs what stays project-specific.
 
 ## Tool Contract
 

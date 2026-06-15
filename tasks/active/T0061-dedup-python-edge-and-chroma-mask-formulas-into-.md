@@ -1,7 +1,7 @@
 ---
 id: T0061
 title: Dedup python edge and chroma mask formulas into chroma_key_alpha
-status: backlog
+status: doing
 epic: E003
 priority: P3
 tags: [assets, subtraction, tooling]

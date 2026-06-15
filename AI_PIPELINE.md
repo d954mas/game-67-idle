@@ -52,7 +52,7 @@ node tools/skills_sync.mjs
   during normal game implementation, simplify the script or move that behavior
   behind an explicit deep mode.
 - **Tools have portability layers.** Before cleaning a project or exporting a
-  new game base, use `tools/README.md` and `tools/tool_layers.json`.
+  new game base, use `tools/README.md`.
   `portable_ai_pipeline` moves to new games, `reusable_game_infrastructure`
   moves only when the runtime matches, and project-specific tooling is
   deleted, archived, or intentionally adapted.
@@ -387,8 +387,7 @@ Portable (copied by the exporter):
   `tools/pipeline_validate.mjs`, `tools/ai_profile/`,
   `tools/game_context/`, `tools/product_gate/`, `tools/assets/new_art_job.mjs`,
   `tools/assets/new_generation_record.mjs`, `tools/assets/validate_art_job.mjs`,
-  `tools/assets/audit_generated_ui_assets.py`, `tools/taskboard/`, `tools/README.md`,
-  `tools/tool_layers.json` - fast AI
+  `tools/assets/audit_generated_ui_assets.py`, `tools/taskboard/`, `tools/README.md` - fast AI
   workflow facade, skill mirroring, skill regression checks, reusable-base
   validation, AI session profiling internals, game iteration context, generated
   art job scaffolding/validation, task store UI/CLI, and tool portability map.
