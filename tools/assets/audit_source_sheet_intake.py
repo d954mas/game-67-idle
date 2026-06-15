@@ -182,7 +182,6 @@ def find_components_numpy(
     for y, start, end, run_index in runs:
         root = find(run_index)
         area = end - start
-        row_offset = y * width
         component = grouped.get(root)
         if component is None:
             component = {
@@ -191,7 +190,7 @@ def find_components_numpy(
                 "max_x": end - 1,
                 "max_y": y,
                 "area_px": area,
-                "_pixel_offsets": list(range(row_offset + start, row_offset + end)),
+                "_pixel_runs": [(y, start, end)],
             }
             grouped[root] = component
             continue
@@ -200,9 +199,9 @@ def find_components_numpy(
         component["max_x"] = max(int(component["max_x"]), end - 1)
         component["max_y"] = max(int(component["max_y"]), y)
         component["area_px"] = int(component["area_px"]) + area
-        offsets = component["_pixel_offsets"]
-        if isinstance(offsets, list):
-            offsets.extend(range(row_offset + start, row_offset + end))
+        pixel_runs = component["_pixel_runs"]
+        if isinstance(pixel_runs, list):
+            pixel_runs.append((y, start, end))
 
     components: list[dict[str, object]] = []
     for component in sorted(grouped.values(), key=lambda item: (int(item["min_y"]), int(item["min_x"]))):
@@ -215,7 +214,7 @@ def find_components_numpy(
                 "id": f"component_{len(components) + 1}",
                 "bbox": [min_x, min_y, max_x - min_x + 1, max_y - min_y + 1],
                 "area_px": int(component["area_px"]),
-                "_pixel_offsets": component["_pixel_offsets"],
+                "_pixel_runs": component["_pixel_runs"],
             }
         )
     return components
@@ -284,6 +283,15 @@ def merge_component_pair(a: dict[str, object], b: dict[str, object], merged_id: 
         else:
             b_offsets.extend(a_offsets)
             merged["_pixel_offsets"] = b_offsets
+    a_runs = a.get("_pixel_runs")
+    b_runs = b.get("_pixel_runs")
+    if isinstance(a_runs, list) and isinstance(b_runs, list):
+        if len(a_runs) >= len(b_runs):
+            a_runs.extend(b_runs)
+            merged["_pixel_runs"] = a_runs
+        else:
+            b_runs.extend(a_runs)
+            merged["_pixel_runs"] = b_runs
     return merged
 
 
@@ -443,6 +451,31 @@ def purple_halo_mask(red: object, green: object, blue: object) -> object:
     return (red_i > 75) & (blue_i > 75) & (green_i < 120) & (np.minimum(red_i, blue_i) - green_i > 20) & (red_i + blue_i > green_i * 2 + 80)
 
 
+def component_pixels_from_private_runs(array: object, component: dict[str, object], flat: object | None = None) -> object | None:
+    if np is None:
+        raise RuntimeError("numpy is required for component_pixels_from_private_runs")
+    pixel_runs = component.get("_pixel_runs")
+    if isinstance(pixel_runs, list) and pixel_runs:
+        chunks = []
+        for run in pixel_runs:
+            if not isinstance(run, (list, tuple)) or len(run) != 3:
+                continue
+            y, start, end = (int(run[0]), int(run[1]), int(run[2]))
+            if end > start:
+                chunks.append(array[y, start:end])
+        if not chunks:
+            return np.empty((0, 4), dtype=array.dtype)
+        if len(chunks) == 1:
+            return chunks[0]
+        return np.concatenate(chunks, axis=0)
+
+    pixel_offsets = component.get("_pixel_offsets")
+    if isinstance(pixel_offsets, list) and pixel_offsets:
+        flat_array = array.reshape((-1, 4)) if flat is None else flat
+        return flat_array[np.asarray(pixel_offsets, dtype=np.int64)]
+    return None
+
+
 def visible_component_arrays(
     array: object,
     components: list[dict[str, object]],
@@ -454,9 +487,8 @@ def visible_component_arrays(
     chunks = []
     flat = array.reshape((-1, 4))
     for component in components:
-        pixel_offsets = component.get("_pixel_offsets")
-        if isinstance(pixel_offsets, list) and pixel_offsets:
-            pixels = flat[np.asarray(pixel_offsets, dtype=np.int64)]
+        pixels = component_pixels_from_private_runs(array, component, flat)
+        if pixels is not None:
             visible = (pixels[..., 3] > 12) & ~key_like_mask(pixels, current_key, tolerance)
             if np.any(visible):
                 chunks.append(pixels[..., :3][visible])
@@ -600,9 +632,8 @@ def add_key_conflict_metrics(
                 exact_key_conflicts = int(np.count_nonzero(exact_candidates & ~crop_border))
             else:
                 exact_key_conflicts = 0
-            pixel_offsets = component.get("_pixel_offsets")
-            if isinstance(pixel_offsets, list) and pixel_offsets:
-                component_pixels = flat[np.asarray(pixel_offsets, dtype=np.int64)]
+            component_pixels = component_pixels_from_private_runs(array, component, flat)
+            if component_pixels is not None:
                 component_red = component_pixels[..., 0]
                 component_green = component_pixels[..., 1]
                 component_blue = component_pixels[..., 2]

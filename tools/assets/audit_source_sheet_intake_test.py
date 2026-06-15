@@ -227,6 +227,28 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             for component in data["components"]:
                 self.assertFalse(any(key.startswith("_") for key in component))
 
+    def test_numpy_components_use_compact_pixel_runs_for_metrics(self):
+        module = load_intake_module()
+        if module.np is None:
+            self.skipTest("numpy is unavailable")
+        image = Image.new("RGBA", (12, 8), (255, 0, 255, 255))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((2, 2, 5, 4), fill=(80, 60, 40, 255))
+        array = module.np.asarray(image.convert("RGBA"))
+
+        components = module.find_components_numpy(image, (255, 0, 255), 0, array)
+        self.assertEqual(len(components), 1)
+        self.assertIn("_pixel_runs", components[0])
+        self.assertNotIn("_pixel_offsets", components[0])
+
+        red, green, blue = module.add_key_conflict_metrics(image, components, (255, 0, 255), 0, array)
+        self.assertEqual(int(red.size), 12)
+        self.assertEqual(int(module.np.count_nonzero(red == 80)), 12)
+        self.assertEqual(components[0]["visible_px"], 12)
+        self.assertEqual(components[0]["exact_key_conflict_px"], 0)
+        self.assertEqual(int(green.size), 12)
+        self.assertEqual(int(blue.size), 12)
+
     def test_rejects_large_key_hue_band_inside_art_component(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "sheet.png"

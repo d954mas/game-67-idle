@@ -294,13 +294,13 @@
   "problems": [],
   "status": "pass",
   "timing_ms": {
-    "load_image": 21.066,
-    "find_components": 28.78,
+    "load_image": 24.351,
+    "find_components": 22.246,
     "merge_fragments": 0.04,
-    "key_conflicts": 49.475,
-    "candidate_key_scores": 59.58,
-    "component_rules": 0.021,
-    "gutter_scan": 0.357,
-    "total": 159.369
+    "key_conflicts": 33.845,
+    "candidate_key_scores": 58.899,
+    "component_rules": 0.019,
+    "gutter_scan": 0.042,
+    "total": 139.487
   }
 }
