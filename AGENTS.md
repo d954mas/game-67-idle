@@ -68,5 +68,17 @@
   restate the explicit user permission that allows web work. If that permission
   is absent, stop and continue on the native PC path.
 - When validating playable or visual changes, use screenshots and emulated input. Cover desktop and mobile portrait when the surface is web-based.
+- Definition of done (playable/visual work): a slice is done when the native
+  screenshot matches the named fake shot/reference and the core moment feels
+  right (see `game-feature-iteration`), not when probes are green. Passing
+  builds, probes, manifests, provenance, and pixel/edge audits are supporting
+  evidence, never the definition of done. A game that passes every automated
+  check but does not look like the fake shot or is not fun is NOT done.
+- Continuous visual gate: when a fake shot/reference is named, score the native
+  screenshot against it every visual iteration (`node tools/ai.mjs gate`), not
+  once at the end. Treat divergence from the reference as a failing build.
+- Visual-first freeze: while the first screen fails the visual gate, do not
+  expand systems, state, routes, content, or automation. Fix the screen to the
+  reference bar first, then expand. This is the default, not a rescue mode.
 - Pack building is explicit; do not wire pack generation into every normal game build.
 - If a task reveals repeated friction, propose updating `AGENTS.md` or creating/updating a project skill.

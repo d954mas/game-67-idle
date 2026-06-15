@@ -14,12 +14,11 @@ Use this skill to make small, playable game changes without losing project conte
    `node tools/ai.mjs context` when available. This prints the compact game
    context and profiles the pre-code context cost. If the facade is absent,
    fall back to `node tools/game_context/iteration_context.mjs`.
-2. Select one task scope. For long implementation, visual, research, or
-   tooling work, run `node tools/ai.mjs start <task-id> <iteration>` before
-   editing so `node tools/ai.mjs status` can report current-scope coverage.
-   Treat `Review confidence: broken` as a blocker for using the profile as
-   review evidence; treat `partial` as a missing-telemetry warning that must be
-   named in handoff/review notes.
+2. Select one task scope. Profiling is optional and passive: for long work you
+   may run `node tools/ai.mjs start <task-id> <iteration>`, but it is never
+   required to begin work and never blocks a handoff. Use `node tools/ai.mjs
+   status` only when the task is explicitly about AI workflow or a requested
+   retrospective; if you rely on its evidence, name any low/broken coverage.
 3. State the selected runtime harness before implementation, including why it is allowed by local rules.
 4. If the feature is based on a named reference, verify a reference deconstruction
    exists before coding. It must include source evidence,
@@ -85,6 +84,14 @@ Use this skill to make small, playable game changes without losing project conte
    shot/reference/art target and list mismatches. After meaningful render
    changes, capture a new screenshot and update the mismatch list before
    expanding content.
+   Apply the AGENTS.md definition of done for playable/visual work: the slice
+   is done when the native screenshot matches the named fake shot/reference and
+   the core moment feels right, NOT when probes are green. Score the screenshot
+   against the fake shot every visual iteration (continuous gate), not once at
+   the end, and treat divergence as a failing build. Hold the visual-first
+   freeze: while the first screen fails the gate, fix the screen to the
+   reference bar before expanding systems, state, routes, content, or
+   automation.
 7. For non-trivial work, use the iteration cycle in `references/iteration-cycle-playbook.md`.
 8. Keep implementation close to existing engine and game patterns.
 9. Avoid broad refactors unless the feature cannot be implemented safely without them.
@@ -92,9 +99,9 @@ Use this skill to make small, playable game changes without losing project conte
 11. Capture evidence and report what changed, where to run it, and what was verified.
 12. Before committing or handing off a prototype slice, run
     `node tools/product_gate/slice_hygiene.mjs --strict` with build/probe
-    evidence, product gate, screenshot evidence, profiler guard evidence from
-    `node tools/ai.mjs status --require-current-scope-usable`, and known red
-    gates. Split a normal slice over 30 changed files unless the lead explicitly
+    evidence, product gate, screenshot evidence, and known red gates. A profiler
+    guard (`--profile-guard`) is optional/advisory and never blocks the slice.
+    Split a normal slice over 30 changed files unless the lead explicitly
     requested an end-of-experiment snapshot. Do not promise push until
     push/upstream state is checked.
 
