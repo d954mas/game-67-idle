@@ -29,3 +29,5 @@ Build the first native playable slice for `Critter Corral` after the Stage 0 sta
 - Which named references or fake shots define the visual target?
 
 ## Log
+
+- 2026-06-15: Built the mechanical core moment in src/clean_seed_main.c (critter sim: wander+separation+lure attraction; matching-color capture with squash+particle burst+pen flash+chain boost; continuous waves; score). Added DevAPI game.state / game.reset_playtest / game.capture.framebuffer (glReadPixels->PPM, unblocks automated screenshots). Builds clean under -Werror; ran via devapi running_game, captured build/captures/corral_core.png, pixel_health audit PASS, score 0->5/6. NOTE: rendered with the DEBUG shape renderer only — lead clarified shape renderer is debug-only; visual layer is being moved to free-asset sprites next (Codex bespoke art later).
