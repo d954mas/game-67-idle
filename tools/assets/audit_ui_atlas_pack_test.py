@@ -112,6 +112,7 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             audit = json.loads((root / "packed/audit.json").read_text(encoding="utf-8"))
             self.assertEqual(audit["verdict"], "pass")
             self.assertEqual(audit["atlases"][0]["transparent_nonzero_rgb_pixels"], 0)
+            self.assertEqual(audit["atlases"][0]["outside_padded_visible_pixels"], 0)
 
     def test_rejects_broken_extrusion_pixels(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -195,6 +196,7 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             markdown = (root / "packed/audit.md").read_text(encoding="utf-8")
             self.assertIn("## Timing", markdown)
             self.assertIn("transparent_nonzero_rgb_pixels=0", markdown)
+            self.assertIn("outside_padded_visible_pixels=0", markdown)
 
     def test_atomic_report_write_keeps_existing_text_on_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -260,6 +262,33 @@ class AuditUiAtlasPackTest(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("clean atlas transparent pixels must have zero RGB", result.stdout + result.stderr)
+
+    def test_rejects_visible_pixels_outside_padded_rects(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_png(root / "assets/runtime/panel.png")
+            manifest, pack = build_pack(root, [asset("panel", "assets/runtime/panel.png")], label_review=True)
+            pack_data = json.loads(pack.read_text(encoding="utf-8"))
+            atlas_path = root / pack_data["atlases"][0]["path"]
+            entry = pack_data["atlases"][0]["entries"][0]
+            padded_x, padded_y, padded_w, padded_h = entry["padded_rect"]
+            atlas = Image.open(atlas_path).convert("RGBA")
+            stray_pixel = None
+            for y in range(atlas.height):
+                for x in range(atlas.width):
+                    if not (padded_x <= x < padded_x + padded_w and padded_y <= y < padded_y + padded_h):
+                        stray_pixel = (x, y)
+                        break
+                if stray_pixel is not None:
+                    break
+            self.assertIsNotNone(stray_pixel)
+            atlas.putpixel(stray_pixel, (255, 255, 255, 255))
+            atlas.save(atlas_path)
+
+            result = run(AUDIT, root, "--atlas-pack", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("clean atlas visible pixels must be inside packed padded_rects", result.stdout + result.stderr)
 
     def test_rejects_wrong_review_label_text(self):
         with tempfile.TemporaryDirectory() as tmp:

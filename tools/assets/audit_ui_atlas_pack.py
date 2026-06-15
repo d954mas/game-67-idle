@@ -110,6 +110,32 @@ def transparent_nonzero_rgb_count(image: Image.Image) -> int:
     return count
 
 
+def visible_pixels_outside_rects_count(image: Image.Image, allowed_rects: list[tuple[int, int, int, int]]) -> int:
+    rgba = image.convert("RGBA")
+    if np is not None:
+        array = np.asarray(rgba, dtype=np.uint8)
+        visible = array[..., 3] > 0
+        allowed = np.zeros(visible.shape, dtype=bool)
+        for x, y, width, height in allowed_rects:
+            x0 = max(0, x)
+            y0 = max(0, y)
+            x1 = min(rgba.width, x + width)
+            y1 = min(rgba.height, y + height)
+            if x0 < x1 and y0 < y1:
+                allowed[y0:y1, x0:x1] = True
+        return int(np.count_nonzero(visible & ~allowed))
+
+    pixels = rgba.load()
+    count = 0
+    for y in range(rgba.height):
+        for x in range(rgba.width):
+            if pixels[x, y][3] == 0:
+                continue
+            if not any(rx <= x < rx + rw and ry <= y < ry + rh for rx, ry, rw, rh in allowed_rects):
+                count += 1
+    return count
+
+
 def label_font() -> ImageFont.ImageFont:
     global _LABEL_FONT
     if _LABEL_FONT is not None:
@@ -368,6 +394,14 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
                 if intersects(label_rect, other_label_rect):
                     atlas_problems.append(f"{label_id} review_label rect overlaps review_label rect for {other_id}")
 
+        outside_padded_visible_pixels = 0
+        if atlas is not None and padded_rects:
+            outside_padded_visible_pixels = visible_pixels_outside_rects_count(atlas, [rect for _, rect in padded_rects])
+            if outside_padded_visible_pixels:
+                atlas_problems.append(
+                    f"clean atlas visible pixels must be inside packed padded_rects; found {outside_padded_visible_pixels}"
+                )
+
         atlas_report = {
             "pack_group": atlas_info.get("pack_group") if isinstance(atlas_info, dict) else None,
             "path": atlas_path_value,
@@ -378,6 +412,7 @@ def audit_pack(pack_path: Path, asset_manifest_path: Path | None = None, profile
             "physical_entry_count": atlas_info.get("physical_entry_count") if isinstance(atlas_info, dict) else None,
             "alias_count": atlas_info.get("alias_count") if isinstance(atlas_info, dict) else None,
             "transparent_nonzero_rgb_pixels": transparent_nonzero_rgb_pixels,
+            "outside_padded_visible_pixels": outside_padded_visible_pixels,
         }
         if profile:
             atlas_report["timing_ms"] = {"total": round((perf_counter() - atlas_started) * 1000, 3)}
@@ -443,6 +478,7 @@ def main() -> None:
         if physical is not None and aliases is not None:
             detail += f", physical={physical}, aliases={aliases}"
         detail += f", transparent_nonzero_rgb_pixels={atlas.get('transparent_nonzero_rgb_pixels', '-')}"
+        detail += f", outside_padded_visible_pixels={atlas.get('outside_padded_visible_pixels', '-')}"
         lines.append(f"- {atlas['status'].upper()} `{atlas.get('pack_group')}` {detail}{suffix}")
     lines.append("")
     if args.report:
