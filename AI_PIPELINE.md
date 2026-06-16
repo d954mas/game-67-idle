@@ -272,6 +272,15 @@ task, or fresh validation evidence.
 
 ## AI session profiling
 
+**Coverage is automatic.** Profiling is wired into BOTH harnesses as a hook
+(`.claude/settings.json` for Claude Code, `.codex/hooks.json` for Codex) that
+runs `tools/ai_profile/hook_record.mjs` on every command tool call + session
+start, appending a record to `tmp/session_profiles/`. The harness runs it, so
+coverage no longer depends on the agent remembering to call `ai.mjs start/run`
+(that opt-in dependency is exactly why a long session once logged zero records).
+`node tools/ai.mjs status` reads the result. The hook is silent and never blocks
+the agent. `ai.mjs start/run` are still available for explicit scope/wrapping.
+
 Profiling shows where an AI agent gets stuck without turning telemetry into a
 second project. It is passive by default: normal game work must not pause to
 repair stale summaries. No profiler step is a forced gate on normal work.

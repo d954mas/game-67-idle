@@ -129,3 +129,29 @@ lower reflection/debug time, better cross-agent/human review than local
 markdown/JSON, reusable datasets/evals that prevent regressions, or production
 monitoring the project actually needs. Local JSONL in `tmp/session_profiles/`
 stays the baseline evidence source unless the lead explicitly changes that rule.
+
+## Retrospective - 2026-06-16 (E003 cleanup + E004 Critter Corral)
+
+Long 24h+ session: pipeline cleanup (E003 T0043-T0063) then built Critter Corral
+from concept to release-candidate (E004) via many subagent executors. Key
+lessons + durable fixes applied:
+
+- **Profiler never fired (0 records).** Root cause: it was an opt-in CLI the
+  agent must remember. Fix: wired it into BOTH harnesses as a hook
+  (`.claude/settings.json` + `.codex/hooks.json` -> `tools/ai_profile/hook_record.mjs`)
+  so coverage is guaranteed by the harness, not the agent. Verified live on Claude.
+- **Built game visuals on the debug shape renderer -> full rework to sprites.**
+  Fix: AGENTS.md rule "game visuals ALWAYS use real assets; shape renderer is
+  debug-only." Clarify the render/asset path before building visuals.
+- **Declared "release-candidate" but it was unteachable** (no text, opaque
+  upgrades, no FTUE) - the visual gate checks appearance, not comprehension.
+  Proposed fix: a "first-player teachability" gate beside the visual gate
+  (would a new player understand in 10s? are systems explained?). Not yet added.
+- **Built option C (image-similarity) then reverted** - it contradicted the
+  just-made "qualitative gate" decision. Don't build a lead-decision option
+  before confirming, especially against a just-set principle.
+- **Proposed an existing game ("cow evolution")** - verify concept novelty.
+- **CRLF warnings on every commit** - fixed with `.gitattributes` + autocrlf=false.
+- Judged everything from static screenshots; never played the game / verified the
+  core-moment feel in motion. Future: judge first-player UX + motion feel, not
+  just composition.
