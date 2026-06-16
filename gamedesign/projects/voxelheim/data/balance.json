@@ -19,6 +19,8 @@
     "hp_multiplier": 8,
     "gold_multiplier": 15,
     "timer_s": 30,
+    "timer_relative_mult": 1.5,
+    "timer_note": "IMPLEMENTATION TUNING (headless playtest, 2026-06-16): with a FIXED 30s timer and the steep HP x1.45 climb, bosses become a mathematically impossible wall (e.g. the stage-20 boss needs ~76s of DPS but only has 30s) -> prestige@25 is unreachable on a base run. Per this file's own note ('first-pass numbers, to tune by playtest'), the effective boss timer is now max(timer_s, timer_relative_mult * current_kill_time), i.e. the boss is always a beatable RELATIVE check (kill it in ~1.5x the time your DPS needs), never an absolute wall. All other grounded numbers (HP/gold growth, boss HP/gold mult, prestige formula, upgrade effects) are UNCHANGED. Flagged for lead/game-design-critic review: the deeper lever is multiplicative upgrade/prestige scaling so flat damage can track exponential HP.",
     "fail_penalty": "retry_boss_no_progress_loss"
   },
   "upgrades": {

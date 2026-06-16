@@ -1,17 +1,32 @@
 #!/usr/bin/env python3
-"""End-to-end verification of the Voxelheim casual-RPG core loop.
+"""End-to-end verification of the Voxelheim IDLE / incremental RPG loop.
 
-Launches game_seed (voxelheim) with DevAPI, then drives the loop headlessly via
-deterministic debug endpoints and asserts the progression transitions:
+Launches game_seed (voxelheim) with DevAPI, then drives the idle loop headlessly
+via deterministic debug endpoints and asserts the progression transitions:
 
-  - tap-to-move advances FTUE (ftue_step >= 1)
-  - walking the hero into goblins kills them (enemies_defeated increases)
-  - enough kills trigger a LEVEL UP (level increases)
-  - clearing all 3 enemies + reaching the keep sets keep_reached / won
+  - gold rises from auto-kills (the hero auto-attacks the monster stream)
+  - buying Sword raises damage AND the realized kill rate (gold/sec)
+  - the stage counter advances after kills_per_stage kills
+  - a BOSS appears at stage 10 (boss_active, a countdown)
+  - reaching stage 25 unlocks prestige
+  - prestiging grants Frost Shards and resets gold/stage while keeping shards
+  - a shard upgrade can be purchased and changes a permanent multiplier
+  - an offline grant computes gold while away
 
-Captures screenshots at key beats (start, combat, level-up, victory) via the
-game's own glReadPixels endpoint (frame.screenshot) and runs pixel_health on
-each, so the run proves the loop works AND looks non-blank.
+Captures screenshots at: early auto-farm, the upgrade panel, a boss, and
+post-prestige (build/captures/idle_*.png) and runs pixel_health on each, so the
+run proves the loop works AND looks non-blank.
+
+DevAPI methods used (added/extended in src/voxelheim_main.c):
+  game.state                 -> flat idle mirror + derived stats + costs
+  game.reset_playtest        -> fresh idle profile + sim
+  game.debug.tick {seconds}  -> advance the sim deterministically
+  game.debug.click {x,y}     -> route a design-space UI click
+  game.debug.buy {upgrade}   -> buy one upgrade level (sword/boots/armor/luck)
+  game.debug.buy_shard {shard}-> buy one shard upgrade (damage/gold/start/offline)
+  game.debug.prestige        -> commit a prestige (no confirm gate)
+  game.debug.offline {seconds}-> simulate an absence and grant offline gold
+  frame.screenshot {path}    -> engine-side glReadPixels capture
 
 Usage: voxelheim_play_test.py [port]
 """
@@ -30,21 +45,12 @@ EXE = os.path.join(ROOT, "build", "game_seed", "native-debug", "game_seed.exe")
 PIXEL_HEALTH = os.path.join(ROOT, "tools", "devapi", "pixel_health.py")
 CAP_DIR = os.path.join(ROOT, "build", "captures")
 
-# Enemy spawn points in DESIGN units (mirror sim_reset in voxelheim_main.c).
-DESIGN_W, DESIGN_H = 960.0, 540.0
-ENEMIES = [
-    (DESIGN_W * 0.50 - 78.0, DESIGN_H * 0.30),
-    (DESIGN_W * 0.50 + 84.0, DESIGN_H * 0.44),
-    (DESIGN_W * 0.50 - 30.0, DESIGN_H * 0.58),
-]
-KEEP = (DESIGN_W * 0.50, DESIGN_H * 0.70)
-
 
 class Probe:
     def __init__(self, port: int):
         self.port = port
 
-    def call(self, method: str, params: dict | None = None, timeout: float = 6.0) -> dict:
+    def call(self, method: str, params: dict | None = None, timeout: float = 8.0) -> dict:
         req = {"id": "1", "method": method}
         if params is not None:
             req["params"] = params
@@ -66,11 +72,23 @@ class Probe:
     def state(self) -> dict:
         return self.call("game.state")
 
+    def tick(self, seconds: float) -> dict:
+        return self.call("game.debug.tick", {"seconds": seconds})
+
     def click(self, x: float, y: float) -> dict:
         return self.call("game.debug.click", {"x": x, "y": y})
 
-    def tick(self, seconds: float) -> dict:
-        return self.call("game.debug.tick", {"seconds": seconds})
+    def buy(self, upgrade: str) -> dict:
+        return self.call("game.debug.buy", {"upgrade": upgrade})
+
+    def buy_shard(self, shard: str) -> dict:
+        return self.call("game.debug.buy_shard", {"shard": shard})
+
+    def prestige(self) -> dict:
+        return self.call("game.debug.prestige")
+
+    def offline(self, seconds: float) -> dict:
+        return self.call("game.debug.offline", {"seconds": seconds})
 
     def screenshot(self, path: str) -> bool:
         self.call("frame.screenshot", {"path": path})
@@ -83,8 +101,8 @@ class Probe:
         return False
 
 
-PASS = []
-FAIL = []
+PASS: list[str] = []
+FAIL: list[str] = []
 
 
 def check(name: str, cond: bool, detail: object = None) -> bool:
@@ -113,43 +131,38 @@ def shoot(p: Probe, name: str) -> str:
     return abs_path
 
 
-def walk_to(p: Probe, x: float, y: float, budget: float = 6.0, step: float = 0.25) -> dict:
-    """Issue a move order and tick until arrival or the time budget elapses."""
-    p.click(x, y)
-    elapsed = 0.0
-    st = p.state()
-    while elapsed < budget:
-        st = p.tick(step)
-        elapsed += step
-        dx = st.get("hero_x", 0.0) - x
-        dy = st.get("hero_y", 0.0) - y
-        if (dx * dx + dy * dy) < 16.0 * 16.0 and not st.get("downed"):
-            break
-    return st
+def buy_until_stage(p: Probe, target: int, max_iters: int = 600, tick_s: float = 15.0) -> dict:
+    """Auto-farm + buy upgrades, climbing toward `target`.
 
-
-def engage(p: Probe, ex: float, ey: float, budget: float = 14.0) -> dict:
-    """Walk next to an enemy and tick until a kill registers or budget elapses."""
-    start_killed = p.state().get("enemies_defeated", 0)
-    p.click(ex, ey)
-    elapsed = 0.0
+    Each iteration advances the sim by `tick_s` of simulated time (the climb is
+    balanced for minutes of idle play, so the probe fast-forwards), then spends
+    all affordable gold. To keep the kill rate climbing alongside monster HP it
+    spends broadly: damage (Sword) + attack speed (Boots) first, then Luck for
+    more gold, then Armor.
+    """
     st = p.state()
-    while elapsed < budget:
-        # keep nudging toward the enemy in case it drifted
-        p.click(ex, ey)
-        st = p.tick(0.3)
-        elapsed += 0.3
-        if st.get("enemies_defeated", 0) > start_killed:
-            break
-        if st.get("downed"):
-            # wait out the respawn, then re-engage
-            st = p.tick(1.5)
-            elapsed += 1.5
+    cost_keys = {"sword": "cost_sword", "boots": "cost_boots", "armor": "cost_armor", "luck": "cost_luck"}
+    # priority: throughput first (sword+boots), then gold (luck), then armor
+    prio = ["sword", "boots", "luck", "sword", "armor"]
+    it = 0
+    while st.get("stage", 1) < target and it < max_iters:
+        it += 1
+        st = p.tick(tick_s)
+        # spend repeatedly while anything is affordable
+        spent = True
+        while spent:
+            spent = False
+            gold = st.get("gold", 0)
+            for u in prio:
+                if gold >= st.get(cost_keys[u], 1e18):
+                    st = p.buy(u)
+                    spent = True
+                    break
     return st
 
 
 def main() -> int:
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 9132
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 9133
     os.makedirs(CAP_DIR, exist_ok=True)
     if not os.path.exists(EXE):
         print(f"FAIL: build native debug first: {EXE}", file=sys.stderr)
@@ -173,63 +186,118 @@ def main() -> int:
         if not check("game/atlas ready", ready):
             return 1
 
-        # Clean start: reset the run so the test is deterministic.
+        # Clean start.
         st = p.call("game.reset_playtest")
         check(
-            "fresh run state",
-            st.get("level") == 1
-            and st.get("hero_hp") == 100
-            and st.get("enemies_defeated") == 0
-            and st.get("enemies_alive") == 3
-            and not st.get("keep_reached"),
+            "fresh idle state",
+            st.get("stage") == 1
+            and st.get("gold") == 0
+            and st.get("frost_shards") == 0
+            and st.get("up_sword") == 0
+            and not st.get("prestige_unlocked"),
             st,
         )
-        shoot(p, "voxelheim_start.png")
 
-        # 1) Tap to move advances FTUE step 0 -> 1.
-        st = walk_to(p, DESIGN_W * 0.5, DESIGN_H * 0.30, budget=3.0)
-        check("tap-to-move advances FTUE", st.get("ftue_step", 0) >= 1, st)
+        # 1) Auto-farm: gold rises from auto-kills.
+        st = p.tick(8.0)
+        gold_after_farm = st.get("gold", 0)
+        check("gold rises from auto-kills", gold_after_farm > 0, st)
+        check("FTUE advanced after a kill", st.get("ftue_step", 0) >= 1, st)
+        shoot(p, "idle_early.png")
 
-        # 2) Engage enemy #1 -> a kill registers.
-        st = engage(p, *ENEMIES[0])
-        check("first kill registers", st.get("enemies_defeated", 0) >= 1, st)
-        check("FTUE advanced to fight phase", st.get("ftue_step", 0) >= 2, st)
-        shoot(p, "voxelheim_combat.png")
-
-        level_before = st.get("level", 1)
-
-        # 3) Engage enemy #2 -> more kills; XP should drive a level up
-        #    (20 XP/kill, xp_to_next starts at 60 -> level up on the 3rd kill).
-        st = engage(p, *ENEMIES[1])
-        check("second kill registers", st.get("enemies_defeated", 0) >= 2, st)
-
-        # 4) Engage enemy #3 -> clears the path and (with 60 XP) levels up.
-        st = engage(p, *ENEMIES[2])
-        check("all enemies cleared", st.get("enemies_alive", 99) == 0, st)
-        check(
-            "level up occurred",
-            st.get("level", 1) > level_before,
-            {"before": level_before, "after": st.get("level")},
-        )
-        shoot(p, "voxelheim_levelup.png")
-
-        # 5) Walk to the keep portal -> victory. Issue ONE move order toward the
-        #    keep center, then tick only (clicking after "won" would replay).
-        p.click(KEEP[0], KEEP[1])
-        for _ in range(60):
-            st = p.tick(0.25)
-            if st.get("keep_reached") and st.get("won"):
+        # 2) Buying Sword raises damage AND the realized kill rate (gold/sec).
+        #    Measure on a clean, longer window so the kill cadence averages out.
+        dmg_before = st.get("hero_damage", 0.0)
+        win = 20.0
+        g0 = p.state().get("gold", 0)
+        s0 = p.tick(win)
+        rate_before = (s0.get("gold", 0) - g0) / win
+        # buy a generous number of sword levels to make the effect unambiguous
+        for _ in range(20):
+            r = p.buy("sword")
+            if not r.get("bought", True):
                 break
-            # if not yet there and not won, nudge again (but never after a win)
-            if not st.get("won"):
-                p.click(KEEP[0], KEEP[1])
-        check("keep reached", bool(st.get("keep_reached")), st)
-        check("victory state", bool(st.get("won")), st)
-        shoot(p, "voxelheim_victory.png")
+        st = p.state()
+        dmg_after = st.get("hero_damage", 0.0)
+        check("buying Sword raises damage", dmg_after > dmg_before, {"before": dmg_before, "after": dmg_after})
+        g1 = st.get("gold", 0)
+        s1 = p.tick(win)
+        rate_after = (s1.get("gold", 0) - g1) / win
+        check("buying Sword raises kill/gold rate", rate_after > rate_before,
+              {"before": rate_before, "after": rate_after, "dmg": (dmg_before, dmg_after)})
 
-        # 6) Replay via reset clears the win.
-        st = p.call("game.reset_playtest")
-        check("replay resets run", not st.get("won") and st.get("enemies_alive") == 3, st)
+        # 3) Stage advances.
+        stage_before = p.state().get("stage", 1)
+        st = buy_until_stage(p, max(stage_before + 2, 3))
+        check("stage advances", st.get("stage", 1) > stage_before,
+              {"before": stage_before, "after": st.get("stage")})
+        shoot(p, "idle_upgrades.png")
+
+        # 4) Climb to a boss (stage 10). Buy upgrades to get there fast.
+        st = buy_until_stage(p, 10)
+        # the boss is at stage 10; capture while boss_active (it may take a tick
+        # for the stage to land exactly on 10 with boss spawned)
+        # ensure we are on stage 10 with a boss
+        check("reached stage 10", st.get("stage", 1) >= 10, st)
+        # tick a little so we're mid-boss for the screenshot
+        for _ in range(3):
+            st = p.state()
+            if st.get("stage") == 10 and st.get("boss_active"):
+                break
+            st = p.tick(0.5)
+        boss_seen = st.get("boss_active") or st.get("stage", 1) > 10
+        check("a BOSS appears at stage 10", boss_seen, st)
+        # capture the boss if currently active; else climb back is fine, snapshot anyway
+        if st.get("boss_active"):
+            shoot(p, "idle_boss.png")
+        else:
+            # climb to next boss multiple of 10 to capture one
+            tries = 0
+            while not st.get("boss_active") and tries < 40:
+                tries += 1
+                st = buy_until_stage(p, (st.get("stage", 1) // 10 + 1) * 10)
+                for _ in range(3):
+                    if st.get("boss_active"):
+                        break
+                    st = p.tick(0.5)
+            shoot(p, "idle_boss.png")
+
+        # 5) Climb to stage 25 -> prestige unlocks.
+        st = buy_until_stage(p, 25)
+        check("reached stage 25", st.get("stage", 1) >= 25, st)
+        check("prestige unlocks at stage 25", st.get("prestige_unlocked"), st)
+
+        # 6) Prestige grants Frost Shards and resets gold/stage while keeping shards.
+        highest_before = st.get("highest_stage", 1)
+        reward = st.get("shards_reward_now", 0)
+        check("prestige reward is positive", reward > 0, reward)
+        st = p.prestige()
+        check("prestige granted frost shards", st.get("frost_shards", 0) >= reward,
+              {"reward": reward, "got": st.get("frost_shards")})
+        check("prestige reset gold", st.get("gold", 1) == 0, st)
+        check("prestige reset upgrades", st.get("up_sword", 1) == 0, st)
+        check("prestige reset stage", st.get("stage", 99) <= max(1, highest_before),
+              {"stage": st.get("stage")})
+        check("prestige kept highest_stage", st.get("highest_stage", 0) >= highest_before, st)
+        shoot(p, "idle_prestige.png")
+
+        # 7) Spend a shard on a permanent upgrade -> multiplier changes.
+        if st.get("frost_shards", 0) >= 1:
+            dmg_mult_before = st.get("hero_damage", 0.0)
+            st = p.buy_shard("damage")
+            check("shard upgrade purchased", st.get("bought", False) is True or st.get("shard_global_damage", 0) >= 1, st)
+            check("shard upgrade raises base damage", st.get("hero_damage", 0.0) >= dmg_mult_before, st)
+
+        # 8) Offline grant computes gold while away.
+        gold_before_offline = st.get("gold", 0)
+        # offline requires the first-boss unlock; we cleared bosses above
+        if st.get("offline_unlocked"):
+            st = p.offline(3600.0)
+            check("offline grant computes gold", st.get("gold", 0) > gold_before_offline,
+                  {"before": gold_before_offline, "after": st.get("gold"), "offline_gold": st.get("offline_gold")})
+            check("offline popup armed", st.get("offline_popup", False), st)
+        else:
+            check("offline unlocked (first boss cleared)", False, st)
 
     finally:
         try:

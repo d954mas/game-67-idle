@@ -41,6 +41,22 @@ REQUIRED_FIELDS = {
     "run.enemies_defeated",
     "run.keep_reached",
     "run.ftue_step",
+    "idle.gold",
+    "idle.stage",
+    "idle.highest_stage",
+    "idle.kills_in_stage",
+    "idle.up_sword",
+    "idle.up_boots",
+    "idle.up_armor",
+    "idle.up_luck",
+    "idle.frost_shards",
+    "idle.shard_global_damage",
+    "idle.shard_global_gold",
+    "idle.shard_start_stage",
+    "idle.shard_offline_rate",
+    "idle.last_seen_unix",
+    "idle.offline_unlocked",
+    "idle.boss_active",
 }
 
 SCALAR_TYPES = {"bool", "int", "float", "string", "string?", "enum"}
@@ -74,8 +90,8 @@ def load_schema(schema_path: Path = SCHEMA_PATH) -> dict[str, Any]:
         raise SystemExit("schema id must be game_seed.state")
     if schema.get("document") != "game":
         raise SystemExit("document must be game")
-    if schema.get("version") not in (1, 2):
-        raise SystemExit("this generator supports version 1 or 2")
+    if schema.get("version") not in (1, 2, 3):
+        raise SystemExit("this generator supports version 1, 2 or 3")
     if not isinstance(schema.get("string_max"), int) or schema["string_max"] < 2:
         raise SystemExit("string_max must be an integer >= 2")
     if not isinstance(schema.get("fields"), list):

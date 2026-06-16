@@ -1,0 +1,45 @@
+{
+  "schema": "game_seed.state",
+  "version": 3,
+  "state": {
+    "shape_index": 1,
+    "render_mode_index": 2,
+    "camera_distance": 5.0,
+    "test_ui_clicks": 2,
+    "test_label_text": "Label: clicked 2",
+    "test_button_text": "Clicked 2",
+    "tutorial": {"done": false},
+    "wallet": {"soft": 0, "hard": 0},
+    "items": {},
+    "inventory": {"item_ids": []},
+    "equipment": {"hand_item_id": null},
+    "run": {
+      "hero_hp": 100,
+      "hero_max_hp": 100,
+      "level": 1,
+      "xp": 0,
+      "xp_to_next": 60,
+      "enemies_defeated": 0,
+      "keep_reached": false,
+      "ftue_step": 0
+    },
+    "idle": {
+      "gold": 0,
+      "stage": 1,
+      "highest_stage": 1,
+      "kills_in_stage": 0,
+      "up_sword": 0,
+      "up_boots": 0,
+      "up_armor": 0,
+      "up_luck": 0,
+      "frost_shards": 0,
+      "shard_global_damage": 0,
+      "shard_global_gold": 0,
+      "shard_start_stage": 0,
+      "shard_offline_rate": 0,
+      "last_seen_unix": 0,
+      "offline_unlocked": false,
+      "boss_active": false
+    }
+  }
+}

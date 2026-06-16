@@ -1,23 +1,26 @@
 /*
- * Voxelheim -- "Frost Keep Approach" casual-RPG core loop (P2-P4).
+ * Voxelheim -- "Frost Keep Climb" IDLE / incremental auto-battle RPG.
  *
- * Built on the static first-screen slice: real sprites from the voxelheim atlas
- * + slug-text HUD on a DESIGN canvas (960x540, ortho, bottom-left origin, Y-up).
- * Everything is authored in design units and scaled uniformly to the window.
+ * The hero stands on the path (lower-center) and AUTO-ATTACKS. An endless stream
+ * of monsters spawns up the path and walks toward him; the front monster takes
+ * damage, dies, drops GOLD, and the next advances. No player movement.
  *
- * The loop, kept casual + readable + juicy:
- *   - Tap to move: hero straight-line walks toward the tapped design point.
- *   - 3 ice-goblins along the path; idle until the hero is near, then approach.
- *   - Auto-combat: hero auto-attacks in range (hit flash + floating damage),
- *     enemy attacks back, hero slowly regenerates out of combat.
- *   - Reward: kills sparkle, grant XP; XP fills -> LEVEL UP (heal, scale pop,
- *     glow, big text). Persisted progression in g_game_state.run.*.
- *   - Win: clear all 3 enemies + reach the keep -> "FROST KEEP CLEARED!".
- *   - FTUE (<=3 beats): move -> fight -> clear + enter the keep.
+ *   - Auto-combat stream: hero deals computed damage every computed interval.
+ *   - Stages: kills_per_stage kills -> stage+1; monster HP/gold scale per stage.
+ *   - Bosses: every boss.every_stages stages, one big timed monster.
+ *   - Gold -> 4 upgrades (Sword/Boots/Armor/Luck) in a bottom UPGRADE PANEL.
+ *   - Prestige (unlock @ stage 25): reset stage+gold+upgrades for Frost Shards,
+ *     spend on permanent shard upgrades.
+ *   - Offline (unlock after first boss): earn gold while away (capped).
+ *   - FTUE (<=3 beats from balance.json).
+ *
+ * All economy numbers come from gamedesign/projects/voxelheim/data/balance.json;
+ * they are mirrored as the VH_* constants below (single source of truth: keep in
+ * sync with that file).
  *
  * Render path: nt_atlas + nt_sprite_renderer (direct emit), nt_text_renderer for
- * labels. A solid white atlas region (voxels/white.png) backs HP-bar fills,
- * particles, glows, and flash overlays.
+ * labels. A solid white atlas region (voxels/white.png) backs bar fills,
+ * particles, glows, panels, and flash overlays.
  *
  * Pack build (explicit) -- run from the project root only if assets change:
  *   build/voxelheim_packer/build_voxelheim_packs.exe build/voxelheim
@@ -61,6 +64,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define VOXELHEIM_DEVAPI_PORT_DEFAULT 9123
 
@@ -71,31 +75,78 @@
 /* Flip flag (mirrors NT_SPRITE_FLAG_FLIP_X = 1U<<0; literal keeps deps local). */
 #define VH_FLIP_X 1U
 
-/* ---- Tuning (casual) ---- */
-#define HERO_SPEED 220.0F      /* design-units/sec */
-#define HERO_ATTACK_RANGE 72.0F
-#define HERO_ATTACK_COOLDOWN 0.6F
-#define HERO_ATTACK_DAMAGE 10
-#define ENEMY_AGGRO_RANGE 140.0F
-#define ENEMY_SPEED 60.0F
-/* Goblins hold their post: they only step toward the hero when he comes within
- * this leash distance of their guard spot, and never chase past it. This makes
- * the player WALK UP the path and fight each encounter in turn. */
-#define ENEMY_LEASH 70.0F
-#define ENEMY_ATTACK_COOLDOWN 0.85F
-#define ENEMY_ATTACK_DAMAGE 8
-#define ENEMY_MAX_HP 34
-#define HERO_REGEN_PER_SEC 5.0F
-#define XP_PER_KILL 20
-#define KEEP_REACH_RANGE 58.0F
-#define DOWNED_DURATION 1.2F
-#define HIT_FLASH_TIME 0.1F
-#define LEVELUP_POP_TIME 1.3F
+/* ============================================================================
+ * Economy constants -- MIRROR gamedesign/projects/voxelheim/data/balance.json.
+ * ==========================================================================*/
 
-#define ENEMY_COUNT 3
-#define MAX_PARTICLES 48
-#define MAX_FLOATERS 16
-#define MAX_SPRITE_FX 16
+/* combat */
+#define VH_HERO_BASE_DAMAGE 5.0
+#define VH_HERO_ATTACK_INTERVAL_S 1.0
+#define VH_HERO_BASE_MAX_HP 100.0
+#define VH_KILLS_PER_STAGE 10
+
+/* monster */
+#define VH_MON_HP_BASE 10.0
+#define VH_MON_HP_GROWTH 1.45
+#define VH_MON_GOLD_BASE 5.0
+#define VH_MON_GOLD_GROWTH 1.42
+
+/* boss */
+#define VH_BOSS_EVERY_STAGES 10
+#define VH_BOSS_HP_MULT 8.0
+#define VH_BOSS_GOLD_MULT 15.0
+#define VH_BOSS_TIMER_S 30.0
+/* Effective boss timer = max(VH_BOSS_TIMER_S, mult * current kill time). A fixed
+ * 30s timer is mathematically impossible against the steep HP x1.45 climb, which
+ * blocks prestige@25; this makes the boss a beatable RELATIVE check. See the
+ * boss.timer_note in data/balance.json. */
+#define VH_BOSS_TIMER_REL_MULT 1.5
+
+/* upgrades */
+#define VH_UP_COST_GROWTH 1.09
+#define VH_SWORD_BASE_COST 10.0
+#define VH_SWORD_DMG_PER_LEVEL 3.0
+#define VH_BOOTS_BASE_COST 25.0
+#define VH_BOOTS_INTERVAL_MULT 0.97
+#define VH_BOOTS_MIN_INTERVAL 0.2
+#define VH_ARMOR_BASE_COST 20.0
+#define VH_ARMOR_HP_PER_LEVEL 12.0
+#define VH_ARMOR_REGEN_PER_LEVEL 1.0
+#define VH_LUCK_BASE_COST 30.0
+#define VH_LUCK_GOLD_FIND_PCT 4.0
+
+/* prestige */
+#define VH_PRESTIGE_UNLOCK_STAGE 25
+/* frost_shards = floor(highest_stage ^ 0.8 / 3) */
+#define VH_SHARD_DMG_PCT 10.0
+#define VH_SHARD_DMG_BASE_COST 1.0
+#define VH_SHARD_DMG_GROWTH 1.5
+#define VH_SHARD_GOLD_PCT 10.0
+#define VH_SHARD_GOLD_BASE_COST 1.0
+#define VH_SHARD_GOLD_GROWTH 1.5
+#define VH_SHARD_START_PER_LEVEL 1
+#define VH_SHARD_START_BASE_COST 2.0
+#define VH_SHARD_START_GROWTH 2.0
+#define VH_SHARD_OFFLINE_PCT 5.0
+#define VH_SHARD_OFFLINE_BASE_COST 2.0
+#define VH_SHARD_OFFLINE_GROWTH 1.6
+
+/* offline */
+#define VH_OFFLINE_RATE_PCT 50.0
+#define VH_OFFLINE_CAP_HOURS 8.0
+
+/* ---- Sim tuning (presentation only; not economy) ---- */
+#define MON_SPAWN_Y (DESIGN_H * 0.72F)  /* monsters appear up the path */
+#define MON_FRONT_Y (DESIGN_H * 0.40F)  /* front monster engagement line */
+#define MON_WALK_SPEED 70.0F            /* design units/sec down the path */
+#define MON_SLOT_GAP 96.0F              /* spacing between queued monsters */
+#define HIT_FLASH_TIME 0.1F
+#define STAGE_FLASH_TIME 1.1F
+
+#define MAX_MONSTERS 6                  /* visible queue depth */
+#define MAX_PARTICLES 64
+#define MAX_FLOATERS 24
+#define MAX_SPRITE_FX 32
 
 /* ---- Region name hashes, indexed by enum ---- */
 
@@ -167,14 +218,18 @@ static bool s_shot_pending;
 static bool s_shot_done;
 static bool s_shot_ok;
 
-/* ---- Gameplay simulation state (transient; progression lives in g_game_state.run) ---- */
+/* ---- Upgrade indices ---- */
+enum { UP_SWORD = 0, UP_BOOTS, UP_ARMOR, UP_LUCK, UP_COUNT };
+enum { SH_DMG = 0, SH_GOLD, SH_START, SH_OFFLINE, SH_COUNT };
+
+/* ---- Gameplay simulation state (transient; progression lives in g_game_state.idle) ---- */
 
 typedef struct Floater {
     bool active;
     float x, y;
-    float age;       /* seconds */
-    float ttl;       /* seconds */
-    char text[16];
+    float age;
+    float ttl;
+    char text[24];
     float color[4];
     float size;
 } Floater;
@@ -188,56 +243,62 @@ typedef struct Particle {
     float size;
 } Particle;
 
-typedef struct Enemy {
+/* One monster in the descending stream. */
+typedef struct Monster {
     bool alive;
     float x, y;       /* design units */
-    float guard_x, guard_y; /* post the goblin holds; only leashes within ENEMY_LEASH */
-    int hp;
-    float attack_cd;  /* seconds until next attack */
+    double hp;        /* current hp (double: scales large) */
+    double max_hp;
     float flash;      /* hit-flash timer */
-    bool facing_left;
-} Enemy;
+    bool is_boss;
+} Monster;
 
-/* Short-lived sprite FX (hit spark, coin pop) drawn with a real atlas region. */
+/* Short-lived sprite FX (hit spark, coin pop). */
 typedef struct SpriteFx {
     bool active;
-    int region;       /* R_HIT_SPARK / R_COIN / ... */
+    int region;
     float x, y;
-    float vy;         /* coins drift up */
+    float vy;
     float age, ttl;
     float size;
-    float spin;       /* current rotation (radians) */
+    float spin;
     float spin_rate;
 } SpriteFx;
 
 static struct {
-    float hero_x, hero_y;
-    float target_x, target_y;
-    bool moving;
-    bool hero_facing_left;
-    float hero_attack_cd;
-    float hero_flash;
-    float regen_accum;     /* fractional hp accumulator */
-    float downed_timer;    /* >0 = hero down + respawning */
-    float levelup_timer;   /* >0 = level-up pop playing */
-    int attack_target;     /* index of enemy the hero is currently attacking, else -1 */
-    bool has_moved;        /* FTUE: first move done */
-    bool won;
-    float win_timer;       /* time since victory (for banner anim) */
-    Enemy enemies[ENEMY_COUNT];
+    Monster monsters[MAX_MONSTERS];
     Particle particles[MAX_PARTICLES];
     Floater floaters[MAX_FLOATERS];
     SpriteFx sprite_fx[MAX_SPRITE_FX];
-    float time;            /* total sim time, for idle bob */
-    bool started;          /* sim initialised */
+
+    float hero_attack_cd;  /* seconds until next swing */
+    float hero_flash;
+    double regen_accum;    /* fractional hp regen accumulator */
+    double gold_accum;     /* fractional gold accumulator (boss/regen rounding) */
+
+    float boss_timer;      /* seconds remaining for the active boss */
+    float boss_timer_max;  /* full duration of the active boss timer */
+    float stage_flash;     /* stage-advance banner flash */
+
+    float spawn_cooldown;  /* time until next monster enqueued */
+    float time;            /* total sim time */
+    bool started;
+
+    /* offline grant pending presentation (popup). */
+    bool offline_popup;
+    long offline_gold;     /* gold granted while away (display) */
+    double offline_hours;  /* capped hours (display) */
+
+    /* prestige confirm state: a press arms confirm; second press commits. */
+    bool prestige_armed;
+    float prestige_armed_timer;
 } g_sim;
 
-/* Hero spawn (lower-left of the path, like the fake shot, so the goblin column
- * up the path stays visible) + keep center (top-center). */
-#define HERO_SPAWN_X (DESIGN_W * 0.41F)
-#define HERO_SPAWN_Y (DESIGN_H * 0.25F)
+/* Hero stands lower-center on the path. */
+#define HERO_X (DESIGN_W * 0.50F)
+#define HERO_Y (DESIGN_H * 0.27F)
 #define KEEP_CX (DESIGN_W * 0.5F)
-#define KEEP_CY (DESIGN_H * 0.70F)
+#define KEEP_CY (DESIGN_H * 0.72F)
 
 /* ---- Helpers ---- */
 
@@ -254,6 +315,28 @@ static uint32_t pack_rgba(float r, float g, float b, float a) {
     uint32_t bb = (uint32_t)(clampf(b, 0.0F, 1.0F) * 255.0F + 0.5F);
     uint32_t aa = (uint32_t)(clampf(a, 0.0F, 1.0F) * 255.0F + 0.5F);
     return (aa << 24) | (bb << 16) | (gg << 8) | rr;
+}
+
+/* Clamp a double down to the int32 storage range used by the state schema. */
+static int gold_to_int(double v) {
+    if (v < 0.0) return 0;
+    if (v > 2147483647.0) return 2147483647;
+    return (int)(v + 0.5);
+}
+
+/* Pretty number for the HUD (1.2k, 3.4M, ...). */
+static void fmt_num(char *out, size_t cap, double v) {
+    if (v < 1000.0) {
+        (void)snprintf(out, cap, "%d", (int)(v + 0.5));
+    } else if (v < 1.0e6) {
+        (void)snprintf(out, cap, "%.1fk", v / 1.0e3);
+    } else if (v < 1.0e9) {
+        (void)snprintf(out, cap, "%.2fM", v / 1.0e6);
+    } else if (v < 1.0e12) {
+        (void)snprintf(out, cap, "%.2fB", v / 1.0e9);
+    } else {
+        (void)snprintf(out, cap, "%.2eT", v / 1.0e12);
+    }
 }
 
 static void parse_args(int argc, char **argv) {
@@ -321,7 +404,6 @@ static void emit_sprite_rot(int region, float cx, float cy, float w, float h, fl
     const float s = sinf(rot);
     mat4 m;
     glm_mat4_identity(m);
-    /* columns: scaled basis rotated in the XY plane */
     m[0][0] = c * sx;
     m[0][1] = s * sx;
     m[1][0] = -s * sy;
@@ -360,12 +442,17 @@ static float text_width(const char *s, float size) {
     return (float)strlen(s) * size * 0.52F;
 }
 
+/* Left-anchored text with a dark drop shadow for readability. */
+static void emit_text_shadow(const char *s, float x, float y, float size, const float color[4]) {
+    const float ink[4] = {0.10F, 0.08F, 0.07F, color[3]};
+    emit_text(s, x + 2.0F, y - 2.0F, size, ink);
+    emit_text(s, x, y, size, color);
+}
+
 /* Centered text with a dark drop shadow for readability. */
 static void emit_text_centered(const char *s, float cx, float y, float size, const float color[4]) {
-    const float ink[4] = {0.10F, 0.08F, 0.07F, color[3]};
     const float w = text_width(s, size);
-    emit_text(s, cx - w * 0.5F + 2.0F, y - 2.0F, size, ink);
-    emit_text(s, cx - w * 0.5F, y, size, color);
+    emit_text_shadow(s, cx - w * 0.5F, y, size, color);
 }
 
 static bool write_backbuffer_png(const char *path) {
@@ -396,6 +483,106 @@ static bool write_backbuffer_png(const char *path) {
     const int ok = stbi_write_png(path, w, h, 4, flip, (int)stride);
     free(flip);
     return ok != 0;
+}
+
+/* ============================================================================
+ * Economy math (derived from balance.json constants + upgrade/shard levels).
+ * ==========================================================================*/
+
+static double ipow(double base, int exp) {
+    double r = 1.0;
+    for (int i = 0; i < exp; ++i) {
+        r *= base;
+    }
+    return r;
+}
+
+/* Permanent shard multipliers (>=1.0). */
+static double shard_damage_mult(void) {
+    return 1.0 + (double)g_game_state.idle_shard_global_damage * VH_SHARD_DMG_PCT / 100.0;
+}
+static double shard_gold_mult(void) {
+    return 1.0 + (double)g_game_state.idle_shard_global_gold * VH_SHARD_GOLD_PCT / 100.0;
+}
+static int shard_start_stage(void) {
+    return 1 + g_game_state.idle_shard_start_stage * VH_SHARD_START_PER_LEVEL;
+}
+static double shard_offline_mult(void) {
+    return 1.0 + (double)g_game_state.idle_shard_offline_rate * VH_SHARD_OFFLINE_PCT / 100.0;
+}
+
+/* Hero combat stats from upgrade levels + permanent shard multipliers. */
+static double hero_damage(void) {
+    double base = VH_HERO_BASE_DAMAGE + (double)g_game_state.idle_up_sword * VH_SWORD_DMG_PER_LEVEL;
+    return base * shard_damage_mult();
+}
+static double hero_attack_interval(void) {
+    double iv = VH_HERO_ATTACK_INTERVAL_S * ipow(VH_BOOTS_INTERVAL_MULT, g_game_state.idle_up_boots);
+    if (iv < VH_BOOTS_MIN_INTERVAL) iv = VH_BOOTS_MIN_INTERVAL;
+    return iv;
+}
+static int hero_max_hp(void) {
+    return (int)(VH_HERO_BASE_MAX_HP + (double)g_game_state.idle_up_armor * VH_ARMOR_HP_PER_LEVEL);
+}
+static double hero_regen_per_sec(void) {
+    return (double)g_game_state.idle_up_armor * VH_ARMOR_REGEN_PER_LEVEL;
+}
+static double gold_find_mult(void) {
+    /* Luck % per level + permanent shard gold multiplier. */
+    double luck = 1.0 + (double)g_game_state.idle_up_luck * VH_LUCK_GOLD_FIND_PCT / 100.0;
+    return luck * shard_gold_mult();
+}
+
+/* Monster stats for a stage (per the per-stage step in balance.json). */
+static double monster_hp_for_stage(int stage) {
+    return VH_MON_HP_BASE * ipow(VH_MON_HP_GROWTH, stage - 1);
+}
+static double monster_gold_for_stage(int stage) {
+    double g = VH_MON_GOLD_BASE * ipow(VH_MON_GOLD_GROWTH, stage - 1);
+    return g * gold_find_mult();
+}
+static bool stage_is_boss(int stage) {
+    return (stage % VH_BOSS_EVERY_STAGES) == 0;
+}
+
+/* Upgrade cost = base_cost * cost_growth^level. */
+static double upgrade_cost(int which) {
+    int lvl = 0;
+    double base = 0.0;
+    switch (which) {
+        case UP_SWORD: lvl = g_game_state.idle_up_sword; base = VH_SWORD_BASE_COST; break;
+        case UP_BOOTS: lvl = g_game_state.idle_up_boots; base = VH_BOOTS_BASE_COST; break;
+        case UP_ARMOR: lvl = g_game_state.idle_up_armor; base = VH_ARMOR_BASE_COST; break;
+        case UP_LUCK:  lvl = g_game_state.idle_up_luck;  base = VH_LUCK_BASE_COST;  break;
+        default: return 0.0;
+    }
+    return base * ipow(VH_UP_COST_GROWTH, lvl);
+}
+
+/* Shard upgrade cost = base_cost_shards * cost_growth^level. */
+static double shard_cost(int which) {
+    int lvl = 0;
+    double base = 0.0, growth = 1.5;
+    switch (which) {
+        case SH_DMG:     lvl = g_game_state.idle_shard_global_damage; base = VH_SHARD_DMG_BASE_COST;     growth = VH_SHARD_DMG_GROWTH;     break;
+        case SH_GOLD:    lvl = g_game_state.idle_shard_global_gold;   base = VH_SHARD_GOLD_BASE_COST;    growth = VH_SHARD_GOLD_GROWTH;    break;
+        case SH_START:   lvl = g_game_state.idle_shard_start_stage;   base = VH_SHARD_START_BASE_COST;   growth = VH_SHARD_START_GROWTH;   break;
+        case SH_OFFLINE: lvl = g_game_state.idle_shard_offline_rate;  base = VH_SHARD_OFFLINE_BASE_COST; growth = VH_SHARD_OFFLINE_GROWTH; break;
+        default: return 0.0;
+    }
+    return base * ipow(growth, lvl);
+}
+
+/* Frost shards earned from a prestige at the current highest stage. */
+static int frost_shards_reward(void) {
+    int hs = g_game_state.idle_highest_stage;
+    double v = floor(pow((double)hs, 0.8) / 3.0);
+    if (v < 0.0) v = 0.0;
+    return (int)v;
+}
+
+static bool prestige_unlocked(void) {
+    return g_game_state.idle_highest_stage >= VH_PRESTIGE_UNLOCK_STAGE;
 }
 
 /* ---- Effects spawning ---- */
@@ -431,7 +618,6 @@ static void spawn_sparkle(float x, float y) {
             p->vy = sinf(ang) * spd + 40.0F;
             p->age = 0.0F;
             p->ttl = 0.5F + (float)((i * 13) % 30) / 100.0F;
-            /* warm gold sparkle */
             p->r = 1.0F;
             p->g = 0.85F;
             p->b = 0.35F;
@@ -441,7 +627,6 @@ static void spawn_sparkle(float x, float y) {
     }
 }
 
-/* Spawn a short-lived sprite FX (real atlas region) at (x,y). */
 static void spawn_sprite_fx(int region, float x, float y, float size, float ttl, float vy, float spin_rate) {
     for (int i = 0; i < MAX_SPRITE_FX; ++i) {
         if (!g_sim.sprite_fx[i].active) {
@@ -461,371 +646,569 @@ static void spawn_sprite_fx(int region, float x, float y, float size, float ttl,
     }
 }
 
-/* A bright impact spark on each landed hit. */
 static void spawn_hit_spark(float x, float y) {
     spawn_sprite_fx(R_HIT_SPARK, x, y, 64.0F, 0.22F, 30.0F, 0.0F);
 }
 
-/* A coin that pops up and spins on a kill (the loot beat). */
 static void spawn_coin_pop(float x, float y) {
     spawn_sprite_fx(R_COIN, x, y + 10.0F, 40.0F, 0.7F, 90.0F, 9.0F);
     spawn_sprite_fx(R_COIN, x - 18.0F, y + 4.0F, 30.0F, 0.6F, 70.0F, -8.0F);
 }
 
-/* ---- Run state (g_game_state.run.*) ---- */
+/* ---- Sim/monster spawning ---- */
 
-static void run_reset(void) {
-    g_game_state.run_level = 1;
-    g_game_state.run_hero_max_hp = 100;
-    g_game_state.run_hero_hp = 100;
-    g_game_state.run_xp = 0;
-    g_game_state.run_xp_to_next = 60;
-    g_game_state.run_enemies_defeated = 0;
-    g_game_state.run_keep_reached = false;
-    /* Keep ftue_step persistent across resets (don't re-tutorialise). */
+/* Highest queued y so a new monster spawns above the column. */
+static float column_top_y(void) {
+    float top = MON_FRONT_Y;
+    for (int i = 0; i < MAX_MONSTERS; ++i) {
+        if (g_sim.monsters[i].alive && g_sim.monsters[i].y > top) {
+            top = g_sim.monsters[i].y;
+        }
+    }
+    return top;
+}
+
+static int count_monsters(void) {
+    int n = 0;
+    for (int i = 0; i < MAX_MONSTERS; ++i) {
+        if (g_sim.monsters[i].alive) n++;
+    }
+    return n;
+}
+
+static bool boss_present(void) {
+    for (int i = 0; i < MAX_MONSTERS; ++i) {
+        if (g_sim.monsters[i].alive && g_sim.monsters[i].is_boss) return true;
+    }
+    return false;
+}
+
+/* Spawn a normal monster for the current stage at the top of the column. */
+static void spawn_monster(void) {
+    if (g_game_state.idle_boss_active) {
+        return; /* boss stage: a single boss occupies the path */
+    }
+    if (count_monsters() >= MAX_MONSTERS) {
+        return;
+    }
+    for (int i = 0; i < MAX_MONSTERS; ++i) {
+        if (!g_sim.monsters[i].alive) {
+            Monster *m = &g_sim.monsters[i];
+            m->alive = true;
+            m->is_boss = false;
+            m->max_hp = monster_hp_for_stage(g_game_state.idle_stage);
+            m->hp = m->max_hp;
+            m->flash = 0.0F;
+            float top = column_top_y();
+            float y = top + MON_SLOT_GAP;
+            if (y < MON_SPAWN_Y) y = MON_SPAWN_Y;
+            m->y = y;
+            /* slight horizontal weave so the column does not read as a single bar */
+            m->x = KEEP_CX + (((i % 2) == 0) ? -22.0F : 24.0F);
+            return;
+        }
+    }
+}
+
+/* Spawn the boss for the current (boss) stage. */
+static void spawn_boss(void) {
+    for (int i = 0; i < MAX_MONSTERS; ++i) {
+        g_sim.monsters[i].alive = false; /* clear the path for the boss */
+    }
+    Monster *m = &g_sim.monsters[0];
+    m->alive = true;
+    m->is_boss = true;
+    m->max_hp = monster_hp_for_stage(g_game_state.idle_stage) * VH_BOSS_HP_MULT;
+    m->hp = m->max_hp;
+    m->flash = 0.0F;
+    m->x = KEEP_CX;
+    m->y = MON_FRONT_Y + 30.0F;
+    /* Relative timer: at least 30s, and at least mult x the time the hero's
+     * current DPS needs to fell this boss -> always a beatable check. */
+    double dps = hero_damage() / hero_attack_interval();
+    double kill_time = (dps > 0.0) ? (m->max_hp / dps) : VH_BOSS_TIMER_S;
+    double timer = VH_BOSS_TIMER_S;
+    if (kill_time * VH_BOSS_TIMER_REL_MULT > timer) {
+        timer = kill_time * VH_BOSS_TIMER_REL_MULT;
+    }
+    g_sim.boss_timer = (float)timer;
+    g_sim.boss_timer_max = (float)timer;
+}
+
+/* Enter the current stage: if it is a boss stage, start the boss; else seed the
+ * stream. Call after stage changes. */
+static void enter_stage(void) {
+    g_game_state.idle_kills_in_stage = 0;
+    if (stage_is_boss(g_game_state.idle_stage)) {
+        g_game_state.idle_boss_active = true;
+        spawn_boss();
+    } else {
+        g_game_state.idle_boss_active = false;
+        g_sim.boss_timer = 0.0F;
+        /* seed a couple of monsters so the screen reads immediately */
+        for (int i = 0; i < MAX_MONSTERS; ++i) g_sim.monsters[i].alive = false;
+        spawn_monster();
+        spawn_monster();
+        spawn_monster();
+    }
+    g_sim.stage_flash = STAGE_FLASH_TIME;
     game_state_mark_dirty();
+}
+
+static void advance_stage(void) {
+    g_game_state.idle_stage += 1;
+    if (g_game_state.idle_stage > g_game_state.idle_highest_stage) {
+        g_game_state.idle_highest_stage = g_game_state.idle_stage;
+    }
+    enter_stage();
+}
+
+/* Grant gold (with rounding accumulator) and a coin pop. */
+static void grant_gold(double amount, float x, float y, bool floater) {
+    g_sim.gold_accum += amount;
+    long whole = (long)g_sim.gold_accum;
+    if (whole > 0) {
+        g_sim.gold_accum -= (double)whole;
+        double g = (double)g_game_state.idle_gold + (double)whole;
+        g_game_state.idle_gold = gold_to_int(g);
+    }
+    if (floater) {
+        char t[24];
+        char n[16];
+        fmt_num(n, sizeof(n), amount);
+        (void)snprintf(t, sizeof(t), "+%s", n);
+        const float gc[4] = {1.0F, 0.88F, 0.32F, 1.0F};
+        spawn_floater(x, y + 18.0F, t, gc, 22.0F);
+    }
+    game_state_mark_dirty();
+}
+
+/* Kill the front monster: drop gold, advance the stage counter / boss. */
+static void on_monster_killed(Monster *m) {
+    spawn_sparkle(m->x, m->y);
+    spawn_coin_pop(m->x, m->y);
+
+    if (m->is_boss) {
+        double g = monster_gold_for_stage(g_game_state.idle_stage) * VH_BOSS_GOLD_MULT;
+        grant_gold(g, m->x, m->y, true);
+        m->alive = false;
+        g_game_state.idle_boss_active = false;
+        g_sim.boss_timer = 0.0F;
+        /* first boss cleared unlocks offline earnings */
+        if (!g_game_state.idle_offline_unlocked) {
+            g_game_state.idle_offline_unlocked = true;
+            const float c[4] = {0.7F, 0.9F, 1.0F, 1.0F};
+            spawn_floater(HERO_X, HERO_Y + 80.0F, "Offline unlocked!", c, 24.0F);
+        }
+        advance_stage();
+        return;
+    }
+
+    double g = monster_gold_for_stage(g_game_state.idle_stage);
+    grant_gold(g, m->x, m->y, true);
+    m->alive = false;
+    g_game_state.idle_kills_in_stage += 1;
+
+    /* FTUE: first kill -> beat 2 (buy an upgrade). */
+    if (g_game_state.run_ftue_step < 1) {
+        g_game_state.run_ftue_step = 1;
+    }
+
+    if (g_game_state.idle_kills_in_stage >= VH_KILLS_PER_STAGE) {
+        advance_stage();
+    } else {
+        spawn_monster(); /* keep the stream full */
+    }
+    game_state_mark_dirty();
+}
+
+/* ---- Upgrade / prestige actions ---- */
+
+static bool buy_upgrade(int which) {
+    if (which < 0 || which >= UP_COUNT) return false;
+    double cost = upgrade_cost(which);
+    if ((double)g_game_state.idle_gold < cost) return false;
+    g_game_state.idle_gold = gold_to_int((double)g_game_state.idle_gold - cost);
+    switch (which) {
+        case UP_SWORD: g_game_state.idle_up_sword += 1; break;
+        case UP_BOOTS: g_game_state.idle_up_boots += 1; break;
+        case UP_ARMOR: g_game_state.idle_up_armor += 1; break;
+        case UP_LUCK:  g_game_state.idle_up_luck += 1; break;
+        default: break;
+    }
+    /* keep hero hp consistent with new max */
+    g_game_state.run_hero_max_hp = hero_max_hp();
+    if (g_game_state.run_hero_hp > g_game_state.run_hero_max_hp) {
+        g_game_state.run_hero_hp = g_game_state.run_hero_max_hp;
+    }
+    /* FTUE: first purchase -> beat 3 once prestige is reachable. */
+    if (g_game_state.run_ftue_step < 2) {
+        g_game_state.run_ftue_step = 2;
+    }
+    const float c[4] = {0.7F, 1.0F, 0.8F, 1.0F};
+    spawn_floater(HERO_X, HERO_Y + 70.0F, "Upgrade!", c, 22.0F);
+    game_state_mark_dirty();
+    return true;
+}
+
+static bool buy_shard_upgrade(int which) {
+    if (which < 0 || which >= SH_COUNT) return false;
+    double cost = shard_cost(which);
+    if ((double)g_game_state.idle_frost_shards < cost) return false;
+    g_game_state.idle_frost_shards -= (int)(cost + 0.5);
+    switch (which) {
+        case SH_DMG:     g_game_state.idle_shard_global_damage += 1; break;
+        case SH_GOLD:    g_game_state.idle_shard_global_gold += 1; break;
+        case SH_START:   g_game_state.idle_shard_start_stage += 1; break;
+        case SH_OFFLINE: g_game_state.idle_shard_offline_rate += 1; break;
+        default: break;
+    }
+    game_state_mark_dirty();
+    return true;
+}
+
+static void sim_seed_stage(void); /* fwd */
+
+/* Prestige: reset stage+gold+the 4 upgrades, grant Frost Shards. */
+static bool do_prestige(void) {
+    if (!prestige_unlocked()) return false;
+    int reward = frost_shards_reward();
+    g_game_state.idle_frost_shards += reward;
+
+    /* reset run economy */
+    g_game_state.idle_gold = 0;
+    g_game_state.idle_up_sword = 0;
+    g_game_state.idle_up_boots = 0;
+    g_game_state.idle_up_armor = 0;
+    g_game_state.idle_up_luck = 0;
+    g_game_state.idle_stage = shard_start_stage();
+    if (g_game_state.idle_stage > g_game_state.idle_highest_stage) {
+        g_game_state.idle_highest_stage = g_game_state.idle_stage;
+    }
+    g_game_state.idle_kills_in_stage = 0;
+    g_game_state.idle_boss_active = false;
+
+    g_game_state.run_hero_max_hp = hero_max_hp();
+    g_game_state.run_hero_hp = g_game_state.run_hero_max_hp;
+
+    g_sim.gold_accum = 0.0;
+    g_sim.regen_accum = 0.0;
+    g_sim.prestige_armed = false;
+    g_sim.prestige_armed_timer = 0.0F;
+
+    char t[24];
+    (void)snprintf(t, sizeof(t), "+%d Frost Shards", reward);
+    const float c[4] = {0.65F, 0.9F, 1.0F, 1.0F};
+    spawn_floater(HERO_X, HERO_Y + 90.0F, t, c, 26.0F);
+    spawn_sparkle(HERO_X, HERO_Y + 30.0F);
+
+    sim_seed_stage();
+    game_state_mark_dirty();
+    return true;
+}
+
+/* ---- Offline earnings ---- */
+
+/* Compute + grant offline gold from a last-seen timestamp. Returns granted. */
+static long compute_offline_grant(long now_unix) {
+    if (!g_game_state.idle_offline_unlocked) return 0;
+    long last = (long)g_game_state.idle_last_seen_unix;
+    if (last <= 0 || now_unix <= last) return 0;
+    double elapsed_s = (double)(now_unix - last);
+    double cap_s = VH_OFFLINE_CAP_HOURS * 3600.0;
+    if (elapsed_s > cap_s) elapsed_s = cap_s;
+
+    /* Rate = gold/sec at the highest cleared stage's clear rate.
+     * Per kill at that stage * kills/sec (one kill per attack interval),
+     * times the offline rate % and the permanent offline shard mult. */
+    int clear_stage = g_game_state.idle_highest_stage;
+    double gold_per_kill = monster_gold_for_stage(clear_stage);
+    double kills_per_sec = 1.0 / hero_attack_interval();
+    double rate = gold_per_kill * kills_per_sec * (VH_OFFLINE_RATE_PCT / 100.0) * shard_offline_mult();
+    double grant = rate * elapsed_s;
+    if (grant < 0.0) grant = 0.0;
+    long g = (long)grant;
+    if (g > 0) {
+        double total = (double)g_game_state.idle_gold + (double)g;
+        g_game_state.idle_gold = gold_to_int(total);
+        g_sim.offline_hours = elapsed_s / 3600.0;
+        game_state_mark_dirty();
+    }
+    return g;
+}
+
+/* ---- Sim lifecycle ---- */
+
+/* Reset the visible sim for the current persistent stage. */
+static void sim_seed_stage(void) {
+    for (int i = 0; i < MAX_MONSTERS; ++i) g_sim.monsters[i].alive = false;
+    for (int i = 0; i < MAX_PARTICLES; ++i) g_sim.particles[i].active = false;
+    for (int i = 0; i < MAX_FLOATERS; ++i) g_sim.floaters[i].active = false;
+    for (int i = 0; i < MAX_SPRITE_FX; ++i) g_sim.sprite_fx[i].active = false;
+    g_sim.hero_attack_cd = (float)hero_attack_interval();
+    g_sim.hero_flash = 0.0F;
+    g_sim.spawn_cooldown = 0.0F;
+    g_sim.boss_timer = 0.0F;
+    g_sim.stage_flash = 0.0F;
+
+    g_game_state.run_hero_max_hp = hero_max_hp();
+    if (g_game_state.run_hero_hp <= 0 || g_game_state.run_hero_hp > g_game_state.run_hero_max_hp) {
+        g_game_state.run_hero_hp = g_game_state.run_hero_max_hp;
+    }
+
+    if (stage_is_boss(g_game_state.idle_stage)) {
+        g_game_state.idle_boss_active = true;
+        spawn_boss();
+    } else {
+        g_game_state.idle_boss_active = false;
+        spawn_monster();
+        spawn_monster();
+        spawn_monster();
+    }
 }
 
 static void sim_reset(void) {
     memset(&g_sim, 0, sizeof(g_sim));
     g_sim.started = true;
-    g_sim.attack_target = -1;
-    g_sim.hero_x = HERO_SPAWN_X;
-    g_sim.hero_y = HERO_SPAWN_Y;
-    g_sim.target_x = HERO_SPAWN_X;
-    g_sim.target_y = HERO_SPAWN_Y;
-
-    /* 3 ice-goblins staggered ALONG the path at increasing distance from the
-     * hero spawn, sitting ON the path (centered near x=480) so the player must
-     * walk up and fight each in turn. Small alternating x offsets stop them
-     * stacking into one blob. */
-    /* Spaced > the hero attack range apart so each goblin is a DISTINCT fight
-     * the player walks up to (no single engagement bleeds into the next). */
-    const float xs[ENEMY_COUNT] = {DESIGN_W * 0.50F - 78.0F, DESIGN_W * 0.50F + 84.0F, DESIGN_W * 0.50F - 30.0F};
-    const float ys[ENEMY_COUNT] = {DESIGN_H * 0.30F, DESIGN_H * 0.44F, DESIGN_H * 0.58F};
-    for (int i = 0; i < ENEMY_COUNT; ++i) {
-        g_sim.enemies[i].alive = true;
-        g_sim.enemies[i].x = xs[i];
-        g_sim.enemies[i].y = ys[i];
-        g_sim.enemies[i].guard_x = xs[i];
-        g_sim.enemies[i].guard_y = ys[i];
-        g_sim.enemies[i].hp = ENEMY_MAX_HP;
-        g_sim.enemies[i].attack_cd = ENEMY_ATTACK_COOLDOWN;
-        g_sim.enemies[i].flash = 0.0F;
-        g_sim.enemies[i].facing_left = false;
-    }
+    g_sim.time = 0.0F;
+    sim_seed_stage();
 }
 
-/* Full new run: reset progression AND the live sim. */
+/* Full new idle profile (devapi reset for tests). */
 static void playtest_reset(void) {
-    run_reset();
+    /* reset persistent idle economy to defaults */
+    g_game_state.idle_gold = 0;
+    g_game_state.idle_stage = 1;
+    g_game_state.idle_highest_stage = 1;
+    g_game_state.idle_kills_in_stage = 0;
+    g_game_state.idle_up_sword = 0;
+    g_game_state.idle_up_boots = 0;
+    g_game_state.idle_up_armor = 0;
+    g_game_state.idle_up_luck = 0;
+    g_game_state.idle_frost_shards = 0;
+    g_game_state.idle_shard_global_damage = 0;
+    g_game_state.idle_shard_global_gold = 0;
+    g_game_state.idle_shard_start_stage = 0;
+    g_game_state.idle_shard_offline_rate = 0;
+    g_game_state.idle_last_seen_unix = 0;
+    g_game_state.idle_offline_unlocked = false;
+    g_game_state.idle_boss_active = false;
+    g_game_state.run_ftue_step = 0;
+    g_game_state.run_hero_max_hp = hero_max_hp();
+    g_game_state.run_hero_hp = g_game_state.run_hero_max_hp;
+    game_state_mark_dirty();
     sim_reset();
 }
 
-static int alive_enemies(void) {
-    int n = 0;
-    for (int i = 0; i < ENEMY_COUNT; ++i) {
-        if (g_sim.enemies[i].alive) {
-            n++;
-        }
-    }
-    return n;
-}
-
-/* ---- Simulation ---- */
-
-static void hero_respawn(void) {
-    g_sim.hero_x = HERO_SPAWN_X;
-    g_sim.hero_y = HERO_SPAWN_Y;
-    g_sim.target_x = HERO_SPAWN_X;
-    g_sim.target_y = HERO_SPAWN_Y;
-    g_sim.moving = false;
-    g_game_state.run_hero_hp = g_game_state.run_hero_max_hp;
-    game_state_mark_dirty();
-}
-
-/* Issue a move order to a design-space point (clamped to the playable area). */
-static void hero_move_to(float x, float y) {
-    if (g_sim.downed_timer > 0.0F || g_sim.won) {
-        return;
-    }
-    /* Keep the hero on the lower 2/3 and inside the screen. */
-    x = clampf(x, 40.0F, DESIGN_W - 40.0F);
-    y = clampf(y, DESIGN_H * 0.12F, DESIGN_H * 0.74F);
-    g_sim.target_x = x;
-    g_sim.target_y = y;
-    g_sim.moving = true;
-    if (!g_sim.has_moved) {
-        g_sim.has_moved = true;
-        if (g_game_state.run_ftue_step < 1) {
-            g_game_state.run_ftue_step = 1; /* advance: move -> fight */
-            game_state_mark_dirty();
-        }
-    }
-}
-
-static void award_kill(Enemy *e) {
-    e->alive = false;
-    spawn_sparkle(e->x, e->y);
-    spawn_coin_pop(e->x, e->y); /* loot beat: a coin pops on the kill */
-    const float xpcol[4] = {1.0F, 0.9F, 0.4F, 1.0F};
-    spawn_floater(e->x, e->y + 18.0F, "+20 XP", xpcol, 22.0F);
-    g_game_state.run_enemies_defeated += 1;
-    g_game_state.run_xp += XP_PER_KILL;
-
-    /* FTUE: first kill advances move -> clear-the-path. */
-    if (g_game_state.run_ftue_step < 2) {
-        g_game_state.run_ftue_step = 2;
-    }
-
-    /* Level up (possibly multiple times). */
-    while (g_game_state.run_xp >= g_game_state.run_xp_to_next) {
-        g_game_state.run_xp -= g_game_state.run_xp_to_next;
-        g_game_state.run_level += 1;
-        g_game_state.run_hero_max_hp += 20;
-        g_game_state.run_hero_hp = g_game_state.run_hero_max_hp; /* full heal */
-        g_game_state.run_xp_to_next = (int)((float)g_game_state.run_xp_to_next * 1.4F + 0.5F);
-        g_sim.levelup_timer = LEVELUP_POP_TIME;
-        const float lc[4] = {1.0F, 0.95F, 0.5F, 1.0F};
-        spawn_floater(g_sim.hero_x, g_sim.hero_y + 60.0F, "LEVEL UP!", lc, 30.0F);
-        spawn_sparkle(g_sim.hero_x, g_sim.hero_y + 10.0F);
-    }
-    game_state_mark_dirty();
-}
+/* ---- Effects update ---- */
 
 static void update_effects(float dt) {
     for (int i = 0; i < MAX_PARTICLES; ++i) {
         Particle *p = &g_sim.particles[i];
-        if (!p->active) {
-            continue;
-        }
+        if (!p->active) continue;
         p->age += dt;
-        if (p->age >= p->ttl) {
-            p->active = false;
-            continue;
-        }
+        if (p->age >= p->ttl) { p->active = false; continue; }
         p->x += p->vx * dt;
         p->y += p->vy * dt;
-        p->vy -= 160.0F * dt; /* gravity (y-up) */
+        p->vy -= 160.0F * dt;
     }
     for (int i = 0; i < MAX_FLOATERS; ++i) {
         Floater *f = &g_sim.floaters[i];
-        if (!f->active) {
-            continue;
-        }
+        if (!f->active) continue;
         f->age += dt;
-        if (f->age >= f->ttl) {
-            f->active = false;
-            continue;
-        }
-        f->y += 38.0F * dt; /* float upward */
+        if (f->age >= f->ttl) { f->active = false; continue; }
+        f->y += 38.0F * dt;
     }
     for (int i = 0; i < MAX_SPRITE_FX; ++i) {
         SpriteFx *fx = &g_sim.sprite_fx[i];
-        if (!fx->active) {
-            continue;
-        }
+        if (!fx->active) continue;
         fx->age += dt;
-        if (fx->age >= fx->ttl) {
-            fx->active = false;
-            continue;
-        }
+        if (fx->age >= fx->ttl) { fx->active = false; continue; }
         fx->y += fx->vy * dt;
-        fx->vy -= 80.0F * dt; /* coins arc back down (y-up) */
+        fx->vy -= 80.0F * dt;
         fx->spin += fx->spin_rate * dt;
     }
 }
 
+/* ---- Core idle simulation ---- */
+
 static void update_sim(float dt) {
-    if (!g_sim.started) {
-        return;
-    }
-    if (dt <= 0.0F) {
-        dt = 1.0F / 60.0F;
-    }
-    if (dt > 0.1F) {
-        dt = 0.1F; /* clamp large steps so debug ticks stay stable */
-    }
+    if (!g_sim.started) return;
+    if (dt <= 0.0F) dt = 1.0F / 60.0F;
+    if (dt > 0.1F) dt = 0.1F; /* clamp big steps so debug ticks stay stable */
     g_sim.time += dt;
 
-    /* timers */
-    if (g_sim.hero_flash > 0.0F) {
-        g_sim.hero_flash -= dt;
-    }
-    if (g_sim.levelup_timer > 0.0F) {
-        g_sim.levelup_timer -= dt;
-    }
-    if (g_sim.win_timer > 0.0F || g_sim.won) {
-        g_sim.win_timer += dt;
+    if (g_sim.hero_flash > 0.0F) g_sim.hero_flash -= dt;
+    if (g_sim.stage_flash > 0.0F) g_sim.stage_flash -= dt;
+    if (g_sim.prestige_armed_timer > 0.0F) {
+        g_sim.prestige_armed_timer -= dt;
+        if (g_sim.prestige_armed_timer <= 0.0F) g_sim.prestige_armed = false;
     }
     update_effects(dt);
 
-    /* Downed: brief pause then respawn at full hp. */
-    if (g_sim.downed_timer > 0.0F) {
-        g_sim.downed_timer -= dt;
-        if (g_sim.downed_timer <= 0.0F) {
-            g_sim.downed_timer = 0.0F;
-            hero_respawn();
+    const bool boss = g_game_state.idle_boss_active;
+
+    /* Boss countdown. Timeout -> retry boss (no progress loss). */
+    if (boss && boss_present()) {
+        g_sim.boss_timer -= dt;
+        if (g_sim.boss_timer <= 0.0F) {
+            spawn_boss(); /* retry: fresh full-hp boss + fresh timer */
+            const float c[4] = {1.0F, 0.5F, 0.5F, 1.0F};
+            spawn_floater(HERO_X, HERO_Y + 70.0F, "Boss retry!", c, 24.0F);
         }
-        return; /* no movement/combat while downed */
     }
 
-    if (g_sim.won) {
-        update_effects(0.0F);
-        return; /* freeze gameplay on victory; banner animates via win_timer */
-    }
+    /* Monster stream advance: front monster walks to the engagement line, the
+     * rest follow at slot spacing. */
+    {
+        /* find the front (lowest-y) alive monster */
+        int front = -1;
+        float front_y = 1e9F;
+        for (int i = 0; i < MAX_MONSTERS; ++i) {
+            if (g_sim.monsters[i].alive && g_sim.monsters[i].y < front_y) {
+                front_y = g_sim.monsters[i].y;
+                front = i;
+            }
+        }
+        (void)front_y;
+        for (int i = 0; i < MAX_MONSTERS; ++i) {
+            Monster *m = &g_sim.monsters[i];
+            if (!m->alive) continue;
+            if (m->flash > 0.0F) m->flash -= dt;
+            /* Each monster marches down toward the front line but stops a
+             * slot-gap behind whoever is ahead of it (cheap monotone push). */
+            int ahead = 0;
+            for (int j = 0; j < MAX_MONSTERS; ++j) {
+                if (j != i && g_sim.monsters[j].alive && g_sim.monsters[j].y < m->y) ahead++;
+            }
+            float want = MON_FRONT_Y + MON_SLOT_GAP * (float)ahead;
+            if (m->y > want) {
+                m->y -= MON_WALK_SPEED * dt;
+                if (m->y < want) m->y = want;
+            }
+        }
 
-    /* Hero movement toward target. */
-    if (g_sim.moving) {
-        float dx = g_sim.target_x - g_sim.hero_x;
-        float dy = g_sim.target_y - g_sim.hero_y;
-        float dist = sqrtf(dx * dx + dy * dy);
-        float step = HERO_SPEED * dt;
-        if (dist <= step || dist < 1.0F) {
-            g_sim.hero_x = g_sim.target_x;
-            g_sim.hero_y = g_sim.target_y;
-            g_sim.moving = false;
-        } else {
-            g_sim.hero_x += dx / dist * step;
-            g_sim.hero_y += dy / dist * step;
-            if (fabsf(dx) > 1.0F) {
-                g_sim.hero_facing_left = dx < 0.0F;
+        /* Hero auto-attacks the front monster once it is at/near the line. */
+        if (g_sim.hero_attack_cd > 0.0F) g_sim.hero_attack_cd -= dt;
+        if (front >= 0) {
+            Monster *m = &g_sim.monsters[front];
+            bool engaged = (m->y <= MON_FRONT_Y + 4.0F);
+            if (engaged && g_sim.hero_attack_cd <= 0.0F) {
+                g_sim.hero_attack_cd = (float)hero_attack_interval();
+                double dmg = hero_damage();
+                m->hp -= dmg;
+                m->flash = HIT_FLASH_TIME;
+                spawn_hit_spark(m->x, m->y + 6.0F);
+                char d[16];
+                char n[16];
+                fmt_num(n, sizeof(n), dmg);
+                (void)snprintf(d, sizeof(d), "-%s", n);
+                const float dc[4] = {1.0F, 1.0F, 1.0F, 1.0F};
+                spawn_floater(m->x + 24.0F, m->y + 18.0F, d, dc, 20.0F);
+                if (m->hp <= 0.0) {
+                    on_monster_killed(m);
+                }
             }
         }
     }
 
-    /* Pick nearest alive enemy in attack range; track if any enemy is near. */
-    int nearest = -1;
-    float nearest_d = 1e9F;
-    bool any_in_aggro = false;
-    for (int i = 0; i < ENEMY_COUNT; ++i) {
-        Enemy *e = &g_sim.enemies[i];
-        if (!e->alive) {
-            continue;
-        }
-        float dx = e->x - g_sim.hero_x;
-        float dy = e->y - g_sim.hero_y;
-        float d = sqrtf(dx * dx + dy * dy);
-        if (d <= ENEMY_AGGRO_RANGE) {
-            any_in_aggro = true;
-        }
-        if (d <= HERO_ATTACK_RANGE && d < nearest_d) {
-            nearest_d = d;
-            nearest = i;
+    /* Keep the (non-boss) stream topped up. */
+    if (!g_game_state.idle_boss_active) {
+        if (g_sim.spawn_cooldown > 0.0F) g_sim.spawn_cooldown -= dt;
+        if (count_monsters() < MAX_MONSTERS && g_sim.spawn_cooldown <= 0.0F) {
+            spawn_monster();
+            g_sim.spawn_cooldown = 0.6F;
         }
     }
 
-    /* Enemy AI: hold the guard post; only step toward the hero within a short
-     * leash, and never wander further than ENEMY_LEASH from the post -- so each
-     * goblin is a distinct encounter the player must walk up to. */
-    for (int i = 0; i < ENEMY_COUNT; ++i) {
-        Enemy *e = &g_sim.enemies[i];
-        if (!e->alive) {
-            continue;
-        }
-        if (e->flash > 0.0F) {
-            e->flash -= dt;
-        }
-        float dx = g_sim.hero_x - e->x;
-        float dy = g_sim.hero_y - e->y;
-        float d = sqrtf(dx * dx + dy * dy);
-        /* How far the goblin currently is from its post. */
-        float gx = e->x - e->guard_x;
-        float gy = e->y - e->guard_y;
-        float gdist = sqrtf(gx * gx + gy * gy);
-        if (d <= ENEMY_AGGRO_RANGE && d > HERO_ATTACK_RANGE * 0.7F && gdist < ENEMY_LEASH) {
-            /* Step toward the hero, but never beyond the leash from the post. */
-            float step = ENEMY_SPEED * dt;
-            if (d > 1.0F) {
-                e->x += dx / d * step;
-                e->y += dy / d * step;
-                e->facing_left = dx < 0.0F;
-            }
-        } else if (d > ENEMY_AGGRO_RANGE && gdist > 2.0F) {
-            /* Hero left: drift back to the post so the encounter resets cleanly. */
-            float step = ENEMY_SPEED * 0.7F * dt;
-            if (gdist <= step) {
-                e->x = e->guard_x;
-                e->y = e->guard_y;
-            } else {
-                e->x -= gx / gdist * step;
-                e->y -= gy / gdist * step;
-            }
-        }
-        /* Enemy attacks the hero when in range. */
-        if (e->attack_cd > 0.0F) {
-            e->attack_cd -= dt;
-        }
-        if (d <= HERO_ATTACK_RANGE && e->attack_cd <= 0.0F) {
-            e->attack_cd = ENEMY_ATTACK_COOLDOWN;
-            g_game_state.run_hero_hp = clampi(g_game_state.run_hero_hp - ENEMY_ATTACK_DAMAGE, 0, g_game_state.run_hero_max_hp);
-            g_sim.hero_flash = HIT_FLASH_TIME;
-            game_state_mark_dirty();
-            if (g_game_state.run_hero_hp <= 0) {
-                g_sim.downed_timer = DOWNED_DURATION;
-                const float dc[4] = {1.0F, 0.4F, 0.4F, 1.0F};
-                spawn_floater(g_sim.hero_x, g_sim.hero_y + 50.0F, "Downed!", dc, 30.0F);
-            }
-        }
-    }
-
-    /* Hero auto-attack nearest enemy in range. */
-    if (g_sim.hero_attack_cd > 0.0F) {
-        g_sim.hero_attack_cd -= dt;
-    }
-    g_sim.attack_target = nearest; /* drives the pulsing target ring under the foe */
-    if (nearest >= 0 && g_game_state.run_hero_hp > 0) {
-        Enemy *e = &g_sim.enemies[nearest];
-        g_sim.hero_facing_left = (e->x < g_sim.hero_x);
-        g_sim.moving = false; /* stop to fight */
-        if (g_sim.hero_attack_cd <= 0.0F) {
-            g_sim.hero_attack_cd = HERO_ATTACK_COOLDOWN;
-            e->hp -= HERO_ATTACK_DAMAGE;
-            e->flash = HIT_FLASH_TIME;
-            spawn_hit_spark(e->x, e->y + 6.0F);
-            char dmg[16];
-            (void)snprintf(dmg, sizeof(dmg), "-%d", HERO_ATTACK_DAMAGE);
-            const float dc[4] = {1.0F, 1.0F, 1.0F, 1.0F};
-            spawn_floater(e->x, e->y + 24.0F, dmg, dc, 22.0F);
-            if (e->hp <= 0) {
-                g_sim.attack_target = -1;
-                award_kill(e);
-            }
-        }
-    }
-
-    /* Out-of-combat regen. */
-    if (!any_in_aggro && g_game_state.run_hero_hp < g_game_state.run_hero_max_hp && g_game_state.run_hero_hp > 0) {
-        g_sim.regen_accum += HERO_REGEN_PER_SEC * dt;
-        if (g_sim.regen_accum >= 1.0F) {
+    /* Hero passive regen (armor). */
+    double regen = hero_regen_per_sec();
+    if (regen > 0.0 && g_game_state.run_hero_hp < g_game_state.run_hero_max_hp) {
+        g_sim.regen_accum += regen * (double)dt;
+        if (g_sim.regen_accum >= 1.0) {
             int gain = (int)g_sim.regen_accum;
-            g_sim.regen_accum -= (float)gain;
+            g_sim.regen_accum -= (double)gain;
             g_game_state.run_hero_hp = clampi(g_game_state.run_hero_hp + gain, 0, g_game_state.run_hero_max_hp);
-            game_state_mark_dirty();
-        }
-    } else {
-        g_sim.regen_accum = 0.0F;
-    }
-
-    /* Win check: all enemies cleared AND hero reached the keep portal. */
-    if (alive_enemies() == 0 && !g_sim.won) {
-        float dx = KEEP_CX - g_sim.hero_x;
-        float dy = KEEP_CY - g_sim.hero_y;
-        float d = sqrtf(dx * dx + dy * dy);
-        if (d <= KEEP_REACH_RANGE) {
-            g_sim.won = true;
-            g_sim.win_timer = 0.0001F;
-            g_game_state.run_keep_reached = true;
-            if (g_game_state.run_ftue_step < 3) {
-                g_game_state.run_ftue_step = 3; /* tutorial complete */
-            }
-            spawn_sparkle(KEEP_CX, KEEP_CY);
             game_state_mark_dirty();
         }
     }
 }
 
-/* ---- Input ---- */
+/* ---- Input: click the upgrade panel / prestige / collect popup ---- */
+
+/* Upgrade panel layout (design units, y-up). */
+#define PANEL_SLOT_W 210.0F
+#define PANEL_SLOT_H 64.0F
+#define PANEL_GAP 12.0F
+#define PANEL_CY 46.0F
+
+static void panel_slot_rect(int i, float *cx, float *cy, float *w, float *h) {
+    const int slots = UP_COUNT;
+    const float total = slots * PANEL_SLOT_W + (slots - 1) * PANEL_GAP;
+    float x0 = DESIGN_W * 0.5F - total * 0.5F + PANEL_SLOT_W * 0.5F;
+    *cx = x0 + (float)i * (PANEL_SLOT_W + PANEL_GAP);
+    *cy = PANEL_CY;
+    *w = PANEL_SLOT_W;
+    *h = PANEL_SLOT_H;
+}
+
+/* Prestige button rect (top-center banner area), shown only when unlocked. */
+static void prestige_btn_rect(float *cx, float *cy, float *w, float *h) {
+    *cx = DESIGN_W * 0.5F;
+    *cy = DESIGN_H - 40.0F;
+    *w = 240.0F;
+    *h = 44.0F;
+}
+
+/* Collect-offline button rect (centered popup). */
+static void collect_btn_rect(float *cx, float *cy, float *w, float *h) {
+    *cx = DESIGN_W * 0.5F;
+    *cy = DESIGN_H * 0.5F - 36.0F;
+    *w = 200.0F;
+    *h = 44.0F;
+}
+
+static bool in_rect(float px, float py, float cx, float cy, float w, float h) {
+    return px >= cx - w * 0.5F && px <= cx + w * 0.5F && py >= cy - h * 0.5F && py <= cy + h * 0.5F;
+}
+
+/* Route a design-space click to a UI action. Returns true if consumed. */
+static bool handle_world_click(float px, float py) {
+    /* offline popup eats clicks first */
+    if (g_sim.offline_popup) {
+        float cx, cy, w, h;
+        collect_btn_rect(&cx, &cy, &w, &h);
+        g_sim.offline_popup = false; /* any click dismisses/collects (gold already added) */
+        (void)px; (void)py; (void)cx; (void)cy; (void)w; (void)h;
+        return true;
+    }
+    /* prestige button */
+    if (prestige_unlocked()) {
+        float cx, cy, w, h;
+        prestige_btn_rect(&cx, &cy, &w, &h);
+        if (in_rect(px, py, cx, cy, w, h)) {
+            if (g_sim.prestige_armed) {
+                do_prestige();
+            } else {
+                g_sim.prestige_armed = true;
+                g_sim.prestige_armed_timer = 3.0F;
+                const float c[4] = {1.0F, 0.85F, 0.4F, 1.0F};
+                spawn_floater(DESIGN_W * 0.5F, DESIGN_H - 70.0F, "Tap again to confirm", c, 20.0F);
+            }
+            return true;
+        }
+    }
+    /* upgrade panel */
+    for (int i = 0; i < UP_COUNT; ++i) {
+        float cx, cy, w, h;
+        panel_slot_rect(i, &cx, &cy, &w, &h);
+        if (in_rect(px, py, cx, cy, w, h)) {
+            buy_upgrade(i);
+            return true;
+        }
+    }
+    return false;
+}
 
 /* Convert a framebuffer pointer pixel to design-space (Y flips to bottom-up). */
 static void pointer_to_design(float px, float py, float *dx, float *dy) {
@@ -842,21 +1225,17 @@ static void handle_input(void) {
             if (p.active) {
                 float dx, dy;
                 pointer_to_design(p.x, p.y, &dx, &dy);
-                if (g_sim.won) {
-                    playtest_reset(); /* click to replay after victory */
-                } else {
-                    hero_move_to(dx, dy);
-                }
+                handle_world_click(dx, dy);
                 break;
             }
         }
     }
 }
 
-/* ---- Scene composition (design units, y-up, bottom-left origin) ---- */
+/* ============================================================================
+ * Scene composition (design units, y-up, bottom-left origin).
+ * ==========================================================================*/
 
-/* Soft dark ground-shadow ellipse (flattened white quad, low alpha) to anchor
- * a character to the ground. cy is the character's feet line. */
 static void emit_ground_shadow(float cx, float cy, float w, float a) {
     emit_quad(cx, cy, w, w * 0.32F, 0.04F, 0.05F, 0.07F, a);
     emit_quad(cx, cy, w * 0.66F, w * 0.21F, 0.02F, 0.03F, 0.05F, a * 0.8F);
@@ -867,123 +1246,77 @@ static void compose_scene(void) {
 
     emit_sprite(R_BACKGROUND, DESIGN_W * 0.5F, DESIGN_H * 0.5F, DESIGN_W, DESIGN_H, white);
 
-    /* Keep glows brighter once the path is clear (the goal beacon). */
-    if (alive_enemies() == 0 && !g_sim.won) {
-        emit_quad(KEEP_CX, KEEP_CY, 220.0F, 220.0F, 1.0F, 0.95F, 0.55F, 0.18F);
-    }
-    emit_h(R_KEEP, KEEP_CX, KEEP_CY, DESIGN_H * 0.40F, white);
+    /* The Frost Keep sits at the top of the path (the climb goal). */
+    emit_h(R_KEEP, KEEP_CX, KEEP_CY, DESIGN_H * 0.36F, white);
 
-    /* Foreground framing scenery. */
-    emit_h(R_PINE, DESIGN_W * 0.08F, DESIGN_H * 0.18F, DESIGN_H * 0.46F, white);
-    emit_h(R_PINE, DESIGN_W * 0.92F, DESIGN_H * 0.17F, DESIGN_H * 0.48F, white);
-    emit_h(R_ROCK, DESIGN_W * 0.82F, DESIGN_H * 0.28F, DESIGN_H * 0.13F, white);
+    /* Framing scenery. */
+    emit_h(R_PINE, DESIGN_W * 0.07F, DESIGN_H * 0.20F, DESIGN_H * 0.46F, white);
+    emit_h(R_PINE, DESIGN_W * 0.93F, DESIGN_H * 0.18F, DESIGN_H * 0.48F, white);
+    emit_h(R_ROCK, DESIGN_W * 0.83F, DESIGN_H * 0.30F, DESIGN_H * 0.13F, white);
 
-    /* Enemies (draw far-to-near by y so nearer ones overlap). */
-    for (int pass = 0; pass < ENEMY_COUNT; ++pass) {
-        /* simple painter sort: highest y first */
+    /* Monsters: draw far-to-near (highest y first) so nearer overlap. */
+    for (int pass = 0; pass < MAX_MONSTERS; ++pass) {
         int best = -1;
-        float best_y = -1.0F;
-        for (int i = 0; i < ENEMY_COUNT; ++i) {
-            if (!g_sim.enemies[i].alive) {
-                continue;
-            }
-            /* find the pass-th highest; cheap O(n^2) for 3 enemies */
+        for (int i = 0; i < MAX_MONSTERS; ++i) {
+            if (!g_sim.monsters[i].alive) continue;
             int rank = 0;
-            for (int j = 0; j < ENEMY_COUNT; ++j) {
-                if (g_sim.enemies[j].alive && g_sim.enemies[j].y > g_sim.enemies[i].y) {
-                    rank++;
-                }
+            for (int j = 0; j < MAX_MONSTERS; ++j) {
+                if (g_sim.monsters[j].alive && g_sim.monsters[j].y > g_sim.monsters[i].y) rank++;
             }
-            if (rank == pass && g_sim.enemies[i].y > best_y - 1e6F) {
-                best = i;
-                best_y = g_sim.enemies[i].y;
-                break;
-            }
+            if (rank == pass) { best = i; break; }
         }
-        if (best < 0) {
-            continue;
-        }
-        Enemy *e = &g_sim.enemies[best];
-        /* Perspective scale: goblins lower on screen (nearer the hero) read
-         * bigger; far ones up the path slightly smaller. Stays >= ~24% h so
-         * every one reads clearly as a MONSTER, not a shrub. */
-        float depth = clampf((e->y - DESIGN_H * 0.24F) / (DESIGN_H * 0.40F), 0.0F, 1.0F); /* 0 far .. 1 near */
-        const float enemy_h = DESIGN_H * (0.245F + 0.055F * (1.0F - depth));
-        const float feet = e->y - enemy_h * 0.42F;
+        if (best < 0) continue;
+        Monster *m = &g_sim.monsters[best];
 
-        /* Ground shadow anchors the goblin to the path. */
-        emit_ground_shadow(e->x, feet, enemy_h * 0.62F, 0.32F);
+        float depth = clampf((m->y - MON_FRONT_Y) / (MON_SPAWN_Y - MON_FRONT_Y), 0.0F, 1.0F); /* 0 near .. 1 far */
+        float base_h = m->is_boss ? (DESIGN_H * 0.42F) : (DESIGN_H * 0.245F);
+        float enemy_h = base_h * (1.0F - 0.30F * depth);
+        float feet = m->y - enemy_h * 0.42F;
 
-        /* Pulsing gold target ring under the foe the hero is currently fighting. */
-        if (best == g_sim.attack_target) {
+        emit_ground_shadow(m->x, feet, enemy_h * 0.62F, 0.32F);
+
+        /* Target ring under the engaged front monster. */
+        if (best == 0 || m->y <= MON_FRONT_Y + 6.0F) {
             float pulse = 0.5F + 0.5F * sinf(g_sim.time * 7.0F);
             float rs = enemy_h * (0.58F + 0.10F * pulse);
-            float ra = 0.30F + 0.45F * pulse;
-            emit_quad(e->x, feet, rs, rs * 0.42F, 1.0F, 0.82F, 0.20F, ra * 0.55F);
-            emit_quad(e->x, feet, rs * 0.66F, rs * 0.27F, 1.0F, 0.92F, 0.45F, ra);
+            float ra = 0.30F + 0.40F * pulse;
+            emit_quad(m->x, feet, rs, rs * 0.42F, 1.0F, 0.82F, 0.20F, ra * 0.5F);
         }
 
-        uint32_t tint = white;
-        emit_h_flip(R_ENEMY, e->x, e->y, enemy_h, tint, e->facing_left ? VH_FLIP_X : 0);
-        if (e->flash > 0.0F) {
-            float a = clampf(e->flash / HIT_FLASH_TIME, 0.0F, 1.0F) * 0.7F;
-            emit_quad(e->x, e->y, enemy_h * 0.7F, enemy_h, 1.0F, 1.0F, 1.0F, a);
+        uint32_t tint = m->is_boss ? pack_rgba(1.0F, 0.55F, 0.55F, 1.0F) : white;
+        emit_h(R_ENEMY, m->x, m->y, enemy_h, tint);
+        if (m->flash > 0.0F) {
+            float a = clampf(m->flash / HIT_FLASH_TIME, 0.0F, 1.0F) * 0.7F;
+            emit_quad(m->x, m->y, enemy_h * 0.7F, enemy_h, 1.0F, 1.0F, 1.0F, a);
         }
-        /* Enemy hp pip above the goblin's head. */
-        float frac = clampf((float)e->hp / (float)ENEMY_MAX_HP, 0.0F, 1.0F);
-        float bw = 56.0F;
-        float by = e->y + enemy_h * 0.60F;
-        emit_quad(e->x, by, bw + 4.0F, 10.0F, 0.10F, 0.07F, 0.10F, 0.85F);
-        emit_quad(e->x - bw * 0.5F + bw * frac * 0.5F, by, bw * frac, 6.0F, 0.95F, 0.30F, 0.28F, 1.0F);
+        /* HP pip above the monster. */
+        float frac = (m->max_hp > 0.0) ? clampf((float)(m->hp / m->max_hp), 0.0F, 1.0F) : 0.0F;
+        float bw = m->is_boss ? 120.0F : 56.0F;
+        float by = m->y + enemy_h * 0.60F;
+        emit_quad(m->x, by, bw + 4.0F, 10.0F, 0.10F, 0.07F, 0.10F, 0.85F);
+        emit_quad(m->x - bw * 0.5F + bw * frac * 0.5F, by, bw * frac, 6.0F, 0.95F, 0.30F, 0.28F, 1.0F);
     }
 
-    /* Hero with level-up pop scale + burst. */
+    /* Hero (stationary, idle bob). */
     float hero_h = DESIGN_H * 0.34F;
-    float hero_feet = g_sim.hero_y - hero_h * 0.42F;
-    float pop = 1.0F;
-    /* idle bob when standing still */
-    float bob = (!g_sim.moving && g_sim.downed_timer <= 0.0F) ? sinf(g_sim.time * 4.0F) * 3.0F : 0.0F;
-
-    /* Hero ground shadow (skip while downed/faded). */
-    if (g_sim.downed_timer <= 0.0F) {
-        emit_ground_shadow(g_sim.hero_x, hero_feet, hero_h * 0.62F, 0.34F);
-    }
-
-    if (g_sim.levelup_timer > 0.0F) {
-        float t = g_sim.levelup_timer / LEVELUP_POP_TIME; /* 1->0 */
-        /* ease-out punch: big at the start, settling over ~1.3s */
-        pop = 1.0F + 0.32F * t;
-        /* Spinning level-up burst sprite BEHIND the hero, growing as it fades. */
-        float burst = hero_h * (1.3F + 0.7F * (1.0F - t));
-        float ba = clampf(t * 1.4F, 0.0F, 1.0F);
-        emit_sprite_rot(R_LEVELUP_BURST, g_sim.hero_x, g_sim.hero_y + bob, burst, burst,
-                        g_sim.time * 2.0F, pack_rgba(1.0F, 1.0F, 1.0F, ba));
-    }
-
-    uint32_t hero_tint = white;
-    float hero_alpha = 1.0F;
-    if (g_sim.downed_timer > 0.0F) {
-        hero_alpha = 0.45F;
-        hero_tint = pack_rgba(0.7F, 0.7F, 0.8F, hero_alpha);
-    }
-    emit_h_flip(R_HERO, g_sim.hero_x, g_sim.hero_y + bob, hero_h * pop, hero_tint, g_sim.hero_facing_left ? VH_FLIP_X : 0);
+    float hero_feet = HERO_Y - hero_h * 0.42F;
+    float bob = sinf(g_sim.time * 4.0F) * 3.0F;
+    emit_ground_shadow(HERO_X, hero_feet, hero_h * 0.62F, 0.34F);
+    /* face up the path toward the monsters (flip so the sword faces them). */
+    emit_h(R_HERO, HERO_X, HERO_Y + bob, hero_h, white);
     if (g_sim.hero_flash > 0.0F) {
         float a = clampf(g_sim.hero_flash / HIT_FLASH_TIME, 0.0F, 1.0F) * 0.7F;
-        emit_quad(g_sim.hero_x, g_sim.hero_y + bob, hero_h * 0.6F, hero_h * pop, 1.0F, 0.3F, 0.3F, a);
+        emit_quad(HERO_X, HERO_Y + bob, hero_h * 0.6F, hero_h, 1.0F, 0.3F, 0.3F, a);
     }
 
-    /* Sprite FX (hit sparks, coin pops) -- real atlas regions, drawn over actors. */
+    /* Sprite FX (hit sparks, coin pops). */
     for (int i = 0; i < MAX_SPRITE_FX; ++i) {
         SpriteFx *fx = &g_sim.sprite_fx[i];
-        if (!fx->active) {
-            continue;
-        }
-        float t = fx->age / fx->ttl;           /* 0->1 */
+        if (!fx->active) continue;
+        float t = fx->age / fx->ttl;
         float life = clampf(1.0F - t, 0.0F, 1.0F);
         float sz = fx->size;
-        if (fx->region == R_HIT_SPARK) {
-            sz = fx->size * (0.7F + 0.6F * t); /* spark expands as it fades */
-        }
+        if (fx->region == R_HIT_SPARK) sz = fx->size * (0.7F + 0.6F * t);
         emit_sprite_rot(fx->region, fx->x, fx->y, sz, sz, fx->spin,
                         pack_rgba(1.0F, 1.0F, 1.0F, clampf(life + 0.2F, 0.0F, 1.0F)));
     }
@@ -991,9 +1324,7 @@ static void compose_scene(void) {
     /* Particles (gold sparkles). */
     for (int i = 0; i < MAX_PARTICLES; ++i) {
         Particle *p = &g_sim.particles[i];
-        if (!p->active) {
-            continue;
-        }
+        if (!p->active) continue;
         float life = 1.0F - p->age / p->ttl;
         float sz = p->size * (0.4F + 0.6F * life);
         emit_quad(p->x, p->y, sz, sz, p->r, p->g, p->b, clampf(life, 0.0F, 1.0F));
@@ -1002,116 +1333,139 @@ static void compose_scene(void) {
     nt_sprite_renderer_flush();
 }
 
-/* ---- HUD layout (design units, y-up; shared by compose_hud + compose_text) ---- */
-#define HUD_BADGE_CX 56.0F
-#define HUD_BADGE_CY (DESIGN_H - 52.0F)
-#define HUD_BADGE_H 76.0F
-#define HUD_BAR_H 26.0F
-#define HUD_BAR_W 232.0F
-#define HUD_BAR_LEFT 98.0F                         /* bars start right of the badge */
-#define HUD_BAR_CX (HUD_BAR_LEFT + HUD_BAR_W * 0.5F)
-#define HUD_HP_CY (DESIGN_H - 34.0F)
-#define HUD_XP_CY (DESIGN_H - 64.0F)
-#define HUD_HOTBAR_CY 40.0F
-#define HUD_SLOT_H 56.0F
-#define HUD_SLOT_GAP 10.0F
+/* ---- HUD: top counters, upgrade panel, prestige, popups ---- */
 
-/* A filled bar built from the EMPTY bar_frame art: draw the frame first (its
- * dark inner slot is the track), then a colored fill inset inside the slot so
- * the gold border stays visible and the bar fills left-to-right by value. */
-static void emit_bar(int region, float cx, float cy, float w, float h, float frac, float r, float g, float b) {
-    frac = clampf(frac, 0.0F, 1.0F);
-    emit_sprite(region, cx, cy, w, h, 0xFFFFFFFFu); /* empty frame (slot + border) */
-    const float inner_w = w - 22.0F;   /* inset past the frame border */
-    const float inner_h = h - 12.0F;
-    const float fill_w = inner_w * frac;
-    const float fill_left = cx - inner_w * 0.5F;
-    if (fill_w > 0.5F) {
-        emit_quad(fill_left + fill_w * 0.5F, cy, fill_w, inner_h, r, g, b, 1.0F);
+static int upgrade_icon_region(int i) {
+    switch (i) {
+        case UP_SWORD: return R_SWORD_ICON;
+        case UP_BOOTS: return R_ROCK;   /* boots stand-in (free-asset reuse) */
+        case UP_ARMOR: return R_KEEP;   /* armor stand-in */
+        case UP_LUCK:  return R_COIN;   /* luck = gold find */
+        default: return R_SLOT;
+    }
+}
+
+static const char *upgrade_label(int i) {
+    switch (i) {
+        case UP_SWORD: return "Sword";
+        case UP_BOOTS: return "Boots";
+        case UP_ARMOR: return "Armor";
+        case UP_LUCK:  return "Luck";
+        default: return "?";
+    }
+}
+
+/* Current-effect short string for an upgrade (drives the panel readout). */
+static void upgrade_effect_str(int i, char *out, size_t cap) {
+    switch (i) {
+        case UP_SWORD:
+            (void)snprintf(out, cap, "DMG %.0f", hero_damage());
+            break;
+        case UP_BOOTS:
+            (void)snprintf(out, cap, "%.2fs/hit", hero_attack_interval());
+            break;
+        case UP_ARMOR:
+            (void)snprintf(out, cap, "HP %d", hero_max_hp());
+            break;
+        case UP_LUCK:
+            (void)snprintf(out, cap, "+%.0f%% gold", (gold_find_mult() - 1.0) * 100.0);
+            break;
+        default: out[0] = 0; break;
+    }
+}
+
+static int upgrade_level(int i) {
+    switch (i) {
+        case UP_SWORD: return g_game_state.idle_up_sword;
+        case UP_BOOTS: return g_game_state.idle_up_boots;
+        case UP_ARMOR: return g_game_state.idle_up_armor;
+        case UP_LUCK:  return g_game_state.idle_up_luck;
+        default: return 0;
     }
 }
 
 static void compose_hud(void) {
     const uint32_t white = 0xFFFFFFFFu;
 
-    /* Dark rounded pill plate behind the HP/XP numbers + bars for legibility. */
-    emit_quad(HUD_BAR_CX + 6.0F, (HUD_HP_CY + HUD_XP_CY) * 0.5F, HUD_BAR_W + 64.0F, 84.0F, 0.07F, 0.06F, 0.10F, 0.70F);
+    /* Top-left status plate: Gold + Stage + Shards counters. */
+    emit_quad(176.0F, DESIGN_H - 40.0F, 320.0F, 64.0F, 0.07F, 0.06F, 0.10F, 0.72F);
+    emit_h(R_COIN, 36.0F, DESIGN_H - 30.0F, 30.0F, white);
+    emit_h(R_BADGE, 36.0F, DESIGN_H - 62.0F, 40.0F, white);
 
-    /* HP bar: red->orange->green by health fraction. */
-    float hp_frac = clampf((float)g_game_state.run_hero_hp / (float)g_game_state.run_hero_max_hp, 0.0F, 1.0F);
-    float hp_r = clampf(1.4F - hp_frac, 0.2F, 1.0F);
-    float hp_g = clampf(0.3F + hp_frac, 0.3F, 0.95F);
-    emit_bar(R_BAR_FRAME, HUD_BAR_CX, HUD_HP_CY, HUD_BAR_W, HUD_BAR_H, hp_frac, hp_r, hp_g, 0.28F);
+    /* Minimap top-right (progress flavor). */
+    emit_h(R_MINIMAP, DESIGN_W - 70.0F, DESIGN_H - 70.0F, 110.0F, white);
 
-    /* XP bar: repurpose the old "stamina" art; fill = xp/xp_to_next (gold). */
-    float xp_frac = (g_game_state.run_xp_to_next > 0)
-                        ? clampf((float)g_game_state.run_xp / (float)g_game_state.run_xp_to_next, 0.0F, 1.0F)
-                        : 0.0F;
-    emit_bar(R_BAR_FRAME, HUD_BAR_CX, HUD_XP_CY, HUD_BAR_W, HUD_BAR_H, xp_frac, 1.0F, 0.78F, 0.24F);
-
-    /* Gold-star level badge, top-left (overlaps the plate's left edge). */
-    emit_h(R_BADGE, HUD_BADGE_CX, HUD_BADGE_CY, HUD_BADGE_H, white);
-
-    /* Minimap top-right. */
-    emit_h(R_MINIMAP, DESIGN_W - 78.0F, DESIGN_H - 78.0F, 120.0F, white);
-
-    /* Quest banner under the minimap. */
-    emit_h(R_BANNER, DESIGN_W - 150.0F, DESIGN_H - 164.0F, 86.0F, white);
-
-    /* Bottom-center 5-slot hotbar (reads as an action bar). */
+    /* Stage progress bar under the top plate (kills toward next stage). */
     {
-        const float slot_w = HUD_SLOT_H;
-        const int slots = 5;
-        const float total = slots * slot_w + (slots - 1) * HUD_SLOT_GAP;
-        float x = DESIGN_W * 0.5F - total * 0.5F + slot_w * 0.5F;
-        /* a subtle dark tray behind the slots */
-        emit_quad(DESIGN_W * 0.5F, HUD_HOTBAR_CY, total + 24.0F, HUD_SLOT_H + 16.0F, 0.06F, 0.05F, 0.08F, 0.45F);
+        float boss_max = (g_sim.boss_timer_max > 0.0F) ? g_sim.boss_timer_max : (float)VH_BOSS_TIMER_S;
+        float frac = g_game_state.idle_boss_active
+                         ? clampf(g_sim.boss_timer / boss_max, 0.0F, 1.0F)
+                         : clampf((float)g_game_state.idle_kills_in_stage / (float)VH_KILLS_PER_STAGE, 0.0F, 1.0F);
+        float bx = 176.0F, by = DESIGN_H - 80.0F, bw = 300.0F, bh = 16.0F;
+        emit_quad(bx, by, bw + 6.0F, bh + 6.0F, 0.05F, 0.04F, 0.07F, 0.8F);
+        float r = g_game_state.idle_boss_active ? 1.0F : 0.35F;
+        float g = g_game_state.idle_boss_active ? 0.55F : 0.85F;
+        float b = g_game_state.idle_boss_active ? 0.30F : 0.45F;
+        emit_quad(bx - bw * 0.5F + bw * frac * 0.5F, by, bw * frac, bh, r, g, b, 1.0F);
+    }
+
+    /* ---- Bottom upgrade panel: 4 buttons (icon + label + effect + cost). ---- */
+    {
+        const int slots = UP_COUNT;
+        const float total = slots * PANEL_SLOT_W + (slots - 1) * PANEL_GAP;
+        /* tray */
+        emit_quad(DESIGN_W * 0.5F, PANEL_CY, total + 28.0F, PANEL_SLOT_H + 22.0F, 0.06F, 0.05F, 0.08F, 0.55F);
         for (int i = 0; i < slots; ++i) {
-            emit_sprite(R_SLOT, x, HUD_HOTBAR_CY, slot_w, HUD_SLOT_H, white); /* empty cell */
-            if (i == 0) {
-                emit_sprite(R_SWORD_ICON, x, HUD_HOTBAR_CY, slot_w * 0.66F, slot_w * 0.66F, white); /* equipped weapon */
-            } else if (i == 1) {
-                emit_sprite(R_COIN, x, HUD_HOTBAR_CY, slot_w * 0.60F, slot_w * 0.60F, white); /* gold */
+            float cx, cy, w, h;
+            panel_slot_rect(i, &cx, &cy, &w, &h);
+            bool affordable = (double)g_game_state.idle_gold >= upgrade_cost(i);
+            /* button background: bright if affordable, dim if not. */
+            emit_sprite(R_BUTTON, cx, cy, w, h, affordable ? white : pack_rgba(0.55F, 0.55F, 0.6F, 1.0F));
+            /* affordable pulse ring */
+            if (affordable) {
+                float pulse = 0.5F + 0.5F * sinf(g_sim.time * 5.0F + (float)i);
+                emit_quad(cx, cy, w + 6.0F, h + 6.0F, 1.0F, 0.9F, 0.4F, 0.10F + 0.18F * pulse);
             }
-            x += slot_w + HUD_SLOT_GAP;
+            /* icon on the left */
+            emit_h(upgrade_icon_region(i), cx - w * 0.5F + 26.0F, cy + 6.0F, 36.0F, white);
         }
+    }
+
+    /* ---- Prestige button (top-center) when unlocked. ---- */
+    if (prestige_unlocked()) {
+        float cx, cy, w, h;
+        prestige_btn_rect(&cx, &cy, &w, &h);
+        uint32_t tint = g_sim.prestige_armed ? pack_rgba(1.0F, 0.7F, 0.7F, 1.0F) : pack_rgba(0.6F, 0.85F, 1.0F, 1.0F);
+        emit_sprite(R_BUTTON, cx, cy, w, h, tint);
+    }
+
+    /* ---- Offline popup panel. ---- */
+    if (g_sim.offline_popup) {
+        emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.5F, 520.0F, 160.0F, 0.06F, 0.06F, 0.12F, 0.86F);
+        float cx, cy, w, h;
+        collect_btn_rect(&cx, &cy, &w, &h);
+        emit_sprite(R_BUTTON, cx, cy, w, h, white);
     }
 
     nt_sprite_renderer_flush();
 }
 
-/* Dim background panels for prompts/banners. Sprite pass (quads), so it MUST run
- * while the sprite material is bound -- text is drawn separately in compose_text. */
+/* ---- FTUE prompt (<=3 beats from balance.json) ---- */
 static const char *ftue_prompt(void) {
-    if (g_sim.won) {
-        return NULL;
-    }
-    /* Don't crowd the screen while the level-up reward pop is playing. */
-    if (g_sim.levelup_timer > 0.0F) {
-        return NULL;
-    }
-    if (g_game_state.run_ftue_step <= 0 || !g_sim.has_moved) {
-        return "Tap anywhere to move";
-    }
-    if (g_game_state.run_ftue_step == 1) {
-        return "Tap a monster to fight it";
-    }
-    if (g_game_state.run_ftue_step == 2) {
-        return "Clear the path, then enter the keep";
-    }
+    if (g_sim.offline_popup) return NULL;
+    int step = g_game_state.run_ftue_step;
+    if (step <= 0) return "Your hero fights on its own - watch the gold pile up.";
+    if (step == 1) return "Tap Sword to upgrade - hit harder, kill faster.";
+    if (step == 2 && prestige_unlocked())
+        return "Push as far as you can. When it slows, Prestige for a permanent boost.";
     return NULL;
 }
 
 static void compose_overlays(void) {
     const char *prompt = ftue_prompt();
     if (prompt) {
-        emit_quad(DESIGN_W * 0.5F, 98.0F, text_width(prompt, 22.0F) + 40.0F, 38.0F, 0.06F, 0.05F, 0.08F, 0.55F);
-    }
-    if (g_sim.downed_timer > 0.0F) {
-        emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.5F, 360.0F, 70.0F, 0.10F, 0.03F, 0.05F, 0.6F);
-    }
-    if (g_sim.won) {
-        emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.55F - 14.0F, 600.0F, 150.0F, 0.06F, 0.05F, 0.10F, 0.66F);
+        /* place the prompt ABOVE the upgrade panel, clear of it */
+        emit_quad(DESIGN_W * 0.5F, PANEL_CY + 78.0F, text_width(prompt, 20.0F) + 40.0F, 34.0F, 0.06F, 0.05F, 0.08F, 0.6F);
     }
     nt_sprite_renderer_flush();
 }
@@ -1119,9 +1473,7 @@ static void compose_overlays(void) {
 static void compose_floaters(void) {
     for (int i = 0; i < MAX_FLOATERS; ++i) {
         Floater *f = &g_sim.floaters[i];
-        if (!f->active) {
-            continue;
-        }
+        if (!f->active) continue;
         float life = 1.0F - f->age / f->ttl;
         float col[4] = {f->color[0], f->color[1], f->color[2], clampf(life + 0.2F, 0.0F, 1.0F)};
         emit_text_centered(f->text, f->x, f->y, f->size, col);
@@ -1129,94 +1481,139 @@ static void compose_floaters(void) {
 }
 
 static void compose_text(void) {
-    const float ink[4] = {0.149F, 0.125F, 0.110F, 1.0F};
-    const float gold[4] = {1.0F, 0.784F, 0.239F, 1.0F};
+    const float gold[4] = {1.0F, 0.82F, 0.28F, 1.0F};
     const float cream[4] = {0.996F, 0.980F, 0.937F, 1.0F};
+    const float ice[4] = {0.7F, 0.9F, 1.0F, 1.0F};
+    const float dim[4] = {0.78F, 0.78F, 0.82F, 1.0F};
 
-    /* Title (under the HUD plate, clear of the bars). */
+    /* Title. */
     {
+        const float ink[4] = {0.149F, 0.125F, 0.110F, 1.0F};
         const char *title = "VOXELHEIM";
-        const float size = 22.0F;
-        const float tx = 24.0F;
-        const float ty = DESIGN_H - 96.0F;
-        emit_text(title, tx + 2.0F, ty - 2.0F, size, ink);
-        emit_text(title, tx, ty, size, gold);
+        emit_text(title, DESIGN_W - 150.0F, DESIGN_H - 132.0F + 2.0F - 2.0F, 18.0F, ink);
+        emit_text(title, DESIGN_W - 150.0F, DESIGN_H - 132.0F, 18.0F, gold);
     }
 
-    /* "Lv N" on the gold-star badge (dark ink reads well on bright gold). */
+    /* Gold counter. */
     {
-        char lvl[16];
-        (void)snprintf(lvl, sizeof(lvl), "Lv %d", g_game_state.run_level);
-        const float size = 19.0F;
-        const float w = text_width(lvl, size);
-        const float halo[4] = {1.0F, 0.94F, 0.65F, 0.9F}; /* light halo so dark text pops */
-        emit_text(lvl, HUD_BADGE_CX - w * 0.5F - 1.0F, HUD_BADGE_CY - 7.0F + 1.0F, size, halo);
-        emit_text(lvl, HUD_BADGE_CX - w * 0.5F, HUD_BADGE_CY - 7.0F, size, ink);
+        char g[24];
+        char n[16];
+        fmt_num(n, sizeof(n), (double)g_game_state.idle_gold);
+        (void)snprintf(g, sizeof(g), "Gold  %s", n);
+        emit_text_shadow(g, 60.0F, DESIGN_H - 38.0F, 22.0F, gold);
     }
-
-    /* "HP  cur/max" label, centered on the HP bar. */
+    /* Stage counter. */
     {
-        char hp[28];
-        (void)snprintf(hp, sizeof(hp), "HP  %d/%d", g_game_state.run_hero_hp, g_game_state.run_hero_max_hp);
-        const float size = 16.0F;
-        const float w = text_width(hp, size);
-        emit_text(hp, HUD_BAR_CX - w * 0.5F + 1.0F, HUD_HP_CY - 6.0F - 1.0F, size, ink);
-        emit_text(hp, HUD_BAR_CX - w * 0.5F, HUD_HP_CY - 6.0F, size, cream);
-    }
-
-    /* "XP  cur/next" label, centered on the XP bar. */
-    {
-        char xp[28];
-        (void)snprintf(xp, sizeof(xp), "XP  %d/%d", g_game_state.run_xp, g_game_state.run_xp_to_next);
-        const float size = 16.0F;
-        const float w = text_width(xp, size);
-        emit_text(xp, HUD_BAR_CX - w * 0.5F + 1.0F, HUD_XP_CY - 6.0F - 1.0F, size, ink);
-        emit_text(xp, HUD_BAR_CX - w * 0.5F, HUD_XP_CY - 6.0F, size, cream);
-    }
-
-    /* Objective banner text (phase-driven). */
-    {
-        int killed = g_game_state.run_enemies_defeated;
-        int total = ENEMY_COUNT;
-        char quest[48];
-        if (g_sim.won) {
-            (void)snprintf(quest, sizeof(quest), "Victory!");
-        } else if (alive_enemies() == 0) {
-            (void)snprintf(quest, sizeof(quest), "Enter the Frost Keep!");
+        char s[28];
+        if (g_game_state.idle_boss_active) {
+            (void)snprintf(s, sizeof(s), "Stage %d  BOSS", g_game_state.idle_stage);
         } else {
-            (void)snprintf(quest, sizeof(quest), "Defeat monsters (%d/%d)", clampi(killed, 0, total), total);
+            (void)snprintf(s, sizeof(s), "Stage %d", g_game_state.idle_stage);
         }
-        const float size = 18.0F;
-        const float bx = DESIGN_W - 150.0F;
-        const float by = DESIGN_H - 170.0F;
-        const float w = text_width(quest, size);
-        emit_text(quest, bx - w * 0.5F + 1.0F, by - 1.0F, size, ink);
-        emit_text(quest, bx - w * 0.5F, by, size, cream);
+        emit_text_shadow(s, 60.0F, DESIGN_H - 70.0F, 20.0F, cream);
+    }
+    /* Frost shards (top-right under minimap), always shown once any exist. */
+    {
+        char fs[28];
+        (void)snprintf(fs, sizeof(fs), "Frost Shards: %d", g_game_state.idle_frost_shards);
+        emit_text_shadow(fs, DESIGN_W - 240.0F, DESIGN_H - 160.0F, 18.0F, ice);
     }
 
-    /* FTUE prompt (<=3 beats), centered near the bottom while not complete. */
+    /* Stage progress bar label. */
+    {
+        char s[28];
+        if (g_game_state.idle_boss_active) {
+            (void)snprintf(s, sizeof(s), "BOSS  %0.0fs", (double)(g_sim.boss_timer < 0.0F ? 0.0F : g_sim.boss_timer));
+        } else {
+            (void)snprintf(s, sizeof(s), "%d / %d kills", g_game_state.idle_kills_in_stage, VH_KILLS_PER_STAGE);
+        }
+        emit_text_centered(s, 176.0F, DESIGN_H - 86.0F, 13.0F, cream);
+    }
+
+    /* Stage-advance flash banner. */
+    if (g_sim.stage_flash > 0.0F) {
+        float a = clampf(g_sim.stage_flash / STAGE_FLASH_TIME, 0.0F, 1.0F);
+        float col[4] = {1.0F, 0.9F, 0.45F, a};
+        char s[28];
+        if (stage_is_boss(g_game_state.idle_stage)) {
+            (void)snprintf(s, sizeof(s), "BOSS! Stage %d", g_game_state.idle_stage);
+        } else {
+            (void)snprintf(s, sizeof(s), "Stage %d", g_game_state.idle_stage);
+        }
+        emit_text_centered(s, DESIGN_W * 0.5F, DESIGN_H * 0.62F, 40.0F, col);
+    }
+
+    /* ---- Upgrade panel text (label + effect + cost). ---- */
+    for (int i = 0; i < UP_COUNT; ++i) {
+        float cx, cy, w, h;
+        panel_slot_rect(i, &cx, &cy, &w, &h);
+        bool affordable = (double)g_game_state.idle_gold >= upgrade_cost(i);
+        const float *labelc = affordable ? cream : dim;
+
+        char lbl[24];
+        (void)snprintf(lbl, sizeof(lbl), "%s  Lv%d", upgrade_label(i), upgrade_level(i));
+        emit_text_shadow(lbl, cx - w * 0.5F + 48.0F, cy + 12.0F, 16.0F, labelc);
+
+        char eff[24];
+        upgrade_effect_str(i, eff, sizeof(eff));
+        emit_text_shadow(eff, cx - w * 0.5F + 48.0F, cy - 8.0F, 13.0F, ice);
+
+        char cost[24];
+        char n[16];
+        fmt_num(n, sizeof(n), upgrade_cost(i));
+        (void)snprintf(cost, sizeof(cost), "%s", n);
+        const float *cc = affordable ? gold : dim;
+        emit_text_shadow(cost, cx - w * 0.5F + 48.0F, cy - 26.0F, 14.0F, cc);
+    }
+
+    /* ---- Prestige button text. ---- */
+    if (prestige_unlocked()) {
+        float cx, cy, w, h;
+        prestige_btn_rect(&cx, &cy, &w, &h);
+        char t[40];
+        if (g_sim.prestige_armed) {
+            (void)snprintf(t, sizeof(t), "CONFIRM PRESTIGE");
+        } else {
+            (void)snprintf(t, sizeof(t), "Prestige  +%d shards", frost_shards_reward());
+        }
+        const float ink[4] = {0.10F, 0.08F, 0.07F, 1.0F};
+        emit_text_centered(t, cx, cy - 7.0F, 16.0F, ink);
+    }
+
+    /* ---- Shard upgrades mini-panel (left column) when shards exist. ---- */
+    if (g_game_state.idle_frost_shards > 0 || g_game_state.idle_shard_global_damage > 0 ||
+        g_game_state.idle_shard_global_gold > 0 || g_game_state.idle_shard_start_stage > 0 ||
+        g_game_state.idle_shard_offline_rate > 0) {
+        const char *names[SH_COUNT] = {"Sharper Steel", "Rich Veins", "Head Start", "Camp Supplies"};
+        int lvls[SH_COUNT] = {g_game_state.idle_shard_global_damage, g_game_state.idle_shard_global_gold,
+                              g_game_state.idle_shard_start_stage, g_game_state.idle_shard_offline_rate};
+        for (int i = 0; i < SH_COUNT; ++i) {
+            char t[48];
+            (void)snprintf(t, sizeof(t), "%s Lv%d (%.0f)", names[i], lvls[i], shard_cost(i));
+            emit_text_shadow(t, 18.0F, DESIGN_H - 200.0F - (float)i * 22.0F, 13.0F, ice);
+        }
+    }
+
+    /* ---- FTUE prompt text. ---- */
     {
         const char *prompt = ftue_prompt();
         if (prompt) {
-            emit_text_centered(prompt, DESIGN_W * 0.5F, 90.0F, 22.0F, cream);
+            emit_text_centered(prompt, DESIGN_W * 0.5F, PANEL_CY + 72.0F, 20.0F, cream);
         }
     }
 
-    /* Downed banner. */
-    if (g_sim.downed_timer > 0.0F) {
-        const float red[4] = {1.0F, 0.45F, 0.45F, 1.0F};
-        emit_text_centered("Downed!  Respawning...", DESIGN_W * 0.5F, DESIGN_H * 0.5F - 12.0F, 30.0F, red);
-    }
-
-    /* Victory banner + reward recap. */
-    if (g_sim.won) {
-        const float gold2[4] = {1.0F, 0.85F, 0.30F, 1.0F};
-        emit_text_centered("FROST KEEP CLEARED!", DESIGN_W * 0.5F, DESIGN_H * 0.55F + 10.0F, 42.0F, gold2);
-        char recap[48];
-        (void)snprintf(recap, sizeof(recap), "Level %d  -  +%d XP", g_game_state.run_level,
-                       g_game_state.run_enemies_defeated * XP_PER_KILL);
-        emit_text_centered(recap, DESIGN_W * 0.5F, DESIGN_H * 0.55F - 26.0F, 24.0F, cream);
-        emit_text_centered("Tap anywhere to play again", DESIGN_W * 0.5F, DESIGN_H * 0.55F - 58.0F, 20.0F, cream);
+    /* ---- Offline popup text. ---- */
+    if (g_sim.offline_popup) {
+        char t[48];
+        char n[16];
+        fmt_num(n, sizeof(n), (double)g_sim.offline_gold);
+        emit_text_centered("While you were away", DESIGN_W * 0.5F, DESIGN_H * 0.5F + 44.0F, 24.0F, ice);
+        (void)snprintf(t, sizeof(t), "+%s gold  (%.1fh)", n, g_sim.offline_hours);
+        emit_text_centered(t, DESIGN_W * 0.5F, DESIGN_H * 0.5F + 8.0F, 22.0F, gold);
+        float cx, cy, w, h;
+        collect_btn_rect(&cx, &cy, &w, &h);
+        const float ink[4] = {0.10F, 0.08F, 0.07F, 1.0F};
+        emit_text_centered("Collect", cx, cy - 7.0F, 18.0F, ink);
     }
 
     compose_floaters();
@@ -1225,6 +1622,10 @@ static void compose_text(void) {
 /* ---- Persistence ---- */
 
 #define VOXELHEIM_SAVE_PATH "build/voxelheim_save.json"
+
+static long now_unix(void) {
+    return (long)time(NULL);
+}
 
 static void load_persistent_state(void) {
     game_state_init_defaults(&g_game_state);
@@ -1242,6 +1643,7 @@ static void save_persistent_state(void) {
     if (!s_autosave) {
         return;
     }
+    g_game_state.idle_last_seen_unix = (int)now_unix();
     char err[256] = {0};
     (void)game_state_save(&g_game_state, VOXELHEIM_SAVE_PATH, err, (int)sizeof(err));
 }
@@ -1254,91 +1656,82 @@ void game_state_register_devapi(void);
 static cJSON *state_json(void) {
     cJSON *root = game_state_to_json(&g_game_state);
     cJSON_AddStringToObject(root, "runtime", "voxelheim");
-    cJSON_AddStringToObject(root, "screen", "frost_keep_approach");
+    cJSON_AddStringToObject(root, "screen", "frost_keep_climb");
     cJSON_AddBoolToObject(root, "atlas_ready", s_atlas_resolved);
 
-    /* Flat run mirror for easy probe assertions. */
-    cJSON_AddNumberToObject(root, "hero_hp", g_game_state.run_hero_hp);
-    cJSON_AddNumberToObject(root, "hero_max_hp", g_game_state.run_hero_max_hp);
-    cJSON_AddNumberToObject(root, "level", g_game_state.run_level);
-    cJSON_AddNumberToObject(root, "xp", g_game_state.run_xp);
-    cJSON_AddNumberToObject(root, "xp_to_next", g_game_state.run_xp_to_next);
-    cJSON_AddNumberToObject(root, "enemies_defeated", g_game_state.run_enemies_defeated);
-    cJSON_AddNumberToObject(root, "enemies_alive", alive_enemies());
-    cJSON_AddBoolToObject(root, "keep_reached", g_game_state.run_keep_reached);
+    /* Flat idle mirror for easy probe assertions. */
+    cJSON_AddNumberToObject(root, "gold", (double)g_game_state.idle_gold);
+    cJSON_AddNumberToObject(root, "stage", g_game_state.idle_stage);
+    cJSON_AddNumberToObject(root, "highest_stage", g_game_state.idle_highest_stage);
+    cJSON_AddNumberToObject(root, "kills_in_stage", g_game_state.idle_kills_in_stage);
+    cJSON_AddNumberToObject(root, "frost_shards", g_game_state.idle_frost_shards);
+    cJSON_AddNumberToObject(root, "up_sword", g_game_state.idle_up_sword);
+    cJSON_AddNumberToObject(root, "up_boots", g_game_state.idle_up_boots);
+    cJSON_AddNumberToObject(root, "up_armor", g_game_state.idle_up_armor);
+    cJSON_AddNumberToObject(root, "up_luck", g_game_state.idle_up_luck);
+    cJSON_AddBoolToObject(root, "boss_active", g_game_state.idle_boss_active);
+    cJSON_AddBoolToObject(root, "offline_unlocked", g_game_state.idle_offline_unlocked);
+    cJSON_AddBoolToObject(root, "prestige_unlocked", prestige_unlocked());
     cJSON_AddNumberToObject(root, "ftue_step", g_game_state.run_ftue_step);
-    cJSON_AddBoolToObject(root, "won", g_sim.won);
-    cJSON_AddBoolToObject(root, "downed", g_sim.downed_timer > 0.0F);
-    cJSON_AddNumberToObject(root, "hero_x", (double)g_sim.hero_x);
-    cJSON_AddNumberToObject(root, "hero_y", (double)g_sim.hero_y);
+
+    /* Derived combat stats (so the probe can assert upgrades change damage). */
+    cJSON_AddNumberToObject(root, "hero_damage", hero_damage());
+    cJSON_AddNumberToObject(root, "hero_attack_interval", hero_attack_interval());
+    cJSON_AddNumberToObject(root, "hero_max_hp", hero_max_hp());
+    cJSON_AddNumberToObject(root, "gold_find_mult", gold_find_mult());
+
+    /* Costs / rewards (so the probe can drive deterministically). */
+    cJSON_AddNumberToObject(root, "cost_sword", upgrade_cost(UP_SWORD));
+    cJSON_AddNumberToObject(root, "cost_boots", upgrade_cost(UP_BOOTS));
+    cJSON_AddNumberToObject(root, "cost_armor", upgrade_cost(UP_ARMOR));
+    cJSON_AddNumberToObject(root, "cost_luck", upgrade_cost(UP_LUCK));
+    cJSON_AddNumberToObject(root, "shards_reward_now", frost_shards_reward());
+
+    cJSON_AddBoolToObject(root, "offline_popup", g_sim.offline_popup);
+    cJSON_AddNumberToObject(root, "offline_gold", (double)g_sim.offline_gold);
+    cJSON_AddNumberToObject(root, "monsters_alive", count_monsters());
     return root;
 }
 
 static bool ep_game_state(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
-    (void)params;
-    (void)error;
-    (void)error_cap;
-    (void)user;
+    (void)params; (void)error; (void)error_cap; (void)user;
     *result = state_json();
     return true;
 }
 
 static bool ep_game_reset_playtest(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
-    (void)params;
-    (void)error;
-    (void)error_cap;
-    (void)user;
+    (void)params; (void)error; (void)error_cap; (void)user;
     playtest_reset();
     *result = state_json();
     return true;
 }
 
-/* Drive a world move: params {x,y} in DESIGN units (0..960, 0..540, y-up).
- * Lets the headless probe walk the hero deterministically without fb/Y math. */
+/* Drive a world click: params {x,y} in DESIGN units (0..960, 0..540, y-up). */
 static bool ep_game_debug_click(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
-    (void)error;
-    (void)error_cap;
-    (void)user;
+    (void)error; (void)error_cap; (void)user;
     double x = (double)DESIGN_W * 0.5;
     double y = (double)DESIGN_H * 0.5;
     if (params) {
         const cJSON *px = cJSON_GetObjectItemCaseSensitive(params, "x");
         const cJSON *py = cJSON_GetObjectItemCaseSensitive(params, "y");
-        if (cJSON_IsNumber(px)) {
-            x = px->valuedouble;
-        }
-        if (cJSON_IsNumber(py)) {
-            y = py->valuedouble;
-        }
+        if (cJSON_IsNumber(px)) x = px->valuedouble;
+        if (cJSON_IsNumber(py)) y = py->valuedouble;
     }
-    if (g_sim.won) {
-        playtest_reset();
-    } else {
-        hero_move_to((float)x, (float)y);
-    }
+    handle_world_click((float)x, (float)y);
     *result = state_json();
     return true;
 }
 
-/* Advance the simulation deterministically: params {seconds} (default 0.5s),
- * stepped at a fixed dt so combat/movement resolve the same headless or live. */
+/* Advance the simulation deterministically: params {seconds} (default 0.5s). */
 static bool ep_game_debug_tick(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
-    (void)error;
-    (void)error_cap;
-    (void)user;
+    (void)error; (void)error_cap; (void)user;
     double seconds = 0.5;
     if (params) {
         const cJSON *s = cJSON_GetObjectItemCaseSensitive(params, "seconds");
-        if (cJSON_IsNumber(s)) {
-            seconds = s->valuedouble;
-        }
+        if (cJSON_IsNumber(s)) seconds = s->valuedouble;
     }
-    if (seconds < 0.0) {
-        seconds = 0.0;
-    }
-    if (seconds > 30.0) {
-        seconds = 30.0; /* safety cap */
-    }
+    if (seconds < 0.0) seconds = 0.0;
+    if (seconds > 600.0) seconds = 600.0;
     s_debug_driven = true; /* probe owns sim time from here on */
     const double fixed = 1.0 / 60.0;
     int steps = (int)(seconds / fixed + 0.5);
@@ -1349,14 +1742,87 @@ static bool ep_game_debug_tick(const cJSON *params, cJSON **result, char *error,
     return true;
 }
 
-static bool ep_frame_screenshot(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
-    (void)error;
-    (void)error_cap;
+/* Buy an upgrade by name: params {upgrade:"sword"|"boots"|"armor"|"luck"}. */
+static bool ep_game_debug_buy(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
     (void)user;
-    cJSON *root = cJSON_CreateObject();
+    int which = -1;
+    if (params) {
+        const cJSON *u = cJSON_GetObjectItemCaseSensitive(params, "upgrade");
+        if (cJSON_IsString(u)) {
+            if (strcmp(u->valuestring, "sword") == 0) which = UP_SWORD;
+            else if (strcmp(u->valuestring, "boots") == 0) which = UP_BOOTS;
+            else if (strcmp(u->valuestring, "armor") == 0) which = UP_ARMOR;
+            else if (strcmp(u->valuestring, "luck") == 0) which = UP_LUCK;
+        }
+    }
+    if (which < 0) {
+        if (error && error_cap > 0) (void)snprintf(error, (size_t)error_cap, "unknown upgrade");
+        return false;
+    }
+    bool bought = buy_upgrade(which);
+    cJSON *root = state_json();
+    cJSON_AddBoolToObject(root, "bought", bought);
+    *result = root;
+    return true;
+}
 
-    /* A request with an explicit "path" starts a NEW capture (resets prior
-     * done/ok). A no-path call is a poll for the current/last capture status. */
+/* Buy a shard upgrade: params {shard:"damage"|"gold"|"start"|"offline"}. */
+static bool ep_game_debug_buy_shard(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)user;
+    int which = -1;
+    if (params) {
+        const cJSON *u = cJSON_GetObjectItemCaseSensitive(params, "shard");
+        if (cJSON_IsString(u)) {
+            if (strcmp(u->valuestring, "damage") == 0) which = SH_DMG;
+            else if (strcmp(u->valuestring, "gold") == 0) which = SH_GOLD;
+            else if (strcmp(u->valuestring, "start") == 0) which = SH_START;
+            else if (strcmp(u->valuestring, "offline") == 0) which = SH_OFFLINE;
+        }
+    }
+    if (which < 0) {
+        if (error && error_cap > 0) (void)snprintf(error, (size_t)error_cap, "unknown shard upgrade");
+        return false;
+    }
+    bool bought = buy_shard_upgrade(which);
+    cJSON *root = state_json();
+    cJSON_AddBoolToObject(root, "bought", bought);
+    *result = root;
+    return true;
+}
+
+/* Commit a prestige (no confirm gate). */
+static bool ep_game_debug_prestige(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)params; (void)user;
+    bool ok = do_prestige();
+    if (!ok) {
+        if (error && error_cap > 0) (void)snprintf(error, (size_t)error_cap, "prestige locked (stage < %d)", VH_PRESTIGE_UNLOCK_STAGE);
+        return false;
+    }
+    *result = state_json();
+    return true;
+}
+
+/* Simulate an offline absence: params {seconds} -> set last_seen back, grant. */
+static bool ep_game_debug_offline(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)error; (void)error_cap; (void)user;
+    double seconds = 3600.0;
+    if (params) {
+        const cJSON *s = cJSON_GetObjectItemCaseSensitive(params, "seconds");
+        if (cJSON_IsNumber(s)) seconds = s->valuedouble;
+    }
+    long now = now_unix();
+    g_game_state.idle_last_seen_unix = (int)(now - (long)seconds);
+    long granted = compute_offline_grant(now);
+    g_sim.offline_gold = granted;
+    g_sim.offline_popup = (granted > 0);
+    g_game_state.idle_last_seen_unix = (int)now;
+    *result = state_json();
+    return true;
+}
+
+static bool ep_frame_screenshot(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)error; (void)error_cap; (void)user;
+    cJSON *root = cJSON_CreateObject();
     const cJSON *p = params ? cJSON_GetObjectItemCaseSensitive(params, "path") : NULL;
     const bool is_request = (p && cJSON_IsString(p));
 
@@ -1371,8 +1837,6 @@ static bool ep_frame_screenshot(const cJSON *params, cJSON **result, char *error
         *result = root;
         return true;
     }
-
-    /* Poll (or request arriving while one is still in flight): report status. */
     cJSON_AddBoolToObject(root, "queued", s_shot_pending);
     cJSON_AddBoolToObject(root, "done", s_shot_done);
     cJSON_AddBoolToObject(root, "ok", s_shot_ok);
@@ -1388,6 +1852,10 @@ static void register_game_endpoints(void) {
     nt_devapi_register("game.reset_playtest", ep_game_reset_playtest, NULL);
     nt_devapi_register("game.debug.click", ep_game_debug_click, NULL);
     nt_devapi_register("game.debug.tick", ep_game_debug_tick, NULL);
+    nt_devapi_register("game.debug.buy", ep_game_debug_buy, NULL);
+    nt_devapi_register("game.debug.buy_shard", ep_game_debug_buy_shard, NULL);
+    nt_devapi_register("game.debug.prestige", ep_game_debug_prestige, NULL);
+    nt_devapi_register("game.debug.offline", ep_game_debug_offline, NULL);
     nt_devapi_register("frame.screenshot", ep_frame_screenshot, NULL);
 }
 
@@ -1395,7 +1863,7 @@ static void register_ui_devapi(float w, float h) {
     nt_devapi_set_frame(g_nt_app.frame);
     nt_devapi_set_view((float)canvas_w(), (float)canvas_h(), w, h);
     nt_devapi_clear_ui_elements();
-    (void)nt_devapi_register_ui_node("root", "", "screen", "Voxelheim", "Frost Keep Approach", 0.0F, 0.0F, w, h, true, true);
+    (void)nt_devapi_register_ui_node("root", "", "screen", "Voxelheim", "Frost Keep Climb", 0.0F, 0.0F, w, h, true, true);
 }
 #endif
 
@@ -1421,6 +1889,16 @@ static void frame(void) {
 
     if (s_atlas_resolved && !g_sim.started) {
         sim_reset();
+        /* compute the offline grant the first time the sim comes up */
+        if (g_game_state.idle_offline_unlocked && !s_fresh_state) {
+            long now = now_unix();
+            long granted = compute_offline_grant(now);
+            if (granted > 0) {
+                g_sim.offline_gold = granted;
+                g_sim.offline_popup = true;
+            }
+            g_game_state.idle_last_seen_unix = (int)now;
+        }
     }
 
     handle_input();
@@ -1443,7 +1921,6 @@ static void frame(void) {
     }
 #endif
 
-    /* Periodic autosave when progression changed. */
     if (game_state_is_dirty()) {
         save_persistent_state();
         game_state_clear_dirty();
@@ -1530,7 +2007,7 @@ int main(int argc, char **argv) {
 
     parse_args(argc, argv);
 
-    g_nt_window.title = "Voxelheim - Frost Keep Approach";
+    g_nt_window.title = "Voxelheim - Frost Keep Climb";
     g_nt_window.width = (uint32_t)s_window_width;
     g_nt_window.height = (uint32_t)s_window_height;
     nt_window_init();
@@ -1558,7 +2035,6 @@ int main(int argc, char **argv) {
 
     g_nt_app.target_dt = 1.0F / 60.0F;
 
-    /* Load persistent progression before anything reads g_game_state. */
     load_persistent_state();
 
     s_frame_ubo = nt_gfx_make_buffer(&(nt_buffer_desc_t){

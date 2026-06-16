@@ -2,7 +2,7 @@
   "schema": "game_seed.state",
   "document": "game",
   "lifetime": "persistent_profile",
-  "version": 2,
+  "version": 3,
   "string_max": 64,
   "reserved": [
     {
@@ -250,6 +250,146 @@
       "devapi": "read_write",
       "min": 0,
       "max": 9
+    },
+    {
+      "path": "idle.gold",
+      "id": 23,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 2147483647
+    },
+    {
+      "path": "idle.stage",
+      "id": 24,
+      "type": "int",
+      "default": 1,
+      "devapi": "read_write",
+      "min": 1,
+      "max": 100000
+    },
+    {
+      "path": "idle.highest_stage",
+      "id": 25,
+      "type": "int",
+      "default": 1,
+      "devapi": "read_write",
+      "min": 1,
+      "max": 100000
+    },
+    {
+      "path": "idle.kills_in_stage",
+      "id": 26,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 1000000
+    },
+    {
+      "path": "idle.up_sword",
+      "id": 27,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000
+    },
+    {
+      "path": "idle.up_boots",
+      "id": 28,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000
+    },
+    {
+      "path": "idle.up_armor",
+      "id": 29,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000
+    },
+    {
+      "path": "idle.up_luck",
+      "id": 30,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000
+    },
+    {
+      "path": "idle.frost_shards",
+      "id": 31,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 2147483647
+    },
+    {
+      "path": "idle.shard_global_damage",
+      "id": 32,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000
+    },
+    {
+      "path": "idle.shard_global_gold",
+      "id": 33,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000
+    },
+    {
+      "path": "idle.shard_start_stage",
+      "id": 34,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000
+    },
+    {
+      "path": "idle.shard_offline_rate",
+      "id": 35,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000
+    },
+    {
+      "path": "idle.last_seen_unix",
+      "id": 36,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 2147483647
+    },
+    {
+      "path": "idle.offline_unlocked",
+      "id": 37,
+      "type": "bool",
+      "default": false,
+      "devapi": "read_write"
+    },
+    {
+      "path": "idle.boss_active",
+      "id": 38,
+      "type": "bool",
+      "default": false,
+      "devapi": "read_write"
     }
   ]
 }
