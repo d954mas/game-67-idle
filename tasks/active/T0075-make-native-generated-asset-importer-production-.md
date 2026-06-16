@@ -104,3 +104,14 @@ produced visually-valid but non-identical PNGs.
   - Audit still passed for 11 generated UI assets.
   - Python/native warm PNG parity remained pixel-identical for all 11 runtime
     PNGs.
+- 2026-06-16: Warm/no-change profile showed the remaining importer time was
+  mostly module import overhead. Made NumPy, PIL tint helpers, and
+  `tools.assets.chroma_key_alpha` imports lazy so cache-hit runs do not pay for
+  pixel-processing modules:
+  - Warm native before lazy imports: about 0.188s.
+  - Warm native after lazy imports: 0.140-0.145s.
+  - Warm Python after lazy imports: 0.146s.
+  - Native full-cold remained about 0.664s.
+  - Audit still passed for 11 generated UI assets.
+  - Python/native warm PNG parity remained pixel-identical for all 11 runtime
+    PNGs.

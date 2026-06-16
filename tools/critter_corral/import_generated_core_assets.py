@@ -17,23 +17,13 @@ import sys
 import tempfile
 from typing import Any
 
-from PIL import Image, ImageEnhance, ImageOps
-import numpy as np
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.assets.chroma_key_alpha import (  # noqa: E402
-    bleed_transparent_rgb,
-    remove_edge_fringe,
-    remove_green_screen_spill,
-    remove_source_key_spill,
-    repair_visible_halo,
-    repair_transparent_edge_rgb,
-    zero_fully_transparent_rgb,
-)
 from tools.assets.atomic_io import save_image_atomic, write_json_atomic  # noqa: E402
 
 
@@ -204,6 +194,8 @@ def fast_key_to_alpha(image: Image.Image) -> Image.Image:
     magenta with tolerance and leave subject pixels untouched until the small
     runtime canvas cleanup pass.
     """
+    import numpy as np
+
     rgba = image.convert("RGBA")
     arr = np.array(rgba, dtype=np.int16)
     red = arr[..., 0]
@@ -235,6 +227,16 @@ def source_region(source: Image.Image, spec: dict[str, Any]) -> Image.Image:
 
 
 def fit_to_canvas(image: Image.Image, size: tuple[int, int], padding: int) -> Image.Image:
+    from tools.assets.chroma_key_alpha import (
+        bleed_transparent_rgb,
+        remove_edge_fringe,
+        remove_green_screen_spill,
+        remove_source_key_spill,
+        repair_visible_halo,
+        repair_transparent_edge_rgb,
+        zero_fully_transparent_rgb,
+    )
+
     bbox = alpha_bbox(image)
     crop = image.crop(bbox)
     max_w = max(1, size[0] - padding * 2)
@@ -259,6 +261,18 @@ def fit_to_canvas(image: Image.Image, size: tuple[int, int], padding: int) -> Im
 def apply_tint(image: Image.Image, tint: list[int] | None) -> Image.Image:
     if not tint:
         return image
+    from PIL import ImageEnhance, ImageOps
+
+    from tools.assets.chroma_key_alpha import (
+        bleed_transparent_rgb,
+        remove_edge_fringe,
+        remove_green_screen_spill,
+        remove_source_key_spill,
+        repair_visible_halo,
+        repair_transparent_edge_rgb,
+        zero_fully_transparent_rgb,
+    )
+
     tint_rgb = Image.new("RGBA", image.size, tuple(tint) + (255,))
     gray = ImageOps.grayscale(image)
     tinted = ImageOps.colorize(gray, black=(38, 30, 36), white=tuple(tint)).convert("RGBA")
