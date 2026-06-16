@@ -143,6 +143,9 @@ endif()
 # build, matching the bunnymark "packer is invoked manually" pattern.
 set(CORRAL_PACK_DIR "${CMAKE_SOURCE_DIR}/assets/runtime/critter-corral")
 set(CORRAL_PACK "${CORRAL_PACK_DIR}/critter_corral.ntpack")
+# Relative path the game mounts at runtime (must match CORRAL_PACK_PATH in
+# clean_seed_main.c). On web this is the fetch path relative to index.html.
+set(CORRAL_PACK_REL "assets/runtime/critter-corral/critter_corral.ntpack")
 set(CORRAL_GENERATED_DIR "${CMAKE_SOURCE_DIR}/tools/critter_corral/generated")
 set(CORRAL_SPRITE_SCRIPT "${CMAKE_SOURCE_DIR}/tools/critter_corral/generate_sprites.py")
 set(CORRAL_SPRITE_DIR "${CMAKE_SOURCE_DIR}/gamedesign/projects/critter-corral/art/sprites")
@@ -272,5 +275,32 @@ if(EMSCRIPTEN)
     endif()
     if(NT_WASM_ANALYSIS)
         target_link_options(${GAME_TARGET} PRIVATE "SHELL:--profiling-funcs")
+    endif()
+
+    # Web asset sync: the game mounts the pack at the relative path
+    # CORRAL_PACK_PATH ("assets/runtime/critter-corral/critter_corral.ntpack").
+    # On web nt_http fetches that path relative to the served index.html, so the
+    # pack must sit at <output>/assets/runtime/critter-corral/ next to index.*.
+    # The packer is native-only and invoked explicitly (see above); if the pack
+    # is missing we warn instead of failing the wasm link, matching bunnymark.
+    set(CORRAL_WEB_PACK "${GAME_OUTPUT_DIR}/${CORRAL_PACK_REL}")
+    if(EXISTS "${CORRAL_PACK}")
+        add_custom_command(
+            OUTPUT "${CORRAL_WEB_PACK}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_OUTPUT_DIR}/assets/runtime/critter-corral"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CORRAL_PACK}" "${CORRAL_WEB_PACK}"
+            DEPENDS "${CORRAL_PACK}"
+            COMMENT "Syncing critter_corral.ntpack -> ${NT_PRESET_NAME}/assets/ (web fetch root)"
+            VERBATIM
+        )
+        add_custom_target(corral_web_assets DEPENDS "${CORRAL_WEB_PACK}")
+        add_dependencies(${GAME_TARGET} corral_web_assets)
+    else()
+        message(WARNING
+            "Critter Corral: pack not found at ${CORRAL_PACK}. The wasm build "
+            "will link but the browser fetch for the pack will 404. Build the "
+            "pack first (native: cmake --build <native-preset> --target "
+            "critter_corral_packs), then re-run cmake configure for the wasm "
+            "preset to wire the web asset copy.")
     endif()
 endif()

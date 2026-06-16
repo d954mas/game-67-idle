@@ -483,6 +483,23 @@ static void draw_text_shadow(const char *s, float x, float y, float size,
   draw_text(s, x, y, size, color, align);
 }
 
+/* Like draw_text_shadow but shrinks `size` (down to a floor) so the string fits
+ * within `max_w` pixels — keeps long copy on-screen on a narrow/portrait
+ * screen without manual per-string tuning. Returns the size actually used. */
+static float draw_text_shadow_fit(const char *s, float x, float y, float size,
+                                  float max_w, const float color[4],
+                                  text_align_t align) {
+  if (s_text_ready && s != NULL && s[0] != '\0' && max_w > 0.0F) {
+    float wpx = text_width(s, size);
+    if (wpx > max_w) {
+      float scaled = size * (max_w / wpx);
+      size = (scaled < 11.0F) ? 11.0F : scaled; /* floor for legibility */
+    }
+  }
+  draw_text_shadow(s, x, y, size, color, align);
+  return size;
+}
+
 /* ---- Progression curve (wave -> difficulty) ----
  * Calm escalation: wave 1 is tiny + slow (FTUE), then more critters, more
  * colors (2 -> 5 over the first waves), and a gentle wander speed-up later. */
@@ -599,7 +616,13 @@ static corral_behavior_t pick_behavior(int wave, int idx, int count) {
   return CORRAL_BEHAVIOR_NORMAL;
 }
 
+#if NT_DEVAPI_ENABLED
+/* Only consumed by the DevAPI state report (compiled out on web/release). */
 static int corral_behavior_loose_count(corral_behavior_t b);
+#endif
+static const nt_pointer_t *primary_pointer(void);
+static void restart_marker_rect(float w, float h, float *rx, float *ry,
+                                float *rw, float *rh);
 
 /* ---- LIGHT META: derived run modifiers from acquired upgrade levels ----
  * Each is a clear, readable, player-POSITIVE buff that scales with level so the
@@ -700,55 +723,110 @@ static bool corral_pick_upgrade(int offer_index, float w, float h) {
  * shrinks a touch as the count grows so the pasture stays open. */
 static void corral_layout_pens(float w, float h) {
   const int n = s_color_count;
+  const bool portrait = h > w; /* TALL phone screen vs wide desktop */
   const float top = h * 0.10F; /* HUD band reserved at the very top */
-  const float pen_w = clampf(w * 0.15F, 96.0F, 180.0F);
-  const float pen_h = clampf(h * 0.30F, 130.0F, 240.0F);
-  const float mx = w * 0.035F; /* edge margins */
-  const float my = top + h * 0.02F;
   const float cx = w * 0.5F;
   const float cy = h * 0.5F;
+  const float mx = w * 0.035F; /* edge margins */
+  const float my = top + h * 0.02F;
+
+  /* Pen size adapts to orientation: a tall portrait screen wants WIDE, SHORT
+   * pens hugging the top/bottom edges (so the centre pasture stays open and the
+   * gates face inward up/down); a wide landscape screen wants the original
+   * NARROW, TALL pens on the side edges. Sizes track the screen so nothing
+   * overflows at any ratio. */
+  float pen_w;
+  float pen_h;
+  if (portrait) {
+    pen_w = clampf(w * 0.40F, 120.0F, 320.0F);
+    pen_h = clampf(h * 0.13F, 96.0F, 200.0F);
+  } else {
+    pen_w = clampf(w * 0.15F, 96.0F, 180.0F);
+    pen_h = clampf(h * 0.30F, 130.0F, 240.0F);
+  }
 
   /* Anchored slots, picked per active-color count for a balanced, readable
-   * spread. Each slot is a top-left rect; the gate faces the field centre. */
+   * spread. Each slot is a top-left rect; the gate faces the field centre.
+   * Portrait uses top/bottom edges; landscape uses left/right sides. */
   for (int i = 0; i < n && i < CORRAL_PEN_COUNT; ++i) {
     Pen *p = &s_pens[i];
     p->color = (uint8_t)i;
     p->w = pen_w;
     p->h = pen_h;
-    switch (n) {
-    case 2:
-      /* left & right, vertically centred */
-      p->x = (i == 0) ? mx : (w - pen_w - mx);
-      p->y = cy - pen_h * 0.5F;
-      break;
-    case 3:
-      /* two sides + bottom-centre */
-      if (i == 0) {
-        p->x = mx;
-        p->y = cy - pen_h * 0.5F;
-      } else if (i == 1) {
-        p->x = w - pen_w - mx;
-        p->y = cy - pen_h * 0.5F;
-      } else {
+    const float bottom_y = h - pen_h - h * 0.015F;
+    if (portrait) {
+      /* PORTRAIT: stack pens on the top and bottom edges (gates face center). */
+      switch (n) {
+      case 2:
+        /* top-centre & bottom-centre */
         p->x = cx - pen_w * 0.5F;
-        p->y = h - pen_h - my * 0.4F;
+        p->y = (i == 0) ? my : bottom_y;
+        break;
+      case 3:
+        /* top-centre + two bottom (left/right) */
+        if (i == 0) {
+          p->x = cx - pen_w * 0.5F;
+          p->y = my;
+        } else {
+          p->x = (i == 1) ? mx : (w - pen_w - mx);
+          p->y = bottom_y;
+        }
+        break;
+      case 4:
+        /* two top + two bottom (a 2x2 ring) */
+        p->x = (i % 2 == 0) ? mx : (w - pen_w - mx);
+        p->y = (i < 2) ? my : bottom_y;
+        break;
+      default: /* 5: two top + two bottom + one bottom-centre is tight, so use
+                * two top + three bottom spread across the wide bottom band. */
+        if (i < 2) {
+          p->x = (i % 2 == 0) ? mx : (w - pen_w - mx);
+          p->y = my;
+        } else {
+          int j = i - 2; /* 0,1,2 across the bottom */
+          float span = w - pen_w - 2.0F * mx;
+          p->x = mx + span * (float)j * 0.5F;
+          p->y = bottom_y;
+        }
+        break;
       }
-      break;
-    case 4:
-      /* four corners */
-      p->x = (i % 2 == 0) ? mx : (w - pen_w - mx);
-      p->y = (i < 2) ? my : (h - pen_h - my * 0.4F);
-      break;
-    default: /* 5 */
-      /* four corners + bottom-centre */
-      if (i < 4) {
+    } else {
+      /* LANDSCAPE: original side-edge / corner spread. */
+      switch (n) {
+      case 2:
+        /* left & right, vertically centred */
+        p->x = (i == 0) ? mx : (w - pen_w - mx);
+        p->y = cy - pen_h * 0.5F;
+        break;
+      case 3:
+        /* two sides + bottom-centre */
+        if (i == 0) {
+          p->x = mx;
+          p->y = cy - pen_h * 0.5F;
+        } else if (i == 1) {
+          p->x = w - pen_w - mx;
+          p->y = cy - pen_h * 0.5F;
+        } else {
+          p->x = cx - pen_w * 0.5F;
+          p->y = h - pen_h - my * 0.4F;
+        }
+        break;
+      case 4:
+        /* four corners */
         p->x = (i % 2 == 0) ? mx : (w - pen_w - mx);
         p->y = (i < 2) ? my : (h - pen_h - my * 0.4F);
-      } else {
-        p->x = cx - pen_w * 0.5F;
-        p->y = h - pen_h - my * 0.4F;
+        break;
+      default: /* 5 */
+        /* four corners + bottom-centre */
+        if (i < 4) {
+          p->x = (i % 2 == 0) ? mx : (w - pen_w - mx);
+          p->y = (i < 2) ? my : (h - pen_h - my * 0.4F);
+        } else {
+          p->x = cx - pen_w * 0.5F;
+          p->y = h - pen_h - my * 0.4F;
+        }
+        break;
       }
-      break;
     }
     /* gate mouth on the pen face nearest the field centre; inward normal. */
     float pcx = p->x + p->w * 0.5F;
@@ -928,8 +1006,10 @@ static int corral_color_remaining(int color) {
   return n;
 }
 
+#if NT_DEVAPI_ENABLED
 /* Count loose (alive, not parked) critters of a given behavior — drives the
- * DevAPI behavior-mix report so a playtest can confirm progressive intro. */
+ * DevAPI behavior-mix report so a playtest can confirm progressive intro.
+ * DevAPI-only: unused (and -Werror=unused-function) in the web/release build. */
 static int corral_behavior_loose_count(corral_behavior_t b) {
   int n = 0;
   for (int i = 0; i < s_critter_count; ++i) {
@@ -940,6 +1020,7 @@ static int corral_behavior_loose_count(corral_behavior_t b) {
   }
   return n;
 }
+#endif
 
 /* Gate mouth lives on the pen struct (pen->gx/gy + gdx/gdy), precomputed in
  * corral_layout_pens so any edge/corner placement works. */
@@ -1030,10 +1111,22 @@ static void critter_update(float dt, float w, float h) {
 
   game_audio_update();
 
-  /* Lure tracks the cursor (framebuffer pixels == our draw space). */
-  s_lure_x = g_nt_input.pointers[0].x;
-  s_lure_y = g_nt_input.pointers[0].y;
-  s_lure_active = s_lure_x > 0.0F || s_lure_y > 0.0F;
+  /* Lure tracks the primary pointer — mouse cursor OR a held/dragged finger
+   * (framebuffer pixels == our draw space). Using the first ACTIVE pointer
+   * (not a fixed slot 0) means a touch that lands in any slot still drives the
+   * lure, so the lure follows a dragged finger on a phone. */
+  {
+    const nt_pointer_t *pp = primary_pointer();
+    if (pp != NULL) {
+      s_lure_x = pp->x;
+      s_lure_y = pp->y;
+      s_lure_active = true;
+    } else {
+      /* no pointer down (touch released) — hold the last lure position so the
+       * field settles calmly instead of snapping the lure to the origin. */
+      s_lure_active = s_lure_x > 0.0F || s_lure_y > 0.0F;
+    }
+  }
 
   /* SECOND_LURE upgrade: a trailing secondary lure point that lags smoothly
    * behind the cursor (an obvious "two influence points" extension of the one
@@ -1596,6 +1689,31 @@ static void emit_panel(float cx, float cy, float pw, float ph, uint32_t color) {
 static void upgrade_card_rect(int i, float w, float h, float *cx, float *cy,
                               float *cw, float *ch) {
   int n = (s_offer_count > 0) ? s_offer_count : CORRAL_UPGRADE_OFFER;
+  const bool portrait = h > w;
+  if (portrait) {
+    /* PORTRAIT: a vertical STACK of wide, finger-tall cards — three of them fit
+     * a narrow phone screen without overflow, each a big tap target. */
+    float card_w = clampf(w * 0.84F, 200.0F, 520.0F);
+    float card_h = clampf(h * 0.18F, 120.0F, 220.0F);
+    float gap = card_h * 0.16F;
+    float total = (float)n * card_h + (float)(n - 1) * gap;
+    /* keep the stack clear of the header text near the top. */
+    float y0 = h * 0.16F;
+    float avail = h - y0 - h * 0.04F;
+    if (total > avail) {
+      /* shrink to fit the available band so nothing runs off the bottom. */
+      float scale = avail / total;
+      card_h *= scale;
+      gap *= scale;
+      total = avail;
+    }
+    *cw = card_w;
+    *ch = card_h;
+    *cx = w * 0.5F - card_w * 0.5F;
+    *cy = y0 + (float)i * (card_h + gap);
+    return;
+  }
+  /* LANDSCAPE: the original 1x3 row across the centre band. */
   float card_w = clampf(w * 0.20F, 150.0F, 230.0F);
   float card_h = clampf(h * 0.46F, 200.0F, 300.0F);
   float gap = card_w * 0.18F;
@@ -1619,20 +1737,28 @@ static int upgrade_card_pips(corral_upgrade_t u) {
  * read without any font. The field stays visible behind every beat. */
 static void corral_draw_phase_overlay(float w, float h) {
   if (s_phase == CORRAL_PHASE_TITLE) {
+    const bool portrait = h > w;
+    const float screen_min = (w < h) ? w : h;
     /* soft dim over the (visible, frozen) field so the start beat pops. */
     emit_panel(w * 0.5F, h * 0.5F, w, h, 0x55101418U);
-    /* title plate */
-    emit_panel(w * 0.5F, h * 0.42F, w * 0.62F, h * 0.34F, 0xDD2A2218U);
-    /* a friendly row of all five hues = "this is the game" identity badge. */
-    float bx = w * 0.5F - 2.0F * 70.0F;
+    /* title plate — wider/taller share of a narrow portrait screen. */
+    float plate_w = portrait ? w * 0.88F : w * 0.62F;
+    float plate_h = portrait ? h * 0.30F : h * 0.34F;
+    emit_panel(w * 0.5F, h * 0.42F, plate_w, plate_h, 0xDD2A2218U);
+    /* a friendly row of all five hues = "this is the game" identity badge.
+     * Pitch + critter size track the screen so the row never runs past the
+     * plate on a narrow screen. */
+    float badge = clampf(screen_min * 0.10F, 34.0F, 56.0F);
+    float pitch = badge * 1.25F;
+    float bx = w * 0.5F - 2.0F * pitch;
     for (int i = 0; i < CORRAL_MAX_COLORS; ++i) {
       float bob = 6.0F * sinf((float)g_nt_app.frame * 0.06F + (float)i * 0.9F);
-      emit_sprite(CORRAL_RGN_CRITTER, bx + (float)i * 70.0F, h * 0.38F + bob,
-                  56.0F, 56.0F, critter_tint(i));
+      emit_sprite(CORRAL_RGN_CRITTER, bx + (float)i * pitch, h * 0.38F + bob,
+                  badge, badge, critter_tint(i));
     }
-    /* pulsing lure orb = "press / click to start" (the one action, invited). */
+    /* pulsing lure orb = "press / tap to start" (the one action, invited). */
     float pulse = 0.5F + 0.5F * sinf((float)g_nt_app.frame * 0.12F);
-    float sz = 92.0F + 26.0F * pulse;
+    float sz = clampf(screen_min * 0.18F, 80.0F, 130.0F) + 26.0F * pulse;
     emit_sprite(CORRAL_RGN_LURE, w * 0.5F, h * 0.62F, sz, sz,
                 pack_white_alpha(0.55F + 0.35F * pulse));
     emit_sprite(CORRAL_RGN_FLAG, w * 0.5F, h * 0.62F, 34.0F, 42.0F,
@@ -1690,33 +1816,62 @@ static void corral_draw_phase_overlay(float w, float h) {
       float wash[4] = {0.96F, 0.93F, 0.86F, 1.0F};
       emit_sprite(CORRAL_RGN_CARD, mcx, mcy, cw, ch, pack_rgba(wash));
 
-      /* big upgrade icon (dark so it pops on the light card). */
-      float icon = cw * 0.56F;
-      emit_sprite(upgrade_icon_region(u), mcx, mcy - ch * 0.12F, icon, icon,
-                  0xFF20242CU);
-
-      /* magnitude: a row of MAX pips, filled up to the level this pick grants
-       * (so a bigger magnitude reads as more filled pips — no text). */
+      const bool portrait = h > w;
       int filled = upgrade_card_pips(u);
-      const float dot = cw * 0.10F;
-      const float gap = dot * 1.4F;
-      float row_w = (float)CORRAL_UPG_MAX_LEVEL * gap;
-      float px0 = mcx - row_w * 0.5F + gap * 0.5F;
-      for (int l = 0; l < CORRAL_UPG_MAX_LEVEL; ++l) {
-        uint32_t pc = (l < filled) ? 0xFF40D0FFU /* warm gold-ish filled */
-                                   : 0xFFB0A89CU /* dim empty slot */;
-        emit_sprite(CORRAL_RGN_PIP, px0 + (float)l * gap, mcy + ch * 0.24F, dot,
-                    dot, pc);
-      }
+      if (portrait) {
+        /* WIDE/SHORT portrait card: icon on the LEFT, magnitude pips + the
+         * 1/2/3 index dots on the RIGHT; the title/desc text sit in the middle
+         * (drawn in the text pass). Sizes track the card height so it scales. */
+        float icon = ch * 0.62F;
+        float icx = cx + ch * 0.5F; /* left gutter, one card-height in */
+        emit_sprite(upgrade_icon_region(u), icx, mcy, icon, icon, 0xFF20242CU);
 
-      /* 1/2/3 key hint: that many small dots at the card foot (fontless index). */
-      const float kd = cw * 0.06F;
-      const float kgap = kd * 1.6F;
-      float kw = (float)(i + 1) * kgap;
-      float kx0 = mcx - kw * 0.5F + kgap * 0.5F;
-      for (int k = 0; k <= i; ++k) {
-        emit_sprite(CORRAL_RGN_PIP, kx0 + (float)k * kgap, mcy + ch * 0.40F, kd,
-                    kd, 0xFF303838U);
+        const float dot = ch * 0.13F;
+        const float gap = dot * 1.4F;
+        float rx = cx + cw - ch * 0.55F; /* right gutter */
+        float row_w = (float)CORRAL_UPG_MAX_LEVEL * gap;
+        float px0 = rx - row_w * 0.5F + gap * 0.5F;
+        for (int l = 0; l < CORRAL_UPG_MAX_LEVEL; ++l) {
+          uint32_t pc = (l < filled) ? 0xFF40D0FFU : 0xFFB0A89CU;
+          emit_sprite(CORRAL_RGN_PIP, px0 + (float)l * gap, mcy - ch * 0.14F,
+                      dot, dot, pc);
+        }
+        const float kd = ch * 0.09F;
+        const float kgap = kd * 1.6F;
+        float kw = (float)(i + 1) * kgap;
+        float kx0 = rx - kw * 0.5F + kgap * 0.5F;
+        for (int k = 0; k <= i; ++k) {
+          emit_sprite(CORRAL_RGN_PIP, kx0 + (float)k * kgap, mcy + ch * 0.22F,
+                      kd, kd, 0xFF303838U);
+        }
+      } else {
+        /* big upgrade icon (dark so it pops on the light card). */
+        float icon = cw * 0.56F;
+        emit_sprite(upgrade_icon_region(u), mcx, mcy - ch * 0.12F, icon, icon,
+                    0xFF20242CU);
+
+        /* magnitude: a row of MAX pips, filled up to the level this pick grants
+         * (so a bigger magnitude reads as more filled pips — no text). */
+        const float dot = cw * 0.10F;
+        const float gap = dot * 1.4F;
+        float row_w = (float)CORRAL_UPG_MAX_LEVEL * gap;
+        float px0 = mcx - row_w * 0.5F + gap * 0.5F;
+        for (int l = 0; l < CORRAL_UPG_MAX_LEVEL; ++l) {
+          uint32_t pc = (l < filled) ? 0xFF40D0FFU /* warm gold-ish filled */
+                                     : 0xFFB0A89CU /* dim empty slot */;
+          emit_sprite(CORRAL_RGN_PIP, px0 + (float)l * gap, mcy + ch * 0.24F,
+                      dot, dot, pc);
+        }
+
+        /* 1/2/3 key hint: that many small dots at the card foot (fontless). */
+        const float kd = cw * 0.06F;
+        const float kgap = kd * 1.6F;
+        float kw = (float)(i + 1) * kgap;
+        float kx0 = mcx - kw * 0.5F + kgap * 0.5F;
+        for (int k = 0; k <= i; ++k) {
+          emit_sprite(CORRAL_RGN_PIP, kx0 + (float)k * kgap, mcy + ch * 0.40F,
+                      kd, kd, 0xFF303838U);
+        }
       }
     }
     return;
@@ -1970,18 +2125,20 @@ static void corral_draw_sprites(float w, float h) {
     }
   }
 
-  /* clickable RESTART marker (top-right): a small dark chip with a looping ring
-   * glyph (reuse the lure ring) — fontless "start over", calm, always
-   * available. Rect matches restart_marker_rect() so the click hit-test lines
-   * up. */
+  /* clickable/tappable RESTART marker (top-right): a dark chip with a looping
+   * ring glyph (reuse the lure ring) — fontless "start over", calm, always
+   * available. Rect matches restart_marker_rect() so the tap hit-test lines up;
+   * it is finger-sized on a narrow/portrait screen. */
   {
-    float rw = 40.0F;
-    float rh = 32.0F;
-    float rx = w - rw - 6.0F;
-    float ry = 6.0F;
+    float rw;
+    float rh;
+    float rx;
+    float ry;
+    restart_marker_rect(w, h, &rx, &ry, &rw, &rh);
     emit_sprite(CORRAL_RGN_PIP, rx + rw * 0.5F, ry + rh * 0.5F, rw, rh,
                 0xCC2A2218U);
-    emit_sprite(CORRAL_RGN_LURE, rx + rw * 0.5F, ry + rh * 0.5F, 24.0F, 24.0F,
+    float gsz = rh * 0.7F;
+    emit_sprite(CORRAL_RGN_LURE, rx + rw * 0.5F, ry + rh * 0.5F, gsz, gsz,
                 0xFFD8E0E8U);
   }
 
@@ -2090,12 +2247,15 @@ static void corral_draw_text(float w, float h) {
   }
 
   /* ---- FTUE beats (first run only): one short line + the actual first color.
-   * The motion/arrow cues are sprite-side; this is the readable instruction. */
-  if (s_ftue_active) {
+   * The motion/arrow cues are sprite-side; this is the readable instruction.
+   * Only while PLAYING — it's a herding hint, irrelevant over the upgrade
+   * cards / beats (and in portrait it sits where the cards are). */
+  if (s_ftue_active && s_phase == CORRAL_PHASE_PLAYING) {
     const char *line = NULL;
     char buf[80];
     if (s_ftue_beat == 0) {
-      line = "Move your mouse to herd the critters";
+      /* device-neutral: a drag works with a mouse or a finger. */
+      line = "Drag to herd the critters";
     } else if (s_ftue_beat == 1) {
       const char *cn = CORRAL_COLOR_NAMES[0]; /* the actual first color */
       (void)snprintf(buf, sizeof(buf), "Bring %s critters into the %s pen", cn,
@@ -2107,16 +2267,23 @@ static void corral_draw_text(float w, float h) {
     /* a gentle fade-in over the first ~0.4s of each beat so it feels calm. */
     float a = clampf(s_ftue_beat_age / 0.4F, 0.0F, 1.0F);
     float tip[4] = {1.0F, 0.97F, 0.88F, a};
-    draw_text_shadow(line, w * 0.5F, h - 56.0F, 22.0F, tip, TEXT_ALIGN_CENTER);
+    /* sits above the bottom pen band in portrait; fit to width so the longer
+     * FTUE lines never run off a narrow screen. */
+    float ftue_y = (h > w) ? h * 0.46F : h - 56.0F;
+    draw_text_shadow_fit(line, w * 0.5F, ftue_y, 22.0F, w * 0.92F, tip,
+                         TEXT_ALIGN_CENTER);
   }
 
   /* ---- Phase-beat copy (title / cleared / win / upgrade cards) ---- */
   if (s_phase == CORRAL_PHASE_TITLE) {
-    draw_text_shadow("CRITTER CORRAL", w * 0.5F, h * 0.26F, 44.0F, warm,
-                     TEXT_ALIGN_CENTER);
-    draw_text_shadow("Herd each color into its matching pen", w * 0.5F,
-                     h * 0.26F + 54.0F, 20.0F, white, TEXT_ALIGN_CENTER);
-    draw_text_shadow("Click to start", w * 0.5F, h * 0.72F, 24.0F, white,
+    float maxw = w * 0.86F; /* keep copy inside the title plate on any ratio */
+    draw_text_shadow_fit("CRITTER CORRAL", w * 0.5F, h * 0.26F, 44.0F, maxw,
+                         warm, TEXT_ALIGN_CENTER);
+    draw_text_shadow_fit("Herd each color into its matching pen", w * 0.5F,
+                         h * 0.26F + 54.0F, 20.0F, maxw, white,
+                         TEXT_ALIGN_CENTER);
+    /* "Tap to start" reads on phone and desktop alike (a click is a tap). */
+    draw_text_shadow("Tap to start", w * 0.5F, h * 0.72F, 24.0F, white,
                      TEXT_ALIGN_CENTER);
   } else if (s_phase == CORRAL_PHASE_WAVE_CLEARED) {
     char buf[48];
@@ -2126,12 +2293,14 @@ static void corral_draw_text(float w, float h) {
   } else if (s_phase == CORRAL_PHASE_WIN) {
     draw_text_shadow("You did it!", w * 0.5F, h * 0.5F - 70.0F, 40.0F, warm,
                      TEXT_ALIGN_CENTER);
-    draw_text_shadow("Keep going — the pasture never ends", w * 0.5F,
-                     h * 0.5F + 48.0F, 20.0F, white, TEXT_ALIGN_CENTER);
+    draw_text_shadow_fit("Keep going — the pasture never ends", w * 0.5F,
+                         h * 0.5F + 48.0F, 20.0F, w * 0.9F, white,
+                         TEXT_ALIGN_CENTER);
   } else if (s_phase == CORRAL_PHASE_UPGRADE_CHOICE) {
+    const bool portrait = h > w;
     /* header */
-    draw_text_shadow("Choose an upgrade", w * 0.5F, h * 0.06F, 30.0F, warm,
-                     TEXT_ALIGN_CENTER);
+    draw_text_shadow("Choose an upgrade", w * 0.5F, h * 0.06F,
+                     portrait ? 26.0F : 30.0F, warm, TEXT_ALIGN_CENTER);
     int n = (s_offer_count > 0) ? s_offer_count : CORRAL_UPGRADE_OFFER;
     for (int i = 0; i < n; ++i) {
       corral_upgrade_t u = s_offer[i];
@@ -2141,41 +2310,68 @@ static void corral_draw_text(float w, float h) {
       float ch;
       upgrade_card_rect(i, w, h, &cx, &cy, &cw, &ch);
       float bob = 4.0F * sinf((float)g_nt_app.frame * 0.05F + (float)i * 1.3F);
-      float mcx = cx + cw * 0.5F;
       float top = cy + bob;
       /* dark ink on the light card so the copy is crisp. */
       const float ink[4] = {0.12F, 0.13F, 0.16F, 1.0F};
       const float ink2[4] = {0.24F, 0.26F, 0.30F, 1.0F};
-      /* TITLE near the top of the card. */
-      draw_text(upgrade_title(u), mcx, top + ch * 0.06F, 20.0F, ink,
-                TEXT_ALIGN_CENTER);
-      /* DESCRIPTION (two short lines) just under the icon. */
       const char *desc = upgrade_desc(u);
-      /* split on the embedded '\n' into two centered lines for clean centering. */
       const char *nl = strchr(desc, '\n');
-      if (nl != NULL) {
-        char l1[40];
-        size_t l1len = (size_t)(nl - desc);
-        if (l1len >= sizeof(l1)) {
-          l1len = sizeof(l1) - 1;
-        }
-        memcpy(l1, desc, l1len);
-        l1[l1len] = '\0';
-        draw_text(l1, mcx, top + ch * 0.56F, 13.0F, ink2, TEXT_ALIGN_CENTER);
-        draw_text(nl + 1, mcx, top + ch * 0.56F + 17.0F, 13.0F, ink2,
-                  TEXT_ALIGN_CENTER);
-      } else {
-        draw_text(desc, mcx, top + ch * 0.56F, 13.0F, ink2, TEXT_ALIGN_CENTER);
-      }
-      /* current level / what this pick grants, as words under the pips. */
       char lvl[40];
       (void)snprintf(lvl, sizeof(lvl), "Level %d / %d", upgrade_card_pips(u),
                      CORRAL_UPG_MAX_LEVEL);
-      draw_text(lvl, mcx, top + ch * 0.80F, 13.0F, ink2, TEXT_ALIGN_CENTER);
-      /* the number key hint, as a real "[1]" so the pick is obvious. */
       char key[8];
       (void)snprintf(key, sizeof(key), "[%d]", i + 1);
-      draw_text(key, mcx, top + ch * 0.90F, 14.0F, ink, TEXT_ALIGN_CENTER);
+
+      if (portrait) {
+        /* WIDE/SHORT card: text column lives BETWEEN the left icon and the
+         * right pips. Title on top, the two-line desc under it, level + key at
+         * the foot — all in the middle band, vertically centered on the card. */
+        float tcx = cx + cw * 0.5F;       /* card centre x for the title row */
+        float mid = top + ch * 0.5F;
+        draw_text(upgrade_title(u), tcx, top + ch * 0.10F, 18.0F, ink,
+                  TEXT_ALIGN_CENTER);
+        if (nl != NULL) {
+          char l1[40];
+          size_t l1len = (size_t)(nl - desc);
+          if (l1len >= sizeof(l1)) {
+            l1len = sizeof(l1) - 1;
+          }
+          memcpy(l1, desc, l1len);
+          l1[l1len] = '\0';
+          draw_text(l1, tcx, mid - 6.0F, 12.0F, ink2, TEXT_ALIGN_CENTER);
+          draw_text(nl + 1, tcx, mid + 10.0F, 12.0F, ink2, TEXT_ALIGN_CENTER);
+        } else {
+          draw_text(desc, tcx, mid, 12.0F, ink2, TEXT_ALIGN_CENTER);
+        }
+        draw_text(lvl, tcx, top + ch * 0.78F, 12.0F, ink2, TEXT_ALIGN_CENTER);
+        draw_text(key, tcx, top + ch * 0.78F + 16.0F, 13.0F, ink,
+                  TEXT_ALIGN_CENTER);
+      } else {
+        float mcx = cx + cw * 0.5F;
+        /* TITLE near the top of the card. */
+        draw_text(upgrade_title(u), mcx, top + ch * 0.06F, 20.0F, ink,
+                  TEXT_ALIGN_CENTER);
+        /* DESCRIPTION (two short lines) just under the icon. */
+        if (nl != NULL) {
+          char l1[40];
+          size_t l1len = (size_t)(nl - desc);
+          if (l1len >= sizeof(l1)) {
+            l1len = sizeof(l1) - 1;
+          }
+          memcpy(l1, desc, l1len);
+          l1[l1len] = '\0';
+          draw_text(l1, mcx, top + ch * 0.56F, 13.0F, ink2, TEXT_ALIGN_CENTER);
+          draw_text(nl + 1, mcx, top + ch * 0.56F + 17.0F, 13.0F, ink2,
+                    TEXT_ALIGN_CENTER);
+        } else {
+          draw_text(desc, mcx, top + ch * 0.56F, 13.0F, ink2,
+                    TEXT_ALIGN_CENTER);
+        }
+        /* current level / what this pick grants, as words under the pips. */
+        draw_text(lvl, mcx, top + ch * 0.80F, 13.0F, ink2, TEXT_ALIGN_CENTER);
+        /* the number key hint, as a real "[1]" so the pick is obvious. */
+        draw_text(key, mcx, top + ch * 0.90F, 14.0F, ink, TEXT_ALIGN_CENTER);
+      }
     }
   }
 
@@ -2565,8 +2761,15 @@ static void register_ui_devapi(float w, float h) {
                                      true, true);
   }
   /* clickable restart marker (top-right HUD corner). */
-  (void)nt_devapi_register_ui_node("restart", "root", "button", "Restart", "",
-                                   w - 46.0F, 6.0F, 40.0F, 32.0F, true, true);
+  {
+    float rrx;
+    float rry;
+    float rrw;
+    float rrh;
+    restart_marker_rect(w, h, &rrx, &rry, &rrw, &rrh);
+    (void)nt_devapi_register_ui_node("restart", "root", "button", "Restart", "",
+                                     rrx, rry, rrw, rrh, true, true);
+  }
   /* LIGHT META: expose the pending upgrade cards as clickable nodes so the
    * playtest/ui tooling sees the pick-1-of-3 (also pickable via
    * game.debug.pick_upgrade). */
@@ -2606,49 +2809,92 @@ static void parse_args(int argc, char **argv) {
   }
 }
 
-/* Clickable restart marker rect (top-right HUD corner). */
-static void restart_marker_rect(float w, float *rx, float *ry, float *rw,
-                                float *rh) {
-  *rw = 40.0F;
-  *rh = 32.0F;
-  *rx = w - *rw - 6.0F;
-  *ry = 6.0F;
+/* Clickable restart marker rect (top-right HUD corner). Touch-friendly: a
+ * finger-sized chip that grows on a narrow (portrait/phone) screen so it is an
+ * easy tap target, and stays clear of the top HUD band. */
+static void restart_marker_rect(float w, float h, float *rx, float *ry,
+                                float *rw, float *rh) {
+  const float screen_min = (w < h) ? w : h;
+  /* ~12% of the short edge, clamped to a comfortable finger size. */
+  float sz = clampf(screen_min * 0.12F, 40.0F, 72.0F);
+  *rw = sz;
+  *rh = sz * 0.80F;
+  *rx = w - *rw - 8.0F;
+  *ry = 8.0F;
 }
 
+/* ---- Unified pointer (touch + mouse + pen) tap helpers ----
+ * The engine routes touch, mouse, and pen through g_nt_input.pointers[]. The
+ * mouse-only helpers (nt_input_mouse_is_*) match ONLY a NT_POINTER_MOUSE slot,
+ * so on a phone a finger TAP would never register as a click. These helpers
+ * treat a press/down on ANY active pointer as a tap, so taps work on touch. */
+
+/* The "primary" pointer: the first active pointer slot (pointers[0] in the
+ * common single-finger / mouse case), used for the lure position + tap coords. */
+static const nt_pointer_t *primary_pointer(void) {
+  for (int i = 0; i < NT_INPUT_MAX_POINTERS; ++i) {
+    if (g_nt_input.pointers[i].active) {
+      return &g_nt_input.pointers[i];
+    }
+  }
+  return NULL;
+}
+
+/* True on the frame ANY pointer's left/primary button goes down (mouse click,
+ * finger tap, or pen press). Writes the tap position into *px,*py. */
+static bool pointer_tap_pressed(float *px, float *py) {
+  for (int i = 0; i < NT_INPUT_MAX_POINTERS; ++i) {
+    const nt_pointer_t *p = &g_nt_input.pointers[i];
+    if (p->active && p->buttons[NT_BUTTON_LEFT].is_pressed) {
+      if (px != NULL) {
+        *px = p->x;
+      }
+      if (py != NULL) {
+        *py = p->y;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+/* Input handling runs on BOTH native and web: the keyboard paths are no-ops on
+ * a phone (no keys) but harmless, and the pointer-tap paths drive touch. */
 static void handle_input(void) {
-#ifndef NT_PLATFORM_WEB
   const float w =
       (float)(g_nt_window.fb_width ? g_nt_window.fb_width : g_nt_window.width);
   const float h = (float)(g_nt_window.fb_height ? g_nt_window.fb_height
                                                 : g_nt_window.height);
+
+  float tap_x = 0.0F;
+  float tap_y = 0.0F;
+  const bool tapped = pointer_tap_pressed(&tap_x, &tap_y);
+
   /* R = restart any time (back to a fresh run / title — calm, no penalty). */
   if (nt_input_key_is_pressed(NT_KEY_R)) {
     corral_reset(w, h);
     return;
   }
-  /* clickable restart marker takes priority over a TITLE start-click. */
-  if (nt_input_mouse_is_pressed(NT_BUTTON_LEFT)) {
+  /* clickable/tappable restart marker takes priority over a TITLE start-tap. */
+  if (tapped) {
     float rx;
     float ry;
     float rw;
     float rh;
-    restart_marker_rect(w, &rx, &ry, &rw, &rh);
-    float px = g_nt_input.pointers[0].x;
-    float py = g_nt_input.pointers[0].y;
-    if (px >= rx && px <= rx + rw && py >= ry && py <= ry + rh) {
+    restart_marker_rect(w, h, &rx, &ry, &rw, &rh);
+    if (tap_x >= rx && tap_x <= rx + rw && tap_y >= ry && tap_y <= ry + rh) {
       corral_reset(w, h);
       return;
     }
   }
-  /* TITLE: press/click to start (any of click / space / enter). */
+  /* TITLE: press/tap/click to start (any of tap / space / enter). */
   if (s_phase == CORRAL_PHASE_TITLE &&
-      (nt_input_mouse_is_pressed(NT_BUTTON_LEFT) ||
-       nt_input_key_is_pressed(NT_KEY_SPACE) ||
+      (tapped || nt_input_key_is_pressed(NT_KEY_SPACE) ||
        nt_input_key_is_pressed(NT_KEY_ENTER))) {
     corral_start(w, h);
   }
 
-  /* LIGHT META: pick-1-of-3 upgrade choice — keyboard 1/2/3 or click a card. */
+  /* LIGHT META: pick-1-of-3 upgrade choice — keyboard 1/2/3 or tap a card. */
   if (s_phase == CORRAL_PHASE_UPGRADE_CHOICE && s_offer_count > 0) {
     int pick = -1;
     if (nt_input_key_is_pressed(NT_KEY_1)) {
@@ -2657,16 +2903,15 @@ static void handle_input(void) {
       pick = 1;
     } else if (nt_input_key_is_pressed(NT_KEY_3)) {
       pick = 2;
-    } else if (nt_input_mouse_is_pressed(NT_BUTTON_LEFT)) {
-      float px = g_nt_input.pointers[0].x;
-      float py = g_nt_input.pointers[0].y;
+    } else if (tapped) {
       for (int i = 0; i < s_offer_count; ++i) {
         float cx;
         float cy;
         float cw;
         float ch;
         upgrade_card_rect(i, w, h, &cx, &cy, &cw, &ch);
-        if (px >= cx && px <= cx + cw && py >= cy && py <= cy + ch) {
+        if (tap_x >= cx && tap_x <= cx + cw && tap_y >= cy &&
+            tap_y <= cy + ch) {
           pick = i;
           break;
         }
@@ -2676,7 +2921,6 @@ static void handle_input(void) {
       corral_pick_upgrade(pick, w, h);
     }
   }
-#endif
 }
 
 /* Resolve atlas region indices + source sizes once the atlas is READY. */
