@@ -45,6 +45,11 @@
 - Start a new game iteration by creating a fresh project wiki/GDD under
   `gamedesign/projects/<game-id>/` and fresh work items in `tasks/active/`.
 - Prefer small playable native iterations over broad speculative systems.
+- Rendering rule: GAME VISUALS ALWAYS use real assets — sprites/textures,
+  generated art, or models — through the engine's asset render path (e.g.
+  `nt_sprite_renderer` + atlas pack for 2D). The shape renderer (`nt_shape_renderer`)
+  is DEBUG-ONLY; never ship game visuals on it. Use free/placeholder assets first
+  if bespoke art is not ready; do not substitute debug primitives for art.
 - First-screen scope discipline: a first playable slice has one goal and one
   primary action. Cap the first-session/FTUE chain at <=3 beats (default; the
   lead may raise it for a specific game) - a 14-beat onboarding (the Rune

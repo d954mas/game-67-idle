@@ -1,0 +1,23 @@
+# Normalize line endings: store and check out LF for text files (kills the
+# "LF will be replaced by CRLF" warnings on Windows). Mark binaries so git
+# never touches their bytes.
+* text=auto eol=lf
+
+# Binary assets
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.ttf  binary
+*.otf  binary
+*.woff binary
+*.woff2 binary
+*.ntpack binary
+*.glb  binary
+*.gltf binary
+*.wasm binary
+*.zip  binary
+*.ogg  binary
+*.wav  binary
+*.mp3  binary
