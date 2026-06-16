@@ -323,9 +323,11 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   assert.match(visualGate, /Decision: blocked until filled/);
 
   const context = JSON.parse(readFileSync(join(fixture, "tmp", "prototype_startup_gate_context.json"), "utf8"));
-  assert.equal(context.prototype_startup_gate.status, "ready_for_first_slice");
-  assert.equal(context.prototype_startup_gate.hard_stop, false);
-  assert.deepEqual(context.prototype_startup_gate.missing, []);
+  // A freshly scaffolded prototype must design the core-loop economy before it
+  // is ready to build (data/balance.json) -- design-first forcing function.
+  assert.equal(context.prototype_startup_gate.status, "not_ready_for_implementation");
+  assert.equal(context.prototype_startup_gate.hard_stop, true);
+  assert.deepEqual(context.prototype_startup_gate.missing, ["core_loop_economy"]);
   assert.equal(context.visual_first_contract.status, "required_before_visual_runtime_work");
   assert.ok(context.visual_first_contract.stop_conditions.some((item) => item.includes("Product gate fail blocks")));
   assert.ok(context.design_sources.includes("gamedesign/projects/bubble-bay/reviews/first_slice_visual_gate.md"));

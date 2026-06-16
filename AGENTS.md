@@ -122,6 +122,20 @@
   screen as "release candidate" while the lead could not tell what the game was,
   why, or its loop — only appearance + screen-teachability were gated. Do not
   repeat that.)
+- Evidence-or-gap rule (the meta-fix for the recurring "thin version claimed as
+  done" failure that hit BOTH the game-design and the reference steps this
+  session): never claim "studied / grounded in refs / it's a game / done /
+  release-ready" from confidence. Every such claim must name a durable auditable
+  artifact AND let you cite >=3 specific facts from it (for references, plus one
+  current-build mismatch). If you cannot, state the narrower truth — "quick
+  check only", "reference not studied", "screen, not a game", "not done" — and
+  do the real step. A rigorous method existing but being skipped for a
+  genre/memory/surface version IS the failure. Operationalized where possible:
+  the prototype startup gate now hard-blocks on `core_loop_economy`
+  (`data/balance.json`) so a game cannot be "ready to build" with no designed
+  loop; the visual gate is `ai.mjs gate`; references use
+  `reference_deconstruction.md`. Applies to the visual, teachability, core-loop,
+  and reference gates alike.
 - Continuous visual gate: when a fake shot/reference is named, judge the native
   screenshot against its direction every visual iteration (`node tools/ai.mjs
   gate` — a qualitative rubric: composition, readability, ui controls, action

@@ -147,6 +147,14 @@ function buildStartupGate({ concept, designSources, runtimeSources, taskContext,
       evidence: activeConcept && mentionsProductProof(`${currentGate}\n${nextPriorities}`) ? "Status names visual/product/native proof for the active concept." : "No active-concept visual/product proof gate found in status.",
       fix: "Name the first fake shot/product-read/native screenshot proof before broad implementation.",
     },
+    {
+      id: "core_loop_economy",
+      ok: activeConcept && designSources.some((source) => /\/data\/balance\.json$/.test(source)),
+      evidence: activeConcept && designSources.some((source) => /\/data\/balance\.json$/.test(source))
+        ? "Core-loop economy data found (data/balance.json) for the active concept."
+        : "No core-loop economy data (data/balance.json) for the active concept.",
+      fix: "Design the core loop FIRST: write gamedesign/projects/<id>/data/balance.json (currencies, cost/value growth, progression/prestige, offline) grounded in a reference deconstruction, before building. A pretty screen is not a game (AGENTS.md Game/core-loop gate).",
+    },
   ];
   const missing = requirements.filter((requirement) => !requirement.ok);
   return {
