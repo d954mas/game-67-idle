@@ -34,3 +34,5 @@ Depends on T0002. **Visual-first freeze: this gate comes before any systems.**
 ## Log
 
 - 2026-06-16 created (depends on T0002).
+- 2026-06-16 P1 first render WORKS (commit 574e993): full pipeline agy->cut->atlas->engine->real sprites->screenshot. Strict visual gate FAIL vs fake shot: busy diamond snow-tile ground, no readable stone path, no depth/sky/mountains/dragon backdrop, tiny HUD text. Iterating: add a painted background backdrop + recompose + readable text. Visual-first freeze holds.
+- 2026-06-16 P1 v2: painted 16:9 backdrop (sky/mountains/dragon/path) replaces tiled field; recomposed keep/hero/enemy/foreground framing; HUD text enlarged. Screenshot build/captures/voxelheim_p1_v2.png reaches the Theme-A fake-shot DIRECTION (depth, readable goal/hero/path, full HUD). Visual gate (direction) PASS; minor polish deferred (bigger hero, hotbar contrast). Proof: visual/proof/p1_first_screen.png. Visual-first freeze lifted -> P2-P4 gameplay next.

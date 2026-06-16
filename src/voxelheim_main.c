@@ -68,7 +68,8 @@
 /* ---- Region name hashes, indexed by enum ---- */
 
 enum {
-    R_SNOW = 0,
+    R_BACKGROUND = 0,
+    R_SNOW,
     R_PATH,
     R_KEEP,
     R_PINE,
@@ -86,6 +87,7 @@ enum {
 };
 
 static const nt_hash64_t k_region_names[R_COUNT] = {
+    ASSET_ATLAS_REGION_VOXELS_BACKGROUND_PNG,
     ASSET_ATLAS_REGION_VOXELS_SNOW_TILE_PNG,   ASSET_ATLAS_REGION_VOXELS_PATH_TILE_PNG, ASSET_ATLAS_REGION_VOXELS_KEEP_PNG,
     ASSET_ATLAS_REGION_VOXELS_PINE_PNG,        ASSET_ATLAS_REGION_VOXELS_ROCK_PNG,      ASSET_ATLAS_REGION_VOXELS_HERO_PNG,
     ASSET_ATLAS_REGION_VOXELS_ENEMY_PNG,       ASSET_ATLAS_REGION_VOXELS_HP_BAR_PNG,    ASSET_ATLAS_REGION_VOXELS_STAMINA_BAR_PNG,
@@ -241,52 +243,26 @@ static bool write_backbuffer_png(const char *path) {
 static void compose_scene(void) {
     const uint32_t white = 0xFFFFFFFFu;
 
-    // #region background: tiled snow filling the whole canvas
-    /* Overlap tiles generously so seams read as gentle snow variation rather
-     * than a hard checker grid. */
-    const float snow_tile = 150.0F;     /* on-screen tile footprint in design units */
-    const float snow_step = snow_tile * 0.84F;
-    for (float y = -snow_tile; y < DESIGN_H + snow_tile; y += snow_step) {
-        for (float x = -snow_tile; x < DESIGN_W + snow_tile; x += snow_step) {
-            emit_sprite(R_SNOW, x, y, snow_tile, snow_tile, white);
-        }
-    }
+    // #region background: full painted backdrop (sky, mountains, dragon, snow field, stone path to the clearing)
+    emit_sprite(R_BACKGROUND, DESIGN_W * 0.5F, DESIGN_H * 0.5F, DESIGN_W, DESIGN_H, white);
     // #endregion
 
-    // #region stone path: a clear continuous road from bottom-center to the keep
     const float path_cx = DESIGN_W * 0.5F;
-    const float keep_cy = DESIGN_H * 0.74F;
-    const float path_bottom = -20.0F;
-    const float path_top = keep_cy - DESIGN_H * 0.10F;
-    const float path_tile = 96.0F;
-    for (float y = path_bottom; y < path_top; y += path_tile * 0.5F) {
-        /* Road narrows with distance (simple 3/4 depth cue) and stays wide
-         * enough to read clearly under the hero. */
-        const float t = (y - path_bottom) / (path_top - path_bottom);
-        const float pw = path_tile * (2.05F - 0.95F * t);
-        emit_sprite(R_PATH, path_cx, y, pw, path_tile * 0.72F, white);
-    }
-    // #endregion
+    const float keep_cy = DESIGN_H * 0.66F;  /* keep sits at the path clearing in the backdrop */
 
     // #region keep: the goal beacon near top-center
     emit_h(R_KEEP, path_cx, keep_cy, DESIGN_H * 0.40F, white);
     // #endregion
 
-    // #region scenery: pines + rocks scattered on the sides (back -> front)
-    emit_h(R_PINE, DESIGN_W * 0.14F, DESIGN_H * 0.70F, DESIGN_H * 0.26F, white);
-    emit_h(R_PINE, DESIGN_W * 0.86F, DESIGN_H * 0.71F, DESIGN_H * 0.25F, white);
-    emit_h(R_PINE, DESIGN_W * 0.07F, DESIGN_H * 0.46F, DESIGN_H * 0.34F, white);
-    emit_h(R_PINE, DESIGN_W * 0.93F, DESIGN_H * 0.45F, DESIGN_H * 0.35F, white);
-    emit_h(R_ROCK, DESIGN_W * 0.22F, DESIGN_H * 0.40F, DESIGN_H * 0.13F, white);
-    emit_h(R_ROCK, DESIGN_W * 0.78F, DESIGN_H * 0.38F, DESIGN_H * 0.15F, white);
-    emit_h(R_PINE, DESIGN_W * 0.16F, DESIGN_H * 0.20F, DESIGN_H * 0.40F, white);
-    emit_h(R_PINE, DESIGN_W * 0.85F, DESIGN_H * 0.19F, DESIGN_H * 0.42F, white);
-    emit_h(R_ROCK, DESIGN_W * 0.30F, DESIGN_H * 0.12F, DESIGN_H * 0.16F, white);
+    // #region scenery: a few FOREGROUND pines/rocks for framing (backdrop already has midground trees)
+    emit_h(R_PINE, DESIGN_W * 0.08F, DESIGN_H * 0.18F, DESIGN_H * 0.46F, white);
+    emit_h(R_PINE, DESIGN_W * 0.92F, DESIGN_H * 0.17F, DESIGN_H * 0.48F, white);
+    emit_h(R_ROCK, DESIGN_W * 0.82F, DESIGN_H * 0.28F, DESIGN_H * 0.13F, white);
     // #endregion
 
-    // #region actors: enemy up the path (toward the keep), hero on the path
-    emit_h(R_ENEMY, DESIGN_W * 0.585F, DESIGN_H * 0.55F, DESIGN_H * 0.20F, white);
-    emit_h(R_HERO, path_cx, DESIGN_H * 0.30F, DESIGN_H * 0.38F, white);
+    // #region actors: enemy beside the path, hero on the path facing the keep
+    emit_h(R_ENEMY, DESIGN_W * 0.62F, DESIGN_H * 0.44F, DESIGN_H * 0.19F, white);
+    emit_h(R_HERO, path_cx, DESIGN_H * 0.30F, DESIGN_H * 0.34F, white);
     // #endregion
 
     nt_sprite_renderer_flush();
@@ -336,7 +312,7 @@ static void compose_text(void) {
      * dark drop shadow so the gold reads against the bright snow. */
     {
         const char *title = "VOXELHEIM";
-        const float size = 34.0F;
+        const float size = 40.0F;
         const float tx = 24.0F;
         const float ty = DESIGN_H - 132.0F;
         emit_text(title, tx + 2.0F, ty - 2.0F, size, ink);
@@ -346,7 +322,7 @@ static void compose_text(void) {
     /* Level label centered on the level badge (top-left corner). */
     {
         const char *lvl = "Lv 1";
-        const float size = 18.0F;
+        const float size = 22.0F;
         const float w = text_width(lvl, size);
         emit_text(lvl, 50.0F - w * 0.5F + 2.0F, DESIGN_H - 56.0F - 1.0F, size, ink);
         emit_text(lvl, 50.0F - w * 0.5F, DESIGN_H - 56.0F, size, cream);
@@ -355,7 +331,7 @@ static void compose_text(void) {
     /* Objective text centered on the red banner under the top-right minimap. */
     {
         const char *quest = "Reach the Frost Keep";
-        const float size = 17.0F;
+        const float size = 20.0F;
         const float bx = DESIGN_W - 150.0F;
         const float by = DESIGN_H - 170.0F;
         const float w = text_width(quest, size);
