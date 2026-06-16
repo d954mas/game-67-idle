@@ -74,7 +74,13 @@ test -f <PATH>.png && echo OK
   pre-existing image** (an unrelated puzzle icon) to the target path. ⚠️ So a
   codex-exec "image" can be a stale copy, not a fresh on-prompt generation.
   Always verify: check the `generated_images` count delta AND `Read` the PNG to
-  confirm it matches the prompt. codex DOES produce real art interactively / in
+  confirm it matches the prompt. Phrasing does NOT matter: an explicit
+  `$imagegen`/"use the image tool" prompt makes exec **copy a stale image**,
+  while a plain "draw/create a picture of X" prompt makes it **code-draw** with
+  GDI+/PIL primitives — both leave `generated_images` delta at 0 because the
+  native tool is absent from the exec context. (Code-drawing can look passable
+  for a single simple icon but cannot build a real scene and is banned
+  programmer-art for game visuals.) codex DOES produce real art interactively / in
   the VS Code extension (doctor rollout sources: `vscode=286`) — just not via
   headless `exec` on Windows. For headless, use **agy**.
   Driving codex via `codex mcp-server` / `app-server` does NOT recover it:
