@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "note": "First-pass idle economy for Voxelheim. Numbers are a starting point to be tuned by playtest; they exist so the loop is implementable from data, not invented in code (AGENTS.md core-loop gate).",
+  "version": 2,
+  "note": "Idle economy for Voxelheim, GROUNDED in references/idle_deconstruction.md (Clicker Heroes ~x1.55/encounter HP, boss x10; Tap Titans 2 1.57^stage; prestige from accumulated progress with a fractional scale + flat %/unit per Hero Souls; Pecorella: reset at +50-200%). First-pass numbers, to tune by playtest + game-design critic.",
   "combat": {
     "hero_base_damage": 5,
     "hero_attack_interval_s": 1.0,
@@ -9,9 +9,10 @@
   },
   "monster": {
     "hp_base": 10,
-    "hp_growth_per_stage": 1.15,
+    "hp_growth_per_stage": 1.45,
     "gold_base": 5,
-    "gold_growth_per_stage": 1.18
+    "gold_growth_per_stage": 1.42,
+    "scaling_note": "per-stage step (10 same-HP kills/stage); steepened from 1.15 toward the refs' ~1.55/encounter so the climb reads as idle number-go-up. gold grows just under HP so upgrades stay meaningful."
   },
   "boss": {
     "every_stages": 10,
@@ -30,10 +31,11 @@
   "prestige": {
     "unlock_stage": 25,
     "label": "Return to the valley",
-    "frost_shards_formula": "floor((highest_stage / 10) ^ 1.5)",
+    "frost_shards_formula": "floor(highest_stage ^ 0.8 / 3)",
+    "formula_note": "fractional exponent (was super-linear ^1.5, wrong direction) so each prestige grants ~+50-200% more shards (Pecorella); modeled on Clicker Heroes (souls from accumulated progress) not a super-linear stage power.",
     "shard_upgrades": {
-      "global_damage": { "label": "Sharper Steel", "pct_per_level": 5, "base_cost_shards": 1, "cost_growth": 1.5 },
-      "global_gold":   { "label": "Rich Veins",    "pct_per_level": 5, "base_cost_shards": 1, "cost_growth": 1.5 },
+      "global_damage": { "label": "Sharper Steel", "pct_per_level": 10, "base_cost_shards": 1, "cost_growth": 1.5 },
+      "global_gold":   { "label": "Rich Veins",    "pct_per_level": 10, "base_cost_shards": 1, "cost_growth": 1.5 },
       "start_stage":   { "label": "Head Start",    "stages_per_level": 1, "base_cost_shards": 2, "cost_growth": 2.0 },
       "offline_rate":  { "label": "Camp Supplies",  "pct_per_level": 5, "base_cost_shards": 2, "cost_growth": 1.6 }
     }

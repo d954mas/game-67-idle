@@ -1,8 +1,9 @@
 # Voxelheim GDD — Idle RPG
 
 Genre **LOCKED: idle / incremental RPG** (2026-06-16, lead). Reference grounding:
-`references/idle_reference_digest.md`. Visual direction unchanged (Theme A,
-below). Economy numbers: `data/balance.json`.
+`references/idle_deconstruction.md` (Clicker Heroes / Tap Titans 2, with real
+formulas). Visual direction unchanged (Theme A, below). Economy numbers:
+`data/balance.json`.
 
 ## Hook (one sentence)
 
@@ -21,8 +22,10 @@ while you're away, and prestige to climb the mountain faster.**
 4. Spend gold on **4 upgrades** (cost ×1.09 per level — the exponential wall):
    - **Sword** → +damage. **Boots** → faster attacks. **Armor** → +max HP/regen
      (boss survivability). **Luck** → +gold find %.
-5. Higher stage = tougher monsters (HP ×1.15/stage) but more gold (×1.18/stage)
-   → number-go-up. There is always **one upgrade you can almost afford**.
+5. Higher stage = tougher monsters (HP ×1.45/stage) but more gold (×1.42/stage)
+   → a real idle climb (steepened toward the refs' ~×1.55/encounter, see
+   `references/idle_deconstruction.md`). There is always **one upgrade you can
+   almost afford**.
 6. When progress stalls, **PRESTIGE** ("Return to the valley"): reset stage +
    gold + the 4 upgrades; gain **Frost Shards** ∝ highest stage reached. Spend
    Frost Shards on **permanent** multipliers (global damage, gold, start stage,

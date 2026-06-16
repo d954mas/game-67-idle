@@ -1,0 +1,112 @@
+# Idle Auto-Battle RPG — Deconstruction (for Voxelheim)
+
+Mode: **central deconstruction** (the idle loop + economy drive the game).
+Reference question: the auto-battle idle loop, stage/boss pacing, currencies,
+and prestige math for "hero auto-fights up stages -> gold -> upgrades -> bosses
+-> prestige -> offline" (Voxelheim).
+
+## Source packet status (HONEST)
+
+**Secondary, not first-hand observed frames.** Evidence = official wikis +
+formula guides + store/genre design talks. No first-hand gameplay video frames
+were captured. Per `reference_deconstruction.md` this is "source packet
+incomplete (secondary)" — strong enough to ground the loop + economy NUMBERS
+(the formulas are published), but UI/feel claims are `secondary`/`inferred`, and
+a later pass should add real gameplay-frame captures or lead-provided footage.
+
+## Source matrix
+
+| Source | Link | Quality | Proves | Uncertain |
+|---|---|---|---|---|
+| Clicker Heroes Wiki — Formulas / Zones / Hero Souls | clickerheroes.fandom.com/wiki/Formulas · /Zones · /Hero_Souls | wiki (secondary) | monster HP scaling, boss cadence, prestige (Hero Souls) math | exact current-version values, moment-to-moment UI |
+| Tap Titans 2 / Tap Titans Wiki — Prestige / Relics + formula guides | tap-titans.fandom.com/wiki/Prestige · /Relics · tap-titans.com/formulas | wiki/guide (secondary) | HP formula, prestige relic math, artifact meta | balance patch drift |
+| Pecorella, "Quest for Progress" (GDC) | see `gamedesign/sources/idle_incremental_design_sources_2026-06-16.md` | GDC talk | idle math norms: cost>value growth, prestige at +50-200%, fractional prestige scaling | — |
+| Current build | `gamedesign/projects/voxelheim/visual/proof/release_candidate.png` + `src/voxelheim_main.c` | our capture | what we have now (real-time, not idle) | — |
+
+## Per-game breakdown
+
+### Clicker Heroes (closest 1:1 ref) — `secondary`
+- **Loop:** hero + party auto-attack the monster on the current zone; kill ->
+  gold; gold buys/levels heroes (the "upgrades"); auto-advance zones.
+- **Stage/HP:** monster L1 = **10 HP**; grows **~x1.55 per level** (L1-140),
+  then ~x1.145 (L140-500), slowing later. Steep early exponential.
+- **Boss:** every **5 levels**, boss HP ~**x10** a normal monster; every 100
+  levels a guaranteed Hero-Soul boss; Primal bosses (5% from L105) drop souls.
+- **Prestige (Ascension):** reset for **Hero Souls** = `floor(total_hero_levels
+  / 2000)`; **each Hero Soul = +10% all damage** (permanent). Souls also spent
+  on Ancients (a meta tree).
+- **Why it works:** steep exponential -> frequent visible jumps; a near-
+  affordable hero upgrade always; ascension converts a stalled run into a flat
+  +X% damage so the next run blasts the old wall.
+
+### Tap Titans 2 — `secondary`
+- **Loop:** tap + auto-attack titans up stages; boss-per-stage gate; gold ->
+  hero/skill upgrades.
+- **HP:** `MaxHP = 18.5 * 1.57^min(stage,150) * 1.17^max(stage-150,0)`; boss HP
+  = MaxHP x [2,4,6,7,10] by tier. (Steep early, gentler after 150.)
+- **Prestige:** unlock at main-hero L600; soft reset; earn **Relics** (1 relic ~
+  1000 hero levels + a stage bonus every 15 stages, x2-3 if full team) -> buy
+  permanent **Artifacts**. After stage 80, +1 relic per 10 stages.
+- **Why it works:** two-layer meta (relics -> artifacts), staged relic income,
+  "when to prestige" is the core decision.
+
+## Comparison
+
+| | Clicker Heroes | Tap Titans 2 | Voxelheim (target) |
+|---|---|---|---|
+| Combat | auto-attack | tap + auto | **auto** (pure idle) |
+| HP growth / encounter | ~x1.55/level | ~x1.57/stage | **steepen toward ~x1.4-1.55** (see fix) |
+| Boss | every 5, x10 HP | per-stage tiers x2-10 | every 10, x8 (ok) |
+| Soft currency | gold -> hero levels | gold -> hero levels | gold -> 4 upgrades |
+| Prestige currency | Hero Souls = totalLevels/2000 | Relics ~ heroLevels/1000 | **Frost Shards (fix formula)** |
+| Per-prestige bonus | +10% dmg / soul | artifacts | **borrow: +X% dmg/gold per shard** |
+| Meta depth | Ancients tree | Artifacts | shard upgrades (keep small) |
+| Offline | yes | yes | yes (8h) |
+
+## Borrow / Avoid / Copy-risk
+
+- **Borrow (Clicker Heroes):** steep early exponential HP so kills visibly speed
+  up; boss every N as the pacing gate; **prestige currency from ACCUMULATED
+  progress with a divisor** (souls = totalLevels/2000), and **a flat +% per
+  prestige unit** (+10%/soul) — simple, legible, exactly our Frost-Shard intent.
+- **Borrow (TT2):** "when to prestige" as the meta decision; relic income that
+  scales with how far you pushed.
+- **Borrow (Pecorella):** reset is worth it at **+50-200%** meta gain; scale the
+  prestige currency with a **fractional** exponent, not super-linear.
+- **Avoid:** TT2's deep two-layer artifact tree + tap-DPS (we are pure idle,
+  first slice = small); CH's late-game Ancient complexity; any energy/IAP gates.
+- **Copy-risk:** none (formulas/structures are genre-standard); keep our snowy
+  Frost-Keep skin and names — do not reuse "Hero Souls"/"Relics"/"Titans".
+
+## Mismatch vs current build (`src/voxelheim_main.c`)
+
+1. Build is **real-time tap-to-move with 3 fixed goblins**, not an endless
+   auto-battle stream of scaling monsters. MUST convert.
+2. **No gold / upgrades / stages / bosses / prestige / offline** wired — the
+   whole idle economy is missing.
+3. **`data/balance.json` scaling is far too flat vs refs** (see fix) — it would
+   not feel like an idle climb.
+
+## balance.json corrections (grounded in the refs)
+
+- **Steepen monster growth.** Refs use ~x1.55-1.57 per encounter. Our
+  `hp_growth_per_stage = 1.15` over a 10-kill stage is ~x1.014/kill — far too
+  flat. Either grow HP **per kill** (~x1.25-1.45/kill) or raise
+  `hp_growth_per_stage` to ~**1.9-2.5** so each stage is a real step. Keep
+  gold growth a touch below HP growth so upgrades stay meaningful.
+- **Fix the prestige formula.** Replace `floor((stage/10)^1.5)` (super-linear,
+  wrong direction) with an **accumulation/divisor or fractional** form, e.g.
+  `frost_shards = floor((highest_stage)^0.5)` or `floor(total_gold_earned /
+  K)` — tuned so a prestige grants **+50-200%** more shards than the last
+  (Pecorella). 
+- **Per-shard bonus:** adopt CH's legibility — each Frost Shard spent = a flat
+  **+% global damage / gold** (start ~+8-10%/level).
+- Keep boss (every 10, x8) and offline (8h) — both in ref range.
+
+## Next proof
+
+Native idle screenshot/scenario: gold ticking from auto-kills, buying "Sword +1"
+visibly raises kill-speed, the **stage counter climbs with a steep difficulty
+curve** (not flat), a boss at stage 10, and a prestige that grants Frost Shards
+sized for a +50-200% next-run jump. This proves the loop + the corrected economy,
+i.e. the AGENTS.md Game/core-loop gate — judged by a game-design critic.
