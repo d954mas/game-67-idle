@@ -1136,9 +1136,9 @@ static void compose_text(void) {
     /* Title (under the HUD plate, clear of the bars). */
     {
         const char *title = "VOXELHEIM";
-        const float size = 34.0F;
+        const float size = 22.0F;
         const float tx = 24.0F;
-        const float ty = DESIGN_H - 128.0F;
+        const float ty = DESIGN_H - 96.0F;
         emit_text(title, tx + 2.0F, ty - 2.0F, size, ink);
         emit_text(title, tx, ty, size, gold);
     }
