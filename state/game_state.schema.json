@@ -2,7 +2,7 @@
   "schema": "game_seed.state",
   "document": "game",
   "lifetime": "persistent_profile",
-  "version": 1,
+  "version": 2,
   "string_max": 64,
   "reserved": [
     {
@@ -180,6 +180,76 @@
       "default": null,
       "max_length": 63,
       "devapi": "read_write"
+    },
+    {
+      "path": "run.hero_hp",
+      "id": 15,
+      "type": "int",
+      "default": 100,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000
+    },
+    {
+      "path": "run.hero_max_hp",
+      "id": 16,
+      "type": "int",
+      "default": 100,
+      "devapi": "read_write",
+      "min": 1,
+      "max": 100000
+    },
+    {
+      "path": "run.level",
+      "id": 17,
+      "type": "int",
+      "default": 1,
+      "devapi": "read_write",
+      "min": 1,
+      "max": 9999
+    },
+    {
+      "path": "run.xp",
+      "id": 18,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 2147483647
+    },
+    {
+      "path": "run.xp_to_next",
+      "id": 19,
+      "type": "int",
+      "default": 60,
+      "devapi": "read_write",
+      "min": 1,
+      "max": 2147483647
+    },
+    {
+      "path": "run.enemies_defeated",
+      "id": 20,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 2147483647
+    },
+    {
+      "path": "run.keep_reached",
+      "id": 21,
+      "type": "bool",
+      "default": false,
+      "devapi": "read_write"
+    },
+    {
+      "path": "run.ftue_step",
+      "id": 22,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 9
     }
   ]
 }

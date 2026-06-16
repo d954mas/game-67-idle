@@ -95,6 +95,7 @@ add_library(game_state STATIC
     "${GAME_STATE_GENERATED_HEADER}"
     "${GAME_STATE_GENERATED_SCHEMA_HEADER}"
     state/migrations/v0_to_v1.c
+    state/migrations/v1_to_v2.c
 )
 add_dependencies(game_state game_state_codegen)
 target_include_directories(game_state PUBLIC "${GAME_STATE_GENERATED_DIR}" src external/cjson)

@@ -1,22 +1,27 @@
 /*
- * Voxelheim -- First static screen ("Frost Keep Approach").
+ * Voxelheim -- "Frost Keep Approach" casual-RPG core loop (P2-P4).
  *
- * A readable, bright "Roblox" casual-RPG scene assembled from real sprites in
- * the voxelheim atlas + a slug-text HUD. No gameplay yet: this is the static
- * first-screen visual slice (art direction proof).
+ * Built on the static first-screen slice: real sprites from the voxelheim atlas
+ * + slug-text HUD on a DESIGN canvas (960x540, ortho, bottom-left origin, Y-up).
+ * Everything is authored in design units and scaled uniformly to the window.
  *
- * Render path: nt_atlas + nt_sprite_renderer (direct emit) for the world and
- * HUD, nt_text_renderer for labels. Mirrors clean_seed_main.c's
- * window/init/loop/devapi scaffold.
+ * The loop, kept casual + readable + juicy:
+ *   - Tap to move: hero straight-line walks toward the tapped design point.
+ *   - 3 ice-goblins along the path; idle until the hero is near, then approach.
+ *   - Auto-combat: hero auto-attacks in range (hit flash + floating damage),
+ *     enemy attacks back, hero slowly regenerates out of combat.
+ *   - Reward: kills sparkle, grant XP; XP fills -> LEVEL UP (heal, scale pop,
+ *     glow, big text). Persisted progression in g_game_state.run.*.
+ *   - Win: clear all 3 enemies + reach the keep -> "FROST KEEP CLEARED!".
+ *   - FTUE (<=3 beats): move -> fight -> clear + enter the keep.
  *
- * Coordinate convention: bottom-left = (0,0), Y up (ortho VP matches).
+ * Render path: nt_atlas + nt_sprite_renderer (direct emit), nt_text_renderer for
+ * labels. A solid white atlas region (voxels/white.png) backs HP-bar fills,
+ * particles, glows, and flash overlays.
  *
- * Pack build (explicit, like bunnymark) -- run from the project root:
- *   cmake --build build/_cmake/native-debug --target build_voxelheim_packs
+ * Pack build (explicit) -- run from the project root only if assets change:
  *   build/voxelheim_packer/build_voxelheim_packs.exe build/voxelheim
  *   copy build/voxelheim/voxelheim.ntpack -> assets/voxelheim.ntpack
- * This emits assets/voxelheim.ntpack + src/generated/voxelheim_assets.h.
- * Build game_seed afterwards; it loads assets/voxelheim.ntpack at runtime.
  */
 
 #include "app/nt_app.h"
@@ -59,11 +64,33 @@
 
 #define VOXELHEIM_DEVAPI_PORT_DEFAULT 9123
 
-/* Design canvas the composition is authored against (matches the fake shot
- * aspect). Everything is laid out in these units, then scaled uniformly to the
- * real framebuffer so the scene fills the window regardless of size. */
+/* Design canvas the composition is authored against. */
 #define DESIGN_W 960.0F
 #define DESIGN_H 540.0F
+
+/* Flip flag (mirrors NT_SPRITE_FLAG_FLIP_X = 1U<<0; literal keeps deps local). */
+#define VH_FLIP_X 1U
+
+/* ---- Tuning (casual) ---- */
+#define HERO_SPEED 220.0F      /* design-units/sec */
+#define HERO_ATTACK_RANGE 80.0F
+#define HERO_ATTACK_COOLDOWN 0.6F
+#define HERO_ATTACK_DAMAGE 10
+#define ENEMY_AGGRO_RANGE 140.0F
+#define ENEMY_SPEED 70.0F
+#define ENEMY_ATTACK_COOLDOWN 0.9F
+#define ENEMY_ATTACK_DAMAGE 6
+#define ENEMY_MAX_HP 30
+#define HERO_REGEN_PER_SEC 5.0F
+#define XP_PER_KILL 20
+#define KEEP_REACH_RANGE 90.0F
+#define DOWNED_DURATION 1.2F
+#define HIT_FLASH_TIME 0.1F
+#define LEVELUP_POP_TIME 0.7F
+
+#define ENEMY_COUNT 3
+#define MAX_PARTICLES 48
+#define MAX_FLOATERS 16
 
 /* ---- Region name hashes, indexed by enum ---- */
 
@@ -83,6 +110,7 @@ enum {
     R_SLOT,
     R_BANNER,
     R_BUTTON,
+    R_WHITE,
     R_COUNT,
 };
 
@@ -92,15 +120,22 @@ static const nt_hash64_t k_region_names[R_COUNT] = {
     ASSET_ATLAS_REGION_VOXELS_PINE_PNG,        ASSET_ATLAS_REGION_VOXELS_ROCK_PNG,      ASSET_ATLAS_REGION_VOXELS_HERO_PNG,
     ASSET_ATLAS_REGION_VOXELS_ENEMY_PNG,       ASSET_ATLAS_REGION_VOXELS_HP_BAR_PNG,    ASSET_ATLAS_REGION_VOXELS_STAMINA_BAR_PNG,
     ASSET_ATLAS_REGION_VOXELS_LEVEL_BADGE_PNG, ASSET_ATLAS_REGION_VOXELS_MINIMAP_PNG,   ASSET_ATLAS_REGION_VOXELS_ITEM_SLOT_PNG,
-    ASSET_ATLAS_REGION_VOXELS_BANNER_PNG,      ASSET_ATLAS_REGION_VOXELS_BUTTON_PNG,
+    ASSET_ATLAS_REGION_VOXELS_BANNER_PNG,      ASSET_ATLAS_REGION_VOXELS_BUTTON_PNG,    ASSET_ATLAS_REGION_VOXELS_WHITE_PNG,
 };
 
-/* ---- State ---- */
+/* ---- Engine/runtime state ---- */
 
 static bool s_devapi_enabled;
 static uint16_t s_devapi_port = VOXELHEIM_DEVAPI_PORT_DEFAULT;
 static int s_window_width = 960;
 static int s_window_height = 540;
+static bool s_fresh_state;
+static bool s_autosave = true;
+
+/* When a probe drives the sim via game.debug.tick, the per-frame real-time
+ * update is suppressed so headless runs are fully deterministic (the probe owns
+ * simulation time). The live game never sets this. */
+static bool s_debug_driven;
 
 static nt_buffer_t s_frame_ubo;
 static nt_hash32_t s_pack_id;
@@ -114,18 +149,83 @@ static uint16_t s_region_w[R_COUNT];
 static uint16_t s_region_h[R_COUNT];
 static bool s_atlas_resolved;
 
-/* Pending engine-side screenshot. OS window-grab can't read this GL window on
- * headless/RDP sessions, so the game reads its own backbuffer via glReadPixels
- * and writes a PNG. A DevAPI endpoint (or --shot <path>) requests one. */
 static char s_shot_path[512];
 static bool s_shot_pending;
 static bool s_shot_done;
 static bool s_shot_ok;
 
+/* ---- Gameplay simulation state (transient; progression lives in g_game_state.run) ---- */
+
+typedef struct Floater {
+    bool active;
+    float x, y;
+    float age;       /* seconds */
+    float ttl;       /* seconds */
+    char text[16];
+    float color[4];
+    float size;
+} Floater;
+
+typedef struct Particle {
+    bool active;
+    float x, y;
+    float vx, vy;
+    float age, ttl;
+    float r, g, b;
+    float size;
+} Particle;
+
+typedef struct Enemy {
+    bool alive;
+    float x, y;       /* design units */
+    int hp;
+    float attack_cd;  /* seconds until next attack */
+    float flash;      /* hit-flash timer */
+    bool facing_left;
+} Enemy;
+
+static struct {
+    float hero_x, hero_y;
+    float target_x, target_y;
+    bool moving;
+    bool hero_facing_left;
+    float hero_attack_cd;
+    float hero_flash;
+    float regen_accum;     /* fractional hp accumulator */
+    float downed_timer;    /* >0 = hero down + respawning */
+    float levelup_timer;   /* >0 = level-up pop playing */
+    bool has_moved;        /* FTUE: first move done */
+    bool won;
+    float win_timer;       /* time since victory (for banner anim) */
+    Enemy enemies[ENEMY_COUNT];
+    Particle particles[MAX_PARTICLES];
+    Floater floaters[MAX_FLOATERS];
+    float time;            /* total sim time, for idle bob */
+    bool started;          /* sim initialised */
+} g_sim;
+
+/* Hero spawn (bottom-center) + keep center (top-center) in design units. */
+#define HERO_SPAWN_X (DESIGN_W * 0.5F)
+#define HERO_SPAWN_Y (DESIGN_H * 0.22F)
+#define KEEP_CX (DESIGN_W * 0.5F)
+#define KEEP_CY (DESIGN_H * 0.66F)
+
 /* ---- Helpers ---- */
 
 static uint32_t canvas_w(void) { return g_nt_window.fb_width > 0 ? g_nt_window.fb_width : (uint32_t)s_window_width; }
 static uint32_t canvas_h(void) { return g_nt_window.fb_height > 0 ? g_nt_window.fb_height : (uint32_t)s_window_height; }
+
+static float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
+static int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+/* Pack an RGBA float color (0..1) into 0xAABBGGRR for the sprite renderer. */
+static uint32_t pack_rgba(float r, float g, float b, float a) {
+    uint32_t rr = (uint32_t)(clampf(r, 0.0F, 1.0F) * 255.0F + 0.5F);
+    uint32_t gg = (uint32_t)(clampf(g, 0.0F, 1.0F) * 255.0F + 0.5F);
+    uint32_t bb = (uint32_t)(clampf(b, 0.0F, 1.0F) * 255.0F + 0.5F);
+    uint32_t aa = (uint32_t)(clampf(a, 0.0F, 1.0F) * 255.0F + 0.5F);
+    return (aa << 24) | (bb << 16) | (gg << 8) | rr;
+}
 
 static void parse_args(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
@@ -141,14 +241,14 @@ static void parse_args(int argc, char **argv) {
                 s_window_width = w;
                 s_window_height = h;
             }
+        } else if (strcmp(argv[i], "--fresh-state") == 0) {
+            s_fresh_state = true;
+        } else if (strcmp(argv[i], "--disable-autosave") == 0) {
+            s_autosave = false;
         }
-        /* --fresh-state / --disable-autosave from the launcher: no persistent
-         * gameplay state in this static slice, so they are accepted no-ops. */
     }
 }
 
-/* Resolve the 14 atlas regions once the atlas is ready. Caches region index +
- * source pixel dimensions so the scene can size sprites in design units. */
 static void resolve_regions(void) {
     if (s_atlas_resolved || !nt_resource_is_ready(s_atlas)) {
         return;
@@ -166,11 +266,9 @@ static void resolve_regions(void) {
     s_atlas_resolved = true;
 }
 
-/* Build a column-major mat4 that scales a unit-centered quad to (w,h) design
- * units and translates its center to (cx,cy). The sprite is emitted with pivot
- * (0.5,0.5); emit applies the region's source size internally, so we pre-divide
- * by the region's source pixels to get an exact target footprint. */
-static void emit_sprite(int region, float cx, float cy, float w, float h, uint32_t color) {
+/* Scale a unit-centered quad to (w,h) design units, translate center to (cx,cy),
+ * tint by color, optionally flip horizontally. */
+static void emit_sprite_flip(int region, float cx, float cy, float w, float h, uint32_t color, uint8_t flip) {
     const float sx = (s_region_w[region] > 0) ? (w / (float)s_region_w[region]) : 1.0F;
     const float sy = (s_region_h[region] > 0) ? (h / (float)s_region_h[region]) : 1.0F;
     mat4 m;
@@ -179,13 +277,26 @@ static void emit_sprite(int region, float cx, float cy, float w, float h, uint32
     m[1][1] = sy;
     m[3][0] = cx;
     m[3][1] = cy;
-    nt_sprite_renderer_emit_region(s_atlas, s_region_idx[region], (const float *)m, 0.5F, 0.5F, color, 0);
+    nt_sprite_renderer_emit_region(s_atlas, s_region_idx[region], (const float *)m, 0.5F, 0.5F, color, flip);
+}
+
+static void emit_sprite(int region, float cx, float cy, float w, float h, uint32_t color) {
+    emit_sprite_flip(region, cx, cy, w, h, color, 0);
 }
 
 /* Emit a sprite at design-unit height, preserving its source aspect ratio. */
-static void emit_h(int region, float cx, float cy, float design_h, uint32_t color) {
+static void emit_h_flip(int region, float cx, float cy, float design_h, uint32_t color, uint8_t flip) {
     const float aspect = (s_region_h[region] > 0) ? ((float)s_region_w[region] / (float)s_region_h[region]) : 1.0F;
-    emit_sprite(region, cx, cy, design_h * aspect, design_h, color);
+    emit_sprite_flip(region, cx, cy, design_h * aspect, design_h, color, flip);
+}
+
+static void emit_h(int region, float cx, float cy, float design_h, uint32_t color) {
+    emit_h_flip(region, cx, cy, design_h, color, 0);
+}
+
+/* Solid color quad (uses the white atlas region, tinted). */
+static void emit_quad(float cx, float cy, float w, float h, float r, float g, float b, float a) {
+    emit_sprite(R_WHITE, cx, cy, w, h, pack_rgba(r, g, b, a));
 }
 
 static void emit_text(const char *utf8, float x, float y, float size, const float color[4]) {
@@ -198,15 +309,18 @@ static void emit_text(const char *utf8, float x, float y, float size, const floa
     nt_text_renderer_flush();
 }
 
-/* Width of one text line in design units (so labels can be centered). */
 static float text_width(const char *s, float size) {
-    /* Roboto average advance ~0.52em; good enough for centering HUD labels. */
     return (float)strlen(s) * size * 0.52F;
 }
 
-/* Read the default framebuffer and write it to s_shot_path as PNG. Must be
- * called while the backbuffer is the current draw target (after end_pass,
- * before swap). glReadPixels gives bottom-up rows; we flip to top-down PNG. */
+/* Centered text with a dark drop shadow for readability. */
+static void emit_text_centered(const char *s, float cx, float y, float size, const float color[4]) {
+    const float ink[4] = {0.10F, 0.08F, 0.07F, color[3]};
+    const float w = text_width(s, size);
+    emit_text(s, cx - w * 0.5F + 2.0F, y - 2.0F, size, ink);
+    emit_text(s, cx - w * 0.5F, y, size, color);
+}
+
 static bool write_backbuffer_png(const char *path) {
     const int w = (int)canvas_w();
     const int h = (int)canvas_h();
@@ -221,7 +335,6 @@ static bool write_backbuffer_png(const char *path) {
     glReadBuffer(GL_BACK);
     glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, buf);
 
-    /* Flip vertically into a second buffer for top-down PNG row order. */
     unsigned char *flip = (unsigned char *)malloc((size_t)w * (size_t)h * 4u);
     if (!flip) {
         free(buf);
@@ -238,32 +351,481 @@ static bool write_backbuffer_png(const char *path) {
     return ok != 0;
 }
 
+/* ---- Effects spawning ---- */
+
+static void spawn_floater(float x, float y, const char *text, const float color[4], float size) {
+    for (int i = 0; i < MAX_FLOATERS; ++i) {
+        if (!g_sim.floaters[i].active) {
+            Floater *f = &g_sim.floaters[i];
+            f->active = true;
+            f->x = x;
+            f->y = y;
+            f->age = 0.0F;
+            f->ttl = 0.9F;
+            f->size = size;
+            (void)snprintf(f->text, sizeof(f->text), "%s", text);
+            memcpy(f->color, color, sizeof(f->color));
+            return;
+        }
+    }
+}
+
+static void spawn_sparkle(float x, float y) {
+    int spawned = 0;
+    for (int i = 0; i < MAX_PARTICLES && spawned < 14; ++i) {
+        if (!g_sim.particles[i].active) {
+            Particle *p = &g_sim.particles[i];
+            float ang = (float)spawned / 14.0F * 6.2831853F;
+            float spd = 90.0F + (float)((i * 37) % 60);
+            p->active = true;
+            p->x = x;
+            p->y = y;
+            p->vx = cosf(ang) * spd;
+            p->vy = sinf(ang) * spd + 40.0F;
+            p->age = 0.0F;
+            p->ttl = 0.5F + (float)((i * 13) % 30) / 100.0F;
+            /* warm gold sparkle */
+            p->r = 1.0F;
+            p->g = 0.85F;
+            p->b = 0.35F;
+            p->size = 6.0F + (float)((i * 7) % 6);
+            spawned++;
+        }
+    }
+}
+
+/* ---- Run state (g_game_state.run.*) ---- */
+
+static void run_reset(void) {
+    g_game_state.run_level = 1;
+    g_game_state.run_hero_max_hp = 100;
+    g_game_state.run_hero_hp = 100;
+    g_game_state.run_xp = 0;
+    g_game_state.run_xp_to_next = 60;
+    g_game_state.run_enemies_defeated = 0;
+    g_game_state.run_keep_reached = false;
+    /* Keep ftue_step persistent across resets (don't re-tutorialise). */
+    game_state_mark_dirty();
+}
+
+static void sim_reset(void) {
+    memset(&g_sim, 0, sizeof(g_sim));
+    g_sim.started = true;
+    g_sim.hero_x = HERO_SPAWN_X;
+    g_sim.hero_y = HERO_SPAWN_Y;
+    g_sim.target_x = HERO_SPAWN_X;
+    g_sim.target_y = HERO_SPAWN_Y;
+
+    /* 3 ice-goblins spaced up the path between hero spawn and the keep. */
+    const float xs[ENEMY_COUNT] = {DESIGN_W * 0.40F, DESIGN_W * 0.60F, DESIGN_W * 0.50F};
+    const float ys[ENEMY_COUNT] = {DESIGN_H * 0.36F, DESIGN_H * 0.46F, DESIGN_H * 0.56F};
+    for (int i = 0; i < ENEMY_COUNT; ++i) {
+        g_sim.enemies[i].alive = true;
+        g_sim.enemies[i].x = xs[i];
+        g_sim.enemies[i].y = ys[i];
+        g_sim.enemies[i].hp = ENEMY_MAX_HP;
+        g_sim.enemies[i].attack_cd = ENEMY_ATTACK_COOLDOWN;
+        g_sim.enemies[i].flash = 0.0F;
+        g_sim.enemies[i].facing_left = false;
+    }
+}
+
+/* Full new run: reset progression AND the live sim. */
+static void playtest_reset(void) {
+    run_reset();
+    sim_reset();
+}
+
+static int alive_enemies(void) {
+    int n = 0;
+    for (int i = 0; i < ENEMY_COUNT; ++i) {
+        if (g_sim.enemies[i].alive) {
+            n++;
+        }
+    }
+    return n;
+}
+
+/* ---- Simulation ---- */
+
+static void hero_respawn(void) {
+    g_sim.hero_x = HERO_SPAWN_X;
+    g_sim.hero_y = HERO_SPAWN_Y;
+    g_sim.target_x = HERO_SPAWN_X;
+    g_sim.target_y = HERO_SPAWN_Y;
+    g_sim.moving = false;
+    g_game_state.run_hero_hp = g_game_state.run_hero_max_hp;
+    game_state_mark_dirty();
+}
+
+/* Issue a move order to a design-space point (clamped to the playable area). */
+static void hero_move_to(float x, float y) {
+    if (g_sim.downed_timer > 0.0F || g_sim.won) {
+        return;
+    }
+    /* Keep the hero on the lower 2/3 and inside the screen. */
+    x = clampf(x, 40.0F, DESIGN_W - 40.0F);
+    y = clampf(y, DESIGN_H * 0.12F, DESIGN_H * 0.70F);
+    g_sim.target_x = x;
+    g_sim.target_y = y;
+    g_sim.moving = true;
+    if (!g_sim.has_moved) {
+        g_sim.has_moved = true;
+        if (g_game_state.run_ftue_step < 1) {
+            g_game_state.run_ftue_step = 1; /* advance: move -> fight */
+            game_state_mark_dirty();
+        }
+    }
+}
+
+static void award_kill(Enemy *e) {
+    e->alive = false;
+    spawn_sparkle(e->x, e->y);
+    const float xpcol[4] = {1.0F, 0.9F, 0.4F, 1.0F};
+    spawn_floater(e->x, e->y + 18.0F, "+20 XP", xpcol, 22.0F);
+    g_game_state.run_enemies_defeated += 1;
+    g_game_state.run_xp += XP_PER_KILL;
+
+    /* FTUE: first kill advances move -> clear-the-path. */
+    if (g_game_state.run_ftue_step < 2) {
+        g_game_state.run_ftue_step = 2;
+    }
+
+    /* Level up (possibly multiple times). */
+    while (g_game_state.run_xp >= g_game_state.run_xp_to_next) {
+        g_game_state.run_xp -= g_game_state.run_xp_to_next;
+        g_game_state.run_level += 1;
+        g_game_state.run_hero_max_hp += 20;
+        g_game_state.run_hero_hp = g_game_state.run_hero_max_hp; /* full heal */
+        g_game_state.run_xp_to_next = (int)((float)g_game_state.run_xp_to_next * 1.4F + 0.5F);
+        g_sim.levelup_timer = LEVELUP_POP_TIME;
+        const float lc[4] = {1.0F, 0.95F, 0.5F, 1.0F};
+        spawn_floater(g_sim.hero_x, g_sim.hero_y + 60.0F, "LEVEL UP!", lc, 30.0F);
+        spawn_sparkle(g_sim.hero_x, g_sim.hero_y + 10.0F);
+    }
+    game_state_mark_dirty();
+}
+
+static void update_effects(float dt) {
+    for (int i = 0; i < MAX_PARTICLES; ++i) {
+        Particle *p = &g_sim.particles[i];
+        if (!p->active) {
+            continue;
+        }
+        p->age += dt;
+        if (p->age >= p->ttl) {
+            p->active = false;
+            continue;
+        }
+        p->x += p->vx * dt;
+        p->y += p->vy * dt;
+        p->vy -= 160.0F * dt; /* gravity (y-up) */
+    }
+    for (int i = 0; i < MAX_FLOATERS; ++i) {
+        Floater *f = &g_sim.floaters[i];
+        if (!f->active) {
+            continue;
+        }
+        f->age += dt;
+        if (f->age >= f->ttl) {
+            f->active = false;
+            continue;
+        }
+        f->y += 38.0F * dt; /* float upward */
+    }
+}
+
+static void update_sim(float dt) {
+    if (!g_sim.started) {
+        return;
+    }
+    if (dt <= 0.0F) {
+        dt = 1.0F / 60.0F;
+    }
+    if (dt > 0.1F) {
+        dt = 0.1F; /* clamp large steps so debug ticks stay stable */
+    }
+    g_sim.time += dt;
+
+    /* timers */
+    if (g_sim.hero_flash > 0.0F) {
+        g_sim.hero_flash -= dt;
+    }
+    if (g_sim.levelup_timer > 0.0F) {
+        g_sim.levelup_timer -= dt;
+    }
+    if (g_sim.win_timer > 0.0F || g_sim.won) {
+        g_sim.win_timer += dt;
+    }
+    update_effects(dt);
+
+    /* Downed: brief pause then respawn at full hp. */
+    if (g_sim.downed_timer > 0.0F) {
+        g_sim.downed_timer -= dt;
+        if (g_sim.downed_timer <= 0.0F) {
+            g_sim.downed_timer = 0.0F;
+            hero_respawn();
+        }
+        return; /* no movement/combat while downed */
+    }
+
+    if (g_sim.won) {
+        update_effects(0.0F);
+        return; /* freeze gameplay on victory; banner animates via win_timer */
+    }
+
+    /* Hero movement toward target. */
+    if (g_sim.moving) {
+        float dx = g_sim.target_x - g_sim.hero_x;
+        float dy = g_sim.target_y - g_sim.hero_y;
+        float dist = sqrtf(dx * dx + dy * dy);
+        float step = HERO_SPEED * dt;
+        if (dist <= step || dist < 1.0F) {
+            g_sim.hero_x = g_sim.target_x;
+            g_sim.hero_y = g_sim.target_y;
+            g_sim.moving = false;
+        } else {
+            g_sim.hero_x += dx / dist * step;
+            g_sim.hero_y += dy / dist * step;
+            if (fabsf(dx) > 1.0F) {
+                g_sim.hero_facing_left = dx < 0.0F;
+            }
+        }
+    }
+
+    /* Pick nearest alive enemy in attack range; track if any enemy is near. */
+    int nearest = -1;
+    float nearest_d = 1e9F;
+    bool any_in_aggro = false;
+    for (int i = 0; i < ENEMY_COUNT; ++i) {
+        Enemy *e = &g_sim.enemies[i];
+        if (!e->alive) {
+            continue;
+        }
+        float dx = e->x - g_sim.hero_x;
+        float dy = e->y - g_sim.hero_y;
+        float d = sqrtf(dx * dx + dy * dy);
+        if (d <= ENEMY_AGGRO_RANGE) {
+            any_in_aggro = true;
+        }
+        if (d <= HERO_ATTACK_RANGE && d < nearest_d) {
+            nearest_d = d;
+            nearest = i;
+        }
+    }
+
+    /* Enemy AI: approach hero when aggroed; attack when in their range. */
+    for (int i = 0; i < ENEMY_COUNT; ++i) {
+        Enemy *e = &g_sim.enemies[i];
+        if (!e->alive) {
+            continue;
+        }
+        if (e->flash > 0.0F) {
+            e->flash -= dt;
+        }
+        float dx = g_sim.hero_x - e->x;
+        float dy = g_sim.hero_y - e->y;
+        float d = sqrtf(dx * dx + dy * dy);
+        if (d <= ENEMY_AGGRO_RANGE && d > HERO_ATTACK_RANGE * 0.7F) {
+            float step = ENEMY_SPEED * dt;
+            if (d > 1.0F) {
+                e->x += dx / d * step;
+                e->y += dy / d * step;
+                e->facing_left = dx < 0.0F;
+            }
+        }
+        /* Enemy attacks the hero when in range. */
+        if (e->attack_cd > 0.0F) {
+            e->attack_cd -= dt;
+        }
+        if (d <= HERO_ATTACK_RANGE && e->attack_cd <= 0.0F) {
+            e->attack_cd = ENEMY_ATTACK_COOLDOWN;
+            g_game_state.run_hero_hp = clampi(g_game_state.run_hero_hp - ENEMY_ATTACK_DAMAGE, 0, g_game_state.run_hero_max_hp);
+            g_sim.hero_flash = HIT_FLASH_TIME;
+            game_state_mark_dirty();
+            if (g_game_state.run_hero_hp <= 0) {
+                g_sim.downed_timer = DOWNED_DURATION;
+                const float dc[4] = {1.0F, 0.4F, 0.4F, 1.0F};
+                spawn_floater(g_sim.hero_x, g_sim.hero_y + 50.0F, "Downed!", dc, 30.0F);
+            }
+        }
+    }
+
+    /* Hero auto-attack nearest enemy in range. */
+    if (g_sim.hero_attack_cd > 0.0F) {
+        g_sim.hero_attack_cd -= dt;
+    }
+    if (nearest >= 0 && g_game_state.run_hero_hp > 0) {
+        Enemy *e = &g_sim.enemies[nearest];
+        g_sim.hero_facing_left = (e->x < g_sim.hero_x);
+        g_sim.moving = false; /* stop to fight */
+        if (g_sim.hero_attack_cd <= 0.0F) {
+            g_sim.hero_attack_cd = HERO_ATTACK_COOLDOWN;
+            e->hp -= HERO_ATTACK_DAMAGE;
+            e->flash = HIT_FLASH_TIME;
+            char dmg[16];
+            (void)snprintf(dmg, sizeof(dmg), "-%d", HERO_ATTACK_DAMAGE);
+            const float dc[4] = {1.0F, 1.0F, 1.0F, 1.0F};
+            spawn_floater(e->x, e->y + 24.0F, dmg, dc, 22.0F);
+            if (e->hp <= 0) {
+                award_kill(e);
+            }
+        }
+    }
+
+    /* Out-of-combat regen. */
+    if (!any_in_aggro && g_game_state.run_hero_hp < g_game_state.run_hero_max_hp && g_game_state.run_hero_hp > 0) {
+        g_sim.regen_accum += HERO_REGEN_PER_SEC * dt;
+        if (g_sim.regen_accum >= 1.0F) {
+            int gain = (int)g_sim.regen_accum;
+            g_sim.regen_accum -= (float)gain;
+            g_game_state.run_hero_hp = clampi(g_game_state.run_hero_hp + gain, 0, g_game_state.run_hero_max_hp);
+            game_state_mark_dirty();
+        }
+    } else {
+        g_sim.regen_accum = 0.0F;
+    }
+
+    /* Win check: all enemies cleared AND hero reached the keep portal. */
+    if (alive_enemies() == 0 && !g_sim.won) {
+        float dx = KEEP_CX - g_sim.hero_x;
+        float dy = KEEP_CY - g_sim.hero_y;
+        float d = sqrtf(dx * dx + dy * dy);
+        if (d <= KEEP_REACH_RANGE) {
+            g_sim.won = true;
+            g_sim.win_timer = 0.0001F;
+            g_game_state.run_keep_reached = true;
+            if (g_game_state.run_ftue_step < 3) {
+                g_game_state.run_ftue_step = 3; /* tutorial complete */
+            }
+            spawn_sparkle(KEEP_CX, KEEP_CY);
+            game_state_mark_dirty();
+        }
+    }
+}
+
+/* ---- Input ---- */
+
+/* Convert a framebuffer pointer pixel to design-space (Y flips to bottom-up). */
+static void pointer_to_design(float px, float py, float *dx, float *dy) {
+    float fw = (float)canvas_w();
+    float fh = (float)canvas_h();
+    *dx = (fw > 0.0F) ? (px / fw * DESIGN_W) : px;
+    *dy = (fh > 0.0F) ? ((fh - py) / fh * DESIGN_H) : py;
+}
+
+static void handle_input(void) {
+    if (nt_input_mouse_is_pressed(NT_BUTTON_LEFT)) {
+        for (int i = 0; i < NT_INPUT_MAX_POINTERS; ++i) {
+            const nt_pointer_t p = g_nt_input.pointers[i];
+            if (p.active) {
+                float dx, dy;
+                pointer_to_design(p.x, p.y, &dx, &dy);
+                if (g_sim.won) {
+                    playtest_reset(); /* click to replay after victory */
+                } else {
+                    hero_move_to(dx, dy);
+                }
+                break;
+            }
+        }
+    }
+}
+
 /* ---- Scene composition (design units, y-up, bottom-left origin) ---- */
 
 static void compose_scene(void) {
     const uint32_t white = 0xFFFFFFFFu;
 
-    // #region background: full painted backdrop (sky, mountains, dragon, snow field, stone path to the clearing)
     emit_sprite(R_BACKGROUND, DESIGN_W * 0.5F, DESIGN_H * 0.5F, DESIGN_W, DESIGN_H, white);
-    // #endregion
 
-    const float path_cx = DESIGN_W * 0.5F;
-    const float keep_cy = DESIGN_H * 0.66F;  /* keep sits at the path clearing in the backdrop */
+    /* Keep glows brighter once the path is clear (the goal beacon). */
+    if (alive_enemies() == 0 && !g_sim.won) {
+        emit_quad(KEEP_CX, KEEP_CY, 220.0F, 220.0F, 1.0F, 0.95F, 0.55F, 0.18F);
+    }
+    emit_h(R_KEEP, KEEP_CX, KEEP_CY, DESIGN_H * 0.40F, white);
 
-    // #region keep: the goal beacon near top-center
-    emit_h(R_KEEP, path_cx, keep_cy, DESIGN_H * 0.40F, white);
-    // #endregion
-
-    // #region scenery: a few FOREGROUND pines/rocks for framing (backdrop already has midground trees)
+    /* Foreground framing scenery. */
     emit_h(R_PINE, DESIGN_W * 0.08F, DESIGN_H * 0.18F, DESIGN_H * 0.46F, white);
     emit_h(R_PINE, DESIGN_W * 0.92F, DESIGN_H * 0.17F, DESIGN_H * 0.48F, white);
     emit_h(R_ROCK, DESIGN_W * 0.82F, DESIGN_H * 0.28F, DESIGN_H * 0.13F, white);
-    // #endregion
 
-    // #region actors: enemy beside the path, hero on the path facing the keep
-    emit_h(R_ENEMY, DESIGN_W * 0.62F, DESIGN_H * 0.44F, DESIGN_H * 0.19F, white);
-    emit_h(R_HERO, path_cx, DESIGN_H * 0.30F, DESIGN_H * 0.34F, white);
-    // #endregion
+    /* Enemies (draw far-to-near by y so nearer ones overlap). */
+    for (int pass = 0; pass < ENEMY_COUNT; ++pass) {
+        /* simple painter sort: highest y first */
+        int best = -1;
+        float best_y = -1.0F;
+        for (int i = 0; i < ENEMY_COUNT; ++i) {
+            if (!g_sim.enemies[i].alive) {
+                continue;
+            }
+            /* find the pass-th highest; cheap O(n^2) for 3 enemies */
+            int rank = 0;
+            for (int j = 0; j < ENEMY_COUNT; ++j) {
+                if (g_sim.enemies[j].alive && g_sim.enemies[j].y > g_sim.enemies[i].y) {
+                    rank++;
+                }
+            }
+            if (rank == pass && g_sim.enemies[i].y > best_y - 1e6F) {
+                best = i;
+                best_y = g_sim.enemies[i].y;
+                break;
+            }
+        }
+        if (best < 0) {
+            continue;
+        }
+        Enemy *e = &g_sim.enemies[best];
+        uint32_t tint = white;
+        if (e->flash > 0.0F) {
+            tint = pack_rgba(1.0F, 1.0F, 1.0F, 1.0F); /* full white -> emit overlay below */
+        }
+        emit_h_flip(R_ENEMY, e->x, e->y, DESIGN_H * 0.17F, tint, e->facing_left ? VH_FLIP_X : 0);
+        if (e->flash > 0.0F) {
+            float a = clampf(e->flash / HIT_FLASH_TIME, 0.0F, 1.0F) * 0.7F;
+            emit_quad(e->x, e->y, DESIGN_H * 0.17F, DESIGN_H * 0.17F, 1.0F, 1.0F, 1.0F, a);
+        }
+        /* Tiny enemy hp pip. */
+        float frac = clampf((float)e->hp / (float)ENEMY_MAX_HP, 0.0F, 1.0F);
+        float bw = 46.0F;
+        float by = e->y + DESIGN_H * 0.105F;
+        emit_quad(e->x, by, bw + 4.0F, 9.0F, 0.10F, 0.07F, 0.10F, 0.85F);
+        emit_quad(e->x - bw * 0.5F + bw * frac * 0.5F, by, bw * frac, 5.0F, 0.95F, 0.30F, 0.28F, 1.0F);
+    }
+
+    /* Hero with level-up pop scale + glow. */
+    float hero_h = DESIGN_H * 0.34F;
+    float pop = 1.0F;
+    if (g_sim.levelup_timer > 0.0F) {
+        float t = g_sim.levelup_timer / LEVELUP_POP_TIME; /* 1->0 */
+        pop = 1.0F + 0.2F * t;
+        float ga = 0.5F * t;
+        emit_quad(g_sim.hero_x, g_sim.hero_y, hero_h * 1.1F, hero_h * 1.1F, 1.0F, 0.95F, 0.5F, ga);
+    }
+    /* idle bob when standing still */
+    float bob = (!g_sim.moving && g_sim.downed_timer <= 0.0F) ? sinf(g_sim.time * 4.0F) * 3.0F : 0.0F;
+    uint32_t hero_tint = white;
+    float hero_alpha = 1.0F;
+    if (g_sim.downed_timer > 0.0F) {
+        hero_alpha = 0.45F;
+        hero_tint = pack_rgba(0.7F, 0.7F, 0.8F, hero_alpha);
+    }
+    emit_h_flip(R_HERO, g_sim.hero_x, g_sim.hero_y + bob, hero_h * pop, hero_tint, g_sim.hero_facing_left ? VH_FLIP_X : 0);
+    if (g_sim.hero_flash > 0.0F) {
+        float a = clampf(g_sim.hero_flash / HIT_FLASH_TIME, 0.0F, 1.0F) * 0.7F;
+        emit_quad(g_sim.hero_x, g_sim.hero_y + bob, hero_h * 0.6F, hero_h * pop, 1.0F, 0.3F, 0.3F, a);
+    }
+
+    /* Particles (gold sparkles). */
+    for (int i = 0; i < MAX_PARTICLES; ++i) {
+        Particle *p = &g_sim.particles[i];
+        if (!p->active) {
+            continue;
+        }
+        float life = 1.0F - p->age / p->ttl;
+        float sz = p->size * (0.4F + 0.6F * life);
+        emit_quad(p->x, p->y, sz, sz, p->r, p->g, p->b, clampf(life, 0.0F, 1.0F));
+    }
 
     nt_sprite_renderer_flush();
 }
@@ -271,45 +833,93 @@ static void compose_scene(void) {
 static void compose_hud(void) {
     const uint32_t white = 0xFFFFFFFFu;
 
-    // #region top-left: hp bar, stamina bar, level badge
+    /* HP bar frame + colored fill. */
     const float bar_h = 30.0F;
     const float bar_left = 22.0F;
     const float bar_aspect = (s_region_h[R_HP] > 0) ? ((float)s_region_w[R_HP] / (float)s_region_h[R_HP]) : 4.0F;
     const float bar_w = bar_h * bar_aspect;
-    emit_sprite(R_HP, bar_left + bar_w * 0.5F + 54.0F, DESIGN_H - 34.0F, bar_w, bar_h, white);
-    emit_sprite(R_STAMINA, bar_left + bar_w * 0.5F + 54.0F, DESIGN_H - 34.0F - bar_h - 6.0F, bar_w, bar_h, white);
-    emit_h(R_BADGE, bar_left + 28.0F, DESIGN_H - 48.0F, 70.0F, white);
-    // #endregion
+    const float bar_cx = bar_left + bar_w * 0.5F + 54.0F;
+    const float bar_cy = DESIGN_H - 34.0F;
 
-    // #region top-right: minimap
-    emit_h(R_MINIMAP, DESIGN_W - 78.0F, DESIGN_H - 78.0F, 120.0F, white);
-    // #endregion
-
-    // #region bottom-center: 5-slot hotbar
-    const float slot = 58.0F;
-    const float gap = 10.0F;
-    const int slots = 5;
-    const float row_w = slots * slot + (slots - 1) * gap;
-    const float row_x0 = (DESIGN_W - row_w) * 0.5F + slot * 0.5F;
-    for (int i = 0; i < slots; ++i) {
-        emit_sprite(R_SLOT, row_x0 + (float)i * (slot + gap), 44.0F, slot, slot, white);
+    float hp_frac = clampf((float)g_game_state.run_hero_hp / (float)g_game_state.run_hero_max_hp, 0.0F, 1.0F);
+    /* fill sits inside the bar frame; inset a little so the art border shows */
+    float fill_w = (bar_w - 10.0F) * hp_frac;
+    float fill_left = bar_cx - (bar_w - 10.0F) * 0.5F;
+    /* dark track */
+    emit_quad(bar_cx, bar_cy, bar_w - 8.0F, bar_h - 10.0F, 0.10F, 0.06F, 0.08F, 0.85F);
+    /* green->red fill by health */
+    float rr = clampf(1.4F - hp_frac, 0.2F, 1.0F);
+    float gg = clampf(0.3F + hp_frac, 0.3F, 0.95F);
+    if (fill_w > 0.5F) {
+        emit_quad(fill_left + fill_w * 0.5F, bar_cy, fill_w, bar_h - 10.0F, rr, gg, 0.30F, 1.0F);
     }
-    // #endregion
+    emit_sprite(R_HP, bar_cx, bar_cy, bar_w, bar_h, white); /* art frame on top */
 
-    // #region banner under the minimap (top-right) carrying the objective
+    /* Stamina bar (decorative). */
+    emit_sprite(R_STAMINA, bar_cx, bar_cy - bar_h - 6.0F, bar_w, bar_h, white);
+
+    /* Level badge. */
+    emit_h(R_BADGE, bar_left + 28.0F, DESIGN_H - 48.0F, 70.0F, white);
+
+    /* Minimap top-right. */
+    emit_h(R_MINIMAP, DESIGN_W - 78.0F, DESIGN_H - 78.0F, 120.0F, white);
+
+    /* Quest banner under the minimap. */
     emit_h(R_BANNER, DESIGN_W - 150.0F, DESIGN_H - 164.0F, 86.0F, white);
-    // #endregion
 
     nt_sprite_renderer_flush();
 }
 
+/* Dim background panels for prompts/banners. Sprite pass (quads), so it MUST run
+ * while the sprite material is bound -- text is drawn separately in compose_text. */
+static const char *ftue_prompt(void) {
+    if (g_sim.won) {
+        return NULL;
+    }
+    if (g_game_state.run_ftue_step <= 0 || !g_sim.has_moved) {
+        return "Tap anywhere to move";
+    }
+    if (g_game_state.run_ftue_step == 1) {
+        return "Tap a monster to fight it";
+    }
+    if (g_game_state.run_ftue_step == 2) {
+        return "Clear the path, then enter the keep";
+    }
+    return NULL;
+}
+
+static void compose_overlays(void) {
+    const char *prompt = ftue_prompt();
+    if (prompt) {
+        emit_quad(DESIGN_W * 0.5F, 30.0F, text_width(prompt, 22.0F) + 40.0F, 38.0F, 0.06F, 0.05F, 0.08F, 0.55F);
+    }
+    if (g_sim.downed_timer > 0.0F) {
+        emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.5F, 360.0F, 70.0F, 0.10F, 0.03F, 0.05F, 0.6F);
+    }
+    if (g_sim.won) {
+        emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.55F, 560.0F, 120.0F, 0.06F, 0.05F, 0.10F, 0.62F);
+    }
+    nt_sprite_renderer_flush();
+}
+
+static void compose_floaters(void) {
+    for (int i = 0; i < MAX_FLOATERS; ++i) {
+        Floater *f = &g_sim.floaters[i];
+        if (!f->active) {
+            continue;
+        }
+        float life = 1.0F - f->age / f->ttl;
+        float col[4] = {f->color[0], f->color[1], f->color[2], clampf(life + 0.2F, 0.0F, 1.0F)};
+        emit_text_centered(f->text, f->x, f->y, f->size, col);
+    }
+}
+
 static void compose_text(void) {
-    const float ink[4] = {0.149F, 0.125F, 0.110F, 1.0F};  /* outline near-black brown */
-    const float gold[4] = {1.0F, 0.784F, 0.239F, 1.0F};   /* #FFC83D */
+    const float ink[4] = {0.149F, 0.125F, 0.110F, 1.0F};
+    const float gold[4] = {1.0F, 0.784F, 0.239F, 1.0F};
     const float cream[4] = {0.996F, 0.980F, 0.937F, 1.0F};
 
-    /* Game title: clear snow band just below the top-left HUD, drawn with a
-     * dark drop shadow so the gold reads against the bright snow. */
+    /* Title. */
     {
         const char *title = "VOXELHEIM";
         const float size = 40.0F;
@@ -319,24 +929,98 @@ static void compose_text(void) {
         emit_text(title, tx, ty, size, gold);
     }
 
-    /* Level label centered on the level badge (top-left corner). */
+    /* Level label on the badge. */
     {
-        const char *lvl = "Lv 1";
+        char lvl[16];
+        (void)snprintf(lvl, sizeof(lvl), "Lv %d", g_game_state.run_level);
         const float size = 22.0F;
         const float w = text_width(lvl, size);
         emit_text(lvl, 50.0F - w * 0.5F + 2.0F, DESIGN_H - 56.0F - 1.0F, size, ink);
         emit_text(lvl, 50.0F - w * 0.5F, DESIGN_H - 56.0F, size, cream);
     }
 
-    /* Objective text centered on the red banner under the top-right minimap. */
+    /* HP readout next to the bar. */
     {
-        const char *quest = "Reach the Frost Keep";
-        const float size = 20.0F;
+        char hp[24];
+        (void)snprintf(hp, sizeof(hp), "%d / %d", g_game_state.run_hero_hp, g_game_state.run_hero_max_hp);
+        emit_text(hp, 92.0F, DESIGN_H - 30.0F, 16.0F, ink);
+        emit_text(hp, 91.0F, DESIGN_H - 29.0F, 16.0F, cream);
+    }
+
+    /* XP readout under the badge. */
+    {
+        char xp[28];
+        (void)snprintf(xp, sizeof(xp), "XP %d/%d", g_game_state.run_xp, g_game_state.run_xp_to_next);
+        emit_text(xp, 22.0F, DESIGN_H - 92.0F, 15.0F, ink);
+        emit_text(xp, 21.0F, DESIGN_H - 91.0F, 15.0F, cream);
+    }
+
+    /* Objective banner text (phase-driven). */
+    {
+        int killed = g_game_state.run_enemies_defeated;
+        int total = ENEMY_COUNT;
+        char quest[48];
+        if (g_sim.won) {
+            (void)snprintf(quest, sizeof(quest), "Victory!");
+        } else if (alive_enemies() == 0) {
+            (void)snprintf(quest, sizeof(quest), "Enter the Frost Keep!");
+        } else {
+            (void)snprintf(quest, sizeof(quest), "Defeat monsters (%d/%d)", clampi(killed, 0, total), total);
+        }
+        const float size = 18.0F;
         const float bx = DESIGN_W - 150.0F;
         const float by = DESIGN_H - 170.0F;
         const float w = text_width(quest, size);
+        emit_text(quest, bx - w * 0.5F + 1.0F, by - 1.0F, size, ink);
         emit_text(quest, bx - w * 0.5F, by, size, cream);
     }
+
+    /* FTUE prompt (<=3 beats), centered near the bottom while not complete. */
+    {
+        const char *prompt = ftue_prompt();
+        if (prompt) {
+            emit_text_centered(prompt, DESIGN_W * 0.5F, 22.0F, 22.0F, cream);
+        }
+    }
+
+    /* Downed banner. */
+    if (g_sim.downed_timer > 0.0F) {
+        const float red[4] = {1.0F, 0.45F, 0.45F, 1.0F};
+        emit_text_centered("Downed!  Respawning...", DESIGN_W * 0.5F, DESIGN_H * 0.5F - 12.0F, 30.0F, red);
+    }
+
+    /* Victory banner. */
+    if (g_sim.won) {
+        const float gold2[4] = {1.0F, 0.85F, 0.30F, 1.0F};
+        emit_text_centered("FROST KEEP CLEARED!", DESIGN_W * 0.5F, DESIGN_H * 0.55F - 6.0F, 44.0F, gold2);
+        emit_text_centered("Tap anywhere to play again", DESIGN_W * 0.5F, DESIGN_H * 0.55F - 50.0F, 22.0F, cream);
+    }
+
+    compose_floaters();
+}
+
+/* ---- Persistence ---- */
+
+#define VOXELHEIM_SAVE_PATH "build/voxelheim_save.json"
+
+static void load_persistent_state(void) {
+    game_state_init_defaults(&g_game_state);
+    if (s_fresh_state) {
+        return;
+    }
+    char err[256] = {0};
+    GameState loaded;
+    if (game_state_load(&loaded, VOXELHEIM_SAVE_PATH, err, (int)sizeof(err))) {
+        g_game_state = loaded;
+    }
+}
+
+static void save_persistent_state(void) {
+    if (!s_autosave) {
+        return;
+    }
+    char err[256] = {0};
+    (void)game_state_save(&g_game_state, VOXELHEIM_SAVE_PATH, err, (int)sizeof(err));
 }
 
 /* ---- DevAPI ---- */
@@ -345,10 +1029,25 @@ static void compose_text(void) {
 void game_state_register_devapi(void);
 
 static cJSON *state_json(void) {
-    cJSON *root = cJSON_CreateObject();
+    cJSON *root = game_state_to_json(&g_game_state);
     cJSON_AddStringToObject(root, "runtime", "voxelheim");
     cJSON_AddStringToObject(root, "screen", "frost_keep_approach");
     cJSON_AddBoolToObject(root, "atlas_ready", s_atlas_resolved);
+
+    /* Flat run mirror for easy probe assertions. */
+    cJSON_AddNumberToObject(root, "hero_hp", g_game_state.run_hero_hp);
+    cJSON_AddNumberToObject(root, "hero_max_hp", g_game_state.run_hero_max_hp);
+    cJSON_AddNumberToObject(root, "level", g_game_state.run_level);
+    cJSON_AddNumberToObject(root, "xp", g_game_state.run_xp);
+    cJSON_AddNumberToObject(root, "xp_to_next", g_game_state.run_xp_to_next);
+    cJSON_AddNumberToObject(root, "enemies_defeated", g_game_state.run_enemies_defeated);
+    cJSON_AddNumberToObject(root, "enemies_alive", alive_enemies());
+    cJSON_AddBoolToObject(root, "keep_reached", g_game_state.run_keep_reached);
+    cJSON_AddNumberToObject(root, "ftue_step", g_game_state.run_ftue_step);
+    cJSON_AddBoolToObject(root, "won", g_sim.won);
+    cJSON_AddBoolToObject(root, "downed", g_sim.downed_timer > 0.0F);
+    cJSON_AddNumberToObject(root, "hero_x", (double)g_sim.hero_x);
+    cJSON_AddNumberToObject(root, "hero_y", (double)g_sim.hero_y);
     return root;
 }
 
@@ -366,47 +1065,94 @@ static bool ep_game_reset_playtest(const cJSON *params, cJSON **result, char *er
     (void)error;
     (void)error_cap;
     (void)user;
+    playtest_reset();
     *result = state_json();
     return true;
 }
 
-/* Request an engine-side backbuffer screenshot. params: {"path": "..."}.
- * The handler runs on the main thread inside net_poll (before the frame
- * renders), so it cannot block waiting for the capture -- it flags the request
- * and returns immediately. The frame loop writes the file after end_pass and
- * sets s_shot_done/s_shot_ok, which the next frame.screenshot call reports.
- * Callers poll the returned "done" flag (or just wait + read the file). */
+/* Drive a world move: params {x,y} in DESIGN units (0..960, 0..540, y-up).
+ * Lets the headless probe walk the hero deterministically without fb/Y math. */
+static bool ep_game_debug_click(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)error;
+    (void)error_cap;
+    (void)user;
+    double x = (double)DESIGN_W * 0.5;
+    double y = (double)DESIGN_H * 0.5;
+    if (params) {
+        const cJSON *px = cJSON_GetObjectItemCaseSensitive(params, "x");
+        const cJSON *py = cJSON_GetObjectItemCaseSensitive(params, "y");
+        if (cJSON_IsNumber(px)) {
+            x = px->valuedouble;
+        }
+        if (cJSON_IsNumber(py)) {
+            y = py->valuedouble;
+        }
+    }
+    if (g_sim.won) {
+        playtest_reset();
+    } else {
+        hero_move_to((float)x, (float)y);
+    }
+    *result = state_json();
+    return true;
+}
+
+/* Advance the simulation deterministically: params {seconds} (default 0.5s),
+ * stepped at a fixed dt so combat/movement resolve the same headless or live. */
+static bool ep_game_debug_tick(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)error;
+    (void)error_cap;
+    (void)user;
+    double seconds = 0.5;
+    if (params) {
+        const cJSON *s = cJSON_GetObjectItemCaseSensitive(params, "seconds");
+        if (cJSON_IsNumber(s)) {
+            seconds = s->valuedouble;
+        }
+    }
+    if (seconds < 0.0) {
+        seconds = 0.0;
+    }
+    if (seconds > 30.0) {
+        seconds = 30.0; /* safety cap */
+    }
+    s_debug_driven = true; /* probe owns sim time from here on */
+    const double fixed = 1.0 / 60.0;
+    int steps = (int)(seconds / fixed + 0.5);
+    for (int i = 0; i < steps; ++i) {
+        update_sim((float)fixed);
+    }
+    *result = state_json();
+    return true;
+}
+
 static bool ep_frame_screenshot(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
     (void)error;
     (void)error_cap;
     (void)user;
     cJSON *root = cJSON_CreateObject();
-    if (s_shot_pending) {
-        /* A capture is already in flight -- just report status. */
-        cJSON_AddBoolToObject(root, "queued", true);
-        cJSON_AddBoolToObject(root, "done", s_shot_done);
-        cJSON_AddBoolToObject(root, "ok", s_shot_ok);
-        cJSON_AddStringToObject(root, "path", s_shot_path);
-        *result = root;
-        return true;
-    }
-    if (s_shot_done) {
-        /* Report the previous completed capture. */
-        cJSON_AddBoolToObject(root, "queued", false);
-        cJSON_AddBoolToObject(root, "done", true);
-        cJSON_AddBoolToObject(root, "ok", s_shot_ok);
-        cJSON_AddStringToObject(root, "path", s_shot_path);
-        *result = root;
-        return true;
-    }
+
+    /* A request with an explicit "path" starts a NEW capture (resets prior
+     * done/ok). A no-path call is a poll for the current/last capture status. */
     const cJSON *p = params ? cJSON_GetObjectItemCaseSensitive(params, "path") : NULL;
-    const char *path = (p && cJSON_IsString(p)) ? p->valuestring : "build/captures/voxelheim_p1.png";
-    (void)snprintf(s_shot_path, sizeof(s_shot_path), "%s", path);
-    s_shot_done = false;
-    s_shot_ok = false;
-    s_shot_pending = true;
-    cJSON_AddBoolToObject(root, "queued", true);
-    cJSON_AddBoolToObject(root, "done", false);
+    const bool is_request = (p && cJSON_IsString(p));
+
+    if (is_request && !s_shot_pending) {
+        (void)snprintf(s_shot_path, sizeof(s_shot_path), "%s", p->valuestring);
+        s_shot_done = false;
+        s_shot_ok = false;
+        s_shot_pending = true;
+        cJSON_AddBoolToObject(root, "queued", true);
+        cJSON_AddBoolToObject(root, "done", false);
+        cJSON_AddStringToObject(root, "path", s_shot_path);
+        *result = root;
+        return true;
+    }
+
+    /* Poll (or request arriving while one is still in flight): report status. */
+    cJSON_AddBoolToObject(root, "queued", s_shot_pending);
+    cJSON_AddBoolToObject(root, "done", s_shot_done);
+    cJSON_AddBoolToObject(root, "ok", s_shot_ok);
     cJSON_AddStringToObject(root, "path", s_shot_path);
     *result = root;
     return true;
@@ -417,6 +1163,8 @@ static void register_game_endpoints(void) {
     game_state_register_devapi();
     nt_devapi_register("game.state", ep_game_state, NULL);
     nt_devapi_register("game.reset_playtest", ep_game_reset_playtest, NULL);
+    nt_devapi_register("game.debug.click", ep_game_debug_click, NULL);
+    nt_devapi_register("game.debug.tick", ep_game_debug_tick, NULL);
     nt_devapi_register("frame.screenshot", ep_frame_screenshot, NULL);
 }
 
@@ -448,6 +1196,15 @@ static void frame(void) {
     nt_material_step();
     resolve_regions();
 
+    if (s_atlas_resolved && !g_sim.started) {
+        sim_reset();
+    }
+
+    handle_input();
+    if (!s_debug_driven) {
+        update_sim(g_nt_app.target_dt);
+    }
+
     const float w = (float)canvas_w();
     const float h = (float)canvas_h();
 
@@ -463,7 +1220,12 @@ static void frame(void) {
     }
 #endif
 
-    // #region frame uniforms: ortho over the DESIGN canvas (auto-fits the window)
+    /* Periodic autosave when progression changed. */
+    if (game_state_is_dirty()) {
+        save_persistent_state();
+        game_state_clear_dirty();
+    }
+
     mat4 proj;
     mat4 view;
     mat4 vp;
@@ -481,7 +1243,6 @@ static void frame(void) {
     u.resolution[3] = (h > 0.0F) ? 1.0F / h : 0.0F;
     u.near_far[0] = -1.0F;
     u.near_far[1] = 1.0F;
-    // #endregion
 
     const nt_material_info_t *sprite_info = nt_material_get_info(s_sprite_mat);
     const nt_material_info_t *text_info = nt_material_get_info(s_text_mat);
@@ -503,7 +1264,6 @@ static void frame(void) {
         nt_text_renderer_restore_gpu();
     }
 
-    /* Sky-blue clear (art bible #3FB7FF). */
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.247F, 0.717F, 1.0F, 1.0F}, .clear_depth = 1.0F});
     nt_font_step();
 
@@ -515,6 +1275,8 @@ static void frame(void) {
         compose_scene();
         nt_sprite_renderer_set_material(s_sprite_mat);
         compose_hud();
+        nt_sprite_renderer_set_material(s_sprite_mat);
+        compose_overlays();
 
         if (text_info && text_info->ready) {
             compose_text();
@@ -523,8 +1285,6 @@ static void frame(void) {
 
     nt_gfx_end_pass();
 
-    /* Engine-side screenshot: read the just-rendered backbuffer before swap.
-     * Only fire once the scene is actually drawn so the PNG is never blank. */
     if (s_shot_pending && can_render && !g_nt_gfx.context_restored) {
         s_shot_ok = write_backbuffer_png(s_shot_path);
         s_shot_done = true;
@@ -574,6 +1334,9 @@ int main(int argc, char **argv) {
     nt_text_renderer_init();
 
     g_nt_app.target_dt = 1.0F / 60.0F;
+
+    /* Load persistent progression before anything reads g_game_state. */
+    load_persistent_state();
 
     s_frame_ubo = nt_gfx_make_buffer(&(nt_buffer_desc_t){
         .type = NT_BUFFER_UNIFORM,
@@ -643,6 +1406,7 @@ int main(int argc, char **argv) {
     nt_app_run(frame);
 
 #ifndef NT_PLATFORM_WEB
+    save_persistent_state();
 #if NT_DEVAPI_ENABLED
     if (s_devapi_enabled) {
         nt_devapi_net_stop();

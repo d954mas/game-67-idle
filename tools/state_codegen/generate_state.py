@@ -33,6 +33,14 @@ REQUIRED_FIELDS = {
     "items",
     "inventory.item_ids",
     "equipment.hand_item_id",
+    "run.hero_hp",
+    "run.hero_max_hp",
+    "run.level",
+    "run.xp",
+    "run.xp_to_next",
+    "run.enemies_defeated",
+    "run.keep_reached",
+    "run.ftue_step",
 }
 
 SCALAR_TYPES = {"bool", "int", "float", "string", "string?", "enum"}
@@ -66,8 +74,8 @@ def load_schema(schema_path: Path = SCHEMA_PATH) -> dict[str, Any]:
         raise SystemExit("schema id must be game_seed.state")
     if schema.get("document") != "game":
         raise SystemExit("document must be game")
-    if schema.get("version") != 1:
-        raise SystemExit("this generator supports version 1")
+    if schema.get("version") not in (1, 2):
+        raise SystemExit("this generator supports version 1 or 2")
     if not isinstance(schema.get("string_max"), int) or schema["string_max"] < 2:
         raise SystemExit("string_max must be an integer >= 2")
     if not isinstance(schema.get("fields"), list):
