@@ -93,6 +93,8 @@ def touches_alpha(alpha_pixels: Any, x: int, y: int, width: int, height: int, ra
 
 
 def remove_edge_fringe(image: Image.Image, passes: int = 3) -> None:
+    if remove_edge_fringe_numpy(image, passes=passes):
+        return
     pixels = image.load()
     width, height = image.size
     for _pass in range(passes):
@@ -125,6 +127,8 @@ def repair_visible_halo(
     radius: int = 6,
     require_transparent_touch: bool = True,
 ) -> None:
+    if repair_visible_halo_numpy_image(image, require_transparent_touch=require_transparent_touch):
+        return
     pixels = image.load()
     alpha = image.getchannel("A")
     alpha_pixels = alpha.load()
@@ -159,6 +163,8 @@ def repair_visible_halo(
 
 
 def remove_source_key_spill(image: Image.Image, key: RGB, passes: int = 3, radius: int = 2) -> None:
+    if remove_source_key_spill_numpy(image, key=key, passes=passes, radius=radius):
+        return
     pixels = image.load()
     width, height = image.size
     for _pass in range(passes):
@@ -180,6 +186,8 @@ def remove_source_key_spill(image: Image.Image, key: RGB, passes: int = 3, radiu
 
 
 def remove_green_screen_spill(image: Image.Image, passes: int = 3, radius: int = 2) -> None:
+    if remove_green_screen_spill_numpy(image, passes=passes, radius=radius):
+        return
     pixels = image.load()
     width, height = image.size
     for _pass in range(passes):
@@ -198,6 +206,87 @@ def remove_green_screen_spill(image: Image.Image, passes: int = 3, radius: int =
         for x, y in to_clear:
             red, green, blue, _alpha = pixels[x, y]
             pixels[x, y] = (red, green, blue, 0)
+
+
+def remove_edge_fringe_numpy(image: Image.Image, passes: int = 3) -> bool:
+    if np is None:
+        return False
+    array = np.array(image.convert("RGBA"), dtype=np.uint8)
+    if array.size == 0:
+        return True
+    for _pass in range(passes):
+        alpha = array[..., 3]
+        visible = alpha > 12
+        transparent = alpha <= 12
+        red = array[..., 0].astype(np.int16)
+        green = array[..., 1].astype(np.int16)
+        blue = array[..., 2].astype(np.int16)
+        clear = visible & (
+            (key_fringe_mask_rgb(red, green, blue) & dilate_bool_mask(transparent, 1))
+            | (purple_halo_only_mask_rgb(red, green, blue) & dilate_bool_mask(transparent, 2))
+        )
+        if not np.any(clear):
+            break
+        array[..., 3][clear] = 0
+    image.paste(Image.fromarray(array))
+    return True
+
+
+def remove_source_key_spill_numpy(image: Image.Image, key: RGB, passes: int = 3, radius: int = 2) -> bool:
+    if np is None:
+        return False
+    array = np.array(image.convert("RGBA"), dtype=np.uint8)
+    if array.size == 0:
+        return True
+    for _pass in range(passes):
+        alpha = array[..., 3]
+        visible = alpha > 12
+        transparent_touch = dilate_bool_mask(alpha <= 12, radius)
+        red = array[..., 0].astype(np.int16)
+        green = array[..., 1].astype(np.int16)
+        blue = array[..., 2].astype(np.int16)
+        clear = visible & source_key_spill_mask(red, green, blue, key) & transparent_touch
+        if not np.any(clear):
+            break
+        array[..., 3][clear] = 0
+    image.paste(Image.fromarray(array))
+    return True
+
+
+def remove_green_screen_spill_numpy(image: Image.Image, passes: int = 3, radius: int = 2) -> bool:
+    if np is None:
+        return False
+    array = np.array(image.convert("RGBA"), dtype=np.uint8)
+    if array.size == 0:
+        return True
+    for _pass in range(passes):
+        alpha = array[..., 3]
+        visible = alpha > 12
+        transparent_touch = dilate_bool_mask(alpha <= 12, radius)
+        red = array[..., 0].astype(np.int16)
+        green = array[..., 1].astype(np.int16)
+        blue = array[..., 2].astype(np.int16)
+        clear = visible & green_screen_spill_mask_rgb(red, green, blue) & transparent_touch
+        if not np.any(clear):
+            break
+        array[..., 3][clear] = 0
+    image.paste(Image.fromarray(array))
+    return True
+
+
+def repair_visible_halo_numpy_image(image: Image.Image, *, require_transparent_touch: bool = True) -> bool:
+    if np is None:
+        return False
+    array = np.array(image.convert("RGBA"), dtype=np.uint8)
+    if array.size == 0:
+        return True
+    repair_visible_halo_numpy(
+        array,
+        key=(255, 0, 255),
+        aggressive_visible_decontaminate=not require_transparent_touch,
+    )
+    image.paste(Image.fromarray(array))
+    return True
 
 
 def key_fringe_mask_rgb(red: Any, green: Any, blue: Any) -> Any:
@@ -493,6 +582,8 @@ def zero_fully_transparent_rgb(image: Image.Image) -> None:
 
 
 def repair_transparent_edge_rgb(image: Image.Image, radius: int = 4, key: RGB | None = None) -> None:
+    if repair_transparent_edge_rgb_numpy(image, radius=radius, key=key):
+        return
     pixels = image.load()
     alpha = image.getchannel("A")
     alpha_pixels = alpha.load()
@@ -529,6 +620,30 @@ def repair_transparent_edge_rgb(image: Image.Image, radius: int = 4, key: RGB | 
                 )
     for x, y, red, green, blue in updates:
         pixels[x, y] = (red, green, blue, 0)
+
+
+def repair_transparent_edge_rgb_numpy(image: Image.Image, radius: int = 4, key: RGB | None = None) -> bool:
+    if np is None:
+        return False
+    array = np.array(image.convert("RGBA"), dtype=np.uint8)
+    if array.size == 0:
+        return True
+    alpha = array[..., 3]
+    transparent = alpha <= 12
+    bad = bad_edge_rgb_mask_array(array, key)
+    update = transparent & bad
+    if not np.any(update):
+        return True
+
+    visible = alpha > 12
+    count = box_sum(visible.astype(np.uint16), radius)
+    total = box_sum(array[..., :3].astype(np.uint32) * visible[..., None], radius)
+    update &= count > 0
+    if np.any(update):
+        array[..., :3][update] = (total[update] // count[update, None]).astype(np.uint8)
+        array[..., 3][update] = 0
+        image.paste(Image.fromarray(array))
+    return True
 
 
 def key_to_alpha(

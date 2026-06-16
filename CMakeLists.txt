@@ -202,6 +202,16 @@ if(NOT EMSCRIPTEN AND NOT TARGET asset_chroma_key_native)
     nt_set_sanitizer_flags(asset_chroma_key_native)
 endif()
 
+if(NOT EMSCRIPTEN AND NOT TARGET import_generated_core_assets_native)
+    add_executable(import_generated_core_assets_native tools/critter_corral/import_generated_core_assets_native.c)
+    target_link_libraries(import_generated_core_assets_native PRIVATE stb_image stb_image_resize2 stb_image_write)
+    target_compile_definitions(import_generated_core_assets_native PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(import_generated_core_assets_native PRIVATE -U_DLL)
+    nt_set_warning_flags(import_generated_core_assets_native)
+    target_compile_options(import_generated_core_assets_native PRIVATE -Wno-language-extension-token)
+    nt_set_sanitizer_flags(import_generated_core_assets_native)
+endif()
+
 add_executable(${GAME_TARGET}
     src/clean_seed_main.c
     src/game_audio.c
