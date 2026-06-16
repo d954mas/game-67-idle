@@ -1463,30 +1463,22 @@ static void compose_hud(void) {
             float cx, cy, w, h;
             panel_slot_rect(i, &cx, &cy, &w, &h);
             bool affordable = (double)g_game_state.idle_gold >= upgrade_cost(i);
-            /* affordable -> bright green button + pulse "buy now" ring;
-             * unaffordable -> tinted dark slate + a darkening overlay so it reads
-             * clearly as "can't buy this yet". */
-            if (affordable) {
-                float pulse = 0.5F + 0.5F * sinf(g_sim.time * 5.0F + (float)i);
-                emit_quad(cx, cy, w + 12.0F, h + 12.0F, 1.0F, 0.95F, 0.45F, 0.16F + 0.24F * pulse);
-                emit_sprite(R_BUTTON, cx, cy, w, h, pack_rgba(0.58F, 1.0F, 0.62F, 1.0F));
-            } else {
-                emit_sprite(R_BUTTON, cx, cy, w, h, pack_rgba(0.30F, 0.34F, 0.40F, 1.0F));
-                /* darkening veil to kill the leftover green and dim the whole pill */
-                emit_quad(cx, cy, w - 4.0F, h - 4.0F, 0.10F, 0.11F, 0.14F, 0.45F);
-            }
+            /* The rounded R_BUTTON sprite IS the card: tint it by affordability and
+             * draw nothing rectangular on top (icon + coin + outlined text sit
+             * directly on it). Earlier extra glow/veil/icon-box/cost-strip quads
+             * were rectangles that clashed with the rounded button and read dirty. */
+            uint32_t btn = affordable ? pack_rgba(0.56F, 1.0F, 0.60F, 1.0F)    /* bright green = buyable */
+                                      : pack_rgba(0.40F, 0.44F, 0.50F, 1.0F);  /* dim slate = can't afford */
+            emit_sprite(R_BUTTON, cx, cy, w, h, btn);
 
-            /* left icon disc + icon */
-            float ix = cx - w * 0.5F + 30.0F;
+            /* upgrade icon (no box) top-left of the button */
+            float ix = cx - w * 0.5F + 28.0F;
             float iy = cy + 14.0F;
-            emit_quad(ix, iy, 46.0F, 46.0F, 0.05F, 0.06F, 0.05F, affordable ? 0.55F : 0.42F);
-            emit_h(upgrade_icon_region(i), ix, iy, 40.0F, affordable ? white : pack_rgba(0.68F, 0.70F, 0.74F, 1.0F));
+            emit_h(upgrade_icon_region(i), ix, iy, 38.0F, affordable ? white : pack_rgba(0.70F, 0.72F, 0.76F, 1.0F));
 
-            /* cost-row backing strip (dark) so the price reads as a price */
+            /* coin glyph in front of the cost number (bottom-left), no strip */
             float cry = cy - h * 0.5F + 16.0F;
-            emit_quad(cx, cry, w - 18.0F, 24.0F, 0.04F, 0.05F, 0.04F, affordable ? 0.66F : 0.55F);
-            /* small coin glyph at the left of the cost strip */
-            emit_h(R_COIN, cx - w * 0.5F + 24.0F, cry, 22.0F, affordable ? white : pack_rgba(0.62F, 0.62F, 0.66F, 1.0F));
+            emit_h(R_COIN, cx - w * 0.5F + 22.0F, cry, 20.0F, affordable ? white : pack_rgba(0.66F, 0.66F, 0.70F, 1.0F));
         }
     }
 

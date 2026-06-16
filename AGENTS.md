@@ -154,6 +154,17 @@
   auto-metric is a coarse helper; the montage eyeball is the gate. (2026-06-17:
   the idle UI shipped ~2px hairline text on small plates because it was judged
   from the full shot, not a zoom.)
+- Visual regression rule (a recurring failure: fixing one axis silently made
+  another worse — this session a text-readability pass introduced clashing
+  rectangular plates on the ROUNDED buttons and "looked dirty"): when you change
+  UI/visual, produce a BEFORE -> AFTER comparison
+  (`py -3.12 tools/devapi/ui_readability.py <new_shot> --compare <old_shot>`
+  writes a `*_cmp.png` montage of the prior vs new bands) and confirm the change
+  did NOT regress any part — do NOT trade one axis (e.g. readability) for another
+  (cleanliness). Self-judge the WHOLE screen against the target, not only the
+  thing you touched. Back UI with MATCHING shapes: an element's own rounded
+  sprite IS its plate — never stack rectangles (glow rings, veils, icon boxes,
+  cost strips) on a rounded button; they read dirty.
 - Visual-first freeze: while the first screen fails the visual gate, do not
   expand systems, state, routes, content, or automation. Fix the screen to the
   reference bar first, then expand. This is the default, not a rescue mode.

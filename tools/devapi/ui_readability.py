@@ -23,7 +23,7 @@ import os
 import sys
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 # Heuristic thresholds (tuned to flag "text on bright sky" + washed text).
 INK_LUMA = 80          # <= this = "ink" (text body / dark outline)
@@ -104,6 +104,7 @@ def main() -> int:
         return 2
     path = sys.argv[1]
     out = None
+    before = None
     region_args: list[str] = []
     i = 2
     while i < len(sys.argv):
@@ -111,6 +112,8 @@ def main() -> int:
             out = sys.argv[i + 1]; i += 2
         elif sys.argv[i] == "--region":
             region_args.append(sys.argv[i + 1]); i += 2
+        elif sys.argv[i] == "--compare":
+            before = sys.argv[i + 1]; i += 2
         else:
             i += 1
     if not os.path.exists(path):
@@ -152,6 +155,25 @@ def main() -> int:
         any_warn = any_warn or r["warn"]
     print("LOOK AT THE ZOOM MONTAGE — do not judge text from the full screenshot.")
     print("WARN: text readability likely poor (see above)." if any_warn else "PASS: no text-on-bright flag (still eyeball the montage).")
+    if before and os.path.exists(before):
+        bim = Image.open(before).convert("RGB")
+        rows = []
+        for name, (fx0, fy0, fx1, fy1) in regions.items():
+            for tag, src in (("BEFORE", bim), ("AFTER", im)):
+                ww, hh = src.size
+                c = src.crop((int(fx0 * ww), int(fy0 * hh), int(fx1 * ww), int(fy1 * hh)))
+                z = c.resize((int(c.width * 2.5), int(c.height * 2.5)), Image.LANCZOS)
+                ImageDraw.Draw(z).text((6, 4), f"{tag} {name}", fill=(255, 80, 80))
+                rows.append(z)
+        mw = max(z.width for z in rows)
+        mh = sum(z.height for z in rows) + 6 * (len(rows) - 1)
+        cmp_canvas = Image.new("RGB", (mw, mh), (18, 18, 18))
+        y = 0
+        for z in rows:
+            cmp_canvas.paste(z, (0, y)); y += z.height + 6
+        cmp_out = os.path.splitext(out)[0] + "_cmp.png"
+        cmp_canvas.save(cmp_out)
+        print(f"BEFORE/AFTER regression montage: {cmp_out} — confirm the change did NOT make any band WORSE (do not trade one axis for another).")
     return 1 if any_warn else 0
 
 
