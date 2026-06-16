@@ -70,7 +70,12 @@ offline-earnings popup on launch. Reuse all current art.
 
 ## Visual Direction — LOCKED: "Bright Roblox Adventure" (Theme A)
 
-Unchanged from before — see `visual/art_bible.md` + `visual/fake_shot_first_screen.png`.
+Unchanged STYLE (Theme A) — see `visual/art_bible.md`. **Idle visual target:
+`visual/idle_fakeshot.png`** — a polished idealized idle screen (one central
+enemy the hero fights, a clean readable 4-button upgrade panel with
+affordability + coin costs, big readable Gold/Stage on solid plates, damage-
+number juice). `visual/fake_shot_first_screen.png` is the earlier ACTION-era
+shot, kept for reference. Improve the build toward `idle_fakeshot.png`.
 Saturated, blocky, readable; real sprites via `nt_sprite_renderer`. The existing
 hero/goblin/keep/path/backdrop/UI assets are reused; the hotbar art becomes the
 upgrade panel.

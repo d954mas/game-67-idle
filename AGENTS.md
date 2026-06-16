@@ -143,6 +143,17 @@
   gate` — a qualitative rubric: composition, readability, ui controls, action
   direction, art quality, audience fit), not once at the end. Treat a screen
   that does not reach the fake shot's direction/quality bar as a failing build.
+- UI / text readability gate (a RECURRING iteration failure): judge text from a
+  ZOOM, never the full screenshot — text that looks fine at thumbnail size is
+  routinely tiny / hairline / on a bright background. Before any UI/text slice is
+  done, run `py -3.12 tools/devapi/ui_readability.py <screenshot>` (it crops +
+  upscales the HUD/panel bands into a montage and flags ~2px hairline strokes and
+  text-on-bright) and LOOK at the montage. Minimums: every label/number on a
+  solid plate that fully contains it; primary numbers/labels large + bold or
+  outlined (hairline ~2px strokes = fail); cost/affordability legible. The
+  auto-metric is a coarse helper; the montage eyeball is the gate. (2026-06-17:
+  the idle UI shipped ~2px hairline text on small plates because it was judged
+  from the full shot, not a zoom.)
 - Visual-first freeze: while the first screen fails the visual gate, do not
   expand systems, state, routes, content, or automation. Fix the screen to the
   reference bar first, then expand. This is the default, not a rescue mode.
