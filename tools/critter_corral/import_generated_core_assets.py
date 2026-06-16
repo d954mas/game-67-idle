@@ -480,6 +480,19 @@ def import_stamp_fingerprint() -> dict[str, Any]:
     }
 
 
+def without_runtime_metas(stamp: dict[str, Any]) -> dict[str, Any]:
+    comparable = dict(stamp)
+    comparable.pop("runtime_metas", None)
+    return comparable
+
+
+def runtime_meta_fingerprint_by_path(stamp: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    metas = stamp.get("runtime_metas", [])
+    if not isinstance(metas, list):
+        return {}
+    return {meta["path"]: meta for meta in metas if isinstance(meta, dict) and isinstance(meta.get("path"), str)}
+
+
 def import_outputs_current() -> bool:
     required_outputs = [SPRITE_DIR / spec["output"] for spec in ASSETS] + [CROP_MANIFEST, ASSET_MANIFEST, CONTACT_SHEET]
     if not all(path.exists() for path in required_outputs):
@@ -495,6 +508,31 @@ def import_outputs_current() -> bool:
 
 def write_import_stamp() -> None:
     write_json_atomic_file(IMPORT_STAMP, import_stamp_fingerprint())
+
+
+def repair_runtime_metas_from_stamp() -> bool:
+    if not IMPORT_STAMP.exists():
+        return False
+    required_outputs = [SPRITE_DIR / spec["output"] for spec in ASSETS] + [CROP_MANIFEST, ASSET_MANIFEST, CONTACT_SHEET]
+    if not all(path.exists() for path in required_outputs):
+        return False
+    try:
+        previous_stamp = json.loads(IMPORT_STAMP.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if len(previous_stamp.get("runtime_metas", [])) != len(ASSETS):
+        return False
+    current_stamp = import_stamp_fingerprint()
+    if without_runtime_metas(previous_stamp) != without_runtime_metas(current_stamp):
+        return False
+    previous_metas = runtime_meta_fingerprint_by_path(previous_stamp)
+    for spec in ASSETS:
+        meta_path = runtime_cache_meta_path(spec)
+        current_meta = file_fingerprint(meta_path) if meta_path.exists() else None
+        if current_meta != previous_metas.get(rel(meta_path)):
+            write_runtime_output_meta(spec, SPRITE_DIR / spec["output"])
+    write_import_stamp()
+    return import_outputs_current()
 
 
 def write_rgba_cache_atomic(path: Path, image: Image.Image) -> None:
@@ -585,6 +623,9 @@ def main() -> None:
 
     if import_outputs_current():
         print("generated core assets are up to date")
+        return
+    if repair_runtime_metas_from_stamp():
+        print("repaired generated core asset runtime metadata")
         return
 
     from PIL import Image

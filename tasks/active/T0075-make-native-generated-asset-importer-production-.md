@@ -151,3 +151,20 @@ produced visually-valid but non-identical PNGs.
     about 0.25s, `fit_to_canvas` about 0.21s, PNG saves about 0.05s. Further
     large gains require native/runtime-transform parity work or reducing cold
     work volume, not more small no-op cleanup.
+- 2026-06-16: Added a metadata-only repair path for partial runtime-cache
+  invalidation:
+  - If the aggregate import stamp proves that source PNGs, runtime PNGs,
+    crop/asset manifests, contact sheet, specs, and algorithm versions are
+    unchanged, but runtime sidecar metadata is missing/stale, the importer now
+    rewrites only the affected sidecar JSON and refreshes the stamp before
+    importing PIL or rebuilding runtime PNGs.
+  - `tools.assets.atomic_io` no longer imports PIL for JSON writes; PIL is
+    loaded only for `save_image_atomic`.
+  - Deleting `icon_chain.png.json` repaired in about 0.074s instead of taking
+    the previous full rebuild path.
+  - Repair-path cProfile: 0.049s inside Python, with no PIL/PNG processing.
+  - Warm native no-change, 5 runs: 0.057-0.065s wall-clock.
+  - Native full-cold rebuild: 0.630s.
+  - Python full-cold rebuild: 0.675s.
+  - Pixel parity still passed for all 11 generated runtime PNGs.
+  - Audit still passed for 11 generated UI assets.

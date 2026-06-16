@@ -5,8 +5,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
-
 
 def atomic_temp_path(path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -37,7 +35,9 @@ def write_json_atomic(path: Path, data: Any, *, indent: int = 2, trailing_newlin
     write_text_atomic(path, text)
 
 
-def save_image_atomic(image: Image.Image, path: Path, *, format: str | None = None, **save_kwargs: Any) -> None:
+def save_image_atomic(image: Any, path: Path, *, format: str | None = None, **save_kwargs: Any) -> None:
+    from PIL import Image
+
     path.parent.mkdir(parents=True, exist_ok=True)
     format_name = format
     if format_name is None:
