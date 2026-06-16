@@ -3,11 +3,13 @@
 ## Current Goal
 
 `Critter Corral` (critter-corral, epic E004) is a **gameplay release-candidate**:
-a complete native casual herd-sort game (core moment + run structure + 2->5
-colors + 4 behaviors + between-wave upgrades + audio + fontless HUD), rendered
-on free placeholder sprites, code review CLEAN, visual gate PASS. Remaining for
-a hard release (out of autonomous reach, by design): a HUMAN fun/balance
-playtest, and bespoke art via Codex (swap placeholder PNGs in-place).
+a complete casual herd-sort game (core moment + run/levels + 2->5 colors + 4
+behaviors + between-wave upgrades + audio), on free placeholder sprites, code
+review CLEAN, visual gate PASS. Now also TEACHABLE (text rendering: clear upgrade
+names+descriptions, a 3-beat FTUE, "Level N"/"New color!" display) and runs in
+PORTRAIT with TOUCH plus a working mobile WEB (wasm) build. Remaining for a hard
+release (by design, out of autonomous reach): a HUMAN fun/balance playtest, and
+bespoke art via Codex (swap placeholder PNGs in-place).
 
 ## Blocking Work
 
