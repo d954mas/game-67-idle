@@ -11,6 +11,26 @@ sessions, use the `chat-session-reflection` skill.
 Compact reusable lessons about AI-assisted development. Keep each entry under
 about 10 lines.
 
+### 2026-06-16 - Shipped a Pretty Screen, Not a Game (Visual Gates Hid the Missing Loop)
+
+- Context: Built Voxelheim from a "Roblox RPG like Skyrim" brief up to a
+  "release-candidate" first screen; lead: "looks nice but I don't get what the
+  game is, the loop, the idea, the refs - is it idle?"
+- Root cause: the pipeline OPERATIONALIZES the visual gate (`ai.mjs gate`) and
+  the teachability gate, but had NO operational gate for the GAME (core loop,
+  progression, hook, reason-to-play, reference grounding). I optimized to the
+  gates I had; the player/critic subagents were briefed to judge the SCREEN's
+  look + teachability, not the game. Reference deconstruction was skipped (fake
+  shots were style-only). The visual-first freeze became design-never; the
+  "first slice = one goal/one action" FTUE rule got conflated with "the whole
+  game = one screen, one fight".
+- Fix: added a Game / core-loop gate to AGENTS.md (beside visual + teachability)
+  with a separate game-design critic, and "design the loop + ref digest BEFORE
+  art/screens; release-ready is never a first-screen visual verdict". The real
+  game-design work goes to `tasks/`.
+- Profiling: 4.5h session, 1.7% wall-clock coverage, 33 unresolved fails -
+  subagent gaps not checkpointed; checkpoint long delegated stretches.
+
 ### 2026-06-16 - Generated Art Must Prove Source-To-Runtime, Not Just Look Better
 
 - Context: Lead rejected a procedural "polish" pass because it did not visibly

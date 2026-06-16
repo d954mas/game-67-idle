@@ -28,8 +28,13 @@ py -3.12 tools/devapi/voxelheim_play_test.py 9123
 
 ## Current Gate
 
-Release-candidate bar: PASSED (final critic round 3). Two full player+critic
-rounds + a confirmation pass drove the iteration.
+VISUAL + TEACHABILITY gates: PASSED (final critic round 3, screen-level).
+**Game / core-loop gate (AGENTS.md): NOT passed.** Retrospective correction:
+the round-3 verdict judged the SCREEN (look + can-a-newcomer-operate-it), not
+the GAME. The build is a polished visual/tech slice, not a designed game — no
+real core loop, progression/economy, hook, or reference grounding (lead: "I
+don't get what the game is"). Next: **T0005** (design the real game) after the
+genre decision (idle vs action-RPG).
 
 ## Non-blocking Debt / Deferred (not gating)
 

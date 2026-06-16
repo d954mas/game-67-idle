@@ -104,6 +104,24 @@
   not polish — not done until a first-time player could figure it out unaided.
   (This session shipped "release-candidate" with opaque, text-less upgrades and
   no real FTUE because only appearance was gated; do not repeat that.)
+- Game / core-loop gate (beside the visual + teachability gates; the GAME, not
+  the screen): before a slice is "done" or called a prototype/release-ready,
+  judge it as someone who wants a GAME, not a demo. Can you state the
+  hook/fantasy in one sentence? Is there a real core loop (>=3 interlocking
+  verbs with a reward and a reason to repeat), with progression/economy (what
+  grows, what is spent, why) and a reason to play the next 5 minutes? Is the
+  loop grounded in a NAMED reference deconstruction, not invented thin? A screen
+  that LOOKS like a game and a newcomer can operate, but has no loop /
+  progression / hook and no reason to keep playing, is a tech-art DEMO, NOT a
+  game, and NOT done. Run a separate game-design critic / playtest that judges
+  fun + loop + why-replay (not the art/UX critic). Design the core loop +
+  reference digest BEFORE generating fake shots or building screens; the
+  visual-first freeze means "do not over-build systems before the screen looks
+  right", it does NOT mean "skip the GDD/loop/refs". "Release-ready" is never a
+  first-SCREEN visual verdict. (This session shipped a polished, teachable first
+  screen as "release candidate" while the lead could not tell what the game was,
+  why, or its loop — only appearance + screen-teachability were gated. Do not
+  repeat that.)
 - Continuous visual gate: when a fake shot/reference is named, judge the native
   screenshot against its direction every visual iteration (`node tools/ai.mjs
   gate` — a qualitative rubric: composition, readability, ui controls, action
