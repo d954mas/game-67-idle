@@ -1,8 +1,16 @@
 {
-  "_comment": "Guaranteed passive profiling for Codex CLI (mirror of .claude/settings.json). Codex runs hook_record.mjs on every command tool call + session start, appending a record to tmp/session_profiles/ that `node tools/ai.mjs status` reads. The handler filters to command-bearing tool calls itself, so a broad matcher is fine. If hooks do not fire, ensure `[features] hooks = true` in .codex/config.toml (hooks are enabled by default in current Codex).",
+  "_comment": "Passive profiling for Codex CLI (mirror of .claude/settings.json). PreToolUse records command attempts, PostToolUse records command results when the harness emits them, and SessionStart records the session. Records append to tmp/session_profiles/ for `node tools/ai.mjs status`. If hooks do not fire, ensure `[features] hooks = true` in .codex/config.toml (hooks are enabled by default in current Codex).",
   "hooks": {
     "SessionStart": [
       {
+        "hooks": [
+          { "type": "command", "command": "node tools/ai_profile/hook_record.mjs codex" }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "(?i)(bash|shell|exec)",
         "hooks": [
           { "type": "command", "command": "node tools/ai_profile/hook_record.mjs codex" }
         ]

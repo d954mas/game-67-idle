@@ -1,8 +1,16 @@
 {
-  "$comment": "Guaranteed passive profiling: the harness runs hook_record.mjs on every Bash tool call + session start, appending a record to tmp/session_profiles/ that `node tools/ai.mjs status` reads. No agent action required. Mirror config for Codex: .codex/hooks.json.",
+  "$comment": "Passive profiling: PreToolUse records Bash command attempts, PostToolUse records results when the harness emits them, and SessionStart records the session. Records append to tmp/session_profiles/ for `node tools/ai.mjs status`. Mirror config for Codex: .codex/hooks.json.",
   "hooks": {
     "SessionStart": [
       {
+        "hooks": [
+          { "type": "command", "command": "node tools/ai_profile/hook_record.mjs claude" }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
         "hooks": [
           { "type": "command", "command": "node tools/ai_profile/hook_record.mjs claude" }
         ]
