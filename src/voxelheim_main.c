@@ -139,18 +139,28 @@
 #define VH_OFFLINE_RATE_PCT 50.0
 #define VH_OFFLINE_CAP_HOURS 8.0
 
-/* ---- Sim tuning (presentation only; not economy) ---- */
-#define MON_SPAWN_Y (DESIGN_H * 0.72F)  /* monsters appear up the path */
-#define MON_FRONT_Y (DESIGN_H * 0.40F)  /* front monster engagement line */
-#define MON_WALK_SPEED 70.0F            /* design units/sec down the path */
-#define MON_SLOT_GAP 96.0F              /* spacing between queued monsters */
+/* ---- Sim tuning (presentation only; not economy) ----
+ *
+ * IDLE BATTLER layout (Clicker Heroes / Tap Titans 2): the fight is ONE big
+ * enemy at a fixed FIGHT SLOT next to the hero in the lower third -- never a
+ * vertical stack. Queued monsters (at most a couple) sit far up the path, small
+ * and faded, as "coming next"; when the front dies the next walks down into the
+ * slot. Each monster carries a progression coordinate `y` in [0..1] (1 = just
+ * spawned far up the path, 0 = engaged at the fight slot); screen position is
+ * derived from `y` along a receding path curve, so distance reads as depth
+ * (smaller + higher + dimmer), not as a column. */
+#define MON_WALK_RATE 0.9F              /* progress units/sec the front advances */
 #define HIT_FLASH_TIME 0.1F
 #define STAGE_FLASH_TIME 1.1F
 
-#define MAX_MONSTERS 6                  /* visible queue depth */
-#define MAX_PARTICLES 64
+/* Only a tiny queue is ever shown behind the active enemy (refs show ~1-2). */
+#define MAX_MONSTERS 3                  /* 1 active + up to 2 small queued */
+#define MAX_PARTICLES 80
 #define MAX_FLOATERS 24
-#define MAX_SPRITE_FX 32
+#define MAX_SPRITE_FX 40
+
+/* Hero attack lunge (presentation): a quick forward poke + recoil on each swing. */
+#define HERO_LUNGE_TIME 0.26F
 
 /* ---- Region name hashes, indexed by enum ---- */
 
@@ -247,13 +257,19 @@ typedef struct Particle {
     float size;
 } Particle;
 
-/* One monster in the descending stream. */
+/* One monster in the stream. `prog` is a progression coordinate in [0..1]:
+ * 1.0 = just spawned, far up the path; 0.0 = engaged at the fight slot next to
+ * the hero. Screen (x,y,scale,alpha) are DERIVED from `prog` along a receding
+ * path curve so distance reads as depth, never as a vertical column. */
 typedef struct Monster {
     bool alive;
-    float x, y;       /* design units */
+    float prog;       /* 1=far up path .. 0=engaged at the fight slot */
+    int lane;         /* queued-monster lane index (slight L/R offset up-path) */
     double hp;        /* current hp (double: scales large) */
     double max_hp;
     float flash;      /* hit-flash timer */
+    float knockback;  /* hit knockback timer (small recoil) */
+    float spawn_pop;  /* spawn-in pop timer (scale ease) */
     bool is_boss;
 } Monster;
 
@@ -277,6 +293,7 @@ static struct {
 
     float hero_attack_cd;  /* seconds until next swing */
     float hero_flash;
+    float hero_lunge;      /* attack lunge/recoil timer (presentation) */
     double regen_accum;    /* fractional hp regen accumulator */
     double gold_accum;     /* fractional gold accumulator (boss/regen rounding) */
 
@@ -298,11 +315,19 @@ static struct {
     float prestige_armed_timer;
 } g_sim;
 
-/* Hero stands lower-center on the path. */
-#define HERO_X (DESIGN_W * 0.50F)
-#define HERO_Y (DESIGN_H * 0.27F)
+/* IDLE-BATTLER composition (toward idle_fakeshot.png): hero lower-center-LEFT,
+ * the active enemy at the FIGHT SLOT just to his right, BOTH prominent in the
+ * lower third; the Frost Keep + mountains read as backdrop only. */
+#define HERO_X (DESIGN_W * 0.355F)
+#define HERO_Y (DESIGN_H * 0.300F)
+/* Fight slot: where the engaged enemy stands (prog==0). Just up-path / right. */
+#define FIGHT_X (DESIGN_W * 0.605F)
+#define FIGHT_Y (DESIGN_H * 0.345F)
+/* Far end of the queue path (prog==1): up toward the keep, smaller + dimmer. */
+#define PATH_FAR_X (DESIGN_W * 0.560F)
+#define PATH_FAR_Y (DESIGN_H * 0.560F)
 #define KEEP_CX (DESIGN_W * 0.5F)
-#define KEEP_CY (DESIGN_H * 0.72F)
+#define KEEP_CY (DESIGN_H * 0.74F)
 
 /* ---- Helpers ---- */
 
@@ -311,6 +336,26 @@ static uint32_t canvas_h(void) { return g_nt_window.fb_height > 0 ? g_nt_window.
 
 static float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 static int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+/* Map a monster's progression coord (1 far .. 0 engaged) + lane to screen.
+ * The path recedes up and slightly toward center; depth (=prog) drives scale &
+ * fade so queued monsters read as small/faded "coming next", not a tower. */
+static void monster_screen(const Monster *m, float *out_x, float *out_y, float *out_scale, float *out_alpha) {
+    float t = clampf(m->prog, 0.0F, 1.0F);
+    /* ease so the front sits clearly forward and the queue bunches up-path */
+    float te = t * t;
+    float x = FIGHT_X + (PATH_FAR_X - FIGHT_X) * te;
+    float y = FIGHT_Y + (PATH_FAR_Y - FIGHT_Y) * te;
+    /* queued monsters fan to alternating lanes so two queued don't overlap */
+    if (t > 0.02F) {
+        float lane_off = (m->lane % 2 == 0) ? -1.0F : 1.0F;
+        x += lane_off * 34.0F * te;
+    }
+    *out_x = x;
+    *out_y = y;
+    *out_scale = 1.0F - 0.46F * te;   /* near=1.0 .. far=~0.54 */
+    *out_alpha = 1.0F - 0.55F * te;   /* near=1.0 .. far=~0.45 (faded) */
+}
 
 /* Pack an RGBA float color (0..1) into 0xAABBGGRR for the sprite renderer. */
 static uint32_t pack_rgba(float r, float g, float b, float a) {
@@ -686,17 +731,6 @@ static void spawn_coin_pop(float x, float y) {
 
 /* ---- Sim/monster spawning ---- */
 
-/* Highest queued y so a new monster spawns above the column. */
-static float column_top_y(void) {
-    float top = MON_FRONT_Y;
-    for (int i = 0; i < MAX_MONSTERS; ++i) {
-        if (g_sim.monsters[i].alive && g_sim.monsters[i].y > top) {
-            top = g_sim.monsters[i].y;
-        }
-    }
-    return top;
-}
-
 static int count_monsters(void) {
     int n = 0;
     for (int i = 0; i < MAX_MONSTERS; ++i) {
@@ -712,10 +746,36 @@ static bool boss_present(void) {
     return false;
 }
 
-/* Spawn a normal monster for the current stage at the top of the column. */
+/* Index of the front (lowest-prog == most engaged) alive monster, or -1. */
+static int front_monster_index(void) {
+    int front = -1;
+    float best = 2.0F;
+    for (int i = 0; i < MAX_MONSTERS; ++i) {
+        if (g_sim.monsters[i].alive && g_sim.monsters[i].prog < best) {
+            best = g_sim.monsters[i].prog;
+            front = i;
+        }
+    }
+    return front;
+}
+
+/* The smallest progress among other alive monsters that are AHEAD of `self`
+ * (lower prog). Used to keep the queue staggered up-path behind the front. */
+static float min_prog_excluding(int self) {
+    float best = 2.0F;
+    for (int i = 0; i < MAX_MONSTERS; ++i) {
+        if (i != self && g_sim.monsters[i].alive && g_sim.monsters[i].prog < best) {
+            best = g_sim.monsters[i].prog;
+        }
+    }
+    return best;
+}
+
+/* Spawn a normal monster up the path. It starts at prog==1 (far, small, faded)
+ * and walks down toward the front; only the front engages the hero. */
 static void spawn_monster(void) {
     if (g_game_state.idle_boss_active) {
-        return; /* boss stage: a single boss occupies the path */
+        return; /* boss stage: a single boss occupies the fight slot */
     }
     if (count_monsters() >= MAX_MONSTERS) {
         return;
@@ -728,18 +788,17 @@ static void spawn_monster(void) {
             m->max_hp = monster_hp_for_stage(g_game_state.idle_stage);
             m->hp = m->max_hp;
             m->flash = 0.0F;
-            float top = column_top_y();
-            float y = top + MON_SLOT_GAP;
-            if (y < MON_SPAWN_Y) y = MON_SPAWN_Y;
-            m->y = y;
-            /* slight horizontal weave so the column does not read as a single bar */
-            m->x = KEEP_CX + (((i % 2) == 0) ? -22.0F : 24.0F);
+            m->knockback = 0.0F;
+            m->spawn_pop = 0.22F;
+            m->lane = i;
+            m->prog = 1.0F; /* spawn far up the path */
             return;
         }
     }
 }
 
-/* Spawn the boss for the current (boss) stage. */
+/* Spawn the boss for the current (boss) stage -- a single big enemy that walks
+ * straight into the fight slot with a brief telegraph (spawn pop). */
 static void spawn_boss(void) {
     for (int i = 0; i < MAX_MONSTERS; ++i) {
         g_sim.monsters[i].alive = false; /* clear the path for the boss */
@@ -750,8 +809,10 @@ static void spawn_boss(void) {
     m->max_hp = monster_hp_for_stage(g_game_state.idle_stage) * VH_BOSS_HP_MULT;
     m->hp = m->max_hp;
     m->flash = 0.0F;
-    m->x = KEEP_CX;
-    m->y = MON_FRONT_Y + 30.0F;
+    m->knockback = 0.0F;
+    m->spawn_pop = 0.5F; /* bigger telegraph for the boss entrance */
+    m->lane = 0;
+    m->prog = 0.55F; /* boss strides in from partway up the path */
     /* FIXED timer (v3): with multiplicative damage the hero's DPS compounds with
      * monster HP, so bosses are beaten well inside 30s; the relative-timer
      * band-aid is removed. See boss.timer_note in data/balance.json. */
@@ -809,15 +870,27 @@ static void grant_gold(double amount, float x, float y, bool floater) {
 
 /* Kill the front monster: drop gold, advance the stage counter / boss. */
 static void on_monster_killed(Monster *m) {
-    spawn_sparkle(m->x, m->y);
-    spawn_coin_pop(m->x, m->y);
+    /* Screen position of the dying enemy (FX/floaters spawn here). */
+    float kx, ky, ksc, ka;
+    monster_screen(m, &kx, &ky, &ksc, &ka);
+    bool was_boss = m->is_boss;
 
-    if (m->is_boss) {
+    spawn_sparkle(kx, ky);
+    spawn_coin_pop(kx, ky);
+    /* gold burst: a ring of coins on every kill (bigger on a boss). */
+    spawn_sprite_fx(R_LEVELUP_BURST, kx, ky, was_boss ? 220.0F : 120.0F,
+                    was_boss ? 0.55F : 0.38F, 12.0F, 0.0F);
+
+    if (was_boss) {
         double g = monster_gold_for_stage(g_game_state.idle_stage) * VH_BOSS_GOLD_MULT;
-        grant_gold(g, m->x, m->y, true);
+        grant_gold(g, kx, ky, true);
         m->alive = false;
         g_game_state.idle_boss_active = false;
         g_sim.boss_timer = 0.0F;
+        /* bigger death burst: extra coins + sparkle for the boss. */
+        spawn_coin_pop(kx + 28.0F, ky + 8.0F);
+        spawn_coin_pop(kx - 30.0F, ky - 4.0F);
+        spawn_sparkle(kx, ky + 10.0F);
         /* first boss cleared unlocks offline earnings */
         if (!g_game_state.idle_offline_unlocked) {
             g_game_state.idle_offline_unlocked = true;
@@ -829,7 +902,7 @@ static void on_monster_killed(Monster *m) {
     }
 
     double g = monster_gold_for_stage(g_game_state.idle_stage);
-    grant_gold(g, m->x, m->y, true);
+    grant_gold(g, kx, ky, true);
     m->alive = false;
     g_game_state.idle_kills_in_stage += 1;
 
@@ -1086,53 +1159,50 @@ static void update_sim(float dt) {
         }
     }
 
-    /* Monster stream advance: front monster walks to the engagement line, the
-     * rest follow at slot spacing. */
+    /* Monster stream advance (progression coords): the FRONT enemy walks down to
+     * the fight slot (prog->0) next to the hero; queued enemies hold staggered
+     * positions up the path (small + faded), never stacking on the front. */
     {
-        /* find the front (lowest-y) alive monster */
-        int front = -1;
-        float front_y = 1e9F;
-        for (int i = 0; i < MAX_MONSTERS; ++i) {
-            if (g_sim.monsters[i].alive && g_sim.monsters[i].y < front_y) {
-                front_y = g_sim.monsters[i].y;
-                front = i;
-            }
-        }
-        (void)front_y;
+        if (g_sim.hero_lunge > 0.0F) g_sim.hero_lunge -= dt;
+        int front = front_monster_index();
         for (int i = 0; i < MAX_MONSTERS; ++i) {
             Monster *m = &g_sim.monsters[i];
             if (!m->alive) continue;
             if (m->flash > 0.0F) m->flash -= dt;
-            /* Each monster marches down toward the front line but stops a
-             * slot-gap behind whoever is ahead of it (cheap monotone push). */
-            int ahead = 0;
-            for (int j = 0; j < MAX_MONSTERS; ++j) {
-                if (j != i && g_sim.monsters[j].alive && g_sim.monsters[j].y < m->y) ahead++;
-            }
-            float want = MON_FRONT_Y + MON_SLOT_GAP * (float)ahead;
-            if (m->y > want) {
-                m->y -= MON_WALK_SPEED * dt;
-                if (m->y < want) m->y = want;
+            if (m->knockback > 0.0F) m->knockback -= dt;
+            if (m->spawn_pop > 0.0F) m->spawn_pop -= dt;
+            /* The front advances to the slot; everyone else stops a queue gap
+             * behind whoever is ahead of them (monotone push, no overlap). */
+            float floor_prog = (i == front) ? 0.0F : (min_prog_excluding(i) + 0.34F);
+            if (floor_prog > 1.0F) floor_prog = 1.0F;
+            if (m->prog > floor_prog) {
+                m->prog -= MON_WALK_RATE * dt;
+                if (m->prog < floor_prog) m->prog = floor_prog;
             }
         }
 
-        /* Hero auto-attacks the front monster once it is at/near the line. */
+        /* Hero auto-attacks the front monster once it has reached the slot. */
         if (g_sim.hero_attack_cd > 0.0F) g_sim.hero_attack_cd -= dt;
         if (front >= 0) {
             Monster *m = &g_sim.monsters[front];
-            bool engaged = (m->y <= MON_FRONT_Y + 4.0F);
+            bool engaged = (m->prog <= 0.05F);
             if (engaged && g_sim.hero_attack_cd <= 0.0F) {
                 g_sim.hero_attack_cd = (float)hero_attack_interval();
+                g_sim.hero_lunge = HERO_LUNGE_TIME; /* hero pokes forward */
                 double dmg = hero_damage();
                 m->hp -= dmg;
                 m->flash = HIT_FLASH_TIME;
-                spawn_hit_spark(m->x, m->y + 6.0F);
+                m->knockback = 0.12F; /* small recoil */
+                float mx, my, msc, ma;
+                monster_screen(m, &mx, &my, &msc, &ma);
+                float top = my + 70.0F * msc;
+                spawn_hit_spark(mx, my + 8.0F);
                 char d[16];
                 char n[16];
                 fmt_num(n, sizeof(n), dmg);
                 (void)snprintf(d, sizeof(d), "-%s", n);
-                const float dc[4] = {1.0F, 1.0F, 1.0F, 1.0F};
-                spawn_floater(m->x + 24.0F, m->y + 18.0F, d, dc, 20.0F);
+                const float dc[4] = {1.0F, 0.96F, 0.86F, 1.0F};
+                spawn_floater(mx + 14.0F, top, d, dc, m->is_boss ? 30.0F : 26.0F);
                 if (m->hp <= 0.0) {
                     on_monster_killed(m);
                 }
@@ -1275,67 +1345,106 @@ static void compose_scene(void) {
 
     emit_sprite(R_BACKGROUND, DESIGN_W * 0.5F, DESIGN_H * 0.5F, DESIGN_W, DESIGN_H, white);
 
-    /* The Frost Keep sits at the top of the path (the climb goal). */
-    emit_h(R_KEEP, KEEP_CX, KEEP_CY, DESIGN_H * 0.36F, white);
+    /* The Frost Keep sits at the top of the path (the climb goal -- backdrop). */
+    emit_h(R_KEEP, KEEP_CX, KEEP_CY, DESIGN_H * 0.30F, white);
 
-    /* Framing scenery. */
-    emit_h(R_PINE, DESIGN_W * 0.07F, DESIGN_H * 0.20F, DESIGN_H * 0.46F, white);
-    emit_h(R_PINE, DESIGN_W * 0.93F, DESIGN_H * 0.18F, DESIGN_H * 0.48F, white);
-    emit_h(R_ROCK, DESIGN_W * 0.83F, DESIGN_H * 0.30F, DESIGN_H * 0.13F, white);
+    /* Framing scenery (kept toward the edges so the FIGHT is the focal point). */
+    emit_h(R_PINE, DESIGN_W * 0.06F, DESIGN_H * 0.22F, DESIGN_H * 0.50F, white);
+    emit_h(R_PINE, DESIGN_W * 0.95F, DESIGN_H * 0.20F, DESIGN_H * 0.52F, white);
+    emit_h(R_ROCK, DESIGN_W * 0.86F, DESIGN_H * 0.30F, DESIGN_H * 0.12F, white);
 
-    /* Monsters: draw far-to-near (highest y first) so nearer overlap. */
+    const int front = front_monster_index();
+
+    /* Monsters: draw far-to-near (highest prog first) so the engaged enemy is on
+     * top and prominent; queued ones recede small + faded up the path. */
     for (int pass = 0; pass < MAX_MONSTERS; ++pass) {
         int best = -1;
+        float best_prog = -1.0F;
         for (int i = 0; i < MAX_MONSTERS; ++i) {
             if (!g_sim.monsters[i].alive) continue;
             int rank = 0;
             for (int j = 0; j < MAX_MONSTERS; ++j) {
-                if (g_sim.monsters[j].alive && g_sim.monsters[j].y > g_sim.monsters[i].y) rank++;
+                if (g_sim.monsters[j].alive && g_sim.monsters[j].prog > g_sim.monsters[i].prog) rank++;
             }
-            if (rank == pass) { best = i; break; }
+            if (rank == pass && g_sim.monsters[i].prog > best_prog) { best = i; best_prog = g_sim.monsters[i].prog; }
         }
         if (best < 0) continue;
         Monster *m = &g_sim.monsters[best];
+        const bool is_front = (best == front);
 
-        float depth = clampf((m->y - MON_FRONT_Y) / (MON_SPAWN_Y - MON_FRONT_Y), 0.0F, 1.0F); /* 0 near .. 1 far */
-        float base_h = m->is_boss ? (DESIGN_H * 0.42F) : (DESIGN_H * 0.245F);
-        float enemy_h = base_h * (1.0F - 0.30F * depth);
-        float feet = m->y - enemy_h * 0.42F;
+        float sx, sy, sscale, salpha;
+        monster_screen(m, &sx, &sy, &sscale, &salpha);
 
-        emit_ground_shadow(m->x, feet, enemy_h * 0.62F, 0.32F);
+        /* spawn-in pop: ease the scale up so an enemy "arrives" with a punch. */
+        float pop = (m->spawn_pop > 0.0F)
+                        ? (1.0F - 0.35F * clampf(m->spawn_pop / 0.5F, 0.0F, 1.0F))
+                        : 1.0F;
+        /* knockback recoil nudges the enemy back up-path briefly on a hit. */
+        float kb = (m->knockback > 0.0F) ? (m->knockback / 0.12F) : 0.0F;
+        float kbx = (PATH_FAR_X - FIGHT_X);
+        float kby = (PATH_FAR_Y - FIGHT_Y);
+        float kbl = sqrtf(kbx * kbx + kby * kby);
+        if (kbl > 0.0F) { kbx /= kbl; kby /= kbl; }
+        sx += kbx * 10.0F * kb;
+        sy += kby * 10.0F * kb;
 
-        /* Target ring under the engaged front monster. */
-        if (best == 0 || m->y <= MON_FRONT_Y + 6.0F) {
+        float base_h = m->is_boss ? (DESIGN_H * 0.48F) : (DESIGN_H * 0.30F);
+        float enemy_h = base_h * sscale * pop;
+        float feet = sy - enemy_h * 0.42F;
+
+        emit_ground_shadow(sx, feet, enemy_h * 0.62F, 0.30F * salpha);
+
+        /* Target ring + glow under the engaged front enemy (focal cue). */
+        if (is_front && m->prog <= 0.08F) {
             float pulse = 0.5F + 0.5F * sinf(g_sim.time * 7.0F);
-            float rs = enemy_h * (0.58F + 0.10F * pulse);
-            float ra = 0.30F + 0.40F * pulse;
-            emit_quad(m->x, feet, rs, rs * 0.42F, 1.0F, 0.82F, 0.20F, ra * 0.5F);
+            float rs = enemy_h * (0.62F + 0.10F * pulse);
+            emit_quad(sx, feet, rs * 1.15F, rs * 0.5F, 1.0F, 0.86F, 0.30F, 0.20F + 0.18F * pulse);
+            emit_quad(sx, feet, rs, rs * 0.40F, 1.0F, 0.78F, 0.18F, 0.30F + 0.30F * pulse);
         }
 
-        uint32_t tint = m->is_boss ? pack_rgba(1.0F, 0.55F, 0.55F, 1.0F) : white;
-        emit_h(R_ENEMY, m->x, m->y, enemy_h, tint);
+        uint32_t tint = m->is_boss ? pack_rgba(1.0F, 0.58F, 0.55F, salpha) : pack_rgba(1.0F, 1.0F, 1.0F, salpha);
+        emit_h(R_ENEMY, sx, sy, enemy_h, tint);
         if (m->flash > 0.0F) {
-            float a = clampf(m->flash / HIT_FLASH_TIME, 0.0F, 1.0F) * 0.7F;
-            emit_quad(m->x, m->y, enemy_h * 0.7F, enemy_h, 1.0F, 1.0F, 1.0F, a);
+            float a = clampf(m->flash / HIT_FLASH_TIME, 0.0F, 1.0F) * 0.85F;
+            emit_h(R_ENEMY, sx, sy, enemy_h, pack_rgba(1.0F, 1.0F, 1.0F, a));
         }
-        /* HP pip above the monster. */
-        float frac = (m->max_hp > 0.0) ? clampf((float)(m->hp / m->max_hp), 0.0F, 1.0F) : 0.0F;
-        float bw = m->is_boss ? 120.0F : 56.0F;
-        float by = m->y + enemy_h * 0.60F;
-        emit_quad(m->x, by, bw + 4.0F, 10.0F, 0.10F, 0.07F, 0.10F, 0.85F);
-        emit_quad(m->x - bw * 0.5F + bw * frac * 0.5F, by, bw * frac, 6.0F, 0.95F, 0.30F, 0.28F, 1.0F);
+
+        /* Boss telegraph: a pulsing red warning ring as the boss strides in. */
+        if (m->is_boss && m->spawn_pop > 0.0F) {
+            float warn = clampf(m->spawn_pop / 0.5F, 0.0F, 1.0F);
+            float pr = 0.5F + 0.5F * sinf(g_sim.time * 18.0F);
+            emit_quad(sx, sy, enemy_h * (0.85F + 0.25F * pr), enemy_h * (1.05F + 0.1F * pr),
+                      1.0F, 0.25F, 0.20F, warn * 0.45F * pr);
+        }
+
+        /* HP pip above the enemy (only the front shows it big; queued = none). */
+        if (is_front) {
+            float frac = (m->max_hp > 0.0) ? clampf((float)(m->hp / m->max_hp), 0.0F, 1.0F) : 0.0F;
+            float bw = m->is_boss ? 168.0F : 78.0F;
+            float by = sy + enemy_h * 0.62F;
+            emit_quad(sx, by, bw + 8.0F, 14.0F, 0.08F, 0.06F, 0.09F, 0.9F);
+            emit_quad(sx - bw * 0.5F + bw * frac * 0.5F, by, bw * frac, 9.0F,
+                      m->is_boss ? 1.0F : 0.95F, m->is_boss ? 0.35F : 0.32F, 0.28F, 1.0F);
+        }
     }
 
-    /* Hero (stationary, idle bob). */
-    float hero_h = DESIGN_H * 0.34F;
-    float hero_feet = HERO_Y - hero_h * 0.42F;
+    /* Hero (stationary, idle bob + attack lunge toward the fight slot). */
+    float hero_h = DESIGN_H * 0.36F;
     float bob = sinf(g_sim.time * 4.0F) * 3.0F;
+    /* lunge: quick forward poke (toward the enemy) then ease back. */
+    float lunge = 0.0F;
+    if (g_sim.hero_lunge > 0.0F) {
+        float lt = g_sim.hero_lunge / HERO_LUNGE_TIME;       /* 1 -> 0 */
+        lunge = sinf(lt * 3.14159F) * 18.0F;                 /* peak mid-lunge */
+    }
+    float hero_x = HERO_X + lunge;
+    float hero_feet = HERO_Y - hero_h * 0.42F;
     emit_ground_shadow(HERO_X, hero_feet, hero_h * 0.62F, 0.34F);
-    /* face up the path toward the monsters (flip so the sword faces them). */
-    emit_h(R_HERO, HERO_X, HERO_Y + bob, hero_h, white);
+    /* face up the path toward the enemy (default art faces right = toward slot). */
+    emit_h(R_HERO, hero_x, HERO_Y + bob, hero_h, white);
     if (g_sim.hero_flash > 0.0F) {
         float a = clampf(g_sim.hero_flash / HIT_FLASH_TIME, 0.0F, 1.0F) * 0.7F;
-        emit_quad(HERO_X, HERO_Y + bob, hero_h * 0.6F, hero_h, 1.0F, 0.3F, 0.3F, a);
+        emit_h(R_HERO, hero_x, HERO_Y + bob, hero_h, pack_rgba(1.0F, 0.3F, 0.3F, a));
     }
 
     /* Sprite FX (hit sparks, coin pops). */
@@ -1435,6 +1544,10 @@ static void compose_hud(void) {
     /* Minimap top-right (progress flavor). */
     emit_h(R_MINIMAP, DESIGN_W - 70.0F, DESIGN_H - 70.0F, 110.0F, white);
 
+    /* Title + Frost-Shards plate (top-right under the minimap) so that text
+     * does not sit hairline on the bright sky. */
+    emit_plate(DESIGN_W - 116.0F, DESIGN_H - 144.0F, 196.0F, 56.0F, 0.84F);
+
     /* Stage progress bar inside the plate (kills toward next stage). */
     {
         float boss_max = (g_sim.boss_timer_max > 0.0F) ? g_sim.boss_timer_max : (float)VH_BOSS_TIMER_S;
@@ -1530,7 +1643,10 @@ static void compose_floaters(void) {
         if (!f->active) continue;
         float life = 1.0F - f->age / f->ttl;
         float col[4] = {f->color[0], f->color[1], f->color[2], clampf(life + 0.2F, 0.0F, 1.0F)};
-        emit_text_centered(f->text, f->x, f->y, f->size, col);
+        /* scale-pop: overshoot big for the first ~120ms, then settle (ref juice). */
+        float pt = clampf(f->age / 0.12F, 0.0F, 1.0F);
+        float pop = (pt < 1.0F) ? (1.35F - 0.35F * pt) : 1.0F;
+        emit_text_centered(f->text, f->x, f->y, f->size * pop, col);
     }
 }
 
@@ -1542,7 +1658,7 @@ static void compose_text(void) {
     /* Title (top-right, outlined so it reads over the sky). */
     {
         const char *title = "VOXELHEIM";
-        emit_text_shadow(title, DESIGN_W - 158.0F, DESIGN_H - 134.0F, 20.0F, gold);
+        emit_text_centered(title, DESIGN_W - 116.0F, DESIGN_H - 138.0F, 23.0F, gold);
     }
 
     /* Gold counter (sits on the HUD plate, after the coin glyph). */
@@ -1567,7 +1683,7 @@ static void compose_text(void) {
     {
         char fs[28];
         (void)snprintf(fs, sizeof(fs), "Frost Shards: %d", g_game_state.idle_frost_shards);
-        emit_text_shadow(fs, DESIGN_W - 240.0F, DESIGN_H - 160.0F, 18.0F, ice);
+        emit_text_centered(fs, DESIGN_W - 116.0F, DESIGN_H - 164.0F, 19.0F, ice);
     }
 
     /* Stage progress bar label (centered on the bar, inside the plate). */
