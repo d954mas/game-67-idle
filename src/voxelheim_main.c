@@ -446,10 +446,16 @@ static float text_width(const char *s, float size) {
     return (float)strlen(s) * size * 0.52F;
 }
 
-/* Left-anchored text with a dark drop shadow for readability. */
+/* Left-anchored text with a dark outline for readability: draw the dark ink at
+ * four diagonal offsets (a cheap outline), then the light glyph on top, so the
+ * string stays legible even where it overhangs a bright background. */
 static void emit_text_shadow(const char *s, float x, float y, float size, const float color[4]) {
-    const float ink[4] = {0.10F, 0.08F, 0.07F, color[3]};
-    emit_text(s, x + 2.0F, y - 2.0F, size, ink);
+    const float ink[4] = {0.06F, 0.05F, 0.04F, color[3]};
+    const float o = clampf(size * 0.09F, 1.4F, 3.0F);
+    emit_text(s, x + o, y - o, size, ink);
+    emit_text(s, x - o, y - o, size, ink);
+    emit_text(s, x + o, y + o, size, ink);
+    emit_text(s, x - o, y + o, size, ink);
     emit_text(s, x, y, size, color);
 }
 
@@ -457,6 +463,20 @@ static void emit_text_shadow(const char *s, float x, float y, float size, const 
 static void emit_text_centered(const char *s, float cx, float y, float size, const float color[4]) {
     const float w = text_width(s, size);
     emit_text_shadow(s, cx - w * 0.5F, y, size, color);
+}
+
+/* Solid dark rounded plate that strings sit on. Drawn as a main slab plus two
+ * narrower slabs (top/bottom) to fake rounded corners, with a faint light rim on
+ * top for a readable card edge. Sized to FULLY contain the text + padding so HUD
+ * numbers never touch the bright sky. */
+static void emit_plate(float cx, float cy, float w, float h, float a) {
+    const float r = 0.078F, g = 0.066F, b = 0.058F; /* ~#14110F warm ink */
+    /* faint light rim (1px-ish) behind for a card edge */
+    emit_quad(cx, cy, w + 4.0F, h + 4.0F, 0.32F, 0.30F, 0.36F, a * 0.55F);
+    /* body + rounded-corner fakery */
+    emit_quad(cx, cy, w, h, r, g, b, a);
+    emit_quad(cx, cy, w - 8.0F, h + 6.0F, r, g, b, a);
+    emit_quad(cx, cy, w + 6.0F, h - 8.0F, r, g, b, a);
 }
 
 static bool write_backbuffer_png(const char *path) {
@@ -1144,11 +1164,12 @@ static void update_sim(float dt) {
 
 /* ---- Input: click the upgrade panel / prestige / collect popup ---- */
 
-/* Upgrade panel layout (design units, y-up). */
-#define PANEL_SLOT_W 210.0F
-#define PANEL_SLOT_H 64.0F
-#define PANEL_GAP 12.0F
-#define PANEL_CY 46.0F
+/* Upgrade panel layout (design units, y-up). Taller buttons so the 3 text rows
+ * (name+Lv / effect / cost) each get room and read at a glance. */
+#define PANEL_SLOT_W 214.0F
+#define PANEL_SLOT_H 88.0F
+#define PANEL_GAP 14.0F
+#define PANEL_CY 56.0F
 
 static void panel_slot_rect(int i, float *cx, float *cy, float *w, float *h) {
     const int slots = UP_COUNT;
@@ -1392,50 +1413,80 @@ static int upgrade_level(int i) {
     }
 }
 
+/* Top-left HUD plate geometry (shared by sprite + text passes so the dark plate
+ * always FULLY contains the gold/stage strings + the progress bar). */
+#define HUD_PLATE_CX 162.0F
+#define HUD_PLATE_W 296.0F
+#define HUD_TOP_Y (DESIGN_H - 34.0F)   /* Gold row baseline */
+#define HUD_MID_Y (DESIGN_H - 66.0F)   /* Stage row baseline */
+#define HUD_BAR_Y (DESIGN_H - 96.0F)   /* progress bar center */
+#define HUD_BAR_W 256.0F
+#define HUD_ICON_X 30.0F
+
 static void compose_hud(void) {
     const uint32_t white = 0xFFFFFFFFu;
 
-    /* Top-left status plate: Gold + Stage + Shards counters. */
-    emit_quad(176.0F, DESIGN_H - 40.0F, 320.0F, 64.0F, 0.07F, 0.06F, 0.10F, 0.72F);
-    emit_h(R_COIN, 36.0F, DESIGN_H - 30.0F, 30.0F, white);
-    emit_h(R_BADGE, 36.0F, DESIGN_H - 62.0F, 40.0F, white);
+    /* Top-left status plate: one solid dark card that contains the coin glyph,
+     * "Gold N", "Stage N" and the kills progress bar, so no number ever spills
+     * onto the bright sky. */
+    emit_plate(HUD_PLATE_CX, DESIGN_H - 64.0F, HUD_PLATE_W, 86.0F, 0.86F);
+    emit_h(R_COIN, HUD_ICON_X, HUD_TOP_Y + 6.0F, 34.0F, white);
 
     /* Minimap top-right (progress flavor). */
     emit_h(R_MINIMAP, DESIGN_W - 70.0F, DESIGN_H - 70.0F, 110.0F, white);
 
-    /* Stage progress bar under the top plate (kills toward next stage). */
+    /* Stage progress bar inside the plate (kills toward next stage). */
     {
         float boss_max = (g_sim.boss_timer_max > 0.0F) ? g_sim.boss_timer_max : (float)VH_BOSS_TIMER_S;
         float frac = g_game_state.idle_boss_active
                          ? clampf(g_sim.boss_timer / boss_max, 0.0F, 1.0F)
                          : clampf((float)g_game_state.idle_kills_in_stage / (float)VH_KILLS_PER_STAGE, 0.0F, 1.0F);
-        float bx = 176.0F, by = DESIGN_H - 80.0F, bw = 300.0F, bh = 16.0F;
-        emit_quad(bx, by, bw + 6.0F, bh + 6.0F, 0.05F, 0.04F, 0.07F, 0.8F);
+        float bx = HUD_PLATE_CX, by = HUD_BAR_Y, bw = HUD_BAR_W, bh = 16.0F;
+        /* dark bar groove */
+        emit_quad(bx, by, bw + 6.0F, bh + 6.0F, 0.03F, 0.025F, 0.05F, 1.0F);
         float r = g_game_state.idle_boss_active ? 1.0F : 0.35F;
         float g = g_game_state.idle_boss_active ? 0.55F : 0.85F;
-        float b = g_game_state.idle_boss_active ? 0.30F : 0.45F;
+        float b = g_game_state.idle_boss_active ? 0.30F : 0.50F;
         emit_quad(bx - bw * 0.5F + bw * frac * 0.5F, by, bw * frac, bh, r, g, b, 1.0F);
     }
 
-    /* ---- Bottom upgrade panel: 4 buttons (icon + label + effect + cost). ---- */
+    /* ---- Bottom upgrade panel: 4 buttons (icon + name+Lv / effect / cost). ----
+     * Affordable buttons read bright GREEN + a soft pulse "buy now" ring;
+     * unaffordable ones are dimmed grey so the player can tell at a glance which
+     * upgrades they can buy. */
     {
         const int slots = UP_COUNT;
         const float total = slots * PANEL_SLOT_W + (slots - 1) * PANEL_GAP;
         /* tray */
-        emit_quad(DESIGN_W * 0.5F, PANEL_CY, total + 28.0F, PANEL_SLOT_H + 22.0F, 0.06F, 0.05F, 0.08F, 0.55F);
+        emit_quad(DESIGN_W * 0.5F, PANEL_CY, total + 30.0F, PANEL_SLOT_H + 24.0F, 0.05F, 0.045F, 0.07F, 0.62F);
         for (int i = 0; i < slots; ++i) {
             float cx, cy, w, h;
             panel_slot_rect(i, &cx, &cy, &w, &h);
             bool affordable = (double)g_game_state.idle_gold >= upgrade_cost(i);
-            /* button background: bright if affordable, dim if not. */
-            emit_sprite(R_BUTTON, cx, cy, w, h, affordable ? white : pack_rgba(0.55F, 0.55F, 0.6F, 1.0F));
-            /* affordable pulse ring */
+            /* affordable -> bright green button + pulse "buy now" ring;
+             * unaffordable -> tinted dark slate + a darkening overlay so it reads
+             * clearly as "can't buy this yet". */
             if (affordable) {
                 float pulse = 0.5F + 0.5F * sinf(g_sim.time * 5.0F + (float)i);
-                emit_quad(cx, cy, w + 6.0F, h + 6.0F, 1.0F, 0.9F, 0.4F, 0.10F + 0.18F * pulse);
+                emit_quad(cx, cy, w + 12.0F, h + 12.0F, 1.0F, 0.95F, 0.45F, 0.16F + 0.24F * pulse);
+                emit_sprite(R_BUTTON, cx, cy, w, h, pack_rgba(0.58F, 1.0F, 0.62F, 1.0F));
+            } else {
+                emit_sprite(R_BUTTON, cx, cy, w, h, pack_rgba(0.30F, 0.34F, 0.40F, 1.0F));
+                /* darkening veil to kill the leftover green and dim the whole pill */
+                emit_quad(cx, cy, w - 4.0F, h - 4.0F, 0.10F, 0.11F, 0.14F, 0.45F);
             }
-            /* icon on the left */
-            emit_h(upgrade_icon_region(i), cx - w * 0.5F + 26.0F, cy + 6.0F, 36.0F, white);
+
+            /* left icon disc + icon */
+            float ix = cx - w * 0.5F + 30.0F;
+            float iy = cy + 14.0F;
+            emit_quad(ix, iy, 46.0F, 46.0F, 0.05F, 0.06F, 0.05F, affordable ? 0.55F : 0.42F);
+            emit_h(upgrade_icon_region(i), ix, iy, 40.0F, affordable ? white : pack_rgba(0.68F, 0.70F, 0.74F, 1.0F));
+
+            /* cost-row backing strip (dark) so the price reads as a price */
+            float cry = cy - h * 0.5F + 16.0F;
+            emit_quad(cx, cry, w - 18.0F, 24.0F, 0.04F, 0.05F, 0.04F, affordable ? 0.66F : 0.55F);
+            /* small coin glyph at the left of the cost strip */
+            emit_h(R_COIN, cx - w * 0.5F + 24.0F, cry, 22.0F, affordable ? white : pack_rgba(0.62F, 0.62F, 0.66F, 1.0F));
         }
     }
 
@@ -1469,11 +1520,14 @@ static const char *ftue_prompt(void) {
     return NULL;
 }
 
+/* FTUE prompt baseline (shared by the plate + text passes), clear of the panel. */
+#define FTUE_Y (PANEL_CY + PANEL_SLOT_H * 0.5F + 40.0F)
+
 static void compose_overlays(void) {
     const char *prompt = ftue_prompt();
     if (prompt) {
-        /* place the prompt ABOVE the upgrade panel, clear of it */
-        emit_quad(DESIGN_W * 0.5F, PANEL_CY + 78.0F, text_width(prompt, 20.0F) + 40.0F, 34.0F, 0.06F, 0.05F, 0.08F, 0.6F);
+        /* place the prompt ABOVE the upgrade panel, on a solid plate, clear of it */
+        emit_plate(DESIGN_W * 0.5F, FTUE_Y + 6.0F, text_width(prompt, 21.0F) + 48.0F, 40.0F, 0.88F);
     }
     nt_sprite_renderer_flush();
 }
@@ -1492,25 +1546,22 @@ static void compose_text(void) {
     const float gold[4] = {1.0F, 0.82F, 0.28F, 1.0F};
     const float cream[4] = {0.996F, 0.980F, 0.937F, 1.0F};
     const float ice[4] = {0.7F, 0.9F, 1.0F, 1.0F};
-    const float dim[4] = {0.78F, 0.78F, 0.82F, 1.0F};
 
-    /* Title. */
+    /* Title (top-right, outlined so it reads over the sky). */
     {
-        const float ink[4] = {0.149F, 0.125F, 0.110F, 1.0F};
         const char *title = "VOXELHEIM";
-        emit_text(title, DESIGN_W - 150.0F, DESIGN_H - 132.0F + 2.0F - 2.0F, 18.0F, ink);
-        emit_text(title, DESIGN_W - 150.0F, DESIGN_H - 132.0F, 18.0F, gold);
+        emit_text_shadow(title, DESIGN_W - 158.0F, DESIGN_H - 134.0F, 20.0F, gold);
     }
 
-    /* Gold counter. */
+    /* Gold counter (sits on the HUD plate, after the coin glyph). */
     {
         char g[24];
         char n[16];
         fmt_num(n, sizeof(n), (double)g_game_state.idle_gold);
-        (void)snprintf(g, sizeof(g), "Gold  %s", n);
-        emit_text_shadow(g, 60.0F, DESIGN_H - 38.0F, 22.0F, gold);
+        (void)snprintf(g, sizeof(g), "Gold %s", n);
+        emit_text_shadow(g, 56.0F, HUD_TOP_Y - 11.0F, 28.0F, gold);
     }
-    /* Stage counter. */
+    /* Stage counter (on the plate). */
     {
         char s[28];
         if (g_game_state.idle_boss_active) {
@@ -1518,7 +1569,7 @@ static void compose_text(void) {
         } else {
             (void)snprintf(s, sizeof(s), "Stage %d", g_game_state.idle_stage);
         }
-        emit_text_shadow(s, 60.0F, DESIGN_H - 70.0F, 20.0F, cream);
+        emit_text_shadow(s, 56.0F, HUD_MID_Y - 10.0F, 24.0F, cream);
     }
     /* Frost shards (top-right under minimap), always shown once any exist. */
     {
@@ -1527,7 +1578,7 @@ static void compose_text(void) {
         emit_text_shadow(fs, DESIGN_W - 240.0F, DESIGN_H - 160.0F, 18.0F, ice);
     }
 
-    /* Stage progress bar label. */
+    /* Stage progress bar label (centered on the bar, inside the plate). */
     {
         char s[28];
         if (g_game_state.idle_boss_active) {
@@ -1535,7 +1586,7 @@ static void compose_text(void) {
         } else {
             (void)snprintf(s, sizeof(s), "%d / %d kills", g_game_state.idle_kills_in_stage, VH_KILLS_PER_STAGE);
         }
-        emit_text_centered(s, 176.0F, DESIGN_H - 86.0F, 13.0F, cream);
+        emit_text_centered(s, HUD_PLATE_CX, HUD_BAR_Y - 7.0F, 15.0F, cream);
     }
 
     /* Stage-advance flash banner. */
@@ -1551,27 +1602,37 @@ static void compose_text(void) {
         emit_text_centered(s, DESIGN_W * 0.5F, DESIGN_H * 0.62F, 40.0F, col);
     }
 
-    /* ---- Upgrade panel text (label + effect + cost). ---- */
+    /* ---- Upgrade panel text: 3 clear rows with hierarchy. ----
+     *   row 1: NAME (bold, biggest) + "Lv N"
+     *   row 2: current effect (smaller, muted)
+     *   row 3: COST = coin glyph (drawn in compose_hud) + the number (a price)
+     * Affordable -> full-strength cream/gold text; unaffordable -> dimmed. */
+    const float dimmed[4] = {0.66F, 0.66F, 0.70F, 1.0F};
+    const float mutedc[4] = {0.80F, 0.90F, 0.98F, 1.0F};
     for (int i = 0; i < UP_COUNT; ++i) {
         float cx, cy, w, h;
         panel_slot_rect(i, &cx, &cy, &w, &h);
         bool affordable = (double)g_game_state.idle_gold >= upgrade_cost(i);
-        const float *labelc = affordable ? cream : dim;
+        float tx = cx - w * 0.5F + 60.0F;     /* text column, right of the icon */
+        float cry = cy - h * 0.5F + 16.0F;    /* cost-row backing center (mirror compose_hud) */
 
-        char lbl[24];
+        /* row 1: NAME (big, bold-ish via cream) + level */
+        char lbl[28];
         (void)snprintf(lbl, sizeof(lbl), "%s  Lv%d", upgrade_label(i), upgrade_level(i));
-        emit_text_shadow(lbl, cx - w * 0.5F + 48.0F, cy + 12.0F, 16.0F, labelc);
+        emit_text_shadow(lbl, tx, cy + 16.0F, 21.0F, affordable ? cream : dimmed);
 
+        /* row 2: current effect (smaller, muted) */
         char eff[24];
         upgrade_effect_str(i, eff, sizeof(eff));
-        emit_text_shadow(eff, cx - w * 0.5F + 48.0F, cy - 8.0F, 13.0F, ice);
+        emit_text_shadow(eff, tx, cy - 6.0F, 16.0F, affordable ? mutedc : dimmed);
 
+        /* row 3: COST number, after the coin glyph in the cost strip */
         char cost[24];
         char n[16];
         fmt_num(n, sizeof(n), upgrade_cost(i));
         (void)snprintf(cost, sizeof(cost), "%s", n);
-        const float *cc = affordable ? gold : dim;
-        emit_text_shadow(cost, cx - w * 0.5F + 48.0F, cy - 26.0F, 14.0F, cc);
+        const float *cc = affordable ? gold : dimmed;
+        emit_text_shadow(cost, cx - w * 0.5F + 42.0F, cry - 8.0F, 18.0F, cc);
     }
 
     /* ---- Prestige button text. ---- */
@@ -1606,7 +1667,7 @@ static void compose_text(void) {
     {
         const char *prompt = ftue_prompt();
         if (prompt) {
-            emit_text_centered(prompt, DESIGN_W * 0.5F, PANEL_CY + 72.0F, 20.0F, cream);
+            emit_text_centered(prompt, DESIGN_W * 0.5F, FTUE_Y, 21.0F, cream);
         }
     }
 
