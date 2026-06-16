@@ -3,7 +3,8 @@
 ## Project
 
 - This is an AI-first game development base: improve the game and the AI workflow together.
-- Active game concept: `Critter Corral` (critter-corral), A loop sort-puzzle where you herd living colored critters into matching pens by influence (lures, scares, gusts) instead of placing them; primitives first, art skinned later.
+- Active game concept: none. This repository is reset to the reusable `Game Seed`
+  template and is ready for the next prototype.
 - The engine lives in `external/neotolis-engine` as a submodule; do not edit it unless explicitly asked.
 - Game design lives in `gamedesign/`; game code lives in `src/`.
 - Design folder map is documented in `gamedesign/README.md`.
@@ -35,11 +36,10 @@
 
 - Current runtime surface: native `Game Seed` template in
   `src/clean_seed_main.c`.
-- The closed Splash Rods / Rune Marches prototypes were removed entirely (they
-  were test runs): code, runtime, tooling, and design folders. Their history is
-  in git and archived task logs under `tasks/archive/`; their durable lessons
-  are encoded in these rules and the skills. `gamedesign/projects/` is now empty
-  and ready for the next game.
+- Closed prototypes are removed from the working tree: code, runtime assets,
+  tooling, design folders, task archives, and live status. Their durable lessons
+  are encoded in these rules and reusable skills; detailed history remains in
+  git. `gamedesign/projects/` is empty and ready for the next game.
 - The template is intentionally small: a shape-renderer screen, one cycle action,
   persistent state, DevAPI, screenshot capture, and smoke/full probes.
 - Start a new game iteration by creating a fresh project wiki/GDD under

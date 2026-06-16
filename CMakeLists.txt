@@ -134,65 +134,6 @@ else()
     target_compile_definitions(game_devapi INTERFACE NT_DEVAPI_ENABLED=0)
 endif()
 
-# ---- Critter Corral sprite pack ----
-# Real sprite visuals are drawn through nt_sprite_renderer + nt_atlas from an
-# offline-built .ntpack. The pack builder is native-only (nt_builder). The pack
-# is written to a tracked runtime location and mounted at that relative path by
-# the game at startup. Pack building is explicit: a missing pack downgrades the
-# game to a procedural fallback (see clean_seed_main.c) instead of failing the
-# build, matching the bunnymark "packer is invoked manually" pattern.
-set(CORRAL_PACK_DIR "${CMAKE_SOURCE_DIR}/assets/runtime/critter-corral")
-set(CORRAL_PACK "${CORRAL_PACK_DIR}/critter_corral.ntpack")
-# Relative path the game mounts at runtime (must match CORRAL_PACK_PATH in
-# clean_seed_main.c). On web this is the fetch path relative to index.html.
-set(CORRAL_PACK_REL "assets/runtime/critter-corral/critter_corral.ntpack")
-set(CORRAL_GENERATED_DIR "${CMAKE_SOURCE_DIR}/tools/critter_corral/generated")
-set(CORRAL_SPRITE_SCRIPT "${CMAKE_SOURCE_DIR}/tools/critter_corral/generate_sprites.py")
-set(CORRAL_SPRITE_DIR "${CMAKE_SOURCE_DIR}/gamedesign/projects/critter-corral/art/sprites")
-
-if(NOT EMSCRIPTEN AND NOT TARGET build_critter_corral_packs)
-    add_executable(build_critter_corral_packs tools/critter_corral/build_packs.c)
-    target_link_libraries(build_critter_corral_packs PRIVATE nt_builder)
-    target_compile_definitions(build_critter_corral_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(build_critter_corral_packs PRIVATE -U_DLL)
-    nt_set_warning_flags(build_critter_corral_packs)
-    nt_set_sanitizer_flags(build_critter_corral_packs)
-
-    # (Re)build the pack from the durable source PNGs. Runs from the project
-    # root so the builder resolves engine shaders (via asset root) and source
-    # PNGs by their project-relative paths. The sprite PNGs are durable source
-    # assets; regenerate them with `py -3.12 ${CORRAL_SPRITE_SCRIPT}` (needs
-    # PIL+numpy) when art changes. Wired as a custom target the user invokes
-    # explicitly (e.g. cmake --build ... --target critter_corral_packs).
-    set(CORRAL_SPRITE_PNGS
-        "${CORRAL_SPRITE_DIR}/critter_a.png"
-        "${CORRAL_SPRITE_DIR}/critter_b.png"
-        "${CORRAL_SPRITE_DIR}/critter.png"
-        "${CORRAL_SPRITE_DIR}/pen.png"
-        "${CORRAL_SPRITE_DIR}/grass.png"
-        "${CORRAL_SPRITE_DIR}/lure.png"
-        "${CORRAL_SPRITE_DIR}/spark.png"
-        "${CORRAL_SPRITE_DIR}/icon_radius.png"
-        "${CORRAL_SPRITE_DIR}/icon_pull.png"
-        "${CORRAL_SPRITE_DIR}/icon_second_lure.png"
-        "${CORRAL_SPRITE_DIR}/icon_gate.png"
-        "${CORRAL_SPRITE_DIR}/icon_calm.png"
-        "${CORRAL_SPRITE_DIR}/icon_chain.png"
-        "${CORRAL_SPRITE_DIR}/card.png"
-    )
-    add_custom_command(
-        OUTPUT "${CORRAL_PACK}"
-        COMMAND "$<TARGET_FILE:build_critter_corral_packs>" "${CORRAL_PACK_DIR}"
-        DEPENDS
-            build_critter_corral_packs
-            ${CORRAL_SPRITE_PNGS}
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        COMMENT "Building critter_corral.ntpack from source sprites"
-        VERBATIM
-    )
-    add_custom_target(critter_corral_packs DEPENDS "${CORRAL_PACK}")
-endif()
-
 if(NOT EMSCRIPTEN AND NOT TARGET asset_chroma_key_native)
     add_executable(asset_chroma_key_native tools/assets/native_chroma_key.c)
     target_link_libraries(asset_chroma_key_native PRIVATE stb_image stb_image_write tinycthread)
@@ -200,16 +141,6 @@ if(NOT EMSCRIPTEN AND NOT TARGET asset_chroma_key_native)
     target_compile_options(asset_chroma_key_native PRIVATE -U_DLL)
     nt_set_warning_flags(asset_chroma_key_native)
     nt_set_sanitizer_flags(asset_chroma_key_native)
-endif()
-
-if(NOT EMSCRIPTEN AND NOT TARGET import_generated_core_assets_native)
-    add_executable(import_generated_core_assets_native tools/critter_corral/import_generated_core_assets_native.c)
-    target_link_libraries(import_generated_core_assets_native PRIVATE stb_image stb_image_resize2 stb_image_write tinycthread)
-    target_compile_definitions(import_generated_core_assets_native PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(import_generated_core_assets_native PRIVATE -U_DLL)
-    nt_set_warning_flags(import_generated_core_assets_native)
-    target_compile_options(import_generated_core_assets_native PRIVATE -Wno-language-extension-token)
-    nt_set_sanitizer_flags(import_generated_core_assets_native)
 endif()
 
 add_executable(${GAME_TARGET}
@@ -254,7 +185,6 @@ else()
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_DIR}"
-    "${CORRAL_GENERATED_DIR}"
     src
     external/cjson
     external/neotolis-engine/deps/glfw/deps
@@ -294,32 +224,5 @@ if(EMSCRIPTEN)
     endif()
     if(NT_WASM_ANALYSIS)
         target_link_options(${GAME_TARGET} PRIVATE "SHELL:--profiling-funcs")
-    endif()
-
-    # Web asset sync: the game mounts the pack at the relative path
-    # CORRAL_PACK_PATH ("assets/runtime/critter-corral/critter_corral.ntpack").
-    # On web nt_http fetches that path relative to the served index.html, so the
-    # pack must sit at <output>/assets/runtime/critter-corral/ next to index.*.
-    # The packer is native-only and invoked explicitly (see above); if the pack
-    # is missing we warn instead of failing the wasm link, matching bunnymark.
-    set(CORRAL_WEB_PACK "${GAME_OUTPUT_DIR}/${CORRAL_PACK_REL}")
-    if(EXISTS "${CORRAL_PACK}")
-        add_custom_command(
-            OUTPUT "${CORRAL_WEB_PACK}"
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_OUTPUT_DIR}/assets/runtime/critter-corral"
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CORRAL_PACK}" "${CORRAL_WEB_PACK}"
-            DEPENDS "${CORRAL_PACK}"
-            COMMENT "Syncing critter_corral.ntpack -> ${NT_PRESET_NAME}/assets/ (web fetch root)"
-            VERBATIM
-        )
-        add_custom_target(corral_web_assets DEPENDS "${CORRAL_WEB_PACK}")
-        add_dependencies(${GAME_TARGET} corral_web_assets)
-    else()
-        message(WARNING
-            "Critter Corral: pack not found at ${CORRAL_PACK}. The wasm build "
-            "will link but the browser fetch for the pack will 404. Build the "
-            "pack first (native: cmake --build <native-preset> --target "
-            "critter_corral_packs), then re-run cmake configure for the wasm "
-            "preset to wire the web asset copy.")
     endif()
 endif()
