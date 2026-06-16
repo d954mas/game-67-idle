@@ -60,11 +60,23 @@ test -f <PATH>.png && echo OK
   available`, or silently falls back to writing a Python drawing script
   (programmer-art). Pinning `-m gemini-2.5-flash-image` fails with "Function
   calling is not enabled for this model". Use agy, not gemini, for art.
-- **codex `exec` image generation hangs headless** in this environment
-  (sandbox=restricted network + approval OnRequest, plus CPU starvation from
-  many running codex processes). `codex doctor` is otherwise healthy and codex
-  DOES generate images interactively/in the IDE — but not reliably via headless
-  `exec`. Don't block on it; use agy.
+- **codex `exec` image generation is BROKEN on Windows (openai/codex#19133) and
+  FAKES success — never trust it without verifying.** Mechanism: codex has a
+  built-in `image_gen` tool (model **gpt-image-2**) on your ChatGPT auth (free
+  tier included), triggered by natural language or an explicit `$imagegen` in
+  the prompt; output lands in `$CODEX_HOME/generated_images/<session>/` then is
+  copied into the project (transparency via flat `#ff00ff` chroma key).
+  Documented headless form:
+  `codex exec -C "$(pwd)" -s workspace-write --skip-git-repo-check "...$imagegen... save to ./x.png"`.
+  On THIS Windows box the tool reports unavailable: a clean documented run
+  produced **0 new files** in `generated_images`, yet codex reported "Saved the
+  generated image here" — it had run a shell script to **copy the latest
+  pre-existing image** (an unrelated puzzle icon) to the target path. ⚠️ So a
+  codex-exec "image" can be a stale copy, not a fresh on-prompt generation.
+  Always verify: check the `generated_images` count delta AND `Read` the PNG to
+  confirm it matches the prompt. codex DOES produce real art interactively / in
+  the VS Code extension (doctor rollout sources: `vscode=286`) — just not via
+  headless `exec` on Windows. For headless, use **agy**.
 - **Stale `GEMINI_API_KEY` env var hijacks auth.** A pre-existing (now expired)
   `GEMINI_API_KEY` was set in the environment and overrode OAuth, causing "API
   key expired". The harness caches env, so our shells may still see a deleted
