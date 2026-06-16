@@ -89,6 +89,18 @@ a later pass should add real gameplay-frame captures or lead-provided footage.
 
 ## balance.json corrections (grounded in the refs)
 
+- **Upgrades must be MULTIPLICATIVE, not additive (gap exposed by the build,
+  2026-06-16).** Clicker Heroes / Tap Titans 2 scale hero damage
+  MULTIPLICATIVELY (hero-level DPS, % bonuses), so flat DPS tracks the
+  exponential HP climb and power visibly COMPOUNDS — the core idle dopamine. Our
+  v2 balance.json had Sword = flat **+3 dmg/level**, which cannot track HP
+  ×1.45/stage → mid bosses become impossible walls (the build had to add a
+  relative-timer band-aid), and each upgrade feels weaker over time. FIX: make
+  damage multiplicative — e.g. Sword = **×1.10-1.15 damage/level** (or hero
+  damage = base × Π(upgrade multipliers)), and prestige shards = a global
+  **×damage / ×gold** multiplier (+10%/shard, as Clicker Heroes). This is the
+  "deeper lever" the build flagged (T0006). [My deconstruction missed the
+  upgrade SCALING SHAPE; it focused on HP/gold/prestige scaling.]
 - **Steepen monster growth.** Refs use ~x1.55-1.57 per encounter. Our
   `hp_growth_per_stage = 1.15` over a 10-kill stage is ~x1.014/kill — far too
   flat. Either grow HP **per kill** (~x1.25-1.45/kill) or raise
