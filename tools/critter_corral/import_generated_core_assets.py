@@ -8,24 +8,17 @@ their own generated source families exist.
 """
 from __future__ import annotations
 
-import argparse
 import json
 import os
 from pathlib import Path
-import subprocess
 import sys
-import tempfile
 from typing import Any
-
-from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[2]
+ROOT_RESOLVED = ROOT.resolve()
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-from tools.assets.atomic_io import save_image_atomic, write_json_atomic  # noqa: E402
-
 
 PROJECT = ROOT / "gamedesign" / "projects" / "critter-corral"
 SOURCE_DIR = PROJECT / "art" / "generated" / "T0070"
@@ -42,6 +35,8 @@ KEYED_CACHE_DIR = ROOT / "tmp" / "generated_core_keyed_sources"
 KEYED_CACHE_VERSION = "t0070-magenta-key-v1"
 RUNTIME_CACHE_DIR = ROOT / "tmp" / "generated_core_runtime_assets"
 RUNTIME_CACHE_VERSION = "t0070-runtime-cleanup-v2"
+IMPORT_STAMP = RUNTIME_CACHE_DIR / "import_generated_core_assets.json"
+IMPORT_STAMP_VERSION = "t0070-import-stamp-v1"
 
 
 ASSETS: list[dict[str, Any]] = [
@@ -177,7 +172,22 @@ ASSETS: list[dict[str, Any]] = [
 
 
 def rel(path: Path) -> str:
-    return path.resolve().relative_to(ROOT.resolve()).as_posix()
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.resolve().relative_to(ROOT_RESOLVED).as_posix()
+
+
+def save_image_atomic_file(image: Any, path: Path) -> None:
+    from tools.assets.atomic_io import save_image_atomic
+
+    save_image_atomic(image, path)
+
+
+def write_json_atomic_file(path: Path, data: Any) -> None:
+    from tools.assets.atomic_io import write_json_atomic
+
+    write_json_atomic(path, data)
 
 
 def alpha_bbox(image: Image.Image, threshold: int = 10) -> tuple[int, int, int, int]:
@@ -194,6 +204,7 @@ def fast_key_to_alpha(image: Image.Image) -> Image.Image:
     magenta with tolerance and leave subject pixels untouched until the small
     runtime canvas cleanup pass.
     """
+    from PIL import Image
     import numpy as np
 
     rgba = image.convert("RGBA")
@@ -227,6 +238,8 @@ def source_region(source: Image.Image, spec: dict[str, Any]) -> Image.Image:
 
 
 def fit_to_canvas(image: Image.Image, size: tuple[int, int], padding: int) -> Image.Image:
+    from PIL import Image
+
     from tools.assets.chroma_key_alpha import (
         bleed_transparent_rgb,
         remove_edge_fringe,
@@ -261,7 +274,7 @@ def fit_to_canvas(image: Image.Image, size: tuple[int, int], padding: int) -> Im
 def apply_tint(image: Image.Image, tint: list[int] | None) -> Image.Image:
     if not tint:
         return image
-    from PIL import ImageEnhance, ImageOps
+    from PIL import Image, ImageEnhance, ImageOps
 
     from tools.assets.chroma_key_alpha import (
         bleed_transparent_rgb,
@@ -294,6 +307,8 @@ def apply_tint(image: Image.Image, tint: list[int] | None) -> Image.Image:
 
 
 def write_contact_sheet(items: list[tuple[str, Image.Image]]) -> None:
+    from PIL import Image
+
     cell_w, cell_h = 220, 190
     sheet = Image.new("RGBA", (cell_w * len(items), cell_h), (36, 35, 42, 255))
     for index, (label, image) in enumerate(items):
@@ -310,30 +325,54 @@ def write_contact_sheet(items: list[tuple[str, Image.Image]]) -> None:
         )
         bg.alpha_composite(preview, ((cell_w - preview.width) // 2, 12))
         sheet.alpha_composite(bg, (index * cell_w, 0))
-    save_image_atomic(sheet, CONTACT_SHEET)
+    save_image_atomic_file(sheet, CONTACT_SHEET)
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--mode",
-        choices=("python", "native"),
-        default="python",
-        help="python keeps the full PIL path; native uses the C worker only for source chroma-keying.",
+class ImportArgs:
+    def __init__(self) -> None:
+        self.mode = "python"
+        self.native_tool = DEFAULT_NATIVE_TOOL
+        self.native_threads = max(1, min(4, os.cpu_count() or 1))
+
+
+def print_usage() -> None:
+    print(
+        "usage: import_generated_core_assets.py "
+        "[--mode python|native] [--native-tool PATH] [--native-threads N]"
     )
-    parser.add_argument(
-        "--native-tool",
-        type=Path,
-        default=DEFAULT_NATIVE_TOOL,
-        help="Path to import_generated_core_assets_native.exe for --mode native.",
-    )
-    parser.add_argument(
-        "--native-threads",
-        type=int,
-        default=max(1, min(4, os.cpu_count() or 1)),
-        help="Worker threads used by the native source chroma-key step.",
-    )
-    return parser.parse_args()
+
+
+def parse_args() -> ImportArgs:
+    args = ImportArgs()
+    argv = sys.argv[1:]
+    index = 0
+    while index < len(argv):
+        option = argv[index]
+        if option in ("-h", "--help"):
+            print_usage()
+            raise SystemExit(0)
+        if option not in {"--mode", "--native-tool", "--native-threads"}:
+            print_usage()
+            raise SystemExit(f"unknown option: {option}")
+        if index + 1 >= len(argv):
+            print_usage()
+            raise SystemExit(f"missing value for {option}")
+        value = argv[index + 1]
+        if option == "--mode":
+            if value not in {"python", "native"}:
+                raise SystemExit(f"--mode must be python or native, got: {value}")
+            args.mode = value
+        elif option == "--native-tool":
+            args.native_tool = Path(value)
+        elif option == "--native-threads":
+            try:
+                args.native_threads = int(value)
+            except ValueError as exc:
+                raise SystemExit(f"--native-threads must be an integer, got: {value}") from exc
+            if args.native_threads < 1:
+                raise SystemExit("--native-threads must be >= 1")
+        index += 2
+    return args
 
 
 def unique_source_keys() -> list[str]:
@@ -371,6 +410,15 @@ def source_fingerprint(source_key: str) -> dict[str, Any]:
     }
 
 
+def file_fingerprint(path: Path) -> dict[str, Any]:
+    stat = path.stat()
+    return {
+        "path": rel(path),
+        "mtime_ns": stat.st_mtime_ns,
+        "size_bytes": stat.st_size,
+    }
+
+
 def keyed_cache_valid(source_key: str) -> bool:
     cache_path = keyed_cache_path(source_key)
     meta_path = keyed_cache_meta_path(source_key)
@@ -384,7 +432,7 @@ def keyed_cache_valid(source_key: str) -> bool:
     return all(meta.get(key) == value for key, value in expected.items())
 
 
-def runtime_output_fingerprint(spec: dict[str, Any]) -> dict[str, Any]:
+def runtime_input_fingerprint(spec: dict[str, Any]) -> dict[str, Any]:
     return {
         "runtime_algorithm": RUNTIME_CACHE_VERSION,
         "source": source_fingerprint(spec["source"]),
@@ -400,11 +448,53 @@ def runtime_output_valid(spec: dict[str, Any], output_path: Path) -> bool:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return False
-    return meta == runtime_output_fingerprint(spec)
+    return meta.get("input") == runtime_input_fingerprint(spec) and meta.get("output") == file_fingerprint(output_path)
 
 
-def write_runtime_output_meta(spec: dict[str, Any]) -> None:
-    write_json_atomic(runtime_cache_meta_path(spec), runtime_output_fingerprint(spec))
+def write_runtime_output_meta(spec: dict[str, Any], output_path: Path) -> None:
+    write_json_atomic_file(
+        runtime_cache_meta_path(spec),
+        {
+            "input": runtime_input_fingerprint(spec),
+            "output": file_fingerprint(output_path),
+        },
+    )
+
+
+def import_stamp_fingerprint() -> dict[str, Any]:
+    return {
+        "import_algorithm": IMPORT_STAMP_VERSION,
+        "runtime_algorithm": RUNTIME_CACHE_VERSION,
+        "key_algorithm": KEYED_CACHE_VERSION,
+        "assets": ASSETS,
+        "runtime_outputs": [
+            file_fingerprint(SPRITE_DIR / spec["output"])
+            for spec in ASSETS
+            if (SPRITE_DIR / spec["output"]).exists()
+        ],
+        "crop_manifest": file_fingerprint(CROP_MANIFEST) if CROP_MANIFEST.exists() else None,
+        "asset_manifest": file_fingerprint(ASSET_MANIFEST) if ASSET_MANIFEST.exists() else None,
+        "contact_sheet": file_fingerprint(CONTACT_SHEET) if CONTACT_SHEET.exists() else None,
+    }
+
+
+def import_outputs_current() -> bool:
+    required_outputs = [SPRITE_DIR / spec["output"] for spec in ASSETS] + [CROP_MANIFEST, ASSET_MANIFEST, CONTACT_SHEET]
+    if not all(path.exists() for path in required_outputs):
+        return False
+    if not all(runtime_output_valid(spec, SPRITE_DIR / spec["output"]) for spec in ASSETS):
+        return False
+    if not IMPORT_STAMP.exists():
+        return False
+    try:
+        stamp = json.loads(IMPORT_STAMP.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return stamp == import_stamp_fingerprint()
+
+
+def write_import_stamp() -> None:
+    write_json_atomic_file(IMPORT_STAMP, import_stamp_fingerprint())
 
 
 def write_rgba_cache_atomic(path: Path, image: Image.Image) -> None:
@@ -419,7 +509,7 @@ def write_rgba_cache_atomic(path: Path, image: Image.Image) -> None:
 def write_keyed_cache_meta(source_key: str, producer: str) -> None:
     meta = source_fingerprint(source_key)
     meta["producer"] = producer
-    write_json_atomic(keyed_cache_meta_path(source_key), meta)
+    write_json_atomic_file(keyed_cache_meta_path(source_key), meta)
 
 
 def write_native_key_plan(plan_path: Path, source_keys: list[str]) -> dict[str, Path]:
@@ -436,6 +526,9 @@ def write_native_key_plan(plan_path: Path, source_keys: list[str]) -> dict[str, 
 def run_native_key_worker(native_tool: Path, threads: int, stale_sources: list[str]) -> None:
     if not stale_sources:
         return
+    import subprocess
+    import tempfile
+
     native_tool = native_tool.resolve()
     if not native_tool.exists():
         raise SystemExit(
@@ -467,6 +560,8 @@ def run_native_key_worker(native_tool: Path, threads: int, stale_sources: list[s
 
 
 def load_native_rgba_cache(path: Path) -> Image.Image:
+    from PIL import Image
+
     with path.open("rb") as handle:
         header = handle.readline().decode("ascii").strip().split()
         if len(header) != 3 or header[0] != "CCRGBA1":
@@ -487,6 +582,12 @@ def main() -> None:
     REVIEW_DIR.mkdir(parents=True, exist_ok=True)
     KEYED_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     RUNTIME_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    if import_outputs_current():
+        print("generated core assets are up to date")
+        return
+
+    from PIL import Image
 
     crop_sources: dict[str, dict[str, Any]] = {}
     runtime_assets: list[dict[str, Any]] = []
@@ -531,8 +632,8 @@ def main() -> None:
             region_size = region.size
             trimmed = fit_to_canvas(region, tuple(spec["size"]), int(spec.get("padding", 0)))
             final = apply_tint(trimmed, spec.get("tint"))
-            save_image_atomic(final, output_path)
-            write_runtime_output_meta(spec)
+            save_image_atomic_file(final, output_path)
+            write_runtime_output_meta(spec, output_path)
         contact_items.append((spec["id"], final))
 
         bbox = alpha_bbox(final)
@@ -614,9 +715,10 @@ def main() -> None:
         "assets": runtime_assets,
     }
 
-    write_json_atomic(CROP_MANIFEST, crop_manifest)
-    write_json_atomic(ASSET_MANIFEST, runtime_manifest)
+    write_json_atomic_file(CROP_MANIFEST, crop_manifest)
+    write_json_atomic_file(ASSET_MANIFEST, runtime_manifest)
     write_contact_sheet(contact_items)
+    write_import_stamp()
     for asset in runtime_assets:
         print(f"wrote {asset['path']} from generated source")
     print(f"wrote {rel(CROP_MANIFEST)}")

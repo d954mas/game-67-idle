@@ -115,3 +115,21 @@ produced visually-valid but non-identical PNGs.
   - Audit still passed for 11 generated UI assets.
   - Python/native warm PNG parity remained pixel-identical for all 11 runtime
     PNGs.
+- 2026-06-16: Added a fast import stamp for true no-op runs:
+  - Stamp covers runtime output files, crop manifest, asset manifest, contact
+    sheet, asset specs, and algorithm versions.
+  - Fast path exits before importing PIL/NumPy/native worker helpers when all
+    outputs are current.
+  - Missing-output invalidation was tested by moving `icon_chain.png`; the
+    importer rebuilt it and refreshed manifests/contact sheet/stamp.
+  - Warm native no-change after import stamp and lazy atomic-IO imports:
+    0.062-0.066s wall-clock.
+  - cProfile no-change time inside Python process: 0.019s; remaining cost is
+    mostly process startup, `pathlib`/JSON/stat checks, and file metadata
+    validation.
+  - Native full-cold rebuild after these changes: 0.626s.
+  - Python full-cold rebuild after these changes: 0.666s.
+  - Pixel parity: all 11 generated runtime PNGs remained identical between
+    native and Python paths.
+  - Audit still passed for 11 generated UI assets; slowest audited asset was
+    `generated_upgrade_card` at about 9.6ms.
