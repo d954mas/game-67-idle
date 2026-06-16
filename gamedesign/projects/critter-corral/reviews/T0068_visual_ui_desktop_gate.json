@@ -1,0 +1,40 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "critter-corral",
+  "task": "T0068",
+  "surface": "desktop",
+  "verdict": "pass",
+  "timestamp": "2026-06-16T04:07:50.541Z",
+  "screenshot": "build/captures/corral_visual_ui_landscape_play.png",
+  "answers": {
+    "where": "bright open pasture with color pens, critters, HUD, and lure",
+    "action": "drag the lure to herd the red critters into the matching red pen",
+    "response": "the lure glow moves, critters follow, and matching pens/gates show the target color",
+    "reward": "captured critters pop with sparkles, score and remaining pips update, and waves lead to upgrades",
+    "game_look": "squishy critters, toy-fence pens, textured grass, glow FX, readable HUD, not debug primitives"
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 5,
+      "ui_controls": 4,
+      "action_direction": 5,
+      "art_quality": 4,
+      "audience_fit": 5
+    },
+    "issues": []
+  },
+  "problem": "",
+  "next": ""
+}

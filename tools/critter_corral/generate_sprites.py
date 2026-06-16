@@ -52,15 +52,30 @@ def _smoothstep(edge0: float, edge1: float, x: np.ndarray) -> np.ndarray:
 
 
 def critter(size: int, body_rgb, rim_rgb, eye_dir: float):
-    """Bold round blob: radial-gradient body, dark contrast rim, glossy shine,
-    two big clear eyes. Higher contrast so it pops on the calmed grass."""
+    """Candy-soft critter: imperfect squishy silhouette, tiny nubs, glossy body,
+    expressive eyes and a small smile. Kept readable at gameplay size."""
     xs, ys, cx, cy = _grid(size)
-    r = np.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
+    dx = xs - cx
+    dy = ys - cy
+    theta = np.arctan2(dy, dx)
+    # Not a perfect token: a subtle wobbly outline makes it feel alive.
+    wobble = 1.0 + 0.035 * np.sin(theta * 3.0 + 0.4) + 0.025 * np.sin(theta * 5.0 - 0.7)
+    r = np.sqrt((dx / 1.03) ** 2 + (dy / 0.94) ** 2) / wobble
     radius = size * 0.46
     out = np.zeros((size, size, 4), np.float32)
 
     # soft alpha falloff at the edge for a tactile, anti-aliased rim
     alpha = 1.0 - _smoothstep(radius - 2.0, radius + 1.5, r)
+
+    # little side nubs/feet so the silhouette is a character, not a token
+    for nx, ny, nr in (
+        (cx - radius * 0.56, cy + radius * 0.24, radius * 0.18),
+        (cx + radius * 0.56, cy + radius * 0.24, radius * 0.18),
+        (cx - radius * 0.22, cy + radius * 0.55, radius * 0.15),
+        (cx + radius * 0.22, cy + radius * 0.55, radius * 0.15),
+    ):
+        alpha = np.maximum(alpha, (1.0 - _smoothstep(nr - 1.2, nr + 1.2,
+                                                     np.sqrt((xs - nx) ** 2 + (ys - ny) ** 2))) * 0.95)
 
     # body: radial gradient (brighter centre -> rim color near edge)
     t = np.clip(r / radius, 0.0, 1.0)[..., None]
@@ -78,12 +93,15 @@ def critter(size: int, body_rgb, rim_rgb, eye_dir: float):
     dark = rim * 0.45
     rgb = rgb * (1.0 - outline[..., None]) + dark[None, None, :] * outline[..., None]
 
-    # soft top-left highlight (cartoon shine)
+    # soft top-left highlight (cartoon shine) plus a lower bounce-light patch
     hx, hy = cx - radius * 0.34, cy - radius * 0.34
     hr = radius * 0.44
     hd = np.sqrt((xs - hx) ** 2 + (ys - hy) ** 2)
     shine = (1.0 - _smoothstep(0.0, hr, hd)) * 0.6
     rgb = rgb + (255.0 - rgb) * shine[..., None]
+    belly = (1.0 - _smoothstep(0.0, radius * 0.58,
+                               np.sqrt((xs - cx) ** 2 + (ys - (cy + radius * 0.18)) ** 2))) * 0.18
+    rgb = rgb + (255.0 - rgb) * belly[..., None]
 
     out[..., :3] = rgb
     out[..., 3] = alpha * 255.0
@@ -121,26 +139,46 @@ def critter(size: int, body_rgb, rim_rgb, eye_dir: float):
         lit = (1.0 - _smoothstep(0.0, pr * 0.5, ld)) * 0.9
         for c in range(3):
             out[..., c] = out[..., c] * (1.0 - lit) + 255.0 * lit
+    # tiny smile: dark soft arc below the eyes
+    mx = xs - cx
+    mcy = cy + radius * 0.02
+    mouth_r = radius * 0.30
+    mouth_d = np.sqrt(mx ** 2 + (ys - mcy) ** 2)
+    mouth_band = (np.abs(mouth_d - mouth_r) < 1.8) & (ys > mcy) & (np.abs(mx) < radius * 0.26)
+    smile = mouth_band.astype(np.float32) * alpha
+    for c in range(3):
+        out[..., c] = out[..., c] * (1.0 - smile) + 35.0 * smile
+    out[..., 3] = np.maximum(out[..., 3], smile * 255.0)
     return out
 
 
 def critter_neutral(size: int):
-    """Neutral light-grey blob built so the runtime emit-color tint reproduces a
-    clean, distinct hue per color. Body is near-white (multiplies cleanly to the
-    target hue), rim/outline stay dark and eyes stay white+dark so they read on
-    any tint. One shape, N tint colors (see CORRAL_COLORS in clean_seed_main.c)."""
+    """Neutral tintable critter with the same squishy character silhouette.
+    Body is near-white so runtime emit-color reproduces saturated hues cleanly."""
     xs, ys, cx, cy = _grid(size)
-    r = np.sqrt((xs - cx) ** 2 + (ys - cy) ** 2)
+    dx = xs - cx
+    dy = ys - cy
+    theta = np.arctan2(dy, dx)
+    wobble = 1.0 + 0.035 * np.sin(theta * 3.0 + 0.4) + 0.025 * np.sin(theta * 5.0 - 0.7)
+    r = np.sqrt((dx / 1.03) ** 2 + (dy / 0.94) ** 2) / wobble
     radius = size * 0.46
     out = np.zeros((size, size, 4), np.float32)
 
     alpha = 1.0 - _smoothstep(radius - 2.0, radius + 1.5, r)
+    for nx, ny, nr in (
+        (cx - radius * 0.56, cy + radius * 0.24, radius * 0.18),
+        (cx + radius * 0.56, cy + radius * 0.24, radius * 0.18),
+        (cx - radius * 0.22, cy + radius * 0.55, radius * 0.15),
+        (cx + radius * 0.22, cy + radius * 0.55, radius * 0.15),
+    ):
+        alpha = np.maximum(alpha, (1.0 - _smoothstep(nr - 1.2, nr + 1.2,
+                                                     np.sqrt((xs - nx) ** 2 + (ys - ny) ** 2))) * 0.95)
 
     # body: near-white radial gradient (slightly darker toward the rim) so the
     # emit tint multiplies to a saturated, even hue with a soft rounded shade.
     t = np.clip(r / radius, 0.0, 1.0)[..., None]
-    centre = np.full((size, size, 3), 252.0, np.float32)
-    edge = np.full((size, size, 3), 188.0, np.float32)
+    centre = np.full((size, size, 3), 255.0, np.float32)
+    edge = np.full((size, size, 3), 190.0, np.float32)
     rgb = centre * (1.0 - t) + edge * t
 
     # dark contrast outline ring near the rim (stays dark under any tint).
@@ -157,6 +195,9 @@ def critter_neutral(size: int):
     hd = np.sqrt((xs - hx) ** 2 + (ys - hy) ** 2)
     shine = (1.0 - _smoothstep(0.0, hr, hd)) * 0.5
     rgb = rgb + (255.0 - rgb) * shine[..., None]
+    belly = (1.0 - _smoothstep(0.0, radius * 0.58,
+                               np.sqrt((xs - cx) ** 2 + (ys - (cy + radius * 0.18)) ** 2))) * 0.16
+    rgb = rgb + (255.0 - rgb) * belly[..., None]
 
     out[..., :3] = rgb
     out[..., 3] = alpha * 255.0
@@ -190,6 +231,15 @@ def critter_neutral(size: int):
         lit = (1.0 - _smoothstep(0.0, pr * 0.5, ld)) * 0.9
         for c in range(3):
             out[..., c] = out[..., c] * (1.0 - lit) + 255.0 * lit
+    mx = xs - cx
+    mcy = cy + radius * 0.02
+    mouth_r = radius * 0.30
+    mouth_d = np.sqrt(mx ** 2 + (ys - mcy) ** 2)
+    mouth_band = (np.abs(mouth_d - mouth_r) < 1.8) & (ys > mcy) & (np.abs(mx) < radius * 0.26)
+    smile = mouth_band.astype(np.float32) * alpha
+    for c in range(3):
+        out[..., c] = out[..., c] * (1.0 - smile) + 36.0 * smile
+    out[..., 3] = np.maximum(out[..., 3], smile * 255.0)
     return out
 
 
@@ -203,25 +253,21 @@ def _round_rect_mask(xs, ys, x0, y0, x1, y1, radius, soft=1.5):
 
 
 def pen(w: int, h: int):
-    """Tintable pen panel: near-WHITE fill so the runtime emit-color reproduces
-    the exact critter hue. A darker fence rim frames it, and an open gate is
-    carved out of the right face (the field-facing side) so the entrance reads.
-    The runtime draws the panel for both pens and only the gate side differs;
-    we put the gate on the right and let the runtime add the directional
-    gate-glow marker on the correct inner face."""
+    """Tintable toy-fence pen: near-white planks multiply into the target hue,
+    with baked darker rails/posts and an open right-face gate."""
     ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
     out = np.zeros((h, w, 4), np.float32)
     pad = 7.0
     radius = 22.0
     panel = _round_rect_mask(xs, ys, pad, pad, w - pad, h - pad, radius, soft=2.0)
 
-    # near-white fill with a faint vertical sheen. White means the emit tint
-    # multiplies cleanly to the exact pen hue at runtime.
-    sheen = 0.92 + 0.08 * (1.0 - ys / h)
-    base = 252.0
-    fill_rgb = np.stack([np.full((h, w), base) * sheen,
-                         np.full((h, w), base) * sheen,
-                         np.full((h, w), base) * sheen], axis=-1)
+    # near-white toy planks with subtle woodgrain. White means runtime tint
+    # multiplies cleanly to the exact pen hue.
+    plank = (np.floor((xs - pad) / max(1.0, (w - 2 * pad) / 5.0)) % 2.0)
+    sheen = 0.90 + 0.10 * (1.0 - ys / h)
+    grain = np.sin(ys * 0.16 + plank * 1.7) * 3.0 + np.sin((xs + ys) * 0.045) * 2.0
+    base = 252.0 + grain + plank * 5.0
+    fill_rgb = np.stack([base * sheen, base * sheen, base * sheen], axis=-1)
     out[..., :3] = fill_rgb
     out[..., 3] = panel * 255.0
 
@@ -229,9 +275,15 @@ def pen(w: int, h: int):
     inner = _round_rect_mask(xs, ys, pad + 16, pad + 16,
                              w - pad - 16, h - pad - 16, radius * 0.7, soft=2.0)
     rim = np.clip(panel - inner, 0.0, 1.0)
-    # darken (not recolor) so the tint still shows but the frame is distinct.
     for c in range(3):
-        out[..., c] = out[..., c] * (1.0 - rim * 0.55)
+        out[..., c] = out[..., c] * (1.0 - rim * 0.68)
+
+    # chunky horizontal rails: clear "corral" read even when tinted.
+    rail_mask = np.zeros((h, w), np.float32)
+    for py in (pad + h * 0.25, h - pad - h * 0.25):
+        rail_mask = np.maximum(rail_mask, (1.0 - _smoothstep(8.0, 11.5, np.abs(ys - py))) * panel)
+    for c in range(3):
+        out[..., c] = out[..., c] * (1.0 - rail_mask * 0.38)
 
     # vertical fence posts inside the rim (gives the "pen" read, stays tintable)
     n_posts = 5
@@ -242,6 +294,15 @@ def pen(w: int, h: int):
     post_mask *= inner  # only inside the fenced area
     for c in range(3):
         out[..., c] = out[..., c] * (1.0 - post_mask * 0.28)
+
+    # small nail heads on rails/posts, still tintable but darker.
+    nail = np.zeros((h, w), np.float32)
+    for k in range(n_posts):
+        px = pad + 18 + (w - 2 * (pad + 18)) * (k / (n_posts - 1))
+        for py in (pad + h * 0.25, h - pad - h * 0.25):
+            nail = np.maximum(nail, _disc(xs, ys, px, py, 4.2, soft=1.0))
+    for c in range(3):
+        out[..., c] = out[..., c] * (1.0 - nail * 0.45)
 
     # open GATE: carve a tall notch out of the RIGHT face (centre vertically) so
     # the entrance reads as an opening. Runtime mirrors which side faces field.
@@ -268,8 +329,7 @@ def pen(w: int, h: int):
 
 
 def flag(w: int, h: int):
-    """Small white pennant on a pole (tinted to pen hue at emit time). Marks
-    each pen with its color so the color mapping is unmistakable."""
+    """Small tintable pennant on a chunky pole. Marks each pen color."""
     ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
     out = np.zeros((h, w, 4), np.float32)
     # pole on the left
@@ -291,24 +351,39 @@ def flag(w: int, h: int):
     flag_a = np.clip(in_flag * flag_soft, 0.0, 1.0)
     # white flag + slightly darker pole so it reads as a marker
     rgb = np.full((h, w, 3), 255.0, np.float32)
-    a = np.clip(np.maximum(flag_a, pole), 0.0, 1.0)
-    # darken the pole a touch
-    out[..., :3] = rgb * (1.0 - pole[..., None] * 0.35)
+    bead = _disc(xs, ys, pole_x, h * 0.83, w * 0.10, soft=1.0)
+    a = np.clip(np.maximum(np.maximum(flag_a, pole), bead), 0.0, 1.0)
+    # darken the pole and bottom bead a touch
+    out[..., :3] = rgb * (1.0 - (pole + bead)[..., None] * 0.35)
     out[..., 3] = a * 255.0
     return out
 
 
 def grass(size: int):
-    """Soft, low-contrast pasture tile so the field RECEDES. Gentle muted green
-    with very subtle large-scale mottling (no busy hatch pattern)."""
+    """Bright mobile pasture tile: juicy but low-contrast enough to recede."""
     ys, xs = np.mgrid[0:size, 0:size].astype(np.float32)
-    base = np.array([120.0, 178.0, 108.0], np.float32)  # muted, slightly desat green
+    base = np.array([125.0, 191.0, 106.0], np.float32)
     out = np.zeros((size, size, 4), np.float32)
     field = np.tile(base, (size, size, 1))
-    # one slow tileable wave only -> soft mottling, very low amplitude
-    tex = np.sin(xs / size * math.tau * 1.0 + 0.4) * np.cos(ys / size * math.tau * 1.0 - 0.7)
-    tex *= 4.0  # low contrast (was ~16 across two octaves)
-    field += tex[..., None] * np.array([0.5, 0.8, 0.4], np.float32)
+    # tileable soft mottling + broad mown arcs. Keep contrast restrained.
+    tex = (
+        np.sin(xs / size * math.tau * 1.0 + 0.4) * np.cos(ys / size * math.tau * 1.0 - 0.7)
+        + 0.45 * np.sin((xs + ys) / size * math.tau * 2.0)
+        + 0.25 * np.cos((xs - ys) / size * math.tau * 3.0)
+    )
+    field += tex[..., None] * np.array([4.0, 6.0, 3.0], np.float32)
+    stripe = 0.5 + 0.5 * np.sin((xs + ys * 0.42) / size * math.tau * 4.0)
+    field += (stripe[..., None] - 0.5) * np.array([7.0, 9.0, 4.0], np.float32)
+
+    # sparse flowers/clover sell the pasture without becoming gameplay noise.
+    for fx, fy, rgb, rad in (
+        (0.18, 0.28, (255.0, 232.0, 128.0), 3.2),
+        (0.72, 0.18, (244.0, 178.0, 215.0), 2.8),
+        (0.42, 0.76, (236.0, 250.0, 170.0), 2.4),
+        (0.88, 0.62, (255.0, 232.0, 128.0), 2.6),
+    ):
+        d = _disc(xs, ys, fx * size, fy * size, rad, soft=1.2)
+        field = field * (1.0 - d[..., None] * 0.34) + np.array(rgb, np.float32) * d[..., None] * 0.34
     out[..., :3] = field
     out[..., 3] = 255.0
     return out
@@ -326,7 +401,11 @@ def lure(size: int):
     ring = np.exp(-((r - ring_r) ** 2) / (2.0 * (radius * 0.14) ** 2))
     # very soft, low-intensity core (no hot dot)
     core = np.exp(-(r ** 2) / (2.0 * (radius * 0.40) ** 2)) * 0.35
-    glow = np.clip(ring * 0.85 + core, 0.0, 1.0)
+    star = np.maximum(
+        1.0 - _smoothstep(size * 0.015, size * 0.045, np.abs(xs - cx)),
+        1.0 - _smoothstep(size * 0.015, size * 0.045, np.abs(ys - cy)),
+    ) * (1.0 - _smoothstep(0.0, radius * 0.55, r))
+    glow = np.clip(ring * 0.85 + core + star * 0.45, 0.0, 1.0)
     gold = np.array([255.0, 224.0, 130.0], np.float32)
     warm = np.array([255.0, 238.0, 190.0], np.float32)
     cmix = np.clip(core, 0.0, 1.0)[..., None]
@@ -343,6 +422,11 @@ def spark(size: int):
     radius = size * 0.46
     out = np.zeros((size, size, 4), np.float32)
     glow = np.exp(-(r ** 2) / (2.0 * (radius * 0.42) ** 2))
+    cross = np.maximum(
+        1.0 - _smoothstep(size * 0.012, size * 0.045, np.abs(xs - cx)),
+        1.0 - _smoothstep(size * 0.012, size * 0.045, np.abs(ys - cy)),
+    ) * (1.0 - _smoothstep(0.0, radius, r))
+    glow = np.clip(glow * 0.75 + cross * 0.55, 0.0, 1.0)
     out[..., :3] = 255.0  # white; tinted at emit time by vertex color
     out[..., 3] = np.clip(glow * 255.0, 0, 255)
     return out
@@ -356,7 +440,10 @@ def pip(size: int):
     pad = size * 0.12
     radius = size * 0.30
     mask = _round_rect_mask(xs, ys, pad, pad, size - pad, size - pad, radius, soft=1.5)
-    out[..., :3] = 255.0
+    shade = 0.84 + 0.16 * (1.0 - ys / size)
+    highlight = _round_rect_mask(xs, ys, pad + 3, pad + 3, size - pad - 3,
+                                 size * 0.48, radius * 0.75, soft=1.5) * 0.18
+    out[..., :3] = np.clip((245.0 * shade + 255.0 * highlight)[..., None], 0, 255)
     out[..., 3] = mask * 255.0
     return out
 
@@ -486,24 +573,32 @@ def icon_chain(size: int):
 
 
 def card(w: int, h: int):
-    """A rounded card backdrop tile for an upgrade choice. Near-white so the
-    runtime emit-color can tint each card; a soft inner border frames it."""
+    """Candy UI card backdrop for upgrade choices. Text/icons stay runtime."""
     ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
     out = np.zeros((h, w, 4), np.float32)
     pad = 6.0
     radius = 26.0
     panel = _round_rect_mask(xs, ys, pad, pad, w - pad, h - pad, radius, soft=2.0)
-    # gentle top-to-bottom sheen
-    sheen = 0.90 + 0.10 * (1.0 - ys / h)
-    base = 252.0
-    out[..., :3] = (np.full((h, w, 3), base) * sheen[..., None])
+    # warm paper/plastic fill with glossy top and subtle diagonal texture.
+    sheen = 0.88 + 0.12 * (1.0 - ys / h)
+    diagonal = np.sin((xs + ys * 0.55) * 0.055) * 2.0
+    base = 252.0 + diagonal
+    out[..., :3] = np.stack([base * sheen, base * sheen, base * sheen], axis=-1)
     out[..., 3] = panel * 255.0
-    # darker inner border so the card reads as a tactile tile under any tint
+
+    # darker outer border plus a bright inner bevel so the card reads as a
+    # tappable object under any tint.
     inner = _round_rect_mask(xs, ys, pad + 9, pad + 9,
                              w - pad - 9, h - pad - 9, radius * 0.7, soft=2.0)
     rim = np.clip(panel - inner, 0.0, 1.0)
     for c in range(3):
-        out[..., c] = out[..., c] * (1.0 - rim * 0.5)
+        out[..., c] = out[..., c] * (1.0 - rim * 0.62)
+
+    shine = _round_rect_mask(xs, ys, pad + 14, pad + 12, w - pad - 14,
+                             h * 0.34, radius * 0.52, soft=2.0)
+    for c in range(3):
+        out[..., c] = out[..., c] * (1.0 - shine * 0.18) + 255.0 * shine * 0.18
+
     return out
 
 

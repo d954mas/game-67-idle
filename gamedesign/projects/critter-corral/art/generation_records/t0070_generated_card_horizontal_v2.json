@@ -1,0 +1,16 @@
+{
+  "schema": "game.art_generation_record",
+  "version": 1,
+  "id": "t0070_generated_card_horizontal_v2",
+  "provider": "OpenAI built-in image_gen",
+  "model_or_workflow": "built-in image_gen",
+  "workflow_path": "gamedesign/projects/critter-corral/art/generated/T0070/openai-built-in-imagegen-workflow.json",
+  "no_seed_reason": "Built-in image_gen output did not expose a stable seed",
+  "prompt": "one blank horizontal upgrade choice card panel for Critter Corral, reusable runtime UI asset, polished bright mobile casual game art, no text, flat #ff00ff chroma-key background",
+  "negative_prompt": "text, letters, numbers, logo, watermark, cast shadow, contact shadow, non-flat background, magenta inside subject",
+  "source_family": "blank UI kit sheet",
+  "source_family_role": "single horizontal upgrade card source",
+  "accepted_source_image": "gamedesign/projects/critter-corral/art/generated/T0070/generated-card-horizontal-source-v2.png",
+  "final_art_source": "generated",
+  "rejected_candidate_notes": ""
+}

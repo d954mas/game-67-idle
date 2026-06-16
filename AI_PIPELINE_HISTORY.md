@@ -11,6 +11,19 @@ sessions, use the `chat-session-reflection` skill.
 Compact reusable lessons about AI-assisted development. Keep each entry under
 about 10 lines.
 
+### 2026-06-16 - Generated Art Must Prove Source-To-Runtime, Not Just Look Better
+
+- Context: Lead rejected a procedural "polish" pass because it did not visibly
+  use generated art and still looked draft-like.
+- Friction: The agent initially integrated generated assets before checking
+  source/runtime orientation and before setting an AI profiling scope.
+- Lesson: Generated visual work needs an early source-to-runtime proof:
+  selected generated source, runtime cut/contact sheet, atlas pack, screenshot,
+  and a directional-orientation check for arrows/asymmetric art.
+- Status: T0070/T0072 added generated sources, provenance, pixel audits,
+  native gates, atlas transform disable, and sprite Y-scale fix. T0071 remains
+  open for chroma-key hot-path optimization.
+
 ### 2026-06-14 - Automation Green Did Not Mean Product Good
 
 - Context: A long native RPG prototype run added systems, routes, state,

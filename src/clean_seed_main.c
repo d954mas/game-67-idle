@@ -403,6 +403,18 @@ static uint32_t pack_white_alpha(float alpha) {
   return (a << 24) | 0x00FFFFFFU;
 }
 
+static uint32_t upgrade_accent_tint(corral_upgrade_t u, float alpha) {
+  static const int accent_idx[CORRAL_UPG_COUNT] = {3, 0, 4, 2, 1, 3};
+  const float *col = CORRAL_COLORS[accent_idx[(int)u]];
+  float tint[4] = {
+      clampf(col[0] * 0.68F + 0.30F, 0.0F, 1.0F),
+      clampf(col[1] * 0.68F + 0.30F, 0.0F, 1.0F),
+      clampf(col[2] * 0.68F + 0.30F, 0.0F, 1.0F),
+      alpha,
+  };
+  return pack_rgba(tint);
+}
+
 /* Build a column-major mat4 with independent X/Y scale + translation. The
  * sprite renderer reads columns 0/1 (scale/rot) and m[12/13] (translate). */
 static void sprite_mat(float cx, float cy, float sx, float sy, float out[16]) {
@@ -416,8 +428,10 @@ static void sprite_mat(float cx, float cy, float sx, float sy, float out[16]) {
 }
 
 /* Emit one centred sprite at (cx,cy) scaled so its source covers (dst_w,dst_h)
- * pixels, tinted by color_packed. Region is centre-pivot in the atlas. A
- * negative dst_w mirrors the sprite horizontally about its centre. */
+ * pixels, tinted by color_packed. Region is centre-pivot in the atlas. The
+ * scene uses a Y-down projection, while sprite quads are authored in the
+ * renderer's normal orientation, so negate Y scale to keep PNG top == screen
+ * top. A negative dst_w mirrors the sprite horizontally about its centre. */
 static void emit_sprite(corral_region_t rgn, float cx, float cy, float dst_w,
                         float dst_h, uint32_t color_packed) {
   uint16_t sw = s_region_w[rgn];
@@ -426,7 +440,7 @@ static void emit_sprite(corral_region_t rgn, float cx, float cy, float dst_w,
     return;
   }
   float m[16];
-  sprite_mat(cx, cy, dst_w / (float)sw, dst_h / (float)sh, m);
+  sprite_mat(cx, cy, dst_w / (float)sw, -dst_h / (float)sh, m);
   nt_sprite_renderer_emit_region(s_atlas_handle, s_region_idx[rgn], m, 0.5F,
                                  0.5F, color_packed, 0);
 }
@@ -1753,7 +1767,8 @@ static void corral_draw_phase_overlay(float w, float h) {
     float bx = w * 0.5F - 2.0F * pitch;
     for (int i = 0; i < CORRAL_MAX_COLORS; ++i) {
       float bob = 6.0F * sinf((float)g_nt_app.frame * 0.06F + (float)i * 0.9F);
-      emit_sprite(CORRAL_RGN_CRITTER, bx + (float)i * pitch, h * 0.38F + bob,
+      float badge_y = portrait ? h * 0.38F : h * 0.43F;
+      emit_sprite(CORRAL_RGN_CRITTER, bx + (float)i * pitch, badge_y + bob,
                   badge, badge, critter_tint(i));
     }
     /* pulsing lure orb = "press / tap to start" (the one action, invited). */
@@ -1807,10 +1822,6 @@ static void corral_draw_phase_overlay(float w, float h) {
       float mcx = cx + cw * 0.5F;
       float mcy = cy + ch * 0.5F;
 
-      /* gentle idle bob per card so the choice feels alive (calm, slow). */
-      float bob = 4.0F * sinf((float)g_nt_app.frame * 0.05F + (float)i * 1.3F);
-      mcy += bob;
-
       /* card backdrop: a near-white tile, faintly tinted toward a warm hue so
        * the three cards read as inviting buttons. */
       float wash[4] = {0.96F, 0.93F, 0.86F, 1.0F};
@@ -1822,33 +1833,33 @@ static void corral_draw_phase_overlay(float w, float h) {
         /* WIDE/SHORT portrait card: icon on the LEFT, magnitude pips + the
          * 1/2/3 index dots on the RIGHT; the title/desc text sit in the middle
          * (drawn in the text pass). Sizes track the card height so it scales. */
-        float icon = ch * 0.62F;
-        float icx = cx + ch * 0.5F; /* left gutter, one card-height in */
-        emit_sprite(upgrade_icon_region(u), icx, mcy, icon, icon, 0xFF20242CU);
+        float icon = ch * 0.48F;
+        float icx = cx + ch * 0.54F; /* left safe-area, inside the frame */
+        emit_sprite(CORRAL_RGN_LURE, icx, mcy, icon * 1.05F, icon * 1.05F,
+                    upgrade_accent_tint(u, 0.32F));
+        emit_sprite(CORRAL_RGN_PIP, icx, mcy, icon * 0.72F, icon * 0.72F,
+                    upgrade_accent_tint(u, 0.52F));
+        emit_sprite(upgrade_icon_region(u), icx, mcy, icon, icon, 0xFFFFFFFFU);
 
-        const float dot = ch * 0.13F;
+        const float dot = ch * 0.10F;
         const float gap = dot * 1.4F;
-        float rx = cx + cw - ch * 0.55F; /* right gutter */
+        float rx = cx + cw - ch * 0.62F; /* right safe-area */
         float row_w = (float)CORRAL_UPG_MAX_LEVEL * gap;
         float px0 = rx - row_w * 0.5F + gap * 0.5F;
         for (int l = 0; l < CORRAL_UPG_MAX_LEVEL; ++l) {
           uint32_t pc = (l < filled) ? 0xFF40D0FFU : 0xFFB0A89CU;
-          emit_sprite(CORRAL_RGN_PIP, px0 + (float)l * gap, mcy - ch * 0.14F,
+          emit_sprite(CORRAL_RGN_PIP, px0 + (float)l * gap, mcy - ch * 0.10F,
                       dot, dot, pc);
-        }
-        const float kd = ch * 0.09F;
-        const float kgap = kd * 1.6F;
-        float kw = (float)(i + 1) * kgap;
-        float kx0 = rx - kw * 0.5F + kgap * 0.5F;
-        for (int k = 0; k <= i; ++k) {
-          emit_sprite(CORRAL_RGN_PIP, kx0 + (float)k * kgap, mcy + ch * 0.22F,
-                      kd, kd, 0xFF303838U);
         }
       } else {
         /* big upgrade icon (dark so it pops on the light card). */
         float icon = cw * 0.56F;
+        emit_sprite(CORRAL_RGN_LURE, mcx, mcy - ch * 0.12F, icon * 1.18F,
+                    icon * 1.18F, upgrade_accent_tint(u, 0.48F));
+        emit_sprite(CORRAL_RGN_PIP, mcx, mcy - ch * 0.12F, icon * 0.78F,
+                    icon * 0.78F, upgrade_accent_tint(u, 0.70F));
         emit_sprite(upgrade_icon_region(u), mcx, mcy - ch * 0.12F, icon, icon,
-                    0xFF20242CU);
+                    0xFFFFFFFFU);
 
         /* magnitude: a row of MAX pips, filled up to the level this pick grants
          * (so a bigger magnitude reads as more filled pips — no text). */
@@ -2309,8 +2320,7 @@ static void corral_draw_text(float w, float h) {
       float cw;
       float ch;
       upgrade_card_rect(i, w, h, &cx, &cy, &cw, &ch);
-      float bob = 4.0F * sinf((float)g_nt_app.frame * 0.05F + (float)i * 1.3F);
-      float top = cy + bob;
+      float top = cy;
       /* dark ink on the light card so the copy is crisp. */
       const float ink[4] = {0.12F, 0.13F, 0.16F, 1.0F};
       const float ink2[4] = {0.24F, 0.26F, 0.30F, 1.0F};
@@ -2319,16 +2329,13 @@ static void corral_draw_text(float w, float h) {
       char lvl[40];
       (void)snprintf(lvl, sizeof(lvl), "Level %d / %d", upgrade_card_pips(u),
                      CORRAL_UPG_MAX_LEVEL);
-      char key[8];
-      (void)snprintf(key, sizeof(key), "[%d]", i + 1);
-
       if (portrait) {
         /* WIDE/SHORT card: text column lives BETWEEN the left icon and the
          * right pips. Title on top, the two-line desc under it, level + key at
          * the foot — all in the middle band, vertically centered on the card. */
-        float tcx = cx + cw * 0.5F;       /* card centre x for the title row */
+        float tcx = cx + cw * 0.52F;      /* visual centre of text safe area */
         float mid = top + ch * 0.5F;
-        draw_text(upgrade_title(u), tcx, top + ch * 0.10F, 18.0F, ink,
+        draw_text(upgrade_title(u), tcx, top + ch * 0.24F, 17.0F, ink,
                   TEXT_ALIGN_CENTER);
         if (nl != NULL) {
           char l1[40];
@@ -2338,14 +2345,12 @@ static void corral_draw_text(float w, float h) {
           }
           memcpy(l1, desc, l1len);
           l1[l1len] = '\0';
-          draw_text(l1, tcx, mid - 6.0F, 12.0F, ink2, TEXT_ALIGN_CENTER);
-          draw_text(nl + 1, tcx, mid + 10.0F, 12.0F, ink2, TEXT_ALIGN_CENTER);
+          draw_text(l1, tcx, mid - 3.0F, 12.0F, ink2, TEXT_ALIGN_CENTER);
+          draw_text(nl + 1, tcx, mid + 12.0F, 12.0F, ink2, TEXT_ALIGN_CENTER);
         } else {
           draw_text(desc, tcx, mid, 12.0F, ink2, TEXT_ALIGN_CENTER);
         }
-        draw_text(lvl, tcx, top + ch * 0.78F, 12.0F, ink2, TEXT_ALIGN_CENTER);
-        draw_text(key, tcx, top + ch * 0.78F + 16.0F, 13.0F, ink,
-                  TEXT_ALIGN_CENTER);
+        draw_text(lvl, tcx, top + ch * 0.71F, 11.0F, ink2, TEXT_ALIGN_CENTER);
       } else {
         float mcx = cx + cw * 0.5F;
         /* TITLE near the top of the card. */
@@ -2369,8 +2374,6 @@ static void corral_draw_text(float w, float h) {
         }
         /* current level / what this pick grants, as words under the pips. */
         draw_text(lvl, mcx, top + ch * 0.80F, 13.0F, ink2, TEXT_ALIGN_CENTER);
-        /* the number key hint, as a real "[1]" so the pick is obvious. */
-        draw_text(key, mcx, top + ch * 0.90F, 14.0F, ink, TEXT_ALIGN_CENTER);
       }
     }
   }

@@ -104,7 +104,9 @@ int main(int argc, char *argv[]) {
     // #region atlas: 6 critter-corral sprites
     nt_atlas_opts_t atlas_opts = nt_atlas_opts_defaults();
     atlas_opts.shape = NT_ATLAS_SHAPE_RECT; /* soft round blobs trim fine as rects */
-    atlas_opts.allow_transform = true;
+    /* Generated UI icons have directional meaning (arrows, gates). Keep atlas
+       regions unrotated/unflipped so runtime art matches source orientation. */
+    atlas_opts.allow_transform = false;
     atlas_opts.pixels_per_unit = 1.0F; /* 1 source pixel = 1 world unit */
     atlas_opts.padding = 2;
     atlas_opts.margin = 2;

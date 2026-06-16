@@ -1,0 +1,40 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "critter-corral",
+  "task": "T0070",
+  "surface": "landscape-play",
+  "verdict": "pass",
+  "timestamp": "2026-06-16T06:05:28.131Z",
+  "screenshot": "build/captures/corral_visual_ui_landscape_play.png",
+  "answers": {
+    "where": "Active Critter Corral herding field",
+    "action": "Drag the lure to bring red critters into the red pen",
+    "response": "Critters move toward the lure and pens show matching target colors",
+    "reward": "The screen shows progress toward sorting critters and finishing the wave",
+    "game_look": "Generated critters and toy pens sit on a bright casual pasture with readable HUD and objective copy"
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 4,
+      "ui_controls": 4,
+      "action_direction": 4,
+      "art_quality": 4,
+      "audience_fit": 4
+    },
+    "issues": []
+  },
+  "problem": "",
+  "next": ""
+}

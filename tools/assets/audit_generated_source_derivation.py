@@ -9,6 +9,11 @@ from typing import Any
 
 from PIL import Image
 
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - fallback keeps the audit usable in minimal Python installs.
+    np = None
+
 ROOT = Path.cwd()
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -64,6 +69,26 @@ def compare_images(reference: Image.Image, output: Image.Image, diff_threshold: 
             "mean_rgb_delta": 255.0,
         }
 
+    if np is not None:
+        ref_array = np.array(ref, dtype=np.int16)
+        out_array = np.array(out, dtype=np.int16)
+        visible = ~((ref_array[..., 3] <= 12) & (out_array[..., 3] <= 12))
+        visible_count = int(np.count_nonzero(visible))
+        rgb_delta = np.abs(ref_array[..., :3] - out_array[..., :3]).sum(axis=2)
+        alpha_delta = np.abs(ref_array[..., 3] - out_array[..., 3])
+        changed = visible & ((rgb_delta + alpha_delta) > diff_threshold)
+        changed_count = int(np.count_nonzero(changed))
+        rgb_delta_sum = int(rgb_delta[visible].sum()) if visible_count else 0
+        return {
+            "size_match": True,
+            "reference_size": [ref.width, ref.height],
+            "output_size": [out.width, out.height],
+            "visible_pixels": visible_count,
+            "changed_pixels": changed_count,
+            "changed_ratio": changed_count / max(1, visible_count),
+            "mean_rgb_delta": rgb_delta_sum / max(1, visible_count) / 3.0,
+        }
+
     ref_pixels = ref.load()
     out_pixels = out.load()
     visible = 0
@@ -103,6 +128,7 @@ def audit_crop(
     max_mean_rgb_delta: float,
     diff_threshold: int,
     source_key: tuple[int, int, int] | None,
+    source_cache: dict[Path, Image.Image],
 ) -> dict[str, Any]:
     result: dict[str, Any] = {
         "id": crop.get("id", ""),
@@ -138,10 +164,28 @@ def audit_crop(
         return result
 
     x, y, width, height = [int(value) for value in rect]
-    source_image = Image.open(source_path).convert("RGBA")
+    output = Image.open(output_path).convert("RGBA")
+    if output.size != (width, height):
+        result.update(
+            {
+                "size_match": False,
+                "reference_size": [width, height],
+                "output_size": [output.width, output.height],
+                "visible_pixels": 0,
+                "changed_pixels": 0,
+                "changed_ratio": 1.0,
+                "mean_rgb_delta": 255.0,
+            }
+        )
+        result["problems"].append("output dimensions do not match source crop; derivation is not directly auditable")
+        return result
+
+    source_image = source_cache.get(source_path)
+    if source_image is None:
+        source_image = Image.open(source_path).convert("RGBA")
+        source_cache[source_path] = source_image
     key = source_key if source_key is not None else (255, 0, 255)
     reference = key_to_alpha(source_image.crop((x, y, x + width, y + height)), key=key)
-    output = Image.open(output_path).convert("RGBA")
     stats = compare_images(reference, output, diff_threshold)
     result.update(stats)
 
@@ -214,6 +258,7 @@ def main(argv: list[str]) -> int:
     manifest_path = project_path(args.crop_manifest)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     source_key = parse_hex_color(manifest.get("green_screen", {}).get("key"))
+    source_cache: dict[Path, Image.Image] = {}
     assets = [
         audit_crop(
             source,
@@ -222,6 +267,7 @@ def main(argv: list[str]) -> int:
             max_mean_rgb_delta=args.max_mean_rgb_delta,
             diff_threshold=args.diff_threshold,
             source_key=source_key,
+            source_cache=source_cache,
         )
         for source, crop in iter_crops(manifest)
     ]

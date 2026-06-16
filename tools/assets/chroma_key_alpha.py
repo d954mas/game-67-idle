@@ -13,6 +13,7 @@ except ImportError:  # pragma: no cover - fallback path is kept for portable min
 
 
 RGB = tuple[int, int, int]
+NUMPY_FAST_PATH_MIN_PIXELS = 256 * 256
 
 
 def is_exact_key_like(red: int, green: int, blue: int, key: RGB = (255, 0, 255), tolerance: int = 10) -> bool:
@@ -257,6 +258,145 @@ def bad_edge_rgb_mask_array(array: Any, key: RGB | None) -> Any:
     return key_fringe | purple_halo | green_spill | source_key
 
 
+def dilate_bool_mask(mask: Any, radius: int) -> Any:
+    if radius <= 0:
+        return mask.copy()
+    height, width = mask.shape
+    padded = np.pad(mask, ((radius, radius), (radius, radius)), mode="constant", constant_values=False)
+    dilated = np.zeros(mask.shape, dtype=bool)
+    for dy in range(radius * 2 + 1):
+        for dx in range(radius * 2 + 1):
+            dilated |= padded[dy : dy + height, dx : dx + width]
+    return dilated
+
+
+def border_connected_key_mask(exact: Any) -> Any:
+    connected = np.zeros(exact.shape, dtype=bool)
+    connected[0, :] = exact[0, :]
+    connected[-1, :] = exact[-1, :]
+    connected[:, 0] = exact[:, 0]
+    connected[:, -1] = exact[:, -1]
+    previous_count = -1
+    while True:
+        current_count = int(np.count_nonzero(connected))
+        if current_count == previous_count:
+            return connected
+        previous_count = current_count
+        expanded = connected.copy()
+        expanded[1:, :] |= connected[:-1, :]
+        expanded[:-1, :] |= connected[1:, :]
+        expanded[:, 1:] |= connected[:, :-1]
+        expanded[:, :-1] |= connected[:, 1:]
+        connected = expanded & exact
+
+
+def box_sum(values: Any, radius: int) -> Any:
+    if values.ndim == 2:
+        padded = np.pad(values, ((radius, radius), (radius, radius)), mode="constant", constant_values=0)
+        integral = np.pad(padded, ((1, 0), (1, 0)), mode="constant", constant_values=0).cumsum(axis=0).cumsum(axis=1)
+        diameter = radius * 2 + 1
+        return integral[diameter:, diameter:] - integral[:-diameter, diameter:] - integral[diameter:, :-diameter] + integral[:-diameter, :-diameter]
+    padded = np.pad(values, ((radius, radius), (radius, radius), (0, 0)), mode="constant", constant_values=0)
+    integral = np.pad(padded, ((1, 0), (1, 0), (0, 0)), mode="constant", constant_values=0).cumsum(axis=0).cumsum(axis=1)
+    diameter = radius * 2 + 1
+    return integral[diameter:, diameter:] - integral[:-diameter, diameter:] - integral[diameter:, :-diameter] + integral[:-diameter, :-diameter]
+
+
+def repair_visible_halo_numpy(array: Any, *, key: RGB, aggressive_visible_decontaminate: bool) -> None:
+    alpha = array[..., 3]
+    visible = alpha > 12
+    red = array[..., 0].astype(np.int16)
+    green = array[..., 1].astype(np.int16)
+    blue = array[..., 2].astype(np.int16)
+    halo = any_purple_halo_mask_rgb(red, green, blue)
+    if aggressive_visible_decontaminate:
+        touch = np.ones(alpha.shape, dtype=bool)
+    else:
+        touch = dilate_bool_mask(alpha <= 12, 6)
+    update = visible & halo & touch
+    if not np.any(update):
+        return
+
+    bad = halo | key_fringe_mask_rgb(red, green, blue) | source_key_spill_mask(red, green, blue, key)
+    source = visible & (~bad)
+    radius = 6
+    count = box_sum(source.astype(np.uint16), radius)
+    total = box_sum(array[..., :3].astype(np.uint32) * source[..., None], radius)
+    update &= count > 0
+    if np.any(update):
+        array[..., :3][update] = (total[update] // count[update, None]).astype(np.uint8)
+
+
+def remove_edge_artifacts_numpy(array: Any, *, key: RGB, aggressive_visible_decontaminate: bool) -> None:
+    for _pass in range(3):
+        alpha = array[..., 3]
+        visible = alpha > 12
+        transparent_touch_1 = dilate_bool_mask(alpha <= 12, 1)
+        transparent_touch_2 = dilate_bool_mask(alpha <= 12, 2)
+        red = array[..., 0].astype(np.int16)
+        green = array[..., 1].astype(np.int16)
+        blue = array[..., 2].astype(np.int16)
+        clear = visible & (
+            (key_fringe_mask_rgb(red, green, blue) & transparent_touch_1)
+            | (purple_halo_only_mask_rgb(red, green, blue) & transparent_touch_2)
+            | (source_key_spill_mask(red, green, blue, key) & transparent_touch_2)
+            | (green_screen_spill_mask_rgb(red, green, blue) & transparent_touch_2)
+        )
+        if not np.any(clear):
+            break
+        array[..., 3][clear] = 0
+    repair_visible_halo_numpy(array, key=key, aggressive_visible_decontaminate=aggressive_visible_decontaminate)
+
+
+def key_to_alpha_numpy_large(
+    image: Image.Image,
+    *,
+    key: RGB,
+    exact_tolerance: int,
+    edge_tolerance: int,
+    aggressive_visible_decontaminate: bool,
+) -> Image.Image | None:
+    if np is None:
+        return None
+    width, height = image.size
+    if width * height < NUMPY_FAST_PATH_MIN_PIXELS:
+        return None
+
+    array = np.array(image.convert("RGBA"), dtype=np.uint8)
+    if array.size == 0:
+        return Image.fromarray(array, "RGBA")
+
+    rgb = array[..., :3].astype(np.int16)
+    key_array = np.array(key, dtype=np.int16)
+    exact = np.max(np.abs(rgb - key_array), axis=2) <= exact_tolerance
+    connected = border_connected_key_mask(exact)
+    if not np.any(connected):
+        return None
+
+    edge_mask = dilate_bool_mask(connected, 2)
+    edge_exact = edge_mask & (np.max(np.abs(rgb - key_array), axis=2) <= edge_tolerance)
+    clear = connected | edge_exact
+    array[..., 3][clear] = 0
+
+    edge_visible = edge_mask & (~clear) & (array[..., 3] > 12)
+    if np.any(edge_visible):
+        red = array[..., 0].astype(np.int16)
+        green = array[..., 1].astype(np.int16)
+        blue = array[..., 2].astype(np.int16)
+        spill = np.minimum(red, blue) - green
+        decontaminate = edge_visible & (spill > 28)
+        if np.any(decontaminate):
+            new_red = np.maximum(green, red - spill // 2)
+            new_blue = np.maximum(green, blue - spill // 2)
+            array[..., 0][decontaminate] = np.clip(new_red[decontaminate], 0, 255).astype(np.uint8)
+            array[..., 2][decontaminate] = np.clip(new_blue[decontaminate], 0, 255).astype(np.uint8)
+
+    remove_edge_artifacts_numpy(array, key=key, aggressive_visible_decontaminate=aggressive_visible_decontaminate)
+    rgba = Image.fromarray(array, "RGBA")
+    zero_fully_transparent_rgb(rgba)
+    return rgba
+
+
 def bleed_transparent_rgb_numpy(image: Image.Image, passes: int = 16, key: RGB | None = None) -> bool:
     if np is None:
         return False
@@ -399,6 +539,16 @@ def key_to_alpha(
     edge_tolerance: int = 24,
     aggressive_visible_decontaminate: bool = False,
 ) -> Image.Image:
+    fast = key_to_alpha_numpy_large(
+        image,
+        key=key,
+        exact_tolerance=exact_tolerance,
+        edge_tolerance=edge_tolerance,
+        aggressive_visible_decontaminate=aggressive_visible_decontaminate,
+    )
+    if fast is not None:
+        return fast
+
     rgba = image.convert("RGBA")
     pixels = rgba.load()
     width, height = rgba.size

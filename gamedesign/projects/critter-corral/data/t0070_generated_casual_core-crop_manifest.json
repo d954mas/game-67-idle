@@ -1,0 +1,504 @@
+{
+  "schema": "game.art_crop_manifest",
+  "version": 1,
+  "art_job": "gamedesign/projects/critter-corral/art_requests/t0070_generated_casual_core.json",
+  "output_dir": "gamedesign/projects/critter-corral/art/sprites",
+  "green_screen": {
+    "mode": "chroma_key",
+    "key": "#ff00ff",
+    "notes": "T0070 generated source art cut with border-connected chroma-key removal."
+  },
+  "sources": [
+    {
+      "id": "generated-card-horizontal-source-v2",
+      "path": "gamedesign/projects/critter-corral/art/generated/T0070/generated-card-horizontal-source-v2.png",
+      "source_role": "generated source cut for T0070 casual rescue pass",
+      "crops": [
+        {
+          "id": "generated_upgrade_card",
+          "kind": "slice9",
+          "rect": [
+            0,
+            0,
+            1536,
+            1024
+          ],
+          "output": "gamedesign/projects/critter-corral/art/sprites/card.png",
+          "source_rect": [
+            0,
+            0,
+            1536,
+            1024
+          ],
+          "trim_rect": [
+            6,
+            8,
+            244,
+            112
+          ],
+          "trim_padding": 6,
+          "chroma_key": {
+            "key": "#ff00ff",
+            "mode": "border_connected"
+          },
+          "semantic_role": "upgrade_card_background",
+          "atlas": {
+            "pack_group": "ui_common",
+            "trim_mode": "alpha",
+            "alpha_bleed": true,
+            "premultiply_alpha": true,
+            "extrude": 2,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "allow_rotation": false
+          },
+          "slice9": [
+            52,
+            42,
+            52,
+            36
+          ],
+          "content": [
+            56,
+            36,
+            144,
+            56
+          ],
+          "target_preview_sizes": [
+            [
+              160,
+              200
+            ],
+            [
+              192,
+              240
+            ],
+            [
+              224,
+              280
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "generated-critter-source-v1",
+      "path": "gamedesign/projects/critter-corral/art/generated/T0070/generated-critter-source-v1.png",
+      "source_role": "generated source cut for T0070 casual rescue pass",
+      "crops": [
+        {
+          "id": "generated_critter_neutral",
+          "kind": "sprite",
+          "rect": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "output": "gamedesign/projects/critter-corral/art/sprites/critter.png",
+          "source_rect": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "trim_rect": [
+            7,
+            12,
+            98,
+            87
+          ],
+          "trim_padding": 7,
+          "chroma_key": {
+            "key": "#ff00ff",
+            "mode": "border_connected"
+          },
+          "semantic_role": "neutral_tintable_critter",
+          "atlas": {
+            "pack_group": "gameplay_common",
+            "trim_mode": "alpha",
+            "alpha_bleed": true,
+            "premultiply_alpha": true,
+            "extrude": 2,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "allow_rotation": false
+          },
+          "preserve_green_edges": true
+        },
+        {
+          "id": "generated_critter_a",
+          "kind": "sprite",
+          "rect": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "output": "gamedesign/projects/critter-corral/art/sprites/critter_a.png",
+          "source_rect": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "trim_rect": [
+            7,
+            12,
+            98,
+            87
+          ],
+          "trim_padding": 7,
+          "chroma_key": {
+            "key": "#ff00ff",
+            "mode": "border_connected"
+          },
+          "semantic_role": "warm_critter_variant",
+          "atlas": {
+            "pack_group": "gameplay_common",
+            "trim_mode": "alpha",
+            "alpha_bleed": true,
+            "premultiply_alpha": true,
+            "extrude": 2,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "allow_rotation": false
+          }
+        },
+        {
+          "id": "generated_critter_b",
+          "kind": "sprite",
+          "rect": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "output": "gamedesign/projects/critter-corral/art/sprites/critter_b.png",
+          "source_rect": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "trim_rect": [
+            7,
+            12,
+            98,
+            87
+          ],
+          "trim_padding": 7,
+          "chroma_key": {
+            "key": "#ff00ff",
+            "mode": "border_connected"
+          },
+          "semantic_role": "cool_critter_variant",
+          "atlas": {
+            "pack_group": "gameplay_common",
+            "trim_mode": "alpha",
+            "alpha_bleed": true,
+            "premultiply_alpha": true,
+            "extrude": 2,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "allow_rotation": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "generated-pen-source-v1",
+      "path": "gamedesign/projects/critter-corral/art/generated/T0070/generated-pen-source-v1.png",
+      "source_role": "generated source cut for T0070 casual rescue pass",
+      "crops": [
+        {
+          "id": "generated_pen",
+          "kind": "sprite",
+          "rect": [
+            0,
+            0,
+            1402,
+            1122
+          ],
+          "output": "gamedesign/projects/critter-corral/art/sprites/pen.png",
+          "source_rect": [
+            0,
+            0,
+            1402,
+            1122
+          ],
+          "trim_rect": [
+            8,
+            20,
+            240,
+            160
+          ],
+          "trim_padding": 8,
+          "chroma_key": {
+            "key": "#ff00ff",
+            "mode": "border_connected"
+          },
+          "semantic_role": "toy_fence_pen",
+          "atlas": {
+            "pack_group": "gameplay_common",
+            "trim_mode": "alpha",
+            "alpha_bleed": true,
+            "premultiply_alpha": true,
+            "extrude": 2,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "allow_rotation": false
+          },
+          "preserve_green_edges": true
+        }
+      ]
+    },
+    {
+      "id": "generated-upgrade-icons-source-v1",
+      "path": "gamedesign/projects/critter-corral/art/generated/T0070/generated-upgrade-icons-source-v1.png",
+      "source_role": "generated source cut for T0070 casual rescue pass",
+      "crops": [
+        {
+          "id": "generated_icon_radius",
+          "kind": "icon",
+          "rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "output": "gamedesign/projects/critter-corral/art/sprites/icon_radius.png",
+          "source_rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "trim_rect": [
+            7,
+            6,
+            82,
+            84
+          ],
+          "trim_padding": 4,
+          "chroma_key": {
+            "key": "#ff00ff",
+            "mode": "border_connected"
+          },
+          "semantic_role": "upgrade_lure_radius_icon",
+          "atlas": {
+            "pack_group": "ui_common",
+            "trim_mode": "alpha",
+            "alpha_bleed": true,
+            "premultiply_alpha": true,
+            "extrude": 2,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "allow_rotation": false
+          },
+          "preserve_green_edges": true
+        },
+        {
+          "id": "generated_icon_pull",
+          "kind": "icon",
+          "rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "output": "gamedesign/projects/critter-corral/art/sprites/icon_pull.png",
+          "source_rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "trim_rect": [
+            15,
+            10,
+            75,
+            76
+          ],
+          "trim_padding": 4,
+          "chroma_key": {
+            "key": "#ff00ff",
+            "mode": "border_connected"
+          },
+          "semantic_role": "upgrade_lure_pull_icon",
+          "atlas": {
+            "pack_group": "ui_common",
+            "trim_mode": "alpha",
+            "alpha_bleed": true,
+            "premultiply_alpha": true,
+            "extrude": 2,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "allow_rotation": false
+          },
+          "preserve_green_edges": true
+        },
+        {
+          "id": "generated_icon_second_lure",
+          "kind": "icon",
+          "rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "output": "gamedesign/projects/critter-corral/art/sprites/icon_second_lure.png",
+          "source_rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "trim_rect": [
+            7,
+            6,
+            82,
+            84
+          ],
+          "trim_padding": 4,
+          "chroma_key": {
+            "key": "#ff00ff",
+            "mode": "border_connected"
+          },
+          "semantic_role": "upgrade_second_lure_icon",
+          "atlas": {
+            "pack_group": "ui_common",
+            "trim_mode": "alpha",
+            "alpha_bleed": true,
+            "premultiply_alpha": true,
+            "extrude": 2,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "allow_rotation": false
+          },
+          "preserve_green_edges": true
+        },
+        {
+          "id": "generated_icon_gate",
+          "kind": "icon",
+          "rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "output": "gamedesign/projects/critter-corral/art/sprites/icon_gate.png",
+          "source_rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "trim_rect": [
+            7,
+            6,
+            82,
+            84
+          ],
+          "trim_padding": 4,
+          "chroma_key": {
+            "key": "#ff00ff",
+            "mode": "border_connected"
+          },
+          "semantic_role": "upgrade_wider_gates_icon",
+          "atlas": {
+            "pack_group": "ui_common",
+            "trim_mode": "alpha",
+            "alpha_bleed": true,
+            "premultiply_alpha": true,
+            "extrude": 2,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "allow_rotation": false
+          },
+          "preserve_green_edges": true
+        },
+        {
+          "id": "generated_icon_calm",
+          "kind": "icon",
+          "rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "output": "gamedesign/projects/critter-corral/art/sprites/icon_calm.png",
+          "source_rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "trim_rect": [
+            7,
+            6,
+            82,
+            84
+          ],
+          "trim_padding": 4,
+          "chroma_key": {
+            "key": "#ff00ff",
+            "mode": "border_connected"
+          },
+          "semantic_role": "upgrade_calm_icon",
+          "atlas": {
+            "pack_group": "ui_common",
+            "trim_mode": "alpha",
+            "alpha_bleed": true,
+            "premultiply_alpha": true,
+            "extrude": 2,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "allow_rotation": false
+          },
+          "preserve_green_edges": true
+        },
+        {
+          "id": "generated_icon_chain",
+          "kind": "icon",
+          "rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "output": "gamedesign/projects/critter-corral/art/sprites/icon_chain.png",
+          "source_rect": [
+            0,
+            0,
+            362,
+            724
+          ],
+          "trim_rect": [
+            7,
+            6,
+            82,
+            84
+          ],
+          "trim_padding": 4,
+          "chroma_key": {
+            "key": "#ff00ff",
+            "mode": "border_connected"
+          },
+          "semantic_role": "upgrade_longer_chain_icon",
+          "atlas": {
+            "pack_group": "ui_common",
+            "trim_mode": "alpha",
+            "alpha_bleed": true,
+            "premultiply_alpha": true,
+            "extrude": 2,
+            "shape_padding": 2,
+            "border_padding": 1,
+            "allow_rotation": false
+          },
+          "preserve_green_edges": true
+        }
+      ]
+    }
+  ]
+}

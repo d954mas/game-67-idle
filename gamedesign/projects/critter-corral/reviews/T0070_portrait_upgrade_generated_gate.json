@@ -1,0 +1,40 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "critter-corral",
+  "task": "T0070",
+  "surface": "portrait-upgrade",
+  "verdict": "pass",
+  "timestamp": "2026-06-16T06:05:27.329Z",
+  "screenshot": "build/captures/corral_portrait_upgrade.png",
+  "answers": {
+    "where": "Upgrade choice after a wave in Critter Corral",
+    "action": "Tap one of three bright upgrade cards",
+    "response": "The selected upgrade improves herding for the next wave",
+    "reward": "Player gets a persistent run modifier and a clearer one-more-wave reason",
+    "game_look": "Generated candy-style cards and icons, toy pen, and soft pasture presentation read as a casual mobile game"
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 4,
+      "ui_controls": 4,
+      "action_direction": 4,
+      "art_quality": 4,
+      "audience_fit": 4
+    },
+    "issues": []
+  },
+  "problem": "",
+  "next": ""
+}

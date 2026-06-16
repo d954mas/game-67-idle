@@ -76,7 +76,11 @@ def alpha_bbox(image: Image.Image, threshold: int = 12) -> tuple[int, int, int, 
     return alpha.point(lambda value: 255 if value > threshold else 0).getbbox()
 
 
-def crop_trimmed(source: Image.Image, crop: dict[str, Any]) -> tuple[Image.Image, list[int], list[int]]:
+def crop_trimmed(
+    source: Image.Image,
+    crop: dict[str, Any],
+    keyed_sources: dict[tuple[int, int, int], Image.Image],
+) -> tuple[Image.Image, list[int], list[int]]:
     rect = crop.get("rect")
     if not isinstance(rect, list) or len(rect) != 4:
         raise SystemExit(f"{crop.get('id', 'crop')} needs rect [x,y,w,h]")
@@ -84,7 +88,11 @@ def crop_trimmed(source: Image.Image, crop: dict[str, Any]) -> tuple[Image.Image
     if width <= 0 or height <= 0:
         raise SystemExit(f"{crop.get('id', 'crop')} rect must have positive size")
     key = parse_hex_color(crop.get("chroma_key", {}).get("key") if isinstance(crop.get("chroma_key"), dict) else None)
-    rgba = key_to_alpha(source.crop((x, y, x + width, y + height)), key=key)
+    keyed_source = keyed_sources.get(key)
+    if keyed_source is None:
+        keyed_source = key_to_alpha(source, key=key)
+        keyed_sources[key] = keyed_source
+    rgba = keyed_source.crop((x, y, x + width, y + height))
     bbox = alpha_bbox(rgba)
     if bbox is None:
         raise SystemExit(f"{crop.get('id', 'crop')} produced empty alpha after keying")
@@ -209,13 +217,14 @@ def build(args: argparse.Namespace) -> None:
     if not isinstance(crops, list) or not crops:
         raise SystemExit("crop plan must contain non-empty crops")
     source = Image.open(source_path).convert("RGBA")
+    keyed_sources: dict[tuple[int, int, int], Image.Image] = {}
     outputs: list[tuple[dict[str, Any], Image.Image]] = []
     runtime_assets: list[dict[str, Any]] = []
     manifest_crops: list[dict[str, Any]] = []
     for crop in crops:
         if not isinstance(crop, dict) or not isinstance(crop.get("id"), str) or not isinstance(crop.get("output"), str):
             raise SystemExit("each crop plan entry needs id and output")
-        image, trim_rect, source_rect = crop_trimmed(source, crop)
+        image, trim_rect, source_rect = crop_trimmed(source, crop, keyed_sources)
         output_path = project_path(crop["output"])
         output_path.parent.mkdir(parents=True, exist_ok=True)
         save_image_atomic(image, output_path)

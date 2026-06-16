@@ -1,0 +1,227 @@
+{
+  "schema": "game.art_job",
+  "version": 1,
+  "id": "t0070_generated_casual_core",
+  "status": "integrating",
+  "asset_family": "critter-corral-generated-core",
+  "audience": "casual mobile players",
+  "runtime_harness": "native PC",
+  "visual_targets": [
+    "native-first-screen"
+  ],
+  "candidate_policy": {
+    "target_count": 4,
+    "keep_raw_candidates": true,
+    "reject_to_tmp": true,
+    "accept_one_or_two_for_runtime": true
+  },
+  "reusable_kinds": [
+    "sprite",
+    "slice9",
+    "icon",
+    "tile",
+    "border",
+    "effect"
+  ],
+  "required_asset_groups": [
+    {
+      "id": "modal_panel_slice9",
+      "kind": "slice9",
+      "role": "blank resizable modal/panel background",
+      "states": [
+        "default"
+      ],
+      "content_policy": "runtime text/icons only inside content safe area",
+      "stretch_zone_policy": "center and long edges must be plain/repeatable texture; non-stretch ornaments are corner-only or separate overlay sprites",
+      "decor_overlay_policy": "badges, gems, medallions, locks, banners, and center ornaments must be separate overlay assets with anchors",
+      "target_preview_sizes": [
+        [
+          240,
+          160
+        ],
+        [
+          360,
+          240
+        ],
+        [
+          520,
+          320
+        ]
+      ]
+    },
+    {
+      "id": "primary_button_slice9",
+      "kind": "slice9",
+      "role": "blank resizable command button backgrounds",
+      "states": [
+        "idle",
+        "pressed",
+        "disabled",
+        "selected"
+      ],
+      "content_policy": "runtime label/icon composed over blank background",
+      "stretch_zone_policy": "center and long edges must stay structurally boring at the smallest button size",
+      "decor_overlay_policy": "decorative caps are corner-only; center gems or badges are separate overlay assets",
+      "target_preview_sizes": [
+        [
+          128,
+          48
+        ],
+        [
+          180,
+          56
+        ],
+        [
+          240,
+          64
+        ]
+      ]
+    },
+    {
+      "id": "ui_icon_set",
+      "kind": "icon",
+      "role": "isolated readable icons with transparent or chroma-key background",
+      "states": [
+        "default",
+        "locked"
+      ],
+      "size_class": "64px source, preview at gameplay size"
+    },
+    {
+      "id": "gameplay_sprite_or_marker",
+      "kind": "sprite",
+      "role": "isolated gameplay sprite, marker, or FX with pivot/anchor",
+      "states": [
+        "default"
+      ],
+      "anchor_policy": "pivot or anchor must be recorded before runtime use"
+    }
+  ],
+  "must_not_bake": [
+    "button labels",
+    "resource counters",
+    "timer values",
+    "tutorial text",
+    "debug text",
+    "game state values"
+  ],
+  "generation_contract": {
+    "source_families": [
+      "blank UI kit sheet",
+      "isolated icon sheet",
+      "world/map/background layer sheet",
+      "sprite or FX sheet"
+    ],
+    "final_asset_policy": {
+      "procedural_art_allowed": "debug_only",
+      "runtime_final_must_use_generated_or_artist_source": true,
+      "layered_source_required_for_ui": true,
+      "notes": "Code may cut, validate, pack, and compose. Code-generated/programmer art is not acceptable as final generated UI unless an explicit exception is recorded."
+    },
+    "source_family_roles": {
+      "blank UI kit sheet": "stretchable bases only: panels, button states, bars, frames, dividers",
+      "ui decor overlay sheet": "non-stretch ornaments, gems, badges, caps, medallions with anchors",
+      "isolated icon sheet": "semantic icons with gutters and transparent/chroma source",
+      "world/map/background layer sheet": "non-UI illustration layers or stamps",
+      "sprite or FX sheet": "isolated gameplay sprites/effects with pivots"
+    },
+    "prompt_constraints": [
+      "no readable text",
+      "no fake letters",
+      "no fused icons inside button backgrounds",
+      "clear gutters between assets",
+      "consistent perspective and lighting",
+      "transparent or flat chroma-key background for isolated assets",
+      "no unique decoration inside slice9 stretch zones"
+    ],
+    "metadata_to_record": [
+      "provider or generator",
+      "model/workflow",
+      "workflow file or workflow json",
+      "seed",
+      "prompt",
+      "negative prompt",
+      "source family role",
+      "accepted source image path",
+      "rejected candidate notes"
+    ]
+  },
+  "expected_outputs": {
+    "source_art": [
+      "gamedesign/projects/critter-corral/art/generated/T0070/generated-card-horizontal-source-v2.png",
+      "gamedesign/projects/critter-corral/art/generated/T0070/generated-critter-source-v1.png",
+      "gamedesign/projects/critter-corral/art/generated/T0070/generated-pen-source-v1.png",
+      "gamedesign/projects/critter-corral/art/generated/T0070/generated-upgrade-icons-source-v1.png"
+    ],
+    "required_source_families": [
+      "blank UI kit sheet",
+      "isolated icon sheet",
+      "ui decor overlay sheet"
+    ],
+    "generation_records": [
+      "gamedesign/projects/critter-corral/art/generation_records/t0070_generated_card_horizontal_v2.json",
+      "gamedesign/projects/critter-corral/art/generation_records/t0070_generated_critter_v1.json",
+      "gamedesign/projects/critter-corral/art/generation_records/t0070_generated_pen_v1.json",
+      "gamedesign/projects/critter-corral/art/generation_records/t0070_generated_upgrade_icons_v1.json"
+    ],
+    "crop_manifest": "gamedesign/projects/critter-corral/data/t0070_generated_casual_core-crop_manifest.json",
+    "runtime_manifest": "gamedesign/projects/critter-corral/data/t0070_generated_casual_core-asset_manifest.json",
+    "runtime_dir": "assets/runtime/t0070_generated_casual_core",
+    "asset_audit": [
+      "gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-generated_ui_asset_audit.md",
+      "gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-generated_ui_asset_audit.json"
+    ],
+    "slice9_design_audit": [
+      "gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-slice9_design_policy_audit.md",
+      "gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-slice9_design_policy_audit.json"
+    ],
+    "source_family_coverage_audit": [
+      "gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-source_family_coverage_audit.md",
+      "gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-source_family_coverage_audit.json"
+    ],
+    "native_evidence": [],
+    "runtime_scope": {
+      "mode": "partial_runtime_slice",
+      "included_source_families": [
+        "blank UI kit sheet",
+        "isolated icon sheet",
+        "world/map/background layer sheet",
+        "sprite or FX sheet"
+      ],
+      "deferred_source_families": [
+        "ui decor overlay sheet"
+      ],
+      "reason": "T0070 is a corrective rescue pass after lead rejection. It replaces the dominant visible card, critter, and pen art with generated source assets first; full reusable icon/decor families remain separate follow-up work."
+    }
+  },
+  "runtime_composition": {
+    "buttons": "slice9 background plus runtime text/icon",
+    "cards": "slice9 card background plus character sprite and runtime state",
+    "board": "frame, tile, slot, highlight, and effect pieces composed at runtime",
+    "characters": "separate transparent sprites with pivots and gameplay ids"
+  },
+  "qa_rejects": [
+    "random letters",
+    "watermarks",
+    "labels fused into reusable backgrounds",
+    "icons fused into buttons",
+    "wrong subject",
+    "weak silhouette at gameplay size",
+    "opaque chroma-key background",
+    "baked board state"
+  ],
+  "commands": {
+    "plan_source_sheet_prompt": "node tools/assets/plan_source_sheet_prompt.mjs --job gamedesign/projects/critter-corral/art_requests/t0070_generated_casual_core.json --source-family \"<source family>\" --output gamedesign/projects/critter-corral/art/prompts/<source-id>-prompt.md --json-output gamedesign/projects/critter-corral/art/prompts/<source-id>-prompt.json",
+    "new_generation_record": "node tools/assets/new_generation_record.mjs --id <source-id> --project-dir gamedesign/projects/critter-corral --source-family \"<source family>\" --source-family-role \"<source family role>\" --accepted-source <path> --provider <provider> --model <model-or-workflow> --workflow-path <workflow.json> --prompt-packet gamedesign/projects/critter-corral/art/prompts/<source-id>-prompt.json --seed <seed> --prompt \"<prompt>\" --negative-prompt \"<negative prompt>\"",
+    "slice_assets": "py -3.12 tools/critter_corral/import_generated_core_assets.py",
+    "validate_draft": "node tools/assets/validate_art_job.mjs --job gamedesign/projects/critter-corral/art_requests/t0070_generated_casual_core.json",
+    "validate_strict": "node tools/assets/validate_art_job.mjs --job gamedesign/projects/critter-corral/art_requests/t0070_generated_casual_core.json --strict",
+    "validate_final_art": "node tools/assets/validate_art_job.mjs --job gamedesign/projects/critter-corral/art_requests/t0070_generated_casual_core.json --final-art",
+    "asset_audit": "py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest gamedesign/projects/critter-corral/data/t0070_generated_casual_core-crop_manifest.json --json-output gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-generated_ui_asset_audit.json --report gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-generated_ui_asset_audit.md",
+    "slice9_design_audit": "node tools/assets/audit_slice9_design_policy.mjs --crop-manifest gamedesign/projects/critter-corral/data/t0070_generated_casual_core-crop_manifest.json --runtime-manifest gamedesign/projects/critter-corral/data/t0070_generated_casual_core-asset_manifest.json --json-output gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-slice9_design_policy_audit.json --report gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-slice9_design_policy_audit.md",
+    "source_family_coverage_audit": "node tools/assets/audit_source_family_coverage.mjs --job gamedesign/projects/critter-corral/art_requests/t0070_generated_casual_core.json --json-output gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-source_family_coverage_audit.json --report gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-source_family_coverage_audit.md",
+    "plan_missing_source_family_prompts": "node tools/assets/plan_missing_source_family_prompts.mjs --job gamedesign/projects/critter-corral/art_requests/t0070_generated_casual_core.json --coverage-audit gamedesign/projects/critter-corral/reviews/t0070_generated_casual_core-source_family_coverage_audit.json --output-dir gamedesign/projects/critter-corral/art/prompts --key-color \"#00ff00\" --force",
+    "build_pack": "cmake --build build/_cmake/native-debug --target critter_corral_packs",
+    "native_evidence": "fill with DevAPI scenario command"
+  }
+}

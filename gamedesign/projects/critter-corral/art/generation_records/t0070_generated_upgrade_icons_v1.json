@@ -1,0 +1,16 @@
+{
+  "schema": "game.art_generation_record",
+  "version": 1,
+  "id": "t0070_generated_upgrade_icons_v1",
+  "provider": "OpenAI built-in image_gen",
+  "model_or_workflow": "built-in image_gen",
+  "workflow_path": "gamedesign/projects/critter-corral/art/generated/T0070/openai-built-in-imagegen-workflow.json",
+  "no_seed_reason": "Built-in image_gen output did not expose a stable seed",
+  "prompt": "one clean source sheet with six separate Critter Corral upgrade icons in a horizontal row, polished mobile casual icon art, no text, flat #ff00ff chroma-key background",
+  "negative_prompt": "watermark, logo, fake text, fused icons, overlap, non-flat background, magenta inside icons",
+  "source_family": "isolated icon sheet",
+  "source_family_role": "six upgrade icon source sheet",
+  "accepted_source_image": "gamedesign/projects/critter-corral/art/generated/T0070/generated-upgrade-icons-source-v1.png",
+  "final_art_source": "generated",
+  "rejected_candidate_notes": ""
+}

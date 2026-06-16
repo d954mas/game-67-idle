@@ -193,6 +193,15 @@ if(NOT EMSCRIPTEN AND NOT TARGET build_critter_corral_packs)
     add_custom_target(critter_corral_packs DEPENDS "${CORRAL_PACK}")
 endif()
 
+if(NOT EMSCRIPTEN AND NOT TARGET asset_chroma_key_native)
+    add_executable(asset_chroma_key_native tools/assets/native_chroma_key.c)
+    target_link_libraries(asset_chroma_key_native PRIVATE stb_image stb_image_write tinycthread)
+    target_compile_definitions(asset_chroma_key_native PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(asset_chroma_key_native PRIVATE -U_DLL)
+    nt_set_warning_flags(asset_chroma_key_native)
+    nt_set_sanitizer_flags(asset_chroma_key_native)
+endif()
+
 add_executable(${GAME_TARGET}
     src/clean_seed_main.c
     src/game_audio.c
