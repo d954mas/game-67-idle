@@ -168,3 +168,28 @@ produced visually-valid but non-identical PNGs.
   - Python full-cold rebuild: 0.675s.
   - Pixel parity still passed for all 11 generated runtime PNGs.
   - Audit still passed for 11 generated UI assets.
+- 2026-06-16: Added runtime PNG byte caches for partial runtime-output repair:
+  - Runtime output caches live under `tmp/generated_core_runtime_assets/*.png`
+    beside the existing runtime sidecar JSON and aggregate import stamp.
+  - If the aggregate stamp proves sources/specs/manifests/contact sheet are
+    unchanged and a runtime PNG is missing/stale, the importer restores it by
+    atomic cache copy and rewrites only its sidecar metadata.
+  - If a cache PNG is missing/stale but the runtime PNG still matches the prior
+    stamp, the importer backfills the cache from the runtime PNG instead of
+    doing a full image transform.
+  - Cache copies use shared `tools.assets.atomic_io.copy_file_atomic`; the
+    helper is covered by an interrupted-copy preservation test.
+  - Fixed the first backfill bug: valid runtime outputs must seed missing cache
+    PNGs, otherwise the new cache requirement makes no-op runs fall through to
+    the full importer path.
+  - Warm native no-change, 5 runs: 0.058-0.064s wall-clock.
+  - No-change cProfile inside Python process: 0.016s; remaining wall-clock is
+    dominated by Windows `python.exe` startup and file-stat/fingerprint checks,
+    not pixel processing.
+  - Missing `icon_chain.png` runtime output restored from cache in 0.087s.
+  - Missing `icon_chain.png` runtime cache restored from runtime output in
+    0.083s.
+  - Runtime/cache byte parity passed for all cached PNGs.
+  - Current next bottleneck: repeated command/process boundaries. Avoiding the
+    Python invocation entirely on known-clean builds, or combining import+audit
+    into one process, should beat further micro-optimizing the hot no-op path.

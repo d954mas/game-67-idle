@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from tools.assets.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
+from tools.assets.atomic_io import copy_file_atomic, save_image_atomic, write_json_atomic, write_text_atomic
 
 
 class AtomicIoTest(unittest.TestCase):
@@ -34,6 +34,25 @@ class AtomicIoTest(unittest.TestCase):
             target = Path(tmp) / "report.json"
             write_json_atomic(target, {"verdict": "pass"})
             self.assertTrue(target.read_text(encoding="utf-8").endswith("\n"))
+
+    def test_copy_file_atomic_keeps_existing_file_on_copy_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.png"
+            target = root / "target.png"
+            source.write_bytes(b"new complete png")
+            target.write_bytes(b"old complete png")
+
+            def failing_copyfile(_source, destination, *args, **kwargs):
+                Path(destination).write_bytes(b"partial-png")
+                raise RuntimeError("simulated interrupted copy")
+
+            with patch("tools.assets.atomic_io.shutil.copyfile", failing_copyfile):
+                with self.assertRaises(RuntimeError):
+                    copy_file_atomic(source, target)
+
+            self.assertEqual(target.read_bytes(), b"old complete png")
+            self.assertEqual(list(root.glob(".target.png.*.tmp")), [])
 
     def test_save_image_atomic_keeps_existing_png_on_save_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

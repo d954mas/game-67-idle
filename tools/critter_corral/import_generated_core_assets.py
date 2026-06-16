@@ -394,6 +394,10 @@ def runtime_cache_meta_path(spec: dict[str, Any]) -> Path:
     return RUNTIME_CACHE_DIR / f"{spec['output']}.json"
 
 
+def runtime_cache_image_path(spec: dict[str, Any]) -> Path:
+    return RUNTIME_CACHE_DIR / spec["output"]
+
+
 def source_fingerprint(source_key: str) -> dict[str, Any]:
     source_path = SOURCE_DIR / source_key
     stat = source_path.stat()
@@ -457,6 +461,12 @@ def write_runtime_output_meta(spec: dict[str, Any], output_path: Path) -> None:
     )
 
 
+def write_runtime_output_cache(spec: dict[str, Any], output_path: Path) -> None:
+    from tools.assets.atomic_io import copy_file_atomic
+
+    copy_file_atomic(output_path, runtime_cache_image_path(spec))
+
+
 def import_stamp_fingerprint() -> dict[str, Any]:
     return {
         "import_algorithm": IMPORT_STAMP_VERSION,
@@ -468,6 +478,11 @@ def import_stamp_fingerprint() -> dict[str, Any]:
             file_fingerprint(SPRITE_DIR / spec["output"])
             for spec in ASSETS
             if (SPRITE_DIR / spec["output"]).exists()
+        ],
+        "runtime_output_caches": [
+            file_fingerprint(runtime_cache_image_path(spec))
+            for spec in ASSETS
+            if runtime_cache_image_path(spec).exists()
         ],
         "runtime_metas": [
             file_fingerprint(runtime_cache_meta_path(spec))
@@ -486,15 +501,31 @@ def without_runtime_metas(stamp: dict[str, Any]) -> dict[str, Any]:
     return comparable
 
 
-def runtime_meta_fingerprint_by_path(stamp: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    metas = stamp.get("runtime_metas", [])
-    if not isinstance(metas, list):
+def without_runtime_files(stamp: dict[str, Any]) -> dict[str, Any]:
+    comparable = without_runtime_metas(stamp)
+    comparable.pop("runtime_outputs", None)
+    comparable.pop("runtime_output_caches", None)
+    return comparable
+
+
+def stamp_fingerprints_by_path(stamp: dict[str, Any], key: str) -> dict[str, dict[str, Any]]:
+    fingerprints = stamp.get(key, [])
+    if not isinstance(fingerprints, list):
         return {}
-    return {meta["path"]: meta for meta in metas if isinstance(meta, dict) and isinstance(meta.get("path"), str)}
+    return {
+        fingerprint["path"]: fingerprint
+        for fingerprint in fingerprints
+        if isinstance(fingerprint, dict) and isinstance(fingerprint.get("path"), str)
+    }
 
 
 def import_outputs_current() -> bool:
-    required_outputs = [SPRITE_DIR / spec["output"] for spec in ASSETS] + [CROP_MANIFEST, ASSET_MANIFEST, CONTACT_SHEET]
+    required_outputs = (
+        [SPRITE_DIR / spec["output"] for spec in ASSETS]
+        + [runtime_cache_image_path(spec) for spec in ASSETS]
+        + [runtime_cache_meta_path(spec) for spec in ASSETS]
+        + [CROP_MANIFEST, ASSET_MANIFEST, CONTACT_SHEET]
+    )
     if not all(path.exists() for path in required_outputs):
         return False
     if not IMPORT_STAMP.exists():
@@ -525,12 +556,105 @@ def repair_runtime_metas_from_stamp() -> bool:
     current_stamp = import_stamp_fingerprint()
     if without_runtime_metas(previous_stamp) != without_runtime_metas(current_stamp):
         return False
-    previous_metas = runtime_meta_fingerprint_by_path(previous_stamp)
+    previous_metas = stamp_fingerprints_by_path(previous_stamp, "runtime_metas")
     for spec in ASSETS:
         meta_path = runtime_cache_meta_path(spec)
         current_meta = file_fingerprint(meta_path) if meta_path.exists() else None
         if current_meta != previous_metas.get(rel(meta_path)):
             write_runtime_output_meta(spec, SPRITE_DIR / spec["output"])
+    write_import_stamp()
+    return import_outputs_current()
+
+
+def repair_runtime_outputs_from_stamp(args: ImportArgs) -> bool:
+    from tools.assets.atomic_io import copy_file_atomic
+
+    if not IMPORT_STAMP.exists():
+        return False
+    required_non_runtime = [CROP_MANIFEST, ASSET_MANIFEST, CONTACT_SHEET]
+    if not all(path.exists() for path in required_non_runtime):
+        return False
+    try:
+        previous_stamp = json.loads(IMPORT_STAMP.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if len(previous_stamp.get("runtime_outputs", [])) != len(ASSETS):
+        return False
+    current_stamp = import_stamp_fingerprint()
+    if without_runtime_files(previous_stamp) != without_runtime_files(current_stamp):
+        return False
+
+    previous_outputs = stamp_fingerprints_by_path(previous_stamp, "runtime_outputs")
+    previous_caches = stamp_fingerprints_by_path(previous_stamp, "runtime_output_caches")
+    stale_specs: list[dict[str, Any]] = []
+    cache_repair_specs: list[dict[str, Any]] = []
+    for spec in ASSETS:
+        output_path = SPRITE_DIR / spec["output"]
+        current_output = file_fingerprint(output_path) if output_path.exists() else None
+        if current_output != previous_outputs.get(rel(output_path)):
+            stale_specs.append(spec)
+        cache_path = runtime_cache_image_path(spec)
+        current_cache = file_fingerprint(cache_path) if cache_path.exists() else None
+        if current_cache != previous_caches.get(rel(cache_path)):
+            cache_repair_specs.append(spec)
+    if not stale_specs and not cache_repair_specs:
+        return False
+
+    restored_specs: set[str] = set()
+    for spec in stale_specs:
+        output_path = SPRITE_DIR / spec["output"]
+        cache_path = runtime_cache_image_path(spec)
+        current_cache = file_fingerprint(cache_path) if cache_path.exists() else None
+        if current_cache == previous_caches.get(rel(cache_path)):
+            copy_file_atomic(cache_path, output_path)
+            write_runtime_output_meta(spec, output_path)
+            restored_specs.add(spec["id"])
+
+    for spec in cache_repair_specs:
+        output_path = SPRITE_DIR / spec["output"]
+        current_output = file_fingerprint(output_path) if output_path.exists() else None
+        if current_output == previous_outputs.get(rel(output_path)):
+            write_runtime_output_cache(spec, output_path)
+
+    stale_specs = [spec for spec in stale_specs if spec["id"] not in restored_specs]
+    if not stale_specs:
+        write_import_stamp()
+        return import_outputs_current()
+
+    source_keys = unique_source_keys()
+    stale_runtime_source_set = {spec["source"] for spec in stale_specs}
+    sources_needed = [source_key for source_key in source_keys if source_key in stale_runtime_source_set]
+    stale_sources = [source_key for source_key in sources_needed if not keyed_cache_valid(source_key)]
+    if args.mode == "native":
+        run_native_key_worker(args.native_tool, args.native_threads, stale_sources)
+
+    from PIL import Image
+
+    keyed_source_cache: dict[str, Image.Image] = {}
+    for spec in stale_specs:
+        source_key = spec["source"]
+        keyed_source = keyed_source_cache.get(source_key)
+        if keyed_source is None:
+            if keyed_cache_valid(source_key):
+                keyed_source = load_native_rgba_cache(keyed_cache_path(source_key))
+            else:
+                if args.mode == "native":
+                    raise RuntimeError(f"native keyed cache was not created for {source_key}")
+                source_path = SOURCE_DIR / source_key
+                if not source_path.exists():
+                    raise SystemExit(f"missing generated source: {source_path}")
+                source = Image.open(source_path).convert("RGBA")
+                keyed_source = fast_key_to_alpha(source)
+                write_rgba_cache_atomic(keyed_cache_path(source_key), keyed_source)
+                write_keyed_cache_meta(source_key, "python")
+            keyed_source_cache[source_key] = keyed_source
+        region = source_region(keyed_source, spec)
+        trimmed = fit_to_canvas(region, tuple(spec["size"]), int(spec.get("padding", 0)))
+        final = apply_tint(trimmed, spec.get("tint"))
+        output_path = SPRITE_DIR / spec["output"]
+        save_image_atomic_file(final, output_path)
+        write_runtime_output_cache(spec, output_path)
+        write_runtime_output_meta(spec, output_path)
     write_import_stamp()
     return import_outputs_current()
 
@@ -627,6 +751,9 @@ def main() -> None:
     if repair_runtime_metas_from_stamp():
         print("repaired generated core asset runtime metadata")
         return
+    if repair_runtime_outputs_from_stamp(args):
+        print("repaired generated core asset runtime outputs")
+        return
 
     from PIL import Image
 
@@ -656,6 +783,9 @@ def main() -> None:
                 x0, y0, x1, y1 = source_region_rect(source.size, spec)
             region_size = (x1 - x0, y1 - y0)
             final = Image.open(output_path).convert("RGBA")
+            cache_path = runtime_cache_image_path(spec)
+            if not cache_path.exists() or file_fingerprint(cache_path) != file_fingerprint(output_path):
+                write_runtime_output_cache(spec, output_path)
         else:
             keyed_source = keyed_source_cache.get(source_key)
             if keyed_source is None:
@@ -674,6 +804,7 @@ def main() -> None:
             trimmed = fit_to_canvas(region, tuple(spec["size"]), int(spec.get("padding", 0)))
             final = apply_tint(trimmed, spec.get("tint"))
             save_image_atomic_file(final, output_path)
+            write_runtime_output_cache(spec, output_path)
             write_runtime_output_meta(spec, output_path)
         contact_items.append((spec["id"], final))
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -33,6 +34,17 @@ def write_json_atomic(path: Path, data: Any, *, indent: int = 2, trailing_newlin
     if trailing_newline:
         text += "\n"
     write_text_atomic(path, text)
+
+
+def copy_file_atomic(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = atomic_temp_path(target)
+    try:
+        shutil.copyfile(source, tmp_path)
+        tmp_path.replace(target)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 def save_image_atomic(image: Any, path: Path, *, format: str | None = None, **save_kwargs: Any) -> None:
