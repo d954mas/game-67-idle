@@ -77,6 +77,11 @@ test -f <PATH>.png && echo OK
   confirm it matches the prompt. codex DOES produce real art interactively / in
   the VS Code extension (doctor rollout sources: `vscode=286`) — just not via
   headless `exec` on Windows. For headless, use **agy**.
+  Driving codex via `codex mcp-server` / `app-server` does NOT recover it:
+  mcp-server exposes only a `codex` / `codex-reply` *session runner* (not the
+  internal `image_gen` tool), and those sessions use the same engine as `exec`,
+  so they inherit the same Windows gap. Only the codex VS Code extension/app
+  context registers a working `image_gen`.
 - **Stale `GEMINI_API_KEY` env var hijacks auth.** A pre-existing (now expired)
   `GEMINI_API_KEY` was set in the environment and overrode OAuth, causing "API
   key expired". The harness caches env, so our shells may still see a deleted
