@@ -60,6 +60,10 @@ test -f <PATH>.png && echo OK
   - Progress/health/XP bars: generate the EMPTY frame only (hollow track, "NO
     fill, segments, chips, pips, or ticks inside") and fill it in-engine with a
     tinted quad. A pre-filled bar can't be animated.
+  - Containers/slots/cells (hotbar item slots, panels, button bases): generate
+    EMPTY ("NO icon/item/content inside, just the cell frame"); draw item icons
+    and labels separately on top in-engine. A slot baked with a sword shows the
+    sword under any icon drawn over it.
 
 ## Dead-ends — do NOT waste time re-trying these
 

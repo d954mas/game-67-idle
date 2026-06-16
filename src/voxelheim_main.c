@@ -120,6 +120,7 @@ enum {
     R_LEVELUP_BURST,
     R_COIN,
     R_BAR_FRAME,
+    R_SWORD_ICON,
     R_COUNT,
 };
 
@@ -132,6 +133,7 @@ static const nt_hash64_t k_region_names[R_COUNT] = {
     ASSET_ATLAS_REGION_VOXELS_BANNER_PNG,      ASSET_ATLAS_REGION_VOXELS_BUTTON_PNG,    ASSET_ATLAS_REGION_VOXELS_WHITE_PNG,
     ASSET_ATLAS_REGION_VOXELS_HIT_SPARK_PNG,   ASSET_ATLAS_REGION_VOXELS_LEVELUP_BURST_PNG, ASSET_ATLAS_REGION_VOXELS_COIN_PNG,
     ASSET_ATLAS_REGION_VOXELS_BAR_FRAME_PNG,
+    ASSET_ATLAS_REGION_VOXELS_SWORD_ICON_PNG,
 };
 
 /* ---- Engine/runtime state ---- */
@@ -1065,10 +1067,11 @@ static void compose_hud(void) {
         /* a subtle dark tray behind the slots */
         emit_quad(DESIGN_W * 0.5F, HUD_HOTBAR_CY, total + 24.0F, HUD_SLOT_H + 16.0F, 0.06F, 0.05F, 0.08F, 0.45F);
         for (int i = 0; i < slots; ++i) {
-            emit_sprite(R_SLOT, x, HUD_HOTBAR_CY, slot_w, HUD_SLOT_H, white);
+            emit_sprite(R_SLOT, x, HUD_HOTBAR_CY, slot_w, HUD_SLOT_H, white); /* empty cell */
             if (i == 0) {
-                /* primary action glyph (coin) so the bar reads as actionable */
-                emit_sprite(R_COIN, x, HUD_HOTBAR_CY, slot_w * 0.62F, slot_w * 0.62F, white);
+                emit_sprite(R_SWORD_ICON, x, HUD_HOTBAR_CY, slot_w * 0.66F, slot_w * 0.66F, white); /* equipped weapon */
+            } else if (i == 1) {
+                emit_sprite(R_COIN, x, HUD_HOTBAR_CY, slot_w * 0.60F, slot_w * 0.60F, white); /* gold */
             }
             x += slot_w + HUD_SLOT_GAP;
         }
@@ -1102,7 +1105,7 @@ static const char *ftue_prompt(void) {
 static void compose_overlays(void) {
     const char *prompt = ftue_prompt();
     if (prompt) {
-        emit_quad(DESIGN_W * 0.5F, 30.0F, text_width(prompt, 22.0F) + 40.0F, 38.0F, 0.06F, 0.05F, 0.08F, 0.55F);
+        emit_quad(DESIGN_W * 0.5F, 98.0F, text_width(prompt, 22.0F) + 40.0F, 38.0F, 0.06F, 0.05F, 0.08F, 0.55F);
     }
     if (g_sim.downed_timer > 0.0F) {
         emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.5F, 360.0F, 70.0F, 0.10F, 0.03F, 0.05F, 0.6F);
@@ -1195,7 +1198,7 @@ static void compose_text(void) {
     {
         const char *prompt = ftue_prompt();
         if (prompt) {
-            emit_text_centered(prompt, DESIGN_W * 0.5F, 22.0F, 22.0F, cream);
+            emit_text_centered(prompt, DESIGN_W * 0.5F, 90.0F, 22.0F, cream);
         }
     }
 

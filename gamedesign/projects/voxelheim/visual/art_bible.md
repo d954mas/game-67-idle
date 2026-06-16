@@ -43,6 +43,10 @@ materials, chunky rounded forms. Readable at a glance. Gameplay framing:
     rounded track with NO baked fill, segments, chips, pips, or ticks inside.
     The engine draws a tinted fill quad clipped to the value. A pre-filled bar
     cannot be filled/animated in game.
+  - **Containers / slots / cells: generate EMPTY** (hotbar item slot, panel,
+    button base) — no baked icon, item, or content inside; draw item icons and
+    labels separately on top in-engine. (A slot baked with a sword shows the
+    sword under any icon drawn over it.)
 - Cut + audit via `generated-game-ui-assets` (intake → crop → runtime PNGs →
   pixel/atlas audits) → build the runtime atlas `.ntpack` via `nt_builder`.
 - Judge the **assembled screen** against this bible / the fake shot, not just
