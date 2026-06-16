@@ -34,6 +34,15 @@ materials, chunky rounded forms. Readable at a glance. Gameplay framing:
 - Generate source sheets via **agy** (`delegated-image-generation` skill), each
   on a flat **`#ff00ff` magenta chroma** background, isolated elements with big
   gaps, no baked text/letters.
+- **Composable, not baked — generate parts the engine can assemble:**
+  - **No baked shadows on characters** (hero/enemy/creatures). A soft drop/
+    contact shadow painted over the chroma bleeds and fringes when keyed. Keep
+    the magenta flat right up to the outline; the engine draws the shadow as a
+    separate ground-quad on a lower layer (or use a separate shadow asset).
+  - **Progress / health / XP bars: generate the EMPTY FRAME only** — a hollow
+    rounded track with NO baked fill, segments, chips, pips, or ticks inside.
+    The engine draws a tinted fill quad clipped to the value. A pre-filled bar
+    cannot be filled/animated in game.
 - Cut + audit via `generated-game-ui-assets` (intake → crop → runtime PNGs →
   pixel/atlas audits) → build the runtime atlas `.ntpack` via `nt_builder`.
 - Judge the **assembled screen** against this bible / the fake shot, not just

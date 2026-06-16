@@ -52,6 +52,14 @@ test -f <PATH>.png && echo OK
   `agy-image` skill pattern (Openclaw-Metis/agy-image).
 - For a theme/style comparison, keep ONE composition and vary only the art style
   across N generations (see `primary-gdd-pipeline` visual gate, max 3 directions).
+- **Generate composable parts, not baked composites** (the engine assembles the
+  final look):
+  - Chroma'd characters: forbid baked shadows ("NO drop/contact shadow, flat key
+    colour right up to the outline"). A soft shadow over the key colour bleeds/
+    fringes when cut; draw the shadow as a separate engine ground-quad/asset.
+  - Progress/health/XP bars: generate the EMPTY frame only (hollow track, "NO
+    fill, segments, chips, pips, or ticks inside") and fill it in-engine with a
+    tinted quad. A pre-filled bar can't be animated.
 
 ## Dead-ends — do NOT waste time re-trying these
 
