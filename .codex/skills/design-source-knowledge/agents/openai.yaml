@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Source Knowledge"
+  short_description: "Turn design sources into reusable knowledge"
+  default_prompt: "Use $design-source-knowledge to add, review, or promote game-design sources into the correct knowledge files."

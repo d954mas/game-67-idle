@@ -56,6 +56,8 @@
   systems) from first-session presentation; build the readable first screen and
   core moment before expanding either. This pairs with the visual-first freeze.
 - For new GDD work, use `.codex/skills/primary-gdd-pipeline/`.
+- For adding, reviewing, parsing, or promoting design sources and reusable
+  knowledge, use `.codex/skills/design-source-knowledge/`.
 - For polished/generated visual work, use `.codex/skills/game-visual-art-direction/`.
 - References are a build gate only when the user names a reference or says the
   current build does not match one. Use the smallest honest mode: quick check

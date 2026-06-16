@@ -32,3 +32,11 @@ humans should use the knowledge base.
 - Promoted reusable conclusions to [Hybrid-Casual Patterns](hybrid_casual_patterns.md)
   (satisfying core loop + one twist on a proven genre; IAP-led monetization
   shape) and registered it in [Index](index.md).
+
+## 2026-06-17
+
+- Added the project skill `.codex/skills/design-source-knowledge/` for source
+  intake, evidence labels, routing, promotion, and knowledge-base hygiene.
+- Added frontmatter to two reusable source packets and moved Voxelheim-specific
+  application out of the global source shelf by linking to the project
+  deconstruction.
