@@ -16,7 +16,7 @@ audio polish.
 
 - No runtime implementation blocker is known.
 - No open generated-art importer/check performance blocker is known after
-  T0071 and T0073.
+  T0071, T0073, and the closed T0075 importer/native orchestration pass.
 
 ## Non-blocking Debt
 
@@ -31,6 +31,10 @@ provenance, cut into runtime sprites, and pixel-audited. T0072 fixed
 source-to-runtime orientation for directional generated art. T0071 optimized
 the generated-source chroma-key importer hot path and added native timing tools.
 T0073 optimized generated-asset build/audit scripts around the helper.
+T0075 closed the generated core importer production/performance cycle: Python
+keeps production asset semantics, native C handles heavy source keying, runtime
+caches repair partial invalidation, and `--audit` combines import+pixel audit
+without a Node wrapper.
 Next product gate is the LEAD's: play a real-time 10-20 min run and judge
 fun/balance.
 
@@ -70,9 +74,16 @@ node tools/taskboard/cli.mjs validate
   from 6.603s to 0.154s; same-size compare is NumPy-vectorized; crop-plan
   builder now keys a source sheet once per chroma key and crops from that keyed
   source.
+- Generated core importer production/performance evidence (T0075 archive):
+  Python/native runtime PNG parity passed; native worker is threaded heavy-key
+  stage only; hot no-op importer is about 0.058-0.064s; combined no-op
+  import+audit is about 0.178-0.217s; Node wrapper was rejected as unnecessary
+  orchestration complexity.
 
 ## Next Priorities
 
-1. LEAD: play a real-time 10-20 min run; judge fun/balance/pacing; note fixes.
-2. Tune balance/feel from that human playtest.
-3. Optional later: polished SFX/music pass.
+1. T0076: optimize skills and generation workflow now that UI/importer tooling
+   is fast enough for iteration.
+2. LEAD: play a real-time 10-20 min run; judge fun/balance/pacing; note fixes.
+3. Tune balance/feel from that human playtest.
+4. Optional later: polished SFX/music pass.

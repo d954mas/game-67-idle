@@ -1,7 +1,7 @@
 ---
 id: T0075
 title: Make native generated asset importer production-capable
-status: doing
+status: done
 epic: E004
 priority: P1
 tags: [performance, assets, generated-art, native]
@@ -206,3 +206,12 @@ produced visually-valid but non-identical PNGs.
   - Hot no-op import with `--audit`, 5 runs: 0.178-0.217s wall-clock.
   - Combined versus standalone audit JSON parity passed.
   - Combined versus standalone audit Markdown parity passed.
+- 2026-06-16: Closed this importer/UI asset optimization cycle:
+  - Rejected the proposed Node wrapper/skip layer as unnecessary complexity for
+    the current bottleneck; no Node wrapper was kept.
+  - Kept the stable architecture: Python owns production semantics, native C
+    handles heavy keying, and `--audit` removes the main redundant process
+    boundary without adding a third orchestration runtime.
+  - Remaining hot no-op cost is small enough that further work should move to
+    skills/generation workflow optimization unless a fresh profile proves a new
+    importer bottleneck.
