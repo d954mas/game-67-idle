@@ -95,6 +95,16 @@
   are supporting evidence, never the definition of done. A game that passes
   every automated check but does not reach the fake shot's look/feel, or is not
   fun, is NOT done.
+- Teachability / first-player gate (beside the visual gate; comprehension, not
+  appearance): before a playable slice is "done", judge it as a brand-new player
+  who knows nothing — would they understand within ~10 seconds what to do, is
+  every system explained (on-screen text/labels, a tutorial/FTUE), and is
+  anything opaque (icon-only controls, unexplained upgrades, an unclear goal)?
+  The visual gate asks "does it LOOK like a game"; this asks "can a newcomer
+  PLAY it". For a casual game, missing onboarding/text/explanation is a BLOCKER,
+  not polish — not done until a first-time player could figure it out unaided.
+  (This session shipped "release-candidate" with opaque, text-less upgrades and
+  no real FTUE because only appearance was gated; do not repeat that.)
 - Continuous visual gate: when a fake shot/reference is named, judge the native
   screenshot against its direction every visual iteration (`node tools/ai.mjs
   gate` — a qualitative rubric: composition, readability, ui controls, action

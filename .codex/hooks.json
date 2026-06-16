@@ -10,7 +10,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": ".*",
+        "matcher": "(?i)(bash|shell|exec)",
         "hooks": [
           { "type": "command", "command": "node tools/ai_profile/hook_record.mjs codex" }
         ]
