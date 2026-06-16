@@ -1,79 +1,87 @@
-# Voxelheim GDD
+# Voxelheim GDD — Idle RPG
 
-## One-Line Concept
+Genre **LOCKED: idle / incremental RPG** (2026-06-16, lead). Reference grounding:
+`references/idle_reference_digest.md`. Visual direction unchanged (Theme A,
+below). Economy numbers: `data/balance.json`.
 
-A bright, blocky **casual action-RPG**: roam a snowy fantasy realm, fight
-monsters, clear a dragon-guarded keep, loot, and level up — Skyrim's sense of
-adventure in an instantly-readable Roblox-style shape.
+## Hook (one sentence)
+
+**Your blocky hero auto-battles up an endless snowy path of monsters toward the
+Frost Keep — spend the gold they drop on upgrades, leave it running to grow rich
+while you're away, and prestige to climb the mountain faster.**
+
+## Core Loop (the GAME, with numbers)
+
+1. The hero stands on the path and **auto-attacks** the nearest monster (base 5
+   dmg every 1.0s). Monsters walk down the path in a continuous stream.
+2. A kill → **gold drop** (+ a coin pop) and the next monster spawns. Clear the
+   stage's quota (10 kills) → **advance a stage**.
+3. **Every 10th stage = a timed BOSS** (30s): big HP, big gold; fail = retry the
+   boss (no loss of progress).
+4. Spend gold on **4 upgrades** (cost ×1.09 per level — the exponential wall):
+   - **Sword** → +damage. **Boots** → faster attacks. **Armor** → +max HP/regen
+     (boss survivability). **Luck** → +gold find %.
+5. Higher stage = tougher monsters (HP ×1.15/stage) but more gold (×1.18/stage)
+   → number-go-up. There is always **one upgrade you can almost afford**.
+6. When progress stalls, **PRESTIGE** ("Return to the valley"): reset stage +
+   gold + the 4 upgrades; gain **Frost Shards** ∝ highest stage reached. Spend
+   Frost Shards on **permanent** multipliers (global damage, gold, start stage,
+   offline rate). Next run blasts past the old wall.
+7. **Offline:** while away, the hero auto-farms your highest cleared stage at
+   50% rate (cap 8h). Return → "While you were away: +X gold" + Collect.
+
+## Currencies (2 — clear roles)
+
+- **Gold** (soft): from kills; spent on the 4 upgrades; **resets on prestige**.
+- **Frost Shards** (meta): earned on prestige ∝ highest stage; spent on
+  permanent multipliers; **never reset**.
+
+## Progression axes
+
+Stage number (1 → ∞, bosses every 10) · 4 upgrade levels · prestige tier +
+Frost-Shard upgrades. Milestone unlocks (e.g. prestige unlocks at stage 25;
+offline unlocks after the first boss).
+
+## "Next 5 minutes" pull (retention)
+
+A near-affordable upgrade ticking closer · the next boss / next zone milestone ·
+offline gold to collect · a prestige that makes the next run visibly faster.
+
+## FTUE (<=3 beats, on-screen)
+
+1. "Your hero fights on its own — watch the gold pile up."
+2. "Tap **Sword** to upgrade — hit harder, kill faster." (pulse the button)
+3. "Push as far as you can. When it slows, **Prestige** for a permanent boost."
+   (revealed when prestige unlocks)
+
+## Session shape
+
+2-5 min active (buy upgrades, push stages, maybe prestige) → idle/offline →
+come back, collect, repeat. Standard idle cadence.
+
+## First idle slice (build target)
+
+One screen: auto-combat stream + gold counter + stage counter + the 4 upgrade
+buttons (live cost/effect) + a boss every 10 + prestige (unlock @25) + an
+offline-earnings popup on launch. Reuse all current art.
 
 ## Visual Direction — LOCKED: "Bright Roblox Adventure" (Theme A)
 
-Locked 2026-06-16 by the lead. Target = `visual/fake_shot_first_screen.png`.
+Unchanged from before — see `visual/art_bible.md` + `visual/fake_shot_first_screen.png`.
+Saturated, blocky, readable; real sprites via `nt_sprite_renderer`. The existing
+hero/goblin/keep/path/backdrop/UI assets are reused; the hotbar art becomes the
+upgrade panel.
 
-- Saturated, cheerful palette; bright daylight; soft shadows; high readability.
-- Blocky / chunky low-poly forms, clean toy-like plastic materials, bold
-  outlines, soft cel shading.
-- 3/4 top-down ("2.5D" feel) for casual readability.
-- Rendered in-engine with **REAL sprite assets** (`nt_sprite_renderer` + atlas
-  pack), never the debug shape renderer (AGENTS.md).
-- The fake shot is **direction** (mood / palette / composition / readability),
-  not a pixel target.
-- Avoid: realism, muddy / low-contrast, grimdark, debug primitives.
+## No-Go
 
-## Audience
+- No real-time movement/aiming (it's idle — the hero auto-fights).
+- No punishing death / energy gates / pay-to-win.
+- No >2 early currencies, no deep skill webs (first slice).
+- Not the whole mountain — first slice is the one auto-battle screen + the loop.
 
-Casual players (Roblox-style). Simple controls, clear progression, juicy
-feedback. A first-time player must understand goal + action in ~10s.
+## Build plan
 
-## Core Loop
-
-1. Move toward a **visible** objective.
-2. Fight a **readable** threat.
-3. Get loot + XP (juicy feedback).
-4. See power go up (hero changes **and** a number).
-5. A new short-term objective appears.
-
-## First Playable Slice — "Frost Keep Approach"
-
-ONE goal, ONE primary action (AGENTS.md first-screen discipline).
-
-- **Goal:** reach and clear the glowing **Frost Keep** entrance at the end of
-  the snowy path.
-- **Primary action:** tap / click to move; the hero **auto-attacks** enemies in
-  range (casual — no combo system in the slice).
-- **First 30 seconds:** spawn on the path → quest banner "Reach the Frost Keep"
-  → walk up → 1–2 frost enemies block the path → defeat them → step into the
-  glowing keep portal → **Victory**.
-- **Reward moment:** loot sparkle + XP → a visible **LEVEL UP** (number ticks up,
-  hero glows / scales slightly, HP bar grows).
-- **HUD (from fake shot):** top-left HP + stamina bars + level badge; top-right
-  minimap; bottom hotbar; quest banner under the minimap.
-- **FTUE ≤ 3 beats** (on-screen text): (1) "Tap to move" → (2) "Defeat the
-  monsters" → (3) "Enter the glowing keep".
-- **Minimal RPG systems:** HP, XP / level (one visible badge), one auto-attack
-  weapon, loot → power. Persisted via the `state/` schema.
-- **Out of slice (defer):** open world, inventory / equipment screen, skill
-  trees, multiple zones, quest chains, co-op, and the **dragon as a fightable
-  boss** (in the slice it is decorative / distant).
-
-## Visual session contract (write before runtime visual code)
-
-- **Goal:** a readable first screen that reaches the Theme-A fake-shot direction
-  with real sprites.
-- **Non-goal:** full combat / economy / open world; pixel-matching the fake shot.
-- **Proof:** native screenshot + `node tools/ai.mjs gate --visual-strict`
-  against the fake-shot direction; source/runtime asset manifests + pixel audit.
-- **Stop condition:** visual gate reaches the direction/quality bar **and** a
-  newcomer reads goal + action in ~10s (teachability gate).
-- **Likely files:** new `src/` voxelheim screen, asset atlas, `state/` schema,
-  `gamedesign/projects/voxelheim/*`.
-
-## Art Direction (seed — full art bible in the art task)
-
-Palette: bright sky/portal blues, warm stone browns/greys, pale-blue snow,
-saturated hero blue + a warm accent. Chunky dark outlines, soft cel shading,
-mascot-readable hero silhouette. Generate source sheets via **agy** in the
-Bright Roblox style (see the `delegated-image-generation` skill); cut + audit
-through `generated-game-ui-assets`.
-
-See `game_implementation_plan.md` for the build roadmap and gates.
+The current `src/voxelheim_main.c` real-time loop is converted to idle: stationary
+auto-fighting hero, endless spawns, gold drops, stage scaling, 4 upgrades,
+bosses, prestige, offline. State schema gains gold/stage/upgrade-levels/
+frost-shards/last-seen-time. See the next task after this design is accepted.

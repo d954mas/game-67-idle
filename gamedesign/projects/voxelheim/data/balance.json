@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "note": "First-pass idle economy for Voxelheim. Numbers are a starting point to be tuned by playtest; they exist so the loop is implementable from data, not invented in code (AGENTS.md core-loop gate).",
+  "combat": {
+    "hero_base_damage": 5,
+    "hero_attack_interval_s": 1.0,
+    "hero_base_max_hp": 100,
+    "kills_per_stage": 10
+  },
+  "monster": {
+    "hp_base": 10,
+    "hp_growth_per_stage": 1.15,
+    "gold_base": 5,
+    "gold_growth_per_stage": 1.18
+  },
+  "boss": {
+    "every_stages": 10,
+    "hp_multiplier": 8,
+    "gold_multiplier": 15,
+    "timer_s": 30,
+    "fail_penalty": "retry_boss_no_progress_loss"
+  },
+  "upgrades": {
+    "cost_growth_per_level": 1.09,
+    "sword": { "label": "Sword", "base_cost": 10, "effect": "damage", "damage_per_level": 3 },
+    "boots": { "label": "Boots", "base_cost": 25, "effect": "attack_speed", "interval_mult_per_level": 0.97, "min_interval_s": 0.2 },
+    "armor": { "label": "Armor", "base_cost": 20, "effect": "survivability", "max_hp_per_level": 12, "regen_per_level": 1 },
+    "luck":  { "label": "Luck",  "base_cost": 30, "effect": "gold_find", "gold_find_pct_per_level": 4 }
+  },
+  "prestige": {
+    "unlock_stage": 25,
+    "label": "Return to the valley",
+    "frost_shards_formula": "floor((highest_stage / 10) ^ 1.5)",
+    "shard_upgrades": {
+      "global_damage": { "label": "Sharper Steel", "pct_per_level": 5, "base_cost_shards": 1, "cost_growth": 1.5 },
+      "global_gold":   { "label": "Rich Veins",    "pct_per_level": 5, "base_cost_shards": 1, "cost_growth": 1.5 },
+      "start_stage":   { "label": "Head Start",    "stages_per_level": 1, "base_cost_shards": 2, "cost_growth": 2.0 },
+      "offline_rate":  { "label": "Camp Supplies",  "pct_per_level": 5, "base_cost_shards": 2, "cost_growth": 1.6 }
+    }
+  },
+  "offline": {
+    "unlock": "after_first_boss",
+    "rate_pct_of_highest_clear": 50,
+    "cap_hours": 8
+  },
+  "ftue": {
+    "beat1": "Your hero fights on its own - watch the gold pile up.",
+    "beat2": "Tap Sword to upgrade - hit harder, kill faster.",
+    "beat3": "Push as far as you can. When it slows, Prestige for a permanent boost."
+  }
+}

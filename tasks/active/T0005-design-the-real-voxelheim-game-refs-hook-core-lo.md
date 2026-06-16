@@ -1,7 +1,7 @@
 ---
 id: T0005
 title: "Design the REAL Voxelheim game: refs -> hook -> core loop -> progression/economy -> FTUE (pass the core-loop gate)"
-status: todo
+status: doing
 epic: E001
 priority: P1
 tags: [voxelheim, design, core-loop, gate]
@@ -44,3 +44,4 @@ real-time action-RPG, see Open questions) — once chosen, run the design.
 - 2026-06-16 created from the session retrospective (AI_PIPELINE_HISTORY): the
   pipeline gated appearance + screen-teachability but not the GAME; added the
   Game/core-loop gate to AGENTS.md. This task is the real design work.
+- 2026-06-16 Genre LOCKED = idle (lead). Design written DESIGN-FIRST per the new core-loop gate: references/idle_reference_digest.md (named refs: Tap Titans 2 / Idle Slayer / NGU Idle / Melvor), gdd.md rewritten around the idle loop (hook, loop w/ numbers, 2 currencies, 4 upgrades, bosses/10, prestige@25, offline), data/balance.json with the economy. AGENTS active concept -> idle. Next: implement the idle slice (convert voxelheim_main.c) after lead accepts the design + judge with a game-design critic.

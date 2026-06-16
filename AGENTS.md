@@ -2,7 +2,7 @@
 
 ## Project
 
-- Active game concept: `Voxelheim` (voxelheim), Blocky low-poly open-world fantasy action-RPG in the spirit of Skyrim for the Roblox-style audience: explore, fight dragons, loot dungeons, and level up.
+- Active game concept: `Voxelheim` (voxelheim), a bright blocky **idle / incremental RPG**: a hero auto-battles up a snowy path of monsters to the Frost Keep — gold -> 4 upgrades -> bosses -> prestige (Frost Shards) -> offline earnings. Theme A visual. Design: `gamedesign/projects/voxelheim/gdd.md` + `references/idle_reference_digest.md` + `data/balance.json`.
 - This is an AI-first game development base: improve the game and the AI workflow together.
 - The engine lives in `external/neotolis-engine` as a submodule; do not edit it unless explicitly asked.
 - Game design lives in `gamedesign/`; game code lives in `src/`.
