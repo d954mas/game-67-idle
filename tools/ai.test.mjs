@@ -350,13 +350,72 @@ function seedOldWorkRecord(profile) {
   })}\n`, "utf8");
 }
 
+function writeFailedCodexSession(file, callId = "call_facade_import") {
+  writeFileSync(file, [
+    JSON.stringify({
+      type: "response_item",
+      payload: {
+        type: "function_call",
+        call_id: callId,
+        arguments: JSON.stringify({ command: "node --test tools/ai_profile/test.mjs" }),
+      },
+    }),
+    JSON.stringify({
+      type: "response_item",
+      payload: {
+        type: "function_call_output",
+        call_id: callId,
+        output: "Exit code: 1\n",
+      },
+    }),
+  ].join("\n") + "\n", "utf8");
+}
+
+test("import-codex-session forwards profile and session options", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    const session = join(dir, "codex-session.jsonl");
+    writeFailedCodexSession(session);
+
+    const result = run(["import-codex-session", "--profile", profile, "--session", session]);
+
+    assert.equal(result.status, 0, result.stderr);
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].event_type, "tool_call_result_recovered");
+    assert.equal(records[0].source_call_id, "call_facade_import");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status imports Codex session before analysis", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    const session = join(dir, "codex-session.jsonl");
+    writeFailedCodexSession(session, "call_status_import");
+
+    const result = run(["status", "--profile", profile, "--session", session]);
+
+    assert.equal(result.status, 0, result.stderr);
+    const records = readJsonl(profile);
+    assert.equal(records[0].event_type, "tool_call_result_recovered");
+    assert.equal(records[0].source_call_id, "call_status_import");
+    assert.match(result.stdout, /Unresolved failures: 1/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("reflect is passive by default: no forced gap checkpoint", () => {
   const dir = tempDir();
   try {
     const profile = join(dir, "profile.jsonl");
     seedOldWorkRecord(profile);
 
-    const result = run(["reflect", "--quick", "--profile", profile]);
+    const result = run(["reflect", "--quick", "--profile", profile, "--no-import-codex-session"]);
 
     assert.equal(result.status, 0, result.stderr);
     const records = readJsonl(profile);
@@ -376,7 +435,7 @@ test("reflect --gap-checkpoint records the pre-reflection gap before closeout", 
     const profile = join(dir, "profile.jsonl");
     seedOldWorkRecord(profile);
 
-    const result = run(["reflect", "--gap-checkpoint", "--quick", "--profile", profile]);
+    const result = run(["reflect", "--gap-checkpoint", "--quick", "--profile", profile, "--no-import-codex-session"]);
 
     assert.equal(result.status, 0, result.stderr);
     const records = readJsonl(profile);

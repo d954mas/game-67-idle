@@ -288,6 +288,13 @@ session transcript. `node tools/ai.mjs status` reads the result. The hook is
 silent and never blocks the agent. `ai.mjs start/run` are still available for
 explicit scope/wrapping.
 
+This intentionally uses two sources:
+
+- Hook records are the primary live source: low-overhead, normalized, project
+  local, and quiet enough to leave on during long work.
+- Codex session JSONL is a secondary analysis source: noisy, harness-owned, and
+  imported after long work only to backfill missed failures or audit hook gaps.
+
 Profiling shows where an AI agent gets stuck without turning telemetry into a
 second project. It is passive by default: normal game work must not pause to
 repair stale summaries. No profiler step is a forced gate on normal work.

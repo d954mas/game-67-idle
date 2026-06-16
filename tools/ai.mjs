@@ -24,8 +24,9 @@ function usage() {
   node tools/ai.mjs critic --project <game-id> --task <task-id> --screenshot <path> --target <path|text> --output <packet.md> [critic options]
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail [gate options]
   node tools/ai.mjs close-slice --task <task-id> --project <game-id> --evidence <text> [close options]
-  node tools/ai.mjs status [--verbose] [--require-review-usable|--require-current-scope-usable]
-  node tools/ai.mjs reflect [--gap-checkpoint]
+  node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
+  node tools/ai.mjs status [--verbose] [--no-import-codex-session] [--require-review-usable|--require-current-scope-usable]
+  node tools/ai.mjs reflect [--gap-checkpoint] [--no-import-codex-session]
 
 Fast path:
   start    set current work item and append one profiling checkpoint
@@ -38,6 +39,7 @@ Fast path:
   critic   write a reusable visual/UI critic packet before strict product gate
   gate     write a product-read screenshot gate before expanding game content
   close-slice require product gate + evidence before handoff/review
+  import-codex-session import missed failed Codex shell calls before post-work analysis
   status   show passive telemetry health; guard flags fail unsafe handoffs
   reflect  write a short session closeout; --gap-checkpoint records a long
            unprofiled work gap first
@@ -67,6 +69,16 @@ function run(args) {
 function runOrExit(args) {
   const status = runNode(args);
   if (status !== 0) process.exit(status);
+}
+
+function maybeImportCodexSession(args) {
+  if (hasFlag(args, "--no-import-codex-session")) return;
+  const importArgs = ["tools/ai_profile/import_codex_session.mjs"];
+  const profile = flagValue(args, "--profile");
+  if (profile) importArgs.push("--profile", profile);
+  const session = flagValue(args, "--session");
+  if (session) importArgs.push("--session", session);
+  runOrExit(importArgs);
 }
 
 function shellText(args) {
@@ -120,6 +132,10 @@ function stripFlagsWithValues(args, flags) {
     out.push(arg);
   }
   return out;
+}
+
+function stripImportFlags(args) {
+  return stripFlagsWithValues(withoutFlag(args, "--no-import-codex-session"), new Set(["--session"]));
 }
 
 function appendProfile(values, extra = {}) {
@@ -415,8 +431,13 @@ if (command === "close-slice") {
   run(["tools/product_gate/close_slice.mjs", ...argv]);
 }
 
+if (command === "import-codex-session") {
+  run(["tools/ai_profile/import_codex_session.mjs", ...argv]);
+}
+
 if (command === "status") {
-  run(["tools/ai_profile/status.mjs", ...argv]);
+  maybeImportCodexSession(argv);
+  run(["tools/ai_profile/status.mjs", ...stripImportFlags(argv)]);
 }
 
 if (command === "reflect") {
@@ -427,9 +448,10 @@ if (command === "reflect") {
   // baseline comparisons are not comparable); --deep is now a no-op.
   const wantGapCheckpoint = argv.includes("--gap-checkpoint");
   const deep = argv.includes("--deep");
+  maybeImportCodexSession(argv);
   const reflectArgs = withoutFlag(
     withoutFlag(
-      withoutFlag(withoutFlag(argv, "--gap-checkpoint"), "--no-gap-checkpoint"),
+      withoutFlag(withoutFlag(stripImportFlags(argv), "--gap-checkpoint"), "--no-gap-checkpoint"),
       "--deep",
     ),
     "--strict",
