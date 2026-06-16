@@ -2,53 +2,52 @@
 
 ## Current Goal
 
-Build the `Voxelheim` first playable slice **"Frost Keep Approach"** — a casual
-action-RPG screen — to the LOCKED Theme-A "Bright Roblox" fake-shot direction
-(`gamedesign/projects/voxelheim/visual/fake_shot_first_screen.png`).
-Visual-first freeze: do not expand systems/state/content until the first screen
-passes the strict visual gate.
+`Voxelheim` first playable slice **"Frost Keep Approach"** — a bright casual
+action-RPG — is a **RELEASE-CANDIDATE**. Final critic (round 3) verdict: clears
+the polished/teachable/good-looking casual-RPG prototype bar (Visual 8.5,
+UI/HUD 9, Teachability 9; no blockers). Proof:
+`gamedesign/projects/voxelheim/visual/proof/release_candidate.png`.
 
-## Current Playable Path
+## What's Built (verified)
 
-P0 art (T0002) → P1 readable first screen + visual gate (T0003) → P2-P4 casual
-core loop (T0004). Roadmap: `gamedesign/projects/voxelheim/game_implementation_plan.md`.
+Tap-to-move hero, 3 ice-goblins with auto-combat + target ring, XP/level-up
+(juicy), reach the Frost Keep portal → win; FTUE (3 beats); persistent state
+(v2 + migration); real agy-generated sprite art through `nt_sprite_renderer`.
+`voxelheim_play_test.py` = 19/19. Entry: `src/voxelheim_main.c`.
 
-## Blocking Work
+## Build / Run / Shoot
 
-- T0002 (art) is the next actionable: art bible + Bright Roblox source sheets via
-  **agy**, cut/audited via `generated-game-ui-assets`. T0003/T0004 gated behind it.
-
-## Non-blocking Debt
-
-- Native build/run/screenshot commands for a new screen not yet confirmed
-  (discover during T0003).
+```powershell
+cmake --build --preset native-debug --target game_seed
+build/game_seed/native-debug/game_seed.exe --devapi 9123
+py -3.12 tools/devapi/shoot_voxelheim.py build/captures/x.png 9123
+py -3.12 tools/devapi/voxelheim_play_test.py 9123
+# atlas (only if assets change): build/voxelheim_packer/build_voxelheim_packs.exe build/voxelheim
+#   then copy build/voxelheim/voxelheim.ntpack -> assets/voxelheim.ntpack
+```
 
 ## Current Gate
 
-P1 **strict visual gate** (T0003): the native first screen must reach the
-Theme-A fake-shot direction (`node tools/ai.mjs gate --visual-strict`) before any
-gameplay systems, plus the teachability gate (a newcomer reads goal + action in
-~10s).
+Release-candidate bar: PASSED (final critic round 3). Two full player+critic
+rounds + a confirmation pass drove the iteration.
 
-## Required Validation
+## Non-blocking Debt / Deferred (not gating)
 
-```powershell
-node tools/taskboard/cli.mjs validate
-node tools/ai.mjs gate --visual-strict ...   # at P1 (T0003)
-```
+- Bolder flying dragon over the mountains (agy generation throttled at finish;
+  background already has a small dragon).
+- Deeper path perspective / background parallax.
 
 ## Last Known Good Evidence
 
-- Theme A locked: `gamedesign/projects/voxelheim/visual/fake_shot_first_screen.png`
-  (3 themed fake shots generated via agy; A chosen). Rejected directions:
-  `visual/fake_shot_prompts.md`.
-- `gdd.md` (slice + locked visual direction) + `game_implementation_plan.md`.
-- Headless image-gen path: `delegated-image-generation` skill (agy).
+- `gamedesign/projects/voxelheim/visual/proof/` — p1_first_screen, p5_integrated,
+  p6_release_candidate, release_candidate.png.
+- Commits: scaffold → P1 (`cfb6f4c`) → core loop (`078be64`) → polish (`e6232b7`)
+  → composable-asset integration (`d78790f`) → final polish (`3f36ded`) → RC (`b7e01e4`).
+- Image-gen + composable-asset rules: `.codex/skills/delegated-image-generation`
+  + `gamedesign/projects/voxelheim/visual/art_bible.md`.
 
-## Next Priorities
+## Next Priorities (optional, post-RC)
 
-1. T0002 — write `visual/art_bible.md`; generate Bright Roblox source sheets via
-   agy; cut/audit via `generated-game-ui-assets`; build the atlas.
-2. T0003 — readable first screen with real sprites; confirm native build/run
-   commands; screenshot-vs-fake-shot mismatch list; pass `--visual-strict`.
-3. T0004 — casual core loop (move/fight/clear/loot/level) once the gate passes.
+1. Add the bolder dragon + path depth when agy generation recovers.
+2. Audio pass (SFX/music) for more juice.
+3. Expand beyond the first slice (more regions/enemies) if continuing.
