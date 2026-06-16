@@ -133,3 +133,21 @@ produced visually-valid but non-identical PNGs.
     native and Python paths.
   - Audit still passed for 11 generated UI assets; slowest audited asset was
     `generated_upgrade_card` at about 9.6ms.
+- 2026-06-16: Tightened the fast stamp and hot fingerprint path:
+  - Import stamp now includes source input fingerprints and runtime meta file
+    fingerprints, so no-op validation no longer needs to read every runtime
+    sidecar JSON before checking the aggregate stamp.
+  - Replaced hot-path `Path.relative_to` path formatting with `os.path.relpath`
+    for repo-local generated paths.
+  - Warm native no-change, 5 runs: 0.055-0.064s wall-clock.
+  - cProfile no-change time inside Python process: 0.013s.
+  - Native full-cold rebuild: 0.630s.
+  - Python full-cold rebuild: 0.662s.
+  - Runtime meta invalidation was tested by deleting `icon_chain.png.json`; the
+    importer rebuilt the missing sidecar and refreshed the stamp.
+  - Pixel parity still passed for all 11 generated runtime PNGs.
+  - Audit still passed for 11 generated UI assets.
+  - Current large cold-path bottlenecks remain: native subprocess/key stage
+    about 0.25s, `fit_to_canvas` about 0.21s, PNG saves about 0.05s. Further
+    large gains require native/runtime-transform parity work or reducing cold
+    work volume, not more small no-op cleanup.

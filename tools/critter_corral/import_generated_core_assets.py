@@ -16,7 +16,6 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
-ROOT_RESOLVED = ROOT.resolve()
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -172,10 +171,7 @@ ASSETS: list[dict[str, Any]] = [
 
 
 def rel(path: Path) -> str:
-    try:
-        return path.relative_to(ROOT).as_posix()
-    except ValueError:
-        return path.resolve().relative_to(ROOT_RESOLVED).as_posix()
+    return os.path.relpath(path, ROOT).replace(os.sep, "/")
 
 
 def save_image_atomic_file(image: Any, path: Path) -> None:
@@ -466,11 +462,17 @@ def import_stamp_fingerprint() -> dict[str, Any]:
         "import_algorithm": IMPORT_STAMP_VERSION,
         "runtime_algorithm": RUNTIME_CACHE_VERSION,
         "key_algorithm": KEYED_CACHE_VERSION,
+        "source_inputs": [source_fingerprint(source_key) for source_key in unique_source_keys()],
         "assets": ASSETS,
         "runtime_outputs": [
             file_fingerprint(SPRITE_DIR / spec["output"])
             for spec in ASSETS
             if (SPRITE_DIR / spec["output"]).exists()
+        ],
+        "runtime_metas": [
+            file_fingerprint(runtime_cache_meta_path(spec))
+            for spec in ASSETS
+            if runtime_cache_meta_path(spec).exists()
         ],
         "crop_manifest": file_fingerprint(CROP_MANIFEST) if CROP_MANIFEST.exists() else None,
         "asset_manifest": file_fingerprint(ASSET_MANIFEST) if ASSET_MANIFEST.exists() else None,
@@ -481,8 +483,6 @@ def import_stamp_fingerprint() -> dict[str, Any]:
 def import_outputs_current() -> bool:
     required_outputs = [SPRITE_DIR / spec["output"] for spec in ASSETS] + [CROP_MANIFEST, ASSET_MANIFEST, CONTACT_SHEET]
     if not all(path.exists() for path in required_outputs):
-        return False
-    if not all(runtime_output_valid(spec, SPRITE_DIR / spec["output"]) for spec in ASSETS):
         return False
     if not IMPORT_STAMP.exists():
         return False
