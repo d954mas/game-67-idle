@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -46,6 +46,27 @@ function readJsonl(file) {
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+}
+
+function runHook(payload, profile, harness = "codex", env = {}) {
+  const result = spawnSync(process.execPath, ["tools/ai_profile/hook_record.mjs", harness], {
+    cwd: root,
+    env: {
+      ...process.env,
+      AI_PROFILE_FILE: profile,
+      CODEX_SESSION_FILE: join(dirname(profile), "missing-codex-session.jsonl"),
+      ...env,
+    },
+    input: JSON.stringify(payload),
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  assert.equal(
+    result.status,
+    0,
+    `hook_record ${payload.hook_event_name || ""}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+  );
+  return result;
 }
 
 test("scope file supplies metadata after CLI and env fallbacks", () => {
@@ -144,6 +165,112 @@ test("start writes scope and phase_start event", () => {
     assert.equal(records[0].notes, "start helper smoke");
     assert.equal(records[0].scope_path, resolve(scope));
     assert.deepEqual(records[0].tools, ["ai_profile/start.mjs"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("hook_record logs session start and command start records", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "hook.jsonl");
+    runHook({ hook_event_name: "SessionStart" }, profile);
+    runHook({
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "node --test tools/ai_profile/test.mjs" },
+    }, profile);
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, 2);
+    assert.equal(records[0].event_type, "session_start");
+    assert.equal(records[0].intent, "session start (codex)");
+    assert.deepEqual(records[0].tools, ["codex/session"]);
+
+    assert.equal(records[1].event_type, "tool_call_start");
+    assert.equal(records[1].category, "validation");
+    assert.equal(records[1].result, "unknown");
+    assert.equal(records[1].value, "necessary_overhead");
+    assert.deepEqual(records[1].tools, ["codex/Bash"]);
+    assert.deepEqual(records[1].commands, ["node --test tools/ai_profile/test.mjs"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("hook_record logs failed command result records", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "hook-fail.jsonl");
+    runHook({
+      hook_event_name: "PostToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "git status --short" },
+      tool_response: { exit_code: 7 },
+    }, profile);
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].event_type, "tool_call_result");
+    assert.equal(records[0].category, "task_status");
+    assert.equal(records[0].result, "fail");
+    assert.equal(records[0].value, "rework");
+    assert.deepEqual(records[0].commands, ["git status --short"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("hook_record recovers missed Codex failed shell commands from session transcript", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "hook-recovered.jsonl");
+    const session = join(dir, "codex-session.jsonl");
+    writeFileSync(session, [
+      {
+        timestamp: "2026-06-16T03:24:19.271Z",
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "shell_command",
+          call_id: "call_failed_probe",
+          arguments: JSON.stringify({
+            command: "Write-Error 'HOOK_FAIL'; exit 9",
+            workdir: root,
+          }),
+        },
+      },
+      {
+        timestamp: "2026-06-16T03:24:20.318Z",
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call_failed_probe",
+          output: "Exit code: 9\nWall time: 0.7 seconds\nOutput:\nHOOK_FAIL\n",
+        },
+      },
+    ].map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
+
+    runHook({
+      hook_event_name: "PostToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "git status --short" },
+      tool_response: { exit_code: 0 },
+    }, profile, "codex", { CODEX_SESSION_FILE: session });
+    runHook({
+      hook_event_name: "PostToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "git status --short" },
+      tool_response: { exit_code: 0 },
+    }, profile, "codex", { CODEX_SESSION_FILE: session });
+
+    const recovered = readJsonl(profile).filter((record) => record.event_type === "tool_call_result_recovered");
+    assert.equal(recovered.length, 1);
+    assert.equal(recovered[0].result, "fail");
+    assert.equal(recovered[0].value, "rework");
+    assert.equal(recovered[0].source_call_id, "call_failed_probe");
+    assert.equal(recovered[0].exit_code, 9);
+    assert.deepEqual(recovered[0].commands, ["Write-Error 'HOOK_FAIL'; exit 9"]);
   } finally {
     cleanup(dir);
   }

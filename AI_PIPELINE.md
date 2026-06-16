@@ -272,12 +272,16 @@ task, or fresh validation evidence.
 
 ## AI session profiling
 
-**Coverage is automatic.** Profiling is wired into BOTH harnesses as a hook
+**Coverage is automatic.** Profiling is wired into BOTH harnesses as hooks
 (`.claude/settings.json` for Claude Code, `.codex/hooks.json` for Codex) that
-runs `tools/ai_profile/hook_record.mjs` on every command tool call + session
-start, appending a record to `tmp/session_profiles/`. The harness runs it, so
-coverage no longer depends on the agent remembering to call `ai.mjs start/run`
-(that opt-in dependency is exactly why a long session once logged zero records).
+run `tools/ai_profile/hook_record.mjs` on command start, command result when the
+harness emits it, and session start, appending records to
+`tmp/session_profiles/`. The harness runs it, so coverage no longer depends on
+the agent remembering to call `ai.mjs start/run` (that opt-in dependency is
+exactly why a long session once logged zero records). A command that fails before
+the harness emits a result still has a `tool_call_start` record, so later review
+can see the attempted command instead of a silent gap; Codex also recovers missed
+failed shell results from its local session JSONL on the next successful hook.
 `node tools/ai.mjs status` reads the result. The hook is silent and never blocks
 the agent. `ai.mjs start/run` are still available for explicit scope/wrapping.
 
