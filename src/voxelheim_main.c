@@ -95,17 +95,19 @@
 #define VH_BOSS_EVERY_STAGES 10
 #define VH_BOSS_HP_MULT 8.0
 #define VH_BOSS_GOLD_MULT 15.0
+/* FIXED boss timer (v3). With MULTIPLICATIVE damage (Sword x1.12/level + prestige
+ * x-damage) the hero's DPS compounds alongside monster HP, so the stage-10 boss
+ * is beaten in ~6s, stage-20/30 in <1s -- all inside 30s. The old relative-timer
+ * band-aid is removed. See boss.timer_note in data/balance.json. */
 #define VH_BOSS_TIMER_S 30.0
-/* Effective boss timer = max(VH_BOSS_TIMER_S, mult * current kill time). A fixed
- * 30s timer is mathematically impossible against the steep HP x1.45 climb, which
- * blocks prestige@25; this makes the boss a beatable RELATIVE check. See the
- * boss.timer_note in data/balance.json. */
-#define VH_BOSS_TIMER_REL_MULT 1.5
 
 /* upgrades */
 #define VH_UP_COST_GROWTH 1.09
 #define VH_SWORD_BASE_COST 10.0
-#define VH_SWORD_DMG_PER_LEVEL 3.0
+/* MULTIPLICATIVE damage (v3): hero damage = base * VH_SWORD_DMG_MULT^sword_level.
+ * x1.12/level => 1.12^3.28 = x1.45, so ~3-4 sword levels recover one stage's HP
+ * x1.45 step, keeping flat-feeling purchases tracking the exponential HP climb. */
+#define VH_SWORD_DMG_MULT 1.12
 #define VH_BOOTS_BASE_COST 25.0
 #define VH_BOOTS_INTERVAL_MULT 0.97
 #define VH_BOOTS_MIN_INTERVAL 0.2
@@ -117,7 +119,9 @@
 
 /* prestige */
 #define VH_PRESTIGE_UNLOCK_STAGE 25
-/* frost_shards = floor(highest_stage ^ 0.8 / 3) */
+/* frost_shards = floor(highest_stage ^ 0.8 / 3).
+ * Shard damage/gold apply MULTIPLICATIVELY (v3): mult = (1 + pct/100)^level, i.e.
+ * +10%/level COMPOUNDING (Clicker Heroes Hero Souls), not a flat sum. */
 #define VH_SHARD_DMG_PCT 10.0
 #define VH_SHARD_DMG_BASE_COST 1.0
 #define VH_SHARD_DMG_GROWTH 1.5
@@ -497,12 +501,15 @@ static double ipow(double base, int exp) {
     return r;
 }
 
-/* Permanent shard multipliers (>=1.0). */
+/* Permanent shard multipliers (>=1.0), applied MULTIPLICATIVELY (v3):
+ * mult = (1 + pct/100)^level, i.e. +10%/level COMPOUNDING (Clicker Heroes Hero
+ * Souls), so the prestige bonus stacks on top of the multiplicative Sword and
+ * the whole power curve shifts up -> the next run blasts the early stages. */
 static double shard_damage_mult(void) {
-    return 1.0 + (double)g_game_state.idle_shard_global_damage * VH_SHARD_DMG_PCT / 100.0;
+    return pow(1.0 + VH_SHARD_DMG_PCT / 100.0, (double)g_game_state.idle_shard_global_damage);
 }
 static double shard_gold_mult(void) {
-    return 1.0 + (double)g_game_state.idle_shard_global_gold * VH_SHARD_GOLD_PCT / 100.0;
+    return pow(1.0 + VH_SHARD_GOLD_PCT / 100.0, (double)g_game_state.idle_shard_global_gold);
 }
 static int shard_start_stage(void) {
     return 1 + g_game_state.idle_shard_start_stage * VH_SHARD_START_PER_LEVEL;
@@ -511,9 +518,11 @@ static double shard_offline_mult(void) {
     return 1.0 + (double)g_game_state.idle_shard_offline_rate * VH_SHARD_OFFLINE_PCT / 100.0;
 }
 
-/* Hero combat stats from upgrade levels + permanent shard multipliers. */
+/* Hero combat stats from upgrade levels + permanent shard multipliers.
+ * MULTIPLICATIVE damage (v3): base * Sword_mult^sword_level * prestige damage
+ * mult, so power COMPOUNDS and tracks the exponential HP climb. */
 static double hero_damage(void) {
-    double base = VH_HERO_BASE_DAMAGE + (double)g_game_state.idle_up_sword * VH_SWORD_DMG_PER_LEVEL;
+    double base = VH_HERO_BASE_DAMAGE * ipow(VH_SWORD_DMG_MULT, g_game_state.idle_up_sword);
     return base * shard_damage_mult();
 }
 static double hero_attack_interval(void) {
@@ -723,16 +732,11 @@ static void spawn_boss(void) {
     m->flash = 0.0F;
     m->x = KEEP_CX;
     m->y = MON_FRONT_Y + 30.0F;
-    /* Relative timer: at least 30s, and at least mult x the time the hero's
-     * current DPS needs to fell this boss -> always a beatable check. */
-    double dps = hero_damage() / hero_attack_interval();
-    double kill_time = (dps > 0.0) ? (m->max_hp / dps) : VH_BOSS_TIMER_S;
-    double timer = VH_BOSS_TIMER_S;
-    if (kill_time * VH_BOSS_TIMER_REL_MULT > timer) {
-        timer = kill_time * VH_BOSS_TIMER_REL_MULT;
-    }
-    g_sim.boss_timer = (float)timer;
-    g_sim.boss_timer_max = (float)timer;
+    /* FIXED timer (v3): with multiplicative damage the hero's DPS compounds with
+     * monster HP, so bosses are beaten well inside 30s; the relative-timer
+     * band-aid is removed. See boss.timer_note in data/balance.json. */
+    g_sim.boss_timer = (float)VH_BOSS_TIMER_S;
+    g_sim.boss_timer_max = (float)VH_BOSS_TIMER_S;
 }
 
 /* Enter the current stage: if it is a boss stage, start the boss; else seed the
@@ -927,6 +931,10 @@ static long compute_offline_grant(long now_unix) {
     double rate = gold_per_kill * kills_per_sec * (VH_OFFLINE_RATE_PCT / 100.0) * shard_offline_mult();
     double grant = rate * elapsed_s;
     if (grant < 0.0) grant = 0.0;
+    /* Clamp in DOUBLE to the int32 gold range before any narrowing cast: with the
+     * multiplicative economy, highest_stage climbs high enough that the raw grant
+     * exceeds 2^31 and a direct (long) cast wraps to INT_MIN. */
+    if (grant > 2147483647.0) grant = 2147483647.0;
     long g = (long)grant;
     if (g > 0) {
         double total = (double)g_game_state.idle_gold + (double)g;

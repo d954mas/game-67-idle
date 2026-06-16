@@ -14,8 +14,8 @@ via deterministic debug endpoints and asserts the progression transitions:
   - an offline grant computes gold while away
 
 Captures screenshots at: early auto-farm, the upgrade panel, a boss, and
-post-prestige (build/captures/idle_*.png) and runs pixel_health on each, so the
-run proves the loop works AND looks non-blank.
+post-prestige (build/captures/mult_*.png) and runs pixel_health on each, so the
+run proves the MULTIPLICATIVE economy works AND looks non-blank.
 
 DevAPI methods used (added/extended in src/voxelheim_main.c):
   game.state                 -> flat idle mirror + derived stats + costs
@@ -203,11 +203,34 @@ def main() -> int:
         gold_after_farm = st.get("gold", 0)
         check("gold rises from auto-kills", gold_after_farm > 0, st)
         check("FTUE advanced after a kill", st.get("ftue_step", 0) >= 1, st)
-        shoot(p, "idle_early.png")
+        shoot(p, "mult_early.png")
 
-        # 2) Buying Sword raises damage AND the realized kill rate (gold/sec).
-        #    Measure on a clean, longer window so the kill cadence averages out.
-        dmg_before = st.get("hero_damage", 0.0)
+        # 2) Damage is MULTIPLICATIVE: each Sword level multiplies damage by the
+        #    same factor (~1.12), so power COMPOUNDS. Verify the ratio between
+        #    successive levels is constant and > 1 (a flat-additive curve would
+        #    have a SHRINKING ratio).
+        ratios = []
+        dprev = p.state().get("hero_damage", 0.0)
+        for _ in range(6):
+            # farm a little so the next Sword level is affordable
+            r = p.state()
+            while r.get("gold", 0) < r.get("cost_sword", 1e18):
+                r = p.tick(4.0)
+            r = p.buy("sword")
+            if not r.get("bought", True):
+                break
+            dcur = r.get("hero_damage", 0.0)
+            if dprev > 0:
+                ratios.append(dcur / dprev)
+            dprev = dcur
+        check("Sword damage compounds (multiplicative)", len(ratios) >= 3, ratios)
+        # all step ratios equal (within float tolerance) and clearly > 1
+        const_ratio = all(abs(rr - ratios[0]) < 1e-3 for rr in ratios) if ratios else False
+        check("Sword damage ratio is constant >1 (compounding, not flat)",
+              const_ratio and ratios and ratios[0] > 1.05, ratios)
+
+        # Buying Sword raises damage AND the realized kill rate (gold/sec).
+        dmg_before = p.state().get("hero_damage", 0.0)
         win = 20.0
         g0 = p.state().get("gold", 0)
         s0 = p.tick(win)
@@ -231,13 +254,10 @@ def main() -> int:
         st = buy_until_stage(p, max(stage_before + 2, 3))
         check("stage advances", st.get("stage", 1) > stage_before,
               {"before": stage_before, "after": st.get("stage")})
-        shoot(p, "idle_upgrades.png")
+        shoot(p, "mult_upgrades.png")
 
         # 4) Climb to a boss (stage 10). Buy upgrades to get there fast.
         st = buy_until_stage(p, 10)
-        # the boss is at stage 10; capture while boss_active (it may take a tick
-        # for the stage to land exactly on 10 with boss spawned)
-        # ensure we are on stage 10 with a boss
         check("reached stage 10", st.get("stage", 1) >= 10, st)
         # tick a little so we're mid-boss for the screenshot
         for _ in range(3):
@@ -247,11 +267,10 @@ def main() -> int:
             st = p.tick(0.5)
         boss_seen = st.get("boss_active") or st.get("stage", 1) > 10
         check("a BOSS appears at stage 10", boss_seen, st)
-        # capture the boss if currently active; else climb back is fine, snapshot anyway
+        # capture the boss if currently active; else climb to the next boss to snap.
         if st.get("boss_active"):
-            shoot(p, "idle_boss.png")
+            shoot(p, "mult_boss.png")
         else:
-            # climb to next boss multiple of 10 to capture one
             tries = 0
             while not st.get("boss_active") and tries < 40:
                 tries += 1
@@ -260,9 +279,18 @@ def main() -> int:
                     if st.get("boss_active"):
                         break
                     st = p.tick(0.5)
-            shoot(p, "idle_boss.png")
+            shoot(p, "mult_boss.png")
 
-        # 5) Climb to stage 25 -> prestige unlocks.
+        # 4b) The stage-10 boss is BEATABLE on a base run within the FIXED timer:
+        #     advancing past stage 10 is only possible by killing that boss.
+        st = buy_until_stage(p, 11)
+        check("stage-10 boss BEATEN on base run (fixed timer)", st.get("highest_stage", 1) >= 11,
+              {"highest_stage": st.get("highest_stage"), "stage": st.get("stage")})
+
+        # 5) Climb past the stage-20 boss, then to stage 25 -> prestige unlocks.
+        st = buy_until_stage(p, 21)
+        check("stage-20 boss BEATEN on base run (fixed timer)", st.get("highest_stage", 1) >= 21,
+              {"highest_stage": st.get("highest_stage"), "stage": st.get("stage")})
         st = buy_until_stage(p, 25)
         check("reached stage 25", st.get("stage", 1) >= 25, st)
         check("prestige unlocks at stage 25", st.get("prestige_unlocked"), st)
@@ -279,14 +307,71 @@ def main() -> int:
         check("prestige reset stage", st.get("stage", 99) <= max(1, highest_before),
               {"stage": st.get("stage")})
         check("prestige kept highest_stage", st.get("highest_stage", 0) >= highest_before, st)
-        shoot(p, "idle_prestige.png")
+        shoot(p, "mult_prestige.png")
 
-        # 7) Spend a shard on a permanent upgrade -> multiplier changes.
-        if st.get("frost_shards", 0) >= 1:
-            dmg_mult_before = st.get("hero_damage", 0.0)
-            st = p.buy_shard("damage")
-            check("shard upgrade purchased", st.get("bought", False) is True or st.get("shard_global_damage", 0) >= 1, st)
-            check("shard upgrade raises base damage", st.get("hero_damage", 0.0) >= dmg_mult_before, st)
+        # 7) A Frost-Shard global-damage purchase VISIBLY raises base damage, and
+        #    the post-prestige run reaches an early stage CLEARLY FASTER.
+        # 7a) measure the base (no-shard) sim-time to reach stage 8 from the reset.
+        #     (we just prestiged: gold/upgrades are reset, shards kept.)
+        post = p.state()
+        # buy as many damage shards as affordable so the boost is unambiguous.
+        bought_shards = 0
+        if post.get("frost_shards", 0) >= 1:
+            dmg_before_shard = post.get("hero_damage", 0.0)
+            while True:
+                r = p.buy_shard("damage")
+                if not r.get("bought", False):
+                    break
+                bought_shards += 1
+                post = r
+            check("shard damage purchased", bought_shards >= 1, bought_shards)
+            check("Frost-Shard global-damage raises base damage",
+                  post.get("hero_damage", 0.0) > dmg_before_shard,
+                  {"before": dmg_before_shard, "after": post.get("hero_damage")})
+            check("shard global-damage is multiplicative (>1.10x for >=1 lvl)",
+                  post.get("hero_damage", 0.0) >= dmg_before_shard * 1.10 - 1e-6,
+                  {"before": dmg_before_shard, "after": post.get("hero_damage"), "levels": bought_shards})
+
+        # 7b) Next-run speed: with the shard damage bonus the run reaches an early
+        #     milestone faster (fewer sim seconds). Compare two clean climbs to
+        #     stage 8 -- one at current (boosted) damage vs one with damage forced
+        #     off via a fresh playtest reset (no shards).
+        def time_to_stage(target=8, tick_s=2.0, max_it=400):
+            cost_keys = {"sword": "cost_sword", "boots": "cost_boots", "luck": "cost_luck"}
+            prio = ["sword", "boots", "luck", "sword"]
+            sec = 0.0
+            s = p.state()
+            it = 0
+            while s.get("stage", 1) < target and it < max_it:
+                it += 1
+                s = p.tick(tick_s)
+                sec += tick_s
+                spent = True
+                while spent:
+                    spent = False
+                    gold = s.get("gold", 0)
+                    for u in prio:
+                        if gold >= s.get(cost_keys[u], 1e18):
+                            s = p.buy(u)
+                            spent = True
+                            break
+            return sec, s.get("stage", 1)
+
+        # boosted run (keeps the shards we just bought): prestige to reset run econ
+        if p.state().get("prestige_unlocked"):
+            p.prestige()
+        boosted_sec, boosted_stage = time_to_stage(8)
+        # baseline run with NO shard damage: full reset wipes shards too.
+        p.call("game.reset_playtest")
+        base_sec, base_stage = time_to_stage(8)
+        check("next run (with shard damage) reaches stage 8 faster than a no-shard run",
+              boosted_stage >= 8 and base_stage >= 8 and boosted_sec < base_sec,
+              {"boosted_sec": boosted_sec, "base_sec": base_sec,
+               "boosted_stage": boosted_stage, "base_stage": base_stage,
+               "shard_dmg_levels": bought_shards})
+
+        # restore a progressed, offline-unlocked profile for the offline test.
+        st = buy_until_stage(p, 11)
 
         # 8) Offline grant computes gold while away.
         gold_before_offline = st.get("gold", 0)

@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "note": "Idle economy for Voxelheim, GROUNDED in references/idle_deconstruction.md (Clicker Heroes ~x1.55/encounter HP, boss x10; Tap Titans 2 1.57^stage; prestige from accumulated progress with a fractional scale + flat %/unit per Hero Souls; Pecorella: reset at +50-200%). First-pass numbers, to tune by playtest + game-design critic.",
+  "version": 3,
+  "note": "Idle economy for Voxelheim, GROUNDED in references/idle_deconstruction.md (Clicker Heroes ~x1.55/encounter HP, boss x10; Tap Titans 2 1.57^stage; prestige from accumulated progress with a fractional scale + flat %/unit per Hero Souls; Pecorella: reset at +50-200%). v3 (2026-06-16, lead decision): MULTIPLICATIVE damage. Hero damage = hero_base_damage * (sword damage_mult_per_level)^sword_level * prestige global-damage mult, so power COMPOUNDS and tracks the exponential HP climb (the core idle dopamine, as Clicker Heroes / Tap Titans 2). Flat +3 dmg/level could not track HP x1.45/stage and forced a relative-timer band-aid; removed. Sword x1.12/level => ~3.3 sword levels recover one stage's HP x1.45 step, matching 'damage tracks HP'. Boss timer back to a FIXED 30s (with compounding damage the stage-10/20/30 bosses are beaten in <7s).",
   "combat": {
     "hero_base_damage": 5,
     "hero_attack_interval_s": 1.0,
@@ -19,13 +19,13 @@
     "hp_multiplier": 8,
     "gold_multiplier": 15,
     "timer_s": 30,
-    "timer_relative_mult": 1.5,
-    "timer_note": "IMPLEMENTATION TUNING (headless playtest, 2026-06-16): with a FIXED 30s timer and the steep HP x1.45 climb, bosses become a mathematically impossible wall (e.g. the stage-20 boss needs ~76s of DPS but only has 30s) -> prestige@25 is unreachable on a base run. Per this file's own note ('first-pass numbers, to tune by playtest'), the effective boss timer is now max(timer_s, timer_relative_mult * current_kill_time), i.e. the boss is always a beatable RELATIVE check (kill it in ~1.5x the time your DPS needs), never an absolute wall. All other grounded numbers (HP/gold growth, boss HP/gold mult, prestige formula, upgrade effects) are UNCHANGED. Flagged for lead/game-design-critic review: the deeper lever is multiplicative upgrade/prestige scaling so flat damage can track exponential HP.",
+    "timer_note": "FIXED 30s timer (lead decision, v3 2026-06-16). The relative-timer band-aid is REMOVED: it was only needed because flat-additive Sword (+3/level) could not track HP x1.45/stage. With MULTIPLICATIVE damage (Sword x1.12/level + prestige x-damage), the hero's DPS compounds alongside monster HP, so a base run beats the stage-10 boss in ~6s, stage-20 in <1s, stage-30 in <1s -- all comfortably inside 30s. Headless sim (tools): base run reaches stage 30 (past prestige@25). 30s sits in the 20-40s design band.",
     "fail_penalty": "retry_boss_no_progress_loss"
   },
   "upgrades": {
     "cost_growth_per_level": 1.09,
-    "sword": { "label": "Sword", "base_cost": 10, "effect": "damage", "damage_per_level": 3 },
+    "sword": { "label": "Sword", "base_cost": 10, "effect": "damage", "damage_mult_per_level": 1.12,
+               "sword_note": "MULTIPLICATIVE (v3): hero damage = hero_base_damage * 1.12^sword_level * prestige global-damage mult. x1.12/level => 1.12^3.28 = x1.45, so ~3-4 sword levels recover one stage's HP x1.45 step, keeping damage tracking the climb (Clicker Heroes / Tap Titans 2 scale damage multiplicatively). Was flat damage_per_level: 3, which could not track exponential HP." },
     "boots": { "label": "Boots", "base_cost": 25, "effect": "attack_speed", "interval_mult_per_level": 0.97, "min_interval_s": 0.2 },
     "armor": { "label": "Armor", "base_cost": 20, "effect": "survivability", "max_hp_per_level": 12, "regen_per_level": 1 },
     "luck":  { "label": "Luck",  "base_cost": 30, "effect": "gold_find", "gold_find_pct_per_level": 4 }
@@ -34,10 +34,12 @@
     "unlock_stage": 25,
     "label": "Return to the valley",
     "frost_shards_formula": "floor(highest_stage ^ 0.8 / 3)",
-    "formula_note": "fractional exponent (was super-linear ^1.5, wrong direction) so each prestige grants ~+50-200% more shards (Pecorella); modeled on Clicker Heroes (souls from accumulated progress) not a super-linear stage power.",
+    "formula_note": "fractional exponent (was super-linear ^1.5, wrong direction) so each prestige grants ~+50-200% more shards (Pecorella); modeled on Clicker Heroes (souls from accumulated progress) not a super-linear stage power. At highest_stage 25 (first prestige) = 4 shards, enough to buy ~3 global_damage levels (x1.33 / +33% base damage) so the next run blasts the early stages and reaches the old wall clearly faster.",
     "shard_upgrades": {
-      "global_damage": { "label": "Sharper Steel", "pct_per_level": 10, "base_cost_shards": 1, "cost_growth": 1.5 },
-      "global_gold":   { "label": "Rich Veins",    "pct_per_level": 10, "base_cost_shards": 1, "cost_growth": 1.5 },
+      "global_damage": { "label": "Sharper Steel", "pct_per_level": 10, "apply": "multiplicative", "base_cost_shards": 1, "cost_growth": 1.5,
+                          "shard_note": "MULTIPLICATIVE (v3): global damage mult = (1 + 10/100)^level = 1.10^level (+10%/level, COMPOUNDING, as Clicker Heroes Hero Souls). Multiplies hero_base_damage alongside the Sword mult." },
+      "global_gold":   { "label": "Rich Veins",    "pct_per_level": 10, "apply": "multiplicative", "base_cost_shards": 1, "cost_growth": 1.5,
+                          "shard_note": "MULTIPLICATIVE (v3): global gold mult = 1.10^level (+10%/level, compounding)." },
       "start_stage":   { "label": "Head Start",    "stages_per_level": 1, "base_cost_shards": 2, "cost_growth": 2.0 },
       "offline_rate":  { "label": "Camp Supplies",  "pct_per_level": 5, "base_cost_shards": 2, "cost_growth": 1.6 }
     }

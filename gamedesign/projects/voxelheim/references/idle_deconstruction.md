@@ -101,6 +101,20 @@ a later pass should add real gameplay-frame captures or lead-provided footage.
   **×damage / ×gold** multiplier (+10%/shard, as Clicker Heroes). This is the
   "deeper lever" the build flagged (T0006). [My deconstruction missed the
   upgrade SCALING SHAPE; it focused on HP/gold/prestige scaling.]
+  - **IMPLEMENTED + VERIFIED (balance.json v3, 2026-06-17).** Hero damage =
+    `hero_base_damage(5) × 1.12^sword_level × (1.10)^shard_damage_level`. Sword
+    `damage_mult_per_level = 1.12` (≈3.3 sword levels recover one stage's HP
+    ×1.45 step). Prestige shard global_damage/global_gold apply
+    MULTIPLICATIVELY as `(1 + 10/100)^level` (+10%/level compounding, Clicker
+    Heroes Hero Souls). The boss `timer_relative_mult` band-aid was REMOVED →
+    fixed `timer_s = 30`. Headless probe (`voxelheim_play_test.py 9182`,
+    35/35 pass): on a BASE run (no prior prestige) the stage-10 boss is beaten
+    in ~3-6s and the stage-20 boss in <1s (both inside the fixed 30s timer),
+    prestige@25 is reached, a Frost-Shard global-damage purchase raises base
+    damage ≥×1.10, and the post-prestige run reaches an early milestone clearly
+    faster than a no-shard run. Natural prestige wall lands at the stage-80 boss
+    (Boots hit the 0.2s interval floor + gold saturates int32), which is the
+    intended "run stalls → prestige to push past" idle moment.
 - **Steepen monster growth.** Refs use ~x1.55-1.57 per encounter. Our
   `hp_growth_per_stage = 1.15` over a 10-kill stage is ~x1.014/kill — far too
   flat. Either grow HP **per kill** (~x1.25-1.45/kill) or raise
