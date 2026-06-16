@@ -56,6 +56,16 @@ small vertical slice instead of a large document set.
   and gather sources instead of coding. Parallel reference work (collecting
   sources/frames/transcripts/native mismatch captures) may run, but never beside
   the implementation lane it guides.
+- Reference anti-pattern (do NOT repeat): a one-paragraph "Reference Digest"
+  written from a single web search or genre memory is NOT a deconstruction and
+  does NOT ground the loop/economy/art. A digest is valid only when backed by
+  the durable deconstruction doc (per-game source matrix + >=5-beat observation
+  ledger + observed/secondary/inferred evidence labels). Self-check before
+  claiming "grounded in refs": can I cite 3 labeled facts AND one current-build
+  mismatch FROM THE DOC? If not, say "reference not studied" and run the method;
+  never pass genre knowledge off as a deconstruction. Ground the method in real
+  external teardown guides saved under `gamedesign/sources/`. (2026-06-16: a
+  genre-level digest was passed off as ref grounding; the lead caught it.)
 - Full reference-deconstruction method and gates: `gamedesign/knowledge/reference_deconstruction.md`.
 - Treat the GDD as a living source of truth, not a static essay.
 - Validators prove consistency, not quality; require visual/runtime evidence when possible.
