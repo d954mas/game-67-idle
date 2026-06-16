@@ -73,24 +73,29 @@
 
 /* ---- Tuning (casual) ---- */
 #define HERO_SPEED 220.0F      /* design-units/sec */
-#define HERO_ATTACK_RANGE 80.0F
+#define HERO_ATTACK_RANGE 72.0F
 #define HERO_ATTACK_COOLDOWN 0.6F
 #define HERO_ATTACK_DAMAGE 10
 #define ENEMY_AGGRO_RANGE 140.0F
-#define ENEMY_SPEED 70.0F
-#define ENEMY_ATTACK_COOLDOWN 0.9F
-#define ENEMY_ATTACK_DAMAGE 6
-#define ENEMY_MAX_HP 30
+#define ENEMY_SPEED 60.0F
+/* Goblins hold their post: they only step toward the hero when he comes within
+ * this leash distance of their guard spot, and never chase past it. This makes
+ * the player WALK UP the path and fight each encounter in turn. */
+#define ENEMY_LEASH 70.0F
+#define ENEMY_ATTACK_COOLDOWN 0.85F
+#define ENEMY_ATTACK_DAMAGE 8
+#define ENEMY_MAX_HP 34
 #define HERO_REGEN_PER_SEC 5.0F
 #define XP_PER_KILL 20
-#define KEEP_REACH_RANGE 90.0F
+#define KEEP_REACH_RANGE 58.0F
 #define DOWNED_DURATION 1.2F
 #define HIT_FLASH_TIME 0.1F
-#define LEVELUP_POP_TIME 0.7F
+#define LEVELUP_POP_TIME 1.3F
 
 #define ENEMY_COUNT 3
 #define MAX_PARTICLES 48
 #define MAX_FLOATERS 16
+#define MAX_SPRITE_FX 16
 
 /* ---- Region name hashes, indexed by enum ---- */
 
@@ -111,6 +116,9 @@ enum {
     R_BANNER,
     R_BUTTON,
     R_WHITE,
+    R_HIT_SPARK,
+    R_LEVELUP_BURST,
+    R_COIN,
     R_COUNT,
 };
 
@@ -121,6 +129,7 @@ static const nt_hash64_t k_region_names[R_COUNT] = {
     ASSET_ATLAS_REGION_VOXELS_ENEMY_PNG,       ASSET_ATLAS_REGION_VOXELS_HP_BAR_PNG,    ASSET_ATLAS_REGION_VOXELS_STAMINA_BAR_PNG,
     ASSET_ATLAS_REGION_VOXELS_LEVEL_BADGE_PNG, ASSET_ATLAS_REGION_VOXELS_MINIMAP_PNG,   ASSET_ATLAS_REGION_VOXELS_ITEM_SLOT_PNG,
     ASSET_ATLAS_REGION_VOXELS_BANNER_PNG,      ASSET_ATLAS_REGION_VOXELS_BUTTON_PNG,    ASSET_ATLAS_REGION_VOXELS_WHITE_PNG,
+    ASSET_ATLAS_REGION_VOXELS_HIT_SPARK_PNG,   ASSET_ATLAS_REGION_VOXELS_LEVELUP_BURST_PNG, ASSET_ATLAS_REGION_VOXELS_COIN_PNG,
 };
 
 /* ---- Engine/runtime state ---- */
@@ -178,11 +187,24 @@ typedef struct Particle {
 typedef struct Enemy {
     bool alive;
     float x, y;       /* design units */
+    float guard_x, guard_y; /* post the goblin holds; only leashes within ENEMY_LEASH */
     int hp;
     float attack_cd;  /* seconds until next attack */
     float flash;      /* hit-flash timer */
     bool facing_left;
 } Enemy;
+
+/* Short-lived sprite FX (hit spark, coin pop) drawn with a real atlas region. */
+typedef struct SpriteFx {
+    bool active;
+    int region;       /* R_HIT_SPARK / R_COIN / ... */
+    float x, y;
+    float vy;         /* coins drift up */
+    float age, ttl;
+    float size;
+    float spin;       /* current rotation (radians) */
+    float spin_rate;
+} SpriteFx;
 
 static struct {
     float hero_x, hero_y;
@@ -194,21 +216,24 @@ static struct {
     float regen_accum;     /* fractional hp accumulator */
     float downed_timer;    /* >0 = hero down + respawning */
     float levelup_timer;   /* >0 = level-up pop playing */
+    int attack_target;     /* index of enemy the hero is currently attacking, else -1 */
     bool has_moved;        /* FTUE: first move done */
     bool won;
     float win_timer;       /* time since victory (for banner anim) */
     Enemy enemies[ENEMY_COUNT];
     Particle particles[MAX_PARTICLES];
     Floater floaters[MAX_FLOATERS];
+    SpriteFx sprite_fx[MAX_SPRITE_FX];
     float time;            /* total sim time, for idle bob */
     bool started;          /* sim initialised */
 } g_sim;
 
-/* Hero spawn (bottom-center) + keep center (top-center) in design units. */
-#define HERO_SPAWN_X (DESIGN_W * 0.5F)
-#define HERO_SPAWN_Y (DESIGN_H * 0.22F)
+/* Hero spawn (lower-left of the path, like the fake shot, so the goblin column
+ * up the path stays visible) + keep center (top-center). */
+#define HERO_SPAWN_X (DESIGN_W * 0.41F)
+#define HERO_SPAWN_Y (DESIGN_H * 0.25F)
 #define KEEP_CX (DESIGN_W * 0.5F)
-#define KEEP_CY (DESIGN_H * 0.66F)
+#define KEEP_CY (DESIGN_H * 0.70F)
 
 /* ---- Helpers ---- */
 
@@ -282,6 +307,24 @@ static void emit_sprite_flip(int region, float cx, float cy, float w, float h, u
 
 static void emit_sprite(int region, float cx, float cy, float w, float h, uint32_t color) {
     emit_sprite_flip(region, cx, cy, w, h, color, 0);
+}
+
+/* Scaled + rotated quad (rotation about the sprite center, radians). */
+static void emit_sprite_rot(int region, float cx, float cy, float w, float h, float rot, uint32_t color) {
+    const float sx = (s_region_w[region] > 0) ? (w / (float)s_region_w[region]) : 1.0F;
+    const float sy = (s_region_h[region] > 0) ? (h / (float)s_region_h[region]) : 1.0F;
+    const float c = cosf(rot);
+    const float s = sinf(rot);
+    mat4 m;
+    glm_mat4_identity(m);
+    /* columns: scaled basis rotated in the XY plane */
+    m[0][0] = c * sx;
+    m[0][1] = s * sx;
+    m[1][0] = -s * sy;
+    m[1][1] = c * sy;
+    m[3][0] = cx;
+    m[3][1] = cy;
+    nt_sprite_renderer_emit_region(s_atlas, s_region_idx[region], (const float *)m, 0.5F, 0.5F, color, 0);
 }
 
 /* Emit a sprite at design-unit height, preserving its source aspect ratio. */
@@ -394,6 +437,37 @@ static void spawn_sparkle(float x, float y) {
     }
 }
 
+/* Spawn a short-lived sprite FX (real atlas region) at (x,y). */
+static void spawn_sprite_fx(int region, float x, float y, float size, float ttl, float vy, float spin_rate) {
+    for (int i = 0; i < MAX_SPRITE_FX; ++i) {
+        if (!g_sim.sprite_fx[i].active) {
+            SpriteFx *fx = &g_sim.sprite_fx[i];
+            fx->active = true;
+            fx->region = region;
+            fx->x = x;
+            fx->y = y;
+            fx->vy = vy;
+            fx->age = 0.0F;
+            fx->ttl = ttl;
+            fx->size = size;
+            fx->spin = 0.0F;
+            fx->spin_rate = spin_rate;
+            return;
+        }
+    }
+}
+
+/* A bright impact spark on each landed hit. */
+static void spawn_hit_spark(float x, float y) {
+    spawn_sprite_fx(R_HIT_SPARK, x, y, 64.0F, 0.22F, 30.0F, 0.0F);
+}
+
+/* A coin that pops up and spins on a kill (the loot beat). */
+static void spawn_coin_pop(float x, float y) {
+    spawn_sprite_fx(R_COIN, x, y + 10.0F, 40.0F, 0.7F, 90.0F, 9.0F);
+    spawn_sprite_fx(R_COIN, x - 18.0F, y + 4.0F, 30.0F, 0.6F, 70.0F, -8.0F);
+}
+
 /* ---- Run state (g_game_state.run.*) ---- */
 
 static void run_reset(void) {
@@ -411,18 +485,26 @@ static void run_reset(void) {
 static void sim_reset(void) {
     memset(&g_sim, 0, sizeof(g_sim));
     g_sim.started = true;
+    g_sim.attack_target = -1;
     g_sim.hero_x = HERO_SPAWN_X;
     g_sim.hero_y = HERO_SPAWN_Y;
     g_sim.target_x = HERO_SPAWN_X;
     g_sim.target_y = HERO_SPAWN_Y;
 
-    /* 3 ice-goblins spaced up the path between hero spawn and the keep. */
-    const float xs[ENEMY_COUNT] = {DESIGN_W * 0.40F, DESIGN_W * 0.60F, DESIGN_W * 0.50F};
-    const float ys[ENEMY_COUNT] = {DESIGN_H * 0.36F, DESIGN_H * 0.46F, DESIGN_H * 0.56F};
+    /* 3 ice-goblins staggered ALONG the path at increasing distance from the
+     * hero spawn, sitting ON the path (centered near x=480) so the player must
+     * walk up and fight each in turn. Small alternating x offsets stop them
+     * stacking into one blob. */
+    /* Spaced > the hero attack range apart so each goblin is a DISTINCT fight
+     * the player walks up to (no single engagement bleeds into the next). */
+    const float xs[ENEMY_COUNT] = {DESIGN_W * 0.50F - 78.0F, DESIGN_W * 0.50F + 84.0F, DESIGN_W * 0.50F - 30.0F};
+    const float ys[ENEMY_COUNT] = {DESIGN_H * 0.30F, DESIGN_H * 0.44F, DESIGN_H * 0.58F};
     for (int i = 0; i < ENEMY_COUNT; ++i) {
         g_sim.enemies[i].alive = true;
         g_sim.enemies[i].x = xs[i];
         g_sim.enemies[i].y = ys[i];
+        g_sim.enemies[i].guard_x = xs[i];
+        g_sim.enemies[i].guard_y = ys[i];
         g_sim.enemies[i].hp = ENEMY_MAX_HP;
         g_sim.enemies[i].attack_cd = ENEMY_ATTACK_COOLDOWN;
         g_sim.enemies[i].flash = 0.0F;
@@ -465,7 +547,7 @@ static void hero_move_to(float x, float y) {
     }
     /* Keep the hero on the lower 2/3 and inside the screen. */
     x = clampf(x, 40.0F, DESIGN_W - 40.0F);
-    y = clampf(y, DESIGN_H * 0.12F, DESIGN_H * 0.70F);
+    y = clampf(y, DESIGN_H * 0.12F, DESIGN_H * 0.74F);
     g_sim.target_x = x;
     g_sim.target_y = y;
     g_sim.moving = true;
@@ -481,6 +563,7 @@ static void hero_move_to(float x, float y) {
 static void award_kill(Enemy *e) {
     e->alive = false;
     spawn_sparkle(e->x, e->y);
+    spawn_coin_pop(e->x, e->y); /* loot beat: a coin pops on the kill */
     const float xpcol[4] = {1.0F, 0.9F, 0.4F, 1.0F};
     spawn_floater(e->x, e->y + 18.0F, "+20 XP", xpcol, 22.0F);
     g_game_state.run_enemies_defeated += 1;
@@ -532,6 +615,20 @@ static void update_effects(float dt) {
             continue;
         }
         f->y += 38.0F * dt; /* float upward */
+    }
+    for (int i = 0; i < MAX_SPRITE_FX; ++i) {
+        SpriteFx *fx = &g_sim.sprite_fx[i];
+        if (!fx->active) {
+            continue;
+        }
+        fx->age += dt;
+        if (fx->age >= fx->ttl) {
+            fx->active = false;
+            continue;
+        }
+        fx->y += fx->vy * dt;
+        fx->vy -= 80.0F * dt; /* coins arc back down (y-up) */
+        fx->spin += fx->spin_rate * dt;
     }
 }
 
@@ -614,7 +711,9 @@ static void update_sim(float dt) {
         }
     }
 
-    /* Enemy AI: approach hero when aggroed; attack when in their range. */
+    /* Enemy AI: hold the guard post; only step toward the hero within a short
+     * leash, and never wander further than ENEMY_LEASH from the post -- so each
+     * goblin is a distinct encounter the player must walk up to. */
     for (int i = 0; i < ENEMY_COUNT; ++i) {
         Enemy *e = &g_sim.enemies[i];
         if (!e->alive) {
@@ -626,12 +725,27 @@ static void update_sim(float dt) {
         float dx = g_sim.hero_x - e->x;
         float dy = g_sim.hero_y - e->y;
         float d = sqrtf(dx * dx + dy * dy);
-        if (d <= ENEMY_AGGRO_RANGE && d > HERO_ATTACK_RANGE * 0.7F) {
+        /* How far the goblin currently is from its post. */
+        float gx = e->x - e->guard_x;
+        float gy = e->y - e->guard_y;
+        float gdist = sqrtf(gx * gx + gy * gy);
+        if (d <= ENEMY_AGGRO_RANGE && d > HERO_ATTACK_RANGE * 0.7F && gdist < ENEMY_LEASH) {
+            /* Step toward the hero, but never beyond the leash from the post. */
             float step = ENEMY_SPEED * dt;
             if (d > 1.0F) {
                 e->x += dx / d * step;
                 e->y += dy / d * step;
                 e->facing_left = dx < 0.0F;
+            }
+        } else if (d > ENEMY_AGGRO_RANGE && gdist > 2.0F) {
+            /* Hero left: drift back to the post so the encounter resets cleanly. */
+            float step = ENEMY_SPEED * 0.7F * dt;
+            if (gdist <= step) {
+                e->x = e->guard_x;
+                e->y = e->guard_y;
+            } else {
+                e->x -= gx / gdist * step;
+                e->y -= gy / gdist * step;
             }
         }
         /* Enemy attacks the hero when in range. */
@@ -655,6 +769,7 @@ static void update_sim(float dt) {
     if (g_sim.hero_attack_cd > 0.0F) {
         g_sim.hero_attack_cd -= dt;
     }
+    g_sim.attack_target = nearest; /* drives the pulsing target ring under the foe */
     if (nearest >= 0 && g_game_state.run_hero_hp > 0) {
         Enemy *e = &g_sim.enemies[nearest];
         g_sim.hero_facing_left = (e->x < g_sim.hero_x);
@@ -663,11 +778,13 @@ static void update_sim(float dt) {
             g_sim.hero_attack_cd = HERO_ATTACK_COOLDOWN;
             e->hp -= HERO_ATTACK_DAMAGE;
             e->flash = HIT_FLASH_TIME;
+            spawn_hit_spark(e->x, e->y + 6.0F);
             char dmg[16];
             (void)snprintf(dmg, sizeof(dmg), "-%d", HERO_ATTACK_DAMAGE);
             const float dc[4] = {1.0F, 1.0F, 1.0F, 1.0F};
             spawn_floater(e->x, e->y + 24.0F, dmg, dc, 22.0F);
             if (e->hp <= 0) {
+                g_sim.attack_target = -1;
                 award_kill(e);
             }
         }
@@ -734,6 +851,13 @@ static void handle_input(void) {
 
 /* ---- Scene composition (design units, y-up, bottom-left origin) ---- */
 
+/* Soft dark ground-shadow ellipse (flattened white quad, low alpha) to anchor
+ * a character to the ground. cy is the character's feet line. */
+static void emit_ground_shadow(float cx, float cy, float w, float a) {
+    emit_quad(cx, cy, w, w * 0.32F, 0.04F, 0.05F, 0.07F, a);
+    emit_quad(cx, cy, w * 0.66F, w * 0.21F, 0.02F, 0.03F, 0.05F, a * 0.8F);
+}
+
 static void compose_scene(void) {
     const uint32_t white = 0xFFFFFFFFu;
 
@@ -776,34 +900,62 @@ static void compose_scene(void) {
             continue;
         }
         Enemy *e = &g_sim.enemies[best];
-        uint32_t tint = white;
-        if (e->flash > 0.0F) {
-            tint = pack_rgba(1.0F, 1.0F, 1.0F, 1.0F); /* full white -> emit overlay below */
+        /* Perspective scale: goblins lower on screen (nearer the hero) read
+         * bigger; far ones up the path slightly smaller. Stays >= ~24% h so
+         * every one reads clearly as a MONSTER, not a shrub. */
+        float depth = clampf((e->y - DESIGN_H * 0.24F) / (DESIGN_H * 0.40F), 0.0F, 1.0F); /* 0 far .. 1 near */
+        const float enemy_h = DESIGN_H * (0.245F + 0.055F * (1.0F - depth));
+        const float feet = e->y - enemy_h * 0.42F;
+
+        /* Ground shadow anchors the goblin to the path. */
+        emit_ground_shadow(e->x, feet, enemy_h * 0.62F, 0.32F);
+
+        /* Pulsing gold target ring under the foe the hero is currently fighting. */
+        if (best == g_sim.attack_target) {
+            float pulse = 0.5F + 0.5F * sinf(g_sim.time * 7.0F);
+            float rs = enemy_h * (0.58F + 0.10F * pulse);
+            float ra = 0.30F + 0.45F * pulse;
+            emit_quad(e->x, feet, rs, rs * 0.42F, 1.0F, 0.82F, 0.20F, ra * 0.55F);
+            emit_quad(e->x, feet, rs * 0.66F, rs * 0.27F, 1.0F, 0.92F, 0.45F, ra);
         }
-        emit_h_flip(R_ENEMY, e->x, e->y, DESIGN_H * 0.17F, tint, e->facing_left ? VH_FLIP_X : 0);
+
+        uint32_t tint = white;
+        emit_h_flip(R_ENEMY, e->x, e->y, enemy_h, tint, e->facing_left ? VH_FLIP_X : 0);
         if (e->flash > 0.0F) {
             float a = clampf(e->flash / HIT_FLASH_TIME, 0.0F, 1.0F) * 0.7F;
-            emit_quad(e->x, e->y, DESIGN_H * 0.17F, DESIGN_H * 0.17F, 1.0F, 1.0F, 1.0F, a);
+            emit_quad(e->x, e->y, enemy_h * 0.7F, enemy_h, 1.0F, 1.0F, 1.0F, a);
         }
-        /* Tiny enemy hp pip. */
+        /* Enemy hp pip above the goblin's head. */
         float frac = clampf((float)e->hp / (float)ENEMY_MAX_HP, 0.0F, 1.0F);
-        float bw = 46.0F;
-        float by = e->y + DESIGN_H * 0.105F;
-        emit_quad(e->x, by, bw + 4.0F, 9.0F, 0.10F, 0.07F, 0.10F, 0.85F);
-        emit_quad(e->x - bw * 0.5F + bw * frac * 0.5F, by, bw * frac, 5.0F, 0.95F, 0.30F, 0.28F, 1.0F);
+        float bw = 56.0F;
+        float by = e->y + enemy_h * 0.60F;
+        emit_quad(e->x, by, bw + 4.0F, 10.0F, 0.10F, 0.07F, 0.10F, 0.85F);
+        emit_quad(e->x - bw * 0.5F + bw * frac * 0.5F, by, bw * frac, 6.0F, 0.95F, 0.30F, 0.28F, 1.0F);
     }
 
-    /* Hero with level-up pop scale + glow. */
+    /* Hero with level-up pop scale + burst. */
     float hero_h = DESIGN_H * 0.34F;
+    float hero_feet = g_sim.hero_y - hero_h * 0.42F;
     float pop = 1.0F;
-    if (g_sim.levelup_timer > 0.0F) {
-        float t = g_sim.levelup_timer / LEVELUP_POP_TIME; /* 1->0 */
-        pop = 1.0F + 0.2F * t;
-        float ga = 0.5F * t;
-        emit_quad(g_sim.hero_x, g_sim.hero_y, hero_h * 1.1F, hero_h * 1.1F, 1.0F, 0.95F, 0.5F, ga);
-    }
     /* idle bob when standing still */
     float bob = (!g_sim.moving && g_sim.downed_timer <= 0.0F) ? sinf(g_sim.time * 4.0F) * 3.0F : 0.0F;
+
+    /* Hero ground shadow (skip while downed/faded). */
+    if (g_sim.downed_timer <= 0.0F) {
+        emit_ground_shadow(g_sim.hero_x, hero_feet, hero_h * 0.62F, 0.34F);
+    }
+
+    if (g_sim.levelup_timer > 0.0F) {
+        float t = g_sim.levelup_timer / LEVELUP_POP_TIME; /* 1->0 */
+        /* ease-out punch: big at the start, settling over ~1.3s */
+        pop = 1.0F + 0.32F * t;
+        /* Spinning level-up burst sprite BEHIND the hero, growing as it fades. */
+        float burst = hero_h * (1.3F + 0.7F * (1.0F - t));
+        float ba = clampf(t * 1.4F, 0.0F, 1.0F);
+        emit_sprite_rot(R_LEVELUP_BURST, g_sim.hero_x, g_sim.hero_y + bob, burst, burst,
+                        g_sim.time * 2.0F, pack_rgba(1.0F, 1.0F, 1.0F, ba));
+    }
+
     uint32_t hero_tint = white;
     float hero_alpha = 1.0F;
     if (g_sim.downed_timer > 0.0F) {
@@ -814,6 +966,22 @@ static void compose_scene(void) {
     if (g_sim.hero_flash > 0.0F) {
         float a = clampf(g_sim.hero_flash / HIT_FLASH_TIME, 0.0F, 1.0F) * 0.7F;
         emit_quad(g_sim.hero_x, g_sim.hero_y + bob, hero_h * 0.6F, hero_h * pop, 1.0F, 0.3F, 0.3F, a);
+    }
+
+    /* Sprite FX (hit sparks, coin pops) -- real atlas regions, drawn over actors. */
+    for (int i = 0; i < MAX_SPRITE_FX; ++i) {
+        SpriteFx *fx = &g_sim.sprite_fx[i];
+        if (!fx->active) {
+            continue;
+        }
+        float t = fx->age / fx->ttl;           /* 0->1 */
+        float life = clampf(1.0F - t, 0.0F, 1.0F);
+        float sz = fx->size;
+        if (fx->region == R_HIT_SPARK) {
+            sz = fx->size * (0.7F + 0.6F * t); /* spark expands as it fades */
+        }
+        emit_sprite_rot(fx->region, fx->x, fx->y, sz, sz, fx->spin,
+                        pack_rgba(1.0F, 1.0F, 1.0F, clampf(life + 0.2F, 0.0F, 1.0F)));
     }
 
     /* Particles (gold sparkles). */
@@ -830,42 +998,76 @@ static void compose_scene(void) {
     nt_sprite_renderer_flush();
 }
 
+/* ---- HUD layout (design units, y-up; shared by compose_hud + compose_text) ---- */
+#define HUD_BADGE_CX 56.0F
+#define HUD_BADGE_CY (DESIGN_H - 52.0F)
+#define HUD_BADGE_H 76.0F
+#define HUD_BAR_H 26.0F
+#define HUD_BAR_W 232.0F
+#define HUD_BAR_LEFT 98.0F                         /* bars start right of the badge */
+#define HUD_BAR_CX (HUD_BAR_LEFT + HUD_BAR_W * 0.5F)
+#define HUD_HP_CY (DESIGN_H - 34.0F)
+#define HUD_XP_CY (DESIGN_H - 64.0F)
+#define HUD_HOTBAR_CY 40.0F
+#define HUD_SLOT_H 56.0F
+#define HUD_SLOT_GAP 10.0F
+
+/* A filled bar: dark plate behind the art frame, a colored fill inside. */
+static void emit_bar(int region, float cx, float cy, float w, float h, float frac, float r, float g, float b) {
+    frac = clampf(frac, 0.0F, 1.0F);
+    emit_quad(cx, cy, w - 6.0F, h - 8.0F, 0.09F, 0.06F, 0.08F, 0.9F); /* dark track */
+    float fill_w = (w - 12.0F) * frac;
+    float fill_left = cx - (w - 12.0F) * 0.5F;
+    if (fill_w > 0.5F) {
+        emit_quad(fill_left + fill_w * 0.5F, cy, fill_w, h - 10.0F, r, g, b, 1.0F);
+    }
+    emit_sprite(region, cx, cy, w, h, 0xFFFFFFFFu); /* art frame on top */
+}
+
 static void compose_hud(void) {
     const uint32_t white = 0xFFFFFFFFu;
 
-    /* HP bar frame + colored fill. */
-    const float bar_h = 30.0F;
-    const float bar_left = 22.0F;
-    const float bar_aspect = (s_region_h[R_HP] > 0) ? ((float)s_region_w[R_HP] / (float)s_region_h[R_HP]) : 4.0F;
-    const float bar_w = bar_h * bar_aspect;
-    const float bar_cx = bar_left + bar_w * 0.5F + 54.0F;
-    const float bar_cy = DESIGN_H - 34.0F;
+    /* Dark rounded pill plate behind the HP/XP numbers + bars for legibility. */
+    emit_quad(HUD_BAR_CX + 6.0F, (HUD_HP_CY + HUD_XP_CY) * 0.5F, HUD_BAR_W + 64.0F, 84.0F, 0.07F, 0.06F, 0.10F, 0.70F);
 
+    /* HP bar: red->orange->green by health fraction. */
     float hp_frac = clampf((float)g_game_state.run_hero_hp / (float)g_game_state.run_hero_max_hp, 0.0F, 1.0F);
-    /* fill sits inside the bar frame; inset a little so the art border shows */
-    float fill_w = (bar_w - 10.0F) * hp_frac;
-    float fill_left = bar_cx - (bar_w - 10.0F) * 0.5F;
-    /* dark track */
-    emit_quad(bar_cx, bar_cy, bar_w - 8.0F, bar_h - 10.0F, 0.10F, 0.06F, 0.08F, 0.85F);
-    /* green->red fill by health */
-    float rr = clampf(1.4F - hp_frac, 0.2F, 1.0F);
-    float gg = clampf(0.3F + hp_frac, 0.3F, 0.95F);
-    if (fill_w > 0.5F) {
-        emit_quad(fill_left + fill_w * 0.5F, bar_cy, fill_w, bar_h - 10.0F, rr, gg, 0.30F, 1.0F);
-    }
-    emit_sprite(R_HP, bar_cx, bar_cy, bar_w, bar_h, white); /* art frame on top */
+    float hp_r = clampf(1.4F - hp_frac, 0.2F, 1.0F);
+    float hp_g = clampf(0.3F + hp_frac, 0.3F, 0.95F);
+    emit_bar(R_HP, HUD_BAR_CX, HUD_HP_CY, HUD_BAR_W, HUD_BAR_H, hp_frac, hp_r, hp_g, 0.28F);
 
-    /* Stamina bar (decorative). */
-    emit_sprite(R_STAMINA, bar_cx, bar_cy - bar_h - 6.0F, bar_w, bar_h, white);
+    /* XP bar: repurpose the old "stamina" art; fill = xp/xp_to_next (gold). */
+    float xp_frac = (g_game_state.run_xp_to_next > 0)
+                        ? clampf((float)g_game_state.run_xp / (float)g_game_state.run_xp_to_next, 0.0F, 1.0F)
+                        : 0.0F;
+    emit_bar(R_STAMINA, HUD_BAR_CX, HUD_XP_CY, HUD_BAR_W, HUD_BAR_H, xp_frac, 1.0F, 0.78F, 0.24F);
 
-    /* Level badge. */
-    emit_h(R_BADGE, bar_left + 28.0F, DESIGN_H - 48.0F, 70.0F, white);
+    /* Gold-star level badge, top-left (overlaps the plate's left edge). */
+    emit_h(R_BADGE, HUD_BADGE_CX, HUD_BADGE_CY, HUD_BADGE_H, white);
 
     /* Minimap top-right. */
     emit_h(R_MINIMAP, DESIGN_W - 78.0F, DESIGN_H - 78.0F, 120.0F, white);
 
     /* Quest banner under the minimap. */
     emit_h(R_BANNER, DESIGN_W - 150.0F, DESIGN_H - 164.0F, 86.0F, white);
+
+    /* Bottom-center 5-slot hotbar (reads as an action bar). */
+    {
+        const float slot_w = HUD_SLOT_H;
+        const int slots = 5;
+        const float total = slots * slot_w + (slots - 1) * HUD_SLOT_GAP;
+        float x = DESIGN_W * 0.5F - total * 0.5F + slot_w * 0.5F;
+        /* a subtle dark tray behind the slots */
+        emit_quad(DESIGN_W * 0.5F, HUD_HOTBAR_CY, total + 24.0F, HUD_SLOT_H + 16.0F, 0.06F, 0.05F, 0.08F, 0.45F);
+        for (int i = 0; i < slots; ++i) {
+            emit_sprite(R_SLOT, x, HUD_HOTBAR_CY, slot_w, HUD_SLOT_H, white);
+            if (i == 0) {
+                /* primary action glyph (coin) so the bar reads as actionable */
+                emit_sprite(R_COIN, x, HUD_HOTBAR_CY, slot_w * 0.62F, slot_w * 0.62F, white);
+            }
+            x += slot_w + HUD_SLOT_GAP;
+        }
+    }
 
     nt_sprite_renderer_flush();
 }
@@ -874,6 +1076,10 @@ static void compose_hud(void) {
  * while the sprite material is bound -- text is drawn separately in compose_text. */
 static const char *ftue_prompt(void) {
     if (g_sim.won) {
+        return NULL;
+    }
+    /* Don't crowd the screen while the level-up reward pop is playing. */
+    if (g_sim.levelup_timer > 0.0F) {
         return NULL;
     }
     if (g_game_state.run_ftue_step <= 0 || !g_sim.has_moved) {
@@ -897,7 +1103,7 @@ static void compose_overlays(void) {
         emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.5F, 360.0F, 70.0F, 0.10F, 0.03F, 0.05F, 0.6F);
     }
     if (g_sim.won) {
-        emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.55F, 560.0F, 120.0F, 0.06F, 0.05F, 0.10F, 0.62F);
+        emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.55F - 14.0F, 600.0F, 150.0F, 0.06F, 0.05F, 0.10F, 0.66F);
     }
     nt_sprite_renderer_flush();
 }
@@ -919,40 +1125,45 @@ static void compose_text(void) {
     const float gold[4] = {1.0F, 0.784F, 0.239F, 1.0F};
     const float cream[4] = {0.996F, 0.980F, 0.937F, 1.0F};
 
-    /* Title. */
+    /* Title (under the HUD plate, clear of the bars). */
     {
         const char *title = "VOXELHEIM";
-        const float size = 40.0F;
+        const float size = 34.0F;
         const float tx = 24.0F;
-        const float ty = DESIGN_H - 132.0F;
+        const float ty = DESIGN_H - 128.0F;
         emit_text(title, tx + 2.0F, ty - 2.0F, size, ink);
         emit_text(title, tx, ty, size, gold);
     }
 
-    /* Level label on the badge. */
+    /* "Lv N" on the gold-star badge (dark ink reads well on bright gold). */
     {
         char lvl[16];
         (void)snprintf(lvl, sizeof(lvl), "Lv %d", g_game_state.run_level);
-        const float size = 22.0F;
+        const float size = 19.0F;
         const float w = text_width(lvl, size);
-        emit_text(lvl, 50.0F - w * 0.5F + 2.0F, DESIGN_H - 56.0F - 1.0F, size, ink);
-        emit_text(lvl, 50.0F - w * 0.5F, DESIGN_H - 56.0F, size, cream);
+        const float halo[4] = {1.0F, 0.94F, 0.65F, 0.9F}; /* light halo so dark text pops */
+        emit_text(lvl, HUD_BADGE_CX - w * 0.5F - 1.0F, HUD_BADGE_CY - 7.0F + 1.0F, size, halo);
+        emit_text(lvl, HUD_BADGE_CX - w * 0.5F, HUD_BADGE_CY - 7.0F, size, ink);
     }
 
-    /* HP readout next to the bar. */
+    /* "HP  cur/max" label, centered on the HP bar. */
     {
-        char hp[24];
-        (void)snprintf(hp, sizeof(hp), "%d / %d", g_game_state.run_hero_hp, g_game_state.run_hero_max_hp);
-        emit_text(hp, 92.0F, DESIGN_H - 30.0F, 16.0F, ink);
-        emit_text(hp, 91.0F, DESIGN_H - 29.0F, 16.0F, cream);
+        char hp[28];
+        (void)snprintf(hp, sizeof(hp), "HP  %d/%d", g_game_state.run_hero_hp, g_game_state.run_hero_max_hp);
+        const float size = 16.0F;
+        const float w = text_width(hp, size);
+        emit_text(hp, HUD_BAR_CX - w * 0.5F + 1.0F, HUD_HP_CY - 6.0F - 1.0F, size, ink);
+        emit_text(hp, HUD_BAR_CX - w * 0.5F, HUD_HP_CY - 6.0F, size, cream);
     }
 
-    /* XP readout under the badge. */
+    /* "XP  cur/next" label, centered on the XP bar. */
     {
         char xp[28];
-        (void)snprintf(xp, sizeof(xp), "XP %d/%d", g_game_state.run_xp, g_game_state.run_xp_to_next);
-        emit_text(xp, 22.0F, DESIGN_H - 92.0F, 15.0F, ink);
-        emit_text(xp, 21.0F, DESIGN_H - 91.0F, 15.0F, cream);
+        (void)snprintf(xp, sizeof(xp), "XP  %d/%d", g_game_state.run_xp, g_game_state.run_xp_to_next);
+        const float size = 16.0F;
+        const float w = text_width(xp, size);
+        emit_text(xp, HUD_BAR_CX - w * 0.5F + 1.0F, HUD_XP_CY - 6.0F - 1.0F, size, ink);
+        emit_text(xp, HUD_BAR_CX - w * 0.5F, HUD_XP_CY - 6.0F, size, cream);
     }
 
     /* Objective banner text (phase-driven). */
@@ -989,11 +1200,15 @@ static void compose_text(void) {
         emit_text_centered("Downed!  Respawning...", DESIGN_W * 0.5F, DESIGN_H * 0.5F - 12.0F, 30.0F, red);
     }
 
-    /* Victory banner. */
+    /* Victory banner + reward recap. */
     if (g_sim.won) {
         const float gold2[4] = {1.0F, 0.85F, 0.30F, 1.0F};
-        emit_text_centered("FROST KEEP CLEARED!", DESIGN_W * 0.5F, DESIGN_H * 0.55F - 6.0F, 44.0F, gold2);
-        emit_text_centered("Tap anywhere to play again", DESIGN_W * 0.5F, DESIGN_H * 0.55F - 50.0F, 22.0F, cream);
+        emit_text_centered("FROST KEEP CLEARED!", DESIGN_W * 0.5F, DESIGN_H * 0.55F + 10.0F, 42.0F, gold2);
+        char recap[48];
+        (void)snprintf(recap, sizeof(recap), "Level %d  -  +%d XP", g_game_state.run_level,
+                       g_game_state.run_enemies_defeated * XP_PER_KILL);
+        emit_text_centered(recap, DESIGN_W * 0.5F, DESIGN_H * 0.55F - 26.0F, 24.0F, cream);
+        emit_text_centered("Tap anywhere to play again", DESIGN_W * 0.5F, DESIGN_H * 0.55F - 58.0F, 20.0F, cream);
     }
 
     compose_floaters();

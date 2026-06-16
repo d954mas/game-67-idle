@@ -33,11 +33,11 @@ CAP_DIR = os.path.join(ROOT, "build", "captures")
 # Enemy spawn points in DESIGN units (mirror sim_reset in voxelheim_main.c).
 DESIGN_W, DESIGN_H = 960.0, 540.0
 ENEMIES = [
-    (DESIGN_W * 0.40, DESIGN_H * 0.36),
-    (DESIGN_W * 0.60, DESIGN_H * 0.46),
-    (DESIGN_W * 0.50, DESIGN_H * 0.56),
+    (DESIGN_W * 0.50 - 78.0, DESIGN_H * 0.30),
+    (DESIGN_W * 0.50 + 84.0, DESIGN_H * 0.44),
+    (DESIGN_W * 0.50 - 30.0, DESIGN_H * 0.58),
 ]
-KEEP = (DESIGN_W * 0.50, DESIGN_H * 0.66)
+KEEP = (DESIGN_W * 0.50, DESIGN_H * 0.70)
 
 
 class Probe:
@@ -128,7 +128,7 @@ def walk_to(p: Probe, x: float, y: float, budget: float = 6.0, step: float = 0.2
     return st
 
 
-def engage(p: Probe, ex: float, ey: float, budget: float = 8.0) -> dict:
+def engage(p: Probe, ex: float, ey: float, budget: float = 14.0) -> dict:
     """Walk next to an enemy and tick until a kill registers or budget elapses."""
     start_killed = p.state().get("enemies_defeated", 0)
     p.click(ex, ey)
