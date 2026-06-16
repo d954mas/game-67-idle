@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 // Cross-harness profiling hook handler.
 //
-// Wired as a PostToolUse / SessionStart hook in BOTH harnesses:
-//   - Claude Code:  .claude/settings.json   (hooks.PostToolUse ...)
-//   - Codex CLI:    .codex/hooks.json        (hooks.PostToolUse ...)
+// Wired as a PreToolUse / PostToolUse / SessionStart hook in BOTH harnesses:
+//   - Claude Code:  .claude/settings.json   (hooks.PreToolUse/PostToolUse ...)
+//   - Codex CLI:    .codex/hooks.json        (hooks.PreToolUse/PostToolUse ...)
 // The harness runs this automatically on every tool call, so profiling coverage
-// is GUARANTEED without the agent remembering to call `ai.mjs start/run`.
+// is not dependent on the agent remembering to call `ai.mjs start/run`.
 //
 // It reads the hook JSON payload on stdin (Claude and Codex share the shape:
 // hook_event_name / tool_name / tool_input.command / tool_response) and appends
 // one passive profile record to the session JSONL that `ai.mjs status` reads.
 //
 // Hard rule: NEVER break or slow the harness. Any error -> exit 0 silently.
-// Pass the harness name via env AI_PROFILE_HARNESS (claude|codex) in the config.
+// Pass the harness name as argv[2] or AI_PROFILE_HARNESS (claude|codex).
 
 import { appendRecord, buildRecord } from "./profile_lib.mjs";
 
@@ -55,11 +55,13 @@ function readStdin() {
     const harness = process.argv[2] || process.env.AI_PROFILE_HARNESS || "agent";
     const event = String(pick(payload, "hook_event_name", "hookEventName") || "PostToolUse");
 
+    const profilePath = process.env.AI_PROFILE_FILE || "";
+
     if (event === "SessionStart") {
-      appendRecord("", buildRecord({
+      appendRecord(profilePath, buildRecord({
         phase: "session", category: "context", result: "pass",
         intent: `session start (${harness})`, tool: [`${harness}/session`],
-      }));
+      }, { event_type: "session_start" }));
       process.exit(0);
     }
 
@@ -69,6 +71,24 @@ function readStdin() {
     const command = pick(input, "command");
     if (!command) process.exit(0); // only profile command/shell tool calls
 
+    const cmd1 = String(command).split(/\r?\n/)[0].trim().slice(0, 200);
+    const baseValues = {
+      phase: "session",
+      category: inferCategory(cmd1),
+      intent: `auto:${tool || "shell"}`,
+      tool: [`${harness}/${tool || "shell"}`],
+      command: [cmd1],
+    };
+
+    if (event === "PreToolUse") {
+      appendRecord(profilePath, buildRecord({
+        ...baseValues,
+        result: "unknown",
+        value: "necessary_overhead",
+      }, { event_type: "tool_call_start" }));
+      process.exit(0);
+    }
+
     const exit = pick(response, "exit_code", "exitCode", "code", "returncode");
     const isErr = pick(response, "is_error", "isError", "error");
     const result =
@@ -76,15 +96,11 @@ function readStdin() {
         ? "fail"
         : "pass";
 
-    const cmd1 = String(command).split(/\r?\n/)[0].trim().slice(0, 200);
-    appendRecord("", buildRecord({
-      phase: "session",
-      category: inferCategory(cmd1),
+    appendRecord(profilePath, buildRecord({
+      ...baseValues,
       result,
-      intent: `auto:${tool || "shell"}`,
-      tool: [`${harness}/${tool || "shell"}`],
-      command: [cmd1],
-    }));
+      value: result === "fail" ? "rework" : "unknown",
+    }, { event_type: "tool_call_result" }));
   } catch {
     // swallow — a profiling hook must never disrupt the agent
   }
