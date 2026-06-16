@@ -62,12 +62,11 @@ changes the hero. FTUE ≤ 3 beats.
 - No web prototype detour; native PC first.
 - First slice is NOT the whole open world — one region, one dungeon, one boss.
 
-## Open Visual Question (this session)
+## Visual Direction — LOCKED (2026-06-16)
 
-Which art **theme** sells the fantasy best? Exploring 3 fake-shot directions
-before locking the art bible — see `tmp/voxelheim_fakeshots/` and the visual
-gate. The three directions under test:
-
-1. **Bright Roblox Adventure** — saturated, toy-like, daylight, max approachable.
-2. **Dark Nordic Epic** — moody, snowy, dramatic light, Skyrim-leaning, older.
-3. **Stylized Painterly Low-poly** — premium hand-painted low-poly fantasy.
+**Theme A — "Bright Roblox Adventure"** chosen by the lead from 3 fake-shot
+directions (A bright / B dark-nordic / C painterly). Accepted target:
+`visual/fake_shot_first_screen.png`. Saturated, toy-like, bright daylight, max
+approachable, readable at a glance. See `gdd.md` (Visual Direction) and
+`game_implementation_plan.md` for the build roadmap. Rejected directions
+recorded in `visual/fake_shot_prompts.md`.

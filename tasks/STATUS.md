@@ -2,51 +2,53 @@
 
 ## Current Goal
 
-Start the `Voxelheim` (voxelheim) native-first prototype from a clean Stage 0
-startup gate. Do not expand broad systems until the first fake shot/product-read
-gate, native screenshot proof, and screenshot-vs-target mismatch list are
-named. For beautiful/casual/generated-UI/fake-shot slices, the product gate
-uses `--visual-strict`.
+Build the `Voxelheim` first playable slice **"Frost Keep Approach"** — a casual
+action-RPG screen — to the LOCKED Theme-A "Bright Roblox" fake-shot direction
+(`gamedesign/projects/voxelheim/visual/fake_shot_first_screen.png`).
+Visual-first freeze: do not expand systems/state/content until the first screen
+passes the strict visual gate.
+
+## Current Playable Path
+
+P0 art (T0002) → P1 readable first screen + visual gate (T0003) → P2-P4 casual
+core loop (T0004). Roadmap: `gamedesign/projects/voxelheim/game_implementation_plan.md`.
 
 ## Blocking Work
 
-- No runtime implementation blocker is known yet; the next blocker should come
-  from the first GDD/reference/fake-shot pass.
+- T0002 (art) is the next actionable: art bible + Bright Roblox source sheets via
+  **agy**, cut/audited via `generated-game-ui-assets`. T0003/T0004 gated behind it.
 
 ## Non-blocking Debt
 
-- None recorded for this prototype yet.
+- Native build/run/screenshot commands for a new screen not yet confirmed
+  (discover during T0003).
 
 ## Current Gate
 
-Stage 0 startup gate for voxelheim: active concept, actionable task T0001,
-project wiki, native/runtime harness, and fake shot/product-read/native
-screenshot proof plan must be visible before implementation. For visual work,
-the 5-line session contract and screenshot-vs-target mismatch list are required
-before runtime visual coding. Strict visual product gates require six scores
-and blocker/major issue reporting before any pass.
+P1 **strict visual gate** (T0003): the native first screen must reach the
+Theme-A fake-shot direction (`node tools/ai.mjs gate --visual-strict`) before any
+gameplay systems, plus the teachability gate (a newcomer reads goal + action in
+~10s).
 
 ## Required Validation
 
 ```powershell
-node tools/game_context/iteration_context.mjs
 node tools/taskboard/cli.mjs validate
+node tools/ai.mjs gate --visual-strict ...   # at P1 (T0003)
 ```
 
 ## Last Known Good Evidence
 
-- `tmp/prototype_startup_gate_context.json` after kickoff.
-- `gamedesign/projects/voxelheim/reviews/first_slice_visual_gate.md` is the
-  first-slice visual/product gate template and must be filled before broad
-  runtime work; it names the optional visual critic packet command.
+- Theme A locked: `gamedesign/projects/voxelheim/visual/fake_shot_first_screen.png`
+  (3 themed fake shots generated via agy; A chosen). Rejected directions:
+  `visual/fake_shot_prompts.md`.
+- `gdd.md` (slice + locked visual direction) + `game_implementation_plan.md`.
+- Headless image-gen path: `delegated-image-generation` skill (agy).
 
 ## Next Priorities
 
-1. Fill `gamedesign/projects/voxelheim/gdd.md` with the first playable loop,
-   references/fake shot target, visual/product proof gate, and stop condition.
-2. Fill `gamedesign/projects/voxelheim/reviews/first_slice_visual_gate.md`
-   with the target, native screenshot/capture plan, mismatch list, gate command,
-   critic packet command, strict visual rubric, and expansion decision.
-3. Identify the native build/run command for this prototype.
-4. Capture or plan the first native screenshot, compare it with the accepted
-   target, and record the mismatch list before broad content.
+1. T0002 — write `visual/art_bible.md`; generate Bright Roblox source sheets via
+   agy; cut/audit via `generated-game-ui-assets`; build the atlas.
+2. T0003 — readable first screen with real sprites; confirm native build/run
+   commands; screenshot-vs-fake-shot mismatch list; pass `--visual-strict`.
+3. T0004 — casual core loop (move/fight/clear/loot/level) once the gate passes.

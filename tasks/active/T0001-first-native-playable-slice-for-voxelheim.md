@@ -11,7 +11,11 @@ updated: 2026-06-16
 
 ## What
 
-Build the first native playable slice for `Voxelheim` after the Stage 0 startup gate is ready.
+Umbrella for the first playable slice **"Frost Keep Approach"** (see
+`gamedesign/projects/voxelheim/gdd.md` + `game_implementation_plan.md`). Visual
+direction LOCKED: Theme A "Bright Roblox" (`visual/fake_shot_first_screen.png`).
+Build proceeds via subtasks under the visual-first freeze:
+T0002 (art) → T0003 (first screen + visual gate) → T0004 (core loop).
 
 ## Done when
 
@@ -26,6 +30,7 @@ Build the first native playable slice for `Voxelheim` after the Stage 0 startup 
 
 ## Open questions
 
-- Which named references or fake shots define the visual target?
+- (resolved 2026-06-16) Visual target = Theme A fake shot
+  `visual/fake_shot_first_screen.png`.
 
 ## Log
