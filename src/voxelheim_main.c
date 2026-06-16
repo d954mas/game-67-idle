@@ -119,6 +119,7 @@ enum {
     R_HIT_SPARK,
     R_LEVELUP_BURST,
     R_COIN,
+    R_BAR_FRAME,
     R_COUNT,
 };
 
@@ -130,6 +131,7 @@ static const nt_hash64_t k_region_names[R_COUNT] = {
     ASSET_ATLAS_REGION_VOXELS_LEVEL_BADGE_PNG, ASSET_ATLAS_REGION_VOXELS_MINIMAP_PNG,   ASSET_ATLAS_REGION_VOXELS_ITEM_SLOT_PNG,
     ASSET_ATLAS_REGION_VOXELS_BANNER_PNG,      ASSET_ATLAS_REGION_VOXELS_BUTTON_PNG,    ASSET_ATLAS_REGION_VOXELS_WHITE_PNG,
     ASSET_ATLAS_REGION_VOXELS_HIT_SPARK_PNG,   ASSET_ATLAS_REGION_VOXELS_LEVELUP_BURST_PNG, ASSET_ATLAS_REGION_VOXELS_COIN_PNG,
+    ASSET_ATLAS_REGION_VOXELS_BAR_FRAME_PNG,
 };
 
 /* ---- Engine/runtime state ---- */
@@ -1012,16 +1014,19 @@ static void compose_scene(void) {
 #define HUD_SLOT_H 56.0F
 #define HUD_SLOT_GAP 10.0F
 
-/* A filled bar: dark plate behind the art frame, a colored fill inside. */
+/* A filled bar built from the EMPTY bar_frame art: draw the frame first (its
+ * dark inner slot is the track), then a colored fill inset inside the slot so
+ * the gold border stays visible and the bar fills left-to-right by value. */
 static void emit_bar(int region, float cx, float cy, float w, float h, float frac, float r, float g, float b) {
     frac = clampf(frac, 0.0F, 1.0F);
-    emit_quad(cx, cy, w - 6.0F, h - 8.0F, 0.09F, 0.06F, 0.08F, 0.9F); /* dark track */
-    float fill_w = (w - 12.0F) * frac;
-    float fill_left = cx - (w - 12.0F) * 0.5F;
+    emit_sprite(region, cx, cy, w, h, 0xFFFFFFFFu); /* empty frame (slot + border) */
+    const float inner_w = w - 22.0F;   /* inset past the frame border */
+    const float inner_h = h - 12.0F;
+    const float fill_w = inner_w * frac;
+    const float fill_left = cx - inner_w * 0.5F;
     if (fill_w > 0.5F) {
-        emit_quad(fill_left + fill_w * 0.5F, cy, fill_w, h - 10.0F, r, g, b, 1.0F);
+        emit_quad(fill_left + fill_w * 0.5F, cy, fill_w, inner_h, r, g, b, 1.0F);
     }
-    emit_sprite(region, cx, cy, w, h, 0xFFFFFFFFu); /* art frame on top */
 }
 
 static void compose_hud(void) {
@@ -1034,13 +1039,13 @@ static void compose_hud(void) {
     float hp_frac = clampf((float)g_game_state.run_hero_hp / (float)g_game_state.run_hero_max_hp, 0.0F, 1.0F);
     float hp_r = clampf(1.4F - hp_frac, 0.2F, 1.0F);
     float hp_g = clampf(0.3F + hp_frac, 0.3F, 0.95F);
-    emit_bar(R_HP, HUD_BAR_CX, HUD_HP_CY, HUD_BAR_W, HUD_BAR_H, hp_frac, hp_r, hp_g, 0.28F);
+    emit_bar(R_BAR_FRAME, HUD_BAR_CX, HUD_HP_CY, HUD_BAR_W, HUD_BAR_H, hp_frac, hp_r, hp_g, 0.28F);
 
     /* XP bar: repurpose the old "stamina" art; fill = xp/xp_to_next (gold). */
     float xp_frac = (g_game_state.run_xp_to_next > 0)
                         ? clampf((float)g_game_state.run_xp / (float)g_game_state.run_xp_to_next, 0.0F, 1.0F)
                         : 0.0F;
-    emit_bar(R_STAMINA, HUD_BAR_CX, HUD_XP_CY, HUD_BAR_W, HUD_BAR_H, xp_frac, 1.0F, 0.78F, 0.24F);
+    emit_bar(R_BAR_FRAME, HUD_BAR_CX, HUD_XP_CY, HUD_BAR_W, HUD_BAR_H, xp_frac, 1.0F, 0.78F, 0.24F);
 
     /* Gold-star level badge, top-left (overlaps the plate's left edge). */
     emit_h(R_BADGE, HUD_BADGE_CX, HUD_BADGE_CY, HUD_BADGE_H, white);
