@@ -1,7 +1,7 @@
 ---
 id: T0002
 title: "P0: Bright Roblox art bible + source sheets via agy"
-status: todo
+status: doing
 epic: E001
 priority: P1
 tags: [voxelheim, art, visual-first, agy]
@@ -40,3 +40,4 @@ skill) and the `generated-game-ui-assets` pipeline. No runtime screen code here
 ## Log
 
 - 2026-06-16 created. Theme A locked; accepted fake shot in `visual/`.
+- 2026-06-16 P0 art batch 1 generated via agy (Bright Roblox): hero, keep+portal, ice goblin, env_kit (snow/path/pine/rock/sign), ui_kit (hp/stamina/badge/minimap/slot/banner/button). All reach the fake-shot bar; accepted source sheets in visual/source/. Next: chroma-key cut + atlas (pending engine map for .ntpack format).
