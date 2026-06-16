@@ -193,3 +193,16 @@ produced visually-valid but non-identical PNGs.
   - Current next bottleneck: repeated command/process boundaries. Avoiding the
     Python invocation entirely on known-clean builds, or combining import+audit
     into one process, should beat further micro-optimizing the hot no-op path.
+- 2026-06-16: Added a combined import+audit path to remove one Python process
+  boundary from the common generated-asset validation loop:
+  - `tools/critter_corral/import_generated_core_assets.py --audit` runs the
+    existing generated UI asset audit module after import/no-op/repair without
+    duplicating audit rules.
+  - The standalone audit command remains valid for debugging and independent
+    gates.
+  - Added `slice_and_audit_assets` to the T0070 art job command packet; it
+    writes the same durable audit JSON/Markdown as the standalone audit.
+  - Hot no-op import + standalone audit, 5 runs: 0.225-0.239s wall-clock.
+  - Hot no-op import with `--audit`, 5 runs: 0.178-0.217s wall-clock.
+  - Combined versus standalone audit JSON parity passed.
+  - Combined versus standalone audit Markdown parity passed.

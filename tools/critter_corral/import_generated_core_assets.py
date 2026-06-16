@@ -329,12 +329,20 @@ class ImportArgs:
         self.mode = "python"
         self.native_tool = DEFAULT_NATIVE_TOOL
         self.native_threads = max(1, min(4, os.cpu_count() or 1))
+        self.audit = False
+        self.audit_json_output: str | None = None
+        self.audit_report: str | None = None
+        self.audit_profile = False
+        self.audit_profile_output: str | None = None
+        self.audit_profile_inline = False
 
 
 def print_usage() -> None:
     print(
         "usage: import_generated_core_assets.py "
-        "[--mode python|native] [--native-tool PATH] [--native-threads N]"
+        "[--mode python|native] [--native-tool PATH] [--native-threads N] "
+        "[--audit] [--audit-json-output PATH] [--audit-report PATH] "
+        "[--audit-profile] [--audit-profile-output PATH] [--audit-profile-inline]"
     )
 
 
@@ -347,7 +355,23 @@ def parse_args() -> ImportArgs:
         if option in ("-h", "--help"):
             print_usage()
             raise SystemExit(0)
-        if option not in {"--mode", "--native-tool", "--native-threads"}:
+        if option in {"--audit", "--audit-profile", "--audit-profile-inline"}:
+            if option == "--audit":
+                args.audit = True
+            elif option == "--audit-profile":
+                args.audit_profile = True
+            else:
+                args.audit_profile_inline = True
+            index += 1
+            continue
+        if option not in {
+            "--mode",
+            "--native-tool",
+            "--native-threads",
+            "--audit-json-output",
+            "--audit-report",
+            "--audit-profile-output",
+        }:
             print_usage()
             raise SystemExit(f"unknown option: {option}")
         if index + 1 >= len(argv):
@@ -367,6 +391,15 @@ def parse_args() -> ImportArgs:
                 raise SystemExit(f"--native-threads must be an integer, got: {value}") from exc
             if args.native_threads < 1:
                 raise SystemExit("--native-threads must be >= 1")
+        elif option == "--audit-json-output":
+            args.audit = True
+            args.audit_json_output = value
+        elif option == "--audit-report":
+            args.audit = True
+            args.audit_report = value
+        elif option == "--audit-profile-output":
+            args.audit = True
+            args.audit_profile_output = value
         index += 2
     return args
 
@@ -737,6 +770,28 @@ def load_native_rgba_cache(path: Path) -> Image.Image:
     return Image.frombytes("RGBA", (width, height), data)
 
 
+def run_asset_audit_if_requested(args: ImportArgs) -> None:
+    if not args.audit:
+        return
+
+    from tools.assets.audit_generated_ui_assets import main as audit_main
+
+    audit_args = ["--crop-manifest", rel(CROP_MANIFEST)]
+    if args.audit_json_output:
+        audit_args.extend(["--json-output", args.audit_json_output])
+    if args.audit_report:
+        audit_args.extend(["--report", args.audit_report])
+    if args.audit_profile:
+        audit_args.append("--profile")
+    if args.audit_profile_output:
+        audit_args.extend(["--profile-output", args.audit_profile_output])
+    if args.audit_profile_inline:
+        audit_args.append("--profile-inline")
+    audit_result = audit_main(audit_args)
+    if audit_result != 0:
+        raise SystemExit(audit_result)
+
+
 def main() -> None:
     args = parse_args()
     SPRITE_DIR.mkdir(parents=True, exist_ok=True)
@@ -747,12 +802,15 @@ def main() -> None:
 
     if import_outputs_current():
         print("generated core assets are up to date")
+        run_asset_audit_if_requested(args)
         return
     if repair_runtime_metas_from_stamp():
         print("repaired generated core asset runtime metadata")
+        run_asset_audit_if_requested(args)
         return
     if repair_runtime_outputs_from_stamp(args):
         print("repaired generated core asset runtime outputs")
+        run_asset_audit_if_requested(args)
         return
 
     from PIL import Image
@@ -896,6 +954,7 @@ def main() -> None:
     print(f"wrote {rel(CROP_MANIFEST)}")
     print(f"wrote {rel(ASSET_MANIFEST)}")
     print(f"wrote {rel(CONTACT_SHEET)}")
+    run_asset_audit_if_requested(args)
 
 
 if __name__ == "__main__":
