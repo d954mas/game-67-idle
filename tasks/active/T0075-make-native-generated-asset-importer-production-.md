@@ -90,3 +90,17 @@ produced visually-valid but non-identical PNGs.
   - After reduction: Python full path 0.709s; native full path 0.664s.
   - Audit still passed for 11 generated UI assets.
   - Python/native PNG parity remained pixel-identical for all 11 runtime PNGs.
+- 2026-06-16: Added persistent temp caches for keyed source RGBA and runtime
+  output validity:
+  - Keyed source cache invalidates on source path, source mtime, source byte
+    size, key color, and key algorithm version.
+  - Runtime output cache invalidates on the full asset spec, source
+    fingerprint, and runtime algorithm version.
+  - Native worker now runs only for stale sources that are actually needed by
+    stale runtime outputs.
+  - Measured native full-cold after cache changes: 0.667s.
+  - Measured native warm/no-change after cache changes: 0.188s.
+  - Measured Python warm/no-change after cache changes: 0.188s.
+  - Audit still passed for 11 generated UI assets.
+  - Python/native warm PNG parity remained pixel-identical for all 11 runtime
+    PNGs.

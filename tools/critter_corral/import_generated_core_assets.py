@@ -48,6 +48,10 @@ ASSET_MANIFEST = DATA_DIR / "t0070_generated_casual_core-asset_manifest.json"
 CONTACT_SHEET = REVIEW_DIR / "t0070_generated_casual_core-runtime_contact_sheet.png"
 KEY = (255, 0, 255)
 DEFAULT_NATIVE_TOOL = ROOT / "build" / "_cmake" / "native-debug" / "import_generated_core_assets_native.exe"
+KEYED_CACHE_DIR = ROOT / "tmp" / "generated_core_keyed_sources"
+KEYED_CACHE_VERSION = "t0070-magenta-key-v1"
+RUNTIME_CACHE_DIR = ROOT / "tmp" / "generated_core_runtime_assets"
+RUNTIME_CACHE_VERSION = "t0070-runtime-cleanup-v2"
 
 
 ASSETS: list[dict[str, Any]] = [
@@ -318,21 +322,106 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def write_native_key_plan(plan_path: Path, output_dir: Path) -> dict[str, Path]:
-    lines = ["# source_path\toutput_path"]
-    keyed_paths: dict[str, Path] = {}
+def unique_source_keys() -> list[str]:
+    source_keys: list[str] = []
+    seen: set[str] = set()
     for spec in ASSETS:
         source_key = spec["source"]
-        if source_key in keyed_paths:
-            continue
-        output_path = output_dir / f"{source_key}.rgba"
+        if source_key not in seen:
+            source_keys.append(source_key)
+            seen.add(source_key)
+    return source_keys
+
+
+def keyed_cache_path(source_key: str) -> Path:
+    return KEYED_CACHE_DIR / f"{source_key}.rgba"
+
+
+def keyed_cache_meta_path(source_key: str) -> Path:
+    return KEYED_CACHE_DIR / f"{source_key}.json"
+
+
+def runtime_cache_meta_path(spec: dict[str, Any]) -> Path:
+    return RUNTIME_CACHE_DIR / f"{spec['output']}.json"
+
+
+def source_fingerprint(source_key: str) -> dict[str, Any]:
+    source_path = SOURCE_DIR / source_key
+    stat = source_path.stat()
+    return {
+        "source": rel(source_path),
+        "source_mtime_ns": stat.st_mtime_ns,
+        "source_size_bytes": stat.st_size,
+        "key_algorithm": KEYED_CACHE_VERSION,
+        "key": "#ff00ff",
+    }
+
+
+def keyed_cache_valid(source_key: str) -> bool:
+    cache_path = keyed_cache_path(source_key)
+    meta_path = keyed_cache_meta_path(source_key)
+    if not cache_path.exists() or not meta_path.exists():
+        return False
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    expected = source_fingerprint(source_key)
+    return all(meta.get(key) == value for key, value in expected.items())
+
+
+def runtime_output_fingerprint(spec: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "runtime_algorithm": RUNTIME_CACHE_VERSION,
+        "source": source_fingerprint(spec["source"]),
+        "spec": spec,
+    }
+
+
+def runtime_output_valid(spec: dict[str, Any], output_path: Path) -> bool:
+    meta_path = runtime_cache_meta_path(spec)
+    if not output_path.exists() or not meta_path.exists():
+        return False
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return meta == runtime_output_fingerprint(spec)
+
+
+def write_runtime_output_meta(spec: dict[str, Any]) -> None:
+    write_json_atomic(runtime_cache_meta_path(spec), runtime_output_fingerprint(spec))
+
+
+def write_rgba_cache_atomic(path: Path, image: Image.Image) -> None:
+    rgba = image.convert("RGBA")
+    tmp_path = path.with_name(f"{path.name}.tmp")
+    with tmp_path.open("wb") as handle:
+        handle.write(f"CCRGBA1 {rgba.width} {rgba.height}\n".encode("ascii"))
+        handle.write(rgba.tobytes())
+    tmp_path.replace(path)
+
+
+def write_keyed_cache_meta(source_key: str, producer: str) -> None:
+    meta = source_fingerprint(source_key)
+    meta["producer"] = producer
+    write_json_atomic(keyed_cache_meta_path(source_key), meta)
+
+
+def write_native_key_plan(plan_path: Path, source_keys: list[str]) -> dict[str, Path]:
+    lines = ["# source_path\toutput_path"]
+    keyed_paths: dict[str, Path] = {}
+    for source_key in source_keys:
+        output_path = keyed_cache_path(source_key)
         keyed_paths[source_key] = output_path
         lines.append("\t".join([(SOURCE_DIR / source_key).as_posix(), output_path.as_posix()]))
     plan_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return keyed_paths
 
 
-def run_native_key_worker(native_tool: Path, threads: int) -> dict[str, Path]:
+def run_native_key_worker(native_tool: Path, threads: int, stale_sources: list[str]) -> None:
+    if not stale_sources:
+        return
     native_tool = native_tool.resolve()
     if not native_tool.exists():
         raise SystemExit(
@@ -341,12 +430,11 @@ def run_native_key_worker(native_tool: Path, threads: int) -> dict[str, Path]:
         )
     tmp_dir = ROOT / "tmp"
     tmp_dir.mkdir(exist_ok=True)
-    keyed_dir = tmp_dir / "generated_core_keyed_sources"
-    keyed_dir.mkdir(exist_ok=True)
+    KEYED_CACHE_DIR.mkdir(exist_ok=True)
     with tempfile.NamedTemporaryFile("w", suffix=".tsv", delete=False, dir=tmp_dir, encoding="utf-8") as handle:
         plan_path = Path(handle.name)
     try:
-        keyed_paths = write_native_key_plan(plan_path, keyed_dir)
+        write_native_key_plan(plan_path, stale_sources)
         subprocess.run(
             [
                 str(native_tool),
@@ -358,7 +446,8 @@ def run_native_key_worker(native_tool: Path, threads: int) -> dict[str, Path]:
             cwd=ROOT,
             check=True,
         )
-        return keyed_paths
+        for source_key in stale_sources:
+            write_keyed_cache_meta(source_key, "native")
     finally:
         plan_path.unlink(missing_ok=True)
 
@@ -382,15 +471,23 @@ def main() -> None:
     SPRITE_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     REVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    KEYED_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    RUNTIME_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
     crop_sources: dict[str, dict[str, Any]] = {}
     runtime_assets: list[dict[str, Any]] = []
     contact_items: list[tuple[str, Image.Image]] = []
     keyed_source_cache: dict[str, Image.Image] = {}
-    native_keyed_paths: dict[str, Path] = {}
+    source_keys = unique_source_keys()
+    stale_runtime_sources = [
+        spec["source"] for spec in ASSETS if not runtime_output_valid(spec, SPRITE_DIR / spec["output"])
+    ]
+    stale_runtime_source_set = set(stale_runtime_sources)
+    sources_needed = [source_key for source_key in source_keys if source_key in stale_runtime_source_set]
+    stale_sources = [source_key for source_key in sources_needed if not keyed_cache_valid(source_key)]
 
     if args.mode == "native":
-        native_keyed_paths = run_native_key_worker(args.native_tool, args.native_threads)
+        run_native_key_worker(args.native_tool, args.native_threads, stale_sources)
 
     for spec in ASSETS:
         source_path = SOURCE_DIR / spec["source"]
@@ -398,19 +495,30 @@ def main() -> None:
             raise SystemExit(f"missing generated source: {source_path}")
         output_path = SPRITE_DIR / spec["output"]
         source_key = spec["source"]
-        keyed_source = keyed_source_cache.get(source_key)
-        if keyed_source is None:
-            if args.mode == "native":
-                keyed_source = load_native_rgba_cache(native_keyed_paths[source_key])
-            else:
-                source = Image.open(source_path).convert("RGBA")
-                keyed_source = fast_key_to_alpha(source)
-            keyed_source_cache[source_key] = keyed_source
-        region = source_region(keyed_source, spec)
-        region_size = region.size
-        trimmed = fit_to_canvas(region, tuple(spec["size"]), int(spec.get("padding", 0)))
-        final = apply_tint(trimmed, spec.get("tint"))
-        save_image_atomic(final, output_path)
+        if runtime_output_valid(spec, output_path):
+            with Image.open(source_path) as source:
+                x0, y0, x1, y1 = source_region_rect(source.size, spec)
+            region_size = (x1 - x0, y1 - y0)
+            final = Image.open(output_path).convert("RGBA")
+        else:
+            keyed_source = keyed_source_cache.get(source_key)
+            if keyed_source is None:
+                if keyed_cache_valid(source_key):
+                    keyed_source = load_native_rgba_cache(keyed_cache_path(source_key))
+                else:
+                    if args.mode == "native":
+                        raise RuntimeError(f"native keyed cache was not created for {source_key}")
+                    source = Image.open(source_path).convert("RGBA")
+                    keyed_source = fast_key_to_alpha(source)
+                    write_rgba_cache_atomic(keyed_cache_path(source_key), keyed_source)
+                    write_keyed_cache_meta(source_key, "python")
+                keyed_source_cache[source_key] = keyed_source
+            region = source_region(keyed_source, spec)
+            region_size = region.size
+            trimmed = fit_to_canvas(region, tuple(spec["size"]), int(spec.get("padding", 0)))
+            final = apply_tint(trimmed, spec.get("tint"))
+            save_image_atomic(final, output_path)
+            write_runtime_output_meta(spec)
         contact_items.append((spec["id"], final))
 
         bbox = alpha_bbox(final)
