@@ -204,7 +204,7 @@ endif()
 
 if(NOT EMSCRIPTEN AND NOT TARGET import_generated_core_assets_native)
     add_executable(import_generated_core_assets_native tools/critter_corral/import_generated_core_assets_native.c)
-    target_link_libraries(import_generated_core_assets_native PRIVATE stb_image stb_image_resize2 stb_image_write)
+    target_link_libraries(import_generated_core_assets_native PRIVATE stb_image stb_image_resize2 stb_image_write tinycthread)
     target_compile_definitions(import_generated_core_assets_native PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(import_generated_core_assets_native PRIVATE -U_DLL)
     nt_set_warning_flags(import_generated_core_assets_native)

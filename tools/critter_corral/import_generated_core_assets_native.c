@@ -14,6 +14,7 @@
 #include "stb_image.h"
 #include "stb_image_resize2.h"
 #include "stb_image_write.h"
+#include "tinycthread.h"
 
 typedef struct Image {
     uint8_t *pixels;
@@ -22,9 +23,9 @@ typedef struct Image {
 } Image;
 
 typedef struct AssetSpec {
-    const char *id;
-    const char *source;
-    const char *output;
+    char id[128];
+    char source_path[1024];
+    char output[256];
     int width;
     int height;
     int padding;
@@ -40,6 +41,17 @@ typedef struct SourceCache {
     Image image;
 } SourceCache;
 
+typedef struct KeySpec {
+    char source_path[1024];
+    char output_path[1024];
+} KeySpec;
+
+typedef struct KeyAlphaJob {
+    Image *image;
+    int y0;
+    int y1;
+} KeyAlphaJob;
+
 typedef struct BBox {
     int left;
     int top;
@@ -47,21 +59,7 @@ typedef struct BBox {
     int bottom;
 } BBox;
 
-static const char *SOURCE_DIR = "gamedesign/projects/critter-corral/art/generated/T0070";
-
-static const AssetSpec ASSETS[] = {
-    {"generated_upgrade_card", "generated-card-horizontal-source-v2.png", "card.png", 256, 128, 6, -1, 0, -1, -1, -1},
-    {"generated_critter_neutral", "generated-critter-source-v1.png", "critter.png", 112, 112, 7, -1, 0, -1, -1, -1},
-    {"generated_critter_a", "generated-critter-source-v1.png", "critter_a.png", 112, 112, 7, -1, 0, 255, 116, 78},
-    {"generated_critter_b", "generated-critter-source-v1.png", "critter_b.png", 112, 112, 7, -1, 0, 84, 166, 255},
-    {"generated_pen", "generated-pen-source-v1.png", "pen.png", 256, 200, 8, -1, 0, -1, -1, -1},
-    {"generated_icon_radius", "generated-upgrade-icons-source-v1.png", "icon_radius.png", 96, 96, 4, 0, 6, -1, -1, -1},
-    {"generated_icon_pull", "generated-upgrade-icons-source-v1.png", "icon_pull.png", 96, 96, 4, 1, 6, -1, -1, -1},
-    {"generated_icon_second_lure", "generated-upgrade-icons-source-v1.png", "icon_second_lure.png", 96, 96, 4, 2, 6, -1, -1, -1},
-    {"generated_icon_gate", "generated-upgrade-icons-source-v1.png", "icon_gate.png", 96, 96, 4, 3, 6, -1, -1, -1},
-    {"generated_icon_calm", "generated-upgrade-icons-source-v1.png", "icon_calm.png", 96, 96, 4, 4, 6, -1, -1, -1},
-    {"generated_icon_chain", "generated-upgrade-icons-source-v1.png", "icon_chain.png", 96, 96, 4, 5, 6, -1, -1, -1},
-};
+#define MAX_ASSETS 128
 
 static double now_seconds(void) {
 #ifdef _WIN32
@@ -187,8 +185,10 @@ static bool alpha_bbox(const Image *image, BBox *bbox) {
     return bbox->right > bbox->left && bbox->bottom > bbox->top;
 }
 
-static void fast_key_to_alpha(Image *image) {
-    for (int y = 0; y < image->height; ++y) {
+static int fast_key_to_alpha_rows(void *arg) {
+    KeyAlphaJob *job = (KeyAlphaJob *)arg;
+    Image *image = job->image;
+    for (int y = job->y0; y < job->y1; ++y) {
         for (int x = 0; x < image->width; ++x) {
             uint8_t *p = image->pixels + ((size_t)y * (size_t)image->width + (size_t)x) * 4u;
             int red = p[0];
@@ -202,29 +202,68 @@ static void fast_key_to_alpha(Image *image) {
             }
         }
     }
+    return 0;
 }
 
-static Image load_keyed_source(const char *source_name) {
-    char path[1024];
-    int written = snprintf(path, sizeof(path), "%s/%s", SOURCE_DIR, source_name);
-    if (written <= 0 || written >= (int)sizeof(path)) return (Image){0};
+static bool fast_key_to_alpha(Image *image, int threads) {
+    if (threads < 1) threads = 1;
+    if (threads > image->height) threads = image->height;
+    if (threads <= 1) {
+        KeyAlphaJob job = {image, 0, image->height};
+        return fast_key_to_alpha_rows(&job) == 0;
+    }
+    thrd_t *handles = (thrd_t *)calloc((size_t)threads, sizeof(thrd_t));
+    KeyAlphaJob *jobs = (KeyAlphaJob *)calloc((size_t)threads, sizeof(KeyAlphaJob));
+    if (!handles || !jobs) {
+        free(handles);
+        free(jobs);
+        return false;
+    }
+    for (int index = 0; index < threads; ++index) {
+        int y0 = (image->height * index) / threads;
+        int y1 = (image->height * (index + 1)) / threads;
+        jobs[index] = (KeyAlphaJob){image, y0, y1};
+        if (thrd_create(&handles[index], fast_key_to_alpha_rows, &jobs[index]) != thrd_success) {
+            for (int joined = 0; joined < index; ++joined) {
+                (void)thrd_join(handles[joined], NULL);
+            }
+            free(handles);
+            free(jobs);
+            return false;
+        }
+    }
+    bool ok = true;
+    for (int index = 0; index < threads; ++index) {
+        int result = 0;
+        (void)thrd_join(handles[index], &result);
+        ok = ok && result == 0;
+    }
+    free(handles);
+    free(jobs);
+    return ok;
+}
+
+static Image load_keyed_source(const char *path, int threads) {
     int width = 0;
     int height = 0;
     int channels = 0;
     uint8_t *loaded = stbi_load(path, &width, &height, &channels, 4);
     if (!loaded) return (Image){0};
     Image image = {loaded, width, height};
-    fast_key_to_alpha(&image);
+    if (!fast_key_to_alpha(&image, threads)) {
+        stbi_image_free(image.pixels);
+        return (Image){0};
+    }
     return image;
 }
 
-static const Image *cached_source(SourceCache *cache, int *cache_count, const char *source_name) {
+static const Image *cached_source(SourceCache *cache, int *cache_count, const char *source_path, int threads) {
     for (int i = 0; i < *cache_count; ++i) {
-        if (strcmp(cache[i].path, source_name) == 0) return &cache[i].image;
+        if (strcmp(cache[i].path, source_path) == 0) return &cache[i].image;
     }
-    Image image = load_keyed_source(source_name);
+    Image image = load_keyed_source(source_path, threads);
     if (!image.pixels) return NULL;
-    cache[*cache_count].path = source_name;
+    cache[*cache_count].path = source_path;
     cache[*cache_count].image = image;
     *cache_count += 1;
     return &cache[*cache_count - 1].image;
@@ -303,15 +342,25 @@ static Image fit_to_canvas(const Image *region, int target_width, int target_hei
 
 static void apply_tint(Image *image, int tint_r, int tint_g, int tint_b) {
     if (tint_r < 0) return;
+    const int black_r = 38;
+    const int black_g = 30;
+    const int black_b = 36;
     for (int y = 0; y < image->height; ++y) {
         for (int x = 0; x < image->width; ++x) {
             uint8_t *p = image->pixels + ((size_t)y * (size_t)image->width + (size_t)x) * 4u;
             if (p[3] <= 12) continue;
-            int luma = (p[0] * 77 + p[1] * 150 + p[2] * 29) >> 8;
-            if (luma > 92) {
-                p[0] = (uint8_t)((p[0] * 35 + tint_r * 65) / 100);
-                p[1] = (uint8_t)((p[1] * 35 + tint_g * 65) / 100);
-                p[2] = (uint8_t)((p[2] * 35 + tint_b * 65) / 100);
+            int gray = (p[0] * 77 + p[1] * 150 + p[2] * 29 + 128) >> 8;
+            int contrast = clamp_int((int)((double)(gray - 128) * 1.25 + 128.0 + 0.5), 0, 255);
+            if (contrast > 92) {
+                int tinted_r = black_r + (tint_r - black_r) * gray / 255;
+                int tinted_g = black_g + (tint_g - black_g) * gray / 255;
+                int tinted_b = black_b + (tint_b - black_b) * gray / 255;
+                int mixed_r = (tinted_r * 92 + tint_r * 8) / 100;
+                int mixed_g = (tinted_g * 92 + tint_g * 8) / 100;
+                int mixed_b = (tinted_b * 92 + tint_b * 8) / 100;
+                p[0] = (uint8_t)((p[0] * 85 + mixed_r * 170) / 255);
+                p[1] = (uint8_t)((p[1] * 85 + mixed_g * 170) / 255);
+                p[2] = (uint8_t)((p[2] * 85 + mixed_b * 170) / 255);
             }
         }
     }
@@ -327,10 +376,41 @@ static bool write_png_atomic(const char *path, const Image *image) {
     return rename(tmp_path, path) == 0;
 }
 
-static bool process_asset(const AssetSpec *spec, SourceCache *cache, int *cache_count, const char *output_dir, bool no_write) {
-    const Image *source = cached_source(cache, cache_count, spec->source);
+static bool has_suffix(const char *text, const char *suffix) {
+    size_t text_len = strlen(text);
+    size_t suffix_len = strlen(suffix);
+    if (suffix_len > text_len) return false;
+    return strcmp(text + text_len - suffix_len, suffix) == 0;
+}
+
+static bool write_rgba_atomic(const char *path, const Image *image) {
+    char tmp_path[1024];
+    int written = snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path);
+    if (written <= 0 || written >= (int)sizeof(tmp_path)) return false;
+    FILE *file = fopen(tmp_path, "wb");
+    if (!file) return false;
+    bool ok = fprintf(file, "CCRGBA1 %d %d\n", image->width, image->height) > 0;
+    size_t pixel_bytes = (size_t)image->width * (size_t)image->height * 4u;
+    ok = ok && fwrite(image->pixels, 1, pixel_bytes, file) == pixel_bytes;
+    int close_result = fclose(file);
+    ok = ok && close_result == 0;
+    if (!ok) {
+        (void)remove(tmp_path);
+        return false;
+    }
+    (void)remove(path);
+    return rename(tmp_path, path) == 0;
+}
+
+static bool write_image_atomic(const char *path, const Image *image) {
+    if (has_suffix(path, ".rgba")) return write_rgba_atomic(path, image);
+    return write_png_atomic(path, image);
+}
+
+static bool process_asset(const AssetSpec *spec, SourceCache *cache, int *cache_count, const char *output_dir, bool no_write, int threads) {
+    const Image *source = cached_source(cache, cache_count, spec->source_path, threads);
     if (!source) {
-        fprintf(stderr, "missing source %s\n", spec->source);
+        fprintf(stderr, "missing source %s\n", spec->source_path);
         return false;
     }
     int x = 0;
@@ -361,20 +441,176 @@ static bool process_asset(const AssetSpec *spec, SourceCache *cache, int *cache_
     return true;
 }
 
+static bool copy_token(char *dst, size_t dst_size, const char *src) {
+    size_t len = strlen(src);
+    if (len + 1 > dst_size) return false;
+    memcpy(dst, src, len + 1);
+    return true;
+}
+
+static bool parse_int_field(const char *text, int *value) {
+    char *end = NULL;
+    long parsed = strtol(text, &end, 10);
+    if (!text[0] || (end && *end)) return false;
+    *value = (int)parsed;
+    return true;
+}
+
+static bool load_plan(const char *path, AssetSpec *assets, size_t *asset_count) {
+    FILE *file = fopen(path, "rb");
+    if (!file) {
+        fprintf(stderr, "failed to open plan %s\n", path);
+        return false;
+    }
+    char line[4096];
+    size_t count = 0;
+    int line_number = 0;
+    while (fgets(line, sizeof(line), file)) {
+        ++line_number;
+        if (line[0] == '\0' || line[0] == '\n' || line[0] == '#') continue;
+        char *tokens[11] = {0};
+        int token_count = 0;
+        char *token = strtok(line, "\t\r\n");
+        while (token && token_count < 11) {
+            tokens[token_count++] = token;
+            token = strtok(NULL, "\t\r\n");
+        }
+        if (token_count != 11 || token) {
+            fprintf(stderr, "invalid plan line %d: expected 11 tab-separated fields\n", line_number);
+            fclose(file);
+            return false;
+        }
+        if (count >= MAX_ASSETS) {
+            fprintf(stderr, "too many plan assets; max is %d\n", MAX_ASSETS);
+            fclose(file);
+            return false;
+        }
+        AssetSpec *spec = &assets[count];
+        memset(spec, 0, sizeof(*spec));
+        if (!copy_token(spec->id, sizeof(spec->id), tokens[0]) ||
+            !copy_token(spec->source_path, sizeof(spec->source_path), tokens[1]) ||
+            !copy_token(spec->output, sizeof(spec->output), tokens[2]) ||
+            !parse_int_field(tokens[3], &spec->width) ||
+            !parse_int_field(tokens[4], &spec->height) ||
+            !parse_int_field(tokens[5], &spec->padding) ||
+            !parse_int_field(tokens[6], &spec->slot_index) ||
+            !parse_int_field(tokens[7], &spec->slot_count) ||
+            !parse_int_field(tokens[8], &spec->tint_r) ||
+            !parse_int_field(tokens[9], &spec->tint_g) ||
+            !parse_int_field(tokens[10], &spec->tint_b)) {
+            fprintf(stderr, "invalid plan line %d\n", line_number);
+            fclose(file);
+            return false;
+        }
+        ++count;
+    }
+    fclose(file);
+    *asset_count = count;
+    if (count == 0) {
+        fprintf(stderr, "empty native import plan %s\n", path);
+        return false;
+    }
+    return true;
+}
+
+static bool load_key_plan(const char *path, KeySpec *keys, size_t *key_count) {
+    FILE *file = fopen(path, "rb");
+    if (!file) {
+        fprintf(stderr, "failed to open key plan %s\n", path);
+        return false;
+    }
+    char line[4096];
+    size_t count = 0;
+    int line_number = 0;
+    while (fgets(line, sizeof(line), file)) {
+        ++line_number;
+        if (line[0] == '\0' || line[0] == '\n' || line[0] == '#') continue;
+        char *source = strtok(line, "\t\r\n");
+        char *output = strtok(NULL, "\t\r\n");
+        char *extra = strtok(NULL, "\t\r\n");
+        if (!source || !output || extra) {
+            fprintf(stderr, "invalid key plan line %d: expected 2 tab-separated fields\n", line_number);
+            fclose(file);
+            return false;
+        }
+        if (count >= MAX_ASSETS) {
+            fprintf(stderr, "too many key plan sources; max is %d\n", MAX_ASSETS);
+            fclose(file);
+            return false;
+        }
+        if (!copy_token(keys[count].source_path, sizeof(keys[count].source_path), source) ||
+            !copy_token(keys[count].output_path, sizeof(keys[count].output_path), output)) {
+            fprintf(stderr, "invalid key plan line %d\n", line_number);
+            fclose(file);
+            return false;
+        }
+        ++count;
+    }
+    fclose(file);
+    *key_count = count;
+    if (count == 0) {
+        fprintf(stderr, "empty native key plan %s\n", path);
+        return false;
+    }
+    return true;
+}
+
+static bool process_key_plan(const char *key_plan_path, int iterations, bool no_write, int threads) {
+    KeySpec keys[MAX_ASSETS];
+    size_t key_count = 0;
+    if (!load_key_plan(key_plan_path, keys, &key_count)) return false;
+    double best_total = 0.0;
+    for (int iteration = 0; iteration < iterations; ++iteration) {
+        double started = now_seconds();
+        bool ok = true;
+        for (size_t i = 0; i < key_count; ++i) {
+            Image image = load_keyed_source(keys[i].source_path, threads);
+            if (!image.pixels) {
+                fprintf(stderr, "missing source %s\n", keys[i].source_path);
+                ok = false;
+                break;
+            }
+            if (!no_write && !write_image_atomic(keys[i].output_path, &image)) {
+                fprintf(stderr, "failed to write %s\n", keys[i].output_path);
+                free_image(&image);
+                ok = false;
+                break;
+            }
+            stbi_image_free(image.pixels);
+        }
+        double total = now_seconds() - started;
+        if (!ok) return false;
+        if (iteration == 0 || total < best_total) best_total = total;
+        printf("iteration=%d sources=%zu threads=%d no_write=%d total=%.6f\n", iteration + 1, key_count, threads, no_write ? 1 : 0, total);
+    }
+    printf("best_total=%.6f\n", best_total);
+    return true;
+}
+
 static void usage(void) {
-    fprintf(stderr, "usage: import_generated_core_assets_native [--output-dir <dir>] [--iterations N] [--no-write]\n");
+    fprintf(stderr, "usage: import_generated_core_assets_native (--plan <tsv> [--output-dir <dir>] | --key-plan <tsv>) [--threads N] [--iterations N] [--no-write]\n");
 }
 
 int main(int argc, char **argv) {
     const char *output_dir = "tmp";
+    const char *plan_path = NULL;
+    const char *key_plan_path = NULL;
     int iterations = 1;
+    int threads = 1;
     bool no_write = false;
     for (int i = 1; i < argc; ++i) {
-        if (strcmp(argv[i], "--output-dir") == 0 && i + 1 < argc) {
+        if (strcmp(argv[i], "--plan") == 0 && i + 1 < argc) {
+            plan_path = argv[++i];
+        } else if (strcmp(argv[i], "--key-plan") == 0 && i + 1 < argc) {
+            key_plan_path = argv[++i];
+        } else if (strcmp(argv[i], "--output-dir") == 0 && i + 1 < argc) {
             output_dir = argv[++i];
         } else if (strcmp(argv[i], "--iterations") == 0 && i + 1 < argc) {
             iterations = atoi(argv[++i]);
             if (iterations < 1) iterations = 1;
+        } else if (strcmp(argv[i], "--threads") == 0 && i + 1 < argc) {
+            threads = atoi(argv[++i]);
+            if (threads < 1) threads = 1;
         } else if (strcmp(argv[i], "--no-write") == 0) {
             no_write = true;
         } else {
@@ -382,6 +618,20 @@ int main(int argc, char **argv) {
             return 2;
         }
     }
+    if (key_plan_path && plan_path) {
+        usage();
+        return 2;
+    }
+    if (key_plan_path) {
+        return process_key_plan(key_plan_path, iterations, no_write, threads) ? 0 : 1;
+    }
+    if (!plan_path) {
+        usage();
+        return 2;
+    }
+    AssetSpec assets[MAX_ASSETS];
+    size_t asset_count = 0;
+    if (!load_plan(plan_path, assets, &asset_count)) return 1;
 #ifdef _WIN32
     (void)_mkdir(output_dir);
 #endif
@@ -391,8 +641,8 @@ int main(int argc, char **argv) {
         SourceCache cache[8] = {0};
         int cache_count = 0;
         bool ok = true;
-        for (size_t i = 0; i < sizeof(ASSETS) / sizeof(ASSETS[0]); ++i) {
-            if (!process_asset(&ASSETS[i], cache, &cache_count, output_dir, no_write)) {
+        for (size_t i = 0; i < asset_count; ++i) {
+            if (!process_asset(&assets[i], cache, &cache_count, output_dir, no_write, threads)) {
                 ok = false;
                 break;
             }
@@ -403,7 +653,7 @@ int main(int argc, char **argv) {
         double total = now_seconds() - started;
         if (!ok) return 1;
         if (iteration == 0 || total < best_total) best_total = total;
-        printf("iteration=%d assets=%zu no_write=%d total=%.6f\n", iteration + 1, sizeof(ASSETS) / sizeof(ASSETS[0]), no_write ? 1 : 0, total);
+        printf("iteration=%d assets=%zu threads=%d no_write=%d total=%.6f\n", iteration + 1, asset_count, threads, no_write ? 1 : 0, total);
     }
     printf("best_total=%.6f\n", best_total);
     return 0;

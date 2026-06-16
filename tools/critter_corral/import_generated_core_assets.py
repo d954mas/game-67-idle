@@ -8,9 +8,13 @@ their own generated source families exist.
 """
 from __future__ import annotations
 
+import argparse
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
+import tempfile
 from typing import Any
 
 from PIL import Image, ImageEnhance, ImageOps
@@ -43,6 +47,7 @@ CROP_MANIFEST = DATA_DIR / "t0070_generated_casual_core-crop_manifest.json"
 ASSET_MANIFEST = DATA_DIR / "t0070_generated_casual_core-asset_manifest.json"
 CONTACT_SHEET = REVIEW_DIR / "t0070_generated_casual_core-runtime_contact_sheet.png"
 KEY = (255, 0, 255)
+DEFAULT_NATIVE_TOOL = ROOT / "build" / "_cmake" / "native-debug" / "import_generated_core_assets_native.exe"
 
 
 ASSETS: list[dict[str, Any]] = [
@@ -207,18 +212,22 @@ def fast_key_to_alpha(image: Image.Image) -> Image.Image:
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGBA")
 
 
-def source_region(source: Image.Image, spec: dict[str, Any]) -> Image.Image:
+def source_region_rect(source_size: tuple[int, int], spec: dict[str, Any]) -> tuple[int, int, int, int]:
     slot = spec.get("slot")
     if isinstance(slot, list) and len(slot) == 2:
         index = int(slot[0])
         count = int(slot[1])
         if count <= 0 or index < 0 or index >= count:
             raise RuntimeError(f"invalid slot for {spec['id']}: {slot}")
-        cell_w = source.width / float(count)
+        cell_w = source_size[0] / float(count)
         x0 = round(cell_w * float(index))
         x1 = round(cell_w * float(index + 1))
-        return source.crop((x0, 0, x1, source.height))
-    return source
+        return (x0, 0, x1, source_size[1])
+    return (0, 0, source_size[0], source_size[1])
+
+
+def source_region(source: Image.Image, spec: dict[str, Any]) -> Image.Image:
+    return source.crop(source_region_rect(source.size, spec))
 
 
 def fit_to_canvas(image: Image.Image, size: tuple[int, int], padding: int) -> Image.Image:
@@ -237,7 +246,7 @@ def fit_to_canvas(image: Image.Image, size: tuple[int, int], padding: int) -> Im
     remove_source_key_spill(canvas, KEY)
     remove_green_screen_spill(canvas)
     repair_visible_halo(canvas)
-    bleed_transparent_rgb(canvas, key=KEY)
+    bleed_transparent_rgb(canvas, passes=2, key=KEY)
     repair_transparent_edge_rgb(canvas, key=KEY)
     zero_fully_transparent_rgb(canvas)
     return canvas
@@ -260,7 +269,7 @@ def apply_tint(image: Image.Image, tint: list[int] | None) -> Image.Image:
     remove_source_key_spill(composited, KEY)
     remove_green_screen_spill(composited)
     repair_visible_halo(composited)
-    bleed_transparent_rgb(composited, key=KEY)
+    bleed_transparent_rgb(composited, passes=2, key=KEY)
     repair_transparent_edge_rgb(composited, key=KEY)
     zero_fully_transparent_rgb(composited)
     return composited
@@ -286,7 +295,90 @@ def write_contact_sheet(items: list[tuple[str, Image.Image]]) -> None:
     save_image_atomic(sheet, CONTACT_SHEET)
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--mode",
+        choices=("python", "native"),
+        default="python",
+        help="python keeps the full PIL path; native uses the C worker only for source chroma-keying.",
+    )
+    parser.add_argument(
+        "--native-tool",
+        type=Path,
+        default=DEFAULT_NATIVE_TOOL,
+        help="Path to import_generated_core_assets_native.exe for --mode native.",
+    )
+    parser.add_argument(
+        "--native-threads",
+        type=int,
+        default=max(1, min(4, os.cpu_count() or 1)),
+        help="Worker threads used by the native source chroma-key step.",
+    )
+    return parser.parse_args()
+
+
+def write_native_key_plan(plan_path: Path, output_dir: Path) -> dict[str, Path]:
+    lines = ["# source_path\toutput_path"]
+    keyed_paths: dict[str, Path] = {}
+    for spec in ASSETS:
+        source_key = spec["source"]
+        if source_key in keyed_paths:
+            continue
+        output_path = output_dir / f"{source_key}.rgba"
+        keyed_paths[source_key] = output_path
+        lines.append("\t".join([(SOURCE_DIR / source_key).as_posix(), output_path.as_posix()]))
+    plan_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return keyed_paths
+
+
+def run_native_key_worker(native_tool: Path, threads: int) -> dict[str, Path]:
+    native_tool = native_tool.resolve()
+    if not native_tool.exists():
+        raise SystemExit(
+            f"missing native worker: {native_tool}\n"
+            "Build it first: cmake --build build/_cmake/native-debug --target import_generated_core_assets_native"
+        )
+    tmp_dir = ROOT / "tmp"
+    tmp_dir.mkdir(exist_ok=True)
+    keyed_dir = tmp_dir / "generated_core_keyed_sources"
+    keyed_dir.mkdir(exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", suffix=".tsv", delete=False, dir=tmp_dir, encoding="utf-8") as handle:
+        plan_path = Path(handle.name)
+    try:
+        keyed_paths = write_native_key_plan(plan_path, keyed_dir)
+        subprocess.run(
+            [
+                str(native_tool),
+                "--key-plan",
+                str(plan_path),
+                "--threads",
+                str(max(1, threads)),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+        return keyed_paths
+    finally:
+        plan_path.unlink(missing_ok=True)
+
+
+def load_native_rgba_cache(path: Path) -> Image.Image:
+    with path.open("rb") as handle:
+        header = handle.readline().decode("ascii").strip().split()
+        if len(header) != 3 or header[0] != "CCRGBA1":
+            raise RuntimeError(f"invalid native RGBA cache header: {path}")
+        width = int(header[1])
+        height = int(header[2])
+        data = handle.read()
+    expected = width * height * 4
+    if len(data) != expected:
+        raise RuntimeError(f"invalid native RGBA cache size for {path}: got {len(data)}, expected {expected}")
+    return Image.frombytes("RGBA", (width, height), data)
+
+
 def main() -> None:
+    args = parse_args()
     SPRITE_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     REVIEW_DIR.mkdir(parents=True, exist_ok=True)
@@ -295,21 +387,29 @@ def main() -> None:
     runtime_assets: list[dict[str, Any]] = []
     contact_items: list[tuple[str, Image.Image]] = []
     keyed_source_cache: dict[str, Image.Image] = {}
+    native_keyed_paths: dict[str, Path] = {}
+
+    if args.mode == "native":
+        native_keyed_paths = run_native_key_worker(args.native_tool, args.native_threads)
 
     for spec in ASSETS:
         source_path = SOURCE_DIR / spec["source"]
         if not source_path.exists():
             raise SystemExit(f"missing generated source: {source_path}")
+        output_path = SPRITE_DIR / spec["output"]
         source_key = spec["source"]
         keyed_source = keyed_source_cache.get(source_key)
         if keyed_source is None:
-            source = Image.open(source_path).convert("RGBA")
-            keyed_source = fast_key_to_alpha(source)
+            if args.mode == "native":
+                keyed_source = load_native_rgba_cache(native_keyed_paths[source_key])
+            else:
+                source = Image.open(source_path).convert("RGBA")
+                keyed_source = fast_key_to_alpha(source)
             keyed_source_cache[source_key] = keyed_source
         region = source_region(keyed_source, spec)
+        region_size = region.size
         trimmed = fit_to_canvas(region, tuple(spec["size"]), int(spec.get("padding", 0)))
         final = apply_tint(trimmed, spec.get("tint"))
-        output_path = SPRITE_DIR / spec["output"]
         save_image_atomic(final, output_path)
         contact_items.append((spec["id"], final))
 
@@ -317,9 +417,9 @@ def main() -> None:
         crop_entry: dict[str, Any] = {
             "id": spec["id"],
             "kind": spec["kind"],
-            "rect": [0, 0, region.width, region.height],
+            "rect": [0, 0, region_size[0], region_size[1]],
             "output": rel(output_path),
-            "source_rect": [0, 0, region.width, region.height],
+            "source_rect": [0, 0, region_size[0], region_size[1]],
             "trim_rect": [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]],
             "trim_padding": int(spec.get("padding", 0)),
             "chroma_key": {"key": "#ff00ff", "mode": "border_connected"},
