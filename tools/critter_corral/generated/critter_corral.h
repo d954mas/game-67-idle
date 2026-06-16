@@ -9,8 +9,13 @@
 #define ASSET_TEXTURE_CORRAL_TEX0 ((nt_hash64_t){0xB433BCB589A67FB1ULL}) /* corral/tex0 */
 
 /* --- SHADER --- */
+#define ASSET_SHADER_ASSETS_SHADERS_SLUG_TEXT_FRAG ((nt_hash64_t){0xC1C3907ABE639DDCULL}) /* assets/shaders/slug_text.frag */
+#define ASSET_SHADER_ASSETS_SHADERS_SLUG_TEXT_VERT ((nt_hash64_t){0x8ECB088C8983CC2FULL}) /* assets/shaders/slug_text.vert */
 #define ASSET_SHADER_ASSETS_SHADERS_SPRITE_FRAG ((nt_hash64_t){0x96ED6312E7B10087ULL}) /* assets/shaders/sprite.frag */
 #define ASSET_SHADER_ASSETS_SHADERS_SPRITE_VERT ((nt_hash64_t){0x75A9EEA4D1472026ULL}) /* assets/shaders/sprite.vert */
+
+/* --- FONT --- */
+#define ASSET_FONT_CORRAL_FONT ((nt_hash64_t){0x7B7835877534B933ULL}) /* corral/font */
 
 /* --- ATLAS --- */
 #define ASSET_ATLAS_CORRAL ((nt_hash64_t){0xC248B522002B721CULL}) /* corral */
@@ -35,6 +40,8 @@
 
 #if NT_HASH_LABELS
 static inline void critter_corral_register_labels(void) {
+    (void)nt_hash64_str("assets/shaders/slug_text.frag");
+    (void)nt_hash64_str("assets/shaders/slug_text.vert");
     (void)nt_hash64_str("assets/shaders/sprite.frag");
     (void)nt_hash64_str("assets/shaders/sprite.vert");
     (void)nt_hash64_str("corral");
@@ -43,6 +50,7 @@ static inline void critter_corral_register_labels(void) {
     (void)nt_hash64_str("corral/critter_a.png");
     (void)nt_hash64_str("corral/critter_b.png");
     (void)nt_hash64_str("corral/flag.png");
+    (void)nt_hash64_str("corral/font");
     (void)nt_hash64_str("corral/grass.png");
     (void)nt_hash64_str("corral/icon_calm.png");
     (void)nt_hash64_str("corral/icon_chain.png");

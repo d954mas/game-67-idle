@@ -1,7 +1,8 @@
 /*
  * Build the Critter Corral sprite pack:
- *   critter_corral.ntpack -- sprite.vert + sprite.frag + atlas with 9 sprites
- *   (critter_a, critter_b, critter, pen, flag, grass, lure, spark, pip).
+ *   critter_corral.ntpack -- sprite + slug_text shaders + a UI font + atlas with
+ *   the critter-corral sprites (critter, pen, flag, grass, lure, spark, pip,
+ *   upgrade icons, card). slug_text + corral/font drive the TEXT renderer.
  *
  * The sprite shaders are the engine-shipped assets/shaders/sprite.{vert,frag}
  * (resolved via an asset root pointing at external/neotolis-engine so the
@@ -32,6 +33,8 @@
 #define HEADER_DIR "tools/critter_corral/generated"
 #define ENGINE_ROOT "external/neotolis-engine"
 #define SPRITE_SRC_DIR "gamedesign/projects/critter-corral/art/sprites"
+/* Durable project UI font (TTF). ASCII charset is enough for the HUD copy. */
+#define FONT_SRC "gamedesign/projects/critter-corral/art/fonts/corral_ui.ttf"
 
 static char s_path_buf[512];
 
@@ -80,10 +83,22 @@ int main(int argc, char *argv[]) {
         nt_builder_set_threads_auto(ctx);
     }
 
-    // #region shaders (engine-shipped sprite pipeline)
+    // #region shaders (engine-shipped sprite + slug_text pipelines)
     nt_builder_add_shader(ctx, "assets/shaders/sprite.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/sprite.frag", NT_BUILD_SHADER_FRAGMENT);
-    (void)printf("  Shaders added: sprite.vert + sprite.frag\n");
+    /* slug_text vs/fs power the TEXT renderer (readable HUD/upgrade/FTUE copy). */
+    nt_builder_add_shader(ctx, "assets/shaders/slug_text.vert", NT_BUILD_SHADER_VERTEX);
+    nt_builder_add_shader(ctx, "assets/shaders/slug_text.frag", NT_BUILD_SHADER_FRAGMENT);
+    (void)printf("  Shaders added: sprite + slug_text (vert/frag)\n");
+    // #endregion
+
+    // #region font (UI text resource for the text renderer)
+    nt_builder_add_font(ctx, FONT_SRC,
+                        &(nt_font_opts_t){
+                            .charset = NT_CHARSET_ASCII,
+                            .resource_name = "corral/font",
+                        });
+    (void)printf("  Font added: corral/font (ASCII)\n");
     // #endregion
 
     // #region atlas: 6 critter-corral sprites

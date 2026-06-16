@@ -3,6 +3,7 @@
 #include "core/nt_core.h"
 #include "core/nt_platform.h"
 #include "devapi/nt_devapi.h"
+#include "font/nt_font.h"
 #include "fs/nt_fs.h"
 #include "game_audio.h"
 #include "game_state.h"
@@ -15,6 +16,7 @@
 #include "render/nt_render_defs.h"
 #include "renderers/nt_shape_renderer.h"
 #include "renderers/nt_sprite_renderer.h"
+#include "renderers/nt_text_renderer.h"
 #include "resource/nt_resource.h"
 #include "window/nt_window.h"
 
@@ -64,6 +66,12 @@ static const float CORRAL_COLORS[CORRAL_MAX_COLORS][4] = {
     {0.36F, 0.82F, 0.34F, 1.0F}, /* 2 fresh green */
     {1.0F, 0.80F, 0.18F, 1.0F},  /* 3 sunny gold */
     {0.70F, 0.40F, 0.95F, 1.0F}, /* 4 soft purple */
+};
+
+/* Plain color names, index-aligned with CORRAL_COLORS — used in the FTUE/level
+ * text ("Bring red critters into the red pen", "New color: gold!"). */
+static const char *CORRAL_COLOR_NAMES[CORRAL_MAX_COLORS] = {
+    "red", "blue", "green", "gold", "purple",
 };
 
 typedef enum {
@@ -176,6 +184,29 @@ static bool s_win_shown;      /* the soft WIN milestone fired once this run */
 static float s_ftue_hint;     /* wave-1 lure pulse hint (seconds remaining) */
 static uint32_t s_rng = 0x1234abcdU;
 
+/* ---- FTUE / tutorial (first run only, <=3 beats, tutorial-by-doing) ----
+ * Beat 0: "Move your mouse to herd the critters" (advances once the player
+ *         moves the lure a meaningful distance).
+ * Beat 1: "Bring [red] critters into the [red] pen" (advances on first capture).
+ * Beat 2: "Pen them all to finish the level!" (advances when nearly cleared).
+ * s_ftue_active is set true once on the very first run and never again (a flag),
+ * so onboarding shows on the first run only — calm, brief, no modal spam. */
+static bool s_ftue_active;        /* the first-run tutorial is currently showing */
+static bool s_ftue_seen;          /* the tutorial has run once -> never show again */
+static int s_ftue_beat;           /* current beat 0..2 */
+static float s_ftue_beat_age;     /* seconds the current beat has been on screen */
+static float s_ftue_move_accum;   /* lure travel accumulated for beat-0 advance */
+static float s_ftue_last_lure_x;  /* previous lure pos (for movement detection) */
+static float s_ftue_last_lure_y;
+
+/* ---- NEW-COLOR callout (difficulty legibility) ----
+ * When a wave first introduces a color the player hasn't seen, a brief text
+ * banner ("New color: green!") fires so rising difficulty is visible, not silent.
+ */
+static int s_seen_colors;         /* highest color_count reached so far this run */
+static float s_new_color_timer;   /* seconds remaining on the "New color!" banner */
+static int s_new_color_index;     /* which color was just introduced */
+
 /* Lure (the one action): follows the mouse. */
 static float s_lure_x;
 static float s_lure_y;
@@ -199,6 +230,23 @@ static nt_resource_t s_atlas_handle;
 static nt_resource_t s_vs_handle;
 static nt_resource_t s_fs_handle;
 static nt_material_t s_sprite_material;
+
+/* ---- Text-render plumbing (slug_text material + a UI font) ----
+ * Text is the keystone of this increment: it makes upgrades, the FTUE, and the
+ * level/difficulty read in plain language. Shares the sprite renderer's Y-down
+ * Globals VP (slot 0), so a pixel (x,y) in game space == a pixel on screen. */
+static nt_resource_t s_text_vs_handle;
+static nt_resource_t s_text_fs_handle;
+static nt_material_t s_text_material;
+static nt_font_t s_font;
+static bool s_text_ready; /* font loaded + material ready this frame */
+
+/* Text alignment for draw_text(). */
+typedef enum {
+  TEXT_ALIGN_LEFT = 0,
+  TEXT_ALIGN_CENTER,
+  TEXT_ALIGN_RIGHT,
+} text_align_t;
 
 /* Region indices resolved once the atlas is READY. */
 typedef enum {
@@ -224,6 +272,71 @@ typedef enum {
 /* Map an upgrade id to its icon region (icons laid out in upgrade order). */
 static corral_region_t upgrade_icon_region(corral_upgrade_t u) {
   return (corral_region_t)(CORRAL_RGN_ICON_RADIUS + (int)u);
+}
+
+/* Plain-language upgrade copy (what it is) — shown as the card TITLE. */
+static const char *upgrade_title(corral_upgrade_t u) {
+  switch (u) {
+  case CORRAL_UPG_RADIUS:
+    return "Lure Radius";
+  case CORRAL_UPG_PULL:
+    return "Lure Pull";
+  case CORRAL_UPG_SECOND_LURE:
+    return "Second Lure";
+  case CORRAL_UPG_GATE:
+    return "Wider Gates";
+  case CORRAL_UPG_CALM:
+    return "Calmer Critters";
+  case CORRAL_UPG_CHAIN:
+    return "Longer Chain";
+  case CORRAL_UPG_COUNT:
+    break;
+  }
+  return "Upgrade";
+}
+
+/* Compact one-word label for the tight acquired-build HUD row (full titles
+ * collide at the icon pitch; the card uses the full upgrade_title()). */
+static const char *upgrade_short(corral_upgrade_t u) {
+  switch (u) {
+  case CORRAL_UPG_RADIUS:
+    return "Radius";
+  case CORRAL_UPG_PULL:
+    return "Pull";
+  case CORRAL_UPG_SECOND_LURE:
+    return "2nd Lure";
+  case CORRAL_UPG_GATE:
+    return "Gates";
+  case CORRAL_UPG_CALM:
+    return "Calm";
+  case CORRAL_UPG_CHAIN:
+    return "Chain";
+  case CORRAL_UPG_COUNT:
+    break;
+  }
+  return "";
+}
+
+/* One-line "why it helps" — shown as the card DESCRIPTION (kept short so it
+ * wraps cleanly on the card). */
+static const char *upgrade_desc(corral_upgrade_t u) {
+  switch (u) {
+  case CORRAL_UPG_RADIUS:
+    return "Herd critters\nfrom farther away";
+  case CORRAL_UPG_PULL:
+    return "Critters come\nto you faster";
+  case CORRAL_UPG_SECOND_LURE:
+    return "A second\nherding point";
+  case CORRAL_UPG_GATE:
+    return "Pens catch\nmore easily";
+  case CORRAL_UPG_CALM:
+    return "Critters wander\nless wildly";
+  case CORRAL_UPG_CHAIN:
+    return "Friends follow\nin for longer";
+  case CORRAL_UPG_COUNT:
+    break;
+  }
+  return "";
 }
 
 static uint32_t s_region_idx[CORRAL_RGN_COUNT];
@@ -316,6 +429,58 @@ static void emit_sprite(corral_region_t rgn, float cx, float cy, float dst_w,
   sprite_mat(cx, cy, dst_w / (float)sw, dst_h / (float)sh, m);
   nt_sprite_renderer_emit_region(s_atlas_handle, s_region_idx[rgn], m, 0.5F,
                                  0.5F, color_packed, 0);
+}
+
+/* ---- Text emit helpers ----
+ * The text renderer's glyph space is Y-up; our screen ortho is Y-down. Negating
+ * column 1 of the model matrix flips glyphs upright. `size` is the em height in
+ * pixels (1 world unit == 1 framebuffer pixel here). */
+
+/* Measured width of a single-line string in pixels (0 if the font isn't ready). */
+static float text_width(const char *s, float size) {
+  if (!s_text_ready || s == NULL || s[0] == '\0') {
+    return 0.0F;
+  }
+  nt_text_size_t ts = nt_font_measure(s_font, s, size, 0.0F);
+  return ts.width;
+}
+
+/* Draw a single-line UTF-8 string. (x,y) is the TOP-LEFT for LEFT align (top-
+ * center / top-right for the others); the baseline is derived from font ascent
+ * so callers position by the visual top edge. No-op until the font is ready. */
+static void draw_text(const char *s, float x, float y, float size,
+                      const float color[4], text_align_t align) {
+  if (!s_text_ready || s == NULL || s[0] == '\0') {
+    return;
+  }
+  nt_font_metrics_t fm = nt_font_get_metrics(s_font);
+  if (fm.units_per_em == 0) {
+    return; /* font resource not resolved yet */
+  }
+  float ox = x;
+  if (align != TEXT_ALIGN_LEFT) {
+    float wpx = text_width(s, size);
+    ox = (align == TEXT_ALIGN_CENTER) ? x - wpx * 0.5F : x - wpx;
+  }
+  float baseline = y + (float)fm.ascent * (size / (float)fm.units_per_em);
+  float m[16];
+  memset(m, 0, sizeof(m));
+  m[0] = 1.0F;
+  m[5] = -1.0F; /* flip glyph Y-up -> screen Y-down */
+  m[10] = 1.0F;
+  m[12] = ox;
+  m[13] = baseline;
+  m[15] = 1.0F;
+  nt_text_renderer_draw(s, m, size, color, 0.0F, 0.0F);
+}
+
+/* Convenience: a soft dark drop-shadow behind a string so light HUD text stays
+ * legible over any field color, then the string itself. */
+static void draw_text_shadow(const char *s, float x, float y, float size,
+                             const float color[4], text_align_t align) {
+  const float shadow[4] = {0.04F, 0.05F, 0.06F, 0.85F * color[3]};
+  draw_text(s, x + 1.5F, y + 1.5F, size, shadow, align);
+  draw_text(s, x, y, size, color, align);
 }
 
 /* ---- Progression curve (wave -> difficulty) ----
@@ -608,6 +773,16 @@ static void corral_layout_pens(float w, float h) {
 
 static void corral_spawn_wave(float w, float h) {
   s_color_count = wave_color_count(s_wave);
+  /* difficulty legibility: if this wave introduces a color the player hasn't
+   * seen yet, fire a brief "New color!" banner (skip on the very first wave —
+   * the FTUE introduces the first colors). */
+  if (s_color_count > s_seen_colors) {
+    if (s_seen_colors > 0) {
+      s_new_color_index = s_color_count - 1; /* the freshly added hue */
+      s_new_color_timer = 2.6F;
+    }
+    s_seen_colors = s_color_count;
+  }
   corral_layout_pens(w, h);
   for (int i = 0; i < CORRAL_PEN_COUNT; ++i) {
     s_pens[i].parked = 0;
@@ -662,6 +837,17 @@ static void corral_reset(float w, float h) {
   s_cleared_flash = 0.0F;
   s_win_shown = false;
   s_ftue_hint = 0.0F;
+  /* FTUE: arm the first-run tutorial only if it has never been seen this session
+   * (s_ftue_seen is NOT cleared by a reset/restart — first run means first run). */
+  s_ftue_active = !s_ftue_seen;
+  s_ftue_beat = 0;
+  s_ftue_beat_age = 0.0F;
+  s_ftue_move_accum = 0.0F;
+  s_ftue_last_lure_x = 0.0F;
+  s_ftue_last_lure_y = 0.0F;
+  s_seen_colors = 0;
+  s_new_color_timer = 0.0F;
+  s_new_color_index = -1;
   s_lure_active = false;
   /* LIGHT META: a fresh run starts with no upgrades (clean slate). */
   for (int u = 0; u < CORRAL_UPG_COUNT; ++u) {
@@ -876,6 +1062,9 @@ static void critter_update(float dt, float w, float h) {
   if (s_ftue_hint > 0.0F) {
     s_ftue_hint -= dt;
   }
+  if (s_new_color_timer > 0.0F) {
+    s_new_color_timer -= dt;
+  }
 
   /* --- particles always settle (so beats keep their fade) --- */
   for (int i = 0; i < CORRAL_MAX_PARTICLES; ++i) {
@@ -924,6 +1113,38 @@ static void critter_update(float dt, float w, float h) {
   if (s_phase != CORRAL_PHASE_PLAYING) {
     return; /* TITLE: field is visible but frozen until game.start */
   }
+
+  /* ---- FTUE: advance beats by DOING (tutorial-by-doing, first run only) ----
+   * Beat 0 -> 1: the player moved the lure a meaningful distance (learned the
+   *              one action). Beat 1 -> 2: first capture (learned matching).
+   * Beat 2 ends: the wave is nearly cleared (learned the goal). Then the
+   * tutorial retires for the rest of the session (s_ftue_seen). */
+  if (s_ftue_active) {
+    s_ftue_beat_age += dt;
+    if (s_ftue_beat == 0) {
+      float mdx = s_lure_x - s_ftue_last_lure_x;
+      float mdy = s_lure_y - s_ftue_last_lure_y;
+      s_ftue_move_accum += sqrtf(mdx * mdx + mdy * mdy);
+      /* advance once they've swept the lure a bit (and the beat has shown). */
+      if (s_ftue_move_accum > 240.0F && s_ftue_beat_age > 0.6F) {
+        s_ftue_beat = 1;
+        s_ftue_beat_age = 0.0F;
+      }
+    } else if (s_ftue_beat == 1) {
+      if (s_score > 0) { /* first capture made */
+        s_ftue_beat = 2;
+        s_ftue_beat_age = 0.0F;
+      }
+    } else { /* beat 2: clearing the level */
+      int loose = corral_loose_count();
+      if (loose <= 1 || s_ftue_beat_age > 8.0F) {
+        s_ftue_active = false;
+        s_ftue_seen = true; /* never show the tutorial again this session */
+      }
+    }
+  }
+  s_ftue_last_lure_x = s_lure_x;
+  s_ftue_last_lure_y = s_lure_y;
 
   const float crit_r = 13.0F;
 
@@ -1591,6 +1812,47 @@ static void corral_draw_sprites(float w, float h) {
     }
   }
 
+  /* FTUE beat 1 cue: a soft pulsing pointer trail from the nearest loose FIRST-
+   * color critter toward its matching pen gate, so "bring [red] into the [red]
+   * pen" reads as a visible arrow (tutorial-by-doing, calm). */
+  if (s_ftue_active && s_ftue_beat == 1 && s_color_count > 0) {
+    /* nearest loose critter of color 0 (matches the FTUE text). */
+    const Critter *src = NULL;
+    float best = 1.0e18F;
+    for (int i = 0; i < s_critter_count; ++i) {
+      const Critter *c = &s_critters[i];
+      if (!c->alive || c->parked || c->color != 0) {
+        continue;
+      }
+      float dx = s_pens[0].gx - c->x;
+      float dy = s_pens[0].gy - c->y;
+      float d2 = dx * dx + dy * dy;
+      if (d2 < best) {
+        best = d2;
+        src = c;
+      }
+    }
+    if (src != NULL) {
+      const float *col = CORRAL_COLORS[0];
+      float pulse = 0.5F + 0.5F * sinf((float)g_nt_app.frame * 0.16F);
+      for (int k = 1; k <= 5; ++k) {
+        float t = (float)k / 6.0F;
+        float lx = src->x + (s_pens[0].gx - src->x) * t;
+        float ly = src->y + (s_pens[0].gy - src->y) * t;
+        float a = (0.35F + 0.4F * pulse) * (0.4F + 0.6F * t); /* brighter toward pen */
+        float ac[4] = {clampf(col[0] + 0.2F, 0.0F, 1.0F),
+                       clampf(col[1] + 0.2F, 0.0F, 1.0F),
+                       clampf(col[2] + 0.2F, 0.0F, 1.0F), a};
+        float sz = 10.0F + 8.0F * t;
+        emit_sprite(CORRAL_RGN_SPARK, lx, ly, sz, sz, pack_rgba(ac));
+      }
+      /* a bright flag head at the pen gate = "here". */
+      float fc[4] = {col[0], col[1], col[2], 0.7F + 0.3F * pulse};
+      emit_sprite(CORRAL_RGN_FLAG, s_pens[0].gx, s_pens[0].gy - 30.0F, 30.0F,
+                  38.0F, pack_rgba(fc));
+    }
+  }
+
   /* particles (fade out) — tinted spark sprites */
   for (int i = 0; i < CORRAL_MAX_PARTICLES; ++i) {
     const Particle *p = &s_particles[i];
@@ -1617,17 +1879,16 @@ static void corral_draw_sprites(float w, float h) {
      * The bar grows with score so the at-a-glance "progress" reads even when
      * pips wrap. */
     {
-      const float dot = 14.0F;
+      const float dot = 11.0F;
       const float gap = dot * 1.25F;
-      float x0 = 18.0F;
-      int max_pips = 18;
+      /* leave room on the left for the "Score N" TEXT label (drawn in the text
+       * pass); the pips become a subtle progress bar to the right of the word. */
+      float x0 = 110.0F;
+      int max_pips = 16;
       int shown = s_score < max_pips ? s_score : max_pips;
-      /* backing label chip */
-      emit_sprite(CORRAL_RGN_PIP, x0 + 6.0F, cy, 16.0F, 16.0F, 0xFF66CCFFU);
-      x0 += 24.0F;
       for (int i = 0; i < shown; ++i) {
         float px = x0 + dot * 0.5F + (float)i * gap;
-        emit_sprite(CORRAL_RGN_PIP, px, cy, dot, dot, 0xFFF0F0F0U /* white */);
+        emit_sprite(CORRAL_RGN_PIP, px, cy, dot, dot, 0xCCF0F0F0U /* white */);
       }
     }
 
@@ -1732,8 +1993,8 @@ static void corral_draw_sprites(float w, float h) {
     const float strip_h = h * 0.085F;
     float iy = strip_h + 22.0F;
     float ix = 22.0F;
-    const float isz = 30.0F; /* icon tile size */
-    const float istep = isz + 14.0F;
+    const float isz = 30.0F;          /* icon tile size */
+    const float istep = isz + 28.0F;  /* matches the text label pitch below */
     for (int u = 0; u < CORRAL_UPG_COUNT; ++u) {
       if (s_upgrades[u] == 0) {
         continue;
@@ -1772,6 +2033,153 @@ static void corral_draw_sprites(float w, float h) {
   corral_draw_phase_overlay(w, h);
 
   nt_sprite_renderer_flush();
+}
+
+/* ---- TEXT pass (the keystone): readable copy over the sprite field ----
+ * Makes the build TEACHABLE: a clear level/difficulty readout, plain-language
+ * upgrade cards + acquired-build labels, a real first-run FTUE, and a "New
+ * color!" difficulty callout. Calm, casual, legible — short strings, soft
+ * shadow for contrast, the actual color names for the FTUE. */
+static void corral_draw_text(float w, float h) {
+  nt_text_renderer_set_material(s_text_material);
+  nt_text_renderer_set_font(s_font);
+
+  const float white[4] = {0.98F, 0.98F, 0.96F, 1.0F};
+  const float warm[4] = {1.0F, 0.86F, 0.46F, 1.0F};
+
+  /* ---- HUD: "Level N" prominently (top-center), plus a small Score label ---- */
+  {
+    char buf[48];
+    (void)snprintf(buf, sizeof(buf), "Level %d", s_wave);
+    draw_text_shadow(buf, w * 0.5F, 6.0F, 26.0F, warm, TEXT_ALIGN_CENTER);
+
+    (void)snprintf(buf, sizeof(buf), "Score %d", s_score);
+    draw_text_shadow(buf, 16.0F, 8.0F, 20.0F, white, TEXT_ALIGN_LEFT);
+  }
+
+  /* ---- Acquired-upgrade HUD row: a small NAME label under each picked icon so
+   * the player can read their growing build (not just guess from icons). ---- */
+  {
+    const float strip_h = h * 0.085F;
+    float iy = strip_h + 22.0F;
+    float ix = 22.0F;
+    const float isz = 30.0F;
+    const float istep = isz + 28.0F; /* room for the compact label under each icon */
+    for (int u = 0; u < CORRAL_UPG_COUNT; ++u) {
+      if (s_upgrades[u] == 0) {
+        continue;
+      }
+      /* compact label just below the level pips, centered under the icon. */
+      draw_text_shadow(upgrade_short((corral_upgrade_t)u), ix + isz * 0.5F,
+                       iy + isz + 16.0F, 12.0F, white, TEXT_ALIGN_CENTER);
+      ix += istep;
+    }
+  }
+
+  /* ---- "New color!" difficulty callout (text banner) ---- */
+  if (s_new_color_timer > 0.0F && s_new_color_index >= 0 &&
+      s_new_color_index < CORRAL_MAX_COLORS) {
+    char buf[48];
+    (void)snprintf(buf, sizeof(buf), "New color: %s!",
+                   CORRAL_COLOR_NAMES[s_new_color_index]);
+    const float *cc = CORRAL_COLORS[s_new_color_index];
+    float col[4] = {clampf(cc[0] + 0.18F, 0.0F, 1.0F),
+                    clampf(cc[1] + 0.18F, 0.0F, 1.0F),
+                    clampf(cc[2] + 0.18F, 0.0F, 1.0F), 1.0F};
+    draw_text_shadow(buf, w * 0.5F, h * 0.16F, 30.0F, col, TEXT_ALIGN_CENTER);
+  }
+
+  /* ---- FTUE beats (first run only): one short line + the actual first color.
+   * The motion/arrow cues are sprite-side; this is the readable instruction. */
+  if (s_ftue_active) {
+    const char *line = NULL;
+    char buf[80];
+    if (s_ftue_beat == 0) {
+      line = "Move your mouse to herd the critters";
+    } else if (s_ftue_beat == 1) {
+      const char *cn = CORRAL_COLOR_NAMES[0]; /* the actual first color */
+      (void)snprintf(buf, sizeof(buf), "Bring %s critters into the %s pen", cn,
+                     cn);
+      line = buf;
+    } else {
+      line = "Pen them all to finish the level!";
+    }
+    /* a gentle fade-in over the first ~0.4s of each beat so it feels calm. */
+    float a = clampf(s_ftue_beat_age / 0.4F, 0.0F, 1.0F);
+    float tip[4] = {1.0F, 0.97F, 0.88F, a};
+    draw_text_shadow(line, w * 0.5F, h - 56.0F, 22.0F, tip, TEXT_ALIGN_CENTER);
+  }
+
+  /* ---- Phase-beat copy (title / cleared / win / upgrade cards) ---- */
+  if (s_phase == CORRAL_PHASE_TITLE) {
+    draw_text_shadow("CRITTER CORRAL", w * 0.5F, h * 0.26F, 44.0F, warm,
+                     TEXT_ALIGN_CENTER);
+    draw_text_shadow("Herd each color into its matching pen", w * 0.5F,
+                     h * 0.26F + 54.0F, 20.0F, white, TEXT_ALIGN_CENTER);
+    draw_text_shadow("Click to start", w * 0.5F, h * 0.72F, 24.0F, white,
+                     TEXT_ALIGN_CENTER);
+  } else if (s_phase == CORRAL_PHASE_WAVE_CLEARED) {
+    char buf[48];
+    (void)snprintf(buf, sizeof(buf), "Level %d cleared!", s_wave);
+    draw_text_shadow(buf, w * 0.5F, h * 0.5F - 14.0F, 30.0F, warm,
+                     TEXT_ALIGN_CENTER);
+  } else if (s_phase == CORRAL_PHASE_WIN) {
+    draw_text_shadow("You did it!", w * 0.5F, h * 0.5F - 70.0F, 40.0F, warm,
+                     TEXT_ALIGN_CENTER);
+    draw_text_shadow("Keep going — the pasture never ends", w * 0.5F,
+                     h * 0.5F + 48.0F, 20.0F, white, TEXT_ALIGN_CENTER);
+  } else if (s_phase == CORRAL_PHASE_UPGRADE_CHOICE) {
+    /* header */
+    draw_text_shadow("Choose an upgrade", w * 0.5F, h * 0.06F, 30.0F, warm,
+                     TEXT_ALIGN_CENTER);
+    int n = (s_offer_count > 0) ? s_offer_count : CORRAL_UPGRADE_OFFER;
+    for (int i = 0; i < n; ++i) {
+      corral_upgrade_t u = s_offer[i];
+      float cx;
+      float cy;
+      float cw;
+      float ch;
+      upgrade_card_rect(i, w, h, &cx, &cy, &cw, &ch);
+      float bob = 4.0F * sinf((float)g_nt_app.frame * 0.05F + (float)i * 1.3F);
+      float mcx = cx + cw * 0.5F;
+      float top = cy + bob;
+      /* dark ink on the light card so the copy is crisp. */
+      const float ink[4] = {0.12F, 0.13F, 0.16F, 1.0F};
+      const float ink2[4] = {0.24F, 0.26F, 0.30F, 1.0F};
+      /* TITLE near the top of the card. */
+      draw_text(upgrade_title(u), mcx, top + ch * 0.06F, 20.0F, ink,
+                TEXT_ALIGN_CENTER);
+      /* DESCRIPTION (two short lines) just under the icon. */
+      const char *desc = upgrade_desc(u);
+      /* split on the embedded '\n' into two centered lines for clean centering. */
+      const char *nl = strchr(desc, '\n');
+      if (nl != NULL) {
+        char l1[40];
+        size_t l1len = (size_t)(nl - desc);
+        if (l1len >= sizeof(l1)) {
+          l1len = sizeof(l1) - 1;
+        }
+        memcpy(l1, desc, l1len);
+        l1[l1len] = '\0';
+        draw_text(l1, mcx, top + ch * 0.56F, 13.0F, ink2, TEXT_ALIGN_CENTER);
+        draw_text(nl + 1, mcx, top + ch * 0.56F + 17.0F, 13.0F, ink2,
+                  TEXT_ALIGN_CENTER);
+      } else {
+        draw_text(desc, mcx, top + ch * 0.56F, 13.0F, ink2, TEXT_ALIGN_CENTER);
+      }
+      /* current level / what this pick grants, as words under the pips. */
+      char lvl[40];
+      (void)snprintf(lvl, sizeof(lvl), "Level %d / %d", upgrade_card_pips(u),
+                     CORRAL_UPG_MAX_LEVEL);
+      draw_text(lvl, mcx, top + ch * 0.80F, 13.0F, ink2, TEXT_ALIGN_CENTER);
+      /* the number key hint, as a real "[1]" so the pick is obvious. */
+      char key[8];
+      (void)snprintf(key, sizeof(key), "[%d]", i + 1);
+      draw_text(key, mcx, top + ch * 0.90F, 14.0F, ink, TEXT_ALIGN_CENTER);
+    }
+  }
+
+  nt_text_renderer_flush();
 }
 
 #if NT_DEVAPI_ENABLED && !defined(NT_PLATFORM_WEB)
@@ -1870,6 +2278,15 @@ static cJSON *state_json(void) {
   cJSON_AddNumberToObject(root, "score", s_score);
   cJSON_AddBoolToObject(root, "win_milestone_shown", s_win_shown);
   cJSON_AddBoolToObject(root, "sprites_ready", s_sprites_ready);
+  cJSON_AddBoolToObject(root, "text_ready", s_text_ready);
+
+  /* FTUE / tutorial state so a playtest can prove the first-run onboarding. */
+  cJSON *ftue = cJSON_AddObjectToObject(root, "ftue");
+  cJSON_AddBoolToObject(ftue, "active", s_ftue_active);
+  cJSON_AddBoolToObject(ftue, "seen", s_ftue_seen);
+  cJSON_AddNumberToObject(ftue, "beat", s_ftue_beat);
+  /* difficulty callout (the "New color!" banner). */
+  cJSON_AddBoolToObject(root, "new_color_callout", s_new_color_timer > 0.0F);
 
   cJSON *remaining = cJSON_AddArrayToObject(root, "remaining_by_color");
   cJSON *penned = cJSON_AddArrayToObject(root, "penned_by_color");
@@ -2313,9 +2730,10 @@ static void frame(void) {
   }
 #endif
 
-  /* Resource/material pumps for the sprite pipeline. */
+  /* Resource/material pumps for the sprite + text pipelines. */
   nt_resource_step();
   nt_material_step();
+  nt_font_step(); /* resolve the font resource + upload glyph textures */
   resolve_atlas_regions();
 
   const float w =
@@ -2343,14 +2761,23 @@ static void frame(void) {
   const nt_material_info_t *mat_info = nt_material_get_info(s_sprite_material);
   s_sprites_ready = s_atlas_resolved && mat_info != NULL && mat_info->ready;
 
+  /* Text is usable once the slug_text material is ready AND the font resource
+   * has resolved (units_per_em becomes non-zero). */
+  const nt_material_info_t *tmat_info = nt_material_get_info(s_text_material);
+  s_text_ready = tmat_info != NULL && tmat_info->ready &&
+                 nt_font_get_metrics(s_font).units_per_em != 0;
+
   nt_gfx_begin_frame();
   if (g_nt_gfx.context_restored) {
     nt_shape_renderer_restore_gpu();
     nt_sprite_renderer_restore_gpu();
+    nt_text_renderer_restore_gpu();
     nt_resource_invalidate(NT_ASSET_TEXTURE);
     nt_resource_invalidate(NT_ASSET_SHADER_CODE);
     nt_resource_invalidate(NT_ASSET_ATLAS);
+    nt_resource_invalidate(NT_ASSET_FONT);
     s_sprites_ready = false;
+    s_text_ready = false;
   }
   /* Pasture-green clear so the field reads even before the atlas resolves. */
   nt_gfx_begin_pass(&(nt_pass_desc_t){
@@ -2372,6 +2799,17 @@ static void frame(void) {
     nt_gfx_update_buffer(s_frame_ubo, &uniforms, sizeof(uniforms));
     nt_gfx_bind_uniform_buffer(s_frame_ubo, 0);
     corral_draw_sprites(w, h);
+  }
+
+  /* TEXT pass (shares the Globals VP at slot 0 with the sprites above). Drawn
+   * last so HUD/upgrade/FTUE/level copy reads on top of the field. */
+  if (s_text_ready) {
+    if (!s_sprites_ready) {
+      /* sprites didn't bind the UBO this frame — bind it for text. */
+      nt_gfx_update_buffer(s_frame_ubo, &uniforms, sizeof(uniforms));
+      nt_gfx_bind_uniform_buffer(s_frame_ubo, 0);
+    }
+    corral_draw_text(w, h);
   }
 
   nt_gfx_end_pass();
@@ -2419,10 +2857,13 @@ int main(int argc, char **argv) {
                             nt_gfx_deactivate_shader);
   nt_atlas_init();
 
-  /* Immediate-mode sprite emit only — no ECS components needed. */
-  nt_material_init(&(nt_material_desc_t){.max_materials = 4});
+  /* Immediate-mode sprite + text emit — no ECS components needed. Material slots
+   * sized for the sprite material + the slug_text material. */
+  nt_material_init(&(nt_material_desc_t){.max_materials = 8});
+  nt_font_init(&(nt_font_desc_t){.max_fonts = 4});
   nt_sprite_renderer_desc_t sr_desc = nt_sprite_renderer_desc_defaults();
   nt_sprite_renderer_init(&sr_desc);
+  nt_text_renderer_init(); /* the keystone: readable HUD/upgrade/FTUE/level copy */
 
   game_audio_init();
 
@@ -2458,6 +2899,34 @@ int main(int argc, char **argv) {
       .label = "corral_sprite",
   });
 
+  /* TEXT material (slug_text vs/fs from the same pack) + the UI font. The font
+   * curve/band textures are bound internally by the text renderer; the only
+   * material param is the coverage cutoff. depth off — it's a 2D HUD overlay. */
+  s_text_vs_handle = nt_resource_request(
+      ASSET_SHADER_ASSETS_SHADERS_SLUG_TEXT_VERT, NT_ASSET_SHADER_CODE);
+  s_text_fs_handle = nt_resource_request(
+      ASSET_SHADER_ASSETS_SHADERS_SLUG_TEXT_FRAG, NT_ASSET_SHADER_CODE);
+  s_text_material = nt_material_create(&(nt_material_create_desc_t){
+      .vs = s_text_vs_handle,
+      .fs = s_text_fs_handle,
+      .blend_mode = NT_BLEND_MODE_ALPHA,
+      .depth_test = false,
+      .depth_write = false,
+      .cull_mode = NT_CULL_NONE,
+      .params[0] = {.name = "u_alpha_cutoff",
+                    .value = {NT_TEXT_ALPHA_CUTOFF_DEFAULT}},
+      .param_count = 1,
+      .label = "corral_text",
+  });
+  s_font = nt_font_create(&(nt_font_create_desc_t){
+      .curve_texture_width = 1024,
+      .curve_texture_height = 512,
+      .band_texture_height = 256,
+      .band_count = 8,
+      .measure_cache_size = 256,
+  });
+  nt_font_add(s_font, nt_resource_request(ASSET_FONT_CORRAL_FONT, NT_ASSET_FONT));
+
   nt_resource_set_activate_time_budget(0);
 
   corral_reset((float)s_window_width, (float)s_window_height);
@@ -2488,7 +2957,11 @@ int main(int argc, char **argv) {
   }
 #endif
   game_audio_shutdown();
+  nt_text_renderer_shutdown();
+  nt_font_destroy(s_font);
+  nt_font_shutdown();
   nt_sprite_renderer_shutdown();
+  nt_material_destroy(s_text_material);
   nt_material_destroy(s_sprite_material);
   nt_material_shutdown();
   nt_shape_renderer_shutdown();
