@@ -272,18 +272,21 @@ task, or fresh validation evidence.
 
 ## AI session profiling
 
-**Coverage is automatic.** Profiling is wired into BOTH harnesses as hooks
-(`.claude/settings.json` for Claude Code, `.codex/hooks.json` for Codex) that
-run `tools/ai_profile/hook_record.mjs` on command start, command result when the
-harness emits it, and session start, appending records to
-`tmp/session_profiles/`. The harness runs it, so coverage no longer depends on
-the agent remembering to call `ai.mjs start/run` (that opt-in dependency is
-exactly why a long session once logged zero records). A command that fails before
-the harness emits a result still has a `tool_call_start` record, so later review
-can see the attempted command instead of a silent gap; Codex also recovers missed
-failed shell results from its local session JSONL on the next successful hook.
-`node tools/ai.mjs status` reads the result. The hook is silent and never blocks
-the agent. `ai.mjs start/run` are still available for explicit scope/wrapping.
+**Coverage is automatic and low-overhead.** Profiling is wired into BOTH
+harnesses as hooks (`.claude/settings.json` for Claude Code, `.codex/hooks.json`
+for Codex). The hot path runs the native `tools/ai_profile/hook_record_fast`
+(`.exe` on Windows) on `PostToolUse` + `SessionStart`, appending records to
+`tmp/session_profiles/`; rebuild it with
+`node tools/ai_profile/build_hook_record_fast.mjs` after changing the C source or
+on a new OS. The JS `hook_record.mjs` remains the richer fallback/test path and
+Codex transcript recovery path. Successful read-only plumbing commands are
+skipped, and there is no default `PreToolUse` hook because doubling every command
+is too expensive for long sessions. For Codex failures that the harness did not
+emit through `PostToolUse`, run `node tools/ai_profile/import_codex_session.mjs`
+before retrospective analysis to import missed failures from the local Codex
+session transcript. `node tools/ai.mjs status` reads the result. The hook is
+silent and never blocks the agent. `ai.mjs start/run` are still available for
+explicit scope/wrapping.
 
 Profiling shows where an AI agent gets stuck without turning telemetry into a
 second project. It is passive by default: normal game work must not pause to

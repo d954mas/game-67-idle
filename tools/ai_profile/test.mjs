@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -67,6 +67,18 @@ function runHook(payload, profile, harness = "codex", env = {}) {
     `hook_record ${payload.hook_event_name || ""}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
   );
   return result;
+}
+
+function runFastHook(payload, profile, harness = "codex") {
+  const exe = join(root, "tools", "ai_profile", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast");
+  const result = spawnSync(exe, [harness], {
+    cwd: root,
+    env: { ...process.env, AI_PROFILE_FILE: profile },
+    input: JSON.stringify(payload),
+    encoding: "utf8",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  assert.equal(result.status, 0, `hook_record_fast\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
 }
 
 test("scope file supplies metadata after CLI and env fallbacks", () => {
@@ -221,6 +233,81 @@ test("hook_record logs failed command result records", () => {
   }
 });
 
+test("hook_record skips successful read-only plumbing commands", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "hook-plumbing.jsonl");
+    runHook({
+      hook_event_name: "PreToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "git -c core.excludesFile= status --short" },
+    }, profile);
+    runHook({
+      hook_event_name: "PostToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "Get-Content tools\\ai_profile\\hook_record.mjs" },
+      tool_response: { exit_code: 0 },
+    }, profile);
+
+    assert.throws(() => readJsonl(profile), /ENOENT/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("hook_record keeps failed read-only plumbing commands", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "hook-plumbing-fail.jsonl");
+    runHook({
+      hook_event_name: "PostToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "git status --short" },
+      tool_response: { exit_code: 1 },
+    }, profile);
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].event_type, "tool_call_result");
+    assert.equal(records[0].result, "fail");
+    assert.deepEqual(records[0].commands, ["git status --short"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("hook_record_fast records work and skips successful plumbing when built", {
+  skip: !existsSync(join(root, "tools", "ai_profile", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
+}, () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "fast-hook.jsonl");
+    runFastHook({
+      hook_event_name: "PostToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "git status --short" },
+      tool_response: { exit_code: 0 },
+    }, profile);
+    assert.equal(existsSync(profile), false);
+
+    runFastHook({
+      hook_event_name: "PostToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "node --test tools/ai_profile/test.mjs" },
+      tool_response: { exit_code: 0 },
+    }, profile);
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].event_type, "tool_call_result");
+    assert.equal(records[0].category, "validation");
+    assert.equal(records[0].result, "pass");
+    assert.deepEqual(records[0].commands, ["node --test tools/ai_profile/test.mjs"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("hook_record recovers missed Codex failed shell commands from session transcript", () => {
   const dir = tempDir();
   try {
@@ -254,13 +341,13 @@ test("hook_record recovers missed Codex failed shell commands from session trans
     runHook({
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
-      tool_input: { command: "git status --short" },
+      tool_input: { command: "node --test tools/ai_profile/test.mjs" },
       tool_response: { exit_code: 0 },
     }, profile, "codex", { CODEX_SESSION_FILE: session });
     runHook({
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
-      tool_input: { command: "git status --short" },
+      tool_input: { command: "node --test tools/ai_profile/test.mjs" },
       tool_response: { exit_code: 0 },
     }, profile, "codex", { CODEX_SESSION_FILE: session });
 
@@ -271,6 +358,45 @@ test("hook_record recovers missed Codex failed shell commands from session trans
     assert.equal(recovered[0].source_call_id, "call_failed_probe");
     assert.equal(recovered[0].exit_code, 9);
     assert.deepEqual(recovered[0].commands, ["Write-Error 'HOOK_FAIL'; exit 9"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("hook_record recover-only imports Codex failed shell commands", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "hook-recover-only.jsonl");
+    const session = join(dir, "codex-session.jsonl");
+    writeFileSync(session, [
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          call_id: "call_recover_only",
+          arguments: JSON.stringify({ command: "node --test tools/ai_profile/test.mjs" }),
+        },
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call_recover_only",
+          output: "Exit code: 1\n",
+        },
+      }),
+    ].join("\n") + "\n", "utf8");
+
+    runHook({}, profile, "codex", {
+      AI_PROFILE_RECOVER_ONLY: "1",
+      CODEX_SESSION_FILE: session,
+    });
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].event_type, "tool_call_result_recovered");
+    assert.equal(records[0].source_call_id, "call_recover_only");
+    assert.deepEqual(records[0].commands, ["node --test tools/ai_profile/test.mjs"]);
   } finally {
     cleanup(dir);
   }

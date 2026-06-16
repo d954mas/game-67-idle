@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Cross-harness profiling hook handler.
 //
-// Wired as a PreToolUse / PostToolUse / SessionStart hook in BOTH harnesses:
-//   - Claude Code:  .claude/settings.json   (hooks.PreToolUse/PostToolUse ...)
-//   - Codex CLI:    .codex/hooks.json        (hooks.PreToolUse/PostToolUse ...)
+// Fallback/rich handler for the native hook_record_fast hot path.
+// Default harness configs use PostToolUse / SessionStart only:
+//   - Claude Code:  .claude/settings.json
+//   - Codex CLI:    .codex/hooks.json
 // The harness runs this automatically on every tool call, so profiling coverage
 // is not dependent on the agent remembering to call `ai.mjs start/run`.
 //
@@ -20,7 +21,13 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { appendRecord, buildRecord, defaultProfilePath } from "./profile_lib.mjs";
+
+let profileLibPromise;
+
+function loadProfileLib() {
+  profileLibPromise ??= import("./profile_lib.mjs");
+  return profileLibPromise;
+}
 
 function pick(obj, ...keys) {
   if (!obj || typeof obj !== "object") return undefined;
@@ -35,6 +42,26 @@ function inferCategory(cmd) {
   if (/\b(cmake|ninja|gcc|clang|build)\b/.test(c)) return "implementation";
   if (/\b(grep|find|ls|cat|rg|glob)\b/.test(c)) return "research";
   return "tooling";
+}
+
+function stripLeadingEnvAssignments(cmd) {
+  let c = cmd.trim();
+  while (/^[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|\S+)\s+/.test(c)) {
+    c = c.replace(/^[A-Za-z_][A-Za-z0-9_]*=("[^"]*"|'[^']*'|\S+)\s+/, "");
+  }
+  return c;
+}
+
+function isReadOnlyPlumbingCommand(cmd) {
+  let c = stripLeadingEnvAssignments(String(cmd || ""));
+  c = c.split(/\r?\n/)[0].trim();
+  if (!c) return false;
+
+  const lower = c.toLowerCase().replace(/\s+/g, " ");
+  if (/^git(\.exe)?\s+(?:-[a-z]\s+\S+\s+)*(?:status|diff|log)\b/.test(lower)) return true;
+  if (/^git(\.exe)?\s+-c\s+\S+\s+(?:-[a-z]\s+\S+\s+)*(?:status|diff|log)\b/.test(lower)) return true;
+
+  return /^(?:get-content|get-childitem|test-path|select-string|where\.exe|ls|cat)(?:\s|$)/i.test(c);
 }
 
 function todaySessionDir() {
@@ -61,7 +88,7 @@ function latestCodexSessionFile() {
   return latest?.path || "";
 }
 
-function seenRecoveredCallIds(profilePath) {
+function seenRecoveredCallIds(profilePath, defaultProfilePath) {
   const target = resolve(profilePath || defaultProfilePath());
   if (!existsSync(target)) return new Set();
   const seen = new Set();
@@ -103,13 +130,14 @@ function readSessionTailLines(sessionFile) {
   }
 }
 
-function recoverCodexFailedCommands(profilePath, harness) {
+async function recoverCodexFailedCommands(profilePath, harness) {
   if (harness !== "codex") return;
   const sessionFile = latestCodexSessionFile();
   if (!sessionFile || !existsSync(sessionFile)) return;
 
+  const { appendRecord, buildRecord, defaultProfilePath } = await loadProfileLib();
   const commandsByCallId = new Map();
-  const seen = seenRecoveredCallIds(profilePath);
+  const seen = seenRecoveredCallIds(profilePath, defaultProfilePath);
   for (const rawLine of readSessionTailLines(sessionFile)) {
     if (!rawLine.trim()) continue;
     let line;
@@ -178,12 +206,18 @@ function readStdin() {
 
     const profilePath = process.env.AI_PROFILE_FILE || "";
 
+    if (process.env.AI_PROFILE_RECOVER_ONLY === "1") {
+      await recoverCodexFailedCommands(profilePath, harness);
+      process.exit(0);
+    }
+
     if (event === "SessionStart") {
+      const { appendRecord, buildRecord } = await loadProfileLib();
       appendRecord(profilePath, buildRecord({
         phase: "session", category: "context", result: "pass",
         intent: `session start (${harness})`, tool: [`${harness}/session`],
       }, { event_type: "session_start" }));
-      recoverCodexFailedCommands(profilePath, harness);
+      await recoverCodexFailedCommands(profilePath, harness);
       process.exit(0);
     }
 
@@ -203,6 +237,8 @@ function readStdin() {
     };
 
     if (event === "PreToolUse") {
+      if (isReadOnlyPlumbingCommand(cmd1)) process.exit(0);
+      const { appendRecord, buildRecord } = await loadProfileLib();
       appendRecord(profilePath, buildRecord({
         ...baseValues,
         result: "unknown",
@@ -218,12 +254,15 @@ function readStdin() {
         ? "fail"
         : "pass";
 
+    if (result !== "fail" && isReadOnlyPlumbingCommand(cmd1)) process.exit(0);
+
+    const { appendRecord, buildRecord } = await loadProfileLib();
     appendRecord(profilePath, buildRecord({
       ...baseValues,
       result,
       value: result === "fail" ? "rework" : "unknown",
     }, { event_type: "tool_call_result" }));
-    recoverCodexFailedCommands(profilePath, harness);
+    await recoverCodexFailedCommands(profilePath, harness);
   } catch {
     // swallow — a profiling hook must never disrupt the agent
   }
