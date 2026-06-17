@@ -337,6 +337,28 @@ static uint32_t canvas_h(void) { return g_nt_window.fb_height > 0 ? g_nt_window.
 static float clampf(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 static int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
+/* Aspect-correct world bounds. The DESIGN rect (16:9) is fit (CONTAIN) into the
+ * framebuffer with EQUAL x/y scale and centered, so nothing stretches when the
+ * window aspect != 16:9; the extra margin is covered by the full-bleed backdrop.
+ * The projection AND the pointer->design click mapping share this helper so the
+ * two never disagree. At the 16:9 default (what probes use) it returns exactly
+ * [0,DESIGN_W] x [0,DESIGN_H], so headless behavior is unchanged. */
+static void world_bounds(float *left, float *right, float *bottom, float *top) {
+    const float fw = (float)canvas_w();
+    const float fh = (float)canvas_h();
+    if (fw <= 0.0F || fh <= 0.0F) {
+        *left = 0.0F; *right = DESIGN_W; *bottom = 0.0F; *top = DESIGN_H;
+        return;
+    }
+    const float scale = fminf(fw / DESIGN_W, fh / DESIGN_H);
+    const float vis_w = fw / scale;
+    const float vis_h = fh / scale;
+    const float ox = (vis_w - DESIGN_W) * 0.5F;
+    const float oy = (vis_h - DESIGN_H) * 0.5F;
+    *left = -ox; *right = DESIGN_W + ox;
+    *bottom = -oy; *top = DESIGN_H + oy;
+}
+
 /* Map a monster's progression coord (1 far .. 0 engaged) + lane to screen.
  * The path recedes up and slightly toward center; depth (=prog) drives scale &
  * fade so queued monsters read as small/faded "coming next", not a tower. */
@@ -1311,10 +1333,14 @@ static bool handle_world_click(float px, float py) {
 
 /* Convert a framebuffer pointer pixel to design-space (Y flips to bottom-up). */
 static void pointer_to_design(float px, float py, float *dx, float *dy) {
-    float fw = (float)canvas_w();
-    float fh = (float)canvas_h();
-    *dx = (fw > 0.0F) ? (px / fw * DESIGN_W) : px;
-    *dy = (fh > 0.0F) ? ((fh - py) / fh * DESIGN_H) : py;
+    const float fw = (float)canvas_w();
+    const float fh = (float)canvas_h();
+    /* Invert the SAME contain transform the projection uses, so a click lands on
+     * the element drawn under the cursor at any window aspect (no stretch skew). */
+    float L, R, B, T;
+    world_bounds(&L, &R, &B, &T);
+    *dx = (fw > 0.0F) ? (L + px / fw * (R - L)) : px;
+    *dy = (fh > 0.0F) ? (B + (fh - py) / fh * (T - B)) : py;
 }
 
 static void handle_input(void) {
@@ -1343,7 +1369,22 @@ static void emit_ground_shadow(float cx, float cy, float w, float a) {
 static void compose_scene(void) {
     const uint32_t white = 0xFFFFFFFFu;
 
-    emit_sprite(R_BACKGROUND, DESIGN_W * 0.5F, DESIGN_H * 0.5F, DESIGN_W, DESIGN_H, white);
+    /* Full-bleed backdrop: COVER the whole visible area (which extends past the
+     * 16:9 design rect on a differently-shaped window) with the background,
+     * UNDISTORTED + centered, so a non-16:9 window shows more snow/sky rather
+     * than stretched art or empty bars. Gameplay + UI stay in the centered
+     * design rect (see world_bounds). */
+    {
+        float L, R, B, T;
+        world_bounds(&L, &R, &B, &T);
+        const float vis_w = R - L, vis_h = T - B;
+        const float bg_aspect = (s_region_h[R_BACKGROUND] > 0)
+            ? ((float)s_region_w[R_BACKGROUND] / (float)s_region_h[R_BACKGROUND])
+            : (DESIGN_W / DESIGN_H);
+        float bg_w = vis_w, bg_h = bg_w / bg_aspect;
+        if (bg_h < vis_h) { bg_h = vis_h; bg_w = bg_h * bg_aspect; }
+        emit_sprite(R_BACKGROUND, (L + R) * 0.5F, (B + T) * 0.5F, bg_w, bg_h, white);
+    }
 
     /* The Frost Keep sits at the top of the path (the climb goal -- backdrop). */
     emit_h(R_KEEP, KEEP_CX, KEEP_CY, DESIGN_H * 0.30F, white);
@@ -2107,7 +2148,9 @@ static void frame(void) {
     mat4 view;
     mat4 vp;
     glm_mat4_identity(view);
-    glm_ortho(0.0F, DESIGN_W, 0.0F, DESIGN_H, -1.0F, 1.0F, proj);
+    float wb_l, wb_r, wb_b, wb_t;
+    world_bounds(&wb_l, &wb_r, &wb_b, &wb_t);
+    glm_ortho(wb_l, wb_r, wb_b, wb_t, -1.0F, 1.0F, proj);
     glm_mat4_mul(proj, view, vp);
 
     nt_frame_uniforms_t u = {0};
