@@ -50,6 +50,7 @@ game project:
 - `tools/assets/validate_art_job.mjs`
 - `tools/assets/audit_slice9_design_policy.mjs`
 - `tools/assets/audit_atlas_metadata.mjs`
+- `tools/assets/audit_asset_semantic_style.mjs`
 - `tools/assets/build_ui_atlas_pack.py`
 - `tools/assets/audit_ui_atlas_pack.py`
 - `tools/assets/audit_runtime_ui_asset_usage.mjs`
@@ -61,6 +62,7 @@ game project:
 - `tools/assets/plan_runtime_crops_from_intake.py`
 - `tools/assets/build_runtime_assets_from_crop_plan.py`
 - `tools/assets/audit_generated_ui_assets.py`
+- `tools/assets/audit_runtime_ui_edges.py`
 - `tools/assets/render_ui_asset_edge_proof.py`
 - `tools/assets/render_ui_composition_proof.py`
 - `tools/assets/audit_generated_source_derivation.py`
@@ -72,7 +74,13 @@ whether the first screen reads as a product. Use `--visual-strict` for
 beautiful, casual, generated-UI, fake-shot, or child-testable prototype work;
 it requires six-axis visual scores and blocks a pass when text/readability,
 UI controls, action direction, art quality, composition, or audience fit are
-below the bar. `tools/product_gate/visual_critique_packet.mjs` creates a
+below the bar. For UI/visual/product-read work, pair the gate with live-state
+coverage from `gamedesign/knowledge/live_state_acceptance_matrix.md`:
+`--state-matrix`, `--require-state`, `--covered-state`, and
+`--not-covered-state` make a pass say which states it proves and which states
+remain explicit debt. A strict pass fails when a required state is neither
+covered nor marked not covered.
+`tools/product_gate/visual_critique_packet.mjs` creates a
 reusable critic prompt/packet from a screenshot and target before the final
 strict gate; use it through `node tools/ai.mjs critic` in normal agent work.
 `tools/product_gate/close_slice.mjs` is exposed as
@@ -91,6 +99,15 @@ gate, and a screenshot before handoff/commit. A profiler guard
 is optional/advisory and never blocks the slice (passive profiling does not
 block normal work). Use `--snapshot` only when the lead intentionally wants an
 end-of-experiment snapshot instead of scoped phase commits.
+
+`tools/game_context/new_prototype.mjs` is the preferred startup path for a new
+game concept. It creates the project wiki, first-slice visual gate, task/status
+skeleton, and `visual/live_state_acceptance_matrix.md/json`. The generated
+product-gate template already includes `--state-matrix` and a required state,
+so broad UI/visual acceptance cannot silently ignore HUD, primary action,
+feedback, modal, blocked/affordable, returning, or transient stress states.
+`tools/game_context/iteration_context.mjs` treats a missing project matrix as
+startup gate debt before broad implementation.
 
 `tools/assets/new_generation_record.mjs` writes the provenance record for an
 accepted generated or artist source sheet: provider/model or workflow,
@@ -201,6 +218,13 @@ scale variant, and rotation policy. Slice9 entries must set
 `allow_rotation: false` and `trim_preserves_slice9: true`; aliases must point
 to existing asset ids. This is the gate for atlas space savings without
 reintroducing 1-2 pixel halos or broken slice margins.
+`tools/assets/audit_asset_semantic_style.mjs` validates a human/agent
+semantic-style review before generated icons, decor, sprites, or UI art enter
+crop planning. Use it after source candidate selection and before slicing to
+reject assets that look technically clean but read as the wrong object, mix icon
+styles inside one family, or fuse unrelated objects into a non-reusable
+silhouette. The review schema is documented in
+`gamedesign/knowledge/asset_semantic_style_gate.md`.
 `tools/assets/build_ui_atlas_pack.py` builds review/proof atlas PNGs from a
 runtime asset manifest. It groups assets by `pack_group`, preserves
 slice9/content metadata in a `game.ui_atlas_pack` manifest, writes extruded
@@ -290,6 +314,16 @@ JSON/Markdown and print the slowest asset; the default run stays quiet and
 verdict-compatible. When NumPy is available, the edge color scans use
 vectorized masks with the same Python fallback kept for minimal portable
 installs.
+`tools/assets/audit_runtime_ui_edges.py` is the source-to-runtime fringe gate
+for visible UI assets and screenshot crops. Use it on source PNGs before
+packing and on runtime screenshot crops when a visual review reports colored
+edges, hidden chroma, or filtering artifacts around buttons, panels, icons, or
+labels. It reports visible pixel counts, bad-pixel counts, percentage,
+sample coordinates, and pass/fail verdicts with `--max-pixels` and `--max-pct`
+thresholds. Start strict for generated UI (`--max-pixels 0`) and relax only
+when the art direction intentionally uses that edge family. Use `--crop
+x1,y1,x2,y2` for native screenshot evidence and `--family key --key-color
+r,g,b` for non-purple source keys.
 `tools/assets/render_ui_asset_edge_proof.py` renders zoomed top/right/bottom/left
 alpha-boundary strips on a checkerboard and marks detected bad edge pixels. It
 uses the same key/purple/green/source-key edge classes as the generated UI

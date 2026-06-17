@@ -113,7 +113,13 @@ node tools/skills_sync.mjs
   debug tool? If the answer is weak, freeze scope and fix the screen/loop
   first. Passing builds, scenarios, or probes is not enough. Use
   `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate` to write the
-  durable gate artifact. Before handing off a slice, use
+  durable gate artifact. A gate pass only proves the states it covers: define a
+  live-state matrix from `gamedesign/knowledge/live_state_acceptance_matrix.md`
+  and pass it through `--state-matrix`, or pass required/covered/debt states via
+  `--require-state`,
+  `--covered-state`, and `--not-covered-state`. Gate logs must say `PASS for
+  covered states`, not broad UI acceptance when states remain untested. Before
+  handing off a slice, use
   `node tools/ai.mjs close-slice` so the task log records the gate, validation
   evidence, and next action. If the gate fails, feature/content expansion stays
   frozen unless the lead explicitly accepts the debt for that slice.

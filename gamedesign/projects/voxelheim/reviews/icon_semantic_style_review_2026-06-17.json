@@ -1,0 +1,64 @@
+{
+  "schema": "game.asset_semantic_style_review",
+  "source_family": "isolated icon sheet",
+  "accepted_visual_target": "gamedesign/projects/voxelheim/visual/art_bible.md",
+  "pipeline_stage": "pre_slice",
+  "style_contract": {
+    "style_group": "chunky-snowy-voxel-ui-icons",
+    "required_traits": [
+      "chunky readable silhouette",
+      "toy-block material language",
+      "same camera angle",
+      "clear resource or upgrade subject at HUD size"
+    ],
+    "forbidden_mixes": [
+      "coin badge reused as frost block icon",
+      "castle or tower silhouette used as armor/equipment icon",
+      "flat vector symbol mixed with rendered voxel badge"
+    ]
+  },
+  "assets": [
+    {
+      "id": "frost_block_icon_candidate",
+      "intended_role": "Frost Blocks resource icon",
+      "observed_subject": "icy rock or block shard",
+      "evidence": "gamedesign/projects/voxelheim/visual/ui_ux_rescue_spec.md live UI regression notes",
+      "style_group": "chunky-snowy-voxel-ui-icons",
+      "semantic_match": "pass",
+      "style_match": "pass",
+      "composability": "pass",
+      "verdict": "accept",
+      "problems": []
+    },
+    {
+      "id": "green_coin_badge_block_reject",
+      "intended_role": "Frost Blocks resource icon",
+      "observed_subject": "coin-like green badge",
+      "evidence": "gamedesign/projects/voxelheim/reviews/live_ui_regression_2026-06-17.md",
+      "style_group": "old-currency-badges",
+      "semantic_match": "fail",
+      "style_match": "fail",
+      "composability": "fail",
+      "verdict": "reject",
+      "problems": [
+        "reads as a second coin currency instead of a block resource",
+        "creates mixed resource icon language in the HUD"
+      ]
+    },
+    {
+      "id": "castle_as_armor_reject",
+      "intended_role": "armor or equipment upgrade icon",
+      "observed_subject": "castle or keep tower silhouette",
+      "evidence": "tasks/active/T0008-add-asset-composability-icon-style-gates-semanti.md",
+      "style_group": "environment-prop-icons",
+      "semantic_match": "fail",
+      "style_match": "pass",
+      "composability": "fail",
+      "verdict": "reject",
+      "problems": [
+        "upgrade meaning is ambiguous at small size",
+        "environment prop silhouette is not reusable as equipment icon"
+      ]
+    }
+  ]
+}

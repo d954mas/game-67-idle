@@ -1,7 +1,7 @@
 ---
 id: T0012
 title: Require state-coverage tags in product gates
-status: todo
+status: done
 epic: E001
 priority: P2
 tags: [pipeline, product-gate, visual-gate, validation]
@@ -22,16 +22,16 @@ player states.
 
 ## Done when
 
-- [ ] Product gate records explicit reusable scenario/state tags, e.g.
+- [x] Product gate records explicit reusable scenario/state tags, e.g.
       `first_screen`, `primary_action_ready`, `modal_open`, `reward_active`,
       `progression_panel_open`, `returning_player`, `disabled_or_locked_state`.
-- [ ] Game-specific state tags can extend the reusable set, e.g. Voxelheim's
+- [x] Game-specific state tags can extend the reusable set, e.g. Voxelheim's
       `blueprints_visible`, `cta_affordable`, `floaters_active`.
-- [ ] A strict visual/UI pass requires either the matrix-required states or an
+- [x] A strict visual/UI pass requires either the matrix-required states or an
       explicit "not covered" debt line.
-- [ ] `product_read_gate_latest.json` exposes the covered states so reviewers
+- [x] `product_read_gate_latest.json` exposes the covered states so reviewers
       can see what the pass does and does not prove.
-- [ ] Tests cover a generic future-game pass with complete state tags and a
+- [x] Tests cover a generic future-game pass with complete state tags and a
       rejected/flagged pass with missing required tags.
 
 ## Open questions
@@ -46,3 +46,8 @@ player states.
   broadly.
 - 2026-06-17 lead clarified this must be universal for all future games.
   Voxelheim remains the first regression fixture, not the scope of the fix.
+- 2026-06-17 implemented in `tools/product_gate/review.mjs`:
+  `--require-state`, `--covered-state`, `--not-covered-state`; JSON/Markdown
+  now include `state_coverage`; strict pass fails if required states are neither
+  covered nor explicit debt. Evidence: `node --test tools/product_gate/test.mjs`
+  23/23 pass; `node --test tools/ai.test.mjs` 16/16 pass.

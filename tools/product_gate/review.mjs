@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -19,6 +19,10 @@ Options:
   --visual-strict        require structured visual critique scores/issues
   --visual-score <axis=n> repeatable; axes: composition, readability, ui_controls, action_direction, art_quality, audience_fit
   --visual-issue <severity:axis:text> repeatable; severity: blocker, major, minor
+  --state-matrix <path> JSON matrix with required/covered/not-covered states
+  --require-state <tag>  repeatable; state required by this slice's acceptance matrix
+  --covered-state <tag[:evidence]> repeatable; state covered by this screenshot/gate
+  --not-covered-state <tag:reason> repeatable; required state explicitly not covered by this gate
   --problem <text>       required for strict fail
   --next <text>          required for strict fail
   --index-output <path>  latest-gate JSON index path
@@ -28,7 +32,7 @@ Options:
 }
 
 function parseArgs(argv) {
-  const values = { visualScores: [], visualIssues: [] };
+  const values = { visualScores: [], visualIssues: [], requiredStates: [], coveredStates: [], notCoveredStates: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--help" || arg === "-h") values.help = true;
@@ -44,6 +48,21 @@ function parseArgs(argv) {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) fail(`${arg} requires a value`);
       values.visualIssues.push(value);
+      index += 1;
+    } else if (arg === "--require-state") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) fail(`${arg} requires a value`);
+      values.requiredStates.push(value);
+      index += 1;
+    } else if (arg === "--covered-state") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) fail(`${arg} requires a value`);
+      values.coveredStates.push(value);
+      index += 1;
+    } else if (arg === "--not-covered-state") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) fail(`${arg} requires a value`);
+      values.notCoveredStates.push(value);
       index += 1;
     }
     else if (arg.startsWith("--")) {
@@ -99,6 +118,118 @@ const VISUAL_AXES = [
 ];
 const VISUAL_SEVERITIES = new Set(["blocker", "major", "minor"]);
 const VISUAL_PASS_THRESHOLD = 4;
+
+function parseStateToken(raw, separator, needsDetail, detailName) {
+  const value = String(raw || "").trim();
+  const index = value.indexOf(separator);
+  const tag = (index >= 0 ? value.slice(0, index) : value).trim();
+  const detail = (index >= 0 ? value.slice(index + separator.length) : "").trim();
+  const tagPattern = /^[a-z0-9][a-z0-9_-]*$/;
+  const errors = [];
+  if (!tagPattern.test(tag)) {
+    errors.push(`invalid state tag: ${tag || "(missing)"}`);
+  }
+  if (needsDetail && !hasUsefulAnswer(detail)) {
+    errors.push(`state ${tag || "(missing)"} needs ${detailName}`);
+  }
+  return { tag, detail, errors };
+}
+
+function parseRequiredStates(rawStates) {
+  const required = [];
+  const errors = [];
+  const seen = new Set();
+  for (const raw of rawStates || []) {
+    const parsed = parseStateToken(raw, ":", false, "a value");
+    errors.push(...parsed.errors);
+    if (!parsed.errors.length && !seen.has(parsed.tag)) {
+      required.push(parsed.tag);
+      seen.add(parsed.tag);
+    }
+  }
+  return { required, errors };
+}
+
+function parseStateEntries(rawEntries, { needsDetail = false, detailName = "detail" } = {}) {
+  const entries = [];
+  const errors = [];
+  const seen = new Set();
+  for (const raw of rawEntries || []) {
+    const parsed = parseStateToken(raw, ":", needsDetail, detailName);
+    errors.push(...parsed.errors);
+    if (!parsed.errors.length && !seen.has(parsed.tag)) {
+      entries.push({ tag: parsed.tag, detail: parsed.detail });
+      seen.add(parsed.tag);
+    }
+  }
+  return { entries, errors };
+}
+
+function normalizeMatrixStateEntry(tag, raw) {
+  const value = raw && typeof raw === "object" ? raw : {};
+  const status = String(value.status || (value.covered ? "covered" : "") || "").trim();
+  return {
+    tag: String(value.tag || tag || "").trim(),
+    required: value.required !== false,
+    status,
+    evidence: String(value.evidence || value.proof || value.path || "").trim(),
+    reason: String(value.reason || value.debt || value.not_covered_reason || "").trim(),
+  };
+}
+
+function loadStateMatrix(matrixPath) {
+  const fullPath = resolve(matrixPath);
+  if (!existsSync(fullPath)) fail(`state matrix does not exist: ${matrixPath}`);
+  let matrix;
+  try {
+    matrix = JSON.parse(readFileSync(fullPath, "utf8"));
+  } catch (error) {
+    fail(`state matrix is not valid JSON: ${matrixPath}: ${error.message}`);
+  }
+
+  const required = [];
+  const covered = [];
+  const notCovered = [];
+  const pushRequired = (tag) => {
+    if (tag) required.push(String(tag).trim());
+  };
+
+  for (const tag of matrix.required_states || matrix.requiredStates || []) {
+    pushRequired(tag);
+  }
+
+  const stateEntries = [];
+  if (Array.isArray(matrix.states)) {
+    for (const entry of matrix.states) stateEntries.push(normalizeMatrixStateEntry("", entry));
+  } else if (matrix.states && typeof matrix.states === "object") {
+    for (const [tag, entry] of Object.entries(matrix.states)) {
+      stateEntries.push(normalizeMatrixStateEntry(tag, entry));
+    }
+  }
+
+  for (const entry of stateEntries) {
+    if (entry.required) pushRequired(entry.tag);
+    if (entry.status === "covered") {
+      covered.push(entry.evidence ? `${entry.tag}:${entry.evidence}` : entry.tag);
+    } else if (entry.status === "not_covered" || entry.status === "not-covered" || entry.status === "debt") {
+      notCovered.push(`${entry.tag}:${entry.reason || "not covered by this gate"}`);
+    }
+  }
+
+  return { required, covered, notCovered };
+}
+
+function mergeStateMatrix(values) {
+  const matrixPath = values["state-matrix"];
+  if (!matrixPath) return values;
+  const matrix = loadStateMatrix(matrixPath);
+  return {
+    ...values,
+    requiredStates: [...matrix.required, ...(values.requiredStates || [])],
+    coveredStates: [...(values.coveredStates || []), ...matrix.covered],
+    notCoveredStates: [...(values.notCoveredStates || []), ...matrix.notCovered],
+  };
+}
 
 function parseVisualScores(rawScores) {
   const scores = {};
@@ -163,7 +294,20 @@ function validate(values) {
 
   const visualScores = parseVisualScores(values.visualScores);
   const visualIssues = parseVisualIssues(values.visualIssues);
+  const requiredStates = parseRequiredStates(values.requiredStates);
+  const coveredStates = parseStateEntries(values.coveredStates, { needsDetail: false, detailName: "evidence" });
+  const notCoveredStates = parseStateEntries(values.notCoveredStates, { needsDetail: true, detailName: "a reason" });
   errors.push(...visualScores.errors, ...visualIssues.errors);
+  errors.push(...requiredStates.errors, ...coveredStates.errors, ...notCoveredStates.errors);
+  if ((values.strict || values.visualStrict) && values.verdict === "pass") {
+    const covered = new Set(coveredStates.entries.map((entry) => entry.tag));
+    const debt = new Set(notCoveredStates.entries.map((entry) => entry.tag));
+    for (const tag of requiredStates.required) {
+      if (!covered.has(tag) && !debt.has(tag)) {
+        errors.push(`required state ${tag} is neither covered nor marked not covered`);
+      }
+    }
+  }
   if (values.visualStrict) {
     for (const axis of VISUAL_AXES) {
       if (visualScores.scores[axis] === undefined) errors.push(`--visual-score ${axis}=1-5 is required for --visual-strict`);
@@ -209,6 +353,21 @@ function renderMarkdown(record) {
     `- What changed after input? ${record.answers.response || "(missing)"}`,
     `- What is the reward / why continue? ${record.answers.reward || "(missing)"}`,
     `- Why does this look like a game? ${record.answers.game_look || "(missing)"}`,
+    "",
+    "## State Coverage",
+    "",
+    "Required states:",
+    ...(record.state_coverage.required.length > 0 ? record.state_coverage.required.map((tag) => `- ${tag}`) : ["- (none)"]),
+    "",
+    "Covered states:",
+    ...(record.state_coverage.covered.length > 0
+      ? record.state_coverage.covered.map((entry) => `- ${entry.tag}${entry.evidence ? `: ${entry.evidence}` : ""}`)
+      : ["- (none)"]),
+    "",
+    "Not covered / debt:",
+    ...(record.state_coverage.not_covered.length > 0
+      ? record.state_coverage.not_covered.map((entry) => `- ${entry.tag}: ${entry.reason}`)
+      : ["- (none)"]),
     "",
     "## Review",
     "",
@@ -261,7 +420,7 @@ function runTaskLog(record, markdownPath) {
   }
 }
 
-const values = parseArgs(process.argv.slice(2));
+const values = mergeStateMatrix(parseArgs(process.argv.slice(2)));
 if (values.help) usage();
 const surface = values.surface || "desktop";
 const output = values.output || defaultOutput(values.project, surface);
@@ -271,6 +430,9 @@ const errors = validate(values);
 if (errors.length > 0) fail(errors.join("\n"));
 const visualScores = parseVisualScores(values.visualScores);
 const visualIssues = parseVisualIssues(values.visualIssues);
+const requiredStates = parseRequiredStates(values.requiredStates);
+const coveredStates = parseStateEntries(values.coveredStates, { needsDetail: false, detailName: "evidence" });
+const notCoveredStates = parseStateEntries(values.notCoveredStates, { needsDetail: true, detailName: "a reason" });
 
 const record = {
   schema: "game.product_read_gate",
@@ -294,6 +456,11 @@ const record = {
     pass_threshold: VISUAL_PASS_THRESHOLD,
     scores: visualScores.scores,
     issues: visualIssues.issues,
+  },
+  state_coverage: {
+    required: requiredStates.required,
+    covered: coveredStates.entries.map((entry) => ({ tag: entry.tag, evidence: entry.detail })),
+    not_covered: notCoveredStates.entries.map((entry) => ({ tag: entry.tag, reason: entry.detail })),
   },
   problem: values.problem || "",
   next: values.next || "",

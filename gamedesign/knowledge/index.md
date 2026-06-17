@@ -47,11 +47,15 @@ right page; it does not replace the pages.
 - [Mobile/Web Platform Design](mobile_web_platform.md) - touch, viewport,
   browser, and resume constraints.
 - [Visual Direction](visual_direction.md) - friendly readable game visuals.
+- [Asset Semantic And Style Gate](asset_semantic_style_gate.md) - reject
+  generated assets that cut cleanly but mean the wrong thing or mix icon styles.
 
 ## Validation
 
 - [Playtest Validation](playtest_validation.md) - prove first-minute behavior
   with evidence.
+- [Live-State UI Acceptance Matrix](live_state_acceptance_matrix.md) - define
+  which UI/game states a product gate covers before accepting visual/UI work.
 - [Telemetry Evidence](telemetry_evidence.md) - capture logs, events, traces,
   screenshots, and proof.
 - [Release Readiness](release_readiness.md) - external-test and release

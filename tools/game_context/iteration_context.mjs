@@ -110,6 +110,10 @@ function hasProjectWikiSource(sources) {
   return sources.some((source) => /^gamedesign\/projects\/[^/]+\//.test(source));
 }
 
+function hasLiveStateMatrixSource(sources) {
+  return sources.some((source) => /^gamedesign\/projects\/[^/]+\/visual\/live_state_acceptance_matrix\.json$/.test(source));
+}
+
 function mentionsProductProof(text) {
   return /product[- ]read|product gate|fake shot|visual proof|screenshot proof|native proof|first playable screen/i.test(String(text || ""));
 }
@@ -146,6 +150,14 @@ function buildStartupGate({ concept, designSources, runtimeSources, taskContext,
       ok: activeConcept && mentionsProductProof(`${currentGate}\n${nextPriorities}`),
       evidence: activeConcept && mentionsProductProof(`${currentGate}\n${nextPriorities}`) ? "Status names visual/product/native proof for the active concept." : "No active-concept visual/product proof gate found in status.",
       fix: "Name the first fake shot/product-read/native screenshot proof before broad implementation.",
+    },
+    {
+      id: "live_state_acceptance_matrix",
+      ok: activeConcept && hasLiveStateMatrixSource(designSources),
+      evidence: activeConcept && hasLiveStateMatrixSource(designSources)
+        ? "Live-state acceptance matrix found for the active concept."
+        : "No active-concept live-state acceptance matrix found.",
+      fix: "Create gamedesign/projects/<game-id>/visual/live_state_acceptance_matrix.json and require it in product gates before accepting UI/visual work.",
     },
     {
       id: "core_loop_economy",
@@ -197,6 +209,7 @@ function buildVisualFirstContract({ concept }) {
       "Screenshot-vs-target mismatch list before runtime/code changes.",
       "One vertical art slice plan: character/world/water/UI focal surface before broad content.",
       "Product-read gate command/path that can fail the slice.",
+      "Live-state acceptance matrix path and required state coverage for HUD, primary action, feedback, modal, blocked, return, and stress states.",
     ],
     after_meaningful_render_change: [
       "Capture a new native screenshot.",
@@ -256,6 +269,8 @@ function projectDesignSources(root) {
       `gamedesign/projects/${projectId}/GDD.md`,
       `gamedesign/projects/${projectId}/art/art_direction.md`,
       `gamedesign/projects/${projectId}/reviews/first_slice_visual_gate.md`,
+      `gamedesign/projects/${projectId}/visual/live_state_acceptance_matrix.md`,
+      `gamedesign/projects/${projectId}/visual/live_state_acceptance_matrix.json`,
       `gamedesign/projects/${projectId}/data/balance.json`,
     ]));
   }
@@ -351,6 +366,7 @@ function buildContext(root, options = {}) {
       "Write the 5-line visual session contract when the slice has visual, UI, FTUE, feel, or audience-test risk.",
       "Open exactly one actionable task and one active project wiki before code.",
       "Name the visual/product proof gate that can stop feature expansion.",
+      "Attach `visual/live_state_acceptance_matrix.json` to product gates and cover or explicitly debt every required state.",
       "Compare current native screenshot against the accepted fake shot/target and list mismatches before visual code.",
       "Name the selected runtime harness and why it is allowed.",
       "If reference-driven, cite the durable deconstruction/digest and next native proof.",

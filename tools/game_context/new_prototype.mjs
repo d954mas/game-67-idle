@@ -125,9 +125,12 @@ ${brief}
 
 - Define the smallest playable loop in \`gdd.md\`.
 - Fill \`reviews/first_slice_visual_gate.md\` before broad runtime work.
+- Fill \`visual/live_state_acceptance_matrix.md\` before any broad UI/visual pass.
 - For visually important slices, create the critic packet named in that gate
   before writing the strict product gate verdict.
 - Capture visual/product proof in \`reviews/\` before expanding content.
+- Product-read gates must use \`visual/live_state_acceptance_matrix.json\`
+  with explicit covered or not-covered states.
 - Update screenshot-vs-target mismatches after meaningful render changes.
 `;
 }
@@ -157,6 +160,8 @@ Casual players. Progression should be clear; controls and moment-to-moment play 
 - One reward/progression feedback moment.
 - One visual proof screenshot for product-read review.
 - One filled \`reviews/first_slice_visual_gate.md\` before broad runtime work.
+- One project-specific \`visual/live_state_acceptance_matrix.json\` that names
+  required UI/player-read states before broad visual acceptance.
 - One visual-first session contract: goal, non-goal, proof, stop condition,
   likely files.
 - One screenshot-vs-target mismatch list before runtime visual code and after
@@ -180,6 +185,9 @@ Build the first native playable slice for \`${title}\` after the Stage 0 startup
 ## Done when
 
 - [ ] \`gamedesign/projects/${gameId}/gdd.md\` names the first playable loop and player-readable goal.
+- [ ] \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json\`
+      is reviewed for this game's HUD, primary CTA, feedback, modal,
+      blocked/affordable, and transient stress states.
 - [ ] A fake shot or visual target exists before runtime polish starts.
 - [ ] A 5-line visual session contract exists: goal, non-goal, proof, stop
       condition, likely files.
@@ -193,6 +201,133 @@ Build the first native playable slice for \`${title}\` after the Stage 0 startup
 - Which named references or fake shots define the visual target?
 
 ## Log
+`;
+}
+
+function liveStateMatrixJson(gameId) {
+  const required = [
+    "first_screen",
+    "hud_visible",
+    "primary_action_ready",
+    "primary_action_feedback",
+    "reward_active",
+    "progression_panel_open",
+    "modal_or_choice_open",
+    "locked_or_disabled_state",
+    "returning_player_state",
+    "transient_stress_state",
+  ];
+  const states = {
+    first_screen: {
+      required: true,
+      player_read_question: "Where am I, what is the fantasy, and what is the first goal?",
+      proof_prompt: "Fresh first native screenshot with the main scene, HUD, and first action visible.",
+    },
+    hud_visible: {
+      required: true,
+      player_read_question: "Can the player read health/resources/progress without guessing icon meanings?",
+      proof_prompt: "Screenshot or zoom crop showing persistent HUD labels, values, and resource icons.",
+    },
+    primary_action_ready: {
+      required: true,
+      player_read_question: "What should I press or do now?",
+      proof_prompt: "Screenshot where the primary CTA/control is visible, readable, and actionable.",
+    },
+    primary_action_feedback: {
+      required: true,
+      player_read_question: "What changed because of my input?",
+      proof_prompt: "Scenario proof after the core action showing response, animation, state delta, or feedback.",
+    },
+    reward_active: {
+      required: true,
+      player_read_question: "What did I get, where did it go, and why continue?",
+      proof_prompt: "Reward/loot/progression screenshot with no overlap over critical UI.",
+    },
+    progression_panel_open: {
+      required: true,
+      player_read_question: "What grows, what can I afford, and what is locked?",
+      proof_prompt: "Upgrade/inventory/build/collection/meta panel screenshot if the slice has progression.",
+    },
+    modal_or_choice_open: {
+      required: true,
+      player_read_question: "What choice is being asked, and what happens next?",
+      proof_prompt: "Dialog/card/choice/confirmation screenshot, or mark not covered if the slice has none.",
+    },
+    locked_or_disabled_state: {
+      required: true,
+      player_read_question: "Why is this blocked, and how do I unlock or afford it?",
+      proof_prompt: "Blocked/disabled/unaffordable state screenshot with readable reason and cost.",
+    },
+    returning_player_state: {
+      required: true,
+      player_read_question: "What happened while I was away or after resume?",
+      proof_prompt: "Offline/resume/saved-state screenshot, or explicit debt if not in the first slice.",
+    },
+    transient_stress_state: {
+      required: true,
+      player_read_question: "Do combat numbers, particles, toasts, timers, or flyouts cover text/buttons?",
+      proof_prompt: "Stress screenshot/probe with transient feedback active over normal UI.",
+    },
+  };
+  return `${JSON.stringify({
+    schema: "game.live_state_acceptance_matrix",
+    project: gameId,
+    required_states: required,
+    states,
+  }, null, 2)}\n`;
+}
+
+function liveStateMatrixDoc(title, gameId) {
+  return `# ${title} Live-State Acceptance Matrix
+
+Project: \`${gameId}\`
+
+Reusable rule: \`gamedesign/knowledge/live_state_acceptance_matrix.md\`.
+Machine input: \`visual/live_state_acceptance_matrix.json\`.
+
+Fill this before accepting a broad UI/visual/product pass. A product gate pass
+only proves states explicitly covered by screenshot/probe evidence or explicitly
+marked as not-covered debt.
+
+## Required States
+
+| State tag | First proof to capture | Status |
+|---|---|---|
+| \`first_screen\` | Fresh first native screenshot with scene, HUD, and first action visible. | pending |
+| \`hud_visible\` | HUD labels, values, resource icons, and progress readable in a zoom/crop. | pending |
+| \`primary_action_ready\` | Primary CTA/control visible, readable, and actionable. | pending |
+| \`primary_action_feedback\` | Core action response: animation, state delta, damage, build, or other feedback. | pending |
+| \`reward_active\` | Reward/loot/progress moment visible without hiding critical UI. | pending |
+| \`progression_panel_open\` | Upgrade/inventory/build/meta panel if the slice has progression. | pending |
+| \`modal_or_choice_open\` | Dialog, card, choice, confirmation, or explicit not-covered debt. | pending |
+| \`locked_or_disabled_state\` | Unavailable/unaffordable/blocked control with readable reason. | pending |
+| \`returning_player_state\` | Offline/resume/saved-state return, or explicit first-slice debt. | pending |
+| \`transient_stress_state\` | Combat numbers, particles, toasts, timers, or flyouts active over normal UI. | pending |
+
+## Product Gate Pattern
+
+Use this matrix in the first product-read gate:
+
+\`\`\`powershell
+node tools/ai.mjs gate \`
+  --project ${gameId} \`
+  --task <task-id> \`
+  --surface desktop \`
+  --screenshot <native-screenshot.png> \`
+  --verdict fail \`
+  --strict \`
+  --visual-strict \`
+  --state-matrix gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json \`
+  --require-state first_screen \`
+  --covered-state first_screen:<native-screenshot-or-probe> \`
+  --covered-state hud_visible:<hud-zoom-or-screenshot> \`
+  --covered-state primary_action_ready:<native-screenshot-or-probe> \`
+  --not-covered-state modal_or_choice_open:"not in this first slice yet" \`
+  --not-covered-state returning_player_state:"not in this first slice yet"
+\`\`\`
+
+Before a \`pass\`, every required state must be either \`--covered-state\` with
+evidence or \`--not-covered-state\` with a concrete reason.
 `;
 }
 
@@ -239,11 +374,26 @@ not a notes dump.
 - Packet JSON path: \`gamedesign/projects/${gameId}/reviews/first_slice_visual_critic_packet.json\`
 - Use this packet for a self-review or separate critic pass before writing the strict product gate verdict.
 
+## Live-State Matrix
+
+- Matrix doc: \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.md\`
+- Matrix JSON: \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json\`
+- Required first proof states:
+  - [ ] \`first_screen\`
+  - [ ] \`hud_visible\`
+  - [ ] \`primary_action_ready\`
+  - [ ] \`primary_action_feedback\`
+  - [ ] \`reward_active\`
+  - [ ] \`locked_or_disabled_state\`
+  - [ ] \`transient_stress_state\`
+- Any required state not captured by the current screenshot must be passed as
+  \`--not-covered-state <tag>:"<reason>"\`, not silently implied.
+
 ## Product-Read Gate
 
 - Gate command:
   \`\`\`powershell
-  node tools/ai.mjs gate --project ${gameId} --task <task-id> --surface desktop --screenshot <native-screenshot.png> --verdict fail --strict --visual-strict --where "<where am I?>" --action "<what can I do?>" --response "<what changed?>" --reward "<why continue?>" --game-look "<why game?>" --problem "<specific visual/player-read problem>" --next "<smallest next visual fix>" --visual-score composition=1 --visual-score readability=1 --visual-score ui_controls=1 --visual-score action_direction=1 --visual-score art_quality=1 --visual-score audience_fit=1 --visual-issue blocker:readability:"<concrete issue>"
+  node tools/ai.mjs gate --project ${gameId} --task <task-id> --surface desktop --screenshot <native-screenshot.png> --verdict fail --strict --visual-strict --state-matrix gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json --require-state first_screen --covered-state first_screen:<native-screenshot-or-probe> --covered-state hud_visible:<hud-zoom-or-screenshot> --covered-state primary_action_ready:<native-screenshot-or-probe> --not-covered-state modal_or_choice_open:"not in this first slice yet" --not-covered-state returning_player_state:"not in this first slice yet" --where "<where am I?>" --action "<what can I do?>" --response "<what changed?>" --reward "<why continue?>" --game-look "<why game?>" --problem "<specific visual/player-read problem>" --next "<smallest next visual fix>" --visual-score composition=1 --visual-score readability=1 --visual-score ui_controls=1 --visual-score action_direction=1 --visual-score art_quality=1 --visual-score audience_fit=1 --visual-issue blocker:readability:"<concrete issue>"
   \`\`\`
 - Gate artifact path:
 - Verdict: pending
@@ -295,8 +445,8 @@ Stage 0 startup gate for ${gameId}: active concept, actionable task ${taskId},
 project wiki, native/runtime harness, and fake shot/product-read/native
 screenshot proof plan must be visible before implementation. For visual work,
 the 5-line session contract and screenshot-vs-target mismatch list are required
-before runtime visual coding. Strict visual product gates require six scores
-and blocker/major issue reporting before any pass.
+before runtime visual coding. Strict visual product gates require six scores,
+state matrix coverage, and blocker/major issue reporting before any pass.
 
 ## Required Validation
 
@@ -311,6 +461,8 @@ node tools/taskboard/cli.mjs validate
 - \`gamedesign/projects/${gameId}/reviews/first_slice_visual_gate.md\` is the
   first-slice visual/product gate template and must be filled before broad
   runtime work; it names the optional visual critic packet command.
+- \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json\`
+  is the machine-readable state coverage matrix for product gates.
 
 ## Next Priorities
 
@@ -318,9 +470,13 @@ node tools/taskboard/cli.mjs validate
    references/fake shot target, visual/product proof gate, and stop condition.
 2. Fill \`gamedesign/projects/${gameId}/reviews/first_slice_visual_gate.md\`
    with the target, native screenshot/capture plan, mismatch list, gate command,
-   critic packet command, strict visual rubric, and expansion decision.
-3. Identify the native build/run command for this prototype.
-4. Capture or plan the first native screenshot, compare it with the accepted
+   critic packet command, strict visual rubric, state matrix coverage, and
+   expansion decision.
+3. Review \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.md\`
+   and mark any state outside the first slice as explicit not-covered debt in
+   the gate command.
+4. Identify the native build/run command for this prototype.
+5. Capture or plan the first native screenshot, compare it with the accepted
    target, and record the mismatch list before broad content.
 `;
 }
@@ -364,7 +520,10 @@ writeNew(join(projectDir, "gdd.md"), gdd(title, brief), options);
 mkdirSync(join(projectDir, "reviews"), { recursive: true });
 mkdirSync(join(projectDir, "art"), { recursive: true });
 mkdirSync(join(projectDir, "data"), { recursive: true });
+mkdirSync(join(projectDir, "visual"), { recursive: true });
 writeNew(join(projectDir, "reviews", "first_slice_visual_gate.md"), firstSliceVisualGate(title, gameId), options);
+writeNew(join(projectDir, "visual", "live_state_acceptance_matrix.md"), liveStateMatrixDoc(title, gameId), options);
+writeNew(join(projectDir, "visual", "live_state_acceptance_matrix.json"), liveStateMatrixJson(gameId), options);
 
 const epic = createEpic(root, {
   title: `${title} prototype`,

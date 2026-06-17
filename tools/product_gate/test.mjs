@@ -219,6 +219,172 @@ test("product read gate refuses missing screenshots", () => {
   assert.match(result.stderr, /screenshot does not exist/);
 });
 
+test("product read gate records explicit state coverage", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    const markdown = join(dir, "gate.md");
+    const json = join(dir, "gate.json");
+    const latest = join(dir, "latest.json");
+    writeFileSync(screenshot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "matrix-test",
+      "--screenshot", screenshot,
+      "--verdict", "pass",
+      "--where", "A bright combat screen.",
+      "--action", "Press the primary action button.",
+      "--response", "The enemy takes damage.",
+      "--reward", "A reward chip flies to the resource HUD.",
+      "--game-look", "It has runtime art, readable UI, and game feedback.",
+      "--require-state", "first_screen",
+      "--require-state", "primary_action_ready",
+      "--require-state", "reward_active",
+      "--covered-state", "first_screen:screen.png",
+      "--covered-state", "primary_action_ready:screen.png",
+      "--not-covered-state", "reward_active:reward state belongs to the next slice",
+      "--output", markdown,
+      "--json-output", json,
+      "--index-output", latest,
+      "--strict",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(readFileSync(json, "utf8"));
+    assert.deepEqual(report.state_coverage.required, ["first_screen", "primary_action_ready", "reward_active"]);
+    assert.equal(report.state_coverage.covered[1].tag, "primary_action_ready");
+    assert.equal(report.state_coverage.not_covered[0].tag, "reward_active");
+    const md = readFileSync(markdown, "utf8");
+    assert.match(md, /## State Coverage/);
+    assert.match(md, /reward_active: reward state belongs to the next slice/);
+    const latestReport = JSON.parse(readFileSync(latest, "utf8"));
+    assert.equal(latestReport.state_coverage.not_covered[0].tag, "reward_active");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("product read gate rejects strict pass with missing required state coverage", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    writeFileSync(screenshot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "matrix-test",
+      "--screenshot", screenshot,
+      "--verdict", "pass",
+      "--where", "A bright combat screen.",
+      "--action", "Press the primary action button.",
+      "--response", "The enemy takes damage.",
+      "--reward", "A reward chip flies to the resource HUD.",
+      "--game-look", "It has runtime art, readable UI, and game feedback.",
+      "--require-state", "first_screen",
+      "--require-state", "transient_stress_state",
+      "--covered-state", "first_screen:screen.png",
+      "--strict",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /required state transient_stress_state is neither covered nor marked not covered/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("product read gate rejects invalid state tags and debt without reason", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    writeFileSync(screenshot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "matrix-test",
+      "--screenshot", screenshot,
+      "--verdict", "fail",
+      "--problem", "Bad UI.",
+      "--next", "Fix it.",
+      "--require-state", "Bad State",
+      "--not-covered-state", "reward_active",
+      "--strict",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /invalid state tag: Bad State/);
+    assert.match(result.stderr, /state reward_active needs a reason/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("product read gate loads reusable state matrix JSON", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    const matrix = join(dir, "matrix.json");
+    const json = join(dir, "gate.json");
+    writeFileSync(screenshot, "png", "utf8");
+    writeFileSync(matrix, `${JSON.stringify({
+      schema: "game.live_state_acceptance_matrix",
+      required_states: ["first_screen"],
+      states: {
+        primary_action_ready: { status: "covered", evidence: "screen.png" },
+        reward_active: { status: "not_covered", reason: "reward belongs to the next slice" },
+      },
+    })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "matrix-test",
+      "--screenshot", screenshot,
+      "--verdict", "pass",
+      "--where", "A bright combat screen.",
+      "--action", "Press the primary action button.",
+      "--response", "The enemy takes damage.",
+      "--reward", "A reward chip flies to the resource HUD.",
+      "--game-look", "It has runtime art, readable UI, and game feedback.",
+      "--state-matrix", matrix,
+      "--covered-state", "first_screen:screen.png",
+      "--json-output", json,
+      "--strict",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(readFileSync(json, "utf8"));
+    assert.deepEqual(report.state_coverage.required, ["first_screen", "primary_action_ready", "reward_active"]);
+    assert.deepEqual(report.state_coverage.covered.map((entry) => entry.tag), ["first_screen", "primary_action_ready"]);
+    assert.equal(report.state_coverage.not_covered[0].tag, "reward_active");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("product read gate rejects matrix required state with no coverage or debt", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    const matrix = join(dir, "matrix.json");
+    writeFileSync(screenshot, "png", "utf8");
+    writeFileSync(matrix, `${JSON.stringify({
+      states: {
+        transient_stress_state: { required: true },
+      },
+    })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "matrix-test",
+      "--screenshot", screenshot,
+      "--verdict", "pass",
+      "--where", "A bright combat screen.",
+      "--action", "Press the primary action button.",
+      "--response", "The enemy takes damage.",
+      "--reward", "A reward chip flies to the resource HUD.",
+      "--game-look", "It has runtime art, readable UI, and game feedback.",
+      "--state-matrix", matrix,
+      "--strict",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /required state transient_stress_state is neither covered nor marked not covered/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("product read gate visual strict requires full rubric scores", () => {
   const dir = tempDir();
   try {

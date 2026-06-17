@@ -45,8 +45,12 @@ Use this skill to make small, playable game changes without losing project conte
    changed after input, what reward they got, and why it looks like a game
    rather than a debug tool. Write the gate with
    `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate` when that
-   tool exists. Use `node tools/ai.mjs close-slice` before handoff when the
-   slice depends on product-read evidence.
+   tool exists. For UI/visual/player-read work, first define live-state coverage
+   from `gamedesign/knowledge/live_state_acceptance_matrix.md` and pass it to
+   the gate with `--state-matrix`, `--require-state`, `--covered-state`, and
+   `--not-covered-state`; a pass only proves those covered states. Use
+   `node tools/ai.mjs close-slice` before handoff when the slice depends on
+   product-read evidence.
    For visual-first work, write a 5-line session contract first: goal,
    non-goal, proof, stop condition, and likely files. Before coding, compare
    the current native screenshot or capture plan against the accepted fake

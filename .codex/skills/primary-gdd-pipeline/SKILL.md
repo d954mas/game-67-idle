@@ -99,6 +99,11 @@ small vertical slice instead of a large document set.
    decide the slice. For beautiful/casual/generated-UI/fake-shot first slices,
    fill `reviews/first_slice_visual_gate.md` with the strict visual rubric and
    plan `node tools/ai.mjs gate ... --visual-strict` before broad runtime work.
+   Fresh prototypes must also have
+   `visual/live_state_acceptance_matrix.json`; product gates should pass it
+   with `--state-matrix` and cover or explicitly debt required states such as
+   HUD, primary action, feedback, modal/choice, blocked/affordable, returning,
+   and transient stress.
    When the gate template names a visual critic packet, create that packet
    with `node tools/ai.mjs critic` before the strict verdict if a separate/self
    critique pass would reduce risk.

@@ -97,6 +97,10 @@ Open the matching section only when the task needs it:
 8. Reject generated sheets with baked text, fake letters, fused icons/buttons,
    tight gutters, uncuttable ornate long edges, inconsistent states, weak
    icon silhouettes, watermarks, or chroma background not isolated from art.
+   For icon/decor/sprite families, also create a semantic/style review and run
+   `node tools/assets/audit_asset_semantic_style.mjs --review <review.json>`
+   before crop planning. This gate catches wrong-subject icons, mixed icon
+   styles, and fused silhouettes that pixel/chroma audits cannot judge.
 9. Run source-sheet intake before slicing:
    if the generated background is visibly or measurably non-flat, first run
    `py -3.12 tools/assets/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>` and keep both raw and clean copies.

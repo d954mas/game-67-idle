@@ -160,6 +160,7 @@ console.log(readFileSync("tasks/STATUS.md", "utf8"));
   assert.ok(context.prototype_startup_gate.missing.includes("active_task"));
   assert.ok(context.prototype_startup_gate.missing.includes("project_wiki"));
   assert.ok(context.prototype_startup_gate.missing.includes("visual_product_gate_plan"));
+  assert.ok(context.prototype_startup_gate.missing.includes("live_state_acceptance_matrix"));
 });
 
 test("game iteration context omits closed project sources without active concept", (t) => {
@@ -290,17 +291,32 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   assert.equal(existsSync(join(fixture, "gamedesign", "projects", "bubble-bay", "README.md")), true);
   assert.equal(existsSync(join(fixture, "gamedesign", "projects", "bubble-bay", "gdd.md")), true);
   assert.equal(existsSync(join(fixture, "gamedesign", "projects", "bubble-bay", "reviews", "first_slice_visual_gate.md")), true);
+  assert.equal(existsSync(join(fixture, "gamedesign", "projects", "bubble-bay", "visual", "live_state_acceptance_matrix.md")), true);
+  assert.equal(existsSync(join(fixture, "gamedesign", "projects", "bubble-bay", "visual", "live_state_acceptance_matrix.json")), true);
   assert.match(readFileSync(join(fixture, "AGENTS.md"), "utf8"), /Active game concept: `Bubble Bay`/);
   assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /fake shot\/product-read\/native/);
   assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /first_slice_visual_gate\.md/);
   assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /screenshot-vs-target mismatch list/);
   assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /`--visual-strict`/);
   assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /Strict visual product gates require six scores/);
+  assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /state matrix coverage/);
+  assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /live_state_acceptance_matrix\.json/);
   assert.match(readFileSync(join(fixture, "gamedesign", "projects", "bubble-bay", "gdd.md"), "utf8"), /visual-first session contract/);
   assert.match(readFileSync(join(fixture, "gamedesign", "projects", "bubble-bay", "gdd.md"), "utf8"), /strict visual product gate using `--visual-strict`/);
+  assert.match(readFileSync(join(fixture, "gamedesign", "projects", "bubble-bay", "gdd.md"), "utf8"), /live_state_acceptance_matrix\.json/);
   const readme = readFileSync(join(fixture, "gamedesign", "projects", "bubble-bay", "README.md"), "utf8");
   assert.match(readme, /mismatch list/);
   assert.match(readme, /strict visual product/);
+  assert.match(readme, /live_state_acceptance_matrix/);
+  const stateMatrix = JSON.parse(readFileSync(join(fixture, "gamedesign", "projects", "bubble-bay", "visual", "live_state_acceptance_matrix.json"), "utf8"));
+  assert.equal(stateMatrix.schema, "game.live_state_acceptance_matrix");
+  assert.equal(stateMatrix.project, "bubble-bay");
+  assert.ok(stateMatrix.required_states.includes("hud_visible"));
+  assert.ok(stateMatrix.required_states.includes("primary_action_ready"));
+  assert.ok(stateMatrix.required_states.includes("modal_or_choice_open"));
+  assert.ok(stateMatrix.required_states.includes("locked_or_disabled_state"));
+  assert.ok(stateMatrix.required_states.includes("primary_action_feedback"));
+  assert.match(stateMatrix.states.transient_stress_state.proof_prompt, /Stress screenshot/);
   const visualGate = readFileSync(join(fixture, "gamedesign", "projects", "bubble-bay", "reviews", "first_slice_visual_gate.md"), "utf8");
   assert.match(visualGate, /Fake shot \/ visual target path:/);
   assert.match(visualGate, /Current native screenshot path or capture plan:/);
@@ -311,6 +327,10 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   assert.match(visualGate, /first_slice_visual_critic_packet\.json/);
   assert.match(visualGate, /Gate command:/);
   assert.match(visualGate, /--visual-strict/);
+  assert.match(visualGate, /--state-matrix gamedesign\/projects\/bubble-bay\/visual\/live_state_acceptance_matrix\.json/);
+  assert.match(visualGate, /--require-state first_screen/);
+  assert.match(visualGate, /--covered-state hud_visible/);
+  assert.match(visualGate, /--not-covered-state modal_or_choice_open/);
   assert.match(visualGate, /--visual-score composition=1/);
   assert.match(visualGate, /--visual-score readability=1/);
   assert.match(visualGate, /--visual-score ui_controls=1/);
@@ -331,6 +351,46 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   assert.equal(context.visual_first_contract.status, "required_before_visual_runtime_work");
   assert.ok(context.visual_first_contract.stop_conditions.some((item) => item.includes("Product gate fail blocks")));
   assert.ok(context.design_sources.includes("gamedesign/projects/bubble-bay/reviews/first_slice_visual_gate.md"));
+  assert.ok(context.design_sources.includes("gamedesign/projects/bubble-bay/visual/live_state_acceptance_matrix.json"));
+
+  const screenshot = join(fixture, "tmp", "first-screen.png");
+  mkdirSync(join(fixture, "tmp"), { recursive: true });
+  writeFileSync(screenshot, "png", "utf8");
+  const gate = spawnSync(process.execPath, [
+    join(repoRoot, "tools", "product_gate", "review.mjs"),
+    "--project", "bubble-bay",
+    "--task", "T0001",
+    "--surface", "desktop",
+    "--screenshot", screenshot,
+    "--verdict", "pass",
+    "--strict",
+    "--state-matrix", "gamedesign/projects/bubble-bay/visual/live_state_acceptance_matrix.json",
+    "--covered-state", "first_screen:tmp/first-screen.png",
+    "--covered-state", "hud_visible:tmp/first-screen.png",
+    "--covered-state", "primary_action_ready:tmp/first-screen.png",
+    "--not-covered-state", "primary_action_feedback:not in startup smoke",
+    "--not-covered-state", "reward_active:not in startup smoke",
+    "--not-covered-state", "progression_panel_open:not in startup smoke",
+    "--not-covered-state", "modal_or_choice_open:not in startup smoke",
+    "--not-covered-state", "locked_or_disabled_state:not in startup smoke",
+    "--not-covered-state", "returning_player_state:not in startup smoke",
+    "--not-covered-state", "transient_stress_state:not in startup smoke",
+    "--where", "A bright first screen.",
+    "--action", "Use the primary action.",
+    "--response", "The screen responds.",
+    "--reward", "The next reward is clear.",
+    "--game-look", "Runtime art and UI are visible.",
+    "--json-output", "tmp/state-matrix-smoke.json",
+  ], {
+    cwd: fixture,
+    encoding: "utf8",
+    shell: false,
+  });
+  assert.equal(gate.status, 0, gate.stderr);
+  const gateReport = JSON.parse(readFileSync(join(fixture, "tmp", "state-matrix-smoke.json"), "utf8"));
+  assert.deepEqual(gateReport.state_coverage.required, stateMatrix.required_states);
+  assert.equal(gateReport.state_coverage.covered.length, 3);
+  assert.equal(gateReport.state_coverage.not_covered.length, 7);
 });
 
 test("new prototype kickoff refuses existing project without force", (t) => {

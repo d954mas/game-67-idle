@@ -43,7 +43,10 @@ and runtime proof.
    capture plan against the accepted target and write a mismatch list. After
    every meaningful render change, capture a new native screenshot, update the
    mismatch list, and run or record the product-read gate verdict before adding
-   more features/content.
+   more features/content. For UI-heavy work, define live-state coverage from
+   `gamedesign/knowledge/live_state_acceptance_matrix.md` and pass it to the
+   product gate with `--state-matrix`, `--require-state`, `--covered-state`,
+   and `--not-covered-state`.
 5. For multi-asset work, create or update an art request packet/art job before
    generation. If no packet exists, scaffold one with
    `tools/assets/new_art_job.mjs`. Record intended use, reusable kind
@@ -66,6 +69,9 @@ and runtime proof.
 9. Inspect generated outputs before integration. Reject assets with unreadable
    text, wrong subject, weak silhouettes, random logos, watermarks, or style
    drift.
+   For multi-icon/decor/sprite families, record this as a semantic/style review
+   and run `node tools/assets/audit_asset_semantic_style.mjs --review <review.json>`
+   before slicing or runtime integration.
    Reject procedural/programmer-art fallbacks as final generated art. They may
    unblock geometry tests, but they do not satisfy a visual-generation task
    unless the lead explicitly accepts a recorded exception.
@@ -146,7 +152,9 @@ release-quality, or child-testable game work:
   `composition`, `readability`, `ui_controls`, `action_direction`,
   `art_quality`, and `audience_fit`. A pass needs every score at least 4/5 and
   no blocker/major visual issue; otherwise record a fail with concrete
-  `--visual-issue` entries and freeze feature/content expansion.
+  `--visual-issue` entries and freeze feature/content expansion. Strict UI
+  passes should also include live-state coverage; uncovered required states are
+  explicit debt, not implied by one screenshot.
   When a separate design/UI critic pass would help, first generate a reusable
   critic packet with `node tools/ai.mjs critic`; use the packet as the critic
   prompt and convert the findings into the strict product gate.
