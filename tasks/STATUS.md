@@ -2,18 +2,37 @@
 
 ## Current Goal
 
-`Voxelheim` first playable slice **"Frost Keep Approach"** — a bright casual
-action-RPG — is a **RELEASE-CANDIDATE**. Final critic (round 3) verdict: clears
-the polished/teachable/good-looking casual-RPG prototype bar (Visual 8.5,
-UI/HUD 9, Teachability 9; no blockers). Proof:
-`gamedesign/projects/voxelheim/visual/proof/release_candidate.png`.
+`Voxelheim` is in **rescue redesign** after lead feedback that the prototype is
+ugly, unclear, hard to read, and too simple/banal. The current target is
+**Voxelheim: Frost Keep Rebuilder**: a native idle RPG where auto-combat earns
+Gold + Frost Blocks and the player visibly repairs the Frost Keep room by room.
 
-## What's Built (verified)
+Primary source of truth:
 
-Tap-to-move hero, 3 ice-goblins with auto-combat + target ring, XP/level-up
-(juicy), reach the Frost Keep portal → win; FTUE (3 beats); persistent state
-(v2 + migration); real agy-generated sprite art through `nt_sprite_renderer`.
-`voxelheim_play_test.py` = 19/19. Entry: `src/voxelheim_main.c`.
+- `gamedesign/projects/voxelheim/gdd.md`
+- `gamedesign/projects/voxelheim/data/rescue_loop.json`
+- `gamedesign/projects/voxelheim/visual/ui_ux_rescue_spec.md`
+- `gamedesign/projects/voxelheim/references/competitor_deconstruction_2026-06-17.md`
+- `gamedesign/projects/voxelheim/reviews/prototype_deconstruction_2026-06-17.md`
+
+## What's Built
+
+The native build in `src/voxelheim_main.c` now proves the first
+**Frost Keep Rebuilder** loop:
+
+- auto-combat earns Gold + Frost Blocks;
+- Gate -> Forge -> Campfire repairs create Keep Rank, cards, training, helper;
+- Keep Rank 3 unlocks **Avalanche Reset** and persistent Frost Shards;
+- **Frost Blueprints** spend Shards on permanent bonuses;
+- offline return unlocks after Avalanche Reset and grants Gold + Blocks;
+- latest UI pass separates Frost Keep objective from Frost Blueprints and keeps
+  card-choice/offline popup text readable;
+- reward feedback now exists for repair, card choice, Avalanche Reset,
+  Blueprint purchase, and offline collect via sprite bursts, floaters, pulses,
+  and generated audio cues.
+
+Remaining drift: final room art, reward timing/audio polish, and broader
+retention review are still not complete.
 
 ## Build / Run / Shoot
 
@@ -21,38 +40,63 @@ Tap-to-move hero, 3 ice-goblins with auto-combat + target ring, XP/level-up
 cmake --build --preset native-debug --target game_seed
 build/game_seed/native-debug/game_seed.exe --devapi 9123
 py -3.12 tools/devapi/shoot_voxelheim.py build/captures/x.png 9123
-py -3.12 tools/devapi/voxelheim_play_test.py 9123
-# atlas (only if assets change): build/voxelheim_packer/build_voxelheim_packs.exe build/voxelheim
-#   then copy build/voxelheim/voxelheim.ntpack -> assets/voxelheim.ntpack
+py -3.12 tmp/shard_blueprints_probe.py 9162 build/captures/ui_rescue_blueprints_layout.png
+py -3.12 tmp/reward_feedback_probe.py
 ```
 
 ## Current Gate
 
-VISUAL + TEACHABILITY gates: PASSED (final critic round 3, screen-level).
-**Game / core-loop gate (AGENTS.md): NOT passed.** Retrospective correction:
-the round-3 verdict judged the SCREEN (look + can-a-newcomer-operate-it), not
-the GAME. The build is a polished visual/tech slice, not a designed game — no
-real core loop, progression/economy, hook, or reference grounding (lead: "I
-don't get what the game is"). Next: **T0005** (design the real game) after the
-genre decision (idle vs action-RPG).
+**Repair-chain + Avalanche Reset + Frost Blueprints + Offline Return
+product-read gates: passed for the current native slice.** The old
+visual/teachability pass is no longer accepted as product proof; this pass is
+specific to the first repair/meta/retention chain, not the full game.
 
-## Non-blocking Debt / Deferred (not gating)
+Latest proof:
 
-- Bolder flying dragon over the mountains (agy generation throttled at finish;
-  background already has a small dragon).
-- Deeper path perspective / background parallax.
+- product gate:
+  `gamedesign/projects/voxelheim/reviews/product_read_gate_2026-06-17_reward_feedback.md`
+- screenshots:
+  `build/captures/ui_rescue_blueprints_layout.png`,
+  `build/captures/ui_rescue_offline_layout.png`,
+  `build/captures/ui_rescue_card_choice.png`,
+  `build/captures/ui_reward_gate_repair.png`,
+  `build/captures/ui_reward_blueprint.png`,
+  `build/captures/ui_reward_offline.png`
+- readable zooms:
+  `build/captures/ui_rescue_blueprints_layout_uizoom.png`,
+  `build/captures/ui_rescue_offline_layout_uizoom.png`,
+  `build/captures/ui_rescue_card_choice_uizoom.png`,
+  `build/captures/ui_reward_blueprint_uizoom_cmp.png`,
+  `build/captures/ui_reward_offline_uizoom_cmp.png`
+- probes:
+  `tmp/shard_blueprints_probe.py`, `tmp/offline_return_probe.py`,
+  `tmp/rescue_probe.py`, `tmp/reward_feedback_probe.py`
+
+This is still not a full product pass: the assembled UI and first repair chain
+are readable and the first meta/retention loop exists, but final art polish,
+reward timing polish, and broader retention/fun review are still required.
+
+## Blocking Gaps
+
+- Reward feedback exists, but transient floaters can still overlap one Blueprint
+  detail line for a short frame; final timing/audio mix is not polished.
+- Forge/Campfire now have world markers, but room-specific art is still
+  placeholder-level.
+- The current screenshot is a readable functional proof, not final art quality.
+- `tools/devapi/voxelheim_play_test.py` still has a stale offline-unlock
+  expectation; use the focused probes until updated.
 
 ## Last Known Good Evidence
 
-- `gamedesign/projects/voxelheim/visual/proof/` — p1_first_screen, p5_integrated,
-  p6_release_candidate, release_candidate.png.
-- Commits: scaffold → P1 (`cfb6f4c`) → core loop (`078be64`) → polish (`e6232b7`)
-  → composable-asset integration (`d78790f`) → final polish (`3f36ded`) → RC (`b7e01e4`).
-- Image-gen + composable-asset rules: `.codex/skills/delegated-image-generation`
-  + `gamedesign/projects/voxelheim/visual/art_bible.md`.
+- Native build: `cmake --build --preset native-debug --target game_seed`.
+- Latest product gate:
+  `gamedesign/projects/voxelheim/reviews/product_read_gate_2026-06-17_reward_feedback.md`.
+- Design evidence: `gamedesign/projects/voxelheim/reviews/prototype_deconstruction_2026-06-17.md`
+  and `gamedesign/projects/voxelheim/references/competitor_deconstruction_2026-06-17.md`.
 
-## Next Priorities (optional, post-RC)
+## Next Priorities
 
-1. Add the bolder dragon + path depth when agy generation recovers.
-2. Audio pass (SFX/music) for more juice.
-3. Expand beyond the first slice (more regions/enemies) if continuing.
+1. Replace placeholder Forge/Campfire markers with polished generated room art.
+2. Run a broader retention/fun critic pass on the first 5-minute loop.
+3. Tune balance after the critic pass using the current probes as baselines.
+4. Polish reward timing/audio mix after room art stops moving.
