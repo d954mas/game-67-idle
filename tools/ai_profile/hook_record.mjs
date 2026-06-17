@@ -130,7 +130,7 @@ function readSessionTailLines(sessionFile) {
   }
 }
 
-async function recoverCodexFailedCommands(profilePath, harness) {
+async function recoverCodexFailedCommands(profilePath, harness, stamp = {}) {
   if (harness !== "codex") return;
   const sessionFile = latestCodexSessionFile();
   if (!sessionFile || !existsSync(sessionFile)) return;
@@ -175,6 +175,7 @@ async function recoverCodexFailedCommands(profilePath, harness) {
       source_call_id: callId,
       source_session_file: sessionFile,
       exit_code: exitCode,
+      ...stamp,
     }));
     seen.add(callId);
   }
@@ -204,10 +205,19 @@ function readStdin() {
     const harness = process.argv[2] || process.env.AI_PROFILE_HARNESS || "agent";
     const event = String(pick(payload, "hook_event_name", "hookEventName") || "PostToolUse");
 
-    const profilePath = process.env.AI_PROFILE_FILE || "";
+    /* Route to the SAME per-session file the native hot path uses, and stamp
+     * session_id/harness/cwd, so the fallback + Codex recovery never re-mix
+     * parallel work into one daily file. */
+    const { sessionProfilePathFor, deriveSessionId } = await loadProfileLib();
+    let rawSession = pick(payload, "session_id", "sessionId", "conversation_id") || "";
+    if (!rawSession && harness === "codex") rawSession = latestCodexSessionFile();
+    const session = deriveSessionId(rawSession);
+    const profilePath = process.env.AI_PROFILE_FILE || (session.short ? sessionProfilePathFor(harness, session.short) : "");
+    const stamp = { harness, cwd: process.cwd() };
+    if (session.full) stamp.session_id = session.full;
 
     if (process.env.AI_PROFILE_RECOVER_ONLY === "1") {
-      await recoverCodexFailedCommands(profilePath, harness);
+      await recoverCodexFailedCommands(profilePath, harness, stamp);
       process.exit(0);
     }
 
@@ -216,8 +226,8 @@ function readStdin() {
       appendRecord(profilePath, buildRecord({
         phase: "session", category: "context", result: "pass",
         intent: `session start (${harness})`, tool: [`${harness}/session`],
-      }, { event_type: "session_start" }));
-      await recoverCodexFailedCommands(profilePath, harness);
+      }, { event_type: "session_start", ...stamp }));
+      await recoverCodexFailedCommands(profilePath, harness, stamp);
       process.exit(0);
     }
 
@@ -243,7 +253,7 @@ function readStdin() {
         ...baseValues,
         result: "unknown",
         value: "necessary_overhead",
-      }, { event_type: "tool_call_start" }));
+      }, { event_type: "tool_call_start", ...stamp }));
       process.exit(0);
     }
 
@@ -261,8 +271,8 @@ function readStdin() {
       ...baseValues,
       result,
       value: result === "fail" ? "rework" : "unknown",
-    }, { event_type: "tool_call_result" }));
-    await recoverCodexFailedCommands(profilePath, harness);
+    }, { event_type: "tool_call_result", ...stamp }));
+    await recoverCodexFailedCommands(profilePath, harness, stamp);
   } catch {
     // swallow — a profiling hook must never disrupt the agent
   }

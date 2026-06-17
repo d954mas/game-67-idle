@@ -56,6 +56,22 @@ export function todaySessionProfiles() {
   return listSessionProfiles().filter((path) => path.split(/[\\/]/).pop().startsWith(prefix));
 }
 
+/* Derive a stable session id from a Claude session_id or a Codex rollout
+ * filename (full uuid + first-8 short), mirroring extract_uuid in the C hot
+ * path so the .mjs fallback writes to the SAME per-session file. */
+export function deriveSessionId(raw) {
+  const text = String(raw || "");
+  const uuid = text.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  if (uuid) return { full: uuid[0], short: uuid[0].slice(0, 8) };
+  const partial = text.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}/);
+  if (partial) return { full: partial[0], short: partial[0].slice(0, 8) };
+  return { full: "", short: "" };
+}
+
+export function sessionProfilePathFor(harness, short) {
+  return resolve(sessionsDir(), `${localDate()}__${harness}__${short}.jsonl`);
+}
+
 /* The active session = the most-recently-written per-session log. */
 export function latestSessionProfilePath() {
   const files = listSessionProfiles();
