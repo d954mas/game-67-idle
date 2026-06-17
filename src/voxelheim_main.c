@@ -186,6 +186,9 @@ enum {
     R_COIN,
     R_BAR_FRAME,
     R_SWORD_ICON,
+    R_BOOTS_ICON,
+    R_ARMOR_ICON,
+    R_LUCK_ICON,
     R_COUNT,
 };
 
@@ -199,6 +202,9 @@ static const nt_hash64_t k_region_names[R_COUNT] = {
     ASSET_ATLAS_REGION_VOXELS_HIT_SPARK_PNG,   ASSET_ATLAS_REGION_VOXELS_LEVELUP_BURST_PNG, ASSET_ATLAS_REGION_VOXELS_COIN_PNG,
     ASSET_ATLAS_REGION_VOXELS_BAR_FRAME_PNG,
     ASSET_ATLAS_REGION_VOXELS_SWORD_ICON_PNG,
+    ASSET_ATLAS_REGION_VOXELS_BOOTS_ICON_PNG,
+    ASSET_ATLAS_REGION_VOXELS_ARMOR_ICON_PNG,
+    ASSET_ATLAS_REGION_VOXELS_LUCK_ICON_PNG,
 };
 
 /* ---- Engine/runtime state ---- */
@@ -1527,9 +1533,9 @@ static void compose_scene(void) {
 static int upgrade_icon_region(int i) {
     switch (i) {
         case UP_SWORD: return R_SWORD_ICON;
-        case UP_BOOTS: return R_ROCK;   /* boots stand-in (free-asset reuse) */
-        case UP_ARMOR: return R_KEEP;   /* armor stand-in */
-        case UP_LUCK:  return R_COIN;   /* luck = gold find */
+        case UP_BOOTS: return R_BOOTS_ICON;
+        case UP_ARMOR: return R_ARMOR_ICON;
+        case UP_LUCK:  return R_LUCK_ICON;
         default: return R_SLOT;
     }
 }
