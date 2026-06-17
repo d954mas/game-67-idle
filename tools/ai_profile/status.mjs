@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import {
   defaultProfilePath,
@@ -13,11 +13,12 @@ import {
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/status.mjs [--profile <profile.jsonl>] [--session <id>] [--all] [--json-output <status.json>] [--verbose] [--require-review-usable|--require-current-scope-usable]
+  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--verbose] [--require-review-usable|--require-current-scope-usable]
 
 Default reads the ACTIVE session log (newest tmp/session_profiles/sessions/*.jsonl);
---all aggregates today's session logs (+ the legacy daily file); --session <id>
-picks one session; --profile <p> reads an explicit file.
+--harness <name> picks the newest log for that harness (reliable while another
+harness runs concurrently); --all aggregates today's session logs (+ the legacy
+daily file); --session <id> picks one session; --profile <p> reads an explicit file.
 
 Reports current AI profile health without appending records. Default output is
 a short passive diagnostic; --verbose shows the full per-record breakdown.
@@ -108,6 +109,17 @@ function resolveProfilePaths(values) {
     const daily = defaultProfilePath();
     if (existsSync(daily)) all.push(daily);
     return all.length > 0 ? all : [daily];
+  }
+
+  /* --harness <name>: the latest session for that harness -- reliably picks YOUR
+   * session even while another harness (e.g. Codex) writes concurrently, instead
+   * of the globally-latest file which flips between the two. */
+  const harness = stringArg(values, "harness", "");
+  if (harness) {
+    const matches = todaySessionProfiles().filter((path) => basename(path).includes(`__${harness}__`));
+    if (matches.length > 0) {
+      return [matches.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0]];
+    }
   }
 
   const latest = latestSessionProfilePath();
