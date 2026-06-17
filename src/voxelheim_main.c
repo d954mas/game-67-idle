@@ -538,6 +538,23 @@ static void emit_text_centered(const char *s, float cx, float y, float size, con
     emit_text_shadow(s, cx - w * 0.5F, y, size, color);
 }
 
+/* Single SOFT drop-shadow for text that ALREADY sits on a solid plate. The
+ * plate supplies the contrast, so the 4-way outline of emit_text_shadow is
+ * redundant and its halo reads as "noise" (noise-avoidance: one legibility
+ * treatment per text style; prefer the plate over stacked effects). Keep the
+ * 4-way outline only for text floating over the bright scene (damage numbers). */
+static void emit_text_soft(const char *s, float x, float y, float size, const float color[4]) {
+    const float ink[4] = {0.04F, 0.04F, 0.05F, color[3] * 0.5F};
+    const float o = clampf(size * 0.055F, 1.0F, 2.0F);
+    emit_text(s, x + o, y - o, size, ink);
+    emit_text(s, x, y, size, color);
+}
+
+static void emit_text_centered_soft(const char *s, float cx, float y, float size, const float color[4]) {
+    const float w = text_width(s, size);
+    emit_text_soft(s, cx - w * 0.5F, y, size, color);
+}
+
 /* Solid dark rounded plate that strings sit on. Drawn as a main slab plus two
  * narrower slabs (top/bottom) to fake rounded corners, with a faint light rim on
  * top for a readable card edge. Sized to FULLY contain the text + padding so HUD
@@ -1743,7 +1760,7 @@ static void compose_text(void) {
         char n[16];
         fmt_num(n, sizeof(n), (double)g_game_state.idle_gold);
         (void)snprintf(g, sizeof(g), "Gold %s", n);
-        emit_text_shadow(g, 58.0F, HUD_TOP_Y - 12.0F, 30.0F, gold);
+        emit_text_soft(g, 58.0F, HUD_TOP_Y - 12.0F, 30.0F, gold);
     }
     /* Stage counter (on the plate). */
     {
@@ -1753,13 +1770,13 @@ static void compose_text(void) {
         } else {
             (void)snprintf(s, sizeof(s), "Stage %d", g_game_state.idle_stage);
         }
-        emit_text_shadow(s, 58.0F, HUD_MID_Y - 10.0F, 23.0F, cream);
+        emit_text_soft(s, 58.0F, HUD_MID_Y - 10.0F, 23.0F, cream);
     }
     /* Frost shards (top-right card) -- only when relevant, centered on its card. */
     if (show_shards_hud()) {
         char fs[28];
         (void)snprintf(fs, sizeof(fs), "Frost Shards  %d", g_game_state.idle_frost_shards);
-        emit_text_centered(fs, DESIGN_W - 102.0F, DESIGN_H - 134.0F, 18.0F, ice);
+        emit_text_centered_soft(fs, DESIGN_W - 102.0F, DESIGN_H - 134.0F, 18.0F, ice);
     }
 
     /* Stage progress bar label (centered on the bar, inside the plate). */
@@ -1770,7 +1787,7 @@ static void compose_text(void) {
         } else {
             (void)snprintf(s, sizeof(s), "%d / %d kills", g_game_state.idle_kills_in_stage, VH_KILLS_PER_STAGE);
         }
-        emit_text_centered(s, HUD_PLATE_CX, HUD_BAR_Y - 7.0F, 16.0F, cream);
+        emit_text_centered_soft(s, HUD_PLATE_CX, HUD_BAR_Y - 7.0F, 16.0F, cream);
     }
 
     /* Stage-advance flash banner. */
@@ -1802,12 +1819,12 @@ static void compose_text(void) {
         /* NAME + level (top, biggest) */
         char lbl[28];
         (void)snprintf(lbl, sizeof(lbl), "%s  Lv%d", upgrade_label(i), upgrade_level(i));
-        emit_text_shadow(lbl, tx, cy + 12.0F, 20.0F, affordable ? cream : dimmed);
+        emit_text_soft(lbl, tx, cy + 12.0F, 20.0F, affordable ? cream : dimmed);
 
         /* effect (mid, muted) */
         char eff[24];
         upgrade_effect_str(i, eff, sizeof(eff));
-        emit_text_shadow(eff, tx, cy - 6.0F, 15.0F, affordable ? mutedc : dimmed);
+        emit_text_soft(eff, tx, cy - 6.0F, 15.0F, affordable ? mutedc : dimmed);
 
         /* COST on the green pill: dark ink reads on the bright green, light grey
          * on the crushed-dark disabled pill. */
@@ -1851,7 +1868,7 @@ static void compose_text(void) {
     {
         const char *prompt = ftue_prompt();
         if (prompt) {
-            emit_text_centered(prompt, DESIGN_W * 0.5F, FTUE_Y, 21.0F, cream);
+            emit_text_centered_soft(prompt, DESIGN_W * 0.5F, FTUE_Y, 21.0F, cream);
         }
     }
 
