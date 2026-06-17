@@ -1587,23 +1587,34 @@ static int upgrade_level(int i) {
 #define HUD_MID_Y (DESIGN_H - 66.0F)   /* Stage row baseline */
 #define HUD_BAR_Y (DESIGN_H - 96.0F)   /* progress bar center */
 #define HUD_BAR_W 256.0F
-#define HUD_ICON_X 30.0F
+#define HUD_ICON_X 32.0F
+
+/* Show the Frost-Shards (meta currency) HUD card only once it is relevant -- an
+ * empty "Frost Shards: 0" early just clutters the corner (refs hide the meta
+ * currency until it is earned). */
+static bool show_shards_hud(void) {
+    return g_game_state.idle_frost_shards > 0 || prestige_unlocked() ||
+           g_game_state.idle_shard_global_damage > 0 || g_game_state.idle_shard_global_gold > 0 ||
+           g_game_state.idle_shard_start_stage > 0 || g_game_state.idle_shard_offline_rate > 0;
+}
 
 static void compose_hud(void) {
     const uint32_t white = 0xFFFFFFFFu;
 
-    /* Top-left status plate: one solid dark card that contains the coin glyph,
-     * "Gold N", "Stage N" and the kills progress bar, so no number ever spills
-     * onto the bright sky. */
-    emit_plate(HUD_PLATE_CX, DESIGN_H - 64.0F, HUD_PLATE_W, 86.0F, 0.86F);
-    emit_h(R_COIN, HUD_ICON_X, HUD_TOP_Y + 6.0F, 34.0F, white);
+    /* Top-left status card: one cool dark rounded panel (matching the bottom
+     * tray family) holding the coin + "Gold N" + "Stage N" + the kills bar, so
+     * no number ever spills onto the bright sky. */
+    emit_round_panel(HUD_PLATE_CX, DESIGN_H - 64.0F, HUD_PLATE_W, 86.0F, 0.095F, 0.115F, 0.165F, 0.93F);
+    emit_h(R_COIN, HUD_ICON_X, HUD_TOP_Y + 6.0F, 36.0F, white);
 
-    /* Minimap top-right (progress flavor). */
-    emit_h(R_MINIMAP, DESIGN_W - 70.0F, DESIGN_H - 70.0F, 110.0F, white);
+    /* Minimap: a small top-right corner flourish. */
+    emit_h(R_MINIMAP, DESIGN_W - 58.0F, DESIGN_H - 56.0F, 90.0F, white);
 
-    /* Title + Frost-Shards plate (top-right under the minimap) so that text
-     * does not sit hairline on the bright sky. */
-    emit_plate(DESIGN_W - 116.0F, DESIGN_H - 144.0F, 196.0F, 56.0F, 0.84F);
+    /* Frost-Shards card (top-right, under the minimap) only when meta currency
+     * is relevant -- keeps the early-game corner clean. */
+    if (show_shards_hud()) {
+        emit_round_panel(DESIGN_W - 102.0F, DESIGN_H - 128.0F, 184.0F, 46.0F, 0.095F, 0.12F, 0.20F, 0.93F);
+    }
 
     /* Stage progress bar inside the plate (kills toward next stage). */
     {
@@ -1611,13 +1622,19 @@ static void compose_hud(void) {
         float frac = g_game_state.idle_boss_active
                          ? clampf(g_sim.boss_timer / boss_max, 0.0F, 1.0F)
                          : clampf((float)g_game_state.idle_kills_in_stage / (float)VH_KILLS_PER_STAGE, 0.0F, 1.0F);
-        float bx = HUD_PLATE_CX, by = HUD_BAR_Y, bw = HUD_BAR_W, bh = 16.0F;
+        float bx = HUD_PLATE_CX, by = HUD_BAR_Y, bw = HUD_BAR_W, bh = 18.0F;
         /* dark bar groove */
         emit_quad(bx, by, bw + 6.0F, bh + 6.0F, 0.03F, 0.025F, 0.05F, 1.0F);
         float r = g_game_state.idle_boss_active ? 1.0F : 0.35F;
         float g = g_game_state.idle_boss_active ? 0.55F : 0.85F;
         float b = g_game_state.idle_boss_active ? 0.30F : 0.50F;
-        emit_quad(bx - bw * 0.5F + bw * frac * 0.5F, by, bw * frac, bh, r, g, b, 1.0F);
+        float fx = bx - bw * 0.5F + bw * frac * 0.5F;
+        emit_quad(fx, by, bw * frac, bh, r, g, b, 1.0F);
+        /* glossy top highlight on the fill */
+        if (frac > 0.001F) {
+            emit_quad(fx, by + bh * 0.26F, bw * frac, bh * 0.32F,
+                      clampf(r + 0.18F, 0.0F, 1.0F), clampf(g + 0.12F, 0.0F, 1.0F), clampf(b + 0.12F, 0.0F, 1.0F), 0.55F);
+        }
     }
 
     /* ---- Bottom upgrade panel: 4 buttons (icon + name+Lv / effect / cost). ----
@@ -1719,19 +1736,14 @@ static void compose_text(void) {
     const float cream[4] = {0.996F, 0.980F, 0.937F, 1.0F};
     const float ice[4] = {0.7F, 0.9F, 1.0F, 1.0F};
 
-    /* Title (top-right, outlined so it reads over the sky). */
-    {
-        const char *title = "VOXELHEIM";
-        emit_text_centered(title, DESIGN_W - 116.0F, DESIGN_H - 138.0F, 23.0F, gold);
-    }
-
-    /* Gold counter (sits on the HUD plate, after the coin glyph). */
+    /* Gold counter (sits on the HUD plate, after the coin glyph) -- the primary
+     * readout, so it is the biggest HUD number. */
     {
         char g[24];
         char n[16];
         fmt_num(n, sizeof(n), (double)g_game_state.idle_gold);
         (void)snprintf(g, sizeof(g), "Gold %s", n);
-        emit_text_shadow(g, 56.0F, HUD_TOP_Y - 11.0F, 28.0F, gold);
+        emit_text_shadow(g, 58.0F, HUD_TOP_Y - 12.0F, 30.0F, gold);
     }
     /* Stage counter (on the plate). */
     {
@@ -1741,13 +1753,13 @@ static void compose_text(void) {
         } else {
             (void)snprintf(s, sizeof(s), "Stage %d", g_game_state.idle_stage);
         }
-        emit_text_shadow(s, 56.0F, HUD_MID_Y - 10.0F, 24.0F, cream);
+        emit_text_shadow(s, 58.0F, HUD_MID_Y - 10.0F, 23.0F, cream);
     }
-    /* Frost shards (top-right under minimap), always shown once any exist. */
-    {
+    /* Frost shards (top-right card) -- only when relevant, centered on its card. */
+    if (show_shards_hud()) {
         char fs[28];
-        (void)snprintf(fs, sizeof(fs), "Frost Shards: %d", g_game_state.idle_frost_shards);
-        emit_text_centered(fs, DESIGN_W - 116.0F, DESIGN_H - 164.0F, 19.0F, ice);
+        (void)snprintf(fs, sizeof(fs), "Frost Shards  %d", g_game_state.idle_frost_shards);
+        emit_text_centered(fs, DESIGN_W - 102.0F, DESIGN_H - 134.0F, 18.0F, ice);
     }
 
     /* Stage progress bar label (centered on the bar, inside the plate). */
@@ -1758,7 +1770,7 @@ static void compose_text(void) {
         } else {
             (void)snprintf(s, sizeof(s), "%d / %d kills", g_game_state.idle_kills_in_stage, VH_KILLS_PER_STAGE);
         }
-        emit_text_centered(s, HUD_PLATE_CX, HUD_BAR_Y - 7.0F, 15.0F, cream);
+        emit_text_centered(s, HUD_PLATE_CX, HUD_BAR_Y - 7.0F, 16.0F, cream);
     }
 
     /* Stage-advance flash banner. */
