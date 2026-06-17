@@ -188,3 +188,36 @@ lessons + durable fixes applied:
 - Judged everything from static screenshots; never played the game / verified the
   core-moment feel in motion. Future: judge first-player UX + motion feel, not
   just composition.
+
+## Retrospective - 2026-06-17 (Voxelheim UI/visual-noise pass)
+
+Short, lead-driven visual pass on the idle prototype (6 commits: scaling, panel
+rework, real icons, HUD polish, art-noise). Evidence: git log + screenshots;
+profiler UNUSABLE for this scope (8.46h current-scope gap, guard
+`current_scope_low_wall_clock_coverage`, no slowest/context records) -> time
+claims = unknown. Lessons + durable fixes:
+
+- **Misleading asset reuse shipped twice.** Stand-ins read as the WRONG thing
+  (castle keep = "Armor", signpost = "Boots"), and rock.png baked a rock+sign
+  into ONE region so scene decoration drew a stray signpost ("выбивается").
+  Fix queued (T0008): asset semantic-fidelity + composability gate (a labeled
+  sprite must depict EXACTLY its one concept; don't bake multiple objects into
+  one region you place as one). Extends the delegated-image-generation
+  composable-asset rule. Real fix applied: agy-gen icons + crop rock-only.
+- **Heavy 4-way text outline ON solid plates = "font noise".** Fix applied:
+  emit_text_soft (single drop shadow) for all plate-backed text; 4-way outline
+  reserved for over-scene floaters. Rule to add: plate-backed text defaults to
+  single soft shadow, never stacked outline+glow (matches the new source note
+  gamedesign/sources/avoiding_visual_noise_mobile_art_2026-06-17.md).
+- **Stale taskboard overclaimed "RELEASE-CANDIDATE, UI/HUD 9"** while the lead
+  called the same UI "отвратительно стрёмный" with a stretch bug. Recurring
+  "thin claimed as done" in visual form. Status must drop off RC when the lead
+  reports concrete defects.
+- **ui_readability false-positives**: flags ~2px "hairline" on the minimap's
+  decorative lines, not text -> wasted a confirm beat each iteration. The band
+  metric should exclude decorative sprites / weight the eyeball montage.
+- **What worked (keep):** two parallel design subagents (researcher ->
+  gamedesign/sources note; art-director critic -> ranked top-6) mapped 1:1 to
+  fixes; staged commits each with before/after + ui_readability --compare;
+  delegated agy image-gen -> chroma-cut produced usable icons in one call;
+  fixed root cause at the asset (cropped rock.png) not in code.
