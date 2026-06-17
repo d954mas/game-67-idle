@@ -64,6 +64,14 @@ function isReadOnlyPlumbingCommand(cmd) {
   return /^(?:get-content|get-childitem|test-path|select-string|where\.exe|ls|cat)(?:\s|$)/i.test(c);
 }
 
+/* Mirror is_search_command in hook_record_fast.c: a search tool exiting 1 = "no
+ * match", a normal outcome, not a failure. Keep the C hot path and JS fallback
+ * in agreement (the parity test in test.mjs enforces this). */
+function isSearchCommand(cmd) {
+  const c = stripLeadingEnvAssignments(String(cmd || "")).split(/\r?\n/)[0].trim().toLowerCase();
+  return /^(?:rg|grep|egrep|fgrep|findstr|ack|select-string)(?:\s|$)/.test(c);
+}
+
 function todaySessionDir() {
   const now = new Date();
   return join(
@@ -259,10 +267,11 @@ function readStdin() {
 
     const exit = pick(response, "exit_code", "exitCode", "code", "returncode");
     const isErr = pick(response, "is_error", "isError", "error");
-    const result =
-      (typeof exit === "number" && exit !== 0) || isErr === true || (typeof isErr === "string" && isErr.length > 0)
-        ? "fail"
-        : "pass";
+    const errored = isErr === true || (typeof isErr === "string" && isErr.length > 0);
+    const nonZero = typeof exit === "number" && exit !== 0;
+    // search exit 1 = "no match" -> pass (mirror hook_record_fast.c); exit 2 / real error still fails.
+    const searchNoMatch = exit === 1 && !errored && isSearchCommand(cmd1);
+    const result = (nonZero || errored) && !searchNoMatch ? "fail" : "pass";
 
     if (result !== "fail" && isReadOnlyPlumbingCommand(cmd1)) process.exit(0);
 

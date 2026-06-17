@@ -1446,3 +1446,40 @@ test("status recovers failed validation checks when command changes", () => {
     cleanup(dir);
   }
 });
+
+// PARITY: the native hot path (hook_record_fast.c) and the JS fallback
+// (hook_record.mjs) duplicate the result/category logic. This test feeds
+// identical payloads to BOTH and asserts they agree, so the two sources of
+// truth cannot silently drift (e.g. a fix applied to only one of them).
+test("hook_record_fast (C) and hook_record.mjs (JS) agree on result + category", {
+  skip: !existsSync(join(root, "tools", "ai_profile", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
+}, () => {
+  const dir = tempDir();
+  try {
+    const cases = [
+      { cmd: "rg nomatch_xyz", exit: 1, want: "pass" },   // search no-match -> pass
+      { cmd: "rg --badflag", exit: 2, want: "fail" },     // search real error -> fail
+      { cmd: "ninja -C build", exit: 1, want: "fail" },   // real build failure -> fail
+      { cmd: "git commit -m x", exit: 0, want: "pass" },  // task_status
+      { cmd: "cmake --build .", exit: 0, want: "pass" },  // validation
+      { cmd: "node tools/x.mjs", exit: 0, want: "pass" }, // tooling
+    ];
+    for (const item of cases) {
+      const payload = { hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command: item.cmd }, tool_response: { exit_code: item.exit } };
+      const pc = join(dir, "c.jsonl");
+      const pj = join(dir, "j.jsonl");
+      rmSync(pc, { force: true });
+      rmSync(pj, { force: true });
+      runFastHook(payload, pc, "claude");
+      runHook(payload, pj, "claude");
+      const recC = readJsonl(pc).find((r) => r.event_type === "tool_call_result");
+      const recJ = readJsonl(pj).find((r) => r.event_type === "tool_call_result");
+      assert.ok(recC && recJ, `"${item.cmd}": missing result record (C=${!!recC} JS=${!!recJ})`);
+      assert.equal(recC.result, item.want, `C result for "${item.cmd}"`);
+      assert.equal(recJ.result, recC.result, `C/JS RESULT diverge for "${item.cmd}": C=${recC.result} JS=${recJ.result}`);
+      assert.equal(recJ.category, recC.category, `C/JS CATEGORY diverge for "${item.cmd}": C=${recC.category} JS=${recJ.category}`);
+    }
+  } finally {
+    cleanup(dir);
+  }
+});
