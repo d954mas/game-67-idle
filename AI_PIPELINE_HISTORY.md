@@ -192,10 +192,19 @@ lessons + durable fixes applied:
 ## Retrospective - 2026-06-17 (Voxelheim UI/visual-noise pass)
 
 Short, lead-driven visual pass on the idle prototype (6 commits: scaling, panel
-rework, real icons, HUD polish, art-noise). Evidence: git log + screenshots;
-profiler UNUSABLE for this scope (8.46h current-scope gap, guard
-`current_scope_low_wall_clock_coverage`, no slowest/context records) -> time
-claims = unknown. Lessons + durable fixes:
+rework, real icons, HUD polish, art-noise). Evidence: git log + screenshots +
+profiler JSONL (it DID record: 137 claude events today). CORRECTION to a first
+wrong read: the profiler was NOT useless. The "8.46h gap / guard
+`current_scope_low_wall_clock_coverage`" is an OVERNIGHT IDLE (01:02 -> 09:30
++05) the coverage metric mis-penalizes as missing work -- scope T0005 was opened
+16th 22:45 and never rolled, so its window spans the idle night. Reconstructed
+active time (gaps<5m; the codex/* parallel design-source workstream excluded):
+NIGHT depth-triage + balance v4 ~55 min (00:00-01:02); MORNING visual pass ~37
+active min over ~65 wall (09:30-10:35): scaling 7, panel 6, icons 8 (most calls),
+HUD 3, noise+2 design-agents 3 active / ~22 wall (parallel agents), retro 8. Real
+tooling gap (NOT "no data"): the coverage guard should EXCLUDE idle gaps > ~1h or
+auto-roll the scope per work session; and `status` should report active-time, not
+raw wall coverage. Lessons + durable fixes:
 
 - **Misleading asset reuse shipped twice.** Stand-ins read as the WRONG thing
   (castle keep = "Armor", signpost = "Boots"), and rock.png baked a rock+sign
