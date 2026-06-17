@@ -443,6 +443,49 @@ function buildCurrentScopeReviewConfidence({
   };
 }
 
+/* Normalize a command to a tool-level key for aggregation: strip leading env
+ * assignments, take the first token's basename, and for interpreters append the
+ * script basename (so "node tools/ai.mjs status" -> "node ai.mjs"). */
+function commandKey(cmd) {
+  let text = String(cmd || "").trim();
+  while (/^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+/.test(text)) {
+    text = text.replace(/^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+/, "");
+  }
+  const tokens = text.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return "shell";
+  const base = (segment) => segment.split(/[\\/]/).pop() || segment;
+  let key = base(tokens[0]).replace(/\.(exe|cmd)$/i, "");
+  if (/^(node|py|python|python3|bash|sh|npx|deno|pwsh|powershell)$/i.test(key)) {
+    const script = tokens.slice(1).find((token) => !token.startsWith("-"));
+    if (script) key += ` ${base(script)}`;
+  }
+  return key;
+}
+
+/* Aggregate commands by tool key: which tools cost the most total time (what to
+ * speed up) and which run most often (repeats / retries = friction). */
+function commandRollup(records) {
+  const map = new Map();
+  for (const record of records) {
+    if (record.event_type === "session_start") continue;
+    const cmd = (record.commands && record.commands[0]) || "";
+    if (!cmd) continue;
+    const key = commandKey(cmd);
+    const entry = map.get(key) || { key, count: 0, total_ms: 0, max_ms: 0, fails: 0 };
+    entry.count += 1;
+    const durationMs = Number(record.duration_ms || 0);
+    entry.total_ms += durationMs;
+    if (durationMs > entry.max_ms) entry.max_ms = durationMs;
+    if (record.result === "fail") entry.fails += 1;
+    map.set(key, entry);
+  }
+  const all = [...map.values()];
+  return {
+    by_time: all.filter((entry) => entry.total_ms > 0).sort((a, b) => b.total_ms - a.total_ms).slice(0, 6),
+    by_count: all.sort((a, b) => b.count - a.count).slice(0, 6),
+  };
+}
+
 function buildStatus(profilePaths) {
   const files = Array.isArray(profilePaths) ? profilePaths : [profilePaths];
   const parsed = parseProfiles(files);
@@ -585,6 +628,7 @@ function buildStatus(profilePaths) {
     low_profile_coverage: lowCoverage,
     review_confidence: reviewConfidence,
     current_scope_review_confidence: currentScopeReviewConfidence,
+    command_rollup: commandRollup(records),
     passive_summary: {
       mode: "passive",
       slowest_record: slowest ? {
@@ -748,6 +792,22 @@ function renderMarkdown(status) {
     if (slowest.passive_reason) lines.push(`- reason: ${slowest.passive_reason}`);
   } else {
     lines.push("- none recorded");
+  }
+  const rollup = status.command_rollup;
+  if (rollup && rollup.by_time.length > 0) {
+    lines.push("");
+    lines.push("## Top Time-Sinks (by total duration)");
+    for (const entry of rollup.by_time) {
+      lines.push(`- ${entry.key}: ${formatMs(entry.total_ms)} total over ${entry.count} run(s), max ${formatMs(entry.max_ms)}${entry.fails > 0 ? `, ${entry.fails} failed` : ""}`);
+    }
+  }
+  if (rollup && rollup.by_count.length > 0 && rollup.by_count[0].count > 1) {
+    lines.push("");
+    lines.push("## Most-Run Commands (repeats/retries = friction)");
+    for (const entry of rollup.by_count) {
+      if (entry.count < 2) continue;
+      lines.push(`- ${entry.key}: ${entry.count} run(s)${entry.total_ms > 0 ? `, ${formatMs(entry.total_ms)} total` : ""}${entry.fails > 0 ? `, ${entry.fails} failed` : ""}`);
+    }
   }
   lines.push("");
   lines.push("## Largest Context Input");
