@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { basename, dirname, join, resolve } from "node:path";
 import {
   defaultProfilePath,
+  deriveSessionId,
   latestSessionProfilePath,
   listSessionProfiles,
   parseArgs,
@@ -120,6 +121,22 @@ function resolveProfilePaths(values) {
     if (matches.length > 0) {
       return [matches.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0]];
     }
+  }
+
+  /* Default: the CURRENT session, self-identified from the harness env, so it is
+   * correct under ANY number of parallel sessions (multiple claude AND codex),
+   * not just the globally-newest log. Claude exports CLAUDE_CODE_SESSION_ID;
+   * Codex exports CODEX_SESSION_FILE. Fall back to the newest log. */
+  const envSources = [
+    ["claude", process.env.CLAUDE_CODE_SESSION_ID || ""],
+    ["codex", process.env.CODEX_SESSION_FILE || ""],
+  ];
+  for (const [name, raw] of envSources) {
+    if (!raw) continue;
+    const { short } = deriveSessionId(name === "codex" ? basename(raw) : raw);
+    if (!short) continue;
+    const match = todaySessionProfiles().find((path) => basename(path).includes(`__${name}__${short}`));
+    if (match) return [match];
   }
 
   const latest = latestSessionProfilePath();
