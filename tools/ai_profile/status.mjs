@@ -1,11 +1,23 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { defaultProfilePath, parseArgs, readProfileScope, stringArg } from "./profile_lib.mjs";
+import {
+  defaultProfilePath,
+  latestSessionProfilePath,
+  listSessionProfiles,
+  parseArgs,
+  readProfileScope,
+  stringArg,
+  todaySessionProfiles,
+} from "./profile_lib.mjs";
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/status.mjs [--profile <profile.jsonl>] [--json-output <status.json>] [--verbose] [--require-review-usable|--require-current-scope-usable]
+  node tools/ai_profile/status.mjs [--profile <profile.jsonl>] [--session <id>] [--all] [--json-output <status.json>] [--verbose] [--require-review-usable|--require-current-scope-usable]
+
+Default reads the ACTIVE session log (newest tmp/session_profiles/sessions/*.jsonl);
+--all aggregates today's session logs (+ the legacy daily file); --session <id>
+picks one session; --profile <p> reads an explicit file.
 
 Reports current AI profile health without appending records. Default output is
 a short passive diagnostic; --verbose shows the full per-record breakdown.
@@ -30,6 +42,48 @@ function parseProfile(file) {
     }
   }
   return { records, errors, exists: true };
+}
+
+/* Merge several per-session logs into one time-ordered record set. */
+function parseProfiles(files) {
+  const records = [];
+  const errors = [];
+  let exists = false;
+  for (const file of files) {
+    const parsed = parseProfile(file);
+    if (parsed.exists) exists = true;
+    records.push(...parsed.records);
+    for (const error of parsed.errors) errors.push(`${file}: ${error}`);
+  }
+  records.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  return { records, errors, exists };
+}
+
+/* Resolve which log file(s) `status` reads:
+ *   --profile <p>  -> that file
+ *   --session <id> -> the matching per-session log (any day)
+ *   --all          -> all of today's per-session logs + the legacy daily file
+ *   (default)      -> the active session (latest per-session log); legacy daily
+ *                     file as a fallback when no per-session logs exist yet. */
+function resolveProfilePaths(values) {
+  const explicit = stringArg(values, "profile", "");
+  if (explicit) return [resolve(explicit)];
+
+  const sessionId = stringArg(values, "session", "");
+  if (sessionId) {
+    const matches = listSessionProfiles().filter((path) => basename(path).includes(sessionId));
+    if (matches.length > 0) return matches;
+  }
+
+  if (values.all === true) {
+    const all = [...todaySessionProfiles()];
+    const daily = defaultProfilePath();
+    if (existsSync(daily)) all.push(daily);
+    return all.length > 0 ? all : [daily];
+  }
+
+  const latest = latestSessionProfilePath();
+  return [latest || defaultProfilePath()];
 }
 
 function eventTime(record) {
@@ -341,8 +395,9 @@ function buildCurrentScopeReviewConfidence({
   };
 }
 
-function buildStatus(profilePath) {
-  const parsed = parseProfile(profilePath);
+function buildStatus(profilePaths) {
+  const files = Array.isArray(profilePaths) ? profilePaths : [profilePaths];
+  const parsed = parseProfiles(files);
   const records = parsed.records;
   const closeoutSeen = records.some((record) => record.phase === "session_closeout");
   const missingWorkItem = countMissingWorkItem(records);
@@ -441,7 +496,8 @@ function buildStatus(profilePath) {
 
   return {
     schema_version: 1,
-    profile: profilePath,
+    profile: files.length === 1 ? files[0] : `${files.length} session logs`,
+    profile_files: files,
     exists: parsed.exists,
     valid: parsed.errors.length === 0,
     errors: parsed.errors,
@@ -668,9 +724,9 @@ function renderMarkdown(status) {
 const { values } = parseArgs(process.argv.slice(2));
 if (values.help) usage();
 
-const profilePath = resolve(stringArg(values, "profile", defaultProfilePath()));
+const profilePaths = resolveProfilePaths(values);
 const jsonOutputFile = stringArg(values, "json-output", "");
-const status = buildStatus(profilePath);
+const status = buildStatus(profilePaths);
 const rendered = values.verbose === true ? renderMarkdown(status) : renderPassiveMarkdown(status);
 
 if (jsonOutputFile) {

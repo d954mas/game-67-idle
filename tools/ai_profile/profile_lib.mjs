@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 export const CATEGORIES = new Set([
@@ -34,6 +34,41 @@ export function defaultProfilePath() {
 
 export function defaultScopePath() {
   return resolve("tmp", "session_profiles", "current_scope.json");
+}
+
+/* Per-session profile logs (written by the hook) live one file per session, so
+ * parallel work -- different sessions, harnesses, or project cwds -- never mixes.
+ * Layout mirrors hook_record_fast.c: sessions/<date>__<harness>__<sid8>.jsonl */
+export function sessionsDir() {
+  return resolve("tmp", "session_profiles", "sessions");
+}
+
+export function listSessionProfiles() {
+  const dir = sessionsDir();
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((name) => name.endsWith(".jsonl"))
+    .map((name) => resolve(dir, name));
+}
+
+export function todaySessionProfiles() {
+  const prefix = `${localDate()}__`;
+  return listSessionProfiles().filter((path) => path.split(/[\\/]/).pop().startsWith(prefix));
+}
+
+/* The active session = the most-recently-written per-session log. */
+export function latestSessionProfilePath() {
+  const files = listSessionProfiles();
+  let best = "";
+  let bestMtime = -1;
+  for (const file of files) {
+    const mtime = statSync(file).mtimeMs;
+    if (mtime > bestMtime) {
+      best = file;
+      bestMtime = mtime;
+    }
+  }
+  return best;
 }
 
 export function profileScopePath() {

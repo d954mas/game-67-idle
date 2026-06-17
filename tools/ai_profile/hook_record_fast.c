@@ -19,6 +19,12 @@
 #define MAX_PATH 4096
 #endif
 
+/* Per-session attribution (set in main, stamped into every record) so parallel
+ * work in the same day -- different sessions, harnesses, or project cwds -- is
+ * never mixed in one log. */
+static char g_session_id[128] = "";
+static char g_cwd[1024] = "";
+
 static char *read_stdin_all(void) {
     size_t cap = 8192;
     size_t len = 0;
@@ -144,6 +150,19 @@ static bool is_read_only_plumbing(const char *cmd) {
            starts_word(s, "where.exe") || starts_word(s, "ls") || starts_word(s, "cat");
 }
 
+/* Search tools exit 1 on "no match" -- a normal outcome, not a failure. */
+static bool is_search_command(const char *cmd) {
+    char lower[512];
+    lower_copy(lower, sizeof(lower), cmd);
+    char *nl = strchr(lower, '\n');
+    if (nl) *nl = '\0';
+    char *s = lower;
+    while (*s && isspace((unsigned char)*s)) s++;
+    return starts_word(s, "rg") || starts_word(s, "grep") || starts_word(s, "egrep") ||
+           starts_word(s, "fgrep") || starts_word(s, "findstr") ||
+           starts_word(s, "ack") || starts_word(s, "select-string");
+}
+
 static const char *category_for(const char *cmd) {
     char lower[512];
     lower_copy(lower, sizeof(lower), cmd);
@@ -222,6 +241,92 @@ static void default_profile_path(char *out, size_t out_size) {
 #endif
 }
 
+static const char *base_name(const char *path) {
+    const char *b = path;
+    for (const char *p = path; *p; p++)
+        if (*p == '/' || *p == '\\') b = p + 1;
+    return b;
+}
+
+/* Find a UUID (8-4-4-4-12 hex) anywhere in src; copy the full uuid into full[]
+ * and its first 8 hex into short8[]. Returns true on hit. Derives ONE stable
+ * session id from either a Claude session_id ("3ab203ec-...") OR a Codex
+ * rollout-<ts>-<uuid>.jsonl filename -- the leading timestamp groups (2/4 digits)
+ * never match the 8-hex+dash test, so it locks onto the real uuid. */
+static bool extract_uuid(const char *src, char *full, size_t full_size, char *short8, size_t short8_size) {
+    if (!src) return false;
+    for (const char *p = src; *p; p++) {
+        int hex = 0;
+        const char *q = p;
+        while (isxdigit((unsigned char)*q)) { q++; hex++; }
+        if (hex == 8 && *q == '-' && isxdigit((unsigned char)q[1])) {
+            size_t n = 0;
+            while (p[n] && n < 36 && (isxdigit((unsigned char)p[n]) || p[n] == '-') && n + 1 < full_size) {
+                full[n] = p[n];
+                n++;
+            }
+            full[n] = '\0';
+            size_t s = 0;
+            for (; s < 8 && p[s] && s + 1 < short8_size; s++) short8[s] = p[s];
+            short8[s] = '\0';
+            return true;
+        }
+    }
+    return false;
+}
+
+#ifdef _WIN32
+/* Codex best-effort: newest rollout-*.jsonl in ~/.codex/sessions/<Y>/<M>/<D>/
+ * when CODEX_SESSION_FILE is not exported into the hook env. */
+static bool latest_codex_session(char *out, size_t out_size) {
+    const char *home = getenv("USERPROFILE");
+    if (!home) home = getenv("HOME");
+    if (!home) return false;
+    SYSTEMTIME t;
+    GetLocalTime(&t);
+    char pattern[MAX_PATH * 2];
+    snprintf(pattern, sizeof(pattern), "%s\\.codex\\sessions\\%04u\\%02u\\%02u\\rollout-*.jsonl",
+             home, t.wYear, t.wMonth, t.wDay);
+    WIN32_FIND_DATAA fd;
+    HANDLE h = FindFirstFileA(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    char best[MAX_PATH] = "";
+    FILETIME best_time = {0, 0};
+    do {
+        if (CompareFileTime(&fd.ftLastWriteTime, &best_time) >= 0) {
+            best_time = fd.ftLastWriteTime;
+            snprintf(best, sizeof(best), "%s", fd.cFileName);
+        }
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+    if (!best[0]) return false;
+    snprintf(out, out_size, "%s", best);
+    return true;
+}
+#endif
+
+/* Per-session log path: tmp/session_profiles/sessions/<date>__<harness>__<sid8>.jsonl */
+static void session_profile_path(char *out, size_t out_size, const char *harness, const char *sid8) {
+#ifdef _WIN32
+    SYSTEMTIME local;
+    GetLocalTime(&local);
+    _mkdir("tmp");
+    _mkdir("tmp\\session_profiles");
+    _mkdir("tmp\\session_profiles\\sessions");
+    snprintf(out, out_size, "tmp\\session_profiles\\sessions\\%04u-%02u-%02u__%s__%s.jsonl",
+             local.wYear, local.wMonth, local.wDay, harness, sid8);
+#else
+    time_t now = time(NULL);
+    struct tm local;
+    localtime_r(&now, &local);
+    mkdir("tmp", 0755);
+    mkdir("tmp/session_profiles", 0755);
+    mkdir("tmp/session_profiles/sessions", 0755);
+    snprintf(out, out_size, "tmp/session_profiles/sessions/%04d-%02d-%02d__%s__%s.jsonl",
+             local.tm_year + 1900, local.tm_mon + 1, local.tm_mday, harness, sid8);
+#endif
+}
+
 static void json_escape(FILE *f, const char *s) {
     for (; *s; s++) {
         unsigned char c = (unsigned char)*s;
@@ -265,6 +370,22 @@ static void append_record(const char *profile, const char *event_type, const cha
         json_escape(f, command);
         fputs("\"]", f);
     }
+    /* Per-session attribution so parallel work never mixes. */
+    if (g_session_id[0]) {
+        fputs(",\"session_id\":\"", f);
+        json_escape(f, g_session_id);
+        fputc('"', f);
+    }
+    if (harness && *harness) {
+        fputs(",\"harness\":\"", f);
+        json_escape(f, harness);
+        fputc('"', f);
+    }
+    if (g_cwd[0]) {
+        fputs(",\"cwd\":\"", f);
+        json_escape(f, g_cwd);
+        fputc('"', f);
+    }
     fputs("}\n", f);
     fclose(f);
 }
@@ -282,7 +403,51 @@ int main(int argc, char **argv) {
     json_string_value(payload, "tool_name", tool, sizeof(tool)) ||
         json_string_value(payload, "toolName", tool, sizeof(tool));
 
-    const char *profile = getenv("AI_PROFILE_FILE");
+    /* ---- Resolve a stable per-session id (Claude AND Codex) + project cwd ---- */
+    char sid_full[64] = "";
+    char sid8[16] = "";
+    char raw[256] = "";
+    /* 1. payload session_id (Claude always; Codex if provided) */
+    if (json_string_value(payload, "session_id", raw, sizeof(raw)) ||
+        json_string_value(payload, "sessionId", raw, sizeof(raw)) ||
+        json_string_value(payload, "conversation_id", raw, sizeof(raw))) {
+        extract_uuid(raw, sid_full, sizeof(sid_full), sid8, sizeof(sid8));
+    }
+    /* 2. Codex: CODEX_SESSION_FILE env -> uuid in the rollout filename */
+    if (!sid8[0]) {
+        const char *csf = getenv("CODEX_SESSION_FILE");
+        if (csf && *csf) extract_uuid(base_name(csf), sid_full, sizeof(sid_full), sid8, sizeof(sid8));
+    }
+#ifdef _WIN32
+    /* 3. Codex fallback: newest rollout-*.jsonl for today */
+    if (!sid8[0] && strcmp(harness, "codex") == 0) {
+        char fn[MAX_PATH];
+        if (latest_codex_session(fn, sizeof(fn))) extract_uuid(fn, sid_full, sizeof(sid_full), sid8, sizeof(sid8));
+    }
+#endif
+    snprintf(g_session_id, sizeof(g_session_id), "%s", sid_full);
+    /* project cwd = the hook's working dir (the harness runs hooks at the project
+     * root), so work in different repos -- e.g. the engine vs the game -- is
+     * attributable. Read it directly to avoid payload JSON-escaping edge cases. */
+#ifdef _WIN32
+    if (!_getcwd(g_cwd, sizeof(g_cwd))) g_cwd[0] = '\0';
+#else
+    if (!getcwd(g_cwd, sizeof(g_cwd))) g_cwd[0] = '\0';
+#endif
+
+    /* Pick the log file: explicit override -> per-session file -> daily fallback
+     * (so a session with no resolvable id still records, never worse than before). */
+    char profile_buf[MAX_PATH * 2];
+    const char *env_profile = getenv("AI_PROFILE_FILE");
+    const char *profile;
+    if (env_profile && *env_profile) {
+        profile = env_profile;
+    } else if (sid8[0]) {
+        session_profile_path(profile_buf, sizeof(profile_buf), harness, sid8);
+        profile = profile_buf;
+    } else {
+        profile = "";
+    }
 
     if (strcmp(event, "SessionStart") == 0) {
         char intent[128];
@@ -311,6 +476,12 @@ int main(int argc, char **argv) {
 
     int exit_code = json_int_value(payload, "exit_code", json_int_value(payload, "exitCode", 0));
     bool failed = exit_code != 0 || json_error_value(payload);
+    /* A search tool returning exit 1 = "no match", a normal outcome -- counting
+     * it as a failure inflates the failure rate and hides real failures (retro
+     * 2026-06-17). exit 2 (a real search error) still counts as failed. */
+    if (failed && exit_code == 1 && !json_error_value(payload) && is_search_command(command)) {
+        failed = false;
+    }
     if (!failed && is_read_only_plumbing(command)) {
         free(payload);
         return 0;
