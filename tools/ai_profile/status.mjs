@@ -44,6 +44,34 @@ function parseProfile(file) {
   return { records, errors, exists: true };
 }
 
+/* Pair each tool_call_start with its following tool_call_result (sequential per
+ * session) to derive the command's own duration_ms, then DROP the start records
+ * so counts/coverage stay clean. Lets "Slowest Recorded Work" surface the tools
+ * that actually take time. Backward-compatible: files with no start events
+ * (PreToolUse not wired) are unchanged. */
+function attachDurations(records) {
+  const out = [];
+  let pending = null;
+  for (const record of records) {
+    if (record.event_type === "tool_call_start") {
+      pending = record;
+      continue;
+    }
+    if (record.event_type === "tool_call_result" && pending) {
+      const resultCmd = (record.commands && record.commands[0]) || "";
+      const startCmd = (pending.commands && pending.commands[0]) || "";
+      const sameSession = (record.session_id || "") === (pending.session_id || "");
+      if (resultCmd === startCmd && sameSession) {
+        const delta = Date.parse(record.ts) - Date.parse(pending.ts);
+        if (Number.isFinite(delta) && delta >= 0) record.duration_ms = delta;
+      }
+      pending = null;
+    }
+    out.push(record);
+  }
+  return out;
+}
+
 /* Merge several per-session logs into one time-ordered record set. */
 function parseProfiles(files) {
   const records = [];
@@ -56,7 +84,7 @@ function parseProfiles(files) {
     for (const error of parsed.errors) errors.push(`${file}: ${error}`);
   }
   records.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
-  return { records, errors, exists };
+  return { records: attachDurations(records), errors, exists };
 }
 
 /* Resolve which log file(s) `status` reads:
@@ -147,6 +175,9 @@ function coverageStats(records, gapThresholdMs = 5 * 60 * 1000, idleGapMs = 60 *
     if (gap < gapThresholdMs) activeMs += gap;
     else if (gap >= idleGapMs) idleMs += gap;
   }
+  /* Add command execution time (interval widths) when durations are present; it
+   * is 0 without them, so the short-gap proxy still stands alone. */
+  activeMs += merged.reduce((sum, interval) => sum + Math.max(0, interval.end_ms - interval.start_ms), 0);
   const effectiveSpanMs = Math.max(0, wallClockSpanMs - idleMs);
   const mergedProfiledMs = activeMs;
   const largestGaps = [];
