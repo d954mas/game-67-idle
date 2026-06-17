@@ -546,6 +546,16 @@ static void emit_plate(float cx, float cy, float w, float h, float a) {
     emit_quad(cx, cy, w + 6.0F, h - 8.0F, r, g, b, a);
 }
 
+/* Rounded filled panel in an ARBITRARY color (same corner-fakery as emit_plate
+ * + a cool light rim), so a HUD/upgrade card is ONE coherent shape instead of
+ * clashing rects stacked on a sprite. */
+static void emit_round_panel(float cx, float cy, float w, float h, float r, float g, float b, float a) {
+    emit_quad(cx, cy, w + 5.0F, h + 5.0F, 0.30F, 0.36F, 0.46F, a * 0.55F); /* cool rim */
+    emit_quad(cx, cy, w, h, r, g, b, a);
+    emit_quad(cx, cy, w - 9.0F, h + 7.0F, r, g, b, a);
+    emit_quad(cx, cy, w + 7.0F, h - 9.0F, r, g, b, a);
+}
+
 static bool write_backbuffer_png(const char *path) {
     const int w = (int)canvas_w();
     const int h = (int)canvas_h();
@@ -1609,30 +1619,37 @@ static void compose_hud(void) {
      * unaffordable ones are dimmed grey so the player can tell at a glance which
      * upgrades they can buy. */
     {
-        const int slots = UP_COUNT;
-        const float total = slots * PANEL_SLOT_W + (slots - 1) * PANEL_GAP;
-        /* tray */
-        emit_quad(DESIGN_W * 0.5F, PANEL_CY, total + 30.0F, PANEL_SLOT_H + 24.0F, 0.05F, 0.045F, 0.07F, 0.62F);
-        for (int i = 0; i < slots; ++i) {
+        /* SOLID full-width tray + a bright top rim, so the upgrades read as a
+         * grounded UI panel (Clicker Heroes / Tap Titans 2) instead of buttons
+         * floating on the snow. */
+        emit_quad(DESIGN_W * 0.5F, 58.0F, DESIGN_W, 116.0F, 0.055F, 0.065F, 0.10F, 0.96F);
+        emit_quad(DESIGN_W * 0.5F, 115.0F, DESIGN_W, 3.0F, 0.45F, 0.68F, 0.96F, 0.6F);
+
+        for (int i = 0; i < UP_COUNT; ++i) {
             float cx, cy, w, h;
             panel_slot_rect(i, &cx, &cy, &w, &h);
             bool affordable = (double)g_game_state.idle_gold >= upgrade_cost(i);
-            /* The rounded R_BUTTON sprite IS the card: tint it by affordability and
-             * draw nothing rectangular on top (icon + coin + outlined text sit
-             * directly on it). Earlier extra glow/veil/icon-box/cost-strip quads
-             * were rectangles that clashed with the rounded button and read dirty. */
-            uint32_t btn = affordable ? pack_rgba(0.56F, 1.0F, 0.60F, 1.0F)    /* bright green = buyable */
-                                      : pack_rgba(0.40F, 0.44F, 0.50F, 1.0F);  /* dim slate = can't afford */
-            emit_sprite(R_BUTTON, cx, cy, w, h, btn);
 
-            /* upgrade icon (no box) top-left of the button */
-            float ix = cx - w * 0.5F + 28.0F;
-            float iy = cy + 14.0F;
-            emit_h(upgrade_icon_region(i), ix, iy, 38.0F, affordable ? white : pack_rgba(0.70F, 0.72F, 0.76F, 1.0F));
+            /* Card surface: ONE neutral dark rounded plate for every slot (clean,
+             * consistent). Affordability is shown by the cost pill + icon, not by
+             * tinting the whole card, so the panel never looks muddy. */
+            emit_round_panel(cx, cy, w, h, 0.135F, 0.150F, 0.20F, 0.98F);
 
-            /* coin glyph in front of the cost number (bottom-left), no strip */
-            float cry = cy - h * 0.5F + 16.0F;
-            emit_h(R_COIN, cx - w * 0.5F + 22.0F, cry, 20.0F, affordable ? white : pack_rgba(0.66F, 0.66F, 0.70F, 1.0F));
+            /* Upgrade icon, left column. */
+            float ix = cx - w * 0.5F + 32.0F;
+            float iy = cy + 12.0F;
+            emit_h(upgrade_icon_region(i), ix, iy, 44.0F,
+                   affordable ? white : pack_rgba(0.66F, 0.68F, 0.74F, 1.0F));
+
+            /* Green COST pill across the card bottom: full gloss when buyable,
+             * crushed dark when not (so it clearly reads disabled even though the
+             * source sprite is green). The whole card stays clickable. */
+            float pcx = cx, pcy = cy - h * 0.5F + 20.0F, pw = w - 26.0F, ph = 32.0F;
+            uint32_t pill = affordable ? 0xFFFFFFFFu
+                                       : pack_rgba(0.30F, 0.36F, 0.36F, 1.0F);
+            emit_sprite(R_BUTTON, pcx, pcy, pw, ph, pill);
+            emit_h(R_COIN, pcx - pw * 0.5F + 22.0F, pcy, 22.0F,
+                   affordable ? white : pack_rgba(0.62F, 0.64F, 0.68F, 1.0F));
         }
     }
 
@@ -1756,32 +1773,32 @@ static void compose_text(void) {
      *   row 2: current effect (smaller, muted)
      *   row 3: COST = coin glyph (drawn in compose_hud) + the number (a price)
      * Affordable -> full-strength cream/gold text; unaffordable -> dimmed. */
-    const float dimmed[4] = {0.66F, 0.66F, 0.70F, 1.0F};
-    const float mutedc[4] = {0.80F, 0.90F, 0.98F, 1.0F};
+    const float dimmed[4] = {0.62F, 0.64F, 0.70F, 1.0F};
+    const float mutedc[4] = {0.78F, 0.88F, 0.98F, 1.0F};
     for (int i = 0; i < UP_COUNT; ++i) {
         float cx, cy, w, h;
         panel_slot_rect(i, &cx, &cy, &w, &h);
         bool affordable = (double)g_game_state.idle_gold >= upgrade_cost(i);
         float tx = cx - w * 0.5F + 60.0F;     /* text column, right of the icon */
-        float cry = cy - h * 0.5F + 16.0F;    /* cost-row backing center (mirror compose_hud) */
 
-        /* row 1: NAME (big, bold-ish via cream) + level */
+        /* NAME + level (top, biggest) */
         char lbl[28];
         (void)snprintf(lbl, sizeof(lbl), "%s  Lv%d", upgrade_label(i), upgrade_level(i));
-        emit_text_shadow(lbl, tx, cy + 16.0F, 21.0F, affordable ? cream : dimmed);
+        emit_text_shadow(lbl, tx, cy + 12.0F, 20.0F, affordable ? cream : dimmed);
 
-        /* row 2: current effect (smaller, muted) */
+        /* effect (mid, muted) */
         char eff[24];
         upgrade_effect_str(i, eff, sizeof(eff));
-        emit_text_shadow(eff, tx, cy - 6.0F, 16.0F, affordable ? mutedc : dimmed);
+        emit_text_shadow(eff, tx, cy - 6.0F, 15.0F, affordable ? mutedc : dimmed);
 
-        /* row 3: COST number, after the coin glyph in the cost strip */
-        char cost[24];
+        /* COST on the green pill: dark ink reads on the bright green, light grey
+         * on the crushed-dark disabled pill. */
         char n[16];
         fmt_num(n, sizeof(n), upgrade_cost(i));
-        (void)snprintf(cost, sizeof(cost), "%s", n);
-        const float *cc = affordable ? gold : dimmed;
-        emit_text_shadow(cost, cx - w * 0.5F + 42.0F, cry - 8.0F, 18.0F, cc);
+        float pcx = cx, pcy = cy - h * 0.5F + 20.0F, pw = w - 26.0F;
+        const float ink[4] = {0.09F, 0.10F, 0.05F, 1.0F};
+        const float offc[4] = {0.74F, 0.76F, 0.80F, 1.0F};
+        emit_text(n, pcx - pw * 0.5F + 40.0F, pcy - 9.0F, 19.0F, affordable ? ink : offc);
     }
 
     /* ---- Prestige button text. ---- */
