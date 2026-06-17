@@ -2,10 +2,14 @@
 
 ## Current Goal
 
-`Voxelheim` is in **rescue redesign** after lead feedback that the prototype is
-ugly, unclear, hard to read, and too simple/banal. The current target is
-**Voxelheim: Frost Keep Rebuilder**: a native idle RPG where auto-combat earns
-Gold + Frost Blocks and the player visibly repairs the Frost Keep room by room.
+`Voxelheim` game iteration is stopped by lead direction on 2026-06-17. Current
+work is **process review and pipeline improvement**: understand why the
+development loop accepted weak UI/product evidence, then fix the workflow before
+another game iteration.
+
+The stopped prototype target is **Voxelheim: Frost Keep Rebuilder**: a native
+idle RPG where auto-combat earns Gold + Frost Blocks and the player visibly
+repairs the Frost Keep room by room.
 
 Primary source of truth:
 
@@ -14,6 +18,7 @@ Primary source of truth:
 - `gamedesign/projects/voxelheim/visual/ui_ux_rescue_spec.md`
 - `gamedesign/projects/voxelheim/references/competitor_deconstruction_2026-06-17.md`
 - `gamedesign/projects/voxelheim/reviews/prototype_deconstruction_2026-06-17.md`
+- `gamedesign/projects/voxelheim/reviews/process_retrospective_2026-06-17.md`
 
 ## What's Built
 
@@ -30,6 +35,9 @@ The native build in `src/voxelheim_main.c` now proves the first
 - reward feedback now exists for repair, card choice, Avalanche Reset,
   Blueprint purchase, and offline collect via sprite bursts, floaters, pulses,
   and generated audio cues.
+- live UI hotfix removes the reported Gate CTA overlap/muddy text state, cleans
+  the purple-edge source contamination in `assets/raw/button.png`, and replaces
+  the Blocks HUD badge with an icy block icon.
 
 Remaining drift: final room art, reward timing/audio polish, and broader
 retention review are still not complete.
@@ -46,10 +54,11 @@ py -3.12 tmp/reward_feedback_probe.py
 
 ## Current Gate
 
-**Repair-chain + Avalanche Reset + Frost Blueprints + Offline Return
-product-read gates: passed for the current native slice.** The old
-visual/teachability pass is no longer accepted as product proof; this pass is
-specific to the first repair/meta/retention chain, not the full game.
+**Game iteration is no longer expanding. Process-review gate is active.**
+Repair-chain + Avalanche Reset + Frost Blueprints + Offline Return product-read
+gates passed for their captured states, but they are not full-game or full-UI
+acceptance. The live UI text/edge hotfix is proof of a regression fix, not a
+strict final product pass.
 
 Latest proof:
 
@@ -67,10 +76,13 @@ Latest proof:
   `build/captures/ui_rescue_offline_layout_uizoom.png`,
   `build/captures/ui_rescue_card_choice_uizoom.png`,
   `build/captures/ui_reward_blueprint_uizoom_cmp.png`,
-  `build/captures/ui_reward_offline_uizoom_cmp.png`
+  `build/captures/ui_reward_offline_uizoom_cmp.png`,
+  `build/captures/ui_text_live_overlap_fix_uizoom.png`,
+  `build/captures/ui_text_live_overlap_fix_uizoom_cmp.png`
 - probes:
   `tmp/shard_blueprints_probe.py`, `tmp/offline_return_probe.py`,
-  `tmp/rescue_probe.py`, `tmp/reward_feedback_probe.py`
+  `tmp/rescue_probe.py`, `tmp/reward_feedback_probe.py`,
+  `tmp/ui_text_overlap_probe.py`, `tmp/audit_cta_purple.py`
 
 This is still not a full product pass: the assembled UI and first repair chain
 are readable and the first meta/retention loop exists, but final art polish,
@@ -78,8 +90,15 @@ reward timing polish, and broader retention/fun review are still required.
 
 ## Blocking Gaps
 
-- Reward feedback exists, but transient floaters can still overlap one Blueprint
-  detail line for a short frame; final timing/audio mix is not polished.
+- CTA text/edge hotfix has live screenshot proof, but
+  `tools/devapi/ui_readability.py` still warns on CTA stroke thickness; do not
+  call this a final UI product pass until that is resolved or the metric is
+  improved.
+- Any future UI acceptance must include the exact live state from
+  `tmp/ui_text_overlap_probe.py`: post-offline collect, Blueprints visible, Gate
+  CTA affordable, combat/floaters active, HUD visible, and a CTA purple-edge
+  audit.
+- Reward feedback exists, but final timing/audio mix is not polished.
 - Forge/Campfire now have world markers, but room-specific art is still
   placeholder-level.
 - The current screenshot is a readable functional proof, not final art quality.
@@ -91,12 +110,15 @@ reward timing polish, and broader retention/fun review are still required.
 - Native build: `cmake --build --preset native-debug --target game_seed`.
 - Latest product gate:
   `gamedesign/projects/voxelheim/reviews/product_read_gate_2026-06-17_reward_feedback.md`.
+- Latest live UI regression review:
+  `gamedesign/projects/voxelheim/reviews/live_ui_regression_2026-06-17.md`.
 - Design evidence: `gamedesign/projects/voxelheim/reviews/prototype_deconstruction_2026-06-17.md`
   and `gamedesign/projects/voxelheim/references/competitor_deconstruction_2026-06-17.md`.
 
 ## Next Priorities
 
-1. Replace placeholder Forge/Campfire markers with polished generated room art.
-2. Run a broader retention/fun critic pass on the first 5-minute loop.
-3. Tune balance after the critic pass using the current probes as baselines.
-4. Polish reward timing/audio mix after room art stops moving.
+1. T0013: add reusable live-state UI acceptance matrix gate for all future games.
+2. T0012: require state-coverage tags in product gates.
+3. T0011: clean Voxelheim source-of-truth drift in `AGENTS.md` and status.
+4. After process fixes, decide whether to archive this prototype or reopen a
+   new polish/fun-review cycle.

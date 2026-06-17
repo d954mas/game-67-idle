@@ -1,7 +1,7 @@
 ---
 id: T0005
 title: "Design the REAL Voxelheim game: refs -> hook -> core loop -> progression/economy -> FTUE (pass the core-loop gate)"
-status: doing
+status: review
 epic: E001
 priority: P1
 tags: [voxelheim, design, core-loop, gate]
@@ -99,3 +99,7 @@ real-time action-RPG, see Open questions) — once chosen, run the design.
   `gamedesign/projects/voxelheim/reviews/product_read_gate_2026-06-17_blueprints_layout.md`.
   Remaining design gaps: stronger feedback/audio, polished room art, and
   broader fun/retention critic pass.
+- 2026-06-17 Lead stopped the game iteration and moved the work to process
+  review/pipeline improvement. Task moved to `review`; unresolved design debt is
+  now evidence for the process retrospective, not authorization to keep adding
+  gameplay in this iteration.

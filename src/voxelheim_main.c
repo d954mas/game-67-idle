@@ -1,16 +1,18 @@
 /*
- * Voxelheim -- "Frost Keep Climb" IDLE / incremental auto-battle RPG.
+ * Voxelheim -- "Frost Keep Rebuilder" IDLE / incremental RPG rescue slice.
  *
  * The hero stands on the path (lower-center) and AUTO-ATTACKS. An endless stream
  * of monsters spawns up the path and walks toward him; the front monster takes
  * damage, dies, drops GOLD, and the next advances. No player movement.
  *
  *   - Auto-combat stream: hero deals computed damage every computed interval.
+ *   - Monsters drop Gold plus Frost Blocks, the visible rebuild currency.
+ *   - First session: repair the Gate, then choose one of three rune cards.
+ *   - Forge repair later reveals the legacy training panel.
  *   - Stages: kills_per_stage kills -> stage+1; monster HP/gold scale per stage.
  *   - Bosses: every boss.every_stages stages, one big timed monster.
- *   - Gold -> 4 upgrades (Sword/Boots/Armor/Luck) in a bottom UPGRADE PANEL.
- *   - Prestige (unlock @ stage 25): reset stage+gold+upgrades for Frost Shards,
- *     spend on permanent shard upgrades.
+ *   - Avalanche Reset (unlock when the first Keep chain is rebuilt): reset
+ *     rooms+run economy for Frost Shards, then rebuild faster with shard boosts.
  *   - Offline (unlock after first boss): earn gold while away (capped).
  *   - FTUE (<=3 beats from balance.json).
  *
@@ -33,6 +35,7 @@
 #include "core/nt_platform.h"
 #include "devapi/nt_devapi.h"
 #include "font/nt_font.h"
+#include "game_audio.h"
 #include "fs/nt_fs.h"
 #include "game_state.h"
 #include "graphics/nt_gfx.h"
@@ -84,6 +87,17 @@
 #define VH_HERO_ATTACK_INTERVAL_S 1.0
 #define VH_HERO_BASE_MAX_HP 100.0
 #define VH_KILLS_PER_STAGE 10
+#define VH_PACKET_KILLS 5
+
+/* keep rebuild */
+#define VH_BLOCKS_PER_KILL 1
+#define VH_BLOCKS_PER_BOSS 8
+#define VH_GATE_BLOCK_COST 5
+#define VH_FORGE_BLOCK_COST 15
+#define VH_CAMPFIRE_BLOCK_COST 30
+#define VH_CAMPFIRE_DAMAGE_MULT 1.25
+#define VH_BLOCK_CACHE_GATE 5
+#define VH_BLOCK_CACHE_FORGE 8
 
 /* monster */
 #define VH_MON_HP_BASE 10.0
@@ -117,8 +131,10 @@
 #define VH_LUCK_BASE_COST 30.0
 #define VH_LUCK_GOLD_FIND_PCT 4.0
 
-/* prestige */
+/* avalanche reset / prestige */
 #define VH_PRESTIGE_UNLOCK_STAGE 25
+#define VH_AVALANCHE_KEEP_RANK_UNLOCK 3
+#define VH_SHARDS_PER_KEEP_RANK 1
 /* frost_shards = floor(highest_stage ^ 0.8 / 3).
  * Shard damage/gold apply MULTIPLICATIVELY (v3): mult = (1 + pct/100)^level, i.e.
  * +10%/level COMPOUNDING (Clicker Heroes Hero Souls), not a flat sum. */
@@ -138,6 +154,7 @@
 /* offline */
 #define VH_OFFLINE_RATE_PCT 50.0
 #define VH_OFFLINE_CAP_HOURS 8.0
+#define VH_OFFLINE_BLOCKS_PER_HOUR 12.0
 
 /* ---- Sim tuning (presentation only; not economy) ----
  *
@@ -241,6 +258,8 @@ static bool s_shot_ok;
 /* ---- Upgrade indices ---- */
 enum { UP_SWORD = 0, UP_BOOTS, UP_ARMOR, UP_LUCK, UP_COUNT };
 enum { SH_DMG = 0, SH_GOLD, SH_START, SH_OFFLINE, SH_COUNT };
+enum { ROOM_GATE = 0, ROOM_FORGE, ROOM_CAMPFIRE, ROOM_COUNT };
+enum { CARD_SHARP = 0, CARD_BLOCK_CACHE, CARD_QUICK_HANDS, CARD_COUNT };
 
 /* ---- Gameplay simulation state (transient; progression lives in g_game_state.idle) ---- */
 
@@ -314,11 +333,19 @@ static struct {
     /* offline grant pending presentation (popup). */
     bool offline_popup;
     long offline_gold;     /* gold granted while away (display) */
+    int offline_blocks;    /* Frost Blocks recovered while away (display) */
     double offline_hours;  /* capped hours (display) */
 
     /* prestige confirm state: a press arms confirm; second press commits. */
     bool prestige_armed;
     float prestige_armed_timer;
+
+    /* short reward pulses; they make major idle actions read at a glance. */
+    float reward_keep_pulse;
+    float reward_card_pulse;
+    float reward_shard_pulse;
+    float reward_avalanche_pulse;
+    float reward_offline_pulse;
 } g_sim;
 
 /* IDLE-BATTLER composition (toward idle_fakeshot.png): hero lower-center-LEFT,
@@ -334,6 +361,10 @@ static struct {
 #define PATH_FAR_Y (DESIGN_H * 0.560F)
 #define KEEP_CX (DESIGN_W * 0.5F)
 #define KEEP_CY (DESIGN_H * 0.74F)
+#define FORGE_MARKER_X (KEEP_CX + 126.0F)
+#define FORGE_MARKER_Y (KEEP_CY - 82.0F)
+#define CAMPFIRE_MARKER_X (HERO_X - 126.0F)
+#define CAMPFIRE_MARKER_Y (HERO_Y - 78.0F)
 
 /* ---- Helpers ---- */
 
@@ -555,14 +586,28 @@ static void emit_text_centered_soft(const char *s, float cx, float y, float size
     emit_text_soft(s, cx - w * 0.5F, y, size, color);
 }
 
-/* Solid dark rounded plate that strings sit on. Drawn as a main slab plus two
- * narrower slabs (top/bottom) to fake rounded corners, with a faint light rim on
- * top for a readable card edge. Sized to FULLY contain the text + padding so HUD
- * numbers never touch the bright sky. */
+static void emit_text_centered_plain(const char *s, float cx, float y, float size, const float color[4]) {
+    const float w = text_width(s, size);
+    emit_text(s, cx - w * 0.5F, y, size, color);
+}
+
+static void emit_text_centered_button(const char *s, float cx, float y, float size, const float color[4]) {
+    const float w = text_width(s, size);
+    const float x = cx - w * 0.5F;
+    emit_text(s, x - 0.7F, y, size, color);
+    emit_text(s, x + 0.7F, y, size, color);
+    emit_text(s, x, y - 0.5F, size, color);
+    emit_text(s, x, y + 0.5F, size, color);
+    emit_text(s, x, y, size, color);
+}
+
+/* Frosted label plate that strings sit on. Drawn as a main slab plus two
+ * narrower slabs (top/bottom) to fake rounded corners, with an icy rim on top.
+ * Sized to FULLY contain the text + padding so labels never touch the bright
+ * snow/sky directly. */
 static void emit_plate(float cx, float cy, float w, float h, float a) {
-    const float r = 0.078F, g = 0.066F, b = 0.058F; /* ~#14110F warm ink */
-    /* faint light rim (1px-ish) behind for a card edge */
-    emit_quad(cx, cy, w + 4.0F, h + 4.0F, 0.32F, 0.30F, 0.36F, a * 0.55F);
+    const float r = 0.070F, g = 0.155F, b = 0.215F;
+    emit_quad(cx, cy, w + 4.0F, h + 4.0F, 0.52F, 0.78F, 0.95F, a * 0.45F);
     /* body + rounded-corner fakery */
     emit_quad(cx, cy, w, h, r, g, b, a);
     emit_quad(cx, cy, w - 8.0F, h + 6.0F, r, g, b, a);
@@ -643,6 +688,9 @@ static double shard_offline_mult(void) {
  * mult, so power COMPOUNDS and tracks the exponential HP climb. */
 static double hero_damage(void) {
     double base = VH_HERO_BASE_DAMAGE * ipow(VH_SWORD_DMG_MULT, g_game_state.idle_up_sword);
+    if (g_game_state.idle_room_campfire_repaired) {
+        base *= VH_CAMPFIRE_DAMAGE_MULT;
+    }
     return base * shard_damage_mult();
 }
 static double hero_attack_interval(void) {
@@ -702,16 +750,20 @@ static double shard_cost(int which) {
     return base * ipow(growth, lvl);
 }
 
-/* Frost shards earned from a prestige at the current highest stage. */
+/* Frost shards earned from an Avalanche Reset.
+ * First loop must pay out clearly: Keep Rank is the visible rebuild progress,
+ * while highest-stage remains a legacy/late-run progress bonus. */
 static int frost_shards_reward(void) {
     int hs = g_game_state.idle_highest_stage;
-    double v = floor(pow((double)hs, 0.8) / 3.0);
-    if (v < 0.0) v = 0.0;
-    return (int)v;
+    int keep = g_game_state.idle_keep_rank * VH_SHARDS_PER_KEEP_RANK;
+    double stage_bonus = floor(pow((double)hs, 0.8) / 3.0);
+    if (stage_bonus < 0.0) stage_bonus = 0.0;
+    return keep + (int)stage_bonus;
 }
 
 static bool prestige_unlocked(void) {
-    return g_game_state.idle_highest_stage >= VH_PRESTIGE_UNLOCK_STAGE;
+    return g_game_state.idle_keep_rank >= VH_AVALANCHE_KEEP_RANK_UNLOCK ||
+           g_game_state.idle_highest_stage >= VH_PRESTIGE_UNLOCK_STAGE;
 }
 
 /* ---- Effects spawning ---- */
@@ -782,6 +834,19 @@ static void spawn_hit_spark(float x, float y) {
 static void spawn_coin_pop(float x, float y) {
     spawn_sprite_fx(R_COIN, x, y + 10.0F, 40.0F, 0.7F, 90.0F, 9.0F);
     spawn_sprite_fx(R_COIN, x - 18.0F, y + 4.0F, 30.0F, 0.6F, 70.0F, -8.0F);
+}
+
+static void spawn_reward_burst(float x, float y, float size) {
+    spawn_sprite_fx(R_LEVELUP_BURST, x, y, size, 0.62F, 18.0F, 0.0F);
+    spawn_sprite_fx(R_HIT_SPARK, x - size * 0.16F, y + size * 0.05F, size * 0.34F, 0.34F, 34.0F, -2.0F);
+    spawn_sprite_fx(R_HIT_SPARK, x + size * 0.16F, y + size * 0.02F, size * 0.30F, 0.34F, 30.0F, 2.0F);
+    spawn_sparkle(x, y);
+}
+
+static void spawn_reward_coin_fountain(float x, float y) {
+    spawn_coin_pop(x, y);
+    spawn_coin_pop(x + 30.0F, y - 4.0F);
+    spawn_coin_pop(x - 30.0F, y - 2.0F);
 }
 
 /* ---- Sim/monster spawning ---- */
@@ -923,6 +988,153 @@ static void grant_gold(double amount, float x, float y, bool floater) {
     game_state_mark_dirty();
 }
 
+static int keep_room_cost(int room) {
+    switch (room) {
+        case ROOM_GATE: return VH_GATE_BLOCK_COST;
+        case ROOM_FORGE: return VH_FORGE_BLOCK_COST;
+        case ROOM_CAMPFIRE: return VH_CAMPFIRE_BLOCK_COST;
+        default: return 0;
+    }
+}
+
+static const char *keep_room_name(int room) {
+    switch (room) {
+        case ROOM_GATE: return "Gate";
+        case ROOM_FORGE: return "Forge";
+        case ROOM_CAMPFIRE: return "Campfire";
+        default: return "Room";
+    }
+}
+
+static const char *keep_room_effect_label(int room) {
+    switch (room) {
+        case ROOM_GATE: return "opens rune cards";
+        case ROOM_FORGE: return "opens training";
+        case ROOM_CAMPFIRE: return "helper +25%";
+        default: return "upgrades the Keep";
+    }
+}
+
+static bool keep_room_repaired(int room) {
+    switch (room) {
+        case ROOM_GATE: return g_game_state.idle_room_gate_repaired;
+        case ROOM_FORGE: return g_game_state.idle_room_forge_repaired;
+        case ROOM_CAMPFIRE: return g_game_state.idle_room_campfire_repaired;
+        default: return false;
+    }
+}
+
+static void set_keep_room_repaired(int room, bool repaired) {
+    switch (room) {
+        case ROOM_GATE: g_game_state.idle_room_gate_repaired = repaired; break;
+        case ROOM_FORGE: g_game_state.idle_room_forge_repaired = repaired; break;
+        case ROOM_CAMPFIRE: g_game_state.idle_room_campfire_repaired = repaired; break;
+        default: break;
+    }
+}
+
+static void sync_keep_rank(void) {
+    int rank = 0;
+    for (int i = 0; i < ROOM_COUNT; ++i) {
+        if (keep_room_repaired(i)) ++rank;
+    }
+    g_game_state.idle_keep_rank = rank;
+}
+
+static void grant_blocks(int amount, float x, float y, bool floater) {
+    if (amount <= 0) return;
+    long total = (long)g_game_state.idle_frost_blocks + (long)amount;
+    if (total > 2147483647L) total = 2147483647L;
+    g_game_state.idle_frost_blocks = (int)total;
+    if (floater) {
+        char t[24];
+        (void)snprintf(t, sizeof(t), "+%d Blocks", amount);
+        const float c[4] = {0.58F, 0.92F, 1.0F, 1.0F};
+        spawn_floater(x, y + 44.0F, t, c, 21.0F);
+    }
+    game_state_mark_dirty();
+}
+
+static bool repair_room(int room) {
+    if (room < 0 || room >= ROOM_COUNT) return false;
+    if (keep_room_repaired(room)) return false;
+    int cost = keep_room_cost(room);
+    if (g_game_state.idle_frost_blocks < cost) return false;
+
+    g_game_state.idle_frost_blocks -= cost;
+    set_keep_room_repaired(room, true);
+    sync_keep_rank();
+
+    if (room == ROOM_GATE) {
+        g_game_state.idle_pending_card_choice = true;
+        if (g_game_state.run_ftue_step < 2) g_game_state.run_ftue_step = 2;
+    }
+    if (room == ROOM_FORGE && g_game_state.run_ftue_step < 3) {
+        g_game_state.run_ftue_step = 3;
+    }
+    if (room == ROOM_CAMPFIRE && g_game_state.run_ftue_step < 4) {
+        g_game_state.run_ftue_step = 4;
+    }
+
+    char t[24];
+    (void)snprintf(t, sizeof(t), "%s repaired!", keep_room_name(room));
+    const float c[4] = {0.68F, 1.0F, 0.82F, 1.0F};
+    spawn_floater(DESIGN_W * 0.5F, DESIGN_H * 0.60F, t, c, 24.0F);
+    float fx = KEEP_CX;
+    float fy = KEEP_CY - 32.0F;
+    if (room == ROOM_FORGE) {
+        fx = FORGE_MARKER_X;
+        fy = FORGE_MARKER_Y + 10.0F;
+    } else if (room == ROOM_CAMPFIRE) {
+        fx = CAMPFIRE_MARKER_X;
+        fy = CAMPFIRE_MARKER_Y + 8.0F;
+    }
+    spawn_reward_burst(fx, fy, room == ROOM_GATE ? 230.0F : 170.0F);
+    g_sim.reward_keep_pulse = 0.78F;
+    game_audio_play(GAME_AUDIO_CUE_SUCCESS);
+    game_state_mark_dirty();
+    return true;
+}
+
+static bool choose_card(int card) {
+    if (!g_game_state.idle_pending_card_choice) return false;
+    if (card < 0 || card >= CARD_COUNT) return false;
+
+    const char *label = "Rune";
+    const bool forge_tier = g_game_state.idle_room_forge_repaired;
+    switch (card) {
+        case CARD_SHARP:
+            g_game_state.idle_up_sword += forge_tier ? 2 : 1;
+            label = forge_tier ? "Tempered Blade" : "Sharp Edges";
+            break;
+        case CARD_BLOCK_CACHE:
+            grant_blocks(forge_tier ? VH_BLOCK_CACHE_FORGE : VH_BLOCK_CACHE_GATE, DESIGN_W * 0.5F, DESIGN_H * 0.50F, false);
+            label = forge_tier ? "Block Crate" : "Block Cache";
+            break;
+        case CARD_QUICK_HANDS:
+            g_game_state.idle_up_boots += 1;
+            label = "Quick Hands";
+            break;
+        default:
+            break;
+    }
+    g_game_state.idle_pending_card_choice = false;
+    g_game_state.idle_card_choices_made += 1;
+    g_game_state.run_hero_max_hp = hero_max_hp();
+    if (g_game_state.run_hero_hp > g_game_state.run_hero_max_hp) {
+        g_game_state.run_hero_hp = g_game_state.run_hero_max_hp;
+    }
+    if (g_game_state.run_ftue_step < 3) g_game_state.run_ftue_step = 3;
+    const float c[4] = {0.92F, 0.82F, 1.0F, 1.0F};
+    spawn_floater(DESIGN_W * 0.5F, DESIGN_H * 0.56F, label, c, 24.0F);
+    spawn_reward_burst(DESIGN_W * 0.5F, 188.0F, 190.0F);
+    spawn_reward_coin_fountain(DESIGN_W * 0.5F, 176.0F);
+    g_sim.reward_card_pulse = 0.62F;
+    game_audio_play(GAME_AUDIO_CUE_SUCCESS);
+    game_state_mark_dirty();
+    return true;
+}
+
 /* Kill the front monster: drop gold, advance the stage counter / boss. */
 static void on_monster_killed(Monster *m) {
     /* Screen position of the dying enemy (FX/floaters spawn here). */
@@ -939,6 +1151,7 @@ static void on_monster_killed(Monster *m) {
     if (was_boss) {
         double g = monster_gold_for_stage(g_game_state.idle_stage) * VH_BOSS_GOLD_MULT;
         grant_gold(g, kx, ky, true);
+        grant_blocks(VH_BLOCKS_PER_BOSS, kx, ky, true);
         m->alive = false;
         g_game_state.idle_boss_active = false;
         g_sim.boss_timer = 0.0F;
@@ -946,24 +1159,26 @@ static void on_monster_killed(Monster *m) {
         spawn_coin_pop(kx + 28.0F, ky + 8.0F);
         spawn_coin_pop(kx - 30.0F, ky - 4.0F);
         spawn_sparkle(kx, ky + 10.0F);
-        /* first boss cleared unlocks offline earnings */
-        if (!g_game_state.idle_offline_unlocked) {
-            g_game_state.idle_offline_unlocked = true;
-            const float c[4] = {0.7F, 0.9F, 1.0F, 1.0F};
-            spawn_floater(HERO_X, HERO_Y + 80.0F, "Offline unlocked!", c, 24.0F);
-        }
         advance_stage();
         return;
     }
 
     double g = monster_gold_for_stage(g_game_state.idle_stage);
     grant_gold(g, kx, ky, true);
+    grant_blocks(VH_BLOCKS_PER_KILL, kx, ky, true);
     m->alive = false;
     g_game_state.idle_kills_in_stage += 1;
 
-    /* FTUE: first kill -> beat 2 (buy an upgrade). */
+    /* FTUE: first kill -> repair beat. */
     if (g_game_state.run_ftue_step < 1) {
         g_game_state.run_ftue_step = 1;
+    }
+    if (g_game_state.idle_kills_in_stage >= VH_PACKET_KILLS &&
+        g_game_state.idle_room_gate_repaired &&
+        !g_game_state.idle_pending_card_choice) {
+        g_game_state.idle_pending_card_choice = true;
+        const float c[4] = {0.9F, 0.82F, 1.0F, 1.0F};
+        spawn_floater(DESIGN_W * 0.5F, DESIGN_H * 0.58F, "Choose a rune", c, 23.0F);
     }
 
     if (g_game_state.idle_kills_in_stage >= VH_KILLS_PER_STAGE) {
@@ -999,6 +1214,8 @@ static bool buy_upgrade(int which) {
     }
     const float c[4] = {0.7F, 1.0F, 0.8F, 1.0F};
     spawn_floater(HERO_X, HERO_Y + 70.0F, "Upgrade!", c, 22.0F);
+    spawn_reward_burst(HERO_X, HERO_Y + 24.0F, 118.0F);
+    game_audio_play(GAME_AUDIO_CUE_CLICK);
     game_state_mark_dirty();
     return true;
 }
@@ -1021,7 +1238,7 @@ static bool buy_shard_upgrade(int which) {
 
 static void sim_seed_stage(void); /* fwd */
 
-/* Prestige: reset stage+gold+the 4 upgrades, grant Frost Shards. */
+/* Avalanche Reset: bury the rebuilt rooms, grant Frost Shards, restart stronger. */
 static bool do_prestige(void) {
     if (!prestige_unlocked()) return false;
     int reward = frost_shards_reward();
@@ -1033,6 +1250,16 @@ static bool do_prestige(void) {
     g_game_state.idle_up_boots = 0;
     g_game_state.idle_up_armor = 0;
     g_game_state.idle_up_luck = 0;
+    g_game_state.idle_frost_blocks = 0;
+    g_game_state.idle_keep_rank = 0;
+    g_game_state.idle_room_gate_repaired = false;
+    g_game_state.idle_room_forge_repaired = false;
+    g_game_state.idle_room_campfire_repaired = false;
+    g_game_state.idle_pending_card_choice = false;
+    g_game_state.idle_card_choices_made = 0;
+    if (!g_game_state.idle_offline_unlocked) {
+        g_game_state.idle_offline_unlocked = true;
+    }
     g_game_state.idle_stage = shard_start_stage();
     if (g_game_state.idle_stage > g_game_state.idle_highest_stage) {
         g_game_state.idle_highest_stage = g_game_state.idle_stage;
@@ -1048,24 +1275,35 @@ static bool do_prestige(void) {
     g_sim.prestige_armed = false;
     g_sim.prestige_armed_timer = 0.0F;
 
+    sim_seed_stage();
+    g_sim.reward_keep_pulse = 0.0F;
+    g_sim.reward_card_pulse = 0.0F;
+    g_sim.reward_shard_pulse = 0.0F;
+    g_sim.reward_offline_pulse = 0.0F;
+
     char t[24];
     (void)snprintf(t, sizeof(t), "+%d Frost Shards", reward);
     const float c[4] = {0.65F, 0.9F, 1.0F, 1.0F};
-    spawn_floater(HERO_X, HERO_Y + 90.0F, t, c, 26.0F);
-    spawn_sparkle(HERO_X, HERO_Y + 30.0F);
+    spawn_floater(KEEP_CX - 132.0F, KEEP_CY - 84.0F, t, c, 22.0F);
+    spawn_floater(KEEP_CX, KEEP_CY + 24.0F, "Avalanche Reset!", c, 20.0F);
+    spawn_floater(HERO_X - 70.0F, HERO_Y + 76.0F, "Offline Camp ready", c, 18.0F);
+    spawn_reward_burst(KEEP_CX, KEEP_CY - 18.0F, 220.0F);
+    g_sim.reward_avalanche_pulse = 0.92F;
+    game_audio_play(GAME_AUDIO_CUE_NOTIFY);
 
-    sim_seed_stage();
     game_state_mark_dirty();
     return true;
 }
 
 /* ---- Offline earnings ---- */
 
-/* Compute + grant offline gold from a last-seen timestamp. Returns granted. */
-static long compute_offline_grant(long now_unix) {
-    if (!g_game_state.idle_offline_unlocked) return 0;
+/* Compute + grant offline Gold + Frost Blocks from a last-seen timestamp. */
+static bool compute_offline_grant(long now_unix, long *gold_out, int *blocks_out) {
+    if (gold_out) *gold_out = 0;
+    if (blocks_out) *blocks_out = 0;
+    if (!g_game_state.idle_offline_unlocked) return false;
     long last = (long)g_game_state.idle_last_seen_unix;
-    if (last <= 0 || now_unix <= last) return 0;
+    if (last <= 0 || now_unix <= last) return false;
     double elapsed_s = (double)(now_unix - last);
     double cap_s = VH_OFFLINE_CAP_HOURS * 3600.0;
     if (elapsed_s > cap_s) elapsed_s = cap_s;
@@ -1079,18 +1317,36 @@ static long compute_offline_grant(long now_unix) {
     double rate = gold_per_kill * kills_per_sec * (VH_OFFLINE_RATE_PCT / 100.0) * shard_offline_mult();
     double grant = rate * elapsed_s;
     if (grant < 0.0) grant = 0.0;
+    double block_grant = (elapsed_s / 3600.0) * VH_OFFLINE_BLOCKS_PER_HOUR * shard_offline_mult();
+    if (block_grant < 0.0) block_grant = 0.0;
     /* Clamp in DOUBLE to the int32 gold range before any narrowing cast: with the
      * multiplicative economy, highest_stage climbs high enough that the raw grant
      * exceeds 2^31 and a direct (long) cast wraps to INT_MIN. */
     if (grant > 2147483647.0) grant = 2147483647.0;
     long g = (long)grant;
-    if (g > 0) {
+    int blocks = (int)floor(block_grant + 0.5);
+    if (blocks > 9999) blocks = 9999;
+    if (g > 0 || blocks > 0) {
         double total = (double)g_game_state.idle_gold + (double)g;
         g_game_state.idle_gold = gold_to_int(total);
+        if (blocks > 0) {
+            long total_blocks = (long)g_game_state.idle_frost_blocks + (long)blocks;
+            g_game_state.idle_frost_blocks = total_blocks > 2147483647L ? 2147483647 : (int)total_blocks;
+        }
         g_sim.offline_hours = elapsed_s / 3600.0;
+        g_sim.offline_gold = g;
+        g_sim.offline_blocks = blocks;
+        for (int i = 0; i < MAX_FLOATERS; ++i) g_sim.floaters[i].active = false;
+        for (int i = 0; i < MAX_SPRITE_FX; ++i) g_sim.sprite_fx[i].active = false;
+        spawn_reward_burst(DESIGN_W * 0.5F, DESIGN_H * 0.5F + 16.0F, 210.0F);
+        spawn_reward_coin_fountain(DESIGN_W * 0.5F - 112.0F, DESIGN_H * 0.5F + 4.0F);
+        g_sim.reward_offline_pulse = 0.86F;
+        game_audio_play(GAME_AUDIO_CUE_NOTIFY);
         game_state_mark_dirty();
     }
-    return g;
+    if (gold_out) *gold_out = g;
+    if (blocks_out) *blocks_out = blocks;
+    return (g > 0 || blocks > 0);
 }
 
 /* ---- Sim lifecycle ---- */
@@ -1142,6 +1398,13 @@ static void playtest_reset(void) {
     g_game_state.idle_up_armor = 0;
     g_game_state.idle_up_luck = 0;
     g_game_state.idle_frost_shards = 0;
+    g_game_state.idle_frost_blocks = 0;
+    g_game_state.idle_keep_rank = 0;
+    g_game_state.idle_room_gate_repaired = false;
+    g_game_state.idle_room_forge_repaired = false;
+    g_game_state.idle_room_campfire_repaired = false;
+    g_game_state.idle_pending_card_choice = false;
+    g_game_state.idle_card_choices_made = 0;
     g_game_state.idle_shard_global_damage = 0;
     g_game_state.idle_shard_global_gold = 0;
     g_game_state.idle_shard_start_stage = 0;
@@ -1196,11 +1459,20 @@ static void update_sim(float dt) {
 
     if (g_sim.hero_flash > 0.0F) g_sim.hero_flash -= dt;
     if (g_sim.stage_flash > 0.0F) g_sim.stage_flash -= dt;
+    if (g_sim.reward_keep_pulse > 0.0F) g_sim.reward_keep_pulse = clampf(g_sim.reward_keep_pulse - dt, 0.0F, 10.0F);
+    if (g_sim.reward_card_pulse > 0.0F) g_sim.reward_card_pulse = clampf(g_sim.reward_card_pulse - dt, 0.0F, 10.0F);
+    if (g_sim.reward_shard_pulse > 0.0F) g_sim.reward_shard_pulse = clampf(g_sim.reward_shard_pulse - dt, 0.0F, 10.0F);
+    if (g_sim.reward_avalanche_pulse > 0.0F) g_sim.reward_avalanche_pulse = clampf(g_sim.reward_avalanche_pulse - dt, 0.0F, 10.0F);
+    if (g_sim.reward_offline_pulse > 0.0F) g_sim.reward_offline_pulse = clampf(g_sim.reward_offline_pulse - dt, 0.0F, 10.0F);
     if (g_sim.prestige_armed_timer > 0.0F) {
         g_sim.prestige_armed_timer -= dt;
         if (g_sim.prestige_armed_timer <= 0.0F) g_sim.prestige_armed = false;
     }
     update_effects(dt);
+
+    if (g_game_state.idle_pending_card_choice) {
+        return;
+    }
 
     const bool boss = g_game_state.idle_boss_active;
 
@@ -1295,9 +1567,19 @@ static void update_sim(float dt) {
 #define PANEL_SLOT_H 88.0F
 #define PANEL_GAP 14.0F
 #define PANEL_CY 56.0F
+#define TRAINING_SLOT_COUNT 3
+
+static int training_upgrade_at(int slot) {
+    switch (slot) {
+        case 0: return UP_SWORD;
+        case 1: return UP_BOOTS;
+        case 2: return UP_LUCK;
+        default: return UP_SWORD;
+    }
+}
 
 static void panel_slot_rect(int i, float *cx, float *cy, float *w, float *h) {
-    const int slots = UP_COUNT;
+    const int slots = TRAINING_SLOT_COUNT;
     const float total = slots * PANEL_SLOT_W + (slots - 1) * PANEL_GAP;
     float x0 = DESIGN_W * 0.5F - total * 0.5F + PANEL_SLOT_W * 0.5F;
     *cx = x0 + (float)i * (PANEL_SLOT_W + PANEL_GAP);
@@ -1306,20 +1588,148 @@ static void panel_slot_rect(int i, float *cx, float *cy, float *w, float *h) {
     *h = PANEL_SLOT_H;
 }
 
-/* Prestige button rect (top-center banner area), shown only when unlocked. */
+/* Frost Blueprint panel: permanent Frost Shard spend, kept compact and anchored
+ * away from the hero/repair CTA so it reads as meta progress, not another run
+ * action. Camp Supplies is hidden until offline is relevant. */
+#define SHARD_PANEL_CX (DESIGN_W - 142.0F)
+#define SHARD_PANEL_ROW_H 40.0F
+#define SHARD_PANEL_W 268.0F
+#define SHARD_PANEL_GAP 8.0F
+
+static bool shard_upgrade_visible(int which) {
+    if (which == SH_OFFLINE) {
+        return g_game_state.idle_offline_unlocked || g_game_state.idle_shard_offline_rate > 0;
+    }
+    return true;
+}
+
+static bool show_shard_panel(void) {
+    return g_game_state.idle_frost_shards > 0 ||
+           g_game_state.idle_shard_global_damage > 0 ||
+           g_game_state.idle_shard_global_gold > 0 ||
+           g_game_state.idle_shard_start_stage > 0 ||
+           g_game_state.idle_shard_offline_rate > 0;
+}
+
+static int shard_panel_visible_rows(void) {
+    int rows = 0;
+    for (int i = 0; i < SH_COUNT; ++i) {
+        if (shard_upgrade_visible(i)) rows += 1;
+    }
+    return rows;
+}
+
+static int shard_upgrade_at_visible_slot(int slot) {
+    int seen = 0;
+    for (int i = 0; i < SH_COUNT; ++i) {
+        if (!shard_upgrade_visible(i)) continue;
+        if (seen == slot) return i;
+        seen += 1;
+    }
+    return SH_DMG;
+}
+
+static float shard_panel_h(void) {
+    return 52.0F + (float)shard_panel_visible_rows() * (SHARD_PANEL_ROW_H + SHARD_PANEL_GAP) + 10.0F;
+}
+
+static float shard_panel_cy(void) {
+    return 14.0F + shard_panel_h() * 0.5F;
+}
+
+static void shard_row_rect(int slot, float *cx, float *cy, float *w, float *h) {
+    const float ph = shard_panel_h();
+    const float top = shard_panel_cy() + ph * 0.5F - 84.0F;
+    *cx = SHARD_PANEL_CX;
+    *cy = top - (float)slot * (SHARD_PANEL_ROW_H + SHARD_PANEL_GAP);
+    *w = SHARD_PANEL_W - 24.0F;
+    *h = SHARD_PANEL_ROW_H;
+}
+
+static int shard_upgrade_level(int which) {
+    switch (which) {
+        case SH_DMG: return g_game_state.idle_shard_global_damage;
+        case SH_GOLD: return g_game_state.idle_shard_global_gold;
+        case SH_START: return g_game_state.idle_shard_start_stage;
+        case SH_OFFLINE: return g_game_state.idle_shard_offline_rate;
+        default: return 0;
+    }
+}
+
+static const char *shard_upgrade_name(int which) {
+    switch (which) {
+        case SH_DMG: return "Sharper Steel";
+        case SH_GOLD: return "Rich Veins";
+        case SH_START: return "Head Start";
+        case SH_OFFLINE: return "Camp Supplies";
+        default: return "Blueprint";
+    }
+}
+
+static const char *shard_upgrade_effect(int which) {
+    switch (which) {
+        case SH_DMG: return "Permanent DMG +10%";
+        case SH_GOLD: return "Permanent Gold +10%";
+        case SH_START: return "Start +1 Stage";
+        case SH_OFFLINE: return "Offline return +5%";
+        default: return "Permanent boost";
+    }
+}
+
+/* Avalanche Reset button rect (top-center banner area), shown only when unlocked. */
 static void prestige_btn_rect(float *cx, float *cy, float *w, float *h) {
     *cx = DESIGN_W * 0.5F;
     *cy = DESIGN_H - 40.0F;
-    *w = 240.0F;
+    *w = 282.0F;
     *h = 44.0F;
 }
 
 /* Collect-offline button rect (centered popup). */
 static void collect_btn_rect(float *cx, float *cy, float *w, float *h) {
     *cx = DESIGN_W * 0.5F;
-    *cy = DESIGN_H * 0.5F - 36.0F;
+    *cy = DESIGN_H * 0.5F - 72.0F;
     *w = 200.0F;
     *h = 44.0F;
+}
+
+static bool show_training_panel(void) {
+    return g_game_state.idle_room_forge_repaired;
+}
+
+static int next_repair_room(void) {
+    for (int i = 0; i < ROOM_COUNT; ++i) {
+        if (!keep_room_repaired(i)) return i;
+    }
+    return -1;
+}
+
+static int keep_rooms_repaired_count(void) {
+    int n = 0;
+    for (int i = 0; i < ROOM_COUNT; ++i) {
+        if (keep_room_repaired(i)) n += 1;
+    }
+    return n;
+}
+
+static void main_repair_btn_rect(float *cx, float *cy, float *w, float *h) {
+    *cx = DESIGN_W * 0.5F;
+    *cy = 76.0F;
+    *w = 312.0F;
+    *h = 76.0F;
+}
+
+static void room_row_rect(int room, float *cx, float *cy, float *w, float *h) {
+    *cx = DESIGN_W - 142.0F;
+    *cy = DESIGN_H - 172.0F - (float)room * 60.0F;
+    *w = 242.0F;
+    *h = 52.0F;
+}
+
+static void card_rect(int card, float *cx, float *cy, float *w, float *h) {
+    *cx = DESIGN_W * 0.5F + ((float)card - 1.0F) * 190.0F;
+    *cy = 144.0F;
+    *w = 172.0F;
+    *h = 108.0F;
 }
 
 static bool in_rect(float px, float py, float cx, float cy, float w, float h) {
@@ -1333,8 +1743,72 @@ static bool handle_world_click(float px, float py) {
         float cx, cy, w, h;
         collect_btn_rect(&cx, &cy, &w, &h);
         g_sim.offline_popup = false; /* any click dismisses/collects (gold already added) */
-        (void)px; (void)py; (void)cx; (void)cy; (void)w; (void)h;
+        (void)px; (void)py; (void)w; (void)h;
+        const float c[4] = {0.70F, 0.94F, 1.0F, 1.0F};
+        spawn_floater(cx, cy + 56.0F, "Collected!", c, 22.0F);
+        spawn_reward_coin_fountain(DESIGN_W * 0.5F, DESIGN_H * 0.5F - 18.0F);
+        g_sim.reward_offline_pulse = 0.72F;
+        game_audio_play(GAME_AUDIO_CUE_SUCCESS);
         return true;
+    }
+    if (g_game_state.idle_pending_card_choice) {
+        for (int i = 0; i < CARD_COUNT; ++i) {
+            float cx, cy, w, h;
+            card_rect(i, &cx, &cy, &w, &h);
+            if (in_rect(px, py, cx, cy, w, h)) {
+                choose_card(i);
+                return true;
+            }
+        }
+    }
+    if (!g_game_state.idle_pending_card_choice) {
+        int room = next_repair_room();
+        float cx, cy, w, h;
+        main_repair_btn_rect(&cx, &cy, &w, &h);
+        if (room >= 0 && in_rect(px, py, cx, cy, w, h)) {
+            if (!repair_room(room)) {
+                const float c[4] = {1.0F, 0.72F, 0.45F, 1.0F};
+                spawn_floater(cx, cy + 48.0F, "Need Blocks", c, 20.0F);
+                game_audio_play(GAME_AUDIO_CUE_ERROR);
+            }
+            return true;
+        }
+    }
+    /* permanent Frost Shard spend */
+    if (!g_sim.offline_popup && show_shard_panel()) {
+        const int rows = shard_panel_visible_rows();
+        for (int slot = 0; slot < rows; ++slot) {
+            float cx, cy, w, h;
+            shard_row_rect(slot, &cx, &cy, &w, &h);
+            if (in_rect(px, py, cx, cy, w, h)) {
+                int which = shard_upgrade_at_visible_slot(slot);
+                bool bought = buy_shard_upgrade(which);
+                const float okc[4] = {0.70F, 0.94F, 1.0F, 1.0F};
+                const float noc[4] = {1.0F, 0.72F, 0.45F, 1.0F};
+                spawn_floater(cx, cy - 28.0F, bought ? "Learned!" : "Need Shards",
+                              bought ? okc : noc, 18.0F);
+                if (bought) {
+                    spawn_reward_burst(cx - w * 0.34F, cy + 4.0F, 116.0F);
+                    g_sim.reward_shard_pulse = 0.64F;
+                    game_audio_play(GAME_AUDIO_CUE_SUCCESS);
+                } else {
+                    game_audio_play(GAME_AUDIO_CUE_ERROR);
+                }
+                return true;
+            }
+        }
+    }
+    for (int i = 0; i < ROOM_COUNT; ++i) {
+        float cx, cy, w, h;
+        room_row_rect(i, &cx, &cy, &w, &h);
+        if (in_rect(px, py, cx, cy, w, h)) {
+            if (!repair_room(i)) {
+                const float c[4] = {1.0F, 0.72F, 0.45F, 1.0F};
+                spawn_floater(cx, cy + 30.0F, "Need Blocks", c, 18.0F);
+                game_audio_play(GAME_AUDIO_CUE_ERROR);
+            }
+            return true;
+        }
     }
     /* prestige button */
     if (prestige_unlocked()) {
@@ -1347,18 +1821,26 @@ static bool handle_world_click(float px, float py) {
                 g_sim.prestige_armed = true;
                 g_sim.prestige_armed_timer = 3.0F;
                 const float c[4] = {1.0F, 0.85F, 0.4F, 1.0F};
-                spawn_floater(DESIGN_W * 0.5F, DESIGN_H - 70.0F, "Tap again to confirm", c, 20.0F);
+                spawn_floater(DESIGN_W * 0.5F, DESIGN_H - 70.0F, "Tap again: Avalanche", c, 20.0F);
+                game_audio_play(GAME_AUDIO_CUE_NOTIFY);
             }
             return true;
         }
     }
     /* upgrade panel */
-    for (int i = 0; i < UP_COUNT; ++i) {
-        float cx, cy, w, h;
-        panel_slot_rect(i, &cx, &cy, &w, &h);
-        if (in_rect(px, py, cx, cy, w, h)) {
-            buy_upgrade(i);
-            return true;
+    if (!g_sim.offline_popup && show_training_panel()) {
+        for (int slot = 0; slot < TRAINING_SLOT_COUNT; ++slot) {
+            int i = training_upgrade_at(slot);
+            float cx, cy, w, h;
+            panel_slot_rect(slot, &cx, &cy, &w, &h);
+            if (in_rect(px, py, cx, cy, w, h)) {
+                if (!buy_upgrade(i)) {
+                    const float c[4] = {1.0F, 0.72F, 0.45F, 1.0F};
+                    spawn_floater(cx, cy + 38.0F, "Need Gold", c, 18.0F);
+                    game_audio_play(GAME_AUDIO_CUE_ERROR);
+                }
+                return true;
+            }
         }
     }
     return false;
@@ -1399,6 +1881,61 @@ static void emit_ground_shadow(float cx, float cy, float w, float a) {
     emit_quad(cx, cy, w * 0.66F, w * 0.21F, 0.02F, 0.03F, 0.05F, a * 0.8F);
 }
 
+static void emit_world_forge_marker(float cx, float cy) {
+    float pulse = 0.5F + 0.5F * sinf(g_sim.time * 4.2F);
+    emit_ground_shadow(cx, cy - 20.0F, 74.0F, 0.26F);
+    emit_quad(cx, cy - 2.0F, 80.0F, 56.0F, 0.14F, 0.11F, 0.12F, 0.80F);
+    emit_quad(cx, cy + 20.0F, 68.0F, 16.0F, 0.36F, 0.39F, 0.45F, 0.95F);
+    emit_quad(cx - 6.0F, cy + 4.0F, 46.0F, 22.0F, 0.20F, 0.22F, 0.28F, 0.95F);
+    emit_quad(cx + 22.0F, cy + 26.0F, 16.0F, 42.0F, 0.18F, 0.16F, 0.18F, 0.95F);
+    emit_quad(cx + 22.0F, cy + 52.0F, 24.0F, 8.0F, 0.28F, 0.26F, 0.28F, 0.90F);
+    emit_quad(cx - 20.0F, cy - 4.0F, 32.0F, 24.0F, 1.0F, 0.46F, 0.13F, 0.42F + 0.18F * pulse);
+    emit_h(R_HIT_SPARK, cx - 20.0F, cy + 2.0F, 38.0F, pack_rgba(1.0F, 0.62F, 0.18F, 0.75F));
+}
+
+static void emit_world_campfire_marker(float cx, float cy) {
+    float pulse = 0.5F + 0.5F * sinf(g_sim.time * 5.4F);
+    emit_ground_shadow(cx, cy - 14.0F, 66.0F, 0.28F);
+    emit_quad(cx - 14.0F, cy - 12.0F, 44.0F, 10.0F, 0.30F, 0.16F, 0.08F, 0.96F);
+    emit_quad(cx + 14.0F, cy - 12.0F, 44.0F, 10.0F, 0.28F, 0.14F, 0.07F, 0.96F);
+    emit_quad(cx, cy + 2.0F, 54.0F, 38.0F, 1.0F, 0.68F, 0.10F, 0.26F + 0.18F * pulse);
+    emit_h(R_HIT_SPARK, cx, cy + 10.0F, 48.0F, pack_rgba(1.0F, 0.72F, 0.18F, 0.88F));
+    emit_h(R_COIN, cx, cy + 4.0F, 28.0F, pack_rgba(1.0F, 0.42F, 0.12F, 0.72F));
+}
+
+static void compose_reward_pulses(void) {
+    if (g_sim.reward_avalanche_pulse > 0.0F) {
+        float a = clampf(g_sim.reward_avalanche_pulse / 0.92F, 0.0F, 1.0F);
+        emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.5F, DESIGN_W, DESIGN_H,
+                  0.72F, 0.92F, 1.0F, 0.12F * a);
+        emit_h(R_LEVELUP_BURST, KEEP_CX, KEEP_CY - 18.0F, 250.0F + 44.0F * (1.0F - a),
+               pack_rgba(0.72F, 0.94F, 1.0F, 0.46F * a));
+    }
+    if (g_sim.reward_keep_pulse > 0.0F) {
+        float a = clampf(g_sim.reward_keep_pulse / 0.78F, 0.0F, 1.0F);
+        emit_h(R_LEVELUP_BURST, KEEP_CX, KEEP_CY - 28.0F, 250.0F + 40.0F * (1.0F - a),
+               pack_rgba(0.72F, 1.0F, 0.86F, 0.52F * a));
+        emit_quad(KEEP_CX, KEEP_CY - 62.0F, 245.0F, 34.0F, 0.42F, 1.0F, 0.76F, 0.18F * a);
+    }
+    if (g_sim.reward_card_pulse > 0.0F) {
+        float a = clampf(g_sim.reward_card_pulse / 0.62F, 0.0F, 1.0F);
+        emit_h(R_LEVELUP_BURST, DESIGN_W * 0.5F, 188.0F, 224.0F + 42.0F * (1.0F - a),
+               pack_rgba(0.95F, 0.82F, 1.0F, 0.58F * a));
+        emit_quad(DESIGN_W * 0.5F, 144.0F, 570.0F, 132.0F, 0.72F, 0.46F, 1.0F, 0.10F * a);
+    }
+    if (g_sim.reward_shard_pulse > 0.0F) {
+        float a = clampf(g_sim.reward_shard_pulse / 0.64F, 0.0F, 1.0F);
+        emit_h(R_LEVELUP_BURST, SHARD_PANEL_CX, shard_panel_cy() + 12.0F, 176.0F + 36.0F * (1.0F - a),
+               pack_rgba(0.66F, 0.94F, 1.0F, 0.56F * a));
+    }
+    if (g_sim.reward_offline_pulse > 0.0F) {
+        float a = clampf(g_sim.reward_offline_pulse / 0.86F, 0.0F, 1.0F);
+        emit_h(R_LEVELUP_BURST, DESIGN_W * 0.5F, DESIGN_H * 0.5F + 16.0F,
+               238.0F + 44.0F * (1.0F - a), pack_rgba(0.78F, 0.96F, 1.0F, 0.54F * a));
+        emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.5F, 560.0F, 226.0F, 0.24F, 0.76F, 1.0F, 0.08F * a);
+    }
+}
+
 static void compose_scene(void) {
     const uint32_t white = 0xFFFFFFFFu;
 
@@ -1426,6 +1963,13 @@ static void compose_scene(void) {
     emit_h(R_PINE, DESIGN_W * 0.06F, DESIGN_H * 0.22F, DESIGN_H * 0.50F, white);
     emit_h(R_PINE, DESIGN_W * 0.95F, DESIGN_H * 0.20F, DESIGN_H * 0.52F, white);
     emit_h(R_ROCK, DESIGN_W * 0.86F, DESIGN_H * 0.30F, DESIGN_H * 0.12F, white);
+
+    if (g_game_state.idle_room_forge_repaired) {
+        emit_world_forge_marker(FORGE_MARKER_X, FORGE_MARKER_Y);
+    }
+    if (g_game_state.idle_room_campfire_repaired) {
+        emit_world_campfire_marker(CAMPFIRE_MARKER_X, CAMPFIRE_MARKER_Y);
+    }
 
     const int front = front_monster_index();
 
@@ -1520,6 +2064,17 @@ static void compose_scene(void) {
         float a = clampf(g_sim.hero_flash / HIT_FLASH_TIME, 0.0F, 1.0F) * 0.7F;
         emit_h(R_HERO, hero_x, HERO_Y + bob, hero_h, pack_rgba(1.0F, 0.3F, 0.3F, a));
     }
+    if (g_game_state.idle_room_campfire_repaired) {
+        float helper_h = hero_h * 0.46F;
+        float helper_x = HERO_X - 88.0F + sinf(g_sim.time * 3.2F) * 2.0F;
+        float helper_y = HERO_Y - 16.0F + bob * 0.45F;
+        emit_ground_shadow(helper_x, helper_y - helper_h * 0.42F, helper_h * 0.62F, 0.26F);
+        emit_h(R_HERO, helper_x, helper_y, helper_h, pack_rgba(0.68F, 0.94F, 1.0F, 0.96F));
+        emit_quad(helper_x, helper_y + helper_h * 0.34F, helper_h * 0.60F, helper_h * 0.22F,
+                  0.35F, 0.92F, 1.0F, 0.28F + 0.12F * sinf(g_sim.time * 5.0F));
+    }
+
+    compose_reward_pulses();
 
     /* Sprite FX (hit sparks, coin pops). */
     for (int i = 0; i < MAX_SPRITE_FX; ++i) {
@@ -1598,39 +2153,96 @@ static int upgrade_level(int i) {
 
 /* Top-left HUD plate geometry (shared by sprite + text passes so the dark plate
  * always FULLY contains the gold/stage strings + the progress bar). */
-#define HUD_PLATE_CX 162.0F
-#define HUD_PLATE_W 296.0F
-#define HUD_TOP_Y (DESIGN_H - 34.0F)   /* Gold row baseline */
-#define HUD_MID_Y (DESIGN_H - 66.0F)   /* Stage row baseline */
-#define HUD_BAR_Y (DESIGN_H - 96.0F)   /* progress bar center */
-#define HUD_BAR_W 256.0F
-#define HUD_ICON_X 32.0F
+#define HUD_PLATE_CX 178.0F
+#define HUD_PLATE_W 332.0F
+#define HUD_TOP_Y (DESIGN_H - 30.0F)   /* Gold row baseline */
+#define HUD_MID_Y (DESIGN_H - 58.0F)   /* Frost Blocks row baseline */
+#define HUD_RANK_Y (DESIGN_H - 86.0F)  /* Keep rank row baseline */
+#define HUD_BAR_Y (DESIGN_H - 116.0F)  /* progress bar center */
+#define HUD_BAR_W 288.0F
+#define HUD_ICON_X 34.0F
+#define HUD_TEXT_X 66.0F
 
 /* Show the Frost-Shards (meta currency) HUD card only once it is relevant -- an
  * empty "Frost Shards: 0" early just clutters the corner (refs hide the meta
  * currency until it is earned). */
 static bool show_shards_hud(void) {
+    if (show_shard_panel()) return false;
     return g_game_state.idle_frost_shards > 0 || prestige_unlocked() ||
            g_game_state.idle_shard_global_damage > 0 || g_game_state.idle_shard_global_gold > 0 ||
            g_game_state.idle_shard_start_stage > 0 || g_game_state.idle_shard_offline_rate > 0;
 }
 
+#define SHARD_HUD_CX (DESIGN_W - 102.0F)
+#define SHARD_HUD_CY (DESIGN_H - 28.0F)
+#define KEEP_PANEL_CX (DESIGN_W - 142.0F)
+#define KEEP_PANEL_FULL_CY (DESIGN_H - 214.0F)
+#define KEEP_PANEL_COMPACT_CY (DESIGN_H - 154.0F)
+
 static void compose_hud(void) {
     const uint32_t white = 0xFFFFFFFFu;
 
-    /* Top-left status card: one cool dark rounded panel (matching the bottom
-     * tray family) holding the coin + "Gold N" + "Stage N" + the kills bar, so
-     * no number ever spills onto the bright sky. */
-    emit_round_panel(HUD_PLATE_CX, DESIGN_H - 64.0F, HUD_PLATE_W, 86.0F, 0.095F, 0.115F, 0.165F, 0.93F);
-    emit_h(R_COIN, HUD_ICON_X, HUD_TOP_Y + 6.0F, 36.0F, white);
+    /* Top-left status card: one frosted blue panel holding the coin + "Gold N"
+     * + "Stage N" + the kills bar, so no number spills onto the bright sky. */
+    emit_round_panel(HUD_PLATE_CX, DESIGN_H - 76.0F, HUD_PLATE_W, 118.0F, 0.115F, 0.205F, 0.285F, 0.92F);
+    emit_h(R_COIN, HUD_ICON_X, HUD_TOP_Y + 5.0F, 32.0F, white);
+    emit_h(R_ROCK, HUD_ICON_X + 1.0F, HUD_MID_Y + 5.0F, 30.0F, pack_rgba(0.78F, 0.94F, 1.0F, 1.0F));
 
-    /* Minimap: a small top-right corner flourish. */
-    emit_h(R_MINIMAP, DESIGN_W - 58.0F, DESIGN_H - 56.0F, 90.0F, white);
+    /* Keep rebuild panel: full room list before meta, compact objective strip
+     * after Frost Blueprints are relevant so the right rail no longer stacks
+     * two dense lists on top of each other. */
+    if (show_shard_panel()) {
+        emit_round_panel(KEEP_PANEL_CX, KEEP_PANEL_COMPACT_CY, 268.0F, 94.0F, 0.105F, 0.190F, 0.270F, 0.93F);
+        float cx = KEEP_PANEL_CX, cy = KEEP_PANEL_COMPACT_CY - 22.0F;
+        const int room = next_repair_room();
+        const bool affordable = room >= 0 && g_game_state.idle_frost_blocks >= keep_room_cost(room);
+        emit_round_panel(cx, cy, 232.0F, 34.0F,
+                         affordable ? 0.135F : 0.125F,
+                         affordable ? 0.315F : 0.165F,
+                         affordable ? 0.410F : 0.215F,
+                         0.96F);
+    } else {
+        emit_round_panel(KEEP_PANEL_CX, KEEP_PANEL_FULL_CY, 268.0F, 238.0F, 0.105F, 0.190F, 0.270F, 0.93F);
+        for (int i = 0; i < ROOM_COUNT; ++i) {
+            float cx, cy, w, h;
+            room_row_rect(i, &cx, &cy, &w, &h);
+            bool repaired = keep_room_repaired(i);
+            bool affordable = g_game_state.idle_frost_blocks >= keep_room_cost(i);
+            if (repaired) {
+                emit_round_panel(cx, cy, w, h, 0.125F, 0.355F, 0.275F, 0.96F);
+            } else if (affordable) {
+                emit_round_panel(cx, cy, w, h, 0.135F, 0.315F, 0.410F, 0.96F);
+            } else {
+                emit_round_panel(cx, cy, w, h, 0.125F, 0.165F, 0.215F, 0.96F);
+            }
+        }
+    }
 
     /* Frost-Shards card (top-right, under the minimap) only when meta currency
      * is relevant -- keeps the early-game corner clean. */
     if (show_shards_hud()) {
-        emit_round_panel(DESIGN_W - 102.0F, DESIGN_H - 128.0F, 184.0F, 46.0F, 0.095F, 0.12F, 0.20F, 0.93F);
+        emit_round_panel(SHARD_HUD_CX, SHARD_HUD_CY, 184.0F, 46.0F, 0.120F, 0.205F, 0.315F, 0.92F);
+    }
+
+    if (!g_sim.offline_popup && show_shard_panel()) {
+        const float ph = shard_panel_h();
+        const float pcx = SHARD_PANEL_CX;
+        const float pcy = shard_panel_cy();
+        emit_round_panel(pcx, pcy, SHARD_PANEL_W, ph, 0.100F, 0.175F, 0.275F, 0.95F);
+        const int rows = shard_panel_visible_rows();
+        for (int slot = 0; slot < rows; ++slot) {
+            const int which = shard_upgrade_at_visible_slot(slot);
+            float cx, cy, w, h;
+            shard_row_rect(slot, &cx, &cy, &w, &h);
+            bool affordable = (double)g_game_state.idle_frost_shards >= shard_cost(which);
+            if (affordable) {
+                emit_round_panel(cx, cy, w, h, 0.120F, 0.305F, 0.385F, 0.96F);
+            } else {
+                emit_round_panel(cx, cy, w, h, 0.125F, 0.160F, 0.215F, 0.96F);
+            }
+            emit_h(R_BADGE, cx - w * 0.5F + 23.0F, cy + 1.0F, 26.0F,
+                   affordable ? 0xFFFFFFFFu : pack_rgba(0.58F, 0.68F, 0.76F, 1.0F));
+        }
     }
 
     /* Stage progress bar inside the plate (kills toward next stage). */
@@ -1658,22 +2270,23 @@ static void compose_hud(void) {
      * Affordable buttons read bright GREEN + a soft pulse "buy now" ring;
      * unaffordable ones are dimmed grey so the player can tell at a glance which
      * upgrades they can buy. */
-    {
+    if (!g_sim.offline_popup && show_training_panel()) {
         /* SOLID full-width tray + a bright top rim, so the upgrades read as a
          * grounded UI panel (Clicker Heroes / Tap Titans 2) instead of buttons
          * floating on the snow. */
-        emit_quad(DESIGN_W * 0.5F, 58.0F, DESIGN_W, 116.0F, 0.055F, 0.065F, 0.10F, 0.96F);
-        emit_quad(DESIGN_W * 0.5F, 115.0F, DESIGN_W, 3.0F, 0.45F, 0.68F, 0.96F, 0.6F);
+        emit_quad(DESIGN_W * 0.5F, 58.0F, DESIGN_W, 116.0F, 0.075F, 0.145F, 0.205F, 0.94F);
+        emit_quad(DESIGN_W * 0.5F, 115.0F, DESIGN_W, 3.0F, 0.55F, 0.82F, 1.0F, 0.58F);
 
-        for (int i = 0; i < UP_COUNT; ++i) {
+        for (int slot = 0; slot < TRAINING_SLOT_COUNT; ++slot) {
+            int i = training_upgrade_at(slot);
             float cx, cy, w, h;
-            panel_slot_rect(i, &cx, &cy, &w, &h);
+            panel_slot_rect(slot, &cx, &cy, &w, &h);
             bool affordable = (double)g_game_state.idle_gold >= upgrade_cost(i);
 
-            /* Card surface: ONE neutral dark rounded plate for every slot (clean,
+            /* Card surface: ONE neutral frosted plate for every slot (clean,
              * consistent). Affordability is shown by the cost pill + icon, not by
              * tinting the whole card, so the panel never looks muddy. */
-            emit_round_panel(cx, cy, w, h, 0.135F, 0.150F, 0.20F, 0.98F);
+            emit_round_panel(cx, cy, w, h, 0.125F, 0.215F, 0.295F, 0.96F);
 
             /* Upgrade icon, left column. */
             float ix = cx - w * 0.5F + 32.0F;
@@ -1693,8 +2306,27 @@ static void compose_hud(void) {
         }
     }
 
-    /* ---- Prestige button (top-center) when unlocked. ---- */
-    if (prestige_unlocked()) {
+    if (!g_sim.offline_popup && g_game_state.idle_pending_card_choice) {
+        for (int i = 0; i < CARD_COUNT; ++i) {
+            float cx, cy, w, h;
+            card_rect(i, &cx, &cy, &w, &h);
+            emit_round_panel(cx, cy, w, h, 0.165F, 0.210F, 0.360F, 0.96F);
+            emit_h(i == CARD_BLOCK_CACHE ? R_BADGE : upgrade_icon_region(i == CARD_QUICK_HANDS ? UP_BOOTS : UP_SWORD),
+                   cx, cy + 20.0F, 48.0F, white);
+        }
+    } else if (!g_sim.offline_popup && next_repair_room() >= 0) {
+        float cx, cy, w, h;
+        main_repair_btn_rect(&cx, &cy, &w, &h);
+        const int room = next_repair_room();
+        const bool affordable = g_game_state.idle_frost_blocks >= keep_room_cost(room);
+        emit_sprite(R_BUTTON, cx, cy, w, h,
+                    affordable ? white : pack_rgba(0.42F, 0.48F, 0.55F, 1.0F));
+        emit_h(R_ROCK, cx - w * 0.5F + 42.0F, cy + 1.0F, 34.0F,
+               affordable ? pack_rgba(0.88F, 0.98F, 1.0F, 1.0F) : pack_rgba(0.56F, 0.63F, 0.70F, 1.0F));
+    }
+
+    /* ---- Avalanche Reset button (top-center) when unlocked. ---- */
+    if (!g_sim.offline_popup && prestige_unlocked()) {
         float cx, cy, w, h;
         prestige_btn_rect(&cx, &cy, &w, &h);
         uint32_t tint = g_sim.prestige_armed ? pack_rgba(1.0F, 0.7F, 0.7F, 1.0F) : pack_rgba(0.6F, 0.85F, 1.0F, 1.0F);
@@ -1703,7 +2335,11 @@ static void compose_hud(void) {
 
     /* ---- Offline popup panel. ---- */
     if (g_sim.offline_popup) {
-        emit_quad(DESIGN_W * 0.5F, DESIGN_H * 0.5F, 520.0F, 160.0F, 0.06F, 0.06F, 0.12F, 0.86F);
+        emit_round_panel(DESIGN_W * 0.5F, DESIGN_H * 0.5F, 540.0F, 218.0F, 0.090F, 0.165F, 0.255F, 0.94F);
+        emit_round_panel(DESIGN_W * 0.5F - 112.0F, DESIGN_H * 0.5F - 12.0F, 196.0F, 54.0F, 0.145F, 0.205F, 0.285F, 0.96F);
+        emit_round_panel(DESIGN_W * 0.5F + 112.0F, DESIGN_H * 0.5F - 12.0F, 196.0F, 54.0F, 0.110F, 0.260F, 0.335F, 0.96F);
+        emit_h(R_COIN, DESIGN_W * 0.5F - 188.0F, DESIGN_H * 0.5F - 9.0F, 30.0F, white);
+        emit_h(R_ROCK, DESIGN_W * 0.5F + 36.0F, DESIGN_H * 0.5F - 9.0F, 30.0F, pack_rgba(0.82F, 0.96F, 1.0F, 1.0F));
         float cx, cy, w, h;
         collect_btn_rect(&cx, &cy, &w, &h);
         emit_sprite(R_BUTTON, cx, cy, w, h, white);
@@ -1715,22 +2351,39 @@ static void compose_hud(void) {
 /* ---- FTUE prompt (<=3 beats from balance.json) ---- */
 static const char *ftue_prompt(void) {
     if (g_sim.offline_popup) return NULL;
-    int step = g_game_state.run_ftue_step;
-    if (step <= 0) return "Your hero fights on its own - watch the gold pile up.";
-    if (step == 1) return "Tap Sword to upgrade - hit harder, kill faster.";
-    if (step == 2 && prestige_unlocked())
-        return "Push as far as you can. When it slows, Prestige for a permanent boost.";
+    if (g_game_state.idle_pending_card_choice) return "Choose one rune card to shape this run.";
+    if (!g_game_state.idle_room_gate_repaired) {
+        return NULL;
+    }
+    if (!g_game_state.idle_room_forge_repaired) return NULL;
+    if (!g_game_state.idle_room_campfire_repaired) return NULL;
+    if (prestige_unlocked()) return NULL;
     return NULL;
 }
 
 /* FTUE prompt baseline (shared by the plate + text passes), clear of the panel. */
-#define FTUE_Y (PANEL_CY + PANEL_SLOT_H * 0.5F + 40.0F)
+#define FTUE_Y 216.0F
 
 static void compose_overlays(void) {
     const char *prompt = ftue_prompt();
-    if (prompt) {
+    if (prompt && !g_game_state.idle_pending_card_choice) {
         /* place the prompt ABOVE the upgrade panel, on a solid plate, clear of it */
         emit_plate(DESIGN_W * 0.5F, FTUE_Y + 6.0F, text_width(prompt, 21.0F) + 48.0F, 40.0F, 0.88F);
+    }
+    if (g_game_state.idle_pending_card_choice) {
+        emit_plate(DESIGN_W * 0.5F, 218.0F, 430.0F, 54.0F, 0.88F);
+    }
+    if (g_game_state.idle_room_campfire_repaired) {
+        const char *helper = "Helper +25% DMG";
+        emit_plate(HERO_X - 88.0F, HERO_Y + 76.0F, text_width(helper, 17.0F) + 32.0F, 30.0F, 0.82F);
+    }
+    if (g_game_state.idle_room_forge_repaired) {
+        const char *forge = "Forge lit";
+        emit_plate(FORGE_MARKER_X, FORGE_MARKER_Y + 58.0F, text_width(forge, 15.0F) + 26.0F, 26.0F, 0.78F);
+    }
+    if (g_game_state.idle_room_campfire_repaired) {
+        const char *camp = "Campfire";
+        emit_plate(CAMPFIRE_MARKER_X, CAMPFIRE_MARKER_Y + 52.0F, text_width(camp, 15.0F) + 26.0F, 26.0F, 0.78F);
     }
     nt_sprite_renderer_flush();
 }
@@ -1753,6 +2406,8 @@ static void compose_text(void) {
     const float cream[4] = {0.996F, 0.980F, 0.937F, 1.0F};
     const float ice[4] = {0.7F, 0.9F, 1.0F, 1.0F};
 
+    compose_floaters();
+
     /* Gold counter (sits on the HUD plate, after the coin glyph) -- the primary
      * readout, so it is the biggest HUD number. */
     {
@@ -1760,23 +2415,29 @@ static void compose_text(void) {
         char n[16];
         fmt_num(n, sizeof(n), (double)g_game_state.idle_gold);
         (void)snprintf(g, sizeof(g), "Gold %s", n);
-        emit_text_soft(g, 58.0F, HUD_TOP_Y - 12.0F, 30.0F, gold);
+        emit_text_soft(g, HUD_TEXT_X, HUD_TOP_Y - 12.0F, 30.0F, gold);
     }
-    /* Stage counter (on the plate). */
+    /* Frost Blocks are the visible rebuild currency. */
     {
-        char s[28];
+        char b[32];
+        (void)snprintf(b, sizeof(b), "Blocks %d", g_game_state.idle_frost_blocks);
+        emit_text_soft(b, HUD_TEXT_X, HUD_MID_Y - 10.0F, 23.0F, ice);
+    }
+    /* Keep Rank + stage, so progression and fantasy both read in one glance. */
+    {
+        char s[40];
         if (g_game_state.idle_boss_active) {
-            (void)snprintf(s, sizeof(s), "Stage %d  BOSS", g_game_state.idle_stage);
+            (void)snprintf(s, sizeof(s), "Keep Rank %d  Stage %d BOSS", g_game_state.idle_keep_rank, g_game_state.idle_stage);
         } else {
-            (void)snprintf(s, sizeof(s), "Stage %d", g_game_state.idle_stage);
+            (void)snprintf(s, sizeof(s), "Keep Rank %d  Stage %d", g_game_state.idle_keep_rank, g_game_state.idle_stage);
         }
-        emit_text_soft(s, 58.0F, HUD_MID_Y - 10.0F, 23.0F, cream);
+        emit_text_soft(s, 30.0F, HUD_RANK_Y - 10.0F, 19.0F, cream);
     }
     /* Frost shards (top-right card) -- only when relevant, centered on its card. */
     if (show_shards_hud()) {
         char fs[28];
         (void)snprintf(fs, sizeof(fs), "Frost Shards  %d", g_game_state.idle_frost_shards);
-        emit_text_centered_soft(fs, DESIGN_W - 102.0F, DESIGN_H - 134.0F, 18.0F, ice);
+        emit_text_centered_soft(fs, SHARD_HUD_CX, SHARD_HUD_CY - 6.0F, 18.0F, ice);
     }
 
     /* Stage progress bar label (centered on the bar, inside the plate). */
@@ -1788,6 +2449,40 @@ static void compose_text(void) {
             (void)snprintf(s, sizeof(s), "%d / %d kills", g_game_state.idle_kills_in_stage, VH_KILLS_PER_STAGE);
         }
         emit_text_centered_soft(s, HUD_PLATE_CX, HUD_BAR_Y - 7.0F, 16.0F, cream);
+    }
+
+    /* Keep rebuild rows / compact meta objective. */
+    if (show_shard_panel()) {
+        emit_text_centered_soft("Frost Keep", KEEP_PANEL_CX, KEEP_PANEL_COMPACT_CY + 26.0F, 20.0F, cream);
+        char progress[32];
+        (void)snprintf(progress, sizeof(progress), "Rooms %d/%d", keep_rooms_repaired_count(), ROOM_COUNT);
+        emit_text_centered_soft(progress, KEEP_PANEL_CX, KEEP_PANEL_COMPACT_CY + 7.0F, 14.0F, ice);
+        const int room = next_repair_room();
+        char next[42];
+        if (room >= 0) {
+            (void)snprintf(next, sizeof(next), "Next: %s  %d Blocks", keep_room_name(room), keep_room_cost(room));
+        } else {
+            (void)snprintf(next, sizeof(next), "Keep rebuilt");
+        }
+        const float rowc[4] = {0.92F, 0.98F, 1.0F, 1.0F};
+        emit_text_centered_soft(next, KEEP_PANEL_CX, KEEP_PANEL_COMPACT_CY - 29.0F, 15.0F, rowc);
+    } else {
+        emit_text_centered_soft("Frost Keep", KEEP_PANEL_CX, DESIGN_H - 112.0F, 23.0F, cream);
+        emit_text_centered_soft("Rebuild rooms", KEEP_PANEL_CX, DESIGN_H - 136.0F, 14.0F, ice);
+        for (int i = 0; i < ROOM_COUNT; ++i) {
+            float cx, cy, w, h;
+            room_row_rect(i, &cx, &cy, &w, &h);
+            char line[40];
+            if (keep_room_repaired(i)) {
+                (void)snprintf(line, sizeof(line), "%s  DONE", keep_room_name(i));
+            } else {
+                (void)snprintf(line, sizeof(line), "%s  %d Blocks", keep_room_name(i), keep_room_cost(i));
+            }
+            const float rowc[4] = {0.92F, 0.98F, 1.0F, 1.0F};
+            const float subc[4] = {0.70F, 0.90F, 1.0F, 1.0F};
+            emit_text_soft(line, cx - w * 0.5F + 16.0F, cy + 3.0F, 17.0F, rowc);
+            emit_text_soft(keep_room_effect_label(i), cx - w * 0.5F + 16.0F, cy - 14.0F, 13.0F, subc);
+        }
     }
 
     /* Stage-advance flash banner. */
@@ -1810,83 +2505,151 @@ static void compose_text(void) {
      * Affordable -> full-strength cream/gold text; unaffordable -> dimmed. */
     const float dimmed[4] = {0.62F, 0.64F, 0.70F, 1.0F};
     const float mutedc[4] = {0.78F, 0.88F, 0.98F, 1.0F};
-    for (int i = 0; i < UP_COUNT; ++i) {
+    if (show_training_panel()) {
+        emit_text_centered_soft("Hero Training", DESIGN_W * 0.5F, 101.0F, 15.0F, ice);
+        for (int slot = 0; slot < TRAINING_SLOT_COUNT; ++slot) {
+            int i = training_upgrade_at(slot);
+            float cx, cy, w, h;
+            panel_slot_rect(slot, &cx, &cy, &w, &h);
+            bool affordable = (double)g_game_state.idle_gold >= upgrade_cost(i);
+            float tx = cx - w * 0.5F + 60.0F;     /* text column, right of the icon */
+
+            /* NAME + level (top, biggest) */
+            char lbl[28];
+            (void)snprintf(lbl, sizeof(lbl), "%s  Lv%d", upgrade_label(i), upgrade_level(i));
+            emit_text_soft(lbl, tx, cy + 12.0F, 20.0F, affordable ? cream : dimmed);
+
+            /* effect (mid, muted) */
+            char eff[24];
+            upgrade_effect_str(i, eff, sizeof(eff));
+            emit_text_soft(eff, tx, cy - 6.0F, 15.0F, affordable ? mutedc : dimmed);
+
+            /* COST on the green pill: dark ink reads on the bright green, light grey
+             * on the crushed-dark disabled pill. */
+            char n[16];
+            fmt_num(n, sizeof(n), upgrade_cost(i));
+            float pcx = cx, pcy = cy - h * 0.5F + 20.0F, pw = w - 26.0F;
+            const float ink[4] = {0.09F, 0.10F, 0.05F, 1.0F};
+            const float offc[4] = {0.74F, 0.76F, 0.80F, 1.0F};
+            emit_text(n, pcx - pw * 0.5F + 40.0F, pcy - 9.0F, 19.0F, affordable ? ink : offc);
+        }
+    } else if (!g_sim.offline_popup && g_game_state.idle_pending_card_choice) {
+        emit_text_centered_soft("Choose 1 Rune", DESIGN_W * 0.5F, 229.0F, 22.0F, cream);
+        emit_text_centered_soft("Pick a run bonus, then combat resumes", DESIGN_W * 0.5F, 207.0F, 15.0F, ice);
+        const bool forge_tier = g_game_state.idle_room_forge_repaired;
+        const char *names[CARD_COUNT] = {
+            forge_tier ? "Tempered Blade" : "Sharp Edges",
+            forge_tier ? "Block Crate" : "Block Cache",
+            "Quick Hands"
+        };
+        char effect0[24];
+        char effect1[24];
+        (void)snprintf(effect0, sizeof(effect0), "Sword +%d", forge_tier ? 2 : 1);
+        (void)snprintf(effect1, sizeof(effect1), "+%d Frost Blocks", forge_tier ? VH_BLOCK_CACHE_FORGE : VH_BLOCK_CACHE_GATE);
+        const char *effects[CARD_COUNT] = {effect0, effect1, "+1 Boots level"};
+        for (int i = 0; i < CARD_COUNT; ++i) {
+            float cx, cy, w, h;
+            card_rect(i, &cx, &cy, &w, &h);
+            emit_text_centered_soft(names[i], cx, cy - 12.0F, 18.0F, cream);
+            emit_text_centered_soft(effects[i], cx, cy - 38.0F, 15.0F, mutedc);
+        }
+    } else if (!g_sim.offline_popup && next_repair_room() >= 0) {
         float cx, cy, w, h;
-        panel_slot_rect(i, &cx, &cy, &w, &h);
-        bool affordable = (double)g_game_state.idle_gold >= upgrade_cost(i);
-        float tx = cx - w * 0.5F + 60.0F;     /* text column, right of the icon */
-
-        /* NAME + level (top, biggest) */
-        char lbl[28];
-        (void)snprintf(lbl, sizeof(lbl), "%s  Lv%d", upgrade_label(i), upgrade_level(i));
-        emit_text_soft(lbl, tx, cy + 12.0F, 20.0F, affordable ? cream : dimmed);
-
-        /* effect (mid, muted) */
-        char eff[24];
-        upgrade_effect_str(i, eff, sizeof(eff));
-        emit_text_soft(eff, tx, cy - 6.0F, 15.0F, affordable ? mutedc : dimmed);
-
-        /* COST on the green pill: dark ink reads on the bright green, light grey
-         * on the crushed-dark disabled pill. */
-        char n[16];
-        fmt_num(n, sizeof(n), upgrade_cost(i));
-        float pcx = cx, pcy = cy - h * 0.5F + 20.0F, pw = w - 26.0F;
+        main_repair_btn_rect(&cx, &cy, &w, &h);
+        const int room = next_repair_room();
+        const bool affordable = g_game_state.idle_frost_blocks >= keep_room_cost(room);
         const float ink[4] = {0.09F, 0.10F, 0.05F, 1.0F};
-        const float offc[4] = {0.74F, 0.76F, 0.80F, 1.0F};
-        emit_text(n, pcx - pw * 0.5F + 40.0F, pcy - 9.0F, 19.0F, affordable ? ink : offc);
+        const float offc[4] = {0.94F, 0.96F, 0.98F, 1.0F};
+        char title[32];
+        char need[32];
+        (void)snprintf(title, sizeof(title), "Repair %s", keep_room_name(room));
+        (void)snprintf(need, sizeof(need), "Need %d Blocks", keep_room_cost(room));
+        emit_text_centered_button(affordable ? title : need, cx + 40.0F, cy + 12.0F, 24.0F, affordable ? ink : offc);
+        emit_text_centered_button(affordable ? "Tap to rebuild" : "Fight for Blocks", cx + 40.0F, cy - 16.0F,
+                                  17.0F, affordable ? ink : offc);
     }
 
-    /* ---- Prestige button text. ---- */
-    if (prestige_unlocked()) {
+    /* ---- Avalanche Reset button text. ---- */
+    if (!g_sim.offline_popup && prestige_unlocked()) {
         float cx, cy, w, h;
         prestige_btn_rect(&cx, &cy, &w, &h);
         char t[40];
         if (g_sim.prestige_armed) {
-            (void)snprintf(t, sizeof(t), "CONFIRM PRESTIGE");
+            (void)snprintf(t, sizeof(t), "CONFIRM AVALANCHE");
         } else {
-            (void)snprintf(t, sizeof(t), "Prestige  +%d shards", frost_shards_reward());
+            (void)snprintf(t, sizeof(t), "Avalanche Reset  +%d shards", frost_shards_reward());
         }
         const float ink[4] = {0.10F, 0.08F, 0.07F, 1.0F};
         emit_text_centered(t, cx, cy - 7.0F, 16.0F, ink);
     }
 
-    /* ---- Shard upgrades mini-panel (left column) when shards exist. ---- */
-    if (g_game_state.idle_frost_shards > 0 || g_game_state.idle_shard_global_damage > 0 ||
-        g_game_state.idle_shard_global_gold > 0 || g_game_state.idle_shard_start_stage > 0 ||
-        g_game_state.idle_shard_offline_rate > 0) {
-        const char *names[SH_COUNT] = {"Sharper Steel", "Rich Veins", "Head Start", "Camp Supplies"};
-        int lvls[SH_COUNT] = {g_game_state.idle_shard_global_damage, g_game_state.idle_shard_global_gold,
-                              g_game_state.idle_shard_start_stage, g_game_state.idle_shard_offline_rate};
-        for (int i = 0; i < SH_COUNT; ++i) {
-            char t[48];
-            (void)snprintf(t, sizeof(t), "%s Lv%d (%.0f)", names[i], lvls[i], shard_cost(i));
-            emit_text_shadow(t, 18.0F, DESIGN_H - 200.0F - (float)i * 22.0F, 13.0F, ice);
+    /* ---- Frost Blueprint panel: permanent shard spend after Avalanche Reset. ---- */
+    if (!g_sim.offline_popup && show_shard_panel()) {
+        const float pcx = SHARD_PANEL_CX;
+        const float pcy = shard_panel_cy();
+        const float ph = shard_panel_h();
+        emit_text_centered_soft("Frost Blueprints", pcx, pcy + ph * 0.5F - 32.0F, 19.0F, cream);
+        char bank[28];
+        (void)snprintf(bank, sizeof(bank), "%d Shards to spend", g_game_state.idle_frost_shards);
+        emit_text_centered_soft(bank, pcx, pcy + ph * 0.5F - 52.0F, 14.0F, ice);
+
+        const int rows = shard_panel_visible_rows();
+        for (int slot = 0; slot < rows; ++slot) {
+            const int which = shard_upgrade_at_visible_slot(slot);
+            float cx, cy, w, h;
+            shard_row_rect(slot, &cx, &cy, &w, &h);
+            bool affordable = (double)g_game_state.idle_frost_shards >= shard_cost(which);
+            const float row_main[4] = {0.94F, 0.99F, 1.0F, 1.0F};
+            const float row_dim[4] = {0.62F, 0.70F, 0.78F, 1.0F};
+            const float row_sub[4] = {0.76F, 0.91F, 1.0F, 1.0F};
+            char name[42];
+            char cost[18];
+            (void)snprintf(name, sizeof(name), "%s  Lv%d", shard_upgrade_name(which), shard_upgrade_level(which));
+            (void)snprintf(cost, sizeof(cost), "%.0f", shard_cost(which));
+            emit_text_soft(name, cx - w * 0.5F + 48.0F, cy + 5.0F, 16.0F, affordable ? row_main : row_dim);
+            emit_text_soft(shard_upgrade_effect(which), cx - w * 0.5F + 48.0F, cy - 12.0F, 12.0F,
+                           affordable ? row_sub : row_dim);
+            emit_text_centered_soft(cost, cx + w * 0.5F - 25.0F, cy - 7.0F, 16.0F, affordable ? ice : row_dim);
         }
     }
 
     /* ---- FTUE prompt text. ---- */
     {
         const char *prompt = ftue_prompt();
-        if (prompt) {
+        if (prompt && !g_game_state.idle_pending_card_choice) {
             emit_text_centered_soft(prompt, DESIGN_W * 0.5F, FTUE_Y, 21.0F, cream);
         }
+    }
+    if (g_game_state.idle_room_campfire_repaired) {
+        emit_text_centered_soft("Helper +25% DMG", HERO_X - 88.0F, HERO_Y + 68.0F, 17.0F, ice);
+    }
+    if (g_game_state.idle_room_forge_repaired) {
+        emit_text_centered_soft("Forge lit", FORGE_MARKER_X, FORGE_MARKER_Y + 50.0F, 15.0F, ice);
+    }
+    if (g_game_state.idle_room_campfire_repaired) {
+        emit_text_centered_soft("Campfire", CAMPFIRE_MARKER_X, CAMPFIRE_MARKER_Y + 44.0F, 15.0F, cream);
     }
 
     /* ---- Offline popup text. ---- */
     if (g_sim.offline_popup) {
-        char t[48];
-        char n[16];
-        fmt_num(n, sizeof(n), (double)g_sim.offline_gold);
-        emit_text_centered("While you were away", DESIGN_W * 0.5F, DESIGN_H * 0.5F + 44.0F, 24.0F, ice);
-        (void)snprintf(t, sizeof(t), "+%s gold  (%.1fh)", n, g_sim.offline_hours);
-        emit_text_centered(t, DESIGN_W * 0.5F, DESIGN_H * 0.5F + 8.0F, 22.0F, gold);
+        char t[56];
+        char g[16];
+        fmt_num(g, sizeof(g), (double)g_sim.offline_gold);
+        emit_text_centered("Camp returned", DESIGN_W * 0.5F, DESIGN_H * 0.5F + 68.0F, 27.0F, ice);
+        (void)snprintf(t, sizeof(t), "Away for %.1fh", g_sim.offline_hours);
+        emit_text_centered_soft(t, DESIGN_W * 0.5F, DESIGN_H * 0.5F + 40.0F, 16.0F, cream);
+        (void)snprintf(t, sizeof(t), "+%s Gold", g);
+        emit_text_soft(t, DESIGN_W * 0.5F - 166.0F, DESIGN_H * 0.5F - 19.0F, 20.0F, gold);
+        (void)snprintf(t, sizeof(t), "+%d Blocks", g_sim.offline_blocks);
+        emit_text_soft(t, DESIGN_W * 0.5F + 58.0F, DESIGN_H * 0.5F - 19.0F, 20.0F, ice);
+        (void)snprintf(t, sizeof(t), "Camp Supplies bonus x%.2f", shard_offline_mult());
+        emit_text_centered_soft(t, DESIGN_W * 0.5F, DESIGN_H * 0.5F - 47.0F, 15.0F, cream);
         float cx, cy, w, h;
         collect_btn_rect(&cx, &cy, &w, &h);
         const float ink[4] = {0.10F, 0.08F, 0.07F, 1.0F};
-        emit_text_centered("Collect", cx, cy - 7.0F, 18.0F, ink);
+        emit_text_centered_plain("Collect", cx, cy - 7.0F, 20.0F, ink);
     }
 
-    compose_floaters();
 }
 
 /* ---- Persistence ---- */
@@ -1926,7 +2689,7 @@ void game_state_register_devapi(void);
 static cJSON *state_json(void) {
     cJSON *root = game_state_to_json(&g_game_state);
     cJSON_AddStringToObject(root, "runtime", "voxelheim");
-    cJSON_AddStringToObject(root, "screen", "frost_keep_climb");
+    cJSON_AddStringToObject(root, "screen", "frost_keep_rebuilder");
     cJSON_AddBoolToObject(root, "atlas_ready", s_atlas_resolved);
 
     /* Flat idle mirror for easy probe assertions. */
@@ -1935,13 +2698,26 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(root, "highest_stage", g_game_state.idle_highest_stage);
     cJSON_AddNumberToObject(root, "kills_in_stage", g_game_state.idle_kills_in_stage);
     cJSON_AddNumberToObject(root, "frost_shards", g_game_state.idle_frost_shards);
+    cJSON_AddNumberToObject(root, "frost_blocks", g_game_state.idle_frost_blocks);
+    cJSON_AddNumberToObject(root, "keep_rank", g_game_state.idle_keep_rank);
+    cJSON_AddBoolToObject(root, "room_gate_repaired", g_game_state.idle_room_gate_repaired);
+    cJSON_AddBoolToObject(root, "room_forge_repaired", g_game_state.idle_room_forge_repaired);
+    cJSON_AddBoolToObject(root, "room_campfire_repaired", g_game_state.idle_room_campfire_repaired);
+    cJSON_AddBoolToObject(root, "companion_unlocked", g_game_state.idle_room_campfire_repaired);
+    cJSON_AddBoolToObject(root, "pending_card_choice", g_game_state.idle_pending_card_choice);
+    cJSON_AddNumberToObject(root, "card_choices_made", g_game_state.idle_card_choices_made);
     cJSON_AddNumberToObject(root, "up_sword", g_game_state.idle_up_sword);
     cJSON_AddNumberToObject(root, "up_boots", g_game_state.idle_up_boots);
     cJSON_AddNumberToObject(root, "up_armor", g_game_state.idle_up_armor);
     cJSON_AddNumberToObject(root, "up_luck", g_game_state.idle_up_luck);
+    cJSON_AddNumberToObject(root, "shard_damage_level", g_game_state.idle_shard_global_damage);
+    cJSON_AddNumberToObject(root, "shard_gold_level", g_game_state.idle_shard_global_gold);
+    cJSON_AddNumberToObject(root, "shard_start_level", g_game_state.idle_shard_start_stage);
+    cJSON_AddNumberToObject(root, "shard_offline_level", g_game_state.idle_shard_offline_rate);
     cJSON_AddBoolToObject(root, "boss_active", g_game_state.idle_boss_active);
     cJSON_AddBoolToObject(root, "offline_unlocked", g_game_state.idle_offline_unlocked);
     cJSON_AddBoolToObject(root, "prestige_unlocked", prestige_unlocked());
+    cJSON_AddBoolToObject(root, "avalanche_unlocked", prestige_unlocked());
     cJSON_AddNumberToObject(root, "ftue_step", g_game_state.run_ftue_step);
 
     /* Derived combat stats (so the probe can assert upgrades change damage). */
@@ -1949,17 +2725,49 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(root, "hero_attack_interval", hero_attack_interval());
     cJSON_AddNumberToObject(root, "hero_max_hp", hero_max_hp());
     cJSON_AddNumberToObject(root, "gold_find_mult", gold_find_mult());
+    cJSON_AddNumberToObject(root, "campfire_damage_mult", VH_CAMPFIRE_DAMAGE_MULT);
 
     /* Costs / rewards (so the probe can drive deterministically). */
     cJSON_AddNumberToObject(root, "cost_sword", upgrade_cost(UP_SWORD));
     cJSON_AddNumberToObject(root, "cost_boots", upgrade_cost(UP_BOOTS));
     cJSON_AddNumberToObject(root, "cost_armor", upgrade_cost(UP_ARMOR));
     cJSON_AddNumberToObject(root, "cost_luck", upgrade_cost(UP_LUCK));
+    cJSON_AddNumberToObject(root, "cost_gate_blocks", VH_GATE_BLOCK_COST);
+    cJSON_AddNumberToObject(root, "cost_forge_blocks", VH_FORGE_BLOCK_COST);
+    cJSON_AddNumberToObject(root, "cost_campfire_blocks", VH_CAMPFIRE_BLOCK_COST);
     cJSON_AddNumberToObject(root, "shards_reward_now", frost_shards_reward());
+    cJSON_AddNumberToObject(root, "avalanche_shards_reward", frost_shards_reward());
+    cJSON_AddNumberToObject(root, "cost_shard_damage", shard_cost(SH_DMG));
+    cJSON_AddNumberToObject(root, "cost_shard_gold", shard_cost(SH_GOLD));
+    cJSON_AddNumberToObject(root, "cost_shard_start", shard_cost(SH_START));
+    cJSON_AddNumberToObject(root, "cost_shard_offline", shard_cost(SH_OFFLINE));
 
     cJSON_AddBoolToObject(root, "offline_popup", g_sim.offline_popup);
     cJSON_AddNumberToObject(root, "offline_gold", (double)g_sim.offline_gold);
+    cJSON_AddNumberToObject(root, "offline_blocks", g_sim.offline_blocks);
+    cJSON_AddNumberToObject(root, "offline_hours", g_sim.offline_hours);
     cJSON_AddNumberToObject(root, "monsters_alive", count_monsters());
+
+    cJSON *reward = cJSON_CreateObject();
+    cJSON_AddNumberToObject(reward, "keep", (double)g_sim.reward_keep_pulse);
+    cJSON_AddNumberToObject(reward, "card", (double)g_sim.reward_card_pulse);
+    cJSON_AddNumberToObject(reward, "shard", (double)g_sim.reward_shard_pulse);
+    cJSON_AddNumberToObject(reward, "avalanche", (double)g_sim.reward_avalanche_pulse);
+    cJSON_AddNumberToObject(reward, "offline", (double)g_sim.reward_offline_pulse);
+    cJSON_AddItemToObject(root, "reward_pulses", reward);
+
+    GameAudioStatus audio = game_audio_status();
+    cJSON *audio_json = cJSON_CreateObject();
+    cJSON_AddBoolToObject(audio_json, "implemented", audio.implemented);
+    cJSON_AddBoolToObject(audio_json, "initialized", audio.initialized);
+    cJSON_AddBoolToObject(audio_json, "device_enabled", audio.device_enabled);
+    cJSON_AddStringToObject(audio_json, "backend", audio.backend ? audio.backend : "unknown");
+    cJSON_AddNumberToObject(audio_json, "total_play_count", audio.total_play_count);
+    cJSON_AddNumberToObject(audio_json, "click", audio.cue_play_count[GAME_AUDIO_CUE_CLICK]);
+    cJSON_AddNumberToObject(audio_json, "success", audio.cue_play_count[GAME_AUDIO_CUE_SUCCESS]);
+    cJSON_AddNumberToObject(audio_json, "notify", audio.cue_play_count[GAME_AUDIO_CUE_NOTIFY]);
+    cJSON_AddNumberToObject(audio_json, "error", audio.cue_play_count[GAME_AUDIO_CUE_ERROR]);
+    cJSON_AddItemToObject(root, "audio", audio_json);
     return root;
 }
 
@@ -2036,6 +2844,30 @@ static bool ep_game_debug_buy(const cJSON *params, cJSON **result, char *error, 
     return true;
 }
 
+/* Choose a rune card by name/index: params {card:"sharp"|"blocks"|"quick"} or {card:0}. */
+static bool ep_game_debug_choose_card(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)user;
+    int card = -1;
+    if (params) {
+        const cJSON *c = cJSON_GetObjectItemCaseSensitive(params, "card");
+        if (cJSON_IsNumber(c)) {
+            card = c->valueint;
+        } else if (cJSON_IsString(c)) {
+            if (strcmp(c->valuestring, "sharp") == 0) card = CARD_SHARP;
+            else if (strcmp(c->valuestring, "blocks") == 0) card = CARD_BLOCK_CACHE;
+            else if (strcmp(c->valuestring, "quick") == 0) card = CARD_QUICK_HANDS;
+        }
+    }
+    bool picked = choose_card(card);
+    if (!picked && error && error_cap > 0) {
+        (void)snprintf(error, (size_t)error_cap, "no pending card or unknown card");
+    }
+    cJSON *root = state_json();
+    cJSON_AddBoolToObject(root, "picked", picked);
+    *result = root;
+    return picked;
+}
+
 /* Buy a shard upgrade: params {shard:"damage"|"gold"|"start"|"offline"}. */
 static bool ep_game_debug_buy_shard(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
     (void)user;
@@ -2065,7 +2897,9 @@ static bool ep_game_debug_prestige(const cJSON *params, cJSON **result, char *er
     (void)params; (void)user;
     bool ok = do_prestige();
     if (!ok) {
-        if (error && error_cap > 0) (void)snprintf(error, (size_t)error_cap, "prestige locked (stage < %d)", VH_PRESTIGE_UNLOCK_STAGE);
+        if (error && error_cap > 0) {
+            (void)snprintf(error, (size_t)error_cap, "avalanche reset locked (Keep Rank < %d)", VH_AVALANCHE_KEEP_RANK_UNLOCK);
+        }
         return false;
     }
     *result = state_json();
@@ -2082,9 +2916,12 @@ static bool ep_game_debug_offline(const cJSON *params, cJSON **result, char *err
     }
     long now = now_unix();
     g_game_state.idle_last_seen_unix = (int)(now - (long)seconds);
-    long granted = compute_offline_grant(now);
-    g_sim.offline_gold = granted;
-    g_sim.offline_popup = (granted > 0);
+    long granted_gold = 0;
+    int granted_blocks = 0;
+    bool granted = compute_offline_grant(now, &granted_gold, &granted_blocks);
+    g_sim.offline_gold = granted_gold;
+    g_sim.offline_blocks = granted_blocks;
+    g_sim.offline_popup = granted;
     g_game_state.idle_last_seen_unix = (int)now;
     *result = state_json();
     return true;
@@ -2123,6 +2960,7 @@ static void register_game_endpoints(void) {
     nt_devapi_register("game.debug.click", ep_game_debug_click, NULL);
     nt_devapi_register("game.debug.tick", ep_game_debug_tick, NULL);
     nt_devapi_register("game.debug.buy", ep_game_debug_buy, NULL);
+    nt_devapi_register("game.debug.choose_card", ep_game_debug_choose_card, NULL);
     nt_devapi_register("game.debug.buy_shard", ep_game_debug_buy_shard, NULL);
     nt_devapi_register("game.debug.prestige", ep_game_debug_prestige, NULL);
     nt_devapi_register("game.debug.offline", ep_game_debug_offline, NULL);
@@ -2133,7 +2971,7 @@ static void register_ui_devapi(float w, float h) {
     nt_devapi_set_frame(g_nt_app.frame);
     nt_devapi_set_view((float)canvas_w(), (float)canvas_h(), w, h);
     nt_devapi_clear_ui_elements();
-    (void)nt_devapi_register_ui_node("root", "", "screen", "Voxelheim", "Frost Keep Climb", 0.0F, 0.0F, w, h, true, true);
+    (void)nt_devapi_register_ui_node("root", "", "screen", "Voxelheim", "Frost Keep Rebuilder", 0.0F, 0.0F, w, h, true, true);
 }
 #endif
 
@@ -2152,6 +2990,7 @@ static void frame(void) {
         nt_devapi_apply_pending();
     }
 #endif
+    game_audio_update();
 
     nt_resource_step();
     nt_material_step();
@@ -2162,9 +3001,11 @@ static void frame(void) {
         /* compute the offline grant the first time the sim comes up */
         if (g_game_state.idle_offline_unlocked && !s_fresh_state) {
             long now = now_unix();
-            long granted = compute_offline_grant(now);
-            if (granted > 0) {
-                g_sim.offline_gold = granted;
+            long granted_gold = 0;
+            int granted_blocks = 0;
+            if (compute_offline_grant(now, &granted_gold, &granted_blocks)) {
+                g_sim.offline_gold = granted_gold;
+                g_sim.offline_blocks = granted_blocks;
                 g_sim.offline_popup = true;
             }
             g_game_state.idle_last_seen_unix = (int)now;
@@ -2279,7 +3120,7 @@ int main(int argc, char **argv) {
 
     parse_args(argc, argv);
 
-    g_nt_window.title = "Voxelheim - Frost Keep Climb";
+    g_nt_window.title = "Voxelheim - Frost Keep Rebuilder";
     g_nt_window.width = (uint32_t)s_window_width;
     g_nt_window.height = (uint32_t)s_window_height;
     nt_window_init();
@@ -2304,6 +3145,8 @@ int main(int argc, char **argv) {
     nt_sprite_renderer_desc_t sr_desc = nt_sprite_renderer_desc_defaults();
     nt_sprite_renderer_init(&sr_desc);
     nt_text_renderer_init();
+    game_audio_init();
+    game_audio_set_volume(0.72F, 0.82F);
 
     g_nt_app.target_dt = 1.0F / 60.0F;
 
@@ -2385,6 +3228,7 @@ int main(int argc, char **argv) {
     }
 #endif
     nt_text_renderer_shutdown();
+    game_audio_shutdown();
     nt_font_destroy(s_font);
     nt_font_shutdown();
     nt_sprite_renderer_shutdown();

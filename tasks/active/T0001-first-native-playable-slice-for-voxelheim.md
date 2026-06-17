@@ -1,7 +1,7 @@
 ---
 id: T0001
 title: First native playable slice for Voxelheim
-status: doing
+status: review
 epic: E001
 priority: P1
 tags: [prototype, voxelheim, native-first]
@@ -59,3 +59,6 @@ T0002 (art) → T0003 (first screen + visual gate) → T0004 (core loop).
 - 2026-06-17: product gate PASS (desktop_card_choice_ui_rescue); review: gamedesign/projects/voxelheim/reviews/product_read_gate_2026-06-17_card_choice_ui_rescue.md; screenshot: build/captures/ui_rescue_card_choice.png; next: continue to the next narrow slice
 - 2026-06-17: product gate PASS (desktop_blueprints_layout); review: gamedesign/projects/voxelheim/reviews/product_read_gate_2026-06-17_blueprints_layout.md; screenshot: build/captures/ui_rescue_blueprints_layout.png; next: continue to the next narrow slice
 - 2026-06-17: product gate PASS (desktop_reward_feedback); review: gamedesign\projects\voxelheim\reviews\product_read_gate_2026-06-17_reward_feedback.md; screenshot: build/captures/ui_reward_offline.png; next: continue to the next narrow slice
+- 2026-06-17 Lead stopped the game iteration and moved the work to process
+  review/pipeline improvement. Task moved to `review`; do not expand gameplay
+  from this task unless the lead reopens a new polish/fun-review cycle.

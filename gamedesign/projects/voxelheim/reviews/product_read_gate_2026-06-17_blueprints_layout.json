@@ -1,0 +1,33 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "voxelheim",
+  "task": "T0001",
+  "surface": "desktop_blueprints_layout",
+  "verdict": "pass",
+  "timestamp": "2026-06-17T07:52:49.522Z",
+  "screenshot": "build/captures/ui_rescue_blueprints_layout.png",
+  "answers": {
+    "where": "Snowy Frost Keep approach after Avalanche Reset; hero is back at stage 1 with Frost Shards visible.",
+    "action": "Recover Blocks for Gate, then use the Frost Blueprints panel to spend Shards on permanent upgrades.",
+    "response": "Frost Keep is now a compact rebuild objective at the top of the right rail, while Frost Blueprints is a separate spend panel below it.",
+    "reward": "The first Blueprint purchase spends Shards and raises Sharper Steel to Lv1, proving permanent progression without hiding the rebuild goal.",
+    "game_look": "The meta UI is separated into readable frosted panels with resource, objective, and upgrade hierarchy instead of one stacked debug column."
+  },
+  "visual_critique": {
+    "strict": false,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {},
+    "issues": []
+  },
+  "problem": "",
+  "next": "Continue with stronger animation/audio feedback and generated room art; do not add new meta systems before those gates pass."
+}

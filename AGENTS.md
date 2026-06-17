@@ -2,6 +2,8 @@
 
 ## Project
 
+- Active game concept: `Voxelheim` (voxelheim), a bright blocky **idle / incremental RPG** now in rescue direction as **Frost Keep Rebuilder**: a hero auto-battles monsters for Gold + Frost Blocks, repairs the Frost Keep room by room (Gate -> Forge -> Campfire), chooses 1-of-3 rune cards after combat packets, then later grows into bosses, prestige (Frost Shards), and offline earnings. Design: `gamedesign/projects/voxelheim/gdd.md` + `gamedesign/projects/voxelheim/data/rescue_loop.json` + `gamedesign/projects/voxelheim/data/balance.json`.
+
 - Active game concept: `Voxelheim` (voxelheim), a bright blocky **idle / incremental RPG**: a hero auto-battles up a snowy path of monsters to the Frost Keep — gold -> 4 upgrades -> bosses -> prestige (Frost Shards) -> offline earnings. Theme A visual. Design: `gamedesign/projects/voxelheim/gdd.md` + `references/idle_reference_digest.md` + `data/balance.json`.
 - This is an AI-first game development base: improve the game and the AI workflow together.
 - The engine lives in `external/neotolis-engine` as a submodule; do not edit it unless explicitly asked.
@@ -32,6 +34,11 @@
 - Final durable docs/data/assets go in their project folder.
 
 ## Direction
+
+- Current runtime surface: native `Voxelheim` implementation in
+  `src/voxelheim_main.c`. The reusable `Game Seed` template remains available,
+  but current game work targets Voxelheim unless the lead explicitly asks to
+  reset or start another concept.
 
 - Current runtime surface: native `Game Seed` template in
   `src/clean_seed_main.c`.

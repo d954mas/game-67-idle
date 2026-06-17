@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "status": "runtime_first_retention_loop_synced",
+  "note": "Rescue loop contract for Voxelheim after the 2026-06-17 prototype deconstruction. This supersedes the old generic idle GDD direction for new design work. Runtime now proves the first repair chain through Gate, Forge, and Campfire, the first Avalanche Reset, Frost Blueprints, and the first offline return popup.",
+  "title": "Voxelheim: Frost Keep Rebuilder",
+  "hook": "Auto-battle monsters to recover magic blocks, then rebuild the Frost Keep room by room in a visible toy-block diorama.",
+  "currencies": {
+    "gold": {
+      "role": "run_soft_currency",
+      "source": "monster kills and boss chests",
+      "sink": "hero training during the current expedition",
+      "first_slice_visible": true
+    },
+    "frost_blocks": {
+      "role": "visible_rebuild_currency",
+      "source": "monster drops, loot cards, boss blueprints",
+      "sink": "repair keep rooms",
+      "first_slice_visible": true
+    },
+    "frost_shards": {
+      "role": "prestige_meta_currency",
+      "source": "Avalanche Reset after Keep Rank 3, plus highest-stage progress bonus",
+      "sink": "permanent blueprint and expedition bonuses",
+      "first_slice_visible": true
+    }
+  },
+  "first_slice_rooms": [
+    {
+      "id": "gate",
+      "label": "Gate",
+      "cost_blocks": 5,
+      "effect": "unlocks 3-card loot choices after combat packets",
+      "visible_change": "broken gate becomes repaired and glows"
+    },
+    {
+      "id": "forge",
+      "label": "Forge",
+      "cost_blocks": 15,
+      "effect": "unlocks stronger weapon cards and compact hero training",
+      "visible_change": "Forge row becomes DONE and the 3-control training tray appears"
+    },
+    {
+      "id": "campfire",
+      "label": "Campfire",
+      "cost_blocks": 30,
+      "effect": "unlocks first companion helper and +25% combat damage",
+      "visible_change": "Campfire row becomes DONE; helper appears beside the hero with a bonus badge"
+    }
+  ],
+  "combat_packet": {
+    "duration_target_seconds": 20,
+    "enemies_per_packet": 5,
+    "boss_every_packets": 3,
+    "primary_feedback": [
+      "damage_number",
+      "block_pop",
+      "gold_fly_to_counter",
+      "reward_burst",
+      "success_or_notify_audio_cue"
+    ],
+    "choice_after_packet": {
+      "cards_offered": 3,
+      "cards_pick": 1,
+      "card_examples": [
+        { "id": "sharp_edges", "label": "Sharp Edges", "effect": "damage_up_this_run" },
+        { "id": "block_cache", "label": "Block Cache", "effect": "gain_frost_blocks" },
+        { "id": "quick_hands", "label": "Quick Hands", "effect": "attack_speed_up_this_run" }
+      ]
+    }
+  },
+  "first_30_seconds": [
+    "Hero auto-fights one large icy enemy beside a broken keep gate.",
+    "Enemy dies and drops Gold plus Frost Blocks with fly-to-counter feedback.",
+    "Repair Gate becomes the single dominant next action.",
+    "Player repairs Gate; the gate visibly completes and a 3-card loot choice unlocks."
+  ],
+  "first_meta_loop": {
+    "trigger": "repair Gate, Forge, and Campfire to reach Keep Rank 3",
+    "action": "Avalanche Reset",
+    "reward_formula": "keep_rank + floor(highest_stage ^ 0.8 / 3)",
+    "reset": ["gold", "frost_blocks", "room_repairs", "training_upgrades", "stage_progress"],
+    "keeps": ["frost_shards", "shard_upgrades", "highest_stage"],
+    "player_read": "The rebuilt Keep is buried again, Frost Shards remain, and the next expedition starts stronger."
+  },
+  "frost_blueprints": {
+    "unlock": "after first Avalanche Reset grants Frost Shards",
+    "visible_rows_first_meta": ["sharper_steel", "rich_veins", "head_start", "camp_supplies"],
+    "spend_feedback": "Clicking a Blueprint spends Frost Shards, raises its level, fires a short Learned! floater, reward burst, and success audio cue, then immediately updates the permanent stat while the Keep objective remains visible as a compact rebuild strip.",
+    "first_proof": "build/captures/ui_reward_blueprint.png"
+  },
+  "offline_return": {
+    "unlock": "first Avalanche Reset",
+    "base_rewards": ["gold", "frost_blocks"],
+    "camp_supplies_effect": "+5% offline return per level",
+    "first_proof": "build/captures/ui_reward_offline.png",
+    "player_read": "The camp recovered Gold and Frost Blocks while away; the popup, reward burst, coin fountain, and Collect cue return the player to the repair loop with enough Blocks to act."
+  },
+  "validation": {
+    "native_screenshot": "build/captures/ui_reward_offline.png",
+    "repair_chain_screenshot": "build/captures/rescue_campfire_helper.png",
+    "avalanche_reset_screenshot": "build/captures/avalanche_reset_after.png",
+    "blueprint_screenshot": "build/captures/ui_reward_blueprint.png",
+    "blueprint_readability_zoom": "py -3.12 tools/devapi/ui_readability.py build/captures/ui_rescue_blueprints_layout.png --region \"right_meta=0.68,0.00,1.00,0.86\"",
+    "readability_zoom": "py -3.12 tools/devapi/ui_readability.py build/captures/ui_rescue_offline_layout.png --region \"popup=0.20,0.28,0.80,0.74\"",
+    "scenario_probe": "py -3.12 tmp/reward_feedback_probe.py",
+    "pass_condition": "a new player can identify combat, earned reward, next action, keep repair, why Frost Shards matter after reset, and what offline return gave them"
+  }
+}

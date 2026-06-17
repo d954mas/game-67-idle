@@ -1,72 +1,59 @@
-# Voxelheim — Concept (Stage Gate 1)
+# Voxelheim - Concept
 
-> Status: DRAFT concept for visual-direction exploration. Locked decisions move
-> to `gdd.md`; this file holds the one-paragraph pitch + pillars.
+Status: **rescue concept** (2026-06-17). The old open-world/action-RPG pitch and
+the generic idle RPG pitch are both legacy context. Current source of truth:
+`gdd.md`.
 
 ## Fantasy / Hook
 
-You are a fresh adventurer dropped into a blocky open-world realm of snowy
-peaks, ruined keeps, and sleeping dragons. Pick up a sword, raid a dungeon,
-level your hero, and come back to town richer and stronger. **"Skyrim you can
-play with your friends in an afternoon"** — the freedom and dragons of an
-open-world fantasy RPG, in the bright, instantly-readable, social shape of a
-Roblox experience.
+You are rebuilding a ruined Frost Keep with loot from idle expeditions. Your
+blocky hero fights on their own, but every monster drops magic blocks, every
+short run gives you a choice, and every repair visibly turns a frozen ruin into
+your cozy toy fortress.
 
 ## Genre / Platform / Session
 
-- Genre: open-world fantasy action-RPG (single-player slice first; social/co-op
-  is a later layer, not the first slice).
-- Platform: **native PC first** (per AGENTS.md). Visual target leans
-  Roblox/console-casual, not photoreal.
-- Session: 10–20 min loops — one dungeon run or one region of exploration,
-  with persistent character progression between sessions.
+- Genre: idle / incremental RPG with visible base rebuilding and light
+  roguelike choice cards.
+- Platform: native PC first; UI should remain mobile-readable.
+- Session: 30-90 second check-ins, 5-15 minute active sessions, offline return
+  rewards after the first slice.
 
-## Core Verbs (player actions)
+## Core Verbs
 
-1. **Explore** — roam a blocky open region, spot landmarks (a ruined tower, a
-   dragon roost), choose where to go.
-2. **Fight** — real-time melee + a magic/ranged option against world enemies
-   and a dungeon boss.
-3. **Loot & Equip** — find gear/loot, equip it, see your hero visibly change.
-4. **Level up** — spend earned XP/points to get stronger; return stronger.
+1. **Fight** - hero auto-battles one clear enemy at a time.
+2. **Choose** - pick one of three loot/rune cards after short combat packets.
+3. **Rebuild** - spend Frost Blocks to repair keep rooms that visibly change the
+   scene.
+4. **Train** - spend Gold on simple hero stats for the current expedition.
+5. **Reset** - later, Avalanche Reset converts progress into permanent Frost
+   Shards and blueprints.
 
-## 3 Design Pillars (+ what violates each)
+## Design Pillars
 
-1. **Readable at a glance.** Every threat, pickup, exit, and objective reads in
-   <2 seconds. *Violation:* cluttered HUD, muddy palette, enemies that blend
-   into terrain.
-2. **Always an adventure ahead.** From any spot the player can see at least one
-   tempting destination. *Violation:* empty corridors, "go here because the
-   quest says so" with nothing visible to pull you.
-3. **Power you can see.** Progression shows on the character and the screen, not
-   only in menus. *Violation:* upgrades that are pure stat numbers with no
-   visible/feedback change.
+1. **One obvious next click.** Violation: four equal buttons and no dominant
+   action.
+2. **Progress you can see.** Violation: only damage/gold numbers change.
+3. **Idle with choices.** Violation: pure watching with no build decisions.
+4. **Cozy blocky identity.** Violation: dark debug-like UI over bright toy art.
 
 ## Progression Metric
 
-Hero Power (level + equipped gear tier), surfaced as a single readable number/
-badge, climbing run over run.
+Keep Rank: number of repaired rooms plus boss milestones. It is supported by
+Gold training, Frost Blocks, loot/rune cards, companions, and later Frost
+Shards.
 
-## First Slice (one goal, one primary action — to be detailed in gdd.md)
+## First Slice
 
-One readable region with one visible dungeon entrance; primary action = enter
-and clear the dungeon to its boss; reward = loot + a level-up that visibly
-changes the hero. FTUE ≤ 3 beats.
+One native screen: auto-combat, Gold/Frost Blocks/Keep Rank, repair Gate ->
+Forge -> Campfire, a 3-card choice beat, and compact hero training. The first
+proof is a readable native screenshot, not a full economy.
 
 ## No-Go List
 
-- No photoreal rendering; no grimdark gore. Bright, friendly, blocky.
-- No debug shape-renderer game visuals (AGENTS.md): real sprites/generated art
-  through the asset path only.
-- No 14-beat onboarding (the Rune Marches failure). FTUE ≤ 3 beats.
-- No web prototype detour; native PC first.
-- First slice is NOT the whole open world — one region, one dungeon, one boss.
-
-## Visual Direction — LOCKED (2026-06-16)
-
-**Theme A — "Bright Roblox Adventure"** chosen by the lead from 3 fake-shot
-directions (A bright / B dark-nordic / C painterly). Accepted target:
-`visual/fake_shot_first_screen.png`. Saturated, toy-like, bright daylight, max
-approachable, readable at a glance. See `gdd.md` (Visual Direction) and
-`game_implementation_plan.md` for the build roadmap. Rejected directions
-recorded in `visual/fake_shot_prompts.md`.
+- No generic "gold -> four upgrades -> prestige" product target.
+- No minimap or unused adventure UI in the first slice.
+- No more than 3 tutorial beats.
+- No web prototype detour.
+- No final art from competitor references until the reference packet is strong
+  enough for final art.

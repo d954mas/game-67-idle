@@ -11,6 +11,20 @@ sessions, use the `chat-session-reflection` skill.
 Compact reusable lessons about AI-assisted development. Keep each entry under
 about 10 lines.
 
+### 2026-06-17 - A Product Gate Pass Only Covers The Captured State
+
+- Context: Voxelheim rescue produced multiple native product gates, but the lead
+  later found a live UI state with muddy CTA text, bad Blocks icon placement,
+  floaters over UI, and returned purple button edges.
+- Root cause: the pass evidence was state-narrow (offline/reward screenshot) but
+  treated as broad UI acceptance. The durable `assets/raw/button.png` still had
+  chroma contamination, so rebuilding the atlas could reintroduce the purple
+  edge.
+- Fix: add reusable state coverage to product gates (T0012), add a universal
+  live-state UI matrix template with Voxelheim as the first fixture (T0013), and
+  clean contradictory current-state docs (T0011). Gate logs must say which
+  states passed and which remain untested.
+
 ### 2026-06-16 - Shipped a Pretty Screen, Not a Game (Visual Gates Hid the Missing Loop)
 
 - Context: Built Voxelheim from a "Roblox RPG like Skyrim" brief up to a

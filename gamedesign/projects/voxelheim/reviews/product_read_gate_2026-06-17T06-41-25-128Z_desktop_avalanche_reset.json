@@ -1,0 +1,40 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "voxelheim",
+  "task": "T0001",
+  "surface": "desktop_avalanche_reset",
+  "verdict": "pass",
+  "timestamp": "2026-06-17T06:41:25.129Z",
+  "screenshot": "build/captures/avalanche_reset_after.png",
+  "answers": {
+    "where": "I am back on the Frost Keep path after an Avalanche Reset, with Frost Shards banked and the Keep rooms buried again.",
+    "action": "Fight monsters for Frost Blocks, then rebuild Gate, Forge, and Campfire again.",
+    "response": "Avalanche Reset converted Keep Rank into Frost Shards and restarted the repair chain cleanly.",
+    "reward": "Frost Shards persist after reset, so the next rebuild has permanent progress to spend.",
+    "game_look": "Bright snowy RPG scene, readable HUD, visible Keep progress panel, monster fight, and one dominant rebuild CTA."
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 4,
+      "ui_controls": 4,
+      "action_direction": 4,
+      "art_quality": 4,
+      "audience_fit": 4
+    },
+    "issues": []
+  },
+  "problem": "",
+  "next": "Spend Frost Shards through a cleaner shard-upgrade UI and add stronger reset animation/audio."
+}

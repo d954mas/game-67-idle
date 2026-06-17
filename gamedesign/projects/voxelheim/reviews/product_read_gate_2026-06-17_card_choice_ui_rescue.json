@@ -1,0 +1,33 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "voxelheim",
+  "task": "T0001",
+  "surface": "desktop_card_choice_ui_rescue",
+  "verdict": "pass",
+  "timestamp": "2026-06-17T07:43:43.791Z",
+  "screenshot": "build/captures/ui_rescue_card_choice.png",
+  "answers": {
+    "where": "Snowy path outside Frost Keep; hero is fighting an icy enemy while the Keep repair panel shows rooms.",
+    "action": "Choose one of three rune cards; the header says Choose 1 Rune and each card names its bonus.",
+    "response": "Gate is DONE, combat is paused for the rune choice, and the selected card will resume the run with a bonus.",
+    "reward": "Gold and Blocks are visible, Keep Rank advanced to 1, and the next rooms explain Training and Helper unlocks.",
+    "game_look": "Real hero/enemy/keep sprites, card UI, room repair states, and resource HUD read as a game screen rather than the old four-button debug shop."
+  },
+  "visual_critique": {
+    "strict": false,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {},
+    "issues": []
+  },
+  "problem": "",
+  "next": "Continue visual polish with generated room art and stronger animation/audio feedback; do not expand systems until those gaps pass."
+}

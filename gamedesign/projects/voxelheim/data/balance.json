@@ -1,72 +1,120 @@
 {
-  "version": 4,
-  "note": "Idle economy for Voxelheim, GROUNDED in references/idle_deconstruction.md (Clicker Heroes ~x1.55/encounter HP, boss x10; Tap Titans 2 1.57^stage; prestige from accumulated progress with a fractional scale + flat %/unit per Hero Souls; Pecorella: reset at +50-200%). v3 (2026-06-16, lead decision): MULTIPLICATIVE damage. Hero damage = hero_base_damage * (sword damage_mult_per_level)^sword_level * prestige global-damage mult, so power COMPOUNDS and tracks the exponential HP climb (the core idle dopamine, as Clicker Heroes / Tap Titans 2). Flat +3 dmg/level could not track HP x1.45/stage and forced a relative-timer band-aid; removed. Sword x1.12/level => ~3.3 sword levels recover one stage's HP x1.45 step, matching 'damage tracks HP'. Boss timer back to a FIXED 30s (with compounding damage the stage-10/20/30 bosses are beaten in <7s). v4 (2026-06-17, depth pass toward Clicker Heroes / Tap Titans 2): added (1) an ACTIVE ABILITY 'Frost Fury' (a tappable damage burst on a cooldown -- the moment-to-moment action the refs reward but never require; idle still progresses fully), (2) THREE more upgrades (Crit, Greed, Multi-strike) that touch damage/gold MULTIPLICATIVELY for more 'what next' decisions, and (3) a PRESTIGE TREE: the 4 flat shard upgrades become 7 nodes with light GATING (some unlock after an earlier node or a prestige count) so investing shards is a real decision (CH Ancients / TT2 artifacts).",
+  "version": 5,
+  "status": "runtime_rescue_sync",
+  "title": "Voxelheim: Frost Keep Rebuilder",
+  "note": "Rescue economy synced to data/rescue_loop.json after the 2026-06-17 UI/UX and GDD critique. This replaces the old generic idle v4 contract that described Frost Fury, Crit/Greed/Multi, and a prestige tree not present in the rescue runtime.",
   "combat": {
     "hero_base_damage": 5,
     "hero_attack_interval_s": 1.0,
     "hero_base_max_hp": 100,
-    "kills_per_stage": 10
+    "kills_per_stage": 10,
+    "enemies_per_packet": 5,
+    "packet_target_seconds": 20
   },
   "monster": {
     "hp_base": 10,
     "hp_growth_per_stage": 1.45,
     "gold_base": 5,
-    "gold_growth_per_stage": 1.42,
-    "scaling_note": "per-stage step (10 same-HP kills/stage); steepened from 1.15 toward the refs' ~1.55/encounter so the climb reads as idle number-go-up. gold grows just under HP so upgrades stay meaningful."
+    "gold_growth_per_stage": 1.42
   },
   "boss": {
     "every_stages": 10,
     "hp_multiplier": 8,
     "gold_multiplier": 15,
     "timer_s": 30,
-    "timer_note": "FIXED 30s timer (lead decision, v3 2026-06-16). The relative-timer band-aid is REMOVED: it was only needed because flat-additive Sword (+3/level) could not track HP x1.45/stage. With MULTIPLICATIVE damage (Sword x1.12/level + prestige x-damage), the hero's DPS compounds alongside monster HP, so a base run beats the stage-10 boss in ~6s, stage-20 in <1s, stage-30 in <1s -- all comfortably inside 30s. Headless sim (tools): base run reaches stage 30 (past prestige@25). 30s sits in the 20-40s design band.",
+    "frost_blocks_reward": 8,
     "fail_penalty": "retry_boss_no_progress_loss"
   },
-  "upgrades": {
+  "currencies": {
+    "gold": {
+      "source": "monster kills and boss chests",
+      "sink": "hero training after Forge repair"
+    },
+    "frost_blocks": {
+      "source": "monster kills, block-cache cards, boss blueprints",
+      "per_kill": 1,
+      "sink": "repair Frost Keep rooms"
+    },
+    "frost_shards": {
+      "source": "Avalanche Reset after Keep Rank 3, plus legacy highest-stage progress bonus",
+      "sink": "permanent shard upgrades",
+      "first_slice_visible": true
+    }
+  },
+  "keep_rooms": {
+    "gate": {
+      "label": "Gate",
+      "cost_blocks": 5,
+      "effect": "unlocks 3-card rune choices after combat packets",
+      "visible_change": "Gate row becomes DONE and first card choice opens"
+    },
+    "forge": {
+      "label": "Forge",
+      "cost_blocks": 15,
+      "effect": "unlocks hero training and improves later rune card values",
+      "visible_change": "Forge row becomes DONE and training tray appears"
+    },
+    "campfire": {
+      "label": "Campfire",
+      "cost_blocks": 30,
+      "effect": "unlocks first companion helper",
+      "combat_damage_mult": 1.25,
+      "visible_change": "small helper appears beside the hero"
+    }
+  },
+  "rune_cards": {
+    "cards_offered": 3,
+    "cards_pick": 1,
+    "gate_tier": [
+      { "id": "sharp_edges", "label": "Sharp Edges", "effect": "sword_level", "amount": 1 },
+      { "id": "block_cache", "label": "Block Cache", "effect": "frost_blocks", "amount": 5 },
+      { "id": "quick_hands", "label": "Quick Hands", "effect": "boots_level", "amount": 1 }
+    ],
+    "forge_tier": [
+      { "id": "tempered_blade", "label": "Tempered Blade", "effect": "sword_level", "amount": 2 },
+      { "id": "block_crate", "label": "Block Crate", "effect": "frost_blocks", "amount": 8 },
+      { "id": "quick_hands", "label": "Quick Hands", "effect": "boots_level", "amount": 1 }
+    ]
+  },
+  "training": {
+    "unlock": "repair_forge",
     "cost_growth_per_level": 1.09,
-    "sword": { "label": "Sword", "base_cost": 10, "effect": "damage", "damage_mult_per_level": 1.12,
-               "sword_note": "MULTIPLICATIVE (v3): hero damage = hero_base_damage * 1.12^sword_level * prestige global-damage mult. x1.12/level => 1.12^3.28 = x1.45, so ~3-4 sword levels recover one stage's HP x1.45 step, keeping damage tracking the climb (Clicker Heroes / Tap Titans 2 scale damage multiplicatively). Was flat damage_per_level: 3, which could not track exponential HP." },
+    "sword": { "label": "Sword", "base_cost": 10, "effect": "damage", "damage_mult_per_level": 1.12 },
     "boots": { "label": "Boots", "base_cost": 25, "effect": "attack_speed", "interval_mult_per_level": 0.97, "min_interval_s": 0.2 },
     "armor": { "label": "Armor", "base_cost": 20, "effect": "survivability", "max_hp_per_level": 12, "regen_per_level": 1 },
-    "luck":  { "label": "Luck",  "base_cost": 30, "effect": "gold_find", "gold_find_pct_per_level": 4 },
-    "crit":  { "label": "Crit",  "base_cost": 50, "effect": "crit", "crit_chance_pct_per_level": 3, "crit_chance_cap_pct": 60, "crit_damage_mult": 2.0,
-               "crit_note": "v4: +3% crit chance/level (capped 60%). A crit deals crit_damage_mult x the hit. Expected damage multiplier = 1 + chance*(crit_damage_mult-1), so DMG readout rises MULTIPLICATIVELY with crit chance (a CH/TT2 staple decision: invest in burst vs steady)." },
-    "greed": { "label": "Greed", "base_cost": 60, "effect": "gold_mult", "gold_mult_per_level": 1.08,
-               "greed_note": "v4: gold x1.08/level COMPOUNDING (multiplies all gold like Rich Veins but bought with run gold). Stacks multiplicatively with Luck + the shard gold mult, so a 'gold build' is a real alternative to a 'damage build'." },
-    "multi": { "label": "Multi", "base_cost": 80, "effect": "multi_strike", "multi_chance_pct_per_level": 2.5, "multi_chance_cap_pct": 75,
-               "multi_note": "v4: +2.5% chance/level (capped 75%) for a swing to strike TWICE. Expected damage multiplier = 1 + chance, so it raises the DMG readout MULTIPLICATIVELY -- a third damage lever alongside Sword (flat mult) and Crit (burst)." }
+    "luck": { "label": "Luck", "base_cost": 30, "effect": "gold_find", "gold_find_pct_per_level": 4 }
   },
-  "ability": {
-    "frost_fury": {
-      "label": "Frost Fury",
-      "damage_mult": 3.0,
-      "duration_s": 5.0,
-      "cooldown_s": 20.0,
-      "ability_note": "v4 ACTIVE LAYER (the biggest feel gain; Clicker Heroes click-damage / Tap Titans 2 skills): a tappable on-screen button (+ DevAPI game.debug.ability) that, when ready, grants +200% hero damage (x3.0) for 5s, then a 20s cooldown shown as a radial/bar fill. Idle STILL progresses fully without ever tapping it (never required); tapping just buys a power spike. Activation throws a juicy levelup_burst + hit_spark FX."
-    }
+  "avalanche_reset": {
+    "unlock_keep_rank": 3,
+    "fallback_unlock_stage": 25,
+    "frost_shards_formula": "keep_rank + floor(highest_stage ^ 0.8 / 3)",
+    "reset": ["gold", "frost_blocks", "keep_rank", "room_repairs", "training_upgrades", "card_choices", "stage_progress"],
+    "keeps": ["frost_shards", "shard_upgrades", "highest_stage"],
+    "note": "First meta loop: rebuild Gate/Forge/Campfire, trigger Avalanche Reset, earn Frost Shards, rebuild faster through permanent shard bonuses."
   },
-  "prestige": {
-    "unlock_stage": 25,
-    "label": "Return to the valley",
-    "frost_shards_formula": "floor(highest_stage ^ 0.8 / 3)",
-    "formula_note": "fractional exponent (was super-linear ^1.5, wrong direction) so each prestige grants ~+50-200% more shards (Pecorella); modeled on Clicker Heroes (souls from accumulated progress) not a super-linear stage power. At highest_stage 25 (first prestige) = 4 shards, enough to buy ~3 global_damage levels (x1.33 / +33% base damage) so the next run blasts the early stages and reaches the old wall clearly faster.",
-    "shard_upgrades": {
-      "global_damage": { "label": "Sharper Steel", "pct_per_level": 10, "apply": "multiplicative", "base_cost_shards": 1, "cost_growth": 1.5,
-                          "shard_note": "MULTIPLICATIVE (v3): global damage mult = (1 + 10/100)^level = 1.10^level (+10%/level, COMPOUNDING, as Clicker Heroes Hero Souls). Multiplies hero_base_damage alongside the Sword mult." },
-      "global_gold":   { "label": "Rich Veins",    "pct_per_level": 10, "apply": "multiplicative", "base_cost_shards": 1, "cost_growth": 1.5,
-                          "shard_note": "MULTIPLICATIVE (v3): global gold mult = 1.10^level (+10%/level, compounding)." },
-      "start_stage":   { "label": "Head Start",    "stages_per_level": 1, "base_cost_shards": 2, "cost_growth": 2.0 },
-      "offline_rate":  { "label": "Camp Supplies",  "pct_per_level": 5, "base_cost_shards": 2, "cost_growth": 1.6 }
-    }
+  "frost_blueprints": {
+    "unlock": "after_first_avalanche_reset",
+    "first_visible_upgrades": [
+      { "id": "sharper_steel", "label": "Sharper Steel", "cost_shards": 1, "cost_growth": 1.5, "effect": "permanent_damage_mult", "pct_per_level": 10 },
+      { "id": "rich_veins", "label": "Rich Veins", "cost_shards": 1, "cost_growth": 1.5, "effect": "permanent_gold_mult", "pct_per_level": 10 },
+      { "id": "head_start", "label": "Head Start", "cost_shards": 2, "cost_growth": 2.0, "effect": "start_stage", "stages_per_level": 1 }
+    ],
+    "reserved": [
+      { "id": "camp_supplies", "label": "Camp Supplies", "unlock": "first_avalanche_reset", "effect": "offline_return_rate", "pct_per_level": 5 }
+    ]
   },
-  "offline": {
-    "unlock": "after_first_boss",
+  "offline_return": {
+    "unlock": "after_first_avalanche_reset",
     "rate_pct_of_highest_clear": 50,
+    "frost_blocks_per_hour": 12,
+    "camp_supplies_pct_per_level": 5,
     "cap_hours": 8
   },
   "ftue": {
-    "beat1": "Your hero fights on its own - watch the gold pile up.",
-    "beat2": "Tap Sword to upgrade - hit harder, kill faster.",
-    "beat3": "Push as far as you can. When it slows, Prestige for a permanent boost."
+    "beat1": "Defeat monsters to recover Frost Blocks.",
+    "beat2": "Repair the Gate to start rebuilding Frost Keep.",
+    "beat3": "Choose one rune card to shape this run.",
+    "beat4": "Repair the Forge to unlock training upgrades.",
+    "beat5": "Repair the Campfire to recruit a helper."
   }
 }

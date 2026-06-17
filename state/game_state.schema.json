@@ -390,6 +390,61 @@
       "type": "bool",
       "default": false,
       "devapi": "read_write"
+    },
+    {
+      "path": "idle.frost_blocks",
+      "id": 39,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 2147483647
+    },
+    {
+      "path": "idle.keep_rank",
+      "id": 40,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000
+    },
+    {
+      "path": "idle.room_gate_repaired",
+      "id": 41,
+      "type": "bool",
+      "default": false,
+      "devapi": "read_write"
+    },
+    {
+      "path": "idle.room_forge_repaired",
+      "id": 42,
+      "type": "bool",
+      "default": false,
+      "devapi": "read_write"
+    },
+    {
+      "path": "idle.room_campfire_repaired",
+      "id": 43,
+      "type": "bool",
+      "default": false,
+      "devapi": "read_write"
+    },
+    {
+      "path": "idle.pending_card_choice",
+      "id": 44,
+      "type": "bool",
+      "default": false,
+      "devapi": "read_write"
+    },
+    {
+      "path": "idle.card_choices_made",
+      "id": 45,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000
     }
   ]
 }
