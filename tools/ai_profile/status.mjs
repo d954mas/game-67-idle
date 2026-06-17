@@ -105,7 +105,7 @@ function formatPercent(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
-function coverageStats(records, gapThresholdMs = 5 * 60 * 1000) {
+function coverageStats(records, gapThresholdMs = 5 * 60 * 1000, idleGapMs = 60 * 60 * 1000) {
   const intervals = [];
   for (const record of records) {
     const endMs = eventTime(record);
@@ -120,7 +120,7 @@ function coverageStats(records, gapThresholdMs = 5 * 60 * 1000) {
   }
   intervals.sort((a, b) => a.start_ms - b.start_ms || a.end_ms - b.end_ms);
   if (intervals.length === 0) {
-    return { wall_clock_span_ms: 0, merged_profiled_ms: 0, coverage_ratio: undefined, largest_gaps: [] };
+    return { wall_clock_span_ms: 0, effective_span_ms: 0, active_ms: 0, idle_ms: 0, merged_profiled_ms: 0, coverage_ratio: undefined, largest_gaps: [] };
   }
   const merged = [];
   for (const interval of intervals) {
@@ -134,7 +134,21 @@ function coverageStats(records, gapThresholdMs = 5 * 60 * 1000) {
   const firstMs = intervals[0].start_ms;
   const lastMs = intervals.reduce((max, interval) => Math.max(max, interval.end_ms), intervals[0].end_ms);
   const wallClockSpanMs = Math.max(0, lastMs - firstMs);
-  const mergedProfiledMs = merged.reduce((sum, interval) => sum + Math.max(0, interval.end_ms - interval.start_ms), 0);
+  /* Records carry no per-call duration, so "active" time is the sum of SHORT
+   * gaps between consecutive events (hands-on work). Long gaps split into idle
+   * (>= idleGapMs, e.g. overnight) vs uncaptured (between). Coverage is measured
+   * against the IDLE-EXCLUDED span, so an overnight pause no longer makes a
+   * fully-recorded work session look like "low coverage" (retro 2026-06-17). */
+  let activeMs = 0;
+  let idleMs = 0;
+  for (let index = 1; index < merged.length; index += 1) {
+    const gap = merged[index].start_ms - merged[index - 1].end_ms;
+    if (gap <= 0) continue;
+    if (gap < gapThresholdMs) activeMs += gap;
+    else if (gap >= idleGapMs) idleMs += gap;
+  }
+  const effectiveSpanMs = Math.max(0, wallClockSpanMs - idleMs);
+  const mergedProfiledMs = activeMs;
   const largestGaps = [];
   for (let index = 1; index < merged.length; index += 1) {
     const previous = merged[index - 1];
@@ -155,8 +169,11 @@ function coverageStats(records, gapThresholdMs = 5 * 60 * 1000) {
   largestGaps.sort((a, b) => b.duration_ms - a.duration_ms);
   return {
     wall_clock_span_ms: wallClockSpanMs,
+    effective_span_ms: effectiveSpanMs,
+    active_ms: activeMs,
+    idle_ms: idleMs,
     merged_profiled_ms: mergedProfiledMs,
-    coverage_ratio: wallClockSpanMs > 0 ? Math.min(1, mergedProfiledMs / wallClockSpanMs) : undefined,
+    coverage_ratio: effectiveSpanMs > 0 ? Math.min(1, activeMs / effectiveSpanMs) : undefined,
     largest_gaps: largestGaps.slice(0, 10),
   };
 }
@@ -264,7 +281,7 @@ function escapeRegExp(value) {
 }
 
 function isLowCoverage(coverage) {
-  return coverage.wall_clock_span_ms >= 30 * 60 * 1000 && Number.isFinite(coverage.coverage_ratio) && coverage.coverage_ratio < 0.25;
+  return coverage.effective_span_ms >= 30 * 60 * 1000 && Number.isFinite(coverage.coverage_ratio) && coverage.coverage_ratio < 0.25;
 }
 
 function buildReviewConfidence({
@@ -572,7 +589,7 @@ function renderPassiveMarkdown(status) {
   lines.push(`Records: ${status.records}`);
   lines.push(`Unresolved failures: ${status.unresolved_failed_records}`);
   lines.push(`Recovered failures: ${status.recovered_failed_records}`);
-  lines.push(`Wall-clock coverage: ${formatPercent(status.wall_clock_coverage.coverage_ratio)} (${formatMs(status.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(status.wall_clock_coverage.wall_clock_span_ms)})`);
+  lines.push(`Active work: ${formatMs(status.wall_clock_coverage.active_ms)} of ${formatMs(status.wall_clock_coverage.effective_span_ms)} effective (${formatPercent(status.wall_clock_coverage.coverage_ratio)})${status.wall_clock_coverage.idle_ms > 0 ? `; ${formatMs(status.wall_clock_coverage.idle_ms)} idle excluded` : ""}`);
   lines.push(`Review confidence: ${status.review_confidence.level}${status.review_confidence.usable_for_review ? " (usable)" : " (do not treat as complete review evidence)"}`);
   lines.push(`Current scope review confidence: ${status.current_scope_review_confidence.level}${status.current_scope_review_confidence.usable_for_review ? " (usable)" : " (not review evidence yet)"}`);
   if (status.scope.work_item) {
@@ -672,9 +689,9 @@ function renderMarkdown(status) {
     lines.push(`Current scope review confidence blocking reasons: ${status.current_scope_review_confidence.blocking_reasons.join(", ")}`);
   }
   lines.push(`Current scope records: ${status.current_scope.records} (${status.current_scope.missing_context_inputs} missing context inputs, ${status.current_scope.missing_work_item_records} missing work items)`);
-  lines.push(`Current scope wall-clock coverage: ${formatPercent(status.current_scope.wall_clock_coverage.coverage_ratio)} (${formatMs(status.current_scope.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(status.current_scope.wall_clock_coverage.wall_clock_span_ms)})`);
+  lines.push(`Current scope active work: ${formatMs(status.current_scope.wall_clock_coverage.active_ms)} of ${formatMs(status.current_scope.wall_clock_coverage.effective_span_ms)} effective (${formatPercent(status.current_scope.wall_clock_coverage.coverage_ratio)})${status.current_scope.wall_clock_coverage.idle_ms > 0 ? `; ${formatMs(status.current_scope.wall_clock_coverage.idle_ms)} idle excluded` : ""}`);
   lines.push(`Failed records: ${status.failed_records} (${status.recovered_failed_records} recovered, ${status.unresolved_failed_records} unresolved)`);
-  lines.push(`Wall-clock coverage: ${formatPercent(status.wall_clock_coverage.coverage_ratio)} (${formatMs(status.wall_clock_coverage.merged_profiled_ms)} / ${formatMs(status.wall_clock_coverage.wall_clock_span_ms)})`);
+  lines.push(`Active work: ${formatMs(status.wall_clock_coverage.active_ms)} of ${formatMs(status.wall_clock_coverage.effective_span_ms)} effective (${formatPercent(status.wall_clock_coverage.coverage_ratio)})${status.wall_clock_coverage.idle_ms > 0 ? `; ${formatMs(status.wall_clock_coverage.idle_ms)} idle excluded` : ""}`);
   if (status.current_scope.wall_clock_coverage.largest_gaps.length > 0 || status.wall_clock_coverage.largest_gaps.length > 0) {
     lines.push("");
     lines.push("## Largest Coverage Gaps");
