@@ -1483,3 +1483,25 @@ test("hook_record_fast (C) and hook_record.mjs (JS) agree on result + category",
     cleanup(dir);
   }
 });
+
+// The two harness hook configs are hand-mirrored; this guards them from drifting
+// (e.g. adding PreToolUse to one but not the other). They must register the same
+// events and invoke hook_record_fast for each (modulo the harness name token).
+test("hook configs (.claude/settings.json and .codex/hooks.json) stay in sync", () => {
+  const claude = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf8"));
+  const codex = JSON.parse(readFileSync(join(root, ".codex", "hooks.json"), "utf8"));
+  const events = (cfg) => Object.keys(cfg.hooks || {}).sort();
+  assert.deepEqual(events(claude), events(codex), "hook EVENTS differ between .claude/settings.json and .codex/hooks.json");
+  const norm = (cfg, ev, harness) =>
+    (cfg.hooks[ev] || [])
+      .flatMap((group) => (group.hooks || []).map((h) => `${h.command}|${h.commandWindows}`))
+      .map((s) => s.split(harness).join("<H>"))
+      .sort();
+  for (const ev of events(claude)) {
+    assert.deepEqual(
+      norm(claude, ev, "claude"),
+      norm(codex, ev, "codex"),
+      `hook commands for "${ev}" differ between harnesses (beyond the harness name)`,
+    );
+  }
+});

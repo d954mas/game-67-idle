@@ -152,6 +152,7 @@ run("taskboard summary", ["tools/taskboard/cli.mjs", "summary"]);
 run("ai facade syntax", ["--check", "tools/ai.mjs"]);
 run("ai facade tests", ["--test", "tools/ai.test.mjs"]);
 run("skill eval", ["tools/skills_eval.mjs"]);
+run("skills sync check", ["tools/skills_sync.mjs", "--check"]);
 run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
 run("taskboard tests", ["--test", "tools/taskboard/test.mjs"]);
