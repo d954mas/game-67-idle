@@ -18,8 +18,6 @@
 typedef bool (*game_state_migration_fn)(cJSON *state, char *error, int error_cap);
 
 bool game_state_migrate_v0_to_v1(cJSON *state, char *error, int error_cap);
-bool game_state_migrate_v1_to_v2(cJSON *state, char *error, int error_cap);
-bool game_state_migrate_v2_to_v3(cJSON *state, char *error, int error_cap);
 
 typedef struct GameStateMigration {
     int from_version;
@@ -29,8 +27,6 @@ typedef struct GameStateMigration {
 
 static const GameStateMigration k_migrations[] = {
     {0, 1, game_state_migrate_v0_to_v1},
-    {1, 2, game_state_migrate_v1_to_v2},
-    {2, 3, game_state_migrate_v2_to_v3},
 };
 
 /*@GEN:ENUM_TABLES@*/

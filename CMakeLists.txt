@@ -95,8 +95,6 @@ add_library(game_state STATIC
     "${GAME_STATE_GENERATED_HEADER}"
     "${GAME_STATE_GENERATED_SCHEMA_HEADER}"
     state/migrations/v0_to_v1.c
-    state/migrations/v1_to_v2.c
-    state/migrations/v2_to_v3.c
 )
 add_dependencies(game_state game_state_codegen)
 target_include_directories(game_state PUBLIC "${GAME_STATE_GENERATED_DIR}" src external/cjson)
@@ -145,23 +143,8 @@ if(NOT EMSCRIPTEN AND NOT TARGET asset_chroma_key_native)
     nt_set_sanitizer_flags(asset_chroma_key_native)
 endif()
 
-# Voxelheim pack builder (native only). Run from the project root to emit
-# assets/voxelheim.ntpack + src/generated/voxelheim_assets.h before building
-# the game. Mirrors examples/bunnymark/build_bunnymark_packs.
-if(NOT EMSCRIPTEN AND NOT TARGET build_voxelheim_packs)
-    add_executable(build_voxelheim_packs src/build_packs.c)
-    target_link_libraries(build_voxelheim_packs PRIVATE nt_builder)
-    target_compile_definitions(build_voxelheim_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(build_voxelheim_packs PRIVATE -U_DLL)
-    nt_set_warning_flags(build_voxelheim_packs)
-    nt_set_sanitizer_flags(build_voxelheim_packs)
-    set_target_properties(build_voxelheim_packs PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/voxelheim_packer"
-    )
-endif()
-
 add_executable(${GAME_TARGET}
-    src/voxelheim_main.c
+    src/clean_seed_main.c
     src/game_audio.c
     src/game_audio.h
 )
@@ -206,7 +189,6 @@ endif()
 target_include_directories(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_DIR}"
     src
-    "${CMAKE_SOURCE_DIR}/src/generated"
     external/cjson
     external/neotolis-engine/deps/glfw/deps
 )

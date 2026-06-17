@@ -12,8 +12,8 @@ Reusable source notes for idle/incremental design. Each claim is labeled:
 `observed` (read in the source), `secondary`, or `inferred`.
 
 Project-specific application belongs in project wiki/reference files. Current
-Voxelheim application lives in
-`gamedesign/projects/voxelheim/references/idle_deconstruction.md`.
+The former Voxelheim application was removed with the stopped prototype; use
+git history if that project-specific application is needed for comparison.
 
 ## Source Matrix
 

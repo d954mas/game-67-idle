@@ -1,4 +1,4 @@
-#include "generated/game_state.h"
+#include "game_state.h"
 
 #include <stdio.h>
 #include <string.h>
