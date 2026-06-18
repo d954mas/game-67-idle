@@ -49,6 +49,9 @@ typedef struct BackroomsState {
     float last_fear;
     float last_battery;
     float route_choice_feedback_timer;
+    float blackout_timer;
+    float ambush_timer;
+    float relief_timer;
     int route_choice_stage;
     int route_choice_correct;
     int route_choice_wrong;
@@ -99,6 +102,7 @@ static const char *s_fs_src =
     "uniform vec4 u_state;\n"
     "uniform vec4 u_pressure;\n"
     "uniform vec4 u_route;\n"
+    "uniform vec4 u_horror;\n"
     "uniform sampler2D u_wall_tex;\n"
     "uniform sampler2D u_ui_tex;\n"
     "\n"
@@ -132,8 +136,8 @@ static const char *s_fs_src =
     "    vec2 frag = v_uv * u_resolution_time.xy;\n"
     "    vec2 p = (frag - 0.5 * u_resolution_time.xy) / max(u_resolution_time.y, 1.0);\n"
     "    float ttime = u_resolution_time.z;\n"
-    "    p.x += u_pressure.x * (0.035 * sin(ttime * 1.7 + u_player.y * 0.55) + 0.018 * sin(ttime * 5.1));\n"
-    "    p.y += u_pressure.x * 0.014 * sin(ttime * 2.3 + u_player.x * 3.0);\n"
+    "    p.x += (u_pressure.x + u_horror.y * 0.7) * (0.035 * sin(ttime * 1.7 + u_player.y * 0.55) + 0.018 * sin(ttime * 5.1));\n"
+    "    p.y += (u_pressure.x + u_horror.y * 0.6) * 0.014 * sin(ttime * 2.3 + u_player.x * 3.0);\n"
     "    float yaw = u_player.z;\n"
     "    vec2 fwd = vec2(sin(yaw), cos(yaw));\n"
     "    vec2 right = vec2(cos(yaw), -sin(yaw));\n"
@@ -164,7 +168,8 @@ static const char *s_fs_src =
     "    float tfuse = sphere_hit(ro, rd, vec3(0.36, 1.05, 29.4), 0.24);\n"
     "    if (u_state.x < 0.5 && tfuse < best) { best = tfuse; normal = normalize(ro + rd * tfuse - vec3(0.36, 1.05, 29.4)); mat = 5; }\n"
     "\n"
-    "    float entity_z = max(u_player.y - mix(8.6, 4.4, u_pressure.y), 2.9);\n"
+    "    float entity_dist = max(2.55, mix(8.6, 4.4, u_pressure.y) - u_horror.y * 2.2);\n"
+    "    float entity_z = max(u_player.y - entity_dist, 2.9);\n"
     "    float tent = (entity_z - ro.z) / rd.z;\n"
     "    vec3 pent = ro + rd * tent;\n"
     "    float ent_x = pent.x - 0.24 * sin(ttime * 1.7);\n"
@@ -189,11 +194,12 @@ static const char *s_fs_src =
     "    float fixture_z = floor((hit.z + 2.6) / 5.2) * 5.2;\n"
     "    float flicker = 0.76 + 0.24 * step(0.18, hash12(vec2(floor(ttime * 13.0), fixture_z)));\n"
     "    float light_dist = length(vec3(hit.x, hit.y - 2.42, hit.z - fixture_z));\n"
-    "    float ceiling_light = 1.8 / (1.0 + light_dist * light_dist * 0.9) * flicker;\n"
+    "    float blackout_flicker = mix(1.0, 0.10 + 0.22 * step(0.34, hash12(vec2(floor(ttime * 19.0), fixture_z + u_player.y))), u_horror.x);\n"
+    "    float ceiling_light = 1.8 / (1.0 + light_dist * light_dist * 0.9) * flicker * blackout_flicker;\n"
     "    float exit_light = u_state.x * 3.2 / (1.0 + length(hit - vec3(0.0, 1.25, 0.28)) * 1.7);\n"
     "    float fuse_light = (1.0 - u_state.x) * 3.4 / (1.0 + length(hit - vec3(0.36, 1.0, 29.4)) * 1.35);\n"
     "    float cone = smoothstep(0.72, 0.98, dot(rd, normalize(vec3(fwd.x, -0.03, fwd.y)))) * u_state.z;\n"
-    "    float flashlight = cone * 2.5 / (1.0 + best * best * 0.035);\n"
+    "    float flashlight = cone * mix(2.5, 3.25, u_horror.x) / (1.0 + best * best * 0.035);\n"
     "    float contact = 1.0 - 0.34 * exp(-abs(hit.x - sign(hit.x) * 1.36) * 8.0) * smoothstep(0.0, 0.22, hit.y);\n"
     "    contact *= 1.0 - 0.22 * exp(-hit.y * 12.0);\n"
     "    float side_opening = 0.0;\n"
@@ -222,12 +228,16 @@ static const char *s_fs_src =
     "\n"
     "    vec3 color = albedo * (0.16 + ceiling_light + exit_light + fuse_light + flashlight) * contact;\n"
     "    color += vec3(1.1, 1.0, 0.73) * fixture_shape * (1.6 + 1.1 * flicker);\n"
+    "    color += vec3(1.15, 0.04, 0.0) * fixture_shape * u_horror.x * (0.7 + 0.5 * step(0.45, sin(ttime * 15.0)));\n"
     "    color *= 1.0 - side_opening * 0.86;\n"
     "    color = mix(color, vec3(0.005, 0.012, 0.008), false_exit * 0.92);\n"
     "    color += vec3(0.1, 1.1, 0.34) * false_exit * (0.42 + 0.58 * step(0.5, sin(ttime * 6.0 + hit.z)));\n"
     "    color = mix(color, vec3(0.11, 0.0, 0.0), route_bad_glow * 0.46);\n"
     "    color += vec3(0.08, 1.05, 0.42) * route_safe_glow * (0.75 + u_pressure.x);\n"
     "    color += vec3(1.0, 0.08, 0.0) * route_bad_glow * 0.22;\n"
+    "    color = mix(color, color * vec3(0.34, 0.24, 0.18), u_horror.x * 0.62);\n"
+    "    color += vec3(0.72, 0.015, 0.0) * u_horror.y * (0.11 + 0.09 * sin(ttime * 18.0));\n"
+    "    color += vec3(0.05, 0.75, 0.34) * u_horror.z * max(0.0, 1.0 - best / 30.0) * 0.16;\n"
     "    if (mat == 5) color += vec3(0.1, 2.4, 1.1);\n"
     "    if (mat == 6) {\n"
     "        float eye_l = 1.0 - smoothstep(0.015, 0.05, length(hit.xy - vec2(-0.08, 1.55)));\n"
@@ -243,6 +253,7 @@ static const char *s_fs_src =
     "    color *= 0.55 + 0.45 * vignette;\n"
     "    float fear_pulse = u_state.y * (0.08 + 0.07 * sin(ttime * 9.0));\n"
     "    color = mix(color, vec3(0.07, 0.0, 0.0), fear_pulse);\n"
+    "    color = mix(color, vec3(0.12, 0.0, 0.0), u_horror.y * (0.10 + 0.08 * sin(ttime * 20.0)));\n"
     "\n"
     "    vec4 ui = texture(u_ui_tex, vec2(v_uv.x, 1.0 - v_uv.y));\n"
     "    vec3 final_col = mix(tonemap(color), ui.rgb, ui.a);\n"
@@ -314,6 +325,8 @@ static bool route_choice_active(void) {
     const float route_z = route_choice_z_for_stage(s_game.route_choice_stage);
     return s_game.z <= route_z + 1.8F && s_game.z >= route_z - 1.8F;
 }
+
+static bool blackout_active(void) { return s_game.blackout_timer > 0.0F || s_game.ambush_timer > 0.0F; }
 
 static float stalker_z(void) {
     const float close_distance = 8.6F - 4.2F * clampf(s_game.stalker_pressure, 0.0F, 1.0F);
@@ -391,14 +404,18 @@ static void update_route_choice(void) {
         s_game.fear = clampf(s_game.fear - 5.0F, 0.0F, 100.0F);
         s_game.stalker_pressure = clampf(s_game.stalker_pressure - 0.14F, 0.0F, 1.0F);
         s_game.route_shift = clampf(s_game.route_shift - 0.08F, 0.0F, 1.0F);
+        s_game.relief_timer = 2.0F;
         set_message("GOOD TURN", 1.4F);
     } else {
         s_game.route_choice_wrong += 1;
         s_game.fear = clampf(s_game.fear + 16.0F, 0.0F, 100.0F);
         s_game.stalker_pressure = clampf(s_game.stalker_pressure + 0.23F, 0.0F, 1.0F);
         s_game.route_shift = clampf(s_game.route_shift + 0.18F, 0.0F, 1.0F);
+        s_game.blackout_timer = 3.2F;
+        s_game.ambush_timer = 2.4F;
+        s_game.relief_timer = 0.0F;
         game_audio_play(GAME_AUDIO_CUE_STALKER);
-        set_message(chosen_side == 0 ? "YOU HESITATED" : "WRONG TURN", 1.8F);
+        set_message(chosen_side == 0 ? "LIGHTS OUT - MOVE" : "WRONG TURN - RUN", 2.2F);
     }
     s_game.route_choice_feedback_timer = 2.0F;
     s_game.route_choice_stage += 1;
@@ -580,9 +597,13 @@ static void build_ui(void) {
     ui_bar(806, 60, 114, 16, s_game.battery, 238, 210, 86);
     (void)snprintf(line, sizeof(line), "FUSE:%s  EXIT:%s", s_game.fuse_found ? "YES" : "NO", s_game.fuse_found ? "ON" : "OFF");
     ui_text(700, 94, line, 2, 198, 230, 196, 245);
-    if (route_choice_active()) {
+    if (blackout_active()) {
+        ui_text(700, 122, "BLACKOUT:RUN", 1, 255, 122, 96, 255);
+    } else if (route_choice_active()) {
         (void)snprintf(line, sizeof(line), "TURN:%s  CHOICE:%d/%d", route_choice_side_name(route_choice_safe_side_for_stage(s_game.route_choice_stage)), s_game.route_choice_stage + 1, route_choice_total());
         ui_text(700, 122, line, 1, 132, 255, 184, 255);
+    } else if (s_game.relief_timer > 0.0F && s_game.fuse_found && !s_game.won) {
+        ui_text(700, 122, "ROUTE:SAFE", 1, 132, 255, 184, 245);
     } else if (s_game.fuse_found && !s_game.won) {
         (void)snprintf(line, sizeof(line), "ROUTE:SHIFT  THREAT:%d", (int)(s_game.stalker_pressure * 100.0F));
         ui_text(700, 122, line, 1, 255, 184, 132, 245);
@@ -593,10 +614,16 @@ static void build_ui(void) {
     ui_rect(476, 268, 8, 2, 230, 235, 220, 220);
     ui_rect(479, 265, 2, 8, 230, 235, 220, 220);
 
-    if (!s_game.won && !s_game.caught && route_choice_active()) {
+    if (!s_game.won && !s_game.caught && blackout_active()) {
+        ui_rect(262, 392, 436, 46, 24, 2, 2, 230);
+        ui_text(320, 406, "LIGHTS OUT - RUN", 3, 255, 138, 112, 255);
+    } else if (!s_game.won && !s_game.caught && route_choice_active()) {
         ui_rect(260, 392, 440, 46, 5, 8, 8, 215);
         (void)snprintf(line, sizeof(line), "MOVE %s - TRUST HUM", route_choice_side_name(route_choice_safe_side_for_stage(s_game.route_choice_stage)));
         ui_text(288, 406, line, 3, 132, 255, 184, 255);
+    } else if (!s_game.won && !s_game.caught && s_game.relief_timer > 0.0F) {
+        ui_rect(306, 392, 348, 46, 5, 8, 8, 215);
+        ui_text(340, 406, "SAFE TURN - MOVE", 3, 132, 255, 184, 255);
     } else if (!s_game.won && !s_game.caught && near_fuse()) {
         ui_rect(322, 392, 316, 46, 5, 8, 8, 215);
         ui_text(346, 406, "PRESS E - TAKE FUSE", 3, 132, 255, 184, 255);
@@ -726,6 +753,15 @@ static void update_game(void) {
     if (s_game.route_choice_feedback_timer > 0.0F) {
         s_game.route_choice_feedback_timer -= dt;
     }
+    if (s_game.blackout_timer > 0.0F) {
+        s_game.blackout_timer -= dt;
+    }
+    if (s_game.ambush_timer > 0.0F) {
+        s_game.ambush_timer -= dt;
+    }
+    if (s_game.relief_timer > 0.0F) {
+        s_game.relief_timer -= dt;
+    }
     game_audio_update();
     game_audio_set_volume(g_game_state.settings_master_volume, g_game_state.settings_sfx_volume);
     if (s_game.caught) {
@@ -824,6 +860,9 @@ static void update_game(void) {
         if (near_exit()) {
             stalker_delta += 0.18F;
         }
+        if (blackout_active()) {
+            stalker_delta += 0.28F;
+        }
         s_game.stalker_pressure = clampf(s_game.stalker_pressure + stalker_delta * dt, 0.0F, 1.0F);
         if (s_game.stalker_pressure > 0.62F && s_game.message_timer <= 0.0F) {
             set_message(s_game.threat_visible ? "DON'T STARE AT IT" : "IT IS BETWEEN YOU AND EXIT", 1.35F);
@@ -846,6 +885,9 @@ static void update_game(void) {
     float fear_rate = 1.15F + s_game.z * 0.035F + (s_game.flashlight_on ? -0.55F : 1.1F);
     if (s_game.fuse_found) {
         fear_rate += 3.6F + s_game.route_shift * 1.2F + s_game.stalker_pressure * 3.4F;
+        if (blackout_active()) {
+            fear_rate += 2.0F;
+        }
         if (s_game.threat_visible && !s_game.flashlight_on) {
             fear_rate += 2.4F;
         }
@@ -878,6 +920,7 @@ static void draw_frame(float fb_w, float fb_h) {
     nt_gfx_set_uniform_vec4("u_state", (float[4]){s_game.fuse_found ? 1.0F : 0.0F, s_game.fear / 100.0F, (s_game.flashlight_on && s_game.battery > 0.0F) ? 1.0F : 0.0F, s_game.won ? 1.0F : 0.0F});
     nt_gfx_set_uniform_vec4("u_pressure", (float[4]){s_game.route_shift, s_game.stalker_pressure, s_game.threat_visible ? 1.0F : 0.0F, s_game.caught ? 1.0F : 0.0F});
     nt_gfx_set_uniform_vec4("u_route", (float[4]){route_choice_active() ? 1.0F : 0.0F, (float)route_choice_safe_side_for_stage(s_game.route_choice_stage), route_choice_z_for_stage(s_game.route_choice_stage), (float)s_game.route_choice_wrong});
+    nt_gfx_set_uniform_vec4("u_horror", (float[4]){clampf(s_game.blackout_timer / 3.2F, 0.0F, 1.0F), clampf(s_game.ambush_timer / 2.4F, 0.0F, 1.0F), clampf(s_game.relief_timer / 2.0F, 0.0F, 1.0F), 0.0F});
     nt_gfx_draw(0, 6);
 }
 
@@ -900,6 +943,10 @@ static cJSON *state_json(void) {
     cJSON_AddStringToObject(root, "route_choice_safe_side", route_choice_active() ? route_choice_side_name(route_choice_safe_side_for_stage(s_game.route_choice_stage)) : "NONE");
     cJSON_AddNumberToObject(root, "route_choice_correct", (double)s_game.route_choice_correct);
     cJSON_AddNumberToObject(root, "route_choice_wrong", (double)s_game.route_choice_wrong);
+    cJSON_AddBoolToObject(root, "blackout_active", blackout_active());
+    cJSON_AddNumberToObject(root, "blackout_timer", (double)fmaxf(0.0F, s_game.blackout_timer));
+    cJSON_AddNumberToObject(root, "ambush_timer", (double)fmaxf(0.0F, s_game.ambush_timer));
+    cJSON_AddNumberToObject(root, "relief_timer", (double)fmaxf(0.0F, s_game.relief_timer));
     cJSON_AddNumberToObject(root, "run_time", (double)s_game.run_time);
     cJSON_AddNumberToObject(root, "last_run_time", (double)s_game.last_run_time);
     cJSON_AddNumberToObject(root, "last_fear", (double)s_game.last_fear);
@@ -1024,6 +1071,9 @@ static bool ep_game_debug_set_progress(const cJSON *params, cJSON **result, char
     s_game.route_choice_stage = (int)clampf((float)json_number(params, "route_choice_stage", (double)s_game.route_choice_stage), 0.0F, (float)route_choice_total());
     s_game.route_choice_correct = (int)fmaxf(0.0F, (float)json_number(params, "route_choice_correct", (double)s_game.route_choice_correct));
     s_game.route_choice_wrong = (int)fmaxf(0.0F, (float)json_number(params, "route_choice_wrong", (double)s_game.route_choice_wrong));
+    s_game.blackout_timer = fmaxf(0.0F, (float)json_number(params, "blackout_timer", (double)s_game.blackout_timer));
+    s_game.ambush_timer = fmaxf(0.0F, (float)json_number(params, "ambush_timer", (double)s_game.ambush_timer));
+    s_game.relief_timer = fmaxf(0.0F, (float)json_number(params, "relief_timer", (double)s_game.relief_timer));
     s_game.run_time = fmaxf(0.0F, (float)json_number(params, "run_time", (double)s_game.run_time));
     if (s_game.won || s_game.caught) {
         record_run_result();
