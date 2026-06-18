@@ -17,8 +17,9 @@ Active epic:
 Primary tasks:
 
 - `tasks/active/T0001-mine-cards-mining-v0-01-first-slice.md`
-  is in review. The native Mining first slice exists in `src/clean_seed_main.c`;
-  compact UI, core motion, live-state matrix, stress, and strict gates pass.
+  is in doing. The native Mining first slice exists in `src/clean_seed_main.c`,
+  but lead rejected the PC build for tiny/unclear UI and then for missing
+  player focus. Current fix gate is PC readability/focus, not more mechanics.
 - `tasks/active/T0008-production-equipment-source-sheet.md`
   is in review with accepted 12-item runtime equipment sprites for later UI.
 - `tasks/active/T0010-custom-mine-cards-voxel-miner-source-pack.md`
@@ -52,32 +53,31 @@ runtime boundary.
 
 ## Current Gate
 
-Status: `T0001 native Mining first slice ready for lead review`.
+Status: `T0001 PC UI scale/focus rescue implemented; awaiting lead review`.
 
 Current red/yellow gates:
 
 - Prior stage/board evidence is recorded in T0001 and the Mine Cards reviews
-  folder.
-- Slice hygiene is an explicit snapshot warning, not a strict fail:
-  `build/captures/mine_cards_t0001_slice_hygiene_snapshot.md`.
+  folder, but it is superseded by the PC UI-scale rejection.
+- Current rejection/fix evidence:
+  `gamedesign/projects/mine-cards/reviews/t0001_ui_scale_rejection_2026-06-18.md`;
+  latest focus screenshot:
+  `build/captures/mine_cards_focus_v002_1280x720.png`.
 - Native screenshot automation uses game-local `game.capture.framebuffer`.
-- The UI pack now includes generated icons, stage pieces, and sprite/FX proof.
-  Blank UI kit source is accepted; slice9/decor work is still pending.
-- The saved equipment sheet with shadow problems is recorded as reference/probe
-  material only; T0008 has accepted 12-item runtime sprites and is in lead
-  review, not integrated into the native Mining first screen.
-- Responsive compact UI product-read gate passed:
-  `reviews/product_gate_compact_ui_v003_2026-06-18.md`.
+- UI scale fix pass 1 is built: `nt_ui_scale` is connected in
+  `src/clean_seed_main.c`, default window is `1280x720`, and evidence is
+  `build/captures/mine_cards_nt_ui_scale_1280x720_window.png`.
+- Focus pass 2 is built: future skills are no longer pseudo-buttons, the
+  inactive bottom `SKILLS` pseudo-tab is removed, and unavailable upgrade/copper
+  actions are disabled visually and in DevAPI.
+- Old compact/responsive pass evidence is historical only.
+- Old responsive compact UI product-read gate passed, but is no longer
+  sufficient because the runtime did not use `nt_ui_scale`.
 - Core mining motion gate passed: `reviews/core_moment_mining_v004_2026-06-18.md`.
   It proves miner -> rock -> hit FX -> reward in motion; it does not claim
   final custom character art.
-- Visual director review:
-  `gamedesign/projects/mine-cards/reviews/visual_director_review_stage_rescue_v008_2026-06-17.md`.
-- Matrix coverage is current for the first-screen states and 720x480 stress.
-- Art-source rescue packet:
-  `art_requests/mine-cards-stage-ui-family-v001.json`; accepted icons, stage
-  background, sprite/FX, blank UI kit, and compact UI kit sources are recorded
-  there.
+- T0008 equipment art remains review-only and is not integrated into the first
+  screen.
 
 ## Blocking Work
 
@@ -94,40 +94,19 @@ Current red/yellow gates:
 
 ## Last Good Evidence
 
-- Base design/economy evidence lives in
-  `gamedesign/projects/mine-cards/` and T0002/T0003 logs.
-- Ozz/KayKit skeletal evidence lives in T0005/T0006 and the visual wiki.
-- Latest responsive full-screen proof: `build/captures/mine_cards_compact_ui_v003_*`.
-- Latest motion proof: `build/captures/mine_cards_core_moment_v004_sheet.png`
-  and `build/captures/mine_cards_core_moment_v004.gif`.
-- Latest responsive product gate:
-  `gamedesign/projects/mine-cards/reviews/product_gate_compact_ui_v003_2026-06-18.md`.
-- Latest core-moment product gate:
-  `gamedesign/projects/mine-cards/reviews/core_moment_mining_v004_2026-06-18.md`.
-- Latest live-state proof:
-  `build/captures/mine_cards_live_state_v003_state.json`.
-- Lead-review packet:
+- Current rejection/fix packet:
+  `gamedesign/projects/mine-cards/reviews/t0001_ui_scale_rejection_2026-06-18.md`.
+- Prior T0001 review packet/evidence:
   `gamedesign/projects/mine-cards/reviews/t0001_lead_review_packet_2026-06-18.md`.
-- T0001 acceptance audit:
-  `gamedesign/projects/mine-cards/reviews/t0001_acceptance_audit_2026-06-18.md`.
-- Next-slice decision packet:
-  `gamedesign/projects/mine-cards/reviews/next_slice_decision_packet_2026-06-18.md`.
-- T0008 equipment acceptance audit:
-  `gamedesign/projects/mine-cards/reviews/t0008_equipment_art_acceptance_audit_2026-06-18.md`.
-- T0007 renderer contract:
-  `extensions/skeletal_animation/docs/skinned_mesh_renderer_contract_v001.md`.
-- T0007 native proof: `build/captures/mine_cards_t0007_skeletal_game_proof.png`;
-  budget zoom: `build/captures/mine_cards_t0009_skeletal_budget_actor_zoom.png`.
-- Custom miner source packet:
-  `gamedesign/projects/mine-cards/visual/custom_voxel_miner_source_packet_v001.md`.
+- Core motion proof:
+  `gamedesign/projects/mine-cards/reviews/core_moment_mining_v004_2026-06-18.md`.
 
 ## Next Priorities
 
-1. Lead-review T0001 using the latest screenshots/GIF and decide accept vs one
-   more visual/product pass.
+1. Lead-review T0001 PC readability/focus on the actual native window; if
+   rejected, name one remaining axis before adding mechanics.
 2. Keep T0008 available as later equipment/UI prep, but do not integrate it
    into the first screen before T0001 is accepted.
 3. Keep T0010 as gated character-source prep; promote it only after T0001 is
    accepted or the lead explicitly chooses custom character production first.
-4. If rejected, keep feature expansion frozen and fix only the cited visual or
-   product-read issue.
+4. Keep feature expansion frozen until the UI scale/readability gate is fixed.

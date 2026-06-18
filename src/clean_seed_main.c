@@ -18,6 +18,7 @@
 #include "renderers/nt_text_renderer.h"
 #include "resource/nt_resource.h"
 #include "time/nt_time.h"
+#include "ui/nt_ui_scale.h"
 #include "window/nt_window.h"
 
 #if SKELETAL_ANIMATION_EXTENSION_ENABLED
@@ -39,6 +40,8 @@
 #define MINE_CARDS_SKELETAL_MAX_MATRICES 64
 #define MINE_CARDS_REWARD_LOG_ROWS 4
 #define MINE_CARDS_HIT_FEEDBACK_SECONDS 0.55F
+#define MINE_CARDS_UI_REF_W 960.0F
+#define MINE_CARDS_UI_REF_H 540.0F
 
 typedef struct UiBox {
     float x;
@@ -106,8 +109,8 @@ static const MiningNodeDef k_nodes[] = {
 static MineCardsRuntime s_game;
 static bool s_devapi_enabled;
 static uint16_t s_devapi_port = MINE_CARDS_DEVAPI_PORT_DEFAULT;
-static int s_window_width = 960;
-static int s_window_height = 540;
+static int s_window_width = 1280;
+static int s_window_height = 720;
 static UiBox s_node_boxes[2];
 static UiBox s_upgrade_box;
 static UiBox s_primary_box;
@@ -311,6 +314,15 @@ static void ortho(float left, float right, float bottom, float top, float near_z
 
 static bool contains(UiBox box, float x, float y) {
     return x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h;
+}
+
+static UiBox ui_box_to_physical(const nt_ui_scale_t *scale, UiBox box) {
+    return (UiBox){
+        scale->offset_x + box.x * scale->scale_x,
+        scale->offset_y + box.y * scale->scale_y,
+        box.w * scale->scale_x,
+        box.h * scale->scale_y,
+    };
 }
 
 static float active_interval_seconds(void) {
@@ -614,38 +626,6 @@ static UiBox stage_callout_box(float w, float h) {
     };
 }
 
-static UiBox future_activity_box(int index, float w, float h) {
-    const bool portrait = is_portrait_layout(w, h);
-    const float gap = 8.0F;
-    if (portrait) {
-        const float cols = 4.0F;
-        const float chip_w = (s_content_box.w - 36.0F - gap * (cols - 1.0F)) / cols;
-        const float chip_h = 28.0F;
-        const int col = index % 4;
-        const int row = index / 4;
-        return (UiBox){
-            s_content_box.x + 18.0F + (float)col * (chip_w + gap),
-            s_activity_box.y - 36.0F - (float)row * (chip_h + gap),
-            chip_w,
-            chip_h,
-        };
-    }
-
-    const float chip_area_x = s_activity_box.x + s_activity_box.w + gap;
-    const float chip_area_w = s_upgrade_box.x - chip_area_x - 18.0F;
-    const float cols = 4.0F;
-    const float chip_w = (chip_area_w - gap * (cols - 1.0F)) / cols;
-    const float chip_h = s_activity_box.h;
-    const int col = index % 4;
-    const int row = index / 4;
-    return (UiBox){
-        chip_area_x + (float)col * (chip_w + gap),
-        s_activity_box.y - (float)row * (chip_h + gap),
-        chip_w,
-        chip_h,
-    };
-}
-
 static int missing_stone(void) {
     return s_game.stone < 6 ? 6 - s_game.stone : 0;
 }
@@ -715,6 +695,9 @@ static bool ui_assets_ready(void) {
 }
 
 static void draw_ui_slice(MineCardsUiRegion region, float x, float y, float w, float h) {
+    if (w <= 0.0F || h <= 0.0F) {
+        return;
+    }
     nt_sprite_renderer_emit_slice9(s_ui_atlas, s_ui_regions[region], x, y, w, h, NULL, 1.0F, 0xFFFFFFFFU, 0, NT_MATH_MAT4_IDENTITY);
 }
 
@@ -723,6 +706,9 @@ static void draw_ui_slice_box(MineCardsUiRegion region, UiBox box) {
 }
 
 static void draw_ui_icon(MineCardsUiRegion region, float x, float y, float w, float h) {
+    if (w <= 0.0F || h <= 0.0F) {
+        return;
+    }
     const nt_texture_region_t *r = nt_atlas_get_region(s_ui_atlas, s_ui_regions[region]);
     const float ipu = nt_atlas_get_inverse_pixels_per_unit(s_ui_atlas);
     const float src_w = (float)r->source_w * ipu;
@@ -870,23 +856,6 @@ static void draw_ui_sprites(float w, float h) {
 
     draw_ui_slice_box(MINE_CARDS_UI_TAB_ACTIVE, s_activity_box);
     draw_ui_icon(MINE_CARDS_UI_ICON_ACTIVITY_MINING, s_activity_box.x + s_activity_box.w - 34.0F, s_activity_box.y + 5.0F, 26.0F, 26.0F);
-    const MineCardsUiRegion future_icons[] = {
-        MINE_CARDS_UI_ICON_ACTIVITY_WOODCUTTING,
-        MINE_CARDS_UI_ICON_ACTIVITY_FISHING,
-        MINE_CARDS_UI_ICON_ACTIVITY_SMITHING,
-        MINE_CARDS_UI_ICON_ACTIVITY_COMBAT,
-        MINE_CARDS_UI_ICON_ACTIVITY_FARMING,
-        MINE_CARDS_UI_ICON_ACTIVITY_BANK,
-        MINE_CARDS_UI_ICON_ACTIVITY_SHOP,
-    };
-    for (int i = 0; i < 7; ++i) {
-        if (compact && !is_portrait_layout(w, h) && i >= 4) {
-            continue;
-        }
-        const UiBox chip = future_activity_box(i, w, h);
-        const float icon_size = compact ? 14.0F : 16.0F;
-        draw_ui_icon(future_icons[i], chip.x + chip.w - icon_size - 4.0F, chip.y + chip.h * 0.5F - icon_size * 0.5F, icon_size, icon_size);
-    }
 
     for (int i = 0; i < 2; ++i) {
         if (s_game.selected_node == i) {
@@ -901,7 +870,9 @@ static void draw_ui_sprites(float w, float h) {
         }
     }
     draw_ui_slice_box(MINE_CARDS_UI_PANEL_CONTENT, s_upgrade_box);
-    draw_ui_slice_box(upgrade_affordable() ? MINE_CARDS_UI_BUTTON_ACTIVE : MINE_CARDS_UI_BUTTON_DARK, s_primary_box);
+    if (upgrade_affordable() || s_game.copper_pickaxe) {
+        draw_ui_slice_box(upgrade_affordable() ? MINE_CARDS_UI_BUTTON_ACTIVE : MINE_CARDS_UI_BUTTON_DARK, s_primary_box);
+    }
     if (!s_game.copper_pickaxe) {
         const float icon_y0 = s_upgrade_box.y + s_upgrade_box.h - (compact ? 74.0F : 80.0F);
         draw_ui_icon(MINE_CARDS_UI_ICON_RESOURCE_STONE, s_upgrade_box.x + 14.0F, icon_y0 - 2.0F, 16.0F, 16.0F);
@@ -921,13 +892,9 @@ static void draw_ui_sprites(float w, float h) {
         draw_ui_slice(MINE_CARDS_UI_PROGRESS_FILL, bar_x + 3.0F, bar_y + 3.0F, (bar_w - 6.0F) * progress, 12.0F);
     }
 
-    for (int i = 0; i < 3; ++i) {
-        const float tab_x = 42.0F + (float)i * 112.0F;
-        if (i == 1) {
-            draw_ui_slice(MINE_CARDS_UI_NAV_ACTIVE, tab_x, 14.0F, 96.0F, 48.0F);
-        }
+    if (upgrade_affordable() || s_game.copper_pickaxe) {
+        draw_ui_icon(s_game.copper_pickaxe ? MINE_CARDS_UI_ICON_STATE_READY : MINE_CARDS_UI_ICON_UPGRADE_PICKAXE, s_primary_box.x + s_primary_box.w - 32.0F, s_primary_box.y + s_primary_box.h * 0.5F - 12.0F, 24.0F, 24.0F);
     }
-    draw_ui_icon(s_game.copper_pickaxe ? MINE_CARDS_UI_ICON_STATE_READY : MINE_CARDS_UI_ICON_UPGRADE_PICKAXE, s_primary_box.x + s_primary_box.w - 32.0F, s_primary_box.y + s_primary_box.h * 0.5F - 12.0F, 24.0F, 24.0F);
 
     nt_sprite_renderer_flush();
 }
@@ -996,19 +963,19 @@ static void draw_ui_text(float w, float h) {
     const bool portrait = is_portrait_layout(w, h);
 
     draw_text(22.0F, h - 34.0F, compact ? 22.0F : 24.0F, (float[4]){0.86F, 0.92F, 1.0F, 1.0F}, "MINE CARDS");
-    draw_text(compact ? 220.0F : 250.0F, h - 28.0F, compact ? 13.0F : 16.0F, (float[4]){0.90F, 0.96F, 1.0F, 1.0F}, "LEVEL 1");
-    draw_text(compact ? 300.0F : 360.0F, h - 28.0F, compact ? 13.0F : 16.0F, (float[4]){0.64F, 0.90F, 1.0F, 1.0F}, "EXP 2/12");
+    draw_text(compact ? 220.0F : 250.0F, h - 28.0F, compact ? 13.0F : 16.0F, (float[4]){0.88F, 1.0F, 0.62F, 1.0F}, "MINING / SURFACE");
+    draw_text(compact ? 374.0F : 430.0F, h - 28.0F, compact ? 12.0F : 14.0F, (float[4]){0.64F, 0.90F, 1.0F, 1.0F}, "LV 1  EXP 2/12");
     if (!compact) {
-        draw_text(470.0F, h - 28.0F, 16.0F, (float[4]){1.0F, 0.66F, 0.58F, 1.0F}, "HP 100/100");
+        draw_text(562.0F, h - 28.0F, 14.0F, (float[4]){0.72F, 0.74F, 0.86F, 1.0F}, "AUTO RUNNING");
     }
 
     char line[128];
     (void)snprintf(line, sizeof(line), "Stone %d    Copper %d    Coins %d", s_game.stone, s_game.copper_ore, s_game.coins);
     draw_text(compact ? 22.0F : w - 360.0F, compact ? h - 58.0F : h - 28.0F, compact ? 12.0F : 16.0F, (float[4]){1.0F, 0.92F, 0.62F, 1.0F}, line);
 
-    draw_text(s_player_box.x + 16.0F, s_player_box.y + s_player_box.h - 28.0F, 18.0F, (float[4]){0.86F, 0.92F, 1.0F, 1.0F}, "MINER ACTION");
+    draw_text(s_player_box.x + 16.0F, s_player_box.y + s_player_box.h - 28.0F, 18.0F, (float[4]){0.88F, 1.0F, 0.62F, 1.0F}, "NOW MINING");
     char stage_label[64];
-    (void)snprintf(stage_label, sizeof(stage_label), "Mining %s", k_nodes[s_game.selected_node].label);
+    (void)snprintf(stage_label, sizeof(stage_label), "%s runs automatically", k_nodes[s_game.selected_node].label);
     const UiBox action_box = stage_action_box(w, h);
     draw_text(portrait ? s_player_box.x + 16.0F : action_box.x + action_box.w - 360.0F,
               portrait ? s_player_box.y + s_player_box.h - 52.0F : action_box.y + action_box.h - 40.0F,
@@ -1020,19 +987,14 @@ static void draw_ui_text(float w, float h) {
               s_activity_box.y + (s_activity_box.h < 34.0F ? 10.0F : 13.0F),
               s_activity_box.h < 34.0F ? 10.0F : 12.0F,
               (float[4]){0.88F, 1.0F, 0.62F, 1.0F},
-              "MINING ACTIVE");
-    const char *future_tabs[] = {"WOOD", "FISH", "SMITH", "COMBAT", "FARM", "BANK", "SHOP"};
-    for (int i = 0; i < 7; ++i) {
-        if (compact && !portrait && i >= 4) {
-            continue;
-        }
-        const UiBox chip = future_activity_box(i, w, h);
-        draw_text(chip.x + 8.0F,
-                  chip.y + (chip.h < 30.0F ? 9.0F : 11.0F),
-                  chip.w < 76.0F ? 9.0F : 10.0F,
-                  (float[4]){0.66F, 0.64F, 0.74F, 1.0F},
-                  future_tabs[i]);
-    }
+              "1. MINING NOW");
+    const float locked_x = portrait ? s_activity_box.x + 10.0F : s_activity_box.x + s_activity_box.w + 18.0F;
+    const float locked_y = portrait ? s_activity_box.y - 24.0F : s_activity_box.y + 12.0F;
+    draw_text(locked_x,
+              locked_y,
+              compact ? 9.0F : 10.0F,
+              (float[4]){0.46F, 0.46F, 0.54F, 1.0F},
+              "LATER: WOODCUTTING / FISHING / SMITHING");
 
     for (int i = 0; i < 2; ++i) {
         const UiBox box = s_node_boxes[i];
@@ -1048,14 +1010,14 @@ static void draw_ui_text(float w, float h) {
     }
 
     const bool roomy_upgrade = s_upgrade_box.w >= 238.0F && s_upgrade_box.h >= 138.0F;
-    draw_text(s_upgrade_box.x + 16.0F, s_upgrade_box.y + s_upgrade_box.h - (compact ? 22.0F : 26.0F), roomy_upgrade ? 11.0F : (compact ? 10.0F : 11.0F), (float[4]){0.88F, 1.0F, 0.62F, 1.0F}, "NEXT GOAL");
+    draw_text(s_upgrade_box.x + 16.0F, s_upgrade_box.y + s_upgrade_box.h - (compact ? 22.0F : 26.0F), roomy_upgrade ? 11.0F : (compact ? 10.0F : 11.0F), (float[4]){0.88F, 1.0F, 0.62F, 1.0F}, upgrade_affordable() ? "NEXT ACTION" : "NEXT ACTION LOCKED");
     draw_text(s_upgrade_box.x + 16.0F, s_upgrade_box.y + s_upgrade_box.h - (compact ? 42.0F : 50.0F), roomy_upgrade ? 16.0F : (compact ? 14.0F : 17.0F), (float[4]){0.94F, 0.90F, 1.0F, 1.0F}, "Copper Pickaxe");
     if (s_game.copper_pickaxe) {
         draw_text(s_upgrade_box.x + 16.0F, s_upgrade_box.y + s_upgrade_box.h - (compact ? 64.0F : 74.0F), roomy_upgrade ? 11.0F : (compact ? 10.0F : 11.0F), (float[4]){0.72F, 0.90F, 0.78F, 1.0F}, "Mining speed +15%");
     } else if (upgrade_affordable()) {
-        draw_text(s_upgrade_box.x + 16.0F, s_upgrade_box.y + s_upgrade_box.h - (compact ? 64.0F : 74.0F), roomy_upgrade ? 11.0F : (compact ? 10.0F : 11.0F), (float[4]){0.88F, 1.0F, 0.62F, 1.0F}, "All resources ready");
+        draw_text(s_upgrade_box.x + 16.0F, s_upgrade_box.y + s_upgrade_box.h - (compact ? 64.0F : 74.0F), roomy_upgrade ? 11.0F : (compact ? 10.0F : 11.0F), (float[4]){0.88F, 1.0F, 0.62F, 1.0F}, "Press Upgrade Pickaxe");
     } else {
-        draw_text(s_upgrade_box.x + 16.0F, s_upgrade_box.y + s_upgrade_box.h - (compact ? 64.0F : 70.0F), roomy_upgrade ? 10.0F : (compact ? 9.0F : 10.0F), (float[4]){0.72F, 0.74F, 0.86F, 1.0F}, "Cost to upgrade");
+        draw_text(s_upgrade_box.x + 16.0F, s_upgrade_box.y + s_upgrade_box.h - (compact ? 64.0F : 70.0F), roomy_upgrade ? 10.0F : (compact ? 9.0F : 10.0F), (float[4]){0.72F, 0.74F, 0.86F, 1.0F}, "Keep mining to unlock");
     }
     if (!s_game.copper_pickaxe) {
         char row[64];
@@ -1071,8 +1033,10 @@ static void draw_ui_text(float w, float h) {
         draw_text(row_x, row_y - row_gap * 2.0F, row_size, missing_coins() == 0 ? (float[4]){0.76F, 1.0F, 0.68F, 1.0F} : (float[4]){1.0F, 0.92F, 0.62F, 1.0F}, row);
     }
 
-    const char *button_label = s_game.copper_pickaxe ? "Equipped" : (upgrade_affordable() ? "Upgrade" : (compact ? "Need" : "Need Resources"));
-    draw_text(s_primary_box.x + 18.0F, s_primary_box.y + (compact ? 9.0F : 17.0F), roomy_upgrade ? 11.0F : (compact ? 10.0F : 13.0F), (float[4]){1.0F, 1.0F, 0.96F, 1.0F}, button_label);
+    if (upgrade_affordable() || s_game.copper_pickaxe) {
+        const char *button_label = s_game.copper_pickaxe ? "EQUIPPED" : "UPGRADE PICKAXE";
+        draw_text(s_primary_box.x + 18.0F, s_primary_box.y + (compact ? 9.0F : 17.0F), roomy_upgrade ? 11.0F : (compact ? 10.0F : 13.0F), (float[4]){1.0F, 1.0F, 0.96F, 1.0F}, button_label);
+    }
 
     char progress[96];
     (void)snprintf(progress, sizeof(progress), "%s: %.1fs / %.1fs", k_nodes[s_game.selected_node].label, (double)s_game.progress_seconds, (double)active_interval_seconds());
@@ -1088,33 +1052,27 @@ static void draw_ui_text(float w, float h) {
         draw_text(hit_box.x + 12.0F, hit_box.y + 9.0F, 11.0F, (float[4]){1.0F, 0.96F, 0.54F, 1.0F}, s_game.hit_feedback_text);
     }
 
-    const char *bottom_tabs[] = {"DUNGEONS", "SKILLS", "EQUIPMENT"};
-    for (int i = 0; i < 3; ++i) {
-        const float tab_x = 52.0F + (float)i * 112.0F;
-        draw_text(tab_x, 30.0F, 11.0F, i == 1 ? (float[4]){0.88F, 1.0F, 0.62F, 1.0F} : (float[4]){0.78F, 0.76F, 0.84F, 1.0F}, bottom_tabs[i]);
-    }
-
     nt_text_renderer_flush();
 }
 
-static void handle_input(void) {
+static void handle_input(const nt_ui_scale_t *ui_scale) {
     if (nt_input_key_is_pressed(NT_KEY_1)) {
         select_node(0);
     }
     if (nt_input_key_is_pressed(NT_KEY_2)) {
         select_node(1);
     }
-    if (nt_input_key_is_pressed(NT_KEY_SPACE) || nt_input_key_is_pressed(NT_KEY_ENTER)) {
+    if ((nt_input_key_is_pressed(NT_KEY_SPACE) || nt_input_key_is_pressed(NT_KEY_ENTER)) && upgrade_affordable()) {
         buy_upgrade();
     }
     if (nt_input_mouse_is_pressed(NT_BUTTON_LEFT)) {
         for (int i = 0; i < NT_INPUT_MAX_POINTERS; ++i) {
-            const nt_pointer_t pointer = g_nt_input.pointers[i];
+            const nt_pointer_t pointer = nt_ui_scale_apply_pointer(ui_scale, g_nt_input.pointers[i]);
             if (!pointer.active) {
                 continue;
             }
             const float pointer_x = pointer.x;
-            const float pointer_y = s_surface_h - pointer.y;
+            const float pointer_y = ui_scale->logical_h - pointer.y;
             if (contains(s_node_boxes[0], pointer_x, pointer_y)) {
                 select_node(0);
                 return;
@@ -1123,7 +1081,7 @@ static void handle_input(void) {
                 select_node(1);
                 return;
             }
-            if (contains(s_upgrade_box, pointer_x, pointer_y) || contains(s_primary_box, pointer_x, pointer_y)) {
+            if (upgrade_affordable() && contains(s_primary_box, pointer_x, pointer_y)) {
                 buy_upgrade();
                 return;
             }
@@ -1281,10 +1239,10 @@ static void init_text_runtime(void) {
     nt_font_add(s_ui_font, nt_resource_request(nt_hash64_str("mine-cards/font_ui"), NT_ASSET_FONT));
 }
 
-static void update_text_globals(float w, float h) {
+static void update_text_globals(float logical_w, float logical_h, float fb_w, float fb_h) {
     mat4 vp;
     mat4 ident;
-    ortho(0.0F, w, 0.0F, h, -1.0F, 1.0F, (float *)vp);
+    ortho(0.0F, logical_w, 0.0F, logical_h, -1.0F, 1.0F, (float *)vp);
     nt_frame_uniforms_t uniforms;
     memset(&uniforms, 0, sizeof(uniforms));
     memcpy(uniforms.view_proj, vp, sizeof(uniforms.view_proj));
@@ -1293,10 +1251,10 @@ static void update_text_globals(float w, float h) {
     memcpy(uniforms.proj, ident, sizeof(uniforms.proj));
     uniforms.time[0] = (float)nt_time_now();
     uniforms.time[1] = g_nt_app.dt;
-    uniforms.resolution[0] = w;
-    uniforms.resolution[1] = h;
-    uniforms.resolution[2] = w > 0.0F ? 1.0F / w : 0.0F;
-    uniforms.resolution[3] = h > 0.0F ? 1.0F / h : 0.0F;
+    uniforms.resolution[0] = fb_w;
+    uniforms.resolution[1] = fb_h;
+    uniforms.resolution[2] = fb_w > 0.0F ? 1.0F / fb_w : 0.0F;
+    uniforms.resolution[3] = fb_h > 0.0F ? 1.0F / fb_h : 0.0F;
     uniforms.near_far[0] = -1.0F;
     uniforms.near_far[1] = 1.0F;
     nt_gfx_update_buffer(s_frame_ubo, &uniforms, sizeof(uniforms));
@@ -1523,12 +1481,14 @@ static void register_ui_devapi(float w, float h) {
     const UiBox surface_box = devapi_box_from_y_up(s_node_boxes[0], h);
     const UiBox copper_box = devapi_box_from_y_up(s_node_boxes[1], h);
     const UiBox primary_box = devapi_box_from_y_up(s_primary_box, h);
+    const bool copper_enabled = node_unlocked(1);
+    const bool upgrade_enabled = upgrade_affordable() && !s_game.copper_pickaxe;
     (void)nt_devapi_register_ui_node("root", "", "screen", "Mining", "Mine Cards Mining screen", 0.0F, 0.0F, w, h, true, true);
-    (void)nt_devapi_register_ui_node("mining.node.surface", "root", "button", "Surface Stone", "Mine Surface Stone", surface_box.x, surface_box.y, surface_box.w, surface_box.h, true, true);
+    (void)nt_devapi_register_ui_node("mining.node.surface", "root", "button", "Surface Stone", "Current mining node", surface_box.x, surface_box.y, surface_box.w, surface_box.h, true, true);
     (void)nt_devapi_register_ui_node("mining.node.copper", "root", "button", "Copper Vein", node_unlocked(1) ? "Mine Copper Vein" : "Locked: Mining Lv2", copper_box.x, copper_box.y, copper_box.w,
-                                     copper_box.h, true, true);
-    (void)nt_devapi_register_ui_node("mining.upgrade.pickaxe", "root", "button", "Copper Pickaxe", upgrade_affordable() ? "Upgrade Pickaxe" : "Show Missing Cost", primary_box.x, primary_box.y, primary_box.w, primary_box.h,
-                                     true, true);
+                                     copper_box.h, true, copper_enabled);
+    (void)nt_devapi_register_ui_node("mining.upgrade.pickaxe", "root", "button", "Copper Pickaxe", upgrade_enabled ? "Upgrade Pickaxe" : "Locked until resources are ready", primary_box.x, primary_box.y, primary_box.w, primary_box.h,
+                                     true, upgrade_enabled);
 }
 #endif
 
@@ -1546,10 +1506,18 @@ static void frame(void) {
     }
 #endif
 
-    const float w = (float)(g_nt_window.fb_width ? g_nt_window.fb_width : g_nt_window.width);
-    const float h = (float)(g_nt_window.fb_height ? g_nt_window.fb_height : g_nt_window.height);
+    const float fb_w = (float)(g_nt_window.fb_width ? g_nt_window.fb_width : g_nt_window.width);
+    const float fb_h = (float)(g_nt_window.fb_height ? g_nt_window.fb_height : g_nt_window.height);
+    const nt_ui_scale_desc_t ui_scale_desc = {
+        .ref_w = MINE_CARDS_UI_REF_W,
+        .ref_h = MINE_CARDS_UI_REF_H,
+        .mode = NT_UI_SCALE_EXPAND,
+    };
+    const nt_ui_scale_t ui_scale = nt_ui_compute_scale(&ui_scale_desc, fb_w, fb_h);
+    const float w = ui_scale.logical_w;
+    const float h = ui_scale.logical_h;
     layout(w, h);
-    handle_input();
+    handle_input(&ui_scale);
     update_mining(g_nt_app.dt);
     if (s_game.callout_timer > 0.0F) {
         s_game.callout_timer -= g_nt_app.dt;
@@ -1608,16 +1576,17 @@ static void frame(void) {
     draw_ui_shapes(w, h);
     nt_shape_renderer_flush();
 
-    update_text_globals(w, h);
+    update_text_globals(w, h, fb_w, fb_h);
     draw_ui_sprites(w, h);
 
     const UiBox actor_box = stage_actor_box(w, h);
-    mine_cards_model_proof_draw_in_box(w, h, actor_box.x, actor_box.y, actor_box.w, actor_box.h);
+    const UiBox actor_physical_box = ui_box_to_physical(&ui_scale, actor_box);
+    mine_cards_model_proof_draw_in_box(fb_w, fb_h, actor_physical_box.x, actor_physical_box.y, actor_physical_box.w, actor_physical_box.h);
 
-    update_text_globals(w, h);
+    update_text_globals(w, h, fb_w, fb_h);
     draw_stage_overlay_sprites(w, h);
 
-    update_text_globals(w, h);
+    update_text_globals(w, h, fb_w, fb_h);
     draw_ui_text(w, h);
 
     nt_gfx_end_pass();

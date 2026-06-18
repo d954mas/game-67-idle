@@ -203,6 +203,7 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_gfx
     nt_shape_renderer
     nt_mesh_renderer
+    nt_ui
     nt_text_renderer
     nt_sprite_renderer
     nt_atlas

@@ -156,6 +156,18 @@
   auto-metric is a coarse helper; the montage eyeball is the gate. (2026-06-17:
   a previous UI shipped ~2px hairline text on small plates because it was judged
   from the full shot, not a zoom.)
+- UI scale requirement (a RECURRING PC usability failure): playable native UI
+  must render from a reference-resolution/logical viewport using the engine
+  scale layer (`nt_ui_scale` or equivalent): compute scale from framebuffer
+  size, run layout and text sizes in logical coordinates, map pointer/input
+  through the same scale, and expose DevAPI/UI bounds in the same logical
+  coordinate system. Do NOT lay out production UI directly in raw framebuffer
+  pixels with fixed font sizes and hand-written compact thresholds; that makes
+  text stay tiny or inconsistent on real PC windows. Raw framebuffer dimensions
+  are for physical GPU targets, screenshots/capture size, and final resolution
+  uniforms, not for authored UI scale. If a custom immediate UI path is used
+  instead of Clay/`nt_ui`, it still must use the same `nt_ui_scale`
+  reference-resolution contract before a UI slice can be accepted.
 - Visual regression rule (a recurring failure: fixing one axis silently made
   another worse — this session a text-readability pass introduced clashing
   rectangular plates on the ROUNDED buttons and "looked dirty"): when you change

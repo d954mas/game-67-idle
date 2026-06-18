@@ -1,12 +1,12 @@
 ---
 id: T0001
 title: Mine Cards Mining v0.01 first slice
-status: review
+status: doing
 epic: E001
 priority: P1
 tags: [mine-cards, prototype, native, visual, core-loop]
 created: 2026-06-17
-updated: 2026-06-17
+updated: 2026-06-18
 ---
 
 ## What
@@ -299,3 +299,32 @@ Dependencies:
   `gamedesign/projects/mine-cards/reviews/lead_review_board_2026-06-18.md`.
   T0001 remains in review until the lead accepts the baseline or names exactly
   one rejection axis.
+- 2026-06-18: Lead rejected T0001 for PC usability: the screen is too small and
+  unclear on a real PC window. Root cause: Mine Cards UI is authored directly in
+  raw framebuffer pixels with fixed font sizes/compact thresholds instead of the
+  engine `nt_ui_scale` reference-resolution contract. Runtime crash also found
+  and mitigated: non-positive slice9/icon dimensions are now skipped before
+  calling the renderer. Evidence and next gate:
+  `gamedesign/projects/mine-cards/reviews/t0001_ui_scale_rejection_2026-06-18.md`,
+  `build/captures/mine_cards_crash_fix_640x360.png`, and
+  `build/captures/mine_cards_crash_fix_640x360_uizoom.png`. T0001 is back in
+  `doing`; feature/mechanic expansion remains frozen until the UI scale path is
+  fixed and recaptured.
+- 2026-06-18: UI scale fix pass 1 implemented: `game_seed` links `nt_ui`,
+  `src/clean_seed_main.c` computes `nt_ui_scale_t` each frame, authored UI now
+  lays out in a `960x540` logical reference viewport, pointer input is mapped
+  through `nt_ui_scale_apply_pointer`, 3D actor box is converted back to
+  physical framebuffer pixels, and default native window is `1280x720`. Build
+  passed. Evidence:
+  `build/captures/mine_cards_nt_ui_scale_1280x720_window.png` and
+  `build/captures/mine_cards_nt_ui_scale_1280x720_window_uizoom.png`. Still not
+  ready for review: lower-board composition/clipping needs a focused layout pass.
+- 2026-06-18: Lead rejected the scaled PC screen for missing focus: unclear
+  current location, too many pseudo-buttons, and no obvious action hierarchy.
+  Focus pass 2 keeps one active lane (`1. MINING NOW`), turns future skills into
+  muted `LATER` text instead of buttons, removes the inactive bottom `SKILLS`
+  pseudo-tab, and only renders/enables the Copper Pickaxe button when it is
+  actually affordable. Build and readability passed. Evidence:
+  `build/captures/mine_cards_focus_v002_1280x720.png`,
+  `build/captures/mine_cards_focus_v002_1280x720_uizoom.png`, and
+  `build/captures/mine_cards_focus_v002_1280x720_uizoom_cmp.png`.
