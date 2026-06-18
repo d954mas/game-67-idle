@@ -44,6 +44,10 @@ typedef struct BackroomsState {
     float stalker_pressure;
     float fuse_hum_timer;
     float stalker_audio_timer;
+    float run_time;
+    float last_run_time;
+    float last_fear;
+    float last_battery;
     bool threat_visible;
     bool caught_audio_played;
     bool flashlight_on;
@@ -301,6 +305,12 @@ static void reset_backrooms(void) {
     set_message("FIND THE HUMMING FUSE", 3.0F);
 }
 
+static void record_run_result(void) {
+    s_game.last_run_time = s_game.run_time;
+    s_game.last_fear = s_game.fear;
+    s_game.last_battery = s_game.battery;
+}
+
 static void parse_args(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--devapi") == 0) {
@@ -462,7 +472,7 @@ static void build_ui(void) {
     ui_clear();
     const float fuse_dist = dist_to(s_game.x, s_game.z, 0.36F, 29.4F);
     char line[96];
-    const char *objective = s_game.won ? "ESCAPED" : (s_game.fuse_found ? "RETURN TO EXIT" : "FIND THE HUMMING FUSE");
+    const char *objective = s_game.caught ? "CAUGHT" : (s_game.won ? "ESCAPED" : (s_game.fuse_found ? "RETURN TO EXIT" : "FIND THE HUMMING FUSE"));
 
     ui_rect(18, 18, 462, 118, 4, 6, 8, 190);
     ui_text(30, 30, "BACKROOMS LIMINAL", 3, 246, 226, 146, 255);
@@ -487,25 +497,34 @@ static void build_ui(void) {
     ui_rect(476, 268, 8, 2, 230, 235, 220, 220);
     ui_rect(479, 265, 2, 8, 230, 235, 220, 220);
 
-    if (near_fuse()) {
+    if (!s_game.won && !s_game.caught && near_fuse()) {
         ui_rect(322, 392, 316, 46, 5, 8, 8, 215);
         ui_text(346, 406, "PRESS E - TAKE FUSE", 3, 132, 255, 184, 255);
-    } else if (near_exit()) {
+    } else if (!s_game.won && !s_game.caught && near_exit()) {
         ui_rect(334, 392, 292, 46, 5, 8, 8, 215);
         ui_text(358, 406, "PRESS E - ESCAPE", 3, 255, 226, 130, 255);
-    } else if (!s_game.fuse_found && s_game.message_timer <= 0.0F) {
+    } else if (!s_game.won && !s_game.caught && !s_game.fuse_found && s_game.message_timer <= 0.0F) {
         (void)snprintf(line, sizeof(line), "FUSE HUM %.0fM", (double)fuse_dist);
         ui_text(390, 466, line, 2, 230, 218, 156, 230);
     }
 
-    if (s_game.message_timer > 0.0F) {
+    if (!s_game.won && !s_game.caught && s_game.message_timer > 0.0F) {
         ui_rect(254, 470, 452, 42, 3, 4, 5, 190);
         ui_text(282, 484, s_game.message, 2, 255, 236, 170, 255);
     }
+    if (s_game.won) {
+        ui_rect(188, 184, 584, 158, 4, 6, 7, 235);
+        ui_text(338, 206, "ESCAPED", 4, 255, 228, 128, 255);
+        (void)snprintf(line, sizeof(line), "TIME:%02dS  FEAR:%02d  BAT:%02d", (int)s_game.last_run_time, (int)s_game.last_fear, (int)(s_game.last_battery * 100.0F));
+        ui_text(260, 258, line, 2, 220, 238, 210, 255);
+        ui_text(292, 296, "PRESS E - NEW RUN", 3, 132, 255, 184, 255);
+    }
     if (s_game.caught) {
-        ui_rect(218, 220, 524, 92, 6, 0, 0, 225);
-        ui_text(278, 244, "THE LIGHTS FOUND YOU", 3, 255, 130, 112, 255);
-        ui_text(348, 278, "RESETTING ROUTE", 2, 255, 220, 190, 255);
+        ui_rect(178, 184, 604, 166, 8, 0, 0, 232);
+        ui_text(242, 206, "THE LIGHTS FOUND YOU", 3, 255, 130, 112, 255);
+        (void)snprintf(line, sizeof(line), "TIME:%02dS  FEAR:%02d  BAT:%02d", (int)s_game.last_run_time, (int)s_game.last_fear, (int)(s_game.last_battery * 100.0F));
+        ui_text(260, 258, line, 2, 255, 220, 190, 255);
+        ui_text(302, 296, "PRESS E - RETRY", 3, 255, 230, 160, 255);
     }
 }
 
@@ -572,6 +591,7 @@ static void shutdown_render_resources(void) {
 
 static void interact(void) {
     if (s_game.won || s_game.caught) {
+        reset_backrooms();
         return;
     }
     if (near_fuse()) {
@@ -583,6 +603,7 @@ static void interact(void) {
         set_message("THE LIGHTS HEARD YOU", 3.0F);
     } else if (near_exit()) {
         s_game.won = true;
+        record_run_result();
         game_audio_play(GAME_AUDIO_CUE_ESCAPE);
         set_message("ESCAPED - ROUTE COMPLETE", 8.0F);
     } else {
@@ -609,13 +630,16 @@ static void update_game(void) {
             game_audio_play(GAME_AUDIO_CUE_CAUGHT);
             s_game.caught_audio_played = true;
         }
-        s_game.caught_timer -= dt;
-        if (s_game.caught_timer <= 0.0F) {
+        if (nt_input_key_is_pressed(NT_KEY_E) || nt_input_key_is_pressed(NT_KEY_ENTER)) {
             reset_backrooms();
         }
         return;
     }
     if (s_game.won) {
+        if (nt_input_key_is_pressed(NT_KEY_E) || nt_input_key_is_pressed(NT_KEY_ENTER)) {
+            reset_backrooms();
+            return;
+        }
         s_game.route_shift = approachf(s_game.route_shift, 0.0F, dt * 0.7F);
         s_game.stalker_pressure = approachf(s_game.stalker_pressure, 0.0F, dt * 0.45F);
         s_game.fear = clampf(s_game.fear - dt * 14.0F, 0.0F, 100.0F);
@@ -630,6 +654,7 @@ static void update_game(void) {
     if (nt_input_key_is_pressed(NT_KEY_E) || nt_input_key_is_pressed(NT_KEY_ENTER)) {
         interact();
     }
+    s_game.run_time += dt;
 
     const float turn = 1.95F * dt;
     if (nt_input_key_is_down(NT_KEY_ARROW_LEFT) || nt_input_key_is_down(NT_KEY_Q)) {
@@ -727,6 +752,7 @@ static void update_game(void) {
     s_game.fear = clampf(s_game.fear + fear_rate * dt, 0.0F, 100.0F);
     if (s_game.fear >= 100.0F) {
         s_game.caught = true;
+        record_run_result();
         s_game.caught_timer = 2.0F;
         s_game.caught_audio_played = false;
         set_message("THE LIGHTS FOUND YOU", 2.0F);
@@ -763,14 +789,20 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(root, "battery", (double)s_game.battery);
     cJSON_AddNumberToObject(root, "route_shift", (double)s_game.route_shift);
     cJSON_AddNumberToObject(root, "stalker_pressure", (double)s_game.stalker_pressure);
+    cJSON_AddNumberToObject(root, "run_time", (double)s_game.run_time);
+    cJSON_AddNumberToObject(root, "last_run_time", (double)s_game.last_run_time);
+    cJSON_AddNumberToObject(root, "last_fear", (double)s_game.last_fear);
+    cJSON_AddNumberToObject(root, "last_battery", (double)s_game.last_battery);
     cJSON_AddBoolToObject(root, "flashlight_on", s_game.flashlight_on);
     cJSON_AddBoolToObject(root, "fuse_found", s_game.fuse_found);
     cJSON_AddBoolToObject(root, "exit_powered", s_game.fuse_found);
     cJSON_AddBoolToObject(root, "won", s_game.won);
     cJSON_AddBoolToObject(root, "caught", s_game.caught);
     cJSON_AddBoolToObject(root, "threat_visible", s_game.threat_visible);
-    cJSON_AddBoolToObject(root, "can_use", near_fuse() || near_exit());
-    cJSON_AddStringToObject(root, "objective", s_game.won ? "escaped" : (s_game.fuse_found ? "return_to_exit" : "find_fuse"));
+    cJSON_AddBoolToObject(root, "can_use", !s_game.won && !s_game.caught && (near_fuse() || near_exit()));
+    cJSON_AddBoolToObject(root, "can_restart", s_game.won || s_game.caught);
+    cJSON_AddStringToObject(root, "objective", s_game.caught ? "caught" : (s_game.won ? "escaped" : (s_game.fuse_found ? "return_to_exit" : "find_fuse")));
+    cJSON_AddStringToObject(root, "outcome", s_game.caught ? "caught" : (s_game.won ? "escaped" : "running"));
     cJSON_AddStringToObject(root, "message", s_game.message_timer > 0.0F ? s_game.message : "");
     return root;
 }
@@ -858,15 +890,30 @@ static bool ep_game_debug_set_progress(const cJSON *params, cJSON **result, char
     (void)user;
     const cJSON *fuse = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "fuse_found") : NULL;
     const cJSON *won = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "won") : NULL;
+    const cJSON *caught = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "caught") : NULL;
     if (cJSON_IsBool(fuse)) {
         s_game.fuse_found = cJSON_IsTrue(fuse);
     }
     if (cJSON_IsBool(won)) {
         s_game.won = cJSON_IsTrue(won);
+        if (s_game.won) {
+            record_run_result();
+        }
+    }
+    if (cJSON_IsBool(caught)) {
+        s_game.caught = cJSON_IsTrue(caught);
+        if (s_game.caught) {
+            record_run_result();
+            set_message("THE LIGHTS FOUND YOU", 2.0F);
+        }
     }
     s_game.fear = clampf((float)json_number(params, "fear", (double)s_game.fear), 0.0F, 100.0F);
     s_game.route_shift = clampf((float)json_number(params, "route_shift", (double)s_game.route_shift), 0.0F, 1.0F);
     s_game.stalker_pressure = clampf((float)json_number(params, "stalker_pressure", (double)s_game.stalker_pressure), 0.0F, 1.0F);
+    s_game.run_time = fmaxf(0.0F, (float)json_number(params, "run_time", (double)s_game.run_time));
+    if (s_game.won || s_game.caught) {
+        record_run_result();
+    }
     *result = state_json();
     return true;
 }
@@ -946,11 +993,13 @@ static void register_ui_devapi(void) {
     nt_devapi_set_view((float)g_nt_window.fb_width, (float)g_nt_window.fb_height, (float)UI_W, (float)UI_H);
     nt_devapi_clear_ui_elements();
     (void)nt_devapi_register_ui_node("root", "", "screen", "Backrooms Liminal", "Find the fuse and escape.", 0.0F, 0.0F, (float)UI_W, (float)UI_H, true, true);
-    (void)nt_devapi_register_ui_node("backrooms.objective", "root", "label", "Objective", s_game.fuse_found ? "Return to exit" : "Find the humming fuse", 18.0F, 18.0F, 462.0F, 118.0F, true, true);
+    const char *objective_label = s_game.caught ? "Caught" : (s_game.won ? "Escaped" : (s_game.fuse_found ? "Return to exit" : "Find the humming fuse"));
+    const bool use_active = !s_game.won && !s_game.caught && (near_fuse() || near_exit());
+    (void)nt_devapi_register_ui_node("backrooms.objective", "root", "label", "Objective", objective_label, 18.0F, 18.0F, 462.0F, 118.0F, true, true);
     (void)nt_devapi_register_ui_node("backrooms.fear", "root", "meter", "Fear", "Fear pressure", 682.0F, 18.0F, 258.0F, 52.0F, true, true);
     (void)nt_devapi_register_ui_node("backrooms.battery", "root", "meter", "Battery", "Flashlight battery", 682.0F, 70.0F, 258.0F, 66.0F, true, true);
     (void)nt_devapi_register_ui_node("backrooms.threat", "root", "label", "Route threat", s_game.fuse_found ? "Route shifting and stalker pressure" : "Route stable", 682.0F, 118.0F, 258.0F, 28.0F, true, true);
-    (void)nt_devapi_register_ui_node("backrooms.use_prompt", "root", "prompt", "Use", near_fuse() ? "Press E to take fuse" : (near_exit() ? "Press E to escape" : ""), 322.0F, 392.0F, 316.0F, 46.0F, near_fuse() || near_exit(), near_fuse() || near_exit());
+    (void)nt_devapi_register_ui_node("backrooms.use_prompt", "root", "prompt", "Use", near_fuse() ? "Press E to take fuse" : (near_exit() ? "Press E to escape" : ""), 322.0F, 392.0F, 316.0F, 46.0F, use_active, use_active);
 }
 #endif
 

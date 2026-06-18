@@ -5,17 +5,19 @@
 Review and iterate the `Backrooms Liminal` (backrooms-liminal) native-first
 prototype: the first-person 3D corridor slice now exists with fuse pickup,
 return-to-exit, fear/battery pressure, route instability, stalker pressure, and
-native generated-PCM horror audio cues, with strict visual/player-read proof.
+native generated-PCM horror audio cues, plus readable win/fail/replay states
+with strict visual/player-read proof.
 
 ## Blocking Work
 
-- No runtime implementation blocker is known. T0001, T0002, and T0003 are in
-  review; expansion should wait for lead/playtest feedback or a new narrow task.
+- No runtime implementation blocker is known. T0001, T0002, T0003, and T0004
+  are in review; expansion should wait for lead/playtest feedback or a new
+  narrow task.
 
 ## Non-blocking Debt
 
 - Global AI profile review confidence is still broken by older unresolved failed
-  records. The T0003 current scope guard reported usable, but slice hygiene
+  records. The T0004 current scope guard reported usable, but slice hygiene
   still treats profiler evidence as advisory-only.
 
 ## Current Gate
@@ -23,7 +25,8 @@ native generated-PCM horror audio cues, with strict visual/player-read proof.
 Current native gate for backrooms-liminal: `data/core_loop.json`,
 `reviews/first_slice_visual_gate.md`, native build, DevAPI smoke, first-screen
 screenshot, post-fuse route/stalker screenshot, native audio cue status,
-readability zoom, strict product gate, and slice hygiene evidence.
+win/fail/replay screenshots, readability zoom, strict product gate, and slice
+hygiene evidence.
 
 ## Required Validation
 
@@ -69,13 +72,25 @@ node tools/taskboard/cli.mjs validate
 - `build/captures/backrooms_t0003_slice_hygiene.md` is WARN only because
   profiler evidence is advisory/partially unparsable, not because gameplay
   validation failed.
+- `build/captures/backrooms_t0004_win_overlay.png` and
+  `build/captures/backrooms_t0004_fail_overlay.png` show readable end-state
+  overlays with run time, fear, battery, and replay prompt.
+- `build/captures/backrooms_t0004_replay_status.json` proves win/fail restart
+  behavior through DevAPI (`can_restart` true on end states, false after
+  replay).
+- `build/captures/backrooms_t0004_win_overlay_uizoom.png` and
+  `build/captures/backrooms_t0004_fail_overlay_uizoom.png` are the latest
+  readability montages.
+- `build/captures/backrooms_t0004_slice_hygiene.md` is WARN only because
+  profiler evidence is advisory/partially unparsable, not because gameplay
+  validation failed.
 
 ## Next Priorities
 
-1. Let the lead/playtest judge whether T0003 is scary and interesting enough
+1. Let the lead/playtest judge whether T0004 is scary and interesting enough
    for the next slice.
-2. If accepted, create one narrow task for stronger route variation,
-   fail/win polish, or a short playable run scenario.
+2. If accepted, create one narrow task for stronger route variation, a short
+   full-run playtest scenario, or final visual polish on the threat/lighting.
 3. If rejected visually, freeze content expansion and improve the threat
    silhouette, false exits, lighting, audio feedback, or HUD readability before
    adding systems.
