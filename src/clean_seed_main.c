@@ -24,8 +24,8 @@
 #define BACKROOMS_DEVAPI_PORT_DEFAULT 9123
 #define UI_W 960
 #define UI_H 540
-#define WALL_TEX_W 128
-#define WALL_TEX_H 128
+#define WALL_TEX_W 256
+#define WALL_TEX_H 256
 
 typedef struct UiBox {
     float x;
@@ -197,15 +197,31 @@ static const char *s_portal_overlay_fs_src =
     "    float light_kind = step(2.5, v_kind) * (1.0 - step(3.5, v_kind));\n"
     "    float occluder_kind = step(3.5, v_kind) * (1.0 - step(4.5, v_kind));\n"
     "    float shell_kind = step(4.5, v_kind);\n"
-    "    vec3 color = v_color.rgb * (0.66 + tex * 0.58 + grain * 0.10);\n"
+    "    float floor_pick = shell_kind * (1.0 - smoothstep(0.36, 0.48, v_world.y));\n"
+    "    float ceiling_pick = shell_kind * smoothstep(1.70, 1.94, v_world.y);\n"
+    "    float trim_pick = shell_kind * max(1.0 - smoothstep(0.015, 0.055, abs(v_uv.y - 0.5)), step(6.5, v_kind));\n"
+    "    vec2 mat_uv = fract(v_uv * vec2(2.15, 1.75));\n"
+    "    vec2 wall_uv = mat_uv * 0.46 + vec2(0.02, 0.02);\n"
+    "    vec2 floor_uv = mat_uv * 0.46 + vec2(0.52, 0.02);\n"
+    "    vec2 ceil_uv = mat_uv * 0.46 + vec2(0.02, 0.52);\n"
+    "    vec2 trim_uv = mat_uv * 0.46 + vec2(0.52, 0.52);\n"
+    "    vec3 wall_tex = texture(u_overlay_tex, wall_uv).rgb;\n"
+    "    vec3 floor_tex = texture(u_overlay_tex, floor_uv).rgb;\n"
+    "    vec3 ceil_tex = texture(u_overlay_tex, ceil_uv).rgb;\n"
+    "    vec3 trim_tex = texture(u_overlay_tex, trim_uv).rgb;\n"
+    "    vec3 material_tex = mix(wall_tex, floor_tex, floor_pick);\n"
+    "    material_tex = mix(material_tex, ceil_tex, ceiling_pick * (1.0 - floor_pick));\n"
+    "    material_tex = mix(material_tex, trim_tex, trim_pick);\n"
+    "    vec3 color = v_color.rgb * (0.48 + material_tex * 0.92 + grain * 0.055);\n"
     "    color *= mix(1.0, 0.58, side_shadow * (surface_kind + shell_kind * 0.72));\n"
     "    color *= mix(1.0, 0.64, depth * (surface_kind + shell_kind * 0.88));\n"
     "    color += vec3(0.58, 0.44, 0.18) * lamp * (0.16 + light_kind * 0.28);\n"
     "    color = mix(color, color * vec3(0.34, 0.31, 0.24), seam_kind * 0.72);\n"
     "    color = mix(color, vec3(0.030, 0.025, 0.015), occluder_kind * (0.48 + side_shadow * 0.16));\n"
-    "    color = mix(color, color * vec3(0.76, 0.70, 0.50) + vec3(0.035, 0.026, 0.010), shell_kind * 0.68);\n"
-    "    float alpha_boost = 1.0 + surface_kind * 0.52 + seam_kind * 0.20 + light_kind * 0.18 + occluder_kind * 0.34 + shell_kind * 0.78;\n"
-    "    float material_floor = surface_kind * 0.38 + seam_kind * 0.30 + occluder_kind * 0.22 + shell_kind * 0.58;\n"
+    "    color = mix(color, color * vec3(0.82, 0.78, 0.62) + material_tex * 0.18, shell_kind * 0.72);\n"
+    "    color += vec3(0.72, 0.56, 0.24) * light_kind * (0.20 + u_overlay_portal.w * 0.18);\n"
+    "    float alpha_boost = 1.0 + surface_kind * 0.52 + seam_kind * 0.20 + light_kind * 0.18 + occluder_kind * 0.34 + shell_kind * 1.05;\n"
+    "    float material_floor = surface_kind * 0.38 + seam_kind * 0.30 + occluder_kind * 0.22 + shell_kind * 0.82;\n"
     "    float alpha = max(v_color.a * alpha_boost, material_floor) * edge_fade * (0.94 + grain * 0.06);\n"
     "    frag_color = vec4(color, min(0.96, alpha));\n"
     "}\n";
@@ -302,9 +318,9 @@ static const char *s_fs_src =
     "        vec3 pz = ro2 + rd2 * tz;\n"
     "        if (tz > 0.0 && tz < best2 && pz.x > 0.0 && pz.x < u_portal_shape.x + 0.4 && pz.y > 0.0 && pz.y < u_portal_shape.z) { best2 = tz; smat = 4; hp = pz; n2 = vec3(0.0, 0.0, -sign(rd2.z)); }\n"
     "    }\n"
-    "    vec3 paper = texture(u_wall_tex, vec2(hp.x * 0.14 + hp.z * 0.025, hp.y * 0.52)).rgb;\n"
+    "    vec3 paper = texture(u_wall_tex, fract(vec2(hp.x * 0.14 + hp.z * 0.025, hp.y * 0.52)) * 0.46 + vec2(0.02, 0.02)).rgb;\n"
     "    vec3 col = paper * vec3(0.88, 0.79, 0.47);\n"
-    "    if (smat == 2) { col = vec3(0.29, 0.22, 0.13) * (0.66 + texture(u_wall_tex, hp.xz * 0.11).r * 0.42); }\n"
+    "    if (smat == 2) { col = vec3(0.29, 0.22, 0.13) * (0.66 + texture(u_wall_tex, fract(hp.xz * 0.11) * 0.46 + vec2(0.52, 0.02)).r * 0.42); }\n"
     "    if (smat == 3) { col = vec3(0.41, 0.39, 0.31); }\n"
     "    if (smat == 4) { col *= vec3(0.55, 0.50, 0.35); }\n"
     "    float panel_x = 1.0 - smoothstep(0.020, 0.070, abs(fract(hp.x * max(0.10, u_portal_material.x + 0.22)) - 0.5));\n"
@@ -478,9 +494,9 @@ static const char *s_fs_src =
     "    vec3 hit = ro + rd * best;\n"
     "    vec3 albedo = vec3(0.77, 0.68, 0.34);\n"
     "    vec2 tuv = hit.xz * 0.33;\n"
-    "    if (mat == 1) { albedo = vec3(0.34, 0.25, 0.14) * (0.75 + texture(u_wall_tex, hit.xz * 0.19).r * 0.35); }\n"
+    "    if (mat == 1) { albedo = vec3(0.34, 0.25, 0.14) * (0.75 + texture(u_wall_tex, fract(hit.xz * 0.19) * 0.46 + vec2(0.52, 0.02)).r * 0.35); }\n"
     "    if (mat == 2) { albedo = vec3(0.42, 0.40, 0.33); tuv = hit.xz * 0.42; }\n"
-    "    if (mat == 3) { albedo = texture(u_wall_tex, vec2(hit.z * 0.18, hit.y * 0.55)).rgb; }\n"
+    "    if (mat == 3) { albedo = texture(u_wall_tex, fract(vec2(hit.z * 0.18, hit.y * 0.55)) * 0.46 + vec2(0.02, 0.02)).rgb; }\n"
     "    if (mat == 4) { albedo = mix(vec3(0.18, 0.12, 0.06), vec3(1.1, 0.84, 0.28), u_state.x); }\n"
     "    if (mat == 5) { albedo = vec3(0.05, 0.04, 0.025); }\n"
     "    if (mat == 6) { albedo = vec3(0.004, 0.006, 0.008); }\n"
@@ -922,32 +938,102 @@ static void generate_wall_texture(void) {
     for (int y = 0; y < WALL_TEX_H; ++y) {
         for (int x = 0; x < WALL_TEX_W; ++x) {
             const int i = (y * WALL_TEX_W + x) * 4;
-            const int seam = (x % 32 == 0) || (y % 42 == 0);
-            const int fleck = ((x * 17 + y * 31 + ((x * y) % 19)) & 23) == 0;
-            const int stain = (((x * 3 + y * 11) & 63) < 6 && ((x + y * 5) & 15) < 5);
-            const int vertical_wear = (x % 32 == 30 || x % 32 == 1) && ((y * 7 + x) & 7) < 5;
-            int r = 176 + ((x * 5 + y * 3) & 17);
-            int g = 156 + ((x * 7 + y * 11) & 15);
-            int b = 76 + ((x * 13 + y * 2) & 11);
-            if (seam) {
-                r -= 42;
-                g -= 39;
-                b -= 22;
-            }
-            if (fleck) {
-                r -= 50;
-                g -= 42;
-                b -= 24;
-            }
-            if (stain) {
-                r -= 36;
-                g -= 32;
-                b -= 14;
-            }
-            if (vertical_wear) {
-                r += 18;
-                g += 14;
-                b += 6;
+            const int tile_x = x & 127;
+            const int tile_y = y & 127;
+            const int zone = (x >= 128 ? 1 : 0) + (y >= 128 ? 2 : 0);
+            const int hash = (tile_x * 37 + tile_y * 73 + ((tile_x * tile_y) % 97)) & 255;
+            int r = 0;
+            int g = 0;
+            int b = 0;
+            if (zone == 0) {
+                const int seam = (tile_x % 32 == 0) || (tile_y % 46 == 0);
+                const int fleck = ((tile_x * 17 + tile_y * 31 + ((tile_x * tile_y) % 19)) & 23) == 0;
+                const int stain = (((tile_x * 3 + tile_y * 11) & 63) < 7 && ((tile_x + tile_y * 5) & 15) < 5);
+                const int vertical_wear = (tile_x % 32 == 30 || tile_x % 32 == 1) && ((tile_y * 7 + tile_x) & 7) < 5;
+                r = 168 + ((tile_x * 5 + tile_y * 3) & 23);
+                g = 151 + ((tile_x * 7 + tile_y * 11) & 19);
+                b = 78 + ((tile_x * 13 + tile_y * 2) & 15);
+                if (seam) {
+                    r -= 44;
+                    g -= 40;
+                    b -= 24;
+                }
+                if (fleck) {
+                    r -= 54;
+                    g -= 45;
+                    b -= 25;
+                }
+                if (stain) {
+                    r -= 42;
+                    g -= 38;
+                    b -= 18;
+                }
+                if (vertical_wear) {
+                    r += 22;
+                    g += 16;
+                    b += 7;
+                }
+            } else if (zone == 1) {
+                const int seam = (tile_x % 26 == 0) || (tile_y % 30 == 0);
+                const int fiber = ((tile_x * 19 + tile_y * 5) & 15) < 4;
+                const int damp = (((tile_x - 54) * (tile_x - 54) + (tile_y - 76) * (tile_y - 76)) < 680) || (hash > 236);
+                r = 86 + ((tile_x * 3 + tile_y * 9) & 19);
+                g = 69 + ((tile_x * 11 + tile_y * 5) & 15);
+                b = 38 + ((tile_x * 7 + tile_y * 13) & 11);
+                if (fiber) {
+                    r += 18;
+                    g += 13;
+                    b += 5;
+                }
+                if (seam) {
+                    r -= 34;
+                    g -= 27;
+                    b -= 16;
+                }
+                if (damp) {
+                    r -= 31;
+                    g -= 27;
+                    b -= 14;
+                }
+            } else if (zone == 2) {
+                const int grid = (tile_x % 38 < 2) || (tile_y % 34 < 2);
+                const int speckle = hash > 224;
+                const int water_ring = (((tile_x - 84) * (tile_x - 84) + (tile_y - 38) * (tile_y - 38)) > 360 &&
+                                        ((tile_x - 84) * (tile_x - 84) + (tile_y - 38) * (tile_y - 38)) < 610);
+                r = 156 + ((tile_x * 5 + tile_y * 2) & 17);
+                g = 148 + ((tile_x * 2 + tile_y * 7) & 15);
+                b = 102 + ((tile_x * 13 + tile_y * 3) & 13);
+                if (grid) {
+                    r -= 55;
+                    g -= 51;
+                    b -= 36;
+                }
+                if (speckle) {
+                    r -= 39;
+                    g -= 36;
+                    b -= 26;
+                }
+                if (water_ring) {
+                    r -= 30;
+                    g -= 32;
+                    b -= 18;
+                }
+            } else {
+                const int rib = (tile_x % 18 < 3) || (tile_y % 42 < 3);
+                const int scratch = ((tile_x * 29 + tile_y * 17) & 31) < 3;
+                r = 116 + ((tile_x * 9 + tile_y * 4) & 15);
+                g = 92 + ((tile_x * 4 + tile_y * 11) & 13);
+                b = 46 + ((tile_x * 7 + tile_y * 2) & 9);
+                if (rib) {
+                    r -= 44;
+                    g -= 34;
+                    b -= 18;
+                }
+                if (scratch) {
+                    r += 42;
+                    g += 31;
+                    b += 12;
+                }
             }
             s_wall_pixels[i + 0] = (uint8_t)clampf((float)r, 0.0F, 255.0F);
             s_wall_pixels[i + 1] = (uint8_t)clampf((float)g, 0.0F, 255.0F);
@@ -1330,6 +1416,21 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
         const float cx1 = room_x0 + (room_x1 - room_x0) * ((float)(ix + 1) / 4.0F) - 0.026F;
         portal_overlay_emit_floor_quad(count, cx0, cx1, ceiling_y - 0.015F, inner_z0, inner_z1, 0.150F, 0.132F, 0.072F, 0.58F + light * 0.10F);
     }
+    const float nested_x = solid_back_x - 0.030F;
+    const float nested_z0 = center_z - 0.46F;
+    const float nested_z1 = center_z + 0.46F;
+    const float nested_y0 = panel_y0 + 0.22F;
+    const float nested_y1 = panel_y1 - 0.18F;
+    s_portal_overlay_emit_kind = 7.0F;
+    portal_overlay_emit_yz_quad(count, nested_x, nested_y0, nested_y1, nested_z0, nested_z1, 0.018F, 0.014F, 0.007F, 0.94F);
+    portal_overlay_emit_yz_quad(count, nested_x - 0.014F, nested_y0 - 0.055F, nested_y1 + 0.055F, nested_z0 - 0.050F, nested_z0 + 0.020F, 0.112F, 0.082F, 0.038F, 0.96F);
+    portal_overlay_emit_yz_quad(count, nested_x - 0.014F, nested_y0 - 0.055F, nested_y1 + 0.055F, nested_z1 - 0.020F, nested_z1 + 0.050F, 0.102F, 0.075F, 0.034F, 0.96F);
+    portal_overlay_emit_yz_quad(count, nested_x - 0.018F, nested_y1 - 0.020F, nested_y1 + 0.070F, nested_z0 - 0.040F, nested_z1 + 0.040F, 0.135F, 0.102F, 0.046F, 0.94F);
+    portal_overlay_emit_yz_quad(count, nested_x - 0.018F, nested_y0 - 0.070F, nested_y0 + 0.020F, nested_z0 - 0.040F, nested_z1 + 0.040F, 0.074F, 0.054F, 0.026F, 0.94F);
+    s_portal_overlay_emit_kind = 6.0F;
+    portal_overlay_emit_yz_quad(count, nested_x - 0.026F, nested_y1 + 0.075F, nested_y1 + 0.135F, center_z - 0.34F, center_z + 0.34F, 0.78F, 0.62F, 0.26F, 0.92F);
+    portal_overlay_emit_yz_quad(count, room_x0 + 0.46F, panel_y1 + 0.02F, ceiling_y - 0.018F, center_z - 0.16F, center_z + 0.16F, 0.66F, 0.52F, 0.22F, 0.80F);
+    s_portal_overlay_emit_kind = 5.0F;
     s_last_portal_shell_vertices = *count - shell_start;
 
     s_portal_overlay_emit_kind = 1.0F;
@@ -1987,6 +2088,9 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(overlay, "blended_detail_vertex_count", (double)s_last_portal_blended_vertices);
     cJSON_AddNumberToObject(overlay, "vertex_capacity", (double)PORTAL_OVERLAY_MAX_VERTICES);
     cJSON_AddStringToObject(overlay, "path", "native_nt_gfx_solid_shell_plus_blended_detail_layer");
+    cJSON_AddStringToObject(overlay, "material_source", "runtime_backrooms_material_atlas_wall_carpet_ceiling_trim");
+    cJSON_AddNumberToObject(overlay, "material_atlas_width", (double)WALL_TEX_W);
+    cJSON_AddNumberToObject(overlay, "material_atlas_height", (double)WALL_TEX_H);
     cJSON_AddItemToObject(portal, "native_overlay", overlay);
     cJSON_AddItemToObject(root, "portal_render", portal);
     cJSON_AddStringToObject(root,

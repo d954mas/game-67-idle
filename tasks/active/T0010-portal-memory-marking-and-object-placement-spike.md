@@ -204,3 +204,18 @@ and reveal a real exit.
   product gate ran. Product gate remains FAIL for art quality/audience fit: the
   portal interior is more physically native, but still needs production material
   assets and fully integrated lighting/depth or T0011 render-target support.
+- 2026-06-19: Runtime material-atlas slice replaced the single wallpaper noise
+  source with a 256x256 wall/carpet/ceiling/trim material atlas and made the
+  native portal overlay shader choose the material by surface. The solid pass
+  also gained a native nested back-wall frame and fixture/light-box geometry so
+  the aperture reads more like a constructed impossible room. The T0010
+  scenario now reports `native_overlay.last_vertex_count = 744`,
+  `native_overlay.room_mesh_vertex_count = 660`,
+  `native_overlay.solid_pass_vertex_count = 294`,
+  `native_overlay.blended_detail_vertex_count = 450`, and
+  `material_source = runtime_backrooms_material_atlas_wall_carpet_ceiling_trim`.
+  Native build, T0010 capture, smoke, readability, profiler scope, taskboard
+  validation, and strict product gate ran. Product gate remains FAIL for art
+  quality/audience fit: this is a stronger runtime material/native-geometry
+  bridge, but the game still needs real source assets and integrated
+  render-target portal lighting before this task can close.

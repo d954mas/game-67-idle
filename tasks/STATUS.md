@@ -16,7 +16,8 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
   fully opaque fullscreen portal-room composite inside the aperture, denser
   texture-backed/material-kind-lit native `nt_gfx` room surfaces, reduced
   external ghost-frame artifacts, a stronger fixture-driven portal-room light
-  model, and a separate non-blended `nt_gfx` solid-shell pass, but not yet
+  model, a separate non-blended `nt_gfx` solid-shell pass, and a 256x256
+  runtime material atlas for wall/carpet/ceiling/trim sampling, but not yet
   production-quality realistic Backrooms room construction.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
@@ -59,14 +60,17 @@ node tools/taskboard/cli.mjs validate
   descriptors, portal descriptors, flags, validation, and GPU params.
 - `src/clean_seed_main.c` now composites the impossible room as an opaque
   fullscreen portal cut, then draws a separate native `nt_gfx` room pass that
-  streams 702 world-space vertices: 618 texture-backed room
+  streams 744 world-space vertices: 660 texture-backed room
   mesh/material-detail vertices for denser inner floor/wall/ceiling/light-spill
   surfaces, grout seams, wall seams, back-wall strips, ceiling grid, and shadow
-  bands. The first 252 solid-shell vertices for floor panels, side-wall panels,
-  back-wall panels, ceiling panels, soffit, and center-rib surfaces are drawn
-  through a non-blended pipeline; the remaining 450 vertices draw blended seams, light spill,
-  aperture occlusion, softened jamb/threshold hints, inner fixture, conduit,
-  and landmark column from portal scene params.
+  bands. The first 294 solid-shell vertices for floor panels, side-wall panels,
+  back-wall panels, ceiling panels, soffit, center-rib surfaces, a nested
+  back-wall frame, and fixture/light-box surfaces are drawn through a
+  non-blended pipeline; the remaining 450 vertices draw blended seams, light
+  spill, aperture occlusion, softened jamb/threshold hints, inner fixture,
+  conduit, and landmark column from portal scene params. The portal overlay
+  samples a runtime 256x256 wall/carpet/ceiling/trim material atlas rather than
+  using one wallpaper noise source for every surface.
   The fullscreen portal room now uses per-surface normals, direct/bounce
   fluorescent lighting, side/back occlusion, fixture cast shadow, and wet-floor
   specular response. The overlay shader receives material kind and world
@@ -79,11 +83,13 @@ node tools/taskboard/cli.mjs validate
   escape, and active `portal_render` material/light/finish/construction params
   including trim, fixture spacing, ceiling panel scale, shadow spill, jamb
   depth, threshold lip, conduit, landmark columns,
-  `native_overlay.last_vertex_count = 702`,
-  `native_overlay.room_mesh_vertex_count = 618`, and
-  `native_overlay.solid_shell_vertex_count = 252`,
-  `native_overlay.solid_pass_vertex_count = 252`, and
-  `native_overlay.blended_detail_vertex_count = 450`.
+  `native_overlay.last_vertex_count = 744`,
+  `native_overlay.room_mesh_vertex_count = 660`,
+  `native_overlay.solid_shell_vertex_count = 294`,
+  `native_overlay.solid_pass_vertex_count = 294`,
+  `native_overlay.blended_detail_vertex_count = 450`, and
+  `native_overlay.material_source =
+  runtime_backrooms_material_atlas_wall_carpet_ceiling_trim`.
 - `build/captures/backrooms_t0010_impossible_geometry.png` is the latest native
   proof screenshot for the data-driven impossible room.
 - `build/captures/backrooms_t0010_impossible_geometry_uizoom.png` is the latest
@@ -94,12 +100,11 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Promote more portal room surfaces from the fullscreen composite into the
-   native opaque pass, or unblock T0011 render-target portal lighting; revisit
-   the product gate for art quality and audience fit after the room
-   construction itself is no longer a hybrid proxy.
-2. Add stronger production texture/light evidence before expanding content; more
-   one-pass shader or shell decoration is now a low-value path unless it
-   directly proves the future mesh/material/render-target contract.
+1. Turn the current runtime material-atlas proof into real source/runtime
+   material assets, or unblock T0011 render-target portal lighting; revisit the
+   product gate for art quality and audience fit after the room construction
+   itself is no longer a hybrid proxy.
+2. Avoid more one-pass shader or shell decoration unless it directly proves the
+   future mesh/material/render-target contract.
 3. Keep content expansion frozen while the T0010 product gate remains red,
    unless the lead explicitly accepts that visual debt.
