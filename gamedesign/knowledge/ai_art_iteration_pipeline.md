@@ -165,6 +165,22 @@ private crop coordinates, selected candidates, or pack ids only in chat.
   green field tiles, green buttons, grass, leaves, or glow effects unless the
   manifest marks those assets as `chroma_mode: none` or a later validator proves
   the alpha survived. Prefer magenta keying for green-heavy source sheets.
+- Treat chroma color inside clean cutout holes as repairable background: the
+  extractor should have a deliberate `remove_key_holes`/soft-matte mode and the
+  visual proof must show the hole on dark, light, and warm backgrounds. Treat
+  chroma color baked into object material, outlines, contact shadows, or
+  semitransparent shadow ramps as risky source contamination. Normalizing a
+  non-flat background can only fix border-connected background pixels; it
+  cannot recover art pixels already mixed with green-screen spill. Do not
+  answer contaminated shadows with only wider key tolerance or aggressive edge
+  deletion, because that removes soft shadows and material shading. Try a
+  benchmarked repair pass first; if it damages form/shading, regenerate with a
+  safer key and gutters, request true alpha, or switch to dual-plate alpha.
+- Keep cast/contact shadows separate from isolated item source sheets when
+  possible. The item source should contain object shading; runtime composition
+  can add a separate shadow sprite or effect. Baked shadows on a chroma plate
+  are fragile because the key color leaks into the shadow's partially
+  transparent pixels.
 - Before building an atlas/pack, run a cheap alpha-bbox check for every asset
   id the pack builder will include. A single fully transparent runtime PNG
   should fail before the native pack tool reaches atlas packing.
@@ -182,6 +198,18 @@ An art iteration is ready for implementation when:
 - pack/material build command is known and measured or explicitly blocked;
 - native/runtime screenshot evidence exists for playable screens;
 - any remaining visual gaps are written in the relevant task log.
+
+For chroma-keyed source sheets, readiness also requires:
+
+- source-sheet intake plus visual benchmark classifies key-color-like pixels
+  inside component bounds as either repairable holes/background or unsafe
+  material/shadow contamination;
+- key/halo hue conflicts are either zero/accepted by policy or routed to a
+  safer key, true alpha, split layers, or dual-plate alpha;
+- runtime PNG audit reports no visible green spill and no hidden RGB under
+  fully transparent alpha;
+- a background proof or contact sheet is inspected on dark, warm, and light
+  plates so soft edge contamination is visible before pack integration.
 
 ## References
 

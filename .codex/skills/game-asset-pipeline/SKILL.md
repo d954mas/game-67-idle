@@ -111,14 +111,25 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
   previews must be pixel-identical to clean atlases outside label rects, without
   debug outlines over assets. The overlay-only label policy must be declared in
   pack JSON, not carried only in prose or chat context.
-- Source-sheet intake must reject unsafe chroma choices before slicing: exact
-  key-color holes inside component bounds are not normal background, and broad
-  key/halo hue conflicts inside art need either a safer background color or an
-  explicit preserve/masking policy. Use the intake audit's
+- Source-sheet intake must flag unsafe chroma choices before slicing. Exact
+  key-color inside component bounds can be normal cutout background when it is a
+  clean internal hole; route that to a deliberate `remove_key_holes`/soft-matte
+  repair pass and visual proof. Broad key/halo hue conflicts inside material,
+  outlines, or shadows need either a safer background color or an explicit
+  preserve/masking policy. Use the intake audit's
   `next_prompt_key_color` when `key_color_action` is
   `regenerate_with_next_prompt_key_color`; if the action is
   `split_preserve_or_dual_plate_alpha`, stop cycling chroma colors and switch
   method.
+- Normalizing a non-flat chroma background does not make contaminated source
+  art safe. If green/key pixels remain only in clean background holes, repair
+  them with an explicit holes/soft-matte mode and prove the result visually. If
+  they are baked into object outlines, cast shadows, or semitransparent shadow
+  ramps after normalization, mark the source as risky and benchmark the repair
+  before accepting it. Do not rely only on wider key tolerance or aggressive
+  edge deletion; that usually cuts away legitimate soft shadows and material
+  shading. Prefer safer-key regeneration, true alpha, split shadow
+  sprites/layers, or dual-plate alpha extraction when the repair damages form.
 - Pixel audits must catch one- or two-pixel dark purple, dark maroon/magenta,
   red-blue halos, and saturated green-screen spill on the outer alpha contour,
   not only bright magenta fringe. Intentional saturated green edges need an

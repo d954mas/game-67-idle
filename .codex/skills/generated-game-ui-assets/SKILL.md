@@ -114,6 +114,16 @@ Open the matching section only when the task needs it:
    prompt when `key_color_action` is `regenerate_with_next_prompt_key_color`.
    If the action is `split_preserve_or_dual_plate_alpha`, stop trying adjacent
    chroma colors and split/preserve the art or switch to dual-plate alpha.
+   If exact key-color-like pixels remain inside component bounds after
+   normalization, classify them before rejecting the source. Clean internal
+   holes are repairable and should use an explicit `remove_key_holes` or
+   soft-matte pass plus visual proof on several backgrounds. Key color in
+   material, outlines, cast shadows, or semitransparent shadow ramps is risky:
+   benchmark repair before accepting it. Do not solve risky cases only by
+   widening key tolerance or clearing more edge pixels; that destroys material
+   shading and soft shadows. Regenerate with the reported safer key color and
+   larger gutters, request true alpha, split shadows into a separate source
+   family, or use dual-plate alpha when repair fails visually.
    Use the key color from the prompt packet when auditing generated sheets.
    Add `--profile --profile-output tmp/asset-profiles/<name>.json` when
    source-sheet intake feels slow or when comparing component detection fixes;
@@ -182,6 +192,10 @@ Open the matching section only when the task needs it:
    icons, or textures with procedural shapes and present them as generated
    outputs; procedural drawing is allowed only for debug overlays, labels,
    contact-sheet backgrounds, or explicitly recorded scaffold exceptions.
+   Cleanup is a hygiene step for otherwise valid source art. It is not a way to
+   rescue source sheets where green spill is baked into semitransparent shadows
+   or object shading; those must go back to source generation, true alpha,
+   split layers, or dual-plate alpha.
 12. Produce contact sheet, slice9 stretched previews, and a composition proof
    before integration. The composition proof must show base + anchored decor
    overlays + state overlays + runtime text at minimum, normal, large, and at
@@ -370,6 +384,11 @@ UI, unclear first action, or mobile density:
   latest desktop/portrait screenshots.
 - Fix the earliest failed stage in the pipeline. Do not compensate in runtime
   code for a bad source sheet or missing manifest rule.
+- For green halos around outlines, holes, shadows, or semishadows, check the
+  source-sheet intake first. Clean holes should be removed by an explicit
+  holes/soft-matte extraction mode. For outlines, shadows, semishadows, or
+  material contamination, render a visual cutout benchmark; if repair damages
+  form or shading, regenerate/resheet or switch to dual-plate/true alpha.
 - If the fix swaps in procedural shapes or two-color programmer panels, mark it
   as a temporary debug scaffold and reopen source generation. Technical slice9
   correctness is not an art pass; `--final-art` must stay red until generated

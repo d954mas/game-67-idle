@@ -14,11 +14,14 @@ Use this skill to make small, playable game changes without losing project conte
    `node tools/ai.mjs context` when available. This prints the compact game
    context and profiles the pre-code context cost. If the facade is absent,
    fall back to `node tools/game_context/iteration_context.mjs`.
-2. Select one task scope. Profiling is optional and passive: for long work you
-   may run `node tools/ai.mjs start <task-id> <iteration>`, but it is never
-   required to begin work and never blocks a handoff. Use `node tools/ai.mjs
-   status` only when the task is explicitly about AI workflow or a requested
-   retrospective; if you rely on its evidence, name any low/broken coverage.
+2. Select one task scope. For non-trivial playable, visual, pipeline, or
+   tooling work, set profiling scope with
+   `node tools/ai.mjs start <task-id> <iteration>` or explicitly state that
+   profiling is unavailable/off. Collection stays passive and should not turn
+   into profiler maintenance during normal game work. For sessions longer than
+   60-90 minutes, write a short checkpoint: objective, proof, blocker, next.
+   If you rely on `node tools/ai.mjs status` evidence, name any low/broken
+   coverage.
 3. State the selected runtime harness before implementation, including why it is allowed by local rules.
 4. If the feature is based on a named reference, verify a reference deconstruction
    exists in the active project wiki before coding, and keep the
@@ -57,6 +60,15 @@ Use this skill to make small, playable game changes without losing project conte
    shot/reference/art target and list mismatches. After meaningful render
    changes, capture a new screenshot and update the mismatch list before
    expanding content.
+   Native PC scale/focus proof is part of the first playable UI gate, not a
+   polish task. Before calling a native UI slice reviewable, prove it in a real
+   desktop window using the project's reference-resolution scale layer
+   (`nt_ui_scale` or equivalent logical viewport), not raw framebuffer-pixel
+   layout. The review must explicitly answer: where am I, what is active, what
+   can I click now, what is locked, and whether input/DevAPI enabled state
+   matches the visual state. Future systems may be visible as roadmap tabs or
+   locked/disabled affordances when that helps communicate breadth, but they
+   must not look or behave like implemented active controls.
    Apply the AGENTS.md definition of done for playable/visual work: the slice
    is done when the native screen reaches the direction and quality bar the fake
    shot points to and the core moment feels right, NOT when probes are green.
@@ -84,8 +96,8 @@ Use this skill to make small, playable game changes without losing project conte
 11. Capture evidence and report what changed, where to run it, and what was verified.
 12. Before committing or handing off a prototype slice, run
     `node tools/product_gate/slice_hygiene.mjs --strict` with build/probe
-    evidence, product gate, screenshot evidence, and known red gates. A profiler
-    guard (`--profile-guard`) is optional/advisory and never blocks the slice.
+    evidence, product gate, screenshot evidence, known red gates, and current
+    profiler scope/status or an explicit profiling-unavailable note.
     Split a normal slice over 30 changed files unless the lead explicitly
     requested an end-of-experiment snapshot. Do not promise push until
     push/upstream state is checked.
@@ -131,6 +143,9 @@ If naming differs, infer the equivalent directories from the repository.
   right object checklist but no premium reveal, so it did not read as one event.)
 - Product gate fail blocks feature/content expansion unless the lead explicitly
   accepts the debt for the current slice.
+- Keep product/readability, game-loop/fun, art-source/assets, and
+  technical/build gates separate. A build pass, clean asset audit, or scenario
+  pass does not imply that the first screen is readable or the loop is fun.
 - Do not implement a "like reference X" feature from a feature list alone.
   Translate the reference into player-facing screen grammar and visible
   runtime evidence first.
@@ -140,6 +155,11 @@ If naming differs, infer the equivalent directories from the repository.
 - Do not commit stale fail audits as current proof. Refresh them, archive them
   as historical evidence, or call them out in the slice hygiene report and
   final/review notes.
+- When the lead says a prototype was only a test run or is no longer active,
+  stop game implementation and follow the latest explicit instruction for
+  task/status disposition. Do not automatically drop tasks, close epics, or
+  rewrite live status just because the word "test" was used. Preserve evidence
+  historically, and move only reusable lessons into pipeline docs/skills.
 
 ## Build, Launch, And Release Tasks
 

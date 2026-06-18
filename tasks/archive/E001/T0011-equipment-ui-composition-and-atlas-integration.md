@@ -1,7 +1,7 @@
 ---
 id: T0011
 title: Equipment UI composition and atlas integration
-status: idea
+status: dropped
 epic: E001
 priority: P2
 tags: [mine-cards, equipment, ui, atlas, composition, gated]
@@ -94,3 +94,4 @@ Out of scope:
   first proof is a compact item compare panel, not a full Equipment tab. T0011
   remains gated `idea` until T0001 and T0008 are accepted or lead explicitly
   changes priority.
+- 2026-06-18: Closed with Mine Cards test run. Equipment UI integration is not active future work.

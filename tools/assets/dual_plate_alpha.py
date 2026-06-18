@@ -21,8 +21,16 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - supports direct script execution by path.
     from atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
 
+try:
+    from tools.assets.dual_plate_pair_gate import evaluate as evaluate_pair
+except ModuleNotFoundError:  # pragma: no cover - supports direct script execution by path.
+    from dual_plate_pair_gate import evaluate as evaluate_pair
+
 RGB = tuple[int, int, int]
-AlphaCombine = Literal["min", "max", "avg"]
+# "proj" = Smith & Blinn (1996) Theorem-4 joint-channel projection: the
+# least-squares (1-alpha) using all channels at once. "min"/"max"/"avg" are the
+# legacy per-channel solve + reconcile and are kept for backward compatibility.
+AlphaCombine = Literal["min", "max", "avg", "proj"]
 RecoverySource = Literal["dark", "light", "average"]
 
 
@@ -73,8 +81,8 @@ def extract_dual_plate_alpha(
     *,
     bg_light: RGB = (255, 255, 255),
     bg_dark: RGB = (0, 0, 0),
-    alpha_combine: AlphaCombine = "min",
-    recovery_source: RecoverySource = "dark",
+    alpha_combine: AlphaCombine = "proj",
+    recovery_source: RecoverySource = "average",
     alpha_cutoff: int = 0,
     alpha_hardening: int = 0,
 ) -> Image.Image:
@@ -133,17 +141,22 @@ def extract_dual_plate_alpha_python(
     dark_pixels = dark_rgba.load()
     out_pixels = output.load()
     width, height = output.size
+    proj_denom = float(sum(value * value for value in bg_diff)) or 1.0
 
     for y in range(height):
         for x in range(width):
             light_px = light_pixels[x, y]
             dark_px = dark_pixels[x, y]
-            alphas: list[float] = []
-            for channel in usable_channels:
-                observed_diff = light_px[channel] - dark_px[channel]
-                alpha = 1.0 - (observed_diff / bg_diff[channel])
-                alphas.append(max(0.0, min(1.0, alpha)))
-            alpha = combine(alphas, alpha_combine)
+            if alpha_combine == "proj":
+                projected = sum((light_px[channel] - dark_px[channel]) * bg_diff[channel] for channel in range(3)) / proj_denom
+                alpha = max(0.0, min(1.0, 1.0 - projected))
+            else:
+                alphas: list[float] = []
+                for channel in usable_channels:
+                    observed_diff = light_px[channel] - dark_px[channel]
+                    alpha = 1.0 - (observed_diff / bg_diff[channel])
+                    alphas.append(max(0.0, min(1.0, alpha)))
+                alpha = combine(alphas, alpha_combine)
             alpha_byte = clamp_byte(alpha * 255)
             if alpha_byte <= alpha_cutoff or (alpha_hardening > 0 and alpha_byte < alpha_hardening):
                 out_pixels[x, y] = (0, 0, 0, 0)
@@ -181,16 +194,23 @@ def extract_dual_plate_alpha_numpy(
     assert np is not None
     light_array = np.asarray(light_rgba, dtype=np.float32)
     dark_array = np.asarray(dark_rgba, dtype=np.float32)
-    bg_diff_array = np.asarray([bg_diff[channel] for channel in usable_channels], dtype=np.float32)
 
-    observed_diff = light_array[..., usable_channels] - dark_array[..., usable_channels]
-    alpha_values = np.clip(1.0 - (observed_diff / bg_diff_array), 0.0, 1.0)
-    if alpha_combine == "min":
-        alpha = np.min(alpha_values, axis=-1)
-    elif alpha_combine == "max":
-        alpha = np.max(alpha_values, axis=-1)
+    if alpha_combine == "proj":
+        bg_diff_full = np.asarray(bg_diff, dtype=np.float32)
+        proj_denom = float(np.dot(bg_diff_full, bg_diff_full)) or 1.0
+        observed_full = light_array[..., :3] - dark_array[..., :3]
+        projected = np.tensordot(observed_full, bg_diff_full, axes=([-1], [0])) / proj_denom
+        alpha = np.clip(1.0 - projected, 0.0, 1.0)
     else:
-        alpha = np.mean(alpha_values, axis=-1)
+        bg_diff_array = np.asarray([bg_diff[channel] for channel in usable_channels], dtype=np.float32)
+        observed_diff = light_array[..., usable_channels] - dark_array[..., usable_channels]
+        alpha_values = np.clip(1.0 - (observed_diff / bg_diff_array), 0.0, 1.0)
+        if alpha_combine == "min":
+            alpha = np.min(alpha_values, axis=-1)
+        elif alpha_combine == "max":
+            alpha = np.max(alpha_values, axis=-1)
+        else:
+            alpha = np.mean(alpha_values, axis=-1)
     alpha_byte = np.rint(alpha * 255.0).clip(0, 255).astype(np.uint8)
 
     visible_mask = alpha_byte > alpha_cutoff
@@ -407,8 +427,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--bg-light", type=parse_color, default=parse_color("#ffffff"))
     parser.add_argument("--bg-dark", type=parse_color, default=parse_color("#000000"))
-    parser.add_argument("--alpha-combine", choices=["min", "max", "avg"], default="min")
-    parser.add_argument("--recovery-source", choices=["dark", "light", "average"], default="dark")
+    parser.add_argument("--alpha-combine", choices=["min", "max", "avg", "proj"], default="proj")
+    parser.add_argument("--recovery-source", choices=["dark", "light", "average"], default="average")
     parser.add_argument("--alpha-cutoff", type=int, default=0)
     parser.add_argument("--alpha-hardening", type=int, default=0)
     parser.add_argument("--blob-min-area", type=int, default=0)
@@ -416,14 +436,21 @@ def main() -> int:
     parser.add_argument("--json-output", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--no-fail", action="store_true", help="Write diagnostic output even when the extraction report verdict is fail.")
+    parser.add_argument("--skip-pair-gate", action="store_true", help="Do not run the white/black pair consistency gate (allow matteing a misaligned/redrawn pair).")
     parser.add_argument("--profile", action="store_true", help="Record extraction, cleanup, save, and report timings.")
     args = parser.parse_args()
 
+    light_image = Image.open(args.light).convert("RGBA")
+    dark_image = Image.open(args.dark).convert("RGBA")
+    if dark_image.size != light_image.size:
+        # Independent AI generations differ by a few px; align canvas to the light
+        # plate. Real subject misalignment is still caught by the pair gate below.
+        dark_image = dark_image.resize(light_image.size, Image.Resampling.LANCZOS)
     started = perf_counter()
     extract_started = perf_counter()
     result = extract_dual_plate_alpha(
-        Image.open(args.light),
-        Image.open(args.dark),
+        light_image,
+        dark_image,
         bg_light=args.bg_light,
         bg_dark=args.bg_dark,
         alpha_combine=args.alpha_combine,
@@ -465,6 +492,19 @@ def main() -> int:
             "keep_largest_blob": args.keep_largest_blob,
         }
     )
+    # Pipeline gate: a misaligned/redrawn white/black pair produces ghosted alpha,
+    # so refuse it here (verdict fail -> exit 1) instead of letting a bad pair
+    # become a runtime asset. Bypass only with --skip-pair-gate.
+    if not args.skip_pair_gate:
+        pair = evaluate_pair(light_image.convert("RGBA"), dark_image.convert("RGBA"))
+        report["pair_gate"] = {key: pair[key] for key in ("verdict", "inconsistent_fraction", "mean_edge_chroma")}
+        if pair["verdict"] == "regenerate":
+            report["problems"].append(
+                f"dual-plate pair failed the consistency gate (inconsistent_fraction={pair['inconsistent_fraction']}); "
+                "regenerate the pair (chain: black = edit of the white plate) instead of matteing it"
+            )
+            report["verdict"] = "fail"
+            report["status"] = "fail"
     if args.profile:
         timings["build_report"] = round((perf_counter() - report_started) * 1000, 3)
         timings["total"] = round((perf_counter() - started) * 1000, 3)

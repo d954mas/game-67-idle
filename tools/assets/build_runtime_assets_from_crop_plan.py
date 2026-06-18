@@ -25,6 +25,7 @@ from tools.assets.chroma_key_alpha import (
     repair_transparent_edge_rgb,
     zero_fully_transparent_rgb,
 )
+from tools.assets.key_matte import key_matte_cutout
 
 
 ATLAS_POLICY = {
@@ -90,12 +91,20 @@ def crop_trimmed(
     x, y, width, height = [int(value) for value in rect]
     if width <= 0 or height <= 0:
         raise SystemExit(f"{crop.get('id', 'crop')} rect must have positive size")
-    key = parse_hex_color(crop.get("chroma_key", {}).get("key") if isinstance(crop.get("chroma_key"), dict) else None)
-    keyed_source = keyed_sources.get(key)
-    if keyed_source is None:
-        keyed_source = key_to_alpha(source, key=key)
-        keyed_sources[key] = keyed_source
-    rgba = keyed_source.crop((x, y, x + width, y + height))
+    chroma = crop.get("chroma_key") if isinstance(crop.get("chroma_key"), dict) else {}
+    key = parse_hex_color(chroma.get("key"))
+    method = str(chroma.get("method", "chroma"))
+    if method == "key_matte":
+        # Opt-in principled matte (trimap -> closed-form -> ML decontamination).
+        # Runs PER CROP, not on the whole sheet, because the closed-form solve is
+        # global; for opaque art + flat-key holes it replaces the despill heuristics.
+        rgba = key_matte_cutout(source.crop((x, y, x + width, y + height)), key)
+    else:
+        keyed_source = keyed_sources.get(key)
+        if keyed_source is None:
+            keyed_source = key_to_alpha(source, key=key)
+            keyed_sources[key] = keyed_source
+        rgba = keyed_source.crop((x, y, x + width, y + height))
     bbox = alpha_bbox(rgba)
     if bbox is None:
         raise SystemExit(f"{crop.get('id', 'crop')} produced empty alpha after keying")

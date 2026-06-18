@@ -47,12 +47,10 @@
     },
     {
       "id": "green_angel_wings_glow_bad",
-      "label": "Green background angel wings with glow particles",
-      "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-angel-wings-glow-black-v001.png",
-      "source_key": "#000000",
-      "source_background": "#00ff00",
-      "key": "#00ff00",
-      "notes": "Hard transparency case converted from black source to green-screen source: bright feathers, soft golden aura, sparkles, and semitransparent particles."
+      "label": "Legendary angel wings (white-plate source)",
+      "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-angel-wings-legendary-white-v001.png",
+      "key": "#ffffff",
+      "notes": "Real white-plate source used directly (no green recomposite). Single-background keys on white and necessarily eats the white feathers; only dual-plate (white+black) recovers them — a true path-2 asset."
     }
   ]
 }

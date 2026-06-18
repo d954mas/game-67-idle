@@ -1,0 +1,50 @@
+{
+  "schema": "game.direct_dual_plate_pair_benchmark",
+  "version": 1,
+  "id": "green_plain_ring_bad_single_pair",
+  "light": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/dual_plate_transfer/per_asset/green_plain_ring_bad/ai_white_single.png",
+  "dark": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/dual_plate_transfer/per_asset/green_plain_ring_bad/ai_black_single.png",
+  "dual_alpha": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/dual_plate_transfer/per_asset/green_plain_ring_bad/green_plain_ring_bad_single_pair_dual_alpha.png",
+  "overview": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/dual_plate_transfer/per_asset/green_plain_ring_bad/green_plain_ring_bad_single_pair_direct_dual_plate_benchmark.png",
+  "pair_iou": 0.457,
+  "dual_plate_ms": 185.303,
+  "light_metrics": {
+    "visible_pixels": 1572516,
+    "visible_key_pixels": 1323926,
+    "green_spill_pixels": 0,
+    "source_key_spill_pixels": 1324982,
+    "transparent_nonzero_rgb": 0,
+    "alpha_bbox": [
+      0,
+      0,
+      1254,
+      1254
+    ]
+  },
+  "soft_matte_metrics": {
+    "visible_pixels": 249831,
+    "visible_key_pixels": 0,
+    "green_spill_pixels": 0,
+    "source_key_spill_pixels": 0,
+    "transparent_nonzero_rgb": 0,
+    "alpha_bbox": [
+      267,
+      350,
+      950,
+      885
+    ]
+  },
+  "dual_metrics": {
+    "visible_pixels": 265098,
+    "visible_key_pixels": 11348,
+    "green_spill_pixels": 0,
+    "source_key_spill_pixels": 13080,
+    "transparent_nonzero_rgb": 0,
+    "alpha_bbox": [
+      0,
+      0,
+      1254,
+      1254
+    ]
+  }
+}

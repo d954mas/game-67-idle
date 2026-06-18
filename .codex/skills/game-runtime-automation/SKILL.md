@@ -96,15 +96,25 @@ When the task is to verify what the player actually sees and can do:
 
 1. Build and run the primary runtime target through the project's normal
    launch path.
-2. Capture screenshots or observations in the project scratch area.
-3. Check the requested behavior plus basic visual health:
+2. For native UI, capture at least one real desktop-window proof at the
+   intended PC size before relying on framebuffer-only captures. Framebuffer
+   captures are useful evidence, but they can miss the lead's actual window
+   scale/focus problem.
+3. Capture screenshots or observations in the project scratch area.
+4. Check the requested behavior plus basic visual health:
    - nonblank output
    - correct viewport/camera framing
    - readable UI text
    - no incoherent overlap
    - controls respond
    - no obvious rendering errors
-4. Report concise findings with paths to evidence.
+5. For first-screen or UI-focus checks, also answer explicitly:
+   - where the player is
+   - what is active now
+   - what can be clicked now
+   - what is locked or future-only
+   - whether DevAPI/input enabled state matches the visible affordances
+6. Report concise findings with paths to evidence.
 
 Platform order when the project defines none: native desktop first, then web,
 then other platforms only when requested or relevant. Prefer real screenshots

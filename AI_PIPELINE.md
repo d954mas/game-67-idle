@@ -100,11 +100,27 @@ node tools/skills_sync.mjs
   audience-test work, write a 5-line contract before coding: `goal`,
   `non-goal`, `proof`, `stop condition`, and `likely files`. The proof must
   name a native screenshot/product gate/art audit, not only a build command.
+  The same contract and gates apply to spikes, test runs, prototypes, and real
+  game slices; the label changes expected durability, not the quality bar.
   Before visual code changes, compare the current native screenshot or capture
   plan against the accepted fake shot/reference/art target and list the visible
   mismatches. After each meaningful render change, capture a new native
   screenshot, update the mismatch list, and run or record the product-read gate
   verdict before adding features or content.
+- **Native PC scale/focus proof is an early gate.** For any playable native UI,
+  prove the authored UI scale on a real desktop window before art polish or
+  content expansion. The first proof must answer: where am I, what is active,
+  what can I click now, what is locked, and does input/DevAPI enabled state
+  match the visual state. Use the project's reference-resolution scale layer
+  (for this engine, `nt_ui_scale` or an equivalent logical viewport) before
+  claiming the UI is reviewable. A framebuffer/product gate alone is not enough
+  if the lead will play in a normal PC window.
+- **First-player focus comes before art polish.** Before polishing art, the
+  first screen must have one current location, one active primary path, one
+  next action, visible reward/progress, and clear locked/future states. Future
+  activities may be shown as roadmap tabs or disabled/locked affordances when
+  that helps communicate scope, but they must not look or behave like active
+  implemented buttons.
 - **Product-read gates stop content expansion.** For game work where visual,
   FTUE, gameplay feel, or audience testing matters, the first playable screen
   must pass a screenshot/player-read review before adding more content or
@@ -130,6 +146,10 @@ node tools/skills_sync.mjs
   If an independent visual/UI critic is needed, create a packet first with
   `node tools/ai.mjs critic` and use its findings as the source for the strict
   gate verdict.
+- **Gate verdicts are separate.** Product/readability, game-loop/fun,
+  art-source/assets, and technical/build gates must be reported independently.
+  A green build, clean crop, or passing automation scenario is supporting
+  evidence, not acceptance for the player-facing product.
 - **Responsive UI needs geometry evidence.** For desktop/mobile UI composition,
   pair screenshot gates with a UI-tree layout audit when the runtime exposes
   element bounds. Use `node tools/product_gate/responsive_layout_audit.mjs` to
@@ -149,14 +169,21 @@ node tools/skills_sync.mjs
   improvement ideas. Use `chat-session-reflection` for deeper retrospectives of
   long multi-turn sessions. Do not use the history file as a task board or
   project status file.
-- **Profiling is passive by default.** Its job is to reveal where an AI agent
-  gets stuck, not to become another workflow. Normal work uses
+- **Profiling scope is mandatory; collection stays passive.** At the start of
+  any non-trivial game, visual, pipeline, or tooling session, select a task
+  scope and run `node tools/ai.mjs start <task-id> <iteration>`, or explicitly
+  state that profiling is unavailable/off for this environment. Its job is to
+  reveal where an AI agent gets stuck, not to become another workflow. Normal work uses
   `node tools/ai.mjs run`/`checkpoint`/`status`; deep reflection is opt-in. Full
   policy and commands are in the "AI session profiling" section below. External
   AI observability platforms (LangSmith, Phoenix, Langfuse, Braintrust, OTLP
   export) stay gated: local JSONL in `tmp/session_profiles/` is the baseline
   evidence source, and an external pilot needs a concrete trigger. Decision
   criteria are in `AI_PIPELINE_HISTORY.md`.
+- **Long-session checkpoints.** Every 60-90 minutes, write a short checkpoint:
+  objective, proof so far, blocker/risk, and next action. It can be a chat
+  update plus `node tools/ai.mjs checkpoint`, and it should prevent silent
+  drift into broad systems work.
 - **Runtime base is protected in this repository.** `state/`,
   `tools/state_codegen/`, `src/devapi/`, `tools/devapi/`,
   `src/game_storage.*`, and `external/cjson/` are reusable AI/runtime
@@ -182,6 +209,12 @@ node tools/skills_sync.mjs
   If `prototype_startup_gate.status` is `not_ready_for_implementation`, do not
   begin broad runtime implementation. First create/repair the active concept,
   task, project wiki, runtime harness, and visual/product proof gate.
+- **Prototype pause/close protocol.** When the lead says a game/prototype was
+  only a test run, is no longer active, or should stop, stop game implementation
+  immediately and ask or follow the latest explicit instruction for task/status
+  disposition. Do not automatically drop tasks, close epics, or rewrite
+  `tasks/STATUS.md` just because the word "test" was used. Preserve evidence
+  historically and move only reusable lessons into pipeline docs/skills.
 - **Visual failure is a stop condition.** If the lead rejects a screenshot or
   runtime build as ugly, unclear, or unplayable, stop feature expansion. Create
   a rescue task, a visual/product failure report, and the smallest runtime
@@ -237,7 +270,8 @@ Default order for substantial work:
    wholesale for orientation.
 2. Select or create one task scope, then run
    `node tools/ai.mjs start <task-id> <iteration>` for long implementation,
-   visual, research, or tooling work.
+   visual, research, or tooling work. If profiling is unavailable, state that
+   explicitly in the checkpoint/final instead of silently working without it.
 3. Inspect only the files needed for the selected scope.
 4. Prefer scoped search before repo-wide search.
 5. Make the smallest coherent change.
@@ -302,13 +336,12 @@ This intentionally uses two sources:
   imported after long work only to backfill missed failures or audit hook gaps.
 
 Profiling shows where an AI agent gets stuck without turning telemetry into a
-second project. It is passive by default: normal game work must not pause to
-repair stale summaries. No profiler step is a forced gate on normal work.
-`reflect`'s gap checkpoint is opt-in (`--gap-checkpoint`), and the slice-hygiene
-profiler guard is advisory (missing or stale guard is a warning, never a
-blocking problem). Run `start`, `status`, `reflect`, and gap checkpoints only
-when you choose to, or when the task is explicitly about AI workflow, profiler
-behavior, or a requested retrospective.
+second project. Scope selection is mandatory for non-trivial sessions, but
+normal game work must not pause to repair stale historical summaries.
+`reflect`'s gap checkpoint remains opt-in (`--gap-checkpoint`). For prototype
+handoff or retrospective claims, check the current-scope profiler guard; if it
+is missing or stale, record that as an evidence gap instead of pretending the
+profile explains the whole session.
 
 **What to learn.** A useful profile answers: which commands failed; which were
 slow; which context reads were large; where long manual/research/review gaps
@@ -372,12 +405,12 @@ here is a different game/task, so cross-session baselines are not comparable and
 were never captured. Keep profiling lightweight — passive JSONL log,
 `ai status`, and a short `ai reflect` closeout.
 
-**When to use it.** Use passive profiling when a session runs longer than about
-an hour; a command/build/test loop is repeating; packaging, release, art
-generation, or reference research has many steps; the user asks where the agent
-got stuck; or context compaction/repeated loading becomes a risk. Do not start
-profiling for a small direct code/doc change unless it is already showing
-friction.
+**When to use it.** Use scoped passive profiling for every non-trivial session,
+especially when it runs longer than about an hour; a command/build/test loop is
+repeating; packaging, release, art generation, or reference research has many
+steps; the user asks where the agent got stuck; or context compaction/repeated
+loading becomes a risk. For a tiny one-command answer, no profiling scope is
+needed.
 
 **Artifact policy.** Commit reusable profiling code and this policy. Do not
 commit raw telemetry by default: `tmp/session_profiles/*.jsonl`, generated

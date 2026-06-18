@@ -1,0 +1,50 @@
+{
+  "schema": "game.direct_dual_plate_pair_benchmark",
+  "version": 1,
+  "id": "black_angel_wings_glow_edit_pair",
+  "light": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/dual_plate_transfer/per_asset/black_angel_wings_glow_bad/ai_white_edit_from_black.png",
+  "dark": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/dual_plate_transfer/per_asset/black_angel_wings_glow_bad/ai_black_single.png",
+  "dual_alpha": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/dual_plate_transfer/per_asset/black_angel_wings_glow_bad/black_angel_wings_glow_edit_pair_dual_alpha.png",
+  "overview": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/dual_plate_transfer/per_asset/black_angel_wings_glow_bad/black_angel_wings_glow_edit_pair_direct_dual_plate_benchmark.png",
+  "pair_iou": 0.716,
+  "dual_plate_ms": 290.94,
+  "light_metrics": {
+    "visible_pixels": 1572516,
+    "visible_key_pixels": 1136737,
+    "green_spill_pixels": 0,
+    "source_key_spill_pixels": 1198182,
+    "transparent_nonzero_rgb": 0,
+    "alpha_bbox": [
+      0,
+      0,
+      1254,
+      1254
+    ]
+  },
+  "soft_matte_metrics": {
+    "visible_pixels": 491507,
+    "visible_key_pixels": 5842,
+    "green_spill_pixels": 0,
+    "source_key_spill_pixels": 5842,
+    "transparent_nonzero_rgb": 0,
+    "alpha_bbox": [
+      52,
+      132,
+      1211,
+      1069
+    ]
+  },
+  "dual_metrics": {
+    "visible_pixels": 483828,
+    "visible_key_pixels": 54698,
+    "green_spill_pixels": 0,
+    "source_key_spill_pixels": 88678,
+    "transparent_nonzero_rgb": 0,
+    "alpha_bbox": [
+      0,
+      0,
+      1254,
+      1254
+    ]
+  }
+}

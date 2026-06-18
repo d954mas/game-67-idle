@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""Principled single-background cutout: known-key trimap -> closed-form alpha
+matte -> ML foreground (edge-colour) decontamination.
+
+This is path 1 done right. Instead of the hand-tuned RGB despill/halo heuristics
+in ``chroma_key_alpha.key_to_alpha`` (which conflate "is this the key hue" with
+"is this background" and destroy any subject that uses the key hue), it:
+
+1. builds a trimap from the KNOWN key colour distance
+   (sure-bg = flat exact key anywhere, incl. interior holes;
+    sure-fg = far from key; unknown = the thin band between),
+2. solves the unknown band with a closed-form matte (pymatting), and
+3. decontaminates edge colour with multi-level foreground estimation.
+
+Use it for OPAQUE art and flat-key holes (rings, gaps, crisp silhouettes). Soft
+fractional alpha (soft shadow, glow, glass, smoke) is mathematically
+unrecoverable from one background -- route those to dual-plate
+(``dual_plate_alpha.py``).
+
+Falls back to the deterministic ``key_to_alpha`` soft path when numpy/pymatting
+are unavailable, so the module stays dependency-light and offline-safe.
+"""
+from __future__ import annotations
+
+from PIL import Image
+
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - exercised on minimal installs.
+    np = None
+
+from tools.assets.chroma_key_alpha import (
+    bleed_transparent_rgb,
+    decontaminate_source_key_spill_image,
+    key_to_alpha,
+    repair_transparent_edge_rgb,
+    zero_fully_transparent_rgb,
+)
+
+RGB = tuple[int, int, int]
+
+
+def _heuristic_fallback(image: Image.Image, key: RGB) -> Image.Image:
+    """Deterministic, dependency-free fallback (no pymatting/numpy)."""
+    return key_to_alpha(image, key=key, aggressive_visible_decontaminate=True, remove_key_holes=True)
+
+
+def _limit_despill(rgb_float: "np.ndarray", key: RGB) -> "np.ndarray":
+    """Vlahos 'limit' despill keyed on the actual key colour: the key's own
+    channel(s) may not exceed a neutral level set by the other channels, so the
+    key colour cannot dominate the recovered foreground. It is per-pixel and
+    sharp, so it removes the key halo (e.g. green inside a ring hole) WITHOUT
+    blurring detail, and it leaves non-key colours untouched (a grey/brown pixel
+    whose green is already below max(r,b) is unchanged)."""
+    red, green, blue = rgb_float[..., 0], rgb_float[..., 1], rgb_float[..., 2]
+    key_red, key_green, key_blue = key
+    bright, dim = 150, 120
+    out = rgb_float.copy()
+    if key_green > bright and key_red < dim and key_blue < dim:            # green key
+        # Only touch pixels where green is the dominant channel (true spill); pull
+        # those to the average of the other channels so dark olive residue goes
+        # neutral, while leaving green-below-max content (gold, brown) untouched.
+        dominant = green > np.maximum(red, blue)
+        out[..., 1] = np.where(dominant, np.minimum(green, (red + blue) * 0.5), green)
+    elif key_red > bright and key_blue > bright and key_green < dim:       # magenta key
+        magenta = np.minimum(red, blue) > green
+        neutral = (green + np.minimum(red, blue)) * 0.5
+        out[..., 0] = np.where(magenta, np.minimum(red, np.maximum(green, neutral)), red)
+        out[..., 2] = np.where(magenta, np.minimum(blue, np.maximum(green, neutral)), blue)
+    elif key_red > bright and key_green < dim and key_blue < dim:          # red key
+        out[..., 0] = np.minimum(red, np.maximum(green, blue))
+    elif key_blue > bright and key_red < dim and key_green < dim:          # blue key
+        out[..., 2] = np.minimum(blue, np.maximum(red, green))
+    elif key_green > bright and key_blue > bright and key_red < dim:       # cyan key
+        out[..., 1] = np.minimum(green, np.maximum(red, blue))
+        out[..., 2] = np.minimum(blue, np.maximum(red, green))
+    return out
+
+
+def key_matte_cutout(
+    image: Image.Image,
+    key: RGB,
+    *,
+    exact_tolerance: int = 12,
+    foreground_tolerance: int = 80,
+    max_dim: int = 512,
+) -> Image.Image:
+    """Return an RGBA cutout of ``image`` against the flat ``key`` colour using a
+    closed-form matte. Intended to run PER CROP (small image); running it on a
+    full multi-thousand-pixel source sheet is slow because the closed-form solve
+    is global."""
+    if np is None:
+        return _heuristic_fallback(image, key)
+    try:
+        from pymatting import estimate_alpha_cf, estimate_foreground_ml
+    except Exception:
+        return _heuristic_fallback(image, key)
+
+    rgba = image.convert("RGBA")
+    original_size = rgba.size
+    work = rgba
+    longest = max(work.size)
+    if longest > max_dim:
+        scale = max_dim / longest
+        work = work.resize((max(1, round(work.width * scale)), max(1, round(work.height * scale))), Image.Resampling.LANCZOS)
+
+    array = np.asarray(work, dtype=np.float64) / 255.0
+    rgb = array[..., :3]
+    key_array = np.asarray(key, dtype=np.float64) / 255.0
+    distance = np.max(np.abs(rgb - key_array), axis=2) * 255.0
+    trimap = np.full(distance.shape, 0.5, dtype=np.float64)
+    trimap[distance <= exact_tolerance] = 0.0
+    trimap[distance >= foreground_tolerance] = 1.0
+    try:
+        alpha = np.clip(estimate_alpha_cf(rgb, trimap), 0.0, 1.0)
+        foreground = np.clip(estimate_foreground_ml(rgb, alpha), 0.0, 1.0)
+    except Exception:
+        return _heuristic_fallback(image, key)
+
+    # estimate_foreground_ml smooths colour, which blurs crisp interior detail
+    # (text, wood grain, outlines). The estimate is only NEEDED where alpha is
+    # fractional (the soft edge being decontaminated); an opaque pixel already
+    # IS its own foreground. So composite at the ORIGINAL resolution: keep the
+    # crisp original RGB where opaque, blend in the estimate only across the thin
+    # edge band. This also undoes any work-resolution downscale blur.
+    if work.size == original_size:
+        alpha_full = alpha
+        estimated_full = foreground * 255.0
+    else:
+        alpha_full = (
+            np.asarray(Image.fromarray(np.rint(alpha * 255.0).astype(np.uint8), "L").resize(original_size, Image.Resampling.LANCZOS), dtype=np.float64)
+            / 255.0
+        )
+        estimated_full = np.asarray(
+            Image.fromarray(np.rint(foreground * 255.0).astype(np.uint8), "RGB").resize(original_size, Image.Resampling.LANCZOS),
+            dtype=np.float64,
+        )
+    original_rgb = np.asarray(rgba, dtype=np.float64)[..., :3]
+    keep_original = np.clip((alpha_full - 0.80) / 0.15, 0.0, 1.0)[..., None]
+    foreground_full = keep_original * original_rgb + (1.0 - keep_original) * estimated_full
+    # Sharp limit despill so the kept-original edge pixels can't carry a key halo
+    # (e.g. green specks on the inner rim of a ring hole) without blurring detail.
+    foreground_full = _limit_despill(foreground_full, key)
+
+    output_array = np.zeros((original_size[1], original_size[0], 4), dtype=np.uint8)
+    output_array[..., :3] = np.rint(np.clip(foreground_full, 0.0, 255.0)).astype(np.uint8)
+    output_array[..., 3] = np.rint(np.clip(alpha_full * 255.0, 0.0, 255.0)).astype(np.uint8)
+    result = Image.fromarray(output_array, "RGBA")
+    # estimate_foreground_ml decontaminates the bulk; one general key-spill pass
+    # (keyed on the actual key colour, not per-palette magic numbers) clears the
+    # residual anti-aliased edge fringe. Then method-agnostic atlas hygiene.
+    decontaminate_source_key_spill_image(result, key=key, require_transparent_touch=False)
+    bleed_transparent_rgb(result, key=key)
+    repair_transparent_edge_rgb(result, key=key)
+    zero_fully_transparent_rgb(result)
+    return result

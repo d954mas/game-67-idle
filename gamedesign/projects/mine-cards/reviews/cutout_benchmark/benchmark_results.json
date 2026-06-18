@@ -30,7 +30,7 @@
             235,
             186
           ],
-          "time_ms": 0.009,
+          "time_ms": 0.007,
           "mode": "source"
         },
         {
@@ -45,7 +45,7 @@
             235,
             186
           ],
-          "time_ms": 129.06,
+          "time_ms": 97.937,
           "mode": "current"
         },
         {
@@ -60,7 +60,7 @@
             235,
             186
           ],
-          "time_ms": 145.889,
+          "time_ms": 97.377,
           "mode": "aggressive"
         },
         {
@@ -75,7 +75,7 @@
             235,
             186
           ],
-          "time_ms": 145.488,
+          "time_ms": 102.248,
           "mode": "holes"
         },
         {
@@ -90,7 +90,7 @@
             235,
             186
           ],
-          "time_ms": 104.073,
+          "time_ms": 78.706,
           "mode": "soft matte"
         },
         {
@@ -105,8 +105,23 @@
             235,
             186
           ],
-          "time_ms": 1202.126,
+          "time_ms": 994.787,
           "mode": "pymatting"
+        },
+        {
+          "visible_pixels": 31839,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            235,
+            186
+          ],
+          "time_ms": 148.681,
+          "mode": "key matte"
         }
       ]
     },
@@ -136,7 +151,7 @@
             182,
             323
           ],
-          "time_ms": 0.012,
+          "time_ms": 0.008,
           "mode": "source"
         },
         {
@@ -151,7 +166,7 @@
             181,
             322
           ],
-          "time_ms": 174.805,
+          "time_ms": 129.081,
           "mode": "current"
         },
         {
@@ -166,7 +181,7 @@
             181,
             322
           ],
-          "time_ms": 180.689,
+          "time_ms": 125.019,
           "mode": "aggressive"
         },
         {
@@ -181,7 +196,7 @@
             181,
             322
           ],
-          "time_ms": 173.813,
+          "time_ms": 123.952,
           "mode": "holes"
         },
         {
@@ -196,7 +211,7 @@
             182,
             323
           ],
-          "time_ms": 134.518,
+          "time_ms": 105.758,
           "mode": "soft matte"
         },
         {
@@ -211,8 +226,23 @@
             182,
             323
           ],
-          "time_ms": 185.261,
+          "time_ms": 155.918,
           "mode": "pymatting"
+        },
+        {
+          "visible_pixels": 37100,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            182,
+            323
+          ],
+          "time_ms": 159.185,
+          "mode": "key matte"
         }
       ]
     },
@@ -242,7 +272,7 @@
             324,
             307
           ],
-          "time_ms": 0.055,
+          "time_ms": 0.019,
           "mode": "source"
         },
         {
@@ -257,7 +287,7 @@
             324,
             307
           ],
-          "time_ms": 21.531,
+          "time_ms": 13.503,
           "mode": "current"
         },
         {
@@ -272,7 +302,7 @@
             324,
             307
           ],
-          "time_ms": 15.231,
+          "time_ms": 12.842,
           "mode": "aggressive"
         },
         {
@@ -287,7 +317,7 @@
             324,
             307
           ],
-          "time_ms": 17.552,
+          "time_ms": 13.147,
           "mode": "holes"
         },
         {
@@ -302,7 +332,7 @@
             324,
             307
           ],
-          "time_ms": 241.735,
+          "time_ms": 193.803,
           "mode": "soft matte"
         },
         {
@@ -317,8 +347,23 @@
             324,
             307
           ],
-          "time_ms": 299.642,
+          "time_ms": 258.384,
           "mode": "pymatting"
+        },
+        {
+          "visible_pixels": 73136,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            324,
+            307
+          ],
+          "time_ms": 257.384,
+          "mode": "key matte"
         }
       ]
     },
@@ -343,7 +388,7 @@
             460,
             366
           ],
-          "time_ms": 0.038,
+          "time_ms": 0.021,
           "mode": "source"
         },
         {
@@ -358,7 +403,7 @@
             373,
             289
           ],
-          "time_ms": 38.611,
+          "time_ms": 29.794,
           "mode": "current"
         },
         {
@@ -373,7 +418,7 @@
             373,
             289
           ],
-          "time_ms": 38.79,
+          "time_ms": 31.75,
           "mode": "aggressive"
         },
         {
@@ -388,7 +433,7 @@
             373,
             289
           ],
-          "time_ms": 36.799,
+          "time_ms": 27.149,
           "mode": "holes"
         },
         {
@@ -403,7 +448,7 @@
             378,
             294
           ],
-          "time_ms": 493.362,
+          "time_ms": 335.356,
           "mode": "soft matte"
         },
         {
@@ -418,8 +463,23 @@
             378,
             294
           ],
-          "time_ms": 616.278,
+          "time_ms": 490.995,
           "mode": "pymatting"
+        },
+        {
+          "visible_pixels": 46671,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            100,
+            114,
+            377,
+            293
+          ],
+          "time_ms": 1384.378,
+          "mode": "key matte"
         }
       ]
     },
@@ -444,7 +504,7 @@
             216,
             167
           ],
-          "time_ms": 0.006,
+          "time_ms": 0.005,
           "mode": "source"
         },
         {
@@ -459,7 +519,7 @@
             193,
             152
           ],
-          "time_ms": 97.482,
+          "time_ms": 75.802,
           "mode": "current"
         },
         {
@@ -474,7 +534,7 @@
             193,
             152
           ],
-          "time_ms": 96.776,
+          "time_ms": 74.045,
           "mode": "aggressive"
         },
         {
@@ -489,7 +549,7 @@
             193,
             152
           ],
-          "time_ms": 116.176,
+          "time_ms": 72.467,
           "mode": "holes"
         },
         {
@@ -504,7 +564,7 @@
             208,
             159
           ],
-          "time_ms": 77.514,
+          "time_ms": 63.313,
           "mode": "soft matte"
         },
         {
@@ -519,25 +579,40 @@
             208,
             159
           ],
-          "time_ms": 126.878,
+          "time_ms": 119.89,
           "mode": "pymatting"
+        },
+        {
+          "visible_pixels": 24755,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            8,
+            8,
+            208,
+            159
+          ],
+          "time_ms": 120.646,
+          "mode": "key matte"
         }
       ]
     },
     {
       "id": "green_angel_wings_glow_bad",
-      "label": "Green background angel wings with glow particles",
-      "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-angel-wings-glow-black-v001.png",
+      "label": "Legendary angel wings (white-plate source)",
+      "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-angel-wings-legendary-white-v001.png",
       "rect": [],
-      "key": "#00ff00",
-      "notes": "Hard transparency case converted from black source to green-screen source: bright feathers, soft golden aura, sparkles, and semitransparent particles.",
+      "key": "#ffffff",
+      "notes": "Real white-plate source used directly (no green recomposite). Single-background keys on white and necessarily eats the white feathers; only dual-plate (white+black) recovers them \u2014 a true path-2 asset.",
       "image": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/green_angel_wings_glow_bad.png",
       "modes": [
         {
           "visible_pixels": 1572516,
-          "visible_key_pixels": 1108366,
-          "green_spill_pixels": 1108366,
-          "source_key_spill_pixels": 1108366,
+          "visible_key_pixels": 789493,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 871515,
           "transparent_nonzero_rgb": 0,
           "alpha_bbox": [
             0,
@@ -545,83 +620,98 @@
             1254,
             1254
           ],
-          "time_ms": 1.407,
+          "time_ms": 1.119,
           "mode": "source"
         },
         {
-          "visible_pixels": 464150,
-          "visible_key_pixels": 0,
+          "visible_pixels": 914441,
+          "visible_key_pixels": 142162,
           "green_spill_pixels": 0,
-          "source_key_spill_pixels": 0,
+          "source_key_spill_pixels": 213440,
           "transparent_nonzero_rgb": 0,
           "alpha_bbox": [
-            58,
-            186,
-            1204,
-            1036
+            31,
+            36,
+            1248,
+            1198
           ],
-          "time_ms": 1405.492,
+          "time_ms": 882.62,
           "mode": "current"
         },
         {
-          "visible_pixels": 464150,
-          "visible_key_pixels": 0,
+          "visible_pixels": 914441,
+          "visible_key_pixels": 142162,
           "green_spill_pixels": 0,
-          "source_key_spill_pixels": 0,
+          "source_key_spill_pixels": 213440,
           "transparent_nonzero_rgb": 0,
           "alpha_bbox": [
-            58,
-            186,
-            1204,
-            1036
+            31,
+            36,
+            1248,
+            1198
           ],
-          "time_ms": 1412.324,
+          "time_ms": 865.302,
           "mode": "aggressive"
         },
         {
-          "visible_pixels": 464150,
-          "visible_key_pixels": 0,
+          "visible_pixels": 724900,
+          "visible_key_pixels": 4744,
           "green_spill_pixels": 0,
-          "source_key_spill_pixels": 0,
+          "source_key_spill_pixels": 23899,
           "transparent_nonzero_rgb": 0,
           "alpha_bbox": [
-            58,
-            186,
-            1204,
-            1036
+            31,
+            36,
+            1248,
+            1198
           ],
-          "time_ms": 1336.333,
+          "time_ms": 850.266,
           "mode": "holes"
         },
         {
-          "visible_pixels": 464150,
+          "visible_pixels": 858556,
+          "visible_key_pixels": 21333,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 21333,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            30,
+            16,
+            1252,
+            1199
+          ],
+          "time_ms": 3989.093,
+          "mode": "soft matte"
+        },
+        {
+          "visible_pixels": 932661,
           "visible_key_pixels": 0,
           "green_spill_pixels": 0,
           "source_key_spill_pixels": 0,
           "transparent_nonzero_rgb": 0,
           "alpha_bbox": [
-            58,
-            186,
-            1204,
-            1036
+            28,
+            32,
+            1254,
+            1185
           ],
-          "time_ms": 4758.143,
-          "mode": "soft matte"
+          "time_ms": 4130.481,
+          "mode": "pymatting"
         },
         {
-          "visible_pixels": 494126,
+          "visible_pixels": 894394,
           "visible_key_pixels": 0,
-          "green_spill_pixels": 2425,
-          "source_key_spill_pixels": 2646,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
           "transparent_nonzero_rgb": 0,
           "alpha_bbox": [
-            60,
-            181,
-            1209,
-            1040
+            30,
+            32,
+            1252,
+            1201
           ],
-          "time_ms": 5656.173,
-          "mode": "pymatting"
+          "time_ms": 4902.151,
+          "mode": "key matte"
         }
       ]
     }

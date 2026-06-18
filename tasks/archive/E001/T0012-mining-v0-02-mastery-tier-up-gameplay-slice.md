@@ -1,7 +1,7 @@
 ---
 id: T0012
 title: Mining v0.02 mastery tier-up gameplay slice
-status: idea
+status: dropped
 epic: E001
 priority: P2
 tags: [mine-cards, gameplay, mining, mastery, gated]
@@ -85,3 +85,4 @@ Out of scope:
   first proof to `surface_stone`, 10 mastery XP, tier 1 `-3%` interval, and
   `3.00s -> 2.91s` after tier-up. T0012 remains a gated `idea` and must not
   change runtime/state before T0001 acceptance or explicit lead override.
+- 2026-06-18: Closed with Mine Cards test run. Mining v0.02 gameplay expansion is intentionally not continuing.

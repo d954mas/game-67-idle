@@ -1,7 +1,7 @@
 ---
 id: T0001
 title: Mine Cards Mining v0.01 first slice
-status: doing
+status: dropped
 epic: E001
 priority: P1
 tags: [mine-cards, prototype, native, visual, core-loop]
@@ -328,3 +328,4 @@ Dependencies:
   `build/captures/mine_cards_focus_v002_1280x720.png`,
   `build/captures/mine_cards_focus_v002_1280x720_uizoom.png`, and
   `build/captures/mine_cards_focus_v002_1280x720_uizoom_cmp.png`.
+- 2026-06-18: Closed by lead as a pipeline test run, not an active game to continue. Keep evidence for reusable pipeline lessons; do not expand Mine Cards mechanics.

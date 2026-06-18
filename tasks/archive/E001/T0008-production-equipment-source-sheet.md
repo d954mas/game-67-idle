@@ -1,7 +1,7 @@
 ---
 id: T0008
 title: Production equipment source sheet
-status: review
+status: dropped
 epic: E001
 priority: P2
 tags: [mine-cards, art, equipment, source-sheet, alpha, runtime-assets]
@@ -149,3 +149,4 @@ Out of scope:
   `gamedesign/projects/mine-cards/reviews/lead_review_board_2026-06-18.md`.
   T0008 remains in review until the lead accepts the item art or names one
   visual rejection axis.
+- 2026-06-18: Closed with Mine Cards test run. Equipment art evidence remains historical/reusable reference, but this is not active game work.

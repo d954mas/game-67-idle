@@ -1,11 +1,11 @@
 ---
 id: E001
 title: Mine Cards v0.01 mining foundation
-status: active
+status: dropped
 priority: P1
 tags: [mine-cards, idle, mining, prototype]
 created: 2026-06-17
-updated: 2026-06-17
+updated: 2026-06-18
 ---
 
 ## Goal
@@ -54,3 +54,4 @@ understand:
 - 2026-06-17: Lead clarified the production skeletal path must be a reusable
   extension/module outside `external/neotolis-engine`, not an engine submodule
   patch.
+- 2026-06-18: Mine Cards ended by lead as a pipeline test run. Preserve archived evidence and reusable lessons; repo returns to clean seed readiness for future games.

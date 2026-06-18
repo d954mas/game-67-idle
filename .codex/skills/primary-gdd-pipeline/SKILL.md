@@ -81,7 +81,9 @@ small vertical slice instead of a large document set.
 - Visual attempts per gate: max 3 directions before stopping for user choice.
 - Infrastructure plumbing (servers, browsers, screenshots): max 2 attempts, then switch to a cross-platform `node`/`python` validator or state the missing proof plainly.
 - Stuck rule: after 2 failed attempts at the same gate, ask for a concrete user decision.
-- Long sessions: checkpoint `tmp/session_state.md` every 60-90 minutes; keep durable decisions in project files, not chat memory.
+- Long sessions: checkpoint every 60-90 minutes with objective, proof, blocker,
+  and next. Use `tmp/session_state.md` for volatile state and keep durable
+  decisions in project files, not chat memory.
 
 ## Start Checklist
 
@@ -107,6 +109,13 @@ small vertical slice instead of a large document set.
    When the gate template names a visual critic packet, create that packet
    with `node tools/ai.mjs critic` before the strict verdict if a separate/self
    critique pass would reduce risk.
+   For the first playable UI, define the initial focus contract before art:
+   one current location, one active primary path, one next action, visible
+   reward/progress, and clear locked/future states. Future breadth may be shown
+   as roadmap tabs or disabled/locked affordances, but it must not create fake
+   active controls. The implementation handoff must require a real native PC
+   window screenshot plus zoom/readability proof using the project's logical
+   UI scale layer.
 5. Before implementation handoff or runtime coding, run
    `node tools/game_context/iteration_context.mjs`. If
    `prototype_startup_gate.status` is `not_ready_for_implementation`, repair

@@ -30,6 +30,7 @@ from tools.assets.chroma_key_alpha import (
     zero_fully_transparent_rgb,
 )
 from tools.assets.dual_plate_alpha import extract_dual_plate_alpha
+from tools.assets.key_matte import key_matte_cutout as key_trimap_matte
 
 RGB = tuple[int, int, int]
 
@@ -312,6 +313,7 @@ SINGLE_BACKGROUND_MODES: list[tuple[str, Callable[[Image.Image, RGB], Image.Imag
     ("holes", mode_key_holes),
     ("soft matte", soft_chroma_matte),
     ("pymatting", pymatting_trimap),
+    ("key matte", key_trimap_matte),
 ]
 
 

@@ -30,8 +30,11 @@
   deep audits, broad validation, generated handoff artifacts, and old review
   queues require explicit need.
 - AI profiling is passive telemetry for finding stalls and repeated failures.
-  It must not block normal game work with stale reflection artifacts; use deep
-  profiling only when the user asks for AI workflow review or profiler fixes.
+  Every non-trivial game, visual, pipeline, or tooling session must set a
+  current profiling scope or explicitly state that profiling is unavailable;
+  deep profiling remains reserved for AI workflow review or profiler fixes.
+  In long sessions, write a short checkpoint every 60-90 minutes: objective,
+  proof, blocker, next.
 - Temporary generation, scripts, rejected images, screenshots, and audit logs go in `tmp/` or another ignored temp/source folder.
 - Final durable docs/data/assets go in their project folder.
 
@@ -46,6 +49,10 @@
 - Start a new game iteration by creating a fresh project wiki/GDD under
   `gamedesign/projects/<game-id>/` and fresh work items in `tasks/active/`.
 - Prefer small playable native iterations over broad speculative systems.
+- A test run, spike, prototype, and real game slice use the same quality gates.
+  Label the intended outcome honestly, but never lower the bar for visual
+  proof, first-player focus, native PC readability, core-loop evidence, or
+  technical validation because the run is "only a test".
 - Rendering rule: GAME VISUALS ALWAYS use real assets — sprites/textures,
   generated art, or models — through the engine's asset render path (e.g.
   `nt_sprite_renderer` + atlas pack for 2D). The shape renderer (`nt_shape_renderer`)
@@ -108,6 +115,12 @@
   not polish — not done until a first-time player could figure it out unaided.
   (This session shipped "release-candidate" with opaque, text-less upgrades and
   no real FTUE because only appearance was gated; do not repeat that.)
+- First-player focus gate comes before art polish: the first screen must make
+  one current location, one active primary path, one next action, visible
+  reward/progress, and locked/future states understandable before adding more
+  decorative polish. Future activities may appear as roadmap tabs or locked
+  affordances when they help the player understand scope, but they must read as
+  unavailable/future and must not be wired as fake active controls.
 - Game / core-loop gate (beside the visual + teachability gates; the GAME, not
   the screen): before a slice is "done" or called a prototype/release-ready,
   judge it as someone who wants a GAME, not a demo. Can you state the
@@ -168,6 +181,10 @@
   uniforms, not for authored UI scale. If a custom immediate UI path is used
   instead of Clay/`nt_ui`, it still must use the same `nt_ui_scale`
   reference-resolution contract before a UI slice can be accepted.
+- Gate separation: product/readability, game-loop/fun, art-source/assets, and
+  technical/build gates are separate verdicts. Do not let a green build or
+  clean asset audit imply that the screen is readable, the loop is fun, or the
+  art direction is accepted.
 - Visual regression rule (a recurring failure: fixing one axis silently made
   another worse — this session a text-readability pass introduced clashing
   rectangular plates on the ROUNDED buttons and "looked dirty"): when you change

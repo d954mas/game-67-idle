@@ -44,3 +44,11 @@ humans should use the knowledge base.
   (Max Power Gaming / Rotrends-backed Roblox top-game analysis) and promoted
   reusable conclusions to [Player Need Lanes](player_need_lanes.md): accessible
   progression vs active mastery as a first-screen/concept alignment model.
+
+## 2026-06-18
+
+- Added chroma cutout guidance to [AI Art Iteration Pipeline](ai_art_iteration_pipeline.md):
+  clean key-color holes are repairable with explicit holes/soft-matte modes,
+  while key color baked into outlines, material, shadows, and semishadows needs
+  benchmarked repair, safer-key regeneration, true alpha, split shadow layers,
+  or dual-plate alpha extraction.

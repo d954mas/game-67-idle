@@ -1,7 +1,7 @@
 ---
 id: T0010
 title: Custom Mine Cards voxel miner source pack
-status: idea
+status: dropped
 epic: E001
 priority: P2
 tags: [mine-cards, art, character, skeletal, source-pack, gated]
@@ -93,3 +93,4 @@ Out of scope:
   concepts are reference-only, body/head/limbs are skinned, and tools/selected
   gear are rigid-socketed. T0010 remains gated `idea` until T0001 is accepted
   or the lead explicitly changes priority.
+- 2026-06-18: Closed with Mine Cards test run. Custom miner source prep is not active until a future game explicitly reopens it.

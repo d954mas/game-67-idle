@@ -38,6 +38,13 @@ work. Do not inspect the review queue during normal game implementation unless
 the user asks to review/close old tasks or the current decision depends on a
 specific review item.
 
+When the user says a prototype/game was only a test run or should stop, close
+the active game context instead of leaving it in `doing`/`review`: set related
+tasks and epics to `dropped` with a log entry, let the tooling archive task
+files, rewrite `tasks/STATUS.md` to "no active game concept selected", and keep
+only reusable lessons in pipeline docs/skills. Never delete task files to hide
+closed work.
+
 ## Refinement bar
 
 A `backlog` task must answer: what visible change proves it done, what is out
