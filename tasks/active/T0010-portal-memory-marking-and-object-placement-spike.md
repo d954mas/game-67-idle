@@ -155,3 +155,11 @@ and reveal a real exit.
   gate, and slice hygiene ran. Product gate remains FAIL for art quality and
   audience fit: the image is more solid, but still a blended overlay proof that
   needs opaque authored room surfaces or T0011 render-target portal rendering.
+- 2026-06-19: Opaque aperture pass moved the impossible-room composite to full
+  opacity inside the fullscreen portal cut, narrowed/dimmed the shader frame,
+  and reduced the external overlay jamb/threshold alpha so the portal no longer
+  reads as strongly as transparent side plates over the wall. Native build,
+  T0010 capture, smoke, readability, taskboard validation, and strict product
+  gate ran. Product gate remains FAIL for art quality/audience fit: the cleaner
+  aperture is a stopgap, not a replacement for opaque authored interior
+  geometry or T0011 render-target portal lighting.

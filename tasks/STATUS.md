@@ -12,10 +12,11 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 
 - No native runtime blocker is known for the current game repo slice.
 - T0010 product gate is still red: the portal room now has data-driven
-  geometry, material, light, finish, authored construction descriptors, denser
-  texture-backed/material-kind-lit native `nt_gfx` room surfaces, and a
-  separate aperture contact-shadow layer, but not yet production-quality
-  realistic Backrooms room construction.
+  geometry, material, light, finish, authored construction descriptors, a
+  fully opaque fullscreen portal-room composite inside the aperture, denser
+  texture-backed/material-kind-lit native `nt_gfx` room surfaces, and reduced
+  external ghost-frame artifacts, but not yet production-quality realistic
+  Backrooms room construction.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
   must not patch `external/neotolis-engine`; use public APIs or carry an
@@ -56,14 +57,15 @@ node tools/taskboard/cli.mjs validate
 - `src/backrooms_portal_scene.*` defines the current game-local universal portal
   scene foundation: rooms, material/light/finish/authored-construction
   descriptors, portal descriptors, flags, validation, and GPU params.
-- `src/clean_seed_main.c` now has a separate native `nt_gfx` portal overlay
-  pass that streams 450 world-space vertices: 366 texture-backed room
+- `src/clean_seed_main.c` now composites the impossible room as an opaque
+  fullscreen portal cut, then adds a separate native `nt_gfx` detail overlay
+  that streams 450 world-space vertices: 366 texture-backed room
   mesh/material-detail vertices for denser inner floor/wall/ceiling/light-spill
   surfaces, grout seams, wall seams, back-wall strips, ceiling grid, and shadow
-  bands plus a separate aperture contact-shadow layer, jambs, threshold, inner
-  fixture, conduit, and landmark column from portal scene params. The overlay
-  shader now receives material kind and world position to apply center light
-  spill, side shadow falloff, seam darkening, depth falloff, and softer
+  bands plus a separate aperture contact-shadow layer, softened jamb/threshold
+  hints, inner fixture, conduit, and landmark column from portal scene params.
+  The overlay shader receives material kind and world position to apply center
+  light spill, side shadow falloff, seam darkening, depth falloff, and softer
   occluder/contact-shadow treatment.
 - `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md` records
   the engine-facing render-target API gap with evidence from `nt_gfx`.
@@ -84,9 +86,10 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Move from the current denser blended overlay proof to opaque authored 3D
-   room surfaces or T0011 render-target portal rendering, then revisit the
-   product gate for art quality and audience fit.
+1. Use the cleaner opaque aperture as the stopgap, then move to opaque authored
+   3D interior geometry or T0011 render-target portal rendering; revisit the
+   product gate for art quality and audience fit after the room lighting is
+   physically more convincing.
 2. Add stronger production texture/light evidence before expanding content;
    more one-pass shader decoration is now a low-value path unless it directly
    proves the future mesh/material contract.

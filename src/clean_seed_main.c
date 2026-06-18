@@ -524,8 +524,8 @@ static const char *s_fs_src =
     "        float side_edge = abs(abs(hit.z - u_portal_entry.y) - max(0.0, u_portal_entry.z - 0.02));\n"
     "        float top_edge = abs(hit.y - u_portal_bounds.y);\n"
     "        float bottom_edge = abs(hit.y - u_portal_bounds.x);\n"
-    "        float frame_z = 1.0 - smoothstep(0.045, 0.15, side_edge);\n"
-    "        float frame_y = max(1.0 - smoothstep(0.035, 0.13, bottom_edge), 1.0 - smoothstep(0.035, 0.13, top_edge));\n"
+    "        float frame_z = 1.0 - smoothstep(0.024, 0.085, side_edge);\n"
+    "        float frame_y = max(1.0 - smoothstep(0.026, 0.090, bottom_edge), 1.0 - smoothstep(0.026, 0.090, top_edge));\n"
     "        impossible_frame = u_portal_entry.w * cut_band * max(frame_z * cut_y, frame_y * room_band(hit.z, u_portal_entry.y, u_portal_entry.z + 0.10));\n"
     "        impossible_rim = u_portal_entry.w * cut_band * max(1.0 - smoothstep(0.0, 0.035, min(side_edge, min(top_edge, bottom_edge))), 0.0);\n"
     "        impossible_occlusion = u_portal_entry.w * cut_band * cut_y * (1.0 - smoothstep(0.0, 0.34, min(side_edge, min(top_edge, bottom_edge))));\n"
@@ -566,10 +566,10 @@ static const char *s_fs_src =
     "    color += vec3(0.55, 0.16, 0.04) * exit_door * (1.0 - u_puzzle.z) * 0.34;\n"
     "    color += vec3(1.0, 0.58, 0.18) * exit_frame * (0.10 + 0.46 * u_puzzle.w);\n"
     "    vec3 impossible_col = impossible_room_color(hit, rd, ttime);\n"
-    "    color = mix(color, impossible_col, impossible_cut * 0.96);\n"
-    "    color = mix(color, vec3(0.018, 0.014, 0.008), impossible_frame * 0.76);\n"
-    "    color += vec3(0.92, 0.70, 0.34) * impossible_frame * 0.35;\n"
-    "    color = mix(color, color * 0.34, impossible_frame * smoothstep(0.0, 1.0, abs(hit.z - u_portal_entry.y)) * 0.18);\n"
+    "    color = mix(color, impossible_col, impossible_cut);\n"
+    "    color = mix(color, vec3(0.026, 0.020, 0.012), impossible_frame * 0.54);\n"
+    "    color += vec3(0.82, 0.62, 0.28) * impossible_frame * 0.24;\n"
+    "    color = mix(color, color * 0.48, impossible_frame * smoothstep(0.0, 1.0, abs(hit.z - u_portal_entry.y)) * 0.10);\n"
     "    color = mix(color, color * vec3(0.23, 0.20, 0.15), impossible_occlusion * 0.72);\n"
     "    color += vec3(1.12, 0.86, 0.36) * impossible_rim * 0.52;\n"
     "    color = mix(color, vec3(0.010, 0.007, 0.004), cut_screws * 0.92);\n"
@@ -1376,13 +1376,13 @@ static uint32_t build_portal_overlay_vertices(const BackroomsPortalGpuParams *po
     portal_overlay_emit_aperture_occlusion(&count, wall_x, z0, z1, min_y, max_y, jamb);
 
     s_portal_overlay_emit_kind = 0.0F;
-    portal_overlay_emit_yz_quad(&count, wall_x - 0.010F, min_y - 0.04F, max_y + 0.04F, z0 - side, z0 + side, 0.18F, 0.14F, 0.076F, 0.48F);
-    portal_overlay_emit_yz_quad(&count, wall_x - 0.010F, min_y - 0.04F, max_y + 0.04F, z1 - side, z1 + side, 0.17F, 0.13F, 0.072F, 0.50F);
-    portal_overlay_emit_yz_quad(&count, wall_x - 0.020F, max_y - top, max_y + top, z0 - side, z1 + side, 0.24F, 0.19F, 0.095F, 0.46F);
-    portal_overlay_emit_yz_quad(&count, wall_x - 0.020F, min_y - top * 0.85F, min_y + top * 0.45F, z0 - side, z1 + side, 0.12F, 0.090F, 0.048F, 0.42F);
+    portal_overlay_emit_yz_quad(&count, wall_x - 0.010F, min_y - 0.04F, max_y + 0.04F, z0 - side, z0 + side, 0.18F, 0.14F, 0.076F, 0.075F);
+    portal_overlay_emit_yz_quad(&count, wall_x - 0.010F, min_y - 0.04F, max_y + 0.04F, z1 - side, z1 + side, 0.17F, 0.13F, 0.072F, 0.080F);
+    portal_overlay_emit_yz_quad(&count, wall_x - 0.020F, max_y - top, max_y + top, z0 - side, z1 + side, 0.24F, 0.19F, 0.095F, 0.085F);
+    portal_overlay_emit_yz_quad(&count, wall_x - 0.020F, min_y - top * 0.85F, min_y + top * 0.45F, z0 - side, z1 + side, 0.12F, 0.090F, 0.048F, 0.075F);
 
-    portal_overlay_emit_floor_quad(&count, wall_x - 0.10F, wall_x + lip, min_y - 0.035F, z0 - side * 0.7F, z1 + side * 0.7F, 0.19F, 0.15F, 0.078F, 0.30F);
-    portal_overlay_emit_floor_quad(&count, wall_x + 0.10F, wall_x + 1.35F + lip * 0.35F, min_y + 0.012F, z0 + 0.15F, z1 - 0.15F, 0.065F, 0.054F, 0.037F, 0.28F);
+    portal_overlay_emit_floor_quad(&count, wall_x - 0.10F, wall_x + lip, min_y - 0.035F, z0 - side * 0.7F, z1 + side * 0.7F, 0.19F, 0.15F, 0.078F, 0.10F);
+    portal_overlay_emit_floor_quad(&count, wall_x + 0.10F, wall_x + 1.35F + lip * 0.35F, min_y + 0.012F, z0 + 0.15F, z1 - 0.15F, 0.065F, 0.054F, 0.037F, 0.12F);
 
     const float inner_x = wall_x + 0.92F;
     const float fixture_y0 = max_y + 0.10F;
