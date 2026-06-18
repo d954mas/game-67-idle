@@ -93,3 +93,13 @@ and reveal a real exit.
   product gate ran; product gate remains FAIL because the image is still not
   production-quality realistic Backrooms art.
 - 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Use the portal material descriptors for a stronger visual pass: authored-looking trim, light fixtures, shadow gradients, roughness-like wallpaper/carpet response, and eventually T0011 render-target support.
+- 2026-06-18: Portal finish pass extended `BackroomsPortalMaterial` and GPU
+  params with trim strength, fixture spacing, ceiling-panel scale, and shadow
+  spill. The native shader now uses those room descriptors for visible
+  fluorescent fixture cues, ceiling panel seams, wall battens/cove trim, floor
+  light pools, and softer side-opening darkness. Native build, T0010 scenario,
+  smoke, readability, taskboard, and slice hygiene ran; product gate remains
+  FAIL because the screenshot is improved but still not a production-quality
+  realistic Backrooms room. Profiler guard is advisory/red due unresolved failed
+  records.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Move beyond the current one-pass finish layer toward real authored room construction or T0011 render-target support, instead of stacking more fullscreen shader polish.

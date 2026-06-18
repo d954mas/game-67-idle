@@ -135,6 +135,7 @@ static const char *s_fs_src =
     "uniform vec4 u_portal_bounds;\n"
     "uniform vec4 u_portal_material;\n"
     "uniform vec4 u_portal_light;\n"
+    "uniform vec4 u_portal_finish;\n"
     "uniform sampler2D u_wall_tex;\n"
     "uniform sampler2D u_ui_tex;\n"
     "\n"
@@ -211,13 +212,27 @@ static const char *s_fs_src =
     "    float panel_x = 1.0 - smoothstep(0.020, 0.070, abs(fract(hp.x * max(0.10, u_portal_material.x + 0.22)) - 0.5));\n"
     "    float panel_z = 1.0 - smoothstep(0.024, 0.080, abs(fract((hp.z + u_portal_shape.y) * max(0.10, u_portal_material.x)) - 0.5));\n"
     "    float wall_panel = (smat == 1 || smat == 4 ? 1.0 : 0.0) * max(panel_x * 0.55, panel_z);\n"
+    "    float wall_batten = (smat == 1 || smat == 4 ? 1.0 : 0.0) * (1.0 - smoothstep(0.025, 0.090, abs(fract((hp.x + 0.25) * 0.46) - 0.5))) * smoothstep(0.34, 0.58, hp.y) * (1.0 - smoothstep(u_portal_shape.z - 0.44, u_portal_shape.z - 0.18, hp.y));\n"
     "    float carpet_tile_x = (smat == 2 ? 1.0 : 0.0) * (1.0 - smoothstep(0.018, 0.070, abs(fract(hp.x * max(0.10, u_portal_material.y + 0.10)) - 0.5)));\n"
     "    float carpet_tile_z = (smat == 2 ? 1.0 : 0.0) * (1.0 - smoothstep(0.018, 0.070, abs(fract((hp.z + u_portal_shape.y) * max(0.10, u_portal_material.y)) - 0.5)));\n"
     "    float baseboard = (smat == 1 || smat == 4 ? 1.0 : 0.0) * smoothstep(0.08, 0.16, hp.y) * (1.0 - smoothstep(0.22, 0.34, hp.y));\n"
     "    float stain = smoothstep(0.66, 0.96, hash12(floor(hp.xz * vec2(1.4, 2.0)))) * (1.0 - smoothstep(0.35, 2.30, hp.y)) * u_portal_material.z;\n"
     "    float corner_shadow = max(smoothstep(u_portal_shape.y * 0.68, u_portal_shape.y, abs(hp.z)), smoothstep(u_portal_shape.x * 0.72, u_portal_shape.x, hp.x)) * u_portal_light.z;\n"
     "    float floor_wet = (smat == 2 ? 1.0 : 0.0) * smoothstep(2.0, 9.4, hp.x) * (0.45 + 0.55 * hash12(floor(hp.xz * 1.7))) * u_portal_material.w;\n"
-    "    float ceiling_strip = (smat == 3 ? 1.0 : 0.0) * (1.0 - smoothstep(u_portal_light.x * 0.45, u_portal_light.x, abs(hp.z))) * (0.66 + 0.34 * step(0.28, sin(hp.x * 2.4 + ttime * 0.55)));\n"
+    "    float fixture_spacing = max(1.8, u_portal_finish.y);\n"
+    "    float fixture_center = floor((hp.x + fixture_spacing * 0.50) / fixture_spacing) * fixture_spacing;\n"
+    "    float fixture_local = hp.x - fixture_center;\n"
+    "    float fixture_pulse = 0.72 + 0.28 * step(0.22, sin(fixture_center * 3.1 + ttime * 2.7));\n"
+    "    float fixture_lens = (smat == 3 ? 1.0 : 0.0) * (1.0 - smoothstep(u_portal_light.x * 0.35, u_portal_light.x, abs(hp.z))) * (1.0 - smoothstep(0.46, 0.62, abs(fixture_local)));\n"
+    "    float fixture_housing = (smat == 3 ? 1.0 : 0.0) * max(1.0 - smoothstep(0.028, 0.075, abs(abs(hp.z) - u_portal_light.x * 1.22)), 1.0 - smoothstep(0.030, 0.082, abs(abs(fixture_local) - 0.58)));\n"
+    "    fixture_housing *= (1.0 - smoothstep(0.74, 0.94, abs(fixture_local))) * (1.0 - smoothstep(u_portal_light.x * 1.6, u_portal_light.x * 2.1, abs(hp.z)));\n"
+    "    float ceiling_panel = (smat == 3 ? 1.0 : 0.0) * max(1.0 - smoothstep(0.014, 0.060, abs(fract((hp.x + 0.33) * max(0.18, u_portal_finish.z)) - 0.5)), 1.0 - smoothstep(0.014, 0.060, abs(fract((hp.z + u_portal_shape.y) * max(0.18, u_portal_finish.z * 0.72)) - 0.5)));\n"
+    "    float ceiling_strip = fixture_lens * (0.66 + 0.34 * fixture_pulse);\n"
+    "    float wall_light_spill = (smat == 1 || smat == 4 ? 1.0 : 0.0) * (1.0 - smoothstep(0.34, 1.72, abs(hp.z))) * smoothstep(1.18, 2.38, hp.y) * (0.48 + 0.52 * fixture_pulse) * u_portal_finish.w;\n"
+    "    float cove_trim = (smat == 1 || smat == 4 ? 1.0 : 0.0) * max(1.0 - smoothstep(0.030, 0.095, abs(hp.y - (u_portal_shape.z - 0.16))), 1.0 - smoothstep(0.026, 0.080, abs(hp.y - 0.42)));\n"
+    "    cove_trim *= u_portal_finish.x;\n"
+    "    float floor_light_pool = (smat == 2 ? 1.0 : 0.0) * (1.0 - smoothstep(0.42, 1.70, abs(hp.z))) * (1.0 - smoothstep(0.62, 1.95, abs(fixture_local))) * u_portal_finish.w;\n"
+    "    float floor_wall_shadow = (smat == 2 ? 1.0 : 0.0) * smoothstep(u_portal_shape.y * 0.58, u_portal_shape.y, abs(hp.z)) * u_portal_light.z;\n"
     "    float nested_body = (smat == 1 ? 1.0 : 0.0) * (1.0 - smoothstep(1.12, 1.58, abs(hp.z))) * smoothstep(0.44, 0.62, hp.y) * (1.0 - smoothstep(1.82, 2.08, hp.y));\n"
     "    float nested_half = u_portal_style.y;\n"
     "    float nested_frame = (smat == 1 ? 1.0 : 0.0) * max(1.0 - smoothstep(0.035, 0.12, abs(abs(hp.z) - nested_half)), max(1.0 - smoothstep(0.035, 0.12, abs(hp.y - 0.50)), 1.0 - smoothstep(0.035, 0.12, abs(hp.y - 1.98))));\n"
@@ -235,15 +250,22 @@ static const char *s_fs_src =
     "    copied_mark *= (1.0 - smoothstep(0.075, 0.16, abs((hp.y - 1.14) + hp.z * 0.18))) * smoothstep(0.42, 0.66, hp.y) * (1.0 - smoothstep(1.58, 1.84, hp.y));\n"
     "    float copied_mark_small = nested_body * (1.0 - smoothstep(0.040, 0.095, abs((nuv.y + 0.18) - nuv.x * 0.34))) * (1.0 - smoothstep(0.040, 0.095, abs((nuv.y + 0.18) + nuv.x * 0.34)));\n"
     "    float threshold_light = exp(-ro2.x * 0.38) * (0.28 + 0.28 * smoothstep(u_portal_entry.z * 0.80, 0.0, abs(portal_z)));\n"
-    "    float light = 0.14 + threshold_light + ceiling_strip * u_portal_light.y + u_portal_style.z / (1.0 + length(hp - vec3(u_portal_shape.x * 0.49, u_portal_shape.z - 0.29, 0.0)) * 0.82);\n"
+    "    float light = 0.18 + threshold_light + ceiling_strip * u_portal_light.y + wall_light_spill * 0.62 + floor_light_pool * 0.44 + u_portal_style.z / (1.0 + length(hp - vec3(u_portal_shape.x * 0.49, u_portal_shape.z - 0.29, 0.0)) * 0.82);\n"
     "    col *= light;\n"
     "    col = mix(col, col * vec3(0.46, 0.40, 0.28), stain * 0.64);\n"
     "    col = mix(col, col * vec3(0.24, 0.22, 0.17), corner_shadow * 0.58);\n"
     "    col = mix(col, col * 0.48, wall_panel * 0.32);\n"
+    "    col = mix(col, vec3(0.18, 0.12, 0.050), wall_batten * 0.56);\n"
     "    col = mix(col, vec3(0.13, 0.09, 0.045), baseboard * u_portal_light.w);\n"
+    "    col = mix(col, vec3(0.10, 0.075, 0.038), cove_trim * 0.70);\n"
+    "    col = mix(col, col * 0.56, ceiling_panel * 0.26);\n"
+    "    col = mix(col, vec3(0.030, 0.026, 0.018), fixture_housing * 0.86);\n"
     "    col = mix(col, col * 0.62, max(carpet_tile_x, carpet_tile_z) * 0.40);\n"
+    "    col = mix(col, col * 0.50, floor_wall_shadow * 0.46);\n"
     "    col += vec3(0.20, 0.15, 0.07) * floor_wet;\n"
     "    col += vec3(1.00, 0.88, 0.46) * ceiling_strip * (0.42 + 0.12 * u_portal_light.y);\n"
+    "    col += vec3(0.76, 0.58, 0.25) * wall_light_spill * 0.30;\n"
+    "    col += vec3(0.36, 0.23, 0.09) * floor_light_pool * 0.34;\n"
     "    col = mix(col, nested_col, nested_body * 0.92);\n"
     "    col = mix(col, vec3(0.016, 0.012, 0.006), nested_frame * 0.84);\n"
     "    col += vec3(0.95, 0.68, 0.30) * nested_frame * 0.28;\n"
@@ -432,7 +454,8 @@ static const char *s_fs_src =
     "    color = mix(color, color * 0.38, fixture_shadow * 0.22);\n"
     "    color += vec3(1.0, 0.92, 0.66) * fixture_shape * (1.05 + 0.75 * flicker);\n"
     "    color += vec3(1.15, 0.04, 0.0) * fixture_shape * u_horror.x * (0.7 + 0.5 * step(0.45, sin(ttime * 15.0)));\n"
-    "    color *= 1.0 - side_opening * 0.86;\n"
+    "    color = mix(color, color * vec3(0.36, 0.32, 0.20), side_opening * 0.38);\n"
+    "    color += vec3(0.16, 0.13, 0.055) * side_opening * 0.16;\n"
     "    color = mix(color, vec3(0.006, 0.006, 0.004), dead_end_shadow * 0.62);\n"
     "    color = mix(color, vec3(0.16, 0.0, 0.0), red_room * (0.52 + u_pressure.x * 0.25));\n"
     "    color = mix(color, vec3(0.018, 0.014, 0.010), exit_door * (0.82 + 0.15 * u_puzzle.w));\n"
@@ -1346,6 +1369,7 @@ static void draw_frame(float fb_w, float fb_h) {
     nt_gfx_set_uniform_vec4("u_portal_bounds", portal.bounds);
     nt_gfx_set_uniform_vec4("u_portal_material", portal.material);
     nt_gfx_set_uniform_vec4("u_portal_light", portal.light);
+    nt_gfx_set_uniform_vec4("u_portal_finish", portal.finish);
     nt_gfx_draw(0, 6);
 }
 
@@ -1410,6 +1434,10 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(portal, "grime_strength", (double)portal_params.material[2]);
     cJSON_AddNumberToObject(portal, "wetness_strength", (double)portal_params.material[3]);
     cJSON_AddNumberToObject(portal, "fluorescent_intensity", (double)portal_params.light[1]);
+    cJSON_AddNumberToObject(portal, "trim_strength", (double)portal_params.finish[0]);
+    cJSON_AddNumberToObject(portal, "fixture_spacing", (double)portal_params.finish[1]);
+    cJSON_AddNumberToObject(portal, "ceiling_panel_scale", (double)portal_params.finish[2]);
+    cJSON_AddNumberToObject(portal, "shadow_spill_strength", (double)portal_params.finish[3]);
     cJSON_AddItemToObject(root, "portal_render", portal);
     cJSON_AddStringToObject(root,
                             "objective",

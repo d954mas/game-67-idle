@@ -11,9 +11,9 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 ## Blocking Work
 
 - No native runtime blocker is known for the current game repo slice.
-- T0010 product gate is still red: the portal room now reads as a data-driven
-  physical larger room, but not yet as a production-quality realistic Backrooms
-  scene.
+- T0010 product gate is still red: the portal room now has data-driven
+  geometry, material, light, and finish descriptors, but not yet
+  production-quality realistic Backrooms room construction.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
   must not patch `external/neotolis-engine`; use public APIs or carry an
@@ -52,13 +52,14 @@ node tools/taskboard/cli.mjs validate
 ## Last Known Good Evidence
 
 - `src/backrooms_portal_scene.*` defines the current game-local universal portal
-  scene foundation: rooms, material/light descriptors, portal descriptors,
-  flags, validation, and GPU params.
+  scene foundation: rooms, material/light/finish descriptors, portal
+  descriptors, flags, validation, and GPU params.
 - `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md` records
   the engine-facing render-target API gap with evidence from `nt_gfx`.
 - `build/captures/backrooms_t0010_portal_memory_status.json` proves mark
   placement, locked-door rejection, handle pickup, handle fitting, exit reveal,
-  escape, and active `portal_render` material/light params.
+  escape, and active `portal_render` material/light/finish params including
+  trim, fixture spacing, ceiling panel scale, and shadow spill.
 - `build/captures/backrooms_t0010_impossible_geometry.png` is the latest native
   proof screenshot for the data-driven impossible room.
 - `build/captures/backrooms_t0010_impossible_geometry_uizoom.png` is the latest
@@ -69,11 +70,12 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Improve T0010 visual quality on top of the portal-scene foundation:
-   authored-looking trim, visible light fixtures, stronger shadow gradients,
-   roughness-like wallpaper/carpet response, and less shader-authored material
-   feel.
-2. Decide whether to pursue T0011 in the engine repo or keep the current
-   one-pass portal traversal in the game until the visual bar is closer.
+1. Improve T0010 visual quality beyond the current one-pass finish layer:
+   use more real authored room construction where the game repo can, and move
+   the reusable portal path toward T0011 render-target support instead of
+   stacking more fullscreen shader tricks.
+2. Decide whether to pursue T0011 in the engine repo now or prototype a
+   game-local mesh/material room layer that can later feed the render target
+   pipeline.
 3. Keep content expansion frozen while the T0010 product gate remains red,
    unless the lead explicitly accepts that visual debt.

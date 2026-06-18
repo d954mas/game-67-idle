@@ -31,6 +31,10 @@ typedef struct BackroomsPortalMaterial {
     float fluorescent_intensity;
     float corner_shadow_strength;
     float baseboard_strength;
+    float trim_strength;
+    float fixture_spacing;
+    float ceiling_panel_scale;
+    float shadow_spill_strength;
 } BackroomsPortalMaterial;
 
 typedef struct BackroomsPortal {
@@ -61,6 +65,7 @@ typedef struct BackroomsPortalGpuParams {
     float bounds[4]; /* min_y, max_y, outer_wall_start_x, outer_wall_end_x */
     float material[4]; /* wall_panel_scale, carpet_tile_scale, grime_strength, wetness_strength */
     float light[4]; /* fluorescent_width, fluorescent_intensity, corner_shadow_strength, baseboard_strength */
+    float finish[4]; /* trim_strength, fixture_spacing, ceiling_panel_scale, shadow_spill_strength */
 } BackroomsPortalGpuParams;
 
 void backrooms_portal_scene_clear(BackroomsPortalScene *scene);

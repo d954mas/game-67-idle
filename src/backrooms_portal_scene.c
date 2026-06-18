@@ -19,6 +19,10 @@ static BackroomsPortalMaterial default_material(void) {
         .fluorescent_intensity = 1.86F,
         .corner_shadow_strength = 0.58F,
         .baseboard_strength = 0.82F,
+        .trim_strength = 0.72F,
+        .fixture_spacing = 3.2F,
+        .ceiling_panel_scale = 0.48F,
+        .shadow_spill_strength = 0.58F,
     };
 }
 
@@ -90,6 +94,10 @@ void backrooms_portal_scene_build_t0010(BackroomsPortalScene *scene) {
                                               .fluorescent_intensity = 1.72F,
                                               .corner_shadow_strength = 0.56F,
                                               .baseboard_strength = 0.90F,
+                                              .trim_strength = 0.68F,
+                                              .fixture_spacing = 3.8F,
+                                              .ceiling_panel_scale = 0.50F,
+                                              .shadow_spill_strength = 0.54F,
                                           },
                                           &corridor);
     (void)backrooms_portal_scene_add_room(scene,
@@ -109,6 +117,10 @@ void backrooms_portal_scene_build_t0010(BackroomsPortalScene *scene) {
                                               .fluorescent_intensity = 2.12F,
                                               .corner_shadow_strength = 0.74F,
                                               .baseboard_strength = 0.96F,
+                                              .trim_strength = 0.92F,
+                                              .fixture_spacing = 2.9F,
+                                              .ceiling_panel_scale = 0.66F,
+                                              .shadow_spill_strength = 0.82F,
                                           },
                                           &impossible_room);
     (void)backrooms_portal_scene_add_portal(scene,
@@ -134,6 +146,7 @@ BackroomsPortalGpuParams backrooms_portal_scene_gpu_params(const BackroomsPortal
         .bounds = {0.30F, 1.78F, 3.36F, 4.12F},
         .material = {0.36F, 0.52F, 0.86F, 0.72F},
         .light = {0.20F, 2.12F, 0.74F, 0.96F},
+        .finish = {0.92F, 2.9F, 0.66F, 0.82F},
     };
     if (scene == NULL || portal_index >= scene->portal_count) {
         return params;
@@ -166,5 +179,9 @@ BackroomsPortalGpuParams backrooms_portal_scene_gpu_params(const BackroomsPortal
     params.light[1] = material->fluorescent_intensity;
     params.light[2] = material->corner_shadow_strength;
     params.light[3] = material->baseboard_strength;
+    params.finish[0] = material->trim_strength;
+    params.finish[1] = material->fixture_spacing;
+    params.finish[2] = material->ceiling_panel_scale;
+    params.finish[3] = material->shadow_spill_strength;
     return params;
 }
