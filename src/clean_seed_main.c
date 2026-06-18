@@ -54,6 +54,11 @@ typedef struct BackroomsState {
     float blackout_timer;
     float ambush_timer;
     float relief_timer;
+    float dynamo_stall_timer;
+    int visited_rooms_mask;
+    int side_room_visits;
+    int layout_shift_count;
+    int maze_zone;
     int route_choice_stage;
     int route_choice_correct;
     int route_choice_wrong;
@@ -83,6 +88,13 @@ static uint8_t s_wall_pixels[WALL_TEX_W * WALL_TEX_H * 4];
 static uint8_t s_ui_pixels[UI_W * UI_H * 4];
 static const float s_route_choice_z[] = {24.0F, 16.2F, 8.3F};
 static const int s_route_choice_safe_side[] = {1, -1, 1};
+
+#define FUSE_X (-3.45F)
+#define FUSE_Z (25.15F)
+#define MAZE_ZONE_MAIN 0
+#define MAZE_ZONE_LEFT_DEADEND 1
+#define MAZE_ZONE_RED_ROOM 2
+#define MAZE_ZONE_FUSE_ROOM 3
 
 static const char *s_vs_src = "precision mediump float;\n"
                               "layout(location = 0) in vec2 a_position;\n"
@@ -135,6 +147,22 @@ static const char *s_fs_src =
     "    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);\n"
     "}\n"
     "\n"
+    "float room_band(float z, float center, float half_span) {\n"
+    "    return 1.0 - step(half_span, abs(z - center));\n"
+    "}\n"
+    "\n"
+    "float corridor_room_mix(float z) {\n"
+    "    return max(max(room_band(z, 10.8, 1.85), room_band(z, 18.6, 2.2)), room_band(z, 25.1, 1.95));\n"
+    "}\n"
+    "\n"
+    "float corridor_half_width(float z) {\n"
+    "    float w = 1.36;\n"
+    "    w = max(w, mix(1.36, 4.25, room_band(z, 10.8, 1.85)));\n"
+    "    w = max(w, mix(1.36, 5.10, room_band(z, 18.6, 2.2)));\n"
+    "    w = max(w, mix(1.36, 4.65, room_band(z, 25.1, 1.95)));\n"
+    "    return w;\n"
+    "}\n"
+    "\n"
     "void main() {\n"
     "    vec2 frag = v_uv * u_resolution_time.xy;\n"
     "    vec2 p = (frag - 0.5 * u_resolution_time.xy) / max(u_resolution_time.y, 1.0);\n"
@@ -155,21 +183,37 @@ static const char *s_fs_src =
     "    if (tfloor > 0.0) { best = tfloor; normal = vec3(0.0, 1.0, 0.0); mat = 1; }\n"
     "    float tceil = (2.55 - ro.y) / rd.y;\n"
     "    if (tceil > 0.0 && tceil < best) { best = tceil; normal = vec3(0.0, -1.0, 0.0); mat = 2; }\n"
-    "    float twall_l = (-1.36 - ro.x) / rd.x;\n"
-    "    vec3 pwall_l = ro + rd * twall_l;\n"
-    "    if (twall_l > 0.0 && pwall_l.y >= 0.0 && pwall_l.y <= 2.55 && twall_l < best) { best = twall_l; normal = vec3(1.0, 0.0, 0.0); mat = 3; }\n"
-    "    float twall_r = (1.36 - ro.x) / rd.x;\n"
-    "    vec3 pwall_r = ro + rd * twall_r;\n"
-    "    if (twall_r > 0.0 && pwall_r.y >= 0.0 && pwall_r.y <= 2.55 && twall_r < best) { best = twall_r; normal = vec3(-1.0, 0.0, 0.0); mat = 3; }\n"
     "    float texit = (0.12 - ro.z) / rd.z;\n"
     "    vec3 pexit = ro + rd * texit;\n"
     "    if (texit > 0.0 && abs(pexit.x) < 0.68 && pexit.y > 0.0 && pexit.y < 2.15 && texit < best) { best = texit; normal = vec3(0.0, 0.0, 1.0); mat = 4; }\n"
-    "    float tfar = (34.0 - ro.z) / rd.z;\n"
-    "    vec3 pfar = ro + rd * tfar;\n"
-    "    if (tfar > 0.0 && abs(pfar.x) < 1.5 && pfar.y >= 0.0 && pfar.y <= 2.55 && tfar < best) { best = tfar; normal = vec3(0.0, 0.0, -1.0); mat = 3; }\n"
-    "\n"
-    "    float tfuse = sphere_hit(ro, rd, vec3(0.36, 1.05, 29.4), 0.24);\n"
-    "    if (u_state.x < 0.5 && tfuse < best) { best = tfuse; normal = normalize(ro + rd * tfuse - vec3(0.36, 1.05, 29.4)); mat = 5; }\n"
+    "    float tmaze = 0.08;\n"
+    "    float prev_tmaze = tmaze;\n"
+    "    for (int i = 0; i < 118; ++i) {\n"
+    "        vec3 pm = ro + rd * tmaze;\n"
+    "        if (pm.y >= 0.0 && pm.y <= 2.55) {\n"
+    "            float hw = corridor_half_width(pm.z);\n"
+    "            if (abs(pm.x) > hw || pm.z < 0.0 || pm.z > 34.0) {\n"
+    "                if (tmaze < best) {\n"
+    "                    float lo = prev_tmaze;\n"
+    "                    float hi = tmaze;\n"
+    "                    for (int j = 0; j < 6; ++j) {\n"
+    "                        float mid = 0.5 * (lo + hi);\n"
+    "                        vec3 bm = ro + rd * mid;\n"
+    "                        float bhw = corridor_half_width(bm.z);\n"
+    "                        if (abs(bm.x) > bhw || bm.z < 0.0 || bm.z > 34.0) { hi = mid; } else { lo = mid; }\n"
+    "                    }\n"
+    "                    best = hi;\n"
+    "                    pm = ro + rd * best;\n"
+    "                    hw = corridor_half_width(pm.z);\n"
+    "                    normal = abs(pm.x) > hw ? vec3(-sign(pm.x), 0.0, 0.0) : vec3(0.0, 0.0, pm.z < 0.0 ? 1.0 : -1.0);\n"
+    "                    mat = 3;\n"
+    "                }\n"
+    "                break;\n"
+    "            }\n"
+    "        }\n"
+    "        prev_tmaze = tmaze;\n"
+    "        tmaze += 0.055 + tmaze * 0.012;\n"
+    "    }\n"
     "\n"
     "    float entity_dist = max(2.55, mix(8.6, 4.4, u_pressure.y) - u_horror.y * 2.2);\n"
     "    float entity_z = max(u_player.y - entity_dist, 2.9);\n"
@@ -191,19 +235,19 @@ static const char *s_fs_src =
     "    if (mat == 2) { albedo = vec3(0.42, 0.40, 0.33); tuv = hit.xz * 0.42; }\n"
     "    if (mat == 3) { albedo = texture(u_wall_tex, vec2(hit.z * 0.18, hit.y * 0.55)).rgb; }\n"
     "    if (mat == 4) { albedo = mix(vec3(0.18, 0.12, 0.06), vec3(1.1, 0.84, 0.28), u_state.x); }\n"
-    "    if (mat == 5) { albedo = vec3(0.15, 1.25, 0.72); }\n"
+    "    if (mat == 5) { albedo = vec3(0.05, 0.04, 0.025); }\n"
     "    if (mat == 6) { albedo = vec3(0.004, 0.006, 0.008); }\n"
     "\n"
     "    float fixture_z = floor((hit.z + 2.6) / 5.2) * 5.2;\n"
     "    float flicker = 0.76 + 0.24 * step(0.18, hash12(vec2(floor(ttime * 13.0), fixture_z)));\n"
     "    float light_dist = length(vec3(hit.x, hit.y - 2.42, hit.z - fixture_z));\n"
     "    float blackout_flicker = mix(1.0, 0.10 + 0.22 * step(0.34, hash12(vec2(floor(ttime * 19.0), fixture_z + u_player.y))), u_horror.x);\n"
-    "    float ceiling_light = 1.8 / (1.0 + light_dist * light_dist * 0.9) * flicker * blackout_flicker;\n"
+    "    float ceiling_light = 1.55 / (1.0 + light_dist * light_dist * 1.1) * flicker * blackout_flicker;\n"
     "    float exit_light = u_state.x * 3.2 / (1.0 + length(hit - vec3(0.0, 1.25, 0.28)) * 1.7);\n"
-    "    float fuse_light = (1.0 - u_state.x) * 3.4 / (1.0 + length(hit - vec3(0.36, 1.0, 29.4)) * 1.35);\n"
+    "    float fuse_light = u_horror.w * (1.0 - u_state.x) * 1.55 / (1.0 + length(hit - vec3(-4.25, 1.0, 25.15)) * 1.65);\n"
     "    float cone = smoothstep(0.72, 0.98, dot(rd, normalize(vec3(fwd.x, -0.03, fwd.y)))) * u_state.z;\n"
     "    float flashlight = cone * mix(2.5, 3.25, u_horror.x) / (1.0 + best * best * 0.035);\n"
-    "    float contact = 1.0 - 0.34 * exp(-abs(hit.x - sign(hit.x) * 1.36) * 8.0) * smoothstep(0.0, 0.22, hit.y);\n"
+    "    float contact = 1.0 - 0.34 * exp(-abs(abs(hit.x) - corridor_half_width(hit.z)) * 8.0) * smoothstep(0.0, 0.22, hit.y);\n"
     "    contact *= 1.0 - 0.22 * exp(-hit.y * 12.0);\n"
     "    float side_opening = 0.0;\n"
     "    float false_exit = 0.0;\n"
@@ -224,15 +268,28 @@ static const char *s_fs_src =
     "        route_safe_glow = anomaly * lane_side * lane_band;\n"
     "        route_bad_glow = anomaly * (1.0 - lane_side) * lane_band;\n"
     "    }\n"
+    "    float room_mix = corridor_room_mix(hit.z);\n"
+    "    float red_room = room_band(hit.z, 18.6, 1.6) * smoothstep(2.15, 3.1, hit.x);\n"
+    "    float dead_end_shadow = room_band(hit.z, 10.8, 1.35) * smoothstep(1.8, 2.65, -hit.x);\n"
+    "    float exit_wall = room_band(hit.z, 25.1, 1.5) * smoothstep(3.4, 4.1, -hit.x) * u_horror.w;\n"
+    "    float exit_door_w = abs(hit.z - 25.15);\n"
+    "    float exit_door_h = hit.y;\n"
+    "    float exit_door = exit_wall * (1.0 - smoothstep(0.62, 0.92, exit_door_w)) * smoothstep(0.10, 0.18, exit_door_h) * (1.0 - smoothstep(1.58, 1.82, exit_door_h));\n"
+    "    float exit_frame = exit_wall * max(1.0 - smoothstep(0.02, 0.08, abs(exit_door_w - 0.68)), 1.0 - smoothstep(0.02, 0.08, min(abs(exit_door_h - 0.12), abs(exit_door_h - 1.62))));\n"
     "    float fixture_shape = 0.0;\n"
     "    if (mat == 2) {\n"
-    "        fixture_shape = (1.0 - smoothstep(0.13, 0.19, abs(hit.x))) * (1.0 - smoothstep(0.72, 0.92, abs(hit.z - fixture_z)));\n"
+    "        float fixture_w = mix(0.13, 0.34, room_mix);\n"
+    "        fixture_shape = (1.0 - smoothstep(fixture_w, fixture_w + 0.07, abs(hit.x))) * (1.0 - smoothstep(0.72, 0.92, abs(hit.z - fixture_z)));\n"
     "    }\n"
     "\n"
     "    vec3 color = albedo * (0.16 + ceiling_light + exit_light + fuse_light + flashlight) * contact;\n"
-    "    color += vec3(1.1, 1.0, 0.73) * fixture_shape * (1.6 + 1.1 * flicker);\n"
+    "    color += vec3(1.0, 0.92, 0.66) * fixture_shape * (1.05 + 0.75 * flicker);\n"
     "    color += vec3(1.15, 0.04, 0.0) * fixture_shape * u_horror.x * (0.7 + 0.5 * step(0.45, sin(ttime * 15.0)));\n"
     "    color *= 1.0 - side_opening * 0.86;\n"
+    "    color = mix(color, vec3(0.006, 0.006, 0.004), dead_end_shadow * 0.62);\n"
+    "    color = mix(color, vec3(0.16, 0.0, 0.0), red_room * (0.52 + u_pressure.x * 0.25));\n"
+    "    color = mix(color, vec3(0.0, 0.0, 0.0), exit_door);\n"
+    "    color += vec3(1.0, 0.58, 0.18) * exit_frame * 0.24;\n"
     "    color = mix(color, vec3(0.005, 0.012, 0.008), false_exit * 0.92);\n"
     "    color += vec3(0.1, 1.1, 0.34) * false_exit * (0.42 + 0.58 * step(0.5, sin(ttime * 6.0 + hit.z)));\n"
     "    color = mix(color, vec3(0.11, 0.0, 0.0), route_bad_glow * 0.46);\n"
@@ -241,7 +298,7 @@ static const char *s_fs_src =
     "    color = mix(color, color * vec3(0.34, 0.24, 0.18), u_horror.x * 0.62);\n"
     "    color += vec3(0.72, 0.015, 0.0) * u_horror.y * (0.11 + 0.09 * sin(ttime * 18.0));\n"
     "    color += vec3(0.05, 0.75, 0.34) * u_horror.z * max(0.0, 1.0 - best / 30.0) * 0.16;\n"
-    "    if (mat == 5) color += vec3(0.1, 2.4, 1.1);\n"
+    "    if (mat == 5) color += vec3(0.12, 0.06, 0.02);\n"
     "    if (mat == 6) {\n"
     "        float eye_l = 1.0 - smoothstep(0.015, 0.05, length(hit.xy - vec2(-0.08, 1.55)));\n"
     "        float eye_r = 1.0 - smoothstep(0.015, 0.05, length(hit.xy - vec2(0.08, 1.55)));\n"
@@ -291,7 +348,51 @@ static float dist_to(float x, float z, float tx, float tz) {
     return sqrtf((dx * dx) + (dz * dz));
 }
 
-static bool near_fuse(void) { return !s_game.fuse_found && dist_to(s_game.x, s_game.z, 0.36F, 29.4F) < 1.25F; }
+static bool in_z_band(float z, float center, float half_span) { return absf(z - center) <= half_span; }
+
+static float maze_walk_half_width(float z) {
+    float width = 1.05F;
+    if (in_z_band(z, 10.8F, 2.0F)) {
+        width = fmaxf(width, 4.0F);
+    }
+    if (in_z_band(z, 18.6F, 2.35F)) {
+        width = fmaxf(width, 4.85F);
+    }
+    if (in_z_band(z, 25.1F, 2.05F)) {
+        width = fmaxf(width, 4.4F);
+    }
+    return width;
+}
+
+static bool maze_walkable(float x, float z) {
+    if (z < 0.45F || z > 31.8F) {
+        return false;
+    }
+    return absf(x) <= maze_walk_half_width(z);
+}
+
+static int maze_zone_for_pos(float x, float z) {
+    if (in_z_band(z, 10.8F, 2.0F) && x < -1.35F) {
+        return MAZE_ZONE_LEFT_DEADEND;
+    }
+    if (in_z_band(z, 18.6F, 2.35F) && x > 1.45F) {
+        return MAZE_ZONE_RED_ROOM;
+    }
+    if (in_z_band(z, 25.1F, 2.05F) && x < -1.45F) {
+        return MAZE_ZONE_FUSE_ROOM;
+    }
+    return MAZE_ZONE_MAIN;
+}
+
+static int count_room_bits(int mask) {
+    int count = 0;
+    for (int bit = 0; bit < 8; ++bit) {
+        count += (mask & (1 << bit)) != 0 ? 1 : 0;
+    }
+    return count;
+}
+
+static bool near_fuse(void) { return !s_game.fuse_found && s_game.side_room_visits >= 3 && dist_to(s_game.x, s_game.z, FUSE_X, FUSE_Z) < 1.35F; }
 
 static bool near_exit(void) { return s_game.fuse_found && s_game.z < 1.85F && absf(s_game.x) < 0.9F; }
 
@@ -389,13 +490,47 @@ static void reset_backrooms(void) {
         .battery = 1.0F,
         .flashlight_on = true,
     };
-    set_message("FIND THE HUMMING FUSE", 3.0F);
+    set_message("CROSS 3 ROOMS. FIND EXIT", 3.0F);
 }
 
 static void record_run_result(void) {
     s_game.last_run_time = s_game.run_time;
     s_game.last_fear = s_game.fear;
     s_game.last_battery = s_game.battery;
+}
+
+static void update_maze_lostness(void) {
+    const int next_zone = maze_zone_for_pos(s_game.x, s_game.z);
+    if (next_zone == s_game.maze_zone) {
+        return;
+    }
+    s_game.maze_zone = next_zone;
+    if (next_zone == MAZE_ZONE_MAIN || s_game.won || s_game.caught) {
+        return;
+    }
+
+    const int bit = 1 << (next_zone - 1);
+    if ((s_game.visited_rooms_mask & bit) == 0) {
+        s_game.visited_rooms_mask |= bit;
+        s_game.side_room_visits = count_room_bits(s_game.visited_rooms_mask);
+        s_game.layout_shift_count += 1;
+        s_game.route_shift = clampf(s_game.route_shift + 0.12F, 0.0F, 1.0F);
+        s_game.fear = clampf(s_game.fear + 3.0F, 0.0F, 100.0F);
+
+        if (next_zone == MAZE_ZONE_LEFT_DEADEND) {
+            set_message("THE HALL REPEATS", 1.7F);
+        } else if (next_zone == MAZE_ZONE_RED_ROOM) {
+            s_game.blackout_timer = fmaxf(s_game.blackout_timer, 1.1F);
+            s_game.ambush_timer = fmaxf(s_game.ambush_timer, 0.8F);
+            s_game.yaw += 0.38F;
+            set_message("THIS ROOM MOVED", 1.9F);
+        } else if (next_zone == MAZE_ZONE_FUSE_ROOM) {
+            set_message("HUM BEHIND WALLS", 1.8F);
+            game_audio_play(GAME_AUDIO_CUE_FUSE_HUM);
+        }
+    } else if (next_zone == MAZE_ZONE_RED_ROOM && s_game.message_timer <= 0.0F) {
+        set_message("RED ROOM - BACK OUT", 1.2F);
+    }
 }
 
 static void update_route_choice(void) {
@@ -595,83 +730,64 @@ static void ui_text(int x, int y, const char *text, int scale, uint8_t r, uint8_
     }
 }
 
-static void ui_bar(int x, int y, int w, int h, float value, uint8_t r, uint8_t g, uint8_t b) {
-    ui_rect(x, y, w, h, 8, 10, 12, 205);
-    ui_rect(x + 2, y + 2, (int)((float)(w - 4) * clampf(value, 0.0F, 1.0F)), h - 4, r, g, b, 235);
-}
-
 static void build_ui(void) {
     ui_clear();
-    const float fuse_dist = dist_to(s_game.x, s_game.z, 0.36F, 29.4F);
+    const float fuse_dist = dist_to(s_game.x, s_game.z, FUSE_X, FUSE_Z);
     char line[96];
-    const char *objective = s_game.caught ? "CAUGHT" : (s_game.won ? "ESCAPED" : (s_game.fuse_found ? "RETURN TO EXIT" : "FIND THE HUMMING FUSE"));
-
-    ui_rect(18, 18, 462, 118, 4, 6, 8, 190);
-    ui_text(30, 30, "BACKROOMS LIMINAL", 3, 246, 226, 146, 255);
-    (void)snprintf(line, sizeof(line), "OBJECTIVE: %s", objective);
-    ui_text(30, 64, line, 2, 230, 238, 208, 255);
-    ui_text(30, 92, "WASD MOVE  SHIFT SPRINT  E USE  F LIGHT", 2, 190, 205, 184, 240);
-
-    ui_rect(682, 18, 258, 118, 4, 6, 8, 190);
-    ui_text(700, 32, "FEAR", 2, 240, 210, 176, 250);
-    ui_bar(770, 30, 150, 16, s_game.fear / 100.0F, 190, 30, 36);
-    ui_text(700, 62, "BATTERY", 2, 240, 210, 176, 250);
-    ui_bar(806, 60, 114, 16, s_game.battery, 238, 210, 86);
-    (void)snprintf(line, sizeof(line), "FUSE:%s  EXIT:%s", s_game.fuse_found ? "YES" : "NO", s_game.fuse_found ? "ON" : "OFF");
-    ui_text(700, 94, line, 2, 198, 230, 196, 245);
-    if (blackout_active()) {
-        ui_text(700, 122, "BLACKOUT:RUN", 1, 255, 122, 96, 255);
-    } else if (route_choice_active()) {
-        (void)snprintf(line, sizeof(line), "TURN:%s  CHOICE:%d/%d", route_choice_side_name(route_choice_safe_side_for_stage(s_game.route_choice_stage)), s_game.route_choice_stage + 1, route_choice_total());
-        ui_text(700, 122, line, 1, 132, 255, 184, 255);
-    } else if (s_game.relief_timer > 0.0F && s_game.fuse_found && !s_game.won) {
-        ui_text(700, 122, "ROUTE:SAFE", 1, 132, 255, 184, 245);
-    } else if (s_game.fuse_found && !s_game.won) {
-        (void)snprintf(line, sizeof(line), "ROUTE:SHIFT  THREAT:%d", (int)(s_game.stalker_pressure * 100.0F));
-        ui_text(700, 122, line, 1, 255, 184, 132, 245);
-    } else {
-        ui_text(700, 122, "ROUTE:STABLE", 1, 175, 205, 170, 220);
-    }
 
     ui_rect(476, 268, 8, 2, 230, 235, 220, 220);
     ui_rect(479, 265, 2, 8, 230, 235, 220, 220);
 
     if (!s_game.won && !s_game.caught && blackout_active()) {
-        ui_rect(262, 392, 436, 46, 24, 2, 2, 230);
+        ui_rect(284, 396, 392, 42, 24, 2, 2, 205);
         ui_text(290, 406, "LIGHTS OUT - SPRINT", 3, 255, 138, 112, 255);
     } else if (!s_game.won && !s_game.caught && route_choice_active()) {
-        ui_rect(260, 392, 440, 46, 5, 8, 8, 215);
+        ui_rect(260, 396, 440, 42, 5, 8, 8, 190);
         (void)snprintf(line, sizeof(line), "MOVE %s - TRUST HUM", route_choice_side_name(route_choice_safe_side_for_stage(s_game.route_choice_stage)));
         ui_text(288, 406, line, 3, 132, 255, 184, 255);
     } else if (!s_game.won && !s_game.caught && s_game.relief_timer > 0.0F) {
-        ui_rect(306, 392, 348, 46, 5, 8, 8, 215);
+        ui_rect(306, 396, 348, 42, 5, 8, 8, 190);
         ui_text(340, 406, "SAFE TURN - MOVE", 3, 132, 255, 184, 255);
     } else if (!s_game.won && !s_game.caught && near_fuse()) {
-        ui_rect(322, 392, 316, 46, 5, 8, 8, 215);
-        ui_text(346, 406, "PRESS E - TAKE FUSE", 3, 132, 255, 184, 255);
+        ui_rect(318, 396, 324, 42, 5, 8, 8, 185);
+        ui_text(352, 406, "PRESS E - ENTER", 3, 255, 226, 130, 255);
     } else if (!s_game.won && !s_game.caught && near_exit()) {
-        ui_rect(334, 392, 292, 46, 5, 8, 8, 215);
+        ui_rect(334, 396, 292, 42, 5, 8, 8, 190);
         ui_text(358, 406, "PRESS E - ESCAPE", 3, 255, 226, 130, 255);
-    } else if (!s_game.won && !s_game.caught && !s_game.fuse_found && s_game.message_timer <= 0.0F) {
-        (void)snprintf(line, sizeof(line), "FUSE HUM %.0fM", (double)fuse_dist);
-        ui_text(390, 466, line, 2, 230, 218, 156, 230);
+    }
+
+    if (!s_game.won && !s_game.caught) {
+        ui_rect(24, 574, 350, 70, 18, 15, 8, 112);
+        ui_text(42, 588, "JOURNAL", 2, 246, 226, 146, 225);
+        if (s_game.side_room_visits >= 3) {
+            ui_text(42, 614, "TASK: FIND EXIT", 2, 230, 238, 208, 238);
+        } else {
+            (void)snprintf(line, sizeof(line), "TASK: CROSS %d MORE ROOMS", 3 - s_game.side_room_visits);
+            ui_text(42, 614, line, 2, 230, 238, 208, 238);
+        }
+        if (s_game.battery < 0.18F || !s_game.flashlight_on) {
+            ui_text(252, 588, "DYNAMO", 1, 255, 190, 128, 220);
+        } else if (s_game.side_room_visits >= 3 && !s_game.fuse_found) {
+            (void)snprintf(line, sizeof(line), "HUM %.0fM", (double)fuse_dist);
+            ui_text(252, 588, line, 1, 230, 218, 156, 210);
+        }
     }
 
     if (!s_game.won && !s_game.caught && s_game.message_timer > 0.0F) {
-        ui_rect(254, 470, 452, 42, 3, 4, 5, 190);
-        ui_text(282, 484, s_game.message, 2, 255, 236, 170, 255);
+        ui_rect(302, 478, 356, 34, 3, 4, 5, 155);
+        ui_text(326, 488, s_game.message, 2, 255, 236, 170, 240);
     }
     if (s_game.won) {
-        ui_rect(188, 184, 584, 158, 4, 6, 7, 235);
+        ui_rect(220, 210, 520, 132, 4, 6, 7, 220);
         ui_text(338, 206, "ESCAPED", 4, 255, 228, 128, 255);
-        (void)snprintf(line, sizeof(line), "TIME:%02dS  FEAR:%02d  BAT:%02d", (int)s_game.last_run_time, (int)s_game.last_fear, (int)(s_game.last_battery * 100.0F));
+        (void)snprintf(line, sizeof(line), "TIME:%02dS  ROOMS:%d  SHIFTS:%d", (int)s_game.last_run_time, s_game.side_room_visits, s_game.layout_shift_count);
         ui_text(260, 258, line, 2, 220, 238, 210, 255);
         ui_text(292, 296, "PRESS E - NEW RUN", 3, 132, 255, 184, 255);
     }
     if (s_game.caught) {
-        ui_rect(178, 184, 604, 166, 8, 0, 0, 232);
-        ui_text(242, 206, "THE LIGHTS FOUND YOU", 3, 255, 130, 112, 255);
-        (void)snprintf(line, sizeof(line), "TIME:%02dS  FEAR:%02d  BAT:%02d", (int)s_game.last_run_time, (int)s_game.last_fear, (int)(s_game.last_battery * 100.0F));
+        ui_rect(208, 210, 544, 132, 8, 0, 0, 215);
+        ui_text(292, 226, "LOST IN THE LIGHTS", 3, 255, 130, 112, 255);
+        (void)snprintf(line, sizeof(line), "TIME:%02dS  ROOMS:%d  SHIFTS:%d", (int)s_game.last_run_time, s_game.side_room_visits, s_game.layout_shift_count);
         ui_text(260, 258, line, 2, 255, 220, 190, 255);
         ui_text(302, 296, "PRESS E - RETRY", 3, 255, 230, 160, 255);
     }
@@ -748,8 +864,10 @@ static void interact(void) {
         s_game.fear = clampf(s_game.fear + 18.0F, 0.0F, 100.0F);
         s_game.route_shift = 0.18F;
         s_game.stalker_pressure = fmaxf(s_game.stalker_pressure, 0.22F);
-        game_audio_play(GAME_AUDIO_CUE_FUSE_PICKUP);
-        set_message("THE LIGHTS HEARD YOU", 3.0F);
+        s_game.won = true;
+        record_run_result();
+        game_audio_play(GAME_AUDIO_CUE_ESCAPE);
+        set_message("FOUND A WAY OUT", 8.0F);
     } else if (near_exit()) {
         s_game.won = true;
         record_run_result();
@@ -790,6 +908,9 @@ static void update_game(void) {
     if (s_game.relief_timer > 0.0F) {
         s_game.relief_timer -= dt;
     }
+    if (s_game.dynamo_stall_timer > 0.0F) {
+        s_game.dynamo_stall_timer -= dt;
+    }
     game_audio_update();
     game_audio_set_volume(g_game_state.settings_master_volume, g_game_state.settings_sfx_volume);
     if (s_game.caught) {
@@ -816,7 +937,7 @@ static void update_game(void) {
     if (nt_input_key_is_pressed(NT_KEY_F)) {
         s_game.flashlight_on = !s_game.flashlight_on;
         game_audio_play(GAME_AUDIO_CUE_FLASHLIGHT);
-        set_message(s_game.flashlight_on ? "FLASHLIGHT ON" : "FLASHLIGHT OFF", 0.9F);
+        set_message(s_game.flashlight_on ? "DYNAMO ON" : "DYNAMO OFF", 0.9F);
     }
     if (nt_input_key_is_pressed(NT_KEY_E) || nt_input_key_is_pressed(NT_KEY_ENTER)) {
         interact();
@@ -859,32 +980,48 @@ static void update_game(void) {
         move_x /= len;
         move_z /= len;
         const bool wants_sprint = nt_input_key_is_down(NT_KEY_LSHIFT) || nt_input_key_is_down(NT_KEY_RSHIFT);
-        s_game.sprinting = wants_sprint && s_game.battery > 0.08F;
+        s_game.sprinting = wants_sprint;
         const float speed = s_game.sprinting ? 5.05F : 3.15F;
-        s_game.x += move_x * speed * dt;
-        s_game.z += move_z * speed * dt;
+        const float next_x = s_game.x + move_x * speed * dt;
+        const float next_z = s_game.z + move_z * speed * dt;
+        if (maze_walkable(next_x, s_game.z)) {
+            s_game.x = next_x;
+        }
+        if (maze_walkable(s_game.x, next_z)) {
+            s_game.z = next_z;
+        }
     } else {
         s_game.sprinting = false;
     }
-    s_game.x = clampf(s_game.x, -1.05F, 1.05F);
     s_game.z = clampf(s_game.z, 0.45F, 31.8F);
+    s_game.x = clampf(s_game.x, -maze_walk_half_width(s_game.z), maze_walk_half_width(s_game.z));
     s_game.threat_visible = looking_at_stalker();
+    update_maze_lostness();
     update_route_choice();
     update_movement_audio(moving);
 
-    if (s_game.flashlight_on && s_game.battery > 0.0F) {
-        const float sprint_drain = s_game.sprinting ? (blackout_active() ? 0.105F : 0.072F) : 0.0F;
-        s_game.battery = clampf(s_game.battery - dt * (0.026F + sprint_drain), 0.0F, 1.0F);
-        if (s_game.battery <= 0.001F) {
+    if (s_game.flashlight_on) {
+        const float movement_charge = moving ? (s_game.sprinting ? 0.105F : 0.066F) : 0.0F;
+        const float stall_drain = moving ? 0.024F : 0.086F;
+        const float blackout_drain = blackout_active() ? 0.07F : 0.0F;
+        s_game.battery = clampf(s_game.battery + dt * (movement_charge - stall_drain - blackout_drain), 0.0F, 1.0F);
+        if (s_game.battery <= 0.035F) {
             s_game.flashlight_on = false;
-            set_message("BATTERY DEAD", 1.5F);
+            s_game.dynamo_stall_timer = 1.6F;
+            game_audio_play(GAME_AUDIO_CUE_FLASHLIGHT);
+            set_message("DYNAMO STALLED - MOVE", 1.5F);
         }
     } else {
-        s_game.battery = clampf(s_game.battery + dt * 0.006F, 0.0F, 1.0F);
+        s_game.battery = clampf(s_game.battery + dt * (moving ? 0.18F : 0.018F), 0.0F, 1.0F);
+        if (moving && s_game.battery > 0.22F && s_game.dynamo_stall_timer <= 0.0F) {
+            s_game.flashlight_on = true;
+            game_audio_play(GAME_AUDIO_CUE_FLASHLIGHT);
+            set_message("DYNAMO CATCHES", 0.95F);
+        }
     }
 
     if (s_game.fuse_found) {
-        const float return_progress = clampf((29.4F - s_game.z) / 29.4F, 0.0F, 1.0F);
+        const float return_progress = clampf((FUSE_Z - s_game.z) / FUSE_Z, 0.0F, 1.0F);
         const float target_shift = clampf(0.24F + return_progress * 0.58F + (s_game.fear / 100.0F) * 0.16F, 0.0F, 1.0F);
         s_game.route_shift = approachf(s_game.route_shift, target_shift, dt * 0.55F);
 
@@ -915,7 +1052,7 @@ static void update_game(void) {
         s_game.route_shift = approachf(s_game.route_shift, 0.0F, dt * 0.8F);
         s_game.stalker_pressure = approachf(s_game.stalker_pressure, 0.0F, dt * 0.8F);
         s_game.threat_visible = false;
-        const float fuse_dist = dist_to(s_game.x, s_game.z, 0.36F, 29.4F);
+        const float fuse_dist = dist_to(s_game.x, s_game.z, FUSE_X, FUSE_Z);
         if (fuse_dist < 11.0F && s_game.fuse_hum_timer <= 0.0F) {
             game_audio_play(GAME_AUDIO_CUE_FUSE_HUM);
             s_game.fuse_hum_timer = clampf(0.45F + fuse_dist * 0.10F, 0.55F, 1.45F);
@@ -963,7 +1100,7 @@ static void draw_frame(float fb_w, float fb_h) {
     nt_gfx_set_uniform_vec4("u_state", (float[4]){s_game.fuse_found ? 1.0F : 0.0F, s_game.fear / 100.0F, (s_game.flashlight_on && s_game.battery > 0.0F) ? 1.0F : 0.0F, s_game.won ? 1.0F : 0.0F});
     nt_gfx_set_uniform_vec4("u_pressure", (float[4]){s_game.route_shift, s_game.stalker_pressure, s_game.threat_visible ? 1.0F : 0.0F, s_game.caught ? 1.0F : 0.0F});
     nt_gfx_set_uniform_vec4("u_route", (float[4]){route_choice_active() ? 1.0F : 0.0F, (float)route_choice_safe_side_for_stage(s_game.route_choice_stage), route_choice_z_for_stage(s_game.route_choice_stage), (float)s_game.route_choice_wrong});
-    nt_gfx_set_uniform_vec4("u_horror", (float[4]){clampf(s_game.blackout_timer / 3.2F, 0.0F, 1.0F), clampf(s_game.ambush_timer / 2.4F, 0.0F, 1.0F), clampf(s_game.relief_timer / 2.0F, 0.0F, 1.0F), 0.0F});
+    nt_gfx_set_uniform_vec4("u_horror", (float[4]){clampf(s_game.blackout_timer / 3.2F, 0.0F, 1.0F), clampf(s_game.ambush_timer / 2.4F, 0.0F, 1.0F), clampf(s_game.relief_timer / 2.0F, 0.0F, 1.0F), clampf((float)s_game.side_room_visits / 3.0F, 0.0F, 1.0F)});
     nt_gfx_draw(0, 6);
 }
 
@@ -980,6 +1117,10 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(root, "battery", (double)s_game.battery);
     cJSON_AddNumberToObject(root, "route_shift", (double)s_game.route_shift);
     cJSON_AddNumberToObject(root, "stalker_pressure", (double)s_game.stalker_pressure);
+    cJSON_AddNumberToObject(root, "visited_rooms_mask", (double)s_game.visited_rooms_mask);
+    cJSON_AddNumberToObject(root, "side_room_visits", (double)s_game.side_room_visits);
+    cJSON_AddNumberToObject(root, "layout_shift_count", (double)s_game.layout_shift_count);
+    cJSON_AddNumberToObject(root, "maze_zone", (double)s_game.maze_zone);
     cJSON_AddNumberToObject(root, "route_choice_stage", (double)s_game.route_choice_stage);
     cJSON_AddNumberToObject(root, "route_choice_total", (double)route_choice_total());
     cJSON_AddBoolToObject(root, "route_choice_active", route_choice_active());
@@ -999,13 +1140,13 @@ static cJSON *state_json(void) {
     cJSON_AddBoolToObject(root, "flashlight_on", s_game.flashlight_on);
     cJSON_AddBoolToObject(root, "sprinting", s_game.sprinting);
     cJSON_AddBoolToObject(root, "fuse_found", s_game.fuse_found);
-    cJSON_AddBoolToObject(root, "exit_powered", s_game.fuse_found);
+    cJSON_AddBoolToObject(root, "exit_powered", s_game.side_room_visits >= 3);
     cJSON_AddBoolToObject(root, "won", s_game.won);
     cJSON_AddBoolToObject(root, "caught", s_game.caught);
     cJSON_AddBoolToObject(root, "threat_visible", s_game.threat_visible);
     cJSON_AddBoolToObject(root, "can_use", !s_game.won && !s_game.caught && (near_fuse() || near_exit()));
     cJSON_AddBoolToObject(root, "can_restart", s_game.won || s_game.caught);
-    cJSON_AddStringToObject(root, "objective", s_game.caught ? "caught" : (s_game.won ? "escaped" : (s_game.fuse_found ? "return_to_exit" : "find_fuse")));
+    cJSON_AddStringToObject(root, "objective", s_game.caught ? "caught" : (s_game.won ? "escaped" : (s_game.side_room_visits >= 3 ? "find_exit" : "cross_rooms")));
     cJSON_AddStringToObject(root, "outcome", s_game.caught ? "caught" : (s_game.won ? "escaped" : "running"));
     cJSON_AddStringToObject(root, "message", s_game.message_timer > 0.0F ? s_game.message : "");
     return root;
@@ -1081,9 +1222,16 @@ static bool ep_game_action_set_pose(const cJSON *params, cJSON **result, char *e
     (void)error;
     (void)error_cap;
     (void)user;
-    s_game.x = clampf((float)json_number(params, "x", (double)s_game.x), -1.05F, 1.05F);
-    s_game.z = clampf((float)json_number(params, "z", (double)s_game.z), 0.45F, 31.8F);
+    const float requested_z = clampf((float)json_number(params, "z", (double)s_game.z), 0.45F, 31.8F);
+    const float requested_x =
+        clampf((float)json_number(params, "x", (double)s_game.x), -maze_walk_half_width(requested_z), maze_walk_half_width(requested_z));
+    s_game.x = requested_x;
+    s_game.z = requested_z;
+    if (!maze_walkable(s_game.x, s_game.z)) {
+        s_game.x = clampf(s_game.x, -1.05F, 1.05F);
+    }
     s_game.yaw = (float)json_number(params, "yaw", (double)s_game.yaw);
+    update_maze_lostness();
     *result = state_json();
     return true;
 }
@@ -1118,6 +1266,10 @@ static bool ep_game_debug_set_progress(const cJSON *params, cJSON **result, char
     s_game.route_choice_stage = (int)clampf((float)json_number(params, "route_choice_stage", (double)s_game.route_choice_stage), 0.0F, (float)route_choice_total());
     s_game.route_choice_correct = (int)fmaxf(0.0F, (float)json_number(params, "route_choice_correct", (double)s_game.route_choice_correct));
     s_game.route_choice_wrong = (int)fmaxf(0.0F, (float)json_number(params, "route_choice_wrong", (double)s_game.route_choice_wrong));
+    s_game.visited_rooms_mask = (int)fmaxf(0.0F, (float)json_number(params, "visited_rooms_mask", (double)s_game.visited_rooms_mask));
+    s_game.side_room_visits = count_room_bits(s_game.visited_rooms_mask);
+    s_game.layout_shift_count = (int)fmaxf(0.0F, (float)json_number(params, "layout_shift_count", (double)s_game.layout_shift_count));
+    s_game.maze_zone = maze_zone_for_pos(s_game.x, s_game.z);
     s_game.blackout_timer = fmaxf(0.0F, (float)json_number(params, "blackout_timer", (double)s_game.blackout_timer));
     s_game.ambush_timer = fmaxf(0.0F, (float)json_number(params, "ambush_timer", (double)s_game.ambush_timer));
     s_game.relief_timer = fmaxf(0.0F, (float)json_number(params, "relief_timer", (double)s_game.relief_timer));
@@ -1203,14 +1355,14 @@ static void register_ui_devapi(void) {
     nt_devapi_set_frame(g_nt_app.frame);
     nt_devapi_set_view((float)g_nt_window.fb_width, (float)g_nt_window.fb_height, (float)UI_W, (float)UI_H);
     nt_devapi_clear_ui_elements();
-    (void)nt_devapi_register_ui_node("root", "", "screen", "Backrooms Liminal", "Find the fuse and escape.", 0.0F, 0.0F, (float)UI_W, (float)UI_H, true, true);
-    const char *objective_label = s_game.caught ? "Caught" : (s_game.won ? "Escaped" : (s_game.fuse_found ? "Return to exit" : "Find the humming fuse"));
+    (void)nt_devapi_register_ui_node("root", "", "screen", "Backrooms Liminal", "Cross three rooms and find the exit.", 0.0F, 0.0F, (float)UI_W, (float)UI_H, true, true);
+    const char *objective_label = s_game.caught ? "Caught" : (s_game.won ? "Escaped" : (s_game.side_room_visits >= 3 ? "Find the exit" : "Cross three rooms"));
     const bool use_active = !s_game.won && !s_game.caught && (near_fuse() || near_exit());
     (void)nt_devapi_register_ui_node("backrooms.objective", "root", "label", "Objective", objective_label, 18.0F, 18.0F, 462.0F, 118.0F, true, true);
-    (void)nt_devapi_register_ui_node("backrooms.fear", "root", "meter", "Fear", "Fear pressure", 682.0F, 18.0F, 258.0F, 52.0F, true, true);
-    (void)nt_devapi_register_ui_node("backrooms.battery", "root", "meter", "Battery", "Flashlight battery", 682.0F, 70.0F, 258.0F, 66.0F, true, true);
-    (void)nt_devapi_register_ui_node("backrooms.threat", "root", "label", "Route threat", s_game.fuse_found ? "Route shifting and stalker pressure" : "Route stable", 682.0F, 118.0F, 258.0F, 28.0F, true, true);
-    (void)nt_devapi_register_ui_node("backrooms.use_prompt", "root", "prompt", "Use", near_fuse() ? "Press E to take fuse" : (near_exit() ? "Press E to escape" : ""), 322.0F, 392.0F, 316.0F, 46.0F, use_active, use_active);
+    (void)nt_devapi_register_ui_node("backrooms.fear", "root", "meter", "Hidden director pressure", "Internal only", 682.0F, 18.0F, 258.0F, 52.0F, false, false);
+    (void)nt_devapi_register_ui_node("backrooms.battery", "root", "meter", "Dynamo", "Flashlight dynamo charge", 682.0F, 70.0F, 258.0F, 66.0F, false, false);
+    (void)nt_devapi_register_ui_node("backrooms.threat", "root", "label", "Rooms", s_game.side_room_visits >= 3 ? "Exit can appear" : "Keep crossing rooms", 682.0F, 118.0F, 258.0F, 28.0F, false, false);
+    (void)nt_devapi_register_ui_node("backrooms.use_prompt", "root", "prompt", "Use", near_fuse() ? "Press E to enter exit" : (near_exit() ? "Press E to escape" : ""), 322.0F, 392.0F, 316.0F, 46.0F, use_active, use_active);
 }
 #endif
 
