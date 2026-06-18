@@ -1,0 +1,11 @@
+{
+  "schema": "backrooms_liminal.imagegen_workflow",
+  "version": 1,
+  "provider": "built_in_image_gen",
+  "tool": "image_gen",
+  "mode": "generate",
+  "source_output": "C:/Users/ROG/.codex/generated_images/019edb58-520d-7141-bee6-d931aea228e7/ig_0a1aed98d381afc7016a345a98b09c8191938a042874a787c1.png",
+  "accepted_source": "gamedesign/projects/backrooms-liminal/art/source/portal_material_source_sheet_v1.png",
+  "seed_policy": "built-in image_gen did not expose a stable seed in this session",
+  "prompt_packet": "gamedesign/projects/backrooms-liminal/art/prompts/portal_material_source_sheet_v1_prompt.json"
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "backrooms_liminal.prompt_packet",
+  "version": 1,
+  "id": "portal_material_source_sheet_v1_prompt",
+  "source_family": "portal room material source sheet",
+  "prompt_markdown": "gamedesign/projects/backrooms-liminal/art/prompts/portal_material_source_sheet_v1_prompt.md",
+  "layout": {
+    "canvas": "square",
+    "grid": "2x2",
+    "quadrants": {
+      "top_left": "wallpaper",
+      "top_right": "carpet",
+      "bottom_left": "ceiling_tile",
+      "bottom_right": "aged_trim"
+    },
+    "crop_policy": "crop each quadrant with a small inner inset to avoid separator gutters, then downsample into 128x128 runtime atlas regions"
+  },
+  "negative_prompt": "text, letters, numbers, logos, watermark, people, monsters, furniture, UI, cartoon style, clean showroom materials, heavy perspective, labels, thick borders"
+}

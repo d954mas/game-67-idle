@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -14,110 +13,66 @@ if str(ROOT) not in sys.path:
 
 from tools.assets.atomic_io import atomic_temp_path, write_json_atomic
 
+try:
+    from PIL import Image
+except ImportError as exc:  # pragma: no cover - environment failure, surfaced clearly.
+    raise SystemExit("error: Pillow is required to build Backrooms material atlas from generated source art") from exc
+
 OUT_DIR = ROOT / "assets" / "backrooms-liminal" / "materials"
 ATLAS = OUT_DIR / "portal_material_atlas.ppm"
 MANIFEST = OUT_DIR / "portal_material_atlas.json"
+SOURCE_IMAGE = ROOT / "gamedesign" / "projects" / "backrooms-liminal" / "art" / "source" / "portal_material_source_sheet_v1.png"
+ART_JOB = ROOT / "gamedesign" / "projects" / "backrooms-liminal" / "art_requests" / "t0010_portal_material_atlas_v1.json"
+GENERATION_RECORD = ROOT / "gamedesign" / "projects" / "backrooms-liminal" / "art" / "generation_records" / "portal_material_source_sheet_v1.json"
 WIDTH = 256
 HEIGHT = 256
+REGION_SIZE = 128
+
+REGIONS = {
+    "wallpaper": [0, 0, REGION_SIZE, REGION_SIZE],
+    "carpet": [REGION_SIZE, 0, REGION_SIZE, REGION_SIZE],
+    "ceiling_tile": [0, REGION_SIZE, REGION_SIZE, REGION_SIZE],
+    "aged_trim": [REGION_SIZE, REGION_SIZE, REGION_SIZE, REGION_SIZE],
+}
+
+def paste_rgb_tile(data: bytearray, tile: Image.Image, dst_x: int, dst_y: int) -> None:
+    rgb = tile.convert("RGB")
+    pixels = rgb.tobytes()
+    for y in range(REGION_SIZE):
+        src_row = y * REGION_SIZE * 3
+        dst_row = ((dst_y + y) * WIDTH + dst_x) * 3
+        data[dst_row : dst_row + REGION_SIZE * 3] = pixels[src_row : src_row + REGION_SIZE * 3]
 
 
-def clamp_u8(value: int) -> int:
-    return max(0, min(255, value))
+def crop_source_tiles() -> tuple[bytearray, dict[str, list[int]]]:
+    if not SOURCE_IMAGE.exists():
+        raise SystemExit(f"error: missing material source image: {SOURCE_IMAGE}")
+    image = Image.open(SOURCE_IMAGE).convert("RGB")
+    source_width, source_height = image.size
+    if source_width < 512 or source_height < 512:
+        raise SystemExit(f"error: source image is too small for material atlas: {source_width}x{source_height}")
 
-
-def pixel(x: int, y: int) -> tuple[int, int, int]:
-    tile_x = x & 127
-    tile_y = y & 127
-    zone = (1 if x >= 128 else 0) + (2 if y >= 128 else 0)
-    hashed = (tile_x * 37 + tile_y * 73 + ((tile_x * tile_y) % 97)) & 255
-
-    if zone == 0:
-        seam = tile_x % 32 == 0 or tile_y % 46 == 0
-        fleck = ((tile_x * 17 + tile_y * 31 + ((tile_x * tile_y) % 19)) & 23) == 0
-        stain = (((tile_x * 3 + tile_y * 11) & 63) < 7) and (((tile_x + tile_y * 5) & 15) < 5)
-        vertical_wear = (tile_x % 32 in (30, 1)) and (((tile_y * 7 + tile_x) & 7) < 5)
-        r = 168 + ((tile_x * 5 + tile_y * 3) & 23)
-        g = 151 + ((tile_x * 7 + tile_y * 11) & 19)
-        b = 78 + ((tile_x * 13 + tile_y * 2) & 15)
-        if seam:
-            r -= 44
-            g -= 40
-            b -= 24
-        if fleck:
-            r -= 54
-            g -= 45
-            b -= 25
-        if stain:
-            r -= 42
-            g -= 38
-            b -= 18
-        if vertical_wear:
-            r += 22
-            g += 16
-            b += 7
-    elif zone == 1:
-        seam = tile_x % 26 == 0 or tile_y % 30 == 0
-        fiber = ((tile_x * 19 + tile_y * 5) & 15) < 4
-        damp = ((tile_x - 54) * (tile_x - 54) + (tile_y - 76) * (tile_y - 76)) < 680 or hashed > 236
-        r = 86 + ((tile_x * 3 + tile_y * 9) & 19)
-        g = 69 + ((tile_x * 11 + tile_y * 5) & 15)
-        b = 38 + ((tile_x * 7 + tile_y * 13) & 11)
-        if fiber:
-            r += 18
-            g += 13
-            b += 5
-        if seam:
-            r -= 34
-            g -= 27
-            b -= 16
-        if damp:
-            r -= 31
-            g -= 27
-            b -= 14
-    elif zone == 2:
-        grid = tile_x % 38 < 2 or tile_y % 34 < 2
-        speckle = hashed > 224
-        d = (tile_x - 84) * (tile_x - 84) + (tile_y - 38) * (tile_y - 38)
-        water_ring = 360 < d < 610
-        r = 156 + ((tile_x * 5 + tile_y * 2) & 17)
-        g = 148 + ((tile_x * 2 + tile_y * 7) & 15)
-        b = 102 + ((tile_x * 13 + tile_y * 3) & 13)
-        if grid:
-            r -= 55
-            g -= 51
-            b -= 36
-        if speckle:
-            r -= 39
-            g -= 36
-            b -= 26
-        if water_ring:
-            r -= 30
-            g -= 32
-            b -= 18
-    else:
-        rib = tile_x % 18 < 3 or tile_y % 42 < 3
-        scratch = ((tile_x * 29 + tile_y * 17) & 31) < 3
-        r = 116 + ((tile_x * 9 + tile_y * 4) & 15)
-        g = 92 + ((tile_x * 4 + tile_y * 11) & 13)
-        b = 46 + ((tile_x * 7 + tile_y * 2) & 9)
-        if rib:
-            r -= 44
-            g -= 34
-            b -= 18
-        if scratch:
-            r += 42
-            g += 31
-            b += 12
-
-    return clamp_u8(r), clamp_u8(g), clamp_u8(b)
+    half_w = source_width // 2
+    half_h = source_height // 2
+    inset = max(4, min(source_width, source_height) // 160)
+    crops = {
+        "wallpaper": (0 + inset, 0 + inset, half_w - inset, half_h - inset),
+        "carpet": (half_w + inset, 0 + inset, source_width - inset, half_h - inset),
+        "ceiling_tile": (0 + inset, half_h + inset, half_w - inset, source_height - inset),
+        "aged_trim": (half_w + inset, half_h + inset, source_width - inset, source_height - inset),
+    }
+    resample = getattr(getattr(Image, "Resampling", Image), "LANCZOS", Image.BICUBIC)
+    data = bytearray(WIDTH * HEIGHT * 3)
+    for name, (left, top, right, bottom) in crops.items():
+        tile = image.crop((left, top, right, bottom)).resize((REGION_SIZE, REGION_SIZE), resample)
+        dst_x, dst_y, _, _ = REGIONS[name]
+        paste_rgb_tile(data, tile, dst_x, dst_y)
+    return data, {name: [int(v) for v in rect] for name, rect in crops.items()}
 
 
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    data = bytearray()
-    for y in range(HEIGHT):
-        for x in range(WIDTH):
-            data.extend(pixel(x, y))
+    data, source_crops = crop_source_tiles()
 
     tmp_atlas = atomic_temp_path(ATLAS)
     try:
@@ -135,17 +90,16 @@ def main() -> None:
             "format": "ppm_p6_rgb8",
             "width": WIDTH,
             "height": HEIGHT,
-            "regions": {
-                "wallpaper": [0, 0, 128, 128],
-                "carpet": [128, 0, 128, 128],
-                "ceiling_tile": [0, 128, 128, 128],
-                "aged_trim": [128, 128, 128, 128],
-            },
+            "regions": REGIONS,
             "runtime_usage": "src/clean_seed_main.c portal material texture",
             "provenance": {
-                "kind": "procedural_source_asset",
+                "kind": "generated_source_asset",
                 "builder": "tools/assets/build_backrooms_liminal_materials.py",
-                "note": "Iteration source asset for the portal material contract; replace with generated or artist-authored material sources before final art.",
+                "source_image": str(SOURCE_IMAGE.relative_to(ROOT)).replace("\\", "/"),
+                "source_crops": source_crops,
+                "art_job": str(ART_JOB.relative_to(ROOT)).replace("\\", "/"),
+                "generation_record": str(GENERATION_RECORD.relative_to(ROOT)).replace("\\", "/"),
+                "note": "Iteration generated source sheet for the portal material contract; replace with a fuller material/PBR pack later if needed.",
             },
         },
     )

@@ -17,9 +17,11 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
   texture-backed/material-kind-lit native `nt_gfx` room surfaces, reduced
   external ghost-frame artifacts, a stronger fixture-driven portal-room light
   model, a separate non-blended `nt_gfx` solid-shell pass, and a 256x256
-  project source material atlas for wall/carpet/ceiling/trim sampling that the
-  runtime loads from `assets/backrooms-liminal/materials/portal_material_atlas.ppm`,
-  but not yet production-quality realistic Backrooms room construction.
+  generated-source material atlas for wall/carpet/ceiling/trim sampling that
+  the runtime loads from
+  `assets/backrooms-liminal/materials/portal_material_atlas.ppm`, but lighting,
+  side-wall construction, and portal depth still do not reach production-quality
+  realistic Backrooms room construction.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
   must not patch `external/neotolis-engine`; use public APIs or carry an
@@ -69,8 +71,10 @@ node tools/taskboard/cli.mjs validate
 - `tools/assets/build_backrooms_liminal_materials.py` builds the current
   Backrooms material source asset atomically into
   `assets/backrooms-liminal/materials/portal_material_atlas.ppm` plus
-  `portal_material_atlas.json`. This is an iteration source asset with explicit
-  `procedural_source_asset` provenance, not final generated/artist material art.
+  `portal_material_atlas.json` from
+  `gamedesign/projects/backrooms-liminal/art/source/portal_material_source_sheet_v1.png`.
+  The source has prompt/workflow/generation records under the active project art
+  folder.
 - `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md` records
   the engine-facing render-target API gap with evidence from `nt_gfx`.
 - `build/captures/backrooms_t0010_portal_memory_status.json` proves mark
@@ -92,8 +96,8 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Replace the current procedural PPM source material atlas with generated or
-   artist-authored Backrooms material source assets, or unblock T0011
+1. Use the generated material atlas as the baseline and improve integrated
+   portal lighting/depth plus side-wall construction, or unblock T0011
    render-target portal lighting; revisit the product gate for art quality and
    audience fit after the room construction itself is no longer a hybrid proxy.
 2. Avoid more one-pass shader or shell decoration unless it directly proves the

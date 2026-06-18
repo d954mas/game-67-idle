@@ -237,3 +237,15 @@ and reveal a real exit.
   still procedural and must be replaced by generated or artist-authored
   Backrooms materials, or by T0011 render-target portal lighting, before T0010
   can close.
+- 2026-06-19: Generated material source slice accepted
+  `gamedesign/projects/backrooms-liminal/art/source/portal_material_source_sheet_v1.png`
+  as the first source sheet for wallpaper, carpet, ceiling tile, and aged trim.
+  The builder now crops that generated source into the runtime PPM atlas and
+  records `generated_source_asset` provenance plus art job, prompt, workflow,
+  and generation-record paths. The main portal shader also samples all four
+  generated material regions for the fullscreen portal room, not only the
+  native overlay. Native build, T0010 capture, smoke, readability, taskboard
+  validation, and strict product gate ran. Product gate remains FAIL for art
+  quality/audience fit: material identity is stronger and no longer procedural,
+  but the aperture still reads too dark/flat and needs integrated lighting,
+  side-wall construction, and depth or T0011 render-target portal lighting.

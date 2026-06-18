@@ -105,7 +105,5 @@
     ]
   },
   "problem": "The material source is no longer procedural and the room has richer surface identity, but the screenshot still falls short of production-quality realistic Backrooms rendering because light/depth integration, side-wall construction, and portal aperture geometry still read as hybrid shader/proxy work",
-  "next": "Use the generated material source as the baseline, then improve integrated portal lighting/depth and side-wall construction or unblock T0011 render-target lighting; keep content expansion frozen while art_quality/audience_fit remain under 4",
-  "markdown": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-00-49-772Z_desktop.md",
-  "json": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-00-49-772Z_desktop.json"
+  "next": "Use the generated material source as the baseline, then improve integrated portal lighting/depth and side-wall construction or unblock T0011 render-target lighting; keep content expansion frozen while art_quality/audience_fit remain under 4"
 }
