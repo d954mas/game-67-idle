@@ -50,8 +50,8 @@ build/game_seed/native-debug/game_seed.exe --devapi 9123 --fresh-state --disable
 Useful checks:
 
 ```powershell
-py -3.12 tools/devapi/smoke_test.py 9123
-py -3.12 tools/devapi/full_probe.py 9123
+py -3.12 tools/devapi/smoke.py 9123      # game-agnostic DevAPI smoke (edit GAME for a new game)
+py -3.12 tools/devapi/iterate.py 9123    # build-if-stale -> shot -> ui_readability -> gate command
 ```
 
 State schema source: `state/game_state.schema.json`. Generated C files are
