@@ -23,6 +23,9 @@ Current evidence from `external/neotolis-engine`:
 - `nt_pass_desc_t` only carries `clear_color` and `clear_depth`.
 - `nt_texture_desc_t` creates sampleable textures, but has no renderable
   attachment usage flag or color/depth attachment role.
+- `engine/graphics/nt_gfx.c` forwards `nt_gfx_begin_pass(desc)` directly to the
+  backend begin-pass call; there is no public target selection point around the
+  pass lifecycle.
 - Search of engine graphics/backend code found viewport/scissor/depth/stencil
   state, but no public `nt_gfx_*render_target*`, no public framebuffer bind, and
   no `glBindFramebuffer`/FBO path exposed through `nt_gfx`.
@@ -53,6 +56,20 @@ Why it matters:
 - [ ] Backrooms portal renderer can replace its one-pass hardcoded portal proof
       with at least one offscreen target-room view.
 
+## Minimal requested API shape
+
+The game does not require raw OpenGL access. It needs a backend-agnostic public
+contract roughly equivalent to:
+
+- Create/destroy a render target with width, height, color format, optional
+  depth/stencil attachment, and resize policy.
+- Begin a pass against either the default framebuffer or a render-target handle.
+- Expose the color attachment as an `nt_texture_t` or sampleable texture handle
+  for later composition.
+- Define viewport/scissor defaults when entering and leaving a render target.
+- Keep native GL and WebGL2 behavior aligned; if WebGL2 has constraints around
+  depth textures or multisample resolve, document them in the descriptor.
+
 ## Open questions
 
 - Should the public API be a direct `nt_render_target_t`, or should
@@ -65,6 +82,11 @@ Why it matters:
 
 ## Log
 
+- 2026-06-18: Rechecked current `nt_gfx` public surface for
+  render-target/framebuffer binding. The API still does not export any target
+  handle, pass attachment descriptor, or framebuffer bind path; existing
+  Backrooms portal work must remain a one-pass/proxy implementation until the
+  engine issue is resolved.
 - 2026-06-18: Created from Backrooms Liminal T0010 portal-renderer work. The
   current game can build a data-driven portal-scene contract, but the engine
   lacks the public render-target/framebuffer API needed for fast, beautiful,
