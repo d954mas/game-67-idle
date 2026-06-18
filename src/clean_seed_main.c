@@ -208,6 +208,7 @@ static const char *s_portal_overlay_fs_src =
     "    float occluder_kind = step(3.5, v_kind) * (1.0 - step(4.5, v_kind));\n"
     "    float shell_kind = step(4.5, v_kind);\n"
     "    float solid_light_kind = step(5.5, v_kind) * (1.0 - step(6.5, v_kind));\n"
+    "    float construction_kind = step(6.5, v_kind);\n"
     "    float floor_pick = shell_kind * (1.0 - smoothstep(0.36, 0.48, v_world.y));\n"
     "    float ceiling_pick = shell_kind * smoothstep(1.70, 1.94, v_world.y);\n"
     "    float trim_pick = shell_kind * max(1.0 - smoothstep(0.015, 0.055, abs(v_uv.y - 0.5)), step(6.5, v_kind));\n"
@@ -232,11 +233,12 @@ static const char *s_portal_overlay_fs_src =
     "    color = mix(color, color * vec3(0.34, 0.31, 0.24), seam_kind * 0.72);\n"
     "    color = mix(color, vec3(0.030, 0.025, 0.015), occluder_kind * (0.48 + side_shadow * 0.16));\n"
     "    color = mix(color, color * vec3(0.96, 0.91, 0.72) + material_tex * 0.34, shell_kind * 0.78);\n"
-    "    color = mix(color, color * vec3(0.31, 0.27, 0.18), return_contact * shell_kind * 0.34);\n"
+    "    color = mix(color, color * vec3(0.31, 0.27, 0.18), return_contact * shell_kind * (0.34 - construction_kind * 0.16));\n"
     "    color += vec3(0.060, 0.047, 0.022) * shell_kind;\n"
+    "    color += vec3(0.145, 0.108, 0.044) * construction_kind * (0.30 + u_overlay_portal.w * 0.22);\n"
     "    color += vec3(0.78, 0.61, 0.26) * light_kind * (0.24 + u_overlay_portal.w * 0.22);\n"
     "    color += vec3(1.18, 0.90, 0.36) * solid_light_kind * (0.42 + u_overlay_portal.w * 0.34);\n"
-    "    color *= 1.12 + shell_kind * 0.22 + light_kind * 0.16 + solid_light_kind * 0.28;\n"
+    "    color *= 1.12 + shell_kind * 0.22 + light_kind * 0.16 + solid_light_kind * 0.28 + construction_kind * 0.20;\n"
     "    float alpha_boost = 1.0 + surface_kind * 0.58 + seam_kind * 0.20 + light_kind * 0.22 + occluder_kind * 0.34 + shell_kind * 1.18 + solid_light_kind * 0.42;\n"
     "    float material_floor = surface_kind * 0.42 + seam_kind * 0.30 + occluder_kind * 0.22 + shell_kind * 0.94 + solid_light_kind * 0.22;\n"
     "    float alpha = max(v_color.a * alpha_boost, material_floor) * edge_fade * (0.94 + grain * 0.06);\n"
@@ -634,8 +636,8 @@ static const char *s_fs_src =
     "    color += vec3(0.18, 0.12, 0.050) * portal_floor_bounce * (0.45 + u_portal_light.y * 0.12);\n"
     "    color = mix(color, color * vec3(1.14, 1.10, 0.96), portal_wall_bounce * 0.34 + portal_floor_bounce * 0.24);\n"
     "    vec3 impossible_col = impossible_room_color(hit, rd, ttime);\n"
-    "    vec3 portal_matte = mix(vec3(0.050, 0.040, 0.021), impossible_col * vec3(0.72, 0.64, 0.44), 0.62);\n"
-    "    portal_matte += impossible_col * (0.090 + impossible_rim * 0.040 + impossible_frame * 0.020);\n"
+    "    vec3 portal_matte = mix(vec3(0.024, 0.019, 0.011), impossible_col * vec3(0.34, 0.29, 0.18), 0.34);\n"
+    "    portal_matte += impossible_col * (0.030 + impossible_rim * 0.018 + impossible_frame * 0.010);\n"
     "    color = mix(color, portal_matte, impossible_cut);\n"
     "    color = mix(color, vec3(0.030, 0.023, 0.013), impossible_frame * 0.30);\n"
     "    color += vec3(0.70, 0.52, 0.22) * impossible_frame * 0.12;\n"
@@ -1536,6 +1538,9 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
     portal_overlay_emit_box(count, room_x0 + 0.10F, room_x1 - 0.18F, ceiling_y - 0.115F, ceiling_y + 0.018F, inner_z0 + 0.045F, inner_z0 + 0.180F, 0.078F, 0.062F, 0.030F, 0.98F);
     portal_overlay_emit_box(count, room_x0 + 0.10F, room_x1 - 0.18F, ceiling_y - 0.115F, ceiling_y + 0.018F, inner_z1 - 0.180F, inner_z1 - 0.045F, 0.074F, 0.058F, 0.028F, 0.98F);
     portal_overlay_emit_box(count, room_x0 + 0.42F, room_x1 - 0.50F, ceiling_y - 0.085F, ceiling_y + 0.006F, center_z - 0.090F, center_z + 0.090F, 0.095F, 0.078F, 0.038F, 0.96F);
+    portal_overlay_emit_box(count, room_x1 - 0.20F, room_x1 + 0.34F, panel_y0 - 0.020F, panel_y1 + 0.055F, inner_z0 + 0.045F, inner_z1 - 0.045F, 0.086F, 0.076F, 0.042F, 0.99F);
+    portal_overlay_emit_box(count, room_x0 + 0.34F, room_x1 - 0.36F, min_y + 0.008F, min_y + 0.065F, center_z - 0.240F, center_z + 0.240F, 0.088F, 0.064F, 0.026F, 0.98F);
+    portal_overlay_emit_box(count, room_x0 + 0.38F, room_x1 - 0.46F, ceiling_y - 0.040F, ceiling_y + 0.052F, center_z - 0.170F, center_z + 0.170F, 0.120F, 0.098F, 0.048F, 0.97F);
     s_portal_overlay_emit_kind = 5.0F;
     portal_overlay_emit_yz_quad(count, room_x0 + 0.70F, panel_y1 - 0.16F, ceiling_y + 0.01F, inner_z0 + 0.08F, inner_z1 - 0.08F, 0.048F, 0.039F, 0.021F, 0.44F);
     portal_overlay_emit_yz_quad(count, room_x1 - 0.42F, panel_y0 - 0.02F, panel_y1 + 0.08F, center_z - 0.12F, center_z + 0.12F, 0.032F, 0.026F, 0.015F, 0.55F);
@@ -1603,8 +1608,11 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
     s_portal_overlay_emit_kind = 3.0F;
     portal_overlay_emit_yz_quad(count, nested_x - 0.026F, nested_y1 + 0.075F, nested_y1 + 0.135F, center_z - 0.34F, center_z + 0.34F, 0.78F, 0.62F, 0.26F, 0.92F);
     portal_overlay_emit_yz_quad(count, room_x0 + 0.46F, panel_y1 + 0.02F, ceiling_y - 0.018F, center_z - 0.16F, center_z + 0.16F, 0.66F, 0.52F, 0.22F, 0.80F);
+    portal_overlay_emit_yz_quad(count, solid_back_x - 0.060F, panel_y0 + 0.46F, panel_y1 + 0.030F, center_z - 0.075F, center_z + 0.075F, 1.00F, 0.78F, 0.32F, 0.94F);
+    portal_overlay_emit_yz_quad(count, solid_back_x - 0.070F, panel_y0 + 0.38F, panel_y1 + 0.110F, center_z - 0.145F, center_z + 0.145F, 0.48F, 0.34F, 0.13F, 0.48F);
     portal_overlay_emit_floor_quad(count, return_x0 + 0.10F, room_x1 - 0.42F, ceiling_y - 0.030F, center_z - 0.24F, center_z + 0.24F, 0.82F, 0.66F, 0.30F, 0.46F + light * 0.18F);
     portal_overlay_emit_floor_quad(count, return_x0 + 0.18F, room_x1 - 0.78F, min_y + 0.018F, center_z - 0.28F, center_z + 0.28F, 0.40F, 0.28F, 0.12F, 0.34F + wet * 0.12F);
+    portal_overlay_emit_floor_quad(count, room_x0 + 0.46F, room_x1 - 0.48F, min_y + 0.030F, center_z - 0.185F, center_z + 0.185F, 0.58F, 0.39F, 0.15F, 0.46F + wet * 0.12F);
     s_portal_overlay_emit_kind = 5.0F;
     s_last_portal_shell_vertices = *count - shell_start;
 

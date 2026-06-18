@@ -6,7 +6,7 @@ epic: E001
 priority: P1
 tags: [prototype, backrooms-liminal, portal-rendering, marking, object-puzzle, native-first]
 created: 2026-06-18
-updated: 2026-06-19
+updated: 2026-06-18
 ---
 
 ## What
@@ -331,3 +331,18 @@ and reveal a real exit.
   audience fit: this moves the room away from a flat shader trick, but it still
   depends on a dark fullscreen portal backing instead of a fully native opaque
   room or render-target portal.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign\projects\backrooms-liminal\reviews\t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Continue replacing the portal interior with fully native opaque authored surfaces, or resolve T0011 render-target-backed portal lighting; keep content expansion frozen while art_quality and audience_fit remain 3.
+- 2026-06-19: Native backing-reduction slice darkened the fullscreen portal
+  backing so it reads less like a painted room image, then added more
+  non-blended native massing: a larger rear wall box, central floor/ceiling
+  volumes, visible fluorescent strip geometry, and a floor light pool. The
+  native overlay shader now gives construction-kind surfaces extra local light
+  so those opaque surfaces remain readable against the darker backing. The
+  T0010 scenario now reports `native_overlay.last_vertex_count = 1230`,
+  `native_overlay.room_mesh_vertex_count = 1146`,
+  `native_overlay.solid_pass_vertex_count = 780`, and
+  `native_overlay.blended_detail_vertex_count = 450`. Native build, material
+  atlas rebuild, T0010 capture, smoke, readability zoom, and strict product
+  gate ran. Product gate remains FAIL for art quality and audience fit: this is
+  a healthier layer split, but the screenshot still needs fully integrated
+  native room lighting or T0011 render-target portal support.
