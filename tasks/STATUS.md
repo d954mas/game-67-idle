@@ -2,81 +2,77 @@
 
 ## Current Goal
 
-Review and iterate the `Backrooms Liminal` (backrooms-liminal) native-first
-prototype: the first-person 3D corridor slice now exists with fuse pickup,
-return-to-exit, fear/battery pressure, route instability, stalker pressure, and
-native generated-PCM horror audio cues, readable win/fail/replay states, and
-three deterministic risky route-choice anomalies on the return path. Wrong
-route choices now trigger a blackout ambush with closer stalker pressure, while
-correct choices produce a safe-turn relief pulse; holding Shift now gives a real
-sprint escape action that trades battery for distance and lower chase pressure.
-Walking, sprinting, and blackout chase now fire distinct generated movement /
-heartbeat audio cues proven through DevAPI status. The slice has strict
-visual/player-read proof.
+Iterate `Backrooms Liminal` (backrooms-liminal) toward a beautiful native 3D
+liminal horror game with a distinctive non-Euclidean hook: rooms can be bigger
+inside than outside, copy player marks, and require spatial/object reasoning to
+escape. Current focus is T0010: make the impossible-room/portal proof universal
+enough to grow into arbitrary levels instead of another one-off shader trick.
 
 ## Blocking Work
 
-- No runtime implementation blocker is known. T0001, T0002, T0003, T0004,
-  T0005, T0006, T0007, and T0008 are in review; expansion should wait for
-  lead/playtest feedback or a new narrow task.
+- No native runtime blocker is known for the current game repo slice.
+- T0010 product gate is still red: the portal room now reads as a data-driven
+  physical larger room, but not yet as a production-quality realistic Backrooms
+  scene.
+- T0011 tracks an engine-facing dependency for true fast multi-pass portal
+  rendering: public `nt_gfx` render-target/framebuffer support. The game repo
+  must not patch `external/neotolis-engine`; use public APIs or carry an
+  evidence-backed engine task.
 
 ## Non-blocking Debt
 
-- Global AI profile review confidence is still broken by older unresolved failed
-  records. T0008 current-scope guard is also red because unresolved profiler
-  failure records exist; gameplay/build/product evidence is green, but profiler
-  evidence must remain advisory-only.
+- Global AI profile review confidence is still broken by older unresolved
+  failed records. Current profiling evidence is advisory until those records are
+  explained or repaired.
+- T0001-T0008 are in review with historical evidence. Do not expand them unless
+  the lead asks; current actionable work is T0009/T0010 plus the T0011 engine
+  issue.
 
 ## Current Gate
 
 Current native gate for backrooms-liminal: `data/core_loop.json`,
-`reviews/first_slice_visual_gate.md`, native build, DevAPI smoke, first-screen
-screenshot, post-fuse route/stalker screenshot, native audio cue status,
-win/fail/replay screenshots, route-choice screenshots/status report,
-blackout/sprint screenshots/status reports, sprint footstep/chase audio status,
-readability zoom, strict product gate, and slice hygiene evidence.
+`gamedesign/projects/backrooms-liminal/portal_memory_loop_direction.md`,
+native build, DevAPI smoke, T0010 portal-memory scenario,
+`build/captures/backrooms_t0010_impossible_geometry.png`, readability zoom,
+strict product gate
+`gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md`,
+and taskboard validation.
 
 ## Required Validation
 
 ```powershell
 node tools/game_context/iteration_context.mjs
 cmake --build --preset native-debug --target game_seed
+py -3.12 tmp/capture_backrooms_t0010_portal_memory.py
 py -3.12 tools/devapi/smoke.py
+py -3.12 tools/devapi/ui_readability.py build\captures\backrooms_t0010_impossible_geometry.png
 node tools/taskboard/cli.mjs validate
 ```
 
 ## Last Known Good Evidence
 
-- Historical T0001-T0006 evidence is in the review task logs and product gates
-  under `gamedesign/projects/backrooms-liminal/reviews/`; do not expand that
-  history inline here.
-- `gamedesign/projects/backrooms-liminal/visual/live_state_acceptance_matrix.json`
-  is the required live-state matrix for strict product gates.
-- `gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json`
-  points to the latest strict desktop product gate, currently T0008.
-- `build/captures/backrooms_t0008_first_screen.png` shows the stable first
-  screen after sprint/audio tuning.
-- `build/captures/backrooms_t0008_sprint_audio.png` shows blackout sprint
-  guidance with `SHIFT SPRINT`, `LIGHTS OUT - SPRINT`, and close stalker
-  pressure.
-- `build/captures/backrooms_t0008_audio_status.json` proves movement/chase audio
-  checks true: walking increments `footstep`, sprint increments `sprint_step`,
-  blackout chase increments `heartbeat`, and sprinting state is true.
-- `build/captures/backrooms_t0008_sprint_audio_uizoom.png` and
-  `build/captures/backrooms_t0008_sprint_audio_uizoom_cmp.png` are the latest
-  readability and before/after regression montages.
-- `gamedesign/projects/backrooms-liminal/reviews/product_read_gate_t0008_desktop.json`
-  is a strict desktop product gate PASS for sprint footstep/chase audio.
-- `tmp/t0008_slice_hygiene.md` is WARN only because profiler guard evidence is
-  inconclusive; current T0008 build, smoke, scenario, readability, taskboard,
-  and product evidence passed.
+- `src/backrooms_portal_scene.*` defines the current game-local universal portal
+  scene foundation: rooms, portal descriptors, flags, validation, and GPU
+  params.
+- `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md` records
+  the engine-facing render-target API gap with evidence from `nt_gfx`.
+- `build/captures/backrooms_t0010_portal_memory_status.json` proves mark
+  placement, locked-door rejection, handle pickup, handle fitting, exit reveal,
+  and escape.
+- `build/captures/backrooms_t0010_impossible_geometry.png` is the latest native
+  proof screenshot for the data-driven impossible room.
+- `build/captures/backrooms_t0010_impossible_geometry_uizoom.png` is the latest
+  readability montage; readability passed but must still be eyeballed.
+- `gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md`
+  is the latest strict desktop product gate and is FAIL for art quality and
+  audience fit.
 
 ## Next Priorities
 
-1. Let the lead/playtest judge whether T0008 makes blackout chase feel playable,
-   scary, and physically readable enough.
-2. If accepted, create one narrow task for a short full-run playtest scenario,
-   stronger branching geometry, or audio balance/authored asset polish.
-3. If rejected visually or mechanically, freeze content expansion and improve
-   sprint readability, battery cost, threat distance, warning timing, audio
-   cadence, or HUD clarity before adding broader systems.
+1. Improve T0010 visual quality on top of the portal-scene foundation: richer
+   room/material descriptors, better fluorescent lighting, more believable wall
+   thickness, and less shader-authored material feel.
+2. Decide whether to pursue T0011 in the engine repo or keep the current
+   one-pass portal traversal in the game until the visual bar is closer.
+3. Keep content expansion frozen while the T0010 product gate remains red,
+   unless the lead explicitly accepts that visual debt.

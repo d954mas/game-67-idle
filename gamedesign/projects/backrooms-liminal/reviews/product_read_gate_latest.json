@@ -5,14 +5,14 @@
   "task": "T0010",
   "surface": "desktop",
   "verdict": "fail",
-  "timestamp": "2026-06-18T18:09:11.423Z",
+  "timestamp": "2026-06-18T18:26:00.732Z",
   "screenshot": "build/captures/backrooms_t0010_impossible_geometry.png",
   "answers": {
-    "where": "A stained yellow Backrooms room where a thick wall cut exposes a deeper room that cannot fit inside the corridor",
+    "where": "Yellow Backrooms corridor facing a portal-scene cut that renders a larger interior room from data-driven portal parameters",
     "action": "Use the copied mark as evidence, find the missing handle, and test the locked door",
-    "response": "The mark appears on the far wall of the impossible room, the journal updates, the locked door rejects missing-handle use, and fitting the handle reveals the exit",
-    "reward": "The player learns that space can copy evidence and can open the real path by proving the room relationship",
-    "game_look": "Native 3D liminal horror scene with a non-Euclidean room cut, stronger rim/contact shadow, stained wallpaper, darker corners, fluorescent depth cues, copied wall mark, locked-door rule, and minimal journal prompt"
+    "response": "The mark appears inside the impossible room; portal scene data controls aperture, target room size, nested opening, lighting, and copied-mark behavior",
+    "reward": "The player learns the space can be tested and later stabilized by fitting the found handle",
+    "game_look": "Native 3D liminal horror view with data-driven non-Euclidean room aperture, depth, wall thickness, stained wallpaper, carpet seams, fluorescent light, and minimal journal UI"
   },
   "visual_critique": {
     "strict": true,
@@ -28,7 +28,7 @@
     "scores": {
       "composition": 4,
       "readability": 4,
-      "ui_controls": 3,
+      "ui_controls": 4,
       "action_direction": 4,
       "art_quality": 3,
       "audience_fit": 3
@@ -37,27 +37,75 @@
       {
         "severity": "major",
         "axis": "art_quality",
-        "text": "The wall cut has stronger rim and contact shadow, but still lacks real authored geometry and high-fidelity material response"
+        "text": "Portal rendering is now scene-data driven and reads as a larger room, but visual fidelity still depends on one fullscreen shader rather than real authored meshes/materials or offscreen target-room rendering"
       },
       {
-        "severity": "minor",
-        "axis": "ui_controls",
-        "text": "The journal and prompt are readable and softer, but prompt plates still feel temporary"
-      },
-      {
-        "severity": "minor",
-        "axis": "art_quality",
-        "text": "The carpet/wall breakup is improved but still shader-authored rather than realistic Backrooms material work"
+        "severity": "major",
+        "axis": "audience_fit",
+        "text": "The differentiator is clearer, but the screenshot still lacks the production-quality realistic Backrooms lighting/material richness the lead requested"
       }
     ]
   },
   "state_coverage": {
-    "required": [],
-    "covered": [],
-    "not_covered": []
+    "required": [
+      "first_screen",
+      "hud_visible",
+      "primary_action_ready",
+      "primary_action_feedback",
+      "reward_active",
+      "progression_panel_open",
+      "modal_or_choice_open",
+      "locked_or_disabled_state",
+      "resume_or_reentry_state",
+      "transient_stress_state"
+    ],
+    "covered": [
+      {
+        "tag": "hud_visible",
+        "evidence": "build/captures/backrooms_t0010_impossible_geometry.png"
+      },
+      {
+        "tag": "primary_action_ready",
+        "evidence": "build/captures/backrooms_t0010_drawn_mark.png"
+      },
+      {
+        "tag": "primary_action_feedback",
+        "evidence": "build/captures/backrooms_t0010_impossible_geometry.png"
+      },
+      {
+        "tag": "reward_active",
+        "evidence": "build/captures/backrooms_t0010_revealed_exit.png"
+      },
+      {
+        "tag": "progression_panel_open",
+        "evidence": "build/captures/backrooms_t0010_impossible_geometry.png"
+      },
+      {
+        "tag": "locked_or_disabled_state",
+        "evidence": "build/captures/backrooms_t0010_locked_door.png"
+      }
+    ],
+    "not_covered": [
+      {
+        "tag": "first_screen",
+        "reason": "covered by earlier first-screen gates, not the focus of T0010 portal proof"
+      },
+      {
+        "tag": "modal_or_choice_open",
+        "reason": "T0010 has no modal/choice UI"
+      },
+      {
+        "tag": "resume_or_reentry_state",
+        "reason": "not part of portal-memory spike"
+      },
+      {
+        "tag": "transient_stress_state",
+        "reason": "covered by blackout/sprint tasks, not this portal proof"
+      }
+    ]
   },
-  "problem": "T0010 now has better physical framing and contact shadow around the impossible room, but the screenshot still does not meet the requested high-quality scary realistic Backrooms bar.",
-  "next": "Move beyond one-file shader tricks: introduce or emulate authored wall thickness, better carpet/wall material layers, stronger fluorescent shadowing, and a cleaner prompt treatment.",
+  "problem": "T0010 made the portal room data-driven and less like a flat shader overlay, but it still does not meet the high-quality realistic Backrooms visual bar.",
+  "next": "Build on the new portal-scene foundation: add reusable room/material descriptors, improve lighting/material quality, and pursue T0011 engine render-target support for true reusable multi-pass portal views.",
   "markdown": "gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md",
   "json": "build/captures/backrooms_t0010_product_gate.json"
 }

@@ -75,3 +75,12 @@ and reveal a real exit.
   cut now reads more like thick architecture, but product gate remains red until
   geometry/material quality stops reading as one-file shader work.
 - 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Move beyond one-file shader tricks: introduce or emulate authored wall thickness, better carpet/wall material layers, stronger fluorescent shadowing, and a cleaner prompt treatment.
+- 2026-06-18: Universalization pass added a game-local
+  `BackroomsPortalScene` foundation (`src/backrooms_portal_scene.*`) with room,
+  portal, flag, and GPU-parameter descriptors. T0010 now drives the impossible
+  room from scene data instead of only hardcoded shader constants. Native build,
+  T0010 DevAPI scenario, smoke, readability, and taskboard validation passed.
+  Product gate remains FAIL: the portal reads more like a physical larger room,
+  but the visual bar still needs richer materials/lighting and, for true
+  reusable multi-pass portals, engine render-target support tracked by T0011.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Build on the portal-scene foundation with reusable room/material descriptors, stronger lighting/material quality, and T0011 render-target support for true multi-pass portal views.
