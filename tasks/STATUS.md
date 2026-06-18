@@ -2,45 +2,43 @@
 
 ## Current Goal
 
-No active game concept is selected.
+No active game concept is selected. This repository is a clean AI-first native
+game seed, ready for the next game.
 
-Mine Cards was a pipeline test run, not an active game to continue. Its tasks
-and epic are closed as `dropped`; keep the evidence as historical input for
-future pipeline/skill improvements.
+The asset/cutout pipeline was reviewed and optimized this iteration (key_matte
+default, route_cutout auto-picker, dual_plate; the per-asset edge-color audit
+removed; ~4000 lines of legacy/dead code dropped) — see git history.
+
+Mine Cards was a prior pipeline test run; its full game, GDD, and tasks are
+preserved in tag `mine-cards-snapshot-2026-06-18` and removed from the working
+tree so the next game starts clean. Reusable lessons live in
+`AI_PIPELINE_HISTORY.md`.
 
 ## Current Runtime Surface
 
-Native `game_seed` remains the clean seed work surface:
+Native `game_seed` is the clean seed work surface:
 
 ```powershell
 cmake --build --preset native-debug --target game_seed
 build/game_seed/native-debug/game_seed.exe --devapi 9123
 ```
 
-Runtime entrypoint: `src/clean_seed_main.c`.
+Runtime entrypoint: `src/clean_seed_main.c` (362-line debug template).
 
-The engine submodule at `external/neotolis-engine` remains read-only from this
-repo. Reusable sidecar modules, tools, skills, and game code may be edited here.
-
-## Historical Evidence
-
-- Mine Cards project wiki: `gamedesign/projects/mine-cards/`
-- Closed epic: `tasks/epics/E001-mine-cards-v0-01-mining-foundation.md`
-- Archived tasks: `tasks/archive/E001/`
-- PC UI scale/focus rejection and fix:
-  `gamedesign/projects/mine-cards/reviews/t0001_ui_scale_rejection_2026-06-18.md`
-- Pipeline lesson:
-  `AI_PIPELINE_HISTORY.md`
+The engine submodule at `external/neotolis-engine` is read-only from this repo.
+Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 ## Current Gate
 
-Status: `clean seed; improve reusable pipeline/skills before next game`.
-
-Before starting a future game, run the Stage 0 prototype startup path and create
-a fresh project wiki/task set. Do not reuse Mine Cards tasks as current work.
+Capture the user's game concept (references, audience, platform, no-go
+constraints), then run the Stage 0 prototype startup path and create a fresh
+project wiki plus exactly one scoped task/epic before implementation. Do not
+invent a concept.
 
 ## Next Priorities
 
-1. Strengthen reusable skills and pipeline rules from the Mine Cards test run.
-2. Keep native PC scale/focus proof as an early gate for future playable UI.
-3. Keep task/status context clean until the next game concept is selected.
+1. Capture the next game concept, then scaffold a fresh project wiki + one
+   scoped task/epic before implementation.
+2. Keep reusable pipeline/skills/knowledge clean and current between games.
+3. Keep native PC scale/focus + visual/teachability/core-loop proof as early
+   gates for the next playable UI.

@@ -1,5 +1,0 @@
-mine_wall_tile
-mine_floor_shadow
-stone_debris_cluster
-copper_ore_seam_stamp
-warm_lantern_light_overlay

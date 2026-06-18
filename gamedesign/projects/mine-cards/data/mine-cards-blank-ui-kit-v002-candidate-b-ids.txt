@@ -1,8 +1,0 @@
-board_panel_slice9
-upgrade_panel_slice9
-node_card_default_slice9
-node_card_selected_slice9
-activity_chip_active_slice9
-activity_chip_locked_slice9
-primary_button_disabled_slice9
-primary_button_affordable_slice9

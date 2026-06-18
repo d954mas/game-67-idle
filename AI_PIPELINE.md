@@ -30,7 +30,7 @@ node tools/skills_sync.mjs
 
 Generation is an agent recipe (a **skill**); everything after is deterministic
 tooling in `tools/assets/`, grouped by stage. Game-specific tools live in
-`tools/<game-id>/` (e.g. `tools/mine-cards/`), never in `tools/assets/`.
+their own `tools/<game-id>/` folder, never in `tools/assets/`.
 
 | # | Stage | Home | Entry |
 |---|---|---|---|

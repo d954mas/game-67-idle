@@ -1,5 +1,0 @@
-stone_hit_chip_fx
-copper_hit_chip_fx
-geode_reward_pop_fx
-xp_spark_fx
-coin_spark_fx

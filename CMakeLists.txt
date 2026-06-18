@@ -134,42 +134,6 @@ else()
     target_compile_definitions(game_devapi INTERFACE NT_DEVAPI_ENABLED=0)
 endif()
 
-if(NOT EMSCRIPTEN AND NOT TARGET mine_cards_skeletal_glb_probe)
-    add_executable(mine_cards_skeletal_glb_probe tools/mine-cards/inspect_skeletal_glb_native.c)
-    target_link_libraries(mine_cards_skeletal_glb_probe PRIVATE cgltf)
-    target_compile_definitions(mine_cards_skeletal_glb_probe PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(mine_cards_skeletal_glb_probe PRIVATE -U_DLL)
-    nt_set_warning_flags(mine_cards_skeletal_glb_probe)
-    nt_set_sanitizer_flags(mine_cards_skeletal_glb_probe)
-    set_target_properties(mine_cards_skeletal_glb_probe PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/tools/${NT_PRESET_NAME}"
-    )
-endif()
-
-if(NOT EMSCRIPTEN AND NOT TARGET build_mine_cards_text_pack)
-    add_executable(build_mine_cards_text_pack tools/mine-cards/build_mine_cards_text_pack.c)
-    target_link_libraries(build_mine_cards_text_pack PRIVATE nt_builder)
-    target_compile_definitions(build_mine_cards_text_pack PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(build_mine_cards_text_pack PRIVATE -U_DLL)
-    nt_set_warning_flags(build_mine_cards_text_pack)
-    nt_set_sanitizer_flags(build_mine_cards_text_pack)
-    set_target_properties(build_mine_cards_text_pack PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/tools/${NT_PRESET_NAME}"
-    )
-endif()
-
-if(NOT EMSCRIPTEN AND NOT TARGET build_mine_cards_ui_pack)
-    add_executable(build_mine_cards_ui_pack tools/mine-cards/build_mine_cards_ui_pack.c)
-    target_link_libraries(build_mine_cards_ui_pack PRIVATE nt_builder)
-    target_compile_definitions(build_mine_cards_ui_pack PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(build_mine_cards_ui_pack PRIVATE -U_DLL)
-    nt_set_warning_flags(build_mine_cards_ui_pack)
-    nt_set_sanitizer_flags(build_mine_cards_ui_pack)
-    set_target_properties(build_mine_cards_ui_pack PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/tools/${NT_PRESET_NAME}"
-    )
-endif()
-
 set(SKELETAL_ANIMATION_OZZ_SOURCE_DIR "" CACHE PATH "Optional ozz-animation source checkout for reusable skeletal animation extension probes.")
 if(NOT EMSCRIPTEN AND SKELETAL_ANIMATION_OZZ_SOURCE_DIR)
     enable_language(CXX)
@@ -183,8 +147,6 @@ add_executable(${GAME_TARGET}
     src/clean_seed_main.c
     src/game_audio.c
     src/game_audio.h
-    src/mine_cards_model_proof.c
-    src/mine_cards_model_proof.h
 )
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core
