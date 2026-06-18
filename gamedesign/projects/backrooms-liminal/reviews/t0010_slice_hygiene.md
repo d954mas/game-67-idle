@@ -9,13 +9,13 @@ Upstream: origin/master
 ## Checklist
 - build evidence: yes
 - probe/scenario evidence: yes
-- product gate: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md (fail)
+- product gate: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.json (fail)
 - screenshot evidence: build/captures/backrooms_t0010_impossible_geometry.png
-- profiler guard: node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/opaque-native-dominant-room (unknown)
-- known red gates: T0010 product gate intentionally remains FAIL for art_quality/audience_fit until the portal interior becomes a complete opaque native room draw path or T0011 render-target-backed lighting, not hybrid matte/composite plus native overlay
+- profiler guard: node tools/ai.mjs status --require-current-scope-usable: usable, current scope T0010/opaque-native-dominant-room (unknown)
+- known red gates: T0010 product gate remains FAIL for art_quality/audience_fit; content expansion stays frozen
 
 ## Warnings
-- profiler guard evidence is inconclusive (advisory): node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/opaque-native-dominant-room (could not confirm usable current-scope profiler guard)
+- profiler guard evidence is inconclusive (advisory): node tools/ai.mjs status --require-current-scope-usable: usable, current scope T0010/opaque-native-dominant-room (could not confirm usable current-scope profiler guard)
 - known red review artifact(s) accepted for this handoff: gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json, gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.json, gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md
 
 ## Changed Files
