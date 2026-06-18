@@ -627,13 +627,13 @@ static const char *s_fs_src =
     "    color += vec3(1.0, 0.58, 0.18) * exit_frame * (0.10 + 0.46 * u_puzzle.w);\n"
     "    vec3 impossible_col = impossible_room_color(hit, rd, ttime);\n"
     "    vec3 portal_matte = mix(vec3(0.050, 0.040, 0.021), impossible_col * vec3(0.72, 0.64, 0.44), 0.62);\n"
-    "    portal_matte += impossible_col * (0.095 + impossible_rim * 0.065 + impossible_frame * 0.032);\n"
+    "    portal_matte += impossible_col * (0.090 + impossible_rim * 0.040 + impossible_frame * 0.020);\n"
     "    color = mix(color, portal_matte, impossible_cut);\n"
-    "    color = mix(color, vec3(0.026, 0.020, 0.012), impossible_frame * 0.54);\n"
-    "    color += vec3(0.82, 0.62, 0.28) * impossible_frame * 0.24;\n"
-    "    color = mix(color, color * 0.48, impossible_frame * smoothstep(0.0, 1.0, abs(hit.z - u_portal_entry.y)) * 0.10);\n"
+    "    color = mix(color, vec3(0.030, 0.023, 0.013), impossible_frame * 0.30);\n"
+    "    color += vec3(0.70, 0.52, 0.22) * impossible_frame * 0.12;\n"
+    "    color = mix(color, color * 0.58, impossible_frame * smoothstep(0.0, 1.0, abs(hit.z - u_portal_entry.y)) * 0.06);\n"
     "    color = mix(color, color * vec3(0.38, 0.32, 0.21), impossible_occlusion * 0.34);\n"
-    "    color += vec3(1.12, 0.86, 0.36) * impossible_rim * 0.52;\n"
+    "    color += vec3(0.92, 0.70, 0.30) * impossible_rim * 0.26;\n"
     "    color = mix(color, vec3(0.010, 0.007, 0.004), cut_screws * 0.92);\n"
     "    color += vec3(0.80, 0.55, 0.24) * cut_screws * 0.28;\n"
     "    color += vec3(1.0, 0.08, 0.03) * mark_wall * (0.85 + 0.15 * sin(ttime * 9.0));\n"
@@ -1485,6 +1485,14 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
     portal_overlay_emit_floor_quad(count, return_x0 - 0.010F, return_x1 + 0.12F, min_y - 0.024F, inner_z0 - 0.056F, inner_z1 + 0.056F, 0.040F, 0.032F, 0.020F, 0.86F);
     portal_overlay_emit_yz_quad(count, return_x1 + 0.018F, min_y + 0.010F, ceiling_y - 0.020F, inner_z0 - 0.060F, inner_z0 + 0.016F, 0.026F, 0.021F, 0.013F, 0.96F);
     portal_overlay_emit_yz_quad(count, return_x1 + 0.018F, min_y + 0.010F, ceiling_y - 0.020F, inner_z1 - 0.016F, inner_z1 + 0.060F, 0.024F, 0.020F, 0.012F, 0.96F);
+    s_portal_overlay_emit_kind = 7.0F;
+    portal_overlay_emit_yz_quad(count, wall_x + 0.020F, min_y - 0.040F, ceiling_y + 0.020F, z0 - 0.150F, z0 + 0.060F, 0.110F, 0.086F, 0.040F, 0.98F);
+    portal_overlay_emit_yz_quad(count, wall_x + 0.020F, min_y - 0.040F, ceiling_y + 0.020F, z1 - 0.060F, z1 + 0.150F, 0.102F, 0.080F, 0.038F, 0.98F);
+    portal_overlay_emit_yz_quad(count, wall_x + 0.016F, max_y - 0.020F, max_y + 0.180F, z0 - 0.130F, z1 + 0.130F, 0.138F, 0.108F, 0.048F, 0.96F);
+    portal_overlay_emit_floor_quad(count, wall_x - 0.030F, return_x1 + 0.170F, min_y - 0.036F, z0 - 0.120F, z1 + 0.120F, 0.104F, 0.080F, 0.040F, 0.98F);
+    portal_overlay_emit_yz_quad(count, wall_x + 0.052F, min_y + 0.050F, max_y + 0.080F, z0 + 0.050F, z0 + 0.118F, 0.040F, 0.031F, 0.017F, 0.99F);
+    portal_overlay_emit_yz_quad(count, wall_x + 0.052F, min_y + 0.050F, max_y + 0.080F, z1 - 0.118F, z1 - 0.050F, 0.038F, 0.030F, 0.016F, 0.99F);
+    s_portal_overlay_emit_kind = 5.0F;
     portal_overlay_emit_yz_quad(count, room_x0 + 0.70F, panel_y1 - 0.16F, ceiling_y + 0.01F, inner_z0 + 0.08F, inner_z1 - 0.08F, 0.048F, 0.039F, 0.021F, 0.44F);
     portal_overlay_emit_yz_quad(count, room_x1 - 0.42F, panel_y0 - 0.02F, panel_y1 + 0.08F, center_z - 0.12F, center_z + 0.12F, 0.032F, 0.026F, 0.015F, 0.55F);
     for (int ix = 0; ix < floor_cols; ++ix) {

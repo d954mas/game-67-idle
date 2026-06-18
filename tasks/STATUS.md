@@ -18,9 +18,10 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
   external ghost-frame artifacts, a stronger fixture-driven portal-room light
   model, a separate non-blended `nt_gfx` solid-shell pass, generated-source
   material atlas sampling, inner wall returns, center/floor light spill,
-  side-wall bounce, additional opaque side/back/ceiling construction ribs, and
-  lower-alpha external proxy framing. The fullscreen portal color now carries
-  less of the room image, while the native layer carries more material/light
+  side-wall bounce, additional opaque side/back/ceiling construction ribs,
+  native solid jamb/header/sill entrance trim, and lower-alpha external proxy
+  framing. The fullscreen portal color and rim now carry less of the room and
+  frame image, while the native layer carries more material/light/entry
   responsibility. It still does not reach
   production-quality realistic Backrooms room construction because the portal
   interior remains a hybrid matte/composite plus native overlay.
@@ -66,11 +67,12 @@ node tools/taskboard/cli.mjs validate
   descriptors, portal descriptors, flags, validation, and GPU params.
 - `src/clean_seed_main.c` composites the impossible room as a dimmed fullscreen
   portal backing, then draws a separate native `nt_gfx` room pass. The current
-  status JSON proves 888 portal overlay vertices: 438 non-blended solid-shell
+  status JSON proves 924 portal overlay vertices: 474 non-blended solid-shell
   vertices, 450 blended detail vertices, material-kind shading, per-surface
   portal lighting, inner wall returns, opaque side/back/ceiling construction,
   corrected native light material kind, brighter native material/light shading,
-  nested back-wall frame/fixture geometry, and copied mark feedback.
+  native solid jamb/header/sill entrance trim, nested back-wall frame/fixture
+  geometry, and copied mark feedback.
 - `tools/assets/build_backrooms_liminal_materials.py` builds the current
   Backrooms material source asset atomically into
   `assets/backrooms-liminal/materials/portal_material_atlas.ppm` plus

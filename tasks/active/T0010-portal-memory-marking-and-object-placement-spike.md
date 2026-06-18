@@ -290,3 +290,17 @@ and reveal a real exit.
   for art quality/audience fit: the layer split is healthier, but the aperture
   is still a hybrid matte/composite plus native overlay, not yet a production
   opaque native room or render-target portal.
+- 2026-06-19: Native aperture-craft slice reduced fullscreen portal frame/rim
+  glow and added solid native jamb/header/sill entrance trim inside the
+  non-blended portal room pass. This makes the aperture less dependent on a
+  shader-painted glow frame and gives the threshold more physical construction.
+  The T0010 scenario now reports
+  `native_overlay.last_vertex_count = 924`,
+  `native_overlay.room_mesh_vertex_count = 840`,
+  `native_overlay.solid_pass_vertex_count = 474`, and
+  `native_overlay.blended_detail_vertex_count = 450`. Native build, material
+  atlas rebuild, T0010 capture, smoke, readability zoom, taskboard validation,
+  profiler-scope check, and strict product gate ran. Product gate remains FAIL
+  for art quality/audience fit: the entrance is more physically framed, but the
+  aperture is still a hybrid matte/composite plus native overlay, not yet a
+  production opaque native room or render-target portal.
