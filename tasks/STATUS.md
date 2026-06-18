@@ -13,8 +13,8 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 - No native runtime blocker is known for the current game repo slice.
 - T0010 product gate is still red: the portal room now has data-driven
   geometry, material, light, finish, authored construction descriptors, and a
-  texture-backed native `nt_gfx` room mesh/material-detail overlay, but not yet
-  production-quality realistic Backrooms room construction.
+  texture-backed/material-kind-lit native `nt_gfx` room mesh/detail overlay, but
+  not yet production-quality realistic Backrooms room construction.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
   must not patch `external/neotolis-engine`; use public APIs or carry an
@@ -60,7 +60,9 @@ node tools/taskboard/cli.mjs validate
   mesh/material-detail vertices for inner floor/wall/ceiling/light-spill
   surfaces, grout seams, wall seams, back-wall strips, ceiling grid, and shadow
   bands plus jambs, threshold, inner fixture, conduit, and landmark column from
-  portal scene params.
+  portal scene params. The overlay shader now receives material kind and world
+  position to apply center light spill, side shadow falloff, seam darkening, and
+  depth falloff.
 - `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md` records
   the engine-facing render-target API gap with evidence from `nt_gfx`.
 - `build/captures/backrooms_t0010_portal_memory_status.json` proves mark
@@ -80,9 +82,9 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Move from the current overlay detail proof to proper authored 3D room
-   surfaces with stronger light/shadow response, or move to the T0011
-   render-target path when the engine API exists.
+1. Move from the current overlay-lit detail proof to proper authored 3D room
+   surfaces or T0011 render-target portal rendering, then revisit the product
+   gate for art quality and audience fit.
 2. Add stronger production texture/light evidence before expanding content;
    more one-pass shader decoration is now a low-value path unless it directly
    proves the future mesh/material contract.

@@ -105,7 +105,5 @@
     ]
   },
   "problem": "The portal proof now reads more solid because material kinds drive different alpha, light spill, side shadows, seam darkening, and depth falloff, but it still lacks true integrated 3D surfaces and render-target-backed lighting",
-  "next": "Move from overlay-lit material detail to proper authored 3D room surfaces or T0011 render-target portal rendering, then revisit product gate for art_quality and audience_fit",
-  "markdown": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T19-29-48-812Z_desktop.md",
-  "json": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T19-29-48-812Z_desktop.json"
+  "next": "Move from overlay-lit material detail to proper authored 3D room surfaces or T0011 render-target portal rendering, then revisit product gate for art_quality and audience_fit"
 }

@@ -137,3 +137,11 @@ and reveal a real exit.
   taskboard validation, and refreshed product gate ran. Product gate remains
   FAIL: the room reads more constructed, but the render still needs proper 3D
   surface integration and stronger physically convincing light/shadow response.
+- 2026-06-18: Material-kind lighting pass extended the native overlay vertex
+  contract with a material kind and world-position shading. The overlay shader
+  now applies different alpha, center light spill, side shadow falloff, seam
+  darkening, and depth falloff for room surfaces, seams, and light strips.
+  Native build, T0010 scenario, smoke, readability, profiler guard, taskboard
+  validation, and refreshed product gate ran. Product gate remains FAIL: the
+  portal reads more solid/scary, but it is still an overlay-lit proof rather
+  than fully integrated 3D room surfaces or render-target portal lighting.

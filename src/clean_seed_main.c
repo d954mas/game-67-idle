@@ -112,11 +112,13 @@ typedef struct PortalOverlayVertex {
     float a;
     float u;
     float v;
+    float kind;
 } PortalOverlayVertex;
 
 #define PORTAL_OVERLAY_MAX_VERTICES 1536
 
 static PortalOverlayVertex s_portal_overlay_vertices[PORTAL_OVERLAY_MAX_VERTICES];
+static float s_portal_overlay_emit_kind;
 
 #define FUSE_X (-3.45F)
 #define FUSE_Z (25.15F)
@@ -142,8 +144,11 @@ static const char *s_portal_overlay_vs_src =
     "layout(location = 0) in vec3 a_position;\n"
     "layout(location = 1) in vec4 a_color;\n"
     "layout(location = 2) in vec2 a_uv;\n"
+    "layout(location = 3) in float a_kind;\n"
     "out vec4 v_color;\n"
     "out vec2 v_uv;\n"
+    "out vec3 v_world;\n"
+    "out float v_kind;\n"
     "uniform vec4 u_overlay_resolution;\n"
     "uniform vec4 u_overlay_player;\n"
     "void main() {\n"
@@ -162,22 +167,38 @@ static const char *s_portal_overlay_vs_src =
     "    gl_Position = vec4(ndc, 0.0, 1.0);\n"
     "    v_color = a_color * front;\n"
     "    v_uv = a_uv;\n"
+    "    v_world = a_position;\n"
+    "    v_kind = a_kind;\n"
     "}\n";
 
 static const char *s_portal_overlay_fs_src =
     "precision mediump float;\n"
     "in vec4 v_color;\n"
     "in vec2 v_uv;\n"
+    "in vec3 v_world;\n"
+    "in float v_kind;\n"
     "out vec4 frag_color;\n"
     "uniform sampler2D u_overlay_tex;\n"
+    "uniform vec4 u_overlay_portal;\n"
     "void main() {\n"
     "    if (v_color.a <= 0.01) { discard; }\n"
     "    float edge = min(min(v_uv.x, 1.0 - v_uv.x), min(v_uv.y, 1.0 - v_uv.y));\n"
     "    float edge_fade = mix(0.62, 1.0, smoothstep(0.0, 0.16, edge));\n"
     "    float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);\n"
     "    vec3 tex = texture(u_overlay_tex, v_uv * vec2(1.8, 1.35)).rgb;\n"
-    "    vec3 color = v_color.rgb * (0.70 + tex * 0.52 + grain * 0.12);\n"
-    "    frag_color = vec4(color, v_color.a * edge_fade * (0.92 + grain * 0.08));\n"
+    "    float depth = clamp((v_world.x - u_overlay_portal.x) / 4.2, 0.0, 1.0);\n"
+    "    float side_shadow = smoothstep(u_overlay_portal.z * 0.48, u_overlay_portal.z * 0.98, abs(v_world.z - u_overlay_portal.y));\n"
+    "    float lamp = exp(-abs(v_world.z - u_overlay_portal.y) * 2.8) * exp(-abs(v_world.y - 0.34) * 0.95) * u_overlay_portal.w;\n"
+    "    float surface_kind = step(0.5, v_kind) * (1.0 - step(1.5, v_kind));\n"
+    "    float seam_kind = step(1.5, v_kind) * (1.0 - step(2.5, v_kind));\n"
+    "    float light_kind = step(2.5, v_kind);\n"
+    "    vec3 color = v_color.rgb * (0.66 + tex * 0.58 + grain * 0.10);\n"
+    "    color *= mix(1.0, 0.58, side_shadow * surface_kind);\n"
+    "    color *= mix(1.0, 0.76, depth * surface_kind);\n"
+    "    color += vec3(0.58, 0.44, 0.18) * lamp * (0.16 + light_kind * 0.28);\n"
+    "    color = mix(color, color * vec3(0.34, 0.31, 0.24), seam_kind * 0.72);\n"
+    "    float alpha_boost = 1.0 + surface_kind * 0.34 + seam_kind * 0.12 + light_kind * 0.26;\n"
+    "    frag_color = vec4(color, min(0.86, v_color.a * alpha_boost * edge_fade * (0.92 + grain * 0.08)));\n"
     "}\n";
 
 #if defined(__clang__)
@@ -1107,7 +1128,8 @@ static void portal_overlay_emit_vertex(uint32_t *count, float x, float y, float 
     if (*count >= PORTAL_OVERLAY_MAX_VERTICES) {
         return;
     }
-    s_portal_overlay_vertices[*count] = (PortalOverlayVertex){.x = x, .y = y, .z = z, .r = r, .g = g, .b = b, .a = a, .u = u, .v = v};
+    s_portal_overlay_vertices[*count] =
+        (PortalOverlayVertex){.x = x, .y = y, .z = z, .r = r, .g = g, .b = b, .a = a, .u = u, .v = v, .kind = s_portal_overlay_emit_kind};
     *count += 1U;
 }
 
@@ -1229,6 +1251,7 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
     const int floor_rows = 4;
     const float seam_y = min_y + 0.018F;
 
+    s_portal_overlay_emit_kind = 1.0F;
     for (int ix = 0; ix < floor_cols; ++ix) {
         const float fx0 = room_x0 + (room_x1 - room_x0) * ((float)ix / (float)floor_cols);
         const float fx1 = room_x0 + (room_x1 - room_x0) * ((float)(ix + 1) / (float)floor_cols) - 0.018F;
@@ -1240,6 +1263,7 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
             portal_overlay_emit_floor_quad(count, fx0, fx1, min_y + 0.006F, fz0, fz1, base * 0.86F, base * 0.75F, base * 0.48F, 0.110F + wet * 0.070F);
         }
     }
+    s_portal_overlay_emit_kind = 2.0F;
     for (int ix = 1; ix < floor_cols; ++ix) {
         const float x = room_x0 + (room_x1 - room_x0) * ((float)ix / (float)floor_cols);
         portal_overlay_emit_floor_x_strip(count, x, seam_y, inner_z0, inner_z1, 0.010F, 0.018F, 0.015F, 0.010F, 0.30F);
@@ -1249,6 +1273,7 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
         portal_overlay_emit_floor_z_strip(count, room_x0, room_x1, seam_y, z, 0.010F, 0.018F, 0.015F, 0.010F, 0.28F);
     }
 
+    s_portal_overlay_emit_kind = 1.0F;
     for (int ix = 0; ix < 4; ++ix) {
         const float sx0 = room_x0 + (room_x1 - room_x0) * ((float)ix / 4.0F);
         const float sx1 = room_x0 + (room_x1 - room_x0) * ((float)(ix + 1) / 4.0F) - 0.020F;
@@ -1259,6 +1284,7 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
         portal_overlay_emit_xy_quad(count, sx0, sx1, panel_y0, panel_y1, inner_z0 - 0.018F, r * 0.82F, g * 0.78F, b * 0.72F, 0.175F + grime * 0.090F);
         portal_overlay_emit_xy_quad(count, sx0, sx1, panel_y0, panel_y1, inner_z1 + 0.018F, r * 0.74F, g * 0.70F, b * 0.66F, 0.185F + grime * 0.095F);
     }
+    s_portal_overlay_emit_kind = 2.0F;
     for (int ix = 1; ix < 4; ++ix) {
         const float sx = room_x0 + (room_x1 - room_x0) * ((float)ix / 4.0F);
         portal_overlay_emit_xy_quad(count, sx - 0.012F, sx + 0.012F, panel_y0, panel_y1, inner_z0 - 0.024F, 0.050F, 0.042F, 0.024F, 0.26F);
@@ -1268,23 +1294,27 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
     portal_overlay_emit_xy_quad(count, room_x0, room_x1, panel_y0 + 0.66F, panel_y0 + 0.69F, inner_z1 + 0.026F, 0.038F, 0.032F, 0.019F, 0.28F);
 
     const float back_x = room_x1 + 0.16F;
+    s_portal_overlay_emit_kind = 1.0F;
     for (int iz = 0; iz < 3; ++iz) {
         const float bz0 = inner_z0 + (inner_z1 - inner_z0) * ((float)iz / 3.0F);
         const float bz1 = inner_z0 + (inner_z1 - inner_z0) * ((float)(iz + 1) / 3.0F) - 0.020F;
         const float v = portal_panel_variation(11, iz);
         portal_overlay_emit_yz_quad(count, back_x, panel_y0, panel_y1, bz0, bz1, 0.115F + v * 0.035F, 0.103F + v * 0.028F, 0.058F + v * 0.016F, 0.205F + grime * 0.080F);
     }
+    s_portal_overlay_emit_kind = 2.0F;
     for (int iz = 1; iz < 3; ++iz) {
         const float z = inner_z0 + (inner_z1 - inner_z0) * ((float)iz / 3.0F);
         portal_overlay_emit_yz_quad(count, back_x - 0.014F, panel_y0, panel_y1, z - 0.010F, z + 0.010F, 0.040F, 0.034F, 0.020F, 0.32F);
     }
     portal_overlay_emit_yz_quad(count, back_x - 0.018F, panel_y0 + 0.76F, panel_y0 + 0.80F, inner_z0, inner_z1, 0.050F, 0.042F, 0.024F, 0.30F);
 
+    s_portal_overlay_emit_kind = 1.0F;
     for (int ix = 0; ix < 4; ++ix) {
         const float cx0 = room_x0 + (room_x1 - room_x0) * ((float)ix / 4.0F);
         const float cx1 = room_x0 + (room_x1 - room_x0) * ((float)(ix + 1) / 4.0F) - 0.026F;
         portal_overlay_emit_floor_quad(count, cx0, cx1, ceiling_y, inner_z0, inner_z1, 0.19F, 0.17F, 0.09F, 0.090F + light * 0.070F);
     }
+    s_portal_overlay_emit_kind = 2.0F;
     for (int ix = 1; ix < 4; ++ix) {
         const float x = room_x0 + (room_x1 - room_x0) * ((float)ix / 4.0F);
         portal_overlay_emit_floor_x_strip(count, x, ceiling_y - 0.004F, inner_z0, inner_z1, 0.008F, 0.060F, 0.052F, 0.030F, 0.28F);
@@ -1293,10 +1323,13 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
 
     const float spill_x0 = room_x0 + 0.35F;
     const float spill_x1 = room_x1 - 0.35F;
+    s_portal_overlay_emit_kind = 3.0F;
     portal_overlay_emit_floor_quad(count, spill_x0, spill_x1, min_y + 0.022F, center_z - 0.34F, center_z + 0.34F, 0.66F, 0.53F, 0.24F, 0.110F + light * 0.115F);
     portal_overlay_emit_floor_quad(count, spill_x0 + 0.34F, spill_x1 - 0.34F, min_y + 0.026F, center_z - 0.16F, center_z + 0.16F, 0.78F, 0.64F, 0.31F, 0.090F + light * 0.075F);
     portal_overlay_emit_yz_quad(count, back_x - 0.035F, panel_y0 + 0.40F, panel_y0 + 0.56F, center_z - 0.52F, center_z + 0.52F, 0.60F, 0.48F, 0.22F, 0.105F + light * 0.105F);
+    s_portal_overlay_emit_kind = 2.0F;
     portal_overlay_emit_yz_quad(count, back_x - 0.040F, panel_y0, panel_y0 + 0.18F, inner_z0, inner_z1, 0.014F, 0.012F, 0.008F, 0.32F + grime * 0.16F);
+    s_portal_overlay_emit_kind = 0.0F;
 }
 
 static uint32_t build_portal_overlay_vertices(const BackroomsPortalGpuParams *portal) {
@@ -1385,13 +1418,14 @@ static void init_render_resources(void) {
         .fragment_shader = s_portal_overlay_fs,
         .layout =
             {
-                .attr_count = 3,
+                .attr_count = 4,
                 .stride = sizeof(PortalOverlayVertex),
                 .attrs =
                     {
                         {.location = 0, .format = NT_FORMAT_FLOAT3, .offset = (uint16_t)offsetof(PortalOverlayVertex, x)},
                         {.location = 1, .format = NT_FORMAT_FLOAT4, .offset = (uint16_t)offsetof(PortalOverlayVertex, r)},
                         {.location = 2, .format = NT_FORMAT_FLOAT2, .offset = (uint16_t)offsetof(PortalOverlayVertex, u)},
+                        {.location = 3, .format = NT_FORMAT_FLOAT, .offset = (uint16_t)offsetof(PortalOverlayVertex, kind)},
                     },
             },
         .depth_test = false,
@@ -1748,6 +1782,7 @@ static void draw_frame(float fb_w, float fb_h) {
         nt_gfx_set_uniform_int("u_overlay_tex", 0);
         nt_gfx_set_uniform_vec4("u_overlay_resolution", (float[4]){fb_w, fb_h, g_nt_app.time, portal.entry[3]});
         nt_gfx_set_uniform_vec4("u_overlay_player", (float[4]){s_game.x, s_game.z, s_game.yaw, 0.0F});
+        nt_gfx_set_uniform_vec4("u_overlay_portal", (float[4]){portal.entry[0], portal.entry[1], portal.entry[2], clampf(portal.light[1] * 0.32F, 0.25F, 0.80F)});
         nt_gfx_draw(0, s_last_portal_overlay_vertices);
     }
 }
