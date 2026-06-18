@@ -201,12 +201,18 @@ static const char *s_fs_src =
     "    if (smat == 4) { col *= vec3(0.52, 0.48, 0.34); }\n"
     "    float seam_x = 1.0 - smoothstep(0.025, 0.070, abs(fract(hp.x * 0.82) - 0.5));\n"
     "    float seam_z = 1.0 - smoothstep(0.030, 0.085, abs(fract((hp.z + 5.9) * 0.48) - 0.5));\n"
+    "    float stain = smoothstep(0.70, 0.96, hash12(floor(hp.xz * vec2(1.7, 2.3)))) * (1.0 - smoothstep(0.30, 2.20, hp.y));\n"
+    "    float corner_shadow = max(smoothstep(4.1, 5.9, abs(hp.z)), smoothstep(6.5, 8.8, hp.x));\n"
+    "    float floor_wet = (smat == 2 ? 1.0 : 0.0) * smoothstep(2.2, 7.4, hp.x) * (0.55 + 0.45 * hash12(floor(hp.xz * 2.0)));\n"
     "    float ceiling_strip = (smat == 3 ? 1.0 : 0.0) * (1.0 - smoothstep(0.10, 0.22, abs(hp.z))) * (0.65 + 0.35 * step(0.25, sin(hp.x * 2.6 + ttime * 0.5)));\n"
     "    float back_door = (smat == 1 ? 1.0 : 0.0) * (1.0 - smoothstep(0.70, 1.05, abs(hp.z))) * smoothstep(0.12, 0.22, hp.y) * (1.0 - smoothstep(1.64, 1.92, hp.y));\n"
     "    float copied_mark = (smat == 1 ? 1.0 : 0.0) * (1.0 - smoothstep(0.075, 0.16, abs((hp.y - 1.14) - hp.z * 0.20)));\n"
     "    copied_mark *= (1.0 - smoothstep(0.075, 0.16, abs((hp.y - 1.14) + hp.z * 0.20))) * smoothstep(0.40, 0.65, hp.y) * (1.0 - smoothstep(1.62, 1.88, hp.y));\n"
-    "    float light = 0.24 + ceiling_strip * 1.55 + 0.85 / (1.0 + length(hp - vec3(4.8, 2.52, 0.0)) * 0.95);\n"
+    "    float light = 0.18 + ceiling_strip * 1.72 + 1.05 / (1.0 + length(hp - vec3(4.8, 2.52, 0.0)) * 0.95);\n"
     "    col *= light;\n"
+    "    col = mix(col, col * vec3(0.48, 0.43, 0.30), stain * 0.62);\n"
+    "    col = mix(col, col * vec3(0.28, 0.25, 0.20), corner_shadow * 0.50);\n"
+    "    col += vec3(0.20, 0.15, 0.07) * floor_wet;\n"
     "    col = mix(col, vec3(0.020, 0.018, 0.012), back_door * 0.76);\n"
     "    col += vec3(1.00, 0.88, 0.46) * ceiling_strip * 0.58;\n"
     "    col = mix(col, col * 0.58, max(seam_x, seam_z) * 0.36);\n"
@@ -366,7 +372,13 @@ static const char *s_fs_src =
     "        fixture_shape = (1.0 - smoothstep(fixture_w, fixture_w + 0.07, abs(hit.x))) * (1.0 - smoothstep(0.72, 0.92, abs(hit.z - fixture_z)));\n"
     "    }\n"
     "\n"
-    "    vec3 color = albedo * (0.16 + ceiling_light + exit_light + fuse_light + flashlight) * contact;\n"
+    "    float wall_damp = (mat == 3 ? 1.0 : 0.0) * (1.0 - smoothstep(0.10, 1.85, hit.y)) * smoothstep(0.72, 0.96, hash12(floor(hit.zy * vec2(2.0, 4.0))));\n"
+    "    float carpet_wear = (mat == 1 ? 1.0 : 0.0) * smoothstep(0.54, 0.98, hash12(floor(hit.xz * 2.4))) * smoothstep(3.5, 18.0, hit.z);\n"
+    "    float fixture_shadow = (mat == 2 ? 1.0 : 0.0) * (1.0 - smoothstep(0.18, 0.52, abs(hit.x))) * (1.0 - smoothstep(0.45, 1.10, abs(hit.z - fixture_z)));\n"
+    "    vec3 color = albedo * (0.13 + ceiling_light + exit_light + fuse_light + flashlight) * contact;\n"
+    "    color = mix(color, color * vec3(0.48, 0.42, 0.30), wall_damp * 0.56);\n"
+    "    color = mix(color, color * vec3(0.56, 0.45, 0.32), carpet_wear * 0.42);\n"
+    "    color = mix(color, color * 0.38, fixture_shadow * 0.22);\n"
     "    color += vec3(1.0, 0.92, 0.66) * fixture_shape * (1.05 + 0.75 * flicker);\n"
     "    color += vec3(1.15, 0.04, 0.0) * fixture_shape * u_horror.x * (0.7 + 0.5 * step(0.45, sin(ttime * 15.0)));\n"
     "    color *= 1.0 - side_opening * 0.86;\n"
@@ -378,8 +390,9 @@ static const char *s_fs_src =
     "    color += vec3(1.0, 0.58, 0.18) * exit_frame * (0.10 + 0.46 * u_puzzle.w);\n"
     "    vec3 impossible_col = impossible_room_color(hit, rd, ttime);\n"
     "    color = mix(color, impossible_col, impossible_cut * 0.96);\n"
-    "    color = mix(color, vec3(0.030, 0.025, 0.014), impossible_frame * 0.72);\n"
-    "    color += vec3(0.88, 0.65, 0.28) * impossible_frame * 0.42;\n"
+    "    color = mix(color, vec3(0.018, 0.014, 0.008), impossible_frame * 0.76);\n"
+    "    color += vec3(0.92, 0.70, 0.34) * impossible_frame * 0.35;\n"
+    "    color = mix(color, color * 0.34, impossible_frame * smoothstep(0.0, 1.0, abs(hit.z - 10.8)) * 0.18);\n"
     "    color += vec3(1.0, 0.08, 0.03) * mark_wall * (0.85 + 0.15 * sin(ttime * 9.0));\n"
     "    color += vec3(1.0, 0.02, 0.0) * forged_mark * (0.55 + 0.25 * step(0.45, sin(ttime * 11.0)));\n"
     "    color = mix(color, vec3(0.005, 0.012, 0.008), false_exit * 0.92);\n"
@@ -705,19 +718,31 @@ static void generate_wall_texture(void) {
         for (int x = 0; x < WALL_TEX_W; ++x) {
             const int i = (y * WALL_TEX_W + x) * 4;
             const int seam = (x % 32 == 0) || (y % 42 == 0);
-            const int fleck = ((x * 17 + y * 31 + ((x * y) % 19)) & 31) == 0;
-            int r = 184 + ((x * 5 + y * 3) & 15);
-            int g = 161 + ((x * 7 + y * 11) & 13);
-            int b = 74 + ((x * 13 + y * 2) & 9);
+            const int fleck = ((x * 17 + y * 31 + ((x * y) % 19)) & 23) == 0;
+            const int stain = (((x * 3 + y * 11) & 63) < 6 && ((x + y * 5) & 15) < 5);
+            const int vertical_wear = (x % 32 == 30 || x % 32 == 1) && ((y * 7 + x) & 7) < 5;
+            int r = 176 + ((x * 5 + y * 3) & 17);
+            int g = 156 + ((x * 7 + y * 11) & 15);
+            int b = 76 + ((x * 13 + y * 2) & 11);
             if (seam) {
-                r -= 36;
-                g -= 34;
-                b -= 20;
+                r -= 42;
+                g -= 39;
+                b -= 22;
             }
             if (fleck) {
                 r -= 50;
                 g -= 42;
                 b -= 24;
+            }
+            if (stain) {
+                r -= 36;
+                g -= 32;
+                b -= 14;
+            }
+            if (vertical_wear) {
+                r += 18;
+                g += 14;
+                b += 6;
             }
             s_wall_pixels[i + 0] = (uint8_t)clampf((float)r, 0.0F, 255.0F);
             s_wall_pixels[i + 1] = (uint8_t)clampf((float)g, 0.0F, 255.0F);
@@ -748,6 +773,15 @@ static void ui_rect(int x, int y, int w, int h, uint8_t r, uint8_t g, uint8_t b,
             ui_px(xx, yy, r, g, b, a);
         }
     }
+}
+
+static void ui_panel(int x, int y, int w, int h, bool danger) {
+    ui_rect(x + 3, y + 4, w, h, 0, 0, 0, danger ? 118 : 88);
+    ui_rect(x, y, w, h, danger ? 22 : 11, danger ? 3 : 9, danger ? 3 : 7, danger ? 178 : 146);
+    ui_rect(x, y, w, 2, danger ? 144 : 104, danger ? 35 : 84, danger ? 28 : 46, danger ? 168 : 112);
+    ui_rect(x, y + h - 2, w, 2, 0, 0, 0, 86);
+    ui_rect(x, y, 2, h, 0, 0, 0, 64);
+    ui_rect(x + w - 2, y, 2, h, 0, 0, 0, 64);
 }
 
 static void glyph_rows(char c, uint8_t out[7]) {
@@ -843,68 +877,68 @@ static void build_ui(void) {
     ui_rect(479, 265, 2, 8, 230, 235, 220, 220);
 
     if (!s_game.won && !s_game.caught && blackout_active()) {
-        ui_rect(284, 396, 392, 42, 24, 2, 2, 205);
+        ui_panel(284, 396, 392, 42, true);
         ui_text(290, 406, "LIGHTS OUT - SPRINT", 3, 255, 138, 112, 255);
     } else if (!s_game.won && !s_game.caught && route_choice_active()) {
-        ui_rect(260, 396, 440, 42, 5, 8, 8, 190);
+        ui_panel(260, 396, 440, 42, false);
         (void)snprintf(line, sizeof(line), "MOVE %s - TRUST HUM", route_choice_side_name(route_choice_safe_side_for_stage(s_game.route_choice_stage)));
         ui_text(288, 406, line, 3, 132, 255, 184, 255);
     } else if (!s_game.won && !s_game.caught && s_game.relief_timer > 0.0F) {
-        ui_rect(306, 396, 348, 42, 5, 8, 8, 190);
+        ui_panel(306, 396, 348, 42, false);
         ui_text(340, 406, "SAFE TURN - MOVE", 3, 132, 255, 184, 255);
     } else if (!s_game.won && !s_game.caught && near_mark_surface()) {
-        ui_rect(306, 396, 348, 42, 5, 8, 8, 185);
+        ui_panel(306, 396, 348, 42, false);
         ui_text(338, 406, "PRESS E - DRAW MARK", 3, 255, 226, 130, 255);
     } else if (!s_game.won && !s_game.caught && near_door_handle()) {
-        ui_rect(314, 396, 332, 42, 5, 8, 8, 185);
+        ui_panel(314, 396, 332, 42, false);
         ui_text(348, 406, "PRESS E - TAKE HANDLE", 3, 255, 226, 130, 255);
     } else if (!s_game.won && !s_game.caught && near_locked_door() && !s_game.portal_exit_revealed) {
-        ui_rect(310, 396, 340, 42, 5, 8, 8, 185);
+        ui_panel(310, 396, 340, 42, false);
         ui_text(338, 406, s_game.door_handle_collected ? "PRESS E - FIT HANDLE" : "PRESS E - TRY DOOR", 3, 255, 226, 130, 255);
     } else if (!s_game.won && !s_game.caught && near_fuse()) {
-        ui_rect(318, 396, 324, 42, 5, 8, 8, 185);
+        ui_panel(318, 396, 324, 42, false);
         ui_text(352, 406, "PRESS E - ENTER", 3, 255, 226, 130, 255);
     } else if (!s_game.won && !s_game.caught && near_exit()) {
-        ui_rect(334, 396, 292, 42, 5, 8, 8, 190);
+        ui_panel(334, 396, 292, 42, false);
         ui_text(358, 406, "PRESS E - ESCAPE", 3, 255, 226, 130, 255);
     }
 
     if (!s_game.won && !s_game.caught) {
-        ui_rect(24, 574, 350, 70, 18, 15, 8, 112);
-        ui_text(42, 588, "JOURNAL", 2, 246, 226, 146, 225);
+        ui_panel(24, 458, 350, 58, false);
+        ui_text(42, 470, "JOURNAL", 2, 246, 226, 146, 225);
         if (!s_game.mark_placed) {
-            ui_text(42, 614, "TASK: DRAW A WALL MARK", 2, 230, 238, 208, 238);
+            ui_text(42, 496, "TASK: DRAW A WALL MARK", 2, 230, 238, 208, 238);
         } else if (!s_game.door_handle_collected) {
-            ui_text(42, 614, "TASK: FIND DOOR HANDLE", 2, 230, 238, 208, 238);
+            ui_text(42, 496, "TASK: FIND DOOR HANDLE", 2, 230, 238, 208, 238);
         } else if (!s_game.portal_exit_revealed) {
-            ui_text(42, 614, "TASK: FIT HANDLE TO DOOR", 2, 230, 238, 208, 238);
+            ui_text(42, 496, "TASK: FIT HANDLE TO DOOR", 2, 230, 238, 208, 238);
         } else if (!s_game.fuse_found) {
-            ui_text(42, 614, "TASK: ENTER REAL EXIT", 2, 230, 238, 208, 238);
+            ui_text(42, 496, "TASK: ENTER REAL EXIT", 2, 230, 238, 208, 238);
         } else {
             (void)snprintf(line, sizeof(line), "TASK: CROSS %d MORE ROOMS", 3 - s_game.side_room_visits);
-            ui_text(42, 614, line, 2, 230, 238, 208, 238);
+            ui_text(42, 496, line, 2, 230, 238, 208, 238);
         }
         if (s_game.battery < 0.18F || !s_game.flashlight_on) {
-            ui_text(252, 588, "DYNAMO", 1, 255, 190, 128, 220);
+            ui_text(252, 470, "DYNAMO", 1, 255, 190, 128, 220);
         } else if (s_game.side_room_visits >= 3 && !s_game.fuse_found) {
             (void)snprintf(line, sizeof(line), "HUM %.0fM", (double)fuse_dist);
-            ui_text(252, 588, line, 1, 230, 218, 156, 210);
+            ui_text(252, 470, line, 1, 230, 218, 156, 210);
         }
     }
 
     if (!s_game.won && !s_game.caught && s_game.message_timer > 0.0F) {
-        ui_rect(302, 478, 356, 34, 3, 4, 5, 155);
-        ui_text(326, 488, s_game.message, 2, 255, 236, 170, 240);
+        ui_panel(302, 344, 356, 34, false);
+        ui_text(326, 354, s_game.message, 2, 255, 236, 170, 240);
     }
     if (s_game.won) {
-        ui_rect(220, 210, 520, 132, 4, 6, 7, 220);
+        ui_panel(220, 210, 520, 132, false);
         ui_text(338, 206, "ESCAPED", 4, 255, 228, 128, 255);
         (void)snprintf(line, sizeof(line), "TIME:%02dS  ROOMS:%d  SHIFTS:%d", (int)s_game.last_run_time, s_game.side_room_visits, s_game.layout_shift_count);
         ui_text(260, 258, line, 2, 220, 238, 210, 255);
         ui_text(292, 296, "PRESS E - NEW RUN", 3, 132, 255, 184, 255);
     }
     if (s_game.caught) {
-        ui_rect(208, 210, 544, 132, 8, 0, 0, 215);
+        ui_panel(208, 210, 544, 132, true);
         ui_text(292, 226, "LOST IN THE LIGHTS", 3, 255, 130, 112, 255);
         (void)snprintf(line, sizeof(line), "TIME:%02dS  ROOMS:%d  SHIFTS:%d", (int)s_game.last_run_time, s_game.side_room_visits, s_game.layout_shift_count);
         ui_text(260, 258, line, 2, 255, 220, 190, 255);

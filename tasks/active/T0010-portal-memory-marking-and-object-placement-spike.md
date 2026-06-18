@@ -63,3 +63,10 @@ and reveal a real exit.
   as a deeper room that should not fit, but product gate remains red for
   material, lighting, bevel/contact-shadow, and UI plate quality.
 - 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Do a dedicated visual pass on production materials and lighting: stronger wallpaper/carpet material depth, fluorescent shadows, beveled wall thickness, grime, and a more physical locked-door/room landmark.
+- 2026-06-18: Material/lighting HUD pass added dirtier wallpaper generation,
+  damp wall/carpet variation, darker impossible-room corners, localized
+  fluorescent depth cues, and moved the minimal journal into the visible UI
+  texture. Readability improved, but product gate remains red because the
+  result is still shader-authored rather than production-quality realistic
+  Backrooms geometry/materials.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Move the visual pass from shader-only polish to stronger authored geometry/material treatment: real bevel/thickness, better fluorescent shadowing, stronger carpet/wall material breakup, and less temporary prompt styling.
