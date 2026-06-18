@@ -261,3 +261,16 @@ and reveal a real exit.
   portal entrance is cleaner and more physical, but still reads as a hybrid
   fullscreen composite plus native shell rather than production-quality
   render-target or fully native 3D portal-room rendering.
+- 2026-06-19: Native opaque-interior slice added opaque side-wall ribs,
+  back-wall rails, ceiling light strips, floor light pools, and corrected the
+  native light quads to use the existing light material kind instead of an
+  unlit shell kind. The T0010 scenario now reports
+  `native_overlay.last_vertex_count = 888`,
+  `native_overlay.room_mesh_vertex_count = 804`,
+  `native_overlay.solid_pass_vertex_count = 438`, and
+  `native_overlay.blended_detail_vertex_count = 450`. Native build, T0010
+  capture, smoke, readability, profiler scope, taskboard validation, and strict
+  product gate ran. Product gate remains FAIL for art quality/audience fit:
+  geometry density and light handling improved, but this path is reaching the
+  limit of shell decoration; next work should be a more complete opaque native
+  portal-room draw path or T0011 render-target-backed portal lighting.

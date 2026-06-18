@@ -6,8 +6,8 @@
   "threshold": 30,
   "changed_file_count": 7,
   "changed_files": [
-    "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.json",
-    "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.md",
+    "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.json",
+    "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.md",
     "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json",
     "gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md",
     "src/clean_seed_main.c",
@@ -36,23 +36,23 @@
     ],
     "profile_guards": [
       {
-        "path": "node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/integrated-light-depth",
+        "path": "node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/native-opaque-interior",
         "source": "inline",
         "verdict": "unknown",
         "reason": "could not confirm usable current-scope profiler guard"
       }
     ],
     "known_red_gates": [
-      "T0010 product gate intentionally remains FAIL for art_quality/audience_fit until the portal interior is real opaque native room geometry or render-target-backed lighting rather than hybrid fullscreen composite plus native shell"
+      "T0010 product gate intentionally remains FAIL for art_quality/audience_fit until the portal interior becomes a complete opaque native room draw path or T0011 render-target-backed lighting, not hybrid fullscreen composite plus native overlay"
     ]
   },
   "red_review_artifacts": [
     {
-      "path": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.json",
+      "path": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.json",
       "reason": "changed review/audit evidence contains FAIL/fail verdict"
     },
     {
-      "path": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.md",
+      "path": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.md",
       "reason": "changed review/audit evidence contains FAIL/fail verdict"
     },
     {
@@ -73,7 +73,7 @@
   },
   "problems": [],
   "warnings": [
-    "profiler guard evidence is inconclusive (advisory): node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/integrated-light-depth (could not confirm usable current-scope profiler guard)",
-    "known red review artifact(s) accepted for this handoff: gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.json, gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.md, gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json, gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md"
+    "profiler guard evidence is inconclusive (advisory): node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/native-opaque-interior (could not confirm usable current-scope profiler guard)",
+    "known red review artifact(s) accepted for this handoff: gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.json, gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.md, gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json, gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md"
   ]
 }

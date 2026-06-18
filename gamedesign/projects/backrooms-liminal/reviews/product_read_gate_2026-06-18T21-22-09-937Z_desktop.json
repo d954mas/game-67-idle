@@ -105,7 +105,5 @@
     ]
   },
   "problem": "The room construction is denser and the native light path is more correct, but the result still reads as a hybrid fullscreen composite plus native overlay rather than a production-quality render-target or fully native 3D room",
-  "next": "Stop adding shell decoration; either implement a more complete opaque native portal-room draw path or unblock T0011 render-target-backed portal lighting before expanding content",
-  "markdown": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.md",
-  "json": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.json"
+  "next": "Stop adding shell decoration; either implement a more complete opaque native portal-room draw path or unblock T0011 render-target-backed portal lighting before expanding content"
 }
