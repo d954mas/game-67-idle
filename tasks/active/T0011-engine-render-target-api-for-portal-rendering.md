@@ -20,12 +20,20 @@ Current evidence from `external/neotolis-engine`:
 - Public `engine/graphics/nt_gfx.h` exposes default-frame pass lifecycle
   (`nt_gfx_begin_frame`, `nt_gfx_begin_pass`, `nt_gfx_end_pass`) but no
   render-target/framebuffer handle, attachment descriptor, or pass target.
-- `nt_pass_desc_t` only carries `clear_color` and `clear_depth`.
+- `engine/graphics/nt_gfx.h:251-253`: `nt_pass_desc_t` only carries
+  `clear_color` and `clear_depth`.
 - `nt_texture_desc_t` creates sampleable textures, but has no renderable
   attachment usage flag or color/depth attachment role.
-- `engine/graphics/nt_gfx.c` forwards `nt_gfx_begin_pass(desc)` directly to the
-  backend begin-pass call; there is no public target selection point around the
-  pass lifecycle.
+- `engine/graphics/nt_gfx.h:317-318`: pass lifecycle is only
+  `nt_gfx_begin_pass(const nt_pass_desc_t *desc)` / `nt_gfx_end_pass(void)`.
+- `engine/graphics/nt_gfx_internal.h:24-25`: backend pass lifecycle also only
+  accepts `const nt_pass_desc_t *desc`; no backend target handle is present.
+- `engine/graphics/nt_gfx.c:286-298` forwards `nt_gfx_begin_pass(desc)`
+  directly to the backend begin-pass call; there is no public target selection
+  point around the pass lifecycle.
+- `engine/graphics/gl/nt_gfx_gl.c:650-654` begins a pass by setting the
+  viewport to `g_nt_window.fb_width/fb_height` and clearing color/depth on the
+  current/default framebuffer; no `glBindFramebuffer` path is used there.
 - Search of engine graphics/backend code found viewport/scissor/depth/stencil
   state, but no public `nt_gfx_*render_target*`, no public framebuffer bind, and
   no `glBindFramebuffer`/FBO path exposed through `nt_gfx`.
@@ -70,6 +78,54 @@ contract roughly equivalent to:
 - Keep native GL and WebGL2 behavior aligned; if WebGL2 has constraints around
   depth textures or multisample resolve, document them in the descriptor.
 
+## Engine issue body
+
+Title: Add public `nt_gfx` render-target/framebuffer API for offscreen portal rendering
+
+Problem:
+
+`nt_gfx` currently exposes textures and default framebuffer passes, but it does
+not expose a backend-agnostic way to create, bind, render into, and later sample
+an offscreen color/depth target. This blocks Backrooms Liminal portal rendering:
+the game needs to render an impossible target room from a portal camera, then
+composite that texture into the source room aperture. The current game-side
+fallback is a one-pass/proxy portal shader, which cannot scale to arbitrary
+rooms, recursive spaces, or reusable portal scenes.
+
+Evidence:
+
+- `engine/graphics/nt_gfx.h:251-253`: `nt_pass_desc_t` only contains clear
+  color/depth.
+- `engine/graphics/nt_gfx.h:317-318`: public pass API has no target parameter.
+- `engine/graphics/nt_gfx_internal.h:24-25`: backend pass API also has no target
+  parameter.
+- `engine/graphics/nt_gfx.c:286-298`: `nt_gfx_begin_pass(desc)` forwards
+  directly to backend begin-pass.
+- `engine/graphics/gl/nt_gfx_gl.c:650-654`: GL begin-pass clears the window
+  framebuffer size and does not bind an FBO.
+- Scoped search under `engine/graphics` found no public render target handle and
+  no `glBindFramebuffer` path.
+
+Requested contract:
+
+- Create/destroy a render target with width, height, color format, optional
+  depth/stencil, and explicit resize policy.
+- Begin a pass against either the default framebuffer or a render target.
+- Expose the render target color attachment as a sampleable `nt_texture_t` or
+  equivalent public texture handle for later composition.
+- Define viewport/scissor defaults for target pass entry and return to default
+  framebuffer.
+- Support native GL and WebGL2, documenting any WebGL2 depth/stencil/MSAA
+  constraints.
+
+Minimal acceptance test:
+
+1. Render a colored/depth-tested offscreen scene into a render target.
+2. Bind the target color texture in a later default-framebuffer pass.
+3. Draw it on a visible quad.
+4. Verify the offscreen depth/stencil attachment does not corrupt default pass
+   depth, viewport, or scissor state.
+
 ## Open questions
 
 - Should the public API be a direct `nt_render_target_t`, or should
@@ -82,6 +138,14 @@ contract roughly equivalent to:
 
 ## Log
 
+- 2026-06-19: User asked to verify whether render target/framebuffer binding is
+  currently exported. Rechecked public `nt_gfx`, backend boundary, shared
+  implementation, and GL backend line-level evidence. It is still not exported:
+  no render target handle, no pass target, no attachment descriptor, no texture
+  usage flag for renderable attachments, and no `glBindFramebuffer` path under
+  `engine/graphics`. Added a portable engine issue body and minimal acceptance
+  test to this task so it can be copied into the engine tracker without
+  touching the submodule from the game repo.
 - 2026-06-19: Re-audited the current `external/neotolis-engine` public graphics
   surface. `nt_gfx.h` still only exposes `nt_texture_t`, `nt_pass_desc_t` with
   `clear_color`/`clear_depth`, `nt_gfx_begin_pass(const nt_pass_desc_t *)`,
