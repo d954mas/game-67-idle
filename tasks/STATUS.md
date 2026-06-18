@@ -15,9 +15,9 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
   geometry, material, light, finish, authored construction descriptors, a
   fully opaque fullscreen portal-room composite inside the aperture, denser
   texture-backed/material-kind-lit native `nt_gfx` room surfaces, reduced
-  external ghost-frame artifacts, and a stronger fixture-driven portal-room
-  light model, but not yet production-quality realistic Backrooms room
-  construction.
+  external ghost-frame artifacts, a stronger fixture-driven portal-room light
+  model, and a denser solid-shell `nt_gfx` bridge layer, but not yet
+  production-quality realistic Backrooms room construction.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
   must not patch `external/neotolis-engine`; use public APIs or carry an
@@ -25,9 +25,8 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 
 ## Non-blocking Debt
 
-- Global AI profile review confidence is still broken by older unresolved
-  failed records. Current profiling evidence is advisory until those records are
-  explained or repaired.
+- Current profiling scope is usable for normal review:
+  `T0010/authored-room-geometry-slice`.
 - T0001-T0008 are in review with historical evidence. Do not expand them unless
   the lead asks; current actionable work is T0009/T0010 plus the T0011 engine
   issue.
@@ -60,11 +59,13 @@ node tools/taskboard/cli.mjs validate
   descriptors, portal descriptors, flags, validation, and GPU params.
 - `src/clean_seed_main.c` now composites the impossible room as an opaque
   fullscreen portal cut, then adds a separate native `nt_gfx` detail overlay
-  that streams 450 world-space vertices: 366 texture-backed room
+  that streams 492 world-space vertices: 408 texture-backed room
   mesh/material-detail vertices for denser inner floor/wall/ceiling/light-spill
   surfaces, grout seams, wall seams, back-wall strips, ceiling grid, and shadow
-  bands plus a separate aperture contact-shadow layer, softened jamb/threshold
-  hints, inner fixture, conduit, and landmark column from portal scene params.
+  bands; 42 of those are solid-shell vertices for floor, side walls, back wall,
+  ceiling, soffit, and center-rib surfaces. A separate aperture contact-shadow
+  layer, softened jamb/threshold hints, inner fixture, conduit, and landmark
+  column still come from portal scene params.
   The fullscreen portal room now uses per-surface normals, direct/bounce
   fluorescent lighting, side/back occlusion, fixture cast shadow, and wet-floor
   specular response. The overlay shader receives material kind and world
@@ -77,8 +78,9 @@ node tools/taskboard/cli.mjs validate
   escape, and active `portal_render` material/light/finish/construction params
   including trim, fixture spacing, ceiling panel scale, shadow spill, jamb
   depth, threshold lip, conduit, landmark columns,
-  `native_overlay.last_vertex_count = 450`, and
-  `native_overlay.room_mesh_vertex_count = 366`.
+  `native_overlay.last_vertex_count = 492`,
+  `native_overlay.room_mesh_vertex_count = 408`, and
+  `native_overlay.solid_shell_vertex_count = 42`.
 - `build/captures/backrooms_t0010_impossible_geometry.png` is the latest native
   proof screenshot for the data-driven impossible room.
 - `build/captures/backrooms_t0010_impossible_geometry_uizoom.png` is the latest
@@ -89,12 +91,12 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Use the cleaner opaque aperture plus physical-lighting pass as the stopgap,
-   then move to real opaque authored 3D interior geometry or T0011 render-target
-   portal rendering; revisit the product gate for art quality and audience fit
-   after the room construction itself is no longer a one-pass proxy.
-2. Add stronger production texture/light evidence before expanding content;
-   more one-pass shader decoration is now a low-value path unless it directly
-   proves the future mesh/material contract.
+1. Use the solid-shell overlay as the bridge, then move to real opaque authored
+   3D interior geometry in the native pass or T0011 render-target portal
+   rendering; revisit the product gate for art quality and audience fit after
+   the room construction itself is no longer a blended proxy.
+2. Add stronger production texture/light evidence before expanding content; more
+   one-pass shader or shell decoration is now a low-value path unless it
+   directly proves the future mesh/material/render-target contract.
 3. Keep content expansion frozen while the T0010 product gate remains red,
    unless the lead explicitly accepts that visual debt.

@@ -99,6 +99,7 @@ static uint8_t s_wall_pixels[WALL_TEX_W * WALL_TEX_H * 4];
 static uint8_t s_ui_pixels[UI_W * UI_H * 4];
 static uint32_t s_last_portal_overlay_vertices;
 static uint32_t s_last_portal_room_mesh_vertices;
+static uint32_t s_last_portal_shell_vertices;
 static const float s_route_choice_z[] = {24.0F, 16.2F, 8.3F};
 static const int s_route_choice_safe_side[] = {1, -1, 1};
 
@@ -192,17 +193,19 @@ static const char *s_portal_overlay_fs_src =
     "    float surface_kind = step(0.5, v_kind) * (1.0 - step(1.5, v_kind));\n"
     "    float seam_kind = step(1.5, v_kind) * (1.0 - step(2.5, v_kind));\n"
     "    float light_kind = step(2.5, v_kind) * (1.0 - step(3.5, v_kind));\n"
-    "    float occluder_kind = step(3.5, v_kind);\n"
+    "    float occluder_kind = step(3.5, v_kind) * (1.0 - step(4.5, v_kind));\n"
+    "    float shell_kind = step(4.5, v_kind);\n"
     "    vec3 color = v_color.rgb * (0.66 + tex * 0.58 + grain * 0.10);\n"
-    "    color *= mix(1.0, 0.58, side_shadow * surface_kind);\n"
-    "    color *= mix(1.0, 0.64, depth * surface_kind);\n"
+    "    color *= mix(1.0, 0.58, side_shadow * (surface_kind + shell_kind * 0.72));\n"
+    "    color *= mix(1.0, 0.64, depth * (surface_kind + shell_kind * 0.88));\n"
     "    color += vec3(0.58, 0.44, 0.18) * lamp * (0.16 + light_kind * 0.28);\n"
     "    color = mix(color, color * vec3(0.34, 0.31, 0.24), seam_kind * 0.72);\n"
     "    color = mix(color, vec3(0.030, 0.025, 0.015), occluder_kind * (0.48 + side_shadow * 0.16));\n"
-    "    float alpha_boost = 1.0 + surface_kind * 0.52 + seam_kind * 0.20 + light_kind * 0.18 + occluder_kind * 0.34;\n"
-    "    float material_floor = surface_kind * 0.38 + seam_kind * 0.30 + occluder_kind * 0.22;\n"
+    "    color = mix(color, color * vec3(0.76, 0.70, 0.50) + vec3(0.035, 0.026, 0.010), shell_kind * 0.68);\n"
+    "    float alpha_boost = 1.0 + surface_kind * 0.52 + seam_kind * 0.20 + light_kind * 0.18 + occluder_kind * 0.34 + shell_kind * 0.78;\n"
+    "    float material_floor = surface_kind * 0.38 + seam_kind * 0.30 + occluder_kind * 0.22 + shell_kind * 0.58;\n"
     "    float alpha = max(v_color.a * alpha_boost, material_floor) * edge_fade * (0.94 + grain * 0.06);\n"
-    "    frag_color = vec4(color, min(0.92, alpha));\n"
+    "    frag_color = vec4(color, min(0.96, alpha));\n"
     "}\n";
 
 #if defined(__clang__)
@@ -1282,6 +1285,17 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
     const int floor_cols = 5;
     const int floor_rows = 4;
     const float seam_y = min_y + 0.018F;
+    const uint32_t shell_start = *count;
+
+    s_portal_overlay_emit_kind = 5.0F;
+    portal_overlay_emit_floor_quad(count, room_x0 + 0.18F, room_x1 - 0.18F, min_y + 0.010F, inner_z0 + 0.08F, inner_z1 - 0.08F, 0.070F, 0.058F, 0.035F, 0.46F + wet * 0.10F);
+    portal_overlay_emit_xy_quad(count, room_x0 + 0.02F, room_x1 - 0.10F, panel_y0 - 0.02F, panel_y1 + 0.04F, inner_z0 - 0.034F, 0.118F, 0.104F, 0.058F, 0.50F + grime * 0.12F);
+    portal_overlay_emit_xy_quad(count, room_x0 + 0.02F, room_x1 - 0.10F, panel_y0 - 0.02F, panel_y1 + 0.04F, inner_z1 + 0.034F, 0.102F, 0.091F, 0.051F, 0.52F + grime * 0.12F);
+    portal_overlay_emit_yz_quad(count, room_x1 + 0.18F, panel_y0 - 0.04F, panel_y1 + 0.05F, inner_z0 + 0.05F, inner_z1 - 0.05F, 0.094F, 0.083F, 0.046F, 0.56F + grime * 0.12F);
+    portal_overlay_emit_floor_quad(count, room_x0 + 0.25F, room_x1 - 0.25F, ceiling_y - 0.012F, inner_z0 + 0.07F, inner_z1 - 0.07F, 0.145F, 0.128F, 0.072F, 0.42F + light * 0.10F);
+    portal_overlay_emit_yz_quad(count, room_x0 + 0.70F, panel_y1 - 0.16F, ceiling_y + 0.01F, inner_z0 + 0.08F, inner_z1 - 0.08F, 0.048F, 0.039F, 0.021F, 0.44F);
+    portal_overlay_emit_yz_quad(count, room_x1 - 0.42F, panel_y0 - 0.02F, panel_y1 + 0.08F, center_z - 0.12F, center_z + 0.12F, 0.032F, 0.026F, 0.015F, 0.55F);
+    s_last_portal_shell_vertices = *count - shell_start;
 
     s_portal_overlay_emit_kind = 1.0F;
     for (int ix = 0; ix < floor_cols; ++ix) {
@@ -1367,6 +1381,7 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
 static uint32_t build_portal_overlay_vertices(const BackroomsPortalGpuParams *portal) {
     if (portal == NULL || portal->entry[3] <= 0.5F) {
         s_last_portal_room_mesh_vertices = 0U;
+        s_last_portal_shell_vertices = 0U;
         return 0U;
     }
 
@@ -1895,8 +1910,9 @@ static cJSON *state_json(void) {
     cJSON_AddBoolToObject(overlay, "enabled", true);
     cJSON_AddNumberToObject(overlay, "last_vertex_count", (double)s_last_portal_overlay_vertices);
     cJSON_AddNumberToObject(overlay, "room_mesh_vertex_count", (double)s_last_portal_room_mesh_vertices);
+    cJSON_AddNumberToObject(overlay, "solid_shell_vertex_count", (double)s_last_portal_shell_vertices);
     cJSON_AddNumberToObject(overlay, "vertex_capacity", (double)PORTAL_OVERLAY_MAX_VERTICES);
-    cJSON_AddStringToObject(overlay, "path", "native_nt_gfx_room_mesh_material_layer");
+    cJSON_AddStringToObject(overlay, "path", "native_nt_gfx_room_mesh_material_shell_layer");
     cJSON_AddItemToObject(portal, "native_overlay", overlay);
     cJSON_AddItemToObject(root, "portal_render", portal);
     cJSON_AddStringToObject(root,

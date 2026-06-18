@@ -171,3 +171,14 @@ and reveal a real exit.
   room is scarier and less flat, but still needs real opaque authored interior
   geometry or T0011 render-target portal lighting instead of more cosmetic
   overlay decoration.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Use the solid-shell overlay as the bridge, then either build the portal interior as real opaque geometry in the native pass or unblock T0011 render-target portal lighting; avoid adding more cosmetic shell plates
+- 2026-06-19: Authored solid-shell bridge layer added a new native overlay
+  material kind for denser interior floor, side-wall, back-wall, ceiling,
+  soffit, and center-rib planes. The T0010 scenario now reports
+  `native_overlay.last_vertex_count = 492`,
+  `native_overlay.room_mesh_vertex_count = 408`, and
+  `native_overlay.solid_shell_vertex_count = 42`. Native build, T0010 capture,
+  smoke, readability, profiler scope, taskboard validation, and strict product
+  gate ran. Product gate remains FAIL for art quality/audience fit: this is a
+  better bridge toward real opaque geometry, not the final render-target or
+  production-room solution.
