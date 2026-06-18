@@ -6,8 +6,8 @@ import unittest
 import numpy as np
 from PIL import Image
 
-import tools.assets.dual_plate_pair_gate as gate
-from tools.assets.dual_plate_pair_gate import evaluate
+import tools.assets.cutout.dual_plate_pair_gate as gate
+from tools.assets.cutout.dual_plate_pair_gate import evaluate
 
 
 def _plate(bg: tuple[int, int, int], subject_cols: tuple[int, int], fg=(120, 80, 40)) -> Image.Image:

@@ -15,7 +15,7 @@ Make the two AI-art cutout paths better, simpler, and provable.
 
 - Path 1 (single background): replace the brittle magic-number despill heuristics
   with a principled matte (known-key trimap -> closed-form alpha -> ML foreground
-  decontamination). New module `tools/assets/key_matte.py` (pymatting optional,
+  decontamination). New module `tools/assets/cutout/key_matte.py` (pymatting optional,
   deterministic `key_to_alpha` fallback).
 - Path 2 (dual-plate): default to the Smith & Blinn Theorem-4 joint-channel
   projection (`alpha-combine proj`) instead of the per-channel min/max/avg guess.
@@ -55,9 +55,9 @@ glass) is unrecoverable from one background and routes to path 2. See
 ## Log
 
 - 2026-06-18: Implemented and verified.
-  - `tools/assets/dual_plate_alpha.py`: added `proj` (Theorem-4 joint-channel
+  - `tools/assets/cutout/dual_plate_alpha.py`: added `proj` (Theorem-4 joint-channel
     projection) in numpy + python paths; CLI/default now `proj` + `recovery=average`.
-  - `tools/assets/key_matte.py` (new) + `key_matte_test.py`: trimap -> CF ->
+  - `tools/assets/cutout/key_matte.py` (new) + `key_matte_test.py`: trimap -> CF ->
     `estimate_foreground_ml` -> general key-spill decontam -> bleed/repair/zero.
   - `tools/assets/benchmark_cutout_modes.py`: imports `key_matte_cutout` as the
     `key matte` mode.
@@ -68,7 +68,7 @@ glass) is unrecoverable from one background and routes to path 2. See
       current/aggressive heuristic 30.82 -> ~24x better.
     - soft_or_transparent (path 2 domain): dual min/proj 0.0 (exact) vs every
       single-bg 55-102 -> proves dual is required for soft alpha; proj == min.
-  - `tools/assets/dual_plate_pair_gate.py` (new): channel-uniformity consistency
+  - `tools/assets/cutout/dual_plate_pair_gate.py` (new): channel-uniformity consistency
     gate. Real pairs: ring `pass` (~3-5% inconsistent), angel-wings-glow
     `regenerate` (33%) -> correctly flags the ghosting case.
   - `.codex/skills/delegated-image-generation/scripts/gen_dual_plate.sh` (new):

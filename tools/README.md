@@ -56,7 +56,7 @@ game project:
 - `tools/assets/audit_runtime_ui_asset_usage.mjs`
 - `tools/assets/audit_source_family_coverage.mjs`
 - `tools/assets/chroma_key_alpha.py`
-- `tools/assets/dual_plate_alpha.py`
+- `tools/assets/cutout/dual_plate_alpha.py`
 - `tools/assets/normalize_source_sheet_chroma.py`
 - `tools/assets/audit_source_sheet_intake.py`
 - `tools/assets/plan_runtime_crops_from_intake.py`
@@ -150,7 +150,7 @@ Builders and audits should pass the crop manifest's actual key color; a green
 source sheet can fail with green edge spill even when the old magenta/purple
 checks pass.
 
-`tools/assets/dual_plate_alpha.py` extracts transparent PNGs from two
+`tools/assets/cutout/dual_plate_alpha.py` extracts transparent PNGs from two
 pixel-aligned generated plates: one on a light background and one on a dark
 background. Use it when chroma-key source sheets repeatedly fail fringe audits
 or when the asset has delicate antialiasing, hair-like detail, glow, or soft
@@ -158,7 +158,7 @@ ornate edges. It writes an RGBA PNG plus optional JSON/Markdown report with
 visible-pixel, alpha-bbox, hidden transparent-RGB, cleanup, and timing stats:
 
 ```powershell
-py -3.12 tools/assets/dual_plate_alpha.py `
+py -3.12 tools/assets/cutout/dual_plate_alpha.py `
   --light path/to/light-plate.png `
   --dark path/to/dark-plate.png `
   --output path/to/output.png `

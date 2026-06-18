@@ -25,7 +25,7 @@ from tools.assets.chroma_key_alpha import (
     repair_transparent_edge_rgb,
     zero_fully_transparent_rgb,
 )
-from tools.assets.key_matte import key_matte_cutout
+from tools.assets.cutout.key_matte import key_matte_cutout
 
 
 ATLAS_POLICY = {

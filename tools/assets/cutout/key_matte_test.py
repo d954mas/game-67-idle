@@ -5,8 +5,8 @@ import unittest
 
 from PIL import Image
 
-import tools.assets.key_matte as key_matte
-from tools.assets.key_matte import key_matte_cutout
+import tools.assets.cutout.key_matte as key_matte
+from tools.assets.cutout.key_matte import key_matte_cutout
 
 
 def make_ring_on_key(size: int = 160, key: tuple[int, int, int] = (0, 255, 0)):

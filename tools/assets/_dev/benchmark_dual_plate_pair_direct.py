@@ -15,7 +15,7 @@ if str(ROOT) not in sys.path:
 from tools.assets.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
 from tools.assets._dev.benchmark_cutout_modes import BACKGROUNDS, checkerboard, contain, font, metrics, project_path, rel, soft_chroma_matte
 from tools.assets._dev.benchmark_dual_plate_transfer import foreground_mask_from_bg, mask_iou
-from tools.assets.dual_plate_alpha import extract_dual_plate_alpha
+from tools.assets.cutout.dual_plate_alpha import extract_dual_plate_alpha
 
 
 def composite_on(image: Image.Image, bg: tuple[int, int, int], size: tuple[int, int]) -> Image.Image:

@@ -13,7 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.assets._dev.benchmark_cutout_modes import BACKGROUNDS, checkerboard, contain, metrics, source_image_for_case, soft_chroma_matte
-from tools.assets.dual_plate_alpha import extract_dual_plate_alpha
+from tools.assets.cutout.dual_plate_alpha import extract_dual_plate_alpha
 
 BENCHMARK_DIR = ROOT / "gamedesign/projects/mine-cards/reviews/cutout_benchmark"
 FIXTURES_PATH = BENCHMARK_DIR / "fixtures.json"

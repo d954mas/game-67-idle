@@ -16,15 +16,14 @@ try:
 except ImportError:  # pragma: no cover - exercised in environments without numpy.
     np = None
 
-try:
-    from tools.assets.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
-except ModuleNotFoundError:  # pragma: no cover - supports direct script execution by path.
-    from atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
+import sys
 
-try:
-    from tools.assets.dual_plate_pair_gate import evaluate as evaluate_pair
-except ModuleNotFoundError:  # pragma: no cover - supports direct script execution by path.
-    from dual_plate_pair_gate import evaluate as evaluate_pair
+ROOT = Path(__file__).resolve().parents[3]  # cutout -> assets -> tools -> repo root
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from tools.assets.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
+from tools.assets.cutout.dual_plate_pair_gate import evaluate as evaluate_pair
 
 RGB = tuple[int, int, int]
 # "proj" = Smith & Blinn (1996) Theorem-4 joint-channel projection: the

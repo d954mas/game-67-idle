@@ -29,8 +29,8 @@ from tools.assets.chroma_key_alpha import (
     source_key_spill_mask,
     zero_fully_transparent_rgb,
 )
-from tools.assets.dual_plate_alpha import extract_dual_plate_alpha
-from tools.assets.key_matte import key_matte_cutout as key_trimap_matte
+from tools.assets.cutout.dual_plate_alpha import extract_dual_plate_alpha
+from tools.assets.cutout.key_matte import key_matte_cutout as key_trimap_matte
 
 RGB = tuple[int, int, int]
 

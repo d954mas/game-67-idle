@@ -24,9 +24,9 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from tools.assets.dual_plate_alpha import extract_dual_plate_alpha
-from tools.assets.dual_plate_pair_gate import evaluate
-from tools.assets.key_matte import key_matte_cutout
+from tools.assets.cutout.dual_plate_alpha import extract_dual_plate_alpha
+from tools.assets.cutout.dual_plate_pair_gate import evaluate
+from tools.assets.cutout.key_matte import key_matte_cutout
 
 CAND = ROOT / "gamedesign/projects/mine-cards/art/candidates"
 PER_ASSET = ROOT / "gamedesign/projects/mine-cards/reviews/cutout_benchmark/dual_plate_transfer/per_asset"

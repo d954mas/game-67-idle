@@ -24,8 +24,8 @@ if str(ROOT) not in sys.path:
 
 from tools.assets.atomic_io import save_image_atomic
 from tools.assets._dev.benchmark_cutout_modes import add_drop_shadow, crop_from_case, flatten_on_background, make_procedural_sign_truth
-from tools.assets.dual_plate_alpha import extract_dual_plate_alpha
-from tools.assets.dual_plate_pair_gate import evaluate
+from tools.assets.cutout.dual_plate_alpha import extract_dual_plate_alpha
+from tools.assets.cutout.dual_plate_pair_gate import evaluate
 
 BENCH = ROOT / "gamedesign/projects/mine-cards/reviews/cutout_benchmark"
 CAND = ROOT / "gamedesign/projects/mine-cards/art/candidates"

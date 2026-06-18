@@ -41,7 +41,7 @@ from tools.assets._dev.benchmark_cutout_modes import (
     soft_chroma_matte,
 )
 from tools.assets.chroma_key_alpha import key_to_alpha
-from tools.assets.dual_plate_alpha import extract_dual_plate_alpha
+from tools.assets.cutout.dual_plate_alpha import extract_dual_plate_alpha
 from PIL import ImageDraw
 
 RGB = tuple[int, int, int]

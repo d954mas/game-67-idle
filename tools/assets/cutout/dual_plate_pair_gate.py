@@ -6,11 +6,11 @@ the SAME place. When gpt-image-2 redraws the subject between plates the alpha
 ghosts. This gate measures how well the white and black plates agree (foreground
 mask IoU + centroid/scale drift) and returns a verdict BEFORE extraction:
 
-  pass       -> plates agree; extract directly (py -3.12 tools/assets/dual_plate_alpha.py)
+  pass       -> plates agree; extract directly (py -3.12 tools/assets/cutout/dual_plate_alpha.py)
   align      -> small drift; a translation align may rescue it, else regenerate
   regenerate -> subject redrawn/moved too much; regenerate the pair, do NOT matte
 
-Run: py -3.12 tools/assets/dual_plate_pair_gate.py --light white.png --dark black.png
+Run: py -3.12 tools/assets/cutout/dual_plate_pair_gate.py --light white.png --dark black.png
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from pathlib import Path
 
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

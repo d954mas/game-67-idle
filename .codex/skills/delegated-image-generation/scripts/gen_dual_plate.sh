@@ -6,7 +6,7 @@
 # model redraw the subject -> ghosting. Instead we generate the white plate from
 # the source, then generate the black plate as an EDIT OF THE WHITE PLATE, so the
 # subject is already final and only the background fill changes. Then the
-# acceptance gate (tools/assets/dual_plate_pair_gate.py) checks the pair really is
+# acceptance gate (tools/assets/cutout/dual_plate_pair_gate.py) checks the pair really is
 # consistent before you spend an extraction on it.
 #
 # Path: generate_image.py edit mode (codex OAuth backend, gpt-image-2, --input-image).
@@ -53,14 +53,14 @@ python "$GEN" --input-image "$WHITE" --prompt "$BLACK_PROMPT" --out "$BLACK" --s
   echo "black plate generation failed" >&2; exit 1; }
 
 echo ">>> [3/3] acceptance gate (pair must be consistent before extraction)"
-py -3.12 "$REPO_ROOT/tools/assets/dual_plate_pair_gate.py" --light "$WHITE" --dark "$BLACK" --json-output "$OUTDIR/${NAME}_gate.json"
+py -3.12 "$REPO_ROOT/tools/assets/cutout/dual_plate_pair_gate.py" --light "$WHITE" --dark "$BLACK" --json-output "$OUTDIR/${NAME}_gate.json"
 GATE_RC=$?
 
 echo "================= RESULT ================="
 echo "white: $WHITE"
 echo "black: $BLACK"
 if [ "$GATE_RC" -eq 0 ]; then
-  echo "PAIR OK -> extract: py -3.12 tools/assets/dual_plate_alpha.py --light '$WHITE' --dark '$BLACK' --output '$OUTDIR/${NAME}_rgba.png' --alpha-combine proj"
+  echo "PAIR OK -> extract: py -3.12 tools/assets/cutout/dual_plate_alpha.py --light '$WHITE' --dark '$BLACK' --output '$OUTDIR/${NAME}_rgba.png' --alpha-combine proj"
 else
   echo "PAIR REJECTED (see gate above) -> re-run gen_dual_plate.sh to regenerate; do NOT matte this pair."
 fi

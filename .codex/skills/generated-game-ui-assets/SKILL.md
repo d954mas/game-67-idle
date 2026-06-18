@@ -145,7 +145,7 @@ Open the matching section only when the task needs it:
    light-background plate and one dark-background plate, same dimensions and
    pixel-aligned subject, followed by difference matting, blob cleanup, alpha
    hardening, and the same crop/slice/runtime audits. Use
-   `py -3.12 tools/assets/dual_plate_alpha.py --light <light.png> --dark <dark.png> --output <rgba.png> --json-output <report.json> --report <report.md> --profile`
+   `py -3.12 tools/assets/cutout/dual_plate_alpha.py --light <light.png> --dark <dark.png> --output <rgba.png> --json-output <report.json> --report <report.md> --profile`
    for the deterministic extraction step. The report must show `verdict:
    pass`, no problems, and `transparent_nonzero_rgb_pixels: 0`; hidden RGB
    under transparent alpha can reappear as 1-2px fringe after premultiplied

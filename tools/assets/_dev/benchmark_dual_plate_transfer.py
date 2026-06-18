@@ -31,7 +31,7 @@ from tools.assets._dev.benchmark_cutout_modes import (
     source_image_for_case,
     soft_chroma_matte,
 )
-from tools.assets.dual_plate_alpha import extract_dual_plate_alpha
+from tools.assets.cutout.dual_plate_alpha import extract_dual_plate_alpha
 
 
 RGB = tuple[int, int, int]
