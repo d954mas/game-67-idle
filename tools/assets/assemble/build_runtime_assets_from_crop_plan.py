@@ -17,6 +17,7 @@ if str(SCRIPT_ROOT) not in sys.path:
 
 from tools.assets.atomic_io import save_image_atomic, write_json_atomic
 from tools.assets.cutout.key_matte import key_matte_cutout
+from tools.assets.cutout.route_cutout import route_cutout
 
 
 ATLAS_POLICY = {
@@ -74,6 +75,8 @@ def alpha_bbox(image: Image.Image, threshold: int = 12) -> tuple[int, int, int, 
 def crop_trimmed(
     source: Image.Image,
     crop: dict[str, Any],
+    *,
+    strict_route: bool = False,
 ) -> tuple[Image.Image, list[int], list[int]]:
     rect = crop.get("rect")
     if not isinstance(rect, list) or len(rect) != 4:
@@ -83,11 +86,26 @@ def crop_trimmed(
         raise SystemExit(f"{crop.get('id', 'crop')} rect must have positive size")
     chroma = crop.get("chroma_key") if isinstance(crop.get("chroma_key"), dict) else {}
     key = parse_hex_color(chroma.get("key"))
+    region = source.crop((x, y, x + width, y + height))
+    # Route check: this single-source path can only key_matte. If the art is soft
+    # (glow / cast shadow / glass), key_matte flattens its fractional alpha, so the
+    # asset must instead be regenerated as a white/black dual-plate pair. Surface
+    # that loudly here instead of silently shipping a hard-keyed soft asset.
+    decision = route_cutout(region, key)
+    if decision.needs_dual:
+        note = (
+            f"{crop.get('id', 'crop')}: route=dual_plate "
+            f"(soft_score={decision.soft_score}, depth90={decision.depth90}px) "
+            f"-- key_matte flattens soft alpha; regenerate as a white/black dual-plate pair"
+        )
+        if strict_route:
+            raise SystemExit(f"route error: {note}")
+        print(f"WARN route: {note}", file=sys.stderr)
     # Principled matte: known-key trimap -> closed-form -> ML foreground
     # decontamination -> Vlahos despill, run PER CROP (the closed-form solve is
     # global). It finalizes the crop (despill + bleed + repair + zero) inside the
     # matte, so there is no post-crop hygiene to re-run here.
-    rgba = key_matte_cutout(source.crop((x, y, x + width, y + height)), key)
+    rgba = key_matte_cutout(region, key)
     bbox = alpha_bbox(rgba)
     if bbox is None:
         raise SystemExit(f"{crop.get('id', 'crop')} produced empty alpha after keying")
@@ -230,7 +248,7 @@ def build(args: argparse.Namespace) -> None:
     for crop in crops:
         if not isinstance(crop, dict) or not isinstance(crop.get("id"), str) or not isinstance(crop.get("output"), str):
             raise SystemExit("each crop plan entry needs id and output")
-        image, trim_rect, source_rect = crop_trimmed(source, crop)
+        image, trim_rect, source_rect = crop_trimmed(source, crop, strict_route=args.strict_route)
         output_path = project_path(crop["output"])
         output_path.parent.mkdir(parents=True, exist_ok=True)
         save_image_atomic(image, output_path)
@@ -300,6 +318,11 @@ def main() -> None:
     parser.add_argument("--asset-manifest", required=True)
     parser.add_argument("--art-job", required=True)
     parser.add_argument("--contact-sheet")
+    parser.add_argument(
+        "--strict-route",
+        action="store_true",
+        help="fail (not warn) when a crop routes to dual_plate but only a single source is available",
+    )
     parser.add_argument("--min-output-padding", type=int, default=4)
     args = parser.parse_args()
     build(args)

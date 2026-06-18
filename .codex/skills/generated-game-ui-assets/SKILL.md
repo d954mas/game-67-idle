@@ -161,9 +161,13 @@ Open the matching section only when the task needs it:
    For icon/decor/sprite crop plans produced from intake components, build
    runtime PNGs and manifests with:
    `py -3.12 tools/assets/assemble/build_runtime_assets_from_crop_plan.py --crop-plan <crop-plan.json> --crop-manifest <crop-manifest.json> --asset-manifest <asset-manifest.json> --art-job <job.json> --contact-sheet <contact.png>`.
-   This step must preserve generated source pixels, remove border-connected
-   chroma, trim to alpha bounds with padding, scrub transparent RGB, and write
-   atlas metadata so the normal pixel/atlas audits can run next.
+   This step runs the principled cutout per crop and AUTO-ROUTES it: it prints a
+   `WARN route: ... dual_plate` line when a crop is soft (glow/shadow/glass) so
+   key_matte would flatten its fractional alpha — regenerate that asset as a
+   white/black dual-plate pair instead (pass `--strict-route` to hard-fail rather
+   than warn). This step must preserve generated source pixels, remove
+   border-connected chroma, trim to alpha bounds with padding, scrub transparent
+   RGB, and write atlas metadata so the atlas/composition audits can run next.
    The runtime manifest must reference every crop output with the same `id`,
    `kind`, and `path`; strict validation rejects missing or mismatched runtime
    assets. Slice9 crop and runtime entries also need explicit `stretch_policy`

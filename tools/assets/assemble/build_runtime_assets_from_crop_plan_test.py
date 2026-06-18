@@ -32,6 +32,20 @@ def write_source(path: Path) -> None:
     image.save(path)
 
 
+def write_soft_source(path: Path) -> None:
+    # A wide radial glow fading into the green key -> soft fractional alpha that
+    # route_cutout flags as dual_plate (key_matte would flatten it).
+    import numpy as np
+
+    size = 96
+    yy, xx = np.mgrid[0:size, 0:size]
+    r = np.sqrt((xx - size / 2.0) ** 2 + (yy - size / 2.0) ** 2)
+    t = np.clip(1.0 - r / 42.0, 0.0, 1.0)[..., None]
+    img = t * np.array([255, 150, 0], dtype=float) + (1.0 - t) * np.array([0, 255, 0], dtype=float)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.clip(img, 0, 255).astype("uint8"), "RGB").convert("RGBA").save(path)
+
+
 class BuildRuntimeAssetsFromCropPlanTest(unittest.TestCase):
     def test_builds_runtime_assets_and_manifests_from_crop_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -91,6 +105,46 @@ class BuildRuntimeAssetsFromCropPlanTest(unittest.TestCase):
             self.assertEqual(assets["icon_health"]["pack_group"], "ui_icons_core")
             self.assertEqual(assets["decor_blue_block"]["anchor"], "center")
             self.assertTrue((root / "contact.png").exists())
+
+    def test_route_warns_on_soft_crop_and_strict_route_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_soft_source(root / "soft.png")
+            plan = {
+                "schema": "game.runtime_crop_plan",
+                "version": 1,
+                "source": "soft.png",
+                "source_id": "soft",
+                "source_role": "isolated_icon_sheet",
+                "output_dir": "assets/runtime/soft",
+                "crops": [
+                    {
+                        "id": "glow_fx",
+                        "kind": "decor",
+                        "rect": [4, 4, 88, 88],
+                        "output": "assets/runtime/soft/glow_fx.png",
+                        "trim": {"padding": 6},
+                        "chroma_key": {"key": "#00ff00"},
+                        "atlas": {"pack_group": "ui_fx"},
+                    }
+                ],
+            }
+            (root / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
+            common = [
+                "--crop-plan", "plan.json",
+                "--crop-manifest", "cm.json",
+                "--asset-manifest", "am.json",
+                "--art-job", "gamedesign/projects/test/art_requests/test.json",
+            ]
+            # Default: warn (the build still succeeds) and the route warning is emitted.
+            warn = run_script(root, SCRIPT, *common)
+            self.assertEqual(warn.returncode, 0, warn.stdout + warn.stderr)
+            self.assertIn("WARN route", warn.stderr)
+            self.assertIn("dual_plate", warn.stderr)
+            # --strict-route: hard-fail on the soft crop instead of hard-keying it.
+            strict = run_script(root, SCRIPT, *common, "--strict-route")
+            self.assertNotEqual(strict.returncode, 0)
+            self.assertIn("route error", strict.stdout + strict.stderr)
 
 
 if __name__ == "__main__":
