@@ -4,11 +4,10 @@
   "strict": true,
   "snapshot": false,
   "threshold": 30,
-  "changed_file_count": 7,
+  "changed_file_count": 6,
   "changed_files": [
-    "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.json",
-    "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.md",
     "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json",
+    "gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.json",
     "gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md",
     "src/clean_seed_main.c",
     "tasks/STATUS.md",
@@ -19,7 +18,7 @@
       "cmake --build --preset native-debug --target game_seed: pass"
     ],
     "probe": [
-      "py -3.12 tmp/capture_backrooms_t0010_portal_memory.py: pass; py -3.12 tools/devapi/smoke.py: pass; py -3.12 tools/devapi/ui_readability.py build/captures/backrooms_t0010_impossible_geometry.png: pass; node tools/taskboard/cli.mjs validate: pass"
+      "py -3.12 tools/assets/build_backrooms_liminal_materials.py: pass; py -3.12 tmp/capture_backrooms_t0010_portal_memory.py: pass; py -3.12 tools/devapi/smoke.py: pass; py -3.12 tools/devapi/ui_readability.py build/captures/backrooms_t0010_impossible_geometry.png: pass; node tools/taskboard/cli.mjs validate: pass"
     ],
     "product_gates": [
       {
@@ -36,27 +35,23 @@
     ],
     "profile_guards": [
       {
-        "path": "node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/native-opaque-interior",
+        "path": "node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/opaque-native-dominant-room",
         "source": "inline",
         "verdict": "unknown",
         "reason": "could not confirm usable current-scope profiler guard"
       }
     ],
     "known_red_gates": [
-      "T0010 product gate intentionally remains FAIL for art_quality/audience_fit until the portal interior becomes a complete opaque native room draw path or T0011 render-target-backed lighting, not hybrid fullscreen composite plus native overlay"
+      "T0010 product gate intentionally remains FAIL for art_quality/audience_fit until the portal interior becomes a complete opaque native room draw path or T0011 render-target-backed lighting, not hybrid matte/composite plus native overlay"
     ]
   },
   "red_review_artifacts": [
     {
-      "path": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.json",
-      "reason": "changed review/audit evidence contains FAIL/fail verdict"
-    },
-    {
-      "path": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.md",
-      "reason": "changed review/audit evidence contains FAIL/fail verdict"
-    },
-    {
       "path": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json",
+      "reason": "changed review/audit evidence contains FAIL/fail verdict"
+    },
+    {
+      "path": "gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.json",
       "reason": "changed review/audit evidence contains FAIL/fail verdict"
     },
     {
@@ -73,7 +68,7 @@
   },
   "problems": [],
   "warnings": [
-    "profiler guard evidence is inconclusive (advisory): node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/native-opaque-interior (could not confirm usable current-scope profiler guard)",
-    "known red review artifact(s) accepted for this handoff: gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.json, gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-22-09-937Z_desktop.md, gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json, gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md"
+    "profiler guard evidence is inconclusive (advisory): node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/opaque-native-dominant-room (could not confirm usable current-scope profiler guard)",
+    "known red review artifact(s) accepted for this handoff: gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json, gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.json, gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md"
   ]
 }

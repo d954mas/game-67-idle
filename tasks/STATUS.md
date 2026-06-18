@@ -13,15 +13,17 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 - No native runtime blocker is known for the current game repo slice.
 - T0010 product gate is still red: the portal room now has data-driven
   geometry, material, light, finish, authored construction descriptors, a
-  fully opaque fullscreen portal-room composite inside the aperture, denser
+  dimmed fullscreen matte/backing inside the aperture, denser
   texture-backed/material-kind-lit native `nt_gfx` room surfaces, reduced
   external ghost-frame artifacts, a stronger fixture-driven portal-room light
   model, a separate non-blended `nt_gfx` solid-shell pass, generated-source
   material atlas sampling, inner wall returns, center/floor light spill,
   side-wall bounce, additional opaque side/back/ceiling construction ribs, and
-  lower-alpha external proxy framing. It still does not reach
+  lower-alpha external proxy framing. The fullscreen portal color now carries
+  less of the room image, while the native layer carries more material/light
+  responsibility. It still does not reach
   production-quality realistic Backrooms room construction because the portal
-  interior remains a hybrid fullscreen composite plus native overlay.
+  interior remains a hybrid matte/composite plus native overlay.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
   must not patch `external/neotolis-engine`; use public APIs or carry an
@@ -30,7 +32,7 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 ## Non-blocking Debt
 
 - Current profiling scope is usable for normal review:
-  `T0010/native-opaque-interior`.
+  `T0010/opaque-native-dominant-room`.
 - T0001-T0008 are in review with historical evidence. Do not expand them unless
   the lead asks; current actionable work is T0009/T0010 plus the T0011 engine
   issue.
@@ -62,13 +64,13 @@ node tools/taskboard/cli.mjs validate
 - `src/backrooms_portal_scene.*` defines the current game-local universal portal
   scene foundation: rooms, material/light/finish/authored-construction
   descriptors, portal descriptors, flags, validation, and GPU params.
-- `src/clean_seed_main.c` composites the impossible room as an opaque fullscreen
-  portal cut, then draws a separate native `nt_gfx` room pass. The current
+- `src/clean_seed_main.c` composites the impossible room as a dimmed fullscreen
+  portal backing, then draws a separate native `nt_gfx` room pass. The current
   status JSON proves 888 portal overlay vertices: 438 non-blended solid-shell
   vertices, 450 blended detail vertices, material-kind shading, per-surface
   portal lighting, inner wall returns, opaque side/back/ceiling construction,
-  corrected native light material kind, nested back-wall frame/fixture geometry,
-  and copied mark feedback.
+  corrected native light material kind, brighter native material/light shading,
+  nested back-wall frame/fixture geometry, and copied mark feedback.
 - `tools/assets/build_backrooms_liminal_materials.py` builds the current
   Backrooms material source asset atomically into
   `assets/backrooms-liminal/materials/portal_material_atlas.ppm` plus

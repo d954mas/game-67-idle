@@ -105,7 +105,5 @@
     ]
   },
   "problem": "The portal is less purely fullscreen shader-driven and the native room layer has more responsibility, but the result still reads as a hybrid matte/composite plus overlay rather than a production-quality native room or render-target portal.",
-  "next": "Continue toward a complete opaque native portal-room draw path or unblock T0011 render-target-backed portal lighting; avoid expanding gameplay content while art_quality and audience_fit remain 3.",
-  "markdown": "gamedesign\\projects\\backrooms-liminal\\reviews\\t0010_portal_memory_visual_gate.md",
-  "json": "gamedesign\\projects\\backrooms-liminal\\reviews\\t0010_portal_memory_visual_gate.json"
+  "next": "Continue toward a complete opaque native portal-room draw path or unblock T0011 render-target-backed portal lighting; avoid expanding gameplay content while art_quality and audience_fit remain 3."
 }

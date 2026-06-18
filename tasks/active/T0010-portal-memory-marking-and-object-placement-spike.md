@@ -274,3 +274,19 @@ and reveal a real exit.
   geometry density and light handling improved, but this path is reaching the
   limit of shell decoration; next work should be a more complete opaque native
   portal-room draw path or T0011 render-target-backed portal lighting.
+- 2026-06-19: Native-matte responsibility slice reduced the fullscreen
+  impossible-room shader from the main portal image into a darker matte/backing
+  layer, then raised the native `nt_gfx` portal shader's material brightness,
+  light spill, shell opacity floor, and depth/side-shadow readability. This is
+  a render-path alignment step rather than new content: the goal is for the
+  native room layer to carry more of the room construction before T0011
+  render-target support exists. The T0010 scenario still reports
+  `native_overlay.last_vertex_count = 888`,
+  `native_overlay.room_mesh_vertex_count = 804`,
+  `native_overlay.solid_pass_vertex_count = 438`, and
+  `native_overlay.blended_detail_vertex_count = 450`. Native build, material
+  atlas rebuild, T0010 capture, smoke, readability zoom, taskboard validation,
+  profiler-scope check, and strict product gate ran. Product gate remains FAIL
+  for art quality/audience fit: the layer split is healthier, but the aperture
+  is still a hybrid matte/composite plus native overlay, not yet a production
+  opaque native room or render-target portal.
