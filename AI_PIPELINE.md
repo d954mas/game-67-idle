@@ -26,6 +26,31 @@ renaming a skill in `.codex/skills/`, run:
 node tools/skills_sync.mjs
 ```
 
+## Image / asset pipeline map
+
+Generation is an agent recipe (a **skill**); everything after is deterministic
+tooling in `tools/assets/`, grouped by stage. Game-specific tools live in
+`tools/<game-id>/` (e.g. `tools/mine-cards/`), never in `tools/assets/`.
+
+| # | Stage | Home | Entry |
+|---|---|---|---|
+| 1 | Generate art | skill `.codex/skills/delegated-image-generation/` | `scripts/codex_imagegen.sh` / `generate_image.py` / `gen_dual_plate.sh` (dual pair via chain) |
+| — | Art job + prompt | `tools/assets/job/` | `node new_art_job.mjs` → `plan_source_sheet_prompt.mjs` → `validate_art_job.mjs` |
+| 2 | Intake / normalize | `tools/assets/intake/` | `normalize_source_sheet_chroma.py` → `audit_source_sheet_intake.py` |
+| 3 | Crop plan | `tools/assets/crop/` | `plan_runtime_crops_from_intake.py` |
+| 4 | Cut + assemble runtime assets | `tools/assets/assemble/` + `tools/assets/cutout/` | `build_runtime_assets_from_crop_plan.py`; cutout path 1 `cutout/key_matte.py`, path 2 `cutout/dual_plate_alpha.py` (+ `dual_plate_pair_gate.py`); shared `chroma_key_alpha.py` |
+| 5 | Atlas / pack | `tools/assets/pack/` | `build_ui_atlas_pack.py` → `audit_ui_atlas_pack.py` |
+| 6 | Audits / proofs | `tools/assets/audit/` + `tools/assets/job/` | `audit_generated_ui_assets.py`, `render_ui_{asset_edge,composition}_proof.py`; node `audit_*.mjs` |
+| — | Orchestrator (runs 2→6) | `tools/assets/job/` | `node run_ui_asset_tier.mjs` |
+| — | Shared utils | `tools/assets/` | `atomic_io.py`, `chroma_key_alpha.py` |
+| — | Dev-only (benchmarks/profiling) | `tools/assets/_dev/` | off the runtime path |
+
+Cutout has **two paths**: path 1 `key_matte` (single flat-key background →
+known-key trimap + closed-form matte + colour decontamination; for opaque art and
+flat-key holes) and path 2 `dual_plate` (same subject on white + black plates →
+exact alpha from the difference; for glow / shadow / glass / particles), with
+`dual_plate_pair_gate` rejecting a redrawn/misaligned plate pair before extraction.
+
 ## Flow: idea to shipped
 
 | Stage | What happens | Skill / tool |
