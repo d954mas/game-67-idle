@@ -3,6 +3,7 @@
 #include "core/nt_platform.h"
 #include "devapi/nt_devapi.h"
 #include "game_state.h"
+#include "game_audio.h"
 #include "graphics/nt_gfx.h"
 #include "input/nt_input.h"
 #include "window/nt_window.h"
@@ -41,7 +42,10 @@ typedef struct BackroomsState {
     float caught_timer;
     float route_shift;
     float stalker_pressure;
+    float fuse_hum_timer;
+    float stalker_audio_timer;
     bool threat_visible;
+    bool caught_audio_played;
     bool flashlight_on;
     bool fuse_found;
     bool won;
@@ -575,9 +579,11 @@ static void interact(void) {
         s_game.fear = clampf(s_game.fear + 18.0F, 0.0F, 100.0F);
         s_game.route_shift = 0.18F;
         s_game.stalker_pressure = fmaxf(s_game.stalker_pressure, 0.22F);
+        game_audio_play(GAME_AUDIO_CUE_FUSE_PICKUP);
         set_message("THE LIGHTS HEARD YOU", 3.0F);
     } else if (near_exit()) {
         s_game.won = true;
+        game_audio_play(GAME_AUDIO_CUE_ESCAPE);
         set_message("ESCAPED - ROUTE COMPLETE", 8.0F);
     } else {
         set_message("TOO FAR FROM ANYTHING", 1.2F);
@@ -590,7 +596,19 @@ static void update_game(void) {
     if (s_game.message_timer > 0.0F) {
         s_game.message_timer -= dt;
     }
+    if (s_game.fuse_hum_timer > 0.0F) {
+        s_game.fuse_hum_timer -= dt;
+    }
+    if (s_game.stalker_audio_timer > 0.0F) {
+        s_game.stalker_audio_timer -= dt;
+    }
+    game_audio_update();
+    game_audio_set_volume(g_game_state.settings_master_volume, g_game_state.settings_sfx_volume);
     if (s_game.caught) {
+        if (!s_game.caught_audio_played) {
+            game_audio_play(GAME_AUDIO_CUE_CAUGHT);
+            s_game.caught_audio_played = true;
+        }
         s_game.caught_timer -= dt;
         if (s_game.caught_timer <= 0.0F) {
             reset_backrooms();
@@ -606,6 +624,7 @@ static void update_game(void) {
 
     if (nt_input_key_is_pressed(NT_KEY_F)) {
         s_game.flashlight_on = !s_game.flashlight_on;
+        game_audio_play(GAME_AUDIO_CUE_FLASHLIGHT);
         set_message(s_game.flashlight_on ? "FLASHLIGHT ON" : "FLASHLIGHT OFF", 0.9F);
     }
     if (nt_input_key_is_pressed(NT_KEY_E) || nt_input_key_is_pressed(NT_KEY_ENTER)) {
@@ -680,10 +699,19 @@ static void update_game(void) {
         if (s_game.stalker_pressure > 0.62F && s_game.message_timer <= 0.0F) {
             set_message(s_game.threat_visible ? "DON'T STARE AT IT" : "IT IS BETWEEN YOU AND EXIT", 1.35F);
         }
+        if (s_game.stalker_pressure > 0.52F && s_game.stalker_audio_timer <= 0.0F) {
+            game_audio_play(GAME_AUDIO_CUE_STALKER);
+            s_game.stalker_audio_timer = s_game.threat_visible ? 1.1F : 1.9F;
+        }
     } else {
         s_game.route_shift = approachf(s_game.route_shift, 0.0F, dt * 0.8F);
         s_game.stalker_pressure = approachf(s_game.stalker_pressure, 0.0F, dt * 0.8F);
         s_game.threat_visible = false;
+        const float fuse_dist = dist_to(s_game.x, s_game.z, 0.36F, 29.4F);
+        if (fuse_dist < 11.0F && s_game.fuse_hum_timer <= 0.0F) {
+            game_audio_play(GAME_AUDIO_CUE_FUSE_HUM);
+            s_game.fuse_hum_timer = clampf(0.45F + fuse_dist * 0.10F, 0.55F, 1.45F);
+        }
     }
 
     float fear_rate = 1.15F + s_game.z * 0.035F + (s_game.flashlight_on ? -0.55F : 1.1F);
@@ -700,6 +728,7 @@ static void update_game(void) {
     if (s_game.fear >= 100.0F) {
         s_game.caught = true;
         s_game.caught_timer = 2.0F;
+        s_game.caught_audio_played = false;
         set_message("THE LIGHTS FOUND YOU", 2.0F);
     }
 }
@@ -756,6 +785,22 @@ static const char *json_string(const cJSON *params, const char *name, const char
     return cJSON_IsString(item) ? item->valuestring : fallback;
 }
 
+static cJSON *audio_status_json(void) {
+    const GameAudioStatus status = game_audio_status();
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddBoolToObject(root, "implemented", status.implemented);
+    cJSON_AddBoolToObject(root, "initialized", status.initialized);
+    cJSON_AddBoolToObject(root, "device_enabled", status.device_enabled);
+    cJSON_AddStringToObject(root, "backend", status.backend ? status.backend : "unknown");
+    cJSON_AddNumberToObject(root, "total_play_count", status.total_play_count);
+    cJSON *counts = cJSON_CreateObject();
+    for (int i = 0; i < GAME_AUDIO_CUE_COUNT; ++i) {
+        cJSON_AddNumberToObject(counts, game_audio_cue_name((GameAudioCue)i), status.cue_play_count[i]);
+    }
+    cJSON_AddItemToObject(root, "cue_play_count", counts);
+    return root;
+}
+
 static bool ep_game_state(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
     (void)params;
     (void)error;
@@ -791,6 +836,7 @@ static bool ep_game_action_toggle_flashlight(const cJSON *params, cJSON **result
     (void)error_cap;
     (void)user;
     s_game.flashlight_on = !s_game.flashlight_on;
+    game_audio_play(GAME_AUDIO_CUE_FLASHLIGHT);
     *result = state_json();
     return true;
 }
@@ -822,6 +868,15 @@ static bool ep_game_debug_set_progress(const cJSON *params, cJSON **result, char
     s_game.route_shift = clampf((float)json_number(params, "route_shift", (double)s_game.route_shift), 0.0F, 1.0F);
     s_game.stalker_pressure = clampf((float)json_number(params, "stalker_pressure", (double)s_game.stalker_pressure), 0.0F, 1.0F);
     *result = state_json();
+    return true;
+}
+
+static bool ep_game_audio_status(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)params;
+    (void)error;
+    (void)error_cap;
+    (void)user;
+    *result = audio_status_json();
     return true;
 }
 
@@ -882,6 +937,7 @@ static void register_game_endpoints(void) {
     nt_devapi_register("game.action.toggle_flashlight", ep_game_action_toggle_flashlight, NULL);
     nt_devapi_register("game.action.set_pose", ep_game_action_set_pose, NULL);
     nt_devapi_register("game.debug.set_progress", ep_game_debug_set_progress, NULL);
+    nt_devapi_register("game.audio.status", ep_game_audio_status, NULL);
     nt_devapi_register("game.capture.framebuffer", ep_game_capture_framebuffer, NULL);
 }
 
@@ -956,6 +1012,8 @@ int main(int argc, char **argv) {
     g_nt_window.height = (uint32_t)s_window_height;
     nt_window_init();
     nt_input_init();
+    game_audio_init();
+    game_audio_set_volume(g_game_state.settings_master_volume, g_game_state.settings_sfx_volume);
 
     nt_gfx_desc_t gfx_desc = nt_gfx_desc_defaults();
     gfx_desc.depth = false;
@@ -992,6 +1050,7 @@ int main(int argc, char **argv) {
 #endif
     shutdown_render_resources();
     nt_gfx_shutdown();
+    game_audio_shutdown();
     nt_input_shutdown();
     nt_window_shutdown();
     nt_engine_shutdown();

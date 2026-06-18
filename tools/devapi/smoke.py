@@ -29,6 +29,10 @@ UNIVERSAL_ENDPOINTS = {
     "game.state.get", "game.state.set", "game.state.save", "game.state.load",
 }
 
+GAME_ENDPOINTS = {
+    "game.audio.status",
+}
+
 
 def check(name: str, condition: object, detail: object = None) -> bool:
     if condition:
@@ -45,6 +49,8 @@ def main() -> int:
         endpoints = set(game.result("endpoints"))
         ok &= check("universal endpoints present", UNIVERSAL_ENDPOINTS.issubset(endpoints),
                     sorted(UNIVERSAL_ENDPOINTS - endpoints))
+        ok &= check("game endpoints present", GAME_ENDPOINTS.issubset(endpoints),
+                    sorted(GAME_ENDPOINTS - endpoints))
         ok &= check("ping", game.result("ping") is not None)
 
         state = game.result("game.reset_playtest") or {}
@@ -60,6 +66,15 @@ def main() -> int:
         patched = game.result("game.state.set", {"doc": "game", "path": "settings.master_volume", "value": 0.5})
         ok &= check("state.set round-trips",
                     abs(patched.get("settings", {}).get("master_volume", 0.0) - 0.5) < 0.01, patched)
+
+        before_audio = game.result("game.audio.status")
+        before_flashlight = before_audio.get("cue_play_count", {}).get("flashlight", 0)
+        game.result("game.action.toggle_flashlight")
+        after_audio = game.result("game.audio.status")
+        after_flashlight = after_audio.get("cue_play_count", {}).get("flashlight", 0)
+        ok &= check("audio cue count increments",
+                    after_flashlight > before_flashlight,
+                    {"before": before_audio, "after": after_audio})
 
         shot = game.capture_screenshot("build/captures/smoke.png", audit=False)
         ok &= check("screenshot captured", bool(shot), shot)

@@ -5,25 +5,25 @@
 Review and iterate the `Backrooms Liminal` (backrooms-liminal) native-first
 prototype: the first-person 3D corridor slice now exists with fuse pickup,
 return-to-exit, fear/battery pressure, route instability, stalker pressure, and
-strict visual/player-read proof.
+native generated-PCM horror audio cues, with strict visual/player-read proof.
 
 ## Blocking Work
 
-- No runtime implementation blocker is known. T0001 and T0002 are in review;
-  expansion should wait for lead/playtest feedback or a new narrow task.
+- No runtime implementation blocker is known. T0001, T0002, and T0003 are in
+  review; expansion should wait for lead/playtest feedback or a new narrow task.
 
 ## Non-blocking Debt
 
 - Global AI profile review confidence is still broken by older unresolved failed
-  records. The T0002 current scope guard reported usable, but slice hygiene
+  records. The T0003 current scope guard reported usable, but slice hygiene
   still treats profiler evidence as advisory-only.
 
 ## Current Gate
 
 Current native gate for backrooms-liminal: `data/core_loop.json`,
 `reviews/first_slice_visual_gate.md`, native build, DevAPI smoke, first-screen
-screenshot, post-fuse route/stalker screenshot, readability zoom, strict
-product gate, and slice hygiene evidence.
+screenshot, post-fuse route/stalker screenshot, native audio cue status,
+readability zoom, strict product gate, and slice hygiene evidence.
 
 ## Required Validation
 
@@ -58,12 +58,24 @@ node tools/taskboard/cli.mjs validate
 - `build/captures/backrooms_t0002_slice_hygiene.md` is WARN only because
   profiler evidence is advisory/partially unparsable, not because gameplay
   validation failed.
+- `build/captures/backrooms_t0003_first_screen.png` and
+  `build/captures/backrooms_t0003_audio_threat.png` are the latest visual proof
+  after adding audio cues.
+- `build/captures/backrooms_t0003_audio_status.json` proves generated PCM cues
+  fired in automation: flashlight, fuse hum, fuse pickup, stalker, caught, and
+  escape.
+- `build/captures/backrooms_t0003_audio_threat_uizoom.png` is the latest
+  readability montage.
+- `build/captures/backrooms_t0003_slice_hygiene.md` is WARN only because
+  profiler evidence is advisory/partially unparsable, not because gameplay
+  validation failed.
 
 ## Next Priorities
 
-1. Let the lead/playtest judge whether T0002 is scary and interesting enough
+1. Let the lead/playtest judge whether T0003 is scary and interesting enough
    for the next slice.
-2. If accepted, create one narrow task for audio/hum cues, stronger route
-   variation, or a short win/fail polish pass.
+2. If accepted, create one narrow task for stronger route variation,
+   fail/win polish, or a short playable run scenario.
 3. If rejected visually, freeze content expansion and improve the threat
-   silhouette, false exits, lighting, or HUD readability before adding systems.
+   silhouette, false exits, lighting, audio feedback, or HUD readability before
+   adding systems.

@@ -43,14 +43,18 @@ static float clamp01(float value) {
 
 const char *game_audio_cue_name(GameAudioCue cue) {
     switch (cue) {
-    case GAME_AUDIO_CUE_CLICK:
-        return "click";
-    case GAME_AUDIO_CUE_SUCCESS:
-        return "success";
-    case GAME_AUDIO_CUE_NOTIFY:
-        return "notify";
-    case GAME_AUDIO_CUE_ERROR:
-        return "error";
+    case GAME_AUDIO_CUE_FLASHLIGHT:
+        return "flashlight";
+    case GAME_AUDIO_CUE_FUSE_HUM:
+        return "fuse_hum";
+    case GAME_AUDIO_CUE_FUSE_PICKUP:
+        return "fuse_pickup";
+    case GAME_AUDIO_CUE_STALKER:
+        return "stalker";
+    case GAME_AUDIO_CUE_CAUGHT:
+        return "caught";
+    case GAME_AUDIO_CUE_ESCAPE:
+        return "escape";
     case GAME_AUDIO_CUE_COUNT:
     default:
         return "unknown";
@@ -112,14 +116,18 @@ void game_audio_set_device_enabled(bool enabled) {
 #if defined(_WIN32) && !defined(NT_PLATFORM_WEB)
 static int cue_sample_count(GameAudioCue cue) {
     switch (cue) {
-    case GAME_AUDIO_CUE_CLICK:
-        return (int)(0.12F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_SUCCESS:
-        return (int)(0.22F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_NOTIFY:
+    case GAME_AUDIO_CUE_FLASHLIGHT:
+        return (int)(0.08F * (float)GAME_AUDIO_SAMPLE_RATE);
+    case GAME_AUDIO_CUE_FUSE_HUM:
+        return (int)(0.28F * (float)GAME_AUDIO_SAMPLE_RATE);
+    case GAME_AUDIO_CUE_FUSE_PICKUP:
         return (int)(0.26F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_ERROR:
-        return (int)(0.11F * (float)GAME_AUDIO_SAMPLE_RATE);
+    case GAME_AUDIO_CUE_STALKER:
+        return (int)(0.24F * (float)GAME_AUDIO_SAMPLE_RATE);
+    case GAME_AUDIO_CUE_CAUGHT:
+        return (int)(0.30F * (float)GAME_AUDIO_SAMPLE_RATE);
+    case GAME_AUDIO_CUE_ESCAPE:
+        return (int)(0.28F * (float)GAME_AUDIO_SAMPLE_RATE);
     case GAME_AUDIO_CUE_COUNT:
     default:
         return (int)(0.10F * (float)GAME_AUDIO_SAMPLE_RATE);
@@ -139,24 +147,36 @@ static void fill_cue_samples(GameAudioCue cue, int16_t *out, int sample_count, f
         const float env = attack * release;
         float sample = 0.0F;
         switch (cue) {
-        case GAME_AUDIO_CUE_CLICK: {
-            const float f = 440.0F + 520.0F * u;
-            sample = 0.78F * sine(f * t) + 0.20F * sine(f * 2.0F * t);
+        case GAME_AUDIO_CUE_FLASHLIGHT: {
+            const float f = (u < 0.45F) ? 1500.0F : 420.0F;
+            sample = 0.62F * sine(f * t) + 0.28F * sine((f * 0.5F) * t);
             break;
         }
-        case GAME_AUDIO_CUE_SUCCESS: {
-            const float f = (u < 0.50F) ? 620.0F : 930.0F;
-            sample = 0.62F * sine(f * t) + 0.28F * sine((f + 180.0F * u) * t);
+        case GAME_AUDIO_CUE_FUSE_HUM: {
+            const float wobble = 1.0F + 0.09F * sine(7.0F * t);
+            const float buzz = (sine(180.0F * wobble * t) > 0.0F) ? 1.0F : -1.0F;
+            sample = 0.42F * sine(92.0F * wobble * t) + 0.18F * buzz;
             break;
         }
-        case GAME_AUDIO_CUE_NOTIFY: {
-            const float f = (u < 0.33F) ? 523.25F : ((u < 0.66F) ? 659.25F : 783.99F);
-            sample = 0.64F * sine(f * t) + 0.24F * sine(f * 2.0F * t);
+        case GAME_AUDIO_CUE_FUSE_PICKUP: {
+            const float f = 260.0F + 680.0F * u;
+            sample = 0.66F * sine(f * t) + 0.32F * sine((f * 1.51F) * t);
             break;
         }
-        case GAME_AUDIO_CUE_ERROR: {
-            const float f = (u < 0.50F) ? 180.0F : 150.0F;
-            sample = 0.58F * sine(f * t) + 0.14F * sine(90.0F * t);
+        case GAME_AUDIO_CUE_STALKER: {
+            const float tremolo = 0.35F + 0.65F * fabsf(sine(11.0F * t));
+            sample = tremolo * (0.58F * sine(58.0F * t) + 0.24F * sine(116.0F * t));
+            break;
+        }
+        case GAME_AUDIO_CUE_CAUGHT: {
+            const float f = 92.0F - 34.0F * u;
+            const float grit = (sine(410.0F * t) > 0.0F) ? 0.18F : -0.18F;
+            sample = 0.72F * sine(f * t) + grit;
+            break;
+        }
+        case GAME_AUDIO_CUE_ESCAPE: {
+            const float f = (u < 0.45F) ? 392.0F : 784.0F;
+            sample = 0.54F * sine(f * t) + 0.24F * sine((f + 220.0F * u) * t);
             break;
         }
         case GAME_AUDIO_CUE_COUNT:
