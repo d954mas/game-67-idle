@@ -105,7 +105,5 @@
     ]
   },
   "problem": "The portal proof now has real native proxy quads, but the image still lacks production-quality realistic room construction and lighting/material richness",
-  "next": "Replace proxy quads and shader-authored room surfaces with richer authored mesh/material layers, or use the T0011 render-target path once the engine exports it",
-  "markdown": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T19-04-06-339Z_desktop.md",
-  "json": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T19-04-06-339Z_desktop.json"
+  "next": "Replace proxy quads and shader-authored room surfaces with richer authored mesh/material layers, or use the T0011 render-target path once the engine exports it"
 }

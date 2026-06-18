@@ -113,3 +113,11 @@ and reveal a real exit.
   this is a better bridge toward real renderable room layers, not the final
   production-quality Backrooms image.
 - 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Move construction descriptors into actual renderable mesh/material or render-target-backed room layers, and avoid spending more cycles on cosmetic one-pass shader decoration unless it proves that contract.
+- 2026-06-18: Native portal overlay pass added a separate `nt_gfx` geometry
+  layer on top of the portal shader. The pass streams 66 world-space vertices
+  for jambs, threshold lip, inner fixture, conduit, and landmark column from
+  the portal scene params; `game.state.portal_render.native_overlay` exposes
+  the active path and vertex count. Native build, T0010 DevAPI scenario, smoke,
+  readability, and refreshed product gate ran. Product gate remains FAIL: this
+  proves a real render layer but is still proxy geometry, not production-quality
+  realistic Backrooms construction/material lighting.

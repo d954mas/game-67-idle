@@ -16,6 +16,7 @@
 #endif
 
 #include <math.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -85,15 +86,36 @@ static int s_window_height = 720;
 static BackroomsState s_game;
 static nt_shader_t s_vs;
 static nt_shader_t s_fs;
+static nt_shader_t s_portal_overlay_vs;
+static nt_shader_t s_portal_overlay_fs;
 static nt_pipeline_t s_pipeline;
+static nt_pipeline_t s_portal_overlay_pipeline;
 static nt_buffer_t s_quad_vbo;
+static nt_buffer_t s_portal_overlay_vbo;
 static nt_texture_t s_wall_tex;
 static nt_texture_t s_ui_tex;
 static BackroomsPortalScene s_portal_scene;
 static uint8_t s_wall_pixels[WALL_TEX_W * WALL_TEX_H * 4];
 static uint8_t s_ui_pixels[UI_W * UI_H * 4];
+static uint32_t s_last_portal_overlay_vertices;
 static const float s_route_choice_z[] = {24.0F, 16.2F, 8.3F};
 static const int s_route_choice_safe_side[] = {1, -1, 1};
+
+typedef struct PortalOverlayVertex {
+    float x;
+    float y;
+    float z;
+    float r;
+    float g;
+    float b;
+    float a;
+    float u;
+    float v;
+} PortalOverlayVertex;
+
+#define PORTAL_OVERLAY_MAX_VERTICES 384
+
+static PortalOverlayVertex s_portal_overlay_vertices[PORTAL_OVERLAY_MAX_VERTICES];
 
 #define FUSE_X (-3.45F)
 #define FUSE_Z (25.15F)
@@ -113,6 +135,47 @@ static const char *s_vs_src = "precision mediump float;\n"
                               "    v_uv = a_position * 0.5 + 0.5;\n"
                               "    gl_Position = vec4(a_position, 0.0, 1.0);\n"
                               "}\n";
+
+static const char *s_portal_overlay_vs_src =
+    "precision mediump float;\n"
+    "layout(location = 0) in vec3 a_position;\n"
+    "layout(location = 1) in vec4 a_color;\n"
+    "layout(location = 2) in vec2 a_uv;\n"
+    "out vec4 v_color;\n"
+    "out vec2 v_uv;\n"
+    "uniform vec4 u_overlay_resolution;\n"
+    "uniform vec4 u_overlay_player;\n"
+    "void main() {\n"
+    "    float yaw = u_overlay_player.z;\n"
+    "    vec2 fwd = vec2(sin(yaw), cos(yaw));\n"
+    "    vec2 right = vec2(cos(yaw), -sin(yaw));\n"
+    "    vec3 ro = vec3(u_overlay_player.x, 1.05 + 0.025 * sin(u_overlay_resolution.z * 7.0 + u_overlay_player.y), u_overlay_player.y);\n"
+    "    vec3 rel = a_position - ro;\n"
+    "    float cam_x = dot(rel.xz, right);\n"
+    "    float cam_z = dot(rel.xz, fwd);\n"
+    "    float cam_y = rel.y;\n"
+    "    float front = step(0.06, cam_z) * u_overlay_resolution.w;\n"
+    "    float aspect = max(0.5, u_overlay_resolution.x / max(1.0, u_overlay_resolution.y));\n"
+    "    vec2 ndc = vec2((cam_x / max(0.06, cam_z)) / (0.78 * aspect), (cam_y / max(0.06, cam_z) + 0.03) / 0.86);\n"
+    "    ndc = mix(vec2(2.5, 2.5), ndc, front);\n"
+    "    gl_Position = vec4(ndc, 0.0, 1.0);\n"
+    "    v_color = a_color * front;\n"
+    "    v_uv = a_uv;\n"
+    "}\n";
+
+static const char *s_portal_overlay_fs_src =
+    "precision mediump float;\n"
+    "in vec4 v_color;\n"
+    "in vec2 v_uv;\n"
+    "out vec4 frag_color;\n"
+    "void main() {\n"
+    "    if (v_color.a <= 0.01) { discard; }\n"
+    "    float edge = min(min(v_uv.x, 1.0 - v_uv.x), min(v_uv.y, 1.0 - v_uv.y));\n"
+    "    float edge_fade = mix(0.62, 1.0, smoothstep(0.0, 0.16, edge));\n"
+    "    float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);\n"
+    "    vec3 color = v_color.rgb * (0.86 + grain * 0.18);\n"
+    "    frag_color = vec4(color, v_color.a * edge_fade * (0.92 + grain * 0.08));\n"
+    "}\n";
 
 #if defined(__clang__)
 #pragma clang diagnostic push
@@ -1037,6 +1100,116 @@ static void build_ui(void) {
     }
 }
 
+static void portal_overlay_emit_vertex(uint32_t *count, float x, float y, float z, float r, float g, float b, float a, float u, float v) {
+    if (*count >= PORTAL_OVERLAY_MAX_VERTICES) {
+        return;
+    }
+    s_portal_overlay_vertices[*count] = (PortalOverlayVertex){.x = x, .y = y, .z = z, .r = r, .g = g, .b = b, .a = a, .u = u, .v = v};
+    *count += 1U;
+}
+
+static void portal_overlay_emit_quad(uint32_t *count,
+                                     float ax,
+                                     float ay,
+                                     float az,
+                                     float bx,
+                                     float by,
+                                     float bz,
+                                     float cx,
+                                     float cy,
+                                     float cz,
+                                     float dx,
+                                     float dy,
+                                     float dz,
+                                     float r,
+                                     float g,
+                                     float b,
+                                     float a) {
+    portal_overlay_emit_vertex(count, ax, ay, az, r, g, b, a, 0.0F, 0.0F);
+    portal_overlay_emit_vertex(count, bx, by, bz, r, g, b, a, 1.0F, 0.0F);
+    portal_overlay_emit_vertex(count, cx, cy, cz, r, g, b, a, 1.0F, 1.0F);
+    portal_overlay_emit_vertex(count, ax, ay, az, r, g, b, a, 0.0F, 0.0F);
+    portal_overlay_emit_vertex(count, cx, cy, cz, r, g, b, a, 1.0F, 1.0F);
+    portal_overlay_emit_vertex(count, dx, dy, dz, r, g, b, a, 0.0F, 1.0F);
+}
+
+static void portal_overlay_emit_yz_quad(uint32_t *count,
+                                        float x,
+                                        float y0,
+                                        float y1,
+                                        float z0,
+                                        float z1,
+                                        float r,
+                                        float g,
+                                        float b,
+                                        float a) {
+    portal_overlay_emit_quad(count, x, y0, z0, x, y1, z0, x, y1, z1, x, y0, z1, r, g, b, a);
+}
+
+static void portal_overlay_emit_floor_quad(uint32_t *count,
+                                           float x0,
+                                           float x1,
+                                           float y,
+                                           float z0,
+                                           float z1,
+                                           float r,
+                                           float g,
+                                           float b,
+                                           float a) {
+    portal_overlay_emit_quad(count, x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1, r, g, b, a);
+}
+
+static uint32_t build_portal_overlay_vertices(const BackroomsPortalGpuParams *portal) {
+    if (portal == NULL || portal->entry[3] <= 0.5F) {
+        return 0U;
+    }
+
+    uint32_t count = 0U;
+    const float wall_x = portal->entry[0] - 0.035F;
+    const float center_z = portal->entry[1];
+    const float half_z = portal->entry[2];
+    const float min_y = portal->bounds[0];
+    const float max_y = portal->bounds[1];
+    const float jamb = clampf(portal->construction[0], 0.18F, 1.10F);
+    const float lip = clampf(portal->construction[1], 0.18F, 1.15F);
+    const float trim = clampf(portal->finish[0], 0.2F, 1.0F);
+    const float conduit = clampf(portal->construction[2], 0.0F, 1.0F);
+    const float column = clampf(portal->construction[3], 0.0F, 1.0F);
+    const float z0 = center_z - half_z;
+    const float z1 = center_z + half_z;
+    const float side = 0.075F + jamb * 0.045F;
+    const float top = 0.065F + trim * 0.055F;
+    const float glow_a = 0.18F + 0.18F * portal->light[1];
+
+    portal_overlay_emit_yz_quad(&count, wall_x - 0.010F, min_y - 0.04F, max_y + 0.04F, z0 - side, z0 + side, 0.21F, 0.17F, 0.095F, 0.52F);
+    portal_overlay_emit_yz_quad(&count, wall_x - 0.010F, min_y - 0.04F, max_y + 0.04F, z1 - side, z1 + side, 0.21F, 0.17F, 0.095F, 0.52F);
+    portal_overlay_emit_yz_quad(&count, wall_x - 0.020F, max_y - top, max_y + top, z0 - side, z1 + side, 0.29F, 0.23F, 0.12F, 0.44F);
+    portal_overlay_emit_yz_quad(&count, wall_x - 0.020F, min_y - top * 0.85F, min_y + top * 0.45F, z0 - side, z1 + side, 0.14F, 0.105F, 0.060F, 0.40F);
+
+    portal_overlay_emit_floor_quad(&count, wall_x - 0.10F, wall_x + lip, min_y - 0.035F, z0 - side * 0.7F, z1 + side * 0.7F, 0.22F, 0.18F, 0.09F, 0.26F);
+    portal_overlay_emit_floor_quad(&count, wall_x + 0.10F, wall_x + 1.35F + lip * 0.35F, min_y + 0.012F, z0 + 0.15F, z1 - 0.15F, 0.08F, 0.065F, 0.045F, 0.18F);
+
+    const float inner_x = wall_x + 0.92F;
+    const float fixture_y0 = max_y + 0.10F;
+    const float fixture_y1 = max_y + 0.18F;
+    portal_overlay_emit_yz_quad(&count, inner_x, fixture_y0, fixture_y1, center_z - 0.54F, center_z + 0.54F, 1.00F, 0.86F, 0.50F, clampf(glow_a, 0.28F, 0.66F));
+    portal_overlay_emit_yz_quad(&count, inner_x - 0.05F, fixture_y0 - 0.035F, fixture_y0 + 0.025F, center_z - 0.62F, center_z + 0.62F, 0.16F, 0.13F, 0.080F, 0.72F);
+
+    if (conduit > 0.05F) {
+        const float cy = max_y - 0.24F;
+        portal_overlay_emit_yz_quad(&count, wall_x - 0.055F, cy - 0.018F, cy + 0.018F, z0 - 0.72F, z1 + 0.30F, 0.35F, 0.30F, 0.18F, 0.22F + conduit * 0.18F);
+    }
+
+    if (column > 0.05F) {
+        const float column_z = z1 + 0.42F;
+        const float column_w = 0.10F + column * 0.08F;
+        portal_overlay_emit_yz_quad(&count, wall_x + 0.18F, min_y - 0.02F, max_y + 0.26F, column_z - column_w, column_z + column_w, 0.16F, 0.13F, 0.080F, 0.34F + column * 0.14F);
+        portal_overlay_emit_yz_quad(&count, wall_x + 0.22F, max_y + 0.18F, max_y + 0.26F, column_z - column_w * 1.25F, column_z + column_w * 1.25F, 0.42F, 0.33F, 0.15F, 0.26F);
+    }
+
+    return count;
+}
+
 static void init_render_resources(void) {
     const float verts[] = {
         -1.0F, -1.0F, 1.0F, -1.0F, 1.0F, 1.0F,
@@ -1045,6 +1218,8 @@ static void init_render_resources(void) {
 
     s_vs = nt_gfx_make_shader(&(nt_shader_desc_t){.type = NT_SHADER_VERTEX, .source = s_vs_src, .label = "backrooms_fullscreen_vs"});
     s_fs = nt_gfx_make_shader(&(nt_shader_desc_t){.type = NT_SHADER_FRAGMENT, .source = s_fs_src, .label = "backrooms_liminal_fs"});
+    s_portal_overlay_vs = nt_gfx_make_shader(&(nt_shader_desc_t){.type = NT_SHADER_VERTEX, .source = s_portal_overlay_vs_src, .label = "backrooms_portal_overlay_vs"});
+    s_portal_overlay_fs = nt_gfx_make_shader(&(nt_shader_desc_t){.type = NT_SHADER_FRAGMENT, .source = s_portal_overlay_fs_src, .label = "backrooms_portal_overlay_fs"});
     s_pipeline = nt_gfx_make_pipeline(&(nt_pipeline_desc_t){
         .vertex_shader = s_vs,
         .fragment_shader = s_fs,
@@ -1060,7 +1235,37 @@ static void init_render_resources(void) {
         .cull_mode = 0,
         .label = "backrooms_fullscreen_pipeline",
     });
+    s_portal_overlay_pipeline = nt_gfx_make_pipeline(&(nt_pipeline_desc_t){
+        .vertex_shader = s_portal_overlay_vs,
+        .fragment_shader = s_portal_overlay_fs,
+        .layout =
+            {
+                .attr_count = 3,
+                .stride = sizeof(PortalOverlayVertex),
+                .attrs =
+                    {
+                        {.location = 0, .format = NT_FORMAT_FLOAT3, .offset = (uint16_t)offsetof(PortalOverlayVertex, x)},
+                        {.location = 1, .format = NT_FORMAT_FLOAT4, .offset = (uint16_t)offsetof(PortalOverlayVertex, r)},
+                        {.location = 2, .format = NT_FORMAT_FLOAT2, .offset = (uint16_t)offsetof(PortalOverlayVertex, u)},
+                    },
+            },
+        .depth_test = false,
+        .depth_write = false,
+        .depth_func = NT_DEPTH_ALWAYS,
+        .cull_mode = 0,
+        .blend = true,
+        .blend_src = NT_BLEND_SRC_ALPHA,
+        .blend_dst = NT_BLEND_ONE_MINUS_SRC_ALPHA,
+        .label = "backrooms_portal_overlay_pipeline",
+    });
     s_quad_vbo = nt_gfx_make_buffer(&(nt_buffer_desc_t){.type = NT_BUFFER_VERTEX, .usage = NT_USAGE_IMMUTABLE, .data = verts, .size = sizeof(verts), .label = "backrooms_quad"});
+    s_portal_overlay_vbo = nt_gfx_make_buffer(&(nt_buffer_desc_t){
+        .type = NT_BUFFER_VERTEX,
+        .usage = NT_USAGE_DYNAMIC,
+        .data = NULL,
+        .size = sizeof(s_portal_overlay_vertices),
+        .label = "backrooms_portal_overlay_vbo",
+    });
 
     generate_wall_texture();
     s_wall_tex = nt_gfx_make_texture(&(nt_texture_desc_t){
@@ -1092,8 +1297,12 @@ static void init_render_resources(void) {
 static void shutdown_render_resources(void) {
     nt_gfx_destroy_texture(s_ui_tex);
     nt_gfx_destroy_texture(s_wall_tex);
+    nt_gfx_destroy_buffer(s_portal_overlay_vbo);
     nt_gfx_destroy_buffer(s_quad_vbo);
+    nt_gfx_destroy_pipeline(s_portal_overlay_pipeline);
     nt_gfx_destroy_pipeline(s_pipeline);
+    nt_gfx_destroy_shader(s_portal_overlay_fs);
+    nt_gfx_destroy_shader(s_portal_overlay_vs);
     nt_gfx_destroy_shader(s_fs);
     nt_gfx_destroy_shader(s_vs);
 }
@@ -1384,6 +1593,16 @@ static void draw_frame(float fb_w, float fb_h) {
     nt_gfx_set_uniform_vec4("u_portal_finish", portal.finish);
     nt_gfx_set_uniform_vec4("u_portal_construction", portal.construction);
     nt_gfx_draw(0, 6);
+
+    s_last_portal_overlay_vertices = build_portal_overlay_vertices(&portal);
+    if (s_last_portal_overlay_vertices > 0U) {
+        nt_gfx_orphan_buffer(s_portal_overlay_vbo, s_portal_overlay_vertices, s_last_portal_overlay_vertices * sizeof(s_portal_overlay_vertices[0]));
+        nt_gfx_bind_pipeline(s_portal_overlay_pipeline);
+        nt_gfx_bind_vertex_buffer(s_portal_overlay_vbo);
+        nt_gfx_set_uniform_vec4("u_overlay_resolution", (float[4]){fb_w, fb_h, g_nt_app.time, portal.entry[3]});
+        nt_gfx_set_uniform_vec4("u_overlay_player", (float[4]){s_game.x, s_game.z, s_game.yaw, 0.0F});
+        nt_gfx_draw(0, s_last_portal_overlay_vertices);
+    }
 }
 
 #if NT_DEVAPI_ENABLED
@@ -1455,6 +1674,12 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(portal, "threshold_lip", (double)portal_params.construction[1]);
     cJSON_AddNumberToObject(portal, "conduit_strength", (double)portal_params.construction[2]);
     cJSON_AddNumberToObject(portal, "landmark_column_strength", (double)portal_params.construction[3]);
+    cJSON *overlay = cJSON_CreateObject();
+    cJSON_AddBoolToObject(overlay, "enabled", true);
+    cJSON_AddNumberToObject(overlay, "last_vertex_count", (double)s_last_portal_overlay_vertices);
+    cJSON_AddNumberToObject(overlay, "vertex_capacity", (double)PORTAL_OVERLAY_MAX_VERTICES);
+    cJSON_AddStringToObject(overlay, "path", "native_nt_gfx_proxy_geometry");
+    cJSON_AddItemToObject(portal, "native_overlay", overlay);
     cJSON_AddItemToObject(root, "portal_render", portal);
     cJSON_AddStringToObject(root,
                             "objective",
