@@ -18,9 +18,9 @@ from devapi_client import running_game
 # --- per-game data: edit THIS for a new game, not the checks below -----------
 GAME = {
     # ui.tree node ids the game's first screen must expose (root is universal).
-    "primary_ui_ids": {"root", "backrooms.objective", "backrooms.fear", "backrooms.battery"},
+    "primary_ui_ids": {"root", "backrooms.objective", "backrooms.fear", "backrooms.battery", "backrooms.threat"},
     # one key game.reset_playtest must return (set to None to skip).
-    "expected_state_key": "objective",
+    "expected_state_key": "stalker_pressure",
 }
 
 UNIVERSAL_ENDPOINTS = {

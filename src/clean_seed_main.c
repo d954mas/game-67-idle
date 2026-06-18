@@ -39,6 +39,9 @@ typedef struct BackroomsState {
     float battery;
     float message_timer;
     float caught_timer;
+    float route_shift;
+    float stalker_pressure;
+    bool threat_visible;
     bool flashlight_on;
     bool fuse_found;
     bool won;
@@ -80,6 +83,7 @@ static const char *s_fs_src =
     "uniform vec4 u_resolution_time;\n"
     "uniform vec4 u_player;\n"
     "uniform vec4 u_state;\n"
+    "uniform vec4 u_pressure;\n"
     "uniform sampler2D u_wall_tex;\n"
     "uniform sampler2D u_ui_tex;\n"
     "\n"
@@ -113,6 +117,8 @@ static const char *s_fs_src =
     "    vec2 frag = v_uv * u_resolution_time.xy;\n"
     "    vec2 p = (frag - 0.5 * u_resolution_time.xy) / max(u_resolution_time.y, 1.0);\n"
     "    float ttime = u_resolution_time.z;\n"
+    "    p.x += u_pressure.x * (0.035 * sin(ttime * 1.7 + u_player.y * 0.55) + 0.018 * sin(ttime * 5.1));\n"
+    "    p.y += u_pressure.x * 0.014 * sin(ttime * 2.3 + u_player.x * 3.0);\n"
     "    float yaw = u_player.z;\n"
     "    vec2 fwd = vec2(sin(yaw), cos(yaw));\n"
     "    vec2 right = vec2(cos(yaw), -sin(yaw));\n"
@@ -143,10 +149,15 @@ static const char *s_fs_src =
     "    float tfuse = sphere_hit(ro, rd, vec3(0.36, 1.05, 29.4), 0.24);\n"
     "    if (u_state.x < 0.5 && tfuse < best) { best = tfuse; normal = normalize(ro + rd * tfuse - vec3(0.36, 1.05, 29.4)); mat = 5; }\n"
     "\n"
-    "    float entity_z = max(u_player.y - 7.2, 3.4);\n"
+    "    float entity_z = max(u_player.y - mix(8.6, 4.4, u_pressure.y), 2.9);\n"
     "    float tent = (entity_z - ro.z) / rd.z;\n"
     "    vec3 pent = ro + rd * tent;\n"
-    "    if (u_state.x > 0.5 && tent > 0.0 && abs(pent.x - 0.24 * sin(ttime * 1.7)) < 0.32 && pent.y > 0.12 && pent.y < 1.95 && tent < best) {\n"
+    "    float ent_x = pent.x - 0.24 * sin(ttime * 1.7);\n"
+    "    float ent_head = 1.0 - smoothstep(0.16, 0.24, length(vec2(ent_x, (pent.y - 1.66) * 0.88)));\n"
+    "    float ent_torso = (1.0 - smoothstep(0.18, mix(0.30, 0.44, u_pressure.y), abs(ent_x))) * smoothstep(0.44, 0.72, pent.y) * (1.0 - smoothstep(1.28, 1.56, pent.y));\n"
+    "    float ent_legs = (1.0 - smoothstep(0.10, 0.19, abs(abs(ent_x) - 0.10))) * smoothstep(0.08, 0.34, pent.y) * (1.0 - smoothstep(0.74, 1.05, pent.y));\n"
+    "    float ent_shape = max(max(ent_head, ent_torso), ent_legs);\n"
+    "    if (u_state.x > 0.5 && tent > 0.0 && ent_shape > 0.22 && pent.y > 0.06 && pent.y < 2.05 && tent < best) {\n"
     "        best = tent; normal = vec3(0.0, 0.0, 1.0); mat = 6;\n"
     "    }\n"
     "\n"
@@ -171,9 +182,15 @@ static const char *s_fs_src =
     "    float contact = 1.0 - 0.34 * exp(-abs(hit.x - sign(hit.x) * 1.36) * 8.0) * smoothstep(0.0, 0.22, hit.y);\n"
     "    contact *= 1.0 - 0.22 * exp(-hit.y * 12.0);\n"
     "    float side_opening = 0.0;\n"
+    "    float false_exit = 0.0;\n"
     "    if (mat == 3) {\n"
     "        float bay = abs(fract((hit.z + 1.2) / 7.7) - 0.5);\n"
     "        side_opening = (1.0 - smoothstep(0.065, 0.12, bay)) * smoothstep(0.18, 0.42, hit.y) * (1.0 - smoothstep(1.85, 2.22, hit.y));\n"
+    "        side_opening *= 0.55 + u_pressure.x * 1.05;\n"
+    "        float slot = abs(fract((hit.z - 2.4) / 6.9) - 0.5);\n"
+    "        float door_body = (1.0 - smoothstep(0.07, 0.16, slot)) * smoothstep(0.22, 0.38, hit.y) * (1.0 - smoothstep(1.58, 1.86, hit.y));\n"
+    "        float sign_band = (1.0 - smoothstep(0.09, 0.18, slot)) * (1.0 - smoothstep(0.04, 0.08, abs(hit.y - 1.72)));\n"
+    "        false_exit = u_state.x * u_pressure.x * max(door_body, sign_band * 0.8);\n"
     "    }\n"
     "    float fixture_shape = 0.0;\n"
     "    if (mat == 2) {\n"
@@ -183,10 +200,18 @@ static const char *s_fs_src =
     "    vec3 color = albedo * (0.16 + ceiling_light + exit_light + fuse_light + flashlight) * contact;\n"
     "    color += vec3(1.1, 1.0, 0.73) * fixture_shape * (1.6 + 1.1 * flicker);\n"
     "    color *= 1.0 - side_opening * 0.86;\n"
+    "    color = mix(color, vec3(0.005, 0.012, 0.008), false_exit * 0.92);\n"
+    "    color += vec3(0.1, 1.1, 0.34) * false_exit * (0.42 + 0.58 * step(0.5, sin(ttime * 6.0 + hit.z)));\n"
     "    if (mat == 5) color += vec3(0.1, 2.4, 1.1);\n"
-    "    if (mat == 6) color *= 0.04;\n"
+    "    if (mat == 6) {\n"
+    "        float eye_l = 1.0 - smoothstep(0.015, 0.05, length(hit.xy - vec2(-0.08, 1.55)));\n"
+    "        float eye_r = 1.0 - smoothstep(0.015, 0.05, length(hit.xy - vec2(0.08, 1.55)));\n"
+    "        color *= 0.035;\n"
+    "        color += vec3(1.2, 0.03, 0.0) * max(eye_l, eye_r) * (0.4 + u_pressure.y);\n"
+    "    }\n"
     "    float fog = smoothstep(13.0, 31.0, best);\n"
     "    vec3 fog_col = mix(vec3(0.18, 0.15, 0.06), vec3(0.03, 0.035, 0.045), u_state.x * 0.55);\n"
+    "    fog_col = mix(fog_col, vec3(0.06, 0.018, 0.015), u_pressure.y * 0.35);\n"
     "    color = mix(color, fog_col, fog);\n"
     "    float vignette = smoothstep(0.95, 0.22, length(p));\n"
     "    color *= 0.55 + 0.45 * vignette;\n"
@@ -213,6 +238,13 @@ static float clampf(float v, float lo, float hi) {
 
 static float absf(float v) { return v < 0.0F ? -v : v; }
 
+static float approachf(float value, float target, float step) {
+    if (value < target) {
+        return value + fminf(step, target - value);
+    }
+    return value - fminf(step, value - target);
+}
+
 static float dist_to(float x, float z, float tx, float tz) {
     const float dx = x - tx;
     const float dz = z - tz;
@@ -222,6 +254,29 @@ static float dist_to(float x, float z, float tx, float tz) {
 static bool near_fuse(void) { return !s_game.fuse_found && dist_to(s_game.x, s_game.z, 0.36F, 29.4F) < 1.25F; }
 
 static bool near_exit(void) { return s_game.fuse_found && s_game.z < 1.85F && absf(s_game.x) < 0.9F; }
+
+static float stalker_z(void) {
+    const float close_distance = 8.6F - 4.2F * clampf(s_game.stalker_pressure, 0.0F, 1.0F);
+    return fmaxf(s_game.z - close_distance, 2.9F);
+}
+
+static bool looking_at_stalker(void) {
+    if (!s_game.fuse_found || s_game.won || s_game.caught) {
+        return false;
+    }
+    const float tx = 0.24F * sinf(g_nt_app.time * 1.7F);
+    const float tz = stalker_z();
+    const float dx = tx - s_game.x;
+    const float dz = tz - s_game.z;
+    const float len = sqrtf(dx * dx + dz * dz);
+    if (len < 0.01F || len > 13.0F) {
+        return false;
+    }
+    const float fwd_x = sinf(s_game.yaw);
+    const float fwd_z = cosf(s_game.yaw);
+    const float dot = (dx / len) * fwd_x + (dz / len) * fwd_z;
+    return dot > 0.86F;
+}
 
 static void set_message(const char *text, float seconds) {
     (void)snprintf(s_game.message, sizeof(s_game.message), "%s", text);
@@ -418,6 +473,12 @@ static void build_ui(void) {
     ui_bar(806, 60, 114, 16, s_game.battery, 238, 210, 86);
     (void)snprintf(line, sizeof(line), "FUSE:%s  EXIT:%s", s_game.fuse_found ? "YES" : "NO", s_game.fuse_found ? "ON" : "OFF");
     ui_text(700, 94, line, 2, 198, 230, 196, 245);
+    if (s_game.fuse_found && !s_game.won) {
+        (void)snprintf(line, sizeof(line), "ROUTE:SHIFT  THREAT:%d%%", (int)(s_game.stalker_pressure * 100.0F));
+        ui_text(700, 122, line, 1, 255, 184, 132, 245);
+    } else {
+        ui_text(700, 122, "ROUTE:STABLE", 1, 175, 205, 170, 220);
+    }
 
     ui_rect(476, 268, 8, 2, 230, 235, 220, 220);
     ui_rect(479, 265, 2, 8, 230, 235, 220, 220);
@@ -512,6 +573,8 @@ static void interact(void) {
     if (near_fuse()) {
         s_game.fuse_found = true;
         s_game.fear = clampf(s_game.fear + 18.0F, 0.0F, 100.0F);
+        s_game.route_shift = 0.18F;
+        s_game.stalker_pressure = fmaxf(s_game.stalker_pressure, 0.22F);
         set_message("THE LIGHTS HEARD YOU", 3.0F);
     } else if (near_exit()) {
         s_game.won = true;
@@ -535,6 +598,8 @@ static void update_game(void) {
         return;
     }
     if (s_game.won) {
+        s_game.route_shift = approachf(s_game.route_shift, 0.0F, dt * 0.7F);
+        s_game.stalker_pressure = approachf(s_game.stalker_pressure, 0.0F, dt * 0.45F);
         s_game.fear = clampf(s_game.fear - dt * 14.0F, 0.0F, 100.0F);
         return;
     }
@@ -587,6 +652,7 @@ static void update_game(void) {
     }
     s_game.x = clampf(s_game.x, -1.05F, 1.05F);
     s_game.z = clampf(s_game.z, 0.45F, 31.8F);
+    s_game.threat_visible = looking_at_stalker();
 
     if (s_game.flashlight_on && s_game.battery > 0.0F) {
         s_game.battery = clampf(s_game.battery - dt * 0.026F, 0.0F, 1.0F);
@@ -598,9 +664,34 @@ static void update_game(void) {
         s_game.battery = clampf(s_game.battery + dt * 0.006F, 0.0F, 1.0F);
     }
 
+    if (s_game.fuse_found) {
+        const float return_progress = clampf((29.4F - s_game.z) / 29.4F, 0.0F, 1.0F);
+        const float target_shift = clampf(0.24F + return_progress * 0.58F + (s_game.fear / 100.0F) * 0.16F, 0.0F, 1.0F);
+        s_game.route_shift = approachf(s_game.route_shift, target_shift, dt * 0.55F);
+
+        float stalker_delta = 0.045F + (s_game.fear / 100.0F) * 0.07F + (s_game.flashlight_on ? -0.016F : 0.052F);
+        if (s_game.threat_visible) {
+            stalker_delta += s_game.flashlight_on ? -0.055F : 0.12F;
+        }
+        if (near_exit()) {
+            stalker_delta += 0.18F;
+        }
+        s_game.stalker_pressure = clampf(s_game.stalker_pressure + stalker_delta * dt, 0.0F, 1.0F);
+        if (s_game.stalker_pressure > 0.62F && s_game.message_timer <= 0.0F) {
+            set_message(s_game.threat_visible ? "DON'T STARE AT IT" : "IT IS BETWEEN YOU AND EXIT", 1.35F);
+        }
+    } else {
+        s_game.route_shift = approachf(s_game.route_shift, 0.0F, dt * 0.8F);
+        s_game.stalker_pressure = approachf(s_game.stalker_pressure, 0.0F, dt * 0.8F);
+        s_game.threat_visible = false;
+    }
+
     float fear_rate = 1.15F + s_game.z * 0.035F + (s_game.flashlight_on ? -0.55F : 1.1F);
     if (s_game.fuse_found) {
-        fear_rate += 4.2F;
+        fear_rate += 3.6F + s_game.route_shift * 1.2F + s_game.stalker_pressure * 3.4F;
+        if (s_game.threat_visible && !s_game.flashlight_on) {
+            fear_rate += 2.4F;
+        }
     }
     if (near_exit() || near_fuse()) {
         fear_rate -= 1.1F;
@@ -626,6 +717,7 @@ static void draw_frame(float fb_w, float fb_h) {
     nt_gfx_set_uniform_vec4("u_resolution_time", (float[4]){fb_w, fb_h, g_nt_app.time, 0.0F});
     nt_gfx_set_uniform_vec4("u_player", (float[4]){s_game.x, s_game.z, s_game.yaw, 0.0F});
     nt_gfx_set_uniform_vec4("u_state", (float[4]){s_game.fuse_found ? 1.0F : 0.0F, s_game.fear / 100.0F, (s_game.flashlight_on && s_game.battery > 0.0F) ? 1.0F : 0.0F, s_game.won ? 1.0F : 0.0F});
+    nt_gfx_set_uniform_vec4("u_pressure", (float[4]){s_game.route_shift, s_game.stalker_pressure, s_game.threat_visible ? 1.0F : 0.0F, s_game.caught ? 1.0F : 0.0F});
     nt_gfx_draw(0, 6);
 }
 
@@ -640,11 +732,14 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(root, "yaw", (double)s_game.yaw);
     cJSON_AddNumberToObject(root, "fear", (double)s_game.fear);
     cJSON_AddNumberToObject(root, "battery", (double)s_game.battery);
+    cJSON_AddNumberToObject(root, "route_shift", (double)s_game.route_shift);
+    cJSON_AddNumberToObject(root, "stalker_pressure", (double)s_game.stalker_pressure);
     cJSON_AddBoolToObject(root, "flashlight_on", s_game.flashlight_on);
     cJSON_AddBoolToObject(root, "fuse_found", s_game.fuse_found);
     cJSON_AddBoolToObject(root, "exit_powered", s_game.fuse_found);
     cJSON_AddBoolToObject(root, "won", s_game.won);
     cJSON_AddBoolToObject(root, "caught", s_game.caught);
+    cJSON_AddBoolToObject(root, "threat_visible", s_game.threat_visible);
     cJSON_AddBoolToObject(root, "can_use", near_fuse() || near_exit());
     cJSON_AddStringToObject(root, "objective", s_game.won ? "escaped" : (s_game.fuse_found ? "return_to_exit" : "find_fuse"));
     cJSON_AddStringToObject(root, "message", s_game.message_timer > 0.0F ? s_game.message : "");
@@ -724,6 +819,8 @@ static bool ep_game_debug_set_progress(const cJSON *params, cJSON **result, char
         s_game.won = cJSON_IsTrue(won);
     }
     s_game.fear = clampf((float)json_number(params, "fear", (double)s_game.fear), 0.0F, 100.0F);
+    s_game.route_shift = clampf((float)json_number(params, "route_shift", (double)s_game.route_shift), 0.0F, 1.0F);
+    s_game.stalker_pressure = clampf((float)json_number(params, "stalker_pressure", (double)s_game.stalker_pressure), 0.0F, 1.0F);
     *result = state_json();
     return true;
 }
@@ -796,6 +893,7 @@ static void register_ui_devapi(void) {
     (void)nt_devapi_register_ui_node("backrooms.objective", "root", "label", "Objective", s_game.fuse_found ? "Return to exit" : "Find the humming fuse", 18.0F, 18.0F, 462.0F, 118.0F, true, true);
     (void)nt_devapi_register_ui_node("backrooms.fear", "root", "meter", "Fear", "Fear pressure", 682.0F, 18.0F, 258.0F, 52.0F, true, true);
     (void)nt_devapi_register_ui_node("backrooms.battery", "root", "meter", "Battery", "Flashlight battery", 682.0F, 70.0F, 258.0F, 66.0F, true, true);
+    (void)nt_devapi_register_ui_node("backrooms.threat", "root", "label", "Route threat", s_game.fuse_found ? "Route shifting and stalker pressure" : "Route stable", 682.0F, 118.0F, 258.0F, 28.0F, true, true);
     (void)nt_devapi_register_ui_node("backrooms.use_prompt", "root", "prompt", "Use", near_fuse() ? "Press E to take fuse" : (near_exit() ? "Press E to escape" : ""), 322.0F, 392.0F, 316.0F, 46.0F, near_fuse() || near_exit(), near_fuse() || near_exit());
 }
 #endif
