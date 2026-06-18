@@ -41,7 +41,7 @@ tooling in `tools/assets/`, grouped by stage. Game-specific tools live in
 | 4 | Cut + assemble runtime assets | `tools/assets/assemble/` + `tools/assets/cutout/` | `build_runtime_assets_from_crop_plan.py`; cutout path 1 `cutout/key_matte.py`, path 2 `cutout/dual_plate_alpha.py` (+ `dual_plate_pair_gate.py`); shared `chroma_key_alpha.py` |
 | — | Route cutout path | `tools/assets/cutout/` | `route_cutout.py` — `soft_score` from the flat-key source auto-picks path 1 vs path 2; `--auto-dual` launches `gen_dual_plate.sh` |
 | 5 | Atlas / pack | `tools/assets/pack/` | `build_ui_atlas_pack.py` → `audit_ui_atlas_pack.py` |
-| 6 | Audits / proofs | `tools/assets/audit/` + `tools/assets/job/` | `audit_generated_ui_assets.py`, `render_ui_{asset_edge,composition}_proof.py`; node `audit_*.mjs` |
+| 6 | Audits / proofs | `tools/assets/audit/` + `tools/assets/job/` | `render_ui_composition_proof.py`, `audit_generated_source_derivation.py`; node `audit_*.mjs` |
 | — | Orchestrator (runs 2→6) | `tools/assets/job/` | `node run_ui_asset_tier.mjs` |
 | — | Shared utils | `tools/assets/` | `atomic_io.py`, `chroma_key_alpha.py` |
 | — | Dev-only (benchmarks/profiling) | `tools/assets/_dev/` | off the runtime path |
@@ -95,7 +95,8 @@ made before a generation is spent.
   Do not keep crop coordinates, content safe areas, or slice9 decisions only in
   chat. Start generated runtime UI work with
   `.codex/skills/generated-game-ui-assets/`; it coordinates art direction,
-  asset pipeline, pixel audits, responsive layout audits, and runtime proof.
+  asset pipeline, composition/derivation audits, responsive layout audits, and
+  runtime proof.
   Accepted generated source sheets must carry provenance: provider/model or
   workflow, workflow file/json, seed or no-seed reason, prompt, negative prompt, source family
   role, accepted source image, and rejected candidate notes. Record it with
@@ -122,10 +123,13 @@ made before a generation is spent.
   when the generator produced a non-flat chroma background, then run
   `py -3.12 tools/assets/intake/audit_source_sheet_intake.py --source <source-sheet> --json-output <audit.json> --report <audit.md>`
   to catch non-flat chroma backgrounds, merged components, clipped components,
-  and too-small gutters. For generated UI runtime PNGs, also run
-  `py -3.12 tools/assets/audit/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`
-  after slicing; this catches clipped icon alpha bounds and chroma-key edge
-  fringe that a JSON validator cannot see.
+  and too-small gutters. Cut runtime PNGs through the principled cutout
+  (`py -3.12 tools/assets/cutout/route_cutout.py` auto-picks `key_matte` vs
+  `dual_plate`) so clipped alpha bounds and chroma-key edge fringe are resolved
+  at the source, then verify with
+  `py -3.12 tools/assets/audit/audit_generated_source_derivation.py --crop-manifest <crop-manifest>`
+  after slicing and the visual gate (`node tools/product_gate/review.mjs`)
+  as the backstop a JSON validator cannot replace.
 - **Visual-first session contract.** For visual, UI, FTUE, feel, or
   audience-test work, write a 5-line contract before coding: `goal`,
   `non-goal`, `proof`, `stop condition`, and `likely files`. The proof must
@@ -479,7 +483,7 @@ Portable (copied by the exporter):
   `tools/pipeline_validate.mjs`, `tools/ai_profile/`,
   `tools/game_context/`, `tools/product_gate/`, `tools/assets/job/new_art_job.mjs`,
   `tools/assets/job/new_generation_record.mjs`, `tools/assets/job/validate_art_job.mjs`,
-  `tools/assets/audit/audit_generated_ui_assets.py`, `tools/taskboard/`, `tools/README.md` - fast AI
+  `tools/assets/audit/audit_generated_source_derivation.py`, `tools/taskboard/`, `tools/README.md` - fast AI
   workflow facade, skill mirroring, skill regression checks, reusable-base
   validation, AI session profiling internals, game iteration context, generated
   art job scaffolding/validation, task store UI/CLI, and tool portability map.

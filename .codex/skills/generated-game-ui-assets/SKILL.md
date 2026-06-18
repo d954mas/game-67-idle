@@ -1,6 +1,6 @@
 ---
 name: generated-game-ui-assets
-description: "Use when generating, cutting, validating, integrating, or reviewing reusable game UI asset kits from AI art: UI source sheets, icon sheets, slice9 panels/buttons, art bibles, crop manifests, runtime manifests, chroma/alpha cleanup, contact sheets, pixel audits, responsive UI layout audits, desktop/portrait screenshot proof, or fixing cropped/fringed generated UI assets."
+description: "Use when generating, cutting, validating, integrating, or reviewing reusable game UI asset kits from AI art: UI source sheets, icon sheets, slice9 panels/buttons, art bibles, crop manifests, runtime manifests, chroma/alpha cleanup, contact sheets, composition proofs, source-derivation audits, responsive UI layout audits, desktop/portrait screenshot proof, or fixing cropped/fringed generated UI assets."
 ---
 
 # Generated Game UI Assets
@@ -16,7 +16,7 @@ Open the matching section only when the task needs it:
 
 - `references/ui-asset-rules.md` # Slice9 Rules — building/resizing/validating slice9 panels, buttons, progress bars, overlay decoration, `usage_policy`.
 - `references/ui-asset-rules.md` # Atlas And Reuse Rules — pack groups, atlas metadata, labeled review atlas, aliasing, trim/bleed/extrusion, scale variants.
-- `references/ui-asset-rules.md` # Icon And Sprite Rules — icon gutters, edge-proof review, purple/green edge-color policy, key-color isolation, pivots.
+- `references/ui-asset-rules.md` # Icon And Sprite Rules — icon gutters, key-color isolation, principled cutout (key_matte/dual_plate), pivots.
 - `references/ui-asset-rules.md` # Responsive UI Rules — desktop vs portrait composition, touch targets, `ui.tree` action-bounds audit.
 
 ## Workflow
@@ -26,8 +26,8 @@ Open the matching section only when the task needs it:
    harness are known.
    For visual-first UI work, write the 5-line session contract first: goal,
    non-goal, proof, stop condition, and likely files. The proof must include
-   source/runtime manifests, pixel audit, and native screenshot/product gate
-   evidence.
+   source/runtime manifests, composition proof, and native screenshot/product
+   gate evidence.
 2. Research references first when the visual/gameplay target is new or the
    lead rejected the current result. Store reusable source notes under
    `gamedesign/sources/` and project-specific findings under the active
@@ -43,10 +43,7 @@ Open the matching section only when the task needs it:
 4. Create or update one art job packet with:
    `node tools/assets/job/new_art_job.mjs --id <job-id> --family <family> --project-dir <project-dir>`.
    Keep accepted source sheet paths, expected crop/runtime manifests, and
-   commands in that packet. For disputed edge cleanup, record durable edge
-   proof images in `expected_outputs.edge_proofs` and matching JSON reports in
-   `expected_outputs.edge_proof_reports` only when the report has zero bad
-   marks; keep failing reports as candidate/rejected evidence. The packet must
+   commands in that packet. The packet must
    also record generator provenance:
    provider/model or workflow, workflow file/json, seed or no-seed reason, prompt, negative
    prompt, source family role, accepted source image, and rejected candidate
@@ -172,10 +169,10 @@ Open the matching section only when the task needs it:
    assets. Slice9 crop and runtime entries also need explicit `stretch_policy`
    and `usage_policy`: what can stretch/tile, where fixed ornaments live, the
    minimum runtime size, and disallowed uses such as compact secondary buttons.
-   Do not integrate or claim runtime generated UI from an empty crop manifest,
-   empty runtime manifest, or unrun pixel audit. The order is source sheet,
-   intake, crop manifest, runtime manifest/assets, pixel audit, and only then
-   runtime integration.
+   Do not integrate or claim runtime generated UI from an empty crop manifest
+   or empty runtime manifest. The order is source sheet, intake, crop manifest,
+   runtime manifest/assets, composition proof + source-derivation audit + the
+   visual gate, and only then runtime integration.
 11. Build runtime PNGs deterministically. For chroma-key art, remove only
    border-connected key color, isolate intended icon components, trim by alpha
    bounds, add padding, remove edge fringe, remove source-key color spill
@@ -234,7 +231,7 @@ Goal: see the asset in context fast. Run only:
 
 The draft contract `node tools/assets/job/validate_art_job.mjs --job <job>` (no
 flags) is a cheap structural check you may also run here. Do not run the strict
-or final-art battery, the pixel audit, or any proof PNG at this tier.
+or final-art battery or any proof PNG at this tier.
 
 ### INTEGRATE tier (when wiring into the runtime screen, ~3 commands)
 
@@ -243,14 +240,10 @@ in the screen. Run, in order:
 
 - strict contract after slicing:
   `node tools/assets/job/validate_art_job.mjs --job <job> --strict`
-  This strict gate requires `expected_outputs.asset_audit` evidence and reads
-  JSON audit reports to confirm `verdict: pass` with no listed problems, a
-  `crop_manifest` matching the art job, and coverage for every crop id in the
-  manifest.
-- pixel audit:
-  `py -3.12 tools/assets/audit/audit_generated_ui_assets.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
-  This audit must fail final runtime PNGs whose fully transparent pixels keep
-  any nonzero RGB, not only source-key/purple/green classified edge colors.
+  This strict gate confirms every crop output appears in the runtime manifest
+  with matching `id`, `kind`, and `path`, that listed audit reports read
+  `verdict: pass` with no listed problems, and that a `crop_manifest` matches
+  the art job and covers every crop id in the manifest.
 - runtime composition proof:
   `py -3.12 tools/assets/audit/render_ui_composition_proof.py --asset-manifest <runtime-manifest> --output <proof.png> --json-output <proof.json> --report <proof.md>`
   Overlay sprites must not overlap the content safe area unless the layout or
@@ -260,6 +253,16 @@ in the screen. Run, in order:
   margins leave no usable content area at target sizes, runtime labels do not
   fit, overlays fall outside their anchored base, or the UI only works as a
   static source-size crop.
+- generated-source derivation audit:
+  `py -3.12 tools/assets/audit/audit_generated_source_derivation.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
+  This compares each runtime PNG against the accepted source crop (via
+  `key_matte`) and fails builders that redraw assets procedurally instead of
+  cutting them from the accepted source. The principled cutout
+  (`tools/assets/cutout/key_matte.py` default, `tools/assets/cutout/route_cutout.py`
+  auto-picker, `dual_plate` for soft/glow edges) prevents the edge artifacts at
+  the source, so there is no separate per-asset edge-color audit; the human
+  visual gate (`node tools/product_gate/review.mjs` / `node tools/ai.mjs gate` /
+  `py -3.12 tools/devapi/ui_readability.py <shot>`) is the backstop.
 
 ### FINAL-ART tier (only when shipping a reusable kit)
 
@@ -270,12 +273,6 @@ battery and is the only tier that runs `--final-art`. Run all of:
   (final-art validation requires it; the report `source` must match the art
   job's expected source art or crop source).
 - strict contract (as above).
-- pixel audit (as above).
-- edge proof preview for 1-2px fringe review (conditional, see below):
-  `py -3.12 tools/assets/audit/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md> --only-problems`
-  Store accepted proof image paths in `expected_outputs.edge_proofs` and JSON
-  report paths in `expected_outputs.edge_proof_reports` only when `counts.total`
-  is zero.
 - slice9 design policy audit:
   `node tools/assets/job/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
   Record passing reports in `expected_outputs.slice9_design_audit`; final-art
@@ -344,13 +341,9 @@ battery and is the only tier that runs `--final-art`. Run all of:
 
 ### Conditional proofs (do not render proof PNGs per asset per iteration)
 
-The edge-proof and composition-proof PNG artifacts exist for failure
-investigation, not as per-iteration deliverables:
+The composition-proof PNG artifact exists for failure investigation, not as a
+per-iteration deliverable:
 
-- Generate the edge-proof PNG only at FINAL-ART tier or when investigating a
-  reported 1-2px fringe. `render_ui_asset_edge_proof.py --only-problems` keeps
-  full JSON coverage but renders only the bad sides into the PNG/Markdown, so a
-  clean kit produces no per-asset proof noise.
 - The composition proof writes a PNG and FAILS on problems by default; that
   failing image IS the on-failure artifact. Do not also bank a passing proof
   PNG per asset per iteration. `--no-fail` only exists to capture an image when
@@ -372,7 +365,7 @@ the workflow above leans on them every responsive iteration:
   secondary actions below, and short journal/objective text. A passing
   screenshot is not enough when clickable geometry is wrong — use the `ui.tree`
   action-bounds audit. Everything deeper (slice9 `usage_policy`, atlas pack
-  metadata, edge-color/key isolation policy) lives in the reference manual.
+  metadata, key isolation / cutout policy) lives in the reference manual.
 
 ## Failure Response
 
@@ -380,8 +373,8 @@ If the lead reports cropped icons, key-color outlines, purple edge halo, ugly
 UI, unclear first action, or mobile density:
 
 - Stop feature/content expansion.
-- Reopen the source sheet, crop manifest, contact sheet, pixel audit, and
-  latest desktop/portrait screenshots.
+- Reopen the source sheet, crop manifest, contact sheet, composition proof,
+  source-derivation audit, and latest desktop/portrait screenshots.
 - Fix the earliest failed stage in the pipeline. Do not compensate in runtime
   code for a bad source sheet or missing manifest rule.
 - For green halos around outlines, holes, shadows, or semishadows, check the
@@ -396,13 +389,13 @@ UI, unclear first action, or mobile density:
 - Add a validator, audit, or skill rule for any repeated failure before moving
   on.
 - "Generated/free assets allowed" means a polished runtime set, not permission
-  to ship rough crops. Per-crop pixel/edge/transparency audits prove crop
-  hygiene, not art quality. A clean crop of the wrong or rough art still fails
-  the screen: the binding check is the assembled screen vs the art bible /
-  fake shot (AGENTS.md definition of done), not the per-crop audits.
+  to ship rough crops. Composition/derivation audits prove crop hygiene, not art
+  quality. A clean crop of the wrong or rough art still fails the screen: the
+  binding check is the assembled screen vs the art bible / fake shot (AGENTS.md
+  definition of done) through the visual gate, not the per-asset audits.
 
 ## Report Shape
 
-Report source art, art bible, crop/runtime manifests, preview sheets, pixel
-audit, responsive layout audit, screenshots, product gates, validations run,
-and the next visual gap.
+Report source art, art bible, crop/runtime manifests, preview sheets,
+composition proof, source-derivation audit, responsive layout audit,
+screenshots, product gates, validations run, and the next visual gap.

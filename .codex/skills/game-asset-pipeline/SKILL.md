@@ -54,7 +54,7 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     buttons, icons, decor overlays, review atlases), do not re-walk the UI gate
     sequence here. Follow `.codex/skills/generated-game-ui-assets/` for the full,
     ordered UI-asset gate sequence: source-sheet intake, named crop plan, runtime
-    asset build, pixel audit, edge proof, generated-source derivation audit,
+    asset build, runtime composition proof, generated-source derivation audit,
     slice9 design-policy audit, source-family coverage audit, atlas metadata
     audit, labeled review atlas build/audit, and runtime usage audit. This skill
     owns the general asset hygiene around those gates (locations, provenance,
@@ -130,12 +130,13 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
   edge deletion; that usually cuts away legitimate soft shadows and material
   shading. Prefer safer-key regeneration, true alpha, split shadow
   sprites/layers, or dual-plate alpha extraction when the repair damages form.
-- Pixel audits must catch one- or two-pixel dark purple, dark maroon/magenta,
-  red-blue halos, and saturated green-screen spill on the outer alpha contour,
-  not only bright magenta fringe. Intentional saturated green edges need an
+- The principled cutout must resolve one- or two-pixel dark purple, dark
+  maroon/magenta, red-blue halos, and saturated green-screen spill on the outer
+  alpha contour at the source, not only bright magenta fringe; the visual gate
+  is the backstop at preview size. Intentional saturated green edges need an
   explicit `preserve_green_edges` manifest policy. Intentional purple edges
   need `preserve_purple_edges`, but that policy must not suppress source-key or
-  green-screen leak checks.
+  green-screen leak removal.
 - Slice9 crops need more than margins: record content safe area, target preview
   sizes, minimum size implications, whether the center/edges stretch or tile,
   fixed-ornament policy, and disallowed uses. Separate overlay ornament ids

@@ -8,7 +8,7 @@
 //
 // Tiers (see .codex/skills/generated-game-ui-assets/SKILL.md "Gate Tiers"):
 //   draft     every iteration, cheap   -> intake/normalize + contact sheet     (<=2 cmds)
-//   integrate when wiring into a screen -> strict validate + pixel audit + proof (~3 cmds)
+//   integrate when wiring into a screen -> strict validate + composition proof  (~2 cmds)
 //   final     only when shipping a kit  -> the full battery incl. --final-art
 //
 // --plan / --dry-run prints the command sequence for the tier and exits 0
@@ -47,8 +47,8 @@ function usage() {
 
 Tiers:
   draft      every iteration (cheap, <=2 commands): see the asset in context.
-  integrate  when wiring into the runtime screen (~3 commands): strict validate,
-             pixel audit, composition proof.
+  integrate  when wiring into the runtime screen (~2 commands): strict validate,
+             composition proof.
   final      only when shipping a reusable kit: the full final-art battery.
 
 Modes:

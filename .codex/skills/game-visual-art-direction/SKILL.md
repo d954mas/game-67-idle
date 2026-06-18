@@ -11,8 +11,8 @@ shots, or release-quality presentation.
 
 For reusable generated runtime UI kits, also use
 `.codex/skills/generated-game-ui-assets/`; it owns the end-to-end UI asset kit
-workflow from art bible through slice9, pixel audit, responsive layout audit,
-and runtime proof.
+workflow from art bible through slice9, composition proof, responsive layout
+audit, and runtime proof.
 
 ## Workflow
 
@@ -217,10 +217,17 @@ Generated UI for a game must be reusable runtime UI, not only screenshot art:
   failures: non-flat chroma backgrounds, merged components, clipped components,
   or too-small gutters. A pass here is necessary but not a beauty or slice9-art
   pass.
-- For generated UI kits, require both human preview evidence and the pixel
-  audit from `tools/assets/audit/audit_generated_ui_assets.py`; a clean-looking
-  contact sheet alone is not enough because 1-3 px clipping and chroma fringe
-  can survive visual review.
+- For generated UI kits, require both human preview evidence and the runtime
+  composition proof from `tools/assets/audit/render_ui_composition_proof.py`
+  plus the source-derivation audit from
+  `tools/assets/audit/audit_generated_source_derivation.py`; a clean-looking
+  contact sheet alone is not enough because compressed text, collapsed content
+  areas, and redrawn (non-derived) crops can survive a thumbnail review. The
+  principled cutout (`tools/assets/cutout/key_matte.py` default,
+  `tools/assets/cutout/route_cutout.py` auto-picker, `dual_plate`) prevents 1-3px
+  clipping and chroma fringe at the source, and the visual gate
+  (`node tools/product_gate/review.mjs`, `node tools/ai.mjs gate`,
+  `py -3.12 tools/devapi/ui_readability.py <shot>`) is the backstop.
 - A technical audit pass is not a beauty pass. If the runtime screenshot reads
   as two-color programmer UI, the art task remains open even if slice9/pixel
   gates pass.

@@ -125,27 +125,19 @@ the workflow, gate tiers, failure response, and report shape.
 
 - Generated icon sheets need generous gutters. If expanded crop rects catch
   neighboring shadows, reject the source or isolate the intended component.
-- Manual crop rectangles are only a starting point. Runtime icon output must
-  pass alpha padding, key-fringe, purple edge-halo, transparent-edge RGB bleed
-  audit, and fully transparent RGB-zero audit.
-- For disputed 1-2 pixel edges, generate an edge proof image with zoomed
-  top/right/bottom/left alpha-boundary strips on a checkerboard. The proof
-  should mark the same bad edge classes as the pixel audit, including purple
-  halo, source-key spill, saturated green-screen spill, and hidden bad RGB in
-  transparent edge pixels. Normal contact sheets are too weak for this class of
-  defect. Use `--asset-id` and `--side` to create small proof images for the
-  exact reported edge. Write `--json-output` and `--report` when comparing
-  fixes so the review records per-side counts by reason, not only a screenshot.
-  Add `--profile --profile-output tmp/asset-profiles/<name>.json` for slow
-  proof runs so the slowest asset side is printed and timing plus the analysis
-  engine (`numpy` fast path or portable `python` fallback) is preserved in a
-  sidecar instead of dirtying durable JSON/Markdown evidence.
-  Add `--only-problems` when a full proof sheet is too tall to review; this
-  keeps every side in JSON while omitting clean sides from the PNG/Markdown.
-  Store accepted proof image paths in `expected_outputs.edge_proofs` and JSON
-  report paths in `expected_outputs.edge_proof_reports` only when
-  `counts.total` is zero; reports with bad marks document candidates to reject
-  or keep debugging rather than accepted outputs.
+- Manual crop rectangles are only a starting point. Runtime icon output must be
+  cut through the principled cutout (`tools/assets/cutout/key_matte.py` default,
+  `tools/assets/cutout/route_cutout.py` auto-picker, `dual_plate` for
+  soft/glow/glass edges) so alpha padding, key-fringe, purple edge-halo, and
+  transparent-edge RGB are resolved at the source, then derivation-checked with
+  `audit_generated_source_derivation.py`.
+- Edge artifacts are prevented at the source by the principled cutout, so there
+  is no separate per-asset edge-color audit. For 1-2 pixel fringe, the soft/glow
+  case routes to `dual_plate` (exact alpha from light+dark plates) and the
+  opaque case to `key_matte` (known-key trimap + closed-form matte +
+  decontamination); the human visual gate
+  (`py -3.12 tools/devapi/ui_readability.py <shot>` zoom montage,
+  `node tools/product_gate/review.mjs`) is the backstop at gameplay preview size.
 - Preserve intentional purple/magic colors with explicit manifest policy; do
   not globally delete interior colors because they resemble the key background.
   `preserve_purple_edges` only suppresses intentional purple/magenta edge
@@ -159,9 +151,10 @@ the workflow, gate tiers, failure response, and report shape.
   source failure unless deliberately authored and separately masked; broad
   key/halo hue conflicts should be rare and documented.
 - Treat visible 1-2 pixel dark purple, dark maroon/magenta, or red-blue edge lines as extraction
-  failures, not acceptable polish noise. The audit should catch both bright
-  magenta fringe and very dark low-saturation halos on the outer alpha contour,
-  including near-black purple pixels such as `#26022d` when they touch transparency.
+  failures, not acceptable polish noise. The principled cutout must resolve both
+  bright magenta fringe and very dark low-saturation halos on the outer alpha
+  contour, including near-black purple pixels such as `#26022d` when they touch
+  transparency; the visual gate confirms none survived at preview size.
 - Record pivots/anchors before code uses sprites or map markers.
 
 ## Responsive UI Rules

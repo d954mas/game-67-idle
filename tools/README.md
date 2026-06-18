@@ -62,8 +62,7 @@ game project:
 - `tools/assets/intake/audit_source_sheet_intake.py`
 - `tools/assets/crop/plan_runtime_crops_from_intake.py`
 - `tools/assets/assemble/build_runtime_assets_from_crop_plan.py`
-- `tools/assets/audit/audit_generated_ui_assets.py`
-- `tools/assets/audit/render_ui_asset_edge_proof.py`
+- `tools/assets/cutout/key_matte.py`
 - `tools/assets/audit/render_ui_composition_proof.py`
 - `tools/assets/audit/audit_generated_source_derivation.py`
 
@@ -179,17 +178,12 @@ components. Use `--no-fail` only to keep rejected diagnostic candidates.
 
 `tools/assets/job/validate_art_job.mjs` validates the generated-art job contract:
 source families, generation records, reusable kinds, crop/runtime manifests,
-slice9 metadata, icon policies, listed edge-proof evidence, slice9 design
-policy evidence, runtime composition proof evidence, and generated UI
-audit evidence. Use `--strict` after slicing to prove the runtime asset
-contract; strict mode requires every crop output to appear in the runtime
-manifest with matching `id`, `kind`, and `path`. It also requires
-`expected_outputs.asset_audit` and reads JSON reports for `verdict: pass`;
-those reports must reference the same crop manifest as the art job and cover
-every crop id. If `expected_outputs.edge_proofs` lists zoomed edge proof
-images, strict mode also requires matching structured JSON reports in
-`expected_outputs.edge_proof_reports`, and accepted reports must show
-`counts.total: 0`; reports with bad marks belong in candidate/rejected evidence.
+slice9 metadata, icon policies, slice9 design policy evidence, runtime
+composition proof evidence, and generated-source derivation evidence. Use
+`--strict` after slicing to prove the runtime asset contract; strict mode
+requires every crop output to appear in the runtime manifest with matching
+`id`, `kind`, and `path`, and reads any listed JSON reports for `verdict: pass`
+referencing the same crop manifest as the art job and covering every crop id.
 Use `--final-art` only when claiming final generated or artist
 source art; it rejects procedural debug scaffolds, partial/unknown generation
 provenance, missing generated-source derivation, source-sheet intake audit,
@@ -258,8 +252,8 @@ reviewable bridge between detector output and the final runtime crop manifest.
 crop manifests, asset manifests, and contact sheets from those crop plans. It
 uses the shared chroma/alpha cleanup path, trims to alpha bounds with padding,
 scrubs fully transparent RGB to zero, maps decor plans to `decor_overlay`
-runtime metadata, and writes atlas fields so pixel audits and review-atlas
-packing can run immediately.
+runtime metadata, and writes atlas fields so the derivation audit and
+review-atlas packing can run immediately.
 `tools/assets/job/audit_runtime_ui_asset_usage.mjs` is the runtime placement gate.
 It compares a `game.runtime_ui_asset_usage` file against an asset manifest's
 `usage_policy`, then fails generated UI assets drawn below `min_size`, in the
@@ -296,38 +290,24 @@ passing JSON intake evidence in
 match the art job's expected source art or crop source. The audit merges small
 satellite fragments near a larger component so multi-part icons can pass
 without hiding truly tight full-size neighboring assets.
-`tools/assets/audit/audit_generated_ui_assets.py` is the pixel gate after slicing: it
-opens runtime PNG outputs and fails clipped icon alpha bounds or visible
-chroma-key fringe, including soft purple, very dark purple, and dark
-maroon/magenta one-pixel edge halos, including near-black purple edge pixels
-such as `#26022d`,
-before the assets reach gameplay code. It reads `green_screen.key` from the
-crop manifest and fails visible source-key spill, but it also treats saturated
-green-screen spill as a default defect even when the manifest omitted the
-source key. Intentional saturated green edges require `preserve_green_edges`.
-It rejects transparent edge pixels that still store key/purple/green/source-key
-RGB, because texture filtering can sample that hidden color back into visible
-edges. `preserve_purple_edges` only suppresses intentional purple/magenta
-checks; source-key and green-screen leaks must still fail under that policy.
-Use `--profile` on slow or disputed runs to write per-asset timing into
-JSON/Markdown and print the slowest asset; the default run stays quiet and
-verdict-compatible. When NumPy is available, the edge color scans use
-vectorized masks with the same Python fallback kept for minimal portable
-installs.
-`tools/assets/audit/render_ui_asset_edge_proof.py` renders zoomed top/right/bottom/left
-alpha-boundary strips on a checkerboard and marks detected bad edge pixels. It
-uses the same key/purple/green/source-key edge classes as the generated UI
-asset audit, including hidden bad RGB in transparent pixels near visible
-edges. Add `--json-output` and `--report` to write per-asset/per-side counts
-by reason so cleanup iterations can be compared without eyeballing every
-pixel. Use it when 1-2 pixel fringe is reported or when a normal contact sheet
-is too small to review edge quality. Use `--asset-id` and `--side` to create a
-small proof for the exact reported edge.
+`tools/assets/cutout/key_matte.py` is the default principled cutout: from a
+single flat-key source it builds a known-key trimap, solves a closed-form
+matte, and decontaminates colour so clipped alpha bounds and chroma-key fringe
+(soft purple, very dark purple, dark maroon/magenta, near-black purple edge
+pixels such as `#26022d`, source-key spill, and saturated green-screen spill)
+are resolved at the source instead of caught by a downstream per-asset audit.
+`tools/assets/cutout/route_cutout.py` reads the flat-key source and auto-picks
+the path: opaque art routes to `key_matte`, and a wide soft/semi-transparent
+zone (glow, shadow, glass, particles) routes to `dual_plate_alpha.py`, so the
+edge-artifact class is prevented before a generation is spent. The human visual
+gate (`node tools/product_gate/review.mjs`, `node tools/ai.mjs gate`,
+`py -3.12 tools/devapi/ui_readability.py <shot>`) is the backstop at preview
+size; there is no separate per-asset edge-color audit.
 `tools/assets/audit/render_ui_composition_proof.py` renders runtime composition proof
 from an asset manifest: slice9 base at target preview sizes, optional anchored
 decor/state overlays, runtime labels, and content safe-area outlines. Use it
-after slice9 assets pass pixel audits; it catches panels/buttons that are
-technically cuttable but whose `content` rectangle collapses at compact sizes or
+after slice9 assets are cut and derivation-checked; it catches panels/buttons
+that are technically cuttable but whose `content` rectangle collapses at compact sizes or
 cannot fit real runtime text. The output PNG is human review evidence, and the
 JSON/Markdown report should be recorded beside other generated UI reviews.
 Run with `--profile` when it feels slow; the report includes timing plus

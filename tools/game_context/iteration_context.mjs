@@ -370,7 +370,7 @@ function buildContext(root, options = {}) {
       "Compare current native screenshot against the accepted fake shot/target and list mismatches before visual code.",
       "Name the selected runtime harness and why it is allowed.",
       "If reference-driven, cite the durable deconstruction/digest and next native proof.",
-      "If generated UI work, prove non-empty crop/runtime manifests and pixel audit before runtime integration claims.",
+      "If generated UI work, prove non-empty crop/runtime manifests and a visual review before runtime integration claims.",
       "If visual/UI work, cite the accepted target or art request and reusable asset strategy.",
       "Name the smallest playable slice and the native screenshot/scenario that will prove it.",
       "Use passive AI profiling only for long or risky work where stall evidence would help.",
