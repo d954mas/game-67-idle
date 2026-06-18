@@ -1,12 +1,12 @@
 ---
 id: T0011
 title: Engine render-target API for portal rendering
-status: idea
+status: backlog
 epic: E001
 priority: P1
 tags: [engine, neotolis-engine, rendering, render-target, portal-rendering]
 created: 2026-06-18
-updated: 2026-06-18
+updated: 2026-06-19
 ---
 
 ## What
@@ -82,6 +82,18 @@ contract roughly equivalent to:
 
 ## Log
 
+- 2026-06-19: Re-audited the current `external/neotolis-engine` public graphics
+  surface. `nt_gfx.h` still only exposes `nt_texture_t`, `nt_pass_desc_t` with
+  `clear_color`/`clear_depth`, `nt_gfx_begin_pass(const nt_pass_desc_t *)`,
+  texture binding, and viewport/scissor calls; no render target handle,
+  attachment descriptor, or framebuffer binding is exported. The shared backend
+  boundary still only accepts `nt_gfx_backend_begin_pass(const nt_pass_desc_t *)`,
+  while the GL backend begins a pass by setting viewport to
+  `g_nt_window.fb_width/fb_height` and clearing the default framebuffer. Scoped
+  engine search found no `glBindFramebuffer`/FBO path under `engine/`, only
+  framebuffer-size/window/input/UI references. Moved this issue from raw idea to
+  backlog because the needed API, evidence, done criteria, and open design
+  questions are now explicit.
 - 2026-06-18: Rechecked current `nt_gfx` public surface for
   render-target/framebuffer binding. The API still does not export any target
   handle, pass attachment descriptor, or framebuffer bind path; existing
