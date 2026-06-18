@@ -1,0 +1,629 @@
+{
+  "schema": "game.cutout_mode_benchmark",
+  "version": 1,
+  "fixtures": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/fixtures.json",
+  "overview": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/overview.png",
+  "cases": [
+    {
+      "id": "green_plain_ring_bad",
+      "label": "Green key inside ring hole",
+      "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-v001-candidate-b-normalized.png",
+      "rect": [
+        66,
+        450,
+        235,
+        186
+      ],
+      "key": "#00ff00",
+      "notes": "Candidate B normalized component_8; intake reported 6034 exact key conflicts.",
+      "image": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/green_plain_ring_bad.png",
+      "modes": [
+        {
+          "visible_pixels": 43710,
+          "visible_key_pixels": 13474,
+          "green_spill_pixels": 14128,
+          "source_key_spill_pixels": 14455,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            235,
+            186
+          ],
+          "time_ms": 0.009,
+          "mode": "source"
+        },
+        {
+          "visible_pixels": 35732,
+          "visible_key_pixels": 6034,
+          "green_spill_pixels": 6301,
+          "source_key_spill_pixels": 6477,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            1,
+            235,
+            186
+          ],
+          "time_ms": 129.06,
+          "mode": "current"
+        },
+        {
+          "visible_pixels": 35732,
+          "visible_key_pixels": 6034,
+          "green_spill_pixels": 6301,
+          "source_key_spill_pixels": 6477,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            1,
+            235,
+            186
+          ],
+          "time_ms": 145.889,
+          "mode": "aggressive"
+        },
+        {
+          "visible_pixels": 30209,
+          "visible_key_pixels": 881,
+          "green_spill_pixels": 886,
+          "source_key_spill_pixels": 954,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            1,
+            235,
+            186
+          ],
+          "time_ms": 145.488,
+          "mode": "holes"
+        },
+        {
+          "visible_pixels": 31150,
+          "visible_key_pixels": 203,
+          "green_spill_pixels": 203,
+          "source_key_spill_pixels": 203,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            235,
+            186
+          ],
+          "time_ms": 104.073,
+          "mode": "soft matte"
+        },
+        {
+          "visible_pixels": 35959,
+          "visible_key_pixels": 333,
+          "green_spill_pixels": 3710,
+          "source_key_spill_pixels": 3769,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            235,
+            186
+          ],
+          "time_ms": 1202.126,
+          "mode": "pymatting"
+        }
+      ]
+    },
+    {
+      "id": "green_skull_scroll_bad",
+      "label": "Green key in object gaps",
+      "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-v001-candidate-b-normalized.png",
+      "rect": [
+        1143,
+        386,
+        182,
+        323
+      ],
+      "key": "#00ff00",
+      "notes": "Candidate B normalized component_5; key-color conflicts remain after background normalization.",
+      "image": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/green_skull_scroll_bad.png",
+      "modes": [
+        {
+          "visible_pixels": 58786,
+          "visible_key_pixels": 21917,
+          "green_spill_pixels": 22538,
+          "source_key_spill_pixels": 22793,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            182,
+            323
+          ],
+          "time_ms": 0.012,
+          "mode": "source"
+        },
+        {
+          "visible_pixels": 36574,
+          "visible_key_pixels": 444,
+          "green_spill_pixels": 544,
+          "source_key_spill_pixels": 581,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            181,
+            322
+          ],
+          "time_ms": 174.805,
+          "mode": "current"
+        },
+        {
+          "visible_pixels": 36574,
+          "visible_key_pixels": 444,
+          "green_spill_pixels": 544,
+          "source_key_spill_pixels": 581,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            181,
+            322
+          ],
+          "time_ms": 180.689,
+          "mode": "aggressive"
+        },
+        {
+          "visible_pixels": 36009,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 16,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            181,
+            322
+          ],
+          "time_ms": 173.813,
+          "mode": "holes"
+        },
+        {
+          "visible_pixels": 37046,
+          "visible_key_pixels": 1,
+          "green_spill_pixels": 1,
+          "source_key_spill_pixels": 1,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            182,
+            323
+          ],
+          "time_ms": 134.518,
+          "mode": "soft matte"
+        },
+        {
+          "visible_pixels": 37827,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 34,
+          "source_key_spill_pixels": 34,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            182,
+            323
+          ],
+          "time_ms": 185.261,
+          "mode": "pymatting"
+        }
+      ]
+    },
+    {
+      "id": "green_shadow_armor_bad",
+      "label": "Green background armor with highlight/shadow conflicts",
+      "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-sheet-shadow-problem-v001.png",
+      "rect": [
+        1071,
+        412,
+        324,
+        307
+      ],
+      "key": "#00ff00",
+      "notes": "Armor crop flattened onto green-screen source; tests whether cutout preserves highlights and dark material shading.",
+      "image": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/green_shadow_armor_bad.png",
+      "modes": [
+        {
+          "visible_pixels": 99468,
+          "visible_key_pixels": 26332,
+          "green_spill_pixels": 26380,
+          "source_key_spill_pixels": 26457,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            324,
+            307
+          ],
+          "time_ms": 0.055,
+          "mode": "source"
+        },
+        {
+          "visible_pixels": 73011,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            324,
+            307
+          ],
+          "time_ms": 21.531,
+          "mode": "current"
+        },
+        {
+          "visible_pixels": 73011,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            324,
+            307
+          ],
+          "time_ms": 15.231,
+          "mode": "aggressive"
+        },
+        {
+          "visible_pixels": 73011,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            324,
+            307
+          ],
+          "time_ms": 17.552,
+          "mode": "holes"
+        },
+        {
+          "visible_pixels": 73136,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            324,
+            307
+          ],
+          "time_ms": 241.735,
+          "mode": "soft matte"
+        },
+        {
+          "visible_pixels": 74233,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            324,
+            307
+          ],
+          "time_ms": 299.642,
+          "mode": "pymatting"
+        }
+      ]
+    },
+    {
+      "id": "green_sign_semishadow_bad",
+      "label": "Green background sign with soft cast shadow",
+      "source": "procedural:wooden_sign",
+      "rect": [],
+      "key": "#00ff00",
+      "notes": "Controlled sign fixture with semitransparent cast shadow flattened onto green; shows how single-background extraction handles shadow softness.",
+      "image": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/green_sign_semishadow_bad.png",
+      "modes": [
+        {
+          "visible_pixels": 168360,
+          "visible_key_pixels": 123761,
+          "green_spill_pixels": 138067,
+          "source_key_spill_pixels": 138705,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            460,
+            366
+          ],
+          "time_ms": 0.038,
+          "mode": "source"
+        },
+        {
+          "visible_pixels": 44577,
+          "visible_key_pixels": 172,
+          "green_spill_pixels": 14284,
+          "source_key_spill_pixels": 14922,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            100,
+            114,
+            373,
+            289
+          ],
+          "time_ms": 38.611,
+          "mode": "current"
+        },
+        {
+          "visible_pixels": 44577,
+          "visible_key_pixels": 172,
+          "green_spill_pixels": 14284,
+          "source_key_spill_pixels": 14922,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            100,
+            114,
+            373,
+            289
+          ],
+          "time_ms": 38.79,
+          "mode": "aggressive"
+        },
+        {
+          "visible_pixels": 44577,
+          "visible_key_pixels": 172,
+          "green_spill_pixels": 14284,
+          "source_key_spill_pixels": 14922,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            100,
+            114,
+            373,
+            289
+          ],
+          "time_ms": 36.799,
+          "mode": "holes"
+        },
+        {
+          "visible_pixels": 47243,
+          "visible_key_pixels": 2573,
+          "green_spill_pixels": 14671,
+          "source_key_spill_pixels": 14671,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            100,
+            114,
+            378,
+            294
+          ],
+          "time_ms": 493.362,
+          "mode": "soft matte"
+        },
+        {
+          "visible_pixels": 47805,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 14418,
+          "source_key_spill_pixels": 14424,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            99,
+            112,
+            378,
+            294
+          ],
+          "time_ms": 616.278,
+          "mode": "pymatting"
+        }
+      ]
+    },
+    {
+      "id": "green_floor_shadow_bad",
+      "label": "Green background real soft shadow sprite",
+      "source": "assets/runtime/mine-cards-stage-ui-family-v001/stage/mine_floor_shadow.png",
+      "rect": [],
+      "key": "#00ff00",
+      "notes": "Existing runtime shadow sprite flattened onto green; tests whether single-background extraction preserves soft alpha edges without green halo.",
+      "image": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/green_floor_shadow_bad.png",
+      "modes": [
+        {
+          "visible_pixels": 36072,
+          "visible_key_pixels": 11692,
+          "green_spill_pixels": 18551,
+          "source_key_spill_pixels": 19040,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            216,
+            167
+          ],
+          "time_ms": 0.006,
+          "mode": "source"
+        },
+        {
+          "visible_pixels": 17867,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 348,
+          "source_key_spill_pixels": 835,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            21,
+            21,
+            193,
+            152
+          ],
+          "time_ms": 97.482,
+          "mode": "current"
+        },
+        {
+          "visible_pixels": 17867,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 348,
+          "source_key_spill_pixels": 835,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            21,
+            21,
+            193,
+            152
+          ],
+          "time_ms": 96.776,
+          "mode": "aggressive"
+        },
+        {
+          "visible_pixels": 17867,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 348,
+          "source_key_spill_pixels": 835,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            21,
+            21,
+            193,
+            152
+          ],
+          "time_ms": 116.176,
+          "mode": "holes"
+        },
+        {
+          "visible_pixels": 24755,
+          "visible_key_pixels": 339,
+          "green_spill_pixels": 3875,
+          "source_key_spill_pixels": 3878,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            8,
+            8,
+            208,
+            159
+          ],
+          "time_ms": 77.514,
+          "mode": "soft matte"
+        },
+        {
+          "visible_pixels": 24755,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 3875,
+          "source_key_spill_pixels": 3878,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            8,
+            8,
+            208,
+            159
+          ],
+          "time_ms": 126.878,
+          "mode": "pymatting"
+        }
+      ]
+    },
+    {
+      "id": "green_angel_wings_glow_bad",
+      "label": "Green background angel wings with glow particles",
+      "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-angel-wings-glow-black-v001.png",
+      "rect": [],
+      "key": "#00ff00",
+      "notes": "Hard transparency case converted from black source to green-screen source: bright feathers, soft golden aura, sparkles, and semitransparent particles.",
+      "image": "gamedesign/projects/mine-cards/reviews/cutout_benchmark/green_angel_wings_glow_bad.png",
+      "modes": [
+        {
+          "visible_pixels": 1572516,
+          "visible_key_pixels": 1108366,
+          "green_spill_pixels": 1108366,
+          "source_key_spill_pixels": 1108366,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            0,
+            0,
+            1254,
+            1254
+          ],
+          "time_ms": 1.407,
+          "mode": "source"
+        },
+        {
+          "visible_pixels": 464150,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            58,
+            186,
+            1204,
+            1036
+          ],
+          "time_ms": 1405.492,
+          "mode": "current"
+        },
+        {
+          "visible_pixels": 464150,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            58,
+            186,
+            1204,
+            1036
+          ],
+          "time_ms": 1412.324,
+          "mode": "aggressive"
+        },
+        {
+          "visible_pixels": 464150,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            58,
+            186,
+            1204,
+            1036
+          ],
+          "time_ms": 1336.333,
+          "mode": "holes"
+        },
+        {
+          "visible_pixels": 464150,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 0,
+          "source_key_spill_pixels": 0,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            58,
+            186,
+            1204,
+            1036
+          ],
+          "time_ms": 4758.143,
+          "mode": "soft matte"
+        },
+        {
+          "visible_pixels": 494126,
+          "visible_key_pixels": 0,
+          "green_spill_pixels": 2425,
+          "source_key_spill_pixels": 2646,
+          "transparent_nonzero_rgb": 0,
+          "alpha_bbox": [
+            60,
+            181,
+            1209,
+            1040
+          ],
+          "time_ms": 5656.173,
+          "mode": "pymatting"
+        }
+      ]
+    }
+  ]
+}

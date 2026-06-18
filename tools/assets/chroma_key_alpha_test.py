@@ -25,6 +25,20 @@ class ChromaKeyAlphaTests(unittest.TestCase):
         self.assertEqual(alpha, 0)
         self.assertEqual((red, green, blue), (0, 0, 0))
 
+    def test_key_to_alpha_can_remove_interior_key_holes(self) -> None:
+        image = Image.new("RGBA", (32, 32), (0, 255, 0, 255))
+        draw = ImageDraw.Draw(image)
+        draw.ellipse((6, 6, 25, 25), fill=(150, 90, 50, 255))
+        draw.ellipse((13, 13, 18, 18), fill=(0, 255, 0, 255))
+
+        conservative = key_to_alpha(image, key=(0, 255, 0))
+        repaired = key_to_alpha(image, key=(0, 255, 0), remove_key_holes=True)
+
+        self.assertEqual(conservative.getpixel((15, 15))[3], 255)
+        red, green, blue, alpha = repaired.getpixel((15, 15))
+        self.assertEqual(alpha, 0)
+        self.assertEqual((red, green, blue), (0, 0, 0))
+
     def test_aggressive_decontamination_repairs_visible_purple_specks(self) -> None:
         image = Image.new("RGBA", (24, 24), (255, 0, 255, 255))
         draw = ImageDraw.Draw(image)

@@ -567,6 +567,7 @@ def key_to_alpha_numpy_large(
     exact_tolerance: int,
     edge_tolerance: int,
     aggressive_visible_decontaminate: bool,
+    remove_key_holes: bool = False,
 ) -> Image.Image | None:
     if np is None:
         return None
@@ -582,12 +583,13 @@ def key_to_alpha_numpy_large(
     key_array = np.array(key, dtype=np.int16)
     exact = np.max(np.abs(rgb - key_array), axis=2) <= exact_tolerance
     connected = border_connected_key_mask(exact)
-    if not np.any(connected):
+    key_seed = exact if remove_key_holes else connected
+    if not np.any(key_seed):
         return None
 
-    edge_mask = dilate_bool_mask(connected, 2)
+    edge_mask = dilate_bool_mask(key_seed, 2)
     edge_exact = edge_mask & (np.max(np.abs(rgb - key_array), axis=2) <= edge_tolerance)
-    clear = connected | edge_exact
+    clear = key_seed | edge_exact
     array[..., 3][clear] = 0
 
     edge_visible = edge_mask & (~clear) & (array[..., 3] > 12)
@@ -776,6 +778,7 @@ def key_to_alpha(
     exact_tolerance: int = 10,
     edge_tolerance: int = 24,
     aggressive_visible_decontaminate: bool = False,
+    remove_key_holes: bool = False,
 ) -> Image.Image:
     fast = key_to_alpha_numpy_large(
         image,
@@ -783,6 +786,7 @@ def key_to_alpha(
         exact_tolerance=exact_tolerance,
         edge_tolerance=edge_tolerance,
         aggressive_visible_decontaminate=aggressive_visible_decontaminate,
+        remove_key_holes=remove_key_holes,
     )
     if fast is not None:
         return fast
@@ -802,18 +806,25 @@ def key_to_alpha(
             connected_pixels[x, y] = 255
             queue.append((x, y))
 
-    for x in range(width):
-        push_if_key(x, 0)
-        push_if_key(x, height - 1)
-    for y in range(height):
-        push_if_key(0, y)
-        push_if_key(width - 1, y)
+    if remove_key_holes:
+        for y in range(height):
+            for x in range(width):
+                red, green, blue, _alpha = pixels[x, y]
+                if is_exact_key_like(red, green, blue, key=key, tolerance=exact_tolerance):
+                    connected_pixels[x, y] = 255
+    else:
+        for x in range(width):
+            push_if_key(x, 0)
+            push_if_key(x, height - 1)
+        for y in range(height):
+            push_if_key(0, y)
+            push_if_key(width - 1, y)
 
-    while queue:
-        x, y = queue.popleft()
-        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-            if 0 <= nx < width and 0 <= ny < height:
-                push_if_key(nx, ny)
+        while queue:
+            x, y = queue.popleft()
+            for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                if 0 <= nx < width and 0 <= ny < height:
+                    push_if_key(nx, ny)
 
     edge_mask = connected.filter(ImageFilter.MaxFilter(5))
     edge_pixels = edge_mask.load()
