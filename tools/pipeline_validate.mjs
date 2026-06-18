@@ -3,7 +3,7 @@
 //
 //   node tools/pipeline_validate.mjs [--quick] [--full] [--dry-run]
 
-import { existsSync, rmSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -155,6 +155,29 @@ run("skill eval", ["tools/skills_eval.mjs"]);
 run("skills sync check", ["tools/skills_sync.mjs", "--check"]);
 run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
+
+// Guard: catch a STATUS<->runtime contradiction. A "clean seed" repo must not
+// hide a live game in src/clean_seed_main.c (the exact blocker that let a 1676-
+// line Mine Cards game build while STATUS said "no active game"). Fast; runs always.
+console.log("\n== status/runtime contradiction guard");
+{
+  const statusPath = join(root, "tasks", "STATUS.md");
+  const seedPath = join(root, "src", "clean_seed_main.c");
+  const SEED_MAX_LINES = 600; // the clean seed is ~362 lines; a real game is 1000+
+  if (existsSync(statusPath) && existsSync(seedPath)) {
+    const status = readFileSync(statusPath, "utf8");
+    const seedLines = readFileSync(seedPath, "utf8").split(/\r?\n/).length;
+    if (/no active game concept/i.test(status) && seedLines > SEED_MAX_LINES) {
+      console.error(
+        `error: STATUS.md says "no active game concept" but src/clean_seed_main.c is ${seedLines} lines — that is a game, not a clean seed. Reset the runtime (node tools/bootstrap/reset_to_seed.mjs) or correct STATUS.md.`
+      );
+      process.exit(1);
+    }
+    console.log("ok: STATUS and runtime are consistent");
+  } else {
+    console.log("ok: no STATUS/seed to compare");
+  }
+}
 run("taskboard tests", ["--test", "tools/taskboard/test.mjs"]);
 run("ai profile tests", ["--test", "tools/ai_profile/test.mjs"]);
 if (existsSync(join(root, "tools", "game_context", "test.mjs"))) {

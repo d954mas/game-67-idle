@@ -89,6 +89,7 @@ const COPY = [
   "tools/README.md",
   "tools/taskboard",
   "tools/bootstrap/export_base.mjs",
+  "tools/bootstrap/reset_to_seed.mjs",
   "gamedesign/knowledge",
   "AI_PIPELINE.md",
   "AI_PIPELINE_HISTORY.md",
