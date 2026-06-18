@@ -6,7 +6,6 @@ import unittest
 import numpy as np
 from PIL import Image
 
-import tools.assets.cutout.dual_plate_pair_gate as gate
 from tools.assets.cutout.dual_plate_pair_gate import evaluate
 
 
@@ -20,8 +19,6 @@ def _plate(bg: tuple[int, int, int], subject_cols: tuple[int, int], fg=(120, 80,
 
 class DualPlatePairGateTests(unittest.TestCase):
     def test_consistent_pair_passes(self) -> None:
-        if gate.np is None:
-            self.skipTest("numpy required")
         # Same opaque subject in the same place on white and black -> consistent.
         light = _plate((255, 255, 255), (5, 15))
         dark = _plate((0, 0, 0), (5, 15))
@@ -30,8 +27,6 @@ class DualPlatePairGateTests(unittest.TestCase):
         self.assertLess(report["inconsistent_fraction"], 0.05)
 
     def test_redrawn_pair_regenerates(self) -> None:
-        if gate.np is None:
-            self.skipTest("numpy required")
         # Subject in a different place on each plate (generator redrew it) -> ghost.
         light = _plate((255, 255, 255), (2, 8))
         dark = _plate((0, 0, 0), (12, 18))
@@ -39,8 +34,6 @@ class DualPlatePairGateTests(unittest.TestCase):
         self.assertEqual(report["verdict"], "regenerate")
 
     def test_resizes_mismatched_dark_plate(self) -> None:
-        if gate.np is None:
-            self.skipTest("numpy required")
         light = _plate((255, 255, 255), (5, 15))
         dark = _plate((0, 0, 0), (5, 15)).resize((24, 24))
         report = evaluate(light, dark)

@@ -9,7 +9,6 @@ from pathlib import Path
 
 from PIL import Image
 
-import tools.assets.cutout.dual_plate_alpha as dual_plate
 from tools.assets.cutout.dual_plate_alpha import build_report, cleanup_alpha_blobs, extract_dual_plate_alpha, report_image_stats
 
 
@@ -61,35 +60,6 @@ class DualPlateAlphaTests(unittest.TestCase):
 
         self.assertEqual(result.getpixel((0, 0)), (0, 0, 0, 0))
 
-    def test_numpy_fast_path_matches_python_fallback(self) -> None:
-        if dual_plate.np is None:
-            self.skipTest("numpy fast path unavailable")
-        light = Image.new("RGBA", (3, 2), (255, 255, 255, 255))
-        dark = Image.new("RGBA", (3, 2), (0, 0, 0, 255))
-        foregrounds = [
-            ((120, 80, 40), 64),
-            ((20, 180, 90), 128),
-            ((230, 40, 160), 220),
-            ((12, 140, 220), 255),
-            ((90, 90, 90), 16),
-            ((0, 0, 0), 0),
-        ]
-        for index, (foreground, alpha) in enumerate(foregrounds):
-            x = index % 3
-            y = index // 3
-            light.putpixel((x, y), composite_pixel(foreground, alpha, (255, 255, 255)))
-            dark.putpixel((x, y), composite_pixel(foreground, alpha, (0, 0, 0)))
-
-        numpy_result = extract_dual_plate_alpha(light, dark, alpha_combine="avg", recovery_source="average", alpha_cutoff=8, alpha_hardening=18)
-        original_np = dual_plate.np
-        try:
-            dual_plate.np = None
-            python_result = extract_dual_plate_alpha(light, dark, alpha_combine="avg", recovery_source="average", alpha_cutoff=8, alpha_hardening=18)
-        finally:
-            dual_plate.np = original_np
-
-        self.assertEqual(list(dual_plate.flattened_pixel_data(numpy_result)), list(dual_plate.flattened_pixel_data(python_result)))
-
     def test_rejects_dimension_mismatch(self) -> None:
         with self.assertRaisesRegex(ValueError, "plate dimensions differ"):
             extract_dual_plate_alpha(Image.new("RGBA", (2, 2)), Image.new("RGBA", (3, 2)))
@@ -119,25 +89,6 @@ class DualPlateAlphaTests(unittest.TestCase):
         self.assertEqual(report["verdict"], "fail")
         self.assertTrue(any("no visible alpha pixels" in problem for problem in report["problems"]))
         self.assertTrue(any("transparent pixels retain non-zero RGB" in problem for problem in report["problems"]))
-
-    def test_numpy_report_stats_match_python_fallback(self) -> None:
-        if dual_plate.np is None:
-            self.skipTest("numpy stats path unavailable")
-        image = Image.new("RGBA", (4, 3), (0, 0, 0, 0))
-        image.putpixel((0, 0), (10, 20, 30, 0))
-        image.putpixel((1, 1), (120, 80, 40, 64))
-        image.putpixel((2, 1), (20, 180, 90, 128))
-        image.putpixel((3, 2), (230, 40, 160, 255))
-
-        numpy_stats = report_image_stats(image)
-        original_np = dual_plate.np
-        try:
-            dual_plate.np = None
-            python_stats = report_image_stats(image)
-        finally:
-            dual_plate.np = original_np
-
-        self.assertEqual(numpy_stats, python_stats)
 
     def test_cli_writes_png_and_json_report(self) -> None:
         foreground = (100, 70, 40)
@@ -177,7 +128,7 @@ class DualPlateAlphaTests(unittest.TestCase):
             report = json.loads(json_path.read_text(encoding="utf-8"))
             self.assertEqual(report["schema"], "game.dual_plate_alpha_report")
             self.assertEqual(report["verdict"], "pass")
-            self.assertIn(report["analysis_engine"], {"numpy", "python"})
+            self.assertEqual(report["analysis_engine"], "numpy")
             self.assertEqual(report["problems"], [])
             self.assertEqual(report["visible_pixels"], 16)
             self.assertEqual(report["transparent_nonzero_rgb_pixels"], 0)

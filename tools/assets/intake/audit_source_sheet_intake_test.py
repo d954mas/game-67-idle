@@ -234,8 +234,6 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
 
     def test_numpy_components_use_compact_pixel_runs_for_metrics(self):
         module = load_intake_module()
-        if module.np is None:
-            self.skipTest("numpy is unavailable")
         image = Image.new("RGBA", (12, 8), (255, 0, 255, 255))
         draw = ImageDraw.Draw(image)
         draw.rectangle((2, 2, 5, 4), fill=(80, 60, 40, 255))
@@ -463,7 +461,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("profile: slowest stage", result.stdout)
             data = json.loads(report.read_text(encoding="utf-8"))
-            self.assertIn(data["analysis_engine"], {"numpy", "python"})
+            self.assertEqual(data["analysis_engine"], "numpy")
             self.assertIn("timing_ms", data)
             self.assertIn("find_components", data["timing_ms"])
             self.assertIn("candidate_key_scores", data["timing_ms"])

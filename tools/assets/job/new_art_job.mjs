@@ -84,8 +84,6 @@ const artRequestPath = `${projectDir}/art_requests/${args.id}.json`;
 const cropManifestPath = `${projectDir}/data/${args.id}-crop_manifest.json`;
 const runtimeManifestPath = `${projectDir}/data/${args.id}-asset_manifest.json`;
 const runtimeDir = `assets/runtime/${args.id}`;
-const auditMarkdownPath = `${projectDir}/reviews/${args.id}-generated_ui_asset_audit.md`;
-const auditJsonPath = `${projectDir}/reviews/${args.id}-generated_ui_asset_audit.json`;
 const slice9DesignAuditMarkdownPath = `${projectDir}/reviews/${args.id}-slice9_design_policy_audit.md`;
 const slice9DesignAuditJsonPath = `${projectDir}/reviews/${args.id}-slice9_design_policy_audit.json`;
 const sourceFamilyCoverageMarkdownPath = `${projectDir}/reviews/${args.id}-source_family_coverage_audit.md`;
@@ -203,7 +201,6 @@ const artJob = {
     crop_manifest: cropManifestPath,
     runtime_manifest: runtimeManifestPath,
     runtime_dir: runtimeDir,
-    asset_audit: [auditMarkdownPath, auditJsonPath],
     slice9_design_audit: [slice9DesignAuditMarkdownPath, slice9DesignAuditJsonPath],
     source_family_coverage_audit: [sourceFamilyCoverageMarkdownPath, sourceFamilyCoverageJsonPath],
     native_evidence: []
@@ -231,7 +228,6 @@ const artJob = {
     validate_draft: `node tools/assets/job/validate_art_job.mjs --job ${artRequestPath}`,
     validate_strict: `node tools/assets/job/validate_art_job.mjs --job ${artRequestPath} --strict`,
     validate_final_art: `node tools/assets/job/validate_art_job.mjs --job ${artRequestPath} --final-art`,
-    asset_audit: `py -3.12 tools/assets/audit/audit_generated_ui_assets.py --crop-manifest ${cropManifestPath} --json-output ${auditJsonPath} --report ${auditMarkdownPath}`,
     slice9_design_audit: `node tools/assets/job/audit_slice9_design_policy.mjs --crop-manifest ${cropManifestPath} --runtime-manifest ${runtimeManifestPath} --json-output ${slice9DesignAuditJsonPath} --report ${slice9DesignAuditMarkdownPath}`,
     source_family_coverage_audit: `node tools/assets/job/audit_source_family_coverage.mjs --job ${artRequestPath} --json-output ${sourceFamilyCoverageJsonPath} --report ${sourceFamilyCoverageMarkdownPath}`,
     plan_missing_source_family_prompts: `node tools/assets/job/plan_missing_source_family_prompts.mjs --job ${artRequestPath} --coverage-audit ${sourceFamilyCoverageJsonPath} --output-dir ${projectDir}/art/prompts --key-color "#00ff00" --force`,
@@ -260,13 +256,11 @@ const assetManifest = {
   runtime_dir: runtimeDir,
   commands: {
     slice_assets: "",
-    asset_audit: `py -3.12 tools/assets/audit/audit_generated_ui_assets.py --crop-manifest ${cropManifestPath} --json-output ${auditJsonPath} --report ${auditMarkdownPath}`,
     slice9_design_audit: `node tools/assets/job/audit_slice9_design_policy.mjs --crop-manifest ${cropManifestPath} --runtime-manifest ${runtimeManifestPath} --json-output ${slice9DesignAuditJsonPath} --report ${slice9DesignAuditMarkdownPath}`,
     build_pack: "",
     native_evidence: ""
   },
-  assets: [],
-  asset_audit: [auditMarkdownPath, auditJsonPath]
+  assets: []
 };
 
 writeJson(artRequestPath, artJob, args.dryRun);

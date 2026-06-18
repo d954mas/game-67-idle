@@ -16,15 +16,6 @@ if str(SCRIPT_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPT_ROOT))
 
 from tools.assets.atomic_io import save_image_atomic, write_json_atomic
-from tools.assets.chroma_key_alpha import (
-    bleed_transparent_rgb,
-    decontaminate_source_key_spill_image,
-    is_cyan_key,
-    key_to_alpha,
-    remove_green_screen_spill,
-    repair_transparent_edge_rgb,
-    zero_fully_transparent_rgb,
-)
 from tools.assets.cutout.key_matte import key_matte_cutout
 
 
@@ -83,7 +74,6 @@ def alpha_bbox(image: Image.Image, threshold: int = 12) -> tuple[int, int, int, 
 def crop_trimmed(
     source: Image.Image,
     crop: dict[str, Any],
-    keyed_sources: dict[tuple[int, int, int], Image.Image],
 ) -> tuple[Image.Image, list[int], list[int]]:
     rect = crop.get("rect")
     if not isinstance(rect, list) or len(rect) != 4:
@@ -93,18 +83,11 @@ def crop_trimmed(
         raise SystemExit(f"{crop.get('id', 'crop')} rect must have positive size")
     chroma = crop.get("chroma_key") if isinstance(crop.get("chroma_key"), dict) else {}
     key = parse_hex_color(chroma.get("key"))
-    method = str(chroma.get("method", "chroma"))
-    if method == "key_matte":
-        # Opt-in principled matte (trimap -> closed-form -> ML decontamination).
-        # Runs PER CROP, not on the whole sheet, because the closed-form solve is
-        # global; for opaque art + flat-key holes it replaces the despill heuristics.
-        rgba = key_matte_cutout(source.crop((x, y, x + width, y + height)), key)
-    else:
-        keyed_source = keyed_sources.get(key)
-        if keyed_source is None:
-            keyed_source = key_to_alpha(source, key=key)
-            keyed_sources[key] = keyed_source
-        rgba = keyed_source.crop((x, y, x + width, y + height))
+    # Principled matte: known-key trimap -> closed-form -> ML foreground
+    # decontamination -> Vlahos despill, run PER CROP (the closed-form solve is
+    # global). It finalizes the crop (despill + bleed + repair + zero) inside the
+    # matte, so there is no post-crop hygiene to re-run here.
+    rgba = key_matte_cutout(source.crop((x, y, x + width, y + height)), key)
     bbox = alpha_bbox(rgba)
     if bbox is None:
         raise SystemExit(f"{crop.get('id', 'crop')} produced empty alpha after keying")
@@ -116,16 +99,6 @@ def crop_trimmed(
     trim_right = min(rgba.width, right + padding)
     trim_bottom = min(rgba.height, bottom + padding)
     out = rgba.crop((trim_left, trim_top, trim_right, trim_bottom))
-    if method != "key_matte":
-        # key_matte already finalized the crop (despill + bleed + repair + zero)
-        # inside the matte; re-running the hygiene here is pure redundant work.
-        # Only the legacy chroma path needs this post-crop cleanup.
-        if is_cyan_key(key):
-            decontaminate_source_key_spill_image(out, key=key, require_transparent_touch=False)
-        remove_green_screen_spill(out, passes=10, radius=4)
-        bleed_transparent_rgb(out, key=key)
-        repair_transparent_edge_rgb(out, key=key)
-        zero_fully_transparent_rgb(out)
     return out, [trim_left, trim_top, trim_right - trim_left, trim_bottom - trim_top], [x, y, width, height]
 
 
@@ -251,14 +224,13 @@ def build(args: argparse.Namespace) -> None:
     if not isinstance(crops, list) or not crops:
         raise SystemExit("crop plan must contain non-empty crops")
     source = Image.open(source_path).convert("RGBA")
-    keyed_sources: dict[tuple[int, int, int], Image.Image] = {}
     outputs: list[tuple[dict[str, Any], Image.Image]] = []
     runtime_assets: list[dict[str, Any]] = []
     manifest_crops: list[dict[str, Any]] = []
     for crop in crops:
         if not isinstance(crop, dict) or not isinstance(crop.get("id"), str) or not isinstance(crop.get("output"), str):
             raise SystemExit("each crop plan entry needs id and output")
-        image, trim_rect, source_rect = crop_trimmed(source, crop, keyed_sources)
+        image, trim_rect, source_rect = crop_trimmed(source, crop)
         output_path = project_path(crop["output"])
         output_path.parent.mkdir(parents=True, exist_ok=True)
         save_image_atomic(image, output_path)

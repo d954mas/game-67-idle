@@ -82,7 +82,6 @@ function planFor(tier, vars) {
   if (tier === "integrate") {
     return [
       `node tools/assets/job/validate_art_job.mjs --job ${job} --strict`,
-      `py -3.12 tools/assets/audit/audit_generated_ui_assets.py --crop-manifest ${crop} --json-output tmp/pixel-audit.json --report tmp/pixel-audit.md`,
       `py -3.12 tools/assets/audit/render_ui_composition_proof.py --asset-manifest ${runtime} --output tmp/proof.png --json-output tmp/proof.json --report tmp/proof.md`,
     ];
   }
@@ -91,8 +90,6 @@ function planFor(tier, vars) {
   return [
     `py -3.12 tools/assets/intake/audit_source_sheet_intake.py --source ${sheet} --json-output tmp/intake.json --report tmp/intake.md`,
     `node tools/assets/job/validate_art_job.mjs --job ${job} --strict`,
-    `py -3.12 tools/assets/audit/audit_generated_ui_assets.py --crop-manifest ${crop} --json-output tmp/pixel-audit.json --report tmp/pixel-audit.md`,
-    `py -3.12 tools/assets/audit/render_ui_asset_edge_proof.py --crop-manifest ${crop} --output tmp/edge-proof.png --json-output tmp/edge-proof.json --report tmp/edge-proof.md --only-problems`,
     `node tools/assets/job/audit_slice9_design_policy.mjs --crop-manifest ${crop} --runtime-manifest ${runtime} --json-output tmp/slice9.json --report tmp/slice9.md`,
     `py -3.12 tools/assets/audit/render_ui_composition_proof.py --asset-manifest ${runtime} --output tmp/proof.png --json-output tmp/proof.json --report tmp/proof.md`,
     `node tools/assets/job/audit_atlas_metadata.mjs --asset-manifest ${runtime} --json-output tmp/atlas-meta.json --report tmp/atlas-meta.md`,

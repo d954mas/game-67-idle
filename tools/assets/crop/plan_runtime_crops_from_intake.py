@@ -143,14 +143,10 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "rect": crop_rect,
             "output": f"{args.output_dir.rstrip('/')}/{output_name}",
             "trim": {
-                "mode": "alpha_bounds",
                 "padding": args.trim_padding,
-                "component_isolation": "source_component_bbox",
             },
             "chroma_key": {
-                "mode": "border_connected",
                 "key": intake.get("key_color", args.key_color),
-                "tolerance": intake.get("key_tolerance", args.key_tolerance),
             },
             "atlas": {
                 "pack_group": args.pack_group,
@@ -165,7 +161,6 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             crop["preview_sizes"] = [[32, 32], [48, 48]]
         else:
             crop["semantic_role"] = args.semantic_role_prefix + asset_id
-            crop["anchor_policy"] = args.anchor_policy
         crops.append(crop)
     return {
         "schema": "game.runtime_crop_plan",
@@ -226,9 +221,7 @@ def main() -> None:
     parser.add_argument("--pack-group", default="ui_common")
     parser.add_argument("--semantic-role-prefix", default="")
     parser.add_argument("--size-class", default="96px_source")
-    parser.add_argument("--anchor-policy", default="center pivot unless runtime layout overrides it")
     parser.add_argument("--key-color", default="#00ff00")
-    parser.add_argument("--key-tolerance", type=int, default=8)
     parser.add_argument("--extrude", type=int, default=2)
     parser.add_argument("--shape-padding", type=int, default=2)
     args = parser.parse_args()

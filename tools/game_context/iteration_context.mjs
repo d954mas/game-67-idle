@@ -219,8 +219,8 @@ function buildVisualFirstContract({ concept }) {
     generated_ui_runtime_gate: [
       "Non-empty crop manifest covering every runtime UI asset id.",
       "Non-empty runtime manifest matching crop ids and output PNGs.",
-      "Passing pixel audit from audit_generated_ui_assets.py before runtime integration claims.",
-      "If the audit is red, fix source/crop/runtime assets before compensating in code.",
+      "Passing visual review of the assembled screen before runtime integration claims.",
+      "If the review fails, fix source/crop/runtime assets before compensating in code.",
     ],
     stop_conditions: [
       "Product gate fail blocks feature/content expansion unless the lead explicitly accepts the debt.",

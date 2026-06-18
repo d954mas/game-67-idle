@@ -2,9 +2,9 @@
 """Principled single-background cutout: known-key trimap -> closed-form alpha
 matte -> ML foreground (edge-colour) decontamination.
 
-This is path 1 done right. Instead of the hand-tuned RGB despill/halo heuristics
-in ``chroma_key_alpha.key_to_alpha`` (which conflate "is this the key hue" with
-"is this background" and destroy any subject that uses the key hue), it:
+This is path 1 done right. Instead of hand-tuned RGB despill/halo heuristics
+(which conflate "is this the key hue" with "is this background" and destroy any
+subject that uses the key hue), it:
 
 1. builds a trimap from the KNOWN key colour distance
    (sure-bg = flat exact key anywhere, incl. interior holes;
@@ -17,35 +17,26 @@ fractional alpha (soft shadow, glow, glass, smoke) is mathematically
 unrecoverable from one background -- route those to dual-plate
 (``dual_plate_alpha.py``).
 
-Falls back to the deterministic ``key_to_alpha`` soft path when numpy/pymatting
-are unavailable, so the module stays dependency-light and offline-safe.
+Requires numpy + pymatting (hard pipeline deps); there is no heuristic fallback.
+A crop with no soft edge band (opaque art / flat-key holes) skips the closed-form
+solve entirely, so the heavy path runs only when there is fractional alpha to solve.
 """
 from __future__ import annotations
 
 from time import perf_counter
 
+import numpy as np
 from PIL import Image
-
-try:
-    import numpy as np
-except ImportError:  # pragma: no cover - exercised on minimal installs.
-    np = None
 
 from tools.assets.chroma_key_alpha import (
     bleed_transparent_rgb,
     decontaminate_source_key_spill_image,
-    key_to_alpha,
     repair_transparent_edge_rgb,
     source_key_spill_mask,
     zero_fully_transparent_rgb,
 )
 
 RGB = tuple[int, int, int]
-
-
-def _heuristic_fallback(image: Image.Image, key: RGB) -> Image.Image:
-    """Deterministic, dependency-free fallback (no pymatting/numpy)."""
-    return key_to_alpha(image, key=key, aggressive_visible_decontaminate=True, remove_key_holes=True)
 
 
 def _limit_despill(rgb_float: "np.ndarray", key: RGB) -> "np.ndarray":
@@ -99,12 +90,7 @@ def key_matte_cutout(
             timings[name] = round((perf_counter() - start) * 1000.0, 2)
         return perf_counter()
 
-    if np is None:
-        return _heuristic_fallback(image, key)
-    try:
-        from pymatting import estimate_alpha_cf, estimate_foreground_ml
-    except Exception:
-        return _heuristic_fallback(image, key)
+    from pymatting import estimate_alpha_cf, estimate_foreground_ml
 
     step = perf_counter()
     rgba = image.convert("RGBA")
@@ -123,13 +109,26 @@ def key_matte_cutout(
     trimap[distance <= exact_tolerance] = 0.0
     trimap[distance >= foreground_tolerance] = 1.0
     step = _mark("prep_trimap", step)
-    try:
-        alpha = np.clip(estimate_alpha_cf(rgb, trimap), 0.0, 1.0)
+    if np.any(trimap == 0.5):
+        # Solve the unknown edge band with the closed-form matte + ML foreground.
+        try:
+            alpha = np.clip(estimate_alpha_cf(rgb, trimap), 0.0, 1.0)
+            foreground = np.clip(estimate_foreground_ml(rgb, alpha), 0.0, 1.0)
+        except Exception:
+            # Solver could not handle this trimap: degrade to a hard binary alpha
+            # (sure-fg + unknown -> opaque), never a heuristic keyer.
+            alpha = np.where(trimap >= 0.5, 1.0, 0.0)
+            foreground = rgb
         step = _mark("alpha_closed_form", step)
-        foreground = np.clip(estimate_foreground_ml(rgb, alpha), 0.0, 1.0)
         step = _mark("foreground_ml", step)
-    except Exception:
-        return _heuristic_fallback(image, key)
+    else:
+        # No unknown band: opaque art / flat-key holes only. The global solve and
+        # ML foreground would be a no-op, so skip both heavy steps -- the alpha IS
+        # the trimap and every visible pixel is already its own foreground.
+        alpha = trimap
+        foreground = rgb
+        step = _mark("alpha_closed_form", step)
+        step = _mark("foreground_ml", step)
 
     # estimate_foreground_ml smooths colour, which blurs crisp interior detail
     # (text, wood grain, outlines). The estimate is only NEEDED where alpha is
@@ -177,8 +176,6 @@ def key_matte_cutout(
 
 
 def _has_key_spill(image: Image.Image, key: RGB) -> bool:
-    if np is None:
-        return True
     array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
     visible = array[..., 3] > 12
     if not visible.any():

@@ -39,6 +39,7 @@ tooling in `tools/assets/`, grouped by stage. Game-specific tools live in
 | 2 | Intake / normalize | `tools/assets/intake/` | `normalize_source_sheet_chroma.py` → `audit_source_sheet_intake.py` |
 | 3 | Crop plan | `tools/assets/crop/` | `plan_runtime_crops_from_intake.py` |
 | 4 | Cut + assemble runtime assets | `tools/assets/assemble/` + `tools/assets/cutout/` | `build_runtime_assets_from_crop_plan.py`; cutout path 1 `cutout/key_matte.py`, path 2 `cutout/dual_plate_alpha.py` (+ `dual_plate_pair_gate.py`); shared `chroma_key_alpha.py` |
+| — | Route cutout path | `tools/assets/cutout/` | `route_cutout.py` — `soft_score` from the flat-key source auto-picks path 1 vs path 2; `--auto-dual` launches `gen_dual_plate.sh` |
 | 5 | Atlas / pack | `tools/assets/pack/` | `build_ui_atlas_pack.py` → `audit_ui_atlas_pack.py` |
 | 6 | Audits / proofs | `tools/assets/audit/` + `tools/assets/job/` | `audit_generated_ui_assets.py`, `render_ui_{asset_edge,composition}_proof.py`; node `audit_*.mjs` |
 | — | Orchestrator (runs 2→6) | `tools/assets/job/` | `node run_ui_asset_tier.mjs` |
@@ -50,6 +51,10 @@ known-key trimap + closed-form matte + colour decontamination; for opaque art an
 flat-key holes) and path 2 `dual_plate` (same subject on white + black plates →
 exact alpha from the difference; for glow / shadow / glass / particles), with
 `dual_plate_pair_gate` rejecting a redrawn/misaligned plate pair before extraction.
+`route_cutout.py` decides which path automatically from the single flat-key
+source — a wide soft/semi-transparent zone (`soft_score >= 0.11` or a deep
+transition) routes to `dual_plate`, opaque art to `key_matte` — so the choice is
+made before a generation is spent.
 
 ## Flow: idea to shipped
 

@@ -57,12 +57,12 @@ game project:
 - `tools/assets/job/audit_source_family_coverage.mjs`
 - `tools/assets/chroma_key_alpha.py`
 - `tools/assets/cutout/dual_plate_alpha.py`
+- `tools/assets/cutout/route_cutout.py`
 - `tools/assets/intake/normalize_source_sheet_chroma.py`
 - `tools/assets/intake/audit_source_sheet_intake.py`
 - `tools/assets/crop/plan_runtime_crops_from_intake.py`
 - `tools/assets/assemble/build_runtime_assets_from_crop_plan.py`
 - `tools/assets/audit/audit_generated_ui_assets.py`
-- `tools/assets/audit/audit_runtime_ui_edges.py`
 - `tools/assets/audit/render_ui_asset_edge_proof.py`
 - `tools/assets/audit/render_ui_composition_proof.py`
 - `tools/assets/audit/audit_generated_source_derivation.py`
@@ -314,16 +314,6 @@ JSON/Markdown and print the slowest asset; the default run stays quiet and
 verdict-compatible. When NumPy is available, the edge color scans use
 vectorized masks with the same Python fallback kept for minimal portable
 installs.
-`tools/assets/audit/audit_runtime_ui_edges.py` is the source-to-runtime fringe gate
-for visible UI assets and screenshot crops. Use it on source PNGs before
-packing and on runtime screenshot crops when a visual review reports colored
-edges, hidden chroma, or filtering artifacts around buttons, panels, icons, or
-labels. It reports visible pixel counts, bad-pixel counts, percentage,
-sample coordinates, and pass/fail verdicts with `--max-pixels` and `--max-pct`
-thresholds. Start strict for generated UI (`--max-pixels 0`) and relax only
-when the art direction intentionally uses that edge family. Use `--crop
-x1,y1,x2,y2` for native screenshot evidence and `--family key --key-color
-r,g,b` for non-purple source keys.
 `tools/assets/audit/render_ui_asset_edge_proof.py` renders zoomed top/right/bottom/left
 alpha-boundary strips on a checkerboard and marks detected bad edge pixels. It
 uses the same key/purple/green/source-key edge classes as the generated UI

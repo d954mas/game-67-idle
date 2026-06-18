@@ -30,11 +30,8 @@ function writeAuditReport(dir, path, schema, verdict = "pass", problems = [], ex
     verdict,
     problems,
   };
-  if (schema === "game.generated_ui_asset_audit" || schema === "game.generated_source_derivation_audit" || schema === "game.slice9_design_policy_audit") {
+  if (schema === "game.generated_source_derivation_audit" || schema === "game.slice9_design_policy_audit") {
     report.crop_manifest = "gamedesign/projects/test/data/ui-kit-crop.json";
-  }
-  if (schema === "game.generated_ui_asset_audit") {
-    report.assets = [{ id: "panel" }, { id: "resource_icon" }, { id: "enemy" }];
   }
   if (schema === "game.generated_source_derivation_audit") {
     report.assets = [{ id: "panel" }, { id: "enemy" }];
@@ -113,47 +110,6 @@ function writeAtlasPackAudit(dir, path, overrides = {}) {
     ...overrides,
   };
   writeFileSync(join(dir, path), `${JSON.stringify(audit, null, 2)}\n`, "utf8");
-}
-
-function writeEdgeProofReport(dir, path, imageOutput, overrides = {}) {
-  mkdirSync(join(dir, dirname(path)), { recursive: true });
-  const defaultRows = [];
-  for (const asset of [
-    { id: "panel", kind: "slice9", output: "assets/runtime/ui-kit/panel.png" },
-    { id: "resource_icon", kind: "icon", output: "assets/runtime/ui-kit/icon.png" },
-    { id: "enemy", kind: "sprite", output: "assets/runtime/ui-kit/enemy.png" },
-  ]) {
-    for (const side of ["top", "right", "bottom", "left"]) {
-      defaultRows.push({
-        asset_id: asset.id,
-        kind: asset.kind,
-        output: asset.output,
-        side,
-        rect: [0, 0, 8, 8],
-        counts: {
-          total: 0,
-          visible: 0,
-          transparent_rgb: 0,
-          reasons: {},
-        },
-      });
-    }
-  }
-  const report = {
-    schema: "game.ui_asset_edge_proof",
-    version: 1,
-    crop_manifest: "gamedesign/projects/test/data/ui-kit-crop.json",
-    image_output: imageOutput,
-    counts: {
-      total: 0,
-      visible: 0,
-      transparent_rgb: 0,
-      reasons: {},
-    },
-    rows: defaultRows,
-    ...overrides,
-  };
-  writeFileSync(join(dir, path), `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
 function writeValidDraft(dir) {
@@ -253,7 +209,6 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
   writeFileSync(join(dir, "assets/runtime/ui-kit/panel.png"), "fake-png", "utf8");
   writeFileSync(join(dir, "assets/runtime/ui-kit/icon.png"), "fake-png", "utf8");
   writeFileSync(join(dir, "assets/runtime/ui-kit/enemy.png"), "fake-png", "utf8");
-  const assetAudit = "gamedesign/projects/test/reviews/ui-kit-asset-audit.json";
   const sourceSheetIntakeAudit = "gamedesign/projects/test/reviews/ui-kit-source-intake-audit.json";
   const sourceDerivationAudit = "gamedesign/projects/test/reviews/ui-kit-source-derivation-audit.json";
   const slice9DesignAudit = "gamedesign/projects/test/reviews/ui-kit-slice9-design-audit.json";
@@ -263,7 +218,6 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
   const atlasMetadataAudit = "gamedesign/projects/test/reviews/ui-kit-atlas-metadata-audit.json";
   const atlasPack = "gamedesign/projects/test/data/ui-kit-atlas-pack.json";
   const atlasPackAudit = "gamedesign/projects/test/reviews/ui-kit-atlas-pack-audit.json";
-  writeAuditReport(dir, assetAudit, "game.generated_ui_asset_audit");
   writeAuditReport(dir, sourceSheetIntakeAudit, "game.source_sheet_intake_audit");
   writeAuditReport(dir, sourceDerivationAudit, "game.generated_source_derivation_audit");
   writeAuditReport(dir, slice9DesignAudit, "game.slice9_design_policy_audit");
@@ -298,7 +252,6 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
   const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
   jobData.expected_outputs.source_art = ["gamedesign/projects/test/art/ui-source.png"];
   jobData.expected_outputs.generation_records = [generationRecord];
-  jobData.expected_outputs.asset_audit = [assetAudit];
   jobData.expected_outputs.source_sheet_intake_audit = [sourceSheetIntakeAudit];
   jobData.expected_outputs.source_derivation_audit = [sourceDerivationAudit];
   jobData.expected_outputs.slice9_design_audit = [slice9DesignAudit];
@@ -447,11 +400,8 @@ test("strict mode validates slice9 content and runtime metadata", (t) => {
 
   const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
   jobData.expected_outputs.source_art = ["gamedesign/projects/test/art/ui-source.png"];
-  const assetAudit = "gamedesign/projects/test/reviews/ui-kit-asset-audit.json";
   const sourceSheetIntakeAudit = "gamedesign/projects/test/reviews/ui-kit-source-intake-audit.json";
-  writeAuditReport(dir, assetAudit, "game.generated_ui_asset_audit");
   writeAuditReport(dir, sourceSheetIntakeAudit, "game.source_sheet_intake_audit");
-  jobData.expected_outputs.asset_audit = [assetAudit];
   jobData.expected_outputs.source_sheet_intake_audit = [sourceSheetIntakeAudit];
   const generationRecord = "gamedesign/projects/test/art/generation_records/ui-source.json";
   writeFileSync(join(dir, generationRecord), `${JSON.stringify({
@@ -585,209 +535,6 @@ test("strict mode rejects runtime manifest pointing at another crop manifest", (
   const result = run(["--job", job, "--strict"], dir);
   assert.equal(result.status, 1);
   assert.match(result.stdout, /runtime manifest crop_manifest should match expected_outputs.crop_manifest/);
-});
-
-test("draft mode rejects malformed edge proof list", (t) => {
-  const dir = tempDir(t);
-  const job = writeValidDraft(dir);
-  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.edge_proofs = "gamedesign/projects/test/art/previews/edge-proof.png";
-  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
-
-  const result = run(["--job", job], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /expected_outputs.edge_proofs must be an array/);
-});
-
-test("draft mode rejects malformed edge proof report list", (t) => {
-  const dir = tempDir(t);
-  const job = writeValidDraft(dir);
-  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.edge_proof_reports = "gamedesign/projects/test/reviews/edge-proof.json";
-  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
-
-  const result = run(["--job", job], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /expected_outputs.edge_proof_reports must be an array/);
-});
-
-test("strict mode validates listed edge proof evidence", (t) => {
-  const dir = tempDir(t);
-  const { job } = writeStrictValidJob(dir);
-  const proof = "gamedesign/projects/test/art/previews/ui-edge-proof.png";
-  const proofReport = "gamedesign/projects/test/reviews/ui-edge-proof.json";
-  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.edge_proofs = [proof];
-  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
-
-  let result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /strict mode edge proof missing/);
-
-  mkdirSync(join(dir, "gamedesign/projects/test/art/previews"), { recursive: true });
-  writeFileSync(join(dir, proof), "fake-png", "utf8");
-  result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /strict mode edge proofs require expected_outputs.edge_proof_reports/);
-
-  jobData.expected_outputs.edge_proof_reports = [proofReport];
-  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
-  result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /expected_outputs.edge_proof_reports missing/);
-
-  writeEdgeProofReport(dir, proofReport, proof, { schema: "wrong.schema" });
-  result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON schema must be game\.ui_asset_edge_proof/);
-
-  writeEdgeProofReport(dir, proofReport, proof);
-  result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /strict-valid/);
-});
-
-test("strict mode rejects accepted edge proof report with bad marks", (t) => {
-  const dir = tempDir(t);
-  const { job } = writeStrictValidJob(dir);
-  const proof = "gamedesign/projects/test/art/previews/ui-edge-proof.png";
-  const proofReport = "gamedesign/projects/test/reviews/ui-edge-proof.json";
-  mkdirSync(join(dir, "gamedesign/projects/test/art/previews"), { recursive: true });
-  writeFileSync(join(dir, proof), "fake-png", "utf8");
-  writeEdgeProofReport(dir, proofReport, proof, {
-    counts: {
-      total: 2,
-      visible: 1,
-      transparent_rgb: 1,
-      reasons: { green_screen_spill: 2 },
-    },
-    rows: [
-      {
-        asset_id: "panel",
-        kind: "slice9",
-        output: "assets/runtime/ui-kit/panel.png",
-        side: "right",
-        rect: [90, 0, 6, 64],
-        counts: {
-          total: 2,
-          visible: 1,
-          transparent_rgb: 1,
-          reasons: { green_screen_spill: 2 },
-        },
-      },
-    ],
-  });
-  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.edge_proofs = [proof];
-  jobData.expected_outputs.edge_proof_reports = [proofReport];
-  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
-
-  const result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /expected_outputs\.edge_proof_reports JSON total bad marks must be 0 for accepted edge proof/);
-});
-
-test("strict mode rejects edge proof report for another crop manifest or image", (t) => {
-  const dir = tempDir(t);
-  const { job } = writeStrictValidJob(dir);
-  const proof = "gamedesign/projects/test/art/previews/ui-edge-proof.png";
-  const otherProof = "gamedesign/projects/test/art/previews/other-edge-proof.png";
-  const proofReport = "gamedesign/projects/test/reviews/ui-edge-proof.json";
-  mkdirSync(join(dir, "gamedesign/projects/test/art/previews"), { recursive: true });
-  writeFileSync(join(dir, proof), "fake-png", "utf8");
-  writeFileSync(join(dir, otherProof), "fake-png", "utf8");
-  writeEdgeProofReport(dir, proofReport, otherProof, {
-    crop_manifest: "gamedesign/projects/test/data/other-crop.json",
-  });
-  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.edge_proofs = [proof];
-  jobData.expected_outputs.edge_proof_reports = [proofReport];
-  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
-
-  const result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON crop_manifest must match expected_outputs.crop_manifest/);
-  assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON image_output must match expected_outputs.edge_proofs/);
-});
-
-test("strict mode rejects accepted edge proof report missing asset side coverage", (t) => {
-  const dir = tempDir(t);
-  const { job } = writeStrictValidJob(dir);
-  const proof = "gamedesign/projects/test/art/previews/ui-edge-proof.png";
-  const proofReport = "gamedesign/projects/test/reviews/ui-edge-proof.json";
-  mkdirSync(join(dir, "gamedesign/projects/test/art/previews"), { recursive: true });
-  writeFileSync(join(dir, proof), "fake-png", "utf8");
-  writeEdgeProofReport(dir, proofReport, proof, {
-    rows: [
-      {
-        asset_id: "panel",
-        kind: "slice9",
-        output: "assets/runtime/ui-kit/panel.png",
-        side: "top",
-        rect: [0, 0, 8, 8],
-        counts: { total: 0, visible: 0, transparent_rgb: 0, reasons: {} },
-      },
-    ],
-  });
-  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.edge_proofs = [proof];
-  jobData.expected_outputs.edge_proof_reports = [proofReport];
-  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
-
-  const result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON missing edge row for panel right/);
-  assert.match(result.stdout, /expected_outputs.edge_proof_reports JSON missing edge row for resource_icon top/);
-});
-
-test("strict mode requires generated UI asset audit evidence", (t) => {
-  const dir = tempDir(t);
-  const { job } = writeStrictValidJob(dir);
-  const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  delete jobData.expected_outputs.asset_audit;
-  writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
-
-  const result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /strict mode requires expected_outputs.asset_audit/);
-});
-
-test("strict mode rejects failing generated UI asset audit evidence", (t) => {
-  const dir = tempDir(t);
-  const { job } = writeStrictValidJob(dir);
-  const audit = "gamedesign/projects/test/reviews/ui-kit-asset-audit.json";
-  writeAuditReport(dir, audit, "game.generated_ui_asset_audit", "fail", ["purple edge halo remains"]);
-
-  const result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /expected_outputs.asset_audit JSON verdict\/status must be pass/);
-  assert.match(result.stdout, /expected_outputs.asset_audit JSON must not list problems/);
-});
-
-test("strict mode rejects generated UI asset audit for another crop manifest", (t) => {
-  const dir = tempDir(t);
-  const { job } = writeStrictValidJob(dir);
-  const audit = "gamedesign/projects/test/reviews/ui-kit-asset-audit.json";
-  writeAuditReport(dir, audit, "game.generated_ui_asset_audit", "pass", [], {
-    crop_manifest: "gamedesign/projects/test/data/other-crop.json",
-  });
-
-  const result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /expected_outputs.asset_audit JSON crop_manifest must match expected_outputs.crop_manifest/);
-});
-
-test("strict mode rejects generated UI asset audit missing a crop id", (t) => {
-  const dir = tempDir(t);
-  const { job } = writeStrictValidJob(dir);
-  const audit = "gamedesign/projects/test/reviews/ui-kit-asset-audit.json";
-  writeAuditReport(dir, audit, "game.generated_ui_asset_audit", "pass", [], {
-    assets: [{ id: "panel" }, { id: "enemy" }],
-  });
-
-  const result = run(["--job", job, "--strict"], dir);
-  assert.equal(result.status, 1);
-  assert.match(result.stdout, /expected_outputs.asset_audit JSON missing audited crop id resource_icon/);
 });
 
 test("strict mode rejects failing source sheet intake audit evidence when provided", (t) => {

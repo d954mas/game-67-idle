@@ -5,16 +5,11 @@ import argparse
 import json
 from collections import deque
 from pathlib import Path
-from statistics import mean
 from time import perf_counter
 from typing import Literal
 
+import numpy as np
 from PIL import Image
-
-try:
-    import numpy as np
-except ImportError:  # pragma: no cover - exercised in environments without numpy.
-    np = None
 
 import sys
 
@@ -33,15 +28,8 @@ AlphaCombine = Literal["min", "max", "avg", "proj"]
 RecoverySource = Literal["dark", "light", "average"]
 
 
-def flattened_pixel_data(image: Image.Image):
-    getter = getattr(image, "get_flattened_data", None)
-    if callable(getter):
-        return getter()
-    return image.getdata()
-
-
 def analysis_engine() -> str:
-    return "numpy" if np is not None else "python"
+    return "numpy"
 
 
 def parse_color(value: str) -> RGB:
@@ -52,26 +40,6 @@ def parse_color(value: str) -> RGB:
         return tuple(int(text[index : index + 2], 16) for index in (0, 2, 4))
     except ValueError as exc:
         raise argparse.ArgumentTypeError("color must be #rrggbb") from exc
-
-
-def clamp_byte(value: float) -> int:
-    return max(0, min(255, int(round(value))))
-
-
-def combine(values: list[float], mode: AlphaCombine) -> float:
-    if not values:
-        return 0.0
-    if mode == "min":
-        return min(values)
-    if mode == "max":
-        return max(values)
-    return sum(values) / len(values)
-
-
-def recover_channel(observed: int, alpha: float, background: int) -> float:
-    if alpha <= 0.0001:
-        return 0.0
-    return (observed - (1.0 - alpha) * background) / alpha
 
 
 def extract_dual_plate_alpha(
@@ -95,20 +63,7 @@ def extract_dual_plate_alpha(
     if not usable_channels:
         raise ValueError("bg-light and bg-dark must differ by at least 8 in one channel")
 
-    if np is not None:
-        return extract_dual_plate_alpha_numpy(
-            light_rgba,
-            dark_rgba,
-            bg_light=bg_light,
-            bg_dark=bg_dark,
-            bg_diff=bg_diff,
-            usable_channels=usable_channels,
-            alpha_combine=alpha_combine,
-            recovery_source=recovery_source,
-            alpha_cutoff=alpha_cutoff,
-            alpha_hardening=alpha_hardening,
-        )
-    return extract_dual_plate_alpha_python(
+    return extract_dual_plate_alpha_numpy(
         light_rgba,
         dark_rgba,
         bg_light=bg_light,
@@ -120,61 +75,6 @@ def extract_dual_plate_alpha(
         alpha_cutoff=alpha_cutoff,
         alpha_hardening=alpha_hardening,
     )
-
-
-def extract_dual_plate_alpha_python(
-    light_rgba: Image.Image,
-    dark_rgba: Image.Image,
-    *,
-    bg_light: RGB,
-    bg_dark: RGB,
-    bg_diff: list[int],
-    usable_channels: list[int],
-    alpha_combine: AlphaCombine,
-    recovery_source: RecoverySource,
-    alpha_cutoff: int,
-    alpha_hardening: int,
-) -> Image.Image:
-    output = Image.new("RGBA", light_rgba.size, (0, 0, 0, 0))
-    light_pixels = light_rgba.load()
-    dark_pixels = dark_rgba.load()
-    out_pixels = output.load()
-    width, height = output.size
-    proj_denom = float(sum(value * value for value in bg_diff)) or 1.0
-
-    for y in range(height):
-        for x in range(width):
-            light_px = light_pixels[x, y]
-            dark_px = dark_pixels[x, y]
-            if alpha_combine == "proj":
-                projected = sum((light_px[channel] - dark_px[channel]) * bg_diff[channel] for channel in range(3)) / proj_denom
-                alpha = max(0.0, min(1.0, 1.0 - projected))
-            else:
-                alphas: list[float] = []
-                for channel in usable_channels:
-                    observed_diff = light_px[channel] - dark_px[channel]
-                    alpha = 1.0 - (observed_diff / bg_diff[channel])
-                    alphas.append(max(0.0, min(1.0, alpha)))
-                alpha = combine(alphas, alpha_combine)
-            alpha_byte = clamp_byte(alpha * 255)
-            if alpha_byte <= alpha_cutoff or (alpha_hardening > 0 and alpha_byte < alpha_hardening):
-                out_pixels[x, y] = (0, 0, 0, 0)
-                continue
-
-            recovered: list[int] = []
-            for channel in range(3):
-                dark_fg = recover_channel(dark_px[channel], alpha, bg_dark[channel])
-                light_fg = recover_channel(light_px[channel], alpha, bg_light[channel])
-                if recovery_source == "dark":
-                    value = dark_fg
-                elif recovery_source == "light":
-                    value = light_fg
-                else:
-                    value = (dark_fg + light_fg) * 0.5
-                recovered.append(clamp_byte(value))
-            out_pixels[x, y] = (recovered[0], recovered[1], recovered[2], alpha_byte)
-
-    return output
 
 
 def extract_dual_plate_alpha_numpy(
@@ -190,7 +90,6 @@ def extract_dual_plate_alpha_numpy(
     alpha_cutoff: int,
     alpha_hardening: int,
 ) -> Image.Image:
-    assert np is not None
     light_array = np.asarray(light_rgba, dtype=np.float32)
     dark_array = np.asarray(dark_rgba, dtype=np.float32)
 
@@ -309,28 +208,10 @@ def alpha_bbox(image: Image.Image) -> list[int] | None:
 
 def report_image_stats(image: Image.Image) -> dict[str, int | float | list[int] | None]:
     rgba = image.convert("RGBA")
-    if np is not None:
-        return report_image_stats_numpy(rgba)
-    return report_image_stats_python(rgba)
-
-
-def report_image_stats_python(rgba: Image.Image) -> dict[str, int | float | list[int] | None]:
-    alphas = list(flattened_pixel_data(rgba.getchannel("A")))
-    visible = [alpha for alpha in alphas if alpha > 0]
-    hidden_rgb_pixels = sum(1 for red, green, blue, alpha in flattened_pixel_data(rgba) if alpha == 0 and (red != 0 or green != 0 or blue != 0))
-    return {
-        "alpha_bbox": alpha_bbox(rgba),
-        "visible_pixels": len(visible),
-        "transparent_pixels": len(alphas) - len(visible),
-        "transparent_nonzero_rgb_pixels": hidden_rgb_pixels,
-        "min_visible_alpha": min(visible) if visible else 0,
-        "max_visible_alpha": max(visible) if visible else 0,
-        "mean_visible_alpha": round(mean(visible), 3) if visible else 0,
-    }
+    return report_image_stats_numpy(rgba)
 
 
 def report_image_stats_numpy(rgba: Image.Image) -> dict[str, int | float | list[int] | None]:
-    assert np is not None
     pixels = np.asarray(rgba, dtype=np.uint8)
     alpha = pixels[..., 3]
     visible_mask = alpha > 0

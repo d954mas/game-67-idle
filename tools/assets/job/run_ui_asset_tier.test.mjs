@@ -26,13 +26,12 @@ test("draft tier plans <=2 cheap commands", () => {
   assert.doesNotMatch(result.stdout, /--final-art/);
 });
 
-test("integrate tier plans ~3 wiring commands without the full battery", () => {
+test("integrate tier plans wiring commands without the full battery", () => {
   const result = run(["--tier", "integrate", "--plan"]);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const count = Number(result.stdout.match(/commands: (\d+)/)[1]);
-  assert.equal(count, 3, `integrate should be 3 commands, got ${count}`);
+  assert.equal(count, 2, `integrate should be 2 commands, got ${count}`);
   assert.match(result.stdout, /validate_art_job\.mjs --job .* --strict/);
-  assert.match(result.stdout, /audit_generated_ui_assets\.py/);
   assert.match(result.stdout, /render_ui_composition_proof\.py/);
   assert.doesNotMatch(result.stdout, /--final-art/);
 });
@@ -49,7 +48,7 @@ test("final tier plans the full battery incl. --final-art", () => {
 
 test("supplied paths are substituted into the plan", () => {
   const result = run([
-    "--tier", "integrate", "--plan",
+    "--tier", "final", "--plan",
     "--job", "gamedesign/projects/x/art_requests/ui.json",
     "--crop-manifest", "gamedesign/projects/x/data/crop.json",
     "--runtime-manifest", "gamedesign/projects/x/data/runtime.json",

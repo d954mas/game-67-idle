@@ -30,8 +30,6 @@ def make_ring_on_key(size: int = 160, key: tuple[int, int, int] = (0, 255, 0)):
 
 class KeyMatteTests(unittest.TestCase):
     def test_recovers_ring_with_transparent_hole(self) -> None:
-        if key_matte.np is None:
-            self.skipTest("numpy required")
         try:
             import pymatting  # noqa: F401
         except Exception:
@@ -55,18 +53,6 @@ class KeyMatteTests(unittest.TestCase):
         visible = array[..., 3] > 40
         green_spill = visible & (array[..., 1] > array[..., 0] + 60) & (array[..., 1] > array[..., 2] + 60)
         self.assertLess(int(np.count_nonzero(green_spill)), 10)
-
-    def test_fallback_without_numpy_returns_rgba(self) -> None:
-        original = key_matte.np
-        try:
-            key_matte.np = None
-            crop = Image.new("RGBA", (8, 8), (0, 255, 0, 255))
-            crop.putpixel((4, 4), (200, 100, 50, 255))
-            result = key_matte_cutout(crop, (0, 255, 0))
-            self.assertEqual(result.mode, "RGBA")
-            self.assertEqual(result.size, (8, 8))
-        finally:
-            key_matte.np = original
 
 
 if __name__ == "__main__":

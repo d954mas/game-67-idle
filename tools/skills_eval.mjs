@@ -324,7 +324,6 @@ const SKILL_CHECKS = [
       "new_generation_record.mjs",
       "--final-art",
       "audit_source_sheet_intake.py",
-      "audit_generated_ui_assets.py",
       "audit_generated_source_derivation.py",
       "source-derived PNGs",
       "product_gate/review.mjs",

@@ -7,12 +7,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from PIL import Image
-
-try:
-    import numpy as np
-except ImportError:  # pragma: no cover - fallback keeps the audit usable in minimal Python installs.
-    np = None
 
 ROOT = Path.cwd()
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -20,7 +16,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tools.assets.atomic_io import write_json_atomic, write_text_atomic
-from tools.assets.chroma_key_alpha import key_to_alpha
+from tools.assets.cutout.key_matte import key_matte_cutout
 
 
 def project_path(path: str) -> Path:
@@ -69,54 +65,23 @@ def compare_images(reference: Image.Image, output: Image.Image, diff_threshold: 
             "mean_rgb_delta": 255.0,
         }
 
-    if np is not None:
-        ref_array = np.array(ref, dtype=np.int16)
-        out_array = np.array(out, dtype=np.int16)
-        visible = ~((ref_array[..., 3] <= 12) & (out_array[..., 3] <= 12))
-        visible_count = int(np.count_nonzero(visible))
-        rgb_delta = np.abs(ref_array[..., :3] - out_array[..., :3]).sum(axis=2)
-        alpha_delta = np.abs(ref_array[..., 3] - out_array[..., 3])
-        changed = visible & ((rgb_delta + alpha_delta) > diff_threshold)
-        changed_count = int(np.count_nonzero(changed))
-        rgb_delta_sum = int(rgb_delta[visible].sum()) if visible_count else 0
-        return {
-            "size_match": True,
-            "reference_size": [ref.width, ref.height],
-            "output_size": [out.width, out.height],
-            "visible_pixels": visible_count,
-            "changed_pixels": changed_count,
-            "changed_ratio": changed_count / max(1, visible_count),
-            "mean_rgb_delta": rgb_delta_sum / max(1, visible_count) / 3.0,
-        }
-
-    ref_pixels = ref.load()
-    out_pixels = out.load()
-    visible = 0
-    changed = 0
-    rgb_delta_sum = 0
-    for y in range(ref.height):
-        for x in range(ref.width):
-            rr, rg, rb, ra = ref_pixels[x, y]
-            or_, og, ob, oa = out_pixels[x, y]
-            if ra <= 12 and oa <= 12:
-                continue
-            visible += 1
-            rgb_delta = abs(rr - or_) + abs(rg - og) + abs(rb - ob)
-            alpha_delta = abs(ra - oa)
-            rgb_delta_sum += rgb_delta
-            if rgb_delta + alpha_delta > diff_threshold:
-                changed += 1
-
-    changed_ratio = changed / max(1, visible)
-    mean_rgb_delta = rgb_delta_sum / max(1, visible) / 3.0
+    ref_array = np.array(ref, dtype=np.int16)
+    out_array = np.array(out, dtype=np.int16)
+    visible = ~((ref_array[..., 3] <= 12) & (out_array[..., 3] <= 12))
+    visible_count = int(np.count_nonzero(visible))
+    rgb_delta = np.abs(ref_array[..., :3] - out_array[..., :3]).sum(axis=2)
+    alpha_delta = np.abs(ref_array[..., 3] - out_array[..., 3])
+    changed = visible & ((rgb_delta + alpha_delta) > diff_threshold)
+    changed_count = int(np.count_nonzero(changed))
+    rgb_delta_sum = int(rgb_delta[visible].sum()) if visible_count else 0
     return {
         "size_match": True,
         "reference_size": [ref.width, ref.height],
         "output_size": [out.width, out.height],
-        "visible_pixels": visible,
-        "changed_pixels": changed,
-        "changed_ratio": changed_ratio,
-        "mean_rgb_delta": mean_rgb_delta,
+        "visible_pixels": visible_count,
+        "changed_pixels": changed_count,
+        "changed_ratio": changed_count / max(1, visible_count),
+        "mean_rgb_delta": rgb_delta_sum / max(1, visible_count) / 3.0,
     }
 
 
@@ -185,7 +150,7 @@ def audit_crop(
         source_image = Image.open(source_path).convert("RGBA")
         source_cache[source_path] = source_image
     key = source_key if source_key is not None else (255, 0, 255)
-    reference = key_to_alpha(source_image.crop((x, y, x + width, y + height)), key=key)
+    reference = key_matte_cutout(source_image.crop((x, y, x + width, y + height)), key)
     stats = compare_images(reference, output, diff_threshold)
     result.update(stats)
 

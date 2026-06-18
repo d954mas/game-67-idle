@@ -7,14 +7,10 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
+import numpy as np
 from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
-
-try:
-    import numpy as np
-except ImportError:  # pragma: no cover - fallback keeps the tool portable.
-    np = None
 
 import sys
 
@@ -35,7 +31,7 @@ _LABEL_FONTS: dict[int, ImageFont.ImageFont] = {}
 
 
 def analysis_engine() -> str:
-    return "numpy" if np is not None else "python"
+    return "numpy"
 
 
 def fail(message: str) -> None:
@@ -132,46 +128,25 @@ def rect_has_visible_pixel(image: Image.Image, rect: tuple[int, int, int, int]) 
 
 
 def transparent_nonzero_rgb_count(image: Image.Image) -> int:
-    if np is not None:
-        array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
-        alpha = array[..., 3]
-        rgb_nonzero = np.any(array[..., :3] != 0, axis=2)
-        return int(np.count_nonzero((alpha == 0) & rgb_nonzero))
-    rgba = image.convert("RGBA")
-    pixels = rgba.load()
-    count = 0
-    for y in range(rgba.height):
-        for x in range(rgba.width):
-            red, green, blue, alpha = pixels[x, y]
-            if alpha == 0 and (red != 0 or green != 0 or blue != 0):
-                count += 1
-    return count
+    array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
+    alpha = array[..., 3]
+    rgb_nonzero = np.any(array[..., :3] != 0, axis=2)
+    return int(np.count_nonzero((alpha == 0) & rgb_nonzero))
 
 
 def visible_pixels_outside_rects_count(image: Image.Image, allowed_rects: list[tuple[int, int, int, int]]) -> int:
     rgba = image.convert("RGBA")
-    if np is not None:
-        array = np.asarray(rgba, dtype=np.uint8)
-        visible = array[..., 3] > 0
-        allowed = np.zeros(visible.shape, dtype=bool)
-        for x, y, width, height in allowed_rects:
-            x0 = max(0, x)
-            y0 = max(0, y)
-            x1 = min(rgba.width, x + width)
-            y1 = min(rgba.height, y + height)
-            if x0 < x1 and y0 < y1:
-                allowed[y0:y1, x0:x1] = True
-        return int(np.count_nonzero(visible & ~allowed))
-
-    pixels = rgba.load()
-    count = 0
-    for y in range(rgba.height):
-        for x in range(rgba.width):
-            if pixels[x, y][3] == 0:
-                continue
-            if not any(rx <= x < rx + rw and ry <= y < ry + rh for rx, ry, rw, rh in allowed_rects):
-                count += 1
-    return count
+    array = np.asarray(rgba, dtype=np.uint8)
+    visible = array[..., 3] > 0
+    allowed = np.zeros(visible.shape, dtype=bool)
+    for x, y, width, height in allowed_rects:
+        x0 = max(0, x)
+        y0 = max(0, y)
+        x1 = min(rgba.width, x + width)
+        y1 = min(rgba.height, y + height)
+        if x0 < x1 and y0 < y1:
+            allowed[y0:y1, x0:x1] = True
+    return int(np.count_nonzero(visible & ~allowed))
 
 
 def changed_pixels_outside_rects_count(
@@ -181,30 +156,18 @@ def changed_pixels_outside_rects_count(
     overlay_rgba = overlay.convert("RGBA")
     if base_rgba.size != overlay_rgba.size:
         return 0
-    if np is not None:
-        base_array = np.asarray(base_rgba, dtype=np.uint8)
-        overlay_array = np.asarray(overlay_rgba, dtype=np.uint8)
-        changed = np.any(base_array != overlay_array, axis=2)
-        allowed = np.zeros(changed.shape, dtype=bool)
-        for x, y, width, height in allowed_rects:
-            x0 = max(0, x)
-            y0 = max(0, y)
-            x1 = min(base_rgba.width, x + width)
-            y1 = min(base_rgba.height, y + height)
-            if x0 < x1 and y0 < y1:
-                allowed[y0:y1, x0:x1] = True
-        return int(np.count_nonzero(changed & ~allowed))
-
-    base_pixels = base_rgba.load()
-    overlay_pixels = overlay_rgba.load()
-    count = 0
-    for y in range(base_rgba.height):
-        for x in range(base_rgba.width):
-            if base_pixels[x, y] == overlay_pixels[x, y]:
-                continue
-            if not any(rx <= x < rx + rw and ry <= y < ry + rh for rx, ry, rw, rh in allowed_rects):
-                count += 1
-    return count
+    base_array = np.asarray(base_rgba, dtype=np.uint8)
+    overlay_array = np.asarray(overlay_rgba, dtype=np.uint8)
+    changed = np.any(base_array != overlay_array, axis=2)
+    allowed = np.zeros(changed.shape, dtype=bool)
+    for x, y, width, height in allowed_rects:
+        x0 = max(0, x)
+        y0 = max(0, y)
+        x1 = min(base_rgba.width, x + width)
+        y1 = min(base_rgba.height, y + height)
+        if x0 < x1 and y0 < y1:
+            allowed[y0:y1, x0:x1] = True
+    return int(np.count_nonzero(changed & ~allowed))
 
 
 def label_font(font_size: int = DEFAULT_LABEL_FONT_SIZE) -> ImageFont.ImageFont:

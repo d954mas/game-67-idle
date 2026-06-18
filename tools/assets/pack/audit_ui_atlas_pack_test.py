@@ -114,7 +114,7 @@ class AuditUiAtlasPackTest(unittest.TestCase):
             self.assertEqual(audit["atlases"][0]["transparent_nonzero_rgb_pixels"], 0)
             self.assertEqual(audit["atlases"][0]["outside_padded_visible_pixels"], 0)
             self.assertEqual(audit["atlases"][0]["labeled_preview_delta_outside_label_pixels"], 0)
-            self.assertIn(audit["atlases"][0]["analysis_engine"], {"numpy", "python"})
+            self.assertEqual(audit["atlases"][0]["analysis_engine"], "numpy")
             self.assertEqual(audit["expected_asset_ids"], ["button", "panel"])
             self.assertEqual(audit["reported_asset_ids"], ["button", "panel"])
             self.assertEqual(audit["missing_asset_ids"], [])

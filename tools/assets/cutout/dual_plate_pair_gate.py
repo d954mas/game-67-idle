@@ -18,16 +18,12 @@ import argparse
 import sys
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-try:
-    import numpy as np
-except ImportError:  # pragma: no cover
-    np = None
 
 from tools.assets.atomic_io import write_json_atomic
 
@@ -83,8 +79,6 @@ def evaluate(light: Image.Image, dark: Image.Image) -> dict:
 
 
 def main() -> int:
-    if np is None:
-        raise SystemExit("dual_plate_pair_gate requires numpy")
     parser = argparse.ArgumentParser(description="Acceptance gate for a dual-plate white/black pair.")
     parser.add_argument("--light", type=Path, required=True, help="subject on flat WHITE background")
     parser.add_argument("--dark", type=Path, required=True, help="subject on flat BLACK background")

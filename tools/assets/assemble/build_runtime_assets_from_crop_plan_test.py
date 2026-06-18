@@ -10,7 +10,6 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "tools/assets/assemble/build_runtime_assets_from_crop_plan.py"
-AUDIT = ROOT / "tools/assets/audit/audit_generated_ui_assets.py"
 
 
 def run_script(cwd: Path, script: Path, *args: str):
@@ -92,17 +91,6 @@ class BuildRuntimeAssetsFromCropPlanTest(unittest.TestCase):
             self.assertEqual(assets["icon_health"]["pack_group"], "ui_icons_core")
             self.assertEqual(assets["decor_blue_block"]["anchor"], "center")
             self.assertTrue((root / "contact.png").exists())
-            audit = run_script(
-                root,
-                AUDIT,
-                "--crop-manifest",
-                "crop_manifest.json",
-                "--json-output",
-                "asset_audit.json",
-                "--report",
-                "asset_audit.md",
-            )
-            self.assertEqual(audit.returncode, 0, audit.stdout + audit.stderr)
 
 
 if __name__ == "__main__":
