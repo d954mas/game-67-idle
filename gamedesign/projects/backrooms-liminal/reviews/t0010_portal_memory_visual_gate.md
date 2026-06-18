@@ -4,7 +4,7 @@ project: backrooms-liminal
 task: T0010
 surface: desktop
 verdict: fail
-timestamp: 2026-06-18T20:08:59.471Z
+timestamp: 2026-06-18T20:16:38.282Z
 ---
 
 # Product Read Gate - backrooms-liminal / desktop
@@ -15,11 +15,11 @@ Screenshot: `build/captures/backrooms_t0010_impossible_geometry.png`
 
 ## Player Read
 
-- Where am I? Yellow Backrooms corridor facing a deeper non-Euclidean room aperture with denser native authored shell planes, stronger ceiling soffit/back wall mass, darker side returns, copied mark, conduit, threshold, and landmark column
+- Where am I? Yellow Backrooms corridor facing a deeper non-Euclidean room aperture with a native opaque solid-shell pass for interior floor, side walls, back wall, ceiling, soffit, darker side returns, copied mark, conduit, threshold, and landmark column
 - What should I do now? Use the copied mark as evidence, find the missing handle, and test the locked door
-- What changed after input? The mark appears inside the impossible room; the runtime now combines the opaque fullscreen portal composite with a 492-vertex native nt_gfx room mesh, including 42 solid-shell vertices for floor, side walls, back wall, ceiling, soffit, and center rib surfaces
+- What changed after input? The mark appears inside the impossible room; the runtime now draws the portal room with a separate non-blended nt_gfx solid pass for 42 shell vertices, then draws 450 blended detail vertices for seams, light spill, trim, conduit, and aperture occlusion
 - What is the reward / why continue? The player learns the space can be tested and later stabilized by fitting the found handle
-- Why does this look like a game? Native 3D liminal horror view with a larger-inside portal room, stained wallpaper, carpet seams, ceiling grid, shadowed aperture, minimal journal UI, and denser authored interior room planes
+- Why does this look like a game? Native 3D liminal horror view with a larger-inside portal room, stained wallpaper, carpet seams, ceiling grid, shadowed aperture, minimal journal UI, and a denser opaque native interior layer
 
 ## State Coverage
 
@@ -51,9 +51,9 @@ Not covered / debt:
 
 ## Review
 
-Problem: The authored shell layer improves room construction evidence, but the visual bar still needs true opaque authored 3D geometry or render-target depth instead of a blended room proxy
+Problem: The separate opaque native pass improves physicality, but the visual bar still needs either a fully native opaque portal interior or T0011 render-target depth/lighting instead of a hybrid composite
 
-Next: Use the solid-shell overlay as the bridge, then either build the portal interior as real opaque geometry in the native pass or unblock T0011 render-target portal lighting; avoid adding more cosmetic shell plates
+Next: Promote more portal room surfaces from fullscreen composite into the native opaque pass, or unblock T0011 render-target portal lighting; do not expand gameplay content while art_quality and audience_fit remain 3
 
 ## Visual Critique
 
@@ -69,5 +69,5 @@ Scores:
 - audience_fit: 3
 
 Issues:
-- major / art_quality: The authored shell layer makes the room read more constructed, but it is still blended over a fullscreen composite rather than true opaque geometry or render-target portal lighting
-- major / audience_fit: The impossible-room hook is clearer, but the image still needs a more distinctive high-quality horror look to stand out among many Backrooms games
+- major / art_quality: The separate solid pass reduces the transparent-overlay feel, but the room still needs true integrated opaque interior geometry with depth/lighting rather than a fullscreen composite plus partial native surfaces
+- major / audience_fit: The impossible-room hook is clearer and more physical, but the image still needs a more distinctive high-quality horror look to stand out among many Backrooms games

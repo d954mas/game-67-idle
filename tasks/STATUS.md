@@ -16,7 +16,7 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
   fully opaque fullscreen portal-room composite inside the aperture, denser
   texture-backed/material-kind-lit native `nt_gfx` room surfaces, reduced
   external ghost-frame artifacts, a stronger fixture-driven portal-room light
-  model, and a denser solid-shell `nt_gfx` bridge layer, but not yet
+  model, and a separate non-blended `nt_gfx` solid-shell pass, but not yet
   production-quality realistic Backrooms room construction.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
@@ -26,7 +26,7 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 ## Non-blocking Debt
 
 - Current profiling scope is usable for normal review:
-  `T0010/authored-room-geometry-slice`.
+  `T0010/opaque-native-portal-pass`.
 - T0001-T0008 are in review with historical evidence. Do not expand them unless
   the lead asks; current actionable work is T0009/T0010 plus the T0011 engine
   issue.
@@ -58,14 +58,15 @@ node tools/taskboard/cli.mjs validate
   scene foundation: rooms, material/light/finish/authored-construction
   descriptors, portal descriptors, flags, validation, and GPU params.
 - `src/clean_seed_main.c` now composites the impossible room as an opaque
-  fullscreen portal cut, then adds a separate native `nt_gfx` detail overlay
-  that streams 492 world-space vertices: 408 texture-backed room
+  fullscreen portal cut, then draws a separate native `nt_gfx` room pass that
+  streams 492 world-space vertices: 408 texture-backed room
   mesh/material-detail vertices for denser inner floor/wall/ceiling/light-spill
   surfaces, grout seams, wall seams, back-wall strips, ceiling grid, and shadow
-  bands; 42 of those are solid-shell vertices for floor, side walls, back wall,
-  ceiling, soffit, and center-rib surfaces. A separate aperture contact-shadow
-  layer, softened jamb/threshold hints, inner fixture, conduit, and landmark
-  column still come from portal scene params.
+  bands. The first 42 solid-shell vertices for floor, side walls, back wall,
+  ceiling, soffit, and center-rib surfaces are drawn through a non-blended
+  pipeline; the remaining 450 vertices draw blended seams, light spill,
+  aperture occlusion, softened jamb/threshold hints, inner fixture, conduit,
+  and landmark column from portal scene params.
   The fullscreen portal room now uses per-surface normals, direct/bounce
   fluorescent lighting, side/back occlusion, fixture cast shadow, and wet-floor
   specular response. The overlay shader receives material kind and world
@@ -80,7 +81,9 @@ node tools/taskboard/cli.mjs validate
   depth, threshold lip, conduit, landmark columns,
   `native_overlay.last_vertex_count = 492`,
   `native_overlay.room_mesh_vertex_count = 408`, and
-  `native_overlay.solid_shell_vertex_count = 42`.
+  `native_overlay.solid_shell_vertex_count = 42`,
+  `native_overlay.solid_pass_vertex_count = 42`, and
+  `native_overlay.blended_detail_vertex_count = 450`.
 - `build/captures/backrooms_t0010_impossible_geometry.png` is the latest native
   proof screenshot for the data-driven impossible room.
 - `build/captures/backrooms_t0010_impossible_geometry_uizoom.png` is the latest
@@ -91,10 +94,10 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Use the solid-shell overlay as the bridge, then move to real opaque authored
-   3D interior geometry in the native pass or T0011 render-target portal
-   rendering; revisit the product gate for art quality and audience fit after
-   the room construction itself is no longer a blended proxy.
+1. Promote more portal room surfaces from the fullscreen composite into the
+   native opaque pass, or unblock T0011 render-target portal lighting; revisit
+   the product gate for art quality and audience fit after the room
+   construction itself is no longer a hybrid proxy.
 2. Add stronger production texture/light evidence before expanding content; more
    one-pass shader or shell decoration is now a low-value path unless it
    directly proves the future mesh/material/render-target contract.
