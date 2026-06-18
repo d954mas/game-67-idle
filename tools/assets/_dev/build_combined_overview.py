@@ -15,13 +15,13 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.assets.atomic_io import save_image_atomic
-from tools.assets.benchmark_cutout_modes import SINGLE_BACKGROUND_MODES, parse_color, source_image_for_case
-from tools.assets.build_dual_plate_overview import dual_plates_for_case
+from tools.assets._dev.benchmark_cutout_modes import SINGLE_BACKGROUND_MODES, parse_color, source_image_for_case
+from tools.assets._dev.build_dual_plate_overview import dual_plates_for_case
 from tools.assets.dual_plate_alpha import extract_dual_plate_alpha
 
 BENCH = ROOT / "gamedesign/projects/mine-cards/reviews/cutout_benchmark"

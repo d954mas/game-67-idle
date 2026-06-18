@@ -18,12 +18,12 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.assets.atomic_io import save_image_atomic
-from tools.assets.benchmark_cutout_modes import add_drop_shadow, crop_from_case, flatten_on_background, make_procedural_sign_truth
+from tools.assets._dev.benchmark_cutout_modes import add_drop_shadow, crop_from_case, flatten_on_background, make_procedural_sign_truth
 from tools.assets.dual_plate_alpha import extract_dual_plate_alpha
 from tools.assets.dual_plate_pair_gate import evaluate
 

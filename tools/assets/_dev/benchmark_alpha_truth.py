@@ -20,7 +20,7 @@ from typing import Any, Callable
 
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover - this benchmark needs numpy.
     np = None
 
 from tools.assets.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
-from tools.assets.benchmark_cutout_modes import (
+from tools.assets._dev.benchmark_cutout_modes import (
     checkerboard,
     contain,
     flatten_on_background,
