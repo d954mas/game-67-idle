@@ -1,0 +1,66 @@
+{
+  "schema": "game.slice9_design_policy_audit",
+  "version": 1,
+  "crop_manifest": "gamedesign/projects/mine-cards/data/mine-cards-blank-ui-kit-v002-candidate-b-crop_manifest.json",
+  "runtime_manifest": "gamedesign/projects/mine-cards/data/mine-cards-blank-ui-kit-v002-candidate-b-asset_manifest.json",
+  "verdict": "pass",
+  "problems": [],
+  "assets": [
+    {
+      "id": "board_panel_slice9",
+      "kind": "slice9",
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/board_panel_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "upgrade_panel_slice9",
+      "kind": "slice9",
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/upgrade_panel_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "node_card_default_slice9",
+      "kind": "slice9",
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/node_card_default_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "node_card_selected_slice9",
+      "kind": "slice9",
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/node_card_selected_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "activity_chip_active_slice9",
+      "kind": "slice9",
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/activity_chip_active_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "activity_chip_locked_slice9",
+      "kind": "slice9",
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/activity_chip_locked_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "primary_button_disabled_slice9",
+      "kind": "slice9",
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/primary_button_disabled_slice9.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "primary_button_affordable_slice9",
+      "kind": "slice9",
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/primary_button_affordable_slice9.png",
+      "status": "pass",
+      "problems": []
+    }
+  ]
+}

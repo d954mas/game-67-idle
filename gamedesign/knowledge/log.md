@@ -40,3 +40,7 @@ humans should use the knowledge base.
 - Added frontmatter to two reusable source packets and moved Voxelheim-specific
   application out of the global source shelf by linking to the project
   deconstruction.
+- Added source note `sources/maxpower_roblox_player_needs_2026-06-17.md`
+  (Max Power Gaming / Rotrends-backed Roblox top-game analysis) and promoted
+  reusable conclusions to [Player Need Lanes](player_need_lanes.md): accessible
+  progression vs active mastery as a first-screen/concept alignment model.

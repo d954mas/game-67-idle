@@ -1,0 +1,38 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "mine-cards",
+  "task": "T0001",
+  "surface": "core-moment-motion",
+  "verdict": "pass",
+  "timestamp": "2026-06-17T20:39:00.350Z",
+  "screenshot": "build/captures/mine_cards_core_moment_v004_sheet.png",
+  "answers": {
+    "where": "Top action stage: Surface Stone mining lane with the fixed miner beside the rock node.",
+    "action": "Watch the miner swing at the active rock while the Mining progress bar advances.",
+    "response": "The rock shakes, chip FX fires at impact, and the Ozz/KayKit miner pose changes with the mining tick instead of looping independently.",
+    "reward": "The geode/reward moment appears as one event with a callout, resource text, and progress reset toward the next tick.",
+    "game_look": "Generated stage/UI assets frame the action as an in-game mining panel; the character, target, FX, progress, and next upgrade board are connected enough for this narrow motion proof."
+  },
+  "visual_critique": {
+    "strict": false,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {},
+    "issues": []
+  },
+  "state_coverage": {
+    "required": [],
+    "covered": [],
+    "not_covered": []
+  },
+  "problem": "",
+  "next": ""
+}

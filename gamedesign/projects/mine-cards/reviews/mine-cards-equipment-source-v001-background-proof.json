@@ -1,0 +1,214 @@
+{
+  "schema": "game.sprite_background_proof",
+  "asset_manifest": "gamedesign\\projects\\mine-cards\\data\\mine-cards-equipment-source-v001-asset_manifest.json",
+  "backgrounds": [
+    {
+      "id": "transparent_grid",
+      "color": [
+        32,
+        32,
+        36
+      ],
+      "mode": "checker"
+    },
+    {
+      "id": "mine_dark_panel",
+      "color": [
+        22,
+        18,
+        22
+      ],
+      "mode": "solid"
+    },
+    {
+      "id": "mine_warm_panel",
+      "color": [
+        87,
+        66,
+        45
+      ],
+      "mode": "solid"
+    },
+    {
+      "id": "light_inventory_slot",
+      "color": [
+        198,
+        180,
+        142
+      ],
+      "mode": "solid"
+    }
+  ],
+  "assets_checked": 12,
+  "review_count": 0,
+  "assets": [
+    {
+      "id": "item_pickaxe_worn",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_pickaxe_worn.png",
+      "size": [
+        278,
+        300
+      ],
+      "visible_pixels": 23746,
+      "translucent_pixels": 0,
+      "dark_translucent_pixels": 0,
+      "very_dark_translucent_pixels": 0,
+      "dark_translucent_ratio": 0.0,
+      "verdict": "pass"
+    },
+    {
+      "id": "item_pickaxe_copper",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_pickaxe_copper.png",
+      "size": [
+        271,
+        302
+      ],
+      "visible_pixels": 23886,
+      "translucent_pixels": 0,
+      "dark_translucent_pixels": 0,
+      "very_dark_translucent_pixels": 0,
+      "dark_translucent_ratio": 0.0,
+      "verdict": "pass"
+    },
+    {
+      "id": "item_mining_helmet",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_mining_helmet.png",
+      "size": [
+        282,
+        241
+      ],
+      "visible_pixels": 41987,
+      "translucent_pixels": 0,
+      "dark_translucent_pixels": 0,
+      "very_dark_translucent_pixels": 0,
+      "dark_translucent_ratio": 0.0,
+      "verdict": "pass"
+    },
+    {
+      "id": "item_miner_armor",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_miner_armor.png",
+      "size": [
+        312,
+        296
+      ],
+      "visible_pixels": 60901,
+      "translucent_pixels": 0,
+      "dark_translucent_pixels": 0,
+      "very_dark_translucent_pixels": 0,
+      "dark_translucent_ratio": 0.0,
+      "verdict": "pass"
+    },
+    {
+      "id": "item_plain_ring",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_plain_ring.png",
+      "size": [
+        249,
+        200
+      ],
+      "visible_pixels": 29255,
+      "translucent_pixels": 0,
+      "dark_translucent_pixels": 0,
+      "very_dark_translucent_pixels": 0,
+      "dark_translucent_ratio": 0.0,
+      "verdict": "pass"
+    },
+    {
+      "id": "item_ruby_ring",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_ruby_ring.png",
+      "size": [
+        267,
+        224
+      ],
+      "visible_pixels": 38251,
+      "translucent_pixels": 0,
+      "dark_translucent_pixels": 0,
+      "very_dark_translucent_pixels": 0,
+      "dark_translucent_ratio": 0.0,
+      "verdict": "pass"
+    },
+    {
+      "id": "item_skull_relic_scroll",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_skull_relic_scroll.png",
+      "size": [
+        217,
+        322
+      ],
+      "visible_pixels": 37257,
+      "translucent_pixels": 80,
+      "dark_translucent_pixels": 74,
+      "very_dark_translucent_pixels": 34,
+      "dark_translucent_ratio": 0.00199,
+      "verdict": "pass"
+    },
+    {
+      "id": "item_mine_charm",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_mine_charm.png",
+      "size": [
+        187,
+        323
+      ],
+      "visible_pixels": 32483,
+      "translucent_pixels": 65,
+      "dark_translucent_pixels": 65,
+      "very_dark_translucent_pixels": 26,
+      "dark_translucent_ratio": 0.002,
+      "verdict": "pass"
+    },
+    {
+      "id": "item_hand_axe",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_hand_axe.png",
+      "size": [
+        272,
+        316
+      ],
+      "visible_pixels": 24494,
+      "translucent_pixels": 0,
+      "dark_translucent_pixels": 0,
+      "very_dark_translucent_pixels": 0,
+      "dark_translucent_ratio": 0.0,
+      "verdict": "pass"
+    },
+    {
+      "id": "item_battle_axe",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_battle_axe.png",
+      "size": [
+        287,
+        322
+      ],
+      "visible_pixels": 35543,
+      "translucent_pixels": 69,
+      "dark_translucent_pixels": 69,
+      "very_dark_translucent_pixels": 28,
+      "dark_translucent_ratio": 0.00194,
+      "verdict": "pass"
+    },
+    {
+      "id": "item_spiked_mace",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_spiked_mace.png",
+      "size": [
+        269,
+        321
+      ],
+      "visible_pixels": 25333,
+      "translucent_pixels": 26,
+      "dark_translucent_pixels": 22,
+      "very_dark_translucent_pixels": 7,
+      "dark_translucent_ratio": 0.00087,
+      "verdict": "pass"
+    },
+    {
+      "id": "item_dark_crown",
+      "path": "assets\\runtime\\mine-cards-equipment-source-v001/item_dark_crown.png",
+      "size": [
+        290,
+        320
+      ],
+      "visible_pixels": 47218,
+      "translucent_pixels": 124,
+      "dark_translucent_pixels": 102,
+      "very_dark_translucent_pixels": 52,
+      "dark_translucent_ratio": 0.00216,
+      "verdict": "pass"
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "mine-cards",
+  "task": "T0001",
+  "surface": "responsive",
+  "verdict": "fail",
+  "timestamp": "2026-06-17T20:00:41.893Z",
+  "screenshot": "build/captures/mine_cards_blank_ui_v004_landscape_surface.png",
+  "answers": {
+    "where": "Mine Cards Mining screen: fixed top miner action stage, lower idle mechanics board, and next Copper Pickaxe goal.",
+    "action": "Let Mining run, choose Surface Stone or Copper Vein, and work toward the Copper Pickaxe missing costs.",
+    "response": "Progress fills and rewards/FX fire on mining ticks; selected node and missing upgrade resources are visible.",
+    "reward": "Stone, XP, occasional geode feedback, and a clear next upgrade target give the short loop.",
+    "game_look": "Generated board and stage frames now push the screen toward a blocky RPG UI, with real icons, stage art, FX, and voxel miner."
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 3,
+      "readability": 3,
+      "ui_controls": 2,
+      "action_direction": 3,
+      "art_quality": 3,
+      "audience_fit": 3
+    },
+    "issues": [
+      {
+        "severity": "major",
+        "axis": "ui_controls",
+        "text": "small chips, node rows, nav buttons, and primary button still rely on compact procedural scaffold rather than safe generated compact variants"
+      },
+      {
+        "severity": "major",
+        "axis": "readability",
+        "text": "primary upgrade button/cost region remains visually cramped and needs a purpose-built compact generated control"
+      },
+      {
+        "severity": "minor",
+        "axis": "composition",
+        "text": "landscape lower board is improved but still dense; generated frame consumes space without compact variants"
+      }
+    ]
+  },
+  "state_coverage": {
+    "required": [
+      "first_screen_idle",
+      "mining_tick_reward",
+      "locked_copper",
+      "copper_unlocked",
+      "upgrade_unaffordable",
+      "upgrade_affordable",
+      "upgrade_purchased",
+      "geode_event",
+      "small_window_stress",
+      "hud",
+      "primary_action",
+      "feedback",
+      "blocked"
+    ],
+    "covered": [
+      {
+        "tag": "hud",
+        "evidence": "build/captures/mine_cards_blank_ui_v004_landscape_surface.png"
+      },
+      {
+        "tag": "primary_action",
+        "evidence": "build/captures/mine_cards_blank_ui_v004_landscape_surface.png"
+      },
+      {
+        "tag": "feedback",
+        "evidence": "build/captures/mine_cards_blank_ui_v004_landscape_geode.png"
+      }
+    ],
+    "not_covered": [
+      {
+        "tag": "blocked",
+        "reason": "compact_generated_controls_not_done"
+      }
+    ]
+  },
+  "problem": "Partial blank UI kit integration is visible and cleaner, but T0001 visual gate still cannot pass while compact controls are procedural and the upgrade control is cramped.",
+  "next": "Generate or derive compact button/chip/card variants from the blank UI family, integrate them into the small lower-board controls, then recapture four-shot proof and rerun product gate."
+}

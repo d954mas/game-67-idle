@@ -1,0 +1,430 @@
+{
+  "schema": "game.generated_ui_asset_audit",
+  "version": 1,
+  "crop_manifest": "gamedesign/projects/mine-cards/data/mine-cards-stage-ui-family-v001-crop_manifest.json",
+  "verdict": "pass",
+  "assets_checked": 15,
+  "problems": [],
+  "assets": [
+    {
+      "id": "activity_mining",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/activity_mining.png",
+      "problems": [],
+      "size": [
+        249,
+        249
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        241,
+        241
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "activity_woodcutting",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/activity_woodcutting.png",
+      "problems": [],
+      "size": [
+        239,
+        263
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        231,
+        255
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "activity_fishing",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/activity_fishing.png",
+      "problems": [],
+      "size": [
+        240,
+        295
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        232,
+        287
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "activity_smithing",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/activity_smithing.png",
+      "problems": [],
+      "size": [
+        251,
+        272
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        243,
+        264
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "activity_combat",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/activity_combat.png",
+      "problems": [],
+      "size": [
+        220,
+        222
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        212,
+        214
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "activity_farming",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/activity_farming.png",
+      "problems": [],
+      "size": [
+        276,
+        250
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        268,
+        242
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "activity_bank",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/activity_bank.png",
+      "problems": [],
+      "size": [
+        252,
+        261
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        244,
+        253
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "activity_shop",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/activity_shop.png",
+      "problems": [],
+      "size": [
+        249,
+        253
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        241,
+        245
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "resource_stone",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/resource_stone.png",
+      "problems": [],
+      "size": [
+        202,
+        209
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        194,
+        201
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "resource_copper_ore",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/resource_copper_ore.png",
+      "problems": [],
+      "size": [
+        197,
+        208
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        189,
+        200
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "resource_coin",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/resource_coin.png",
+      "problems": [],
+      "size": [
+        235,
+        201
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        227,
+        193
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "upgrade_pickaxe",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/upgrade_pickaxe.png",
+      "problems": [],
+      "size": [
+        213,
+        210
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        205,
+        202
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "state_locked",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/state_locked.png",
+      "problems": [],
+      "size": [
+        167,
+        226
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        159,
+        218
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "state_equipped",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/state_equipped.png",
+      "problems": [],
+      "size": [
+        199,
+        219
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        191,
+        211
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "state_ready",
+      "kind": "icon",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\icons/state_ready.png",
+      "problems": [],
+      "size": [
+        208,
+        227
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        200,
+        219
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    }
+  ]
+}

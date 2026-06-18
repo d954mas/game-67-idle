@@ -1,0 +1,105 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "mine-cards",
+  "task": "T0001",
+  "surface": "responsive-v003-closeout",
+  "verdict": "pass",
+  "timestamp": "2026-06-17T21:00:16.413Z",
+  "screenshot": "build/captures/mine_cards_compact_ui_v003_landscape_surface.png",
+  "answers": {
+    "where": "Mine Cards Mining v0.01: a fixed miner action stage over a dense Mining mechanics board.",
+    "action": "Let Surface Stone run, watch the reward/progress loop, inspect Copper Vein unlock, and work toward Copper Pickaxe.",
+    "response": "The screen now has current proof for idle, mining tick reward, geode, copper unlock, upgrade unaffordable, upgrade affordable, upgrade purchased, portrait, landscape, and 720x480 stress states.",
+    "reward": "The player sees Stone, XP, geode coins, Copper Vein progression, and Copper Pickaxe speed improvement as the reason to keep mining.",
+    "game_look": "The native screen uses generated voxel/RPG UI assets, real stone/copper/FX sprites, and a KayKit/Ozz animated miner in one coherent first Mining slice rather than debug panels."
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 4,
+      "ui_controls": 4,
+      "action_direction": 4,
+      "art_quality": 4,
+      "audience_fit": 4
+    },
+    "issues": [
+      {
+        "severity": "minor",
+        "axis": "art_quality",
+        "text": "KayKit/Ozz miner remains placeholder kit art, not final custom Mine Cards character art."
+      },
+      {
+        "severity": "minor",
+        "axis": "ui_controls",
+        "text": "Future activities are visible placeholders; deeper locked/hover states belong after the Mining slice."
+      }
+    ]
+  },
+  "state_coverage": {
+    "required": [
+      "first_screen_idle",
+      "mining_tick_reward",
+      "locked_copper",
+      "copper_unlocked",
+      "upgrade_unaffordable",
+      "upgrade_affordable",
+      "upgrade_purchased",
+      "geode_event",
+      "small_window_stress"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen_idle",
+        "evidence": "build/captures/mine_cards_compact_ui_v003_landscape_surface.png"
+      },
+      {
+        "tag": "mining_tick_reward",
+        "evidence": "build/captures/mine_cards_core_moment_v004.gif"
+      },
+      {
+        "tag": "locked_copper",
+        "evidence": "build/captures/mine_cards_compact_ui_v003_portrait_surface.png"
+      },
+      {
+        "tag": "copper_unlocked",
+        "evidence": "build/captures/mine_cards_live_state_v003_copper_unlocked.png; build/captures/mine_cards_live_state_v003_state.json"
+      },
+      {
+        "tag": "upgrade_unaffordable",
+        "evidence": "build/captures/mine_cards_compact_ui_v003_portrait_surface.png"
+      },
+      {
+        "tag": "upgrade_affordable",
+        "evidence": "build/captures/mine_cards_live_state_v003_upgrade_affordable.png; build/captures/mine_cards_live_state_v003_state.json"
+      },
+      {
+        "tag": "upgrade_purchased",
+        "evidence": "build/captures/mine_cards_live_state_v003_upgrade_purchased.png; build/captures/mine_cards_live_state_v003_state.json"
+      },
+      {
+        "tag": "geode_event",
+        "evidence": "build/captures/mine_cards_compact_ui_v003_landscape_geode.png; build/captures/mine_cards_compact_ui_v003_portrait_geode.png"
+      },
+      {
+        "tag": "small_window_stress",
+        "evidence": "build/captures/mine_cards_live_state_v003_small_window_stress.png; build/captures/mine_cards_live_state_v003_small_window_stress_uizoom.png"
+      }
+    ],
+    "not_covered": []
+  },
+  "problem": "",
+  "next": "",
+  "markdown": "gamedesign/projects/mine-cards/reviews/product_gate_t0001_closeout_v001_2026-06-18.md",
+  "json": "gamedesign/projects/mine-cards/reviews/product_gate_t0001_closeout_v001_2026-06-18.json"
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "game.asset_semantic_style_review",
+  "source_family": "isolated equipment sprite sheet",
+  "accepted_visual_target": "gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-sheet-shadowfix-v001.png",
+  "pipeline_stage": "pre_slice",
+  "style_contract": {
+    "style_group": "mine-cards-chunky-mining-equipment",
+    "required_traits": [
+      "chunky readable mining RPG item silhouettes",
+      "hammered metal and worn leather material language",
+      "warm mine lighting baked into item surfaces only",
+      "isolated components with safe gutters",
+      "readable at 64px and 96px inventory size"
+    ],
+    "forbidden_mixes": [
+      "baked labels or stat text",
+      "UI frames or item slots",
+      "baked cast shadows",
+      "full composed equipment screen",
+      "Minecraft or Steve-adjacent character motifs",
+      "visible chroma-key fringe in final runtime crops"
+    ]
+  },
+  "assets": [
+    {
+      "id": "mine-cards-equipment-source-v001-candidate-b-resheet",
+      "intended_role": "Mine Cards isolated equipment sprite source sheet for future inventory/equipment and mining upgrade UI",
+      "observed_subject": "Twelve isolated fantasy-mining equipment items in a 3x4 sheet: worn pickaxe, copper pickaxe, mining helmet, miner armor, plain ring, ruby ring, skull relic scroll, skull/mine charm pendant, hand axe, battle axe, spiked mace, and dark crown.",
+      "evidence": "gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-v001-candidate-b-resheet.png plus passing intake report gamedesign/projects/mine-cards/reviews/mine-cards-equipment-source-v001-candidate-b-resheet-intake.md",
+      "style_group": "mine-cards-chunky-mining-equipment",
+      "semantic_match": "pass",
+      "style_match": "pass",
+      "composability": "pass",
+      "verdict": "accept",
+      "problems": [
+        "accepted as draft source for slicing, not final-art completion",
+        "raw generated candidate B failed intake; this accepted sheet is a deterministic resheet from the generated source",
+        "green fringe was scrubbed for source intake, but final runtime crops still need generated UI pixel audit and edge proof before integration",
+        "the mine charm is skull-themed rather than a neutral mining charm; acceptable for the current dark Mine Cards equipment mood but should be revisited if the equipment UI needs friendlier mining-only trinkets"
+      ]
+    }
+  ]
+}

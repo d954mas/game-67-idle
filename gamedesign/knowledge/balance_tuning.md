@@ -25,7 +25,7 @@ effects, tuning knobs, and validation evidence.
 - Time to first meaningful choice.
 - Time to first slowdown.
 - Session length target.
-- Return or idle reward target.
+- Return, retry, or re-entry pacing target, if the game has one.
 - Failure/recovery time.
 
 ## Core Principles
@@ -56,7 +56,7 @@ effects, tuning knobs, and validation evidence.
 
 - Start from a fresh player state.
 - Simulate the first minute, first session, and at least one return session.
-- Track resources earned, resources spent, idle gains, unlock times, and blocked time.
+- Track resources earned, resources spent, unlock times, failure/retry time, and blocked time.
 - Print milestone times in player-readable labels.
 - Flag impossible purchases, dead-end states, runaway growth, and unused resources.
 - Compare simulation output against the GDD target timeline.
@@ -92,5 +92,3 @@ effects, tuning knobs, and validation evidence.
 
 - GEEvo paper, [Game Economy Generation and Balancing with Evolutionary Algorithms](https://arxiv.org/abs/2404.18574)
 - Wikipedia, [Game balance](https://en.wikipedia.org/wiki/Game_balance)
-- Wikipedia, [Incremental game](https://en.wikipedia.org/wiki/Incremental_game)
-

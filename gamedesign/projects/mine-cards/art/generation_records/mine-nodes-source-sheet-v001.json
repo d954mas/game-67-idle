@@ -1,0 +1,16 @@
+{
+  "schema": "game.art_generation_record",
+  "version": 1,
+  "id": "mine-nodes-source-sheet-v001",
+  "provider": "OpenAI built-in image_gen",
+  "model_or_workflow": "gpt-image-2",
+  "workflow_path": "gamedesign/projects/mine-cards/art/workflows/mine_nodes_source_sheet_v001_workflow.json",
+  "no_seed_reason": "built-in image_gen did not expose a stable seed",
+  "prompt": "Use case: stylized-concept\nAsset type: game sprite source sheet for runtime atlas\nPrimary request: two isolated voxel-style mining node sprites for a blocky idle RPG: one grey stone outcrop and one copper ore vein outcrop.\nScene/backdrop: perfectly flat solid #ff00ff chroma-key background for background removal; no floor plane, no cast shadow, no gradient.\nSubject: exactly two separate assets, left asset is grey stone, right asset is copper ore embedded in grey-brown rock. Irregular chunky mine-rock silhouettes, not perfect cubes.\nStyle/medium: polished pixel-art / low-poly voxel game sprite, matching dark chunky mobile RPG UI, readable at 60x44 px.\nComposition/framing: square source sheet, assets centered horizontally with generous spacing and transparent-ready padding; no overlap between the two assets.\nColor palette: stone greys with cool highlights; copper warm orange-brown ore accents; subtle dark outline suitable for dark purple UI.\nMaterials/textures: broad blocky facets, clean silhouette, no noisy Minecraft-like tile texture.\nConstraints: no text, no numbers, no logo, no watermark, no characters, no pickaxe, no UI frame. Do not use #ff00ff anywhere in the assets. Keep the chroma-key background one uniform color.",
+  "negative_prompt": "text, numbers, logo, watermark, characters, pickaxe, UI frame, Minecraft texture copy, gradients or shadows in chroma background",
+  "source_family": "runtime mining node sprites",
+  "source_family_role": "stone and copper mining node source sheet",
+  "accepted_source_image": "gamedesign/projects/mine-cards/visual/source_sheets/mine_nodes_source_sheet_v001.png",
+  "final_art_source": "generated",
+  "rejected_candidate_notes": "Rejected full UI mockup variants ig_0585585c107107a9016a327fbefa588191aceea2ee76305581.png and ig_05a8927a9d408602016a3282684cf48191a8fa3eeb2d770c23.png."
+}

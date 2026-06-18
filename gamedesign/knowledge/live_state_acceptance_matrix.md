@@ -37,7 +37,7 @@ Every game should adapt these categories to its genre and loop:
 | `progression_panel_open` | upgrades, meta, rooms, inventory, build, or collection exist | What grows, what can I afford, what is locked? |
 | `modal_or_choice_open` | choices, cards, dialogs, popups, confirmations exist | What choice is being asked, and what happens next? |
 | `locked_or_disabled_state` | any unavailable button/row/feature exists | Why is it locked, and how do I unlock it? |
-| `returning_player_state` | offline, resume, daily, idle return, saved-state restore, or long-session return exists | What happened while I was away, and what should I do now? |
+| `resume_or_reentry_state` | resume, restart, retry, re-entering a screen, saved-state restore, or long-session return exists | What should I understand when I return to this state? |
 | `transient_stress_state` | combat numbers, particles, toasts, timers, or reward flyouts can overlap UI | Does anything cover text, buttons, costs, or critical feedback? |
 | `small_viewport_state` | web/mobile/portrait is in scope | Does the primary action still fit and remain touchable? |
 
@@ -142,7 +142,7 @@ gate must fail.
 
 ## Fixture: Voxelheim Failure
 
-Voxelheim's reward-feedback pass captured an offline/reward state and was later
+Voxelheim's reward-feedback pass captured one reward state and was later
 treated as broad UI acceptance. The missed state was a returning live-combat
 stress state with:
 

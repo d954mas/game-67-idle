@@ -75,6 +75,8 @@ def is_source_key_spill_like(red: int, green: int, blue: int, key: RGB) -> bool:
     if key_green > 220 and key_red < 40 and key_blue < 40:
         saturated = green > 90 and green > red * 1.25 and green > blue * 1.25 and green - max(red, blue) > 22
         return saturated or is_muted_green_key_spill_like(red, green, blue)
+    if key_green > 220 and key_blue > 220 and key_red < 40:
+        return green > 70 and blue > 70 and green > red * 1.25 and blue > red * 1.25 and min(green, blue) - red > 26 and abs(green - blue) < 96
     if key_red > 220 and key_blue > 220 and key_green < 40:
         return is_exact_key_like(red, green, blue, key=key, tolerance=36)
     if key_red > 220 and key_green < 40 and key_blue < 40:
@@ -163,6 +165,9 @@ def repair_visible_halo(
 
 
 def remove_source_key_spill(image: Image.Image, key: RGB, passes: int = 3, radius: int = 2) -> None:
+    if is_cyan_key(key):
+        decontaminate_source_key_spill_image(image, key=key, require_transparent_touch=True)
+        return
     if remove_source_key_spill_numpy(image, key=key, passes=passes, radius=radius):
         return
     pixels = image.load()
@@ -237,6 +242,15 @@ def remove_source_key_spill_numpy(image: Image.Image, key: RGB, passes: int = 3,
         return False
     array = np.array(image.convert("RGBA"), dtype=np.uint8)
     if array.size == 0:
+        return True
+    if is_cyan_key(key):
+        decontaminate_source_key_spill_numpy(
+            array,
+            key=key,
+            aggressive_visible_decontaminate=False,
+            radius=max(6, radius),
+        )
+        image.paste(Image.fromarray(array))
         return True
     for _pass in range(passes):
         alpha = array[..., 3]
@@ -325,6 +339,15 @@ def source_key_spill_mask(red: Any, green: Any, blue: Any, key: RGB, magenta_tol
         saturated = (green > 90) & (green > red * 1.25) & (green > blue * 1.25) & (green - np.maximum(red, blue) > 22)
         muted = (green >= 55) & (blue <= 32) & (green - blue >= 40) & (green - red >= 18)
         return saturated | muted
+    if key_green > 220 and key_blue > 220 and key_red < 40:
+        return (
+            (green > 70)
+            & (blue > 70)
+            & (green > red * 1.25)
+            & (blue > red * 1.25)
+            & (np.minimum(green, blue) - red > 26)
+            & (np.abs(green - blue) < 96)
+        )
     if key_red > 220 and key_blue > 220 and key_green < 40:
         return np.maximum.reduce((np.abs(red - key_red), np.abs(green - key_green), np.abs(blue - key_blue))) <= magenta_tolerance
     if key_red > 220 and key_green < 40 and key_blue < 40:
@@ -416,6 +439,98 @@ def repair_visible_halo_numpy(array: Any, *, key: RGB, aggressive_visible_decont
         array[..., :3][update] = (total[update] // count[update, None]).astype(np.uint8)
 
 
+def is_cyan_key(key: RGB) -> bool:
+    key_red, key_green, key_blue = key
+    return key_green > 220 and key_blue > 220 and key_red < 40
+
+
+def decontaminate_source_key_spill_numpy(
+    array: Any,
+    *,
+    key: RGB,
+    aggressive_visible_decontaminate: bool,
+    radius: int = 6,
+) -> None:
+    alpha = array[..., 3]
+    visible = alpha > 12
+    red = array[..., 0].astype(np.int16)
+    green = array[..., 1].astype(np.int16)
+    blue = array[..., 2].astype(np.int16)
+    spill = source_key_spill_mask(red, green, blue, key)
+    if aggressive_visible_decontaminate:
+        touch = np.ones(alpha.shape, dtype=bool)
+    else:
+        touch = dilate_bool_mask(alpha <= 12, radius)
+    update = visible & spill & touch
+    if not np.any(update):
+        return
+
+    bad = spill | key_fringe_mask_rgb(red, green, blue) | green_screen_spill_mask_rgb(red, green, blue) | any_purple_halo_mask_rgb(red, green, blue)
+    source = visible & (~bad)
+    count = box_sum(source.astype(np.uint16), radius)
+    total = box_sum(array[..., :3].astype(np.uint32) * source[..., None], radius)
+    neighbor_update = update & (count > 0)
+    if np.any(neighbor_update):
+        array[..., :3][neighbor_update] = (total[neighbor_update] // count[neighbor_update, None]).astype(np.uint8)
+    fallback_update = update & (count == 0)
+    if np.any(fallback_update):
+        cyan_amount = np.maximum(0, np.minimum(green, blue) - red)
+        repaired_green = np.maximum(red, green - cyan_amount)
+        repaired_blue = np.maximum(red, blue - cyan_amount)
+        array[..., 1][fallback_update] = np.clip(repaired_green[fallback_update], 0, 255).astype(np.uint8)
+        array[..., 2][fallback_update] = np.clip(repaired_blue[fallback_update], 0, 255).astype(np.uint8)
+
+
+def decontaminate_source_key_spill_image(
+    image: Image.Image,
+    *,
+    key: RGB,
+    require_transparent_touch: bool = True,
+    radius: int = 6,
+) -> None:
+    if np is not None:
+        array = np.array(image.convert("RGBA"), dtype=np.uint8)
+        decontaminate_source_key_spill_numpy(
+            array,
+            key=key,
+            aggressive_visible_decontaminate=not require_transparent_touch,
+            radius=radius,
+        )
+        image.paste(Image.fromarray(array))
+        return
+    pixels = image.load()
+    alpha = image.getchannel("A")
+    alpha_pixels = alpha.load()
+    width, height = image.size
+    updates: list[tuple[int, int, int, int, int, int]] = []
+    for y in range(height):
+        for x in range(width):
+            red, green, blue, current_alpha = pixels[x, y]
+            if current_alpha <= 12 or not is_source_key_spill_like(red, green, blue, key):
+                continue
+            if require_transparent_touch and not touches_alpha(alpha_pixels, x, y, width, height, radius, visible=False):
+                continue
+            neighbors: list[RGB] = []
+            for ny in range(max(0, y - radius), min(height, y + radius + 1)):
+                for nx in range(max(0, x - radius), min(width, x + radius + 1)):
+                    nr, ng, nb, na = pixels[nx, ny]
+                    if na > 12 and not is_source_key_spill_like(nr, ng, nb, key):
+                        neighbors.append((nr, ng, nb))
+            if neighbors:
+                updates.append(
+                    (
+                        x,
+                        y,
+                        sum(item[0] for item in neighbors) // len(neighbors),
+                        sum(item[1] for item in neighbors) // len(neighbors),
+                        sum(item[2] for item in neighbors) // len(neighbors),
+                        current_alpha,
+                    )
+                )
+    for x, y, red, green, blue, alpha_value in updates:
+        pixels[x, y] = (red, green, blue, alpha_value)
+
+
 def remove_edge_artifacts_numpy(array: Any, *, key: RGB, aggressive_visible_decontaminate: bool) -> None:
     for _pass in range(3):
         alpha = array[..., 3]
@@ -425,16 +540,24 @@ def remove_edge_artifacts_numpy(array: Any, *, key: RGB, aggressive_visible_deco
         red = array[..., 0].astype(np.int16)
         green = array[..., 1].astype(np.int16)
         blue = array[..., 2].astype(np.int16)
+        source_key_spill = source_key_spill_mask(red, green, blue, key)
         clear = visible & (
             (key_fringe_mask_rgb(red, green, blue) & transparent_touch_1)
             | (purple_halo_only_mask_rgb(red, green, blue) & transparent_touch_2)
-            | (source_key_spill_mask(red, green, blue, key) & transparent_touch_2)
             | (green_screen_spill_mask_rgb(red, green, blue) & transparent_touch_2)
         )
+        if not is_cyan_key(key):
+            clear |= visible & source_key_spill & transparent_touch_2
         if not np.any(clear):
             break
         array[..., 3][clear] = 0
     repair_visible_halo_numpy(array, key=key, aggressive_visible_decontaminate=aggressive_visible_decontaminate)
+    if is_cyan_key(key):
+        decontaminate_source_key_spill_numpy(
+            array,
+            key=key,
+            aggressive_visible_decontaminate=aggressive_visible_decontaminate,
+        )
 
 
 def key_to_alpha_numpy_large(

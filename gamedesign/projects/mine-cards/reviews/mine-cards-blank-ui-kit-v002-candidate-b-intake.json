@@ -1,0 +1,249 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-blank-ui-kit-v002-candidate-b-clean.png",
+  "analysis_engine": "numpy",
+  "size": [
+    1536,
+    1024
+  ],
+  "key_color": "#00ffff",
+  "key_tolerance": 8,
+  "component_count": 8,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 24,
+  "max_exact_key_conflict_px": 0,
+  "max_key_hue_conflict_ratio": 0.05,
+  "closest_gap_px": 45,
+  "closest_pair": [
+    "component_1",
+    "component_2"
+  ],
+  "candidate_key_scores": [
+    {
+      "key_color": "#00ff00",
+      "visible_px": 530899,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 57,
+      "hue_band_ratio": 0.000107,
+      "score": 57.010737
+    },
+    {
+      "key_color": "#ffff00",
+      "visible_px": 530899,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 2137,
+      "hue_band_ratio": 0.004025,
+      "score": 2137.402525
+    },
+    {
+      "key_color": "#ff00ff",
+      "visible_px": 530899,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 2906,
+      "hue_band_ratio": 0.005474,
+      "score": 2906.547373
+    },
+    {
+      "key_color": "#ff0000",
+      "visible_px": 530899,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 4723,
+      "hue_band_ratio": 0.008896,
+      "score": 4723.889623
+    },
+    {
+      "key_color": "#00ffff",
+      "visible_px": 530899,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 31123,
+      "hue_band_ratio": 0.058623,
+      "score": 31128.86232
+    },
+    {
+      "key_color": "#0000ff",
+      "visible_px": 530899,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 62666,
+      "hue_band_ratio": 0.118038,
+      "score": 62677.803752
+    }
+  ],
+  "current_key_score": {
+    "key_color": "#00ffff",
+    "visible_px": 530899,
+    "exact_conflict_px": 0,
+    "exact_conflict_ratio": 0.0,
+    "hue_band_px": 31123,
+    "hue_band_ratio": 0.058623,
+    "score": 31128.86232
+  },
+  "suggested_key_color": "#00ff00",
+  "key_color_conflict_count": 0,
+  "key_color_action": "keep_current_key_color",
+  "next_prompt_key_color": "#00ffff",
+  "problem_summary": {
+    "components_with_border_gap": 0,
+    "components_with_exact_key_conflict": 0,
+    "components_with_key_hue_conflict": 0,
+    "total_exact_key_conflict_px": 0,
+    "total_key_fringe_hue_px": 2,
+    "total_purple_halo_hue_px": 1601,
+    "gutter_below_min": false,
+    "worst_key_hue_component": {
+      "id": "component_5",
+      "ratio": 0.014559,
+      "bbox": [
+        45,
+        611,
+        325,
+        163
+      ]
+    }
+  },
+  "blocking_reasons": [],
+  "recommended_next_step": {
+    "action": "slice_ready",
+    "reason": "source sheet passed intake checks",
+    "key_color": "#00ffff"
+  },
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        1222,
+        230,
+        274,
+        278
+      ],
+      "area_px": 73486,
+      "visible_px": 73486,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 40
+    },
+    {
+      "id": "component_2",
+      "bbox": [
+        929,
+        231,
+        248,
+        276
+      ],
+      "area_px": 65899,
+      "visible_px": 65899,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 231
+    },
+    {
+      "id": "component_3",
+      "bbox": [
+        36,
+        238,
+        413,
+        266
+      ],
+      "area_px": 105295,
+      "visible_px": 105295,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 246,
+      "key_hue_conflict_ratio": 0.002336,
+      "border_gap_px": 36
+    },
+    {
+      "id": "component_4",
+      "bbox": [
+        500,
+        240,
+        383,
+        263
+      ],
+      "area_px": 98985,
+      "visible_px": 98985,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 1,
+      "key_hue_conflict_ratio": 1e-05,
+      "border_gap_px": 240
+    },
+    {
+      "id": "component_5",
+      "bbox": [
+        45,
+        611,
+        325,
+        163
+      ],
+      "area_px": 50485,
+      "visible_px": 50485,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 735,
+      "key_hue_conflict_ratio": 0.014559,
+      "border_gap_px": 45
+    },
+    {
+      "id": "component_6",
+      "bbox": [
+        438,
+        611,
+        316,
+        163
+      ],
+      "area_px": 49034,
+      "visible_px": 49034,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 250
+    },
+    {
+      "id": "component_7",
+      "bbox": [
+        817,
+        618,
+        303,
+        148
+      ],
+      "area_px": 43479,
+      "visible_px": 43479,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 258
+    },
+    {
+      "id": "component_8",
+      "bbox": [
+        1181,
+        618,
+        306,
+        148
+      ],
+      "area_px": 44236,
+      "visible_px": 44236,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 2,
+      "purple_halo_hue_px": 619,
+      "key_hue_conflict_ratio": 0.014038,
+      "border_gap_px": 49
+    }
+  ],
+  "problems": [],
+  "status": "pass"
+}

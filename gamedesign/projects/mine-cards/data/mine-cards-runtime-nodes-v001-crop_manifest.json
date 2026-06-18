@@ -1,0 +1,11 @@
+{
+  "schema": "game.art_crop_manifest",
+  "version": 1,
+  "art_job": "gamedesign/projects/mine-cards/art_requests/mine-cards-runtime-nodes-v001.json",
+  "output_dir": "assets/runtime/mine-cards-runtime-nodes-v001",
+  "green_screen": {
+    "mode": "chroma_key",
+    "notes": "Use transparent PNGs or a flat chroma-key background for local alpha removal."
+  },
+  "sources": []
+}

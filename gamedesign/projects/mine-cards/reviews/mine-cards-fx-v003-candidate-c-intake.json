@@ -1,0 +1,242 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-fx-v003-candidate-c-clean.png",
+  "analysis_engine": "numpy",
+  "size": [
+    1254,
+    1254
+  ],
+  "key_color": "#00ff00",
+  "key_tolerance": 8,
+  "component_count": 5,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 24,
+  "max_exact_key_conflict_px": 0,
+  "max_key_hue_conflict_ratio": 0.05,
+  "closest_gap_px": 18,
+  "closest_pair": [
+    "component_3",
+    "component_5"
+  ],
+  "candidate_key_scores": [
+    {
+      "key_color": "#0000ff",
+      "visible_px": 169493,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 0,
+      "hue_band_ratio": 0.0,
+      "score": 0.0
+    },
+    {
+      "key_color": "#ff00ff",
+      "visible_px": 169493,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 4,
+      "hue_band_ratio": 2.4e-05,
+      "score": 4.00236
+    },
+    {
+      "key_color": "#ff0000",
+      "visible_px": 169493,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 2441,
+      "hue_band_ratio": 0.014402,
+      "score": 2442.440177
+    },
+    {
+      "key_color": "#00ff00",
+      "visible_px": 169493,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 23923,
+      "hue_band_ratio": 0.141144,
+      "score": 23937.114447
+    },
+    {
+      "key_color": "#ffff00",
+      "visible_px": 169493,
+      "exact_conflict_px": 158,
+      "exact_conflict_ratio": 0.000932,
+      "hue_band_px": 34757,
+      "hue_band_ratio": 0.205065,
+      "score": 192777.506452
+    },
+    {
+      "key_color": "#00ffff",
+      "visible_px": 169493,
+      "exact_conflict_px": 216,
+      "exact_conflict_ratio": 0.001274,
+      "hue_band_px": 23160,
+      "hue_band_ratio": 0.136643,
+      "score": 239173.664281
+    }
+  ],
+  "current_key_score": {
+    "key_color": "#00ff00",
+    "visible_px": 169493,
+    "exact_conflict_px": 0,
+    "exact_conflict_ratio": 0.0,
+    "hue_band_px": 23923,
+    "hue_band_ratio": 0.141144,
+    "score": 23937.114447
+  },
+  "suggested_key_color": "#0000ff",
+  "key_color_conflict_count": 0,
+  "key_color_action": "keep_current_key_color",
+  "next_prompt_key_color": "#00ff00",
+  "problem_summary": {
+    "components_with_border_gap": 0,
+    "components_with_exact_key_conflict": 0,
+    "components_with_key_hue_conflict": 0,
+    "total_exact_key_conflict_px": 0,
+    "total_key_fringe_hue_px": 0,
+    "total_purple_halo_hue_px": 0,
+    "gutter_below_min": true,
+    "worst_key_hue_component": {
+      "id": "component_1",
+      "ratio": 0.0,
+      "bbox": [
+        527,
+        460,
+        279,
+        323
+      ]
+    }
+  },
+  "blocking_reasons": [
+    {
+      "code": "unsafe_gutter",
+      "closest_gap_px": 18,
+      "minimum_px": 24,
+      "closest_pair": [
+        "component_3",
+        "component_5"
+      ],
+      "action": "regenerate_source_sheet_with_more_gutter_and_safe_border"
+    }
+  ],
+  "recommended_next_step": {
+    "action": "regenerate_source_sheet_with_more_gutter_and_safe_border",
+    "reason": "components are too close to sheet borders or each other for reliable slicing",
+    "key_color": "#00ff00"
+  },
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        527,
+        460,
+        279,
+        323
+      ],
+      "area_px": 59198,
+      "merged_from": [
+        "component_1",
+        "component_2",
+        "component_4",
+        "component_12"
+      ],
+      "visible_px": 59198,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 448
+    },
+    {
+      "id": "component_2",
+      "bbox": [
+        293,
+        504,
+        210,
+        240
+      ],
+      "area_px": 30872,
+      "merged_from": [
+        "component_6",
+        "component_15",
+        "component_34",
+        "component_37"
+      ],
+      "visible_px": 30872,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 293
+    },
+    {
+      "id": "component_3",
+      "bbox": [
+        1025,
+        514,
+        199,
+        225
+      ],
+      "area_px": 23449,
+      "merged_from": [
+        "component_9",
+        "component_13",
+        "component_21",
+        "component_51"
+      ],
+      "visible_px": 23449,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 30
+    },
+    {
+      "id": "component_4",
+      "bbox": [
+        27,
+        521,
+        222,
+        223
+      ],
+      "area_px": 32140,
+      "merged_from": [
+        "component_14",
+        "component_19",
+        "component_61",
+        "component_68"
+      ],
+      "visible_px": 32140,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 27
+    },
+    {
+      "id": "component_5",
+      "bbox": [
+        830,
+        525,
+        177,
+        213
+      ],
+      "area_px": 23834,
+      "merged_from": [
+        "component_18",
+        "component_67"
+      ],
+      "visible_px": 23834,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 247
+    }
+  ],
+  "problems": [
+    "closest component gap 18px is below required 24px"
+  ],
+  "status": "fail"
+}

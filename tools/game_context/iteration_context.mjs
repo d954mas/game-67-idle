@@ -160,12 +160,12 @@ function buildStartupGate({ concept, designSources, runtimeSources, taskContext,
       fix: "Create gamedesign/projects/<game-id>/visual/live_state_acceptance_matrix.json and require it in product gates before accepting UI/visual work.",
     },
     {
-      id: "core_loop_economy",
-      ok: activeConcept && designSources.some((source) => /\/data\/balance\.json$/.test(source)),
-      evidence: activeConcept && designSources.some((source) => /\/data\/balance\.json$/.test(source))
-        ? "Core-loop economy data found (data/balance.json) for the active concept."
-        : "No core-loop economy data (data/balance.json) for the active concept.",
-      fix: "Design the core loop FIRST: write gamedesign/projects/<id>/data/balance.json (currencies, cost/value growth, progression/prestige, offline) grounded in a reference deconstruction, before building. A pretty screen is not a game (AGENTS.md Game/core-loop gate).",
+      id: "core_loop_model",
+      ok: activeConcept && designSources.some((source) => /\/data\/core_loop\.json$/.test(source)),
+      evidence: activeConcept && designSources.some((source) => /\/data\/core_loop\.json$/.test(source))
+        ? "Core-loop model found (data/core_loop.json) for the active concept."
+        : "No core-loop model (data/core_loop.json) for the active concept.",
+      fix: "Design the core loop FIRST: write gamedesign/projects/<id>/data/core_loop.json (player verbs, rules, feedback, risk, goals, replay reason, and reference grounding) before building. A pretty screen is not a game (AGENTS.md Game/core-loop gate).",
     },
   ];
   const missing = requirements.filter((requirement) => !requirement.ok);
@@ -271,7 +271,7 @@ function projectDesignSources(root) {
       `gamedesign/projects/${projectId}/reviews/first_slice_visual_gate.md`,
       `gamedesign/projects/${projectId}/visual/live_state_acceptance_matrix.md`,
       `gamedesign/projects/${projectId}/visual/live_state_acceptance_matrix.json`,
-      `gamedesign/projects/${projectId}/data/balance.json`,
+      `gamedesign/projects/${projectId}/data/core_loop.json`,
     ]));
   }
   for (const legacyId of directories(join(root, "gamedesign"))) {
@@ -280,7 +280,7 @@ function projectDesignSources(root) {
       `gamedesign/${legacyId}/gdd.md`,
       `gamedesign/${legacyId}/GDD.md`,
       `gamedesign/${legacyId}/art/art_direction.md`,
-      `gamedesign/${legacyId}/data/balance.json`,
+      `gamedesign/${legacyId}/data/core_loop.json`,
     ]));
   }
   return [...new Set(sources)];

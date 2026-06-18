@@ -1,0 +1,665 @@
+{
+  "schema": "game.asset_manifest",
+  "version": 1,
+  "art_job": "gamedesign/projects/mine-cards/art_requests/mine-cards-stage-ui-family-v001.json",
+  "crop_manifest": "gamedesign/projects/mine-cards/data/mine-cards-blank-ui-kit-v002-candidate-b-crop_manifest.json",
+  "runtime_dir": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui",
+  "source_art": "gamedesign/projects/mine-cards/art/candidates/mine-cards-blank-ui-kit-v002-candidate-b-clean.png",
+  "source_policy": "real generated bitmap source; crop plan generated from source-sheet intake components",
+  "assets": [
+    {
+      "id": "board_panel_slice9",
+      "kind": "slice9",
+      "path": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/board_panel_slice9.png",
+      "pack_group": "ui_common",
+      "source_crop": "board_panel_slice9",
+      "original_size": [
+        429,
+        282
+      ],
+      "trim_rect": [
+        4,
+        4,
+        429,
+        282
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      },
+      "source_component_id": "component_3",
+      "component_bbox": [
+        36,
+        238,
+        413,
+        266
+      ],
+      "semantic_role": "large resizable board panel base",
+      "anchor": "center",
+      "slice9": {
+        "left": 56,
+        "top": 56,
+        "right": 56,
+        "bottom": 56
+      },
+      "content": {
+        "x": 72,
+        "y": 72,
+        "w": 285,
+        "h": 138
+      },
+      "target_preview_sizes": [
+        [
+          260,
+          170
+        ],
+        [
+          360,
+          240
+        ],
+        [
+          450,
+          300
+        ]
+      ],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "large_only",
+        "min_size": [
+          260,
+          170
+        ],
+        "disallowed_uses": [
+          "compact_button",
+          "small_chip"
+        ]
+      },
+      "state_role": "default"
+    },
+    {
+      "id": "upgrade_panel_slice9",
+      "kind": "slice9",
+      "path": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/upgrade_panel_slice9.png",
+      "pack_group": "ui_common",
+      "source_crop": "upgrade_panel_slice9",
+      "original_size": [
+        399,
+        279
+      ],
+      "trim_rect": [
+        4,
+        4,
+        399,
+        279
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      },
+      "source_component_id": "component_4",
+      "component_bbox": [
+        500,
+        240,
+        383,
+        263
+      ],
+      "semantic_role": "large upgrade/detail panel base",
+      "anchor": "center",
+      "slice9": {
+        "left": 64,
+        "top": 58,
+        "right": 64,
+        "bottom": 58
+      },
+      "content": {
+        "x": 78,
+        "y": 74,
+        "w": 239,
+        "h": 132
+      },
+      "target_preview_sizes": [
+        [
+          280,
+          180
+        ],
+        [
+          360,
+          240
+        ],
+        [
+          440,
+          300
+        ]
+      ],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "large_only",
+        "min_size": [
+          280,
+          180
+        ],
+        "disallowed_uses": [
+          "compact_button",
+          "small_chip"
+        ]
+      },
+      "state_role": "premium"
+    },
+    {
+      "id": "node_card_default_slice9",
+      "kind": "slice9",
+      "path": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/node_card_default_slice9.png",
+      "pack_group": "ui_common",
+      "source_crop": "node_card_default_slice9",
+      "original_size": [
+        264,
+        292
+      ],
+      "trim_rect": [
+        4,
+        4,
+        264,
+        292
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      },
+      "source_component_id": "component_2",
+      "component_bbox": [
+        929,
+        231,
+        248,
+        276
+      ],
+      "semantic_role": "activity node card default base",
+      "anchor": "center",
+      "slice9": {
+        "left": 48,
+        "top": 58,
+        "right": 48,
+        "bottom": 58
+      },
+      "content": {
+        "x": 62,
+        "y": 74,
+        "w": 140,
+        "h": 132
+      },
+      "target_preview_sizes": [
+        [
+          180,
+          190
+        ],
+        [
+          220,
+          250
+        ],
+        [
+          275,
+          315
+        ]
+      ],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "large_only",
+        "min_size": [
+          180,
+          190
+        ],
+        "disallowed_uses": [
+          "compact_button",
+          "small_chip"
+        ]
+      },
+      "state_role": "default"
+    },
+    {
+      "id": "node_card_selected_slice9",
+      "kind": "slice9",
+      "path": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/node_card_selected_slice9.png",
+      "pack_group": "ui_common",
+      "source_crop": "node_card_selected_slice9",
+      "original_size": [
+        290,
+        294
+      ],
+      "trim_rect": [
+        4,
+        4,
+        290,
+        294
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      },
+      "source_component_id": "component_1",
+      "component_bbox": [
+        1222,
+        230,
+        274,
+        278
+      ],
+      "semantic_role": "activity node card selected base",
+      "anchor": "center",
+      "slice9": {
+        "left": 54,
+        "top": 60,
+        "right": 54,
+        "bottom": 60
+      },
+      "content": {
+        "x": 70,
+        "y": 76,
+        "w": 142,
+        "h": 134
+      },
+      "target_preview_sizes": [
+        [
+          190,
+          200
+        ],
+        [
+          230,
+          255
+        ],
+        [
+          288,
+          320
+        ]
+      ],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "large_only",
+        "min_size": [
+          190,
+          200
+        ],
+        "disallowed_uses": [
+          "compact_button",
+          "small_chip"
+        ]
+      },
+      "state_role": "selected"
+    },
+    {
+      "id": "activity_chip_active_slice9",
+      "kind": "slice9",
+      "path": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/activity_chip_active_slice9.png",
+      "pack_group": "ui_common",
+      "source_crop": "activity_chip_active_slice9",
+      "original_size": [
+        341,
+        179
+      ],
+      "trim_rect": [
+        4,
+        4,
+        341,
+        179
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      },
+      "source_component_id": "component_5",
+      "component_bbox": [
+        45,
+        611,
+        325,
+        163
+      ],
+      "semantic_role": "wide activity chip active base",
+      "anchor": "center",
+      "slice9": {
+        "left": 52,
+        "top": 42,
+        "right": 52,
+        "bottom": 42
+      },
+      "content": {
+        "x": 66,
+        "y": 52,
+        "w": 208,
+        "h": 58
+      },
+      "target_preview_sizes": [
+        [
+          210,
+          140
+        ],
+        [
+          280,
+          160
+        ],
+        [
+          350,
+          180
+        ]
+      ],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "large_only",
+        "min_size": [
+          210,
+          140
+        ],
+        "disallowed_uses": [
+          "small_icon_button"
+        ]
+      },
+      "state_role": "active"
+    },
+    {
+      "id": "activity_chip_locked_slice9",
+      "kind": "slice9",
+      "path": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/activity_chip_locked_slice9.png",
+      "pack_group": "ui_common",
+      "source_crop": "activity_chip_locked_slice9",
+      "original_size": [
+        332,
+        179
+      ],
+      "trim_rect": [
+        4,
+        4,
+        332,
+        179
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      },
+      "source_component_id": "component_6",
+      "component_bbox": [
+        438,
+        611,
+        316,
+        163
+      ],
+      "semantic_role": "wide activity chip locked base",
+      "anchor": "center",
+      "slice9": {
+        "left": 52,
+        "top": 42,
+        "right": 52,
+        "bottom": 42
+      },
+      "content": {
+        "x": 66,
+        "y": 52,
+        "w": 199,
+        "h": 58
+      },
+      "target_preview_sizes": [
+        [
+          210,
+          140
+        ],
+        [
+          280,
+          160
+        ],
+        [
+          340,
+          180
+        ]
+      ],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "large_only",
+        "min_size": [
+          210,
+          140
+        ],
+        "disallowed_uses": [
+          "small_icon_button"
+        ]
+      },
+      "state_role": "locked"
+    },
+    {
+      "id": "primary_button_disabled_slice9",
+      "kind": "slice9",
+      "path": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/primary_button_disabled_slice9.png",
+      "pack_group": "ui_common",
+      "source_crop": "primary_button_disabled_slice9",
+      "original_size": [
+        319,
+        164
+      ],
+      "trim_rect": [
+        4,
+        4,
+        319,
+        164
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      },
+      "source_component_id": "component_7",
+      "component_bbox": [
+        817,
+        618,
+        303,
+        148
+      ],
+      "semantic_role": "primary button disabled base",
+      "anchor": "center",
+      "slice9": {
+        "left": 54,
+        "top": 38,
+        "right": 54,
+        "bottom": 38
+      },
+      "content": {
+        "x": 68,
+        "y": 48,
+        "w": 174,
+        "h": 50
+      },
+      "target_preview_sizes": [
+        [
+          180,
+          128
+        ],
+        [
+          240,
+          150
+        ],
+        [
+          320,
+          180
+        ]
+      ],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "large_only",
+        "min_size": [
+          180,
+          128
+        ],
+        "disallowed_uses": [
+          "small_chip",
+          "tiny_icon_button"
+        ]
+      },
+      "state_role": "disabled"
+    },
+    {
+      "id": "primary_button_affordable_slice9",
+      "kind": "slice9",
+      "path": "assets/runtime/mine-cards-stage-ui-family-v001/blank_ui/primary_button_affordable_slice9.png",
+      "pack_group": "ui_common",
+      "source_crop": "primary_button_affordable_slice9",
+      "original_size": [
+        322,
+        164
+      ],
+      "trim_rect": [
+        4,
+        4,
+        322,
+        164
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      },
+      "source_component_id": "component_8",
+      "component_bbox": [
+        1181,
+        618,
+        306,
+        148
+      ],
+      "semantic_role": "primary button affordable base",
+      "anchor": "center",
+      "slice9": {
+        "left": 54,
+        "top": 38,
+        "right": 54,
+        "bottom": 38
+      },
+      "content": {
+        "x": 68,
+        "y": 48,
+        "w": 177,
+        "h": 50
+      },
+      "target_preview_sizes": [
+        [
+          180,
+          128
+        ],
+        [
+          240,
+          150
+        ],
+        [
+          320,
+          180
+        ]
+      ],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "large_only",
+        "min_size": [
+          180,
+          128
+        ],
+        "disallowed_uses": [
+          "small_chip",
+          "tiny_icon_button"
+        ]
+      },
+      "state_role": "affordable"
+    }
+  ]
+}

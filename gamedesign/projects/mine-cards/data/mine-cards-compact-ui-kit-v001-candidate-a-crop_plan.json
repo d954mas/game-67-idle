@@ -1,0 +1,431 @@
+{
+  "schema": "game.runtime_crop_plan",
+  "version": 1,
+  "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-compact-ui-kit-v001-candidate-a-cyan-clean.png",
+  "source_id": "mine-cards-compact-ui-kit-v001-candidate-a",
+  "source_role": "blank UI kit sheet",
+  "output_dir": "assets/runtime/mine-cards-stage-ui-family-v001/compact_ui",
+  "green_screen": {
+    "mode": "chroma_key",
+    "key": "#00ffff",
+    "notes": "Cyan background was normalized from the saved source sheet before slicing. Remove only border-connected key pixels so authored bevels, glows, and contact shadows remain visible."
+  },
+  "crops": [
+    {
+      "id": "compact_activity_chip_active_slice9",
+      "kind": "slice9",
+      "source_component_id": "component_3",
+      "component_bbox": [53, 298, 322, 144],
+      "rect": [45, 290, 338, 160],
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/compact_ui/compact_activity_chip_active_slice9.png",
+      "semantic_role": "compact active activity chip base",
+      "state_role": "active",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ffff",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "slice9": {
+        "left": 42,
+        "top": 10,
+        "right": 42,
+        "bottom": 10
+      },
+      "content": {
+        "x": 42,
+        "y": 10,
+        "w": 254,
+        "h": 140
+      },
+      "target_preview_sizes": [[96, 28], [140, 34], [204, 38], [468, 42]],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "compact_only",
+        "min_size": [96, 28],
+        "disallowed_uses": ["large_modal_panel", "stage_backdrop"]
+      },
+      "min_edge_padding": 8
+    },
+    {
+      "id": "compact_activity_chip_locked_slice9",
+      "kind": "slice9",
+      "source_component_id": "component_4",
+      "component_bbox": [433, 298, 311, 144],
+      "rect": [425, 290, 327, 160],
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/compact_ui/compact_activity_chip_locked_slice9.png",
+      "semantic_role": "compact locked activity chip base",
+      "state_role": "locked",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ffff",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "slice9": {
+        "left": 42,
+        "top": 10,
+        "right": 42,
+        "bottom": 10
+      },
+      "content": {
+        "x": 42,
+        "y": 10,
+        "w": 243,
+        "h": 140
+      },
+      "target_preview_sizes": [[96, 28], [140, 34], [204, 38], [468, 42]],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "compact_only",
+        "min_size": [96, 28],
+        "disallowed_uses": ["large_modal_panel", "stage_backdrop"]
+      },
+      "min_edge_padding": 8
+    },
+    {
+      "id": "compact_node_row_default_slice9",
+      "kind": "slice9",
+      "source_component_id": "component_1",
+      "component_bbox": [807, 291, 314, 153],
+      "rect": [799, 283, 330, 169],
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/compact_ui/compact_node_row_default_slice9.png",
+      "semantic_role": "compact mining node row default base",
+      "state_role": "default",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ffff",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "slice9": {
+        "left": 42,
+        "top": 12,
+        "right": 42,
+        "bottom": 12
+      },
+      "content": {
+        "x": 42,
+        "y": 12,
+        "w": 246,
+        "h": 145
+      },
+      "target_preview_sizes": [[160, 38], [210, 46], [360, 50], [468, 50]],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "compact_only",
+        "min_size": [160, 38],
+        "disallowed_uses": ["large_modal_panel", "stage_backdrop"]
+      },
+      "min_edge_padding": 8
+    },
+    {
+      "id": "compact_node_row_selected_slice9",
+      "kind": "slice9",
+      "source_component_id": "component_2",
+      "component_bbox": [1175, 291, 311, 153],
+      "rect": [1167, 283, 327, 169],
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/compact_ui/compact_node_row_selected_slice9.png",
+      "semantic_role": "compact mining node row selected base",
+      "state_role": "selected",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ffff",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "slice9": {
+        "left": 42,
+        "top": 12,
+        "right": 42,
+        "bottom": 12
+      },
+      "content": {
+        "x": 42,
+        "y": 12,
+        "w": 243,
+        "h": 145
+      },
+      "target_preview_sizes": [[160, 38], [210, 46], [360, 50], [468, 50]],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "compact_only",
+        "min_size": [160, 38],
+        "disallowed_uses": ["large_modal_panel", "stage_backdrop"]
+      },
+      "min_edge_padding": 8
+    },
+    {
+      "id": "compact_primary_button_disabled_slice9",
+      "kind": "slice9",
+      "source_component_id": "component_8",
+      "component_bbox": [50, 591, 322, 148],
+      "rect": [42, 583, 338, 164],
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/compact_ui/compact_primary_button_disabled_slice9.png",
+      "semantic_role": "compact primary upgrade button disabled base",
+      "state_role": "disabled",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ffff",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "slice9": {
+        "left": 42,
+        "top": 10,
+        "right": 42,
+        "bottom": 10
+      },
+      "content": {
+        "x": 42,
+        "y": 10,
+        "w": 254,
+        "h": 144
+      },
+      "target_preview_sizes": [[160, 34], [224, 34], [420, 34], [468, 42]],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "compact_only",
+        "min_size": [160, 34],
+        "disallowed_uses": ["large_modal_panel", "stage_backdrop"]
+      },
+      "min_edge_padding": 8
+    },
+    {
+      "id": "compact_primary_button_affordable_slice9",
+      "kind": "slice9",
+      "source_component_id": "component_7",
+      "component_bbox": [428, 590, 310, 150],
+      "rect": [420, 582, 326, 166],
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/compact_ui/compact_primary_button_affordable_slice9.png",
+      "semantic_role": "compact primary upgrade button affordable base",
+      "state_role": "affordable",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ffff",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "slice9": {
+        "left": 42,
+        "top": 10,
+        "right": 42,
+        "bottom": 10
+      },
+      "content": {
+        "x": 42,
+        "y": 10,
+        "w": 242,
+        "h": 146
+      },
+      "target_preview_sizes": [[160, 34], [224, 34], [420, 34], [468, 42]],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "compact_only",
+        "min_size": [160, 34],
+        "disallowed_uses": ["large_modal_panel", "stage_backdrop"]
+      },
+      "min_edge_padding": 8
+    },
+    {
+      "id": "compact_nav_tab_idle_slice9",
+      "kind": "slice9",
+      "source_component_id": "component_5",
+      "component_bbox": [808, 585, 313, 162],
+      "rect": [800, 577, 329, 178],
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/compact_ui/compact_nav_tab_idle_slice9.png",
+      "semantic_role": "bottom navigation tab idle base",
+      "state_role": "idle",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ffff",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "slice9": {
+        "left": 36,
+        "top": 14,
+        "right": 36,
+        "bottom": 14
+      },
+      "content": {
+        "x": 36,
+        "y": 14,
+        "w": 257,
+        "h": 150
+      },
+      "target_preview_sizes": [[96, 48], [128, 56], [180, 64]],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "compact_only",
+        "min_size": [96, 48],
+        "disallowed_uses": ["large_modal_panel", "stage_backdrop"]
+      },
+      "min_edge_padding": 8
+    },
+    {
+      "id": "compact_nav_tab_active_slice9",
+      "kind": "slice9",
+      "source_component_id": "component_6",
+      "component_bbox": [1175, 585, 313, 162],
+      "rect": [1167, 577, 329, 178],
+      "output": "assets/runtime/mine-cards-stage-ui-family-v001/compact_ui/compact_nav_tab_active_slice9.png",
+      "semantic_role": "bottom navigation tab active base",
+      "state_role": "active",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ffff",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "slice9": {
+        "left": 36,
+        "top": 14,
+        "right": 36,
+        "bottom": 14
+      },
+      "content": {
+        "x": 36,
+        "y": 14,
+        "w": 257,
+        "h": 150
+      },
+      "target_preview_sizes": [[96, 48], [128, 56], [180, 64]],
+      "stretch_policy": {
+        "center": "repeatable_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "decorative_fixed",
+        "non_stretch_ornaments": "corner_only"
+      },
+      "usage_policy": {
+        "size_class": "compact_only",
+        "min_size": [96, 48],
+        "disallowed_uses": ["large_modal_panel", "stage_backdrop"]
+      },
+      "min_edge_padding": 8
+    }
+  ]
+}

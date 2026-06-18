@@ -1,0 +1,159 @@
+{
+  "schema": "game.source_sheet_prompt_packet",
+  "version": 1,
+  "job_id": "mine-cards-equipment-source-v001",
+  "asset_family": "Mine Cards production equipment item source sheet",
+  "source_family": "isolated equipment sprite sheet",
+  "source_family_role": "cuttable standalone equipment/item sprites: tools, helmet, armor, rings, charm, and relic scroll; no UI frames or text",
+  "suggested_key_color": "#00ff00",
+  "key_color_source": "intake_audit",
+  "intake_key_color_action": "regenerate_with_next_prompt_key_color",
+  "intake_recommended_next_step": {
+    "action": "regenerate_source_sheet_with_safer_key_color",
+    "reason": "current key color conflicts with visible component art or halo colors",
+    "key_color": "#00ff00"
+  },
+  "intake_blocking_reasons": [
+    {
+      "code": "key_color_conflict",
+      "count": 5,
+      "action": "regenerate_source_sheet_with_safer_key_color"
+    },
+    {
+      "code": "unsafe_border",
+      "count": 8,
+      "minimum_px": 64,
+      "action": "regenerate_source_sheet_with_more_gutter_and_safe_border"
+    },
+    {
+      "code": "unsafe_gutter",
+      "closest_gap_px": 10,
+      "minimum_px": 48,
+      "closest_pair": [
+        "component_6",
+        "component_11"
+      ],
+      "action": "regenerate_source_sheet_with_more_gutter_and_safe_border"
+    }
+  ],
+  "diagnostic_chroma_override": false,
+  "source_sheet_layout": {
+    "version": 1,
+    "sheet_role": "cuttable_source_sheet",
+    "family_kind": "sprite",
+    "recommended_canvas": {
+      "size_px": [
+        1792,
+        1344
+      ],
+      "background": "#00ff00",
+      "background_policy": "Use exact flat #00ff00 if transparency is not supported. Do not use blue, white, gray, gradients, vignette, paper, floor, or checkerboard."
+    },
+    "placement": {
+      "mode": "row_major_grid",
+      "edge_margin_px_min": 64,
+      "gutter_px_min": 48,
+      "allow_overlap": false,
+      "allow_composed_ui_screen": false,
+      "allow_baked_runtime_text": false
+    },
+    "rows": [
+      {
+        "id": "mining_first",
+        "purpose": "worn stone/iron pickaxe, copper pickaxe, mining helmet, and miner chest armor",
+        "item_policy": "one isolated component per slot with clear gutters and no composed runtime screen",
+        "slots": [
+          "item_pickaxe_worn",
+          "item_pickaxe_copper",
+          "item_mining_helmet",
+          "item_miner_armor"
+        ]
+      },
+      {
+        "id": "progression_trinkets",
+        "purpose": "plain dark metal ring, ruby ring, skull relic scroll, and mine charm amulet",
+        "item_policy": "one isolated component per slot with clear gutters and no composed runtime screen",
+        "slots": [
+          "item_plain_ring",
+          "item_ruby_ring",
+          "item_skull_relic_scroll",
+          "item_mine_charm"
+        ]
+      },
+      {
+        "id": "later_rpg_reference",
+        "purpose": "hand axe, battle axe, spiked mace, and dark crown for later RPG equipment mood",
+        "item_policy": "one isolated component per slot with clear gutters and no composed runtime screen",
+        "slots": [
+          "item_hand_axe",
+          "item_battle_axe",
+          "item_spiked_mace",
+          "item_dark_crown"
+        ]
+      }
+    ],
+    "cut_policy": {
+      "one_component_per_slot": true,
+      "preserve_empty_chroma_lanes": true,
+      "crop_after_intake_not_by_prompt_coordinates": true,
+      "fixed_ornaments_are_separate_overlays": true
+    }
+  },
+  "prompt": "Create a production source sheet for Mine Cards production equipment item source sheet. Source family: isolated equipment sprite sheet. Role: cuttable standalone equipment/item sprites: tools, helmet, armor, rings, charm, and relic scroll; no UI frames or text. This is a cuttable source sheet, not a gameplay screenshot, mockup, landing page, or composed UI screen. Arrange the sheet as a row_major_grid with at least 64px outer margin and 48px gutters between all visible pixels and shadows. Row 1 mining_first: worn stone/iron pickaxe, copper pickaxe, mining helmet, and miner chest armor; one isolated component per slot with clear gutters and no composed runtime screen. Slots in order: item_pickaxe_worn, item_pickaxe_copper, item_mining_helmet, item_miner_armor. Row 2 progression_trinkets: plain dark metal ring, ruby ring, skull relic scroll, and mine charm amulet; one isolated component per slot with clear gutters and no composed runtime screen. Slots in order: item_plain_ring, item_ruby_ring, item_skull_relic_scroll, item_mine_charm. Row 3 later_rpg_reference: hand axe, battle axe, spiked mace, and dark crown for later RPG equipment mood; one isolated component per slot with clear gutters and no composed runtime screen. Slots in order: item_hand_axe, item_battle_axe, item_spiked_mace, item_dark_crown. Leave empty chroma lanes between rows and slots. Do not compose these assets into a runtime screen. Use a perfectly flat chroma background #00ff00 or true transparency; do not use gradients, shadows, glow, or texture in the background. Keep every asset isolated with generous gutters and no overlap between shadows. Keep all labels, numbers, quest text, counters, and state values blank for runtime composition. Put unique gems, badges, medallions, locks, banners, and center ornaments in separate overlay sprites, not inside stretchable bases. Use consistent perspective, lighting, material language, and line weight across the sheet.",
+  "negative_prompt": "stat labels, rarity labels, item names, UI frames, button labels, button backgrounds, resource counters, game state values, debug text, cast shadows on the background, random letters, watermarks, labels fused into item art, items fused into UI frames, wrong subject, weak silhouette at 64px, opaque or non-flat background, white/gray background, baked cast shadow, halo or matte fringe, neighboring fragments inside expanded crop, clipped silhouette, copying Minecraft/Steve-adjacent character motifs, readable text, fake letters, watermark, fused icons inside buttons, cropped silhouettes, merged components, busy stretch centers, non-flat chroma background, purple or red-blue halo on transparent edges",
+  "constraints": [
+    "Mine Cards blocky fantasy mining RPG item art",
+    "use the old equipment sheet only as silhouette/material reference, not as a copied source",
+    "chunky readable silhouettes with hammered metal, worn leather, ore/copper accents, and low-poly/block-inspired facets",
+    "consistent 3/4 inventory icon perspective and warm mine lighting baked into the item surface only",
+    "exact flat #00ff00 background or true transparent PNG",
+    "no cast shadows, no floor shadow, no glow halo on the background",
+    "at least 64px outer margin and 48px gutters between all visible pixels",
+    "clear gutters between assets",
+    "no readable text",
+    "no fake letters",
+    "no watermark",
+    "no UI frames or card borders",
+    "no fused items",
+    "no unique decoration inside slice9 stretch zones"
+  ],
+  "relevant_asset_groups": [
+    {
+      "id": "equipment_item_sprites",
+      "kind": "sprite",
+      "role": "isolated equipment and trinket sprites with explicit pivots",
+      "states": [
+        "default"
+      ],
+      "size_class": "source 224-320px per item, preview at 64px and 96px",
+      "anchor_policy": "record center pivot for inventory icons; tool sprites also record grip/attachment anchor before runtime use",
+      "component_isolation_policy": "one item per slot, no fused shadows, no neighboring fragments in expanded crop"
+    },
+    {
+      "id": "equipment_icon_set",
+      "kind": "icon",
+      "role": "compatibility group for generated-asset validators; actual current source family exports the same equipment items as sprites/icons, not separate UI icons",
+      "states": [
+        "default"
+      ],
+      "size_class": "preview at 64px and 96px"
+    }
+  ],
+  "final_asset_policy": {
+    "procedural_art_allowed": "debug_only",
+    "runtime_final_must_use_generated_or_artist_source": true,
+    "layered_source_required_for_ui": true,
+    "notes": "Source art may be generated or artist-authored, but runtime sprites must be cut from the accepted source sheet. The old white-background sheet and shadowfix output are reference-only. UI slot frames/panels are intentionally excluded from this source-family prompt and should be generated in a separate UI-kit job."
+  },
+  "acceptance_checklist": [
+    "Source sheet is not a full gameplay screenshot.",
+    "Background is flat #00ff00 or true transparent alpha.",
+    "No readable text, fake glyphs, labels, numbers, or watermark.",
+    "Components have clear gutters and do not share antialias/shadow pixels.",
+    "No stretchable slice9 bases are mixed into this source family.",
+    "Ornaments that should not stretch are separate overlay sprites with visible isolation.",
+    "Icons/sprites have full silhouettes with padding for alpha trim.",
+    "Source can pass source-sheet intake before crop rectangles are trusted.",
+    "Accepted output will get a generation record with provider/model/workflow/seed or no-seed reason."
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "schema": "game.asset_semantic_style_review",
+  "source_family": "isolated icon sheet",
+  "accepted_visual_target": "gamedesign/projects/mine-cards/visual/fake_shots/mining_v001_fake_shot_2026-06-17.png",
+  "pipeline_stage": "pre_slice",
+  "style_contract": {
+    "style_group": "mine-cards-chunky-voxel-icons",
+    "required_traits": [
+      "chunky voxel silhouette",
+      "warm mine lighting",
+      "readable at 24-48px runtime size",
+      "isolated component with cuttable gutter"
+    ],
+    "forbidden_mixes": [
+      "Minecraft item silhouette",
+      "baked labels or letters",
+      "fused UI panels around icons",
+      "key-color fringe or background holes"
+    ]
+  },
+  "assets": [
+    {
+      "id": "mine-cards-icons-v001-candidate-c-sheet",
+      "intended_role": "Mine Cards isolated icon source sheet candidate",
+      "observed_subject": "4x4 chunky voxel icon sheet with activity buildings, resource rocks, coins, pickaxe, lock, chest, ready marker, and one empty dashed slot",
+      "evidence": "gamedesign/projects/mine-cards/art/candidates/mine-cards-icons-v001-candidate-c.png plus intake report gamedesign/projects/mine-cards/reviews/mine-cards-icons-v001-candidate-c-chroma-intake.md",
+      "style_group": "mine-cards-chunky-voxel-icons",
+      "semantic_match": "pass",
+      "style_match": "pass",
+      "composability": "fail",
+      "verdict": "reject",
+      "problems": [
+        "source-sheet intake fails after blue chroma normalization",
+        "component detection finds 31 components, not a clean isolated icon grid",
+        "closest component gap is 9px below the 24px minimum",
+        "blue key color conflicts with visible art in the water/fish and empty dashed slot",
+        "useful as style reference, not safe to slice or integrate as runtime source"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "game.asset_semantic_style_review",
+  "source_family": "blank UI kit sheet",
+  "accepted_visual_target": "gamedesign/projects/mine-cards/visual/fake_shots/mining_v001_fake_shot_2026-06-17.png",
+  "pipeline_stage": "pre_slice",
+  "style_contract": {
+    "style_group": "mine-cards-carved-voxel-ui-bases",
+    "required_traits": [
+      "blank reusable UI bases without baked text or icons",
+      "chunky voxel mining fantasy material language",
+      "dark stone or amethyst panels with copper/gold bevel accents",
+      "clear gutters and isolated component shadows",
+      "slice9-friendly centers and long edges"
+    ],
+    "forbidden_mixes": [
+      "full gameplay screenshots",
+      "baked labels, fake letters, numbers, or watermarks",
+      "icons fused into button or card backgrounds",
+      "decorative center medallions inside stretch zones",
+      "cyan key-color holes or connected component shadows"
+    ]
+  },
+  "assets": [
+    {
+      "id": "mine-cards-blank-ui-kit-v002-candidate-b-sheet",
+      "intended_role": "Mine Cards blank UI base source sheet for board panels, node cards, activity chips, and primary buttons",
+      "observed_subject": "Eight isolated blank carved-stone UI bases on cyan chroma: mechanics panel, premium upgrade panel, default/selected node cards, active/idle activity chips, disabled/active primary buttons.",
+      "evidence": "gamedesign/projects/mine-cards/art/candidates/mine-cards-blank-ui-kit-v002-candidate-b-clean.png plus passing intake report gamedesign/projects/mine-cards/reviews/mine-cards-blank-ui-kit-v002-candidate-b-intake.md",
+      "style_group": "mine-cards-carved-voxel-ui-bases",
+      "semantic_match": "pass",
+      "style_match": "pass",
+      "composability": "pass",
+      "verdict": "accept",
+      "problems": [
+        "accepted as a source sheet only; runtime/final-art still requires slice9 crop manifest, content safe areas, stretched previews, pixel audit, and native screenshot proof",
+        "progress bars are intentionally excluded from this accepted candidate and still need a separate source or retained scaffold"
+      ]
+    }
+  ]
+}

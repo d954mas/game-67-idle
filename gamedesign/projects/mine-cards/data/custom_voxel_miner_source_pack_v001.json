@@ -1,0 +1,180 @@
+{
+  "schema": "game.character_source_pack",
+  "version": 1,
+  "id": "custom_voxel_miner_source_pack_v001",
+  "task": "T0010",
+  "status": "gated_prep",
+  "gate": {
+    "blocked_until": [
+      "T0001 lead acceptance",
+      "or explicit lead priority override for custom character production"
+    ],
+    "must_not_change": [
+      "src/clean_seed_main.c",
+      "current T0001 playable screen",
+      "external/neotolis-engine"
+    ]
+  },
+  "goal": "Replace the temporary KayKit/Ozz miner with an original Mine Cards voxel/low-poly miner while preserving the accepted reusable skeletal animation path.",
+  "selected_production_lane": {
+    "id": "hand_authored_blockbench_blender",
+    "decision": "recommended first candidate lane",
+    "reason": "Precise pivots, public-safe silhouette ownership, stable Y-up model contract, and predictable socket/skinning compatibility matter more than raw generation speed for the first custom miner.",
+    "allowed_support": [
+      "generated raster concepts as reference only",
+      "Blender cleanup/export",
+      "Blockbench cuboid modeling and texture painting"
+    ],
+    "not_allowed_as_final": [
+      "unretopologized generated 3D output",
+      "Minecraft-adjacent avatar/tool proportions",
+      "procedural/debug blockout art",
+      "unlicensed kitbash"
+    ]
+  },
+  "visual_identity": {
+    "silhouette": [
+      "squat sturdy miner",
+      "broad torso",
+      "compact non-cubic head",
+      "thick gloves and boots",
+      "exaggerated but non-Minecraft pickaxe read",
+      "helmet lamp or hair/beard shape unique to Mine Cards"
+    ],
+    "palette": [
+      "warm mine-workshop browns",
+      "dark leather gloves and boots",
+      "aged steel",
+      "copper accent lane for upgrade read",
+      "small warm lamp highlight"
+    ],
+    "public_safety_distance": [
+      "no Minecraft Steve proportions",
+      "no equal cube head/torso/limb rhythm",
+      "no Minecraft texture cadence or palette",
+      "no iconic Minecraft pickaxe shape",
+      "old PSD hero may inform mining fantasy only, not silhouette copying"
+    ]
+  },
+  "body_and_gear_policy": {
+    "first_candidate": "hybrid",
+    "skinned": [
+      "body",
+      "head",
+      "arms",
+      "hands/gloves",
+      "legs/boots"
+    ],
+    "rigid_socketed": [
+      "worn pickaxe",
+      "copper pickaxe",
+      "helmet lamp if authored as separate mesh"
+    ],
+    "future_slots": [
+      "head",
+      "chest",
+      "hands",
+      "boots",
+      "tool",
+      "back"
+    ],
+    "rule": "Do not show decorative gear that implies a mechanic unless it maps to an actual or planned progression slot."
+  },
+  "model_contract": {
+    "source_up_axis": "Y",
+    "source_forward_axis": "record per source before export",
+    "origin": "feet_ground_center",
+    "stage_fit": "must fit current T0001 fixed top action stage without covering HUD/progress/reward UI",
+    "target_budget": {
+      "skinned_vertices_max": 5000,
+      "joints_max": 32,
+      "cpu_skin_ms_avg_max": 0.5,
+      "first_actor_count": 1
+    },
+    "texture_policy": {
+      "preferred": "small texture set or vertex colors with broad readable material areas",
+      "reject": [
+        "tiny noisy voxel texture",
+        "baked labels",
+        "watermarks",
+        "random letters"
+      ]
+    }
+  },
+  "skeleton_contract": {
+    "preferred": "compatible with the existing reusable Ozz/skinned path",
+    "animation_source": "reuse current Pickaxing clip only if retarget remains clean",
+    "skinning_rejects": [
+      "collapsed elbows",
+      "collapsed knees",
+      "detached hands",
+      "tool drift during hit frames"
+    ],
+    "sockets": [
+      {
+        "id": "tool",
+        "required": true,
+        "purpose": "held pickaxe attachment"
+      },
+      {
+        "id": "head",
+        "required": true,
+        "purpose": "helmet or lamp attachment"
+      },
+      {
+        "id": "chest",
+        "required": true,
+        "purpose": "future chest/armor visual slot"
+      },
+      {
+        "id": "back",
+        "required": false,
+        "purpose": "future backpack/tool carry"
+      }
+    ]
+  },
+  "required_source_files": [
+    {
+      "id": "miner_source_model",
+      "kind": "authoring_model",
+      "expected_path_pattern": "gamedesign/projects/mine-cards/visual/character/source/miner_custom_v001.*"
+    },
+    {
+      "id": "miner_runtime_export",
+      "kind": "runtime_model_export",
+      "expected_path_pattern": "gamedesign/projects/mine-cards/visual/character/runtime/miner_custom_v001.glb"
+    },
+    {
+      "id": "miner_texture_source",
+      "kind": "texture_or_palette_source",
+      "expected_path_pattern": "gamedesign/projects/mine-cards/visual/character/source/miner_custom_v001_texture.*"
+    },
+    {
+      "id": "conversion_log",
+      "kind": "conversion_evidence",
+      "expected_path_pattern": "gamedesign/projects/mine-cards/visual/character/reviews/miner_custom_v001_conversion.md"
+    },
+    {
+      "id": "provenance_record",
+      "kind": "source_provenance",
+      "expected_path_pattern": "gamedesign/projects/mine-cards/visual/character/provenance/miner_custom_v001.json"
+    }
+  ],
+  "first_candidate_acceptance": [
+    "source/provenance record exists",
+    "license or ownership note is explicit",
+    "source axes, scale, origin, and export matrix are recorded",
+    "mesh/joint/material/socket inspection report exists",
+    "native proof shows idle/mining motion with attached pickaxe",
+    "CPU skinning remains within the established one-actor budget or records measured remediation",
+    "screenshot review confirms the miner no longer reads as placeholder/debug art",
+    "external/neotolis-engine has no diff"
+  ],
+  "native_evidence_targets": [
+    "landscape idle",
+    "landscape hit/reward",
+    "portrait idle",
+    "portrait hit/reward",
+    "actor zoom for skinning/socket review"
+  ]
+}

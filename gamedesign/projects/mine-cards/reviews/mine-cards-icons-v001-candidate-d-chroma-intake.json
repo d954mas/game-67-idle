@@ -1,0 +1,384 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-icons-v001-candidate-d-chroma.png",
+  "analysis_engine": "numpy",
+  "size": [
+    1254,
+    1254
+  ],
+  "key_color": "#ff00ff",
+  "key_tolerance": 8,
+  "component_count": 15,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 24,
+  "max_exact_key_conflict_px": 0,
+  "max_key_hue_conflict_ratio": 0.05,
+  "closest_gap_px": 14,
+  "closest_pair": [
+    "component_5",
+    "component_7"
+  ],
+  "candidate_key_scores": [
+    {
+      "key_color": "#0000ff",
+      "visible_px": 575439,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 228,
+      "hue_band_ratio": 0.000396,
+      "score": 228.039622
+    },
+    {
+      "key_color": "#ff0000",
+      "visible_px": 575439,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 10918,
+      "hue_band_ratio": 0.018973,
+      "score": 10919.897334
+    },
+    {
+      "key_color": "#00ffff",
+      "visible_px": 575439,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 17775,
+      "hue_band_ratio": 0.030889,
+      "score": 17778.088946
+    },
+    {
+      "key_color": "#00ff00",
+      "visible_px": 575439,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 22381,
+      "hue_band_ratio": 0.038894,
+      "score": 22384.889378
+    },
+    {
+      "key_color": "#ffff00",
+      "visible_px": 575439,
+      "exact_conflict_px": 71,
+      "exact_conflict_ratio": 0.000123,
+      "hue_band_px": 45978,
+      "hue_band_ratio": 0.079901,
+      "score": 116985.990074
+    },
+    {
+      "key_color": "#ff00ff",
+      "visible_px": 575439,
+      "exact_conflict_px": 3390,
+      "exact_conflict_ratio": 0.005891,
+      "hue_band_px": 12203,
+      "hue_band_ratio": 0.021206,
+      "score": 3402205.120642
+    }
+  ],
+  "current_key_score": {
+    "key_color": "#ff00ff",
+    "visible_px": 575439,
+    "exact_conflict_px": 3390,
+    "exact_conflict_ratio": 0.005891,
+    "hue_band_px": 12203,
+    "hue_band_ratio": 0.021206,
+    "score": 3402205.120642
+  },
+  "suggested_key_color": "#0000ff",
+  "key_color_conflict_count": 5,
+  "key_color_action": "regenerate_with_next_prompt_key_color",
+  "next_prompt_key_color": "#0000ff",
+  "problem_summary": {
+    "components_with_border_gap": 0,
+    "components_with_exact_key_conflict": 3,
+    "components_with_key_hue_conflict": 2,
+    "total_exact_key_conflict_px": 6441,
+    "total_key_fringe_hue_px": 6690,
+    "total_purple_halo_hue_px": 11737,
+    "gutter_below_min": true,
+    "worst_key_hue_component": {
+      "id": "component_1",
+      "ratio": 0.286231,
+      "bbox": [
+        646,
+        58,
+        234,
+        298
+      ]
+    }
+  },
+  "blocking_reasons": [
+    {
+      "code": "key_color_conflict",
+      "count": 5,
+      "action": "regenerate_source_sheet_with_safer_key_color"
+    },
+    {
+      "code": "unsafe_gutter",
+      "closest_gap_px": 14,
+      "minimum_px": 24,
+      "closest_pair": [
+        "component_5",
+        "component_7"
+      ],
+      "action": "regenerate_source_sheet_with_more_gutter_and_safe_border"
+    }
+  ],
+  "recommended_next_step": {
+    "action": "regenerate_source_sheet_with_safer_key_color",
+    "reason": "current key color conflicts with visible component art or halo colors",
+    "key_color": "#0000ff"
+  },
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        646,
+        58,
+        234,
+        298
+      ],
+      "area_px": 35646,
+      "visible_px": 35646,
+      "exact_key_conflict_px": 4271,
+      "key_fringe_hue_px": 2813,
+      "purple_halo_hue_px": 3119,
+      "key_hue_conflict_ratio": 0.286231,
+      "border_gap_px": 58
+    },
+    {
+      "id": "component_2",
+      "bbox": [
+        370,
+        60,
+        238,
+        281
+      ],
+      "area_px": 38406,
+      "visible_px": 38406,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 242,
+      "purple_halo_hue_px": 641,
+      "key_hue_conflict_ratio": 0.022991,
+      "border_gap_px": 60
+    },
+    {
+      "id": "component_3",
+      "bbox": [
+        942,
+        69,
+        252,
+        279
+      ],
+      "area_px": 48956,
+      "visible_px": 48956,
+      "exact_key_conflict_px": 67,
+      "key_fringe_hue_px": 332,
+      "purple_halo_hue_px": 831,
+      "key_hue_conflict_ratio": 0.025125,
+      "border_gap_px": 60
+    },
+    {
+      "id": "component_4",
+      "bbox": [
+        56,
+        93,
+        248,
+        249
+      ],
+      "area_px": 40817,
+      "visible_px": 40817,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 156,
+      "purple_halo_hue_px": 712,
+      "key_hue_conflict_ratio": 0.021266,
+      "border_gap_px": 56
+    },
+    {
+      "id": "component_5",
+      "bbox": [
+        625,
+        392,
+        271,
+        275
+      ],
+      "area_px": 55640,
+      "visible_px": 55640,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 141,
+      "purple_halo_hue_px": 386,
+      "key_hue_conflict_ratio": 0.009472,
+      "border_gap_px": 358
+    },
+    {
+      "id": "component_6",
+      "bbox": [
+        943,
+        397,
+        257,
+        270
+      ],
+      "area_px": 54807,
+      "visible_px": 54807,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 242,
+      "purple_halo_hue_px": 674,
+      "key_hue_conflict_ratio": 0.016713,
+      "border_gap_px": 54
+    },
+    {
+      "id": "component_7",
+      "bbox": [
+        326,
+        398,
+        285,
+        271
+      ],
+      "area_px": 44305,
+      "visible_px": 44305,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 267,
+      "purple_halo_hue_px": 529,
+      "key_hue_conflict_ratio": 0.017966,
+      "border_gap_px": 326
+    },
+    {
+      "id": "component_8",
+      "bbox": [
+        58,
+        415,
+        229,
+        226
+      ],
+      "area_px": 33312,
+      "visible_px": 33312,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 187,
+      "purple_halo_hue_px": 519,
+      "key_hue_conflict_ratio": 0.021194,
+      "border_gap_px": 58
+    },
+    {
+      "id": "component_9",
+      "bbox": [
+        358,
+        706,
+        196,
+        218
+      ],
+      "area_px": 30966,
+      "visible_px": 30966,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 126,
+      "purple_halo_hue_px": 445,
+      "key_hue_conflict_ratio": 0.01844,
+      "border_gap_px": 330
+    },
+    {
+      "id": "component_10",
+      "bbox": [
+        71,
+        710,
+        205,
+        215
+      ],
+      "area_px": 30973,
+      "visible_px": 30973,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 138,
+      "purple_halo_hue_px": 430,
+      "key_hue_conflict_ratio": 0.018339,
+      "border_gap_px": 71
+    },
+    {
+      "id": "component_11",
+      "bbox": [
+        955,
+        714,
+        212,
+        215
+      ],
+      "area_px": 21198,
+      "visible_px": 21198,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 189,
+      "purple_halo_hue_px": 367,
+      "key_hue_conflict_ratio": 0.026229,
+      "border_gap_px": 87
+    },
+    {
+      "id": "component_12",
+      "bbox": [
+        646,
+        718,
+        243,
+        208
+      ],
+      "area_px": 33552,
+      "visible_px": 33552,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 215,
+      "purple_halo_hue_px": 474,
+      "key_hue_conflict_ratio": 0.020535,
+      "border_gap_px": 328
+    },
+    {
+      "id": "component_13",
+      "bbox": [
+        84,
+        975,
+        169,
+        240
+      ],
+      "area_px": 31743,
+      "visible_px": 31743,
+      "exact_key_conflict_px": 2103,
+      "key_fringe_hue_px": 1399,
+      "purple_halo_hue_px": 1713,
+      "key_hue_conflict_ratio": 0.164288,
+      "border_gap_px": 39
+    },
+    {
+      "id": "component_14",
+      "bbox": [
+        665,
+        979,
+        217,
+        237
+      ],
+      "area_px": 39733,
+      "visible_px": 39733,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 133,
+      "purple_halo_hue_px": 528,
+      "key_hue_conflict_ratio": 0.016636,
+      "border_gap_px": 38
+    },
+    {
+      "id": "component_15",
+      "bbox": [
+        366,
+        986,
+        199,
+        227
+      ],
+      "area_px": 35385,
+      "visible_px": 35385,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 110,
+      "purple_halo_hue_px": 369,
+      "key_hue_conflict_ratio": 0.013537,
+      "border_gap_px": 41
+    }
+  ],
+  "problems": [
+    "component_1 contains 4271px of exact key-color-like art > allowed 0px",
+    "component_1 key/halo hue conflict ratio 0.286 > allowed 0.050; choose a safer background or split/preserve this art",
+    "component_3 contains 67px of exact key-color-like art > allowed 0px",
+    "component_13 contains 2103px of exact key-color-like art > allowed 0px",
+    "component_13 key/halo hue conflict ratio 0.164 > allowed 0.050; choose a safer background or split/preserve this art",
+    "closest component gap 14px is below required 24px"
+  ],
+  "status": "fail"
+}

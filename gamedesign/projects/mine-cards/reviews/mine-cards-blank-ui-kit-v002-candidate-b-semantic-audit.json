@@ -1,0 +1,16 @@
+{
+  "schema": "game.asset_semantic_style_audit",
+  "version": 1,
+  "review": "gamedesign/projects/mine-cards/reviews/mine-cards-blank-ui-kit-v002-candidate-b-semantic-review.json",
+  "source_family": "blank UI kit sheet",
+  "pipeline_stage": "pre_slice",
+  "accepted_asset_ids": [
+    "mine-cards-blank-ui-kit-v002-candidate-b-sheet"
+  ],
+  "rejected_asset_ids": [],
+  "accepted_style_groups": [
+    "mine-cards-carved-voxel-ui-bases"
+  ],
+  "problems": [],
+  "verdict": "pass"
+}

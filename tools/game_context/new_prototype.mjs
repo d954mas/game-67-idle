@@ -148,18 +148,22 @@ Casual players. Progression should be clear; controls and moment-to-moment play 
 
 ## Core Loop
 
-1. Do one readable action.
-2. Get an immediate juicy result.
-3. Spend rewards on a visible upgrade.
-4. Unlock a new short-term goal.
+1. Read the immediate situation and choose one clear action.
+2. Execute the action with responsive feedback.
+3. See a meaningful state change, consequence, risk, or reward.
+4. Face a new short-term goal or decision that changes the next repetition.
 
 ## First Playable Slice
 
 - One native PC scene.
 - One clear player action.
-- One reward/progression feedback moment.
+- One feedback moment that proves the action changed the game state.
 - One visual proof screenshot for product-read review.
 - One filled \`reviews/first_slice_visual_gate.md\` before broad runtime work.
+- One filled \`data/core_loop.json\` with player verbs, rules, feedback, risk,
+  goals, replay reason, and reference grounding. Do not assume hands-off
+  progression, away-time rewards, or reset-meta loops unless the lead
+  explicitly chooses that direction.
 - One project-specific \`visual/live_state_acceptance_matrix.json\` that names
   required UI/player-read states before broad visual acceptance.
 - One visual-first session contract: goal, non-goal, proof, stop condition,
@@ -185,6 +189,10 @@ Build the first native playable slice for \`${title}\` after the Stage 0 startup
 ## Done when
 
 - [ ] \`gamedesign/projects/${gameId}/gdd.md\` names the first playable loop and player-readable goal.
+- [ ] \`gamedesign/projects/${gameId}/data/core_loop.json\` describes the
+      player verbs, rules, feedback, risk, goals, replay reason, and reference
+      grounding without assuming hands-off progression, away-time rewards, or
+      reset-meta loops.
 - [ ] \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json\`
       is reviewed for this game's HUD, primary CTA, feedback, modal,
       blocked/affordable, and transient stress states.
@@ -214,7 +222,7 @@ function liveStateMatrixJson(gameId) {
     "progression_panel_open",
     "modal_or_choice_open",
     "locked_or_disabled_state",
-    "returning_player_state",
+    "resume_or_reentry_state",
     "transient_stress_state",
   ];
   const states = {
@@ -258,10 +266,10 @@ function liveStateMatrixJson(gameId) {
       player_read_question: "Why is this blocked, and how do I unlock or afford it?",
       proof_prompt: "Blocked/disabled/unaffordable state screenshot with readable reason and cost.",
     },
-    returning_player_state: {
+    resume_or_reentry_state: {
       required: true,
-      player_read_question: "What happened while I was away or after resume?",
-      proof_prompt: "Offline/resume/saved-state screenshot, or explicit debt if not in the first slice.",
+      player_read_question: "What should the player understand after resume, restart, retry, or re-entering this screen?",
+      proof_prompt: "Resume/restart/retry/re-entry screenshot, or explicit debt if not relevant to the first slice.",
     },
     transient_stress_state: {
       required: true,
@@ -301,7 +309,7 @@ marked as not-covered debt.
 | \`progression_panel_open\` | Upgrade/inventory/build/meta panel if the slice has progression. | pending |
 | \`modal_or_choice_open\` | Dialog, card, choice, confirmation, or explicit not-covered debt. | pending |
 | \`locked_or_disabled_state\` | Unavailable/unaffordable/blocked control with readable reason. | pending |
-| \`returning_player_state\` | Offline/resume/saved-state return, or explicit first-slice debt. | pending |
+| \`resume_or_reentry_state\` | Resume, restart, retry, or re-entering this screen, or explicit first-slice debt. | pending |
 | \`transient_stress_state\` | Combat numbers, particles, toasts, timers, or flyouts active over normal UI. | pending |
 
 ## Product Gate Pattern
@@ -323,7 +331,7 @@ node tools/ai.mjs gate \`
   --covered-state hud_visible:<hud-zoom-or-screenshot> \`
   --covered-state primary_action_ready:<native-screenshot-or-probe> \`
   --not-covered-state modal_or_choice_open:"not in this first slice yet" \`
-  --not-covered-state returning_player_state:"not in this first slice yet"
+  --not-covered-state resume_or_reentry_state:"not in this first slice yet"
 \`\`\`
 
 Before a \`pass\`, every required state must be either \`--covered-state\` with
@@ -393,7 +401,7 @@ not a notes dump.
 
 - Gate command:
   \`\`\`powershell
-  node tools/ai.mjs gate --project ${gameId} --task <task-id> --surface desktop --screenshot <native-screenshot.png> --verdict fail --strict --visual-strict --state-matrix gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json --require-state first_screen --covered-state first_screen:<native-screenshot-or-probe> --covered-state hud_visible:<hud-zoom-or-screenshot> --covered-state primary_action_ready:<native-screenshot-or-probe> --not-covered-state modal_or_choice_open:"not in this first slice yet" --not-covered-state returning_player_state:"not in this first slice yet" --where "<where am I?>" --action "<what can I do?>" --response "<what changed?>" --reward "<why continue?>" --game-look "<why game?>" --problem "<specific visual/player-read problem>" --next "<smallest next visual fix>" --visual-score composition=1 --visual-score readability=1 --visual-score ui_controls=1 --visual-score action_direction=1 --visual-score art_quality=1 --visual-score audience_fit=1 --visual-issue blocker:readability:"<concrete issue>"
+  node tools/ai.mjs gate --project ${gameId} --task <task-id> --surface desktop --screenshot <native-screenshot.png> --verdict fail --strict --visual-strict --state-matrix gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json --require-state first_screen --covered-state first_screen:<native-screenshot-or-probe> --covered-state hud_visible:<hud-zoom-or-screenshot> --covered-state primary_action_ready:<native-screenshot-or-probe> --not-covered-state modal_or_choice_open:"not in this first slice yet" --not-covered-state resume_or_reentry_state:"not in this first slice yet" --where "<where am I?>" --action "<what can I do?>" --response "<what changed?>" --reward "<why continue?>" --game-look "<why game?>" --problem "<specific visual/player-read problem>" --next "<smallest next visual fix>" --visual-score composition=1 --visual-score readability=1 --visual-score ui_controls=1 --visual-score action_direction=1 --visual-score art_quality=1 --visual-score audience_fit=1 --visual-issue blocker:readability:"<concrete issue>"
   \`\`\`
 - Gate artifact path:
 - Verdict: pending
@@ -468,15 +476,19 @@ node tools/taskboard/cli.mjs validate
 
 1. Fill \`gamedesign/projects/${gameId}/gdd.md\` with the first playable loop,
    references/fake shot target, visual/product proof gate, and stop condition.
-2. Fill \`gamedesign/projects/${gameId}/reviews/first_slice_visual_gate.md\`
+2. Fill \`gamedesign/projects/${gameId}/data/core_loop.json\` with the
+   player verbs, rules, feedback, risk, goals, replay reason, and reference
+   grounding. Do not assume hands-off progression, away-time rewards, or
+   reset-meta loops unless the lead explicitly chooses that direction.
+3. Fill \`gamedesign/projects/${gameId}/reviews/first_slice_visual_gate.md\`
    with the target, native screenshot/capture plan, mismatch list, gate command,
    critic packet command, strict visual rubric, state matrix coverage, and
    expansion decision.
-3. Review \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.md\`
+4. Review \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.md\`
    and mark any state outside the first slice as explicit not-covered debt in
    the gate command.
-4. Identify the native build/run command for this prototype.
-5. Capture or plan the first native screenshot, compare it with the accepted
+5. Identify the native build/run command for this prototype.
+6. Capture or plan the first native screenshot, compare it with the accepted
    target, and record the mismatch list before broad content.
 `;
 }

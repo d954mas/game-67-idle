@@ -1,7 +1,8 @@
 # Gameplay Systems Playbook
 
-Load this file only when defining gameplay, economy, stats, activities, jobs,
-upgrades, UI flow, balance JSON, or the first playable slice.
+Load this file only when defining gameplay, player verbs, rules, feedback,
+risks, goals, stats, activities, UI flow, structured core-loop data, or the
+first playable slice.
 
 ## Goal
 
@@ -14,14 +15,14 @@ click, what changes, and why the next action matters.
 Write the loop as a chain:
 
 ```text
-intent -> action -> timer/check -> reward -> visible change -> unlock/choice -> next intent
+intent -> action -> rule/check -> consequence -> visible change -> choice/goal -> next intent
 ```
 
 For each step, define:
 
 - player input;
-- wait or cost;
-- output number;
+- timing, cost, risk, or constraint;
+- output state;
 - UI feedback;
 - failure/blocked state;
 - next available decision.
@@ -31,31 +32,32 @@ For each step, define:
 For the first slice, fill this:
 
 - Primary action:
-- Passive/idle action:
+- Secondary action:
 - Activity/job:
-- Upgrade:
+- Progression or mastery hook:
 - Stat affected:
-- Currency source:
-- Currency sink:
+- Resource/source, if any:
+- Spend/sink, if any:
 - Unlock:
 - Visual/status change:
-- Reason to return:
+- Reason to repeat or continue:
 
 Every system must connect to at least one player verb and one visible UI state.
 
-## Economy Minimum
+## Core-Loop Data Minimum
 
 Define only what the first slice needs:
 
-- 1 soft currency;
-- 1-3 stats;
-- 1 activity source;
-- 1 upgrade sink;
-- 1 unlock gate;
-- 1 visual/status milestone.
+- 1-3 player verbs;
+- the rule/check that resolves each verb;
+- one visible consequence or feedback event;
+- one failure, blocked, or recovery state;
+- one short-term goal or next decision;
+- one replay/continue reason.
 
-Add premium currency, prestige, crafting, inventory, or multiple zones only
-after the first loop is playable.
+Add extra economies, crafting, inventory, multiple zones, or reset-meta loops
+only after the first loop is playable and the lead explicitly chooses that
+direction.
 
 ## Activity/Job Template
 
@@ -65,20 +67,20 @@ after the first loop is playable.
 - Input:
 - Duration/cooldown:
 - Cost:
-- Reward:
+- Consequence/reward:
 - Stat effects:
 - Failure/blocked state:
 - Visual feedback:
-- Upgrade affected by:
+- Progression affected by:
 - UI location:
 ```
 
-## Upgrade Template
+## Progression Template
 
 ```markdown
-## Upgrade: [name]
+## Progression/Unlock: [name]
 - Unlock condition:
-- Cost:
+- Cost/risk/requirement:
 - Effect:
 - Why player wants it:
 - Visible before/after:
@@ -101,15 +103,15 @@ The first playable UI needs:
 Do not split the first slice into many screens unless navigation itself is the
 thing being tested.
 
-## Balance Sanity
+## Core-Loop Sanity
 
-Before writing JSON, answer:
+Before writing `data/core_loop.json`, answer:
 
 - How many clicks or seconds to first reward?
-- How many rewards to first upgrade?
-- What changes after first upgrade?
+- How many actions to first new decision?
+- What changes after the first meaningful success?
 - How long to first visual/status milestone?
-- What happens while the player is idle?
+- What happens when the player stops, fails, retries, or re-enters?
 - What prevents the player from being confused or stuck?
 
 For danger/combat/challenge loops, also answer:

@@ -110,6 +110,18 @@ class ChromaKeyAlphaTests(unittest.TestCase):
         self.assertEqual(alpha, 0)
         self.assertFalse(is_source_key_spill_like(red, green, blue, (0, 255, 0)))
 
+    def test_key_to_alpha_decontaminates_cyan_shadow_without_erasing_it(self) -> None:
+        image = Image.new("RGBA", (320, 320), (0, 255, 255, 255))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((80, 80, 220, 220), fill=(44, 34, 58, 255))
+        image.putpixel((221, 150), (20, 128, 132, 180))
+
+        cleaned = key_to_alpha(image, key=(0, 255, 255), aggressive_visible_decontaminate=True)
+        red, green, blue, alpha = cleaned.getpixel((221, 150))
+
+        self.assertGreater(alpha, 12)
+        self.assertFalse(is_source_key_spill_like(red, green, blue, (0, 255, 255)))
+
     def test_premultiplied_resize_does_not_sample_hidden_green(self) -> None:
         image = Image.new("RGBA", (12, 12), (0, 255, 0, 0))
         draw = ImageDraw.Draw(image)

@@ -1,0 +1,17 @@
+{
+  "schema": "game.art_generation_record",
+  "version": 1,
+  "id": "mine-cards-fx-v004-candidate-d",
+  "provider": "codex_builtin_imagegen",
+  "model_or_workflow": "imagegen",
+  "workflow_path": "gamedesign/projects/mine-cards/art/prompts/mine-cards-fx-v004-candidate-d-workflow.json",
+  "prompt_packet": "gamedesign/projects/mine-cards/art/prompts/mine-cards-fx-v004-prompt.json",
+  "no_seed_reason": "Codex built-in imagegen did not expose a stable seed",
+  "prompt": "Create a production source sheet for Mine Cards stage UI and icon source family. Source family: sprite or FX sheet. Role: isolated gameplay sprites/effects with pivots. This is a cuttable source sheet, not a gameplay screenshot, mockup, landing page, or composed UI screen. Arrange the sheet as a row_major_grid with at least 64px outer margin and 48px gutters between all visible pixels and shadows. Row 1 isolated_assets: all requested reusable runtime assets for this source family; one isolated component per slot with clear gutters and no composed runtime screen. Leave empty chroma lanes between rows and slots. Do not compose these assets into a runtime screen. Use a perfectly flat chroma background #00ff00 or true transparency; do not use gradients, shadows, glow, or texture in the background. Keep every asset isolated with generous gutters and no overlap between shadows. Keep all labels, numbers, quest text, counters, and state values blank for runtime composition. Put unique gems, badges, medallions, locks, banners, and center ornaments in separate overlay sprites, not inside stretchable bases. Use consistent perspective, lighting, material language, and line weight across the sheet.",
+  "negative_prompt": "button labels, resource counters, timer values, tutorial text, debug text, game state values, random letters, watermarks, labels fused into reusable backgrounds, icons fused into buttons, wrong subject, weak silhouette at gameplay size, opaque chroma-key background, baked board state, readable text, fake letters, watermark, fused icons inside buttons, cropped silhouettes, merged components, busy stretch centers, non-flat chroma background, purple or red-blue halo on transparent edges",
+  "source_family": "sprite or FX sheet",
+  "source_family_role": "isolated gameplay sprites/effects with pivots",
+  "accepted_source_image": "gamedesign/projects/mine-cards/art/candidates/mine-cards-fx-v004-candidate-d-alpha.png",
+  "final_art_source": "generated",
+  "rejected_candidate_notes": "Candidates A/B/C rejected by intake or semantic issues; D accepted after chroma normalization and soft-matte/despill alpha cleanup; raw/clean/alpha copies retained."
+}

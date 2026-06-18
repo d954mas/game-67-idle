@@ -122,7 +122,7 @@ const artJob = {
       id: "primary_button_slice9",
       kind: "slice9",
       role: "blank resizable command button backgrounds",
-      states: ["idle", "pressed", "disabled", "selected"],
+      states: ["default", "pressed", "disabled", "selected"],
       content_policy: "runtime label/icon composed over blank background",
       stretch_zone_policy: "center and long edges must stay structurally boring at the smallest button size",
       decor_overlay_policy: "decorative caps are corner-only; center gems or badges are separate overlay assets",

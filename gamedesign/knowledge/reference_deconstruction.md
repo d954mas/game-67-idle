@@ -281,8 +281,8 @@ Use this order before coding reference-driven gameplay, UI, economy, or art:
    object spawn area, click/touch targets, reward location, secondary UI, modal
    cadence, feedback effects, and object scale hierarchy.
 4. **Extract mechanics and balance.** Capture visible object counts, timers,
-   merge/combine rules, currencies, sources, sinks, unlock cadence, blockers,
-   offline/session rhythm, and fail/recovery states when visible.
+   merge/combine rules, resources, sources, sinks, unlock cadence, blockers,
+   session rhythm, and fail/recovery states when visible.
 5. **Translate, do not clone.** Write borrow, avoid, and copy-risk notes before
    choosing implementation details.
 6. **Audit the current build.** Compare against a current screenshot or capture
@@ -399,7 +399,7 @@ Write only what a player can see or do. Do not name systems yet.
 - 1-5 minute loop: what repeats, what changes, what blocks progress, what asks
   the player to upgrade, wait, clear space, or return.
 
-Bad transcript: "idle merge economy with upgrades." Good transcript: "The
+Bad transcript: "abstract merge economy with upgrades." Good transcript: "The
 field is full screen; player taps a crate at lower right; a new creature
 appears on the field; dragging two matching creatures creates a higher-tier
 creature; coins pop near the merged object and the top coin counter increases."
@@ -411,7 +411,7 @@ After the transcript, extract the design:
 - screen grammar: main play space, spawn area, object slots/free placement,
   reward location, primary controls, secondary UI, modal cadence;
 - mechanics: spawn, combine/merge, collection, clearing/recycling, timers,
-  offline/session rhythm, fail/recovery states;
+  session rhythm, fail/recovery states;
 - economy: currencies, sources, sinks, price growth, upgrade cadence, blockers;
 - balance clues: visible object counts, wait times, upgrade thresholds,
   compounding pace, first-session target;
@@ -618,7 +618,7 @@ Write a short durable doc before implementation:
 - repeated actions:
 - pacing/blockers:
 - upgrade/reward cadence:
-- session/offline rhythm:
+- session rhythm:
 
 ## Core Loop
 - generate:

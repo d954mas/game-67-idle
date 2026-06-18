@@ -1,0 +1,95 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "mine-cards",
+  "task": "T0001",
+  "surface": "responsive",
+  "verdict": "fail",
+  "timestamp": "2026-06-17T19:18:22.507Z",
+  "screenshot": "build/captures/mine_cards_stage_fx_v003_landscape_geode.png",
+  "answers": {
+    "where": "Mine Cards Mining screen with a fixed top miner action stage, 3D KayKit/Ozz miner, generated mine floor/wall pieces, and lower idle mechanics board.",
+    "action": "Watch Surface Stone mining, read the geode reward pop, then follow NEXT GOAL toward Copper Pickaxe.",
+    "response": "The v003 pass reduces oversized FX/stage stamps, keeps the geode reward in the action stage, and rewrites the upgrade cost rows as direct Need N resource goals.",
+    "reward": "Stone, XP, coins, geode bonus, node unlock progress, and Copper Pickaxe costs are visible; the geode moment now has generated voxel FX instead of only a text callout.",
+    "game_look": "The stage now reads closer to a game action strip with real sprite/3D assets, but the lower board is still a draft repeated-card UI and not yet a polished idle RPG product screen."
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 3,
+      "readability": 4,
+      "ui_controls": 3,
+      "action_direction": 4,
+      "art_quality": 3,
+      "audience_fit": 3
+    },
+    "issues": [
+      {
+        "severity": "major",
+        "axis": "composition",
+        "text": "Landscape still has unused stage space and same-weight lower-board rectangles."
+      },
+      {
+        "severity": "major",
+        "axis": "ui_controls",
+        "text": "NEXT GOAL is clearer, but cost rows and button still need a stronger authored upgrade card treatment."
+      },
+      {
+        "severity": "major",
+        "axis": "art_quality",
+        "text": "FX/stage generated crops are clean, but the board/slice9 family remains procedural/draft-level rather than final generated UI."
+      },
+      {
+        "severity": "minor",
+        "axis": "action_direction",
+        "text": "Actor, rock, reward and progress now read in order, but the reward still sits like a UI badge more than a physical mined payoff."
+      }
+    ]
+  },
+  "state_coverage": {
+    "required": [
+      "first_screen_idle",
+      "mining_tick_reward",
+      "locked_copper",
+      "copper_unlocked",
+      "upgrade_unaffordable",
+      "upgrade_affordable",
+      "upgrade_purchased",
+      "geode_event",
+      "small_window_stress",
+      "portrait_idle",
+      "portrait_geode"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen_idle",
+        "evidence": "build/captures/mine_cards_stage_fx_v003_landscape_surface.png"
+      },
+      {
+        "tag": "geode_event",
+        "evidence": "build/captures/mine_cards_stage_fx_v003_landscape_geode.png"
+      },
+      {
+        "tag": "portrait_idle",
+        "evidence": "build/captures/mine_cards_stage_fx_v003_portrait_surface.png"
+      },
+      {
+        "tag": "portrait_geode",
+        "evidence": "build/captures/mine_cards_stage_fx_v003_portrait_geode.png"
+      }
+    ],
+    "not_covered": []
+  },
+  "problem": "Stage/FX integration improved and four-state proof is current, but the first screen still fails the product bar because lower-board hierarchy and final UI art are not polished enough.",
+  "next": "Keep feature expansion frozen. Generate or accept blank UI kit/decor overlay source families for board/card/button treatment, then recapture four-shot proof and rerun product gate."
+}

@@ -188,7 +188,7 @@ For each ref, capture:
 - first 60 seconds as concrete player actions;
 - first 10 seconds as concrete player actions and visible responses;
 - 1-5 minute loop, including repeated actions, blockers, upgrades, rewards, and
-  session reset/offline cadence when visible;
+  session reset or re-entry cadence when visible;
 - humor/tone;
 - monetization/retention signals if visible;
 - borrow;

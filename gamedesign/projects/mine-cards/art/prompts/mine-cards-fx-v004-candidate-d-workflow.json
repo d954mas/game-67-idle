@@ -1,0 +1,46 @@
+{
+  "schema": "game.image_generation_workflow",
+  "version": 1,
+  "id": "mine-cards-fx-v004-candidate-d",
+  "provider": "codex_builtin_imagegen",
+  "model_or_workflow": "imagegen",
+  "prompt_packet": "gamedesign/projects/mine-cards/art/prompts/mine-cards-fx-v004-prompt.json",
+  "raw_generated_source": "C:/Users/ROG/.codex/generated_images/019ed538-bade-73a3-b4de-360683d97267/ig_0f7690803ddf271a016a32ee1b80488191837f722db7ca3882.png",
+  "saved_raw_candidate": "gamedesign/projects/mine-cards/art/candidates/mine-cards-fx-v004-candidate-d.png",
+  "normalized_candidate": "gamedesign/projects/mine-cards/art/candidates/mine-cards-fx-v004-candidate-d-clean.png",
+  "accepted_alpha_source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-fx-v004-candidate-d-alpha.png",
+  "raw_sha256": "1423759D375D01CBAB27F969169C6222F3B8F2B07D834B3964B80B1C8A077F01",
+  "alpha_sha256": "B951319BDBDCF693DDDD269990EF90756FAAF548CBE21F0A4CF2B98A20D904F4",
+  "seed_policy": {
+    "seed_exposed": false,
+    "no_seed_reason": "Codex built-in imagegen did not expose a stable seed"
+  },
+  "postprocess_steps": [
+    {
+      "step": "normalize_source_sheet_chroma",
+      "output": "gamedesign/projects/mine-cards/art/candidates/mine-cards-fx-v004-candidate-d-clean.png",
+      "reason": "Built-in imagegen produced visually flat but pixel-varied chroma background"
+    },
+    {
+      "step": "soft_matte_despill_alpha_cleanup",
+      "output": "gamedesign/projects/mine-cards/art/candidates/mine-cards-fx-v004-candidate-d-alpha.png",
+      "reason": "Preserve soft shadows and glow while removing green spill and hidden RGB under transparent alpha"
+    },
+    {
+      "step": "source_sheet_intake",
+      "output": "gamedesign/projects/mine-cards/reviews/mine-cards-fx-v004-candidate-d-intake.json",
+      "result": "pass"
+    },
+    {
+      "step": "runtime_crop_and_pixel_audit",
+      "outputs": [
+        "gamedesign/projects/mine-cards/data/mine-cards-fx-v004-candidate-d-crop_manifest.json",
+        "gamedesign/projects/mine-cards/data/mine-cards-fx-v004-candidate-d-asset_manifest.json",
+        "gamedesign/projects/mine-cards/reviews/mine-cards-fx-v004-candidate-d-generated_ui_asset_audit.json"
+      ],
+      "result": "pass"
+    }
+  ],
+  "accepted_reason": "Five isolated voxel FX components with clear gutters; runtime crops preserve soft shadows/glow without green fringe.",
+  "rejected_candidate_notes": "Candidates A/B/C rejected by intake or semantic issues before candidate D: blue/magenta key conflicts, detached particles, or gutter below the required threshold."
+}

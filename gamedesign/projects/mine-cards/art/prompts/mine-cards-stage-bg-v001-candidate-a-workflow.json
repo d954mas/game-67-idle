@@ -1,0 +1,17 @@
+{
+  "schema": "game.image_generation_workflow",
+  "version": 1,
+  "provider": "codex_builtin_imagegen",
+  "model_or_workflow": "imagegen",
+  "source_family": "stage background layer sheet",
+  "prompt_packet": "gamedesign/projects/mine-cards/art/prompts/mine-cards-stage-bg-v001-prompt.json",
+  "raw_output": "C:/Users/ROG/.codex/generated_images/019ed538-bade-73a3-b4de-360683d97267/ig_0f7690803ddf271a016a32e814ad748191a6cefae90430df63.png",
+  "project_raw_copy": "gamedesign/projects/mine-cards/art/candidates/mine-cards-stage-bg-v001-candidate-a.png",
+  "normalized_chroma_copy": "gamedesign/projects/mine-cards/art/candidates/mine-cards-stage-bg-v001-candidate-a-clean.png",
+  "accepted_alpha_source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-stage-bg-v001-candidate-a-alpha.png",
+  "seed_policy": "provider_did_not_expose_stable_seed",
+  "postprocess": [
+    "normalize_source_sheet_chroma.py --key-color #00ff00",
+    "remove_chroma_key.py --auto-key border --soft-matte --transparent-threshold 12 --opaque-threshold 210 --edge-contract 1 --despill"
+  ]
+}

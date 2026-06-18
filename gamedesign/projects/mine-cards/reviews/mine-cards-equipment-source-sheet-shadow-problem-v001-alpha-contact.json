@@ -1,0 +1,97 @@
+{
+  "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-sheet-shadow-problem-v001.png",
+  "rgba_output": "gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-sheet-shadow-problem-v001-alpha-probe.png",
+  "contact_output": "gamedesign/projects/mine-cards/reviews/mine-cards-equipment-source-sheet-shadow-problem-v001-alpha-contact.png",
+  "component_count": 12,
+  "components": [
+    {
+      "x": 739,
+      "y": 21,
+      "w": 275,
+      "h": 356,
+      "area": 24547
+    },
+    {
+      "x": 1075,
+      "y": 21,
+      "w": 302,
+      "h": 355,
+      "area": 33304
+    },
+    {
+      "x": 402,
+      "y": 26,
+      "w": 296,
+      "h": 349,
+      "area": 45274
+    },
+    {
+      "x": 71,
+      "y": 31,
+      "w": 286,
+      "h": 339,
+      "area": 31773
+    },
+    {
+      "x": 72,
+      "y": 398,
+      "w": 239,
+      "h": 316,
+      "area": 56074
+    },
+    {
+      "x": 399,
+      "y": 398,
+      "w": 275,
+      "h": 315,
+      "area": 48292
+    },
+    {
+      "x": 736,
+      "y": 408,
+      "w": 270,
+      "h": 323,
+      "area": 63191
+    },
+    {
+      "x": 1070,
+      "y": 411,
+      "w": 327,
+      "h": 309,
+      "area": 73684
+    },
+    {
+      "x": 1142,
+      "y": 740,
+      "w": 183,
+      "h": 326,
+      "area": 36875
+    },
+    {
+      "x": 765,
+      "y": 744,
+      "w": 201,
+      "h": 306,
+      "area": 37886
+    },
+    {
+      "x": 397,
+      "y": 798,
+      "w": 263,
+      "h": 217,
+      "area": 41375
+    },
+    {
+      "x": 63,
+      "y": 801,
+      "w": 250,
+      "h": 194,
+      "area": 33395
+    }
+  ],
+  "verdict": "diagnostic_only",
+  "notes": [
+    "This probe strips low-chroma near-white shadows and is not final production matting.",
+    "If object highlights or holes are damaged, regenerate as chroma/dual-plate instead of hand-cropping this sheet."
+  ]
+}

@@ -18,7 +18,10 @@ if str(SCRIPT_ROOT) not in sys.path:
 from tools.assets.atomic_io import save_image_atomic, write_json_atomic
 from tools.assets.chroma_key_alpha import (
     bleed_transparent_rgb,
+    decontaminate_source_key_spill_image,
+    is_cyan_key,
     key_to_alpha,
+    remove_green_screen_spill,
     repair_transparent_edge_rgb,
     zero_fully_transparent_rgb,
 )
@@ -104,6 +107,9 @@ def crop_trimmed(
     trim_right = min(rgba.width, right + padding)
     trim_bottom = min(rgba.height, bottom + padding)
     out = rgba.crop((trim_left, trim_top, trim_right, trim_bottom))
+    if is_cyan_key(key):
+        decontaminate_source_key_spill_image(out, key=key, require_transparent_touch=False)
+    remove_green_screen_spill(out, passes=10, radius=4)
     bleed_transparent_rgb(out, key=key)
     repair_transparent_edge_rgb(out, key=key)
     zero_fully_transparent_rgb(out)
@@ -158,9 +164,24 @@ def asset_entry(crop: dict[str, Any], image: Image.Image, trim_rect: list[int]) 
         entry["pivot"] = [0.5, 0.5]
         entry["size_class"] = crop.get("size_class", "96px_source")
         entry["preview_sizes"] = crop.get("preview_sizes", [[32, 32], [48, 48]])
+    elif kind == "slice9":
+        policy["trim_preserves_slice9"] = True
+        entry["atlas_policy"] = policy
+        for field in (
+            "slice9",
+            "content",
+            "content_rect",
+            "target_preview_sizes",
+            "preview_sizes",
+            "stretch_policy",
+            "usage_policy",
+            "state_role",
+        ):
+            if field in crop:
+                entry[field] = crop[field]
     elif kind == "decor_overlay":
         entry["z_order"] = 20
-        entry["allowed_base_ids"] = ["compact_journal_panel_v5", "compact_button_idle_long_v5", "compact_button_idle_medium_v5", "compact_button_idle_short_v5"]
+        entry["allowed_base_ids"] = ["compact_journal_panel_v5", "compact_button_default_long_v5", "compact_button_default_medium_v5", "compact_button_default_short_v5"]
         entry["offset_bounds"] = {"x": [-512, 512], "y": [-512, 512]}
     return entry
 
@@ -234,17 +255,28 @@ def build(args: argparse.Namespace) -> None:
         crop_manifest_entry["trim_rect"] = trim_rect
         crop_manifest_entry["trim_padding"] = int((crop.get("trim") or {}).get("padding", 8)) if isinstance(crop.get("trim"), dict) else 8
         crop_manifest_entry["min_output_padding"] = int(args.min_output_padding)
+        crop_manifest_entry["anchor"] = anchor_for(str(crop_manifest_entry["id"]), crop_manifest_entry["kind"])
+        if crop_manifest_entry["kind"] == "icon":
+            crop_manifest_entry["pivot"] = [0.5, 0.5]
         if crop_manifest_entry["kind"] == "icon":
             crop_manifest_entry["isolate_component"] = str(crop.get("source_component_id") or "source_component_bbox")
         manifest_crops.append(crop_manifest_entry)
         runtime_assets.append(asset_entry(crop_manifest_entry, image, trim_rect))
         outputs.append((crop_manifest_entry, image))
+    manifest_key = "#00ff00"
+    if isinstance(plan.get("green_screen"), dict) and isinstance(plan["green_screen"].get("key"), str):
+        manifest_key = plan["green_screen"]["key"]
+    else:
+        for crop in manifest_crops:
+            if isinstance(crop.get("chroma_key"), dict) and isinstance(crop["chroma_key"].get("key"), str):
+                manifest_key = crop["chroma_key"]["key"]
+                break
     crop_manifest = {
         "schema": "game.art_crop_manifest",
         "version": 1,
-        "art_job": args.art_job,
-        "output_dir": str(plan.get("output_dir") or ""),
-        "green_screen": {"mode": "chroma_key", "key": "#00ff00", "notes": "Runtime assets cut from accepted source-sheet intake crop plan."},
+        "art_job": rel(project_path(args.art_job)),
+        "output_dir": str(plan.get("output_dir") or "").replace("\\", "/"),
+        "green_screen": {"mode": "chroma_key", "key": manifest_key, "notes": "Runtime assets cut from accepted source-sheet intake crop plan."},
         "sources": [
             {
                 "id": plan.get("source_id"),
@@ -260,9 +292,9 @@ def build(args: argparse.Namespace) -> None:
     runtime_manifest = {
         "schema": "game.asset_manifest",
         "version": 1,
-        "art_job": args.art_job,
+        "art_job": rel(project_path(args.art_job)),
         "crop_manifest": rel(crop_manifest_path),
-        "runtime_dir": str(plan.get("output_dir") or ""),
+        "runtime_dir": str(plan.get("output_dir") or "").replace("\\", "/"),
         "source_art": plan.get("source"),
         "source_policy": "real generated bitmap source; crop plan generated from source-sheet intake components",
         "assets": runtime_assets,

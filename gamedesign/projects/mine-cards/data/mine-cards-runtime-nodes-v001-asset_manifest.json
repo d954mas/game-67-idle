@@ -1,0 +1,19 @@
+{
+  "schema": "game.asset_manifest",
+  "version": 1,
+  "art_job": "gamedesign/projects/mine-cards/art_requests/mine-cards-runtime-nodes-v001.json",
+  "crop_manifest": "gamedesign/projects/mine-cards/data/mine-cards-runtime-nodes-v001-crop_manifest.json",
+  "runtime_dir": "assets/runtime/mine-cards-runtime-nodes-v001",
+  "commands": {
+    "slice_assets": "",
+    "asset_audit": "py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest gamedesign/projects/mine-cards/data/mine-cards-runtime-nodes-v001-crop_manifest.json --json-output gamedesign/projects/mine-cards/reviews/mine-cards-runtime-nodes-v001-generated_ui_asset_audit.json --report gamedesign/projects/mine-cards/reviews/mine-cards-runtime-nodes-v001-generated_ui_asset_audit.md",
+    "slice9_design_audit": "node tools/assets/audit_slice9_design_policy.mjs --crop-manifest gamedesign/projects/mine-cards/data/mine-cards-runtime-nodes-v001-crop_manifest.json --runtime-manifest gamedesign/projects/mine-cards/data/mine-cards-runtime-nodes-v001-asset_manifest.json --json-output gamedesign/projects/mine-cards/reviews/mine-cards-runtime-nodes-v001-slice9_design_policy_audit.json --report gamedesign/projects/mine-cards/reviews/mine-cards-runtime-nodes-v001-slice9_design_policy_audit.md",
+    "build_pack": "",
+    "native_evidence": ""
+  },
+  "assets": [],
+  "asset_audit": [
+    "gamedesign/projects/mine-cards/reviews/mine-cards-runtime-nodes-v001-generated_ui_asset_audit.md",
+    "gamedesign/projects/mine-cards/reviews/mine-cards-runtime-nodes-v001-generated_ui_asset_audit.json"
+  ]
+}

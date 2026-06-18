@@ -24,7 +24,7 @@ Core loop
 Session loop
   -> goals completed during one play session
 Meta loop
-  -> upgrades, unlocks, collections, areas, builds, prestige, or account growth
+  -> mastery, unlocks, collections, areas, builds, story, or account growth
 ```
 
 ## Core Principles
@@ -37,7 +37,7 @@ Meta loop
 - Sources and sinks must both be explicit.
 - Avoid permanent choices before the player understands their value.
 - Parallel goals are useful after the player understands the main loop, not before.
-- Prestige or reset systems need a clear power fantasy before they are offered.
+- Reset systems need a clear genre reason and power fantasy before they are offered.
 
 ## GDD Checklist
 
@@ -49,7 +49,7 @@ Meta loop
 - Visible result: what changes on screen after each upgrade type?
 - Pacing: expected time to first reward, first spend, first unlock, first slowdown.
 - Soft block: what should the player do when they cannot afford the next item?
-- Return hook: what grows while away, or what goal waits for the next session?
+- Return hook: what goal, unresolved problem, or changed state waits for the next session?
 - Tuning knobs: costs, income, timers, caps, unlock thresholds, reward multipliers.
 - Failure case: how does the economy recover from over-generous rewards or dead ends?
 
@@ -61,7 +61,7 @@ Meta loop
 - Collection sets: items that create medium-term completion goals.
 - Timed jobs: delayed rewards that give the player a reason to return.
 - Build/base growth: upgrades change the home, map, character, or environment.
-- Soft reset: later-game reset for permanent benefit after current progression slows.
+- Soft reset: optional later-game reset for permanent benefit, only when the chosen genre supports it.
 
 ## Anti-Patterns
 
@@ -95,5 +95,4 @@ Meta loop
 ## References
 
 - GEEvo paper, [Game Economy Generation and Balancing with Evolutionary Algorithms](https://arxiv.org/abs/2404.18574)
-- Wikipedia, [Incremental game](https://en.wikipedia.org/wiki/Incremental_game)
 - Wikipedia, [Virtual economy](https://en.wikipedia.org/wiki/Virtual_economy)

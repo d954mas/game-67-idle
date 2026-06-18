@@ -74,7 +74,7 @@ def raise_last_error(action: str) -> None:
 
 
 def find_window_for_pid(pid: int) -> int:
-    matches: list[int] = []
+    matches: list[tuple[int, int]] = []
 
     @EnumWindowsProc
     def callback(hwnd: int, _param: int) -> bool:
@@ -83,15 +83,17 @@ def find_window_for_pid(pid: int) -> int:
         if proc_id.value == pid and user32.IsWindowVisible(hwnd):
             rect = RECT()
             if user32.GetWindowRect(hwnd, ctypes.byref(rect)):
-                if rect.right > rect.left and rect.bottom > rect.top:
-                    matches.append(hwnd)
+                width = rect.right - rect.left
+                height = rect.bottom - rect.top
+                if width > 0 and height > 0:
+                    matches.append((width * height, hwnd))
         return True
 
     if not user32.EnumWindows(callback, 0):
         raise_last_error("EnumWindows")
     if not matches:
         raise RuntimeError(f"no visible top-level window found for PID {pid}")
-    return matches[0]
+    return max(matches, key=lambda item: item[0])[1]
 
 
 def bring_window_forward(hwnd: int) -> RECT:

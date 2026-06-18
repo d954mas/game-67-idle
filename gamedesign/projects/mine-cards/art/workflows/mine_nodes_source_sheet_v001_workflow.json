@@ -1,0 +1,14 @@
+{
+  "tool": "built-in image_gen",
+  "mode": "generate",
+  "provider": "OpenAI",
+  "model": "gpt-image-2",
+  "output_folder": "C:/Users/ROG/.codex/generated_images/019ed538-bade-73a3-b4de-360683d97267",
+  "accepted_output": "ig_04082c08bcd9eda3016a32c27f60cc8191a43733ee201f9b3c.png",
+  "rejected_outputs": [
+    "ig_0585585c107107a9016a327fbefa588191aceea2ee76305581.png",
+    "ig_05a8927a9d408602016a3282684cf48191a8fa3eeb2d770c23.png"
+  ],
+  "seed": null,
+  "seed_note": "built-in image_gen did not expose a stable seed"
+}

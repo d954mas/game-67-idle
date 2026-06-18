@@ -1,0 +1,312 @@
+{
+  "schema": "game.art_job",
+  "version": 1,
+  "id": "mine-cards-stage-ui-family-v001",
+  "status": "draft",
+  "asset_family": "Mine Cards stage UI and icon source family",
+  "audience": "Casual idle RPG players; blocky voxel mining fantasy, Melvor-like density with Capybara-like top action stage",
+  "runtime_harness": "native PC",
+  "visual_targets": [
+    "gamedesign\\projects\\mine-cards\\visual\\fake_shots\\mining_v001_fake_shot_2026-06-17.png"
+  ],
+  "screen_problem_to_solve": {
+    "latest_failed_gate": "gamedesign/projects/mine-cards/reviews/product_gate_stage_rescue_v007_2026-06-17.md",
+    "latest_native_screenshots": [
+      "build/captures/mine_cards_stage_rescue_v007_landscape_surface.png",
+      "build/captures/mine_cards_stage_rescue_v007_portrait_surface.png"
+    ],
+    "fail_summary": [
+      "top action stage is mostly empty procedural chrome",
+      "portrait composition is usable but not phone-first or character/action-led",
+      "future activity chips and resource/upgrade markers are placeholder-level",
+      "reward FX is only a text callout, not a satisfying generated effect"
+    ],
+    "runtime_goal": "Give the native Mining screen a reusable voxel-idle UI family: stage frame/background pieces, blank resizable panels/buttons/bars, semantic activity/resource/upgrade icons, and reward FX. Do not generate one fixed gameplay screenshot as final runtime UI."
+  },
+  "candidate_policy": {
+    "target_count": 4,
+    "keep_raw_candidates": true,
+    "reject_to_tmp": true,
+    "accept_one_or_two_for_runtime": true
+  },
+  "reusable_kinds": [
+    "sprite",
+    "slice9",
+    "icon",
+    "tile",
+    "border",
+    "effect"
+  ],
+  "required_asset_groups": [
+    {
+      "id": "modal_panel_slice9",
+      "kind": "slice9",
+      "role": "blank resizable modal/panel background",
+      "states": [
+        "default"
+      ],
+      "content_policy": "runtime text/icons only inside content safe area",
+      "stretch_zone_policy": "center and long edges must be plain/repeatable texture; non-stretch ornaments are corner-only or separate overlay sprites",
+      "decor_overlay_policy": "badges, gems, medallions, locks, banners, and center ornaments must be separate overlay assets with anchors",
+      "target_preview_sizes": [
+        [
+          240,
+          160
+        ],
+        [
+          360,
+          240
+        ],
+        [
+          520,
+          320
+        ]
+      ]
+    },
+    {
+      "id": "primary_button_slice9",
+      "kind": "slice9",
+      "role": "blank resizable command button backgrounds",
+      "states": [
+        "default",
+        "pressed",
+        "disabled",
+        "selected"
+      ],
+      "content_policy": "runtime label/icon composed over blank background",
+      "stretch_zone_policy": "center and long edges must stay structurally boring at the smallest button size",
+      "decor_overlay_policy": "decorative caps are corner-only; center gems or badges are separate overlay assets",
+      "target_preview_sizes": [
+        [
+          128,
+          48
+        ],
+        [
+          180,
+          56
+        ],
+        [
+          240,
+          64
+        ]
+      ]
+    },
+    {
+      "id": "ui_icon_set",
+      "kind": "icon",
+      "role": "isolated readable icons with transparent or chroma-key background",
+      "states": [
+        "default",
+        "locked"
+      ],
+      "size_class": "64px source, preview at gameplay size"
+    },
+    {
+      "id": "gameplay_sprite_or_marker",
+      "kind": "sprite",
+      "role": "isolated gameplay sprite, marker, or FX with pivot/anchor",
+      "states": [
+        "default"
+      ],
+      "anchor_policy": "pivot or anchor must be recorded before runtime use"
+    }
+  ],
+  "must_not_bake": [
+    "button labels",
+    "resource counters",
+    "timer values",
+    "tutorial text",
+    "debug text",
+    "game state values"
+  ],
+  "generation_contract": {
+    "source_families": [
+      "blank UI kit sheet",
+      "isolated icon sheet",
+      "ui decor overlay sheet",
+      "stage background layer sheet",
+      "sprite or FX sheet"
+    ],
+    "final_asset_policy": {
+      "procedural_art_allowed": "debug_only",
+      "runtime_final_must_use_generated_or_artist_source": true,
+      "layered_source_required_for_ui": true,
+      "notes": "Code may cut, validate, pack, and compose. Code-generated/programmer art is not acceptable as final generated UI unless an explicit exception is recorded."
+    },
+    "source_family_roles": {
+      "blank UI kit sheet": "stretchable bases only: panels, button states, bars, frames, dividers",
+      "ui decor overlay sheet": "non-stretch ornaments, gems, badges, caps, medallions with anchors",
+      "isolated icon sheet": "semantic icons with gutters and transparent/chroma source",
+      "stage background layer sheet": "non-stretch stage backdrops, mine wall stamps, floor shadows, lantern glows, ore seam stamps",
+      "sprite or FX sheet": "isolated gameplay sprites/effects with pivots"
+    },
+    "prompt_constraints": [
+      "no readable text",
+      "no fake letters",
+      "no fused icons inside button backgrounds",
+      "clear gutters between assets",
+      "consistent perspective and lighting",
+      "transparent or flat chroma-key background for isolated assets",
+      "no unique decoration inside slice9 stretch zones"
+    ],
+    "metadata_to_record": [
+      "provider or generator",
+      "model/workflow",
+      "workflow file or workflow json",
+      "seed",
+      "prompt",
+      "negative prompt",
+      "source family role",
+      "accepted source image path",
+      "rejected candidate notes"
+    ]
+  },
+  "runtime_crop_targets": {
+    "blank UI kit sheet": [
+      "stage_frame_slice9",
+      "board_panel_slice9",
+      "node_card_default_slice9",
+      "node_card_selected_slice9",
+      "activity_chip_active_slice9",
+      "activity_chip_locked_slice9",
+      "upgrade_panel_slice9",
+      "primary_button_disabled_slice9",
+      "primary_button_affordable_slice9",
+      "progress_track_slice9",
+      "progress_fill_slice9"
+    ],
+    "isolated icon sheet": [
+      "activity_mining",
+      "activity_woodcutting",
+      "activity_fishing",
+      "activity_smithing",
+      "activity_combat",
+      "activity_farming",
+      "activity_bank",
+      "activity_shop",
+      "resource_stone",
+      "resource_copper_ore",
+      "resource_coin",
+      "upgrade_pickaxe",
+      "state_locked",
+      "state_equipped",
+      "state_ready"
+    ],
+    "ui decor overlay sheet": [
+      "stage_corner_bolt",
+      "stage_hanging_lantern",
+      "panel_tab_cap",
+      "selected_card_glow",
+      "locked_badge_overlay",
+      "reward_ribbon_overlay"
+    ],
+    "stage background layer sheet": [
+      "mine_wall_tile",
+      "mine_floor_shadow",
+      "stone_debris_cluster",
+      "copper_ore_seam_stamp",
+      "warm_lantern_light_overlay"
+    ],
+    "sprite or FX sheet": [
+      "stone_hit_chip_fx",
+      "copper_hit_chip_fx",
+      "geode_reward_pop_fx",
+      "xp_spark_fx",
+      "coin_spark_fx"
+    ]
+  },
+  "responsive_runtime_rules": {
+    "landscape": [
+      "top stage must read as one actor-target-reward cluster, not a small icon on a wide empty panel",
+      "lower board may be dense, but active Mining and next goal must be visually heavier than future chips"
+    ],
+    "portrait": [
+      "top stage must be the first read and use fewer simultaneous HUD values",
+      "primary activity row should be full width, with secondary/future activities below",
+      "do not squeeze desktop stat strings into compact chips"
+    ]
+  },
+  "expected_outputs": {
+    "source_art": [
+      "gamedesign/projects/mine-cards/art/candidates/mine-cards-icons-v001-candidate-e-alpha.png",
+      "gamedesign/projects/mine-cards/art/candidates/mine-cards-stage-bg-v001-candidate-a-alpha.png",
+      "gamedesign/projects/mine-cards/art/candidates/mine-cards-fx-v004-candidate-d-alpha.png",
+      "gamedesign/projects/mine-cards/art/candidates/mine-cards-blank-ui-kit-v002-candidate-b-clean.png"
+    ],
+    "source_sheet_intake_audit": [
+      "gamedesign/projects/mine-cards/reviews/mine-cards-icons-v001-candidate-e-alpha-intake.json",
+      "gamedesign/projects/mine-cards/reviews/mine-cards-stage-bg-v001-candidate-a-intake.json",
+      "gamedesign/projects/mine-cards/reviews/mine-cards-fx-v004-candidate-d-intake.json",
+      "gamedesign/projects/mine-cards/reviews/mine-cards-blank-ui-kit-v002-candidate-b-intake.json"
+    ],
+    "semantic_style_audit": [
+      "gamedesign/projects/mine-cards/reviews/mine-cards-icons-v001-candidate-e-semantic-audit.json",
+      "gamedesign/projects/mine-cards/reviews/mine-cards-fx-v004-candidate-d-semantic-audit.json",
+      "gamedesign/projects/mine-cards/reviews/mine-cards-blank-ui-kit-v002-candidate-b-semantic-audit.json"
+    ],
+    "required_source_families": [
+      "blank UI kit sheet",
+      "isolated icon sheet",
+      "ui decor overlay sheet",
+      "stage background layer sheet",
+      "sprite or FX sheet"
+    ],
+    "generation_records": [
+      "gamedesign/projects/mine-cards/art/generation_records/mine-cards-icons-v001-candidate-e.json",
+      "gamedesign/projects/mine-cards/art/generation_records/mine-cards-stage-bg-v001-candidate-a.json",
+      "gamedesign/projects/mine-cards/art/generation_records/mine-cards-fx-v004-candidate-d.json",
+      "gamedesign/projects/mine-cards/art/generation_records/mine-cards-blank-ui-kit-v002-candidate-b.json"
+    ],
+    "crop_manifest": "gamedesign/projects/mine-cards/data/mine-cards-stage-ui-family-v001-crop_manifest.json",
+    "runtime_manifest": "gamedesign/projects/mine-cards/data/mine-cards-stage-ui-family-v001-asset_manifest.json",
+    "runtime_dir": "assets/runtime/mine-cards-stage-ui-family-v001",
+    "asset_audit": [
+      "gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-generated_ui_asset_audit.md",
+      "gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-generated_ui_asset_audit.json"
+    ],
+    "slice9_design_audit": [
+      "gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-slice9_design_policy_audit.md",
+      "gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-slice9_design_policy_audit.json"
+    ],
+    "source_family_coverage_audit": [
+      "gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-source_family_coverage_audit.md",
+      "gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-source_family_coverage_audit.json"
+    ],
+    "native_evidence": [
+      "build/captures/mine_cards_stage_fx_v003_landscape_surface.png",
+      "build/captures/mine_cards_stage_fx_v003_landscape_geode.png",
+      "build/captures/mine_cards_stage_fx_v003_portrait_surface.png",
+      "build/captures/mine_cards_stage_fx_v003_portrait_geode.png"
+    ]
+  },
+  "runtime_composition": {
+    "buttons": "slice9 background plus runtime text/icon",
+    "cards": "slice9 card background plus character sprite and runtime state",
+    "board": "frame, tile, slot, highlight, and effect pieces composed at runtime",
+    "characters": "separate transparent sprites with pivots and gameplay ids"
+  },
+  "qa_rejects": [
+    "random letters",
+    "watermarks",
+    "labels fused into reusable backgrounds",
+    "icons fused into buttons",
+    "wrong subject",
+    "weak silhouette at gameplay size",
+    "opaque chroma-key background",
+    "baked board state"
+  ],
+  "commands": {
+    "plan_source_sheet_prompt": "node tools/assets/plan_source_sheet_prompt.mjs --job gamedesign/projects/mine-cards/art_requests/mine-cards-stage-ui-family-v001.json --source-family \"<source family>\" --output gamedesign/projects/mine-cards/art/prompts/<source-id>-prompt.md --json-output gamedesign/projects/mine-cards/art/prompts/<source-id>-prompt.json",
+    "new_generation_record": "node tools/assets/new_generation_record.mjs --id <source-id> --project-dir gamedesign/projects/mine-cards --source-family \"<source family>\" --source-family-role \"<source family role>\" --accepted-source <path> --provider <provider> --model <model-or-workflow> --workflow-path <workflow.json> --prompt-packet gamedesign/projects/mine-cards/art/prompts/<source-id>-prompt.json --seed <seed> --prompt \"<prompt>\" --negative-prompt \"<negative prompt>\"",
+    "slice_assets": "fill after source sheets are accepted",
+    "validate_draft": "node tools/assets/validate_art_job.mjs --job gamedesign/projects/mine-cards/art_requests/mine-cards-stage-ui-family-v001.json",
+    "validate_strict": "node tools/assets/validate_art_job.mjs --job gamedesign/projects/mine-cards/art_requests/mine-cards-stage-ui-family-v001.json --strict",
+    "validate_final_art": "node tools/assets/validate_art_job.mjs --job gamedesign/projects/mine-cards/art_requests/mine-cards-stage-ui-family-v001.json --final-art",
+    "asset_audit": "py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest gamedesign/projects/mine-cards/data/mine-cards-stage-ui-family-v001-crop_manifest.json --json-output gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-generated_ui_asset_audit.json --report gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-generated_ui_asset_audit.md",
+    "slice9_design_audit": "node tools/assets/audit_slice9_design_policy.mjs --crop-manifest gamedesign/projects/mine-cards/data/mine-cards-stage-ui-family-v001-crop_manifest.json --runtime-manifest gamedesign/projects/mine-cards/data/mine-cards-stage-ui-family-v001-asset_manifest.json --json-output gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-slice9_design_policy_audit.json --report gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-slice9_design_policy_audit.md",
+    "source_family_coverage_audit": "node tools/assets/audit_source_family_coverage.mjs --job gamedesign/projects/mine-cards/art_requests/mine-cards-stage-ui-family-v001.json --json-output gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-source_family_coverage_audit.json --report gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-source_family_coverage_audit.md",
+    "plan_missing_source_family_prompts": "node tools/assets/plan_missing_source_family_prompts.mjs --job gamedesign/projects/mine-cards/art_requests/mine-cards-stage-ui-family-v001.json --coverage-audit gamedesign/projects/mine-cards/reviews/mine-cards-stage-ui-family-v001-source_family_coverage_audit.json --output-dir gamedesign/projects/mine-cards/art/prompts --key-color \"#00ff00\" --force",
+    "build_pack": "fill after pack builder is wired",
+    "native_evidence": "fill with DevAPI scenario command"
+  }
+}

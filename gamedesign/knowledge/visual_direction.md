@@ -48,7 +48,7 @@ and progress without requiring explanation.
 - Soft shadows and clear outlines to separate interactable objects.
 - Saturated accent colors balanced by calm background areas.
 - Large readable numbers, badges, and resource icons.
-- Small idle animations that make the screen feel alive without stealing focus.
+- Small ambient animations that make the screen feel alive without stealing focus.
 - Progression shown through visible accumulation, decoration, area growth, or character change.
 
 ## Anti-Patterns

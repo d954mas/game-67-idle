@@ -67,7 +67,7 @@ console.log(readFileSync("tasks/STATUS.md", "utf8"));
   writeFileSync(join(root, "CMakePresets.json"), "{}\n", "utf8");
   writeFileSync(join(root, "src", "main.c"), "int main(void){return 0;}\n", "utf8");
   writeFileSync(join(root, "gamedesign", "meme-evolution", "gdd.md"), "# GDD\n", "utf8");
-  writeFileSync(join(root, "gamedesign", "meme-evolution", "data", "balance.json"), "{}\n", "utf8");
+  writeFileSync(join(root, "gamedesign", "meme-evolution", "data", "core_loop.json"), "{}\n", "utf8");
 }
 
 test("game iteration context preserves wrapped hard gates", (t) => {
@@ -201,9 +201,9 @@ console.log(readFileSync("tasks/STATUS.md", "utf8"));
   writeFileSync(join(fixture, "gamedesign", "knowledge", "README.md"), "# Knowledge\n", "utf8");
   writeFileSync(join(fixture, "gamedesign", "knowledge", "reference_deconstruction.md"), "# References\n", "utf8");
   writeFileSync(join(fixture, "gamedesign", "projects", "roblox-fishing", "gdd.md"), "# Closed Fishing\n", "utf8");
-  writeFileSync(join(fixture, "gamedesign", "projects", "roblox-fishing", "data", "balance.json"), "{}\n", "utf8");
+  writeFileSync(join(fixture, "gamedesign", "projects", "roblox-fishing", "data", "core_loop.json"), "{}\n", "utf8");
   writeFileSync(join(fixture, "gamedesign", "projects", "rune-marches", "GDD.md"), "# Closed Rune\n", "utf8");
-  writeFileSync(join(fixture, "gamedesign", "projects", "rune-marches", "data", "balance.json"), "{}\n", "utf8");
+  writeFileSync(join(fixture, "gamedesign", "projects", "rune-marches", "data", "core_loop.json"), "{}\n", "utf8");
   writeFileSync(join(fixture, "src", "clean_seed_main.c"), "int main(void){return 0;}\n", "utf8");
   writeFileSync(join(fixture, "src", "main.c"), "int closed(void){return 0;}\n", "utf8");
   writeFileSync(join(fixture, "state", "game_state.schema.json"), "{}\n", "utf8");
@@ -343,11 +343,11 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   assert.match(visualGate, /Decision: blocked until filled/);
 
   const context = JSON.parse(readFileSync(join(fixture, "tmp", "prototype_startup_gate_context.json"), "utf8"));
-  // A freshly scaffolded prototype must design the core-loop economy before it
-  // is ready to build (data/balance.json) -- design-first forcing function.
+  // A freshly scaffolded prototype must design the core-loop model before it
+  // is ready to build (data/core_loop.json) -- design-first forcing function.
   assert.equal(context.prototype_startup_gate.status, "not_ready_for_implementation");
   assert.equal(context.prototype_startup_gate.hard_stop, true);
-  assert.deepEqual(context.prototype_startup_gate.missing, ["core_loop_economy"]);
+  assert.deepEqual(context.prototype_startup_gate.missing, ["core_loop_model"]);
   assert.equal(context.visual_first_contract.status, "required_before_visual_runtime_work");
   assert.ok(context.visual_first_contract.stop_conditions.some((item) => item.includes("Product gate fail blocks")));
   assert.ok(context.design_sources.includes("gamedesign/projects/bubble-bay/reviews/first_slice_visual_gate.md"));
@@ -373,7 +373,7 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
     "--not-covered-state", "progression_panel_open:not in startup smoke",
     "--not-covered-state", "modal_or_choice_open:not in startup smoke",
     "--not-covered-state", "locked_or_disabled_state:not in startup smoke",
-    "--not-covered-state", "returning_player_state:not in startup smoke",
+    "--not-covered-state", "resume_or_reentry_state:not in startup smoke",
     "--not-covered-state", "transient_stress_state:not in startup smoke",
     "--where", "A bright first screen.",
     "--action", "Use the primary action.",

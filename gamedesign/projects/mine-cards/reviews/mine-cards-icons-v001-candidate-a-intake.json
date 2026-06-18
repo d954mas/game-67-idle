@@ -1,0 +1,143 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-icons-v001-candidate-a.png",
+  "analysis_engine": "numpy",
+  "size": [
+    1254,
+    1254
+  ],
+  "key_color": "#ff00ff",
+  "key_tolerance": 8,
+  "component_count": 1,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 24,
+  "max_exact_key_conflict_px": 0,
+  "max_key_hue_conflict_ratio": 0.05,
+  "closest_gap_px": null,
+  "closest_pair": null,
+  "candidate_key_scores": [
+    {
+      "key_color": "#ff00ff",
+      "visible_px": 1572516,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 403,
+      "hue_band_ratio": 0.000256,
+      "score": 403.025628
+    },
+    {
+      "key_color": "#0000ff",
+      "visible_px": 1572516,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 749,
+      "hue_band_ratio": 0.000476,
+      "score": 749.047631
+    },
+    {
+      "key_color": "#00ffff",
+      "visible_px": 1572516,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 4547,
+      "hue_band_ratio": 0.002892,
+      "score": 4547.289154
+    },
+    {
+      "key_color": "#ff0000",
+      "visible_px": 1572516,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 28760,
+      "hue_band_ratio": 0.018289,
+      "score": 28761.828916
+    },
+    {
+      "key_color": "#ffff00",
+      "visible_px": 1572516,
+      "exact_conflict_px": 6,
+      "exact_conflict_ratio": 4e-06,
+      "hue_band_px": 35956,
+      "hue_band_ratio": 0.022865,
+      "score": 41958.286527
+    },
+    {
+      "key_color": "#00ff00",
+      "visible_px": 1572516,
+      "exact_conflict_px": 1090327,
+      "exact_conflict_ratio": 0.693365,
+      "hue_band_px": 1133308,
+      "hue_band_ratio": 0.720697,
+      "score": 1091460380.069728
+    }
+  ],
+  "current_key_score": {
+    "key_color": "#ff00ff",
+    "visible_px": 1572516,
+    "exact_conflict_px": 0,
+    "exact_conflict_ratio": 0.0,
+    "hue_band_px": 403,
+    "hue_band_ratio": 0.000256,
+    "score": 403.025628
+  },
+  "suggested_key_color": "#ff00ff",
+  "key_color_conflict_count": 0,
+  "key_color_action": "keep_current_key_color",
+  "next_prompt_key_color": "#ff00ff",
+  "problem_summary": {
+    "components_with_border_gap": 1,
+    "components_with_exact_key_conflict": 0,
+    "components_with_key_hue_conflict": 0,
+    "total_exact_key_conflict_px": 0,
+    "total_key_fringe_hue_px": 0,
+    "total_purple_halo_hue_px": 4,
+    "gutter_below_min": false,
+    "worst_key_hue_component": {
+      "id": "component_1",
+      "ratio": 3e-06,
+      "bbox": [
+        0,
+        0,
+        1254,
+        1254
+      ]
+    }
+  },
+  "blocking_reasons": [
+    {
+      "code": "unsafe_border",
+      "count": 1,
+      "minimum_px": 24,
+      "action": "regenerate_source_sheet_with_more_gutter_and_safe_border"
+    }
+  ],
+  "recommended_next_step": {
+    "action": "regenerate_source_sheet_with_more_gutter_and_safe_border",
+    "reason": "components are too close to sheet borders or each other for reliable slicing",
+    "key_color": "#ff00ff"
+  },
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        0,
+        0,
+        1254,
+        1254
+      ],
+      "area_px": 1572516,
+      "visible_px": 1572516,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 4,
+      "key_hue_conflict_ratio": 3e-06,
+      "border_gap_px": 0
+    }
+  ],
+  "problems": [
+    "component_1 border gap 0px is below required 24px"
+  ],
+  "status": "fail"
+}

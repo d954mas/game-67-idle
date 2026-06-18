@@ -246,6 +246,71 @@ test("uses explicit key color over intake audit", (t) => {
   assert.match(packet.prompt, /one centered silhouette per slot/);
 });
 
+test("uses custom source sheet layout rows from art job", (t) => {
+  const dir = tempDir(t);
+  mkdirSync(join(dir, "gamedesign/projects/test/art_requests"), { recursive: true });
+  const jobPath = "gamedesign/projects/test/art_requests/equipment-job.json";
+  writeFileSync(join(dir, jobPath), `${JSON.stringify({
+    schema: "game.art_job",
+    id: "equipment-job",
+    asset_family: "equipment sprites",
+    reusable_kinds: ["sprite", "icon", "slice9"],
+    required_asset_groups: [
+      {
+        id: "equipment_item_sprites",
+        kind: "sprite",
+        role: "isolated equipment sprites",
+      },
+    ],
+    must_not_bake: ["button labels", "game state values"],
+    generation_contract: {
+      source_families: ["isolated equipment sprite sheet"],
+      source_family_roles: {
+        "isolated equipment sprite sheet": "standalone equipment sprites",
+      },
+      source_sheet_layout: {
+        canvas: [1792, 1344],
+        outer_margin_px: 64,
+        min_gutter_px: 48,
+        rows: [
+          {
+            id: "mining_first",
+            slots: ["item_pickaxe_worn", "item_pickaxe_copper"],
+          },
+          {
+            id: "progression_trinkets",
+            slots: ["item_plain_ring", "item_ruby_ring"],
+          },
+        ],
+      },
+      final_asset_policy: {
+        procedural_art_allowed: "debug_only",
+        runtime_final_must_use_generated_or_artist_source: true,
+      },
+      prompt_constraints: ["clear gutters between assets"],
+    },
+    qa_rejects: ["watermarks"],
+  }, null, 2)}\n`, "utf8");
+
+  const result = run([
+    "--job", jobPath,
+    "--source-family", "isolated equipment sprite sheet",
+    "--key-color", "#0000ff",
+    "--output", "prompt.md",
+    "--json-output", "prompt.json",
+  ], dir);
+
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const text = readFileSync(join(dir, "prompt.md"), "utf8");
+  assert.match(text, /row 1 `mining_first`/);
+  assert.match(text, /item_pickaxe_worn/);
+  assert.doesNotMatch(text, /isolated_assets/);
+  const packet = JSON.parse(readFileSync(join(dir, "prompt.json"), "utf8"));
+  assert.deepEqual(packet.source_sheet_layout.recommended_canvas.size_px, [1792, 1344]);
+  assert.equal(packet.source_sheet_layout.rows[0].id, "mining_first");
+  assert.deepEqual(packet.source_sheet_layout.rows[1].slots, ["item_plain_ring", "item_ruby_ring"]);
+});
+
 test("rejects source family outside generation contract", (t) => {
   const dir = tempDir(t);
   const job = writeJob(dir);

@@ -114,7 +114,7 @@ const SKILL_CHECKS = [
       "max 3",
       "3-7 refs",
       "first playable slice",
-      "data/balance.json",
+      "data/core_loop.json",
       "data/ui_flow.json",
       "data/asset_manifest.json",
       "data/combat.json",

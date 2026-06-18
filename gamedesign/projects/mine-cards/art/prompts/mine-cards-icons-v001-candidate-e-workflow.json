@@ -1,0 +1,7 @@
+{
+  "tool": "image_gen",
+  "mode": "built_in",
+  "postprocess": "remove_chroma_key auto-key border soft-matte",
+  "source_raw": "gamedesign/projects/mine-cards/art/candidates/mine-cards-icons-v001-candidate-e.png",
+  "source_alpha": "gamedesign/projects/mine-cards/art/candidates/mine-cards-icons-v001-candidate-e-alpha.png"
+}

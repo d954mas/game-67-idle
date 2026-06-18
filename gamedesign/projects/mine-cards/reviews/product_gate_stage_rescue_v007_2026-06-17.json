@@ -1,0 +1,119 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "mine-cards",
+  "task": "T0001",
+  "surface": "responsive",
+  "verdict": "fail",
+  "timestamp": "2026-06-17T17:24:45.606Z",
+  "screenshot": "build/captures/mine_cards_stage_rescue_v007_landscape_surface.png",
+  "answers": {
+    "where": "Mine Cards mining screen with a top miner action stage and lower idle board.",
+    "action": "Watch Surface Stone mining and work toward Copper Pickaxe; this is more readable than v004 but still not clear enough for a first-time player.",
+    "response": "Progress and geode reward appear in the stage, with improved actor/target placement.",
+    "reward": "Stone, coins, XP, and upgrade cost are visible, but the reward loop still relies on text and placeholder panels.",
+    "game_look": "It is closer to a game screen than v004, but still reads as a procedural prototype rather than a polished voxel idle RPG."
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 3,
+      "readability": 4,
+      "ui_controls": 3,
+      "action_direction": 3,
+      "art_quality": 2,
+      "audience_fit": 2
+    },
+    "issues": [
+      {
+        "severity": "major",
+        "axis": "composition",
+        "text": "Stage rescue improved actor scale and removed the disconnected status badge, but the top stage is still mostly empty procedural chrome rather than a strong game scene."
+      },
+      {
+        "severity": "major",
+        "axis": "action_direction",
+        "text": "The miner/rock relationship is clearer than v004, but the hit moment still lacks a proper staged impact pose/effect and portrait crops the character into the header area."
+      },
+      {
+        "severity": "major",
+        "axis": "ui_controls",
+        "text": "The lower board still has same-weight rectangular active activity, future chips, node cards, upgrade, and nav; hierarchy is serviceable but not product quality."
+      },
+      {
+        "severity": "major",
+        "axis": "art_quality",
+        "text": "Runtime still depends on procedural placeholder UI and reused placeholder markers; a generated/artist UI and icon family is required before feature expansion."
+      },
+      {
+        "severity": "major",
+        "axis": "audience_fit",
+        "text": "Portrait is captured and usable, but not phone-first or Capybara-like enough; the character/action zone does not yet dominate first read."
+      }
+    ]
+  },
+  "state_coverage": {
+    "required": [
+      "first_screen_idle",
+      "mining_tick_reward",
+      "locked_copper",
+      "copper_unlocked",
+      "upgrade_unaffordable",
+      "upgrade_affordable",
+      "upgrade_purchased",
+      "geode_event",
+      "small_window_stress"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen_idle",
+        "evidence": "build/captures/mine_cards_stage_rescue_v007_landscape_surface.png"
+      },
+      {
+        "tag": "geode_event",
+        "evidence": "build/captures/mine_cards_stage_rescue_v007_landscape_geode.png"
+      },
+      {
+        "tag": "small_window_stress",
+        "evidence": "build/captures/mine_cards_stage_rescue_v007_portrait_surface.png"
+      }
+    ],
+    "not_covered": [
+      {
+        "tag": "mining_tick_reward",
+        "reason": "No dedicated normal tick reward sequence reviewed in this pass."
+      },
+      {
+        "tag": "locked_copper",
+        "reason": "Visible but still weak due placeholder badge/chip hierarchy."
+      },
+      {
+        "tag": "copper_unlocked",
+        "reason": "Not recaptured in this pass."
+      },
+      {
+        "tag": "upgrade_unaffordable",
+        "reason": "Covered by prior affordance pass, not this stage rescue."
+      },
+      {
+        "tag": "upgrade_affordable",
+        "reason": "Covered by prior affordance pass, not this stage rescue."
+      },
+      {
+        "tag": "upgrade_purchased",
+        "reason": "Covered by prior affordance pass, not this stage rescue."
+      }
+    ]
+  },
+  "problem": "Stage layout tuning improved the actor/target relationship, but the screen still fails product read because it lacks real stage art/UI/icon family and portrait-first composition.",
+  "next": "Stop numeric layout tuning. Create the generated/artist UI and stage/icon source family, then integrate it into the native screen and rerun landscape/portrait product gate."
+}

@@ -1,0 +1,74 @@
+{
+  "schema": "game.ui_flow",
+  "project": "mine-cards",
+  "status": "draft_mining_v001",
+  "screens": [
+    {
+      "id": "mining_activity",
+      "purpose": "Run the first Melvor-like idle loop through one active Mining node.",
+      "primary_action": "select_or_continue_mining_node",
+      "must_show": [
+        "blocky_miner",
+        "selected_node",
+        "progress_bar",
+        "yield_preview",
+        "reward_log",
+        "mining_level",
+        "next_unlock"
+      ]
+    },
+    {
+      "id": "node_picker",
+      "purpose": "Choose between available and locked mining targets.",
+      "primary_action": "tap_node",
+      "must_show": [
+        "node_name",
+        "lock_requirement",
+        "interval",
+        "main_yield",
+        "mastery_progress"
+      ]
+    },
+    {
+      "id": "pickaxe_upgrade",
+      "purpose": "Spend ore/coins on the first tool upgrade.",
+      "primary_action": "tap_upgrade_pickaxe",
+      "must_show": [
+        "current_pickaxe",
+        "next_pickaxe",
+        "cost",
+        "missing_resource",
+        "before_after_speed"
+      ]
+    }
+  ],
+  "modals": [
+    {
+      "id": "geode_event",
+      "trigger": "rare mining tick",
+      "must_show": ["geode", "bonus_reward", "claim_or_auto_collect"]
+    },
+    {
+      "id": "node_unlocked",
+      "trigger": "level_or_tool_requirement_met",
+      "must_show": ["new_node", "why_it_matters", "start_action"]
+    }
+  ],
+  "first_slice_path": [
+    "mining_activity",
+    "node_picker",
+    "mining_activity",
+    "geode_event_optional",
+    "pickaxe_upgrade",
+    "node_unlocked"
+  ],
+  "removed_or_deferred_old_ui": [
+    "card_run",
+    "battle_cards",
+    "victory_defeat_combat_modals",
+    "energy",
+    "food",
+    "equipment_hp_bars",
+    "large_skill_tree"
+  ]
+}

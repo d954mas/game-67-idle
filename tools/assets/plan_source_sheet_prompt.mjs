@@ -108,7 +108,7 @@ function layoutRowsForFamily(sourceFamily, relevantGroups) {
       {
         id: "button_and_chip_bases",
         purpose: "primary/secondary button bases, chips, tabs, compact controls",
-        item_policy: "separate idle/pressed/disabled/selected states; no baked labels or icons",
+        item_policy: "separate default/pressed/disabled/selected states; no baked labels or icons",
         asset_group_ids: groupIds,
       },
       {
@@ -161,26 +161,49 @@ function layoutRowsForFamily(sourceFamily, relevantGroups) {
   ];
 }
 
-function buildSourceSheetLayout(sourceFamily, keyColor, relevantGroups) {
+function normalizeCustomLayoutRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  return rows
+    .filter((row) => row && hasText(row.id))
+    .map((row) => {
+      const slots = Array.isArray(row.slots) ? row.slots.filter(hasText).map((slot) => String(slot).trim()) : [];
+      return {
+        id: String(row.id).trim(),
+        purpose: hasText(row.purpose) ? String(row.purpose).trim() : slots.length > 0 ? "requested row-major source slots" : "requested custom source row",
+        item_policy: hasText(row.item_policy)
+          ? String(row.item_policy).trim()
+          : "one isolated component per slot with clear gutters and no composed runtime screen",
+        slots,
+      };
+    });
+}
+
+function buildSourceSheetLayout(sourceFamily, keyColor, relevantGroups, customLayout = null) {
   const kind = familyKind(sourceFamily);
+  const customRows = normalizeCustomLayoutRows(customLayout?.rows);
+  const customCanvas = Array.isArray(customLayout?.canvas) && customLayout.canvas.length === 2 ? customLayout.canvas : null;
+  const customMargin = Number.isFinite(customLayout?.outer_margin_px) ? customLayout.outer_margin_px : 64;
+  const customGutter = Number.isFinite(customLayout?.min_gutter_px) ? customLayout.min_gutter_px : kind === "icon" || kind === "decor" ? 64 : 48;
   return {
     version: 1,
     sheet_role: "cuttable_source_sheet",
     family_kind: kind,
     recommended_canvas: {
-      size_px: [2048, 2048],
+      size_px: customCanvas || [2048, 2048],
       background: keyColor,
-      background_policy: "perfectly flat chroma or true transparency only",
+      background_policy: hasText(customLayout?.background?.notes)
+        ? customLayout.background.notes
+        : "perfectly flat chroma or true transparency only",
     },
     placement: {
       mode: "row_major_grid",
-      edge_margin_px_min: 64,
-      gutter_px_min: kind === "icon" || kind === "decor" ? 64 : 48,
+      edge_margin_px_min: customMargin,
+      gutter_px_min: customGutter,
       allow_overlap: false,
       allow_composed_ui_screen: false,
       allow_baked_runtime_text: false,
     },
-    rows: layoutRowsForFamily(sourceFamily, relevantGroups),
+    rows: customRows.length > 0 ? customRows : layoutRowsForFamily(sourceFamily, relevantGroups),
     cut_policy: {
       one_component_per_slot: true,
       preserve_empty_chroma_lanes: true,
@@ -192,7 +215,10 @@ function buildSourceSheetLayout(sourceFamily, keyColor, relevantGroups) {
 
 function renderLayoutInstruction(layout) {
   const rowText = layout.rows
-    .map((row, index) => `Row ${index + 1} ${row.id}: ${row.purpose}; ${row.item_policy}.`)
+    .map((row, index) => {
+      const slotText = Array.isArray(row.slots) && row.slots.length > 0 ? ` Slots in order: ${row.slots.join(", ")}.` : "";
+      return `Row ${index + 1} ${row.id}: ${row.purpose}; ${row.item_policy}.${slotText}`;
+    })
     .join(" ");
   return (
     `Arrange the sheet as a ${layout.placement.mode} with at least ${layout.placement.edge_margin_px_min}px outer margin ` +
@@ -251,7 +277,7 @@ function buildPacket(job, sourceFamily, options) {
   const rejects = uniqueStrings(job.qa_rejects || []);
   const relevantGroups = (job.required_asset_groups || []).filter((group) => groupMatchesFamily(group, sourceFamily));
   const finalPolicy = contract.final_asset_policy || {};
-  const sourceSheetLayout = buildSourceSheetLayout(sourceFamily, keyColor, relevantGroups);
+  const sourceSheetLayout = buildSourceSheetLayout(sourceFamily, keyColor, relevantGroups, contract.source_sheet_layout);
 
   const promptLines = [
     `Create a production source sheet for ${job.asset_family || job.id}.`,
@@ -353,7 +379,8 @@ function renderMarkdown(packet) {
     `gutter_px_min: ${packet.source_sheet_layout?.placement?.gutter_px_min || "none"}`,
     "",
     ...(packet.source_sheet_layout?.rows || []).map((row, index) => {
-      return `- row ${index + 1} \`${row.id}\`: ${row.purpose}; ${row.item_policy}`;
+      const slotText = Array.isArray(row.slots) && row.slots.length > 0 ? `; slots: ${row.slots.join(", ")}` : "";
+      return `- row ${index + 1} \`${row.id}\`: ${row.purpose}; ${row.item_policy}${slotText}`;
     }),
     "",
     "## Intake Routing",

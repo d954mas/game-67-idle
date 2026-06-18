@@ -190,7 +190,7 @@ Generated UI for a game must be reusable runtime UI, not only screenshot art:
 - Do not make the full gameplay board one fixed art image when the game needs a
   dynamic board. Generate border, tile, highlight, empty-slot, and background
   parts separately.
-- Generate distinct visual states for controls when needed: idle, hover/press,
+- Generate distinct visual states for controls when needed: default/rest, hover/press,
   disabled, affordable, locked, and selected.
 - Asset manifests should record intended slice9 insets, content safe areas,
   target preview sizes, slice9 stretch/overlay usage policy, semantic icon

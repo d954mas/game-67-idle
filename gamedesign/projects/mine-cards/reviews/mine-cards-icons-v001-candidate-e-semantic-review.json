@@ -1,0 +1,38 @@
+{
+  "schema": "game.asset_semantic_style_review",
+  "source_family": "isolated icon sheet",
+  "accepted_visual_target": "gamedesign/projects/mine-cards/visual/fake_shots/mining_v001_fake_shot_2026-06-17.png",
+  "pipeline_stage": "pre_slice",
+  "style_contract": {
+    "style_group": "mine-cards-chunky-voxel-icons",
+    "required_traits": [
+      "chunky voxel silhouette",
+      "warm mine lighting",
+      "readable at 24-48px runtime size",
+      "isolated component with cuttable gutter"
+    ],
+    "forbidden_mixes": [
+      "Minecraft item silhouette",
+      "baked labels or letters",
+      "fused UI panels around icons",
+      "key-color fringe or background holes"
+    ]
+  },
+  "assets": [
+    {
+      "id": "mine-cards-icons-v001-candidate-e-alpha-sheet",
+      "intended_role": "Mine Cards isolated icon source sheet candidate for first runtime icon proof",
+      "observed_subject": "15 chunky voxel Mine Cards icons in a 4x4 source sheet with an empty final slot: mining, woodcutting, fishing, smithing, combat, farming, bank, shop, stone, copper ore, coins, pickaxe, locked, equipped, ready",
+      "evidence": "gamedesign/projects/mine-cards/art/candidates/mine-cards-icons-v001-candidate-e-alpha.png plus passing intake report gamedesign/projects/mine-cards/reviews/mine-cards-icons-v001-candidate-e-alpha-intake.md",
+      "style_group": "mine-cards-chunky-voxel-icons",
+      "semantic_match": "pass",
+      "style_match": "pass",
+      "composability": "pass",
+      "verdict": "accept",
+      "problems": [
+        "source is accepted for the first runtime icon proof, not final-art completion of the full UI family",
+        "some icons are object/building scale rather than compact 24px silhouettes; runtime screenshot must judge readability"
+      ]
+    }
+  ]
+}

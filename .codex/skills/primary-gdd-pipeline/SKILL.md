@@ -13,7 +13,7 @@ small vertical slice instead of a large document set.
 
 - `references/creative-intake-playbook.md` — user taste/meme anchor/acceptance criteria unclear.
 - `references/reference-research-playbook.md` — comparing games, ads, memes, stores, UI patterns.
-- `references/gameplay-systems-playbook.md` — loops, currencies, stats, activities, balance JSON, UI flow.
+- `references/gameplay-systems-playbook.md` — loops, player verbs, rules, feedback, risks, goals, structured core-loop data, UI flow.
 - `references/visual-proof-playbook.md` — fake shots, art prompts, runtime asset packs, review packets.
 - `references/web-gdd-site-playbook.md` — building/revising a design site or editable docs surface.
 - `references/implementation-handoff-playbook.md` — next-chat build plan, slice packet, acceptance gates.
@@ -102,7 +102,7 @@ small vertical slice instead of a large document set.
    Fresh prototypes must also have
    `visual/live_state_acceptance_matrix.json`; product gates should pass it
    with `--state-matrix` and cover or explicitly debt required states such as
-   HUD, primary action, feedback, modal/choice, blocked/affordable, returning,
+   HUD, primary action, feedback, modal/choice, blocked/affordable, re-entry,
    and transient stress.
    When the gate template names a visual critic packet, create that packet
    with `node tools/ai.mjs critic` before the strict verdict if a separate/self
@@ -120,7 +120,7 @@ revise the earlier gate instead of adding documents.
 1. Concept: hook, audience, platform, 3 pillars, no-go list.
 2. References: 3-7 refs with borrow/avoid/copy-risk and source quality.
 3. Visual: first gameplay fake shot accepted or redirected by the user.
-4. Slice: first 30 seconds, first 5 minutes, loop, currencies, UI flow.
+4. Slice: first 30 seconds, first 5 minutes, loop, player verbs, rules, UI flow.
 5. Handoff: risks, tests, files, commands, next implementation prompt.
 
 ## Workflow
@@ -140,7 +140,7 @@ revise the earlier gate instead of adding documents.
    plan compared against the accepted fake shot/target; record the mismatch
    list before coding and update it after meaningful render changes.
 4. **Create machine-readable contracts** once concept and visuals are stable:
-   `data/balance.json`, `data/ui_flow.json`, `data/asset_manifest.json`; add
+   `data/core_loop.json`, `data/ui_flow.json`, `data/asset_manifest.json`; add
    `data/combat.json` (or equivalent) for any design with danger.
 5. **Add risk gates**: top 3 risks (fun, production, UX), each with the
    smallest owner action (fake shot, paper test, prototype, spike, review).
@@ -158,7 +158,7 @@ active DoD before editing.
 ## Minimum Artifact Set
 
 Inside `gamedesign/projects/<game-id>/`: `concept.md`, `gdd.md`, references
-section or `references/`, `data/balance.json`, `data/ui_flow.json`, visual
+section or `references/`, `data/core_loop.json`, `data/ui_flow.json`, visual
 page/section, and `game_implementation_plan.md`.
 Add more docs only when they remove implementation ambiguity.
 
@@ -184,7 +184,7 @@ positive summary.
 - Docs or lore are expanding without a vertical-slice proof.
 - You cannot state the current DoD in one paragraph.
 - Output is a poster/reference while the user asked for game-ready assets.
-- Handoff says "ready" while combat/economy numbers are still vague.
+- Handoff says "ready" while core-loop rules, challenge, or economy numbers are still vague.
 - Infrastructure work is consuming more time than design work.
 - Accepted decisions exist only in chat, not in durable files.
 - The first-session/FTUE chain grows past ~3 beats, or the first slice has more

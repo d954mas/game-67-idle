@@ -19,6 +19,8 @@ right page; it does not replace the pages.
   definition of done tight.
 - [Content Planning](content_planning.md) - structure content roles, matrices,
   and production scope.
+- [Player Need Lanes](player_need_lanes.md) - choose whether the first playable
+  slice primarily serves accessible progression or active mastery.
 - [Hybrid-Casual Patterns](hybrid_casual_patterns.md) - pick a satisfying core
   loop + one twist on a proven genre; hybrid-casual monetization/retention shape
   (2026 market evidence).
@@ -40,6 +42,8 @@ right page; it does not replace the pages.
 ## Player Experience
 
 - [FTUE](ftue.md) - first session, first 30 seconds, and tutorial-by-doing.
+- [Player Need Lanes](player_need_lanes.md) - align first-minute loop, audience
+  need, and validation before mixing progression with deeper mastery.
 - [UI/UX Patterns](ui_ux_patterns.md) - readable controls, hierarchy,
   feedback, and screen states.
 - [Accessibility](accessibility.md) - readability, control, recovery, and

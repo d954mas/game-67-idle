@@ -1,0 +1,361 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-icons-v001-candidate-e-alpha.png",
+  "analysis_engine": "numpy",
+  "size": [
+    1254,
+    1254
+  ],
+  "key_color": "#0000ff",
+  "key_tolerance": 8,
+  "component_count": 15,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 24,
+  "max_exact_key_conflict_px": 0,
+  "max_key_hue_conflict_ratio": 0.05,
+  "closest_gap_px": 49,
+  "closest_pair": [
+    "component_1",
+    "component_5"
+  ],
+  "candidate_key_scores": [
+    {
+      "key_color": "#0000ff",
+      "visible_px": 469410,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 94,
+      "hue_band_ratio": 0.0002,
+      "score": 94.020025
+    },
+    {
+      "key_color": "#00ffff",
+      "visible_px": 469410,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 812,
+      "hue_band_ratio": 0.00173,
+      "score": 812.172983
+    },
+    {
+      "key_color": "#ff00ff",
+      "visible_px": 469410,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 1822,
+      "hue_band_ratio": 0.003881,
+      "score": 1822.388147
+    },
+    {
+      "key_color": "#ff0000",
+      "visible_px": 469410,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 8660,
+      "hue_band_ratio": 0.018449,
+      "score": 8661.844869
+    },
+    {
+      "key_color": "#00ff00",
+      "visible_px": 469410,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 15130,
+      "hue_band_ratio": 0.032232,
+      "score": 15133.223195
+    },
+    {
+      "key_color": "#ffff00",
+      "visible_px": 469410,
+      "exact_conflict_px": 157,
+      "exact_conflict_ratio": 0.000334,
+      "hue_band_px": 37173,
+      "hue_band_ratio": 0.079191,
+      "score": 194180.91909
+    }
+  ],
+  "current_key_score": {
+    "key_color": "#0000ff",
+    "visible_px": 469410,
+    "exact_conflict_px": 0,
+    "exact_conflict_ratio": 0.0,
+    "hue_band_px": 94,
+    "hue_band_ratio": 0.0002,
+    "score": 94.020025
+  },
+  "suggested_key_color": "#0000ff",
+  "key_color_conflict_count": 0,
+  "key_color_action": "keep_current_key_color",
+  "next_prompt_key_color": "#0000ff",
+  "problem_summary": {
+    "components_with_border_gap": 0,
+    "components_with_exact_key_conflict": 0,
+    "components_with_key_hue_conflict": 0,
+    "total_exact_key_conflict_px": 0,
+    "total_key_fringe_hue_px": 6,
+    "total_purple_halo_hue_px": 175,
+    "gutter_below_min": false,
+    "worst_key_hue_component": {
+      "id": "component_7",
+      "ratio": 0.001267,
+      "bbox": [
+        335,
+        414,
+        260,
+        234
+      ]
+    }
+  },
+  "blocking_reasons": [],
+  "recommended_next_step": {
+    "action": "slice_ready",
+    "reason": "source sheet passed intake checks",
+    "key_color": "#0000ff"
+  },
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        642,
+        76,
+        224,
+        279
+      ],
+      "area_px": 29157,
+      "visible_px": 29070,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 20,
+      "key_hue_conflict_ratio": 0.000688,
+      "border_gap_px": 76
+    },
+    {
+      "id": "component_2",
+      "bbox": [
+        367,
+        85,
+        223,
+        247
+      ],
+      "area_px": 32766,
+      "visible_px": 32690,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 33,
+      "key_hue_conflict_ratio": 0.001009,
+      "border_gap_px": 85
+    },
+    {
+      "id": "component_3",
+      "bbox": [
+        948,
+        90,
+        236,
+        256
+      ],
+      "area_px": 42197,
+      "visible_px": 42107,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 8,
+      "key_hue_conflict_ratio": 0.00019,
+      "border_gap_px": 70
+    },
+    {
+      "id": "component_4",
+      "bbox": [
+        66,
+        108,
+        233,
+        232
+      ],
+      "area_px": 36018,
+      "visible_px": 35949,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 1,
+      "key_hue_conflict_ratio": 2.8e-05,
+      "border_gap_px": 66
+    },
+    {
+      "id": "component_5",
+      "bbox": [
+        645,
+        404,
+        236,
+        245
+      ],
+      "area_px": 42718,
+      "visible_px": 42670,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 373
+    },
+    {
+      "id": "component_6",
+      "bbox": [
+        946,
+        413,
+        233,
+        237
+      ],
+      "area_px": 43453,
+      "visible_px": 43408,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 1,
+      "purple_halo_hue_px": 25,
+      "key_hue_conflict_ratio": 0.000599,
+      "border_gap_px": 75
+    },
+    {
+      "id": "component_7",
+      "bbox": [
+        335,
+        414,
+        260,
+        234
+      ],
+      "area_px": 36377,
+      "visible_px": 36307,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 5,
+      "purple_halo_hue_px": 41,
+      "key_hue_conflict_ratio": 0.001267,
+      "border_gap_px": 335
+    },
+    {
+      "id": "component_8",
+      "bbox": [
+        82,
+        420,
+        204,
+        206
+      ],
+      "area_px": 29350,
+      "visible_px": 29292,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 11,
+      "key_hue_conflict_ratio": 0.000376,
+      "border_gap_px": 82
+    },
+    {
+      "id": "component_9",
+      "bbox": [
+        370,
+        723,
+        181,
+        192
+      ],
+      "area_px": 25666,
+      "visible_px": 25588,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 15,
+      "key_hue_conflict_ratio": 0.000586,
+      "border_gap_px": 339
+    },
+    {
+      "id": "component_10",
+      "bbox": [
+        955,
+        724,
+        197,
+        194
+      ],
+      "area_px": 17207,
+      "visible_px": 17150,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 6,
+      "key_hue_conflict_ratio": 0.00035,
+      "border_gap_px": 102
+    },
+    {
+      "id": "component_11",
+      "bbox": [
+        87,
+        725,
+        186,
+        193
+      ],
+      "area_px": 25851,
+      "visible_px": 25809,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 87
+    },
+    {
+      "id": "component_12",
+      "bbox": [
+        660,
+        727,
+        219,
+        185
+      ],
+      "area_px": 26756,
+      "visible_px": 26691,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 6,
+      "key_hue_conflict_ratio": 0.000225,
+      "border_gap_px": 342
+    },
+    {
+      "id": "component_13",
+      "bbox": [
+        666,
+        974,
+        192,
+        211
+      ],
+      "area_px": 31450,
+      "visible_px": 31388,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 69
+    },
+    {
+      "id": "component_14",
+      "bbox": [
+        99,
+        977,
+        151,
+        210
+      ],
+      "area_px": 22818,
+      "visible_px": 22777,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 67
+    },
+    {
+      "id": "component_15",
+      "bbox": [
+        377,
+        983,
+        183,
+        203
+      ],
+      "area_px": 28546,
+      "visible_px": 28514,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 9,
+      "key_hue_conflict_ratio": 0.000316,
+      "border_gap_px": 68
+    }
+  ],
+  "problems": [],
+  "status": "pass"
+}

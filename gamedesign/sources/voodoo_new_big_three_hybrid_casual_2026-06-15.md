@@ -83,8 +83,8 @@ lineup and replicates the formula across themes (marbles, sand, ...).
 
 ## Related AppMagic pieces seen on the page (not read)
 
-"Idle Games in 2026: Home, Steam Home"; "Casual Puzzles in 2026"; "Casual Games
-Report 2025." Worth pulling if we lean idle or sort-puzzle.
+"Casual Puzzles in 2026"; "Casual Games Report 2025." Worth pulling if we
+explicitly choose that direction.
 
 ## Reusable rule promoted to knowledge
 

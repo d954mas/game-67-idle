@@ -1,0 +1,256 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-fx-v001-candidate-a-clean.png",
+  "analysis_engine": "numpy",
+  "size": [
+    1254,
+    1254
+  ],
+  "key_color": "#0000ff",
+  "key_tolerance": 8,
+  "component_count": 5,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 24,
+  "max_exact_key_conflict_px": 0,
+  "max_key_hue_conflict_ratio": 0.05,
+  "closest_gap_px": 17,
+  "closest_pair": [
+    "component_2",
+    "component_3"
+  ],
+  "candidate_key_scores": [
+    {
+      "key_color": "#00ff00",
+      "visible_px": 172964,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 541,
+      "hue_band_ratio": 0.003128,
+      "score": 541.312782
+    },
+    {
+      "key_color": "#ff00ff",
+      "visible_px": 172964,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 1039,
+      "hue_band_ratio": 0.006007,
+      "score": 1039.600703
+    },
+    {
+      "key_color": "#ff0000",
+      "visible_px": 172964,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 2806,
+      "hue_band_ratio": 0.016223,
+      "score": 2807.622303
+    },
+    {
+      "key_color": "#ffff00",
+      "visible_px": 172964,
+      "exact_conflict_px": 13,
+      "exact_conflict_ratio": 7.5e-05,
+      "hue_band_px": 7492,
+      "hue_band_ratio": 0.043315,
+      "score": 20496.331537
+    },
+    {
+      "key_color": "#00ffff",
+      "visible_px": 172964,
+      "exact_conflict_px": 80,
+      "exact_conflict_ratio": 0.000463,
+      "hue_band_px": 9270,
+      "hue_band_ratio": 0.053595,
+      "score": 89275.359497
+    },
+    {
+      "key_color": "#0000ff",
+      "visible_px": 172964,
+      "exact_conflict_px": 30358,
+      "exact_conflict_ratio": 0.175516,
+      "hue_band_px": 95688,
+      "hue_band_ratio": 0.553225,
+      "score": 30453743.322495
+    }
+  ],
+  "current_key_score": {
+    "key_color": "#0000ff",
+    "visible_px": 172964,
+    "exact_conflict_px": 30358,
+    "exact_conflict_ratio": 0.175516,
+    "hue_band_px": 95688,
+    "hue_band_ratio": 0.553225,
+    "score": 30453743.322495
+  },
+  "suggested_key_color": "#00ff00",
+  "key_color_conflict_count": 10,
+  "key_color_action": "regenerate_with_next_prompt_key_color",
+  "next_prompt_key_color": "#00ff00",
+  "problem_summary": {
+    "components_with_border_gap": 0,
+    "components_with_exact_key_conflict": 5,
+    "components_with_key_hue_conflict": 5,
+    "total_exact_key_conflict_px": 225927,
+    "total_key_fringe_hue_px": 22,
+    "total_purple_halo_hue_px": 4115,
+    "gutter_below_min": true,
+    "worst_key_hue_component": {
+      "id": "component_5",
+      "ratio": 1.734431,
+      "bbox": [
+        1023,
+        459,
+        194,
+        332
+      ]
+    }
+  },
+  "blocking_reasons": [
+    {
+      "code": "key_color_conflict",
+      "count": 10,
+      "action": "regenerate_source_sheet_with_safer_key_color"
+    },
+    {
+      "code": "unsafe_gutter",
+      "closest_gap_px": 17,
+      "minimum_px": 24,
+      "closest_pair": [
+        "component_2",
+        "component_3"
+      ],
+      "action": "regenerate_source_sheet_with_more_gutter_and_safe_border"
+    }
+  ],
+  "recommended_next_step": {
+    "action": "regenerate_source_sheet_with_safer_key_color",
+    "reason": "current key color conflicts with visible component art or halo colors",
+    "key_color": "#00ff00"
+  },
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        27,
+        459,
+        220,
+        332
+      ],
+      "area_px": 29789,
+      "merged_from": [
+        "component_1",
+        "component_22",
+        "component_33",
+        "component_35",
+        "component_43"
+      ],
+      "visible_px": 29789,
+      "exact_key_conflict_px": 47729,
+      "key_fringe_hue_px": 1,
+      "purple_halo_hue_px": 3,
+      "key_hue_conflict_ratio": 1.60237,
+      "border_gap_px": 27
+    },
+    {
+      "id": "component_2",
+      "bbox": [
+        267,
+        459,
+        218,
+        332
+      ],
+      "area_px": 33081,
+      "merged_from": [
+        "component_2",
+        "component_23",
+        "component_26",
+        "component_8"
+      ],
+      "visible_px": 33081,
+      "exact_key_conflict_px": 44956,
+      "key_fringe_hue_px": 4,
+      "purple_halo_hue_px": 973,
+      "key_hue_conflict_ratio": 1.388501,
+      "border_gap_px": 267
+    },
+    {
+      "id": "component_3",
+      "bbox": [
+        502,
+        459,
+        289,
+        332
+      ],
+      "area_px": 57410,
+      "merged_from": [
+        "component_3",
+        "component_7",
+        "component_9",
+        "component_80"
+      ],
+      "visible_px": 57410,
+      "exact_key_conflict_px": 46737,
+      "key_fringe_hue_px": 11,
+      "purple_halo_hue_px": 2073,
+      "key_hue_conflict_ratio": 0.850392,
+      "border_gap_px": 459
+    },
+    {
+      "id": "component_4",
+      "bbox": [
+        810,
+        459,
+        193,
+        332
+      ],
+      "area_px": 26446,
+      "merged_from": [
+        "component_4",
+        "component_20"
+      ],
+      "visible_px": 26446,
+      "exact_key_conflict_px": 42069,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 1.590751,
+      "border_gap_px": 251
+    },
+    {
+      "id": "component_5",
+      "bbox": [
+        1023,
+        459,
+        194,
+        332
+      ],
+      "area_px": 26238,
+      "merged_from": [
+        "component_5",
+        "component_21"
+      ],
+      "visible_px": 26238,
+      "exact_key_conflict_px": 44436,
+      "key_fringe_hue_px": 6,
+      "purple_halo_hue_px": 1066,
+      "key_hue_conflict_ratio": 1.734431,
+      "border_gap_px": 37
+    }
+  ],
+  "problems": [
+    "component_1 contains 47729px of exact key-color-like art > allowed 0px",
+    "component_1 key/halo hue conflict ratio 1.602 > allowed 0.050; choose a safer background or split/preserve this art",
+    "component_2 contains 44956px of exact key-color-like art > allowed 0px",
+    "component_2 key/halo hue conflict ratio 1.389 > allowed 0.050; choose a safer background or split/preserve this art",
+    "component_3 contains 46737px of exact key-color-like art > allowed 0px",
+    "component_3 key/halo hue conflict ratio 0.850 > allowed 0.050; choose a safer background or split/preserve this art",
+    "component_4 contains 42069px of exact key-color-like art > allowed 0px",
+    "component_4 key/halo hue conflict ratio 1.591 > allowed 0.050; choose a safer background or split/preserve this art",
+    "component_5 contains 44436px of exact key-color-like art > allowed 0px",
+    "component_5 key/halo hue conflict ratio 1.734 > allowed 0.050; choose a safer background or split/preserve this art",
+    "closest component gap 17px is below required 24px"
+  ],
+  "status": "fail"
+}

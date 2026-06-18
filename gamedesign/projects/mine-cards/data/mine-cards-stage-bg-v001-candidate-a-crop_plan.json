@@ -1,0 +1,197 @@
+{
+  "schema": "game.runtime_crop_plan",
+  "version": 1,
+  "source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-stage-bg-v001-candidate-a-alpha.png",
+  "source_id": "mine-cards-stage-bg-v001-candidate-a",
+  "source_role": "stage background layer sheet",
+  "intake_audit": "gamedesign/projects/mine-cards/reviews/mine-cards-stage-bg-v001-candidate-a-intake.json",
+  "component_sort": {
+    "mode": "row_major",
+    "row_tolerance": 96
+  },
+  "padding": 12,
+  "output_dir": "assets\\runtime\\mine-cards-stage-ui-family-v001\\stage",
+  "crop_count": 5,
+  "crops": [
+    {
+      "id": "mine_wall_tile",
+      "kind": "sprite",
+      "source_component_id": "component_1",
+      "component_bbox": [
+        28,
+        493,
+        208,
+        230
+      ],
+      "rect": [
+        16,
+        481,
+        232,
+        254
+      ],
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\stage/mine_wall_tile.png",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ff00",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "semantic_role": "mine_wall_tile",
+      "anchor_policy": "center pivot unless runtime layout overrides it"
+    },
+    {
+      "id": "mine_floor_shadow",
+      "kind": "sprite",
+      "source_component_id": "component_5",
+      "component_bbox": [
+        291,
+        580,
+        203,
+        154
+      ],
+      "rect": [
+        279,
+        568,
+        227,
+        178
+      ],
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\stage/mine_floor_shadow.png",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ff00",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "semantic_role": "mine_floor_shadow",
+      "anchor_policy": "center pivot unless runtime layout overrides it"
+    },
+    {
+      "id": "stone_debris_cluster",
+      "kind": "sprite",
+      "source_component_id": "component_4",
+      "component_bbox": [
+        542,
+        577,
+        167,
+        143
+      ],
+      "rect": [
+        530,
+        565,
+        191,
+        167
+      ],
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\stage/stone_debris_cluster.png",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ff00",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "semantic_role": "stone_debris_cluster",
+      "anchor_policy": "center pivot unless runtime layout overrides it"
+    },
+    {
+      "id": "copper_ore_seam_stamp",
+      "kind": "sprite",
+      "source_component_id": "component_3",
+      "component_bbox": [
+        765,
+        513,
+        190,
+        212
+      ],
+      "rect": [
+        753,
+        501,
+        214,
+        236
+      ],
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\stage/copper_ore_seam_stamp.png",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ff00",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "semantic_role": "copper_ore_seam_stamp",
+      "anchor_policy": "center pivot unless runtime layout overrides it"
+    },
+    {
+      "id": "warm_lantern_light_overlay",
+      "kind": "sprite",
+      "source_component_id": "component_2",
+      "component_bbox": [
+        1009,
+        499,
+        215,
+        264
+      ],
+      "rect": [
+        997,
+        487,
+        239,
+        288
+      ],
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\stage/warm_lantern_light_overlay.png",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8,
+        "component_isolation": "source_component_bbox"
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ff00",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "ui_common",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      },
+      "semantic_role": "warm_lantern_light_overlay",
+      "anchor_policy": "center pivot unless runtime layout overrides it"
+    }
+  ]
+}

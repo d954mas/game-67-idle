@@ -19,7 +19,7 @@ Score each area 0-2:
 - DoD and scope: states done/out-of-scope/proof before files or final answer.
 - Creative intake: captures taste, asks max 3 useful questions, labels assumptions.
 - References: uses 3-7 refs when needed, source quality, borrow/avoid/copy-risk.
-- Gameplay: defines verbs, first loop, currencies/stats, activities, upgrades, UI states.
+- Gameplay: defines verbs, first loop, rules/checks, feedback, risks, goals, UI states.
 - Visual proof: distinguishes reference/fake shot/runtime asset and stops for review.
 - Data/handoff: creates or requests machine-readable contracts and source order.
 - Validation: runs or names concrete checks, includes visual/input evidence when relevant.
@@ -42,7 +42,7 @@ Make a first GDD for a tiny toy-factory puzzle game with collection, upgrades, a
 ```
 
 ```text
-Research compact browser puzzle and idle games for a kid-friendly casual audience, then make a visual GDD. I want to see gameplay, not only text.
+Research compact browser puzzle games for a kid-friendly casual audience, then make a visual GDD. I want to see gameplay, not only text.
 ```
 
 ```text
@@ -54,7 +54,7 @@ Continue yesterday's GDD session and prepare a next-chat implementation plan.
 ```
 
 ```text
-Build the GDD as a local editable website, and make sure it stays aligned with balance/UI data.
+Build the GDD as a local editable website, and make sure it stays aligned with core-loop/UI data.
 ```
 
 ## Failure Probes
@@ -62,7 +62,7 @@ Build the GDD as a local editable website, and make sure it stays aligned with b
 Watch for these failures:
 
 - asks 8+ questions before doing useful work;
-- writes broad lore before first loop/currencies/UI;
+- writes broad lore before first loop/player verbs/rules/UI;
 - creates a beautiful site without fake gameplay shots;
 - treats one flattened image as runtime-ready assets;
 - cites refs but extracts no design decisions;

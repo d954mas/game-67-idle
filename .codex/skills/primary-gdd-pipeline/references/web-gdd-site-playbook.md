@@ -28,8 +28,9 @@ Keep sections short and connected:
 
 - Concept: hook, fantasy, pillars, no-go list.
 - Gameplay: first 30 seconds, first 5 minutes, core loop, verbs.
-- Economy: currencies, stats, sources, sinks, first upgrade.
-- Activities: jobs/actions, unlocks, blocked states.
+- Core loop: player verbs, rules, feedback, risk, goals, continue reason.
+- Progression/economy, if used: resources, stats, sources, sinks, first unlock.
+- Activities: actions, unlocks, blocked states.
 - UI/UX map: main screen, panels, actions, feedback, navigation.
 - Visual proof: fake shot, progression shot, runtime asset proof if available.
 - References: compact borrow/avoid/copy-risk.
@@ -52,7 +53,7 @@ visual GDD.
 
 Avoid duplicating data manually when structured files exist:
 
-- read/link `data/balance.json` for economy values;
+- read/link `data/core_loop.json` for player verbs, rules, feedback, risk, goals, and continue reason;
 - read/link `data/ui_flow.json` for screens/actions;
 - read/link `data/asset_manifest.json` for visual assets;
 - link current concept/GDD/handoff files;

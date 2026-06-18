@@ -1,0 +1,14 @@
+{
+  "schema": "game.asset_semantic_style_audit",
+  "version": 1,
+  "review": "gamedesign\\projects\\mine-cards\\reviews\\mine-cards-icons-v001-candidate-c-semantic-review.json",
+  "source_family": "isolated icon sheet",
+  "pipeline_stage": "pre_slice",
+  "accepted_asset_ids": [],
+  "rejected_asset_ids": [
+    "mine-cards-icons-v001-candidate-c-sheet"
+  ],
+  "accepted_style_groups": [],
+  "problems": [],
+  "verdict": "pass"
+}

@@ -1,0 +1,28 @@
+{
+  "schema": "game.asset_generation_workflow",
+  "version": 1,
+  "id": "mine-cards-equipment-source-v001-candidate-b-workflow",
+  "provider": "codex_builtin_imagegen",
+  "model_or_workflow": "imagegen",
+  "prompt_packet": "gamedesign/projects/mine-cards/art/prompts/mine-cards-equipment-source-v001-prompt.json",
+  "raw_generation": {
+    "source_imagegen_path": "C:/Users/ROG/.codex/generated_images/019ed538-bade-73a3-b4de-360683d97267/ig_0397b9689673e566016a3317da10e8819188d45745be64eb92.png",
+    "project_copy": "gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-v001-candidate-b.png",
+    "notes": "Built-in imagegen did not produce a perfectly flat key background; raw candidate failed source-sheet intake."
+  },
+  "postprocess": [
+    {
+      "step": "normalize_source_sheet_chroma",
+      "command": "py -3.12 tools/assets/normalize_source_sheet_chroma.py --source gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-v001-candidate-b.png --output gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-v001-candidate-b-normalized.png --key-color #00ff00 --key-tolerance 48",
+      "output": "gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-v001-candidate-b-normalized.png"
+    },
+    {
+      "step": "resheet_and_green_spill_cleanup",
+      "command": "py -3.12 tmp/rescue_equipment_source_sheet.py",
+      "output": "gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-v001-candidate-b-resheet.png",
+      "contact_sheet": "gamedesign/projects/mine-cards/reviews/mine-cards-equipment-source-v001-candidate-b-resheet-contact.png",
+      "notes": "Deterministically removed green key to alpha, isolated 12 components, resheeted them into a 1792x1344 transparent 3x4 source sheet, and scrubbed visible green spill."
+    }
+  ],
+  "accepted_source": "gamedesign/projects/mine-cards/art/candidates/mine-cards-equipment-source-v001-candidate-b-resheet.png"
+}

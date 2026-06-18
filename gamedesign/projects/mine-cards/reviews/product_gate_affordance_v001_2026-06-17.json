@@ -1,0 +1,104 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "mine-cards",
+  "task": "T0001",
+  "surface": "landscape",
+  "verdict": "fail",
+  "timestamp": "2026-06-17T17:05:55.824Z",
+  "screenshot": "build/captures/mine_cards_affordance_v001_landscape_surface.png",
+  "answers": {
+    "where": "Mine Cards mining screen with top miner action stage and lower idle mechanics board.",
+    "action": "Let Surface Stone run, watch resources, and work toward Copper Pickaxe in the next-goal panel.",
+    "response": "Progress, geode reward, and upgrade states are visible; lower board now separates active Mining from future systems.",
+    "reward": "Stone, coins, and upgrade readiness become visible; geode pop gives a special reward moment.",
+    "game_look": "It now reads as a block mining idle RPG screen, but UI art remains procedural and icon treatment is placeholder."
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 4,
+      "ui_controls": 4,
+      "action_direction": 4,
+      "art_quality": 3,
+      "audience_fit": 3
+    },
+    "issues": [
+      {
+        "severity": "major",
+        "axis": "art_quality",
+        "text": "Future activity and resource icons are reused placeholder atlas sprites, not a proper generated/artist icon family."
+      },
+      {
+        "severity": "minor",
+        "axis": "audience_fit",
+        "text": "The screen reads more like an idle RPG now, but still lacks polished game UI material and stronger future-activity silhouettes."
+      }
+    ]
+  },
+  "state_coverage": {
+    "required": [
+      "first_screen_idle",
+      "mining_tick_reward",
+      "locked_copper",
+      "copper_unlocked",
+      "upgrade_unaffordable",
+      "upgrade_affordable",
+      "upgrade_purchased",
+      "geode_event",
+      "small_window_stress"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen_idle",
+        "evidence": "build/captures/mine_cards_affordance_v001_landscape_surface.png"
+      },
+      {
+        "tag": "geode_event",
+        "evidence": "build/captures/mine_cards_affordance_v001_landscape_geode.png"
+      },
+      {
+        "tag": "upgrade_unaffordable",
+        "evidence": "build/captures/mine_cards_affordance_v001_upgrade_unaffordable.png"
+      },
+      {
+        "tag": "upgrade_affordable",
+        "evidence": "build/captures/mine_cards_affordance_v001_upgrade_affordable.png"
+      },
+      {
+        "tag": "upgrade_purchased",
+        "evidence": "build/captures/mine_cards_affordance_v001_upgrade_purchased.png"
+      }
+    ],
+    "not_covered": [
+      {
+        "tag": "mining_tick_reward",
+        "reason": "Not recaptured as a dedicated normal tick reward sequence in this pass."
+      },
+      {
+        "tag": "locked_copper",
+        "reason": "Visible, but lock affordance still uses placeholder badge and needs stronger player-facing treatment."
+      },
+      {
+        "tag": "copper_unlocked",
+        "reason": "Not recaptured in this pass."
+      },
+      {
+        "tag": "small_window_stress",
+        "reason": "Not recaptured after affordability/icon pass."
+      }
+    ]
+  },
+  "problem": "Affordance/readability improved, but final product-read gate still fails on art quality and future activity silhouettes.",
+  "next": "Create/integrate a real generated icon/UI family or accept placeholder-art debt before expanding mechanics."
+}

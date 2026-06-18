@@ -1,0 +1,150 @@
+{
+  "schema": "game.generated_ui_asset_audit",
+  "version": 1,
+  "crop_manifest": "gamedesign/projects/mine-cards/data/mine-cards-fx-v004-candidate-d-crop_manifest.json",
+  "verdict": "pass",
+  "assets_checked": 5,
+  "problems": [],
+  "assets": [
+    {
+      "id": "stone_hit_chip_fx",
+      "kind": "sprite",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\fx/stone_hit_chip_fx.png",
+      "problems": [],
+      "size": [
+        221,
+        224
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        213,
+        216
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "copper_hit_chip_fx",
+      "kind": "sprite",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\fx/copper_hit_chip_fx.png",
+      "problems": [],
+      "size": [
+        200,
+        213
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        192,
+        205
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "geode_reward_pop_fx",
+      "kind": "sprite",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\fx/geode_reward_pop_fx.png",
+      "problems": [],
+      "size": [
+        261,
+        275
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        253,
+        267
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "xp_spark_fx",
+      "kind": "sprite",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\fx/xp_spark_fx.png",
+      "problems": [],
+      "size": [
+        168,
+        178
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        160,
+        170
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    },
+    {
+      "id": "coin_spark_fx",
+      "kind": "sprite",
+      "output": "assets\\runtime\\mine-cards-stage-ui-family-v001\\fx/coin_spark_fx.png",
+      "problems": [],
+      "size": [
+        172,
+        195
+      ],
+      "alpha_bbox": [
+        8,
+        8,
+        164,
+        187
+      ],
+      "edge_padding": {
+        "left": 8,
+        "top": 8,
+        "right": 8,
+        "bottom": 8
+      },
+      "edge_key_fringe_pixels": 0,
+      "edge_purple_halo_pixels": 0,
+      "edge_green_spill_pixels": 0,
+      "edge_source_key_fringe_pixels": 0,
+      "transparent_edge_bad_rgb_pixels": 0,
+      "transparent_nonzero_rgb_pixels": 0
+    }
+  ]
+}

@@ -62,7 +62,7 @@ Moment loop
 Session loop
   -> short goal, unlock, completion
 Meta loop
-  -> long-term upgrade, collection, area, prestige, mastery
+  -> long-term mastery, collection, area, build, story, or account growth
 ```
 
 Each layer should feed another layer. A moment loop that never changes the

@@ -1,0 +1,16 @@
+{
+  "schema": "game.asset_semantic_style_audit",
+  "version": 1,
+  "review": "gamedesign\\projects\\mine-cards\\reviews\\mine-cards-icons-v001-candidate-e-semantic-review.json",
+  "source_family": "isolated icon sheet",
+  "pipeline_stage": "pre_slice",
+  "accepted_asset_ids": [
+    "mine-cards-icons-v001-candidate-e-alpha-sheet"
+  ],
+  "rejected_asset_ids": [],
+  "accepted_style_groups": [
+    "mine-cards-chunky-voxel-icons"
+  ],
+  "problems": [],
+  "verdict": "pass"
+}

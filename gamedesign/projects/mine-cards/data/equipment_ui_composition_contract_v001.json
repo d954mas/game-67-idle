@@ -1,0 +1,215 @@
+{
+  "schema": "game.equipment_ui_composition_contract",
+  "version": 1,
+  "id": "equipment_ui_composition_contract_v001",
+  "task": "T0011",
+  "status": "gated_prep",
+  "gate": {
+    "blocked_until": [
+      "T0001 lead acceptance",
+      "T0008 item art acceptance",
+      "or explicit lead priority override for equipment UI before T0001 acceptance"
+    ],
+    "must_not_change_before_gate": [
+      "src",
+      "current T0001 playable screen",
+      "external/neotolis-engine"
+    ]
+  },
+  "first_surface": {
+    "id": "compact_item_compare_panel",
+    "decision": "default first proof",
+    "reason": "Smallest surface that proves item sprites, slot frames, selected/equipped states, runtime text, and one equip/compare action without adding equipment mechanics or a full tab.",
+    "later_surface": "equipment_tab_preview"
+  },
+  "input_item_manifest": "gamedesign/projects/mine-cards/data/mine-cards-equipment-source-v001-asset_manifest.json",
+  "input_item_scope": {
+    "atlas_item_ids": [
+      "item_pickaxe_worn",
+      "item_pickaxe_copper",
+      "item_mining_helmet",
+      "item_miner_armor",
+      "item_plain_ring",
+      "item_ruby_ring",
+      "item_skull_relic_scroll",
+      "item_mine_charm",
+      "item_hand_axe",
+      "item_battle_axe",
+      "item_spiked_mace",
+      "item_dark_crown"
+    ],
+    "first_proof_item_ids": [
+      "item_pickaxe_worn",
+      "item_pickaxe_copper",
+      "item_mining_helmet"
+    ],
+    "item_shadow_policy": "omit_first_pass_generate_separate_layer_only_if_composition_proof_shows_need"
+  },
+  "required_source_families": [
+    {
+      "id": "equipment_slot_frames",
+      "kind": "slice9_or_sprite",
+      "required_states": [
+        "empty",
+        "default",
+        "selected",
+        "locked",
+        "equipped"
+      ],
+      "rules": [
+        "blank frame art only",
+        "no item art baked into slots",
+        "no labels or stat text",
+        "content safe area must fit a 64px item icon"
+      ]
+    },
+    {
+      "id": "equipment_panel_frame",
+      "kind": "slice9",
+      "required_states": [
+        "default"
+      ],
+      "rules": [
+        "resizable panel base",
+        "structurally boring stretch zones",
+        "decorations as named overlays only",
+        "content safe area for runtime title, item name, stats, and action"
+      ]
+    },
+    {
+      "id": "equipment_state_overlays",
+      "kind": "sprite_or_icon",
+      "required_states": [
+        "selected",
+        "equipped",
+        "locked",
+        "new",
+        "compare_up",
+        "compare_down"
+      ],
+      "rules": [
+        "state overlays separate from item art",
+        "overlay anchors recorded",
+        "must not cover item silhouette or runtime text"
+      ]
+    },
+    {
+      "id": "equipment_action_buttons",
+      "kind": "slice9",
+      "required_states": [
+        "enabled",
+        "disabled",
+        "pressed"
+      ],
+      "rules": [
+        "compact button sizes must be explicitly allowed",
+        "runtime label only",
+        "no baked text",
+        "no icon fused into button background"
+      ]
+    }
+  ],
+  "runtime_composition": {
+    "must_compose_runtime_layers": [
+      "panel_frame",
+      "slot_frame",
+      "item_sprite",
+      "state_overlay",
+      "runtime_item_name",
+      "runtime_stat_delta",
+      "runtime_action_label"
+    ],
+    "must_not_bake": [
+      "item names",
+      "stat labels",
+      "stat values",
+      "rarity text",
+      "equipped text",
+      "button labels",
+      "item art inside slot frames"
+    ],
+    "minimum_panel_contents": [
+      "selected item",
+      "equipped item marker",
+      "locked or future slot hint",
+      "one compare delta",
+      "one enabled or disabled equip action"
+    ]
+  },
+  "composition_proof_targets": [
+    {
+      "id": "desktop_compact_compare",
+      "size": [
+        560,
+        320
+      ],
+      "required_items": [
+        "item_pickaxe_worn",
+        "item_pickaxe_copper",
+        "item_mining_helmet"
+      ]
+    },
+    {
+      "id": "portrait_compact_compare",
+      "size": [
+        360,
+        520
+      ],
+      "required_items": [
+        "item_pickaxe_worn",
+        "item_pickaxe_copper",
+        "item_mining_helmet"
+      ]
+    },
+    {
+      "id": "hostile_small_width",
+      "size": [
+        320,
+        420
+      ],
+      "required_items": [
+        "item_pickaxe_worn",
+        "item_pickaxe_copper"
+      ]
+    }
+  ],
+  "required_gate_outputs": [
+    "source_sheet_intake",
+    "semantic_style_audit",
+    "crop_manifest",
+    "runtime_manifest",
+    "generated_ui_asset_audit",
+    "slice9_design_policy_audit",
+    "composition_proof",
+    "atlas_metadata_audit",
+    "review_atlas_pack",
+    "review_atlas_audit",
+    "source_family_coverage_audit",
+    "generated_source_derivation_audit",
+    "runtime_usage_audit_after_native_integration",
+    "native_product_gate"
+  ],
+  "native_proof_boundary": {
+    "first_native_surface": "equipment/inventory panel or tab after T0001 acceptance",
+    "must_not_regress": [
+      "T0001 first-screen baseline readability",
+      "T0001 action stage ownership",
+      "portrait compact layout"
+    ],
+    "external_engine_diff_allowed": false
+  },
+  "acceptance_questions": [
+    "Can a new player see which item is selected?",
+    "Can they tell whether the item is equipped, locked, or actionable?",
+    "Is the stat/change text runtime-rendered and readable?",
+    "Do slot frames support the item silhouettes instead of competing with them?",
+    "Does portrait use an authored composition instead of squeezing desktop UI?"
+  ],
+  "deferred": [
+    "equipment stats and actual equip mechanics",
+    "full equipment tab",
+    "inventory sort/filter",
+    "rarity systems",
+    "item shadow layer unless composition proof requires it"
+  ]
+}

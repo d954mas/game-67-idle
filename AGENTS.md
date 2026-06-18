@@ -5,7 +5,10 @@
 - No active game concept is selected. Treat this repository as a clean
   AI-first native game seed ready for the next game.
 - This is an AI-first game development base: improve the game and the AI workflow together.
-- The engine lives in `external/neotolis-engine` as a submodule; do not edit it unless explicitly asked.
+- The engine lives in `external/neotolis-engine` as a submodule; never edit it
+  from this game repo. Connect to it through public APIs/modules only. If an
+  engine change appears necessary, create a task/issue with evidence and a
+  minimal repro instead of patching the submodule.
 - Game design lives in `gamedesign/`; game code lives in `src/`.
 - Design folder map is documented in `gamedesign/README.md`.
 - Reusable cross-project design knowledge lives in `gamedesign/knowledge/`.
@@ -132,9 +135,9 @@
   check only", "reference not studied", "screen, not a game", "not done" — and
   do the real step. A rigorous method existing but being skipped for a
   genre/memory/surface version IS the failure. Operationalized where possible:
-  the prototype startup gate now hard-blocks on `core_loop_economy`
-  (`data/balance.json`) so a game cannot be "ready to build" with no designed
-  loop; the visual gate is `ai.mjs gate`; references use
+  the prototype startup gate now hard-blocks on `core_loop_model`
+  (`data/core_loop.json`) so a game cannot be "ready to build" with no
+  designed loop; the visual gate is `ai.mjs gate`; references use
   `reference_deconstruction.md`. Applies to the visual, teachability, core-loop,
   and reference gates alike.
 - Continuous visual gate: when a fake shot/reference is named, judge the native
@@ -151,7 +154,7 @@
   solid plate that fully contains it; primary numbers/labels large + bold or
   outlined (hairline ~2px strokes = fail); cost/affordability legible. The
   auto-metric is a coarse helper; the montage eyeball is the gate. (2026-06-17:
-  the idle UI shipped ~2px hairline text on small plates because it was judged
+  a previous UI shipped ~2px hairline text on small plates because it was judged
   from the full shot, not a zoom.)
 - Visual regression rule (a recurring failure: fixing one axis silently made
   another worse — this session a text-readability pass introduced clashing

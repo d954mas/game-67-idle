@@ -1,0 +1,104 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "mine-cards",
+  "task": "T0001",
+  "surface": "responsive-v003",
+  "verdict": "pass",
+  "timestamp": "2026-06-17T20:49:00.389Z",
+  "screenshot": "build/captures/mine_cards_compact_ui_v003_landscape_surface.png",
+  "answers": {
+    "where": "Mine Cards Mining screen: a fixed top miner action stage and a lower Melvor-like idle mechanics board.",
+    "action": "Watch Surface Stone mining, read the active node row, inspect the Copper Vein lock, and work toward Copper Pickaxe.",
+    "response": "After the v003 framing pass, the miner is fully visible beside the rock, the stage target/reward line is clearer, and portrait upgrade costs use a cleaner compact action button.",
+    "reward": "Stone, Mining XP, geode bonus, node progress, and exact Copper Pickaxe missing costs are visible; the motion proof shows the hit, FX, reward callout, and progress reset as one mining moment.",
+    "game_look": "Generated voxel/RPG UI assets frame a real native game screen with a top action stage, authored reward FX, selected node row, future activity board, and upgrade goal instead of repeated debug panels."
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 4,
+      "ui_controls": 4,
+      "action_direction": 4,
+      "art_quality": 4,
+      "audience_fit": 4
+    },
+    "issues": [
+      {
+        "severity": "minor",
+        "axis": "art_quality",
+        "text": "KayKit/Ozz miner is acceptable production-path proof, not final custom Mine Cards character art."
+      },
+      {
+        "severity": "minor",
+        "axis": "ui_controls",
+        "text": "Future activity labels remain placeholder-light; acceptable for the first Mining slice but need dedicated locked/hover states later."
+      }
+    ]
+  },
+  "state_coverage": {
+    "required": [
+      "first_screen_idle",
+      "mining_tick_reward",
+      "locked_copper",
+      "copper_unlocked",
+      "upgrade_unaffordable",
+      "upgrade_affordable",
+      "upgrade_purchased",
+      "geode_event",
+      "small_window_stress"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen_idle",
+        "evidence": "build/captures/mine_cards_compact_ui_v003_landscape_surface.png"
+      },
+      {
+        "tag": "mining_tick_reward",
+        "evidence": "build/captures/mine_cards_core_moment_v004.gif"
+      },
+      {
+        "tag": "locked_copper",
+        "evidence": "build/captures/mine_cards_compact_ui_v003_portrait_surface.png"
+      },
+      {
+        "tag": "upgrade_unaffordable",
+        "evidence": "build/captures/mine_cards_compact_ui_v003_portrait_surface.png"
+      },
+      {
+        "tag": "geode_event",
+        "evidence": "build/captures/mine_cards_compact_ui_v003_landscape_geode.png"
+      }
+    ],
+    "not_covered": [
+      {
+        "tag": "copper_unlocked",
+        "reason": "requires refreshed Level-2 click scenario after v003 framing"
+      },
+      {
+        "tag": "upgrade_affordable",
+        "reason": "requires refreshed seeded-resource scenario after v003 framing"
+      },
+      {
+        "tag": "upgrade_purchased",
+        "reason": "requires refreshed purchase scenario after v003 framing"
+      },
+      {
+        "tag": "small_window_stress",
+        "reason": "requires refreshed 720x480 stress capture after v003 framing"
+      }
+    ]
+  },
+  "problem": "",
+  "next": ""
+}
