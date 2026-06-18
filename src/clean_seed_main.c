@@ -57,6 +57,7 @@ typedef struct BackroomsState {
     int route_choice_wrong;
     bool threat_visible;
     bool caught_audio_played;
+    bool sprinting;
     bool flashlight_on;
     bool fuse_found;
     bool won;
@@ -588,7 +589,7 @@ static void build_ui(void) {
     ui_text(30, 30, "BACKROOMS LIMINAL", 3, 246, 226, 146, 255);
     (void)snprintf(line, sizeof(line), "OBJECTIVE: %s", objective);
     ui_text(30, 64, line, 2, 230, 238, 208, 255);
-    ui_text(30, 92, "WASD MOVE  ARROWS LOOK  E USE  F LIGHT", 2, 190, 205, 184, 240);
+    ui_text(30, 92, "WASD MOVE  SHIFT SPRINT  E USE  F LIGHT", 2, 190, 205, 184, 240);
 
     ui_rect(682, 18, 258, 118, 4, 6, 8, 190);
     ui_text(700, 32, "FEAR", 2, 240, 210, 176, 250);
@@ -616,7 +617,7 @@ static void build_ui(void) {
 
     if (!s_game.won && !s_game.caught && blackout_active()) {
         ui_rect(262, 392, 436, 46, 24, 2, 2, 230);
-        ui_text(320, 406, "LIGHTS OUT - RUN", 3, 255, 138, 112, 255);
+        ui_text(290, 406, "LIGHTS OUT - SPRINT", 3, 255, 138, 112, 255);
     } else if (!s_game.won && !s_game.caught && route_choice_active()) {
         ui_rect(260, 392, 440, 46, 5, 8, 8, 215);
         (void)snprintf(line, sizeof(line), "MOVE %s - TRUST HUM", route_choice_side_name(route_choice_safe_side_for_stage(s_game.route_choice_stage)));
@@ -829,9 +830,13 @@ static void update_game(void) {
     if (len > 0.001F) {
         move_x /= len;
         move_z /= len;
-        const float speed = 3.15F;
+        const bool wants_sprint = nt_input_key_is_down(NT_KEY_LSHIFT) || nt_input_key_is_down(NT_KEY_RSHIFT);
+        s_game.sprinting = wants_sprint && s_game.battery > 0.08F;
+        const float speed = s_game.sprinting ? 5.05F : 3.15F;
         s_game.x += move_x * speed * dt;
         s_game.z += move_z * speed * dt;
+    } else {
+        s_game.sprinting = false;
     }
     s_game.x = clampf(s_game.x, -1.05F, 1.05F);
     s_game.z = clampf(s_game.z, 0.45F, 31.8F);
@@ -839,7 +844,8 @@ static void update_game(void) {
     update_route_choice();
 
     if (s_game.flashlight_on && s_game.battery > 0.0F) {
-        s_game.battery = clampf(s_game.battery - dt * 0.026F, 0.0F, 1.0F);
+        const float sprint_drain = s_game.sprinting ? (blackout_active() ? 0.105F : 0.072F) : 0.0F;
+        s_game.battery = clampf(s_game.battery - dt * (0.026F + sprint_drain), 0.0F, 1.0F);
         if (s_game.battery <= 0.001F) {
             s_game.flashlight_on = false;
             set_message("BATTERY DEAD", 1.5F);
@@ -862,6 +868,11 @@ static void update_game(void) {
         }
         if (blackout_active()) {
             stalker_delta += 0.28F;
+            if (s_game.sprinting) {
+                stalker_delta -= 0.46F;
+            }
+        } else if (s_game.sprinting) {
+            stalker_delta -= 0.045F;
         }
         s_game.stalker_pressure = clampf(s_game.stalker_pressure + stalker_delta * dt, 0.0F, 1.0F);
         if (s_game.stalker_pressure > 0.62F && s_game.message_timer <= 0.0F) {
@@ -887,6 +898,9 @@ static void update_game(void) {
         fear_rate += 3.6F + s_game.route_shift * 1.2F + s_game.stalker_pressure * 3.4F;
         if (blackout_active()) {
             fear_rate += 2.0F;
+            if (s_game.sprinting) {
+                fear_rate -= 1.35F;
+            }
         }
         if (s_game.threat_visible && !s_game.flashlight_on) {
             fear_rate += 2.4F;
@@ -952,6 +966,7 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(root, "last_fear", (double)s_game.last_fear);
     cJSON_AddNumberToObject(root, "last_battery", (double)s_game.last_battery);
     cJSON_AddBoolToObject(root, "flashlight_on", s_game.flashlight_on);
+    cJSON_AddBoolToObject(root, "sprinting", s_game.sprinting);
     cJSON_AddBoolToObject(root, "fuse_found", s_game.fuse_found);
     cJSON_AddBoolToObject(root, "exit_powered", s_game.fuse_found);
     cJSON_AddBoolToObject(root, "won", s_game.won);
@@ -1066,6 +1081,7 @@ static bool ep_game_debug_set_progress(const cJSON *params, cJSON **result, char
         }
     }
     s_game.fear = clampf((float)json_number(params, "fear", (double)s_game.fear), 0.0F, 100.0F);
+    s_game.battery = clampf((float)json_number(params, "battery", (double)s_game.battery), 0.0F, 1.0F);
     s_game.route_shift = clampf((float)json_number(params, "route_shift", (double)s_game.route_shift), 0.0F, 1.0F);
     s_game.stalker_pressure = clampf((float)json_number(params, "stalker_pressure", (double)s_game.stalker_pressure), 0.0F, 1.0F);
     s_game.route_choice_stage = (int)clampf((float)json_number(params, "route_choice_stage", (double)s_game.route_choice_stage), 0.0F, (float)route_choice_total());
