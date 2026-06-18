@@ -52,13 +52,13 @@ node tools/taskboard/cli.mjs validate
 ## Last Known Good Evidence
 
 - `src/backrooms_portal_scene.*` defines the current game-local universal portal
-  scene foundation: rooms, portal descriptors, flags, validation, and GPU
-  params.
+  scene foundation: rooms, material/light descriptors, portal descriptors,
+  flags, validation, and GPU params.
 - `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md` records
   the engine-facing render-target API gap with evidence from `nt_gfx`.
 - `build/captures/backrooms_t0010_portal_memory_status.json` proves mark
   placement, locked-door rejection, handle pickup, handle fitting, exit reveal,
-  and escape.
+  escape, and active `portal_render` material/light params.
 - `build/captures/backrooms_t0010_impossible_geometry.png` is the latest native
   proof screenshot for the data-driven impossible room.
 - `build/captures/backrooms_t0010_impossible_geometry_uizoom.png` is the latest
@@ -69,9 +69,10 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Improve T0010 visual quality on top of the portal-scene foundation: richer
-   room/material descriptors, better fluorescent lighting, more believable wall
-   thickness, and less shader-authored material feel.
+1. Improve T0010 visual quality on top of the portal-scene foundation:
+   authored-looking trim, visible light fixtures, stronger shadow gradients,
+   roughness-like wallpaper/carpet response, and less shader-authored material
+   feel.
 2. Decide whether to pursue T0011 in the engine repo or keep the current
    one-pass portal traversal in the game until the visual bar is closer.
 3. Keep content expansion frozen while the T0010 product gate remains red,

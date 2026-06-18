@@ -22,6 +22,17 @@ typedef struct BackroomsPortalRoom {
     uint32_t material_id;
 } BackroomsPortalRoom;
 
+typedef struct BackroomsPortalMaterial {
+    float wall_panel_scale;
+    float carpet_tile_scale;
+    float grime_strength;
+    float wetness_strength;
+    float fluorescent_width;
+    float fluorescent_intensity;
+    float corner_shadow_strength;
+    float baseboard_strength;
+} BackroomsPortalMaterial;
+
 typedef struct BackroomsPortal {
     uint8_t from_room;
     uint8_t to_room;
@@ -37,6 +48,7 @@ typedef struct BackroomsPortal {
 
 typedef struct BackroomsPortalScene {
     BackroomsPortalRoom rooms[BACKROOMS_PORTAL_MAX_ROOMS];
+    BackroomsPortalMaterial materials[BACKROOMS_PORTAL_MAX_ROOMS];
     BackroomsPortal portals[BACKROOMS_PORTAL_MAX_PORTALS];
     uint8_t room_count;
     uint8_t portal_count;
@@ -47,10 +59,12 @@ typedef struct BackroomsPortalGpuParams {
     float shape[4]; /* inner_depth, inner_half_width, inner_height, nested_enabled */
     float style[4]; /* inner_scale_z, nested_half_z, light_strength, copies_marks */
     float bounds[4]; /* min_y, max_y, outer_wall_start_x, outer_wall_end_x */
+    float material[4]; /* wall_panel_scale, carpet_tile_scale, grime_strength, wetness_strength */
+    float light[4]; /* fluorescent_width, fluorescent_intensity, corner_shadow_strength, baseboard_strength */
 } BackroomsPortalGpuParams;
 
 void backrooms_portal_scene_clear(BackroomsPortalScene *scene);
-bool backrooms_portal_scene_add_room(BackroomsPortalScene *scene, const BackroomsPortalRoom *room, uint8_t *out_index);
+bool backrooms_portal_scene_add_room(BackroomsPortalScene *scene, const BackroomsPortalRoom *room, const BackroomsPortalMaterial *material, uint8_t *out_index);
 bool backrooms_portal_scene_add_portal(BackroomsPortalScene *scene, const BackroomsPortal *portal);
 bool backrooms_portal_scene_validate(const BackroomsPortalScene *scene);
 void backrooms_portal_scene_build_t0010(BackroomsPortalScene *scene);

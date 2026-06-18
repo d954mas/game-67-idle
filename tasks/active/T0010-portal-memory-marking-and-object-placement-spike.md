@@ -84,3 +84,12 @@ and reveal a real exit.
   but the visual bar still needs richer materials/lighting and, for true
   reusable multi-pass portals, engine render-target support tracked by T0011.
 - 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Build on the portal-scene foundation with reusable room/material descriptors, stronger lighting/material quality, and T0011 render-target support for true multi-pass portal views.
+- 2026-06-18: Portal material/light pass added `BackroomsPortalMaterial` and
+  GPU material/light vectors so portal rooms can drive wall-panel scale, carpet
+  tile scale, grime, wetness, fluorescent width/intensity, corner shadow, and
+  baseboard strength from scene data. `game.state` now exposes a compact
+  `portal_render` block proving the runtime uses these values. Native build,
+  T0010 scenario, smoke, readability, taskboard validation, and refreshed
+  product gate ran; product gate remains FAIL because the image is still not
+  production-quality realistic Backrooms art.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Use the portal material descriptors for a stronger visual pass: authored-looking trim, light fixtures, shadow gradients, roughness-like wallpaper/carpet response, and eventually T0011 render-target support.

@@ -133,6 +133,8 @@ static const char *s_fs_src =
     "uniform vec4 u_portal_shape;\n"
     "uniform vec4 u_portal_style;\n"
     "uniform vec4 u_portal_bounds;\n"
+    "uniform vec4 u_portal_material;\n"
+    "uniform vec4 u_portal_light;\n"
     "uniform sampler2D u_wall_tex;\n"
     "uniform sampler2D u_ui_tex;\n"
     "\n"
@@ -206,16 +208,16 @@ static const char *s_fs_src =
     "    if (smat == 2) { col = vec3(0.29, 0.22, 0.13) * (0.66 + texture(u_wall_tex, hp.xz * 0.11).r * 0.42); }\n"
     "    if (smat == 3) { col = vec3(0.41, 0.39, 0.31); }\n"
     "    if (smat == 4) { col *= vec3(0.55, 0.50, 0.35); }\n"
-    "    float panel_x = 1.0 - smoothstep(0.020, 0.070, abs(fract(hp.x * 0.58) - 0.5));\n"
-    "    float panel_z = 1.0 - smoothstep(0.024, 0.080, abs(fract((hp.z + u_portal_shape.y) * 0.36) - 0.5));\n"
+    "    float panel_x = 1.0 - smoothstep(0.020, 0.070, abs(fract(hp.x * max(0.10, u_portal_material.x + 0.22)) - 0.5));\n"
+    "    float panel_z = 1.0 - smoothstep(0.024, 0.080, abs(fract((hp.z + u_portal_shape.y) * max(0.10, u_portal_material.x)) - 0.5));\n"
     "    float wall_panel = (smat == 1 || smat == 4 ? 1.0 : 0.0) * max(panel_x * 0.55, panel_z);\n"
-    "    float carpet_tile_x = (smat == 2 ? 1.0 : 0.0) * (1.0 - smoothstep(0.018, 0.070, abs(fract(hp.x * 0.62) - 0.5)));\n"
-    "    float carpet_tile_z = (smat == 2 ? 1.0 : 0.0) * (1.0 - smoothstep(0.018, 0.070, abs(fract((hp.z + u_portal_shape.y) * 0.42) - 0.5)));\n"
+    "    float carpet_tile_x = (smat == 2 ? 1.0 : 0.0) * (1.0 - smoothstep(0.018, 0.070, abs(fract(hp.x * max(0.10, u_portal_material.y + 0.10)) - 0.5)));\n"
+    "    float carpet_tile_z = (smat == 2 ? 1.0 : 0.0) * (1.0 - smoothstep(0.018, 0.070, abs(fract((hp.z + u_portal_shape.y) * max(0.10, u_portal_material.y)) - 0.5)));\n"
     "    float baseboard = (smat == 1 || smat == 4 ? 1.0 : 0.0) * smoothstep(0.08, 0.16, hp.y) * (1.0 - smoothstep(0.22, 0.34, hp.y));\n"
-    "    float stain = smoothstep(0.66, 0.96, hash12(floor(hp.xz * vec2(1.4, 2.0)))) * (1.0 - smoothstep(0.35, 2.30, hp.y));\n"
-    "    float corner_shadow = max(smoothstep(u_portal_shape.y * 0.68, u_portal_shape.y, abs(hp.z)), smoothstep(u_portal_shape.x * 0.72, u_portal_shape.x, hp.x));\n"
-    "    float floor_wet = (smat == 2 ? 1.0 : 0.0) * smoothstep(2.0, 9.4, hp.x) * (0.45 + 0.55 * hash12(floor(hp.xz * 1.7)));\n"
-    "    float ceiling_strip = (smat == 3 ? 1.0 : 0.0) * (1.0 - smoothstep(0.08, 0.24, abs(hp.z))) * (0.66 + 0.34 * step(0.28, sin(hp.x * 2.4 + ttime * 0.55)));\n"
+    "    float stain = smoothstep(0.66, 0.96, hash12(floor(hp.xz * vec2(1.4, 2.0)))) * (1.0 - smoothstep(0.35, 2.30, hp.y)) * u_portal_material.z;\n"
+    "    float corner_shadow = max(smoothstep(u_portal_shape.y * 0.68, u_portal_shape.y, abs(hp.z)), smoothstep(u_portal_shape.x * 0.72, u_portal_shape.x, hp.x)) * u_portal_light.z;\n"
+    "    float floor_wet = (smat == 2 ? 1.0 : 0.0) * smoothstep(2.0, 9.4, hp.x) * (0.45 + 0.55 * hash12(floor(hp.xz * 1.7))) * u_portal_material.w;\n"
+    "    float ceiling_strip = (smat == 3 ? 1.0 : 0.0) * (1.0 - smoothstep(u_portal_light.x * 0.45, u_portal_light.x, abs(hp.z))) * (0.66 + 0.34 * step(0.28, sin(hp.x * 2.4 + ttime * 0.55)));\n"
     "    float nested_body = (smat == 1 ? 1.0 : 0.0) * (1.0 - smoothstep(1.12, 1.58, abs(hp.z))) * smoothstep(0.44, 0.62, hp.y) * (1.0 - smoothstep(1.82, 2.08, hp.y));\n"
     "    float nested_half = u_portal_style.y;\n"
     "    float nested_frame = (smat == 1 ? 1.0 : 0.0) * max(1.0 - smoothstep(0.035, 0.12, abs(abs(hp.z) - nested_half)), max(1.0 - smoothstep(0.035, 0.12, abs(hp.y - 0.50)), 1.0 - smoothstep(0.035, 0.12, abs(hp.y - 1.98))));\n"
@@ -227,21 +229,21 @@ static const char *s_fs_src =
     "    float nlight = (1.0 - smoothstep(0.04, 0.18, abs(nuv.x))) * smoothstep(0.30, 0.72, nuv.y);\n"
     "    float ndepth = 1.0 / (0.50 + abs(nuv.x) * 0.72 + abs(nuv.y + 0.08) * 0.45);\n"
     "    vec3 nested_col = mix(vec3(0.18, 0.14, 0.075), vec3(0.62, 0.56, 0.30), ndepth);\n"
-    "    nested_col = mix(nested_col, vec3(0.030, 0.026, 0.016), max(nwall, max(nfloor, nceil)) * 0.58);\n"
-    "    nested_col += vec3(1.05, 0.90, 0.46) * nlight * 0.80;\n"
+    "    nested_col = mix(nested_col, vec3(0.030, 0.026, 0.016), max(nwall, max(nfloor, nceil)) * (0.46 + 0.20 * u_portal_light.z));\n"
+    "    nested_col += vec3(1.05, 0.90, 0.46) * nlight * (0.68 + 0.18 * u_portal_light.y);\n"
     "    float copied_mark = (smat == 1 ? 1.0 : 0.0) * (1.0 - smoothstep(0.075, 0.16, abs((hp.y - 1.14) - hp.z * 0.18)));\n"
     "    copied_mark *= (1.0 - smoothstep(0.075, 0.16, abs((hp.y - 1.14) + hp.z * 0.18))) * smoothstep(0.42, 0.66, hp.y) * (1.0 - smoothstep(1.58, 1.84, hp.y));\n"
     "    float copied_mark_small = nested_body * (1.0 - smoothstep(0.040, 0.095, abs((nuv.y + 0.18) - nuv.x * 0.34))) * (1.0 - smoothstep(0.040, 0.095, abs((nuv.y + 0.18) + nuv.x * 0.34)));\n"
     "    float threshold_light = exp(-ro2.x * 0.38) * (0.28 + 0.28 * smoothstep(u_portal_entry.z * 0.80, 0.0, abs(portal_z)));\n"
-    "    float light = 0.16 + threshold_light + ceiling_strip * 1.86 + u_portal_style.z / (1.0 + length(hp - vec3(u_portal_shape.x * 0.49, u_portal_shape.z - 0.29, 0.0)) * 0.82);\n"
+    "    float light = 0.14 + threshold_light + ceiling_strip * u_portal_light.y + u_portal_style.z / (1.0 + length(hp - vec3(u_portal_shape.x * 0.49, u_portal_shape.z - 0.29, 0.0)) * 0.82);\n"
     "    col *= light;\n"
     "    col = mix(col, col * vec3(0.46, 0.40, 0.28), stain * 0.64);\n"
     "    col = mix(col, col * vec3(0.24, 0.22, 0.17), corner_shadow * 0.58);\n"
     "    col = mix(col, col * 0.48, wall_panel * 0.32);\n"
-    "    col = mix(col, vec3(0.13, 0.09, 0.045), baseboard * 0.82);\n"
+    "    col = mix(col, vec3(0.13, 0.09, 0.045), baseboard * u_portal_light.w);\n"
     "    col = mix(col, col * 0.62, max(carpet_tile_x, carpet_tile_z) * 0.40);\n"
     "    col += vec3(0.20, 0.15, 0.07) * floor_wet;\n"
-    "    col += vec3(1.00, 0.88, 0.46) * ceiling_strip * 0.62;\n"
+    "    col += vec3(1.00, 0.88, 0.46) * ceiling_strip * (0.42 + 0.12 * u_portal_light.y);\n"
     "    col = mix(col, nested_col, nested_body * 0.92);\n"
     "    col = mix(col, vec3(0.016, 0.012, 0.006), nested_frame * 0.84);\n"
     "    col += vec3(0.95, 0.68, 0.30) * nested_frame * 0.28;\n"
@@ -1342,6 +1344,8 @@ static void draw_frame(float fb_w, float fb_h) {
     nt_gfx_set_uniform_vec4("u_portal_shape", portal.shape);
     nt_gfx_set_uniform_vec4("u_portal_style", portal.style);
     nt_gfx_set_uniform_vec4("u_portal_bounds", portal.bounds);
+    nt_gfx_set_uniform_vec4("u_portal_material", portal.material);
+    nt_gfx_set_uniform_vec4("u_portal_light", portal.light);
     nt_gfx_draw(0, 6);
 }
 
@@ -1394,6 +1398,19 @@ static cJSON *state_json(void) {
     cJSON_AddBoolToObject(root, "can_try_locked_door", near_locked_door() && !s_game.portal_exit_revealed);
     cJSON_AddBoolToObject(root, "can_use", can_use_context());
     cJSON_AddBoolToObject(root, "can_restart", s_game.won || s_game.caught);
+    cJSON *portal = cJSON_CreateObject();
+    const BackroomsPortalGpuParams portal_params = backrooms_portal_scene_gpu_params(&s_portal_scene, 0U, s_game.mark_placed);
+    cJSON_AddNumberToObject(portal, "room_count", (double)s_portal_scene.room_count);
+    cJSON_AddNumberToObject(portal, "portal_count", (double)s_portal_scene.portal_count);
+    cJSON_AddBoolToObject(portal, "visible", portal_params.entry[3] > 0.5F);
+    cJSON_AddNumberToObject(portal, "target_half_width", (double)portal_params.shape[1]);
+    cJSON_AddNumberToObject(portal, "target_half_depth", (double)portal_params.shape[0]);
+    cJSON_AddNumberToObject(portal, "wall_panel_scale", (double)portal_params.material[0]);
+    cJSON_AddNumberToObject(portal, "carpet_tile_scale", (double)portal_params.material[1]);
+    cJSON_AddNumberToObject(portal, "grime_strength", (double)portal_params.material[2]);
+    cJSON_AddNumberToObject(portal, "wetness_strength", (double)portal_params.material[3]);
+    cJSON_AddNumberToObject(portal, "fluorescent_intensity", (double)portal_params.light[1]);
+    cJSON_AddItemToObject(root, "portal_render", portal);
     cJSON_AddStringToObject(root,
                             "objective",
                             s_game.caught ? "caught"

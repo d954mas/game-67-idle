@@ -4,7 +4,7 @@ project: backrooms-liminal
 task: T0010
 surface: desktop
 verdict: fail
-timestamp: 2026-06-18T18:26:00.732Z
+timestamp: 2026-06-18T18:32:29.796Z
 ---
 
 # Product Read Gate - backrooms-liminal / desktop
@@ -15,11 +15,11 @@ Screenshot: `build/captures/backrooms_t0010_impossible_geometry.png`
 
 ## Player Read
 
-- Where am I? Yellow Backrooms corridor facing a portal-scene cut that renders a larger interior room from data-driven portal parameters
+- Where am I? Yellow Backrooms corridor facing a data-driven impossible room aperture with room/material/light parameters
 - What should I do now? Use the copied mark as evidence, find the missing handle, and test the locked door
-- What changed after input? The mark appears inside the impossible room; portal scene data controls aperture, target room size, nested opening, lighting, and copied-mark behavior
+- What changed after input? The mark appears inside the impossible room; DevAPI report now exposes portal room count, target dimensions, wall panel scale, carpet scale, grime, wetness, and fluorescent intensity
 - What is the reward / why continue? The player learns the space can be tested and later stabilized by fitting the found handle
-- Why does this look like a game? Native 3D liminal horror view with data-driven non-Euclidean room aperture, depth, wall thickness, stained wallpaper, carpet seams, fluorescent light, and minimal journal UI
+- Why does this look like a game? Native 3D liminal horror view with data-driven non-Euclidean room aperture, material/light descriptors, depth, wall thickness, stained wallpaper, carpet seams, fluorescent light, and minimal journal UI
 
 ## State Coverage
 
@@ -51,9 +51,9 @@ Not covered / debt:
 
 ## Review
 
-Problem: T0010 made the portal room data-driven and less like a flat shader overlay, but it still does not meet the high-quality realistic Backrooms visual bar.
+Problem: T0010 now has data-driven portal geometry plus material/light parameters visible through DevAPI, but the visual target remains unmet.
 
-Next: Build on the new portal-scene foundation: add reusable room/material descriptors, improve lighting/material quality, and pursue T0011 engine render-target support for true reusable multi-pass portal views.
+Next: Use the portal material descriptors to push a stronger visual pass: authored-looking trim, light fixtures, shadow gradients, roughness-like wallpaper/carpet response, and eventually T0011 render-target support.
 
 ## Visual Critique
 
@@ -69,5 +69,5 @@ Scores:
 - audience_fit: 3
 
 Issues:
-- major / art_quality: Portal rendering is now scene-data driven and reads as a larger room, but visual fidelity still depends on one fullscreen shader rather than real authored meshes/materials or offscreen target-room rendering
-- major / audience_fit: The differentiator is clearer, but the screenshot still lacks the production-quality realistic Backrooms lighting/material richness the lead requested
+- major / art_quality: Portal room material and lighting are now data-driven, but visual fidelity still reads like a fullscreen shader material pass rather than production authored geometry/materials
+- major / audience_fit: The differentiator and renderer foundation are clearer, but the screenshot still lacks the realistic Backrooms richness expected from a high-quality horror game
