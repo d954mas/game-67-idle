@@ -73,7 +73,7 @@ glass) is unrecoverable from one background and routes to path 2. See
     `regenerate` (33%) -> correctly flags the ghosting case.
   - `.codex/skills/delegated-image-generation/scripts/gen_dual_plate.sh` (new):
     white -> black-as-edit-of-white chain + hardened subject-lock prompt + gate.
-  - `tools/assets/build_runtime_assets_from_crop_plan.py`: opt-in per-crop
+  - `tools/assets/build/build_runtime_assets_from_crop_plan.py`: opt-in per-crop
     `chroma_key.method: "key_matte"` (default `chroma` unchanged).
   - Evidence: `py -3.12 -m pytest ... key_matte_test dual_plate_alpha_test
     chroma_key_alpha_test build_runtime_assets_from_crop_plan_test ...` -> 44 passed.

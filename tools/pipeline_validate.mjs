@@ -175,29 +175,29 @@ if (!fullMode) {
 if (existsSync(join(root, "tools", "assets", "new_generation_record.test.mjs"))) {
   run("generated art job node tests", [
     "--test",
-    "tools/assets/plan_source_sheet_prompt.test.mjs",
-    "tools/assets/plan_missing_source_family_prompts.test.mjs",
-    "tools/assets/new_generation_record.test.mjs",
-    "tools/assets/validate_art_job.test.mjs",
-    "tools/assets/audit_slice9_design_policy.test.mjs",
-    "tools/assets/audit_atlas_metadata.test.mjs",
-    "tools/assets/audit_runtime_ui_asset_usage.test.mjs",
-    "tools/assets/audit_project_asset_boundaries.test.mjs",
-    "tools/assets/audit_source_family_coverage.test.mjs",
+    "tools/assets/job/plan_source_sheet_prompt.test.mjs",
+    "tools/assets/job/plan_missing_source_family_prompts.test.mjs",
+    "tools/assets/job/new_generation_record.test.mjs",
+    "tools/assets/job/validate_art_job.test.mjs",
+    "tools/assets/job/audit_slice9_design_policy.test.mjs",
+    "tools/assets/job/audit_atlas_metadata.test.mjs",
+    "tools/assets/job/audit_runtime_ui_asset_usage.test.mjs",
+    "tools/assets/job/audit_project_asset_boundaries.test.mjs",
+    "tools/assets/job/audit_source_family_coverage.test.mjs",
   ]);
 }
 let python = null;
 if (existsSync(join(root, "tools", "assets", "normalize_source_sheet_chroma_test.py"))) {
   python = findPythonRunner();
-  run("source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.atomic_io_test", "tools.assets.chroma_key_alpha_test", "tools.assets.cutout.dual_plate_alpha_test", "tools.assets.cutout.dual_plate_pair_gate_test", "tools.assets.cutout.key_matte_test", "tools.assets.normalize_source_sheet_chroma_test", "tools.assets.audit_source_sheet_intake_test"], { exe: python.exe });
+  run("source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.atomic_io_test", "tools.assets.chroma_key_alpha_test", "tools.assets.cutout.dual_plate_alpha_test", "tools.assets.cutout.dual_plate_pair_gate_test", "tools.assets.cutout.key_matte_test", "tools.assets.intake.normalize_source_sheet_chroma_test", "tools.assets.intake.audit_source_sheet_intake_test"], { exe: python.exe });
 }
 if (existsSync(join(root, "tools", "assets", "audit_generated_ui_assets_test.py"))) {
   python ||= findPythonRunner();
-  run("generated UI asset audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_ui_assets_test", "tools.assets.render_ui_asset_edge_proof_test", "tools.assets.render_ui_composition_proof_test", "tools.assets.build_ui_atlas_pack_test", "tools.assets.audit_ui_atlas_pack_test", "tools.assets.plan_runtime_crops_from_intake_test", "tools.assets.build_runtime_assets_from_crop_plan_test"], { exe: python.exe });
+  run("generated UI asset audit tests", [...python.args, "-m", "unittest", "tools.assets.audit.audit_generated_ui_assets_test", "tools.assets.audit.render_ui_asset_edge_proof_test", "tools.assets.audit.render_ui_composition_proof_test", "tools.assets.pack.build_ui_atlas_pack_test", "tools.assets.pack.audit_ui_atlas_pack_test", "tools.assets.crop.plan_runtime_crops_from_intake_test", "tools.assets.assemble.build_runtime_assets_from_crop_plan_test"], { exe: python.exe });
 }
 if (existsSync(join(root, "tools", "assets", "audit_generated_source_derivation_test.py"))) {
   python ||= findPythonRunner();
-  run("generated source derivation audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_source_derivation_test"], { exe: python.exe });
+  run("generated source derivation audit tests", [...python.args, "-m", "unittest", "tools.assets.audit.audit_generated_source_derivation_test"], { exe: python.exe });
 }
 
 // Runtime seed checks. Skipped automatically in workflow-only exports, which
@@ -237,34 +237,34 @@ if (existsSync(join(exportDir, "tools", "product_gate", "test.mjs"))) {
 if (existsSync(join(exportDir, "tools", "assets", "new_generation_record.test.mjs"))) {
   run("exported generated art job node tests", [
     "--test",
-    "tools/assets/plan_source_sheet_prompt.test.mjs",
-    "tools/assets/plan_missing_source_family_prompts.test.mjs",
-    "tools/assets/new_generation_record.test.mjs",
-    "tools/assets/validate_art_job.test.mjs",
-    "tools/assets/audit_slice9_design_policy.test.mjs",
-    "tools/assets/audit_atlas_metadata.test.mjs",
-    "tools/assets/audit_runtime_ui_asset_usage.test.mjs",
-    "tools/assets/audit_project_asset_boundaries.test.mjs",
-    "tools/assets/audit_source_family_coverage.test.mjs",
+    "tools/assets/job/plan_source_sheet_prompt.test.mjs",
+    "tools/assets/job/plan_missing_source_family_prompts.test.mjs",
+    "tools/assets/job/new_generation_record.test.mjs",
+    "tools/assets/job/validate_art_job.test.mjs",
+    "tools/assets/job/audit_slice9_design_policy.test.mjs",
+    "tools/assets/job/audit_atlas_metadata.test.mjs",
+    "tools/assets/job/audit_runtime_ui_asset_usage.test.mjs",
+    "tools/assets/job/audit_project_asset_boundaries.test.mjs",
+    "tools/assets/job/audit_source_family_coverage.test.mjs",
   ], { cwd: exportDir });
 }
 if (existsSync(join(exportDir, "tools", "assets", "normalize_source_sheet_chroma_test.py"))) {
   python ||= findPythonRunner();
-  run("exported source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.atomic_io_test", "tools.assets.chroma_key_alpha_test", "tools.assets.cutout.dual_plate_alpha_test", "tools.assets.cutout.dual_plate_pair_gate_test", "tools.assets.cutout.key_matte_test", "tools.assets.normalize_source_sheet_chroma_test", "tools.assets.audit_source_sheet_intake_test"], {
+  run("exported source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.atomic_io_test", "tools.assets.chroma_key_alpha_test", "tools.assets.cutout.dual_plate_alpha_test", "tools.assets.cutout.dual_plate_pair_gate_test", "tools.assets.cutout.key_matte_test", "tools.assets.intake.normalize_source_sheet_chroma_test", "tools.assets.intake.audit_source_sheet_intake_test"], {
     cwd: exportDir,
     exe: python.exe,
   });
 }
 if (existsSync(join(exportDir, "tools", "assets", "audit_generated_ui_assets_test.py"))) {
   python ||= findPythonRunner();
-  run("exported generated UI asset audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_ui_assets_test", "tools.assets.render_ui_asset_edge_proof_test", "tools.assets.render_ui_composition_proof_test", "tools.assets.build_ui_atlas_pack_test", "tools.assets.audit_ui_atlas_pack_test", "tools.assets.plan_runtime_crops_from_intake_test", "tools.assets.build_runtime_assets_from_crop_plan_test"], {
+  run("exported generated UI asset audit tests", [...python.args, "-m", "unittest", "tools.assets.audit.audit_generated_ui_assets_test", "tools.assets.audit.render_ui_asset_edge_proof_test", "tools.assets.audit.render_ui_composition_proof_test", "tools.assets.pack.build_ui_atlas_pack_test", "tools.assets.pack.audit_ui_atlas_pack_test", "tools.assets.crop.plan_runtime_crops_from_intake_test", "tools.assets.assemble.build_runtime_assets_from_crop_plan_test"], {
     cwd: exportDir,
     exe: python.exe,
   });
 }
 if (existsSync(join(exportDir, "tools", "assets", "audit_generated_source_derivation_test.py"))) {
   python ||= findPythonRunner();
-  run("exported generated source derivation audit tests", [...python.args, "-m", "unittest", "tools.assets.audit_generated_source_derivation_test"], {
+  run("exported generated source derivation audit tests", [...python.args, "-m", "unittest", "tools.assets.audit.audit_generated_source_derivation_test"], {
     cwd: exportDir,
     exe: python.exe,
   });

@@ -16,13 +16,13 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
 1. Identify the asset source of truth: `assets/`, `raw/`, `art/`, `gamedesign/art/`, or local equivalent.
 2. Identify generated/runtime outputs: pack files, generated headers, atlases, bundles, caches.
 3. For generated multi-asset work, identify the art job/request packet. If it
-   does not exist, scaffold it with `tools/assets/new_art_job.mjs` before
+   does not exist, scaffold it with `tools/assets/job/new_art_job.mjs` before
    adding crop coordinates or pack ids.
    For generated UI, run
-   `node tools/assets/validate_art_job.mjs --job <art-job>` before generation
+   `node tools/assets/job/validate_art_job.mjs --job <art-job>` before generation
    or slicing. Fix the contract instead of carrying missing decisions in chat.
 4. After accepting generated or artist source art, create its provenance record
-   with `node tools/assets/new_generation_record.mjs` and reference that record
+   with `node tools/assets/job/new_generation_record.mjs` and reference that record
    from the art job. Procedural/programmer-art scaffolds require an explicit
    procedural exception and cannot close a generated-art task. Generated/artist
    records need a real workflow path or non-empty workflow JSON; `{}` is only
@@ -31,7 +31,7 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
    pseudo-seed.
 5. Before asking an image model for a new source family, compile the prompt
    packet from the art job:
-   `node tools/assets/plan_source_sheet_prompt.mjs --job <art-job> --source-family "<family>" --output <prompt.md> --json-output <prompt.json>`.
+   `node tools/assets/job/plan_source_sheet_prompt.mjs --job <art-job> --source-family "<family>" --output <prompt.md> --json-output <prompt.json>`.
    Use `--intake-audit` or `--key-color` when a previous source-sheet audit
    found a safer chroma key. When recording the accepted source, pass the JSON
    prompt packet path to `new_generation_record.mjs --prompt-packet`. Prompt
@@ -61,7 +61,7 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
     pack building) and defers the UI-specific gate details to that skill so the
     sequence is documented in exactly one place.
 12. Before claiming a final generated/artist art pass for any asset, run:
-    `node tools/assets/validate_art_job.mjs --job <art-job> --final-art`.
+    `node tools/assets/job/validate_art_job.mjs --job <art-job> --final-art`.
     This must fail while any runtime source is procedural debug art or has
     partial/unknown generation provenance, and (for UI kits) while the
     UI-asset gates above have not all recorded passing evidence in the job's
@@ -78,7 +78,7 @@ sheet -> slice9/icon -> audit -> responsive proof workflow.
   `tools/assets/build_<game_id>_ui_assets.py`; do not hide one game's asset
   pipeline inside another game's builder.
 - When splitting or auditing this boundary, use
-  `node tools/assets/audit_project_asset_boundaries.mjs` to reject cross-project
+  `node tools/assets/job/audit_project_asset_boundaries.mjs` to reject cross-project
   ids/imports in builders or generated files.
 - Do not reference scratch/temp files as final game assets.
 - Generated headers and pack files should be reproducible from source assets and builder code.

@@ -72,7 +72,7 @@ assets with transparent/chroma edges.
 Reusable audit command:
 
 ```powershell
-py -3.12 tools/assets/audit_runtime_ui_edges.py `
+py -3.12 tools/assets/audit/audit_runtime_ui_edges.py `
   --image <source-or-screenshot.png> `
   --crop x1,y1,x2,y2 `
   --family purple `

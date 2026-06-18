@@ -69,7 +69,7 @@ node tools/skills_sync.mjs
   Accepted generated source sheets must carry provenance: provider/model or
   workflow, workflow file/json, seed or no-seed reason, prompt, negative prompt, source family
   role, accepted source image, and rejected candidate notes. Record it with
-  `node tools/assets/new_generation_record.mjs` and reference the created file
+  `node tools/assets/job/new_generation_record.mjs` and reference the created file
   from `expected_outputs.generation_records`. Generated/artist records need a
   real workflow path or non-empty workflow JSON; dummy `{}` provenance is
   draft-only and cannot pass the final-art gate. If a provider does not expose
@@ -80,20 +80,20 @@ node tools/skills_sync.mjs
   and the art job.
   Reusable guidance: `gamedesign/knowledge/ai_art_iteration_pipeline.md`.
   For new multi-asset passes, scaffold the contract with
-  `node tools/assets/new_art_job.mjs`, run
-  `node tools/assets/validate_art_job.mjs --job <job>` before generation, and
-  run `node tools/assets/validate_art_job.mjs --job <job> --strict` after
+  `node tools/assets/job/new_art_job.mjs`, run
+  `node tools/assets/job/validate_art_job.mjs --job <job>` before generation, and
+  run `node tools/assets/job/validate_art_job.mjs --job <job> --strict` after
   slicing/runtime manifests exist. Run
-  `node tools/assets/validate_art_job.mjs --job <job> --final-art` before
+  `node tools/assets/job/validate_art_job.mjs --job <job> --final-art` before
   claiming a final generated/artist art pass; this must fail while any accepted
   source is procedural debug art or has partial/unknown generation provenance.
   Before slicing a generated UI source sheet, run
-  `py -3.12 tools/assets/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>`
+  `py -3.12 tools/assets/intake/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>`
   when the generator produced a non-flat chroma background, then run
-  `py -3.12 tools/assets/audit_source_sheet_intake.py --source <source-sheet> --json-output <audit.json> --report <audit.md>`
+  `py -3.12 tools/assets/intake/audit_source_sheet_intake.py --source <source-sheet> --json-output <audit.json> --report <audit.md>`
   to catch non-flat chroma backgrounds, merged components, clipped components,
   and too-small gutters. For generated UI runtime PNGs, also run
-  `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`
+  `py -3.12 tools/assets/audit/audit_generated_ui_assets.py --crop-manifest <crop-manifest>`
   after slicing; this catches clipped icon alpha bounds and chroma-key edge
   fringe that a JSON validator cannot see.
 - **Visual-first session contract.** For visual, UI, FTUE, feel, or
@@ -447,9 +447,9 @@ Portable (copied by the exporter):
 - `tools/ai.mjs`, `tools/ai.test.mjs`, `tools/skills_sync.mjs`,
   `tools/skills_eval.mjs`,
   `tools/pipeline_validate.mjs`, `tools/ai_profile/`,
-  `tools/game_context/`, `tools/product_gate/`, `tools/assets/new_art_job.mjs`,
-  `tools/assets/new_generation_record.mjs`, `tools/assets/validate_art_job.mjs`,
-  `tools/assets/audit_generated_ui_assets.py`, `tools/taskboard/`, `tools/README.md` - fast AI
+  `tools/game_context/`, `tools/product_gate/`, `tools/assets/job/new_art_job.mjs`,
+  `tools/assets/job/new_generation_record.mjs`, `tools/assets/job/validate_art_job.mjs`,
+  `tools/assets/audit/audit_generated_ui_assets.py`, `tools/taskboard/`, `tools/README.md` - fast AI
   workflow facade, skill mirroring, skill regression checks, reusable-base
   validation, AI session profiling internals, game iteration context, generated
   art job scaffolding/validation, task store UI/CLI, and tool portability map.

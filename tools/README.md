@@ -43,29 +43,29 @@ game project:
 - `tools/pipeline_validate.mjs`
 - `tools/skills_eval.mjs`
 - `tools/skills_sync.mjs`
-- `tools/assets/new_art_job.mjs`
-- `tools/assets/plan_source_sheet_prompt.mjs`
-- `tools/assets/plan_missing_source_family_prompts.mjs`
-- `tools/assets/new_generation_record.mjs`
-- `tools/assets/validate_art_job.mjs`
-- `tools/assets/audit_slice9_design_policy.mjs`
-- `tools/assets/audit_atlas_metadata.mjs`
-- `tools/assets/audit_asset_semantic_style.mjs`
-- `tools/assets/build_ui_atlas_pack.py`
-- `tools/assets/audit_ui_atlas_pack.py`
-- `tools/assets/audit_runtime_ui_asset_usage.mjs`
-- `tools/assets/audit_source_family_coverage.mjs`
+- `tools/assets/job/new_art_job.mjs`
+- `tools/assets/job/plan_source_sheet_prompt.mjs`
+- `tools/assets/job/plan_missing_source_family_prompts.mjs`
+- `tools/assets/job/new_generation_record.mjs`
+- `tools/assets/job/validate_art_job.mjs`
+- `tools/assets/job/audit_slice9_design_policy.mjs`
+- `tools/assets/job/audit_atlas_metadata.mjs`
+- `tools/assets/job/audit_asset_semantic_style.mjs`
+- `tools/assets/pack/build_ui_atlas_pack.py`
+- `tools/assets/pack/audit_ui_atlas_pack.py`
+- `tools/assets/job/audit_runtime_ui_asset_usage.mjs`
+- `tools/assets/job/audit_source_family_coverage.mjs`
 - `tools/assets/chroma_key_alpha.py`
 - `tools/assets/cutout/dual_plate_alpha.py`
-- `tools/assets/normalize_source_sheet_chroma.py`
-- `tools/assets/audit_source_sheet_intake.py`
-- `tools/assets/plan_runtime_crops_from_intake.py`
-- `tools/assets/build_runtime_assets_from_crop_plan.py`
-- `tools/assets/audit_generated_ui_assets.py`
-- `tools/assets/audit_runtime_ui_edges.py`
-- `tools/assets/render_ui_asset_edge_proof.py`
-- `tools/assets/render_ui_composition_proof.py`
-- `tools/assets/audit_generated_source_derivation.py`
+- `tools/assets/intake/normalize_source_sheet_chroma.py`
+- `tools/assets/intake/audit_source_sheet_intake.py`
+- `tools/assets/crop/plan_runtime_crops_from_intake.py`
+- `tools/assets/assemble/build_runtime_assets_from_crop_plan.py`
+- `tools/assets/audit/audit_generated_ui_assets.py`
+- `tools/assets/audit/audit_runtime_ui_edges.py`
+- `tools/assets/audit/render_ui_asset_edge_proof.py`
+- `tools/assets/audit/render_ui_composition_proof.py`
+- `tools/assets/audit/audit_generated_source_derivation.py`
 
 `tools/product_gate/review.mjs` creates the durable screenshot/player-read
 gate for visual, FTUE, and audience-test slices. Use it through
@@ -109,7 +109,7 @@ feedback, modal, blocked/affordable, returning, or transient stress states.
 `tools/game_context/iteration_context.mjs` treats a missing project matrix as
 startup gate debt before broad implementation.
 
-`tools/assets/new_generation_record.mjs` writes the provenance record for an
+`tools/assets/job/new_generation_record.mjs` writes the provenance record for an
 accepted generated or artist source sheet: provider/model or workflow,
 workflow file/json, seed or no-seed reason, prompt, negative prompt, accepted source image, and
 rejected candidate notes. Use it after selecting source art and before strict
@@ -120,7 +120,7 @@ procedural debug records. If the provider does not expose a stable seed, record
 `--no-seed-reason` instead of inventing an unknown seed value. Use
 `--prompt-packet` when the source came from a contract-derived prompt packet.
 
-`tools/assets/plan_source_sheet_prompt.mjs` compiles a source-sheet prompt
+`tools/assets/job/plan_source_sheet_prompt.mjs` compiles a source-sheet prompt
 packet from an art job's generation contract. Use it before image generation so
 the prompt, negative prompt, chroma key, source family role, no-bake rules, and
 acceptance checklist come from durable project data instead of chat memory.
@@ -136,7 +136,7 @@ Generation records can then reference the packet with `prompt_packet`; strict
 art-job validation parses JSON prompt packets and checks schema, required
 fields, job identity, acceptance checklist, source-family alignment, and unsafe
 chroma override policy.
-`tools/assets/plan_missing_source_family_prompts.mjs` turns a failing source
+`tools/assets/job/plan_missing_source_family_prompts.mjs` turns a failing source
 family coverage audit into a concrete prompt queue. It emits prompt packets for
 required source families that do not yet have passing final-accepted generation
 records, so the next action is generating missing blank bases, icon sheets, or
@@ -177,7 +177,7 @@ Hidden RGB under alpha can leak back as 1-2px fringe during premultiplied
 resizing or atlas filtering. Blob cleanup zeroes RGB when it removes tiny alpha
 components. Use `--no-fail` only to keep rejected diagnostic candidates.
 
-`tools/assets/validate_art_job.mjs` validates the generated-art job contract:
+`tools/assets/job/validate_art_job.mjs` validates the generated-art job contract:
 source families, generation records, reusable kinds, crop/runtime manifests,
 slice9 metadata, icon policies, listed edge-proof evidence, slice9 design
 policy evidence, runtime composition proof evidence, and generated UI
@@ -197,7 +197,7 @@ slice9 design policy, runtime composition proof, or source-family coverage
 evidence, audit evidence that points at a different crop manifest/source/runtime
 manifest, and source-derivation reports that do not cover every source-derived
 `slice9`, `border`, `tile`, or `sprite` crop id.
-`tools/assets/audit_slice9_design_policy.mjs` is the manifest-level gate for
+`tools/assets/job/audit_slice9_design_policy.mjs` is the manifest-level gate for
 slice9 art design. It requires each slice9 crop and runtime asset to declare
 stretch-zone material policy, fixed-corner/non-stretch ornament policy,
 allowed size class, minimum runtime size, content safe area, min-size preview,
@@ -210,7 +210,7 @@ gems, or heavy caps baked into areas that runtime resizing will stretch; those
 decorations must be corner-only or separate overlay sprites. When a policy uses
 `non_stretch_ornaments: separate_overlay_assets`, each `overlay_asset_id` must
 exist in the crop/runtime manifest and reference a non-slice9 overlay asset.
-`tools/assets/audit_atlas_metadata.mjs` checks runtime asset manifests before
+`tools/assets/job/audit_atlas_metadata.mjs` checks runtime asset manifests before
 packing/reuse. Every asset must declare `pack_group`, `source_crop`,
 `original_size`, `trim_rect`, and `atlas_policy` fields for trim mode, alpha
 bleed, premultiplied-alpha-safe processing, extrusion, shape/border padding,
@@ -218,14 +218,14 @@ scale variant, and rotation policy. Slice9 entries must set
 `allow_rotation: false` and `trim_preserves_slice9: true`; aliases must point
 to existing asset ids. This is the gate for atlas space savings without
 reintroducing 1-2 pixel halos or broken slice margins.
-`tools/assets/audit_asset_semantic_style.mjs` validates a human/agent
+`tools/assets/job/audit_asset_semantic_style.mjs` validates a human/agent
 semantic-style review before generated icons, decor, sprites, or UI art enter
 crop planning. Use it after source candidate selection and before slicing to
 reject assets that look technically clean but read as the wrong object, mix icon
 styles inside one family, or fuse unrelated objects into a non-reusable
 silhouette. The review schema is documented in
 `gamedesign/knowledge/asset_semantic_style_gate.md`.
-`tools/assets/build_ui_atlas_pack.py` builds review/proof atlas PNGs from a
+`tools/assets/pack/build_ui_atlas_pack.py` builds review/proof atlas PNGs from a
 runtime asset manifest. It groups assets by `pack_group`, preserves
 slice9/content metadata in a `game.ui_atlas_pack` manifest, writes extruded
 padded rects around each sprite, can draw id labels with `--label-review` in
@@ -238,7 +238,7 @@ the atlas. Labels should use readable review text, recorded as
 `review_label.font_size`, because the preview is meant for visual selection by
 the lead, not just machine validation. This output is human validation evidence, not the game's final runtime atlas packer. Record the JSON manifest in
 `expected_outputs.atlas_pack`; final-art validation requires it for generated UI.
-`tools/assets/audit_ui_atlas_pack.py` validates the built review atlas. It
+`tools/assets/pack/audit_ui_atlas_pack.py` validates the built review atlas. It
 checks coverage against the runtime asset manifest, atlas image bounds, non-
 overlapping physical padded rects, alias rect reuse, metadata consistency, and
 that extrusion pixels match the source edge pixels. For labeled review atlases,
@@ -247,27 +247,27 @@ preview, wrapped `review_label.lines` that fit inside `review_label.rect`, no
 label pixels in the clean atlas, and label rects that stay outside asset
 `padded_rect`s, outside other labels, and inside the atlas. Record passing JSON in
 `expected_outputs.atlas_pack_audit`; final-art validation requires it.
-`tools/assets/plan_runtime_crops_from_intake.py` converts a passing source
+`tools/assets/crop/plan_runtime_crops_from_intake.py` converts a passing source
 sheet intake audit into a named crop plan for icon, decor, or sprite sheets.
 Pass an ids file in visual row-major order with `--ids-file` so large source
 sheets do not require fragile long shell commands. The JSON/Markdown outputs
 record component ids, detected bboxes, padded crop rects, output paths, trim
 policy, chroma-key policy, and pack metadata skeletons. Use the plan as the
 reviewable bridge between detector output and the final runtime crop manifest.
-`tools/assets/build_runtime_assets_from_crop_plan.py` builds runtime PNGs,
+`tools/assets/assemble/build_runtime_assets_from_crop_plan.py` builds runtime PNGs,
 crop manifests, asset manifests, and contact sheets from those crop plans. It
 uses the shared chroma/alpha cleanup path, trims to alpha bounds with padding,
 scrubs fully transparent RGB to zero, maps decor plans to `decor_overlay`
 runtime metadata, and writes atlas fields so pixel audits and review-atlas
 packing can run immediately.
-`tools/assets/audit_runtime_ui_asset_usage.mjs` is the runtime placement gate.
+`tools/assets/job/audit_runtime_ui_asset_usage.mjs` is the runtime placement gate.
 It compares a `game.runtime_ui_asset_usage` file against an asset manifest's
 `usage_policy`, then fails generated UI assets drawn below `min_size`, in the
 wrong layout mode, or with a disallowed usage tag such as compact dense button
 rows. Run it after integrating generated slice9 assets into native UI; it
 catches the gap where asset manifests pass but runtime squeezes large-only art
 into a too-small control.
-`tools/assets/audit_source_family_coverage.mjs` checks that final generated UI
+`tools/assets/job/audit_source_family_coverage.mjs` checks that final generated UI
 art is backed by separate accepted source families instead of one mixed
 fake-shot/source sheet. Jobs list required families in
 `expected_outputs.required_source_families`, usually blank UI kit sheet,
@@ -275,10 +275,10 @@ isolated icon sheet, and UI decor overlay sheet. The audit fails missing
 families and records whose role/notes say mixed, candidate, temporary, partial,
 or debug. Final-art validation requires a passing JSON report in
 `expected_outputs.source_family_coverage_audit`.
-`tools/assets/normalize_source_sheet_chroma.py`
+`tools/assets/intake/normalize_source_sheet_chroma.py`
 normalizes only border-connected key-like background pixels to the exact chroma
 key before slicing; keep the raw generated sheet alongside the cleaned copy.
-`tools/assets/audit_source_sheet_intake.py` is the pre-slicing gross
+`tools/assets/intake/audit_source_sheet_intake.py` is the pre-slicing gross
 source-sheet gate: it checks flat/chroma background, component count, border
 clearance, gutters, exact key-color holes inside components, and broad
 key/halo hue conflicts before crop rectangles are trusted. It also scores
@@ -296,7 +296,7 @@ passing JSON intake evidence in
 match the art job's expected source art or crop source. The audit merges small
 satellite fragments near a larger component so multi-part icons can pass
 without hiding truly tight full-size neighboring assets.
-`tools/assets/audit_generated_ui_assets.py` is the pixel gate after slicing: it
+`tools/assets/audit/audit_generated_ui_assets.py` is the pixel gate after slicing: it
 opens runtime PNG outputs and fails clipped icon alpha bounds or visible
 chroma-key fringe, including soft purple, very dark purple, and dark
 maroon/magenta one-pixel edge halos, including near-black purple edge pixels
@@ -314,7 +314,7 @@ JSON/Markdown and print the slowest asset; the default run stays quiet and
 verdict-compatible. When NumPy is available, the edge color scans use
 vectorized masks with the same Python fallback kept for minimal portable
 installs.
-`tools/assets/audit_runtime_ui_edges.py` is the source-to-runtime fringe gate
+`tools/assets/audit/audit_runtime_ui_edges.py` is the source-to-runtime fringe gate
 for visible UI assets and screenshot crops. Use it on source PNGs before
 packing and on runtime screenshot crops when a visual review reports colored
 edges, hidden chroma, or filtering artifacts around buttons, panels, icons, or
@@ -324,7 +324,7 @@ thresholds. Start strict for generated UI (`--max-pixels 0`) and relax only
 when the art direction intentionally uses that edge family. Use `--crop
 x1,y1,x2,y2` for native screenshot evidence and `--family key --key-color
 r,g,b` for non-purple source keys.
-`tools/assets/render_ui_asset_edge_proof.py` renders zoomed top/right/bottom/left
+`tools/assets/audit/render_ui_asset_edge_proof.py` renders zoomed top/right/bottom/left
 alpha-boundary strips on a checkerboard and marks detected bad edge pixels. It
 uses the same key/purple/green/source-key edge classes as the generated UI
 asset audit, including hidden bad RGB in transparent pixels near visible
@@ -333,7 +333,7 @@ by reason so cleanup iterations can be compared without eyeballing every
 pixel. Use it when 1-2 pixel fringe is reported or when a normal contact sheet
 is too small to review edge quality. Use `--asset-id` and `--side` to create a
 small proof for the exact reported edge.
-`tools/assets/render_ui_composition_proof.py` renders runtime composition proof
+`tools/assets/audit/render_ui_composition_proof.py` renders runtime composition proof
 from an asset manifest: slice9 base at target preview sizes, optional anchored
 decor/state overlays, runtime labels, and content safe-area outlines. Use it
 after slice9 assets pass pixel audits; it catches panels/buttons that are
@@ -343,7 +343,7 @@ JSON/Markdown report should be recorded beside other generated UI reviews.
 Run with `--profile` when it feels slow; the report includes timing plus
 image/slice9/panel cache-hit stats so optimization work can compare measured
 bottlenecks instead of guessing from the rendered PNG.
-`tools/assets/audit_generated_source_derivation.py` is the anti-redraw gate for
+`tools/assets/audit/audit_generated_source_derivation.py` is the anti-redraw gate for
 generated UI crops: it compares each runtime PNG against the accepted source
 crop after chroma cleanup and fails builders that output procedural redraws
 instead of source-derived art.

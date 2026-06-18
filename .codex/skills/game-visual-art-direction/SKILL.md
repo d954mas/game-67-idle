@@ -49,14 +49,14 @@ and runtime proof.
    and `--not-covered-state`.
 5. For multi-asset work, create or update an art request packet/art job before
    generation. If no packet exists, scaffold one with
-   `tools/assets/new_art_job.mjs`. Record intended use, reusable kind
+   `tools/assets/job/new_art_job.mjs`. Record intended use, reusable kind
    (`sprite`, `slice9`, `icon`, `tile`, `border`, `background`,
    `full_mockup`), candidate policy, must-not-bake items, crop ids, expected
    runtime composition, and slice9 insets.
    For generated game UI, do not begin from one full-screen mockup unless it is
    explicitly only a visual target. Start from source families: blank UI kit
    sheet, isolated icon sheet, map/world layer sheet, and sprite/FX sheet.
-   The job must pass `node tools/assets/validate_art_job.mjs --job <job>`
+   The job must pass `node tools/assets/job/validate_art_job.mjs --job <job>`
    in draft mode before final generation.
 6. State the runtime harness separately from the visual source of truth.
    Visual work may use generated images, but playable validation follows the
@@ -70,7 +70,7 @@ and runtime proof.
    text, wrong subject, weak silhouettes, random logos, watermarks, or style
    drift.
    For multi-icon/decor/sprite families, record this as a semantic/style review
-   and run `node tools/assets/audit_asset_semantic_style.mjs --review <review.json>`
+   and run `node tools/assets/job/audit_asset_semantic_style.mjs --review <review.json>`
    before slicing or runtime integration.
    Reject procedural/programmer-art fallbacks as final generated art. They may
    unblock geometry tests, but they do not satisfy a visual-generation task
@@ -198,7 +198,7 @@ Generated UI for a game must be reusable runtime UI, not only screenshot art:
 - Accepted source sheets must also have a generation record: provider/model or
   workflow, workflow file/json, seed or no-seed reason, prompt, negative prompt, source family
   role, accepted image path, and rejected candidate notes. Create it with
-  `node tools/assets/new_generation_record.mjs` and reference the record path
+  `node tools/assets/job/new_generation_record.mjs` and reference the record path
   from the art job's `expected_outputs.generation_records`. Generated/artist
   records need real workflow provenance, not empty `{}` placeholders.
 - Reject UI sheets that have fused buttons/icons, fake text, no gutters between
@@ -211,20 +211,20 @@ Generated UI for a game must be reusable runtime UI, not only screenshot art:
 - Accept generated source sheets only after the crop contact sheet shows no
   clipped silhouettes, no adjacent asset fragments, and no visible key-color
   outline at gameplay preview size.
-- Before slicing, use `tools/assets/normalize_source_sheet_chroma.py` when a
+- Before slicing, use `tools/assets/intake/normalize_source_sheet_chroma.py` when a
   generated sheet has non-flat chroma background, then run
-  `tools/assets/audit_source_sheet_intake.py` to catch gross source-sheet
+  `tools/assets/intake/audit_source_sheet_intake.py` to catch gross source-sheet
   failures: non-flat chroma backgrounds, merged components, clipped components,
   or too-small gutters. A pass here is necessary but not a beauty or slice9-art
   pass.
 - For generated UI kits, require both human preview evidence and the pixel
-  audit from `tools/assets/audit_generated_ui_assets.py`; a clean-looking
+  audit from `tools/assets/audit/audit_generated_ui_assets.py`; a clean-looking
   contact sheet alone is not enough because 1-3 px clipping and chroma fringe
   can survive visual review.
 - A technical audit pass is not a beauty pass. If the runtime screenshot reads
   as two-color programmer UI, the art task remains open even if slice9/pixel
   gates pass.
-- `node tools/assets/validate_art_job.mjs --job <job> --final-art` must pass
+- `node tools/assets/job/validate_art_job.mjs --job <job> --final-art` must pass
   before claiming a final generated/artist UI art pass. It should fail while
   accepted source records are procedural debug scaffolds or have partial/unknown
   generation provenance.

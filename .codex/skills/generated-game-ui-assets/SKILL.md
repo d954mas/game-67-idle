@@ -41,7 +41,7 @@ Open the matching section only when the task needs it:
    HUD split, modal behavior, reward feedback, blocked/locked state, content
    safe areas, and target desktop/portrait layouts.
 4. Create or update one art job packet with:
-   `node tools/assets/new_art_job.mjs --id <job-id> --family <family> --project-dir <project-dir>`.
+   `node tools/assets/job/new_art_job.mjs --id <job-id> --family <family> --project-dir <project-dir>`.
    Keep accepted source sheet paths, expected crop/runtime manifests, and
    commands in that packet. For disputed edge cleanup, record durable edge
    proof images in `expected_outputs.edge_proofs` and matching JSON reports in
@@ -52,7 +52,7 @@ Open the matching section only when the task needs it:
    prompt, source family role, accepted source image, and rejected candidate
    notes.
 5. After selecting an accepted source sheet, create a generation record with:
-   `node tools/assets/new_generation_record.mjs --id <source-id> --project-dir <project-dir> --source-family "<family>" --source-family-role "<role>" --accepted-source <path> --provider <provider> --model <model-or-workflow> --workflow-path <workflow.json> --prompt-packet <prompt.json> --seed <seed> --prompt "<prompt>" --negative-prompt "<negative prompt>"`.
+   `node tools/assets/job/new_generation_record.mjs --id <source-id> --project-dir <project-dir> --source-family "<family>" --source-family-role "<role>" --accepted-source <path> --provider <provider> --model <model-or-workflow> --workflow-path <workflow.json> --prompt-packet <prompt.json> --seed <seed> --prompt "<prompt>" --negative-prompt "<negative prompt>"`.
    Add the record path to `expected_outputs.generation_records`. Procedural or
    programmer-art scaffolds must use `--final-art-source procedural` plus
    `--procedural-exception`; they cannot close a generated-art task. Generated
@@ -68,7 +68,7 @@ Open the matching section only when the task needs it:
    art job id/family, and agree with the generation record's source family
    role.
 6. Before generating a source family, compile a prompt packet from the art job:
-   `node tools/assets/plan_source_sheet_prompt.mjs --job <job> --source-family "<family>" --output <prompt.md> --json-output <prompt.json>`.
+   `node tools/assets/job/plan_source_sheet_prompt.mjs --job <job> --source-family "<family>" --output <prompt.md> --json-output <prompt.json>`.
    If source intake recommends a safer key color, pass
    `--intake-audit <audit.json>` or `--key-color <#rrggbb>`. Use the packet's
    prompt, negative prompt, and acceptance checklist instead of an ad hoc chat
@@ -98,13 +98,13 @@ Open the matching section only when the task needs it:
    tight gutters, uncuttable ornate long edges, inconsistent states, weak
    icon silhouettes, watermarks, or chroma background not isolated from art.
    For icon/decor/sprite families, also create a semantic/style review and run
-   `node tools/assets/audit_asset_semantic_style.mjs --review <review.json>`
+   `node tools/assets/job/audit_asset_semantic_style.mjs --review <review.json>`
    before crop planning. This gate catches wrong-subject icons, mixed icon
    styles, and fused silhouettes that pixel/chroma audits cannot judge.
 9. Run source-sheet intake before slicing:
    if the generated background is visibly or measurably non-flat, first run
-   `py -3.12 tools/assets/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>` and keep both raw and clean copies.
-   `py -3.12 tools/assets/audit_source_sheet_intake.py --source <source-sheet> --json-output <audit.json> --report <audit.md>`.
+   `py -3.12 tools/assets/intake/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>` and keep both raw and clean copies.
+   `py -3.12 tools/assets/intake/audit_source_sheet_intake.py --source <source-sheet> --json-output <audit.json> --report <audit.md>`.
    This catches non-flat chroma backgrounds, unsafe key-color holes or hue
    conflicts inside art, merged components, clipped components, and too-small
    gutters; it does not replace human slice9/art review. If a family truly
@@ -153,7 +153,7 @@ Open the matching section only when the task needs it:
    When intake passes for a multi-component icon/decor/sprite source sheet,
    create a named crop plan from the detected components before hand-writing
    crop rectangles:
-   `py -3.12 tools/assets/plan_runtime_crops_from_intake.py --intake-audit <audit.json> --ids-file <ids.txt> --kind <icon|decor|sprite> --source-id <source-id> --source-role <role> --output-dir <runtime-dir> --json-output <crop-plan.json> --report <crop-plan.md>`.
+   `py -3.12 tools/assets/crop/plan_runtime_crops_from_intake.py --intake-audit <audit.json> --ids-file <ids.txt> --kind <icon|decor|sprite> --source-id <source-id> --source-role <role> --output-dir <runtime-dir> --json-output <crop-plan.json> --report <crop-plan.md>`.
    Keep ids in visual row-major order in an ids file so long source sheets do
    not depend on fragile long CLI strings, and review the Markdown plan before
    writing the runtime crop manifest.
@@ -163,7 +163,7 @@ Open the matching section only when the task needs it:
    trim padding, and component isolation policy.
    For icon/decor/sprite crop plans produced from intake components, build
    runtime PNGs and manifests with:
-   `py -3.12 tools/assets/build_runtime_assets_from_crop_plan.py --crop-plan <crop-plan.json> --crop-manifest <crop-manifest.json> --asset-manifest <asset-manifest.json> --art-job <job.json> --contact-sheet <contact.png>`.
+   `py -3.12 tools/assets/assemble/build_runtime_assets_from_crop_plan.py --crop-plan <crop-plan.json> --crop-manifest <crop-manifest.json> --asset-manifest <asset-manifest.json> --art-job <job.json> --contact-sheet <contact.png>`.
    This step must preserve generated source pixels, remove border-connected
    chroma, trim to alpha bounds with padding, scrub transparent RGB, and write
    atlas metadata so the normal pixel/atlas audits can run next.
@@ -207,7 +207,7 @@ Open the matching section only when the task needs it:
     shipping a reusable kit / claiming visual completion. To see the exact
     ordered command sequence for a tier without running any image tool, use the
     thin orchestrator:
-    `node tools/assets/run_ui_asset_tier.mjs --tier draft|integrate|final --plan --job <job> --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --source-sheet <source-sheet>`.
+    `node tools/assets/job/run_ui_asset_tier.mjs --tier draft|integrate|final --plan --job <job> --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --source-sheet <source-sheet>`.
 14. Update the art bible and task log with source sheet, manifests, runtime
     outputs, previews, audits, screenshots, product gates, and remaining gaps.
 
@@ -227,12 +227,12 @@ Per-iteration cost: a normal iteration is ~2 commands (DRAFT) or ~5 commands
 Goal: see the asset in context fast. Run only:
 
 - source-sheet intake (and normalize first if the background is non-flat):
-  `py -3.12 tools/assets/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>` (only when needed), then
-  `py -3.12 tools/assets/audit_source_sheet_intake.py --source <source-sheet> --json-output <audit.json> --report <audit.md>`
+  `py -3.12 tools/assets/intake/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>` (only when needed), then
+  `py -3.12 tools/assets/intake/audit_source_sheet_intake.py --source <source-sheet> --json-output <audit.json> --report <audit.md>`
 - build runtime PNGs + a contact sheet to eyeball the cut:
-  `py -3.12 tools/assets/build_runtime_assets_from_crop_plan.py --crop-plan <crop-plan.json> --crop-manifest <crop-manifest.json> --asset-manifest <asset-manifest.json> --art-job <job.json> --contact-sheet <contact.png>`
+  `py -3.12 tools/assets/assemble/build_runtime_assets_from_crop_plan.py --crop-plan <crop-plan.json> --crop-manifest <crop-manifest.json> --asset-manifest <asset-manifest.json> --art-job <job.json> --contact-sheet <contact.png>`
 
-The draft contract `node tools/assets/validate_art_job.mjs --job <job>` (no
+The draft contract `node tools/assets/job/validate_art_job.mjs --job <job>` (no
 flags) is a cheap structural check you may also run here. Do not run the strict
 or final-art battery, the pixel audit, or any proof PNG at this tier.
 
@@ -242,17 +242,17 @@ Goal: prove the cut asset is clean and composes at real sizes before it lands
 in the screen. Run, in order:
 
 - strict contract after slicing:
-  `node tools/assets/validate_art_job.mjs --job <job> --strict`
+  `node tools/assets/job/validate_art_job.mjs --job <job> --strict`
   This strict gate requires `expected_outputs.asset_audit` evidence and reads
   JSON audit reports to confirm `verdict: pass` with no listed problems, a
   `crop_manifest` matching the art job, and coverage for every crop id in the
   manifest.
 - pixel audit:
-  `py -3.12 tools/assets/audit_generated_ui_assets.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
+  `py -3.12 tools/assets/audit/audit_generated_ui_assets.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
   This audit must fail final runtime PNGs whose fully transparent pixels keep
   any nonzero RGB, not only source-key/purple/green classified edge colors.
 - runtime composition proof:
-  `py -3.12 tools/assets/render_ui_composition_proof.py --asset-manifest <runtime-manifest> --output <proof.png> --json-output <proof.json> --report <proof.md>`
+  `py -3.12 tools/assets/audit/render_ui_composition_proof.py --asset-manifest <runtime-manifest> --output <proof.png> --json-output <proof.json> --report <proof.md>`
   Overlay sprites must not overlap the content safe area unless the layout or
   overlay explicitly sets `allow_content_overlap`. For production layouts set
   `require_overlay_resize_policy: true` and give every decorative/icon overlay
@@ -272,12 +272,12 @@ battery and is the only tier that runs `--final-art`. Run all of:
 - strict contract (as above).
 - pixel audit (as above).
 - edge proof preview for 1-2px fringe review (conditional, see below):
-  `py -3.12 tools/assets/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md> --only-problems`
+  `py -3.12 tools/assets/audit/render_ui_asset_edge_proof.py --crop-manifest <crop-manifest> --output <edge-proof.png> --json-output <edge-proof.json> --report <edge-proof.md> --only-problems`
   Store accepted proof image paths in `expected_outputs.edge_proofs` and JSON
   report paths in `expected_outputs.edge_proof_reports` only when `counts.total`
   is zero.
 - slice9 design policy audit:
-  `node tools/assets/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
+  `node tools/assets/job/audit_slice9_design_policy.mjs --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
   Record passing reports in `expected_outputs.slice9_design_audit`; final-art
   validation requires this evidence so cuttable but unscalable generated panels
   cannot pass as production UI. If a slice9 base declares `non_stretch_ornaments:
@@ -287,14 +287,14 @@ battery and is the only tier that runs `--final-art`. Run all of:
   the JSON report must point at the same runtime manifest and cover every
   slice9 base id.
 - atlas metadata audit:
-  `node tools/assets/audit_atlas_metadata.mjs --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
+  `node tools/assets/job/audit_atlas_metadata.mjs --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
   Record passing reports in `expected_outputs.atlas_metadata_audit`. This gate
   checks `pack_group`, `source_crop`, `original_size`, `trim_rect`, trim mode,
   alpha bleed, premultiplied-alpha handling, extrusion, shape/border padding,
   scale variant, alias links, slice9-safe rotation policy, and
   sprite/decor-overlay placement metadata.
 - review atlas build:
-  `py -3.12 tools/assets/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`
+  `py -3.12 tools/assets/pack/build_ui_atlas_pack.py --asset-manifest <runtime-manifest> --output-dir <review-atlas-dir> --json-output <atlas-pack.json> --report <atlas-pack.md> --label-review`
   Record the JSON manifest in `expected_outputs.atlas_pack`. The builder writes
   atlas PNGs, labeled previews, JSON manifests, and Markdown reports atomically
   through temp-file replace. Labeled review packs must write
@@ -305,7 +305,7 @@ battery and is the only tier that runs `--final-art`. Run all of:
   long labels through `review_label.lines`, and keep `review_label.font_size`
   readable. This is review evidence, not the game's final runtime packer.
 - review atlas audit:
-  `py -3.12 tools/assets/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
+  `py -3.12 tools/assets/pack/audit_ui_atlas_pack.py --atlas-pack <atlas-pack.json> --asset-manifest <runtime-manifest> --json-output <audit.json> --report <audit.md>`
   Record passing JSON reports in `expected_outputs.atlas_pack_audit`. It proves
   runtime asset coverage, atlas bounds, padded-rect overlap, alias reuse,
   metadata consistency, extrusion pixels, that the clean atlas has no label
@@ -313,7 +313,7 @@ battery and is the only tier that runs `--final-art`. Run all of:
   labeled review rects stay outside asset `padded_rect`s. The labeled preview
   may differ from the clean atlas only inside declared `review_label.rect`s.
 - source family coverage audit:
-  `node tools/assets/audit_source_family_coverage.mjs --job <job> --json-output <audit.json> --report <audit.md>`
+  `node tools/assets/job/audit_source_family_coverage.mjs --job <job> --json-output <audit.json> --report <audit.md>`
   Record passing reports in `expected_outputs.source_family_coverage_audit` so
   one mixed generated sheet cannot substitute for separate blank bases, icons,
   and decor overlays. For an intentional partial cut, declare
@@ -321,21 +321,21 @@ battery and is the only tier that runs `--final-art`. Run all of:
   `included_source_families`, `deferred_source_families`, and a concrete
   `reason`; a scoped pass prints `partial-runtime-slice-valid`. If this audit
   fails, queue prompts with
-  `node tools/assets/plan_missing_source_family_prompts.mjs --job <job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`.
+  `node tools/assets/job/plan_missing_source_family_prompts.mjs --job <job> --coverage-audit <audit.json> --output-dir <project>/art/prompts`.
 - generated-source derivation audit:
-  `py -3.12 tools/assets/audit_generated_source_derivation.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
+  `py -3.12 tools/assets/audit/audit_generated_source_derivation.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
   Record this in `expected_outputs.source_derivation_audit`; final-art
   validation requires a passing JSON report whose `crop_manifest` matches the
   art job and covers every source-derived `slice9`, `border`, `tile`, and
   `sprite` crop id. This is what proves source-derived PNGs were cut from the
   accepted source rather than redrawn.
 - runtime usage audit after integration:
-  `node tools/assets/audit_runtime_ui_asset_usage.mjs --asset-manifest <runtime-manifest> --usage <runtime-usage.json> --json-output <audit.json> --report <audit.md>`
+  `node tools/assets/job/audit_runtime_ui_asset_usage.mjs --asset-manifest <runtime-manifest> --usage <runtime-usage.json> --json-output <audit.json> --report <audit.md>`
   Build `game.runtime_ui_asset_usage` from actual runtime rects and layout
   modes. This gate fails if a large-only panel/button is drawn below
   `usage_policy.min_size` or used in compact dense UI.
 - final generated/artist art gate (the single verdict for the whole kit):
-  `node tools/assets/validate_art_job.mjs --job <job> --final-art`
+  `node tools/assets/job/validate_art_job.mjs --job <job> --final-art`
 - native/runtime build for playable work; desktop and portrait screenshots when
   responsive/mobile is in scope; product-read gates
   `node tools/product_gate/review.mjs ...`; responsive layout audit when
