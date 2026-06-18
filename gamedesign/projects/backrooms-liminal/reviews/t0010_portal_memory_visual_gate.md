@@ -4,7 +4,7 @@ project: backrooms-liminal
 task: T0010
 surface: desktop
 verdict: fail
-timestamp: 2026-06-18T18:02:48.234Z
+timestamp: 2026-06-18T18:09:11.423Z
 ---
 
 # Product Read Gate - backrooms-liminal / desktop
@@ -15,11 +15,11 @@ Screenshot: `build/captures/backrooms_t0010_impossible_geometry.png`
 
 ## Player Read
 
-- Where am I? A stained yellow Backrooms room where a narrow wall cut contains a deeper room that cannot fit inside the corridor
+- Where am I? A stained yellow Backrooms room where a thick wall cut exposes a deeper room that cannot fit inside the corridor
 - What should I do now? Use the copied mark as evidence, find the missing handle, and test the locked door
 - What changed after input? The mark appears on the far wall of the impossible room, the journal updates, the locked door rejects missing-handle use, and fitting the handle reveals the exit
 - What is the reward / why continue? The player learns that space can copy evidence and can open the real path by proving the room relationship
-- Why does this look like a game? Native 3D liminal horror scene with a visible non-Euclidean room cut, stained wallpaper, darker corners, fluorescent depth cues, copied wall mark, locked-door rule, and minimal journal prompt
+- Why does this look like a game? Native 3D liminal horror scene with a non-Euclidean room cut, stronger rim/contact shadow, stained wallpaper, darker corners, fluorescent depth cues, copied wall mark, locked-door rule, and minimal journal prompt
 
 ## State Coverage
 
@@ -34,9 +34,9 @@ Not covered / debt:
 
 ## Review
 
-Problem: T0010 is more readable and less sterile, but the screenshot still does not meet the requested high-quality scary realistic Backrooms bar.
+Problem: T0010 now has better physical framing and contact shadow around the impossible room, but the screenshot still does not meet the requested high-quality scary realistic Backrooms bar.
 
-Next: Move the visual pass from shader-only polish to stronger authored geometry/material treatment: real bevel/thickness, better fluorescent shadowing, stronger carpet/wall material breakup, and less temporary prompt styling.
+Next: Move beyond one-file shader tricks: introduce or emulate authored wall thickness, better carpet/wall material layers, stronger fluorescent shadowing, and a cleaner prompt treatment.
 
 ## Visual Critique
 
@@ -52,6 +52,6 @@ Scores:
 - audience_fit: 3
 
 Issues:
-- major / art_quality: The room is moodier and dirtier, but still shader-authored rather than production-quality realistic Backrooms architecture
-- minor / ui_controls: The journal is now visible and readable, but prompt plates still feel temporary
-- minor / art_quality: The wall cut needs stronger real bevel geometry, localized contact shadows, and higher fidelity carpet/wall materials
+- major / art_quality: The wall cut has stronger rim and contact shadow, but still lacks real authored geometry and high-fidelity material response
+- minor / ui_controls: The journal and prompt are readable and softer, but prompt plates still feel temporary
+- minor / art_quality: The carpet/wall breakup is improved but still shader-authored rather than realistic Backrooms material work

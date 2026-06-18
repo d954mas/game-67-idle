@@ -70,3 +70,8 @@ and reveal a real exit.
   result is still shader-authored rather than production-quality realistic
   Backrooms geometry/materials.
 - 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Move the visual pass from shader-only polish to stronger authored geometry/material treatment: real bevel/thickness, better fluorescent shadowing, stronger carpet/wall material breakup, and less temporary prompt styling.
+- 2026-06-18: Bevel/contact-shadow pass added stronger rim lighting, darker
+  inner occlusion around the impossible wall cut, and softer prompt panels. The
+  cut now reads more like thick architecture, but product gate remains red until
+  geometry/material quality stops reading as one-file shader work.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Move beyond one-file shader tricks: introduce or emulate authored wall thickness, better carpet/wall material layers, stronger fluorescent shadowing, and a cleaner prompt treatment.

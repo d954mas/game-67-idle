@@ -349,6 +349,8 @@ static const char *s_fs_src =
     "    float forged_mark = 0.0;\n"
     "    float impossible_cut = 0.0;\n"
     "    float impossible_frame = 0.0;\n"
+    "    float impossible_rim = 0.0;\n"
+    "    float impossible_occlusion = 0.0;\n"
     "    if (mat == 3) {\n"
     "        float mark_side = smoothstep(3.20, 3.95, -hit.x);\n"
     "        float mark_a = 1.0 - smoothstep(0.025, 0.075, abs((hit.y - 1.13) - (hit.z - 10.8) * 0.42));\n"
@@ -362,9 +364,14 @@ static const char *s_fs_src =
     "        float cut_band = room_band(hit.z, 10.8, 1.10) * smoothstep(3.36, 4.12, hit.x);\n"
     "        float cut_y = smoothstep(0.22, 0.38, hit.y) * (1.0 - smoothstep(1.70, 1.92, hit.y));\n"
     "        impossible_cut = u_puzzle.x * cut_band * cut_y;\n"
-    "        float frame_z = 1.0 - smoothstep(0.045, 0.13, abs(abs(hit.z - 10.8) - 1.08));\n"
-    "        float frame_y = max(1.0 - smoothstep(0.035, 0.12, abs(hit.y - 0.30)), 1.0 - smoothstep(0.035, 0.12, abs(hit.y - 1.78)));\n"
+    "        float side_edge = abs(abs(hit.z - 10.8) - 1.08);\n"
+    "        float top_edge = abs(hit.y - 1.78);\n"
+    "        float bottom_edge = abs(hit.y - 0.30);\n"
+    "        float frame_z = 1.0 - smoothstep(0.045, 0.15, side_edge);\n"
+    "        float frame_y = max(1.0 - smoothstep(0.035, 0.13, bottom_edge), 1.0 - smoothstep(0.035, 0.13, top_edge));\n"
     "        impossible_frame = u_puzzle.x * cut_band * max(frame_z * cut_y, frame_y * room_band(hit.z, 10.8, 1.20));\n"
+    "        impossible_rim = u_puzzle.x * cut_band * max(1.0 - smoothstep(0.0, 0.035, min(side_edge, min(top_edge, bottom_edge))), 0.0);\n"
+    "        impossible_occlusion = u_puzzle.x * cut_band * cut_y * (1.0 - smoothstep(0.0, 0.34, min(side_edge, min(top_edge, bottom_edge))));\n"
     "    }\n"
     "    float fixture_shape = 0.0;\n"
     "    if (mat == 2) {\n"
@@ -393,6 +400,8 @@ static const char *s_fs_src =
     "    color = mix(color, vec3(0.018, 0.014, 0.008), impossible_frame * 0.76);\n"
     "    color += vec3(0.92, 0.70, 0.34) * impossible_frame * 0.35;\n"
     "    color = mix(color, color * 0.34, impossible_frame * smoothstep(0.0, 1.0, abs(hit.z - 10.8)) * 0.18);\n"
+    "    color = mix(color, color * vec3(0.23, 0.20, 0.15), impossible_occlusion * 0.72);\n"
+    "    color += vec3(1.12, 0.86, 0.36) * impossible_rim * 0.52;\n"
     "    color += vec3(1.0, 0.08, 0.03) * mark_wall * (0.85 + 0.15 * sin(ttime * 9.0));\n"
     "    color += vec3(1.0, 0.02, 0.0) * forged_mark * (0.55 + 0.25 * step(0.45, sin(ttime * 11.0)));\n"
     "    color = mix(color, vec3(0.005, 0.012, 0.008), false_exit * 0.92);\n"
@@ -776,12 +785,12 @@ static void ui_rect(int x, int y, int w, int h, uint8_t r, uint8_t g, uint8_t b,
 }
 
 static void ui_panel(int x, int y, int w, int h, bool danger) {
-    ui_rect(x + 3, y + 4, w, h, 0, 0, 0, danger ? 118 : 88);
-    ui_rect(x, y, w, h, danger ? 22 : 11, danger ? 3 : 9, danger ? 3 : 7, danger ? 178 : 146);
-    ui_rect(x, y, w, 2, danger ? 144 : 104, danger ? 35 : 84, danger ? 28 : 46, danger ? 168 : 112);
-    ui_rect(x, y + h - 2, w, 2, 0, 0, 0, 86);
-    ui_rect(x, y, 2, h, 0, 0, 0, 64);
-    ui_rect(x + w - 2, y, 2, h, 0, 0, 0, 64);
+    ui_rect(x + 3, y + 4, w, h, 0, 0, 0, danger ? 104 : 66);
+    ui_rect(x, y, w, h, danger ? 22 : 12, danger ? 3 : 10, danger ? 3 : 7, danger ? 166 : 126);
+    ui_rect(x, y, w, 2, danger ? 144 : 116, danger ? 35 : 92, danger ? 28 : 52, danger ? 158 : 104);
+    ui_rect(x, y + h - 2, w, 2, 0, 0, 0, 72);
+    ui_rect(x, y, 2, h, 0, 0, 0, 48);
+    ui_rect(x + w - 2, y, 2, h, 0, 0, 0, 48);
 }
 
 static void glyph_rows(char c, uint8_t out[7]) {
