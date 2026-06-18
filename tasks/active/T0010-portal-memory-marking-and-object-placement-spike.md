@@ -145,3 +145,13 @@ and reveal a real exit.
   validation, and refreshed product gate ran. Product gate remains FAIL: the
   portal reads more solid/scary, but it is still an overlay-lit proof rather
   than fully integrated 3D room surfaces or render-target portal lighting.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Move the portal room from blended overlay proof toward opaque authored interior surfaces or T0011 render-target rendering; remove the remaining ghosted frame artifacts and improve realistic lighting/material response
+- 2026-06-19: Authored-room depth slice added a separate aperture-occluder
+  material kind and denser alpha/shadow treatment for native `nt_gfx` portal
+  room surfaces. The T0010 scenario now reports
+  `native_overlay.last_vertex_count = 450` and
+  `native_overlay.room_mesh_vertex_count = 366`. Native build, T0010 capture,
+  smoke, readability, profiler guard, taskboard validation, strict product
+  gate, and slice hygiene ran. Product gate remains FAIL for art quality and
+  audience fit: the image is more solid, but still a blended overlay proof that
+  needs opaque authored room surfaces or T0011 render-target portal rendering.
