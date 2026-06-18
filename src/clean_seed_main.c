@@ -44,6 +44,8 @@ typedef struct BackroomsState {
     float stalker_pressure;
     float fuse_hum_timer;
     float stalker_audio_timer;
+    float footstep_timer;
+    float heartbeat_timer;
     float run_time;
     float last_run_time;
     float last_fear;
@@ -350,6 +352,25 @@ static bool looking_at_stalker(void) {
     const float fwd_z = cosf(s_game.yaw);
     const float dot = (dx / len) * fwd_x + (dz / len) * fwd_z;
     return dot > 0.86F;
+}
+
+static void update_movement_audio(bool moving) {
+    if (moving && s_game.footstep_timer <= 0.0F) {
+        if (s_game.sprinting) {
+            game_audio_play(GAME_AUDIO_CUE_SPRINT_STEP);
+            s_game.footstep_timer = blackout_active() ? 0.17F : 0.21F;
+        } else {
+            game_audio_play(GAME_AUDIO_CUE_FOOTSTEP);
+            s_game.footstep_timer = 0.38F;
+        }
+    }
+    if (blackout_active() && s_game.heartbeat_timer <= 0.0F) {
+        game_audio_play(GAME_AUDIO_CUE_HEARTBEAT);
+        s_game.heartbeat_timer = s_game.sprinting ? 0.42F : 0.58F;
+        if (s_game.stalker_pressure > 0.72F) {
+            s_game.heartbeat_timer *= 0.78F;
+        }
+    }
 }
 
 static void set_message(const char *text, float seconds) {
@@ -751,6 +772,12 @@ static void update_game(void) {
     if (s_game.stalker_audio_timer > 0.0F) {
         s_game.stalker_audio_timer -= dt;
     }
+    if (s_game.footstep_timer > 0.0F) {
+        s_game.footstep_timer -= dt;
+    }
+    if (s_game.heartbeat_timer > 0.0F) {
+        s_game.heartbeat_timer -= dt;
+    }
     if (s_game.route_choice_feedback_timer > 0.0F) {
         s_game.route_choice_feedback_timer -= dt;
     }
@@ -827,7 +854,8 @@ static void update_game(void) {
         move_z += right_z;
     }
     const float len = sqrtf(move_x * move_x + move_z * move_z);
-    if (len > 0.001F) {
+    const bool moving = len > 0.001F;
+    if (moving) {
         move_x /= len;
         move_z /= len;
         const bool wants_sprint = nt_input_key_is_down(NT_KEY_LSHIFT) || nt_input_key_is_down(NT_KEY_RSHIFT);
@@ -842,6 +870,7 @@ static void update_game(void) {
     s_game.z = clampf(s_game.z, 0.45F, 31.8F);
     s_game.threat_visible = looking_at_stalker();
     update_route_choice();
+    update_movement_audio(moving);
 
     if (s_game.flashlight_on && s_game.battery > 0.0F) {
         const float sprint_drain = s_game.sprinting ? (blackout_active() ? 0.105F : 0.072F) : 0.0F;
@@ -961,6 +990,8 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(root, "blackout_timer", (double)fmaxf(0.0F, s_game.blackout_timer));
     cJSON_AddNumberToObject(root, "ambush_timer", (double)fmaxf(0.0F, s_game.ambush_timer));
     cJSON_AddNumberToObject(root, "relief_timer", (double)fmaxf(0.0F, s_game.relief_timer));
+    cJSON_AddNumberToObject(root, "footstep_timer", (double)fmaxf(0.0F, s_game.footstep_timer));
+    cJSON_AddNumberToObject(root, "heartbeat_timer", (double)fmaxf(0.0F, s_game.heartbeat_timer));
     cJSON_AddNumberToObject(root, "run_time", (double)s_game.run_time);
     cJSON_AddNumberToObject(root, "last_run_time", (double)s_game.last_run_time);
     cJSON_AddNumberToObject(root, "last_fear", (double)s_game.last_fear);

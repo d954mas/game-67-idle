@@ -55,6 +55,12 @@ const char *game_audio_cue_name(GameAudioCue cue) {
         return "caught";
     case GAME_AUDIO_CUE_ESCAPE:
         return "escape";
+    case GAME_AUDIO_CUE_FOOTSTEP:
+        return "footstep";
+    case GAME_AUDIO_CUE_SPRINT_STEP:
+        return "sprint_step";
+    case GAME_AUDIO_CUE_HEARTBEAT:
+        return "heartbeat";
     case GAME_AUDIO_CUE_COUNT:
     default:
         return "unknown";
@@ -128,6 +134,12 @@ static int cue_sample_count(GameAudioCue cue) {
         return (int)(0.30F * (float)GAME_AUDIO_SAMPLE_RATE);
     case GAME_AUDIO_CUE_ESCAPE:
         return (int)(0.28F * (float)GAME_AUDIO_SAMPLE_RATE);
+    case GAME_AUDIO_CUE_FOOTSTEP:
+        return (int)(0.09F * (float)GAME_AUDIO_SAMPLE_RATE);
+    case GAME_AUDIO_CUE_SPRINT_STEP:
+        return (int)(0.075F * (float)GAME_AUDIO_SAMPLE_RATE);
+    case GAME_AUDIO_CUE_HEARTBEAT:
+        return (int)(0.18F * (float)GAME_AUDIO_SAMPLE_RATE);
     case GAME_AUDIO_CUE_COUNT:
     default:
         return (int)(0.10F * (float)GAME_AUDIO_SAMPLE_RATE);
@@ -177,6 +189,25 @@ static void fill_cue_samples(GameAudioCue cue, int16_t *out, int sample_count, f
         case GAME_AUDIO_CUE_ESCAPE: {
             const float f = (u < 0.45F) ? 392.0F : 784.0F;
             sample = 0.54F * sine(f * t) + 0.24F * sine((f + 220.0F * u) * t);
+            break;
+        }
+        case GAME_AUDIO_CUE_FOOTSTEP: {
+            const float strike = expf(-u * 11.5F);
+            const float grit = (sine(920.0F * t + 3.0F * sine(37.0F * t)) > 0.0F) ? 0.10F : -0.10F;
+            sample = strike * (0.82F * sine(66.0F * t) + 0.24F * sine(132.0F * t) + grit);
+            break;
+        }
+        case GAME_AUDIO_CUE_SPRINT_STEP: {
+            const float strike = expf(-u * 14.0F);
+            const float slap = expf(-u * 28.0F) * ((sine(1500.0F * t) > 0.0F) ? 0.20F : -0.20F);
+            sample = strike * (0.94F * sine(88.0F * t) + 0.30F * sine(176.0F * t)) + slap;
+            break;
+        }
+        case GAME_AUDIO_CUE_HEARTBEAT: {
+            const float pulse_a = expf(-fabsf(u - 0.14F) * 34.0F);
+            const float pulse_b = expf(-fabsf(u - 0.42F) * 42.0F) * 0.68F;
+            const float pulse = pulse_a + pulse_b;
+            sample = pulse * (0.78F * sine(54.0F * t) + 0.20F * sine(108.0F * t));
             break;
         }
         case GAME_AUDIO_CUE_COUNT:
