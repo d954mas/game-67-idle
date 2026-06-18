@@ -11,6 +11,19 @@ sessions, use the `chat-session-reflection` skill.
 Compact reusable lessons about AI-assisted development. Keep each entry under
 about 10 lines.
 
+### 2026-06-18 - Native PC Scale/Focus Must Be Early Evidence
+
+- Context: Mine Cards T0001 passed several screenshot/product-read gates, but
+  lead later rejected the actual PC window as too small, unfocused, and full of
+  pseudo-buttons.
+- Root cause: the runtime UI was authored in raw framebuffer pixels and the
+  review optimized screenshots/art direction before proving `nt_ui_scale`,
+  real-window readability, and first-player action focus.
+- Fix: playable native UI must use a reference-resolution scale layer before
+  review; first-screen focus review must ask "where am I, what is active, what
+  can I click now" before calling a slice ready. Evidence lives in
+  `gamedesign/projects/mine-cards/reviews/t0001_ui_scale_rejection_2026-06-18.md`.
+
 ### 2026-06-17 - A Product Gate Pass Only Covers The Captured State
 
 - Context: Voxelheim rescue produced multiple native product gates, but the lead
