@@ -42,18 +42,36 @@ LOCK="Keep the subject EXACTLY as in the input image: same position, same scale,
 flatbg() { echo "Fill the ENTIRE canvas edge-to-edge with solid flat $1. No gradient, no vignette, no texture, no noise, no lighting falloff, no reflection, and do NOT add any new shadow on the background."; }
 
 WHITE_PROMPT="Edit the input image: replace its background with solid flat white #ffffff. $(flatbg 'white #ffffff') ${LOCK} Output the same subject on pure white #ffffff."
-BLACK_PROMPT="Edit the input image. The subject is final. Change ONLY the background fill to solid flat black #000000. $(flatbg 'black #000000') ${LOCK} Output the same subject on pure black #000000."
+# Frame the black plate as a pure background recolour, not a redraw — this is what
+# keeps a glow/soft-alpha subject consistent enough to pass the pair gate.
+BLACK_PROMPT="This is a BACKGROUND-COLOR SWAP only, not a redraw. The subject is final. Output the EXACT same image pixel-for-pixel, with the ONLY change being the flat background recoloured to solid black #000000. $(flatbg 'black #000000') ${LOCK} Do NOT re-render or re-light the subject for the dark background. Output the same subject on pure black #000000."
 
 echo ">>> [1/3] white plate: edit '$SOURCE' -> '$WHITE'"
 python "$GEN" --input-image "$SOURCE" --prompt "$WHITE_PROMPT" --out "$WHITE" --size "$SIZE" --quality high || {
   echo "white plate generation failed" >&2; exit 1; }
 
-echo ">>> [2/3] black plate: edit '$WHITE' (the white plate, NOT the source) -> '$BLACK'"
-python "$GEN" --input-image "$WHITE" --prompt "$BLACK_PROMPT" --out "$BLACK" --size "$SIZE" --quality high || {
-  echo "black plate generation failed" >&2; exit 1; }
+# The generator redraws soft elements (glow/sparkles) between background colours,
+# so the black plate often drifts. Retry it (always editing the SAME white plate)
+# until the pair gate PASSES, keeping the most-consistent attempt.
+ATTEMPTS="${DUAL_PLATE_ATTEMPTS:-4}"
+GATE="$REPO_ROOT/tools/assets/cutout/dual_plate_pair_gate.py"
+echo ">>> [2/3] black plate: edit the white plate -> black, retry until gate PASSES (max $ATTEMPTS)"
+best_frac=101; best_file=""
+for try in $(seq 1 "$ATTEMPTS"); do
+  cand="$OUTDIR/${NAME}_black_try${try}.png"
+  python "$GEN" --input-image "$WHITE" --prompt "$BLACK_PROMPT" --out "$cand" --size "$SIZE" --quality high || {
+    echo "black plate generation failed" >&2; exit 1; }
+  py -3.12 "$GATE" --light "$WHITE" --dark "$cand" --json-output "$OUTDIR/${NAME}_gate.json" >/dev/null 2>&1
+  frac=$(grep -o '"inconsistent_fraction":[ ]*[0-9.]*' "$OUTDIR/${NAME}_gate.json" | grep -o '[0-9.]*$')
+  verdict=$(grep -o '"verdict":[ ]*"[a-z]*"' "$OUTDIR/${NAME}_gate.json" | sed 's/.*"\([a-z]*\)"$/\1/')
+  echo "    try $try/$ATTEMPTS: gate=${verdict:-?} (${frac:-?} inconsistent)"
+  if [ -n "$frac" ] && awk "BEGIN{exit !($frac < $best_frac)}"; then best_frac="$frac"; best_file="$cand"; fi
+  [ "$verdict" = "pass" ] && break
+done
+[ -n "$best_file" ] && cp "$best_file" "$BLACK"
 
-echo ">>> [3/3] acceptance gate (pair must be consistent before extraction)"
-py -3.12 "$REPO_ROOT/tools/assets/cutout/dual_plate_pair_gate.py" --light "$WHITE" --dark "$BLACK" --json-output "$OUTDIR/${NAME}_gate.json"
+echo ">>> [3/3] acceptance gate on the kept best pair"
+py -3.12 "$GATE" --light "$WHITE" --dark "$BLACK" --json-output "$OUTDIR/${NAME}_gate.json"
 GATE_RC=$?
 
 echo "================= RESULT ================="
