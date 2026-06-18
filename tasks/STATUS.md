@@ -12,8 +12,8 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 
 - No native runtime blocker is known for the current game repo slice.
 - T0010 product gate is still red: the portal room now has data-driven
-  geometry, material, light, and finish descriptors, but not yet
-  production-quality realistic Backrooms room construction.
+  geometry, material, light, finish, and authored construction descriptors, but
+  not yet production-quality realistic Backrooms room construction.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
   must not patch `external/neotolis-engine`; use public APIs or carry an
@@ -52,14 +52,15 @@ node tools/taskboard/cli.mjs validate
 ## Last Known Good Evidence
 
 - `src/backrooms_portal_scene.*` defines the current game-local universal portal
-  scene foundation: rooms, material/light/finish descriptors, portal
-  descriptors, flags, validation, and GPU params.
+  scene foundation: rooms, material/light/finish/authored-construction
+  descriptors, portal descriptors, flags, validation, and GPU params.
 - `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md` records
   the engine-facing render-target API gap with evidence from `nt_gfx`.
 - `build/captures/backrooms_t0010_portal_memory_status.json` proves mark
   placement, locked-door rejection, handle pickup, handle fitting, exit reveal,
-  escape, and active `portal_render` material/light/finish params including
-  trim, fixture spacing, ceiling panel scale, and shadow spill.
+  escape, and active `portal_render` material/light/finish/construction params
+  including trim, fixture spacing, ceiling panel scale, shadow spill, jamb
+  depth, threshold lip, conduit, and landmark columns.
 - `build/captures/backrooms_t0010_impossible_geometry.png` is the latest native
   proof screenshot for the data-driven impossible room.
 - `build/captures/backrooms_t0010_impossible_geometry_uizoom.png` is the latest
@@ -70,12 +71,11 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Improve T0010 visual quality beyond the current one-pass finish layer:
-   use more real authored room construction where the game repo can, and move
-   the reusable portal path toward T0011 render-target support instead of
-   stacking more fullscreen shader tricks.
-2. Decide whether to pursue T0011 in the engine repo now or prototype a
-   game-local mesh/material room layer that can later feed the render target
-   pipeline.
+1. Move the current construction descriptors into real renderable room layers:
+   either a game-local mesh/material proxy inside the native pass, or the T0011
+   render-target path when the engine API exists.
+2. Add stronger production texture/light evidence before expanding content;
+   more one-pass shader decoration is now a low-value path unless it directly
+   proves the future mesh/material contract.
 3. Keep content expansion frozen while the T0010 product gate remains red,
    unless the lead explicitly accepts that visual debt.

@@ -37,6 +37,13 @@ typedef struct BackroomsPortalMaterial {
     float shadow_spill_strength;
 } BackroomsPortalMaterial;
 
+typedef struct BackroomsPortalConstruction {
+    float jamb_depth;
+    float threshold_lip;
+    float conduit_strength;
+    float landmark_column_strength;
+} BackroomsPortalConstruction;
+
 typedef struct BackroomsPortal {
     uint8_t from_room;
     uint8_t to_room;
@@ -53,6 +60,7 @@ typedef struct BackroomsPortal {
 typedef struct BackroomsPortalScene {
     BackroomsPortalRoom rooms[BACKROOMS_PORTAL_MAX_ROOMS];
     BackroomsPortalMaterial materials[BACKROOMS_PORTAL_MAX_ROOMS];
+    BackroomsPortalConstruction construction[BACKROOMS_PORTAL_MAX_ROOMS];
     BackroomsPortal portals[BACKROOMS_PORTAL_MAX_PORTALS];
     uint8_t room_count;
     uint8_t portal_count;
@@ -66,10 +74,15 @@ typedef struct BackroomsPortalGpuParams {
     float material[4]; /* wall_panel_scale, carpet_tile_scale, grime_strength, wetness_strength */
     float light[4]; /* fluorescent_width, fluorescent_intensity, corner_shadow_strength, baseboard_strength */
     float finish[4]; /* trim_strength, fixture_spacing, ceiling_panel_scale, shadow_spill_strength */
+    float construction[4]; /* jamb_depth, threshold_lip, conduit_strength, landmark_column_strength */
 } BackroomsPortalGpuParams;
 
 void backrooms_portal_scene_clear(BackroomsPortalScene *scene);
-bool backrooms_portal_scene_add_room(BackroomsPortalScene *scene, const BackroomsPortalRoom *room, const BackroomsPortalMaterial *material, uint8_t *out_index);
+bool backrooms_portal_scene_add_room(BackroomsPortalScene *scene,
+                                     const BackroomsPortalRoom *room,
+                                     const BackroomsPortalMaterial *material,
+                                     const BackroomsPortalConstruction *construction,
+                                     uint8_t *out_index);
 bool backrooms_portal_scene_add_portal(BackroomsPortalScene *scene, const BackroomsPortal *portal);
 bool backrooms_portal_scene_validate(const BackroomsPortalScene *scene);
 void backrooms_portal_scene_build_t0010(BackroomsPortalScene *scene);

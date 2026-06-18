@@ -4,7 +4,7 @@ project: backrooms-liminal
 task: T0010
 surface: desktop
 verdict: fail
-timestamp: 2026-06-18T18:40:36.148Z
+timestamp: 2026-06-18T18:50:25.019Z
 ---
 
 # Product Read Gate - backrooms-liminal / desktop
@@ -15,11 +15,11 @@ Screenshot: `build/captures/backrooms_t0010_impossible_geometry.png`
 
 ## Player Read
 
-- Where am I? Yellow Backrooms corridor facing a data-driven impossible room aperture with visible trim, fixture spacing, ceiling panels, and shadow-spill parameters
+- Where am I? Yellow Backrooms corridor facing a data-driven impossible room aperture with finish and construction descriptors
 - What should I do now? Use the copied mark as evidence, find the missing handle, and test the locked door
-- What changed after input? The mark appears inside the impossible room; DevAPI report exposes portal room count, target dimensions, material settings, and finish settings for trim, fixtures, ceiling panels, and shadow spill
+- What changed after input? The mark appears inside the impossible room; DevAPI report exposes portal geometry, material/light/finish settings, and authored construction proxies for jamb depth, threshold lip, conduit, and landmark columns
 - What is the reward / why continue? The player learns the space can be tested and later stabilized by fitting the found handle
-- Why does this look like a game? Native 3D liminal horror view with non-Euclidean room aperture, authored-looking trim, visible fluorescent fixture cues, stained wallpaper, carpet seams, and minimal journal UI
+- Why does this look like a game? Native 3D liminal horror view with non-Euclidean room aperture, visible fixture and threshold cues, stained wallpaper, carpet seams, and minimal journal UI
 
 ## State Coverage
 
@@ -51,9 +51,9 @@ Not covered / debt:
 
 ## Review
 
-Problem: T0010 improved the portal-room finish layer with data-driven trim, fixture spacing, ceiling panels, and shadow spill, but the visual target remains unmet.
+Problem: T0010 now has game-local authored construction descriptors for the portal room, but the visual target remains unmet.
 
-Next: Continue visual-first work toward real authored room quality: replace more fullscreen-shader cues with mesh/material layers where possible, pursue T0011 render-target support, and add stronger production lighting/texture evidence before expanding content.
+Next: Move the construction descriptors into real mesh/material or render-target-backed room rendering, and add stronger production texture/light evidence before expanding content.
 
 ## Visual Critique
 
@@ -69,5 +69,5 @@ Scores:
 - audience_fit: 3
 
 Issues:
-- major / art_quality: The portal room now has stronger authored-looking trim, fixture, panel, and shadow-spill cues, but the screen still lacks true production mesh/material richness and real offscreen portal rendering
-- major / audience_fit: The Backrooms differentiator is clearer, but the result still falls short of the high-quality realistic horror image target the lead requested
+- major / art_quality: The portal room now has data-driven construction proxies and more physical threshold/fixture cues, but it still lacks real mesh/material richness and offscreen portal rendering
+- major / audience_fit: The differentiator is clearer, but the image still falls short of a high-quality realistic Backrooms horror target

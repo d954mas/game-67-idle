@@ -103,3 +103,13 @@ and reveal a real exit.
   realistic Backrooms room. Profiler guard is advisory/red due unresolved failed
   records.
 - 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Move beyond the current one-pass finish layer toward real authored room construction or T0011 render-target support, instead of stacking more fullscreen shader polish.
+- 2026-06-18: Authored construction pass added
+  `BackroomsPortalConstruction` and GPU construction params for jamb depth,
+  threshold lip, conduit strength, and landmark column strength. The native
+  screenshot now gets visible threshold/fixture/room-construction cues from
+  room descriptors, and `build/captures/backrooms_t0010_portal_memory_status.json`
+  proves those fields in `portal_render`. Native build, T0010 scenario, smoke,
+  readability, and taskboard validation passed. Product gate remains FAIL:
+  this is a better bridge toward real renderable room layers, not the final
+  production-quality Backrooms image.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Move construction descriptors into actual renderable mesh/material or render-target-backed room layers, and avoid spending more cycles on cosmetic one-pass shader decoration unless it proves that contract.

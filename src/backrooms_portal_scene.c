@@ -26,7 +26,20 @@ static BackroomsPortalMaterial default_material(void) {
     };
 }
 
-bool backrooms_portal_scene_add_room(BackroomsPortalScene *scene, const BackroomsPortalRoom *room, const BackroomsPortalMaterial *material, uint8_t *out_index) {
+static BackroomsPortalConstruction default_construction(void) {
+    return (BackroomsPortalConstruction){
+        .jamb_depth = 0.74F,
+        .threshold_lip = 0.68F,
+        .conduit_strength = 0.58F,
+        .landmark_column_strength = 0.52F,
+    };
+}
+
+bool backrooms_portal_scene_add_room(BackroomsPortalScene *scene,
+                                     const BackroomsPortalRoom *room,
+                                     const BackroomsPortalMaterial *material,
+                                     const BackroomsPortalConstruction *construction,
+                                     uint8_t *out_index) {
     if (scene == NULL || room == NULL || scene->room_count >= BACKROOMS_PORTAL_MAX_ROOMS) {
         return false;
     }
@@ -36,6 +49,7 @@ bool backrooms_portal_scene_add_room(BackroomsPortalScene *scene, const Backroom
     const uint8_t index = scene->room_count++;
     scene->rooms[index] = *room;
     scene->materials[index] = material != NULL ? *material : default_material();
+    scene->construction[index] = construction != NULL ? *construction : default_construction();
     if (out_index != NULL) {
         *out_index = index;
     }
@@ -99,6 +113,12 @@ void backrooms_portal_scene_build_t0010(BackroomsPortalScene *scene) {
                                               .ceiling_panel_scale = 0.50F,
                                               .shadow_spill_strength = 0.54F,
                                           },
+                                          &(BackroomsPortalConstruction){
+                                              .jamb_depth = 0.68F,
+                                              .threshold_lip = 0.72F,
+                                              .conduit_strength = 0.46F,
+                                              .landmark_column_strength = 0.36F,
+                                          },
                                           &corridor);
     (void)backrooms_portal_scene_add_room(scene,
                                           &(BackroomsPortalRoom){
@@ -121,6 +141,12 @@ void backrooms_portal_scene_build_t0010(BackroomsPortalScene *scene) {
                                               .fixture_spacing = 2.9F,
                                               .ceiling_panel_scale = 0.66F,
                                               .shadow_spill_strength = 0.82F,
+                                          },
+                                          &(BackroomsPortalConstruction){
+                                              .jamb_depth = 0.94F,
+                                              .threshold_lip = 0.92F,
+                                              .conduit_strength = 0.82F,
+                                              .landmark_column_strength = 0.86F,
                                           },
                                           &impossible_room);
     (void)backrooms_portal_scene_add_portal(scene,
@@ -147,6 +173,7 @@ BackroomsPortalGpuParams backrooms_portal_scene_gpu_params(const BackroomsPortal
         .material = {0.36F, 0.52F, 0.86F, 0.72F},
         .light = {0.20F, 2.12F, 0.74F, 0.96F},
         .finish = {0.92F, 2.9F, 0.66F, 0.82F},
+        .construction = {0.94F, 0.92F, 0.82F, 0.86F},
     };
     if (scene == NULL || portal_index >= scene->portal_count) {
         return params;
@@ -155,6 +182,7 @@ BackroomsPortalGpuParams backrooms_portal_scene_gpu_params(const BackroomsPortal
     const BackroomsPortal *portal = &scene->portals[portal_index];
     const BackroomsPortalRoom *target = &scene->rooms[portal->to_room];
     const BackroomsPortalMaterial *material = &scene->materials[portal->to_room];
+    const BackroomsPortalConstruction *construction = &scene->construction[portal->to_room];
     params.entry[0] = portal->wall_x;
     params.entry[1] = portal->center_z;
     params.entry[2] = portal->half_z;
@@ -183,5 +211,9 @@ BackroomsPortalGpuParams backrooms_portal_scene_gpu_params(const BackroomsPortal
     params.finish[1] = material->fixture_spacing;
     params.finish[2] = material->ceiling_panel_scale;
     params.finish[3] = material->shadow_spill_strength;
+    params.construction[0] = construction->jamb_depth;
+    params.construction[1] = construction->threshold_lip;
+    params.construction[2] = construction->conduit_strength;
+    params.construction[3] = construction->landmark_column_strength;
     return params;
 }

@@ -136,6 +136,7 @@ static const char *s_fs_src =
     "uniform vec4 u_portal_material;\n"
     "uniform vec4 u_portal_light;\n"
     "uniform vec4 u_portal_finish;\n"
+    "uniform vec4 u_portal_construction;\n"
     "uniform sampler2D u_wall_tex;\n"
     "uniform sampler2D u_ui_tex;\n"
     "\n"
@@ -233,6 +234,11 @@ static const char *s_fs_src =
     "    cove_trim *= u_portal_finish.x;\n"
     "    float floor_light_pool = (smat == 2 ? 1.0 : 0.0) * (1.0 - smoothstep(0.42, 1.70, abs(hp.z))) * (1.0 - smoothstep(0.62, 1.95, abs(fixture_local))) * u_portal_finish.w;\n"
     "    float floor_wall_shadow = (smat == 2 ? 1.0 : 0.0) * smoothstep(u_portal_shape.y * 0.58, u_portal_shape.y, abs(hp.z)) * u_portal_light.z;\n"
+    "    float front_return = (smat == 4 ? 1.0 : 0.0) * (1.0 - smoothstep(0.18, 0.82, hp.x)) * smoothstep(0.28, 0.54, hp.y) * (1.0 - smoothstep(u_portal_shape.z - 0.64, u_portal_shape.z - 0.28, hp.y)) * u_portal_construction.x;\n"
+    "    float threshold_lip = (smat == 2 ? 1.0 : 0.0) * (1.0 - smoothstep(0.28, 0.82, hp.x)) * (1.0 - smoothstep(u_portal_shape.y * 0.62, u_portal_shape.y * 0.96, abs(hp.z))) * u_portal_construction.y;\n"
+    "    float ceiling_conduit = (smat == 3 ? 1.0 : 0.0) * max(1.0 - smoothstep(0.018, 0.058, abs(abs(hp.z) - max(0.38, u_portal_light.x * 2.8))), 1.0 - smoothstep(0.020, 0.070, abs(hp.z))) * u_portal_construction.z;\n"
+    "    ceiling_conduit *= smoothstep(0.34, 0.74, hp.x) * (1.0 - smoothstep(u_portal_shape.x - 0.80, u_portal_shape.x - 0.28, hp.x));\n"
+    "    float landmark_column = (smat == 1 ? 1.0 : 0.0) * max(1.0 - smoothstep(0.055, 0.16, abs(abs(hp.z) - u_portal_shape.y * 0.44)), 1.0 - smoothstep(0.045, 0.14, abs(hp.z))) * smoothstep(0.36, 0.60, hp.y) * (1.0 - smoothstep(u_portal_shape.z - 0.42, u_portal_shape.z - 0.20, hp.y)) * u_portal_construction.w;\n"
     "    float nested_body = (smat == 1 ? 1.0 : 0.0) * (1.0 - smoothstep(1.12, 1.58, abs(hp.z))) * smoothstep(0.44, 0.62, hp.y) * (1.0 - smoothstep(1.82, 2.08, hp.y));\n"
     "    float nested_half = u_portal_style.y;\n"
     "    float nested_frame = (smat == 1 ? 1.0 : 0.0) * max(1.0 - smoothstep(0.035, 0.12, abs(abs(hp.z) - nested_half)), max(1.0 - smoothstep(0.035, 0.12, abs(hp.y - 0.50)), 1.0 - smoothstep(0.035, 0.12, abs(hp.y - 1.98))));\n"
@@ -262,10 +268,16 @@ static const char *s_fs_src =
     "    col = mix(col, vec3(0.030, 0.026, 0.018), fixture_housing * 0.86);\n"
     "    col = mix(col, col * 0.62, max(carpet_tile_x, carpet_tile_z) * 0.40);\n"
     "    col = mix(col, col * 0.50, floor_wall_shadow * 0.46);\n"
+    "    col = mix(col, vec3(0.095, 0.065, 0.030), front_return * 0.66);\n"
+    "    col = mix(col, vec3(0.18, 0.12, 0.060), threshold_lip * 0.56);\n"
+    "    col = mix(col, vec3(0.035, 0.031, 0.022), ceiling_conduit * 0.76);\n"
+    "    col = mix(col, vec3(0.11, 0.075, 0.036), landmark_column * 0.68);\n"
     "    col += vec3(0.20, 0.15, 0.07) * floor_wet;\n"
     "    col += vec3(1.00, 0.88, 0.46) * ceiling_strip * (0.42 + 0.12 * u_portal_light.y);\n"
     "    col += vec3(0.76, 0.58, 0.25) * wall_light_spill * 0.30;\n"
     "    col += vec3(0.36, 0.23, 0.09) * floor_light_pool * 0.34;\n"
+    "    col += vec3(0.34, 0.24, 0.10) * threshold_lip * 0.22;\n"
+    "    col += vec3(0.72, 0.55, 0.24) * landmark_column * 0.12;\n"
     "    col = mix(col, nested_col, nested_body * 0.92);\n"
     "    col = mix(col, vec3(0.016, 0.012, 0.006), nested_frame * 0.84);\n"
     "    col += vec3(0.95, 0.68, 0.30) * nested_frame * 0.28;\n"
@@ -1370,6 +1382,7 @@ static void draw_frame(float fb_w, float fb_h) {
     nt_gfx_set_uniform_vec4("u_portal_material", portal.material);
     nt_gfx_set_uniform_vec4("u_portal_light", portal.light);
     nt_gfx_set_uniform_vec4("u_portal_finish", portal.finish);
+    nt_gfx_set_uniform_vec4("u_portal_construction", portal.construction);
     nt_gfx_draw(0, 6);
 }
 
@@ -1438,6 +1451,10 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(portal, "fixture_spacing", (double)portal_params.finish[1]);
     cJSON_AddNumberToObject(portal, "ceiling_panel_scale", (double)portal_params.finish[2]);
     cJSON_AddNumberToObject(portal, "shadow_spill_strength", (double)portal_params.finish[3]);
+    cJSON_AddNumberToObject(portal, "jamb_depth", (double)portal_params.construction[0]);
+    cJSON_AddNumberToObject(portal, "threshold_lip", (double)portal_params.construction[1]);
+    cJSON_AddNumberToObject(portal, "conduit_strength", (double)portal_params.construction[2]);
+    cJSON_AddNumberToObject(portal, "landmark_column_strength", (double)portal_params.construction[3]);
     cJSON_AddItemToObject(root, "portal_render", portal);
     cJSON_AddStringToObject(root,
                             "objective",
