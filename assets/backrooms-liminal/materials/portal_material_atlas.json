@@ -1,0 +1,40 @@
+{
+  "schema": "backrooms_liminal.material_atlas",
+  "version": 1,
+  "atlas": "assets/backrooms-liminal/materials/portal_material_atlas.ppm",
+  "format": "ppm_p6_rgb8",
+  "width": 256,
+  "height": 256,
+  "regions": {
+    "wallpaper": [
+      0,
+      0,
+      128,
+      128
+    ],
+    "carpet": [
+      128,
+      0,
+      128,
+      128
+    ],
+    "ceiling_tile": [
+      0,
+      128,
+      128,
+      128
+    ],
+    "aged_trim": [
+      128,
+      128,
+      128,
+      128
+    ]
+  },
+  "runtime_usage": "src/clean_seed_main.c portal material texture",
+  "provenance": {
+    "kind": "procedural_source_asset",
+    "builder": "tools/assets/build_backrooms_liminal_materials.py",
+    "note": "Iteration source asset for the portal material contract; replace with generated or artist-authored material sources before final art."
+  }
+}

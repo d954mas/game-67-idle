@@ -16,6 +16,7 @@
 #endif
 
 #include <math.h>
+#include <ctype.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +27,7 @@
 #define UI_H 540
 #define WALL_TEX_W 256
 #define WALL_TEX_H 256
+#define BACKROOMS_PORTAL_MATERIAL_ATLAS_PATH "assets/backrooms-liminal/materials/portal_material_atlas.ppm"
 
 typedef struct UiBox {
     float x;
@@ -102,6 +104,7 @@ static uint32_t s_last_portal_overlay_vertices;
 static uint32_t s_last_portal_room_mesh_vertices;
 static uint32_t s_last_portal_shell_vertices;
 static uint32_t s_last_portal_blended_vertices;
+static bool s_material_atlas_loaded_from_asset;
 static const float s_route_choice_z[] = {24.0F, 16.2F, 8.3F};
 static const int s_route_choice_safe_side[] = {1, -1, 1};
 
@@ -1043,6 +1046,79 @@ static void generate_wall_texture(void) {
     }
 }
 
+static int ppm_next_byte(FILE *file) {
+    int ch = fgetc(file);
+    while (isspace(ch) || ch == '#') {
+        if (ch == '#') {
+            do {
+                ch = fgetc(file);
+            } while (ch != '\n' && ch != '\r' && ch != EOF);
+        }
+        ch = fgetc(file);
+    }
+    return ch;
+}
+
+static bool ppm_read_int(FILE *file, int *out_value) {
+    int ch = ppm_next_byte(file);
+    if (!isdigit(ch)) {
+        return false;
+    }
+    int value = 0;
+    while (isdigit(ch)) {
+        value = value * 10 + (ch - '0');
+        ch = fgetc(file);
+    }
+    *out_value = value;
+    return true;
+}
+
+static bool load_portal_material_atlas(const char *path) {
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) {
+        return false;
+    }
+    const int magic_p = fgetc(file);
+    const int magic_6 = fgetc(file);
+    int width = 0;
+    int height = 0;
+    int max_value = 0;
+    if (magic_p != 'P' || magic_6 != '6' || !ppm_read_int(file, &width) || !ppm_read_int(file, &height) || !ppm_read_int(file, &max_value) || width != WALL_TEX_W || height != WALL_TEX_H ||
+        max_value != 255) {
+        fclose(file);
+        return false;
+    }
+    const size_t rgb_size = (size_t)WALL_TEX_W * (size_t)WALL_TEX_H * 3U;
+    uint8_t *rgb = (uint8_t *)malloc(rgb_size);
+    if (rgb == NULL) {
+        fclose(file);
+        return false;
+    }
+    const size_t read_size = fread(rgb, 1, rgb_size, file);
+    fclose(file);
+    if (read_size != rgb_size) {
+        free(rgb);
+        return false;
+    }
+    for (int y = 0; y < WALL_TEX_H; ++y) {
+        for (int x = 0; x < WALL_TEX_W; ++x) {
+            const int dst = (y * WALL_TEX_W + x) * 4;
+            const int src = (y * WALL_TEX_W + x) * 3;
+            s_wall_pixels[dst + 0] = rgb[src + 0];
+            s_wall_pixels[dst + 1] = rgb[src + 1];
+            s_wall_pixels[dst + 2] = rgb[src + 2];
+            s_wall_pixels[dst + 3] = 255;
+        }
+    }
+    free(rgb);
+    return true;
+}
+
+static void load_or_generate_wall_texture(void) {
+    generate_wall_texture();
+    s_material_atlas_loaded_from_asset = load_portal_material_atlas(BACKROOMS_PORTAL_MATERIAL_ATLAS_PATH);
+}
+
 static void ui_clear(void) { memset(s_ui_pixels, 0, sizeof(s_ui_pixels)); }
 
 static void ui_px(int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
@@ -1657,7 +1733,7 @@ static void init_render_resources(void) {
         .label = "backrooms_portal_overlay_vbo",
     });
 
-    generate_wall_texture();
+    load_or_generate_wall_texture();
     s_wall_tex = nt_gfx_make_texture(&(nt_texture_desc_t){
         .width = WALL_TEX_W,
         .height = WALL_TEX_H,
@@ -2088,9 +2164,11 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(overlay, "blended_detail_vertex_count", (double)s_last_portal_blended_vertices);
     cJSON_AddNumberToObject(overlay, "vertex_capacity", (double)PORTAL_OVERLAY_MAX_VERTICES);
     cJSON_AddStringToObject(overlay, "path", "native_nt_gfx_solid_shell_plus_blended_detail_layer");
-    cJSON_AddStringToObject(overlay, "material_source", "runtime_backrooms_material_atlas_wall_carpet_ceiling_trim");
+    cJSON_AddStringToObject(overlay, "material_source", s_material_atlas_loaded_from_asset ? "asset_ppm_backrooms_material_atlas_wall_carpet_ceiling_trim" : "fallback_runtime_backrooms_material_atlas_wall_carpet_ceiling_trim");
     cJSON_AddNumberToObject(overlay, "material_atlas_width", (double)WALL_TEX_W);
     cJSON_AddNumberToObject(overlay, "material_atlas_height", (double)WALL_TEX_H);
+    cJSON_AddBoolToObject(overlay, "material_atlas_loaded_from_asset", s_material_atlas_loaded_from_asset);
+    cJSON_AddStringToObject(overlay, "material_asset_path", BACKROOMS_PORTAL_MATERIAL_ATLAS_PATH);
     cJSON_AddItemToObject(portal, "native_overlay", overlay);
     cJSON_AddItemToObject(root, "portal_render", portal);
     cJSON_AddStringToObject(root,

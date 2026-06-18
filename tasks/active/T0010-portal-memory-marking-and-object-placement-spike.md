@@ -6,7 +6,7 @@ epic: E001
 priority: P1
 tags: [prototype, backrooms-liminal, portal-rendering, marking, object-puzzle, native-first]
 created: 2026-06-18
-updated: 2026-06-18
+updated: 2026-06-19
 ---
 
 ## What
@@ -219,3 +219,21 @@ and reveal a real exit.
   quality/audience fit: this is a stronger runtime material/native-geometry
   bridge, but the game still needs real source assets and integrated
   render-target portal lighting before this task can close.
+- 2026-06-19: Asset-backed material atlas slice added
+  `tools/assets/build_backrooms_liminal_materials.py`,
+  `assets/backrooms-liminal/materials/portal_material_atlas.ppm`, and
+  `portal_material_atlas.json` so the portal material atlas now has a
+  game-local source/runtime asset boundary instead of living only in runtime C
+  generation. The runtime keeps the procedural C fallback, loads the PPM when
+  present, and `build/captures/backrooms_t0010_portal_memory_status.json`
+  reports `native_overlay.material_source =
+  asset_ppm_backrooms_material_atlas_wall_carpet_ceiling_trim`,
+  `material_atlas_loaded_from_asset = true`, and
+  `material_asset_path =
+  assets/backrooms-liminal/materials/portal_material_atlas.ppm`. Native build,
+  T0010 capture, smoke, readability, profiler scope, taskboard validation, and
+  strict product gate ran. Product gate remains FAIL for art quality/audience
+  fit: this proves the reusable material asset contract, but the source is
+  still procedural and must be replaced by generated or artist-authored
+  Backrooms materials, or by T0011 render-target portal lighting, before T0010
+  can close.

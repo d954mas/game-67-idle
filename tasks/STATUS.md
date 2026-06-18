@@ -17,8 +17,9 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
   texture-backed/material-kind-lit native `nt_gfx` room surfaces, reduced
   external ghost-frame artifacts, a stronger fixture-driven portal-room light
   model, a separate non-blended `nt_gfx` solid-shell pass, and a 256x256
-  runtime material atlas for wall/carpet/ceiling/trim sampling, but not yet
-  production-quality realistic Backrooms room construction.
+  project source material atlas for wall/carpet/ceiling/trim sampling that the
+  runtime loads from `assets/backrooms-liminal/materials/portal_material_atlas.ppm`,
+  but not yet production-quality realistic Backrooms room construction.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
   must not patch `external/neotolis-engine`; use public APIs or carry an
@@ -46,6 +47,7 @@ and taskboard validation.
 
 ```powershell
 node tools/game_context/iteration_context.mjs
+py -3.12 tools/assets/build_backrooms_liminal_materials.py
 cmake --build --preset native-debug --target game_seed
 py -3.12 tmp/capture_backrooms_t0010_portal_memory.py
 py -3.12 tools/devapi/smoke.py
@@ -58,38 +60,28 @@ node tools/taskboard/cli.mjs validate
 - `src/backrooms_portal_scene.*` defines the current game-local universal portal
   scene foundation: rooms, material/light/finish/authored-construction
   descriptors, portal descriptors, flags, validation, and GPU params.
-- `src/clean_seed_main.c` now composites the impossible room as an opaque
-  fullscreen portal cut, then draws a separate native `nt_gfx` room pass that
-  streams 744 world-space vertices: 660 texture-backed room
-  mesh/material-detail vertices for denser inner floor/wall/ceiling/light-spill
-  surfaces, grout seams, wall seams, back-wall strips, ceiling grid, and shadow
-  bands. The first 294 solid-shell vertices for floor panels, side-wall panels,
-  back-wall panels, ceiling panels, soffit, center-rib surfaces, a nested
-  back-wall frame, and fixture/light-box surfaces are drawn through a
-  non-blended pipeline; the remaining 450 vertices draw blended seams, light
-  spill, aperture occlusion, softened jamb/threshold hints, inner fixture,
-  conduit, and landmark column from portal scene params. The portal overlay
-  samples a runtime 256x256 wall/carpet/ceiling/trim material atlas rather than
-  using one wallpaper noise source for every surface.
-  The fullscreen portal room now uses per-surface normals, direct/bounce
-  fluorescent lighting, side/back occlusion, fixture cast shadow, and wet-floor
-  specular response. The overlay shader receives material kind and world
-  position to apply center light spill, side shadow falloff, seam darkening,
-  depth falloff, and softer occluder/contact-shadow treatment.
+- `src/clean_seed_main.c` composites the impossible room as an opaque fullscreen
+  portal cut, then draws a separate native `nt_gfx` room pass. The current
+  status JSON proves 744 portal overlay vertices: 294 non-blended solid-shell
+  vertices, 450 blended detail vertices, material-kind shading, per-surface
+  portal lighting, nested back-wall frame/fixture geometry, and copied mark
+  feedback.
+- `tools/assets/build_backrooms_liminal_materials.py` builds the current
+  Backrooms material source asset atomically into
+  `assets/backrooms-liminal/materials/portal_material_atlas.ppm` plus
+  `portal_material_atlas.json`. This is an iteration source asset with explicit
+  `procedural_source_asset` provenance, not final generated/artist material art.
 - `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md` records
   the engine-facing render-target API gap with evidence from `nt_gfx`.
 - `build/captures/backrooms_t0010_portal_memory_status.json` proves mark
   placement, locked-door rejection, handle pickup, handle fitting, exit reveal,
   escape, and active `portal_render` material/light/finish/construction params
-  including trim, fixture spacing, ceiling panel scale, shadow spill, jamb
-  depth, threshold lip, conduit, landmark columns,
-  `native_overlay.last_vertex_count = 744`,
-  `native_overlay.room_mesh_vertex_count = 660`,
-  `native_overlay.solid_shell_vertex_count = 294`,
-  `native_overlay.solid_pass_vertex_count = 294`,
-  `native_overlay.blended_detail_vertex_count = 450`, and
+  including material asset evidence:
   `native_overlay.material_source =
-  runtime_backrooms_material_atlas_wall_carpet_ceiling_trim`.
+  asset_ppm_backrooms_material_atlas_wall_carpet_ceiling_trim`,
+  `native_overlay.material_atlas_loaded_from_asset = true`, and
+  `native_overlay.material_asset_path =
+  assets/backrooms-liminal/materials/portal_material_atlas.ppm`.
 - `build/captures/backrooms_t0010_impossible_geometry.png` is the latest native
   proof screenshot for the data-driven impossible room.
 - `build/captures/backrooms_t0010_impossible_geometry_uizoom.png` is the latest
@@ -100,10 +92,10 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Turn the current runtime material-atlas proof into real source/runtime
-   material assets, or unblock T0011 render-target portal lighting; revisit the
-   product gate for art quality and audience fit after the room construction
-   itself is no longer a hybrid proxy.
+1. Replace the current procedural PPM source material atlas with generated or
+   artist-authored Backrooms material source assets, or unblock T0011
+   render-target portal lighting; revisit the product gate for art quality and
+   audience fit after the room construction itself is no longer a hybrid proxy.
 2. Avoid more one-pass shader or shell decoration unless it directly proves the
    future mesh/material/render-target contract.
 3. Keep content expansion frozen while the T0010 product gate remains red,
