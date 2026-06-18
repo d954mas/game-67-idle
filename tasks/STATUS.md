@@ -14,9 +14,10 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 - T0010 product gate is still red: the portal room now has data-driven
   geometry, material, light, finish, authored construction descriptors, a
   fully opaque fullscreen portal-room composite inside the aperture, denser
-  texture-backed/material-kind-lit native `nt_gfx` room surfaces, and reduced
-  external ghost-frame artifacts, but not yet production-quality realistic
-  Backrooms room construction.
+  texture-backed/material-kind-lit native `nt_gfx` room surfaces, reduced
+  external ghost-frame artifacts, and a stronger fixture-driven portal-room
+  light model, but not yet production-quality realistic Backrooms room
+  construction.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
   must not patch `external/neotolis-engine`; use public APIs or carry an
@@ -64,9 +65,11 @@ node tools/taskboard/cli.mjs validate
   surfaces, grout seams, wall seams, back-wall strips, ceiling grid, and shadow
   bands plus a separate aperture contact-shadow layer, softened jamb/threshold
   hints, inner fixture, conduit, and landmark column from portal scene params.
-  The overlay shader receives material kind and world position to apply center
-  light spill, side shadow falloff, seam darkening, depth falloff, and softer
-  occluder/contact-shadow treatment.
+  The fullscreen portal room now uses per-surface normals, direct/bounce
+  fluorescent lighting, side/back occlusion, fixture cast shadow, and wet-floor
+  specular response. The overlay shader receives material kind and world
+  position to apply center light spill, side shadow falloff, seam darkening,
+  depth falloff, and softer occluder/contact-shadow treatment.
 - `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md` records
   the engine-facing render-target API gap with evidence from `nt_gfx`.
 - `build/captures/backrooms_t0010_portal_memory_status.json` proves mark
@@ -86,10 +89,10 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Use the cleaner opaque aperture as the stopgap, then move to opaque authored
-   3D interior geometry or T0011 render-target portal rendering; revisit the
-   product gate for art quality and audience fit after the room lighting is
-   physically more convincing.
+1. Use the cleaner opaque aperture plus physical-lighting pass as the stopgap,
+   then move to real opaque authored 3D interior geometry or T0011 render-target
+   portal rendering; revisit the product gate for art quality and audience fit
+   after the room construction itself is no longer a one-pass proxy.
 2. Add stronger production texture/light evidence before expanding content;
    more one-pass shader decoration is now a low-value path unless it directly
    proves the future mesh/material contract.

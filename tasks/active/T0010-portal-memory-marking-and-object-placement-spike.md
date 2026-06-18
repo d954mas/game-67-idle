@@ -163,3 +163,11 @@ and reveal a real exit.
   gate ran. Product gate remains FAIL for art quality/audience fit: the cleaner
   aperture is a stopgap, not a replacement for opaque authored interior
   geometry or T0011 render-target portal lighting.
+- 2026-06-19: Physical-lighting pass added per-surface normals inside the
+  fullscreen portal room, direct/bounce fluorescent lighting, side/back
+  occlusion, fixture cast shadow, and wet-floor specular response. Native
+  build, T0010 capture, smoke, readability, taskboard validation, and strict
+  product gate ran. Product gate remains FAIL for art quality/audience fit: the
+  room is scarier and less flat, but still needs real opaque authored interior
+  geometry or T0011 render-target portal lighting instead of more cosmetic
+  overlay decoration.

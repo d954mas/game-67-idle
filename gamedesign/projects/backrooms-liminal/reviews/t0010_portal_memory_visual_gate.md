@@ -4,7 +4,7 @@ project: backrooms-liminal
 task: T0010
 surface: desktop
 verdict: fail
-timestamp: 2026-06-18T19:55:10.513Z
+timestamp: 2026-06-18T20:02:39.320Z
 ---
 
 # Product Read Gate - backrooms-liminal / desktop
@@ -15,11 +15,11 @@ Screenshot: `build/captures/backrooms_t0010_impossible_geometry.png`
 
 ## Player Read
 
-- Where am I? Yellow Backrooms corridor facing a deeper non-Euclidean room aperture with a cleaner opaque-looking portal cut, denser native room surfaces, reduced ghost frame artifacts, floor/wall/ceiling panels, fluorescent spill, copied mark, conduit, threshold, and landmark column
+- Where am I? Yellow Backrooms corridor facing a deeper non-Euclidean room aperture with a cleaner opaque portal cut, stronger fixture-driven light, darker side/back contact shadows, wet floor response, denser native room surfaces, reduced ghost frame artifacts, copied mark, conduit, threshold, and landmark column
 - What should I do now? Use the copied mark as evidence, find the missing handle, and test the locked door
-- What changed after input? The mark appears inside the impossible room; the runtime now uses a fully opaque fullscreen portal-room composite inside the cut while keeping the 450-vertex native overlay as weaker authored surface/detail geometry
+- What changed after input? The mark appears inside the impossible room; the runtime now uses an opaque fullscreen portal-room composite with per-surface normals, direct/bounce fluorescent lighting, side/back occlusion, fixture cast shadow, wet floor specular, and the 450-vertex native overlay as authored detail geometry
 - What is the reward / why continue? The player learns the space can be tested and later stabilized by fitting the found handle
-- Why does this look like a game? Native 3D liminal horror view with a larger-inside portal room, stained wallpaper, carpet seams, ceiling grid, shadowed aperture, minimal journal UI, cleaner portal rim, and texture-backed material geometry
+- Why does this look like a game? Native 3D liminal horror view with a larger-inside portal room, stained wallpaper, carpet seams, ceiling grid, shadowed aperture, minimal journal UI, cleaner portal rim, and stronger texture-backed material lighting
 
 ## State Coverage
 
@@ -51,9 +51,9 @@ Not covered / debt:
 
 ## Review
 
-Problem: The portal cut is cleaner and more opaque, but the visual bar still needs real integrated 3D surface lighting/render-target depth
+Problem: The portal lighting/material response is stronger, but the visual bar still needs real authored 3D geometry or render-target depth instead of a one-pass proxy
 
-Next: Use this cleaner aperture as the stopgap, then move to opaque authored interior geometry or T0011 render-target rendering; focus next on physically convincing light/material response instead of more blended frame decoration
+Next: Keep this physical-lighting pass as the stopgap and move next to real opaque interior geometry or T0011 render-target portal lighting; avoid more cosmetic overlay decoration
 
 ## Visual Critique
 
@@ -69,5 +69,5 @@ Scores:
 - audience_fit: 3
 
 Issues:
-- major / art_quality: The opaque portal cut and weaker external frame reduce the shader-overlay artifact, but the room still lacks true physically integrated authored 3D/render-target lighting
-- major / audience_fit: The non-Euclidean hook reads cleaner, but the screenshot still needs a more distinctive high-quality horror look to stand out among many Backrooms games
+- major / art_quality: The per-surface light model and darker contact shadows improve depth, but the room still lacks truly authored opaque 3D geometry/render-target lighting
+- major / audience_fit: The portal is scarier and cleaner, but the image still needs a more distinctive high-quality horror look to stand out among many Backrooms games
