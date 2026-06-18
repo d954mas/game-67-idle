@@ -1297,6 +1297,39 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
     portal_overlay_emit_floor_quad(count, room_x0 + 0.25F, room_x1 - 0.25F, ceiling_y - 0.012F, inner_z0 + 0.07F, inner_z1 - 0.07F, 0.145F, 0.128F, 0.072F, 0.42F + light * 0.10F);
     portal_overlay_emit_yz_quad(count, room_x0 + 0.70F, panel_y1 - 0.16F, ceiling_y + 0.01F, inner_z0 + 0.08F, inner_z1 - 0.08F, 0.048F, 0.039F, 0.021F, 0.44F);
     portal_overlay_emit_yz_quad(count, room_x1 - 0.42F, panel_y0 - 0.02F, panel_y1 + 0.08F, center_z - 0.12F, center_z + 0.12F, 0.032F, 0.026F, 0.015F, 0.55F);
+    for (int ix = 0; ix < floor_cols; ++ix) {
+        const float fx0 = room_x0 + (room_x1 - room_x0) * ((float)ix / (float)floor_cols);
+        const float fx1 = room_x0 + (room_x1 - room_x0) * ((float)(ix + 1) / (float)floor_cols) - 0.018F;
+        for (int iz = 0; iz < floor_rows; ++iz) {
+            const float fz0 = inner_z0 + (inner_z1 - inner_z0) * ((float)iz / (float)floor_rows);
+            const float fz1 = inner_z0 + (inner_z1 - inner_z0) * ((float)(iz + 1) / (float)floor_rows) - 0.014F;
+            const float v = portal_panel_variation(ix, iz);
+            const float base = 0.058F + v * 0.026F;
+            portal_overlay_emit_floor_quad(count, fx0, fx1, min_y + 0.008F, fz0, fz1, base * 0.92F, base * 0.78F, base * 0.48F, 0.62F + wet * 0.12F);
+        }
+    }
+    for (int ix = 0; ix < 4; ++ix) {
+        const float sx0 = room_x0 + (room_x1 - room_x0) * ((float)ix / 4.0F);
+        const float sx1 = room_x0 + (room_x1 - room_x0) * ((float)(ix + 1) / 4.0F) - 0.020F;
+        const float v = portal_panel_variation(ix, 7);
+        const float r = 0.134F + v * 0.032F;
+        const float g = 0.119F + v * 0.028F;
+        const float b = 0.064F + v * 0.018F;
+        portal_overlay_emit_xy_quad(count, sx0, sx1, panel_y0, panel_y1, inner_z0 - 0.040F, r * 0.84F, g * 0.78F, b * 0.70F, 0.68F + grime * 0.10F);
+        portal_overlay_emit_xy_quad(count, sx0, sx1, panel_y0, panel_y1, inner_z1 + 0.040F, r * 0.76F, g * 0.71F, b * 0.64F, 0.70F + grime * 0.10F);
+    }
+    const float solid_back_x = room_x1 + 0.20F;
+    for (int iz = 0; iz < 3; ++iz) {
+        const float bz0 = inner_z0 + (inner_z1 - inner_z0) * ((float)iz / 3.0F);
+        const float bz1 = inner_z0 + (inner_z1 - inner_z0) * ((float)(iz + 1) / 3.0F) - 0.020F;
+        const float v = portal_panel_variation(11, iz);
+        portal_overlay_emit_yz_quad(count, solid_back_x, panel_y0, panel_y1, bz0, bz1, 0.108F + v * 0.030F, 0.096F + v * 0.024F, 0.052F + v * 0.014F, 0.72F + grime * 0.12F);
+    }
+    for (int ix = 0; ix < 4; ++ix) {
+        const float cx0 = room_x0 + (room_x1 - room_x0) * ((float)ix / 4.0F);
+        const float cx1 = room_x0 + (room_x1 - room_x0) * ((float)(ix + 1) / 4.0F) - 0.026F;
+        portal_overlay_emit_floor_quad(count, cx0, cx1, ceiling_y - 0.015F, inner_z0, inner_z1, 0.150F, 0.132F, 0.072F, 0.58F + light * 0.10F);
+    }
     s_last_portal_shell_vertices = *count - shell_start;
 
     s_portal_overlay_emit_kind = 1.0F;

@@ -193,3 +193,14 @@ and reveal a real exit.
   this reduces the transparent-overlay feel, but the portal is still a hybrid
   fullscreen composite plus native surfaces rather than a fully native opaque
   interior or render-target portal.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Keep promoting the portal interior toward fully native opaque geometry/materials or unblock T0011 render-target portal lighting; do not expand gameplay content while art_quality and audience_fit remain 3
+- 2026-06-19: Opaque surface promotion moved the main floor, side-wall,
+  back-wall, and ceiling panel quads into the non-blended native pass. The
+  T0010 scenario now reports `native_overlay.last_vertex_count = 702`,
+  `native_overlay.room_mesh_vertex_count = 618`,
+  `native_overlay.solid_pass_vertex_count = 252`, and
+  `native_overlay.blended_detail_vertex_count = 450`. Native build, T0010
+  capture, smoke, readability, profiler scope, taskboard validation, and strict
+  product gate ran. Product gate remains FAIL for art quality/audience fit: the
+  portal interior is more physically native, but still needs production material
+  assets and fully integrated lighting/depth or T0011 render-target support.

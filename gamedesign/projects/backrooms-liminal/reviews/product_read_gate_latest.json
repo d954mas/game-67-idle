@@ -5,14 +5,14 @@
   "task": "T0010",
   "surface": "desktop",
   "verdict": "fail",
-  "timestamp": "2026-06-18T20:16:38.282Z",
+  "timestamp": "2026-06-18T20:22:10.354Z",
   "screenshot": "build/captures/backrooms_t0010_impossible_geometry.png",
   "answers": {
-    "where": "Yellow Backrooms corridor facing a deeper non-Euclidean room aperture with a native opaque solid-shell pass for interior floor, side walls, back wall, ceiling, soffit, darker side returns, copied mark, conduit, threshold, and landmark column",
+    "where": "Yellow Backrooms corridor facing a deeper non-Euclidean room aperture where more interior floor, side wall, back wall, ceiling, soffit, copied mark, conduit, threshold, and landmark surfaces are now native opaque geometry",
     "action": "Use the copied mark as evidence, find the missing handle, and test the locked door",
-    "response": "The mark appears inside the impossible room; the runtime now draws the portal room with a separate non-blended nt_gfx solid pass for 42 shell vertices, then draws 450 blended detail vertices for seams, light spill, trim, conduit, and aperture occlusion",
+    "response": "The mark appears inside the impossible room; the runtime now draws 252 solid-pass native nt_gfx vertices for core portal room panels before 450 blended detail vertices add seams, light spill, trim, conduit, and aperture occlusion",
     "reward": "The player learns the space can be tested and later stabilized by fitting the found handle",
-    "game_look": "Native 3D liminal horror view with a larger-inside portal room, stained wallpaper, carpet seams, ceiling grid, shadowed aperture, minimal journal UI, and a denser opaque native interior layer"
+    "game_look": "Native 3D liminal horror view with a larger-inside portal room, stained wallpaper, carpet seams, ceiling grid, shadowed aperture, minimal journal UI, and a larger opaque native interior layer"
   },
   "visual_critique": {
     "strict": true,
@@ -37,12 +37,12 @@
       {
         "severity": "major",
         "axis": "art_quality",
-        "text": "The separate solid pass reduces the transparent-overlay feel, but the room still needs true integrated opaque interior geometry with depth/lighting rather than a fullscreen composite plus partial native surfaces"
+        "text": "Promoting the main room panels into the solid native pass improves physicality, but the visual still lacks production-grade material depth and true integrated portal lighting"
       },
       {
         "severity": "major",
         "axis": "audience_fit",
-        "text": "The impossible-room hook is clearer and more physical, but the image still needs a more distinctive high-quality horror look to stand out among many Backrooms games"
+        "text": "The impossible-room hook is more physical, but the screenshot still needs a more distinctive high-quality horror look to stand out among many Backrooms games"
       }
     ]
   },
@@ -104,8 +104,8 @@
       }
     ]
   },
-  "problem": "The separate opaque native pass improves physicality, but the visual bar still needs either a fully native opaque portal interior or T0011 render-target depth/lighting instead of a hybrid composite",
-  "next": "Promote more portal room surfaces from fullscreen composite into the native opaque pass, or unblock T0011 render-target portal lighting; do not expand gameplay content while art_quality and audience_fit remain 3",
+  "problem": "The native opaque surface coverage is much stronger, but the visual bar still needs production material assets and either fully native interior lighting/depth or T0011 render-target portal lighting",
+  "next": "Keep promoting the portal interior toward fully native opaque geometry/materials or unblock T0011 render-target portal lighting; do not expand gameplay content while art_quality and audience_fit remain 3",
   "markdown": "gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md",
   "json": "build/captures/backrooms_t0010_portal_memory_visual_gate.json"
 }

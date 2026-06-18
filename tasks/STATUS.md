@@ -26,7 +26,7 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 ## Non-blocking Debt
 
 - Current profiling scope is usable for normal review:
-  `T0010/opaque-native-portal-pass`.
+  `T0010/opaque-surface-promotion`.
 - T0001-T0008 are in review with historical evidence. Do not expand them unless
   the lead asks; current actionable work is T0009/T0010 plus the T0011 engine
   issue.
@@ -59,12 +59,12 @@ node tools/taskboard/cli.mjs validate
   descriptors, portal descriptors, flags, validation, and GPU params.
 - `src/clean_seed_main.c` now composites the impossible room as an opaque
   fullscreen portal cut, then draws a separate native `nt_gfx` room pass that
-  streams 492 world-space vertices: 408 texture-backed room
+  streams 702 world-space vertices: 618 texture-backed room
   mesh/material-detail vertices for denser inner floor/wall/ceiling/light-spill
   surfaces, grout seams, wall seams, back-wall strips, ceiling grid, and shadow
-  bands. The first 42 solid-shell vertices for floor, side walls, back wall,
-  ceiling, soffit, and center-rib surfaces are drawn through a non-blended
-  pipeline; the remaining 450 vertices draw blended seams, light spill,
+  bands. The first 252 solid-shell vertices for floor panels, side-wall panels,
+  back-wall panels, ceiling panels, soffit, and center-rib surfaces are drawn
+  through a non-blended pipeline; the remaining 450 vertices draw blended seams, light spill,
   aperture occlusion, softened jamb/threshold hints, inner fixture, conduit,
   and landmark column from portal scene params.
   The fullscreen portal room now uses per-surface normals, direct/bounce
@@ -79,10 +79,10 @@ node tools/taskboard/cli.mjs validate
   escape, and active `portal_render` material/light/finish/construction params
   including trim, fixture spacing, ceiling panel scale, shadow spill, jamb
   depth, threshold lip, conduit, landmark columns,
-  `native_overlay.last_vertex_count = 492`,
-  `native_overlay.room_mesh_vertex_count = 408`, and
-  `native_overlay.solid_shell_vertex_count = 42`,
-  `native_overlay.solid_pass_vertex_count = 42`, and
+  `native_overlay.last_vertex_count = 702`,
+  `native_overlay.room_mesh_vertex_count = 618`, and
+  `native_overlay.solid_shell_vertex_count = 252`,
+  `native_overlay.solid_pass_vertex_count = 252`, and
   `native_overlay.blended_detail_vertex_count = 450`.
 - `build/captures/backrooms_t0010_impossible_geometry.png` is the latest native
   proof screenshot for the data-driven impossible room.
