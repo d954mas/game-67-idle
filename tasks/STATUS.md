@@ -2,24 +2,27 @@
 
 ## Current Goal
 
-Build the `Backrooms Liminal` (backrooms-liminal) native-first prototype:
-one first-person 3D corridor, fuse pickup, return-to-exit, fear/battery pressure,
-and strict visual/player-read proof before any broader maze/content expansion.
+Review and iterate the `Backrooms Liminal` (backrooms-liminal) native-first
+prototype: the first-person 3D corridor slice now exists with fuse pickup,
+return-to-exit, fear/battery pressure, and strict visual/player-read proof.
 
 ## Blocking Work
 
-- No runtime implementation blocker is known yet; the next blocker should come
-  from the first GDD/reference/fake-shot pass.
+- No runtime implementation blocker is known. The first slice is in task review;
+  expansion should wait for lead/playtest feedback or a new narrow task.
 
 ## Non-blocking Debt
 
-- None recorded for this prototype yet.
+- AI profile guard is red because the current scope has unresolved failed
+  profile records. Do not use this session profile as review evidence until it
+  is cleaned up or explicitly accepted as advisory-only.
 
 ## Current Gate
 
 First playable native gate for backrooms-liminal: `data/core_loop.json`,
 `reviews/first_slice_visual_gate.md`, native build, DevAPI smoke, first-screen
-screenshot, after-fuse screenshot, readability zoom, and strict product gate.
+screenshot, after-fuse screenshot, readability zoom, strict product gate, and
+slice hygiene evidence.
 
 ## Required Validation
 
@@ -38,10 +41,21 @@ node tools/taskboard/cli.mjs validate
   runtime work; it names the optional visual critic packet command.
 - `gamedesign/projects/backrooms-liminal/visual/live_state_acceptance_matrix.json`
   is the machine-readable state coverage matrix for product gates.
+- `build/captures/backrooms_first_screen.png` shows the first player-facing
+  corridor/HUD state.
+- `build/captures/backrooms_after_fuse.png` shows fuse feedback, powered exit,
+  and the silhouette stress state.
+- `build/captures/backrooms_first_screen_uizoom.png` is the readability montage.
+- `gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json`
+  is a strict desktop product gate PASS for the first slice.
+- `build/captures/backrooms_slice_hygiene.md` is WARN only because profiler
+  review evidence is advisory/unusable, not because gameplay validation failed.
 
 ## Next Priorities
 
-1. Replace the clean seed screen with the scoped Backrooms 3D runtime.
-2. Update DevAPI smoke per-game expectations for `backrooms.*` UI/state.
-3. Build native debug and run smoke/capture.
-4. Run readability/product gates and freeze expansion if the screenshot fails.
+1. Let the lead/playtest judge whether the first corridor is scary and
+   interesting enough for the next slice.
+2. If accepted, create a new narrow task for route uncertainty/maze variation,
+   enemy pressure, or audio/lighting polish.
+3. If rejected visually, freeze content expansion and improve the first-screen
+   mood/readability before adding routes or systems.

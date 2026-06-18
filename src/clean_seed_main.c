@@ -5,18 +5,24 @@
 #include "game_state.h"
 #include "graphics/nt_gfx.h"
 #include "input/nt_input.h"
-#include "renderers/nt_shape_renderer.h"
 #include "window/nt_window.h"
 
 #ifdef NT_PLATFORM_WEB
 #include "platform/web/nt_platform_web.h"
+#else
+#include <glad/gl.h>
 #endif
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define CLEAN_SEED_DEVAPI_PORT_DEFAULT 9123
+#define BACKROOMS_DEVAPI_PORT_DEFAULT 9123
+#define UI_W 960
+#define UI_H 540
+#define WALL_TEX_W 128
+#define WALL_TEX_H 128
 
 typedef struct UiBox {
     float x;
@@ -25,54 +31,215 @@ typedef struct UiBox {
     float h;
 } UiBox;
 
+typedef struct BackroomsState {
+    float x;
+    float z;
+    float yaw;
+    float fear;
+    float battery;
+    float message_timer;
+    float caught_timer;
+    bool flashlight_on;
+    bool fuse_found;
+    bool won;
+    bool caught;
+    char message[64];
+} BackroomsState;
+
 static bool s_devapi_enabled;
-static uint16_t s_devapi_port = CLEAN_SEED_DEVAPI_PORT_DEFAULT;
-static int s_window_width = 960;
-static int s_window_height = 540;
-static UiBox s_cycle_box;
+static uint16_t s_devapi_port = BACKROOMS_DEVAPI_PORT_DEFAULT;
+static int s_window_width = 1280;
+static int s_window_height = 720;
 
-static void ortho(float left, float right, float bottom, float top, float near_z, float far_z, float out[16]) {
-    memset(out, 0, sizeof(float) * 16);
-    out[0] = 2.0F / (right - left);
-    out[5] = 2.0F / (top - bottom);
-    out[10] = -2.0F / (far_z - near_z);
-    out[12] = -(right + left) / (right - left);
-    out[13] = -(top + bottom) / (top - bottom);
-    out[14] = -(far_z + near_z) / (far_z - near_z);
-    out[15] = 1.0F;
-}
+static BackroomsState s_game;
+static nt_shader_t s_vs;
+static nt_shader_t s_fs;
+static nt_pipeline_t s_pipeline;
+static nt_buffer_t s_quad_vbo;
+static nt_texture_t s_wall_tex;
+static nt_texture_t s_ui_tex;
+static uint8_t s_wall_pixels[WALL_TEX_W * WALL_TEX_H * 4];
+static uint8_t s_ui_pixels[UI_W * UI_H * 4];
 
-static bool contains(UiBox box, float x, float y) {
-    return x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h;
-}
+static const char *s_vs_src = "precision mediump float;\n"
+                              "layout(location = 0) in vec2 a_position;\n"
+                              "out vec2 v_uv;\n"
+                              "void main() {\n"
+                              "    v_uv = a_position * 0.5 + 0.5;\n"
+                              "    gl_Position = vec4(a_position, 0.0, 1.0);\n"
+                              "}\n";
 
-static void set_text(char *target, size_t cap, const char *text) {
-    if (cap == 0) {
-        return;
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Woverlength-strings"
+#endif
+static const char *s_fs_src =
+    "precision mediump float;\n"
+    "in vec2 v_uv;\n"
+    "out vec4 frag_color;\n"
+    "uniform vec4 u_resolution_time;\n"
+    "uniform vec4 u_player;\n"
+    "uniform vec4 u_state;\n"
+    "uniform sampler2D u_wall_tex;\n"
+    "uniform sampler2D u_ui_tex;\n"
+    "\n"
+    "float hash12(vec2 p) {\n"
+    "    vec3 p3 = fract(vec3(p.xyx) * 0.1031);\n"
+    "    p3 += dot(p3, p3.yzx + 33.33);\n"
+    "    return fract((p3.x + p3.y) * p3.z);\n"
+    "}\n"
+    "\n"
+    "vec3 tonemap(vec3 c) {\n"
+    "    c = max(c, vec3(0.0));\n"
+    "    c = c / (vec3(1.0) + c);\n"
+    "    return pow(c, vec3(0.88));\n"
+    "}\n"
+    "\n"
+    "float sphere_hit(vec3 ro, vec3 rd, vec3 c, float r) {\n"
+    "    vec3 oc = ro - c;\n"
+    "    float b = dot(oc, rd);\n"
+    "    float h = b * b - dot(oc, oc) + r * r;\n"
+    "    if (h < 0.0) return 1e20;\n"
+    "    float t = -b - sqrt(h);\n"
+    "    return t > 0.0 ? t : 1e20;\n"
+    "}\n"
+    "\n"
+    "float box2(vec2 p, vec2 half_size) {\n"
+    "    vec2 d = abs(p) - half_size;\n"
+    "    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);\n"
+    "}\n"
+    "\n"
+    "void main() {\n"
+    "    vec2 frag = v_uv * u_resolution_time.xy;\n"
+    "    vec2 p = (frag - 0.5 * u_resolution_time.xy) / max(u_resolution_time.y, 1.0);\n"
+    "    float ttime = u_resolution_time.z;\n"
+    "    float yaw = u_player.z;\n"
+    "    vec2 fwd = vec2(sin(yaw), cos(yaw));\n"
+    "    vec2 right = vec2(cos(yaw), -sin(yaw));\n"
+    "    vec3 ro = vec3(u_player.x, 1.05 + 0.025 * sin(ttime * 7.0 + u_player.y), u_player.y);\n"
+    "    vec3 rd = normalize(vec3(right.x * p.x * 1.55 + fwd.x, p.y * 0.86 - 0.04, right.y * p.x * 1.55 + fwd.y));\n"
+    "\n"
+    "    float best = 1e20;\n"
+    "    vec3 normal = vec3(0.0, 1.0, 0.0);\n"
+    "    int mat = 0;\n"
+    "\n"
+    "    float tfloor = (0.0 - ro.y) / rd.y;\n"
+    "    if (tfloor > 0.0) { best = tfloor; normal = vec3(0.0, 1.0, 0.0); mat = 1; }\n"
+    "    float tceil = (2.55 - ro.y) / rd.y;\n"
+    "    if (tceil > 0.0 && tceil < best) { best = tceil; normal = vec3(0.0, -1.0, 0.0); mat = 2; }\n"
+    "    float twall_l = (-1.36 - ro.x) / rd.x;\n"
+    "    vec3 pwall_l = ro + rd * twall_l;\n"
+    "    if (twall_l > 0.0 && pwall_l.y >= 0.0 && pwall_l.y <= 2.55 && twall_l < best) { best = twall_l; normal = vec3(1.0, 0.0, 0.0); mat = 3; }\n"
+    "    float twall_r = (1.36 - ro.x) / rd.x;\n"
+    "    vec3 pwall_r = ro + rd * twall_r;\n"
+    "    if (twall_r > 0.0 && pwall_r.y >= 0.0 && pwall_r.y <= 2.55 && twall_r < best) { best = twall_r; normal = vec3(-1.0, 0.0, 0.0); mat = 3; }\n"
+    "    float texit = (0.12 - ro.z) / rd.z;\n"
+    "    vec3 pexit = ro + rd * texit;\n"
+    "    if (texit > 0.0 && abs(pexit.x) < 0.68 && pexit.y > 0.0 && pexit.y < 2.15 && texit < best) { best = texit; normal = vec3(0.0, 0.0, 1.0); mat = 4; }\n"
+    "    float tfar = (34.0 - ro.z) / rd.z;\n"
+    "    vec3 pfar = ro + rd * tfar;\n"
+    "    if (tfar > 0.0 && abs(pfar.x) < 1.5 && pfar.y >= 0.0 && pfar.y <= 2.55 && tfar < best) { best = tfar; normal = vec3(0.0, 0.0, -1.0); mat = 3; }\n"
+    "\n"
+    "    float tfuse = sphere_hit(ro, rd, vec3(0.36, 1.05, 29.4), 0.24);\n"
+    "    if (u_state.x < 0.5 && tfuse < best) { best = tfuse; normal = normalize(ro + rd * tfuse - vec3(0.36, 1.05, 29.4)); mat = 5; }\n"
+    "\n"
+    "    float entity_z = max(u_player.y - 7.2, 3.4);\n"
+    "    float tent = (entity_z - ro.z) / rd.z;\n"
+    "    vec3 pent = ro + rd * tent;\n"
+    "    if (u_state.x > 0.5 && tent > 0.0 && abs(pent.x - 0.24 * sin(ttime * 1.7)) < 0.32 && pent.y > 0.12 && pent.y < 1.95 && tent < best) {\n"
+    "        best = tent; normal = vec3(0.0, 0.0, 1.0); mat = 6;\n"
+    "    }\n"
+    "\n"
+    "    vec3 hit = ro + rd * best;\n"
+    "    vec3 albedo = vec3(0.77, 0.68, 0.34);\n"
+    "    vec2 tuv = hit.xz * 0.33;\n"
+    "    if (mat == 1) { albedo = vec3(0.34, 0.25, 0.14) * (0.75 + texture(u_wall_tex, hit.xz * 0.19).r * 0.35); }\n"
+    "    if (mat == 2) { albedo = vec3(0.42, 0.40, 0.33); tuv = hit.xz * 0.42; }\n"
+    "    if (mat == 3) { albedo = texture(u_wall_tex, vec2(hit.z * 0.18, hit.y * 0.55)).rgb; }\n"
+    "    if (mat == 4) { albedo = mix(vec3(0.18, 0.12, 0.06), vec3(1.1, 0.84, 0.28), u_state.x); }\n"
+    "    if (mat == 5) { albedo = vec3(0.15, 1.25, 0.72); }\n"
+    "    if (mat == 6) { albedo = vec3(0.004, 0.006, 0.008); }\n"
+    "\n"
+    "    float fixture_z = floor((hit.z + 2.6) / 5.2) * 5.2;\n"
+    "    float flicker = 0.76 + 0.24 * step(0.18, hash12(vec2(floor(ttime * 13.0), fixture_z)));\n"
+    "    float light_dist = length(vec3(hit.x, hit.y - 2.42, hit.z - fixture_z));\n"
+    "    float ceiling_light = 1.8 / (1.0 + light_dist * light_dist * 0.9) * flicker;\n"
+    "    float exit_light = u_state.x * 3.2 / (1.0 + length(hit - vec3(0.0, 1.25, 0.28)) * 1.7);\n"
+    "    float fuse_light = (1.0 - u_state.x) * 3.4 / (1.0 + length(hit - vec3(0.36, 1.0, 29.4)) * 1.35);\n"
+    "    float cone = smoothstep(0.72, 0.98, dot(rd, normalize(vec3(fwd.x, -0.03, fwd.y)))) * u_state.z;\n"
+    "    float flashlight = cone * 2.5 / (1.0 + best * best * 0.035);\n"
+    "    float contact = 1.0 - 0.34 * exp(-abs(hit.x - sign(hit.x) * 1.36) * 8.0) * smoothstep(0.0, 0.22, hit.y);\n"
+    "    contact *= 1.0 - 0.22 * exp(-hit.y * 12.0);\n"
+    "    float side_opening = 0.0;\n"
+    "    if (mat == 3) {\n"
+    "        float bay = abs(fract((hit.z + 1.2) / 7.7) - 0.5);\n"
+    "        side_opening = (1.0 - smoothstep(0.065, 0.12, bay)) * smoothstep(0.18, 0.42, hit.y) * (1.0 - smoothstep(1.85, 2.22, hit.y));\n"
+    "    }\n"
+    "    float fixture_shape = 0.0;\n"
+    "    if (mat == 2) {\n"
+    "        fixture_shape = (1.0 - smoothstep(0.13, 0.19, abs(hit.x))) * (1.0 - smoothstep(0.72, 0.92, abs(hit.z - fixture_z)));\n"
+    "    }\n"
+    "\n"
+    "    vec3 color = albedo * (0.16 + ceiling_light + exit_light + fuse_light + flashlight) * contact;\n"
+    "    color += vec3(1.1, 1.0, 0.73) * fixture_shape * (1.6 + 1.1 * flicker);\n"
+    "    color *= 1.0 - side_opening * 0.86;\n"
+    "    if (mat == 5) color += vec3(0.1, 2.4, 1.1);\n"
+    "    if (mat == 6) color *= 0.04;\n"
+    "    float fog = smoothstep(13.0, 31.0, best);\n"
+    "    vec3 fog_col = mix(vec3(0.18, 0.15, 0.06), vec3(0.03, 0.035, 0.045), u_state.x * 0.55);\n"
+    "    color = mix(color, fog_col, fog);\n"
+    "    float vignette = smoothstep(0.95, 0.22, length(p));\n"
+    "    color *= 0.55 + 0.45 * vignette;\n"
+    "    float fear_pulse = u_state.y * (0.08 + 0.07 * sin(ttime * 9.0));\n"
+    "    color = mix(color, vec3(0.07, 0.0, 0.0), fear_pulse);\n"
+    "\n"
+    "    vec4 ui = texture(u_ui_tex, vec2(v_uv.x, 1.0 - v_uv.y));\n"
+    "    vec3 final_col = mix(tonemap(color), ui.rgb, ui.a);\n"
+    "    frag_color = vec4(final_col, 1.0);\n"
+    "}\n";
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
+static float clampf(float v, float lo, float hi) {
+    if (v < lo) {
+        return lo;
     }
-    (void)snprintf(target, cap, "%s", text);
-    target[cap - 1] = '\0';
+    if (v > hi) {
+        return hi;
+    }
+    return v;
 }
 
-static void sync_seed_labels(void) {
-    char label[GAME_STATE_STRING_MAX];
-    (void)snprintf(label, sizeof(label), "Clean seed: %s", game_state_shape_name(g_game_state.shape_index));
-    set_text(g_game_state.test_label_text, sizeof(g_game_state.test_label_text), label);
-    set_text(g_game_state.test_button_text, sizeof(g_game_state.test_button_text), "Cycle seed");
+static float absf(float v) { return v < 0.0F ? -v : v; }
+
+static float dist_to(float x, float z, float tx, float tz) {
+    const float dx = x - tx;
+    const float dz = z - tz;
+    return sqrtf((dx * dx) + (dz * dz));
 }
 
-static void reset_seed(void) {
+static bool near_fuse(void) { return !s_game.fuse_found && dist_to(s_game.x, s_game.z, 0.36F, 29.4F) < 1.25F; }
+
+static bool near_exit(void) { return s_game.fuse_found && s_game.z < 1.85F && absf(s_game.x) < 0.9F; }
+
+static void set_message(const char *text, float seconds) {
+    (void)snprintf(s_game.message, sizeof(s_game.message), "%s", text);
+    s_game.message[sizeof(s_game.message) - 1] = '\0';
+    s_game.message_timer = seconds;
+}
+
+static void reset_backrooms(void) {
     game_state_init_defaults(&g_game_state);
-    sync_seed_labels();
-}
-
-static void cycle_seed(void) {
-    g_game_state.shape_index = (g_game_state.shape_index + 1) % GAME_STATE_SHAPE_COUNT;
-    if (g_game_state.test_ui_clicks < GAME_STATE_TEST_UI_CLICKS_MAX) {
-        g_game_state.test_ui_clicks += 1;
-    }
-    sync_seed_labels();
-    game_state_mark_dirty();
+    s_game = (BackroomsState){
+        .x = 0.0F,
+        .z = 2.75F,
+        .yaw = 0.0F,
+        .fear = 10.0F,
+        .battery = 1.0F,
+        .flashlight_on = true,
+    };
+    set_message("FIND THE HUMMING FUSE", 3.0F);
 }
 
 static void parse_args(int argc, char **argv) {
@@ -93,116 +260,373 @@ static void parse_args(int argc, char **argv) {
     }
 }
 
-static void layout(float w, float h) {
-    const float button_w = w < 620.0F ? w * 0.54F : 260.0F;
-    const float button_h = 58.0F;
-    s_cycle_box = (UiBox){
-        .x = (w - button_w) * 0.5F,
-        .y = h - 96.0F,
-        .w = button_w,
-        .h = button_h,
-    };
-}
-
-static void rect(float x, float y, float w, float h, const float color[4]) {
-    nt_shape_renderer_rect((float[3]){x + w * 0.5F, y + h * 0.5F, 0.0F}, (float[2]){w, h}, color);
-}
-
-static void rect_wire(float x, float y, float w, float h, const float color[4]) {
-    nt_shape_renderer_rect_wire((float[3]){x + w * 0.5F, y + h * 0.5F, 0.0F}, (float[2]){w, h}, color);
-}
-
-static void circle(float x, float y, float radius, const float color[4]) {
-    nt_shape_renderer_circle((float[3]){x, y, 0.0F}, radius, color);
-}
-
-static void capsule(float x, float y, float w, float h, const float color[4]) {
-    const float r = h * 0.5F;
-    rect(x + r, y, w - r * 2.0F, h, color);
-    circle(x + r, y + r, r, color);
-    circle(x + w - r, y + r, r, color);
-}
-
-static void draw_seed_shape(float w, float h) {
-    const float cx = w * 0.5F;
-    const float cy = h * 0.40F;
-    const float size = h < w ? h * 0.18F : w * 0.18F;
-    const float shadow[4] = {0.08F, 0.13F, 0.18F, 0.28F};
-    const float colors[][4] = {
-        {0.08F, 0.58F, 0.88F, 1.0F},
-        {0.10F, 0.72F, 0.36F, 1.0F},
-        {0.96F, 0.58F, 0.12F, 1.0F},
-        {0.92F, 0.24F, 0.32F, 1.0F},
-    };
-    const float *accent = colors[g_game_state.shape_index % 4];
-
-    capsule(cx - size * 1.18F, cy + size * 0.68F, size * 2.36F, size * 0.26F, shadow);
-    switch (g_game_state.shape_index) {
-    case GAME_STATE_SHAPE_CUBE:
-        rect(cx - size * 0.5F, cy - size * 0.5F, size, size, accent);
-        rect_wire(cx - size * 0.5F, cy - size * 0.5F, size, size, (float[4]){1.0F, 1.0F, 1.0F, 0.45F});
-        break;
-    case GAME_STATE_SHAPE_SPHERE:
-        circle(cx, cy, size * 0.58F, accent);
-        circle(cx - size * 0.20F, cy - size * 0.20F, size * 0.18F, (float[4]){1.0F, 1.0F, 1.0F, 0.35F});
-        break;
-    case GAME_STATE_SHAPE_CYLINDER:
-        capsule(cx - size * 0.42F, cy - size * 0.70F, size * 0.84F, size * 1.40F, accent);
-        rect(cx - size * 0.42F, cy - size * 0.16F, size * 0.84F, size * 0.32F, (float[4]){1.0F, 1.0F, 1.0F, 0.18F});
-        break;
-    case GAME_STATE_SHAPE_CAPSULE:
-    default:
-        capsule(cx - size * 0.86F, cy - size * 0.36F, size * 1.72F, size * 0.72F, accent);
-        break;
-    }
-}
-
-static void draw_button(UiBox box) {
-    const bool hot = nt_input_mouse_is_down(NT_BUTTON_LEFT) && contains(box, g_nt_input.pointers[0].x, g_nt_input.pointers[0].y);
-    const float base[4] = {0.06F, 0.46F, 0.76F, 1.0F};
-    const float down[4] = {0.04F, 0.36F, 0.62F, 1.0F};
-    const float shine[4] = {1.0F, 1.0F, 1.0F, 0.22F};
-    capsule(box.x, box.y + 5.0F, box.w, box.h, (float[4]){0.05F, 0.11F, 0.16F, 0.28F});
-    capsule(box.x, box.y, box.w, box.h, hot ? down : base);
-    rect(box.x + box.w * 0.14F, box.y + box.h * 0.18F, box.w * 0.72F, box.h * 0.18F, shine);
-}
-
-static void draw_scene(float w, float h) {
-    float vp[16];
-    ortho(0.0F, w, h, 0.0F, -1.0F, 1.0F, vp);
-    nt_shape_renderer_set_vp(vp);
-    nt_shape_renderer_set_cam_pos((float[3]){0.0F, 0.0F, 1.0F});
-    nt_shape_renderer_set_depth(false);
-    nt_shape_renderer_set_line_width(3.0F);
-
-    rect(0.0F, 0.0F, w, h, (float[4]){0.90F, 0.97F, 1.0F, 1.0F});
-    rect(0.0F, h * 0.62F, w, h * 0.38F, (float[4]){0.74F, 0.92F, 0.66F, 1.0F});
-    rect(w * 0.10F, h * 0.16F, w * 0.80F, h * 0.54F, (float[4]){1.0F, 1.0F, 1.0F, 0.22F});
-    rect(w * 0.10F, h * 0.16F, w * 0.80F, 8.0F, (float[4]){0.08F, 0.58F, 0.88F, 1.0F});
-    draw_seed_shape(w, h);
-    draw_button(s_cycle_box);
-
-    const float progress = (float)(g_game_state.test_ui_clicks % 8) / 7.0F;
-    const float meter_w = w < 620.0F ? w * 0.62F : 320.0F;
-    const float meter_x = (w - meter_w) * 0.5F;
-    const float meter_y = s_cycle_box.y - 34.0F;
-    capsule(meter_x, meter_y, meter_w, 14.0F, (float[4]){0.05F, 0.16F, 0.22F, 0.22F});
-    capsule(meter_x, meter_y, meter_w * progress, 14.0F, (float[4]){0.10F, 0.72F, 0.36F, 1.0F});
-}
-
-static void handle_input(void) {
-    if (nt_input_key_is_pressed(NT_KEY_SPACE) || nt_input_key_is_pressed(NT_KEY_ENTER)) {
-        cycle_seed();
-    }
-    if (nt_input_mouse_is_pressed(NT_BUTTON_LEFT)) {
-        for (int i = 0; i < NT_INPUT_MAX_POINTERS; ++i) {
-            const nt_pointer_t pointer = g_nt_input.pointers[i];
-            if (pointer.active && contains(s_cycle_box, pointer.x, pointer.y)) {
-                cycle_seed();
-                return;
+static void generate_wall_texture(void) {
+    for (int y = 0; y < WALL_TEX_H; ++y) {
+        for (int x = 0; x < WALL_TEX_W; ++x) {
+            const int i = (y * WALL_TEX_W + x) * 4;
+            const int seam = (x % 32 == 0) || (y % 42 == 0);
+            const int fleck = ((x * 17 + y * 31 + ((x * y) % 19)) & 31) == 0;
+            int r = 184 + ((x * 5 + y * 3) & 15);
+            int g = 161 + ((x * 7 + y * 11) & 13);
+            int b = 74 + ((x * 13 + y * 2) & 9);
+            if (seam) {
+                r -= 36;
+                g -= 34;
+                b -= 20;
             }
+            if (fleck) {
+                r -= 50;
+                g -= 42;
+                b -= 24;
+            }
+            s_wall_pixels[i + 0] = (uint8_t)clampf((float)r, 0.0F, 255.0F);
+            s_wall_pixels[i + 1] = (uint8_t)clampf((float)g, 0.0F, 255.0F);
+            s_wall_pixels[i + 2] = (uint8_t)clampf((float)b, 0.0F, 255.0F);
+            s_wall_pixels[i + 3] = 255;
         }
     }
+}
+
+static void ui_clear(void) { memset(s_ui_pixels, 0, sizeof(s_ui_pixels)); }
+
+static void ui_px(int x, int y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+    if (x < 0 || y < 0 || x >= UI_W || y >= UI_H) {
+        return;
+    }
+    uint8_t *p = &s_ui_pixels[(y * UI_W + x) * 4];
+    const float alpha = (float)a / 255.0F;
+    const float inv = 1.0F - alpha;
+    p[0] = (uint8_t)((float)p[0] * inv + (float)r * alpha);
+    p[1] = (uint8_t)((float)p[1] * inv + (float)g * alpha);
+    p[2] = (uint8_t)((float)p[2] * inv + (float)b * alpha);
+    p[3] = (uint8_t)clampf((float)p[3] + (float)a * (1.0F - (float)p[3] / 255.0F), 0.0F, 255.0F);
+}
+
+static void ui_rect(int x, int y, int w, int h, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+    for (int yy = y; yy < y + h; ++yy) {
+        for (int xx = x; xx < x + w; ++xx) {
+            ui_px(xx, yy, r, g, b, a);
+        }
+    }
+}
+
+static void glyph_rows(char c, uint8_t out[7]) {
+    memset(out, 0, 7);
+#define GLYPH(a, b, c0, d, e, f, g)                                                                                                                       \
+    do {                                                                                                                                                   \
+        out[0] = (a);                                                                                                                                       \
+        out[1] = (b);                                                                                                                                       \
+        out[2] = (c0);                                                                                                                                      \
+        out[3] = (d);                                                                                                                                       \
+        out[4] = (e);                                                                                                                                       \
+        out[5] = (f);                                                                                                                                       \
+        out[6] = (g);                                                                                                                                       \
+    } while (0)
+    if (c >= 'a' && c <= 'z') {
+        c = (char)(c - ('a' - 'A'));
+    }
+    switch (c) {
+    case 'A': GLYPH(14, 17, 17, 31, 17, 17, 17); break;
+    case 'B': GLYPH(30, 17, 17, 30, 17, 17, 30); break;
+    case 'C': GLYPH(14, 17, 16, 16, 16, 17, 14); break;
+    case 'D': GLYPH(30, 17, 17, 17, 17, 17, 30); break;
+    case 'E': GLYPH(31, 16, 16, 30, 16, 16, 31); break;
+    case 'F': GLYPH(31, 16, 16, 30, 16, 16, 16); break;
+    case 'G': GLYPH(14, 17, 16, 23, 17, 17, 15); break;
+    case 'H': GLYPH(17, 17, 17, 31, 17, 17, 17); break;
+    case 'I': GLYPH(14, 4, 4, 4, 4, 4, 14); break;
+    case 'J': GLYPH(7, 2, 2, 2, 18, 18, 12); break;
+    case 'K': GLYPH(17, 18, 20, 24, 20, 18, 17); break;
+    case 'L': GLYPH(16, 16, 16, 16, 16, 16, 31); break;
+    case 'M': GLYPH(17, 27, 21, 21, 17, 17, 17); break;
+    case 'N': GLYPH(17, 25, 21, 19, 17, 17, 17); break;
+    case 'O': GLYPH(14, 17, 17, 17, 17, 17, 14); break;
+    case 'P': GLYPH(30, 17, 17, 30, 16, 16, 16); break;
+    case 'Q': GLYPH(14, 17, 17, 17, 21, 18, 13); break;
+    case 'R': GLYPH(30, 17, 17, 30, 20, 18, 17); break;
+    case 'S': GLYPH(15, 16, 16, 14, 1, 1, 30); break;
+    case 'T': GLYPH(31, 4, 4, 4, 4, 4, 4); break;
+    case 'U': GLYPH(17, 17, 17, 17, 17, 17, 14); break;
+    case 'V': GLYPH(17, 17, 17, 17, 17, 10, 4); break;
+    case 'W': GLYPH(17, 17, 17, 21, 21, 21, 10); break;
+    case 'X': GLYPH(17, 17, 10, 4, 10, 17, 17); break;
+    case 'Y': GLYPH(17, 17, 10, 4, 4, 4, 4); break;
+    case 'Z': GLYPH(31, 1, 2, 4, 8, 16, 31); break;
+    case '0': GLYPH(14, 17, 19, 21, 25, 17, 14); break;
+    case '1': GLYPH(4, 12, 4, 4, 4, 4, 14); break;
+    case '2': GLYPH(14, 17, 1, 2, 4, 8, 31); break;
+    case '3': GLYPH(30, 1, 1, 14, 1, 1, 30); break;
+    case '4': GLYPH(2, 6, 10, 18, 31, 2, 2); break;
+    case '5': GLYPH(31, 16, 16, 30, 1, 1, 30); break;
+    case '6': GLYPH(14, 16, 16, 30, 17, 17, 14); break;
+    case '7': GLYPH(31, 1, 2, 4, 8, 8, 8); break;
+    case '8': GLYPH(14, 17, 17, 14, 17, 17, 14); break;
+    case '9': GLYPH(14, 17, 17, 15, 1, 1, 14); break;
+    case '-': GLYPH(0, 0, 0, 31, 0, 0, 0); break;
+    case ':': GLYPH(0, 4, 4, 0, 4, 4, 0); break;
+    case '.': GLYPH(0, 0, 0, 0, 0, 12, 12); break;
+    case '/': GLYPH(1, 1, 2, 4, 8, 16, 16); break;
+    case '!': GLYPH(4, 4, 4, 4, 4, 0, 4); break;
+    case '>': GLYPH(16, 8, 4, 2, 4, 8, 16); break;
+    default: break;
+    }
+#undef GLYPH
+}
+
+static void ui_text(int x, int y, const char *text, int scale, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+    int pen_x = x;
+    for (const char *it = text; *it; ++it) {
+        if (*it == ' ') {
+            pen_x += 4 * scale;
+            continue;
+        }
+        uint8_t rows[7];
+        glyph_rows(*it, rows);
+        for (int row = 0; row < 7; ++row) {
+            for (int col = 0; col < 5; ++col) {
+                if ((rows[row] & (1U << (4 - col))) == 0U) {
+                    continue;
+                }
+                ui_rect(pen_x + col * scale, y + row * scale, scale, scale, r, g, b, a);
+            }
+        }
+        pen_x += 6 * scale;
+    }
+}
+
+static void ui_bar(int x, int y, int w, int h, float value, uint8_t r, uint8_t g, uint8_t b) {
+    ui_rect(x, y, w, h, 8, 10, 12, 205);
+    ui_rect(x + 2, y + 2, (int)((float)(w - 4) * clampf(value, 0.0F, 1.0F)), h - 4, r, g, b, 235);
+}
+
+static void build_ui(void) {
+    ui_clear();
+    const float fuse_dist = dist_to(s_game.x, s_game.z, 0.36F, 29.4F);
+    char line[96];
+    const char *objective = s_game.won ? "ESCAPED" : (s_game.fuse_found ? "RETURN TO EXIT" : "FIND THE HUMMING FUSE");
+
+    ui_rect(18, 18, 462, 118, 4, 6, 8, 190);
+    ui_text(30, 30, "BACKROOMS LIMINAL", 3, 246, 226, 146, 255);
+    (void)snprintf(line, sizeof(line), "OBJECTIVE: %s", objective);
+    ui_text(30, 64, line, 2, 230, 238, 208, 255);
+    ui_text(30, 92, "WASD MOVE  ARROWS LOOK  E USE  F LIGHT", 2, 190, 205, 184, 240);
+
+    ui_rect(682, 18, 258, 118, 4, 6, 8, 190);
+    ui_text(700, 32, "FEAR", 2, 240, 210, 176, 250);
+    ui_bar(770, 30, 150, 16, s_game.fear / 100.0F, 190, 30, 36);
+    ui_text(700, 62, "BATTERY", 2, 240, 210, 176, 250);
+    ui_bar(806, 60, 114, 16, s_game.battery, 238, 210, 86);
+    (void)snprintf(line, sizeof(line), "FUSE:%s  EXIT:%s", s_game.fuse_found ? "YES" : "NO", s_game.fuse_found ? "ON" : "OFF");
+    ui_text(700, 94, line, 2, 198, 230, 196, 245);
+
+    ui_rect(476, 268, 8, 2, 230, 235, 220, 220);
+    ui_rect(479, 265, 2, 8, 230, 235, 220, 220);
+
+    if (near_fuse()) {
+        ui_rect(322, 392, 316, 46, 5, 8, 8, 215);
+        ui_text(346, 406, "PRESS E - TAKE FUSE", 3, 132, 255, 184, 255);
+    } else if (near_exit()) {
+        ui_rect(334, 392, 292, 46, 5, 8, 8, 215);
+        ui_text(358, 406, "PRESS E - ESCAPE", 3, 255, 226, 130, 255);
+    } else if (!s_game.fuse_found && s_game.message_timer <= 0.0F) {
+        (void)snprintf(line, sizeof(line), "FUSE HUM %.0fM", (double)fuse_dist);
+        ui_text(390, 466, line, 2, 230, 218, 156, 230);
+    }
+
+    if (s_game.message_timer > 0.0F) {
+        ui_rect(254, 470, 452, 42, 3, 4, 5, 190);
+        ui_text(282, 484, s_game.message, 2, 255, 236, 170, 255);
+    }
+    if (s_game.caught) {
+        ui_rect(218, 220, 524, 92, 6, 0, 0, 225);
+        ui_text(278, 244, "THE LIGHTS FOUND YOU", 3, 255, 130, 112, 255);
+        ui_text(348, 278, "RESETTING ROUTE", 2, 255, 220, 190, 255);
+    }
+}
+
+static void init_render_resources(void) {
+    const float verts[] = {
+        -1.0F, -1.0F, 1.0F, -1.0F, 1.0F, 1.0F,
+        -1.0F, -1.0F, 1.0F, 1.0F,  -1.0F, 1.0F,
+    };
+
+    s_vs = nt_gfx_make_shader(&(nt_shader_desc_t){.type = NT_SHADER_VERTEX, .source = s_vs_src, .label = "backrooms_fullscreen_vs"});
+    s_fs = nt_gfx_make_shader(&(nt_shader_desc_t){.type = NT_SHADER_FRAGMENT, .source = s_fs_src, .label = "backrooms_liminal_fs"});
+    s_pipeline = nt_gfx_make_pipeline(&(nt_pipeline_desc_t){
+        .vertex_shader = s_vs,
+        .fragment_shader = s_fs,
+        .layout =
+            {
+                .attr_count = 1,
+                .stride = sizeof(float) * 2,
+                .attrs = {{.location = 0, .format = NT_FORMAT_FLOAT2, .offset = 0}},
+            },
+        .depth_test = false,
+        .depth_write = false,
+        .depth_func = NT_DEPTH_ALWAYS,
+        .cull_mode = 0,
+        .label = "backrooms_fullscreen_pipeline",
+    });
+    s_quad_vbo = nt_gfx_make_buffer(&(nt_buffer_desc_t){.type = NT_BUFFER_VERTEX, .usage = NT_USAGE_IMMUTABLE, .data = verts, .size = sizeof(verts), .label = "backrooms_quad"});
+
+    generate_wall_texture();
+    s_wall_tex = nt_gfx_make_texture(&(nt_texture_desc_t){
+        .width = WALL_TEX_W,
+        .height = WALL_TEX_H,
+        .data = s_wall_pixels,
+        .format = NT_PIXEL_RGBA8,
+        .min_filter = NT_FILTER_LINEAR,
+        .mag_filter = NT_FILTER_LINEAR,
+        .wrap_u = NT_WRAP_REPEAT,
+        .wrap_v = NT_WRAP_REPEAT,
+        .gen_mipmaps = true,
+        .label = "backrooms_wallpaper_texture",
+    });
+    ui_clear();
+    s_ui_tex = nt_gfx_make_texture(&(nt_texture_desc_t){
+        .width = UI_W,
+        .height = UI_H,
+        .data = s_ui_pixels,
+        .format = NT_PIXEL_RGBA8,
+        .min_filter = NT_FILTER_LINEAR,
+        .mag_filter = NT_FILTER_LINEAR,
+        .wrap_u = NT_WRAP_CLAMP_TO_EDGE,
+        .wrap_v = NT_WRAP_CLAMP_TO_EDGE,
+        .label = "backrooms_ui_texture",
+    });
+}
+
+static void shutdown_render_resources(void) {
+    nt_gfx_destroy_texture(s_ui_tex);
+    nt_gfx_destroy_texture(s_wall_tex);
+    nt_gfx_destroy_buffer(s_quad_vbo);
+    nt_gfx_destroy_pipeline(s_pipeline);
+    nt_gfx_destroy_shader(s_fs);
+    nt_gfx_destroy_shader(s_vs);
+}
+
+static void interact(void) {
+    if (s_game.won || s_game.caught) {
+        return;
+    }
+    if (near_fuse()) {
+        s_game.fuse_found = true;
+        s_game.fear = clampf(s_game.fear + 18.0F, 0.0F, 100.0F);
+        set_message("THE LIGHTS HEARD YOU", 3.0F);
+    } else if (near_exit()) {
+        s_game.won = true;
+        set_message("ESCAPED - ROUTE COMPLETE", 8.0F);
+    } else {
+        set_message("TOO FAR FROM ANYTHING", 1.2F);
+    }
+}
+
+static void update_game(void) {
+    float dt = g_nt_app.dt > 0.0F ? g_nt_app.dt : (1.0F / 60.0F);
+    dt = clampf(dt, 0.0F, 0.05F);
+    if (s_game.message_timer > 0.0F) {
+        s_game.message_timer -= dt;
+    }
+    if (s_game.caught) {
+        s_game.caught_timer -= dt;
+        if (s_game.caught_timer <= 0.0F) {
+            reset_backrooms();
+        }
+        return;
+    }
+    if (s_game.won) {
+        s_game.fear = clampf(s_game.fear - dt * 14.0F, 0.0F, 100.0F);
+        return;
+    }
+
+    if (nt_input_key_is_pressed(NT_KEY_F)) {
+        s_game.flashlight_on = !s_game.flashlight_on;
+        set_message(s_game.flashlight_on ? "FLASHLIGHT ON" : "FLASHLIGHT OFF", 0.9F);
+    }
+    if (nt_input_key_is_pressed(NT_KEY_E) || nt_input_key_is_pressed(NT_KEY_ENTER)) {
+        interact();
+    }
+
+    const float turn = 1.95F * dt;
+    if (nt_input_key_is_down(NT_KEY_ARROW_LEFT) || nt_input_key_is_down(NT_KEY_Q)) {
+        s_game.yaw -= turn;
+    }
+    if (nt_input_key_is_down(NT_KEY_ARROW_RIGHT) || nt_input_key_is_down(NT_KEY_R)) {
+        s_game.yaw += turn;
+    }
+
+    const float fwd_x = sinf(s_game.yaw);
+    const float fwd_z = cosf(s_game.yaw);
+    const float right_x = cosf(s_game.yaw);
+    const float right_z = -sinf(s_game.yaw);
+    float move_x = 0.0F;
+    float move_z = 0.0F;
+    if (nt_input_key_is_down(NT_KEY_W) || nt_input_key_is_down(NT_KEY_ARROW_UP)) {
+        move_x += fwd_x;
+        move_z += fwd_z;
+    }
+    if (nt_input_key_is_down(NT_KEY_S) || nt_input_key_is_down(NT_KEY_ARROW_DOWN)) {
+        move_x -= fwd_x;
+        move_z -= fwd_z;
+    }
+    if (nt_input_key_is_down(NT_KEY_A)) {
+        move_x -= right_x;
+        move_z -= right_z;
+    }
+    if (nt_input_key_is_down(NT_KEY_D)) {
+        move_x += right_x;
+        move_z += right_z;
+    }
+    const float len = sqrtf(move_x * move_x + move_z * move_z);
+    if (len > 0.001F) {
+        move_x /= len;
+        move_z /= len;
+        const float speed = 3.15F;
+        s_game.x += move_x * speed * dt;
+        s_game.z += move_z * speed * dt;
+    }
+    s_game.x = clampf(s_game.x, -1.05F, 1.05F);
+    s_game.z = clampf(s_game.z, 0.45F, 31.8F);
+
+    if (s_game.flashlight_on && s_game.battery > 0.0F) {
+        s_game.battery = clampf(s_game.battery - dt * 0.026F, 0.0F, 1.0F);
+        if (s_game.battery <= 0.001F) {
+            s_game.flashlight_on = false;
+            set_message("BATTERY DEAD", 1.5F);
+        }
+    } else {
+        s_game.battery = clampf(s_game.battery + dt * 0.006F, 0.0F, 1.0F);
+    }
+
+    float fear_rate = 1.15F + s_game.z * 0.035F + (s_game.flashlight_on ? -0.55F : 1.1F);
+    if (s_game.fuse_found) {
+        fear_rate += 4.2F;
+    }
+    if (near_exit() || near_fuse()) {
+        fear_rate -= 1.1F;
+    }
+    s_game.fear = clampf(s_game.fear + fear_rate * dt, 0.0F, 100.0F);
+    if (s_game.fear >= 100.0F) {
+        s_game.caught = true;
+        s_game.caught_timer = 2.0F;
+        set_message("THE LIGHTS FOUND YOU", 2.0F);
+    }
+}
+
+static void draw_frame(float fb_w, float fb_h) {
+    build_ui();
+    nt_gfx_update_texture(s_ui_tex, 0, 0, UI_W, UI_H, s_ui_pixels);
+
+    nt_gfx_bind_pipeline(s_pipeline);
+    nt_gfx_bind_vertex_buffer(s_quad_vbo);
+    nt_gfx_bind_texture(s_wall_tex, 0);
+    nt_gfx_bind_texture(s_ui_tex, 1);
+    nt_gfx_set_uniform_int("u_wall_tex", 0);
+    nt_gfx_set_uniform_int("u_ui_tex", 1);
+    nt_gfx_set_uniform_vec4("u_resolution_time", (float[4]){fb_w, fb_h, g_nt_app.time, 0.0F});
+    nt_gfx_set_uniform_vec4("u_player", (float[4]){s_game.x, s_game.z, s_game.yaw, 0.0F});
+    nt_gfx_set_uniform_vec4("u_state", (float[4]){s_game.fuse_found ? 1.0F : 0.0F, s_game.fear / 100.0F, (s_game.flashlight_on && s_game.battery > 0.0F) ? 1.0F : 0.0F, s_game.won ? 1.0F : 0.0F});
+    nt_gfx_draw(0, 6);
 }
 
 #if NT_DEVAPI_ENABLED
@@ -210,9 +634,31 @@ void game_state_register_devapi(void);
 
 static cJSON *state_json(void) {
     cJSON *root = game_state_to_json(&g_game_state);
-    cJSON_AddStringToObject(root, "runtime", "clean_seed");
-    cJSON_AddStringToObject(root, "shape", game_state_shape_name(g_game_state.shape_index));
+    cJSON_AddStringToObject(root, "runtime", "backrooms_liminal");
+    cJSON_AddNumberToObject(root, "x", (double)s_game.x);
+    cJSON_AddNumberToObject(root, "z", (double)s_game.z);
+    cJSON_AddNumberToObject(root, "yaw", (double)s_game.yaw);
+    cJSON_AddNumberToObject(root, "fear", (double)s_game.fear);
+    cJSON_AddNumberToObject(root, "battery", (double)s_game.battery);
+    cJSON_AddBoolToObject(root, "flashlight_on", s_game.flashlight_on);
+    cJSON_AddBoolToObject(root, "fuse_found", s_game.fuse_found);
+    cJSON_AddBoolToObject(root, "exit_powered", s_game.fuse_found);
+    cJSON_AddBoolToObject(root, "won", s_game.won);
+    cJSON_AddBoolToObject(root, "caught", s_game.caught);
+    cJSON_AddBoolToObject(root, "can_use", near_fuse() || near_exit());
+    cJSON_AddStringToObject(root, "objective", s_game.won ? "escaped" : (s_game.fuse_found ? "return_to_exit" : "find_fuse"));
+    cJSON_AddStringToObject(root, "message", s_game.message_timer > 0.0F ? s_game.message : "");
     return root;
+}
+
+static double json_number(const cJSON *params, const char *name, double fallback) {
+    const cJSON *item = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, name) : NULL;
+    return cJSON_IsNumber(item) ? item->valuedouble : fallback;
+}
+
+static const char *json_string(const cJSON *params, const char *name, const char *fallback) {
+    const cJSON *item = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, name) : NULL;
+    return cJSON_IsString(item) ? item->valuestring : fallback;
 }
 
 static bool ep_game_state(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
@@ -229,19 +675,105 @@ static bool ep_game_reset_playtest(const cJSON *params, cJSON **result, char *er
     (void)error;
     (void)error_cap;
     (void)user;
-    reset_seed();
+    reset_backrooms();
     *result = state_json();
     return true;
 }
 
-static bool ep_game_action_cycle(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+static bool ep_game_action_use(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
     (void)params;
     (void)error;
     (void)error_cap;
     (void)user;
-    cycle_seed();
+    interact();
     *result = state_json();
     return true;
+}
+
+static bool ep_game_action_toggle_flashlight(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)params;
+    (void)error;
+    (void)error_cap;
+    (void)user;
+    s_game.flashlight_on = !s_game.flashlight_on;
+    *result = state_json();
+    return true;
+}
+
+static bool ep_game_action_set_pose(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)error;
+    (void)error_cap;
+    (void)user;
+    s_game.x = clampf((float)json_number(params, "x", (double)s_game.x), -1.05F, 1.05F);
+    s_game.z = clampf((float)json_number(params, "z", (double)s_game.z), 0.45F, 31.8F);
+    s_game.yaw = (float)json_number(params, "yaw", (double)s_game.yaw);
+    *result = state_json();
+    return true;
+}
+
+static bool ep_game_debug_set_progress(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)error;
+    (void)error_cap;
+    (void)user;
+    const cJSON *fuse = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "fuse_found") : NULL;
+    const cJSON *won = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "won") : NULL;
+    if (cJSON_IsBool(fuse)) {
+        s_game.fuse_found = cJSON_IsTrue(fuse);
+    }
+    if (cJSON_IsBool(won)) {
+        s_game.won = cJSON_IsTrue(won);
+    }
+    s_game.fear = clampf((float)json_number(params, "fear", (double)s_game.fear), 0.0F, 100.0F);
+    *result = state_json();
+    return true;
+}
+
+static bool ep_game_capture_framebuffer(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)user;
+#ifdef NT_PLATFORM_WEB
+    (void)params;
+    (void)result;
+    (void)error;
+    (void)error_cap;
+    return false;
+#else
+    const char *output = json_string(params, "output", "");
+    if (!output || !output[0]) {
+        (void)snprintf(error, (size_t)error_cap, "output is required");
+        return false;
+    }
+    const int width = (int)(g_nt_window.fb_width ? g_nt_window.fb_width : g_nt_window.width);
+    const int height = (int)(g_nt_window.fb_height ? g_nt_window.fb_height : g_nt_window.height);
+    if (width <= 0 || height <= 0) {
+        (void)snprintf(error, (size_t)error_cap, "framebuffer is empty");
+        return false;
+    }
+    uint8_t *pixels = (uint8_t *)malloc((size_t)width * (size_t)height * 3U);
+    if (!pixels) {
+        (void)snprintf(error, (size_t)error_cap, "capture allocation failed");
+        return false;
+    }
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, pixels);
+    FILE *file = fopen(output, "wb");
+    if (!file) {
+        free(pixels);
+        (void)snprintf(error, (size_t)error_cap, "could not open capture output");
+        return false;
+    }
+    (void)fprintf(file, "P6\n%d %d\n255\n", width, height);
+    for (int y = height - 1; y >= 0; --y) {
+        (void)fwrite(pixels + ((size_t)y * (size_t)width * 3U), 1, (size_t)width * 3U, file);
+    }
+    fclose(file);
+    free(pixels);
+    cJSON *obj = cJSON_CreateObject();
+    cJSON_AddStringToObject(obj, "output", output);
+    cJSON_AddNumberToObject(obj, "width", width);
+    cJSON_AddNumberToObject(obj, "height", height);
+    *result = obj;
+    return true;
+#endif
 }
 
 static void register_game_endpoints(void) {
@@ -249,16 +781,22 @@ static void register_game_endpoints(void) {
     game_state_register_devapi();
     nt_devapi_register("game.state", ep_game_state, NULL);
     nt_devapi_register("game.reset_playtest", ep_game_reset_playtest, NULL);
-    nt_devapi_register("game.action.cycle", ep_game_action_cycle, NULL);
+    nt_devapi_register("game.action.use", ep_game_action_use, NULL);
+    nt_devapi_register("game.action.toggle_flashlight", ep_game_action_toggle_flashlight, NULL);
+    nt_devapi_register("game.action.set_pose", ep_game_action_set_pose, NULL);
+    nt_devapi_register("game.debug.set_progress", ep_game_debug_set_progress, NULL);
+    nt_devapi_register("game.capture.framebuffer", ep_game_capture_framebuffer, NULL);
 }
 
-static void register_ui_devapi(float w, float h) {
+static void register_ui_devapi(void) {
     nt_devapi_set_frame(g_nt_app.frame);
-    nt_devapi_set_view((float)g_nt_window.fb_width, (float)g_nt_window.fb_height, w, h);
+    nt_devapi_set_view((float)g_nt_window.fb_width, (float)g_nt_window.fb_height, (float)UI_W, (float)UI_H);
     nt_devapi_clear_ui_elements();
-    (void)nt_devapi_register_ui_node("root", "", "screen", "Game Seed", "Clean seed runtime", 0.0F, 0.0F, w, h, true, true);
-    (void)nt_devapi_register_ui_node("seed.cycle", "root", "button", "Cycle Seed", g_game_state.test_button_text, s_cycle_box.x, s_cycle_box.y, s_cycle_box.w, s_cycle_box.h, true, true);
-    (void)nt_devapi_register_ui_node("seed.progress", "root", "meter", "Seed Progress", g_game_state.test_label_text, w * 0.5F - 160.0F, s_cycle_box.y - 34.0F, 320.0F, 14.0F, true, true);
+    (void)nt_devapi_register_ui_node("root", "", "screen", "Backrooms Liminal", "Find the fuse and escape.", 0.0F, 0.0F, (float)UI_W, (float)UI_H, true, true);
+    (void)nt_devapi_register_ui_node("backrooms.objective", "root", "label", "Objective", s_game.fuse_found ? "Return to exit" : "Find the humming fuse", 18.0F, 18.0F, 462.0F, 118.0F, true, true);
+    (void)nt_devapi_register_ui_node("backrooms.fear", "root", "meter", "Fear", "Fear pressure", 682.0F, 18.0F, 258.0F, 52.0F, true, true);
+    (void)nt_devapi_register_ui_node("backrooms.battery", "root", "meter", "Battery", "Flashlight battery", 682.0F, 70.0F, 258.0F, 66.0F, true, true);
+    (void)nt_devapi_register_ui_node("backrooms.use_prompt", "root", "prompt", "Use", near_fuse() ? "Press E to take fuse" : (near_exit() ? "Press E to escape" : ""), 322.0F, 392.0F, 316.0F, 46.0F, near_fuse() || near_exit(), near_fuse() || near_exit());
 }
 #endif
 
@@ -276,14 +814,11 @@ static void frame(void) {
     }
 #endif
 
-    const float w = (float)(g_nt_window.fb_width ? g_nt_window.fb_width : g_nt_window.width);
-    const float h = (float)(g_nt_window.fb_height ? g_nt_window.fb_height : g_nt_window.height);
-    layout(w, h);
-    handle_input();
+    update_game();
 
 #if NT_DEVAPI_ENABLED
     if (s_devapi_enabled) {
-        register_ui_devapi(w, h);
+        register_ui_devapi();
     }
 #endif
 
@@ -293,13 +828,15 @@ static void frame(void) {
     }
 #endif
 
+    const float fb_w = (float)(g_nt_window.fb_width ? g_nt_window.fb_width : g_nt_window.width);
+    const float fb_h = (float)(g_nt_window.fb_height ? g_nt_window.fb_height : g_nt_window.height);
+
     nt_gfx_begin_frame();
     if (g_nt_gfx.context_restored) {
-        nt_shape_renderer_restore_gpu();
+        init_render_resources();
     }
-    nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.90F, 0.97F, 1.0F, 1.0F}, .clear_depth = 1.0F});
-    draw_scene(w, h);
-    nt_shape_renderer_flush();
+    nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.035F, 0.030F, 0.020F, 1.0F}, .clear_depth = 1.0F});
+    draw_frame(fb_w, fb_h);
     nt_gfx_end_pass();
     nt_gfx_end_frame();
     nt_window_swap_buffers();
@@ -307,25 +844,29 @@ static void frame(void) {
 
 int main(int argc, char **argv) {
     nt_engine_config_t config = {0};
-    config.app_name = "Game Seed";
+    config.app_name = "Backrooms Liminal";
     config.version = 1;
     if (nt_engine_init(&config) != NT_OK) {
         return 1;
     }
 
     parse_args(argc, argv);
-    reset_seed();
+    reset_backrooms();
 
-    g_nt_window.title = "Game Seed";
+    g_nt_window.title = "Backrooms Liminal";
     g_nt_window.width = (uint32_t)s_window_width;
     g_nt_window.height = (uint32_t)s_window_height;
     nt_window_init();
     nt_input_init();
 
     nt_gfx_desc_t gfx_desc = nt_gfx_desc_defaults();
-    gfx_desc.depth = true;
+    gfx_desc.depth = false;
+    gfx_desc.max_shaders = 8;
+    gfx_desc.max_pipelines = 8;
+    gfx_desc.max_buffers = 16;
+    gfx_desc.max_textures = 16;
     nt_gfx_init(&gfx_desc);
-    nt_shape_renderer_init();
+    init_render_resources();
 
 #if NT_DEVAPI_ENABLED
     if (s_devapi_enabled) {
@@ -351,7 +892,7 @@ int main(int argc, char **argv) {
         nt_devapi_shutdown();
     }
 #endif
-    nt_shape_renderer_shutdown();
+    shutdown_render_resources();
     nt_gfx_shutdown();
     nt_input_shutdown();
     nt_window_shutdown();
