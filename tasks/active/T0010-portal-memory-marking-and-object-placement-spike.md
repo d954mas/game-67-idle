@@ -249,3 +249,15 @@ and reveal a real exit.
   quality/audience fit: material identity is stronger and no longer procedural,
   but the aperture still reads too dark/flat and needs integrated lighting,
   side-wall construction, and depth or T0011 render-target portal lighting.
+- 2026-06-19: Integrated light/depth slice added stronger center/floor light
+  spill, side-wall bounce, and denser native solid-shell wall returns/soffit/
+  threshold geometry while reducing the external ghost-frame alpha. The T0010
+  scenario now reports `native_overlay.last_vertex_count = 792`,
+  `native_overlay.room_mesh_vertex_count = 708`,
+  `native_overlay.solid_pass_vertex_count = 342`, and
+  `native_overlay.blended_detail_vertex_count = 450`. Native build, T0010
+  capture, smoke, readability, profiler scope, taskboard validation, and strict
+  product gate ran. Product gate remains FAIL for art quality/audience fit: the
+  portal entrance is cleaner and more physical, but still reads as a hybrid
+  fullscreen composite plus native shell rather than production-quality
+  render-target or fully native 3D portal-room rendering.

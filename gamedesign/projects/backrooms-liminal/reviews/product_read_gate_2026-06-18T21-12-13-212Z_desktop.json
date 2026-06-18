@@ -105,7 +105,5 @@
     ]
   },
   "problem": "The frame is cleaner and the room has better center/floor light, but the portal interior still reads as a hybrid fullscreen composite plus native shell rather than production-quality render-target or fully native 3D room rendering",
-  "next": "Promote the portal interior further toward real opaque native room geometry or implement T0011 render-target-backed portal lighting; keep content expansion frozen while art_quality/audience_fit remain below 4",
-  "markdown": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.md",
-  "json": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.json"
+  "next": "Promote the portal interior further toward real opaque native room geometry or implement T0011 render-target-backed portal lighting; keep content expansion frozen while art_quality/audience_fit remain below 4"
 }

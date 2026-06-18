@@ -1,0 +1,79 @@
+{
+  "schema": "game.prototype_slice_hygiene",
+  "verdict": "warn",
+  "strict": true,
+  "snapshot": false,
+  "threshold": 30,
+  "changed_file_count": 7,
+  "changed_files": [
+    "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.json",
+    "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.md",
+    "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json",
+    "gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md",
+    "src/clean_seed_main.c",
+    "tasks/STATUS.md",
+    "tasks/active/T0010-portal-memory-marking-and-object-placement-spike.md"
+  ],
+  "evidence": {
+    "build": [
+      "cmake --build --preset native-debug --target game_seed: pass"
+    ],
+    "probe": [
+      "py -3.12 tmp/capture_backrooms_t0010_portal_memory.py: pass; py -3.12 tools/devapi/smoke.py: pass; py -3.12 tools/devapi/ui_readability.py build/captures/backrooms_t0010_impossible_geometry.png: pass; node tools/taskboard/cli.mjs validate: pass"
+    ],
+    "product_gates": [
+      {
+        "path": "gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md",
+        "exists": true,
+        "verdict": "fail"
+      }
+    ],
+    "screenshots": [
+      {
+        "path": "build/captures/backrooms_t0010_impossible_geometry.png",
+        "exists": true
+      }
+    ],
+    "profile_guards": [
+      {
+        "path": "node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/integrated-light-depth",
+        "source": "inline",
+        "verdict": "unknown",
+        "reason": "could not confirm usable current-scope profiler guard"
+      }
+    ],
+    "known_red_gates": [
+      "T0010 product gate intentionally remains FAIL for art_quality/audience_fit until the portal interior is real opaque native room geometry or render-target-backed lighting rather than hybrid fullscreen composite plus native shell"
+    ]
+  },
+  "red_review_artifacts": [
+    {
+      "path": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.json",
+      "reason": "changed review/audit evidence contains FAIL/fail verdict"
+    },
+    {
+      "path": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.md",
+      "reason": "changed review/audit evidence contains FAIL/fail verdict"
+    },
+    {
+      "path": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json",
+      "reason": "changed review/audit evidence contains FAIL/fail verdict"
+    },
+    {
+      "path": "gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md",
+      "reason": "changed review/audit evidence contains FAIL/fail verdict"
+    }
+  ],
+  "push_policy": {
+    "status": "upstream_and_push_remote_configured",
+    "ok_for_promised_push": true,
+    "branch": "master",
+    "upstream": "origin/master",
+    "push_remote": "git@github.com:d954mas/game-67-idle.git"
+  },
+  "problems": [],
+  "warnings": [
+    "profiler guard evidence is inconclusive (advisory): node tools/ai.mjs status --require-current-scope-usable: usable current scope T0010/integrated-light-depth (could not confirm usable current-scope profiler guard)",
+    "known red review artifact(s) accepted for this handoff: gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.json, gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T21-12-13-212Z_desktop.md, gamedesign/projects/backrooms-liminal/reviews/product_read_gate_latest.json, gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md"
+  ]
+}
