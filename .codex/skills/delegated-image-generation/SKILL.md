@@ -170,11 +170,31 @@ python .codex/skills/delegated-image-generation/scripts/generate_image.py \
 
 ---
 
+## Throughput — whole-game art runs
+
+Generation is the dominant ~1000x cost (30-60s/image). For many assets, do NOT
+issue one serial call per asset:
+
+- **Batch:** `scripts/gen_batch.py --jobs <jobs.json> --concurrency 3` fans out a
+  bounded pool of `generate_image.py` calls (100 assets serial ≈ 75 min;
+  concurrency 3-4 ≈ 20 min). Keep the pool small for Codex rate limits;
+  `--dry-run` prints the planned commands.
+- **Skip-if-exists:** `generate_image.py` writes a `<out>.gen.json` hash sidecar
+  (prompt + size + quality + input-image content) and SKIPs an unchanged asset on
+  a re-run, so each iteration only pays for changed/failed assets (`--force`
+  overrides). For a dual-plate black plate the input is the white plate, so
+  editing the white plate re-keys the hash and regenerates the black plate.
+- **Source-sheet first:** for a BULK opaque family (UI icons), generate ONE source
+  sheet and crop N assets through intake→crop→assemble (~10x fewer generations),
+  instead of N per-asset calls. Reserve per-asset `dual_plate` only for the few
+  genuinely soft hero FX — `route_cutout` (and the assemble route warning) tells
+  you which.
+
 ## Hand-off to the asset pipeline
 
 All paths give you the raw source image only. The deterministic rest is yours:
 `generated-game-ui-assets` (prompt packet → intake → crop → runtime PNGs →
-pixel/atlas audits) and the visual gate `node tools/ai.mjs gate`. Clean output
+composition/derivation audits) and the visual gate `node tools/ai.mjs gate`. Clean output
 proves the PIPE, not the SCREEN — judge the assembled screen against the fake shot
 / art bible. Keep raw generations in `tmp/`.
 

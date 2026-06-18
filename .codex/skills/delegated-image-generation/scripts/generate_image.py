@@ -17,7 +17,7 @@ strict OpenSSL rejects (CERTIFICATE_VERIFY_FAILED) and SChannel only accepts wit
 --ssl-no-revoke. curl --ssl-no-revoke works behind the MITM and on a clean box.
 See ../SKILL.md for the full story.
 """
-import argparse, base64, json, mimetypes, os, subprocess, sys, tempfile, time
+import argparse, base64, hashlib, json, mimetypes, os, subprocess, sys, tempfile, time
 
 CODEX_RESPONSES = "https://chatgpt.com/backend-api/codex/responses"
 REST_IMAGES = "https://api.openai.com/v1/images/generations"
@@ -160,6 +160,24 @@ def gen_rest(tok, a, timeout):
     return imgs
 
 
+def gen_hash(a):
+    """Stable key over everything that determines the output: prompt, size,
+    quality, format, model, background, and the CONTENT of any input image (the
+    source of an edit). A re-run with a matching sidecar skips the API call. For
+    a dual-plate black plate the input is the white plate, so editing the white
+    plate changes this hash and forces the black plate to regenerate."""
+    h = hashlib.sha256()
+    for part in (a.prompt, a.size, a.quality or "", a.format, a.model, a.background or ""):
+        h.update(b"\x00" + str(part).encode("utf-8"))
+    for img in a.input_image or []:
+        try:
+            with open(img, "rb") as f:
+                h.update(f.read())
+        except OSError:
+            h.update(b"\x00MISSING:" + str(img).encode("utf-8"))
+    return h.hexdigest()
+
+
 def main():
     ap = argparse.ArgumentParser(description="Headless gpt-image generation (codex backend or sk- REST).")
     ap.add_argument("--prompt", required=True)
@@ -173,7 +191,19 @@ def main():
                     help="reference image path (repeatable, <=5) -> edit / style-match")
     ap.add_argument("--responses-model", default="gpt-5.5", help="outer model for codex backend path")
     ap.add_argument("--timeout", type=int, help="override seconds (default by --quality)")
+    ap.add_argument("--force", action="store_true", help="regenerate even if an unchanged output already exists")
     a = ap.parse_args()
+
+    sidecar = a.out + ".gen.json"
+    key = gen_hash(a)
+    if not a.force and os.path.exists(a.out) and os.path.exists(sidecar):
+        try:
+            prev = json.load(open(sidecar, encoding="utf-8")).get("hash")
+        except Exception:
+            prev = None
+        if prev == key:
+            print(f"SKIP {a.out} (unchanged; pass --force to regenerate)")
+            return
 
     tok, acct, kind = resolve_credential()
     if not tok:
@@ -186,6 +216,12 @@ def main():
     data = base64.b64decode(imgs[0])
     with open(a.out, "wb") as f:
         f.write(data)
+    try:
+        with open(sidecar, "w", encoding="utf-8") as f:
+            json.dump({"hash": key, "bytes": len(data), "model": a.model, "size": a.size,
+                       "quality": a.quality, "ts": int(time.time())}, f)
+    except OSError:
+        pass
     print(f"OK wrote {a.out} ({len(data)} bytes) via {kind} in {time.time()-t0:.1f}s")
 
 
