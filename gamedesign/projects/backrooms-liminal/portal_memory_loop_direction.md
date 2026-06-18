@@ -71,8 +71,11 @@ The player should feel:
 
 Minimum proof for the next implementation slice:
 
-- A portal doorway shows a room that is visibly larger/different inside than
-  the approach suggests.
+- Impossible geometry is visible without reading as a sci-fi portal: a narrow
+  architectural cut/door seam shows a room volume that is wider/deeper than the
+  outside corridor can contain.
+- A closed door blocks progress until the player finds and fits a missing
+  handle.
 - The player can place at least one mark on a wall/floor surface.
 - The player can pick up one object and place it at one valid target.
 - DevAPI report proves mark placement, object pickup, object placement, and
@@ -82,8 +85,8 @@ Minimum proof for the next implementation slice:
 ## Design Risk
 
 - Portal rendering can become a technical rabbit hole. The first spike should
-  fake one portal convincingly before attempting a general recursive portal
-  renderer.
+  fake one impossible architectural cut convincingly before attempting a
+  general recursive/non-Euclidean renderer.
 - Drawing must be simple: one or two mark types first, not a full paint system.
 - Object puzzles must be readable and physical. Avoid abstract keycards unless
   the room itself explains why the object belongs there.

@@ -62,6 +62,10 @@ typedef struct BackroomsState {
     int route_choice_stage;
     int route_choice_correct;
     int route_choice_wrong;
+    bool mark_placed;
+    bool door_handle_collected;
+    bool door_handle_placed;
+    bool portal_exit_revealed;
     bool threat_visible;
     bool caught_audio_played;
     bool sprinting;
@@ -91,6 +95,10 @@ static const int s_route_choice_safe_side[] = {1, -1, 1};
 
 #define FUSE_X (-3.45F)
 #define FUSE_Z (25.15F)
+#define MARK_X (-3.45F)
+#define MARK_Z (10.8F)
+#define HANDLE_X (3.35F)
+#define HANDLE_Z (18.6F)
 #define MAZE_ZONE_MAIN 0
 #define MAZE_ZONE_LEFT_DEADEND 1
 #define MAZE_ZONE_RED_ROOM 2
@@ -118,6 +126,7 @@ static const char *s_fs_src =
     "uniform vec4 u_pressure;\n"
     "uniform vec4 u_route;\n"
     "uniform vec4 u_horror;\n"
+    "uniform vec4 u_puzzle;\n"
     "uniform sampler2D u_wall_tex;\n"
     "uniform sampler2D u_ui_tex;\n"
     "\n"
@@ -215,6 +224,15 @@ static const char *s_fs_src =
     "        tmaze += 0.055 + tmaze * 0.012;\n"
     "    }\n"
     "\n"
+    "    float thandle = sphere_hit(ro, rd, vec3(3.35, 0.44, 18.6), 0.22);\n"
+    "    if (u_puzzle.y < 0.5 && thandle > 0.0 && thandle < best) {\n"
+    "        best = thandle; normal = normalize(ro + rd * thandle - vec3(3.35, 0.44, 18.6)); mat = 7;\n"
+    "    }\n"
+    "    float tplaced_handle = sphere_hit(ro, rd, vec3(-4.16, 1.05, 25.15), 0.055);\n"
+    "    if (u_puzzle.z > 0.5 && tplaced_handle > 0.0 && tplaced_handle < best) {\n"
+    "        best = tplaced_handle; normal = normalize(ro + rd * tplaced_handle - vec3(-4.16, 1.05, 25.15)); mat = 8;\n"
+    "    }\n"
+    "\n"
     "    float entity_dist = max(2.55, mix(8.6, 4.4, u_pressure.y) - u_horror.y * 2.2);\n"
     "    float entity_z = max(u_player.y - entity_dist, 2.9);\n"
     "    float tent = (entity_z - ro.z) / rd.z;\n"
@@ -237,6 +255,8 @@ static const char *s_fs_src =
     "    if (mat == 4) { albedo = mix(vec3(0.18, 0.12, 0.06), vec3(1.1, 0.84, 0.28), u_state.x); }\n"
     "    if (mat == 5) { albedo = vec3(0.05, 0.04, 0.025); }\n"
     "    if (mat == 6) { albedo = vec3(0.004, 0.006, 0.008); }\n"
+    "    if (mat == 7) { albedo = vec3(1.05, 0.72, 0.34); }\n"
+    "    if (mat == 8) { albedo = vec3(0.95, 0.78, 0.42); }\n"
     "\n"
     "    float fixture_z = floor((hit.z + 2.6) / 5.2) * 5.2;\n"
     "    float flicker = 0.76 + 0.24 * step(0.18, hash12(vec2(floor(ttime * 13.0), fixture_z)));\n"
@@ -271,11 +291,26 @@ static const char *s_fs_src =
     "    float room_mix = corridor_room_mix(hit.z);\n"
     "    float red_room = room_band(hit.z, 18.6, 1.6) * smoothstep(2.15, 3.1, hit.x);\n"
     "    float dead_end_shadow = room_band(hit.z, 10.8, 1.35) * smoothstep(1.8, 2.65, -hit.x);\n"
-    "    float exit_wall = room_band(hit.z, 25.1, 1.5) * smoothstep(3.4, 4.1, -hit.x) * u_horror.w;\n"
+    "    float exit_wall = room_band(hit.z, 25.1, 1.5) * smoothstep(3.4, 4.1, -hit.x);\n"
     "    float exit_door_w = abs(hit.z - 25.15);\n"
     "    float exit_door_h = hit.y;\n"
     "    float exit_door = exit_wall * (1.0 - smoothstep(0.62, 0.92, exit_door_w)) * smoothstep(0.10, 0.18, exit_door_h) * (1.0 - smoothstep(1.58, 1.82, exit_door_h));\n"
     "    float exit_frame = exit_wall * max(1.0 - smoothstep(0.02, 0.08, abs(exit_door_w - 0.68)), 1.0 - smoothstep(0.02, 0.08, min(abs(exit_door_h - 0.12), abs(exit_door_h - 1.62))));\n"
+    "    float mark_wall = 0.0;\n"
+    "    float forged_mark = 0.0;\n"
+    "    float impossible_cut = 0.0;\n"
+    "    if (mat == 3) {\n"
+    "        float mark_side = smoothstep(3.20, 3.95, -hit.x);\n"
+    "        float mark_a = 1.0 - smoothstep(0.025, 0.075, abs((hit.y - 1.13) - (hit.z - 10.8) * 0.42));\n"
+    "        float mark_b = 1.0 - smoothstep(0.025, 0.075, abs((hit.y - 1.13) + (hit.z - 10.8) * 0.42));\n"
+    "        float mark_box = room_band(hit.z, 10.8, 0.62) * smoothstep(0.58, 0.78, hit.y) * (1.0 - smoothstep(1.54, 1.74, hit.y));\n"
+    "        mark_wall = u_puzzle.x * mark_side * mark_box * max(mark_a, mark_b);\n"
+    "        float forged_box = room_band(hit.z, 25.15, 0.72) * smoothstep(0.58, 0.78, hit.y) * (1.0 - smoothstep(1.54, 1.74, hit.y));\n"
+    "        float forged_a = 1.0 - smoothstep(0.03, 0.09, abs((hit.y - 1.10) - (hit.z - 25.15) * 0.37));\n"
+    "        float forged_b = 1.0 - smoothstep(0.03, 0.09, abs((hit.y - 1.10) + (hit.z - 25.15) * 0.37));\n"
+    "        forged_mark = u_puzzle.x * exit_wall * forged_box * max(forged_a, forged_b);\n"
+    "        impossible_cut = u_puzzle.x * room_band(hit.z, 10.8, 1.10) * smoothstep(3.36, 4.12, hit.x) * smoothstep(0.22, 0.38, hit.y) * (1.0 - smoothstep(1.70, 1.92, hit.y));\n"
+    "    }\n"
     "    float fixture_shape = 0.0;\n"
     "    if (mat == 2) {\n"
     "        float fixture_w = mix(0.13, 0.34, room_mix);\n"
@@ -288,8 +323,20 @@ static const char *s_fs_src =
     "    color *= 1.0 - side_opening * 0.86;\n"
     "    color = mix(color, vec3(0.006, 0.006, 0.004), dead_end_shadow * 0.62);\n"
     "    color = mix(color, vec3(0.16, 0.0, 0.0), red_room * (0.52 + u_pressure.x * 0.25));\n"
-    "    color = mix(color, vec3(0.0, 0.0, 0.0), exit_door);\n"
-    "    color += vec3(1.0, 0.58, 0.18) * exit_frame * 0.24;\n"
+    "    color = mix(color, vec3(0.018, 0.014, 0.010), exit_door * (0.82 + 0.15 * u_puzzle.w));\n"
+    "    color = mix(color, vec3(0.04, 0.0, 0.0), exit_door * (1.0 - u_puzzle.z) * 0.35);\n"
+    "    color += vec3(0.55, 0.16, 0.04) * exit_door * (1.0 - u_puzzle.z) * 0.34;\n"
+    "    color += vec3(1.0, 0.58, 0.18) * exit_frame * (0.10 + 0.46 * u_puzzle.w);\n"
+    "    float impossible_room_lines = impossible_cut * max(1.0 - smoothstep(0.015, 0.055, abs(abs(hit.z - 10.8) - 0.54)), 1.0 - smoothstep(0.018, 0.060, abs(hit.y - 1.46)));\n"
+    "    float impossible_floor_stripes = impossible_cut * (1.0 - smoothstep(0.025, 0.075, abs(fract((hit.z + hit.y * 0.95) * 3.1) - 0.5)));\n"
+    "    float impossible_receding_light = impossible_cut * smoothstep(1.18, 0.32, abs(hit.z - 10.8)) * (0.25 + 0.18 * sin(ttime * 4.0));\n"
+    "    color = mix(color, vec3(0.42, 0.36, 0.18), impossible_cut * 0.86);\n"
+    "    color = mix(color, vec3(0.025, 0.022, 0.014), impossible_cut * 0.42);\n"
+    "    color += vec3(0.84, 0.67, 0.32) * impossible_room_lines * 0.42;\n"
+    "    color += vec3(0.58, 0.44, 0.19) * impossible_floor_stripes * 0.16;\n"
+    "    color += vec3(1.1, 0.86, 0.40) * impossible_receding_light;\n"
+    "    color += vec3(1.0, 0.08, 0.03) * mark_wall * (0.85 + 0.15 * sin(ttime * 9.0));\n"
+    "    color += vec3(1.0, 0.02, 0.0) * forged_mark * (0.55 + 0.25 * step(0.45, sin(ttime * 11.0)));\n"
     "    color = mix(color, vec3(0.005, 0.012, 0.008), false_exit * 0.92);\n"
     "    color += vec3(0.1, 1.1, 0.34) * false_exit * (0.42 + 0.58 * step(0.5, sin(ttime * 6.0 + hit.z)));\n"
     "    color = mix(color, vec3(0.11, 0.0, 0.0), route_bad_glow * 0.46);\n"
@@ -305,6 +352,8 @@ static const char *s_fs_src =
     "        color *= 0.035;\n"
     "        color += vec3(1.2, 0.03, 0.0) * max(eye_l, eye_r) * (0.4 + u_pressure.y);\n"
     "    }\n"
+    "    if (mat == 7) { color += vec3(1.2, 0.76, 0.22) * 0.75; }\n"
+    "    if (mat == 8) { color += vec3(1.1, 0.86, 0.35) * (0.45 + 0.25 * u_puzzle.w); }\n"
     "    float fog = smoothstep(13.0, 31.0, best);\n"
     "    vec3 fog_col = mix(vec3(0.18, 0.15, 0.06), vec3(0.03, 0.035, 0.045), u_state.x * 0.55);\n"
     "    fog_col = mix(fog_col, vec3(0.06, 0.018, 0.015), u_pressure.y * 0.35);\n"
@@ -392,9 +441,19 @@ static int count_room_bits(int mask) {
     return count;
 }
 
-static bool near_fuse(void) { return !s_game.fuse_found && s_game.side_room_visits >= 3 && dist_to(s_game.x, s_game.z, FUSE_X, FUSE_Z) < 1.35F; }
+static bool near_mark_surface(void) { return !s_game.mark_placed && dist_to(s_game.x, s_game.z, MARK_X, MARK_Z) < 1.55F; }
+
+static bool near_door_handle(void) { return !s_game.door_handle_collected && dist_to(s_game.x, s_game.z, HANDLE_X, HANDLE_Z) < 1.35F; }
+
+static bool near_locked_door(void) { return s_game.side_room_visits >= 3 && dist_to(s_game.x, s_game.z, FUSE_X, FUSE_Z) < 1.45F; }
+
+static bool near_fuse(void) { return !s_game.fuse_found && s_game.portal_exit_revealed && near_locked_door(); }
 
 static bool near_exit(void) { return s_game.fuse_found && s_game.z < 1.85F && absf(s_game.x) < 0.9F; }
+
+static bool can_use_context(void) {
+    return !s_game.won && !s_game.caught && (near_mark_surface() || near_door_handle() || near_locked_door() || near_exit());
+}
 
 static int route_choice_total(void) { return (int)(sizeof(s_route_choice_z) / sizeof(s_route_choice_z[0])); }
 
@@ -490,7 +549,7 @@ static void reset_backrooms(void) {
         .battery = 1.0F,
         .flashlight_on = true,
     };
-    set_message("CROSS 3 ROOMS. FIND EXIT", 3.0F);
+    set_message("MARK WALL. FIND HANDLE", 3.0F);
 }
 
 static void record_run_result(void) {
@@ -523,9 +582,9 @@ static void update_maze_lostness(void) {
             s_game.blackout_timer = fmaxf(s_game.blackout_timer, 1.1F);
             s_game.ambush_timer = fmaxf(s_game.ambush_timer, 0.8F);
             s_game.yaw += 0.38F;
-            set_message("THIS ROOM MOVED", 1.9F);
+            set_message(s_game.door_handle_collected ? "THIS ROOM MOVED" : "HANDLE ON THE FLOOR", 1.9F);
         } else if (next_zone == MAZE_ZONE_FUSE_ROOM) {
-            set_message("HUM BEHIND WALLS", 1.8F);
+            set_message(s_game.door_handle_collected ? "DOOR HAS NO PLACE OUTSIDE" : "LOCKED - NO HANDLE", 1.8F);
             game_audio_play(GAME_AUDIO_CUE_FUSE_HUM);
         }
     } else if (next_zone == MAZE_ZONE_RED_ROOM && s_game.message_timer <= 0.0F) {
@@ -748,6 +807,15 @@ static void build_ui(void) {
     } else if (!s_game.won && !s_game.caught && s_game.relief_timer > 0.0F) {
         ui_rect(306, 396, 348, 42, 5, 8, 8, 190);
         ui_text(340, 406, "SAFE TURN - MOVE", 3, 132, 255, 184, 255);
+    } else if (!s_game.won && !s_game.caught && near_mark_surface()) {
+        ui_rect(306, 396, 348, 42, 5, 8, 8, 185);
+        ui_text(338, 406, "PRESS E - DRAW MARK", 3, 255, 226, 130, 255);
+    } else if (!s_game.won && !s_game.caught && near_door_handle()) {
+        ui_rect(314, 396, 332, 42, 5, 8, 8, 185);
+        ui_text(348, 406, "PRESS E - TAKE HANDLE", 3, 255, 226, 130, 255);
+    } else if (!s_game.won && !s_game.caught && near_locked_door() && !s_game.portal_exit_revealed) {
+        ui_rect(310, 396, 340, 42, 5, 8, 8, 185);
+        ui_text(338, 406, s_game.door_handle_collected ? "PRESS E - FIT HANDLE" : "PRESS E - TRY DOOR", 3, 255, 226, 130, 255);
     } else if (!s_game.won && !s_game.caught && near_fuse()) {
         ui_rect(318, 396, 324, 42, 5, 8, 8, 185);
         ui_text(352, 406, "PRESS E - ENTER", 3, 255, 226, 130, 255);
@@ -759,8 +827,14 @@ static void build_ui(void) {
     if (!s_game.won && !s_game.caught) {
         ui_rect(24, 574, 350, 70, 18, 15, 8, 112);
         ui_text(42, 588, "JOURNAL", 2, 246, 226, 146, 225);
-        if (s_game.side_room_visits >= 3) {
-            ui_text(42, 614, "TASK: FIND EXIT", 2, 230, 238, 208, 238);
+        if (!s_game.mark_placed) {
+            ui_text(42, 614, "TASK: DRAW A WALL MARK", 2, 230, 238, 208, 238);
+        } else if (!s_game.door_handle_collected) {
+            ui_text(42, 614, "TASK: FIND DOOR HANDLE", 2, 230, 238, 208, 238);
+        } else if (!s_game.portal_exit_revealed) {
+            ui_text(42, 614, "TASK: FIT HANDLE TO DOOR", 2, 230, 238, 208, 238);
+        } else if (!s_game.fuse_found) {
+            ui_text(42, 614, "TASK: ENTER REAL EXIT", 2, 230, 238, 208, 238);
         } else {
             (void)snprintf(line, sizeof(line), "TASK: CROSS %d MORE ROOMS", 3 - s_game.side_room_visits);
             ui_text(42, 614, line, 2, 230, 238, 208, 238);
@@ -857,6 +931,34 @@ static void shutdown_render_resources(void) {
 static void interact(void) {
     if (s_game.won || s_game.caught) {
         reset_backrooms();
+        return;
+    }
+    if (near_mark_surface()) {
+        s_game.mark_placed = true;
+        s_game.route_shift = clampf(s_game.route_shift + 0.18F, 0.0F, 1.0F);
+        s_game.fear = clampf(s_game.fear + 4.0F, 0.0F, 100.0F);
+        set_message("YOUR MARK APPEARS AHEAD", 2.2F);
+        return;
+    }
+    if (near_door_handle()) {
+        s_game.door_handle_collected = true;
+        s_game.blackout_timer = fmaxf(s_game.blackout_timer, 0.65F);
+        s_game.ambush_timer = fmaxf(s_game.ambush_timer, 0.35F);
+        set_message("TOOK A DOOR HANDLE", 1.8F);
+        return;
+    }
+    if (near_locked_door() && !s_game.portal_exit_revealed) {
+        if (!s_game.door_handle_collected) {
+            set_message("LOCKED - HANDLE MISSING", 1.6F);
+            s_game.fear = clampf(s_game.fear + 2.0F, 0.0F, 100.0F);
+            return;
+        }
+        s_game.door_handle_placed = true;
+        s_game.portal_exit_revealed = true;
+        s_game.relief_timer = fmaxf(s_game.relief_timer, 1.2F);
+        s_game.route_shift = clampf(s_game.route_shift + 0.22F, 0.0F, 1.0F);
+        game_audio_play(GAME_AUDIO_CUE_FUSE_HUM);
+        set_message("THE ROOM OPENS INWARD", 2.4F);
         return;
     }
     if (near_fuse()) {
@@ -1101,6 +1203,7 @@ static void draw_frame(float fb_w, float fb_h) {
     nt_gfx_set_uniform_vec4("u_pressure", (float[4]){s_game.route_shift, s_game.stalker_pressure, s_game.threat_visible ? 1.0F : 0.0F, s_game.caught ? 1.0F : 0.0F});
     nt_gfx_set_uniform_vec4("u_route", (float[4]){route_choice_active() ? 1.0F : 0.0F, (float)route_choice_safe_side_for_stage(s_game.route_choice_stage), route_choice_z_for_stage(s_game.route_choice_stage), (float)s_game.route_choice_wrong});
     nt_gfx_set_uniform_vec4("u_horror", (float[4]){clampf(s_game.blackout_timer / 3.2F, 0.0F, 1.0F), clampf(s_game.ambush_timer / 2.4F, 0.0F, 1.0F), clampf(s_game.relief_timer / 2.0F, 0.0F, 1.0F), clampf((float)s_game.side_room_visits / 3.0F, 0.0F, 1.0F)});
+    nt_gfx_set_uniform_vec4("u_puzzle", (float[4]){s_game.mark_placed ? 1.0F : 0.0F, s_game.door_handle_collected ? 1.0F : 0.0F, s_game.door_handle_placed ? 1.0F : 0.0F, s_game.portal_exit_revealed ? 1.0F : 0.0F});
     nt_gfx_draw(0, 6);
 }
 
@@ -1140,13 +1243,26 @@ static cJSON *state_json(void) {
     cJSON_AddBoolToObject(root, "flashlight_on", s_game.flashlight_on);
     cJSON_AddBoolToObject(root, "sprinting", s_game.sprinting);
     cJSON_AddBoolToObject(root, "fuse_found", s_game.fuse_found);
-    cJSON_AddBoolToObject(root, "exit_powered", s_game.side_room_visits >= 3);
+    cJSON_AddBoolToObject(root, "mark_placed", s_game.mark_placed);
+    cJSON_AddBoolToObject(root, "door_handle_collected", s_game.door_handle_collected);
+    cJSON_AddBoolToObject(root, "door_handle_placed", s_game.door_handle_placed);
+    cJSON_AddBoolToObject(root, "portal_exit_revealed", s_game.portal_exit_revealed);
+    cJSON_AddBoolToObject(root, "exit_powered", s_game.portal_exit_revealed);
     cJSON_AddBoolToObject(root, "won", s_game.won);
     cJSON_AddBoolToObject(root, "caught", s_game.caught);
     cJSON_AddBoolToObject(root, "threat_visible", s_game.threat_visible);
-    cJSON_AddBoolToObject(root, "can_use", !s_game.won && !s_game.caught && (near_fuse() || near_exit()));
+    cJSON_AddBoolToObject(root, "can_mark", near_mark_surface());
+    cJSON_AddBoolToObject(root, "can_take_handle", near_door_handle());
+    cJSON_AddBoolToObject(root, "can_try_locked_door", near_locked_door() && !s_game.portal_exit_revealed);
+    cJSON_AddBoolToObject(root, "can_use", can_use_context());
     cJSON_AddBoolToObject(root, "can_restart", s_game.won || s_game.caught);
-    cJSON_AddStringToObject(root, "objective", s_game.caught ? "caught" : (s_game.won ? "escaped" : (s_game.side_room_visits >= 3 ? "find_exit" : "cross_rooms")));
+    cJSON_AddStringToObject(root,
+                            "objective",
+                            s_game.caught ? "caught"
+                                          : (s_game.won              ? "escaped"
+                                             : (!s_game.mark_placed  ? "draw_mark"
+                                                : (!s_game.door_handle_collected ? "find_handle"
+                                                   : (!s_game.portal_exit_revealed ? "fit_handle" : "enter_exit")))));
     cJSON_AddStringToObject(root, "outcome", s_game.caught ? "caught" : (s_game.won ? "escaped" : "running"));
     cJSON_AddStringToObject(root, "message", s_game.message_timer > 0.0F ? s_game.message : "");
     return root;
@@ -1207,6 +1323,18 @@ static bool ep_game_action_use(const cJSON *params, cJSON **result, char *error,
     return true;
 }
 
+static bool ep_game_action_place_mark(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)params;
+    (void)error;
+    (void)error_cap;
+    (void)user;
+    if (!s_game.won && !s_game.caught && near_mark_surface()) {
+        interact();
+    }
+    *result = state_json();
+    return true;
+}
+
 static bool ep_game_action_toggle_flashlight(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
     (void)params;
     (void)error;
@@ -1243,6 +1371,10 @@ static bool ep_game_debug_set_progress(const cJSON *params, cJSON **result, char
     const cJSON *fuse = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "fuse_found") : NULL;
     const cJSON *won = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "won") : NULL;
     const cJSON *caught = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "caught") : NULL;
+    const cJSON *mark = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "mark_placed") : NULL;
+    const cJSON *handle_collected = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "door_handle_collected") : NULL;
+    const cJSON *handle_placed = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "door_handle_placed") : NULL;
+    const cJSON *exit_revealed = cJSON_IsObject(params) ? cJSON_GetObjectItemCaseSensitive(params, "portal_exit_revealed") : NULL;
     if (cJSON_IsBool(fuse)) {
         s_game.fuse_found = cJSON_IsTrue(fuse);
     }
@@ -1258,6 +1390,18 @@ static bool ep_game_debug_set_progress(const cJSON *params, cJSON **result, char
             record_run_result();
             set_message("THE LIGHTS FOUND YOU", 2.0F);
         }
+    }
+    if (cJSON_IsBool(mark)) {
+        s_game.mark_placed = cJSON_IsTrue(mark);
+    }
+    if (cJSON_IsBool(handle_collected)) {
+        s_game.door_handle_collected = cJSON_IsTrue(handle_collected);
+    }
+    if (cJSON_IsBool(handle_placed)) {
+        s_game.door_handle_placed = cJSON_IsTrue(handle_placed);
+    }
+    if (cJSON_IsBool(exit_revealed)) {
+        s_game.portal_exit_revealed = cJSON_IsTrue(exit_revealed);
     }
     s_game.fear = clampf((float)json_number(params, "fear", (double)s_game.fear), 0.0F, 100.0F);
     s_game.battery = clampf((float)json_number(params, "battery", (double)s_game.battery), 0.0F, 1.0F);
@@ -1344,6 +1488,7 @@ static void register_game_endpoints(void) {
     nt_devapi_register("game.state", ep_game_state, NULL);
     nt_devapi_register("game.reset_playtest", ep_game_reset_playtest, NULL);
     nt_devapi_register("game.action.use", ep_game_action_use, NULL);
+    nt_devapi_register("game.action.place_mark", ep_game_action_place_mark, NULL);
     nt_devapi_register("game.action.toggle_flashlight", ep_game_action_toggle_flashlight, NULL);
     nt_devapi_register("game.action.set_pose", ep_game_action_set_pose, NULL);
     nt_devapi_register("game.debug.set_progress", ep_game_debug_set_progress, NULL);
@@ -1356,13 +1501,22 @@ static void register_ui_devapi(void) {
     nt_devapi_set_view((float)g_nt_window.fb_width, (float)g_nt_window.fb_height, (float)UI_W, (float)UI_H);
     nt_devapi_clear_ui_elements();
     (void)nt_devapi_register_ui_node("root", "", "screen", "Backrooms Liminal", "Cross three rooms and find the exit.", 0.0F, 0.0F, (float)UI_W, (float)UI_H, true, true);
-    const char *objective_label = s_game.caught ? "Caught" : (s_game.won ? "Escaped" : (s_game.side_room_visits >= 3 ? "Find the exit" : "Cross three rooms"));
-    const bool use_active = !s_game.won && !s_game.caught && (near_fuse() || near_exit());
+    const char *objective_label = s_game.caught ? "Caught"
+                                                : (s_game.won              ? "Escaped"
+                                                   : (!s_game.mark_placed  ? "Draw a wall mark"
+                                                      : (!s_game.door_handle_collected ? "Find the handle"
+                                                         : (!s_game.portal_exit_revealed ? "Fit handle to locked door" : "Enter the real exit"))));
+    const bool use_active = can_use_context();
     (void)nt_devapi_register_ui_node("backrooms.objective", "root", "label", "Objective", objective_label, 18.0F, 18.0F, 462.0F, 118.0F, true, true);
     (void)nt_devapi_register_ui_node("backrooms.fear", "root", "meter", "Hidden director pressure", "Internal only", 682.0F, 18.0F, 258.0F, 52.0F, false, false);
     (void)nt_devapi_register_ui_node("backrooms.battery", "root", "meter", "Dynamo", "Flashlight dynamo charge", 682.0F, 70.0F, 258.0F, 66.0F, false, false);
-    (void)nt_devapi_register_ui_node("backrooms.threat", "root", "label", "Rooms", s_game.side_room_visits >= 3 ? "Exit can appear" : "Keep crossing rooms", 682.0F, 118.0F, 258.0F, 28.0F, false, false);
-    (void)nt_devapi_register_ui_node("backrooms.use_prompt", "root", "prompt", "Use", near_fuse() ? "Press E to enter exit" : (near_exit() ? "Press E to escape" : ""), 322.0F, 392.0F, 316.0F, 46.0F, use_active, use_active);
+    (void)nt_devapi_register_ui_node("backrooms.threat", "root", "label", "Rooms", s_game.portal_exit_revealed ? "Exit is real" : "Rooms copy evidence", 682.0F, 118.0F, 258.0F, 28.0F, false, false);
+    const char *use_text = near_mark_surface()      ? "Press E to draw mark"
+                           : (near_door_handle()    ? "Press E to take handle"
+                              : (near_locked_door() ? (s_game.portal_exit_revealed ? "Press E to enter exit"
+                                                                                   : (s_game.door_handle_collected ? "Press E to fit handle" : "Press E to try door"))
+                                                    : (near_exit() ? "Press E to escape" : "")));
+    (void)nt_devapi_register_ui_node("backrooms.use_prompt", "root", "prompt", "Use", use_text, 322.0F, 392.0F, 316.0F, 46.0F, use_active, use_active);
 }
 #endif
 

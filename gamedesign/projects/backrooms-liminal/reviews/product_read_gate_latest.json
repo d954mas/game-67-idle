@@ -2,17 +2,17 @@
   "schema": "game.product_read_gate",
   "version": 1,
   "project": "backrooms-liminal",
-  "task": "T0009",
+  "task": "T0010",
   "surface": "desktop",
   "verdict": "fail",
-  "timestamp": "2026-06-18T17:27:58.489Z",
-  "screenshot": "build/captures/backrooms_t0009_branch_room.png",
+  "timestamp": "2026-06-18T17:47:23.985Z",
+  "screenshot": "build/captures/backrooms_t0010_impossible_geometry.png",
   "answers": {
-    "where": "Level 0 yellow corridor with side rooms",
-    "action": "Cross three rooms, then enter the real exit",
-    "response": "Side rooms update room count and trigger layout shift/blackout events",
-    "reward": "After three rooms the exit appears and can be entered",
-    "game_look": "Native 3D Backrooms pocket maze with textured walls, ceiling lights, darkness, minimal journal UI"
+    "where": "A yellow Backrooms room with a narrow impossible architectural cut in the wall",
+    "action": "Draw marks, find the missing door handle, and test locked doors",
+    "response": "The mark is copied ahead, the locked door refuses without a handle, and fitting the handle reveals an inward-opening exit",
+    "reward": "The player learns the space is lying and can open the real exit by proving the room relationship",
+    "game_look": "Native 3D liminal room with wall mark, closed door rule, and minimal journal prompt"
   },
   "visual_critique": {
     "strict": true,
@@ -26,28 +26,28 @@
     ],
     "pass_threshold": 4,
     "scores": {
-      "composition": 2,
+      "composition": 3,
       "readability": 3,
       "ui_controls": 3,
       "action_direction": 3,
-      "art_quality": 1,
-      "audience_fit": 2
+      "art_quality": 2,
+      "audience_fit": 3
     },
     "issues": [
       {
         "severity": "major",
         "axis": "art_quality",
-        "text": "Rooms still look like procedural shader boxes rather than authored production geometry"
+        "text": "Impossible geometry still reads like a flat window or painted panel, not a convincing non-Euclidean volume"
       },
       {
         "severity": "major",
         "axis": "art_quality",
-        "text": "Fluorescent lighting and shadows are still flat and inconsistent"
+        "text": "Rooms are still shader-authored surfaces with weak material depth and shadows"
       },
       {
         "severity": "minor",
         "axis": "ui_controls",
-        "text": "Journal/prompt is readable but still uses black debug-like plates"
+        "text": "Prompts are readable but still debug-plate-like"
       }
     ]
   },
@@ -56,8 +56,8 @@
     "covered": [],
     "not_covered": []
   },
-  "problem": "The slice now has exploration and exit objective, but the screenshot does not yet meet the requested polished scary Backrooms visual bar.",
-  "next": "Replace the shader-box room execution with stronger architectural rooms, better fluorescent lighting/shadows, less UI plating, and a more believable exit composition.",
-  "markdown": "gamedesign\\projects\\backrooms-liminal\\reviews\\t0009_lostness_visual_gate.md",
-  "json": "build\\captures\\backrooms_t0009_product_gate.json"
+  "problem": "T0010 proves the gameplay rule, but the visual proof does not yet meet the high-quality scary Backrooms bar or the requested non-Euclidean render importance.",
+  "next": "Replace the flat impossible-cut illusion with a stronger non-Euclidean render pass: nested room planes, convincing wall thickness, shadowed door depth, and authored room landmarks.",
+  "markdown": "gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md",
+  "json": "build/captures/backrooms_t0010_product_gate.json"
 }
