@@ -129,3 +129,11 @@ and reveal a real exit.
   refreshed product gate ran. Product gate remains FAIL: this is a stronger
   authored room-layer proof, but it still blends like an overlay rather than a
   fully constructed realistic Backrooms room with convincing lighting.
+- 2026-06-18: Authored material-detail pass added thin native geometry for
+  floor grout, wall seams, back-wall strips, ceiling grid, stronger shadow
+  bands, and concentrated fixture spill. The portal overlay now streams 432
+  vertices total, including 366 texture-backed room mesh/material-detail
+  vertices. Native build, T0010 scenario, smoke, readability, profiler guard,
+  taskboard validation, and refreshed product gate ran. Product gate remains
+  FAIL: the room reads more constructed, but the render still needs proper 3D
+  surface integration and stronger physically convincing light/shadow response.

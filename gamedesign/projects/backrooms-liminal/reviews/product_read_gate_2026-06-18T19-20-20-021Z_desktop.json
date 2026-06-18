@@ -105,7 +105,5 @@
     ]
   },
   "problem": "The portal proof now has stronger authored material detail and a more constructed room read, but the render still lacks physically convincing lighting/shadows and full 3D surface integration, so it remains below the high-quality realistic Backrooms target",
-  "next": "Move from overlay detail proof to proper authored 3D room surfaces with stronger light/shadow response, or use the T0011 render-target path once the engine exports it",
-  "markdown": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T19-20-20-021Z_desktop.md",
-  "json": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T19-20-20-021Z_desktop.json"
+  "next": "Move from overlay detail proof to proper authored 3D room surfaces with stronger light/shadow response, or use the T0011 render-target path once the engine exports it"
 }
