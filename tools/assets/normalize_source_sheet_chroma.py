@@ -8,6 +8,11 @@ from pathlib import Path
 from PIL import Image
 
 try:
+    import numpy as np
+except ImportError:  # pragma: no cover - fallback path is kept for minimal Python installs.
+    np = None
+
+try:
     from tools.assets.atomic_io import save_image_atomic
 except ModuleNotFoundError:  # pragma: no cover - supports direct script execution by path.
     from atomic_io import save_image_atomic
@@ -27,6 +32,68 @@ def is_key_like(pixel: tuple[int, int, int, int], key: tuple[int, int, int], tol
 
 def normalize_background(source: Path, output: Path, key: tuple[int, int, int], tolerance: int) -> int:
     image = Image.open(source).convert("RGBA")
+    if np is not None:
+        result, changed = normalize_background_numpy(image, key, tolerance)
+    else:
+        result, changed = normalize_background_python(image, key, tolerance)
+    save_image_atomic(result, output)
+    return changed
+
+
+def normalize_background_numpy(image: Image.Image, key: tuple[int, int, int], tolerance: int) -> tuple[Image.Image, int]:
+    """Vectorized border-connected chroma normalization. Same result as the BFS:
+    fill every key-like pixel reachable from the border with the exact key colour;
+    interior key-coloured art is preserved (not border-connected)."""
+    array = np.asarray(image, dtype=np.uint8).copy()
+    alpha = array[..., 3]
+    rgb = array[..., :3].astype(np.int16)
+    key_array = np.asarray(key, dtype=np.int16)
+    key_like = (alpha == 0) | (np.max(np.abs(rgb - key_array), axis=2) <= tolerance)
+    connected = _border_connected(key_like)
+    target = np.array([key[0], key[1], key[2], 255], dtype=np.uint8)
+    changed = int(np.count_nonzero(connected & np.any(array != target, axis=2)))
+    array[connected] = target
+    return Image.fromarray(array, "RGBA"), changed
+
+
+def _border_connected(mask: "np.ndarray") -> "np.ndarray":
+    """Pixels of ``mask`` connected (4-neighbour) to the image border. Uses
+    scipy's single-pass labelling when available, else a numpy-only iterative
+    dilation. Both are deterministic."""
+    try:
+        from scipy.ndimage import label
+    except Exception:
+        return _border_connected_iterative(mask)
+    labels, _count = label(mask)  # default structure = 4-connectivity
+    border = np.concatenate([labels[0, :], labels[-1, :], labels[:, 0], labels[:, -1]])
+    border_labels = np.unique(border)
+    border_labels = border_labels[border_labels != 0]
+    if border_labels.size == 0:
+        return np.zeros(mask.shape, dtype=bool)
+    return np.isin(labels, border_labels)
+
+
+def _border_connected_iterative(mask: "np.ndarray") -> "np.ndarray":
+    connected = np.zeros(mask.shape, dtype=bool)
+    connected[0, :] = mask[0, :]
+    connected[-1, :] = mask[-1, :]
+    connected[:, 0] = mask[:, 0]
+    connected[:, -1] = mask[:, -1]
+    previous = -1
+    while True:
+        current = int(np.count_nonzero(connected))
+        if current == previous:
+            return connected
+        previous = current
+        expanded = connected.copy()
+        expanded[1:, :] |= connected[:-1, :]
+        expanded[:-1, :] |= connected[1:, :]
+        expanded[:, 1:] |= connected[:, :-1]
+        expanded[:, :-1] |= connected[:, 1:]
+        connected = expanded & mask
+
+
+def normalize_background_python(image: Image.Image, key: tuple[int, int, int], tolerance: int) -> tuple[Image.Image, int]:
     width, height = image.size
     pixels = image.load()
     visited = bytearray(width * height)
@@ -60,9 +127,7 @@ def normalize_background(source: Path, output: Path, key: tuple[int, int, int], 
         for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
             if 0 <= nx < width and 0 <= ny < height:
                 push(nx, ny)
-
-    save_image_atomic(image, output)
-    return changed
+    return image, changed
 
 
 def main() -> int:

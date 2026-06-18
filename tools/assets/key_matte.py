@@ -22,6 +22,8 @@ are unavailable, so the module stays dependency-light and offline-safe.
 """
 from __future__ import annotations
 
+from time import perf_counter
+
 from PIL import Image
 
 try:
@@ -34,6 +36,7 @@ from tools.assets.chroma_key_alpha import (
     decontaminate_source_key_spill_image,
     key_to_alpha,
     repair_transparent_edge_rgb,
+    source_key_spill_mask,
     zero_fully_transparent_rgb,
 )
 
@@ -84,11 +87,18 @@ def key_matte_cutout(
     exact_tolerance: int = 12,
     foreground_tolerance: int = 80,
     max_dim: int = 512,
+    timings: dict | None = None,
 ) -> Image.Image:
     """Return an RGBA cutout of ``image`` against the flat ``key`` colour using a
     closed-form matte. Intended to run PER CROP (small image); running it on a
     full multi-thousand-pixel source sheet is slow because the closed-form solve
-    is global."""
+    is global. Pass ``timings`` (a dict) to record per-step milliseconds for
+    profiling/optimization."""
+    def _mark(name: str, start: float) -> float:
+        if timings is not None:
+            timings[name] = round((perf_counter() - start) * 1000.0, 2)
+        return perf_counter()
+
     if np is None:
         return _heuristic_fallback(image, key)
     try:
@@ -96,6 +106,7 @@ def key_matte_cutout(
     except Exception:
         return _heuristic_fallback(image, key)
 
+    step = perf_counter()
     rgba = image.convert("RGBA")
     original_size = rgba.size
     work = rgba
@@ -111,9 +122,12 @@ def key_matte_cutout(
     trimap = np.full(distance.shape, 0.5, dtype=np.float64)
     trimap[distance <= exact_tolerance] = 0.0
     trimap[distance >= foreground_tolerance] = 1.0
+    step = _mark("prep_trimap", step)
     try:
         alpha = np.clip(estimate_alpha_cf(rgb, trimap), 0.0, 1.0)
+        step = _mark("alpha_closed_form", step)
         foreground = np.clip(estimate_foreground_ml(rgb, alpha), 0.0, 1.0)
+        step = _mark("foreground_ml", step)
     except Exception:
         return _heuristic_fallback(image, key)
 
@@ -149,8 +163,27 @@ def key_matte_cutout(
     # estimate_foreground_ml decontaminates the bulk; one general key-spill pass
     # (keyed on the actual key colour, not per-palette magic numbers) clears the
     # residual anti-aliased edge fringe. Then method-agnostic atlas hygiene.
-    decontaminate_source_key_spill_image(result, key=key, require_transparent_touch=False)
-    bleed_transparent_rgb(result, key=key)
+    # Q3: the sharp _limit_despill above usually clears all key spill, so skip the
+    # (expensive integral-image) decontamination unless visible spill remains.
+    if _has_key_spill(result, key):
+        decontaminate_source_key_spill_image(result, key=key, require_transparent_touch=False)
+    # Q2: a 4px bleed covers the anti-aliased halo under transparent pixels; the
+    # atlas packer's 2px extrude covers the rest. Only invisible RGB changes.
+    bleed_transparent_rgb(result, key=key, passes=4)
     repair_transparent_edge_rgb(result, key=key)
     zero_fully_transparent_rgb(result)
+    _mark("finalize_despill_hygiene", step)
     return result
+
+
+def _has_key_spill(image: Image.Image, key: RGB) -> bool:
+    if np is None:
+        return True
+    array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
+    visible = array[..., 3] > 12
+    if not visible.any():
+        return False
+    red = array[..., 0].astype(np.int16)
+    green = array[..., 1].astype(np.int16)
+    blue = array[..., 2].astype(np.int16)
+    return bool(np.any(visible & source_key_spill_mask(red, green, blue, key)))

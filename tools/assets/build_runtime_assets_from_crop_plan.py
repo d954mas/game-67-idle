@@ -116,12 +116,16 @@ def crop_trimmed(
     trim_right = min(rgba.width, right + padding)
     trim_bottom = min(rgba.height, bottom + padding)
     out = rgba.crop((trim_left, trim_top, trim_right, trim_bottom))
-    if is_cyan_key(key):
-        decontaminate_source_key_spill_image(out, key=key, require_transparent_touch=False)
-    remove_green_screen_spill(out, passes=10, radius=4)
-    bleed_transparent_rgb(out, key=key)
-    repair_transparent_edge_rgb(out, key=key)
-    zero_fully_transparent_rgb(out)
+    if method != "key_matte":
+        # key_matte already finalized the crop (despill + bleed + repair + zero)
+        # inside the matte; re-running the hygiene here is pure redundant work.
+        # Only the legacy chroma path needs this post-crop cleanup.
+        if is_cyan_key(key):
+            decontaminate_source_key_spill_image(out, key=key, require_transparent_touch=False)
+        remove_green_screen_spill(out, passes=10, radius=4)
+        bleed_transparent_rgb(out, key=key)
+        repair_transparent_edge_rgb(out, key=key)
+        zero_fully_transparent_rgb(out)
     return out, [trim_left, trim_top, trim_right - trim_left, trim_bottom - trim_top], [x, y, width, height]
 
 
