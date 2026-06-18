@@ -13,8 +13,8 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 - No native runtime blocker is known for the current game repo slice.
 - T0010 product gate is still red: the portal room now has data-driven
   geometry, material, light, finish, authored construction descriptors, and a
-  native `nt_gfx` proxy-geometry overlay, but not yet production-quality
-  realistic Backrooms room construction.
+  texture-backed native `nt_gfx` room mesh/material overlay, but not yet
+  production-quality realistic Backrooms room construction.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
   rendering: public `nt_gfx` render-target/framebuffer support. The game repo
   must not patch `external/neotolis-engine`; use public APIs or carry an
@@ -56,16 +56,19 @@ node tools/taskboard/cli.mjs validate
   scene foundation: rooms, material/light/finish/authored-construction
   descriptors, portal descriptors, flags, validation, and GPU params.
 - `src/clean_seed_main.c` now has a separate native `nt_gfx` portal overlay
-  pass that streams 66 world-space proxy vertices for jambs, threshold, inner
-  fixture, conduit, and landmark column from portal scene params.
+  pass that streams 288 world-space vertices: 222 texture-backed room
+  mesh/material vertices for inner floor/wall/ceiling/light-spill surfaces plus
+  jambs, threshold, inner fixture, conduit, and landmark column from portal
+  scene params.
 - `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md` records
   the engine-facing render-target API gap with evidence from `nt_gfx`.
 - `build/captures/backrooms_t0010_portal_memory_status.json` proves mark
   placement, locked-door rejection, handle pickup, handle fitting, exit reveal,
   escape, and active `portal_render` material/light/finish/construction params
   including trim, fixture spacing, ceiling panel scale, shadow spill, jamb
-  depth, threshold lip, conduit, landmark columns, and
-  `native_overlay.last_vertex_count = 66`.
+  depth, threshold lip, conduit, landmark columns,
+  `native_overlay.last_vertex_count = 288`, and
+  `native_overlay.room_mesh_vertex_count = 222`.
 - `build/captures/backrooms_t0010_impossible_geometry.png` is the latest native
   proof screenshot for the data-driven impossible room.
 - `build/captures/backrooms_t0010_impossible_geometry_uizoom.png` is the latest
@@ -76,9 +79,9 @@ node tools/taskboard/cli.mjs validate
 
 ## Next Priorities
 
-1. Replace the current native proxy quads and shader-authored room surfaces
-   with richer authored mesh/material layers, or move to the T0011 render-target
-   path when the engine API exists.
+1. Move from the current overlay mesh/material proof to proper authored 3D room
+   surfaces with stronger lighting/shadow response, or move to the T0011
+   render-target path when the engine API exists.
 2. Add stronger production texture/light evidence before expanding content;
    more one-pass shader decoration is now a low-value path unless it directly
    proves the future mesh/material contract.

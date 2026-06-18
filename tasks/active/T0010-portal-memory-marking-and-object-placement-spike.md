@@ -121,3 +121,11 @@ and reveal a real exit.
   readability, and refreshed product gate ran. Product gate remains FAIL: this
   proves a real render layer but is still proxy geometry, not production-quality
   realistic Backrooms construction/material lighting.
+- 2026-06-18: Portal overlay expanded into a texture-backed room mesh/material
+  layer. The native pass now streams 288 vertices total, including 222 vertices
+  for inner floor panels, side walls, back wall, ceiling panels, and light
+  spill sampled through the generated wall texture. Native build, T0010
+  scenario, smoke, readability, profiler guard, taskboard validation, and
+  refreshed product gate ran. Product gate remains FAIL: this is a stronger
+  authored room-layer proof, but it still blends like an overlay rather than a
+  fully constructed realistic Backrooms room with convincing lighting.

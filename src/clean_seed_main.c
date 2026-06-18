@@ -98,6 +98,7 @@ static BackroomsPortalScene s_portal_scene;
 static uint8_t s_wall_pixels[WALL_TEX_W * WALL_TEX_H * 4];
 static uint8_t s_ui_pixels[UI_W * UI_H * 4];
 static uint32_t s_last_portal_overlay_vertices;
+static uint32_t s_last_portal_room_mesh_vertices;
 static const float s_route_choice_z[] = {24.0F, 16.2F, 8.3F};
 static const int s_route_choice_safe_side[] = {1, -1, 1};
 
@@ -113,7 +114,7 @@ typedef struct PortalOverlayVertex {
     float v;
 } PortalOverlayVertex;
 
-#define PORTAL_OVERLAY_MAX_VERTICES 384
+#define PORTAL_OVERLAY_MAX_VERTICES 1536
 
 static PortalOverlayVertex s_portal_overlay_vertices[PORTAL_OVERLAY_MAX_VERTICES];
 
@@ -168,12 +169,14 @@ static const char *s_portal_overlay_fs_src =
     "in vec4 v_color;\n"
     "in vec2 v_uv;\n"
     "out vec4 frag_color;\n"
+    "uniform sampler2D u_overlay_tex;\n"
     "void main() {\n"
     "    if (v_color.a <= 0.01) { discard; }\n"
     "    float edge = min(min(v_uv.x, 1.0 - v_uv.x), min(v_uv.y, 1.0 - v_uv.y));\n"
     "    float edge_fade = mix(0.62, 1.0, smoothstep(0.0, 0.16, edge));\n"
     "    float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);\n"
-    "    vec3 color = v_color.rgb * (0.86 + grain * 0.18);\n"
+    "    vec3 tex = texture(u_overlay_tex, v_uv * vec2(1.8, 1.35)).rgb;\n"
+    "    vec3 color = v_color.rgb * (0.70 + tex * 0.52 + grain * 0.12);\n"
     "    frag_color = vec4(color, v_color.a * edge_fade * (0.92 + grain * 0.08));\n"
     "}\n";
 
@@ -1159,8 +1162,92 @@ static void portal_overlay_emit_floor_quad(uint32_t *count,
     portal_overlay_emit_quad(count, x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1, r, g, b, a);
 }
 
+static void portal_overlay_emit_xy_quad(uint32_t *count,
+                                        float x0,
+                                        float x1,
+                                        float y0,
+                                        float y1,
+                                        float z,
+                                        float r,
+                                        float g,
+                                        float b,
+                                        float a) {
+    portal_overlay_emit_quad(count, x0, y0, z, x1, y0, z, x1, y1, z, x0, y1, z, r, g, b, a);
+}
+
+static float portal_panel_variation(int x, int z) {
+    const float s = sinf((float)(x * 37 + z * 19) * 12.9898F) * 43758.546875F;
+    return s - floorf(s);
+}
+
+static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
+                                                const BackroomsPortalGpuParams *portal,
+                                                float wall_x,
+                                                float center_z,
+                                                float z0,
+                                                float z1,
+                                                float min_y,
+                                                float max_y) {
+    const float depth = clampf(portal->shape[0], 3.2F, 12.0F);
+    const float room_x0 = wall_x + 0.22F;
+    const float room_x1 = wall_x + 3.25F + depth * 0.055F;
+    const float inner_z0 = z0 + 0.13F;
+    const float inner_z1 = z1 - 0.13F;
+    const float ceiling_y = max_y + 0.42F;
+    const float panel_y0 = min_y + 0.08F;
+    const float panel_y1 = max_y + 0.26F;
+    const float grime = clampf(portal->material[2], 0.0F, 1.0F);
+    const float wet = clampf(portal->material[3], 0.0F, 1.0F);
+    const float light = clampf(portal->light[1] * 0.28F, 0.22F, 0.72F);
+    const int floor_cols = 5;
+    const int floor_rows = 4;
+
+    for (int ix = 0; ix < floor_cols; ++ix) {
+        const float fx0 = room_x0 + (room_x1 - room_x0) * ((float)ix / (float)floor_cols);
+        const float fx1 = room_x0 + (room_x1 - room_x0) * ((float)(ix + 1) / (float)floor_cols) - 0.018F;
+        for (int iz = 0; iz < floor_rows; ++iz) {
+            const float fz0 = inner_z0 + (inner_z1 - inner_z0) * ((float)iz / (float)floor_rows);
+            const float fz1 = inner_z0 + (inner_z1 - inner_z0) * ((float)(iz + 1) / (float)floor_rows) - 0.014F;
+            const float v = portal_panel_variation(ix, iz);
+            const float base = 0.050F + v * 0.024F;
+            portal_overlay_emit_floor_quad(count, fx0, fx1, min_y + 0.006F, fz0, fz1, base * 0.86F, base * 0.75F, base * 0.48F, 0.110F + wet * 0.070F);
+        }
+    }
+
+    for (int ix = 0; ix < 4; ++ix) {
+        const float sx0 = room_x0 + (room_x1 - room_x0) * ((float)ix / 4.0F);
+        const float sx1 = room_x0 + (room_x1 - room_x0) * ((float)(ix + 1) / 4.0F) - 0.020F;
+        const float v = portal_panel_variation(ix, 7);
+        const float r = 0.145F + v * 0.035F;
+        const float g = 0.130F + v * 0.030F;
+        const float b = 0.070F + v * 0.020F;
+        portal_overlay_emit_xy_quad(count, sx0, sx1, panel_y0, panel_y1, inner_z0 - 0.018F, r * 0.82F, g * 0.78F, b * 0.72F, 0.175F + grime * 0.090F);
+        portal_overlay_emit_xy_quad(count, sx0, sx1, panel_y0, panel_y1, inner_z1 + 0.018F, r * 0.74F, g * 0.70F, b * 0.66F, 0.185F + grime * 0.095F);
+    }
+
+    const float back_x = room_x1 + 0.16F;
+    for (int iz = 0; iz < 3; ++iz) {
+        const float bz0 = inner_z0 + (inner_z1 - inner_z0) * ((float)iz / 3.0F);
+        const float bz1 = inner_z0 + (inner_z1 - inner_z0) * ((float)(iz + 1) / 3.0F) - 0.020F;
+        const float v = portal_panel_variation(11, iz);
+        portal_overlay_emit_yz_quad(count, back_x, panel_y0, panel_y1, bz0, bz1, 0.115F + v * 0.035F, 0.103F + v * 0.028F, 0.058F + v * 0.016F, 0.205F + grime * 0.080F);
+    }
+
+    for (int ix = 0; ix < 4; ++ix) {
+        const float cx0 = room_x0 + (room_x1 - room_x0) * ((float)ix / 4.0F);
+        const float cx1 = room_x0 + (room_x1 - room_x0) * ((float)(ix + 1) / 4.0F) - 0.026F;
+        portal_overlay_emit_floor_quad(count, cx0, cx1, ceiling_y, inner_z0, inner_z1, 0.19F, 0.17F, 0.09F, 0.090F + light * 0.070F);
+    }
+
+    const float spill_x0 = room_x0 + 0.35F;
+    const float spill_x1 = room_x1 - 0.35F;
+    portal_overlay_emit_floor_quad(count, spill_x0, spill_x1, min_y + 0.022F, center_z - 0.34F, center_z + 0.34F, 0.56F, 0.45F, 0.20F, 0.085F + light * 0.100F);
+    portal_overlay_emit_yz_quad(count, back_x - 0.035F, panel_y0 + 0.40F, panel_y0 + 0.56F, center_z - 0.52F, center_z + 0.52F, 0.54F, 0.42F, 0.18F, 0.090F + light * 0.095F);
+}
+
 static uint32_t build_portal_overlay_vertices(const BackroomsPortalGpuParams *portal) {
     if (portal == NULL || portal->entry[3] <= 0.5F) {
+        s_last_portal_room_mesh_vertices = 0U;
         return 0U;
     }
 
@@ -1180,6 +1267,10 @@ static uint32_t build_portal_overlay_vertices(const BackroomsPortalGpuParams *po
     const float side = 0.075F + jamb * 0.045F;
     const float top = 0.065F + trim * 0.055F;
     const float glow_a = 0.18F + 0.18F * portal->light[1];
+
+    const uint32_t room_mesh_start = count;
+    portal_overlay_emit_room_mesh_layer(&count, portal, wall_x, center_z, z0, z1, min_y, max_y);
+    s_last_portal_room_mesh_vertices = count - room_mesh_start;
 
     portal_overlay_emit_yz_quad(&count, wall_x - 0.010F, min_y - 0.04F, max_y + 0.04F, z0 - side, z0 + side, 0.21F, 0.17F, 0.095F, 0.52F);
     portal_overlay_emit_yz_quad(&count, wall_x - 0.010F, min_y - 0.04F, max_y + 0.04F, z1 - side, z1 + side, 0.21F, 0.17F, 0.095F, 0.52F);
@@ -1599,6 +1690,8 @@ static void draw_frame(float fb_w, float fb_h) {
         nt_gfx_orphan_buffer(s_portal_overlay_vbo, s_portal_overlay_vertices, s_last_portal_overlay_vertices * sizeof(s_portal_overlay_vertices[0]));
         nt_gfx_bind_pipeline(s_portal_overlay_pipeline);
         nt_gfx_bind_vertex_buffer(s_portal_overlay_vbo);
+        nt_gfx_bind_texture(s_wall_tex, 0);
+        nt_gfx_set_uniform_int("u_overlay_tex", 0);
         nt_gfx_set_uniform_vec4("u_overlay_resolution", (float[4]){fb_w, fb_h, g_nt_app.time, portal.entry[3]});
         nt_gfx_set_uniform_vec4("u_overlay_player", (float[4]){s_game.x, s_game.z, s_game.yaw, 0.0F});
         nt_gfx_draw(0, s_last_portal_overlay_vertices);
@@ -1677,8 +1770,9 @@ static cJSON *state_json(void) {
     cJSON *overlay = cJSON_CreateObject();
     cJSON_AddBoolToObject(overlay, "enabled", true);
     cJSON_AddNumberToObject(overlay, "last_vertex_count", (double)s_last_portal_overlay_vertices);
+    cJSON_AddNumberToObject(overlay, "room_mesh_vertex_count", (double)s_last_portal_room_mesh_vertices);
     cJSON_AddNumberToObject(overlay, "vertex_capacity", (double)PORTAL_OVERLAY_MAX_VERTICES);
-    cJSON_AddStringToObject(overlay, "path", "native_nt_gfx_proxy_geometry");
+    cJSON_AddStringToObject(overlay, "path", "native_nt_gfx_room_mesh_material_layer");
     cJSON_AddItemToObject(portal, "native_overlay", overlay);
     cJSON_AddItemToObject(root, "portal_render", portal);
     cJSON_AddStringToObject(root,

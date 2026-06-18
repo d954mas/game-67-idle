@@ -105,7 +105,5 @@
     ]
   },
   "problem": "The portal proof now has a real texture-backed room mesh/material layer, but the image still lacks production-quality realistic construction, physically convincing lighting, and enough material fidelity to compete with strong Backrooms horror games",
-  "next": "Move from overlay mesh material proof to proper authored 3D room surfaces with stronger lighting/shadow response, or use the T0011 render-target path once the engine exports it",
-  "markdown": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T19-12-39-534Z_desktop.md",
-  "json": "gamedesign/projects/backrooms-liminal/reviews/product_read_gate_2026-06-18T19-12-39-534Z_desktop.json"
+  "next": "Move from overlay mesh material proof to proper authored 3D room surfaces with stronger lighting/shadow response, or use the T0011 render-target path once the engine exports it"
 }
