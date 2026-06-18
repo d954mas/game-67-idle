@@ -2,7 +2,7 @@
 
 ## Project
 
-- No active game concept is selected. Treat this repository as a clean
+- Active game concept: `Backrooms Liminal` (backrooms-liminal), Native 3D liminal horror: find a humming exit fuse in shifting yellow corridors while light, sound, and fear pressure force risky route choices.
   AI-first native game seed ready for the next game.
 - This is an AI-first game development base: improve the game and the AI workflow together.
 - The engine lives in `external/neotolis-engine` as a submodule; never edit it

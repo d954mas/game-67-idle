@@ -2,43 +2,46 @@
 
 ## Current Goal
 
-No active game concept is selected. This repository is a clean AI-first native
-game seed, ready for the next game.
+Build the `Backrooms Liminal` (backrooms-liminal) native-first prototype:
+one first-person 3D corridor, fuse pickup, return-to-exit, fear/battery pressure,
+and strict visual/player-read proof before any broader maze/content expansion.
 
-The asset/cutout pipeline was reviewed and optimized this iteration (key_matte
-default, route_cutout auto-picker, dual_plate; the per-asset edge-color audit
-removed; ~4000 lines of legacy/dead code dropped) — see git history.
+## Blocking Work
 
-Mine Cards was a prior pipeline test run; its full game, GDD, and tasks are
-preserved in tag `mine-cards-snapshot-2026-06-18` and removed from the working
-tree so the next game starts clean. Reusable lessons live in
-`AI_PIPELINE_HISTORY.md`.
+- No runtime implementation blocker is known yet; the next blocker should come
+  from the first GDD/reference/fake-shot pass.
 
-## Current Runtime Surface
+## Non-blocking Debt
 
-Native `game_seed` is the clean seed work surface:
-
-```powershell
-cmake --build --preset native-debug --target game_seed
-build/game_seed/native-debug/game_seed.exe --devapi 9123
-```
-
-Runtime entrypoint: `src/clean_seed_main.c` (362-line debug template).
-
-The engine submodule at `external/neotolis-engine` is read-only from this repo.
-Reusable sidecar modules, tools, skills, and game code may be edited here.
+- None recorded for this prototype yet.
 
 ## Current Gate
 
-Capture the user's game concept (references, audience, platform, no-go
-constraints), then run the Stage 0 prototype startup path and create a fresh
-project wiki plus exactly one scoped task/epic before implementation. Do not
-invent a concept.
+First playable native gate for backrooms-liminal: `data/core_loop.json`,
+`reviews/first_slice_visual_gate.md`, native build, DevAPI smoke, first-screen
+screenshot, after-fuse screenshot, readability zoom, and strict product gate.
+
+## Required Validation
+
+```powershell
+node tools/game_context/iteration_context.mjs
+cmake --build --preset native-debug --target game_seed
+py -3.12 tools/devapi/smoke.py
+node tools/taskboard/cli.mjs validate
+```
+
+## Last Known Good Evidence
+
+- `tmp/prototype_startup_gate_context.json` after kickoff.
+- `gamedesign/projects/backrooms-liminal/reviews/first_slice_visual_gate.md` is the
+  first-slice visual/product gate template and must be filled before broad
+  runtime work; it names the optional visual critic packet command.
+- `gamedesign/projects/backrooms-liminal/visual/live_state_acceptance_matrix.json`
+  is the machine-readable state coverage matrix for product gates.
 
 ## Next Priorities
 
-1. Capture the next game concept, then scaffold a fresh project wiki + one
-   scoped task/epic before implementation.
-2. Keep reusable pipeline/skills/knowledge clean and current between games.
-3. Keep native PC scale/focus + visual/teachability/core-loop proof as early
-   gates for the next playable UI.
+1. Replace the clean seed screen with the scoped Backrooms 3D runtime.
+2. Update DevAPI smoke per-game expectations for `backrooms.*` UI/state.
+3. Build native debug and run smoke/capture.
+4. Run readability/product gates and freeze expansion if the screenshot fails.

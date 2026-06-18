@@ -5,8 +5,8 @@
   "task": "",
   "surface": "desktop",
   "verdict": "pass",
-  "timestamp": "2026-06-18T11:16:32.283Z",
-  "screenshot": "C:\\Users\\ROG\\AppData\\Local\\Temp\\product-gate-test-etZQvF\\screen.png",
+  "timestamp": "2026-06-18T15:25:24.661Z",
+  "screenshot": "C:\\Users\\ROG\\AppData\\Local\\Temp\\product-gate-test-078ezQ\\screen.png",
   "answers": {
     "where": "A bright combat screen.",
     "action": "Press the primary action button.",
@@ -53,6 +53,6 @@
   },
   "problem": "",
   "next": "",
-  "markdown": "gamedesign/projects/matrix-test/reviews/product_read_gate_2026-06-18T11-16-32-282Z_desktop.md",
-  "json": "C:\\Users\\ROG\\AppData\\Local\\Temp\\product-gate-test-etZQvF\\gate.json"
+  "markdown": "gamedesign/projects/matrix-test/reviews/product_read_gate_2026-06-18T15-25-24-660Z_desktop.md",
+  "json": "C:\\Users\\ROG\\AppData\\Local\\Temp\\product-gate-test-078ezQ\\gate.json"
 }
