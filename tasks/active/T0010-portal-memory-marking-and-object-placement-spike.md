@@ -21,7 +21,7 @@ and reveal a real exit.
 
 - [x] Project direction doc exists and names the hook, core loop, and visual
       target for portal rooms, player marks, and object placement.
-- [ ] Native runtime shows one readable impossible-room/portal composition:
+- [x] Native runtime shows one readable impossible-room/portal composition:
       the room reads larger/different inside than the approach suggests.
 - [x] Player can place at least one visible mark on a wall or floor surface.
 - [x] Player can pick up one mundane object and place it on one valid target.
@@ -57,3 +57,9 @@ and reveal a real exit.
   the impossible geometry reads too flat and needs a stronger non-Euclidean
   render pass before this task can close.
 - 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Replace the flat impossible-cut illusion with a stronger non-Euclidean render pass: nested room planes, convincing wall thickness, shadowed door depth, and authored room landmarks.
+- 2026-06-18: Non-Euclidean render pass replaced the flat wall overlay with a
+  secondary ray-box room visible through the architectural cut. The updated
+  screenshot `build/captures/backrooms_t0010_impossible_geometry.png` now reads
+  as a deeper room that should not fit, but product gate remains red for
+  material, lighting, bevel/contact-shadow, and UI plate quality.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Do a dedicated visual pass on production materials and lighting: stronger wallpaper/carpet material depth, fluorescent shadows, beveled wall thickness, grime, and a more physical locked-door/room landmark.
