@@ -4,7 +4,7 @@ project: backrooms-liminal
 task: T0010
 surface: desktop
 verdict: fail
-timestamp: 2026-06-18T21:39:40.292Z
+timestamp: 2026-06-18T21:45:47.993Z
 ---
 
 # Product Read Gate - backrooms-liminal / desktop
@@ -15,11 +15,11 @@ Screenshot: `build/captures/backrooms_t0010_impossible_geometry.png`
 
 ## Player Read
 
-- Where am I? Yellow Backrooms corridor facing a larger-inside impossible-room aperture with a more physical native jamb/header/sill, copied mark, threshold, and dark interior matte backing
+- Where am I? Yellow Backrooms corridor facing a larger-inside impossible-room aperture with physical native trim, clearer warm bounce on nearby wall/floor material, copied mark, and dark interior backing
 - What should I do now? Use the copied mark as evidence, find the missing handle, and test the locked door
-- What changed after input? The portal entrance now has solid native trim/return surfaces and the fullscreen rim/glow has less authority over the frame
+- What changed after input? The portal area now has additional warm bounce/fill and a light color-clarity pass so the wall, floor, and aperture materials read less muddy
 - What is the reward / why continue? The player learns the room can be tested and later stabilized by fitting the found handle
-- Why does this look like a game? Native 3D liminal horror view with a larger-inside portal room, generated Backrooms materials, physical aperture trim, fluorescent spill, shadowed interior, minimal journal UI, and visible native wall/floor/ceiling surfaces
+- Why does this look like a game? Native 3D liminal horror view with a larger-inside portal room, generated Backrooms materials, physical aperture trim, warmer local light bounce, shadowed interior, minimal journal UI, and visible native wall/floor/ceiling surfaces
 
 ## State Coverage
 
@@ -51,7 +51,7 @@ Not covered / debt:
 
 ## Review
 
-Problem: The aperture frame is less purely fullscreen glow and has more native physical trim, but the result still reads as a hybrid matte/composite plus native overlay rather than a production-quality native room or render-target portal.
+Problem: The material/light clarity improved around the portal, but the result still reads as a hybrid matte/composite plus native overlay rather than a production-quality native room or render-target portal.
 
 Next: Continue toward a complete opaque native portal-room draw path or unblock T0011 render-target-backed portal lighting; avoid expanding gameplay content while art_quality and audience_fit remain 3.
 
@@ -69,5 +69,5 @@ Scores:
 - audience_fit: 3
 
 Issues:
-- major / art_quality: The entrance is more physically framed, but the portal still lacks production-grade authored geometry, crisp material detail, and physically convincing integrated light.
+- major / art_quality: The portal area is clearer and less muddy, but it still lacks production-grade authored geometry, crisp material detail, and physically convincing integrated light/shadow.
 - major / audience_fit: The impossible-space hook remains readable, but the visual signature is still not strong enough to stand apart from high-quality Backrooms games.

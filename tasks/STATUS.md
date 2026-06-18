@@ -22,7 +22,8 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
   native solid jamb/header/sill entrance trim, and lower-alpha external proxy
   framing. The fullscreen portal color and rim now carry less of the room and
   frame image, while the native layer carries more material/light/entry
-  responsibility. It still does not reach
+  responsibility; a local warm bounce/fill and light color-clarity pass now make
+  nearby wall/floor materials less muddy. It still does not reach
   production-quality realistic Backrooms room construction because the portal
   interior remains a hybrid matte/composite plus native overlay.
 - T0011 tracks an engine-facing dependency for true fast multi-pass portal
@@ -72,7 +73,8 @@ node tools/taskboard/cli.mjs validate
   portal lighting, inner wall returns, opaque side/back/ceiling construction,
   corrected native light material kind, brighter native material/light shading,
   native solid jamb/header/sill entrance trim, nested back-wall frame/fixture
-  geometry, and copied mark feedback.
+  geometry, local portal-area bounce/fill, light color clarity, and copied mark
+  feedback.
 - `tools/assets/build_backrooms_liminal_materials.py` builds the current
   Backrooms material source asset atomically into
   `assets/backrooms-liminal/materials/portal_material_atlas.ppm` plus

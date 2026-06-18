@@ -304,3 +304,16 @@ and reveal a real exit.
   for art quality/audience fit: the entrance is more physically framed, but the
   aperture is still a hybrid matte/composite plus native overlay, not yet a
   production opaque native room or render-target portal.
+- 2026-06-19: Portal light-clarity slice added local warm bounce/fill around
+  the portal wall/floor area and a light color-clarity grade so the generated
+  Backrooms material reads less muddy in the native proof screenshot. This did
+  not add new content or geometry; the T0010 scenario still reports
+  `native_overlay.last_vertex_count = 924`,
+  `native_overlay.room_mesh_vertex_count = 840`,
+  `native_overlay.solid_pass_vertex_count = 474`, and
+  `native_overlay.blended_detail_vertex_count = 450`. Native build, material
+  atlas rebuild, T0010 capture, smoke, readability zoom, taskboard validation,
+  profiler-scope check, and strict product gate ran. Product gate remains FAIL
+  for art quality/audience fit: material/light clarity improved, but the
+  aperture is still a hybrid matte/composite plus native overlay, not yet a
+  production opaque native room or render-target portal.
