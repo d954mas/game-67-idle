@@ -48,6 +48,10 @@ typedef struct BackroomsState {
     float last_run_time;
     float last_fear;
     float last_battery;
+    float route_choice_feedback_timer;
+    int route_choice_stage;
+    int route_choice_correct;
+    int route_choice_wrong;
     bool threat_visible;
     bool caught_audio_played;
     bool flashlight_on;
@@ -71,6 +75,8 @@ static nt_texture_t s_wall_tex;
 static nt_texture_t s_ui_tex;
 static uint8_t s_wall_pixels[WALL_TEX_W * WALL_TEX_H * 4];
 static uint8_t s_ui_pixels[UI_W * UI_H * 4];
+static const float s_route_choice_z[] = {24.0F, 16.2F, 8.3F};
+static const int s_route_choice_safe_side[] = {1, -1, 1};
 
 static const char *s_vs_src = "precision mediump float;\n"
                               "layout(location = 0) in vec2 a_position;\n"
@@ -92,6 +98,7 @@ static const char *s_fs_src =
     "uniform vec4 u_player;\n"
     "uniform vec4 u_state;\n"
     "uniform vec4 u_pressure;\n"
+    "uniform vec4 u_route;\n"
     "uniform sampler2D u_wall_tex;\n"
     "uniform sampler2D u_ui_tex;\n"
     "\n"
@@ -191,6 +198,8 @@ static const char *s_fs_src =
     "    contact *= 1.0 - 0.22 * exp(-hit.y * 12.0);\n"
     "    float side_opening = 0.0;\n"
     "    float false_exit = 0.0;\n"
+    "    float route_safe_glow = 0.0;\n"
+    "    float route_bad_glow = 0.0;\n"
     "    if (mat == 3) {\n"
     "        float bay = abs(fract((hit.z + 1.2) / 7.7) - 0.5);\n"
     "        side_opening = (1.0 - smoothstep(0.065, 0.12, bay)) * smoothstep(0.18, 0.42, hit.y) * (1.0 - smoothstep(1.85, 2.22, hit.y));\n"
@@ -199,6 +208,12 @@ static const char *s_fs_src =
     "        float door_body = (1.0 - smoothstep(0.07, 0.16, slot)) * smoothstep(0.22, 0.38, hit.y) * (1.0 - smoothstep(1.58, 1.86, hit.y));\n"
     "        float sign_band = (1.0 - smoothstep(0.09, 0.18, slot)) * (1.0 - smoothstep(0.04, 0.08, abs(hit.y - 1.72)));\n"
     "        false_exit = u_state.x * u_pressure.x * max(door_body, sign_band * 0.8);\n"
+    "        float anomaly = u_route.x * (1.0 - smoothstep(1.1, 2.35, abs(hit.z - u_route.z)));\n"
+    "        float lane_side = step(0.0, hit.x * u_route.y);\n"
+    "        float lane_band = smoothstep(0.34, 0.62, hit.y) * (1.0 - smoothstep(1.78, 2.10, hit.y));\n"
+    "        lane_band *= 0.62 + 0.38 * step(0.5, sin(ttime * 8.0 + hit.z * 1.4));\n"
+    "        route_safe_glow = anomaly * lane_side * lane_band;\n"
+    "        route_bad_glow = anomaly * (1.0 - lane_side) * lane_band;\n"
     "    }\n"
     "    float fixture_shape = 0.0;\n"
     "    if (mat == 2) {\n"
@@ -210,6 +225,9 @@ static const char *s_fs_src =
     "    color *= 1.0 - side_opening * 0.86;\n"
     "    color = mix(color, vec3(0.005, 0.012, 0.008), false_exit * 0.92);\n"
     "    color += vec3(0.1, 1.1, 0.34) * false_exit * (0.42 + 0.58 * step(0.5, sin(ttime * 6.0 + hit.z)));\n"
+    "    color = mix(color, vec3(0.11, 0.0, 0.0), route_bad_glow * 0.46);\n"
+    "    color += vec3(0.08, 1.05, 0.42) * route_safe_glow * (0.75 + u_pressure.x);\n"
+    "    color += vec3(1.0, 0.08, 0.0) * route_bad_glow * 0.22;\n"
     "    if (mat == 5) color += vec3(0.1, 2.4, 1.1);\n"
     "    if (mat == 6) {\n"
     "        float eye_l = 1.0 - smoothstep(0.015, 0.05, length(hit.xy - vec2(-0.08, 1.55)));\n"
@@ -263,6 +281,40 @@ static bool near_fuse(void) { return !s_game.fuse_found && dist_to(s_game.x, s_g
 
 static bool near_exit(void) { return s_game.fuse_found && s_game.z < 1.85F && absf(s_game.x) < 0.9F; }
 
+static int route_choice_total(void) { return (int)(sizeof(s_route_choice_z) / sizeof(s_route_choice_z[0])); }
+
+static int route_choice_safe_side_for_stage(int stage) {
+    if (stage < 0 || stage >= route_choice_total()) {
+        return 0;
+    }
+    return s_route_choice_safe_side[stage];
+}
+
+static float route_choice_z_for_stage(int stage) {
+    if (stage < 0 || stage >= route_choice_total()) {
+        return 0.0F;
+    }
+    return s_route_choice_z[stage];
+}
+
+static const char *route_choice_side_name(int side) {
+    if (side > 0) {
+        return "LEFT";
+    }
+    if (side < 0) {
+        return "RIGHT";
+    }
+    return "NONE";
+}
+
+static bool route_choice_active(void) {
+    if (!s_game.fuse_found || s_game.won || s_game.caught || s_game.route_choice_stage >= route_choice_total()) {
+        return false;
+    }
+    const float route_z = route_choice_z_for_stage(s_game.route_choice_stage);
+    return s_game.z <= route_z + 1.8F && s_game.z >= route_z - 1.8F;
+}
+
 static float stalker_z(void) {
     const float close_distance = 8.6F - 4.2F * clampf(s_game.stalker_pressure, 0.0F, 1.0F);
     return fmaxf(s_game.z - close_distance, 2.9F);
@@ -309,6 +361,47 @@ static void record_run_result(void) {
     s_game.last_run_time = s_game.run_time;
     s_game.last_fear = s_game.fear;
     s_game.last_battery = s_game.battery;
+}
+
+static void update_route_choice(void) {
+    if (!s_game.fuse_found || s_game.won || s_game.caught || s_game.route_choice_stage >= route_choice_total()) {
+        return;
+    }
+
+    const float route_z = route_choice_z_for_stage(s_game.route_choice_stage);
+    const int safe_side = route_choice_safe_side_for_stage(s_game.route_choice_stage);
+    if (route_choice_active() && s_game.message_timer <= 0.0F) {
+        char line[64];
+        (void)snprintf(line, sizeof(line), "HUM POINTS %s", route_choice_side_name(safe_side));
+        set_message(line, 0.75F);
+    }
+    if (s_game.z > route_z - 1.8F) {
+        return;
+    }
+
+    int chosen_side = 0;
+    if (s_game.x < -0.24F) {
+        chosen_side = -1;
+    } else if (s_game.x > 0.24F) {
+        chosen_side = 1;
+    }
+
+    if (chosen_side == safe_side) {
+        s_game.route_choice_correct += 1;
+        s_game.fear = clampf(s_game.fear - 5.0F, 0.0F, 100.0F);
+        s_game.stalker_pressure = clampf(s_game.stalker_pressure - 0.14F, 0.0F, 1.0F);
+        s_game.route_shift = clampf(s_game.route_shift - 0.08F, 0.0F, 1.0F);
+        set_message("GOOD TURN", 1.4F);
+    } else {
+        s_game.route_choice_wrong += 1;
+        s_game.fear = clampf(s_game.fear + 16.0F, 0.0F, 100.0F);
+        s_game.stalker_pressure = clampf(s_game.stalker_pressure + 0.23F, 0.0F, 1.0F);
+        s_game.route_shift = clampf(s_game.route_shift + 0.18F, 0.0F, 1.0F);
+        game_audio_play(GAME_AUDIO_CUE_STALKER);
+        set_message(chosen_side == 0 ? "YOU HESITATED" : "WRONG TURN", 1.8F);
+    }
+    s_game.route_choice_feedback_timer = 2.0F;
+    s_game.route_choice_stage += 1;
 }
 
 static void parse_args(int argc, char **argv) {
@@ -487,8 +580,11 @@ static void build_ui(void) {
     ui_bar(806, 60, 114, 16, s_game.battery, 238, 210, 86);
     (void)snprintf(line, sizeof(line), "FUSE:%s  EXIT:%s", s_game.fuse_found ? "YES" : "NO", s_game.fuse_found ? "ON" : "OFF");
     ui_text(700, 94, line, 2, 198, 230, 196, 245);
-    if (s_game.fuse_found && !s_game.won) {
-        (void)snprintf(line, sizeof(line), "ROUTE:SHIFT  THREAT:%d%%", (int)(s_game.stalker_pressure * 100.0F));
+    if (route_choice_active()) {
+        (void)snprintf(line, sizeof(line), "TURN:%s  CHOICE:%d/%d", route_choice_side_name(route_choice_safe_side_for_stage(s_game.route_choice_stage)), s_game.route_choice_stage + 1, route_choice_total());
+        ui_text(700, 122, line, 1, 132, 255, 184, 255);
+    } else if (s_game.fuse_found && !s_game.won) {
+        (void)snprintf(line, sizeof(line), "ROUTE:SHIFT  THREAT:%d", (int)(s_game.stalker_pressure * 100.0F));
         ui_text(700, 122, line, 1, 255, 184, 132, 245);
     } else {
         ui_text(700, 122, "ROUTE:STABLE", 1, 175, 205, 170, 220);
@@ -497,7 +593,11 @@ static void build_ui(void) {
     ui_rect(476, 268, 8, 2, 230, 235, 220, 220);
     ui_rect(479, 265, 2, 8, 230, 235, 220, 220);
 
-    if (!s_game.won && !s_game.caught && near_fuse()) {
+    if (!s_game.won && !s_game.caught && route_choice_active()) {
+        ui_rect(260, 392, 440, 46, 5, 8, 8, 215);
+        (void)snprintf(line, sizeof(line), "MOVE %s - TRUST HUM", route_choice_side_name(route_choice_safe_side_for_stage(s_game.route_choice_stage)));
+        ui_text(288, 406, line, 3, 132, 255, 184, 255);
+    } else if (!s_game.won && !s_game.caught && near_fuse()) {
         ui_rect(322, 392, 316, 46, 5, 8, 8, 215);
         ui_text(346, 406, "PRESS E - TAKE FUSE", 3, 132, 255, 184, 255);
     } else if (!s_game.won && !s_game.caught && near_exit()) {
@@ -623,6 +723,9 @@ static void update_game(void) {
     if (s_game.stalker_audio_timer > 0.0F) {
         s_game.stalker_audio_timer -= dt;
     }
+    if (s_game.route_choice_feedback_timer > 0.0F) {
+        s_game.route_choice_feedback_timer -= dt;
+    }
     game_audio_update();
     game_audio_set_volume(g_game_state.settings_master_volume, g_game_state.settings_sfx_volume);
     if (s_game.caught) {
@@ -697,6 +800,7 @@ static void update_game(void) {
     s_game.x = clampf(s_game.x, -1.05F, 1.05F);
     s_game.z = clampf(s_game.z, 0.45F, 31.8F);
     s_game.threat_visible = looking_at_stalker();
+    update_route_choice();
 
     if (s_game.flashlight_on && s_game.battery > 0.0F) {
         s_game.battery = clampf(s_game.battery - dt * 0.026F, 0.0F, 1.0F);
@@ -773,6 +877,7 @@ static void draw_frame(float fb_w, float fb_h) {
     nt_gfx_set_uniform_vec4("u_player", (float[4]){s_game.x, s_game.z, s_game.yaw, 0.0F});
     nt_gfx_set_uniform_vec4("u_state", (float[4]){s_game.fuse_found ? 1.0F : 0.0F, s_game.fear / 100.0F, (s_game.flashlight_on && s_game.battery > 0.0F) ? 1.0F : 0.0F, s_game.won ? 1.0F : 0.0F});
     nt_gfx_set_uniform_vec4("u_pressure", (float[4]){s_game.route_shift, s_game.stalker_pressure, s_game.threat_visible ? 1.0F : 0.0F, s_game.caught ? 1.0F : 0.0F});
+    nt_gfx_set_uniform_vec4("u_route", (float[4]){route_choice_active() ? 1.0F : 0.0F, (float)route_choice_safe_side_for_stage(s_game.route_choice_stage), route_choice_z_for_stage(s_game.route_choice_stage), (float)s_game.route_choice_wrong});
     nt_gfx_draw(0, 6);
 }
 
@@ -789,6 +894,12 @@ static cJSON *state_json(void) {
     cJSON_AddNumberToObject(root, "battery", (double)s_game.battery);
     cJSON_AddNumberToObject(root, "route_shift", (double)s_game.route_shift);
     cJSON_AddNumberToObject(root, "stalker_pressure", (double)s_game.stalker_pressure);
+    cJSON_AddNumberToObject(root, "route_choice_stage", (double)s_game.route_choice_stage);
+    cJSON_AddNumberToObject(root, "route_choice_total", (double)route_choice_total());
+    cJSON_AddBoolToObject(root, "route_choice_active", route_choice_active());
+    cJSON_AddStringToObject(root, "route_choice_safe_side", route_choice_active() ? route_choice_side_name(route_choice_safe_side_for_stage(s_game.route_choice_stage)) : "NONE");
+    cJSON_AddNumberToObject(root, "route_choice_correct", (double)s_game.route_choice_correct);
+    cJSON_AddNumberToObject(root, "route_choice_wrong", (double)s_game.route_choice_wrong);
     cJSON_AddNumberToObject(root, "run_time", (double)s_game.run_time);
     cJSON_AddNumberToObject(root, "last_run_time", (double)s_game.last_run_time);
     cJSON_AddNumberToObject(root, "last_fear", (double)s_game.last_fear);
@@ -910,6 +1021,9 @@ static bool ep_game_debug_set_progress(const cJSON *params, cJSON **result, char
     s_game.fear = clampf((float)json_number(params, "fear", (double)s_game.fear), 0.0F, 100.0F);
     s_game.route_shift = clampf((float)json_number(params, "route_shift", (double)s_game.route_shift), 0.0F, 1.0F);
     s_game.stalker_pressure = clampf((float)json_number(params, "stalker_pressure", (double)s_game.stalker_pressure), 0.0F, 1.0F);
+    s_game.route_choice_stage = (int)clampf((float)json_number(params, "route_choice_stage", (double)s_game.route_choice_stage), 0.0F, (float)route_choice_total());
+    s_game.route_choice_correct = (int)fmaxf(0.0F, (float)json_number(params, "route_choice_correct", (double)s_game.route_choice_correct));
+    s_game.route_choice_wrong = (int)fmaxf(0.0F, (float)json_number(params, "route_choice_wrong", (double)s_game.route_choice_wrong));
     s_game.run_time = fmaxf(0.0F, (float)json_number(params, "run_time", (double)s_game.run_time));
     if (s_game.won || s_game.caught) {
         record_run_result();

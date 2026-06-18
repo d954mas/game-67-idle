@@ -5,28 +5,30 @@
 Review and iterate the `Backrooms Liminal` (backrooms-liminal) native-first
 prototype: the first-person 3D corridor slice now exists with fuse pickup,
 return-to-exit, fear/battery pressure, route instability, stalker pressure, and
-native generated-PCM horror audio cues, plus readable win/fail/replay states
-with strict visual/player-read proof.
+native generated-PCM horror audio cues, readable win/fail/replay states, and
+three deterministic risky route-choice anomalies on the return path with strict
+visual/player-read proof.
 
 ## Blocking Work
 
-- No runtime implementation blocker is known. T0001, T0002, T0003, and T0004
-  are in review; expansion should wait for lead/playtest feedback or a new
-  narrow task.
+- No runtime implementation blocker is known. T0001, T0002, T0003, T0004, and
+  T0005 are in review; expansion should wait for lead/playtest feedback or a
+  new narrow task.
 
 ## Non-blocking Debt
 
 - Global AI profile review confidence is still broken by older unresolved failed
-  records. The T0004 current scope guard reported usable, but slice hygiene
-  still treats profiler evidence as advisory-only.
+  records. T0005 current-scope guard is also broken by earlier failed
+  route-choice scenario attempts that were fixed and rerun successfully; slice
+  hygiene treats profiler evidence as advisory-only.
 
 ## Current Gate
 
 Current native gate for backrooms-liminal: `data/core_loop.json`,
 `reviews/first_slice_visual_gate.md`, native build, DevAPI smoke, first-screen
 screenshot, post-fuse route/stalker screenshot, native audio cue status,
-win/fail/replay screenshots, readability zoom, strict product gate, and slice
-hygiene evidence.
+win/fail/replay screenshots, route-choice screenshots/status report,
+readability zoom, strict product gate, and slice hygiene evidence.
 
 ## Required Validation
 
@@ -84,13 +86,30 @@ node tools/taskboard/cli.mjs validate
 - `build/captures/backrooms_t0004_slice_hygiene.md` is WARN only because
   profiler evidence is advisory/partially unparsable, not because gameplay
   validation failed.
+- `build/captures/backrooms_t0005_first_screen.png` shows the stable first
+  screen after the route-choice slice.
+- `build/captures/backrooms_t0005_route_choice.png` shows the first active
+  return-path lane anomaly with green safe-lane lighting, red danger side,
+  stalker pressure, HUD state, and the `MOVE LEFT - TRUST HUM` prompt.
+- `build/captures/backrooms_t0005_wrong_turn.png` shows wrong-turn feedback,
+  higher fear, and stalker pressure after choosing the unsafe lane.
+- `build/captures/backrooms_t0005_route_choice_status.json` proves all route
+  anomaly checks true: three total choices, active safe side, correct resolve,
+  wrong punishment, second choice right, and third choice left.
+- `build/captures/backrooms_t0005_route_choice_uizoom.png` is the latest
+  readability montage for the route-choice HUD/prompt.
+- `gamedesign/projects/backrooms-liminal/reviews/product_read_gate_t0005_desktop.json`
+  is a strict desktop product gate PASS for risky route-choice anomalies.
+- `build/captures/backrooms_t0005_slice_hygiene.md` is WARN only because
+  profiler evidence is advisory due to fixed earlier scenario failures, not
+  because gameplay validation failed.
 
 ## Next Priorities
 
-1. Let the lead/playtest judge whether T0004 is scary and interesting enough
-   for the next slice.
-2. If accepted, create one narrow task for stronger route variation, a short
-   full-run playtest scenario, or final visual polish on the threat/lighting.
-3. If rejected visually, freeze content expansion and improve the threat
-   silhouette, false exits, lighting, audio feedback, or HUD readability before
-   adding systems.
+1. Let the lead/playtest judge whether T0005 makes the return path scary and
+   interesting enough.
+2. If accepted, create one narrow task for a short full-run playtest scenario,
+   stronger branching geometry, or final visual polish on the stalker/lighting.
+3. If rejected visually or mechanically, freeze content expansion and improve
+   the anomaly readability, threat silhouette, wrong-turn feedback, or HUD
+   clarity before adding broader systems.
