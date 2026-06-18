@@ -4,7 +4,7 @@ project: backrooms-liminal
 task: T0010
 surface: desktop
 verdict: fail
-timestamp: 2026-06-18T22:01:46.568Z
+timestamp: 2026-06-18T22:08:45.316Z
 ---
 
 # Product Read Gate - backrooms-liminal / desktop
@@ -15,11 +15,11 @@ Screenshot: `build/captures/backrooms_t0010_impossible_geometry.png`
 
 ## Player Read
 
-- Where am I? Yellow Backrooms corridor facing a larger-inside impossible-room aperture whose interior now relies more on native boxed room construction and less on the fullscreen portal painting
+- Where am I? Yellow Backrooms corridor facing a larger-inside impossible-room aperture whose interior now has native light-strip and floor-pool geometry instead of only fullscreen portal painting
 - What should I do now? Use the copied mark as evidence, find the missing handle, and test the locked door
-- What changed after input? The portal backing is darker and less image-like, while the native pass adds a larger rear wall mass, floor/ceiling volumes, and visible fluorescent strip/pool geometry
-- What is the reward / why continue? The player reads the opening as a darker physical room that can be tested and later stabilized by fitting the found handle
-- Why does this look like a game? Native 3D liminal horror view with a larger-inside portal room, generated Backrooms materials, physical aperture trim, native boxed interior construction, dim fluorescent light source, shadowed depth, minimal journal UI, and visible wall/floor/ceiling surfaces
+- What changed after input? The native portal overlay now adds central fluorescent fill, wall-wash lighting, and promotes the distant light strip/floor pool to solid native light geometry
+- What is the reward / why continue? The player reads the opening as a physical dark room with a weak real light source that can later be stabilized by fitting the found handle
+- Why does this look like a game? Native 3D liminal horror view with a larger-inside portal room, generated Backrooms materials, physical aperture trim, native boxed interior construction, dim fluorescent source, shadowed depth, minimal journal UI, and visible wall/floor/ceiling surfaces
 
 ## State Coverage
 
@@ -51,9 +51,9 @@ Not covered / debt:
 
 ## Review
 
-Problem: The render path is healthier because more of the room is opaque native geometry and the fullscreen backing is darker, but the screenshot still lacks production-quality integrated portal lighting/material response.
+Problem: The portal has more native light responsibility now, but it still reads as a dark hybrid portal proof rather than a fully integrated production Backrooms room.
 
-Next: Continue replacing the portal interior with fully native opaque authored surfaces, or resolve T0011 render-target-backed portal lighting; keep content expansion frozen while art_quality and audience_fit remain 3.
+Next: Continue replacing the portal interior with brighter fully native authored surfaces and integrated light/shadow, or resolve T0011 render-target-backed portal lighting; keep content expansion frozen while art_quality and audience_fit remain 3.
 
 ## Visual Critique
 
@@ -69,5 +69,5 @@ Scores:
 - audience_fit: 3
 
 Issues:
-- major / art_quality: The fullscreen portal backing is less dominant and the native geometry count is higher, but the aperture still reads too dark and not yet like a fully production-grade integrated 3D room or render-target portal.
-- major / audience_fit: The non-Euclidean hook is clearer and scarier, but the visual signature still is not strong enough to stand apart from high-quality Backrooms games.
+- major / art_quality: The native light source and fill are more honest than the previous backing, but the aperture remains too dark and lacks production-grade integrated material response, shadow detail, and render-target-quality depth.
+- major / audience_fit: The non-Euclidean hook remains readable, but the visual signature still is not strong enough to stand apart from high-quality Backrooms games.

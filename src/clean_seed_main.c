@@ -202,6 +202,8 @@ static const char *s_portal_overlay_fs_src =
     "    float ceiling_spill = exp(-abs(v_world.z - u_overlay_portal.y) * 1.42) * exp(-abs(v_world.y - 1.76) * 1.18) * u_overlay_portal.w;\n"
     "    float floor_spill = exp(-abs(v_world.z - u_overlay_portal.y) * 1.12) * exp(-abs(v_world.y - 0.34) * 1.55) * smoothstep(0.08, 1.0, depth) * u_overlay_portal.w;\n"
     "    float return_contact = smoothstep(u_overlay_portal.z * 0.84, u_overlay_portal.z * 1.04, abs(v_world.z - u_overlay_portal.y));\n"
+    "    float center_beam = exp(-abs(v_world.z - u_overlay_portal.y) * 1.08) * smoothstep(0.08, 0.38, depth) * (1.0 - smoothstep(0.68, 1.0, depth));\n"
+    "    float wall_wash = (1.0 - smoothstep(u_overlay_portal.z * 0.42, u_overlay_portal.z * 0.94, abs(v_world.z - u_overlay_portal.y))) * smoothstep(0.42, 1.72, v_world.y) * (1.0 - smoothstep(2.12, 2.70, v_world.y));\n"
     "    float surface_kind = step(0.5, v_kind) * (1.0 - step(1.5, v_kind));\n"
     "    float seam_kind = step(1.5, v_kind) * (1.0 - step(2.5, v_kind));\n"
     "    float light_kind = step(2.5, v_kind) * (1.0 - step(3.5, v_kind));\n"
@@ -230,6 +232,8 @@ static const char *s_portal_overlay_fs_src =
     "    color += vec3(0.64, 0.49, 0.20) * lamp * (0.20 + light_kind * 0.34);\n"
     "    color += vec3(0.98, 0.80, 0.36) * ceiling_spill * shell_kind * (0.18 + light_kind * 0.10);\n"
     "    color += vec3(0.56, 0.38, 0.15) * floor_spill * shell_kind * 0.25;\n"
+    "    color += vec3(0.32, 0.24, 0.095) * center_beam * shell_kind * (0.34 + u_overlay_portal.w * 0.26);\n"
+    "    color += vec3(0.22, 0.16, 0.060) * wall_wash * construction_kind * (0.26 + u_overlay_portal.w * 0.22);\n"
     "    color = mix(color, color * vec3(0.34, 0.31, 0.24), seam_kind * 0.72);\n"
     "    color = mix(color, vec3(0.030, 0.025, 0.015), occluder_kind * (0.48 + side_shadow * 0.16));\n"
     "    color = mix(color, color * vec3(0.96, 0.91, 0.72) + material_tex * 0.34, shell_kind * 0.78);\n"
@@ -1608,6 +1612,7 @@ static void portal_overlay_emit_room_mesh_layer(uint32_t *count,
     s_portal_overlay_emit_kind = 3.0F;
     portal_overlay_emit_yz_quad(count, nested_x - 0.026F, nested_y1 + 0.075F, nested_y1 + 0.135F, center_z - 0.34F, center_z + 0.34F, 0.78F, 0.62F, 0.26F, 0.92F);
     portal_overlay_emit_yz_quad(count, room_x0 + 0.46F, panel_y1 + 0.02F, ceiling_y - 0.018F, center_z - 0.16F, center_z + 0.16F, 0.66F, 0.52F, 0.22F, 0.80F);
+    s_portal_overlay_emit_kind = 6.0F;
     portal_overlay_emit_yz_quad(count, solid_back_x - 0.060F, panel_y0 + 0.46F, panel_y1 + 0.030F, center_z - 0.075F, center_z + 0.075F, 1.00F, 0.78F, 0.32F, 0.94F);
     portal_overlay_emit_yz_quad(count, solid_back_x - 0.070F, panel_y0 + 0.38F, panel_y1 + 0.110F, center_z - 0.145F, center_z + 0.145F, 0.48F, 0.34F, 0.13F, 0.48F);
     portal_overlay_emit_floor_quad(count, return_x0 + 0.10F, room_x1 - 0.42F, ceiling_y - 0.030F, center_z - 0.24F, center_z + 0.24F, 0.82F, 0.66F, 0.30F, 0.46F + light * 0.18F);

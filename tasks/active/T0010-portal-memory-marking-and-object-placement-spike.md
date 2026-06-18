@@ -346,3 +346,17 @@ and reveal a real exit.
   gate ran. Product gate remains FAIL for art quality and audience fit: this is
   a healthier layer split, but the screenshot still needs fully integrated
   native room lighting or T0011 render-target portal support.
+- 2026-06-18: product gate FAIL (desktop); review: gamedesign\projects\backrooms-liminal\reviews\t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Continue replacing the portal interior with brighter fully native authored surfaces and integrated light/shadow, or resolve T0011 render-target-backed portal lighting; keep content expansion frozen while art_quality and audience_fit remain 3.
+- 2026-06-19: Native light-fill slice kept the geometry count stable but moved
+  more lighting responsibility into the native overlay shader: central
+  fluorescent fill, wall-wash lighting on construction surfaces, and the
+  distant strip/floor pool promoted to the solid native light material kind.
+  The T0010 scenario still reports `native_overlay.last_vertex_count = 1230`,
+  `native_overlay.room_mesh_vertex_count = 1146`,
+  `native_overlay.solid_pass_vertex_count = 780`, and
+  `native_overlay.blended_detail_vertex_count = 450`. Native build, material
+  atlas rebuild, T0010 capture, smoke, readability zoom, taskboard validation,
+  and strict product gate ran. Product gate remains FAIL for art quality and
+  audience fit: the native light source is more honest, but the aperture is
+  still too dark and needs brighter fully authored native surfaces or T0011
+  render-target portal support.
