@@ -15,6 +15,8 @@ Engine-facing issue: `Backrooms Liminal` needs a public render-target /
 framebuffer API in `nt_gfx` before the portal renderer can become a fast,
 general multi-pass system for arbitrary impossible rooms.
 
+Engine tracker: https://github.com/d954mas/neotolis-engine/issues/238
+
 Current evidence from `external/neotolis-engine`:
 
 - Public `engine/graphics/nt_gfx.h` exposes default-frame pass lifecycle
@@ -138,6 +140,8 @@ Minimal acceptance test:
 
 ## Log
 
+- 2026-06-19: Created the external engine issue:
+  https://github.com/d954mas/neotolis-engine/issues/238.
 - 2026-06-19: User asked to verify whether render target/framebuffer binding is
   currently exported. Rechecked public `nt_gfx`, backend boundary, shared
   implementation, and GL backend line-level evidence. It is still not exported:

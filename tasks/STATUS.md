@@ -19,10 +19,11 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
   fluorescent fill/wall-wash lighting. It still does not reach production-quality
   Backrooms construction because the portal interior remains a hybrid
   matte/composite plus native overlay.
-- T0011 tracks an engine-facing dependency for true fast multi-pass portal
-  rendering: public `nt_gfx` render-target/framebuffer support. The game repo
-  must not patch `external/neotolis-engine`; use public APIs or carry an
-  evidence-backed engine task.
+- T0011 / https://github.com/d954mas/neotolis-engine/issues/238 tracks an
+  engine-facing dependency for true fast multi-pass portal rendering: public
+  `nt_gfx` render-target/framebuffer support. The game repo must not patch
+  `external/neotolis-engine`; use public APIs or carry an evidence-backed
+  engine task.
 
 ## Non-blocking Debt
 
