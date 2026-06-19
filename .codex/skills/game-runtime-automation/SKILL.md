@@ -1,6 +1,6 @@
 ---
 name: game-runtime-automation
-description: "Use when adding, using, or improving game runtime automation, or visually testing a running build: DevAPI command buses, endpoints/command.describe contracts, ui.tree/ui.click, frame.wait, synthetic input, gameplay bots, smoke tests, screenshots, recordings, native PC validation, or replacing temporary game-side automation with engine-native tooling. Also covers visual QA: checking how the game looks, auditing UI/camera/rendering/animation output, comparing desktop and web builds, and confirming a scene is nonblank, readable, correctly framed, and playable."
+description: "Use when adding, using, or improving game runtime automation or visual QA for a running build: DevAPI command buses, endpoints/command.describe contracts, ui.tree/ui.click, frame.wait, synthetic input, gameplay bots, smoke tests, screenshots, recordings, native PC validation, and nonblank/readable/playable scene checks."
 ---
 
 # Game Runtime Automation
@@ -10,15 +10,12 @@ runtime contracts instead of screenshots, guesses, or ad hoc OS input.
 
 ## Load Only What Applies
 
-- `references/runtime-workflow-rules.md`: launch/build discovery, project
-  scaffold, temporary adapters, release-build policy, bots, logs, native-first
-  validation, screenshots, recordings, and evidence storage.
-- `references/visual-qa-checklist.md`: Visual QA procedure for checking what the
-  player sees: native desktop/PC proof, WASM/web scope, nonblank output,
-  readable UI text, controls respond, and first-screen focus questions.
-- `references/devapi-pattern.md`: DevAPI command bus, `endpoints`,
-  `command.describe`, `ui.tree`, `ui.click`, `frame.wait`, ordered batches,
-  input gestures, capture patterns, and Required command metadata.
+- `references/runtime-workflow-rules.md`: launch/build discovery, adapters,
+  bots, logs, native-first validation, evidence, and release policy.
+- `references/visual-qa-checklist.md`: Visual QA for player-visible output,
+  native desktop/PC proof, WASM/web scope, readability, and controls.
+- `references/devapi-pattern.md`: DevAPI command bus, discovery, UI/input,
+  frame sync, capture patterns, and required command metadata.
 
 ## Default Workflow
 
