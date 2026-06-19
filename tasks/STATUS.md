@@ -27,12 +27,13 @@ Reusable sidecar modules, tools, skills, and game code may be edited here.
 ## Current Gate
 
 `T0021` is done, `T0022` refreshed the mismatch audit, and `T0023` / `T0025` /
-`T0026` / `T0027` / `T0028` / `T0029` / `T0030` / `T0031` / `T0032` / `T0033`
-are in review after asset-first Roblox-like visual passes. Current baseline:
-sourced CC-BY Assault Walker hero with kitbashed mechanical attachments,
-motion/recoil, stronger shader lighting/material pop, tuned combat camera/VFX
-clarity, CC0 Quaternius enemy, arena rails/pylons, and stylized-studs world
-texture proof. Iteration remains native PC; mobile/web is the UX/export target.
+`T0026` / `T0027` / `T0028` / `T0029` / `T0030` / `T0031` / `T0032` / `T0033` /
+`T0034` are in review after asset-first Roblox-like visual passes. Current
+baseline: sourced CC-BY Assault Walker hero with kitbashed mechanical
+attachments, motion/recoil, stronger shader lighting/material pop, tuned combat
+camera/VFX clarity, CC0 Quaternius enemy, arena rails/pylons, and a true
+runtime mesh/material path for the stylized-studs world texture. Iteration
+remains native PC; mobile/web is the UX/export target.
 Accepted: one owned mech, PvE first, semi-auto arena, floating joystick/WASD,
 resources -> hangar purchase/craft, shoulder rockets, drone swarm proof, short
 dash, `Cooling`, a fixed three-quarter/isometric camera, bright Roblox-like
@@ -40,12 +41,11 @@ toy/block world, stylized studs surfaces, and Foundry Warden mini-boss.
 
 ## Next Priorities
 
-1. Review `T0033`, then choose the next visual slice: true textured
-   mesh/material integration, another sourced mech/part intake, or rigged/source
-   animation.
+1. Review `T0034`, then start the next visual slice: asset-first search and
+   integration for a stronger Roblox-like mech/world model set.
 2. Keep reference constraints from
    `gamedesign/projects/mech-builder-battler/references/current_build_mismatch_audit_2026-06-19.md`.
 3. Keep latest product evidence in
-   `gamedesign/projects/mech-builder-battler/evidence/t0033_stylized_studs_world_texture_2026-06-20.md`.
+   `gamedesign/projects/mech-builder-battler/evidence/t0034_textured_world_floor_runtime_path_2026-06-20.md`.
 4. Defer web/mobile export work until explicitly approved; preserve
    mobile-style controls/readability in the PC harness.

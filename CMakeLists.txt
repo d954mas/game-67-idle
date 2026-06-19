@@ -324,6 +324,7 @@ if(NOT EMSCRIPTEN)
             tools/mech-builder-battler/build_packs.c
             tools/mech-builder-battler/extract_static_gltf.py
             tools/mech-builder-battler/generate_starter_mech_meshes.py
+            tools/mech-builder-battler/generate_world_floor_mesh.py
             tools/mech-builder-battler/recolor_mech_atlas.py
             assets/shaders/mech_mesh_inst.vert
             assets/shaders/mech_mesh_inst.frag
@@ -350,10 +351,12 @@ if(NOT EMSCRIPTEN)
             assets/meshes/mech_starter_joint.gltf
             assets/meshes/mech_starter_armor_plate.gltf
             assets/meshes/mech_starter_visor.gltf
+            assets/meshes/mech_world_studs_floor.gltf
             assets/meshes/poly_pizza_quaternius_mech_cc0.glb
             ${ROBOT_ENEMY_STATIC_MESHES}
             ${ASSAULT_WALKER_STATIC_MESHES}
             "${HERO_MECH_TOY_ATLAS}"
+            assets/textures/mech_builder_battler_stylized_studs_grass_tile_v1.png
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         COMMENT "Building Mech Builder Battler mesh pack"
         VERBATIM

@@ -51,6 +51,7 @@ static const char *MESH_ASSETS[] = {
     "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_004_none_static_ccby30.gltf",
     "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_static_ccby30.gltf",
     "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_none_static_ccby30.gltf",
+    "assets/meshes/mech_world_studs_floor.gltf",
 };
 
 static const char *pack_path(const char *dir, const char *name) {
@@ -87,17 +88,22 @@ int main(int argc, char *argv[]) {
 
   const size_t mesh_count = sizeof(MESH_ASSETS) / sizeof(MESH_ASSETS[0]);
   for (size_t i = 0; i < mesh_count; ++i) {
-    const bool source_mech =
+    const bool textured_mesh =
         strcmp(MESH_ASSETS[i], "assets/meshes/poly_pizza_quaternius_mech_cc0.glb") ==
-        0;
+            0 ||
+        strcmp(MESH_ASSETS[i], "assets/meshes/mech_world_studs_floor.gltf") == 0;
     nt_builder_add_mesh(ctx, MESH_ASSETS[i],
                         &(nt_mesh_opts_t){
-                            .layout = source_mech ? source_mech_layout : layout,
-                            .stream_count = source_mech ? 3 : 2,
+                            .layout = textured_mesh ? source_mech_layout : layout,
+                            .stream_count = textured_mesh ? 3 : 2,
                         });
   }
   nt_builder_add_texture(
       ctx, "assets/textures/poly_pizza_quaternius_mech_toy_atlas.png", NULL);
+  nt_builder_add_texture(
+      ctx,
+      "assets/textures/mech_builder_battler_stylized_studs_grass_tile_v1.png",
+      NULL);
   nt_builder_add_shader(ctx, "assets/shaders/mech_mesh_inst.vert",
                         NT_BUILD_SHADER_VERTEX);
   nt_builder_add_shader(ctx, "assets/shaders/mech_mesh_inst.frag",

@@ -51,8 +51,8 @@
 #define MECH_MESH_PARTS 51
 #define ROBOT_ENEMY_MESH_PARTS 7
 #define ASSAULT_WALKER_MESH_PARTS 13
-#define MECH_MESH_TYPES 36
-#define MECH_MESH_RENDER_ITEMS (MECH_MESH_PARTS + ASSAULT_WALKER_MESH_PARTS + (MAX_DRONES * ROBOT_ENEMY_MESH_PARTS))
+#define MECH_MESH_TYPES 37
+#define MECH_MESH_RENDER_ITEMS (1 + MECH_MESH_PARTS + ASSAULT_WALKER_MESH_PARTS + (MAX_DRONES * ROBOT_ENEMY_MESH_PARTS))
 #define MECH_PART_ROCKETS_ONLY 0x01U
 
 typedef enum {
@@ -139,6 +139,7 @@ typedef enum {
   MECH_MESH_ASSAULT_WALKER_GREY_C_NONE,
   MECH_MESH_ASSAULT_WALKER_GREY_D,
   MECH_MESH_ASSAULT_WALKER_GREY_D_NONE,
+  MECH_MESH_WORLD_STUDS_FLOOR,
 } MeshPartMesh;
 
 typedef struct MeshPartSpec {
@@ -160,12 +161,15 @@ typedef struct MeshMechRuntime {
   nt_resource_t text_vs;
   nt_resource_t text_fs;
   nt_resource_t mech_atlas;
+  nt_resource_t world_texture;
   nt_resource_t ui_font_res;
   nt_material_t material;
+  nt_material_t world_material;
   nt_material_t robot_material;
   nt_material_t solid_material;
   nt_material_t text_material;
   nt_font_t ui_font;
+  nt_entity_t world_floor;
   nt_entity_t parts[MECH_MESH_PARTS];
   nt_entity_t assault_hero[ASSAULT_WALKER_MESH_PARTS];
   nt_entity_t enemy_robots[MAX_DRONES][ROBOT_ENEMY_MESH_PARTS];
@@ -502,6 +506,7 @@ static const char *MESH_MECH_RESOURCE_PATHS[MECH_MESH_TYPES] = {
     "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_004_none_static_ccby30.gltf",
     "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_static_ccby30.gltf",
     "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_none_static_ccby30.gltf",
+    "assets/meshes/mech_world_studs_floor.gltf",
 };
 
 static void ortho(float left, float right, float bottom, float top,
@@ -2026,12 +2031,20 @@ static bool mesh_mech_ready(void) {
   if (!robot_mat_info || !robot_mat_info->ready) {
     return false;
   }
+  const nt_material_info_t *world_mat_info =
+      nt_material_get_info(s_mesh_mech.world_material);
+  if (!world_mat_info || !world_mat_info->ready) {
+    return false;
+  }
   const nt_material_info_t *solid_mat_info =
       nt_material_get_info(s_mesh_mech.solid_material);
   if (!solid_mat_info || !solid_mat_info->ready) {
     return false;
   }
   if (!nt_resource_is_ready(s_mesh_mech.mech_atlas)) {
+    return false;
+  }
+  if (!nt_resource_is_ready(s_mesh_mech.world_texture)) {
     return false;
   }
   for (int i = 0; i < MECH_MESH_TYPES; ++i) {
@@ -2097,6 +2110,10 @@ static void init_mesh_mech(void) {
   s_mesh_mech.mech_atlas = nt_resource_request(
       nt_hash64_str("assets/textures/poly_pizza_quaternius_mech_toy_atlas.png"),
       NT_ASSET_TEXTURE);
+  s_mesh_mech.world_texture = nt_resource_request(
+      nt_hash64_str(
+          "assets/textures/mech_builder_battler_stylized_studs_grass_tile_v1.png"),
+      NT_ASSET_TEXTURE);
   s_mesh_mech.ui_font_res =
       nt_resource_request(nt_hash64_str("mech/ui_font"), NT_ASSET_FONT);
   s_mesh_mech.material = nt_material_create(&(nt_material_create_desc_t){
@@ -2119,6 +2136,27 @@ static void init_mesh_mech(void) {
       .cull_mode = NT_CULL_NONE,
       .color_mode = NT_COLOR_MODE_FLOAT4,
       .label = "mech_starter_mesh_parts",
+  });
+  s_mesh_mech.world_material = nt_material_create(&(nt_material_create_desc_t){
+      .vs = s_mesh_mech.vs,
+      .fs = s_mesh_mech.fs,
+      .textures =
+          {
+              {.name = "u_mech_texture", .resource = s_mesh_mech.world_texture},
+          },
+      .texture_count = 1,
+      .attr_map =
+          {
+              {.stream_name = "position", .location = 0},
+              {.stream_name = "normal", .location = 1},
+              {.stream_name = "uv0", .location = 2},
+          },
+      .attr_map_count = 3,
+      .depth_test = true,
+      .depth_write = true,
+      .cull_mode = NT_CULL_NONE,
+      .color_mode = NT_COLOR_MODE_FLOAT4,
+      .label = "world_stylized_studs_texture",
   });
   s_mesh_mech.robot_material = nt_material_create(&(nt_material_create_desc_t){
       .vs = s_mesh_mech.vs,
@@ -2171,6 +2209,13 @@ static void init_mesh_mech(void) {
       .measure_cache_size = 256,
   });
   nt_font_add(s_mesh_mech.ui_font, s_mesh_mech.ui_font_res);
+
+  s_mesh_mech.world_floor = nt_entity_create();
+  nt_transform_comp_add(s_mesh_mech.world_floor);
+  nt_mesh_comp_add(s_mesh_mech.world_floor);
+  nt_material_comp_add(s_mesh_mech.world_floor);
+  nt_drawable_comp_add(s_mesh_mech.world_floor);
+  *nt_material_comp_handle(s_mesh_mech.world_floor) = s_mesh_mech.world_material;
 
   for (int i = 0; i < MECH_MESH_PARTS; ++i) {
     s_mesh_mech.parts[i] = nt_entity_create();
@@ -2247,6 +2292,7 @@ static void shutdown_mesh_mech(void) {
   nt_transform_comp_shutdown();
   nt_entity_shutdown();
   nt_material_destroy(s_mesh_mech.material);
+  nt_material_destroy(s_mesh_mech.world_material);
   nt_material_destroy(s_mesh_mech.robot_material);
   nt_material_destroy(s_mesh_mech.solid_material);
   nt_material_destroy(s_mesh_mech.text_material);
@@ -2373,6 +2419,28 @@ static void draw_mesh_mech(float w, float h) {
   const int source_hero_index = MECH_MESH_PARTS - 1;
 
   uint32_t item_count = 0;
+  const uint32_t floor_mesh_id =
+      nt_resource_get(s_mesh_mech.meshes[MECH_MESH_WORLD_STUDS_FLOOR]);
+  float *floor_pos = nt_transform_comp_position(s_mesh_mech.world_floor);
+  floor_pos[0] = 0.0F;
+  floor_pos[1] = 0.012F;
+  floor_pos[2] = 0.0F;
+  q_pose(0.0F, 0.0F, 0.0F, nt_transform_comp_rotation(s_mesh_mech.world_floor));
+  float *floor_scl = nt_transform_comp_scale(s_mesh_mech.world_floor);
+  floor_scl[0] = 1.0F;
+  floor_scl[1] = 1.0F;
+  floor_scl[2] = 1.0F;
+  *nt_transform_comp_dirty(s_mesh_mech.world_floor) = true;
+  *nt_mesh_comp_handle(s_mesh_mech.world_floor) = (nt_mesh_t){.id = floor_mesh_id};
+  *nt_material_comp_handle(s_mesh_mech.world_floor) = s_mesh_mech.world_material;
+  nt_drawable_comp_set_color(s_mesh_mech.world_floor, 1.0F, 1.0F, 1.0F, 0.72F);
+  s_mesh_mech.items[item_count].sort_key =
+      nt_sort_key_opaque(s_mesh_mech.world_material.id, floor_mesh_id);
+  s_mesh_mech.items[item_count].entity = s_mesh_mech.world_floor.id;
+  s_mesh_mech.items[item_count].batch_key =
+      nt_batch_key(s_mesh_mech.world_material.id, floor_mesh_id);
+  item_count++;
+
   if (use_assault_hero) {
     append_assault_hero_items(root_x, root_z, root_scale, yaw, move_t, walk,
                               idle_bob, recoil, strafe_lean, forward_lean,
