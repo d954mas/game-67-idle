@@ -98,6 +98,19 @@ test("context budget applies tighter default caps to live status docs", () => {
   }
 });
 
+test("context budget applies the task store hot guide cap", () => {
+  const dir = tempDir();
+  try {
+    writeFixture(dir);
+    writeFileSync(join(dir, "tasks", "README.md"), "x".repeat(3400), "utf8");
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /tasks\/README\.md: 3400 chars > 3300/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("context budget applies the split pipeline map cap", () => {
   const dir = tempDir();
   try {

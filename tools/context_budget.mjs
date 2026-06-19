@@ -48,7 +48,7 @@ const hotDocs = [
   { path: "AGENTS.md", maxChars: 3600 },
   { path: "AI_PIPELINE.md", maxChars: 2200 },
   { path: join("tasks", "STATUS.md"), maxChars: 3200 },
-  { path: join("tasks", "README.md"), maxChars: 4500 },
+  { path: join("tasks", "README.md"), maxChars: 3300 },
 ];
 
 function measure(relPath, kind, maxChars) {
