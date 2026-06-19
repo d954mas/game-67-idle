@@ -5,54 +5,48 @@ description: "Use when generating, cutting, validating, integrating, or reviewin
 
 # Generated Game UI Assets
 
-Use this skill for production generated runtime UI. It coordinates
-`game-visual-art-direction`, `game-asset-pipeline`, and
-`game-runtime-automation`; load those skills only when their deeper domain work
-is actually needed.
+Use this skill for production generated runtime UI. It routes visual target,
+source sheets, crops, runtime manifests, composition proofs, and responsive
+proof without loading every art/asset workflow up front.
 
 ## Load Only What Applies
 
 - `references/ui-workflow-gates.md`: art bible, art job, generation records,
-  source families, prompt packets, source intake, crop plans, runtime assets,
-  gate tiers, runtime integration, failure response, Report Shape.
-- `references/ui-asset-rules.md` # Slice9 Rules: slice9, content safe areas,
-  stretch policy, `usage_policy`, overlay assets.
-- `references/ui-asset-rules.md` # Atlas And Reuse Rules: atlas metadata,
-  review atlases, trim/bleed/extrusion, aliasing, scale variants.
-- `references/ui-asset-rules.md` # Icon And Sprite Rules: gutters, key-color
-  isolation, `key_matte`/`dual_plate`, pivots and anchors.
-- `references/ui-asset-rules.md` # Responsive UI Rules: desktop/portrait split,
-  one full-width primary action, touch/action bounds.
+  source families, source intake, crop/runtime manifests, gate tiers, runtime
+  integration, failure response, and Report Shape.
+- `references/ui-asset-rules.md`: slice9/content bounds, atlas reuse,
+  trim/bleed/extrusion, icons/sprites, gutters, key-color cleanup, anchors, and
+  responsive desktop/portrait layout rules.
+- `game-visual-art-direction`, `game-asset-pipeline`, or
+  `game-runtime-automation`: load only when deeper domain work is required.
 
 ## Minimal Workflow
 
 1. Read project rules, active task, visual target, art direction, screenshot,
    and runtime harness.
-2. Write the 5-line session contract naming manifests, composition proof,
-   screenshot/product gate, and runtime integration evidence.
+2. Write the 5-line session contract: source art, manifests, composition proof,
+   screenshot/product gate, runtime integration evidence.
 3. Use one art job as the work unit: art bible -> source family -> intake ->
    crop/runtime manifests -> contact sheet -> composition proof -> runtime
    screenshot/product gate.
-4. Generate separate source families such as `blank UI kit sheet` and
-   `isolated icon sheet`; use full mockups only as visual targets.
-5. Record accepted source provenance with `new_generation_record.mjs`, using
-   non-empty workflow JSON or `--no-seed-reason`.
-6. Run source intake/crop/build through the referenced workflow. Never integrate
-   from an empty crop manifest or runtime manifest.
-7. Choose draft, integrate, or final-art tier from the reference, then report
-   source art, manifests, proof, gates, validations, and next visual gap.
+4. Keep source families separate: `blank UI kit sheet`, `isolated icon sheet`,
+   and full mockups as visual targets only.
+5. Record provenance with `new_generation_record.mjs` using non-empty workflow
+   JSON or `--no-seed-reason`.
+6. Never integrate from an empty crop manifest or runtime manifest.
+7. Pick draft, integrate, or final-art tier from the reference and report
+   source art, manifests, proof, validations, and the next visual gap.
 
 ## Stop Conditions
 
-- Baked text, fake letters, fused controls, tight gutters, clipped silhouettes,
-  unsafe key-color contamination, or weak icon/component isolation: reject the
-  source sheet before runtime integration.
-- Product/readability fail, lead visual rejection, or mobile density failure:
-  freeze feature/content expansion and fix the earliest failed stage.
-- Technical crop/audit pass is not a beauty pass. A clean crop of bad art still
-  fails the assembled screen against the art bible/fake shot.
-- Procedural or programmer-art scaffolds are debug exceptions only; they cannot
-  close final generated UI work unless the lead explicitly accepts that debt.
+- Reject source sheets with baked text, fake letters, fused controls,
+  tight gutters, clipped silhouettes, key-color contamination, or weak isolation.
+- Product/readability fail, lead visual rejection, or mobile density failure
+  freezes feature/content expansion until the earliest failed stage is fixed.
+- Technical crop/audit pass is not a beauty pass; assembled screen quality is
+  still judged against the art bible/fake shot.
+- Procedural/programmer-art scaffolds are debug debt unless the lead explicitly
+  accepts them.
 
 ## Tier Reminder
 
