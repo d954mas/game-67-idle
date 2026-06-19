@@ -22,7 +22,9 @@ game implementation.
   workflow reviews after importing/checking the current session data.
 - Full deep asset validation currently needs a Python runner visible from Node
   with `PIL`, `numpy`, `scipy`, and `pymatting`; quick reusable pipeline
-  validation remains the normal gate for workflow/tooling edits.
+  validation remains the normal gate for workflow/tooling edits. Override with
+  `AI_PIPELINE_PYTHON` when a project has a known Python command/venv; the
+  value may include arguments such as `uv run python`.
 
 ## Current Gate
 
@@ -65,7 +67,7 @@ node tools/pipeline_validate.mjs
   modules (`PIL`, `numpy`, `scipy`, `pymatting`) instead of accepting the first
   interpreter with `--version`, avoiding late failures on the local `python
   3.14` without SciPy or direct `C:\Python312\python.exe` without user-site
-  cutout deps.
+  cutout deps. `AI_PIPELINE_PYTHON` can supply an explicit command with args.
 - `task-manager` now keeps its hot `SKILL.md` as a short router and loads task
   store, state transition, review queue, prototype closeout, and reporting
   details from `.codex/skills/task-manager/references/task-store-protocol.md`.

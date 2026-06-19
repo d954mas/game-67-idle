@@ -31,7 +31,11 @@ Export depth (with --full):
 
 Housekeeping:
   --keep-exports <n>  keep only the newest n tmp/pipeline-validate-* dirs (default 3)
-  --no-prune          do not prune old tmp/pipeline-validate-* dirs`);
+  --no-prune          do not prune old tmp/pipeline-validate-* dirs
+
+Environment:
+  AI_PIPELINE_PYTHON  Python command for full Python gates; may include args,
+                      for example "C:\\venv\\Scripts\\python.exe" or "uv run python"`);
   process.exit(2);
 }
 
@@ -79,15 +83,64 @@ function run(label, args, opts = {}) {
   }
 }
 
+function splitCommandLine(command) {
+  const parts = [];
+  let current = "";
+  let quote = "";
+  let escaping = false;
+  for (const char of command.trim()) {
+    if (escaping) {
+      current += char;
+      escaping = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaping = true;
+      continue;
+    }
+    if (quote) {
+      if (char === quote) quote = "";
+      else current += char;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (current) {
+        parts.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += char;
+  }
+  if (escaping) current += "\\";
+  if (current) parts.push(current);
+  return parts;
+}
+
+function configuredPythonCandidate() {
+  const configured = process.env.AI_PIPELINE_PYTHON;
+  if (!configured) return null;
+  const parts = splitCommandLine(configured);
+  if (parts.length === 0) return null;
+  return { exe: parts[0], args: parts.slice(1), source: "AI_PIPELINE_PYTHON" };
+}
+
 function findPythonRunner(requiredModules = []) {
+  const configured = configuredPythonCandidate();
   if (dryRun) {
+    if (configured) {
+      console.log(`python runner: <dry-run> ${configured.exe} ${configured.args.join(" ")}`.replace(/\s+/g, " "));
+      return configured;
+    }
     console.log("python runner: <dry-run>");
     return { exe: "python", args: [] };
   }
   const candidates = [];
-  if (process.env.AI_PIPELINE_PYTHON) {
-    candidates.push({ exe: process.env.AI_PIPELINE_PYTHON, args: [] });
-  }
+  if (configured) candidates.push(configured);
   if (process.platform === "win32") {
     candidates.push({ exe: "C:\\Python312\\python.exe", args: [] });
   }

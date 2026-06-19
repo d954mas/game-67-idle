@@ -6,9 +6,10 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-function run(args = []) {
+function run(args = [], env = {}) {
   return spawnSync(process.execPath, ["tools/pipeline_validate.mjs", ...args], {
     cwd: root,
+    env: { ...process.env, ...env },
     encoding: "utf8",
     stdio: "pipe",
   });
@@ -72,4 +73,13 @@ test("pipeline validation accepts --keep-exports and --no-prune", () => {
   const result = run(["--keep-exports", "2", "--no-prune", "--dry-run"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /mode: quick \(dry-run\)/);
+});
+
+test("pipeline validation dry-run shows configured Python command with args", () => {
+  const result = run(["--full", "--dry-run"], {
+    AI_PIPELINE_PYTHON: "uv run python",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /python runner: <dry-run> uv run python/);
+  assert.match(result.stdout, /\$ uv run python -m unittest/);
 });
