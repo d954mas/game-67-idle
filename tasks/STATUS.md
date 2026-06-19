@@ -27,10 +27,10 @@ Reusable sidecar modules, tools, skills, and game code may be edited here.
 ## Current Gate
 
 `T0021` is done, `T0022` refreshed the mismatch audit, and `T0023` / `T0025` /
-`T0026` / `T0027` / `T0028` / `T0029` are in review after asset-first
-Roblox-like visual passes. Current baseline: sourced CC-BY Assault Walker hero
-with motion/recoil, stomp/weapon VFX, CC0 Quaternius enemy, arena rails/pylons,
-studs/world props, and mesh-rendered hero parts instead of shape debug.
+`T0026` / `T0027` / `T0028` / `T0029` / `T0030` are in review after
+asset-first Roblox-like visual passes. Current baseline: sourced CC-BY Assault
+Walker hero with motion/recoil, stronger shader lighting/material pop,
+stomp/weapon VFX, CC0 Quaternius enemy, arena rails/pylons, and studs world.
 Iteration remains native PC; mobile/web is the UX/export target.
 Accepted: one owned mech, PvE first, semi-auto arena, floating joystick/WASD,
 resources -> hangar purchase/craft, shoulder rockets, drone swarm proof, short
@@ -39,11 +39,11 @@ toy/block world, stylized studs surfaces, and Foundry Warden mini-boss.
 
 ## Next Priorities
 
-1. Review `T0029`, then choose the next visual slice: parted limb motion,
-   lighting/material polish, or sourced/generated world asset families.
+1. Review `T0030`, then choose the next visual slice: parted limb motion,
+   authored/source textures, or camera/layout polish for cleaner combat read.
 2. Keep reference constraints from
    `gamedesign/projects/mech-builder-battler/references/current_build_mismatch_audit_2026-06-19.md`.
 3. Keep latest product evidence in
-   `gamedesign/projects/mech-builder-battler/evidence/t0029_arena_dressing_depth_pass_2026-06-20.md`.
+   `gamedesign/projects/mech-builder-battler/evidence/t0030_mech_lighting_material_pop_2026-06-20.md`.
 4. Defer web/mobile export work until explicitly approved; preserve
    mobile-style controls/readability in the PC harness.
