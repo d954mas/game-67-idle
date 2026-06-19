@@ -80,3 +80,11 @@ EMSCRIPTEN/Release link with zero nt_devapi_* symbols; (12) validate + screensho
   cube->sphere). Wire shapes that changed vs the sidecar (clients must follow): get
   -> {path,value}, ui.tree -> {nodes[]}, entity.list -> {entities[]}, engine ok/error
   envelope. REMAINING: Pass 3 (python client/CLI + smoke), Pass 4 (skill + wasm/release).
+- 2026-06-19: PASS 3 DONE + SMOKE GREEN. Rewired tools/devapi onto the engine bus:
+  DevApiClient.step now runs sequentially (the engine rejects deferred frame.wait
+  inside a batch); added endpoint_methods() to flatten endpoints -> {commands[]}.
+  smoke.py rewritten to the engine vocabulary (game.state.reset not the old
+  game.reset_playtest; seed view emits "shape" not shape_index; ui.tree -> {nodes[]}).
+  All 10 checks pass: universal+seed endpoints, ping, state.reset, game.state, ui.tree,
+  state.set round-trip, action.cycle, screenshot (window-capture fallback), and
+  ui.click seed.cycle driving state through the client. REMAINING: Pass 4.

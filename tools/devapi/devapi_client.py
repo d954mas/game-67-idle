@@ -131,12 +131,21 @@ class DevApiClient:
         return self.result("game.state")
 
     def step(self, method: str, params: dict[str, Any] | None = None, wait_frames: int = 1, observe: str = "game.state") -> dict[str, Any]:
-        results = self.batch_results([
-            (method, params or {}),
-            ("frame.wait", {"frames": wait_frames}),
-            (observe, {}),
-        ])
-        return results[-1]
+        # The engine rejects deferred commands (frame.wait) inside a batch, so step
+        # sequentially: act, advance frames, then observe.
+        self.result(method, params or {})
+        if wait_frames > 0:
+            self.wait_frames(wait_frames)
+        return self.result(observe)
+
+    def endpoint_methods(self) -> set[str]:
+        """Engine `endpoints` returns {commands: [{method, group, ...}]}; flatten to names."""
+        listing = self.result("endpoints")
+        if isinstance(listing, dict) and isinstance(listing.get("commands"), list):
+            return {c.get("method") for c in listing["commands"] if isinstance(c, dict)}
+        if isinstance(listing, list):  # tolerate a bare-list transport
+            return {c.get("method") if isinstance(c, dict) else c for c in listing}
+        return set()
 
     def key_tap(self, key: str, hold_frames: int = 1, wait_frames: int = 1) -> dict[str, Any]:
         return self.step("input.key", {"key": key, "mode": "tap", "hold_frames": hold_frames}, wait_frames=wait_frames)
