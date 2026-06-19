@@ -45,7 +45,7 @@ Design inputs:
       step motion, and no "only forward/back" feel.
 - [ ] Attack reads as a mech action: visible weapon recoil, muzzle flash/tracer,
       hit feedback, and heat/vent response.
-- [ ] The mech keeps visible modular slots, including shoulder rocket sockets
+- [x] The mech keeps visible modular slots, including shoulder rocket sockets
       before purchase and equipped rocket modules after purchase.
 - [x] Materials/lighting show stronger painted metal, dark joints, rim/key
       separation, bevel/normal readability, and contact shadow grounding.
@@ -117,3 +117,9 @@ Design inputs:
   all visual scores at 4/5 and no major issue. Minor caveat remains: future
   passes should present customization slots more strongly.
 - 2026-06-19: product gate PASS (desktop-hangar); review: gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T17-37-47-327Z_desktop-hangar.md; screenshot: build/captures/mech_t0021_hangar_smoke.png; next: continue to the next narrow slice
+- 2026-06-19: Added runtime shoulder hardpoint overlay for the downloaded hero
+  mech: locked orange sockets before purchase, then amber/cyan rocket pods
+  after the rocket purchase. Recaptured smoke screenshots prove both states.
+  Also downloaded Poly Pizza/Quaternius `Robot Enemy Legs Gun` as a CC0 source
+  candidate for future modular robot/mech parts; it is not the runtime hero.
+- 2026-06-19: product gate PASS (desktop-rocket-modules); review: gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T17-52-23-263Z_desktop-rocket-modules.md; screenshot: build/captures/mech_t0021_rockets_smoke.png; next: continue to the next narrow slice

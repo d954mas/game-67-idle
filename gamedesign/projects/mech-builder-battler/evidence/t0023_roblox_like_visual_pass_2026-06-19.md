@@ -30,6 +30,12 @@ updated: 2026-06-19
 - Added raised studs to the hangar pad and toy-block props so the world reads
   more like a physical block/baseplate set in perspective, not only a flat
   checker texture.
+- Added visible shoulder hardpoints to the downloaded hero mech: locked orange
+  sockets before purchase and amber rocket pods with cyan caps after purchase.
+  The overlay is a runtime module-readability pass, not a final authored mesh.
+- Downloaded a second CC0 Quaternius source candidate, `Robot Enemy Legs Gun`,
+  for future modular robot/mech part sourcing. It is recorded as source
+  provenance only and is not currently packed into runtime.
 
 ## Screenshot Evidence
 
@@ -53,6 +59,9 @@ Visual judgment:
   the previous single-green-material caveat for the current CC0 asset.
 - The new raised studs make the hangar pad and prop blocks read more like
   chunky toy construction pieces at the native camera distance.
+- The rocket purchase now changes the mech silhouette in the screenshot: the
+  shoulder sockets visibly become rocket pods instead of only changing the HUD
+  button.
 
 ## Residual Risk
 
@@ -61,6 +70,8 @@ Visual judgment:
   shapes, and either find a stronger Roblox-like mech source or create a more
   deliberate block-kit model with clearer customization slots before expanding
   combat.
+- The current hardpoints are a readable runtime overlay. A later final model
+  should turn them into authored mesh parts or a modular GLB set.
 - The stylized-studs ground is procedural proof, not yet a shippable texture
   asset. A future texture pass should decide tileable vs non-tileable up front
   and record provenance using `game-texture-generation`.
@@ -76,6 +87,9 @@ Visual judgment:
 - Strict visual product gate:
   `gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T17-37-47-327Z_desktop-hangar.md`,
   pass with all visual scores at 4/5 and no major issue.
+- Rocket-module visual product gate:
+  `gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T17-52-23-263Z_desktop-rocket-modules.md`,
+  pass with all visual scores at 4/5 and no major issue.
 - `.codex/skills/game-texture-generation`: `quick_validate.py` pass.
 
 ## Downloaded Asset Provenance
@@ -90,3 +104,13 @@ Visual judgment:
 - License as shown on source page on 2026-06-19: Public Domain (CC0 1.0).
 - Texture usage class: mech asset material, unique non-tileable atlas driven by
   the GLB UVs. It should not be reused as a world/baseplate tile.
+
+Additional source candidate:
+
+- Asset: `Robot Enemy Legs Gun` by Quaternius on Poly Pizza.
+- Source page: `https://poly.pizza/m/lFZfDh2hzP`.
+- Downloaded preview: `assets/source/models/quaternius/poly_pizza_quaternius_robot_enemy_legs_gun_cc0_preview.jpg`.
+- Downloaded source GLB: `assets/source/models/quaternius/poly_pizza_quaternius_robot_enemy_legs_gun_cc0.glb`.
+- License as shown on source page on 2026-06-19: Public Domain (CC0 1.0).
+- Runtime status: source candidate only; not packed or rendered in the current
+  slice.

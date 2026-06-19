@@ -1892,6 +1892,68 @@ static void draw_mesh_mech(float w, float h) {
   nt_mesh_renderer_draw_list(s_mesh_mech.items, item_count);
 }
 
+static void draw_source_mech_hardpoints(void) {
+  if (!mesh_mech_ready()) {
+    return;
+  }
+
+  const bool hangar = s_game.screen != SCREEN_BATTLE;
+  const float time = (float)nt_time_now();
+  const float root_x = hangar ? 0.0F : s_game.mech_x;
+  const float root_z = hangar ? 0.4F : s_game.mech_z;
+  const float root_scale = hangar ? 1.18F : 0.88F;
+  const float yaw = hangar ? (2.74F + sinf(time * 0.65F) * 0.05F)
+                           : s_game.mech_facing;
+  float q_y[4];
+  float q_x[4];
+  float q_barrel[4];
+  q_axis(0.0F, 1.0F, 0.0F, yaw, q_y);
+  q_axis(1.0F, 0.0F, 0.0F, 1.5708F, q_x);
+  glm_quat_mul(q_y, q_x, q_barrel);
+  nt_shape_renderer_set_depth(false);
+
+  for (int side = -1; side <= 1; side += 2) {
+    float socket[3];
+    mech_point(root_x, root_z, yaw, (float)side * 0.72F, 2.62F, 0.08F,
+               root_scale, socket);
+    nt_shape_renderer_cube_rot(
+        socket,
+        (float[3]){0.46F * root_scale, 0.18F * root_scale,
+                   0.54F * root_scale},
+        q_y, COL_METAL_DARK);
+    nt_shape_renderer_sphere(
+        (float[3]){socket[0], socket[1] + (0.13F * root_scale), socket[2]},
+        0.13F * root_scale, s_game.rockets_equipped ? COL_GREEN : COL_AMBER);
+
+    if (s_game.rockets_equipped) {
+      float pod[3];
+      mech_point(root_x, root_z, yaw, (float)side * 1.18F, 2.80F, -0.34F,
+                 root_scale, pod);
+      nt_shape_renderer_cube_rot(
+          pod,
+          (float[3]){0.54F * root_scale, 0.34F * root_scale,
+                     0.62F * root_scale},
+          q_y, COL_AMBER);
+      for (int tube = -1; tube <= 1; tube += 2) {
+        float barrel[3];
+        mech_point(root_x, root_z, yaw, (float)side * 1.18F,
+                   2.80F + ((float)tube * 0.12F), -0.78F, root_scale, barrel);
+        nt_shape_renderer_cylinder_rot(barrel, 0.14F * root_scale,
+                                       0.68F * root_scale, q_barrel,
+                                       COL_METAL_DARK);
+        float cap[3];
+        mech_point(root_x, root_z, yaw, (float)side * 1.18F,
+                   2.80F + ((float)tube * 0.12F), -1.12F, root_scale, cap);
+        nt_shape_renderer_sphere(cap, 0.09F * root_scale, COL_EMISSIVE);
+      }
+    } else {
+      nt_shape_renderer_circle_wire_rot(
+          socket, 0.34F * root_scale, q_barrel,
+          (float[4]){1.0F, 0.48F, 0.05F, 0.78F});
+    }
+  }
+}
+
 static void draw_world(float w, float h) {
   const bool hangar = s_game.screen != SCREEN_BATTLE;
   const bool use_mesh_mech = mesh_mech_ready();
@@ -2261,6 +2323,8 @@ static void frame(void) {
   draw_world(w, h);
   nt_shape_renderer_flush();
   draw_mesh_mech(w, h);
+  draw_source_mech_hardpoints();
+  nt_shape_renderer_flush();
   draw_hud(w, h);
   nt_shape_renderer_flush();
   nt_text_renderer_flush();

@@ -22,7 +22,8 @@ Date checked: 2026-06-19.
 | War Machines controls guide | https://deltiasgaming.com/roblox-war-machines-controls-guide/ | Roblox mech/suit controls can stay simple: WASD, dash/boost, primary/secondary attack, mobile joystick/buttons, unlockable suits/upgrades. | Third-party guide; avoid copying licensed suit fantasy directly. |
 | Roblox BattleBots wiki example | https://roblox-battlebots.fandom.com/wiki/Black_Hole | User-built Roblox combat machines are often intentionally box-shaped, with one obvious weapon identity and simple strengths/weaknesses. | BattleBots are vehicle bots, not humanoid mechs; use modular-build readability only. |
 | User-provided stylized studs texture screenshots | `C:/Users/ROG/Downloads/photo_2026-06-19_13-17-59*.jpg` | The ground should not be plain Roblox studs. A strong direction is a seamless stylized surface texture with decorative motifs plus a semi-transparent studs grid and erased gaps where motifs need to show through. | Use as visual direction, not as copied final texture unless the source/provenance is later made project-owned. |
-| Poly Pizza `Mech` by Quaternius | https://poly.pizza/m/o3Ps8z8ByP | A permissively downloadable toy/mech-suit silhouette can replace the procedural cube-pile baseline quickly and better match the Roblox-like target. | Source page shows Public Domain (CC0 1.0) on 2026-06-19. Runtime currently uses mesh silhouette only; original atlas/material colors need a follow-up path. |
+| Poly Pizza `Mech` by Quaternius | https://poly.pizza/m/o3Ps8z8ByP | A permissively downloadable toy/mech-suit silhouette can replace the procedural cube-pile baseline quickly and better match the Roblox-like target. | Source page shows Public Domain (CC0 1.0) on 2026-06-19. Runtime now uses the mesh plus extracted atlas colors. |
+| Poly Pizza `Robot Enemy Legs Gun` by Quaternius | https://poly.pizza/m/lFZfDh2hzP | A second permissive low-poly robot/gun source can inform future modular legs, gun pods, or enemy parts without returning to raw cube authoring. | Source page shows Public Domain (CC0 1.0) on 2026-06-19. Downloaded as source candidate only, not current runtime hero. |
 
 ## Observed Visual Facts
 
@@ -75,6 +76,8 @@ Date checked: 2026-06-19.
 - Mech now uses a downloaded CC0 Poly Pizza/Quaternius source model as its
   visible silhouette, so it reads much closer to a Roblox-like toy mech/suit
   than the previous procedural block assembly.
+- Shoulder hardpoints now visibly change state: locked orange sockets before
+  purchase, amber/cyan rocket pods after purchase.
 - UI is readable and uses engine text, but still closer to prototype HUD than
   playful Roblox-like toy action UI.
 
