@@ -54,6 +54,40 @@ Good examples:
 - playable implementation -> `game-feature-iteration`;
 - visual polish or fake shots -> `game-visual-art-direction`.
 
+## Current Skill Ownership
+
+Use this map before moving rules out of hot files or creating a new skill:
+
+- Pipeline cleanup, context budgets, file/skill placement, export, validators,
+  and repeated workflow friction -> `ai-pipeline-maintenance`.
+- Long-session review, profiler interpretation, and improvement backlog from a
+  completed run -> `chat-session-reflection`.
+- Task capture, task splitting, status, active/archive lifecycle, and evidence
+  rules -> `task-manager`.
+- New game concept, GDD, reference pack, core-loop model, fake shots, and
+  implementation handoff -> `primary-gdd-pipeline`.
+- Playable native feature iteration, build/run proof, slice hygiene, and close
+  slice -> `game-feature-iteration`.
+- Native runtime driving, screenshots, video, DevAPI command contracts, and
+  visual QA automation -> `game-runtime-automation`.
+- Visual direction, fake-shot critique, art quality, and art request packets ->
+  `game-visual-art-direction`.
+- Generated UI kits, source sheets, slice9/crop manifests, and responsive UI
+  composition proofs -> `generated-game-ui-assets`.
+- Source assets, provenance, runtime packs, atlas validation, and pack
+  reproducibility -> `game-asset-pipeline`.
+- Schema-first state, generated C APIs, save/load, migrations, fixtures, and
+  DevAPI state commands -> `game-state-management`.
+- Research source intake, reusable design knowledge promotion, reference
+  deconstruction, and source hygiene -> `design-source-knowledge`.
+- External raster generation fallback through CLI/subagents ->
+  `delegated-image-generation`.
+
+Do not create a new skill for the universal AI pipeline until a repeated
+workflow falls outside this map and needs its own trigger plus distinct
+validation/report shape. Add a reference under the owner skill first when the
+entrypoint can stay short.
+
 ## Create New Skill
 
 Create a new skill only when all are true:
