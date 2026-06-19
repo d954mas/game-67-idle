@@ -1,7 +1,10 @@
 #include "app/nt_app.h"
 #include "core/nt_core.h"
 #include "core/nt_platform.h"
+#if NT_DEVAPI_ENABLED
 #include "devapi/nt_devapi.h"
+#include "devapi/nt_devapi_net.h"
+#endif
 #include "game_state.h"
 #include "graphics/nt_gfx.h"
 #include "input/nt_input.h"
@@ -215,50 +218,56 @@ static cJSON *state_json(void) {
     return root;
 }
 
-static bool ep_game_state(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
-    (void)params;
-    (void)error;
-    (void)error_cap;
-    (void)user;
-    *result = state_json();
+/* The engine handler ABI fills a pre-created result_obj; state_json() builds a
+   fresh object, so transplant its members. */
+static bool seed_emit(cJSON *result_obj, cJSON *src) {
+    if (!src) {
+        return false;
+    }
+    cJSON *child = src->child;
+    while (child) {
+        cJSON *next = child->next;
+        cJSON_DetachItemViaPointer(src, child);
+        cJSON_AddItemToObject(result_obj, child->string, child);
+        child = next;
+    }
+    cJSON_Delete(src);
     return true;
 }
 
-static bool ep_game_reset_playtest(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+static bool ep_game_state(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
     (void)params;
-    (void)error;
-    (void)error_cap;
+    (void)err;
+    (void)user;
+    return seed_emit(result_obj, state_json());
+}
+
+static bool ep_game_reset_playtest(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
+    (void)params;
+    (void)err;
     (void)user;
     reset_seed();
-    *result = state_json();
-    return true;
+    return seed_emit(result_obj, state_json());
 }
 
-static bool ep_game_action_cycle(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+static bool ep_game_action_cycle(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
     (void)params;
-    (void)error;
-    (void)error_cap;
+    (void)err;
     (void)user;
     cycle_seed();
-    *result = state_json();
-    return true;
+    return seed_emit(result_obj, state_json());
 }
 
 static void register_game_endpoints(void) {
-    nt_devapi_register_builtins();
     game_state_register_devapi();
-    nt_devapi_register("game.state", ep_game_state, NULL);
-    nt_devapi_register("game.reset_playtest", ep_game_reset_playtest, NULL);
-    nt_devapi_register("game.action.cycle", ep_game_action_cycle, NULL);
-}
-
-static void register_ui_devapi(float w, float h) {
-    nt_devapi_set_frame(g_nt_app.frame);
-    nt_devapi_set_view((float)g_nt_window.fb_width, (float)g_nt_window.fb_height, w, h);
-    nt_devapi_clear_ui_elements();
-    (void)nt_devapi_register_ui_node("root", "", "screen", "Game Seed", "Clean seed runtime", 0.0F, 0.0F, w, h, true, true);
-    (void)nt_devapi_register_ui_node("seed.cycle", "root", "button", "Cycle Seed", g_game_state.test_button_text, s_cycle_box.x, s_cycle_box.y, s_cycle_box.w, s_cycle_box.h, true, true);
-    (void)nt_devapi_register_ui_node("seed.progress", "root", "meter", "Seed Progress", g_game_state.test_label_text, w * 0.5F - 160.0F, s_cycle_box.y - 34.0F, 320.0F, 14.0F, true, true);
+    static const nt_devapi_command_desc descs[] = {
+        {"game.state", "game", "Return the current seed state.", "", "state object", "immediate", "none"},
+        {"game.reset_playtest", "game", "Reset the seed to defaults.", "", "state object", "immediate", "mutates state"},
+        {"game.action.cycle", "game", "Cycle the seed shape.", "", "state object", "immediate", "mutates state"},
+    };
+    (void)nt_devapi_register(&descs[0], ep_game_state, NULL);
+    (void)nt_devapi_register(&descs[1], ep_game_reset_playtest, NULL);
+    (void)nt_devapi_register(&descs[2], ep_game_action_cycle, NULL);
 }
 #endif
 
@@ -266,26 +275,15 @@ static void frame(void) {
     nt_window_poll();
 #if NT_DEVAPI_ENABLED
     if (s_devapi_enabled) {
-        nt_devapi_net_poll();
+        nt_devapi_update();
     }
 #endif
     nt_input_poll();
-#if NT_DEVAPI_ENABLED
-    if (s_devapi_enabled) {
-        nt_devapi_apply_pending();
-    }
-#endif
 
     const float w = (float)(g_nt_window.fb_width ? g_nt_window.fb_width : g_nt_window.width);
     const float h = (float)(g_nt_window.fb_height ? g_nt_window.fb_height : g_nt_window.height);
     layout(w, h);
     handle_input();
-
-#if NT_DEVAPI_ENABLED
-    if (s_devapi_enabled) {
-        register_ui_devapi(w, h);
-    }
-#endif
 
 #ifndef NT_PLATFORM_WEB
     if (nt_window_should_close() || nt_input_key_is_pressed(NT_KEY_ESCAPE)) {
@@ -329,10 +327,14 @@ int main(int argc, char **argv) {
 
 #if NT_DEVAPI_ENABLED
     if (s_devapi_enabled) {
-        nt_devapi_init();
-        register_game_endpoints();
-        if (!nt_devapi_net_start(s_devapi_port)) {
-            (void)fprintf(stderr, "Failed to start DevAPI on port %u\n", (unsigned)s_devapi_port);
+        if (nt_devapi_init() != NT_OK) {
+            (void)fprintf(stderr, "Failed to init DevAPI\n");
+            s_devapi_enabled = false;
+        } else {
+            register_game_endpoints();
+            if (!nt_devapi_net_start(s_devapi_port)) {
+                (void)fprintf(stderr, "Failed to start DevAPI on port %u\n", (unsigned)s_devapi_port);
+            }
         }
     }
 #endif

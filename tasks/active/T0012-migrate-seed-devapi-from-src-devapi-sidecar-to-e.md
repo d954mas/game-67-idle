@@ -1,7 +1,7 @@
 ---
 id: T0012
 title: Migrate seed DevAPI from src/devapi sidecar to engine native DevAPI
-status: backlog
+status: doing
 epic: E002
 priority: P1
 tags: [engine, devapi, runtime]
@@ -58,3 +58,14 @@ EMSCRIPTEN/Release link with zero nt_devapi_* symbols; (12) validate + screensho
 - 2026-06-19: plan produced from the engine-vs-sidecar dedup analysis (engine native
   DevAPI has no ui.*/entity.*/game.*; sidecar transport/dispatch/input/time are
   redundant). Not yet started; staged + reversible behind the gate.
+- 2026-06-19: PASS 1 DONE + native-debug BUILDS GREEN. Rewrote the state codegen
+  (generate_state.py) + seed game.* handlers to the engine handler ABI (result_obj
+  + nt_devapi_error, descriptor-based register, group="game"); game.state.get now
+  wraps its value as {path,value}. Seed init/poll/shutdown -> nt_devapi_init/update/
+  net_start(9123)/net_stop/shutdown. CMake: enable engine NT_DEVAPI for native debug,
+  drop the game_devapi sidecar lib, unify cJSON on the engine `cjson` target (avoids
+  duplicate cJSON_* symbols), link nt_devapi + nt_devapi_net. Deleted src/devapi/*
+  early — it shadowed the engine header on the -Isrc path and broke the build.
+  REMAINING: Pass 2 port ui.*/entity.list (game-side UI adapter on the engine bus),
+  Pass 3 rewire the python client + smoke (ping/game.state/ui.click/screenshot),
+  Pass 4 verify EMSCRIPTEN/Release link with zero nt_devapi_* + update the skill.

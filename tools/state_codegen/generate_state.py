@@ -371,117 +371,145 @@ def render_devapi_source(schema: dict[str, Any], schema_label: str = "state/game
 #include "devapi/nt_devapi.h"
 #include "game_storage.h"
 
-static bool check_doc(const cJSON *params, char *error, int error_cap) {{
+/* Dev-only, single-threaded: one static buffer for dynamic error messages the
+   engine reads after the handler returns (err->message must outlive the call). */
+static char s_state_err[256];
+
+static bool state_fail(nt_devapi_error *err, const char *code, const char *message) {{
+    (void)snprintf(s_state_err, sizeof(s_state_err), "%s", message);
+    err->code = code;
+    err->message = s_state_err;
+    return false;
+}}
+
+/* err already carries a message snprintf'd into s_state_err by a game_state_* call. */
+static bool state_fail_buf(nt_devapi_error *err, const char *code) {{
+    err->code = code;
+    err->message = s_state_err;
+    return false;
+}}
+
+/* game_state_* helpers return freshly-built cJSON; the engine ABI fills a
+   pre-created object, so transplant src's members into result_obj. */
+static bool state_emit(cJSON *result_obj, cJSON *src, nt_devapi_error *err) {{
+    if (!src) {{
+        return state_fail(err, "internal", "failed to build state json");
+    }}
+    cJSON *child = src->child;
+    while (child) {{
+        cJSON *next = child->next;
+        cJSON_DetachItemViaPointer(src, child);
+        cJSON_AddItemToObject(result_obj, child->string, child);
+        child = next;
+    }}
+    cJSON_Delete(src);
+    return true;
+}}
+
+static bool check_doc(const cJSON *params, nt_devapi_error *err) {{
     const cJSON *doc = cJSON_GetObjectItemCaseSensitive(params, "doc");
     if (!doc || (cJSON_IsString(doc) && strcmp(doc->valuestring, "{doc}") == 0)) {{
         return true;
     }}
-    (void)snprintf(error, (size_t)error_cap, "%s", "unsupported state document");
-    return false;
+    return state_fail(err, "bad_params", "unsupported state document");
 }}
 
-static bool ep_game_state_schema(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+static bool ep_game_state_schema(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
     (void)user;
-    if (!check_doc(params, error, error_cap)) {{
+    if (!check_doc(params, err)) {{
         return false;
     }}
-    *result = game_state_schema_json();
-    return true;
+    return state_emit(result_obj, game_state_schema_json(), err);
 }}
 
-static bool ep_game_state_get(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+static bool ep_game_state_get(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
     (void)user;
-    if (!check_doc(params, error, error_cap)) {{
+    if (!check_doc(params, err)) {{
         return false;
     }}
     const cJSON *path = cJSON_GetObjectItemCaseSensitive(params, "path");
     const char *state_path = cJSON_IsString(path) ? path->valuestring : "";
-    cJSON *value = game_state_get_path_json(&g_game_state, state_path, error, error_cap);
+    cJSON *value = game_state_get_path_json(&g_game_state, state_path, s_state_err, (int)sizeof(s_state_err));
     if (!value) {{
-        return false;
+        return state_fail_buf(err, "bad_params");
     }}
-    *result = value;
+    /* result_obj is an object, but a path value can be any JSON, so wrap it. */
+    cJSON_AddItemToObject(result_obj, "path", cJSON_CreateString(state_path));
+    cJSON_AddItemToObject(result_obj, "value", value);
     return true;
 }}
 
-static bool ep_game_state_set(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+static bool ep_game_state_set(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
     (void)user;
-    if (!check_doc(params, error, error_cap)) {{
+    if (!check_doc(params, err)) {{
         return false;
     }}
     const cJSON *path = cJSON_GetObjectItemCaseSensitive(params, "path");
     const cJSON *value = cJSON_GetObjectItemCaseSensitive(params, "value");
     if (!cJSON_IsString(path) || !value) {{
-        (void)snprintf(error, (size_t)error_cap, "%s", "path and value are required");
-        return false;
+        return state_fail(err, "bad_params", "path and value are required");
     }}
     cJSON *values = cJSON_CreateObject();
     cJSON *copy = cJSON_Duplicate(value, true);
     if (!values || !copy) {{
         cJSON_Delete(values);
         cJSON_Delete(copy);
-        (void)snprintf(error, (size_t)error_cap, "%s", "failed to copy state value");
-        return false;
+        return state_fail(err, "internal", "failed to copy state value");
     }}
     cJSON_AddItemToObject(values, path->valuestring, copy);
-    bool ok = game_state_patch_json(&g_game_state, values, error, error_cap);
+    bool ok = game_state_patch_json(&g_game_state, values, s_state_err, (int)sizeof(s_state_err));
     cJSON_Delete(values);
     if (!ok) {{
-        return false;
+        return state_fail_buf(err, "bad_params");
     }}
-    *result = game_state_to_json(&g_game_state);
-    return true;
+    return state_emit(result_obj, game_state_to_json(&g_game_state), err);
 }}
 
-static bool ep_game_state_patch(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+static bool ep_game_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
     (void)user;
-    if (!check_doc(params, error, error_cap)) {{
+    if (!check_doc(params, err)) {{
         return false;
     }}
     const cJSON *values = cJSON_GetObjectItemCaseSensitive(params, "values");
     if (!cJSON_IsObject(values)) {{
-        (void)snprintf(error, (size_t)error_cap, "%s", "values object is required");
-        return false;
+        return state_fail(err, "bad_params", "values object is required");
     }}
-    if (!game_state_patch_json(&g_game_state, values, error, error_cap)) {{
-        return false;
+    if (!game_state_patch_json(&g_game_state, values, s_state_err, (int)sizeof(s_state_err))) {{
+        return state_fail_buf(err, "bad_params");
     }}
-    *result = game_state_to_json(&g_game_state);
-    return true;
+    return state_emit(result_obj, game_state_to_json(&g_game_state), err);
 }}
 
-static bool ep_game_state_save(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+static bool ep_game_state_save(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
     (void)user;
-    if (!check_doc(params, error, error_cap)) {{
+    if (!check_doc(params, err)) {{
         return false;
     }}
     cJSON *obj = cJSON_CreateObject();
     const cJSON *unsafe_path = cJSON_GetObjectItemCaseSensitive(params, "unsafe_path");
     if (cJSON_IsString(unsafe_path)) {{
-        if (!game_state_save(&g_game_state, unsafe_path->valuestring, error, error_cap)) {{
+        if (!game_state_save(&g_game_state, unsafe_path->valuestring, s_state_err, (int)sizeof(s_state_err))) {{
             cJSON_Delete(obj);
-            return false;
+            return state_fail_buf(err, "bad_params");
         }}
         cJSON_AddStringToObject(obj, "unsafe_path", unsafe_path->valuestring);
-        *result = obj;
-        return true;
+        return state_emit(result_obj, obj, err);
     }}
 
     const cJSON *key = cJSON_GetObjectItemCaseSensitive(params, "key");
     if (!cJSON_IsString(key)) {{
         cJSON_Delete(obj);
-        (void)snprintf(error, (size_t)error_cap, "%s", "key is required");
-        return false;
+        return state_fail(err, "bad_params", "key is required");
     }}
-    char *data = game_state_save_json_string(&g_game_state, error, error_cap);
+    char *data = game_state_save_json_string(&g_game_state, s_state_err, (int)sizeof(s_state_err));
     if (!data) {{
         cJSON_Delete(obj);
-        return false;
+        return state_fail_buf(err, "internal");
     }}
-    if (!game_storage_save_json(key->valuestring, GAME_STATE_DOCUMENT, data, error, error_cap)) {{
+    if (!game_storage_save_json(key->valuestring, GAME_STATE_DOCUMENT, data, s_state_err, (int)sizeof(s_state_err))) {{
         cJSON_free(data);
         cJSON_Delete(obj);
-        return false;
+        return state_fail_buf(err, "internal");
     }}
     cJSON_free(data);
     char resolved[256];
@@ -490,63 +518,67 @@ static bool ep_game_state_save(const cJSON *params, cJSON **result, char *error,
     }}
     cJSON_AddStringToObject(obj, "key", key->valuestring);
     cJSON_AddStringToObject(obj, "doc", GAME_STATE_DOCUMENT);
-    *result = obj;
-    return true;
+    return state_emit(result_obj, obj, err);
 }}
 
-static bool ep_game_state_load(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+static bool ep_game_state_load(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
     (void)user;
-    if (!check_doc(params, error, error_cap)) {{
+    if (!check_doc(params, err)) {{
         return false;
     }}
     const cJSON *unsafe_path = cJSON_GetObjectItemCaseSensitive(params, "unsafe_path");
     if (cJSON_IsString(unsafe_path)) {{
-        if (!game_state_load(&g_game_state, unsafe_path->valuestring, error, error_cap)) {{
-            return false;
+        if (!game_state_load(&g_game_state, unsafe_path->valuestring, s_state_err, (int)sizeof(s_state_err))) {{
+            return state_fail_buf(err, "bad_params");
         }}
-        *result = game_state_to_json(&g_game_state);
-        return true;
+        return state_emit(result_obj, game_state_to_json(&g_game_state), err);
     }}
 
     const cJSON *key = cJSON_GetObjectItemCaseSensitive(params, "key");
     if (!cJSON_IsString(key)) {{
-        (void)snprintf(error, (size_t)error_cap, "%s", "key is required");
-        return false;
+        return state_fail(err, "bad_params", "key is required");
     }}
     char *data = NULL;
-    if (!game_storage_load_json(key->valuestring, GAME_STATE_DOCUMENT, &data, error, error_cap)) {{
-        return false;
+    if (!game_storage_load_json(key->valuestring, GAME_STATE_DOCUMENT, &data, s_state_err, (int)sizeof(s_state_err))) {{
+        return state_fail_buf(err, "bad_params");
     }}
-    bool ok = game_state_load_json_string(&g_game_state, data, error, error_cap);
+    bool ok = game_state_load_json_string(&g_game_state, data, s_state_err, (int)sizeof(s_state_err));
     free(data);
     if (!ok) {{
-        return false;
+        return state_fail_buf(err, "bad_params");
     }}
-    *result = game_state_to_json(&g_game_state);
-    return true;
+    return state_emit(result_obj, game_state_to_json(&g_game_state), err);
 }}
 
-static bool ep_game_state_reset(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {{
+static bool ep_game_state_reset(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
     (void)params;
     (void)user;
-    if (!check_doc(params, error, error_cap)) {{
+    if (!check_doc(params, err)) {{
         return false;
     }}
-    if (!game_state_reset(&g_game_state, error, error_cap)) {{
-        return false;
+    if (!game_state_reset(&g_game_state, s_state_err, (int)sizeof(s_state_err))) {{
+        return state_fail_buf(err, "internal");
     }}
-    *result = game_state_to_json(&g_game_state);
-    return true;
+    return state_emit(result_obj, game_state_to_json(&g_game_state), err);
 }}
 
 void game_state_register_devapi(void) {{
-    nt_devapi_register("game.state.schema", ep_game_state_schema, NULL);
-    nt_devapi_register("game.state.get", ep_game_state_get, NULL);
-    nt_devapi_register("game.state.set", ep_game_state_set, NULL);
-    nt_devapi_register("game.state.patch", ep_game_state_patch, NULL);
-    nt_devapi_register("game.state.save", ep_game_state_save, NULL);
-    nt_devapi_register("game.state.load", ep_game_state_load, NULL);
-    nt_devapi_register("game.state.reset", ep_game_state_reset, NULL);
+    static const nt_devapi_command_desc descs[] = {{
+        {{"game.state.schema", "game", "Return the game state JSON schema.", "doc?", "schema object", "immediate", "none"}},
+        {{"game.state.get", "game", "Get a state value by path.", "doc?, path", "path, value", "immediate", "none"}},
+        {{"game.state.set", "game", "Set a state value by path.", "doc?, path, value", "state object", "immediate", "mutates state"}},
+        {{"game.state.patch", "game", "Patch multiple state values.", "doc?, values", "state object", "immediate", "mutates state"}},
+        {{"game.state.save", "game", "Save state to key or unsafe_path.", "doc?, key|unsafe_path", "key, doc, resolved", "immediate", "writes file"}},
+        {{"game.state.load", "game", "Load state from key or unsafe_path.", "doc?, key|unsafe_path", "state object", "immediate", "mutates state"}},
+        {{"game.state.reset", "game", "Reset state to defaults.", "doc?", "state object", "immediate", "mutates state"}},
+    }};
+    const nt_devapi_handler_fn fns[] = {{
+        ep_game_state_schema, ep_game_state_get, ep_game_state_set, ep_game_state_patch,
+        ep_game_state_save, ep_game_state_load, ep_game_state_reset,
+    }};
+    for (size_t i = 0; i < sizeof(fns) / sizeof(fns[0]); ++i) {{
+        (void)nt_devapi_register(&descs[i], fns[i], NULL);
+    }}
 }}
 
 #endif

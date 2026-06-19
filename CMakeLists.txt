@@ -41,6 +41,13 @@ else()
     endif()
 endif()
 
+# Engine native DevAPI: enable on the same gate as the game DevAPI so the engine
+# builds nt_devapi + nt_devapi_net (command groups default ON). Must precede the
+# engine add_subdirectory so the option is read.
+if(GAME_DEVAPI_ENABLED)
+    set(NT_DEVAPI_ENABLED ON CACHE BOOL "" FORCE)
+endif()
+
 add_subdirectory(external/neotolis-engine)
 if(NOT EMSCRIPTEN AND NOT TARGET nt_builder)
     add_subdirectory(external/neotolis-engine/tools/builder external/neotolis-engine/tools/builder)
@@ -49,11 +56,8 @@ endif()
 set(GAME_TARGET game_seed)
 set(GAME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/build/${GAME_TARGET}/${NT_PRESET_NAME}")
 
-add_library(game_cjson STATIC
-    external/cjson/cJSON.c
-    external/cjson/cJSON.h
-)
-target_include_directories(game_cjson SYSTEM PUBLIC external/cjson)
+# cJSON comes from the engine `cjson` target (single cJSON across the engine bus
+# and the game-owned handlers — two cJSON builds would clash on cJSON_* symbols).
 
 set(GAME_STATE_SCHEMA "${CMAKE_SOURCE_DIR}/state/game_state.schema.json")
 set(GAME_STATE_CODEGEN "${CMAKE_SOURCE_DIR}/tools/state_codegen/generate_state.py")
@@ -94,45 +98,25 @@ add_library(game_state STATIC
     "${GAME_STATE_GENERATED_SOURCE}"
     "${GAME_STATE_GENERATED_HEADER}"
     "${GAME_STATE_GENERATED_SCHEMA_HEADER}"
+    "${GAME_STATE_GENERATED_DEVAPI_SOURCE}"
     state/migrations/v0_to_v1.c
 )
 add_dependencies(game_state game_state_codegen)
-target_include_directories(game_state PUBLIC "${GAME_STATE_GENERATED_DIR}" src external/cjson)
-target_link_libraries(game_state PUBLIC game_cjson)
-target_compile_definitions(game_state PUBLIC NT_DEVAPI_ENABLED=$<BOOL:${GAME_DEVAPI_ENABLED}> PRIVATE _CRT_SECURE_NO_WARNINGS)
+target_include_directories(game_state PUBLIC "${GAME_STATE_GENERATED_DIR}" src)
+target_link_libraries(game_state PUBLIC cjson)
+target_compile_definitions(game_state PRIVATE _CRT_SECURE_NO_WARNINGS)
+# nt_devapi (engine) provides the command bus + NT_DEVAPI_ENABLED=1 (PUBLIC) for
+# the generated game.state.* handlers; OFF -> undefined -> the devapi source is
+# compiled out.
+if(GAME_DEVAPI_ENABLED)
+    target_link_libraries(game_state PUBLIC nt_devapi)
+endif()
 nt_set_warning_flags(game_state)
 nt_set_sanitizer_flags(game_state)
 
-if(GAME_DEVAPI_ENABLED)
-    add_library(game_devapi STATIC
-        src/devapi/nt_devapi.c
-        src/devapi/nt_devapi_net.c
-        src/devapi/nt_devapi.h
-        "${GAME_STATE_GENERATED_DEVAPI_SOURCE}"
-    )
-    target_include_directories(game_devapi PUBLIC "${GAME_STATE_GENERATED_DIR}" src external/cjson)
-    target_link_libraries(game_devapi
-        PUBLIC
-            nt_input
-            nt_entity
-            nt_transform_comp
-            nt_drawable_comp
-            game_cjson
-            game_state
-        PRIVATE
-            nt_log
-    )
-    target_compile_definitions(game_devapi PUBLIC NT_DEVAPI_ENABLED=1 PRIVATE _CRT_SECURE_NO_WARNINGS)
-    if(WIN32)
-        target_link_libraries(game_devapi PRIVATE ws2_32)
-    endif()
-    nt_set_warning_flags(game_devapi)
-    nt_set_sanitizer_flags(game_devapi)
-else()
-    add_library(game_devapi INTERFACE)
-    target_include_directories(game_devapi INTERFACE "${GAME_STATE_GENERATED_DIR}" src external/cjson)
-    target_compile_definitions(game_devapi INTERFACE NT_DEVAPI_ENABLED=0)
-endif()
+# The DevAPI is now the engine's native nt_devapi + nt_devapi_net (linked into
+# game_state/game_seed below); the generated game.state.* handlers compile into
+# game_state. No game-side bus/transport lib anymore.
 
 set(SKELETAL_ANIMATION_OZZ_SOURCE_DIR "" CACHE PATH "Optional ozz-animation source checkout for reusable skeletal animation extension probes.")
 if(NOT EMSCRIPTEN AND SKELETAL_ANIMATION_OZZ_SOURCE_DIR)
@@ -178,10 +162,11 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_time
     glad
     stb_image_write
-    game_devapi
     game_state
-    game_cjson
 )
+if(GAME_DEVAPI_ENABLED)
+    target_link_libraries(${GAME_TARGET} PRIVATE nt_devapi nt_devapi_net)
+endif()
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http)
 else()
@@ -190,10 +175,9 @@ endif()
 target_include_directories(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_DIR}"
     src
-    external/cjson
     external/neotolis-engine/deps/glfw/deps
 )
-target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=$<BOOL:${GAME_DEVAPI_ENABLED}> _CRT_SECURE_NO_WARNINGS)
+target_compile_definitions(${GAME_TARGET} PRIVATE _CRT_SECURE_NO_WARNINGS)
 if(TARGET skeletal_animation_extension)
     target_link_libraries(${GAME_TARGET} PRIVATE skeletal_animation_extension)
     target_compile_definitions(${GAME_TARGET} PRIVATE SKELETAL_ANIMATION_EXTENSION_ENABLED=1)
