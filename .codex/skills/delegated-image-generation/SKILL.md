@@ -5,18 +5,17 @@ description: "Use when the agent must GENERATE real raster art: fake shots, icon
 
 # Delegated Image Generation
 
-Use this skill when the agent must create real raster game art but has no native
-image model in the current tool surface. Delegate generation, verify the PNG,
-then hand it to the normal asset pipeline.
+Use when the agent must create real raster game art but has no native image
+model. Delegate generation, verify the PNG, then hand off to the asset pipeline.
 
 ## Load Only What Applies
 
 - `references/generation-paths.md`: Path A `codex exec`, Path B `agy`, compare
   mode, Path C REST/backend, `START=$(date +%s)`, and exact commands.
-- `references/verification-and-prompts.md`: real raster image forcing, size
-  plus eyeball checks, composable prompts, Dead-ends, gemini CLI, and env
+- `references/verification-and-prompts.md`: real raster forcing, size plus
+  eyeball checks, composable prompts, Dead-ends, gemini CLI, and env
   gotchas like `GEMINI_API_KEY` and `NODE_OPTIONS=--use-system-ca`.
-- `references/throughput-and-handoff.md`: batches, source-sheet first workflow,
+- `references/throughput-and-handoff.md`: batches, source-sheet workflow,
   sidecars, `generated-game-ui-assets` handoff, and visual gate.
 
 ## Default Route
@@ -27,8 +26,8 @@ then hand it to the normal asset pipeline.
 3. Use Path B `agy` only as fallback or comparison.
 4. Use Path C only when Path A is broken or REST features/high volume are
    explicitly needed.
-5. Pick the PNG off disk, keep raw generations in `tmp/`, and move only
-   accepted assets into durable project folders.
+5. Pick the PNG off disk, keep raw generations in `tmp/`, and move only accepted
+   assets into durable project folders.
 
 ## Non-Negotiables
 
@@ -43,5 +42,5 @@ then hand it to the normal asset pipeline.
 
 ## Minimal Report
 
-State the path used, output PNG path, size/fake check result, visual judgment,
-handoff path, and any rejected attempts or fallbacks.
+State path used, output PNG, size/fake check, visual judgment, handoff path, and
+rejected attempts or fallbacks.

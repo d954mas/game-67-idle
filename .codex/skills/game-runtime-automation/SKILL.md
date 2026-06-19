@@ -5,15 +5,15 @@ description: "Use when adding, using, or improving game runtime automation or vi
 
 # Game Runtime Automation
 
-Use this skill to let an agent observe, drive, and verify a running game through
-runtime contracts instead of screenshots, guesses, or ad hoc OS input.
+Use to let an agent observe, drive, and verify a running game through runtime
+contracts instead of screenshots, guesses, or ad hoc OS input.
 
 ## Load Only What Applies
 
 - `references/runtime-workflow-rules.md`: launch/build discovery, adapters,
-  bots, logs, native-first validation, evidence, and release policy.
+  bots, logs, native-first validation, evidence, release policy.
 - `references/visual-qa-checklist.md`: Visual QA for player-visible output,
-  native desktop/PC proof, WASM/web scope, readability, and controls.
+  native desktop/PC proof, WASM/web scope, readability, controls.
 - `references/devapi-pattern.md`: DevAPI command bus, discovery, UI/input,
   frame sync, capture patterns, and required command metadata.
 
@@ -25,15 +25,15 @@ runtime contracts instead of screenshots, guesses, or ad hoc OS input.
 3. Prefer a narrow DevAPI command bus over ad hoc OS input.
 4. Discover the runtime contract before acting: call `endpoints`, then
    `command.describe` for unfamiliar or risky commands.
-5. Capture launch stdout/stderr to `build/logs` or an equivalent known log
-   whenever automation starts the game process.
+5. Capture launch stdout/stderr to `build/logs` or equivalent whenever
+   automation starts the game process.
 6. Validate with native desktop/PC builds first. Run WASM/web checks only when
    requested or when the task targets web behavior.
 
 ## Non-Negotiables
 
 - Runtime command registration is the source of truth. Inspect code only when
-  metadata is missing or behavior conflicts with the runtime contract.
+  metadata is missing or behavior conflicts with it.
 - Keep reusable automation at the low-level device/input/frame/capture layer.
 - Add semantic `action.*` endpoints only as game-local convenience wrappers.
 - Do not enable automation in release builds unless explicitly requested by

@@ -5,32 +5,33 @@ description: "Use when maintaining or improving the reusable AI development pipe
 
 # AI Pipeline Maintenance
 
-Use this skill for AI workflow/tooling changes. It is not for ordinary playable
-game work; use `game-feature-iteration` for runtime features and
-`chat-session-reflection` for pure retrospectives.
+Use for AI workflow/tooling changes, not ordinary playable game work. Use
+`game-feature-iteration` for runtime features and `chat-session-reflection` for
+pure retrospectives.
 
 ## Load Only What Applies
 
 - `references/pipeline-maintenance-playbook.md`: audit flow, source-of-truth,
-  Mechanical Guard Pattern, Validation Matrix, and Report Shape.
+  Mechanical Guard Pattern, Validation Matrix, Report Shape.
 - `references/skill-placement.md`: Update Existing Skill, Create New Skill, and
   Keep Hot Docs Thin decisions.
 - `AI_PIPELINE.md`: portable workflow map.
 - `docs/ai-pipeline/agent-workflow.md`: context, Markdown shape, multi-agent use.
-- `docs/ai-pipeline/quality-validation.md`: gate taxonomy and repeated
-  strict/product failure policy.
+- `docs/ai-pipeline/quality-validation.md`: gates and repeated strict/product
+  failure policy.
 - `docs/ai-pipeline/profiling-reuse.md`: profiling, closeout, assets, export.
 
 ## Default Workflow
 
-1. Inspect state with `git status --short --untracked-files=all`,
-   `node tools/taskboard/cli.mjs summary`, and `node tools/context_budget.mjs`.
+1. Inspect with `git status --short --untracked-files=all`,
+   `node tools/taskboard/cli.mjs summary`, and, for review,
+   `node tools/context_budget.mjs --review`.
 2. Pick one scope: hot docs, skill entrypoints, validators, profiling,
    taskboard, product gates, export, or post-review cleanup.
 3. Move repeated procedure behind a reference, skill, task rule, or tool; keep
    hot files as maps.
-4. Put mandatory rules in validators/tests where practical, then run the narrow
-   proof and `node tools/ai.mjs validate`.
+4. Put mandatory rules in validators/tests where practical, then run the
+   narrow proof and `node tools/ai.mjs validate`.
 
 ## Placement Rules
 

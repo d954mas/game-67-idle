@@ -1,13 +1,13 @@
 # Agent Workflow Reference
 
-Portable rules for agent behavior. Load when changing context policy, work-loop,
+Portable agent rules. Load when changing context policy, work-loop,
 multi-agent use, or hot docs.
 
 ## Roles
 
 - Lead: sets direction, taste, priority, and acceptance.
-- Agent: turns intent into scoped work, asks only necessary questions,
-  researches when refs matter, implements small slices, and proves results.
+- Agent: scopes intent, asks only necessary questions, researches when refs
+  matter, implements small slices, and proves results.
 
 ## Agent-Facing Docs
 
@@ -15,11 +15,10 @@ multi-agent use, or hot docs.
 - `AI_PIPELINE.md`: reusable workflow map and context policy.
 - `tasks/README.md`: task store commands and lifecycle.
 - `.codex/skills/*/SKILL.md`: one focused procedure per task type.
-- Skill `references/` and `gamedesign/knowledge/`: deeper method, examples,
-  lessons loaded only when needed.
+- Skill `references/` and `gamedesign/knowledge/`: deeper method loaded on need.
 
 Do not duplicate rules. Put each rule where first needed, link deeper source,
-then delete stale anecdotes once encoded as tool, validator, task rule, or skill.
+then delete anecdotes once encoded as tool, validator, task rule, or skill.
 
 Write agent Markdown as:
 
@@ -31,16 +30,15 @@ Write agent Markdown as:
 
 ## Context Policy
 
-Default context for substantial work is:
+Default substantial-work context:
 
 1. `AGENTS.md`
 2. `node tools/taskboard/cli.mjs context`
 3. one relevant task or evidence file
 4. one matching skill
 
-Prefer scoped search and compact command output over whole-file dumps. Use
-archives, old logs, generated artifacts, and broad design folders only when
-task-linked or requested.
+Prefer scoped search and compact output over whole-file dumps. Use archives,
+logs, generated artifacts, and broad design only when task-linked or requested.
 
 Keep stable context byte-stable in-session. Put volatile facts in tasks, status,
 evidence files, or final reports, not hot instruction files.

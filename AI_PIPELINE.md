@@ -1,7 +1,7 @@
 # AI Pipeline
 
-Portable map for human-led, AI-assisted game work. `AGENTS.md` owns
-repo-specific rules; this file only routes agents to the right workflow source.
+Portable map for human-led AI game work. `AGENTS.md` owns repo-specific rules;
+this file routes agents to the right workflow source.
 
 ## Load Only What Applies
 
@@ -12,18 +12,17 @@ repo-specific rules; this file only routes agents to the right workflow source.
 - Profiling, prototype closeout, visual/asset routing, or portable export:
   `docs/ai-pipeline/profiling-reuse.md`
 
-Default context for substantial work: `AGENTS.md`, then
-`node tools/taskboard/cli.mjs context`, then one task/evidence file, one matching
-skill, and at most one deep pipeline reference above.
+Default context: `AGENTS.md`, `node tools/taskboard/cli.mjs context`, one
+task/evidence file, one matching skill, and at most one deep reference above.
 
 ## Operating Rules
 
-- Keep hot Markdown short and stable; move procedure, examples, and history
-  behind references, skills, tasks, or validators.
+- Keep hot Markdown short; move procedure/history behind references, skills,
+  tasks, or validators.
 - For non-trivial work, set passive profiling scope or say why unavailable.
 - Make one scoped change, then run the narrowest command that proves it.
-- Do not call a playable/visual slice done from one green gate: product,
-  game-loop, art-source, and technical gates are separate verdicts.
+- Do not call a playable/visual slice done from one green gate; product,
+  game-loop, art-source, and technical gates stay separate.
 - If strict/product fails twice for the same major reason, stop local polish and
   change path: architecture, tooling, source asset, reference, or lead
   acceptance.
