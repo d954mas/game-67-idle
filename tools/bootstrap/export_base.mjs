@@ -32,6 +32,8 @@ const COPY = [
   ".codex/skills",
   "tools/ai.mjs",
   "tools/ai.test.mjs",
+  "tools/context_budget.mjs",
+  "tools/context_budget.test.mjs",
   "tools/skills_eval.mjs",
   "tools/pipeline_validate.mjs",
   "tools/pipeline_validate.test.mjs",

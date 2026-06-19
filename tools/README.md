@@ -35,6 +35,8 @@ game project:
 - `tools/ai.mjs` - fast facade for `start`, `focus`, `context`, `checkpoint`,
   `run`, `validate`, `status`, and `reflect`
 - `tools/ai.test.mjs`
+- `tools/context_budget.mjs`
+- `tools/context_budget.test.mjs`
 - `tools/ai_profile/`
 - `tools/taskboard/`
 - `tools/game_context/`

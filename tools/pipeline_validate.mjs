@@ -79,18 +79,35 @@ function run(label, args, opts = {}) {
   }
 }
 
-function findPythonRunner() {
+function findPythonRunner(requiredModules = []) {
   if (dryRun) {
     console.log("python runner: <dry-run>");
     return { exe: "python", args: [] };
   }
-  const candidates = [
+  const candidates = [];
+  if (process.env.AI_PIPELINE_PYTHON) {
+    candidates.push({ exe: process.env.AI_PIPELINE_PYTHON, args: [] });
+  }
+  if (process.platform === "win32") {
+    candidates.push({ exe: "C:\\Python312\\python.exe", args: [] });
+  }
+  candidates.push(
     { exe: "py", args: ["-3.12"] },
     { exe: "python", args: [] },
     { exe: "python3", args: [] },
-  ];
+  );
+  const probe = [
+    "import sys",
+    ...requiredModules.map((name) => `import ${name}`),
+    "print(sys.version.split()[0])",
+  ].join("; ");
+  const skipped = [];
   for (const candidate of candidates) {
-    const result = spawnSync(candidate.exe, [...candidate.args, "--version"], {
+    if (candidate.exe.includes("\\") && !existsSync(candidate.exe)) {
+      skipped.push(`${candidate.exe} (missing)`);
+      continue;
+    }
+    const result = spawnSync(candidate.exe, [...candidate.args, "-c", probe], {
       cwd: root,
       encoding: "utf8",
       shell: false,
@@ -98,11 +115,16 @@ function findPythonRunner() {
     });
     if (result.status === 0) {
       const version = `${result.stdout || result.stderr}`.trim();
-      console.log(`python runner: ${candidate.exe} ${candidate.args.join(" ")} ${version}`.replace(/\s+/g, " "));
+      const modules = requiredModules.length ? ` with ${requiredModules.join(",")}` : "";
+      console.log(`python runner: ${candidate.exe} ${candidate.args.join(" ")} ${version}${modules}`.replace(/\s+/g, " "));
       return candidate;
     }
+    const output = `${result.stdout || ""}${result.stderr || ""}`.trim().split(/\r?\n/).pop() || `exit ${result.status}`;
+    skipped.push(`${candidate.exe} ${candidate.args.join(" ")} (${output})`.trim());
   }
-  console.error("error: no working Python runner found; tried py -3.12, python, and python3");
+  const modules = requiredModules.length ? ` with required modules: ${requiredModules.join(", ")}` : "";
+  console.error(`error: no working Python runner found${modules}`);
+  for (const item of skipped) console.error(`- tried ${item}`);
   process.exit(1);
 }
 
@@ -153,7 +175,9 @@ run("ai facade syntax", ["--check", "tools/ai.mjs"]);
 run("ai facade tests", ["--test", "tools/ai.test.mjs"]);
 run("skill eval", ["tools/skills_eval.mjs"]);
 run("skills sync check", ["tools/skills_sync.mjs", "--check"]);
+run("context budget report", ["tools/context_budget.mjs"]);
 run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
+run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
 run("repeated product gate failure guard", ["tools/product_gate/repeated_failure_guard.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
 
@@ -212,7 +236,7 @@ if (existsSync(join(root, "tools", "assets", "new_generation_record.test.mjs")))
 }
 let python = null;
 if (existsSync(join(root, "tools", "assets", "intake", "normalize_source_sheet_chroma_test.py"))) {
-  python = findPythonRunner();
+  python = findPythonRunner(["PIL", "numpy", "scipy", "pymatting"]);
   run("source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.atomic_io_test", "tools.assets.chroma_key_alpha_test", "tools.assets.cutout.dual_plate_alpha_test", "tools.assets.cutout.dual_plate_pair_gate_test", "tools.assets.cutout.key_matte_test", "tools.assets.cutout.route_cutout_test", "tools.assets.intake.normalize_source_sheet_chroma_test", "tools.assets.intake.audit_source_sheet_intake_test"], { exe: python.exe });
 }
 if (existsSync(join(root, "tools", "assets", "audit", "render_ui_composition_proof_test.py"))) {

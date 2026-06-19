@@ -20,6 +20,9 @@ game implementation.
   portal rendering work.
 - Raw session profiling evidence may be stale; use it only for requested AI
   workflow reviews after importing/checking the current session data.
+- Full deep asset validation currently needs a Python runner visible from Node
+  with `PIL`, `numpy`, `scipy`, and `pymatting`; quick reusable pipeline
+  validation remains the normal gate for workflow/tooling edits.
 
 ## Current Gate
 
@@ -55,6 +58,14 @@ node tools/pipeline_validate.mjs
 - Profiling hot hook writes are serialized with a short file lock and covered by
   a parallel JSONL append regression test, so concurrent validations do not
   corrupt `tmp/session_profiles/sessions/*.jsonl`.
+- `tools/context_budget.mjs` is part of quick pipeline validation and guards
+  hot docs plus `.codex/skills/*/SKILL.md` entrypoints from silently growing
+  past the current progressive-disclosure budget.
+- Full pipeline validation now chooses a Python runner by required asset-test
+  modules (`PIL`, `numpy`, `scipy`, `pymatting`) instead of accepting the first
+  interpreter with `--version`, avoiding late failures on the local `python
+  3.14` without SciPy or direct `C:\Python312\python.exe` without user-site
+  cutout deps.
 - `task-manager` now keeps its hot `SKILL.md` as a short router and loads task
   store, state transition, review queue, prototype closeout, and reporting
   details from `.codex/skills/task-manager/references/task-store-protocol.md`.
