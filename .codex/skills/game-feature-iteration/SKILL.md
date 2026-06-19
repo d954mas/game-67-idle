@@ -1,6 +1,6 @@
 ---
 name: game-feature-iteration
-description: Use when implementing, changing, debugging, or validating a playable game feature, gameplay mechanics, controls, camera, UI flow, game state, progression, balance, engine integration, small prototype or vertical slice, build/run/debug tasks, CMake presets, release outputs, packaging, or CI. Discover local build/run/test conventions first.
+description: Use when implementing, changing, debugging, or validating a playable game feature: gameplay mechanics, controls, camera, UI flow, game state, progression, balance, engine integration, prototype or vertical slice, build/run/debug tasks, CMake presets, release, packaging, or CI.
 ---
 
 # Game Feature Iteration
@@ -10,11 +10,11 @@ project state in project docs; load references only when their trigger applies.
 
 ## Load Only What Applies
 
-- `references/iteration-cycle-playbook.md`: non-trivial iteration loop, task
-  packet, evidence, review, state update, report format.
-- `references/playable-feature-gates.md`: reference deconstruction, screen
-  grammar, first-60-seconds, visual/product gates, Build/Launch/Release Tasks,
-  slice hygiene, 30 changed files, promise push, stale fail audits.
+- `references/iteration-cycle-playbook.md`: iteration loop, task packet,
+  evidence, review, state update, and report format.
+- `references/playable-feature-gates.md`: reference deconstruction,
+  first-60-seconds, visual/product gates, build/release tasks, slice hygiene,
+  promise push, and stale fail audits.
 
 ## Router Workflow
 
@@ -27,10 +27,9 @@ project state in project docs; load references only when their trigger applies.
    smallest playable slice, validate primary target first, capture evidence, and
    commit intentional files.
 4. For named references, first-player clarity, visual/product feel,
-   build/release tasks, or prototype handoff, load `playable-feature-gates.md`
-   before coding and follow product gate, native desktop,
-   `product_gate/review.mjs`, `node tools/ai.mjs gate`, `close-slice`, and
-   slice hygiene rules.
+   build/release, or handoff, load `playable-feature-gates.md` before coding
+   and follow product gate, native desktop, `product_gate/review.mjs`,
+   `node tools/ai.mjs gate`, `close-slice`, and slice hygiene rules.
 
 ## Discovery
 
