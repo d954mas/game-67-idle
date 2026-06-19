@@ -64,6 +64,9 @@ node tools/pipeline_validate.mjs
 - `game-asset-pipeline` now keeps its hot `SKILL.md` as a short router and
   loads source/cutout/pack-builder detail from
   `.codex/skills/game-asset-pipeline/references/`.
+- `primary-gdd-pipeline` now keeps its hot `SKILL.md` as a short router and
+  loads core DoD, reference, fake-shot, runtime asset, and handoff gates from
+  `.codex/skills/primary-gdd-pipeline/references/gdd-core-gates.md`.
 
 ## Next Priorities
 
