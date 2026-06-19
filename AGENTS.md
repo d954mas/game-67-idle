@@ -2,8 +2,13 @@
 
 ## Current Work
 
-- Focus: clean AI-first native game seed for the next iteration.
-- No active game concept is selected; capture the user's concept before game work.
+- Focus: concept/GDD research for `Mech Builder Battler`
+  (`mech-builder-battler`), a casual mobile/web 3D mech builder battler.
+- Current task: `T0011` reference research, deconstruction, core loop,
+  gameplay, mechanics, meta, and visual reference packet before implementation.
+- Product target is mobile/web UX, controls, readability, and session shape.
+  Development, playtesting, and iteration still use the native PC harness.
+  Do not start web/mobile export or frontend/runtime-path work without approval.
 - Engine submodule: `external/neotolis-engine`; use public APIs only.
 
 ## Source Map
@@ -25,7 +30,9 @@
 
 ## Game Work Rules
 
-- Native PC is the playable harness; no web/mobile/server/frontend path without approval.
+- Native PC is the playable harness for implementation and iteration. Mobile/web
+  requirements inform controls, UI scale, readability, session length, and
+  performance targets; they do not replace the PC harness without approval.
 - Start new games with a fresh project wiki and `tasks/active/` work items.
 - Prefer small native slices; tests, spikes, prototypes, and slices use same gates.
 - Game visuals use real assets through engine asset paths; shape/debug renderers are debug-only.

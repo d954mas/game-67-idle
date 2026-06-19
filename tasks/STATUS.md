@@ -2,8 +2,13 @@
 
 ## Current Goal
 
-No active game concept is selected. This repository is a clean AI-first native
-game seed, ready for the next game.
+Active research concept: `Mech Builder Battler` (`mech-builder-battler`):
+casual mobile/web 3D mech builder battler. GDD/spec, references, review,
+traceability, mechanics/meta, evidence plan, and fake-shot request are in
+review.
+
+Project wiki: `gamedesign/projects/mech-builder-battler/README.md`.
+Latest control note: `gamedesign/projects/mech-builder-battler/references/mobile_control_patterns_2026-06-19.md`.
 
 ## Current Runtime Surface
 
@@ -21,15 +26,20 @@ Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 ## Current Gate
 
-Capture the user's game concept (references, audience, platform, no-go
-constraints), then run the Stage 0 prototype startup path and create a fresh
-project wiki plus exactly one scoped task/epic before implementation. Do not
-invent a concept.
+Implementation is gated. `T0011`, `T0013`-`T0020` are in review. Exact
+UI/economy/combat/final art needs accepted fake shots or stronger evidence.
+Implementation/iteration remains native PC; mobile/web is the UX/export target.
+Accepted: one owned mech, PvE first, semi-auto arena, floating joystick/WASD,
+resources -> hangar purchase/craft, shoulder rockets, drone swarm proof, short
+dash, `Cooling` UI label, fixed three-quarter/isometric camera,
+landscape-first, industrial salvage sport, Foundry Warden mini-boss.
 
 ## Next Priorities
 
-1. Capture the next game concept, then scaffold a fresh project wiki + one
-   scoped task/epic before implementation.
-2. Keep reusable pipeline/skills/knowledge clean and current between games.
-3. Keep native PC scale/focus + visual/teachability/core-loop proof as early
-   gates for the next playable UI.
+1. Generate/accept fake shots for hangar, battle, reward, and upgrade.
+2. Create the first native PC implementation task from the accepted handoff and
+   first-slice spec.
+3. Fill Mech Arena/CATS/Mechangelion evidence boards before exact
+   UI/combat/economy implementation.
+4. Build the eventual native PC slice with mobile-style controls/readability;
+   defer web/mobile export work until explicitly approved.
