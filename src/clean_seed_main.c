@@ -90,11 +90,14 @@ static char s_pending_capture_path[CAPTURE_PATH_MAX];
 static const float COL_BG_FLOOR[4] = {0.12F, 0.15F, 0.17F, 1.0F};
 static const float COL_METAL[4] = {0.52F, 0.63F, 0.70F, 1.0F};
 static const float COL_METAL_DARK[4] = {0.13F, 0.17F, 0.20F, 1.0F};
+static const float COL_METAL_HI[4] = {0.78F, 0.88F, 0.92F, 1.0F};
+static const float COL_ARMOR_DEEP[4] = {0.035F, 0.22F, 0.44F, 1.0F};
 static const float COL_ARMOR_BLUE[4] = {0.08F, 0.47F, 0.85F, 1.0F};
 static const float COL_ARMOR_LIGHT[4] = {0.28F, 0.78F, 1.0F, 1.0F};
 static const float COL_EMISSIVE[4] = {0.02F, 0.92F, 1.0F, 1.0F};
 static const float COL_AMBER[4] = {1.0F, 0.48F, 0.05F, 1.0F};
 static const float COL_WARNING[4] = {1.0F, 0.18F, 0.08F, 1.0F};
+static const float COL_MAGENTA[4] = {0.86F, 0.12F, 1.0F, 1.0F};
 static const float COL_GREEN[4] = {0.18F, 0.85F, 0.38F, 1.0F};
 static const float COL_WHITE[4] = {0.92F, 0.98F, 1.0F, 1.0F};
 static const float COL_PANEL[4] = {0.035F, 0.105F, 0.13F, 1.0F};
@@ -276,6 +279,38 @@ static void draw_int_text(float x, float y, float scale, const char *prefix,
   char buf[64];
   (void)snprintf(buf, sizeof(buf), "%s%d", prefix, value);
   draw_text(x, y, scale, buf, color);
+}
+
+static void action_button2(UiBox b, const float color[4], bool enabled,
+                           const char *label) {
+  if (b.w <= 130.0F) {
+    rect2(b.x + 5.0F, b.y + 6.0F, b.w, b.h,
+          (float[4]){0.0F, 0.0F, 0.0F, 0.28F});
+    rect2(b.x, b.y, b.w, b.h,
+          enabled ? color : (float[4]){0.22F, 0.26F, 0.30F, 0.95F});
+    rect2(b.x + 9.0F, b.y + 9.0F, b.w - 18.0F, b.h * 0.50F,
+          (float[4]){0.01F, 0.04F, 0.05F, 0.82F});
+    rect2(b.x + 9.0F, b.y + 9.0F, b.w - 18.0F, 5.0F,
+          enabled ? COL_WHITE : (float[4]){0.45F, 0.50F, 0.55F, 0.95F});
+    const float text_scale = strlen(label) > 5U ? 2.1F : 2.5F;
+    const float text_w = (float)strlen(label) * 6.0F * text_scale;
+    draw_text(b.x + ((b.w - text_w) * 0.5F), b.y + (b.h * 0.76F), text_scale,
+              label, COL_WHITE);
+    return;
+  }
+
+  button2(b, color, enabled);
+  const float cx = b.x + (b.w * 0.50F);
+  const float cy = b.y + (b.h * 0.38F);
+  nt_shape_renderer_circle((float[3]){cx, cy, 0.0F}, b.h * 0.27F,
+                           (float[4]){0.01F, 0.04F, 0.05F, 0.90F});
+  nt_shape_renderer_circle_wire(
+      (float[3]){cx, cy, 0.0F}, b.h * 0.30F,
+      enabled ? COL_WHITE : (float[4]){0.45F, 0.50F, 0.55F, 0.95F});
+  const float text_scale = strlen(label) > 5U ? 2.1F : 2.5F;
+  const float text_w = (float)strlen(label) * 6.0F * text_scale;
+  draw_text(b.x + ((b.w - text_w) * 0.5F), b.y + (b.h * 0.70F), text_scale,
+            label, COL_WHITE);
 }
 
 static void parse_args(int argc, char **argv) {
@@ -549,11 +584,29 @@ static void layout(float w, float h) {
       (UiBox){.x = w - 132.0F, .y = h - 192.0F, .w = 96.0F, .h = 96.0F};
 }
 
+static void draw_floor_panel(float x, float z, float sx, float sz,
+                             const float color[4]) {
+  const float floor_rot[4] = {0.7071068F, 0.0F, 0.0F, 0.7071068F};
+  nt_shape_renderer_rect_rot((float[3]){x, 0.0F, z}, (float[2]){sx, sz},
+                             floor_rot, color);
+}
+
 static void draw_floor_grid(float half, bool hangar) {
   const float floor_rot[4] = {0.7071068F, 0.0F, 0.0F, 0.7071068F};
   nt_shape_renderer_rect_rot((float[3]){0.0F, -0.02F, 0.0F},
                              (float[2]){half * 2.2F, half * 2.0F}, floor_rot,
                              COL_BG_FLOOR);
+  draw_floor_panel(0.0F, hangar ? 0.4F : 1.6F, 4.8F, 3.6F,
+                   (float[4]){0.10F, 0.20F, 0.24F, 1.0F});
+  draw_floor_panel(0.0F, hangar ? 0.4F : 1.6F, 5.1F, 0.08F,
+                   (float[4]){0.0F, 0.95F, 1.0F, 0.85F});
+  draw_floor_panel(0.0F, (hangar ? 0.4F : 1.6F) - 1.78F, 5.1F, 0.08F,
+                   COL_AMBER);
+  for (int i = -4; i <= 4; ++i) {
+    const float stripe_x = (float)i * 0.62F;
+    draw_floor_panel(stripe_x, hangar ? 2.18F : -0.22F, 0.34F, 0.72F,
+                     (i % 2) == 0 ? COL_AMBER : COL_METAL_DARK);
+  }
   nt_shape_renderer_rect((float[3]){0.0F, 2.7F, -half + 0.08F},
                          (float[2]){half * 2.2F, 5.4F},
                          (float[4]){0.045F, 0.075F, 0.09F, 1.0F});
@@ -582,6 +635,15 @@ static void draw_floor_grid(float half, bool hangar) {
                              (float[3]){x + 1.2F, 0.05F, -1.8F},
                              (float[4]){0.0F, 0.82F, 1.0F, 0.38F});
     }
+    nt_shape_renderer_cube((float[3]){-3.7F, 0.55F, 2.6F},
+                           (float[3]){1.3F, 0.72F, 1.0F}, COL_METAL_DARK);
+    nt_shape_renderer_cube((float[3]){-3.7F, 1.02F, 2.6F},
+                           (float[3]){1.0F, 0.14F, 0.78F}, COL_AMBER);
+    nt_shape_renderer_cube((float[3]){3.9F, 0.45F, 1.9F},
+                           (float[3]){1.1F, 0.56F, 0.9F}, COL_ARMOR_DEEP);
+    nt_shape_renderer_cube_wire((float[3]){3.9F, 0.45F, 1.9F},
+                                (float[3]){1.16F, 0.62F, 0.96F},
+                                (float[4]){0.0F, 0.90F, 1.0F, 0.60F});
   } else {
     nt_shape_renderer_cube((float[3]){-7.2F, 0.42F, -4.8F},
                            (float[3]){0.35F, 0.82F, 2.8F}, COL_METAL_DARK);
@@ -589,6 +651,12 @@ static void draw_floor_grid(float half, bool hangar) {
                            (float[3]){0.35F, 0.82F, 2.8F}, COL_METAL_DARK);
     nt_shape_renderer_line((float[3]){-7.1F, 0.95F, -4.8F},
                            (float[3]){7.1F, 0.95F, -4.8F}, COL_AMBER);
+    for (int side = -1; side <= 1; side += 2) {
+      nt_shape_renderer_cube((float[3]){(float)side * 6.4F, 1.15F, -1.2F},
+                             (float[3]){0.32F, 2.0F, 0.32F}, COL_ARMOR_DEEP);
+      nt_shape_renderer_sphere((float[3]){(float)side * 6.4F, 2.35F, -1.2F},
+                               0.22F, COL_MAGENTA);
+    }
   }
 }
 
@@ -625,6 +693,18 @@ static void draw_mech(float x, float z, float scale, bool rockets,
       (float[3]){1.39F * scale, 1.59F * scale, 0.86F * scale}, q_y,
       (float[4]){0.78F, 0.94F, 1.0F, 0.45F});
   nt_shape_renderer_cube_rot(
+      (float[3]){x, y0 + (1.16F * scale), z + (0.03F * scale)},
+      (float[3]){1.10F * scale, 0.42F * scale, 0.72F * scale}, q_y,
+      COL_ARMOR_DEEP);
+  nt_shape_renderer_cube_rot(
+      (float[3]){x, y0 + (2.48F * scale), z + (0.08F * scale)},
+      (float[3]){1.62F * scale, 0.36F * scale, 0.78F * scale}, q_y,
+      COL_ARMOR_DEEP);
+  nt_shape_renderer_cube_wire_rot(
+      (float[3]){x, y0 + (2.48F * scale), z + (0.08F * scale)},
+      (float[3]){1.70F * scale, 0.44F * scale, 0.86F * scale}, q_y,
+      (float[4]){0.96F, 0.98F, 1.0F, 0.50F});
+  nt_shape_renderer_cube_rot(
       (float[3]){x - (0.42F * scale), y0 + (1.96F * scale),
                  z - (0.46F * scale)},
       (float[3]){0.33F * scale, 1.04F * scale, 0.10F * scale}, q_y,
@@ -638,16 +718,35 @@ static void draw_mech(float x, float z, float scale, bool rockets,
       (float[3]){x, y0 + (2.16F * scale), z - (0.44F * scale)},
       (float[3]){0.72F * scale, 0.28F * scale, 0.13F * scale}, q_y,
       COL_EMISSIVE);
+  nt_shape_renderer_cube_rot(
+      (float[3]){x, y0 + (1.56F * scale), z - (0.50F * scale)},
+      (float[3]){0.34F * scale, 0.70F * scale, 0.12F * scale}, q_y,
+      COL_METAL_HI);
+  nt_shape_renderer_cube_rot(
+      (float[3]){x, y0 + (1.32F * scale), z - (0.55F * scale)},
+      (float[3]){0.86F * scale, 0.10F * scale, 0.14F * scale}, q_y, COL_AMBER);
   nt_shape_renderer_sphere(
       (float[3]){x, y0 + (2.82F * scale), z - (0.05F * scale)}, 0.38F * scale,
       COL_METAL);
   nt_shape_renderer_cube(
       (float[3]){x, y0 + (2.86F * scale), z - (0.38F * scale)},
       (float[3]){0.56F * scale, 0.12F * scale, 0.08F * scale}, COL_EMISSIVE);
+  nt_shape_renderer_cube_rot(
+      (float[3]){x, y0 + (2.74F * scale), z + (0.42F * scale)},
+      (float[3]){0.78F * scale, 0.52F * scale, 0.34F * scale}, q_y,
+      COL_METAL_DARK);
+  nt_shape_renderer_sphere(
+      (float[3]){x, y0 + (2.74F * scale), z + (0.67F * scale)}, 0.20F * scale,
+      COL_EMISSIVE);
 
   for (int side = -1; side <= 1; side += 2) {
     const float sx = x + ((float)side * 0.95F * scale);
     draw_joint_sphere(sx, y0 + (2.32F * scale), z, 0.23F * scale);
+    nt_shape_renderer_cube_rot(
+        (float[3]){x + ((float)side * 1.08F * scale), y0 + (2.58F * scale),
+                   z + (0.02F * scale)},
+        (float[3]){0.72F * scale, 0.34F * scale, 0.78F * scale}, q_y,
+        side < 0 ? COL_ARMOR_LIGHT : COL_ARMOR_BLUE);
     nt_shape_renderer_capsule_rot(
         (float[3]){x + ((float)side * 1.35F * scale), y0 + (1.92F * scale), z},
         0.18F * scale, 0.88F * scale, q_z, COL_METAL);
@@ -656,31 +755,68 @@ static void draw_mech(float x, float z, float scale, bool rockets,
                    z - (0.08F * scale)},
         (float[3]){0.34F * scale, 0.78F * scale, 0.34F * scale},
         COL_ARMOR_LIGHT);
+    nt_shape_renderer_cube_wire(
+        (float[3]){x + ((float)side * 1.86F * scale), y0 + (1.72F * scale),
+                   z - (0.08F * scale)},
+        (float[3]){0.40F * scale, 0.84F * scale, 0.40F * scale},
+        (float[4]){0.0F, 0.95F, 1.0F, 0.45F});
     nt_shape_renderer_cylinder_rot(
         (float[3]){x + ((float)side * 2.02F * scale), y0 + (1.45F * scale),
                    z - (0.38F * scale)},
         0.15F * scale, 0.92F * scale, q_x, side < 0 ? COL_METAL : COL_AMBER);
+    nt_shape_renderer_cylinder_rot(
+        (float[3]){x + ((float)side * 2.08F * scale), y0 + (1.45F * scale),
+                   z - (0.84F * scale)},
+        0.08F * scale, 0.48F * scale, q_x, COL_WARNING);
 
     draw_joint_sphere(x + ((float)side * 0.48F * scale), y0 + (0.95F * scale),
                       z + (0.02F * scale), 0.20F * scale);
+    nt_shape_renderer_cube(
+        (float[3]){x + ((float)side * 0.55F * scale), y0 + (0.78F * scale),
+                   z - (0.18F * scale)},
+        (float[3]){0.50F * scale, 0.38F * scale, 0.46F * scale},
+        COL_ARMOR_BLUE);
     nt_shape_renderer_capsule((float[3]){x + ((float)side * 0.52F * scale),
                                          y0 + (0.50F * scale),
                                          z + (0.04F * scale)},
                               0.18F * scale, 0.82F * scale, COL_METAL_DARK);
     nt_shape_renderer_cube(
+        (float[3]){x + ((float)side * 0.50F * scale), y0 + (0.18F * scale),
+                   z + (0.35F * scale)},
+        (float[3]){0.46F * scale, 0.24F * scale, 0.38F * scale},
+        COL_ARMOR_LIGHT);
+    nt_shape_renderer_cube(
         (float[3]){x + ((float)side * 0.60F * scale), y0 + (0.10F * scale),
                    z - (0.18F * scale)},
         (float[3]){0.54F * scale, 0.24F * scale, 0.86F * scale}, COL_METAL);
+    nt_shape_renderer_cube_wire(
+        (float[3]){x + ((float)side * 0.60F * scale), y0 + (0.10F * scale),
+                   z - (0.18F * scale)},
+        (float[3]){0.60F * scale, 0.30F * scale, 0.92F * scale},
+        (float[4]){0.88F, 0.96F, 1.0F, 0.38F});
 
     if (rockets) {
       nt_shape_renderer_cube(
           (float[3]){x + ((float)side * 0.62F * scale), y0 + (2.92F * scale),
                      z + (0.04F * scale)},
           (float[3]){0.36F * scale, 0.34F * scale, 0.82F * scale}, COL_AMBER);
+      nt_shape_renderer_cube(
+          (float[3]){x + ((float)side * 0.62F * scale), y0 + (3.18F * scale),
+                     z + (0.04F * scale)},
+          (float[3]){0.30F * scale, 0.18F * scale, 0.72F * scale},
+          COL_METAL_HI);
       nt_shape_renderer_cylinder_rot(
           (float[3]){x + ((float)side * 0.62F * scale), y0 + (2.91F * scale),
                      z - (0.45F * scale)},
           0.11F * scale, 0.34F * scale, q_x, COL_WARNING);
+      nt_shape_renderer_cylinder_rot(
+          (float[3]){x + ((float)side * 0.42F * scale), y0 + (2.91F * scale),
+                     z - (0.45F * scale)},
+          0.08F * scale, 0.28F * scale, q_x, COL_WARNING);
+      nt_shape_renderer_cylinder_rot(
+          (float[3]){x + ((float)side * 0.82F * scale), y0 + (2.91F * scale),
+                     z - (0.45F * scale)},
+          0.08F * scale, 0.28F * scale, q_x, COL_WARNING);
     } else {
       nt_shape_renderer_cube_wire(
           (float[3]){x + ((float)side * 0.62F * scale), y0 + (2.92F * scale),
@@ -694,6 +830,17 @@ static void draw_mech(float x, float z, float scale, bool rockets,
   nt_shape_renderer_sphere(
       (float[3]){x, y0 + (1.62F * scale), z + (0.48F * scale)}, 0.22F * scale,
       (float[4]){0.0F, 0.95F, 1.0F, glow});
+  nt_shape_renderer_circle_wire_rot(
+      (float[3]){x, y0 + (1.62F * scale), z + (0.49F * scale)}, 0.34F * scale,
+      q_x, (float[4]){0.0F, 0.95F, 1.0F, 0.70F});
+  for (int i = -2; i <= 2; ++i) {
+    nt_shape_renderer_line(
+        (float[3]){x + ((float)i * 0.18F * scale), y0 + (1.05F * scale),
+                   z + (0.49F * scale)},
+        (float[3]){x + ((float)i * 0.18F * scale), y0 + (0.72F * scale),
+                   z + (0.58F * scale)},
+        s_game.heat > 0.70F ? COL_WARNING : COL_EMISSIVE);
+  }
   if (s_game.dash_flash > 0.0F && !hangar_pose) {
     nt_shape_renderer_line((float[3]){x, 0.25F, z + 0.7F},
                            (float[3]){x, 0.25F, z + 2.6F},
@@ -726,15 +873,28 @@ static void draw_drone(const Drone *d, bool target) {
   const float y = 0.88F + bob;
   nt_shape_renderer_sphere((float[3]){d->x, y, d->z}, 0.34F,
                            target ? COL_WARNING : COL_METAL_DARK);
+  nt_shape_renderer_sphere_wire((float[3]){d->x, y, d->z}, 0.42F,
+                                target ? COL_AMBER : COL_METAL_HI);
   nt_shape_renderer_cube((float[3]){d->x, y, d->z - 0.34F},
                          (float[3]){0.48F, 0.16F, 0.12F}, COL_EMISSIVE);
+  nt_shape_renderer_cube((float[3]){d->x, y + 0.18F, d->z + 0.02F},
+                         (float[3]){0.38F, 0.08F, 0.46F},
+                         target ? COL_WARNING : COL_ARMOR_DEEP);
   nt_shape_renderer_cube((float[3]){d->x - 0.48F, y, d->z},
                          (float[3]){0.48F, 0.08F, 0.16F}, COL_METAL);
   nt_shape_renderer_cube((float[3]){d->x + 0.48F, y, d->z},
                          (float[3]){0.48F, 0.08F, 0.16F}, COL_METAL);
+  nt_shape_renderer_line((float[3]){d->x - 0.78F, y, d->z},
+                         (float[3]){d->x - 1.05F, y + 0.18F, d->z},
+                         COL_MAGENTA);
+  nt_shape_renderer_line((float[3]){d->x + 0.78F, y, d->z},
+                         (float[3]){d->x + 1.05F, y + 0.18F, d->z},
+                         COL_MAGENTA);
   if (target) {
     nt_shape_renderer_circle_wire((float[3]){d->x, 0.06F, d->z}, 0.72F,
                                   COL_WARNING);
+    nt_shape_renderer_circle_wire((float[3]){d->x, 0.08F, d->z}, 1.05F,
+                                  (float[4]){1.0F, 0.48F, 0.05F, 0.45F});
   }
 }
 
@@ -748,6 +908,9 @@ static void draw_projectiles(void) {
     nt_shape_renderer_sphere(
         (float[3]){s_game.drones[target].x, 0.9F, s_game.drones[target].z},
         0.28F, COL_AMBER);
+    nt_shape_renderer_sphere(
+        (float[3]){s_game.mech_x + 1.9F, 1.72F, s_game.mech_z - 0.38F}, 0.16F,
+        COL_WARNING);
   }
   if (s_game.rocket_flash > 0.0F) {
     const float fade = clampf(s_game.rocket_flash / 1.45F, 0.0F, 1.0F);
@@ -820,8 +983,6 @@ static void draw_world(float w, float h) {
     draw_mech(0.0F, 0.4F, 1.18F, s_game.rockets_equipped, true);
     if (s_game.screen == SCREEN_UPGRADE || s_game.screen == SCREEN_REWARD ||
         s_game.screen == SCREEN_RETEST) {
-      nt_shape_renderer_cube_wire((float[3]){1.8F, 3.7F, 0.4F},
-                                  (float[3]){1.1F, 0.72F, 1.25F}, COL_AMBER);
       nt_shape_renderer_cube((float[3]){3.2F, 0.45F, -1.2F},
                              (float[3]){1.2F, 0.28F, 1.2F}, COL_METAL_DARK);
       nt_shape_renderer_cube((float[3]){3.2F, 0.96F, -1.2F},
@@ -850,17 +1011,19 @@ static void draw_hud(float w, float h) {
     draw_text(42.0F, 94.0F, 3.0F, "WASD MOVE  Q DASH  E ROCKETS", COL_WHITE);
     draw_int_text(42.0F, 128.0F, 3.6F, "DRONES ", alive_count(), COL_GREEN);
     draw_cooling_meter(w * 0.5F - 160.0F, h - 54.0F, 320.0F, 18.0F);
-    button2(s_dash_box, COL_ARMOR_BLUE, s_game.dash_cd <= 0.0F);
-    draw_text(s_dash_box.x + 18.0F, s_dash_box.y + 31.0F, 3.2F, "DASH",
+    action_button2(s_dash_box, COL_ARMOR_BLUE, s_game.dash_cd <= 0.0F, "DASH");
+    draw_text(s_dash_box.x + 35.0F, s_dash_box.y + 24.0F, 3.2F, "Q", COL_WHITE);
+    action_button2(s_special_box, COL_AMBER,
+                   s_game.rockets_equipped && s_game.rocket_cd <= 0.0F,
+                   s_game.rockets_equipped ? "ROCKET" : "LOCK");
+    draw_text(s_special_box.x + 40.0F, s_special_box.y + 28.0F, 3.3F, "E",
               COL_WHITE);
-    button2(s_special_box, COL_AMBER,
-            s_game.rockets_equipped && s_game.rocket_cd <= 0.0F);
-    draw_text(s_special_box.x + 12.0F, s_special_box.y + 38.0F, 2.7F,
-              s_game.rockets_equipped ? "ROCKET" : "LOCK", COL_WHITE);
     nt_shape_renderer_circle((float[3]){117.0F, h - 111.0F, 0.0F}, 72.0F,
                              (float[4]){0.025F, 0.12F, 0.16F, 1.0F});
     nt_shape_renderer_circle_wire((float[3]){117.0F, h - 111.0F, 0.0F}, 57.0F,
                                   (float[4]){0.35F, 0.88F, 1.0F, 0.92F});
+    nt_shape_renderer_circle_wire((float[3]){117.0F, h - 111.0F, 0.0F}, 72.0F,
+                                  (float[4]){1.0F, 0.48F, 0.05F, 0.35F});
     nt_shape_renderer_circle((float[3]){117.0F, h - 111.0F, 0.0F}, 18.0F,
                              (float[4]){0.0F, 0.72F, 0.9F, 1.0F});
     draw_text(88.0F, h - 122.0F, 2.4F, "WASD", COL_WHITE);
@@ -872,10 +1035,12 @@ static void draw_hud(float w, float h) {
               COL_WHITE);
     rect2(w - 314.0F, 104.0F, 270.0F, 104.0F, COL_PANEL);
     draw_text(w - 286.0F, 126.0F, 3.0F, "SHOULDER MODULE", COL_AMBER);
-    draw_text(w - 286.0F, 162.0F, 2.7F,
-              s_game.rockets_equipped ? "ROCKETS EQUIPPED"
-                                      : "LOCKED  WIN SALVAGE",
-              COL_WHITE);
+    if (s_game.rockets_equipped) {
+      draw_text(w - 286.0F, 162.0F, 2.7F, "ROCKETS EQUIPPED", COL_WHITE);
+    } else {
+      draw_text(w - 286.0F, 160.0F, 2.6F, "LOCKED", COL_WHITE);
+      draw_text(w - 286.0F, 184.0F, 2.4F, "WIN SALVAGE", COL_WHITE);
+    }
   } else if (s_game.screen == SCREEN_REWARD) {
     rect2(w * 0.5F - 250.0F, 102.0F, 500.0F, 170.0F, COL_PANEL);
     draw_text(w * 0.5F - 182.0F, 130.0F, 5.0F, "REWARD", COL_AMBER);

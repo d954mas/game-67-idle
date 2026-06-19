@@ -20,27 +20,30 @@ cmake --build --preset native-debug --target game_seed
 build/game_seed/native-debug/game_seed.exe --devapi 9123
 ```
 
-Runtime entrypoint: `src/clean_seed_main.c` (362-line debug template).
+Runtime entrypoint: `src/clean_seed_main.c`.
 
 The engine submodule at `external/neotolis-engine` is read-only from this repo.
 Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 ## Current Gate
 
-First native PC prototype is open via `T0021`. Exact UI/economy/combat pacing
-and final reference-driven art remain gated behind current-build screenshots
-and stronger reference evidence (`T0022`). Implementation/iteration remains
-native PC; mobile/web is the UX/export target. Accepted: one owned mech, PvE
-first, semi-auto arena, floating joystick/WASD, resources -> hangar
-purchase/craft, shoulder rockets, drone swarm proof, short dash, `Cooling` UI
-label, fixed three-quarter/isometric camera, landscape-first, industrial
-salvage sport, Foundry Warden mini-boss.
+First native PC prototype is open via `T0021`. The playable loop works, but the
+latest strict product gate is FAIL on art quality because the starter mech is
+still shape-built rather than mesh/material-pipeline backed. Feature/content
+expansion stays frozen until the starter mech visual path improves. Exact
+UI/economy/combat pacing and final reference-driven art remain gated behind
+current-build screenshots and stronger reference evidence (`T0022`).
+Implementation/iteration remains native PC; mobile/web is the UX/export target.
+Accepted: one owned mech, PvE first, semi-auto arena, floating joystick/WASD,
+resources -> hangar purchase/craft, shoulder rockets, drone swarm proof, short
+dash, `Cooling` UI label, fixed three-quarter/isometric camera, landscape-first,
+industrial salvage sport, Foundry Warden mini-boss.
 
 ## Next Priorities
 
-1. Continue `T0021`: improve the first native PC playable slice visual quality
-   from primitive-built prototype toward model-like mech presentation.
-2. Keep the current screenshot evidence:
+1. Continue `T0021`: integrate a real or asset-pipeline-backed starter mech
+   mesh/material path before adding enemies, meta systems, or more progression.
+2. Keep the current screenshot/product gate evidence:
    `gamedesign/projects/mech-builder-battler/evidence/t0021_runtime_visual_review_2026-06-19.md`.
 3. Run `T0022`: update Mech Arena/CATS/Mechangelion mismatch audits against
    the first native capture.

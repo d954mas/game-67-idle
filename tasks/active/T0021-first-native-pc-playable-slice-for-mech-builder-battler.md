@@ -60,9 +60,10 @@ Scope boundaries:
 
 ## Open questions
 
-- Which asset path is fastest for the starter mech: generated GLB-style local
-  assets, kitbashed ready models, or a simple in-engine model assembled from
-  lit mesh parts as temporary scaffolding?
+- Resolved for the next iteration: the temporary in-engine shape kitbash was
+  useful for proving the loop, but the next visual pass should integrate a real
+  or asset-pipeline-backed starter mech mesh/material path before adding more
+  game content.
 
 ## Log
 
@@ -78,3 +79,10 @@ Scope boundaries:
   GLB/model-like bar and needs another art pass.
 - 2026-06-19: Re-ran `game_seed`, DevAPI playable smoke, taskboard validation,
   doc reference check, and `git diff --check` from `master`; all passed.
+- 2026-06-19: product gate FAIL (desktop-battle); review: gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T15-38-07-381Z_desktop-battle.md; screenshot: build/captures/mech_t0021_rockets_smoke.png; next: Integrate a real or asset-pipeline-backed starter mech mesh/material path before adding enemies or meta content.
+- 2026-06-19: Added a second visual pass to the native slice: denser armor
+  plates, shoulder rocket cassettes, cooling vents, arena/hangar props, warning
+  stripes, target rings, and clearer compact action panels. Re-ran `game_seed`
+  build and DevAPI playable smoke successfully. Strict product gate remains
+  FAIL on art quality because the starter mech is still shape-built rather than
+  mesh/material-pipeline backed.
