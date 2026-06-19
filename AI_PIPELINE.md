@@ -34,9 +34,9 @@ skill, and at most one deep pipeline reference above.
 
 ```powershell
 node tools/taskboard/cli.mjs context
-node tools/pipeline_validate.mjs
-node tools/pipeline_validate.mjs --review
-node tools/pipeline_validate.mjs --full
+node tools/ai.mjs validate
+node tools/ai.mjs validate --review
+node tools/ai.mjs validate --full
 ```
 
 Use quick validation after normal pipeline edits; `--review` for strict

@@ -44,7 +44,7 @@
 
 - Docs/tasks: `node tools/taskboard/cli.mjs validate`.
 - Skills/process: `node tools/skills_eval.mjs`.
-- Reusable pipeline: `node tools/pipeline_validate.mjs`; `--full` for portable export/runtime/deep asset gates.
+- Pipeline: `node tools/ai.mjs validate`; add `--review` for context, `--full` for export/runtime.
 - Product/readability: `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate` with screenshot evidence.
 - Native playable changes: smallest proving native build/run, plus screenshot or video when visual/playable.
 

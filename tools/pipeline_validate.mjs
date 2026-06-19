@@ -319,7 +319,7 @@ if (existsSync(join(root, "tools", "product_gate", "test.mjs"))) {
 
 if (!fullMode) {
   console.log(`\nok: reusable pipeline ${reviewMode ? "quick+review" : "quick"} validation passed`);
-  console.log(`hint: run node tools/pipeline_validate.mjs --full for portable export/runtime/deep asset gates`);
+  console.log(`hint: run node tools/ai.mjs validate --full for portable export/runtime/deep asset gates`);
   process.exit(0);
 }
 

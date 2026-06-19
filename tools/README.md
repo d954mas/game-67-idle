@@ -64,10 +64,10 @@ Generated caches (`__pycache__/`, `*.pyc`) are ignored scratch.
 Validation:
 
 ```powershell
-node tools/pipeline_validate.mjs
-node tools/pipeline_validate.mjs --review
-node tools/pipeline_validate.mjs --full
+node tools/ai.mjs validate
+node tools/ai.mjs validate --review
+node tools/ai.mjs validate --full
 ```
 
-`--review` adds strict context pressure. `--full` exports to
+Underlying: `tools/pipeline_validate.mjs`. `--review` adds strict context pressure. `--full` exports to
 `tmp/pipeline-validate-<stamp>/` and prunes to the newest 3 by default.

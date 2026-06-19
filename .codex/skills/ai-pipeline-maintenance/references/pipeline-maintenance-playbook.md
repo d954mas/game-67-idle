@@ -43,18 +43,19 @@ Common guards:
 - `node tools/skills_sync.mjs --check`
 - `node tools/product_gate/repeated_failure_guard.mjs`
 - `node tools/taskboard/cli.mjs validate`
+- `node tools/ai.mjs validate`
+- `node tools/ai.mjs validate --review` for review-stage context pressure
 - `node tools/pipeline_validate.mjs`
-- `node tools/pipeline_validate.mjs --review` for review-stage context pressure
 
 ## Validation Matrix
 
 - Hot docs or context budgets: context budget tests, doc reference check,
-  `node tools/pipeline_validate.mjs --review`.
+  `node tools/ai.mjs validate --review`.
 - Skill entrypoints/references: `node tools/skills_eval.mjs`,
   `node tools/skills_sync.mjs --check`, context budget, quick pipeline.
 - Product gate/tooling: focused product-gate tests plus quick pipeline.
 - Taskboard/status rules: taskboard tests/validate plus quick pipeline.
-- Portable export or root/export drift: `node tools/pipeline_validate.mjs --full`
+- Portable export or root/export drift: `node tools/ai.mjs validate --full`
   or full dry-run when dependencies are unavailable.
 
 ## Report Shape

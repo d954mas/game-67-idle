@@ -30,7 +30,7 @@ game work; use `game-feature-iteration` for runtime features and
 3. Move repeated procedure behind a reference, skill, task rule, or tool; keep
    hot files as maps.
 4. Put mandatory rules in validators/tests where practical, then run the narrow
-   proof and `node tools/pipeline_validate.mjs`.
+   proof and `node tools/ai.mjs validate`.
 
 ## Placement Rules
 

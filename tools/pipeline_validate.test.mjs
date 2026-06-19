@@ -33,6 +33,7 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.doesNotMatch(result.stdout, /== portable export/);
   assert.doesNotMatch(result.stdout, /== exported ai profile tests/);
   assert.match(result.stdout, /reusable pipeline quick validation passed/);
+  assert.match(result.stdout, /node tools\/ai\.mjs validate --full/);
 });
 
 test("pipeline validation review dry-run adds strict context budget review", () => {

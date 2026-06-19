@@ -26,7 +26,7 @@ asset, reference, or explicit lead acceptance. This is enforced by:
 node tools/product_gate/repeated_failure_guard.mjs
 ```
 
-`node tools/pipeline_validate.mjs` runs that guard in quick mode.
+`node tools/ai.mjs validate` runs that guard in quick mode.
 
 ## Validation Defaults
 
@@ -36,8 +36,9 @@ node tools/product_gate/repeated_failure_guard.mjs
 - Taskboard changes: `node --test tools/taskboard/test.mjs`
 - AI facade/profile changes: `node --test tools/ai.test.mjs` and focused
   `tools/ai_profile` tests
-- Reusable pipeline: `node tools/pipeline_validate.mjs`
-- Portable/export/runtime gates: `node tools/pipeline_validate.mjs --full`
+- Reusable pipeline: `node tools/ai.mjs validate`
+- Review-stage context pressure: `node tools/ai.mjs validate --review`
+- Portable/export/runtime gates: `node tools/ai.mjs validate --full`
 
 Escalate validation only when the changed behavior or export path requires it.
 Full portable validation is a final/broad gate, not the default after every
