@@ -8,3 +8,9 @@ description: "Use when reflecting on a long AI-assisted work session, chat histo
 
 Canonical instructions live in `.codex/skills/chat-session-reflection/SKILL.md` (single
 source of truth shared by all agent CLIs). Read that file and follow it.
+
+Reference playbooks (load only when the canonical skill says to):
+
+- `.codex/skills/chat-session-reflection/references/reflection-evidence-intake.md`
+- `.codex/skills/chat-session-reflection/references/reflection-output-rules.md`
+- `.codex/skills/chat-session-reflection/references/reflection-profiling.md`

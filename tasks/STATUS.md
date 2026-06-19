@@ -76,6 +76,9 @@ node tools/pipeline_validate.mjs
 - `game-runtime-automation` now keeps its hot `SKILL.md` as a short router and
   loads runtime workflow/scaffold, Visual QA, and DevAPI command-bus detail from
   `.codex/skills/game-runtime-automation/references/`.
+- `chat-session-reflection` now keeps its hot `SKILL.md` as a short router and
+  loads evidence intake, profiling, and retrospective output rules from
+  `.codex/skills/chat-session-reflection/references/`.
 
 ## Next Priorities
 
