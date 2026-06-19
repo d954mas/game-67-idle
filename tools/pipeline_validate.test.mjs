@@ -23,6 +23,7 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.match(result.stdout, /== ai facade tests/);
   assert.match(result.stdout, /== skills sync tests/);
   assert.match(result.stdout, /== context budget report/);
+  assert.doesNotMatch(result.stdout, /== context budget review/);
   assert.match(result.stdout, /== doc reference check/);
   assert.match(result.stdout, /== context budget tests/);
   assert.match(result.stdout, /== doc reference tests/);
@@ -32,6 +33,17 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.doesNotMatch(result.stdout, /== portable export/);
   assert.doesNotMatch(result.stdout, /== exported ai profile tests/);
   assert.match(result.stdout, /reusable pipeline quick validation passed/);
+});
+
+test("pipeline validation review dry-run adds strict context budget review", () => {
+  const result = run(["--review", "--dry-run"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /mode: quick\+review \(dry-run\)/);
+  assert.match(result.stdout, /== context budget report/);
+  assert.match(result.stdout, /== context budget review/);
+  assert.match(result.stdout, /\$ .*tools\/context_budget\.mjs --review/);
+  assert.doesNotMatch(result.stdout, /== portable export/);
+  assert.match(result.stdout, /reusable pipeline quick\+review validation passed/);
 });
 
 test("pipeline validation full dry-run runs the minimal export check by default", () => {

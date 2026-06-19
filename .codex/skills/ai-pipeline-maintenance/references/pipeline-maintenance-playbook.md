@@ -44,11 +44,12 @@ Common guards:
 - `node tools/product_gate/repeated_failure_guard.mjs`
 - `node tools/taskboard/cli.mjs validate`
 - `node tools/pipeline_validate.mjs`
+- `node tools/pipeline_validate.mjs --review` for review-stage context pressure
 
 ## Validation Matrix
 
-- Hot docs or context budgets: `context_budget.mjs --review`, context budget
-  tests, doc reference check, quick pipeline.
+- Hot docs or context budgets: context budget tests, doc reference check,
+  `node tools/pipeline_validate.mjs --review`.
 - Skill entrypoints/references: `node tools/skills_eval.mjs`,
   `node tools/skills_sync.mjs --check`, context budget, quick pipeline.
 - Product gate/tooling: focused product-gate tests plus quick pipeline.

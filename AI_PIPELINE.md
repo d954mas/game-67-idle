@@ -35,8 +35,9 @@ skill, and at most one deep pipeline reference above.
 ```powershell
 node tools/taskboard/cli.mjs context
 node tools/pipeline_validate.mjs
+node tools/pipeline_validate.mjs --review
 node tools/pipeline_validate.mjs --full
 ```
 
-Use quick pipeline validation after normal pipeline/tooling edits. Use `--full`
-for export, runtime, release, or deep asset gates.
+Use quick validation after normal pipeline edits; `--review` for strict
+context review; `--full` for export, runtime, or deep asset gates.

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Validate the reusable AI pipeline base.
 //
-//   node tools/pipeline_validate.mjs [--quick] [--full] [--dry-run]
+//   node tools/pipeline_validate.mjs [--quick] [--full] [--review] [--dry-run]
 
 import { existsSync, readFileSync, rmSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -15,12 +15,13 @@ const args = process.argv.slice(2);
 
 function usage() {
   console.error(`usage:
-  node tools/pipeline_validate.mjs [--quick] [--full] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune]
+  node tools/pipeline_validate.mjs [--quick] [--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune]
 
 Modes:
   --quick    core workflow validation only (default; use this after narrow edits)
   --full     quick checks plus deep asset/runtime validation + a minimal export
              self-check (reserve for portable-base/export/runtime/release gates)
+  --review   add review-stage gates, including strict aggregate context budgets
   --dry-run  print the selected commands without running them
 
 Export depth (with --full):
@@ -52,7 +53,7 @@ let keepExports = 3;
 }
 const prune = !args.includes("--no-prune");
 
-const allowedArgs = new Set(["--quick", "--full", "--dry-run", "--reexport-tests", "--no-prune", "--help", "-h"]);
+const allowedArgs = new Set(["--quick", "--full", "--review", "--dry-run", "--reexport-tests", "--no-prune", "--help", "-h"]);
 for (const arg of args) {
   if (!allowedArgs.has(arg)) usage();
 }
@@ -60,6 +61,7 @@ if (args.includes("--help") || args.includes("-h")) usage();
 if (args.includes("--quick") && args.includes("--full")) usage();
 
 const fullMode = args.includes("--full");
+const reviewMode = args.includes("--review");
 const mode = fullMode ? "full" : "quick";
 const dryRun = args.includes("--dry-run");
 
@@ -254,7 +256,7 @@ function pruneOldExports(keep) {
   }
 }
 
-console.log(`mode: ${mode}${dryRun ? " (dry-run)" : ""}`);
+console.log(`mode: ${mode}${reviewMode ? "+review" : ""}${dryRun ? " (dry-run)" : ""}`);
 
 if (prune && !dryRun) {
   pruneOldExports(keepExports);
@@ -273,6 +275,9 @@ run("skill eval", ["tools/skills_eval.mjs"]);
 run("skills sync check", ["tools/skills_sync.mjs", "--check"]);
 run("skills sync tests", ["--test", "tools/skills_sync.test.mjs"]);
 run("context budget report", ["tools/context_budget.mjs"]);
+if (reviewMode) {
+  run("context budget review", ["tools/context_budget.mjs", "--review"]);
+}
 run("doc reference check", ["tools/doc_reference_check.mjs"]);
 run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
 run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
@@ -313,7 +318,7 @@ if (existsSync(join(root, "tools", "product_gate", "test.mjs"))) {
 }
 
 if (!fullMode) {
-  console.log(`\nok: reusable pipeline quick validation passed`);
+  console.log(`\nok: reusable pipeline ${reviewMode ? "quick+review" : "quick"} validation passed`);
   console.log(`hint: run node tools/pipeline_validate.mjs --full for portable export/runtime/deep asset gates`);
   process.exit(0);
 }

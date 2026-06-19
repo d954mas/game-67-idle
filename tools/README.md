@@ -61,17 +61,13 @@ timing/debug artifacts normal blockers.
 
 Generated caches (`__pycache__/`, `*.pyc`) are ignored scratch.
 
-After normal cleanup:
+Validation:
 
 ```powershell
 node tools/pipeline_validate.mjs
-```
-
-Use full validation only for export/runtime/release gates:
-
-```powershell
+node tools/pipeline_validate.mjs --review
 node tools/pipeline_validate.mjs --full
 ```
 
-Full validation exports to `tmp/pipeline-validate-<stamp>/` and prunes to the
-newest 3 by default.
+`--review` adds strict context pressure. `--full` exports to
+`tmp/pipeline-validate-<stamp>/` and prunes to the newest 3 by default.
