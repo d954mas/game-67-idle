@@ -35,9 +35,9 @@ Reusable pipeline quality, not game content:
 
 ## Required Validation
 
-Normal gate: `node tools/pipeline_validate.mjs`.
+Normal gate: `node tools/ai.mjs validate`.
 
-Use `node tools/pipeline_validate.mjs --full` for portable export/runtime/deep
+Use `node tools/ai.mjs validate --full` for portable export/runtime/deep
 asset coverage.
 
 ## Last Known Good Evidence
@@ -45,8 +45,8 @@ asset coverage.
 - Historical pipeline evidence: `tasks/archive/README.md`.
 - Source-of-truth docs: `AGENTS.md`, `AI_PIPELINE.md`, `docs/ai-pipeline/`,
   `tasks/README.md`, `.codex/skills/`.
-- Quick validation: `node tools/pipeline_validate.mjs`.
-- Full/export validation: `node tools/pipeline_validate.mjs --full`.
+- Quick validation: `node tools/ai.mjs validate`.
+- Full/export validation: `node tools/ai.mjs validate --full`.
 
 ## Next Priorities
 

@@ -187,7 +187,7 @@ Source: \`tasks/README.md\`.
 
 \`\`\`powershell
 node tools/taskboard/cli.mjs summary
-node tools/pipeline_validate.mjs --full
+node tools/ai.mjs validate --full
 \`\`\`
 
 Sources: \`tasks/README.md\`, \`AI_PIPELINE.md\`.

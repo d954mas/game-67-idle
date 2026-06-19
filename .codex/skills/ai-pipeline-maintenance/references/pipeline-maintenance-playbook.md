@@ -45,7 +45,7 @@ Common guards:
 - `node tools/taskboard/cli.mjs validate`
 - `node tools/ai.mjs validate`
 - `node tools/ai.mjs validate --review` for review-stage context pressure
-- `node tools/pipeline_validate.mjs`
+- underlying implementation: `tools/pipeline_validate.mjs`
 
 ## Validation Matrix
 

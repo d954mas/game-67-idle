@@ -66,8 +66,8 @@ Smallest reliable gates:
 - skill/process: `node tools/skills_eval.mjs`
 - product gate/tooling: `node --test tools/product_gate/test.mjs`
 - taskboard/tooling: `node --test tools/taskboard/test.mjs`
-- reusable pipeline: `node tools/pipeline_validate.mjs`
-- portable/export/runtime: `node tools/pipeline_validate.mjs --full`
+- reusable pipeline: `node tools/ai.mjs validate`
+- portable/export/runtime: `node tools/ai.mjs validate --full`
 - visual/playable: native scenario plus screenshot/video/gate evidence
 
 Repeated strict/product failures:

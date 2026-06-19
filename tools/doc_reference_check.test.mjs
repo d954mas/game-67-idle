@@ -122,3 +122,20 @@ test("doc reference check rejects retired deep reflection command", () => {
     cleanup(dir);
   }
 });
+
+test("doc reference check rejects direct pipeline validator command in docs", () => {
+  const dir = tempDir();
+  try {
+    writeMinimalRoot(dir);
+    writeFileSync(
+      join(dir, "AI_PIPELINE.md"),
+      "Old command:\n\n```powershell\nnode tools/pipeline_validate.mjs --review\n```\n",
+      "utf8",
+    );
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /internal command `node tools\/pipeline_validate\.mjs`/);
+  } finally {
+    cleanup(dir);
+  }
+});

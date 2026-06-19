@@ -9,7 +9,7 @@
 // ALWAYS tag/branch the current game first (e.g. `git tag <id>-snapshot-<date>`):
 // this is destructive in the working tree (recoverable from git, but tag to be
 // safe). After applying, review the game-named files it lists, then run
-// `node tools/pipeline_validate.mjs --full`.
+// `node tools/ai.mjs validate --full`.
 
 import { existsSync, rmSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -80,4 +80,4 @@ for (const p of [...REMOVE_DIRS, ...looseFiles]) {
   }
 }
 console.log("\nDONE. Now: review the manual items above, strip any leftover game CMake targets, then run:");
-console.log("  node tools/pipeline_validate.mjs --full");
+console.log("  node tools/ai.mjs validate --full");

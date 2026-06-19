@@ -99,7 +99,12 @@ const retiredCommandPatterns = [
   {
     pattern: /\bnode\s+tools[\\/]ai\.mjs\s+validate\s+--file\b/i,
     message:
-      "retired command `node tools/ai.mjs validate --file`; use a focused test or `node tools/pipeline_validate.mjs`",
+      "retired command `node tools/ai.mjs validate --file`; use a focused test or `node tools/ai.mjs validate`",
+  },
+  {
+    pattern: /\bnode\s+tools[\\/]pipeline_validate\.mjs\b/i,
+    message:
+      "internal command `node tools/pipeline_validate.mjs`; use facade `node tools/ai.mjs validate` in agent-facing docs",
   },
   {
     pattern: /\bnode\s+tools[\\/]ai\.mjs\s+reflect\s+--deep\b/i,

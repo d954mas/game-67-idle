@@ -159,7 +159,7 @@ function pipelineValidateArgs(args) {
       continue;
     }
     if (arg === "--file") {
-      console.error("error: node tools/ai.mjs validate no longer supports --file; run the relevant focused test or use node tools/pipeline_validate.mjs");
+      console.error("error: node tools/ai.mjs validate no longer supports --file; run the relevant focused test or use node tools/ai.mjs validate");
       process.exit(2);
     }
     console.error(`error: unsupported validate option: ${arg}`);
