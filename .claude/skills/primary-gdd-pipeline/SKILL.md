@@ -18,6 +18,7 @@ Reference playbooks (load only when the canonical skill says to):
 - `.codex/skills/primary-gdd-pipeline/references/implementation-handoff-playbook.md`
 - `.codex/skills/primary-gdd-pipeline/references/knowledge-capture-playbook.md`
 - `.codex/skills/primary-gdd-pipeline/references/output-templates.md`
+- `.codex/skills/primary-gdd-pipeline/references/playbook-map.md`
 - `.codex/skills/primary-gdd-pipeline/references/quality-review-playbook.md`
 - `.codex/skills/primary-gdd-pipeline/references/reference-research-playbook.md`
 - `.codex/skills/primary-gdd-pipeline/references/skill-eval-playbook.md`

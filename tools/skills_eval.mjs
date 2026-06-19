@@ -157,6 +157,7 @@ const SKILL_CHECKS = [
       "data/ui_flow.json",
       "data/asset_manifest.json",
       "data/combat.json",
+      "playbook-map.md",
       "quality-review-playbook.md",
       "skill-eval-playbook.md",
       "design-stewardship.md",
