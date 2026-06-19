@@ -640,7 +640,7 @@ static void source_mech_pose(bool hangar, float *root_x, float *root_z,
   const float time = (float)nt_time_now();
   *root_x = hangar ? 0.0F : s_game.mech_x;
   *root_z = hangar ? 0.4F : s_game.mech_z;
-  *root_scale = hangar ? 1.18F : 0.88F;
+  *root_scale = hangar ? 1.18F : 0.96F;
   *yaw = hangar ? (2.74F + sinf(time * 0.65F) * 0.05F) : s_game.mech_facing;
 }
 
@@ -1974,10 +1974,10 @@ static void build_frame_uniforms(float w, float h, bool hangar,
                                  nt_frame_uniforms_t *uniforms,
                                  float out_vp[16]) {
   const float aspect = h > 0.0F ? w / h : 1.777F;
-  const vec3 eye = {hangar ? 3.6F : 5.8F, hangar ? 3.7F : 6.3F,
-                    hangar ? 6.8F : 10.2F};
-  const vec3 center = {hangar ? 0.0F : 0.15F, hangar ? 1.75F : 1.08F,
-                       hangar ? 0.2F : 0.65F};
+  const vec3 eye = {hangar ? 3.6F : 5.1F, hangar ? 3.7F : 5.7F,
+                    hangar ? 6.8F : 8.8F};
+  const vec3 center = {hangar ? 0.0F : 0.10F, hangar ? 1.75F : 1.16F,
+                       hangar ? 0.2F : 0.46F};
   const vec3 up = {0.0F, 1.0F, 0.0F};
   mat4 view;
   mat4 proj;
@@ -1985,7 +1985,7 @@ static void build_frame_uniforms(float w, float h, bool hangar,
   glm_lookat((vec3){eye[0], eye[1], eye[2]},
              (vec3){center[0], center[1], center[2]},
              (vec3){up[0], up[1], up[2]}, view);
-  glm_perspective(glm_rad(hangar ? 48.0F : 55.0F), aspect, 0.1F, 80.0F, proj);
+  glm_perspective(glm_rad(hangar ? 48.0F : 51.0F), aspect, 0.1F, 80.0F, proj);
   glm_mat4_mul(proj, view, vp);
 
   if (out_vp) {
@@ -2015,8 +2015,8 @@ static void build_frame_uniforms(float w, float h, bool hangar,
 static void setup_perspective(float w, float h, bool hangar) {
   float vp[16];
   build_frame_uniforms(w, h, hangar, NULL, vp);
-  const vec3 eye = {hangar ? 3.6F : 5.8F, hangar ? 3.7F : 6.3F,
-                    hangar ? 6.8F : 10.2F};
+  const vec3 eye = {hangar ? 3.6F : 5.1F, hangar ? 3.7F : 5.7F,
+                    hangar ? 6.8F : 8.8F};
   nt_shape_renderer_set_vp((float *)vp);
   nt_shape_renderer_set_cam_pos((float[3]){eye[0], eye[1], eye[2]});
   nt_shape_renderer_set_depth(true);
@@ -2405,13 +2405,13 @@ static void append_assault_hero_items(float root_x, float root_z, float root_sca
       MECH_MESH_ASSAULT_WALKER_GREY_D_NONE,
   };
   const float assault_colors[ASSAULT_WALKER_MESH_PARTS][4] = {
-      {0.20F, 0.78F, 0.34F, 1.0F}, {0.18F, 0.66F, 0.28F, 1.0F},
-      {0.30F, 0.92F, 0.42F, 1.0F}, {0.78F, 0.86F, 0.86F, 1.0F},
-      {0.22F, 0.92F, 1.0F, 0.92F}, {0.055F, 0.065F, 0.070F, 1.0F},
-      {0.035F, 0.045F, 0.052F, 1.0F}, {0.70F, 0.78F, 0.80F, 1.0F},
-      {0.12F, 0.15F, 0.16F, 1.0F}, {0.88F, 0.92F, 0.90F, 1.0F},
-      {0.82F, 0.88F, 0.88F, 1.0F}, {0.76F, 0.84F, 0.84F, 1.0F},
-      {0.68F, 0.76F, 0.78F, 1.0F},
+      {0.08F, 0.88F, 0.36F, 1.0F}, {0.05F, 0.66F, 0.25F, 1.0F},
+      {0.30F, 1.00F, 0.52F, 1.0F}, {0.88F, 0.95F, 0.92F, 1.0F},
+      {0.12F, 0.96F, 1.00F, 0.96F}, {0.035F, 0.045F, 0.052F, 1.0F},
+      {0.025F, 0.034F, 0.042F, 1.0F}, {0.76F, 0.86F, 0.86F, 1.0F},
+      {0.08F, 0.12F, 0.15F, 1.0F}, {0.98F, 0.92F, 0.70F, 1.0F},
+      {0.90F, 0.96F, 0.94F, 1.0F}, {0.92F, 0.70F, 0.24F, 1.0F},
+      {0.80F, 0.90F, 0.90F, 1.0F},
   };
   const float assault_scale = root_scale * 0.16F;
   const float source_min_y = -8.9889545F;
@@ -2447,15 +2447,28 @@ static void append_assault_hero_items(float root_x, float root_z, float root_sca
     float r = assault_colors[part][0];
     float g = assault_colors[part][1];
     float b = assault_colors[part][2];
-    const float combat_glow = attack_t * 0.16F + heat_t * 0.08F;
-    if (part == 2 || part == 4 || part == 6) {
-      r = fminf(r + combat_glow * 0.45F, 1.0F);
-      g = fminf(g + combat_glow * 0.70F, 1.0F);
-      b = fminf(b + combat_glow, 1.0F);
+    const float combat_glow = attack_t * 0.24F + heat_t * 0.14F;
+    const float heat_pulse = heat_t * (0.35F + 0.65F * fabsf(sinf((float)nt_time_now() * 6.0F)));
+    if (part == 4) {
+      r = fminf(r + combat_glow * 0.38F, 1.0F);
+      g = fminf(g + combat_glow * 0.58F, 1.0F);
+      b = fminf(b + combat_glow * 0.95F, 1.0F);
+    } else if (part == 2 || part == 6) {
+      r = fminf(r + combat_glow * 0.30F, 1.0F);
+      g = fminf(g + combat_glow * 0.48F, 1.0F);
+      b = fminf(b + combat_glow * 0.74F, 1.0F);
+    } else if (part == 5 || part == 8) {
+      r = fminf(r + heat_pulse * 0.34F, 1.0F);
+      g = fminf(g + heat_pulse * 0.16F, 1.0F);
+      b = fminf(b + heat_pulse * 0.06F, 1.0F);
+    } else if (part == 9 || part == 11) {
+      r = fminf(r + attack_t * 0.28F, 1.0F);
+      g = fminf(g + attack_t * 0.20F, 1.0F);
+      b = fmaxf(b - attack_t * 0.10F, 0.0F);
     } else if (part <= 2) {
-      r = fminf(r + combat_glow * 0.18F, 1.0F);
-      g = fminf(g + combat_glow * 0.26F, 1.0F);
-      b = fminf(b + combat_glow * 0.16F, 1.0F);
+      r = fminf(r + combat_glow * 0.12F, 1.0F);
+      g = fminf(g + combat_glow * 0.22F, 1.0F);
+      b = fminf(b + combat_glow * 0.14F, 1.0F);
     }
     nt_drawable_comp_set_color(entity, r, g, b, assault_colors[part][3]);
     s_mesh_mech.items[*item_count].sort_key =
