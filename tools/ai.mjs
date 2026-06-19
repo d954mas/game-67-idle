@@ -20,7 +20,7 @@ function usage() {
   node tools/ai.mjs context [context options] -- <command> [args...]
   node tools/ai.mjs checkpoint <intent> [--force] [--min-gap-min <n>] [checkpoint options]
   node tools/ai.mjs run [--profile-mode passive|full|off] [--profile-slow-ms <n>] [--phase <name>] [--category <name>] [--intent <text>] [--value <name>] -- <command> [args...]
-  node tools/ai.mjs validate [--full] [--dry-run]
+  node tools/ai.mjs validate [--quick|--full] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune]
   node tools/ai.mjs critic --project <game-id> --task <task-id> --screenshot <path> --target <path|text> --output <packet.md> [critic options]
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail [gate options]
   node tools/ai.mjs close-slice --task <task-id> --project <game-id> --evidence <text> [close options]
@@ -35,7 +35,7 @@ Fast path:
   context  print or measure context; passive mode records only large/failing context
   checkpoint record a long manual/research/review gap without noisy short pauses
   run      run a command; passive mode records only slow/failing commands
-  validate run quick reusable-pipeline validation (--full for the heavy export/runtime/release gate)
+  validate run reusable-pipeline validation; unknown options fail instead of being ignored
   critic   write a reusable visual/UI critic packet before strict product gate
   gate     write a product-read screenshot gate before expanding game content
   close-slice require product gate + evidence before handoff/review
@@ -136,6 +136,36 @@ function stripFlagsWithValues(args, flags) {
 
 function stripImportFlags(args) {
   return stripFlagsWithValues(withoutFlag(args, "--no-import-codex-session"), new Set(["--session"]));
+}
+
+function pipelineValidateArgs(args) {
+  const allowedFlags = new Set(["--quick", "--full", "--dry-run", "--reexport-tests", "--no-prune"]);
+  const valueFlags = new Set(["--keep-exports"]);
+  const out = ["tools/pipeline_validate.mjs"];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (allowedFlags.has(arg)) {
+      out.push(arg);
+      continue;
+    }
+    if (valueFlags.has(arg)) {
+      const value = args[index + 1];
+      if (!value || value.startsWith("--")) {
+        console.error(`error: ${arg} requires a value`);
+        usage();
+      }
+      out.push(arg, value);
+      index += 1;
+      continue;
+    }
+    if (arg === "--file") {
+      console.error("error: node tools/ai.mjs validate no longer supports --file; run the relevant focused test or use node tools/pipeline_validate.mjs");
+      process.exit(2);
+    }
+    console.error(`error: unsupported validate option: ${arg}`);
+    usage();
+  }
+  return out;
 }
 
 function appendProfile(values, extra = {}) {
@@ -411,12 +441,9 @@ if (command === "run") {
 }
 
 if (command === "validate") {
-  // Thin alias to the reusable pipeline validator. Quick by default; pass
-  // --full for the heavy export/runtime/release gate. --dry-run prints the plan.
-  const pipelineArgs = ["tools/pipeline_validate.mjs"];
-  if (hasFlag(argv, "--full")) pipelineArgs.push("--full");
-  if (hasFlag(argv, "--dry-run")) pipelineArgs.push("--dry-run");
-  run(pipelineArgs);
+  // Thin alias to the reusable pipeline validator. Keep it strict so stale
+  // options such as --file cannot look like they changed validation scope.
+  run(pipelineValidateArgs(argv));
 }
 
 if (command === "gate") {

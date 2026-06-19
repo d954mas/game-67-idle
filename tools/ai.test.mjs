@@ -291,6 +291,21 @@ test("validate forwards to the reusable pipeline validator", () => {
   assert.match(result.stdout, /mode: quick \(dry-run\)/);
 });
 
+test("validate forwards supported pipeline options", () => {
+  const result = run(["validate", "--full", "--reexport-tests", "--keep-exports", "2", "--no-prune", "--dry-run"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /mode: full \(dry-run\)/);
+  assert.match(result.stdout, /== exported ai profile tests/);
+});
+
+test("validate rejects stale file-scoped option instead of ignoring it", () => {
+  const result = run(["validate", "--file", "AI_PIPELINE.md", "--dry-run"]);
+
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /validate no longer supports --file/);
+});
+
 test("close-slice forwards product gate closeout options", () => {
   const dir = tempDir();
   try {
