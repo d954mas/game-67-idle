@@ -53,8 +53,8 @@ node tools/pipeline_validate.mjs
 - Pipeline source-of-truth docs are `AGENTS.md`, `AI_PIPELINE.md`,
   `tasks/README.md`, and `.codex/skills/`.
 - `generated-game-ui-assets` now keeps its hot `SKILL.md` as a short router and
-  loads workflow/gate details from
-  `.codex/skills/generated-game-ui-assets/references/ui-workflow-gates.md`.
+  loads workflow/gate, tier, slice9, atlas, icon, and responsive UI details from
+  `.codex/skills/generated-game-ui-assets/references/`.
 - `game-visual-art-direction` also keeps its hot `SKILL.md` as a short router
   and loads visual workflow/gate detail from
   `.codex/skills/game-visual-art-direction/references/visual-workflow-gates.md`.

@@ -26,39 +26,21 @@ is actually needed.
 
 ## Minimal Workflow
 
-1. Read project rules, active task, visual target, art direction, current
-   screenshot, and current runtime harness.
-2. Write the 5-line session contract: goal, non-goal, proof, stop condition,
-   likely files. Proof must include source/runtime manifests, composition
-   proof, native screenshot/product gate, and runtime integration evidence.
-3. Create or update the art bible and one art job packet:
-   `node tools/assets/job/new_art_job.mjs`.
-4. Generate separate source families, not a composed UI screenshot. Required
-   families commonly include `blank UI kit sheet`, `isolated icon sheet`,
-   decor/state overlays, bars, map/world layers, and sprites/FX. Use full
-   mockups only as visual targets.
-5. Record accepted source provenance with
-   `node tools/assets/job/new_generation_record.mjs`. Use real workflow
-   provenance or non-empty workflow JSON; use `--no-seed-reason` when a stable
-   seed is unavailable.
-6. Run source intake before slicing:
-   `normalize_source_sheet_chroma.py` when needed, then
-   `audit_source_sheet_intake.py`.
-7. Create crop/runtime manifests. Never integrate from an empty crop manifest or
-   empty runtime manifest.
-8. Build runtime PNGs/contact sheet from accepted source art. Builders must not
-   redraw panels with procedural shapes and present them as generated assets.
-   Reuse `tools/assets/chroma_key_alpha.py` for chroma/alpha cleanup.
-9. Run the tier that matches the iteration:
-   draft for source/crop checks, integrate for runtime composition proof and
-   `audit_generated_source_derivation.py`, final for the full `--final-art`
-   reusable kit gate.
-10. Validate the assembled screen with screenshot/product gate evidence:
-    `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate`. Use
-    `responsive_layout_audit.mjs` when UI bounds exist.
-11. Update the art job/task log with source art, crop/runtime manifests,
-    contact sheet, composition proof, source-derivation audit, responsive layout
-    audit, screenshots, product gates, validations, and the next visual gap.
+1. Read project rules, active task, visual target, art direction, screenshot,
+   and runtime harness.
+2. Write the 5-line session contract naming manifests, composition proof,
+   screenshot/product gate, and runtime integration evidence.
+3. Use one art job as the work unit: art bible -> source family -> intake ->
+   crop/runtime manifests -> contact sheet -> composition proof -> runtime
+   screenshot/product gate.
+4. Generate separate source families such as `blank UI kit sheet` and
+   `isolated icon sheet`; use full mockups only as visual targets.
+5. Record accepted source provenance with `new_generation_record.mjs`, using
+   non-empty workflow JSON or `--no-seed-reason`.
+6. Run source intake/crop/build through the referenced workflow. Never integrate
+   from an empty crop manifest or runtime manifest.
+7. Choose draft, integrate, or final-art tier from the reference, then report
+   source art, manifests, proof, gates, validations, and next visual gap.
 
 ## Stop Conditions
 
@@ -74,10 +56,9 @@ is actually needed.
 
 ## Tier Reminder
 
-- DRAFT: intake + runtime PNG/contact sheet, optional draft
-  `validate_art_job.mjs`.
+- DRAFT: intake plus runtime PNG/contact sheet.
 - INTEGRATE: strict art job validation, composition proof,
   `audit_generated_source_derivation.py`, product gate/runtime proof.
 - FINAL-ART: source family coverage, slice9/atlas/runtime usage audits,
-  source-derived PNG proof, `validate_art_job.mjs --final-art`, native/runtime
+  source-derived PNGs, `validate_art_job.mjs --final-art`, native/runtime
   screenshots, and responsive layout proof when applicable.
