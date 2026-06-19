@@ -27,26 +27,24 @@ Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 ## Current Gate
 
-First native PC prototype slice `T0021` is done and `T0022` refreshed the
-reference mismatch audit against current screenshots. The loop works and DevAPI
-smoke passes. The art target has pivoted: `T0023` is now P0 and must improve the
-visual, Roblox-like world, and starter mech until the player no longer reads as
-a simple set of cubes. Iteration remains native PC; mobile/web is the UX/export
-target. Accepted: one owned mech, PvE first, semi-auto arena, floating
-joystick/WASD, resources -> hangar purchase/craft, shoulder rockets, drone swarm
-proof, short dash, `Cooling`, a fixed three-quarter/isometric camera, bright
-Roblox-like toy/block world, stylized studs surfaces, and Foundry Warden
-mini-boss.
+First native PC prototype slice `T0021` is done, `T0022` refreshed the reference
+mismatch audit, and `T0023` is in review after the Roblox-like visual pass:
+downloaded CC0 Quaternius hero mech, restored atlas color, raised studs/world
+props, visible shoulder modules, attack VFX tied to mech modules, and WASD
+movement proof. Iteration remains native PC; mobile/web is the UX/export target.
+Accepted: one owned mech, PvE first, semi-auto arena, floating joystick/WASD,
+resources -> hangar purchase/craft, shoulder rockets, drone swarm proof, short
+dash, `Cooling`, a fixed three-quarter/isometric camera, bright Roblox-like
+toy/block world, stylized studs surfaces, and Foundry Warden mini-boss.
 
 ## Next Priorities
 
-1. Run `T0023`: improve the mech and Roblox-like world as the first priority.
-   The mech must read as a deliberate toy/block mech character, not a cube pile.
-   Current pass uses a CC0 Poly Pizza/Quaternius mech with restored atlas color
-   and raised studs on the pad/props.
+1. Review `T0023` evidence and start the next asset-first visual slice: source
+   or author a stronger modular/rigged Roblox-like mech so movement and module
+   slots come from the model, not only runtime VFX overlays.
 2. Keep reference constraints from
    `gamedesign/projects/mech-builder-battler/references/current_build_mismatch_audit_2026-06-19.md`.
-3. Keep product evidence in
-   `gamedesign/projects/mech-builder-battler/evidence/t0021_runtime_visual_review_2026-06-19.md`.
+3. Keep latest product evidence in
+   `gamedesign/projects/mech-builder-battler/evidence/t0023_roblox_like_visual_pass_2026-06-19.md`.
 4. Defer web/mobile export work until explicitly approved; preserve
    mobile-style controls/readability in the PC harness.

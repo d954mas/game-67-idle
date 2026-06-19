@@ -37,6 +37,10 @@ updated: 2026-06-19
   twin cannon muzzle flashes/tracers now come from the mech cannons, rocket
   trails/plumes come from shoulder tube caps, and heat/vent lines rise from the
   mech body after firing.
+- Added movement-readability feedback for the current single-mesh hero mech:
+  WASD motion now produces visible foot stomp rings, dust puffs, ground streaks,
+  strafe streaks, dash rings, and stronger body/facing context in the native
+  battle camera.
 - Downloaded a second CC0 Quaternius source candidate, `Robot Enemy Legs Gun`,
   for future modular robot/mech part sourcing. It is recorded as source
   provenance only and is not currently packed into runtime.
@@ -45,6 +49,7 @@ updated: 2026-06-19
 
 - Hangar: `build/captures/mech_t0021_hangar_smoke.png`
 - Battle: `build/captures/mech_t0021_battle_smoke.png`
+- Moving/strafe: `build/captures/mech_t0023_moving_strafe_smoke.png`
 - Cannon attack: `build/captures/mech_t0023_cannon_attack_smoke.png`
 - Rocket-equipped battle: `build/captures/mech_t0021_rockets_smoke.png`
 - Rocket attack: `build/captures/mech_t0023_rocket_attack_smoke.png`
@@ -71,6 +76,9 @@ Visual judgment:
 - The attack frame now reads as a mech action rather than detached VFX: the
   screenshot shows source-model cannons/pods, recoil, projectile lines, hit
   rings, and heat/vent response in the same native battle state.
+- The movement frame now proves the PC harness path, not a fake pose: the smoke
+  holds `W+D` through engine `input.key`, asserts the mech position changed, and
+  captures the active stomp/strafe feedback while the mech faces into motion.
 
 ## Residual Risk
 
@@ -84,6 +92,10 @@ Visual judgment:
 - Rocket trails and hardpoint plumes are intentionally exaggerated runtime VFX.
   They are useful for readability now, but final art should replace the overlay
   look with authored modular launchers or a stronger downloaded mech source.
+- Movement readability is still VFX-assisted because the downloaded hero GLB is
+  imported as a single mesh. A future asset-first pass should source or author a
+  stronger modular/rigged Roblox-like mech with separate legs/feet if the engine
+  path supports it.
 - The stylized-studs ground is procedural proof, not yet a shippable texture
   asset. A future texture pass should decide tileable vs non-tileable up front
   and record provenance using `game-texture-generation`.
@@ -105,6 +117,9 @@ Visual judgment:
 - Attack-read visual product gate:
   `gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T23-05-35_desktop-attack.md`,
   pass with all visual scores at 4/5 and one minor authored-module caveat.
+- Movement visual product gate:
+  `gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T23-11-37_desktop-movement.md`,
+  pass with all visual scores at 4/5 and one minor single-mesh movement caveat.
 - `.codex/skills/game-texture-generation`: `quick_validate.py` pass.
 
 ## Downloaded Asset Provenance

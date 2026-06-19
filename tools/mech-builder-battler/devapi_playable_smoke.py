@@ -46,6 +46,7 @@ def main() -> int:
             "ui.tree",
             "ui.click",
             "frame.wait",
+            "input.key",
         }
         ok &= check("required endpoints", required.issubset(endpoints), sorted(required - endpoints))
 
@@ -61,6 +62,20 @@ def main() -> int:
         state = game.click_ui("action.battle", wait_frames=12)
         ok &= check("battle starts", state.get("screen") == "battle" and state.get("alive_drones", 0) > 0, state)
         capture(game, "mech_t0021_battle_smoke.png")
+        start_x = float(state.get("mech_x", 0.0))
+        start_z = float(state.get("mech_z", 0.0))
+        game.result("input.key", {"key": "D", "down": True})
+        game.result("input.key", {"key": "W", "down": True})
+        game.wait_frames(34)
+        state = game.result("game.state")
+        moved_x = abs(float(state.get("mech_x", 0.0)) - start_x)
+        moved_z = abs(float(state.get("mech_z", 0.0)) - start_z)
+        moved = moved_x > 0.25 or moved_z > 0.25
+        ok &= check("wasd movement changes mech position", moved, state)
+        capture(game, "mech_t0023_moving_strafe_smoke.png", wait_frames=1)
+        game.result("input.key", {"key": "D", "down": False})
+        game.result("input.key", {"key": "W", "down": False})
+        game.wait_frames(8)
         game.wait_frames(22)
         capture(game, "mech_t0023_cannon_attack_smoke.png")
 

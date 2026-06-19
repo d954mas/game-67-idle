@@ -578,6 +578,15 @@ static void source_mech_vent_point(float root_x, float root_z, float yaw,
              root_scale, out);
 }
 
+static void source_mech_foot_point(float root_x, float root_z, float yaw,
+                                   float root_scale, int side, int row,
+                                   float out[3]) {
+  const float lz = row < 0 ? -0.34F : 0.70F;
+  mech_point(root_x, root_z, yaw, (float)side * 0.58F, 0.18F, lz, root_scale,
+             out);
+  out[1] = 0.14F;
+}
+
 static void rect2(float x, float y, float w, float h, const float color[4]) {
   nt_shape_renderer_rect((float[3]){x + (w * 0.5F), y + (h * 0.5F), 0.0F},
                          (float[2]){w, h}, color);
@@ -1442,6 +1451,94 @@ static void draw_drone(const Drone *d, bool target) {
   }
 }
 
+static void draw_movement_feedback(void) {
+  if (s_game.screen != SCREEN_BATTLE) {
+    return;
+  }
+  const float speed = len2(s_game.mech_vx, s_game.mech_vz);
+  const float move_t = clampf(speed / 4.0F, 0.0F, 1.0F);
+  const float dash_t = clampf(s_game.dash_flash / 0.35F, 0.0F, 1.0F);
+  if (move_t <= 0.03F && dash_t <= 0.02F) {
+    return;
+  }
+
+  float root_x = s_game.mech_x;
+  float root_z = s_game.mech_z;
+  float root_scale = 0.88F;
+  float yaw = s_game.mech_facing;
+  if (mesh_mech_ready()) {
+    source_mech_pose(false, &root_x, &root_z, &root_scale, &yaw);
+  }
+
+  float dir_x = 0.0F;
+  float dir_z = -1.0F;
+  if (speed > 0.01F) {
+    dir_x = s_game.mech_vx / speed;
+    dir_z = s_game.mech_vz / speed;
+  } else {
+    dir_x = sinf(yaw);
+    dir_z = -cosf(yaw);
+  }
+  const float side_x = cosf(yaw);
+  const float side_z = -sinf(yaw);
+  const float strafe_t = clampf(fabsf(s_game.mech_vx) / 4.0F, 0.0F, 1.0F);
+  const float phase = fmodf(s_game.mech_walk, 6.2831853F);
+  const int active_side = phase < 3.14159265F ? -1 : 1;
+  const float dust_alpha = 0.28F + (0.28F * move_t) + (0.25F * dash_t);
+  const float dust[4] = {0.82F, 1.0F, 0.72F, dust_alpha};
+  const float stomp_hot[4] = {1.0F, 0.74F, 0.10F, 0.68F};
+  const float stomp_cool[4] = {0.0F, 0.92F, 1.0F, 0.44F};
+  const float trail[4] = {0.0F, 0.88F, 1.0F, 0.34F + (0.32F * dash_t)};
+  const float strafe_color[4] = {1.0F, 0.50F, 0.05F, 0.30F + 0.34F * strafe_t};
+
+  for (int side = -1; side <= 1; side += 2) {
+    for (int row = -1; row <= 1; row += 2) {
+      float foot[3];
+      source_mech_foot_point(root_x, root_z, yaw, root_scale, side, row, foot);
+      const bool active = side == active_side;
+      const float ring = (active ? 0.38F : 0.28F) * root_scale;
+      nt_shape_renderer_circle_wire(foot, ring,
+                                    active ? stomp_hot : stomp_cool);
+      nt_shape_renderer_line(
+          (float[3]){foot[0], 0.13F, foot[2]},
+          (float[3]){foot[0] - (dir_x * (0.48F + 0.34F * move_t)),
+                     0.13F,
+                     foot[2] - (dir_z * (0.48F + 0.34F * move_t))},
+          trail);
+      if (active) {
+        nt_shape_renderer_sphere(
+            (float[3]){foot[0] - dir_x * 0.18F, 0.18F,
+                       foot[2] - dir_z * 0.18F},
+            (0.10F + 0.12F * move_t) * root_scale, dust);
+      }
+    }
+  }
+
+  if (strafe_t > 0.05F) {
+    const float strafe_sign = s_game.mech_vx < 0.0F ? -1.0F : 1.0F;
+    for (int i = 0; i < 3; ++i) {
+      const float back = 0.42F + ((float)i * 0.30F);
+      const float lift = 0.16F + ((float)i * 0.03F);
+      nt_shape_renderer_line(
+          (float[3]){root_x - dir_x * back - side_x * strafe_sign * 0.82F,
+                     lift,
+                     root_z - dir_z * back - side_z * strafe_sign * 0.82F},
+          (float[3]){root_x - dir_x * (back + 0.75F) -
+                         side_x * strafe_sign * 1.42F,
+                     lift + 0.02F,
+                     root_z - dir_z * (back + 0.75F) -
+                         side_z * strafe_sign * 1.42F},
+          strafe_color);
+    }
+  }
+
+  if (dash_t > 0.02F) {
+    nt_shape_renderer_circle_wire((float[3]){root_x, 0.15F, root_z},
+                                  1.05F + dash_t * 0.65F,
+                                  (float[4]){0.0F, 0.95F, 1.0F, 0.55F});
+  }
+}
+
 static void draw_projectiles(void) {
   const int target = target_drone();
   const bool use_source_mech = mesh_mech_ready();
@@ -2076,6 +2173,7 @@ static void draw_world(float w, float h) {
       draw_mech(s_game.mech_x, s_game.mech_z, 0.88F, s_game.rockets_equipped,
                 false);
     }
+    draw_movement_feedback();
     const int target = target_drone();
     for (int i = 0; i < MAX_DRONES; ++i) {
       draw_drone(&s_game.drones[i], i == target);

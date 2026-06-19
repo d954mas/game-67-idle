@@ -1,7 +1,7 @@
 ---
 id: T0023
 title: Authored starter mech visual pass
-status: doing
+status: review
 epic: ""
 priority: P0
 tags: [implementation, visual, assets, 3d, mechs, native]
@@ -41,7 +41,7 @@ Design inputs:
 - [x] Native `game_seed` still builds and runs the first mech loop.
 - [x] The starter mech no longer reads as cube-kitbashed at gameplay scale.
 - [x] The world reads as an intentional Roblox-like block arena, not debug cubes.
-- [ ] Movement reads as a mech: clear facing, strafe/turn feedback, body weight,
+- [x] Movement reads as a mech: clear facing, strafe/turn feedback, body weight,
       step motion, and no "only forward/back" feel.
 - [x] Attack reads as a mech action: visible weapon recoil, muzzle flash/tracer,
       hit feedback, and heat/vent response.
@@ -129,3 +129,8 @@ Design inputs:
   and heat/vent lines, then extended the smoke harness with specific cannon and
   rocket attack captures.
 - 2026-06-19: product gate PASS (desktop-attack); review: gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T23-05-35_desktop-attack.md; screenshot: build/captures/mech_t0023_rocket_attack_smoke.png; next: prove movement weight with moving/strafe screenshot evidence
+- 2026-06-19: Added movement-readability feedback tied to real WASD input:
+  source-mech facing/lean is supported by foot stomp rings, dust puffs, ground
+  streaks, strafe streaks, and a smoke check that holds `W+D` through
+  `input.key` before capture.
+- 2026-06-19: product gate PASS (desktop-movement); review: gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T23-11-37_desktop-movement.md; screenshot: build/captures/mech_t0023_moving_strafe_smoke.png; next: source or author a stronger modular/rigged Roblox-like mech asset
