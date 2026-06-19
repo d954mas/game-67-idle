@@ -1,11 +1,9 @@
 /*
  * Build the Mech Builder Battler starter mesh pack.
  *
- * The first production path is intentionally small: one packed cube glTF mesh
- * with normals plus a game-owned instanced shader. Runtime composes the starter
- * mech from mesh-renderer instances instead of shape-renderer boxes, so the
- * slice proves the engine asset/material path before larger authored mech
- * assets arrive.
+ * The first production path packs a small authored glTF mesh set with normals
+ * plus a game-owned instanced shader. Runtime composes the starter mech from
+ * distinct mesh-renderer part silhouettes instead of one stretched cube.
  */
 
 #include "nt_builder.h"
@@ -13,6 +11,20 @@
 #include <stdio.h>
 
 static char s_path_buf[512];
+
+static const char *MESH_ASSETS[] = {
+    "assets/meshes/mech_starter_torso.gltf",
+    "assets/meshes/mech_starter_pelvis.gltf",
+    "assets/meshes/mech_starter_head.gltf",
+    "assets/meshes/mech_starter_shoulder.gltf",
+    "assets/meshes/mech_starter_limb.gltf",
+    "assets/meshes/mech_starter_forearm.gltf",
+    "assets/meshes/mech_starter_weapon.gltf",
+    "assets/meshes/mech_starter_foot.gltf",
+    "assets/meshes/mech_starter_rocket_pod.gltf",
+    "assets/meshes/mech_starter_rocket_tube.gltf",
+    "assets/meshes/mech_starter_vent.gltf",
+};
 
 static const char *pack_path(const char *dir, const char *name) {
   (void)snprintf(s_path_buf, sizeof(s_path_buf), "%s/%s", dir, name);
@@ -41,12 +53,23 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  nt_builder_add_mesh(ctx, "assets/meshes/starter_cube_normals.gltf",
-                      &(nt_mesh_opts_t){.layout = layout, .stream_count = 2});
+  for (size_t i = 0; i < sizeof(MESH_ASSETS) / sizeof(MESH_ASSETS[0]); ++i) {
+    nt_builder_add_mesh(ctx, MESH_ASSETS[i],
+                        &(nt_mesh_opts_t){.layout = layout, .stream_count = 2});
+  }
   nt_builder_add_shader(ctx, "assets/shaders/mech_mesh_inst.vert",
                         NT_BUILD_SHADER_VERTEX);
   nt_builder_add_shader(ctx, "assets/shaders/mech_mesh_inst.frag",
                         NT_BUILD_SHADER_FRAGMENT);
+  nt_builder_add_shader(ctx, "assets/shaders/slug_text.vert",
+                        NT_BUILD_SHADER_VERTEX);
+  nt_builder_add_shader(ctx, "assets/shaders/slug_text.frag",
+                        NT_BUILD_SHADER_FRAGMENT);
+  nt_builder_add_font(
+      ctx,
+      "external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf",
+      &(nt_font_opts_t){.charset = NT_CHARSET_ASCII,
+                        .resource_name = "mech/ui_font"});
 
   nt_build_result_t result = nt_builder_finish_pack(ctx);
   nt_builder_free_pack(ctx);

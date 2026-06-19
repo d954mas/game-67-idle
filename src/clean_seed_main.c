@@ -8,6 +8,7 @@
 #endif
 #include "drawable_comp/nt_drawable_comp.h"
 #include "entity/nt_entity.h"
+#include "font/nt_font.h"
 #include "fs/nt_fs.h"
 #include "game_state.h"
 #include "graphics/nt_gfx.h"
@@ -23,6 +24,7 @@
 #include "render/nt_render_items.h"
 #include "renderers/nt_mesh_renderer.h"
 #include "renderers/nt_shape_renderer.h"
+#include "renderers/nt_text_renderer.h"
 #include "resource/nt_resource.h"
 #include "time/nt_time.h"
 #include "transform_comp/nt_transform_comp.h"
@@ -46,7 +48,8 @@
 #define MAX_DRONES 8
 #define ROCKET_COST 120
 #define CAPTURE_PATH_MAX 512
-#define MECH_MESH_PARTS 26
+#define MECH_MESH_PARTS 42
+#define MECH_MESH_TYPES 11
 #define MECH_PART_ROCKETS_ONLY 0x01U
 
 typedef enum {
@@ -83,6 +86,11 @@ typedef struct MechGame {
   float rocket_flash;
   float hit_flash;
   float battle_time;
+  float mech_vx;
+  float mech_vz;
+  float mech_facing;
+  float mech_walk;
+  float mech_recoil;
   int salvage;
   int battle_index;
   bool rockets_equipped;
@@ -91,19 +99,39 @@ typedef struct MechGame {
   Drone drones[MAX_DRONES];
 } MechGame;
 
+typedef enum {
+  MECH_MESH_TORSO = 0,
+  MECH_MESH_PELVIS,
+  MECH_MESH_HEAD,
+  MECH_MESH_SHOULDER,
+  MECH_MESH_LIMB,
+  MECH_MESH_FOREARM,
+  MECH_MESH_WEAPON,
+  MECH_MESH_FOOT,
+  MECH_MESH_ROCKET_POD,
+  MECH_MESH_ROCKET_TUBE,
+  MECH_MESH_VENT,
+} MeshPartMesh;
+
 typedef struct MeshPartSpec {
   float pos[3];
   float size[3];
   float color[4];
   uint8_t flags;
+  uint8_t mesh_kind;
 } MeshPartSpec;
 
 typedef struct MeshMechRuntime {
   nt_hash32_t pack_id;
-  nt_resource_t mesh;
+  nt_resource_t meshes[MECH_MESH_TYPES];
   nt_resource_t vs;
   nt_resource_t fs;
+  nt_resource_t text_vs;
+  nt_resource_t text_fs;
+  nt_resource_t ui_font_res;
   nt_material_t material;
+  nt_material_t text_material;
+  nt_font_t ui_font;
   nt_entity_t parts[MECH_MESH_PARTS];
   nt_render_item_t items[MECH_MESH_PARTS];
   nt_render_item_t sort_scratch[MECH_MESH_PARTS];
@@ -143,109 +171,229 @@ static const float COL_PANEL[4] = {0.035F, 0.105F, 0.13F, 1.0F};
 
 static const MeshPartSpec MESH_MECH_PARTS[MECH_MESH_PARTS] = {
     {{0.0F, 1.62F, 0.0F},
-     {1.08F, 1.32F, 0.72F},
+     {1.20F, 1.46F, 0.86F},
      {0.08F, 0.47F, 0.85F, 1.0F},
-     0},
+     0,
+     MECH_MESH_TORSO},
     {{0.0F, 0.92F, 0.04F},
-     {0.92F, 0.38F, 0.60F},
+     {1.06F, 0.42F, 0.68F},
      {0.035F, 0.22F, 0.44F, 1.0F},
-     0},
+     0,
+     MECH_MESH_PELVIS},
     {{0.0F, 2.36F, 0.05F},
-     {1.42F, 0.34F, 0.76F},
+     {1.76F, 0.38F, 0.86F},
      {0.035F, 0.22F, 0.44F, 1.0F},
-     0},
+     0,
+     MECH_MESH_SHOULDER},
     {{0.0F, 1.88F, -0.50F},
      {0.70F, 0.24F, 0.12F},
      {0.02F, 0.92F, 1.0F, 1.0F},
-     0},
+     0,
+     MECH_MESH_VENT},
     {{0.0F, 2.78F, -0.06F},
-     {0.58F, 0.48F, 0.42F},
+     {0.66F, 0.54F, 0.46F},
      {0.52F, 0.63F, 0.70F, 1.0F},
-     0},
+     0,
+     MECH_MESH_HEAD},
     {{0.0F, 2.84F, -0.44F},
      {0.54F, 0.12F, 0.08F},
      {0.02F, 0.92F, 1.0F, 1.0F},
-     0},
+     0,
+     MECH_MESH_VENT},
     {{0.0F, 2.64F, 0.44F},
      {0.74F, 0.48F, 0.34F},
      {0.13F, 0.17F, 0.20F, 1.0F},
-     0},
-    {{-1.03F, 2.50F, 0.02F},
-     {0.72F, 0.34F, 0.78F},
+     0,
+     MECH_MESH_PELVIS},
+    {{-1.18F, 2.48F, 0.02F},
+     {0.86F, 0.42F, 0.88F},
      {0.28F, 0.78F, 1.0F, 1.0F},
-     0},
-    {{1.03F, 2.50F, 0.02F},
-     {0.72F, 0.34F, 0.78F},
+     0,
+     MECH_MESH_SHOULDER},
+    {{1.18F, 2.48F, 0.02F},
+     {0.86F, 0.42F, 0.88F},
      {0.08F, 0.47F, 0.85F, 1.0F},
-     0},
-    {{-1.40F, 1.78F, 0.0F},
-     {0.32F, 0.82F, 0.32F},
+     0,
+     MECH_MESH_SHOULDER},
+    {{-1.56F, 1.78F, -0.02F},
+     {0.38F, 0.92F, 0.38F},
      {0.52F, 0.63F, 0.70F, 1.0F},
-     0},
-    {{1.40F, 1.78F, 0.0F},
-     {0.32F, 0.82F, 0.32F},
+     0,
+     MECH_MESH_LIMB},
+    {{1.56F, 1.78F, -0.02F},
+     {0.38F, 0.92F, 0.38F},
      {0.52F, 0.63F, 0.70F, 1.0F},
-     0},
-    {{-1.78F, 1.44F, -0.16F},
-     {0.34F, 0.74F, 0.36F},
+     0,
+     MECH_MESH_LIMB},
+    {{-1.92F, 1.38F, -0.18F},
+     {0.42F, 0.82F, 0.42F},
      {0.28F, 0.78F, 1.0F, 1.0F},
-     0},
-    {{1.78F, 1.44F, -0.16F},
-     {0.34F, 0.74F, 0.36F},
+     0,
+     MECH_MESH_FOREARM},
+    {{1.92F, 1.38F, -0.18F},
+     {0.42F, 0.82F, 0.42F},
      {0.28F, 0.78F, 1.0F, 1.0F},
-     0},
-    {{1.98F, 1.20F, -0.60F},
-     {0.18F, 0.20F, 0.82F},
+     0,
+     MECH_MESH_FOREARM},
+    {{2.24F, 1.18F, -0.66F},
+     {0.26F, 0.30F, 1.16F},
      {1.0F, 0.48F, 0.05F, 1.0F},
-     0},
-    {{-0.50F, 0.58F, -0.06F},
-     {0.42F, 0.78F, 0.40F},
+     0,
+     MECH_MESH_WEAPON},
+    {{-0.62F, 0.58F, -0.08F},
+     {0.48F, 0.92F, 0.48F},
      {0.13F, 0.17F, 0.20F, 1.0F},
-     0},
-    {{0.50F, 0.58F, -0.06F},
-     {0.42F, 0.78F, 0.40F},
+     0,
+     MECH_MESH_LIMB},
+    {{0.62F, 0.58F, -0.08F},
+     {0.48F, 0.92F, 0.48F},
      {0.13F, 0.17F, 0.20F, 1.0F},
-     0},
-    {{-0.56F, 0.08F, -0.22F},
-     {0.58F, 0.22F, 0.86F},
+     0,
+     MECH_MESH_LIMB},
+    {{-0.70F, 0.08F, -0.30F},
+     {0.78F, 0.28F, 1.08F},
      {0.52F, 0.63F, 0.70F, 1.0F},
-     0},
-    {{0.56F, 0.08F, -0.22F},
-     {0.58F, 0.22F, 0.86F},
+     0,
+     MECH_MESH_FOOT},
+    {{0.70F, 0.08F, -0.30F},
+     {0.78F, 0.28F, 1.08F},
      {0.52F, 0.63F, 0.70F, 1.0F},
-     0},
+     0,
+     MECH_MESH_FOOT},
     {{-0.56F, 0.20F, 0.34F},
      {0.46F, 0.24F, 0.38F},
      {0.28F, 0.78F, 1.0F, 1.0F},
-     0},
+     0,
+     MECH_MESH_VENT},
     {{0.56F, 0.20F, 0.34F},
      {0.46F, 0.24F, 0.38F},
      {0.28F, 0.78F, 1.0F, 1.0F},
-     0},
+     0,
+     MECH_MESH_VENT},
     {{-0.62F, 2.92F, 0.02F},
      {0.38F, 0.34F, 0.82F},
      {1.0F, 0.48F, 0.05F, 1.0F},
-     MECH_PART_ROCKETS_ONLY},
+     MECH_PART_ROCKETS_ONLY,
+     MECH_MESH_ROCKET_POD},
     {{0.62F, 2.92F, 0.02F},
      {0.38F, 0.34F, 0.82F},
      {1.0F, 0.48F, 0.05F, 1.0F},
-     MECH_PART_ROCKETS_ONLY},
+     MECH_PART_ROCKETS_ONLY,
+     MECH_MESH_ROCKET_POD},
     {{-0.62F, 3.18F, 0.02F},
      {0.30F, 0.18F, 0.72F},
      {0.78F, 0.88F, 0.92F, 1.0F},
-     MECH_PART_ROCKETS_ONLY},
+     MECH_PART_ROCKETS_ONLY,
+     MECH_MESH_ROCKET_TUBE},
     {{0.62F, 3.18F, 0.02F},
      {0.30F, 0.18F, 0.72F},
      {0.78F, 0.88F, 0.92F, 1.0F},
-     MECH_PART_ROCKETS_ONLY},
+     MECH_PART_ROCKETS_ONLY,
+     MECH_MESH_ROCKET_TUBE},
     {{-0.42F, 2.91F, -0.48F},
      {0.18F, 0.18F, 0.28F},
      {1.0F, 0.18F, 0.08F, 1.0F},
-     MECH_PART_ROCKETS_ONLY},
+     MECH_PART_ROCKETS_ONLY,
+     MECH_MESH_ROCKET_TUBE},
     {{0.42F, 2.91F, -0.48F},
      {0.18F, 0.18F, 0.28F},
      {1.0F, 0.18F, 0.08F, 1.0F},
-     MECH_PART_ROCKETS_ONLY},
+     MECH_PART_ROCKETS_ONLY,
+     MECH_MESH_ROCKET_TUBE},
+    {{0.0F, 1.78F, -0.56F},
+     {0.78F, 0.44F, 0.10F},
+     {0.28F, 0.78F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+    {{0.0F, 1.50F, -0.62F},
+     {0.34F, 0.22F, 0.08F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+    {{-0.44F, 1.18F, -0.48F},
+     {0.24F, 0.42F, 0.12F},
+     {0.035F, 0.22F, 0.44F, 1.0F},
+     0,
+     MECH_MESH_LIMB},
+    {{0.44F, 1.18F, -0.48F},
+     {0.24F, 0.42F, 0.12F},
+     {0.035F, 0.22F, 0.44F, 1.0F},
+     0,
+     MECH_MESH_LIMB},
+    {{-0.74F, 0.72F, -0.50F},
+     {0.34F, 0.30F, 0.16F},
+     {0.78F, 0.88F, 0.92F, 1.0F},
+     0,
+     MECH_MESH_SHOULDER},
+    {{0.74F, 0.72F, -0.50F},
+     {0.34F, 0.30F, 0.16F},
+     {0.78F, 0.88F, 0.92F, 1.0F},
+     0,
+     MECH_MESH_SHOULDER},
+    {{-0.72F, 0.18F, -0.86F},
+     {0.42F, 0.12F, 0.30F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+    {{0.72F, 0.18F, -0.86F},
+     {0.42F, 0.12F, 0.30F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+    {{-1.20F, 2.80F, -0.42F},
+     {0.52F, 0.16F, 0.16F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+    {{1.20F, 2.80F, -0.42F},
+     {0.52F, 0.16F, 0.16F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+    {{-1.34F, 2.30F, -0.42F},
+     {0.58F, 0.18F, 0.14F},
+     {0.78F, 0.88F, 0.92F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+    {{1.34F, 2.30F, -0.42F},
+     {0.58F, 0.18F, 0.14F},
+     {0.78F, 0.88F, 0.92F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+    {{-0.38F, 2.84F, -0.40F},
+     {0.24F, 0.10F, 0.14F},
+     {1.0F, 0.48F, 0.05F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+    {{0.38F, 2.84F, -0.40F},
+     {0.24F, 0.10F, 0.14F},
+     {1.0F, 0.48F, 0.05F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+    {{-0.20F, 2.70F, -0.45F},
+     {0.24F, 0.14F, 0.08F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+    {{0.20F, 2.70F, -0.45F},
+     {0.24F, 0.14F, 0.08F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_VENT},
+};
+
+static const char *MESH_MECH_RESOURCE_PATHS[MECH_MESH_TYPES] = {
+    "assets/meshes/mech_starter_torso.gltf",
+    "assets/meshes/mech_starter_pelvis.gltf",
+    "assets/meshes/mech_starter_head.gltf",
+    "assets/meshes/mech_starter_shoulder.gltf",
+    "assets/meshes/mech_starter_limb.gltf",
+    "assets/meshes/mech_starter_forearm.gltf",
+    "assets/meshes/mech_starter_weapon.gltf",
+    "assets/meshes/mech_starter_foot.gltf",
+    "assets/meshes/mech_starter_rocket_pod.gltf",
+    "assets/meshes/mech_starter_rocket_tube.gltf",
+    "assets/meshes/mech_starter_vent.gltf",
 };
 
 static void ortho(float left, float right, float bottom, float top,
@@ -276,6 +424,28 @@ static float clampf(float v, float lo, float hi) {
 
 static float len2(float x, float z) { return sqrtf((x * x) + (z * z)); }
 
+static float approachf(float current, float target, float delta) {
+  if (current < target) {
+    return current + fminf(delta, target - current);
+  }
+  return current - fminf(delta, current - target);
+}
+
+static float angle_delta(float from, float to) {
+  float d = to - from;
+  while (d > 3.14159265F) {
+    d -= 6.2831853F;
+  }
+  while (d < -3.14159265F) {
+    d += 6.2831853F;
+  }
+  return d;
+}
+
+static float approach_angle(float current, float target, float delta) {
+  return current + clampf(angle_delta(current, target), -delta, delta);
+}
+
 static const char *screen_name(GameScreen screen) {
   switch (screen) {
   case SCREEN_HANGAR:
@@ -295,6 +465,27 @@ static const char *screen_name(GameScreen screen) {
 
 static void q_axis(float x, float y, float z, float angle, float out[4]) {
   glm_quatv(out, angle, (vec3){x, y, z});
+}
+
+static void q_pose(float yaw, float pitch, float roll, float out[4]) {
+  float q_y[4];
+  float q_x[4];
+  float q_z[4];
+  float q_tmp[4];
+  q_axis(0.0F, 1.0F, 0.0F, yaw, q_y);
+  q_axis(1.0F, 0.0F, 0.0F, pitch, q_x);
+  q_axis(0.0F, 0.0F, 1.0F, roll, q_z);
+  glm_quat_mul(q_y, q_x, q_tmp);
+  glm_quat_mul(q_tmp, q_z, out);
+}
+
+static void mech_point(float root_x, float root_z, float yaw, float lx, float ly,
+                       float lz, float scale, float out[3]) {
+  const float s = sinf(yaw);
+  const float c = cosf(yaw);
+  out[0] = root_x + (((lx * c) + (lz * s)) * scale);
+  out[1] = 0.25F + (ly * scale);
+  out[2] = root_z + (((lz * c) - (lx * s)) * scale);
 }
 
 static void rect2(float x, float y, float w, float h, const float color[4]) {
@@ -407,8 +598,18 @@ static void draw_char(float x, float y, float scale, char c,
   }
 }
 
-static void draw_text(float x, float y, float scale, const char *text,
-                      const float color[4]) {
+static bool ui_text_ready(void) {
+  if (!s_mesh_mech.initialized || !nt_font_valid(s_mesh_mech.ui_font)) {
+    return false;
+  }
+  const nt_material_info_t *mat_info =
+      nt_material_get_info(s_mesh_mech.text_material);
+  return mat_info && mat_info->ready &&
+         nt_resource_is_ready(s_mesh_mech.ui_font_res);
+}
+
+static void draw_debug_text(float x, float y, float scale, const char *text,
+                            const float color[4]) {
   float cursor = x;
   for (const char *p = text; p && *p; ++p) {
     if (*p == ' ') {
@@ -418,6 +619,20 @@ static void draw_text(float x, float y, float scale, const char *text,
       cursor += scale * ((*p >= '0' && *p <= '9') ? 6.2F : 6.0F);
     }
   }
+}
+
+static void draw_text(float x, float y, float scale, const char *text,
+                      const float color[4]) {
+  if (!ui_text_ready()) {
+    draw_debug_text(x, y, scale, text, color);
+    return;
+  }
+
+  mat4 model;
+  glm_mat4_identity(model);
+  glm_translate(model, (vec3){x, y, 0.0F});
+  nt_text_renderer_draw(text, (const float *)model, scale * 8.0F, color, 0.0F,
+                        0.0F);
 }
 
 static void draw_int_text(float x, float y, float scale, const char *prefix,
@@ -492,6 +707,7 @@ static void reset_runtime(void) {
   memset(&s_game, 0, sizeof(s_game));
   s_game.screen = SCREEN_HANGAR;
   s_game.mech_z = 2.5F;
+  s_game.mech_facing = 0.18F;
   s_game.salvage = 0;
   g_game_state.wallet_soft = 0;
   game_state_mark_dirty();
@@ -529,6 +745,11 @@ static void start_battle(void) {
   s_game.screen = SCREEN_BATTLE;
   s_game.mech_x = 0.0F;
   s_game.mech_z = 2.6F;
+  s_game.mech_vx = 0.0F;
+  s_game.mech_vz = 0.0F;
+  s_game.mech_facing = 0.0F;
+  s_game.mech_walk = 0.0F;
+  s_game.mech_recoil = 0.0F;
   s_game.heat = 0.05F;
   s_game.cannon_cd = 0.25F;
   s_game.rocket_cd = s_game.rockets_equipped ? 0.5F : 999.0F;
@@ -568,6 +789,7 @@ static void fire_rockets(void) {
   s_game.rocket_cd = 3.5F;
   s_game.heat = clampf(s_game.heat + 0.42F, 0.0F, 1.0F);
   s_game.rocket_flash = 1.45F;
+  s_game.mech_recoil = 1.0F;
   int hit = 0;
   for (int i = 0; i < MAX_DRONES && hit < 4; ++i) {
     if (!s_game.drones[i].alive) {
@@ -589,7 +811,8 @@ static void dash(void) {
   s_game.dash_cd = 1.3F;
   s_game.dash_flash = 0.35F;
   s_game.heat = clampf(s_game.heat + 0.12F, 0.0F, 1.0F);
-  s_game.mech_z -= 0.8F;
+  s_game.mech_vz -= 5.6F;
+  s_game.mech_z = clampf(s_game.mech_z - 0.34F, -0.8F, 5.4F);
 }
 
 static void handle_button_click(void) {
@@ -601,7 +824,8 @@ static void handle_button_click(void) {
     if (!pointer.active) {
       continue;
     }
-    if (contains(s_primary_box, pointer.x, pointer.y)) {
+    const float pointer_y = (float)g_nt_window.height - pointer.y;
+    if (contains(s_primary_box, pointer.x, pointer_y)) {
       if (s_game.screen == SCREEN_HANGAR || s_game.screen == SCREEN_RETEST) {
         start_battle();
       } else if (s_game.screen == SCREEN_REWARD) {
@@ -612,11 +836,11 @@ static void handle_button_click(void) {
       }
     }
     if (s_game.screen == SCREEN_BATTLE &&
-        contains(s_dash_box, pointer.x, pointer.y)) {
+        contains(s_dash_box, pointer.x, pointer_y)) {
       dash();
     }
     if (s_game.screen == SCREEN_BATTLE &&
-        contains(s_special_box, pointer.x, pointer.y)) {
+        contains(s_special_box, pointer.x, pointer_y)) {
       fire_rockets();
     }
   }
@@ -666,12 +890,33 @@ static void update_battle(float dt) {
     dz += 1.0F;
   }
   const float l = len2(dx, dz);
+  float move_speed = 0.0F;
   if (l > 0.001F) {
     dx /= l;
     dz /= l;
-    s_game.mech_x = clampf(s_game.mech_x + (dx * dt * 4.0F), -5.8F, 5.8F);
-    s_game.mech_z = clampf(s_game.mech_z + (dz * dt * 4.0F), -0.8F, 5.4F);
+    move_speed = 4.0F;
   }
+  const float target_vx = dx * move_speed;
+  const float target_vz = dz * move_speed;
+  s_game.mech_vx = approachf(s_game.mech_vx, target_vx, dt * 14.0F);
+  s_game.mech_vz = approachf(s_game.mech_vz, target_vz, dt * 14.0F);
+  s_game.mech_x = clampf(s_game.mech_x + (s_game.mech_vx * dt), -5.8F, 5.8F);
+  s_game.mech_z = clampf(s_game.mech_z + (s_game.mech_vz * dt), -0.8F, 5.4F);
+  const float actual_speed = len2(s_game.mech_vx, s_game.mech_vz);
+  if (actual_speed > 0.12F) {
+    s_game.mech_facing =
+        approach_angle(s_game.mech_facing, atan2f(s_game.mech_vx, -s_game.mech_vz),
+                       dt * 7.5F);
+  } else {
+    const int aim_target = target_drone();
+    if (aim_target >= 0) {
+      const float ax = s_game.drones[aim_target].x - s_game.mech_x;
+      const float az = s_game.drones[aim_target].z - s_game.mech_z;
+      s_game.mech_facing =
+          approach_angle(s_game.mech_facing, atan2f(ax, -az), dt * 3.0F);
+    }
+  }
+  s_game.mech_walk += actual_speed * dt * 4.4F;
 
   s_game.battle_time += dt;
   s_game.cannon_cd -= dt;
@@ -680,6 +925,7 @@ static void update_battle(float dt) {
   s_game.dash_flash = clampf(s_game.dash_flash - dt, 0.0F, 1.0F);
   s_game.rocket_flash = clampf(s_game.rocket_flash - dt, 0.0F, 1.0F);
   s_game.hit_flash = clampf(s_game.hit_flash - dt, 0.0F, 1.0F);
+  s_game.mech_recoil = clampf(s_game.mech_recoil - dt * 4.4F, 0.0F, 1.0F);
   s_game.heat = clampf(s_game.heat - (dt * 0.18F), 0.0F, 1.0F);
 
   for (int i = 0; i < MAX_DRONES; ++i) {
@@ -701,7 +947,8 @@ static void update_battle(float dt) {
     s_game.cannon_cd = 0.55F;
     s_game.heat = clampf(s_game.heat + 0.055F, 0.0F, 1.0F);
     s_game.hit_flash = 0.16F;
-    s_game.drones[target].hp -= s_game.rockets_equipped ? 20.0F : 17.0F;
+    s_game.mech_recoil = fmaxf(s_game.mech_recoil, 0.48F);
+    s_game.drones[target].hp -= s_game.rockets_equipped ? 26.0F : 24.0F;
     s_game.drones[target].z -= 0.08F;
     if (s_game.drones[target].hp <= 0.0F) {
       s_game.drones[target].alive = false;
@@ -720,14 +967,10 @@ static void update_battle(float dt) {
 
 static void layout(float w, float h) {
   const float btn_h = h < 620.0F ? 54.0F : 64.0F;
-  s_primary_box =
-      (UiBox){.x = w - 274.0F, .y = h - btn_h - 34.0F, .w = 230.0F, .h = btn_h};
-  s_secondary_box =
-      (UiBox){.x = 42.0F, .y = h - btn_h - 34.0F, .w = 190.0F, .h = btn_h};
-  s_dash_box =
-      (UiBox){.x = w - 244.0F, .y = h - 176.0F, .w = 88.0F, .h = 82.0F};
-  s_special_box =
-      (UiBox){.x = w - 132.0F, .y = h - 192.0F, .w = 96.0F, .h = 96.0F};
+  s_primary_box = (UiBox){.x = w - 274.0F, .y = 34.0F, .w = 230.0F, .h = btn_h};
+  s_secondary_box = (UiBox){.x = 42.0F, .y = 34.0F, .w = 190.0F, .h = btn_h};
+  s_dash_box = (UiBox){.x = w - 244.0F, .y = 94.0F, .w = 88.0F, .h = 82.0F};
+  s_special_box = (UiBox){.x = w - 132.0F, .y = 96.0F, .w = 96.0F, .h = 96.0F};
 }
 
 static void draw_floor_panel(float x, float z, float sx, float sz,
@@ -1046,28 +1289,43 @@ static void draw_drone(const Drone *d, bool target) {
 
 static void draw_projectiles(void) {
   const int target = target_drone();
+  float muzzle[3];
+  float muzzle_l[3];
+  float muzzle_r[3];
+  mech_point(s_game.mech_x, s_game.mech_z, s_game.mech_facing, 2.36F, 1.42F,
+             -1.10F, 0.88F, muzzle);
+  mech_point(s_game.mech_x, s_game.mech_z, s_game.mech_facing, -0.62F, 3.12F,
+             -0.58F, 0.88F, muzzle_l);
+  mech_point(s_game.mech_x, s_game.mech_z, s_game.mech_facing, 0.62F, 3.12F,
+             -0.58F, 0.88F, muzzle_r);
   if (target >= 0 && s_game.hit_flash > 0.0F) {
+    const float flash = clampf(s_game.hit_flash / 0.16F, 0.0F, 1.0F);
+    const float target_pos[3] = {s_game.drones[target].x, 0.9F,
+                                 s_game.drones[target].z};
     nt_shape_renderer_line(
-        (float[3]){s_game.mech_x + 1.9F, 1.72F, s_game.mech_z - 0.38F},
-        (float[3]){s_game.drones[target].x, 0.9F, s_game.drones[target].z},
-        COL_AMBER);
+        muzzle, (float[3]){target_pos[0], target_pos[1] + 0.08F, target_pos[2]},
+        (float[4]){1.0F, 0.76F, 0.18F, 1.0F});
+    nt_shape_renderer_line(
+        (float[3]){muzzle[0], muzzle[1] + 0.04F, muzzle[2]},
+        (float[3]){target_pos[0], target_pos[1] - 0.05F, target_pos[2]},
+        (float[4]){0.0F, 0.96F, 1.0F, 0.75F});
     nt_shape_renderer_sphere(
-        (float[3]){s_game.drones[target].x, 0.9F, s_game.drones[target].z},
-        0.28F, COL_AMBER);
-    nt_shape_renderer_sphere(
-        (float[3]){s_game.mech_x + 1.9F, 1.72F, s_game.mech_z - 0.38F}, 0.16F,
-        COL_WARNING);
+        (float[3]){target_pos[0], target_pos[1], target_pos[2]},
+        0.24F + (0.18F * flash), COL_AMBER);
+    nt_shape_renderer_sphere(muzzle, 0.18F + (0.18F * flash), COL_WARNING);
+    nt_shape_renderer_sphere_wire(muzzle, 0.34F + (0.22F * flash),
+                                  (float[4]){0.0F, 0.92F, 1.0F, 0.75F});
   }
   if (s_game.rocket_flash > 0.0F) {
     const float fade = clampf(s_game.rocket_flash / 1.45F, 0.0F, 1.0F);
     for (int i = 0; i < MAX_DRONES; ++i) {
       if (s_game.drones[i].alive) {
         nt_shape_renderer_line(
-            (float[3]){s_game.mech_x - 0.45F, 3.1F, s_game.mech_z - 0.4F},
+            muzzle_l,
             (float[3]){s_game.drones[i].x, 1.0F, s_game.drones[i].z},
             COL_AMBER);
         nt_shape_renderer_line(
-            (float[3]){s_game.mech_x + 0.45F, 3.1F, s_game.mech_z - 0.4F},
+            muzzle_r,
             (float[3]){s_game.drones[i].x, 1.0F, s_game.drones[i].z},
             (float[4]){1.0F, 0.24F, 0.02F, 1.0F});
         nt_shape_renderer_sphere(
@@ -1076,13 +1334,17 @@ static void draw_projectiles(void) {
       }
     }
     nt_shape_renderer_line(
-        (float[3]){s_game.mech_x - 0.45F, 3.1F, s_game.mech_z - 0.4F},
-        (float[3]){s_game.mech_x - 2.5F, 2.0F, s_game.mech_z - 5.0F},
-        COL_AMBER);
+        muzzle_l,
+        (float[3]){muzzle_l[0] - 1.4F, muzzle_l[1] - 0.42F,
+                   muzzle_l[2] - 3.2F},
+        (float[4]){1.0F, 0.64F, 0.06F, fade});
     nt_shape_renderer_line(
-        (float[3]){s_game.mech_x + 0.45F, 3.1F, s_game.mech_z - 0.4F},
-        (float[3]){s_game.mech_x + 2.5F, 2.0F, s_game.mech_z - 5.0F},
-        COL_AMBER);
+        muzzle_r,
+        (float[3]){muzzle_r[0] + 1.4F, muzzle_r[1] - 0.42F,
+                   muzzle_r[2] - 3.2F},
+        (float[4]){0.0F, 0.92F, 1.0F, fade});
+    nt_shape_renderer_sphere(muzzle_l, 0.20F + fade * 0.20F, COL_AMBER);
+    nt_shape_renderer_sphere(muzzle_r, 0.20F + fade * 0.20F, COL_WARNING);
   }
 }
 
@@ -1090,9 +1352,9 @@ static void build_frame_uniforms(float w, float h, bool hangar,
                                  nt_frame_uniforms_t *uniforms,
                                  float out_vp[16]) {
   const float aspect = h > 0.0F ? w / h : 1.777F;
-  const vec3 eye = {hangar ? 4.4F : 5.4F, hangar ? 4.1F : 6.0F,
-                    hangar ? 8.4F : 9.4F};
-  const vec3 center = {0.0F, hangar ? 1.55F : 0.95F, hangar ? 0.0F : 0.2F};
+  const vec3 eye = {hangar ? 3.6F : 5.4F, hangar ? 3.7F : 6.0F,
+                    hangar ? 6.8F : 9.4F};
+  const vec3 center = {0.0F, hangar ? 1.75F : 0.95F, hangar ? 0.2F : 0.2F};
   const vec3 up = {0.0F, 1.0F, 0.0F};
   mat4 view;
   mat4 proj;
@@ -1100,7 +1362,7 @@ static void build_frame_uniforms(float w, float h, bool hangar,
   glm_lookat((vec3){eye[0], eye[1], eye[2]},
              (vec3){center[0], center[1], center[2]},
              (vec3){up[0], up[1], up[2]}, view);
-  glm_perspective(glm_rad(hangar ? 54.0F : 58.0F), aspect, 0.1F, 80.0F, proj);
+  glm_perspective(glm_rad(hangar ? 48.0F : 58.0F), aspect, 0.1F, 80.0F, proj);
   glm_mat4_mul(proj, view, vp);
 
   if (out_vp) {
@@ -1130,8 +1392,8 @@ static void build_frame_uniforms(float w, float h, bool hangar,
 static void setup_perspective(float w, float h, bool hangar) {
   float vp[16];
   build_frame_uniforms(w, h, hangar, NULL, vp);
-  const vec3 eye = {hangar ? 4.4F : 5.4F, hangar ? 4.1F : 6.0F,
-                    hangar ? 8.4F : 9.4F};
+  const vec3 eye = {hangar ? 3.6F : 5.4F, hangar ? 3.7F : 6.0F,
+                    hangar ? 6.8F : 9.4F};
   nt_shape_renderer_set_vp((float *)vp);
   nt_shape_renderer_set_cam_pos((float[3]){eye[0], eye[1], eye[2]});
   nt_shape_renderer_set_depth(true);
@@ -1139,10 +1401,31 @@ static void setup_perspective(float w, float h, bool hangar) {
 
 static void setup_ortho(float w, float h) {
   float vp[16];
-  ortho(0.0F, w, h, 0.0F, -1.0F, 1.0F, vp);
+  ortho(0.0F, w, 0.0F, h, -1.0F, 1.0F, vp);
   nt_shape_renderer_set_vp(vp);
   nt_shape_renderer_set_cam_pos((float[3]){0.0F, 0.0F, 1.0F});
   nt_shape_renderer_set_depth(false);
+}
+
+static void bind_ui_frame_uniforms(float w, float h) {
+  nt_frame_uniforms_t uniforms;
+  memset(&uniforms, 0, sizeof(uniforms));
+  ortho(0.0F, w, 0.0F, h, -1.0F, 1.0F, uniforms.view_proj);
+  glm_mat4_identity((vec4 *)uniforms.view);
+  glm_mat4_identity((vec4 *)uniforms.proj);
+  uniforms.camera_pos[2] = 1.0F;
+  uniforms.time[0] = (float)nt_time_now();
+  uniforms.time[1] = g_nt_app.dt;
+  if (w > 0.0F && h > 0.0F) {
+    uniforms.resolution[0] = w;
+    uniforms.resolution[1] = h;
+    uniforms.resolution[2] = 1.0F / w;
+    uniforms.resolution[3] = 1.0F / h;
+  }
+  uniforms.near_far[0] = -1.0F;
+  uniforms.near_far[1] = 1.0F;
+  nt_gfx_update_buffer(s_mesh_mech.frame_ubo, &uniforms, sizeof(uniforms));
+  nt_gfx_bind_uniform_buffer(s_mesh_mech.frame_ubo, 0);
 }
 
 static bool mesh_mech_ready(void) {
@@ -1151,7 +1434,15 @@ static bool mesh_mech_ready(void) {
   }
   const nt_material_info_t *mat_info =
       nt_material_get_info(s_mesh_mech.material);
-  return mat_info && mat_info->ready && nt_resource_is_ready(s_mesh_mech.mesh);
+  if (!mat_info || !mat_info->ready) {
+    return false;
+  }
+  for (int i = 0; i < MECH_MESH_TYPES; ++i) {
+    if (!nt_resource_is_ready(s_mesh_mech.meshes[i])) {
+      return false;
+    }
+  }
+  return true;
 }
 
 static void init_mesh_mech(void) {
@@ -1167,6 +1458,7 @@ static void init_mesh_mech(void) {
                             nt_gfx_deactivate_shader);
   nt_resource_set_activate_time_budget(0);
 
+  nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
   nt_material_desc_t mat_desc = nt_material_desc_defaults();
   nt_material_init(&mat_desc);
   nt_entity_init(&(nt_entity_desc_t){.max_entities = 64});
@@ -1177,16 +1469,25 @@ static void init_mesh_mech(void) {
 
   nt_mesh_renderer_desc_t mesh_desc = nt_mesh_renderer_desc_defaults();
   nt_mesh_renderer_init(&mesh_desc);
+  nt_text_renderer_init();
 
   s_mesh_mech.pack_id = nt_hash32_str("mech_builder_battler_mesh");
-  s_mesh_mech.mesh = nt_resource_request(
-      nt_hash64_str("assets/meshes/starter_cube_normals.gltf"), NT_ASSET_MESH);
+  for (int i = 0; i < MECH_MESH_TYPES; ++i) {
+    s_mesh_mech.meshes[i] = nt_resource_request(
+        nt_hash64_str(MESH_MECH_RESOURCE_PATHS[i]), NT_ASSET_MESH);
+  }
   s_mesh_mech.vs =
       nt_resource_request(nt_hash64_str("assets/shaders/mech_mesh_inst.vert"),
                           NT_ASSET_SHADER_CODE);
   s_mesh_mech.fs =
       nt_resource_request(nt_hash64_str("assets/shaders/mech_mesh_inst.frag"),
                           NT_ASSET_SHADER_CODE);
+  s_mesh_mech.text_vs = nt_resource_request(
+      nt_hash64_str("assets/shaders/slug_text.vert"), NT_ASSET_SHADER_CODE);
+  s_mesh_mech.text_fs = nt_resource_request(
+      nt_hash64_str("assets/shaders/slug_text.frag"), NT_ASSET_SHADER_CODE);
+  s_mesh_mech.ui_font_res =
+      nt_resource_request(nt_hash64_str("mech/ui_font"), NT_ASSET_FONT);
   s_mesh_mech.material = nt_material_create(&(nt_material_create_desc_t){
       .vs = s_mesh_mech.vs,
       .fs = s_mesh_mech.fs,
@@ -1198,10 +1499,30 @@ static void init_mesh_mech(void) {
       .attr_map_count = 2,
       .depth_test = true,
       .depth_write = true,
-      .cull_mode = NT_CULL_BACK,
+      .cull_mode = NT_CULL_NONE,
       .color_mode = NT_COLOR_MODE_FLOAT4,
       .label = "mech_starter_mesh_parts",
   });
+  s_mesh_mech.text_material = nt_material_create(&(nt_material_create_desc_t){
+      .vs = s_mesh_mech.text_vs,
+      .fs = s_mesh_mech.text_fs,
+      .blend_mode = NT_BLEND_MODE_ALPHA,
+      .depth_test = false,
+      .depth_write = false,
+      .cull_mode = NT_CULL_NONE,
+      .params[0] = {.name = "u_alpha_cutoff",
+                    .value = {NT_TEXT_ALPHA_CUTOFF_DEFAULT}},
+      .param_count = 1,
+      .label = "mech_ui_text",
+  });
+  s_mesh_mech.ui_font = nt_font_create(&(nt_font_create_desc_t){
+      .curve_texture_width = 1024,
+      .curve_texture_height = 512,
+      .band_texture_height = 256,
+      .band_count = 8,
+      .measure_cache_size = 256,
+  });
+  nt_font_add(s_mesh_mech.ui_font, s_mesh_mech.ui_font_res);
 
   for (int i = 0; i < MECH_MESH_PARTS; ++i) {
     s_mesh_mech.parts[i] = nt_entity_create();
@@ -1239,6 +1560,7 @@ static void step_mesh_mech(void) {
   }
   nt_resource_step();
   nt_material_step();
+  nt_font_step();
   if (!s_mesh_mech.pack_logged &&
       nt_resource_pack_state(s_mesh_mech.pack_id) == NT_PACK_STATE_READY) {
     s_mesh_mech.pack_logged = true;
@@ -1249,6 +1571,7 @@ static void shutdown_mesh_mech(void) {
   if (!s_mesh_mech.initialized) {
     return;
   }
+  nt_text_renderer_shutdown();
   nt_mesh_renderer_shutdown();
   nt_drawable_comp_shutdown();
   nt_material_comp_shutdown();
@@ -1256,6 +1579,9 @@ static void shutdown_mesh_mech(void) {
   nt_transform_comp_shutdown();
   nt_entity_shutdown();
   nt_material_destroy(s_mesh_mech.material);
+  nt_material_destroy(s_mesh_mech.text_material);
+  nt_font_destroy(s_mesh_mech.ui_font);
+  nt_font_shutdown();
   nt_material_shutdown();
   nt_resource_shutdown();
   nt_hash_shutdown();
@@ -1270,30 +1596,127 @@ static void draw_mesh_mech(float w, float h) {
 
   const bool hangar = s_game.screen != SCREEN_BATTLE;
   const bool rockets = s_game.rockets_equipped;
+  const float time = (float)nt_time_now();
   const float root_x = hangar ? 0.0F : s_game.mech_x;
   const float root_z = hangar ? 0.4F : s_game.mech_z;
   const float root_scale = hangar ? 1.18F : 0.88F;
-  const float yaw = hangar ? 0.18F : -0.10F;
-  float q_y[4];
-  q_axis(0.0F, 1.0F, 0.0F, yaw, q_y);
+  const float speed = hangar ? 0.0F : len2(s_game.mech_vx, s_game.mech_vz);
+  const float move_t = clampf(speed / 4.0F, 0.0F, 1.0F);
+  const float walk = hangar ? time * 1.25F : s_game.mech_walk;
+  const float recoil = hangar ? 0.0F : s_game.mech_recoil;
+  const float yaw = hangar ? (2.74F + sinf(time * 0.65F) * 0.05F)
+                           : s_game.mech_facing;
+  const float yaw_sin = sinf(yaw);
+  const float yaw_cos = cosf(yaw);
+  const float idle_bob = sinf(walk * 1.55F) * (hangar ? 0.035F : 0.018F);
+  const float step = sinf(walk);
+  const float step_alt = sinf(walk + 3.14159265F);
+  const float strafe_lean =
+      hangar ? 0.0F : clampf(s_game.mech_vx * -0.055F, -0.18F, 0.18F);
+  const float forward_lean =
+      hangar ? 0.0F : clampf(s_game.mech_vz * 0.035F, -0.12F, 0.12F);
 
-  uint32_t mesh_id = nt_resource_get(s_mesh_mech.mesh);
   uint32_t item_count = 0;
   for (int i = 0; i < MECH_MESH_PARTS; ++i) {
     const MeshPartSpec *spec = &MESH_MECH_PARTS[i];
     if ((spec->flags & MECH_PART_ROCKETS_ONLY) && !rockets) {
       continue;
     }
+    uint32_t mesh_id = nt_resource_get(s_mesh_mech.meshes[spec->mesh_kind]);
     nt_entity_t entity = s_mesh_mech.parts[i];
+    float lx = spec->pos[0];
+    float ly = spec->pos[1] + idle_bob;
+    float lz = spec->pos[2];
+    float pitch = forward_lean;
+    float roll = strafe_lean;
+    float scale_x = spec->size[0];
+    float scale_y = spec->size[1];
+    float scale_z = spec->size[2];
+
+    switch (i) {
+    case 0:
+      ly += move_t * 0.025F;
+      scale_x *= 1.08F;
+      scale_z *= 1.10F;
+      break;
+    case 1:
+      ly -= move_t * 0.035F;
+      roll *= 0.45F;
+      break;
+    case 2:
+      ly += move_t * 0.020F;
+      scale_x *= 1.12F;
+      break;
+    case 4:
+      ly += sinf(time * 1.8F) * 0.018F;
+      pitch *= 0.35F;
+      roll *= 0.25F;
+      break;
+    case 7:
+    case 9:
+    case 11:
+      ly += step * move_t * 0.045F;
+      lz += step_alt * move_t * 0.075F;
+      roll += step * move_t * 0.10F;
+      break;
+    case 8:
+    case 10:
+    case 12:
+      ly += step_alt * move_t * 0.045F;
+      lz += step * move_t * 0.075F;
+      roll += step_alt * move_t * 0.10F;
+      break;
+    case 13:
+      lz += recoil * 0.46F;
+      ly += recoil * 0.05F;
+      pitch -= recoil * 0.15F;
+      scale_z *= 1.20F;
+      break;
+    case 14:
+      ly += step * move_t * 0.085F;
+      lz += step * move_t * 0.13F;
+      pitch += step * move_t * 0.18F;
+      break;
+    case 15:
+      ly += step_alt * move_t * 0.085F;
+      lz += step_alt * move_t * 0.13F;
+      pitch += step_alt * move_t * 0.18F;
+      break;
+    case 16:
+      ly += fmaxf(step, 0.0F) * move_t * 0.12F;
+      lz += step * move_t * 0.18F;
+      pitch += step * move_t * 0.22F;
+      scale_x *= 1.10F;
+      break;
+    case 17:
+      ly += fmaxf(step_alt, 0.0F) * move_t * 0.12F;
+      lz += step_alt * move_t * 0.18F;
+      pitch += step_alt * move_t * 0.22F;
+      scale_x *= 1.10F;
+      break;
+    case 20:
+    case 21:
+    case 22:
+    case 23:
+    case 24:
+    case 25:
+      ly += recoil * 0.04F + sinf(time * 3.2F + (float)i) * 0.012F;
+      break;
+    default:
+      break;
+    }
+
+    const float wx = (lx * yaw_cos) + (lz * yaw_sin);
+    const float wz = (lz * yaw_cos) - (lx * yaw_sin);
     float *pos = nt_transform_comp_position(entity);
-    pos[0] = root_x + (spec->pos[0] * root_scale);
-    pos[1] = 0.25F + (spec->pos[1] * root_scale);
-    pos[2] = root_z + (spec->pos[2] * root_scale);
-    memcpy(nt_transform_comp_rotation(entity), q_y, sizeof(float) * 4);
+    pos[0] = root_x + (wx * root_scale);
+    pos[1] = 0.25F + (ly * root_scale);
+    pos[2] = root_z + (wz * root_scale);
+    q_pose(yaw, pitch, roll, nt_transform_comp_rotation(entity));
     float *scl = nt_transform_comp_scale(entity);
-    scl[0] = spec->size[0] * root_scale;
-    scl[1] = spec->size[1] * root_scale;
-    scl[2] = spec->size[2] * root_scale;
+    scl[0] = scale_x * root_scale;
+    scl[1] = scale_y * root_scale;
+    scl[2] = scale_z * root_scale;
     *nt_transform_comp_dirty(entity) = true;
     *nt_mesh_comp_handle(entity) = (nt_mesh_t){.id = mesh_id};
     nt_drawable_comp_set_color(entity, spec->color[0], spec->color[1],
@@ -1362,14 +1785,21 @@ static void draw_cooling_meter(float x, float y, float w, float h) {
 
 static void draw_hud(float w, float h) {
   setup_ortho(w, h);
-  rect2(0.0F, 0.0F, w, 78.0F, (float[4]){0.0F, 0.02F, 0.03F, 0.72F});
-  draw_text(34.0F, 24.0F, 4.2F, "MECH BUILDER BATTLER", COL_WHITE);
-  draw_int_text(w - 250.0F, 24.0F, 4.0F, "SALVAGE ", s_game.salvage, COL_AMBER);
+  bind_ui_frame_uniforms(w, h);
+  if (ui_text_ready()) {
+    nt_text_renderer_set_material(s_mesh_mech.text_material);
+    nt_text_renderer_set_font(s_mesh_mech.ui_font);
+  }
+  rect2(0.0F, h - 78.0F, w, 78.0F, (float[4]){0.0F, 0.02F, 0.03F, 0.72F});
+  draw_text(34.0F, h - 46.0F, 4.2F, "MECH BUILDER BATTLER", COL_WHITE);
+  draw_int_text(w - 250.0F, h - 46.0F, 4.0F, "SALVAGE ", s_game.salvage,
+                COL_AMBER);
 
   if (s_game.screen == SCREEN_BATTLE) {
-    draw_text(42.0F, 94.0F, 3.0F, "WASD MOVE  Q DASH  E ROCKETS", COL_WHITE);
-    draw_int_text(42.0F, 128.0F, 3.6F, "DRONES ", alive_count(), COL_GREEN);
-    draw_cooling_meter(w * 0.5F - 160.0F, h - 54.0F, 320.0F, 18.0F);
+    draw_text(42.0F, h - 116.0F, 3.0F, "WASD MOVE  Q DASH  E ROCKETS",
+              COL_WHITE);
+    draw_int_text(42.0F, h - 154.0F, 3.6F, "DRONES ", alive_count(), COL_GREEN);
+    draw_cooling_meter(w * 0.5F - 160.0F, 36.0F, 320.0F, 18.0F);
     action_button2(s_dash_box, COL_ARMOR_BLUE, s_game.dash_cd <= 0.0F, "DASH");
     draw_text(s_dash_box.x + 35.0F, s_dash_box.y + 24.0F, 3.2F, "Q", COL_WHITE);
     action_button2(s_special_box, COL_AMBER,
@@ -1377,52 +1807,54 @@ static void draw_hud(float w, float h) {
                    s_game.rockets_equipped ? "ROCKET" : "LOCK");
     draw_text(s_special_box.x + 40.0F, s_special_box.y + 28.0F, 3.3F, "E",
               COL_WHITE);
-    nt_shape_renderer_circle((float[3]){117.0F, h - 111.0F, 0.0F}, 72.0F,
+    nt_shape_renderer_circle((float[3]){117.0F, 111.0F, 0.0F}, 72.0F,
                              (float[4]){0.025F, 0.12F, 0.16F, 1.0F});
-    nt_shape_renderer_circle_wire((float[3]){117.0F, h - 111.0F, 0.0F}, 57.0F,
+    nt_shape_renderer_circle_wire((float[3]){117.0F, 111.0F, 0.0F}, 57.0F,
                                   (float[4]){0.35F, 0.88F, 1.0F, 0.92F});
-    nt_shape_renderer_circle_wire((float[3]){117.0F, h - 111.0F, 0.0F}, 72.0F,
+    nt_shape_renderer_circle_wire((float[3]){117.0F, 111.0F, 0.0F}, 72.0F,
                                   (float[4]){1.0F, 0.48F, 0.05F, 0.35F});
-    nt_shape_renderer_circle((float[3]){117.0F, h - 111.0F, 0.0F}, 18.0F,
+    nt_shape_renderer_circle((float[3]){117.0F, 111.0F, 0.0F}, 18.0F,
                              (float[4]){0.0F, 0.72F, 0.9F, 1.0F});
-    draw_text(88.0F, h - 122.0F, 2.4F, "WASD", COL_WHITE);
+    draw_text(88.0F, 100.0F, 2.4F, "WASD", COL_WHITE);
   } else if (s_game.screen == SCREEN_HANGAR) {
-    draw_text(46.0F, 98.0F, 4.0F, "HANGAR", COL_AMBER);
-    draw_text(46.0F, 138.0F, 3.0F, "ONE MECH  ONE NEXT ACTION", COL_WHITE);
+    draw_text(46.0F, h - 126.0F, 4.0F, "HANGAR", COL_AMBER);
+    draw_text(46.0F, h - 164.0F, 3.0F, "ONE MECH  ONE NEXT ACTION", COL_WHITE);
     button2(s_primary_box, COL_GREEN, true);
     draw_text(s_primary_box.x + 48.0F, s_primary_box.y + 23.0F, 4.2F, "BATTLE",
               COL_WHITE);
-    rect2(w - 314.0F, 104.0F, 270.0F, 104.0F, COL_PANEL);
-    draw_text(w - 286.0F, 126.0F, 3.0F, "SHOULDER MODULE", COL_AMBER);
+    rect2(w - 314.0F, h - 208.0F, 270.0F, 104.0F, COL_PANEL);
+    draw_text(w - 286.0F, h - 148.0F, 3.0F, "SHOULDER MODULE", COL_AMBER);
     if (s_game.rockets_equipped) {
-      draw_text(w - 286.0F, 162.0F, 2.7F, "ROCKETS EQUIPPED", COL_WHITE);
+      draw_text(w - 286.0F, h - 184.0F, 2.7F, "ROCKETS EQUIPPED", COL_WHITE);
     } else {
-      draw_text(w - 286.0F, 160.0F, 2.6F, "LOCKED", COL_WHITE);
-      draw_text(w - 286.0F, 184.0F, 2.4F, "WIN SALVAGE", COL_WHITE);
+      draw_text(w - 286.0F, h - 182.0F, 2.6F, "LOCKED", COL_WHITE);
+      draw_text(w - 286.0F, h - 204.0F, 2.4F, "WIN SALVAGE", COL_WHITE);
     }
   } else if (s_game.screen == SCREEN_REWARD) {
-    rect2(w * 0.5F - 250.0F, 102.0F, 500.0F, 170.0F, COL_PANEL);
-    draw_text(w * 0.5F - 182.0F, 130.0F, 5.0F, "REWARD", COL_AMBER);
-    draw_text(w * 0.5F - 188.0F, 190.0F, 4.0F,
+    rect2(w * 0.5F - 250.0F, h - 272.0F, 500.0F, 170.0F, COL_PANEL);
+    draw_text(w * 0.5F - 182.0F, h - 162.0F, 5.0F, "REWARD", COL_AMBER);
+    draw_text(w * 0.5F - 188.0F, h - 222.0F, 4.0F,
               s_game.battle_index == 0 ? "SALVAGE +120" : "SALVAGE +75",
               COL_WHITE);
     button2(s_primary_box, COL_GREEN, true);
     draw_text(s_primary_box.x + 30.0F, s_primary_box.y + 23.0F, 3.8F,
               s_game.rockets_equipped ? "CONTINUE" : "UPGRADE", COL_WHITE);
   } else if (s_game.screen == SCREEN_UPGRADE) {
-    rect2(w * 0.5F - 292.0F, 98.0F, 584.0F, 200.0F, COL_PANEL);
-    draw_text(w * 0.5F - 226.0F, 126.0F, 4.3F, "BUY SHOULDER ROCKETS",
+    rect2(w * 0.5F - 292.0F, h - 298.0F, 584.0F, 200.0F, COL_PANEL);
+    draw_text(w * 0.5F - 226.0F, h - 160.0F, 4.3F, "BUY SHOULDER ROCKETS",
               COL_AMBER);
-    draw_text(w * 0.5F - 188.0F, 184.0F, 3.6F, "COST 120 SALVAGE", COL_WHITE);
+    draw_text(w * 0.5F - 188.0F, h - 218.0F, 3.6F, "COST 120 SALVAGE",
+              COL_WHITE);
     button2(s_primary_box,
             s_game.salvage >= ROCKET_COST ? COL_GREEN : COL_WARNING,
             s_game.salvage >= ROCKET_COST);
     draw_text(s_primary_box.x + 50.0F, s_primary_box.y + 23.0F, 4.0F, "ATTACH",
               COL_WHITE);
   } else if (s_game.screen == SCREEN_RETEST) {
-    rect2(w * 0.5F - 320.0F, 104.0F, 640.0F, 170.0F, COL_PANEL);
-    draw_text(w * 0.5F - 250.0F, 132.0F, 4.4F, "ROCKETS ATTACHED", COL_GREEN);
-    draw_text(w * 0.5F - 286.0F, 190.0F, 3.4F, "TEST THEM AGAINST DRONES",
+    rect2(44.0F, h - 230.0F, 520.0F, 126.0F, COL_PANEL);
+    draw_text(78.0F, h - 150.0F, 4.0F, "ROCKETS ATTACHED",
+              COL_GREEN);
+    draw_text(78.0F, h - 196.0F, 3.1F, "TEST THEM AGAINST DRONES",
               COL_WHITE);
     button2(s_primary_box, COL_AMBER, true);
     draw_text(s_primary_box.x + 56.0F, s_primary_box.y + 23.0F, 4.0F, "RETEST",
@@ -1605,7 +2037,7 @@ static void register_ui_devapi(float w, float h) {
     (void)game_devapi_ui_register_node(
         "slot.shoulder", "root", "slot", "Shoulder Module",
         s_game.rockets_equipped ? "Rockets equipped" : "Locked", w - 314.0F,
-        104.0F, 270.0F, 104.0F, true, false);
+        h - 208.0F, 270.0F, 104.0F, true, false);
   } else if (s_game.screen == SCREEN_BATTLE) {
     (void)game_devapi_ui_register_node(
         "action.dash", "root", "button", "Dash", "Q", s_dash_box.x,
@@ -1616,7 +2048,7 @@ static void register_ui_devapi(float w, float h) {
         s_game.rockets_equipped);
     (void)game_devapi_ui_register_node(
         "meter.cooling", "root", "meter", "Cooling", "Heat limiter",
-        w * 0.5F - 160.0F, h - 54.0F, 320.0F, 18.0F, true, true);
+        w * 0.5F - 160.0F, 36.0F, 320.0F, 18.0F, true, true);
   } else if (s_game.screen == SCREEN_REWARD) {
     (void)game_devapi_ui_register_node(
         "action.reward_continue", "root", "button", "Continue", "Go to upgrade",
@@ -1669,6 +2101,7 @@ static void frame(void) {
   nt_gfx_begin_frame();
   if (g_nt_gfx.context_restored) {
     nt_shape_renderer_restore_gpu();
+    nt_text_renderer_restore_gpu();
   }
   nt_gfx_begin_pass(&(nt_pass_desc_t){
       .clear_color = {0.035F, 0.065F, 0.085F, 1.0F}, .clear_depth = 1.0F});
@@ -1677,6 +2110,7 @@ static void frame(void) {
   draw_mesh_mech(w, h);
   draw_hud(w, h);
   nt_shape_renderer_flush();
+  nt_text_renderer_flush();
   maybe_capture_framebuffer();
   nt_gfx_end_pass();
   nt_gfx_end_frame();

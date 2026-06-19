@@ -13,6 +13,7 @@
 #include "input/nt_input.h"
 #include "input/nt_input_internal.h"
 #include "transform_comp/nt_transform_comp.h"
+#include "window/nt_window.h"
 
 #define GAME_UI_MAX 64
 #define GAME_UI_ID_MAX 48
@@ -136,8 +137,10 @@ static bool ep_ui_click(const cJSON *params, cJSON *result_obj, nt_devapi_error 
     }
     const float x = node->x + (node->w * 0.5F);
     const float y = node->y + (node->h * 0.5F);
-    (void)nt_input_inject_pointer(NT_INJECT_POINTER_DOWN, 0u, x, y, 1.0F, 0u, 1u);
-    (void)nt_input_inject_pointer(NT_INJECT_POINTER_UP, 0u, x, y, 0.0F, 0u, 0u);
+    const float h = (float)(g_nt_window.fb_height ? g_nt_window.fb_height : g_nt_window.height);
+    const float input_y = h - y;
+    (void)nt_input_inject_pointer(NT_INJECT_POINTER_DOWN, 0u, x, input_y, 1.0F, 0u, 1u);
+    (void)nt_input_inject_pointer(NT_INJECT_POINTER_UP, 0u, x, input_y, 0.0F, 0u, 0u);
     cJSON_AddStringToObject(result_obj, "clicked", node->id);
     cJSON_AddNumberToObject(result_obj, "x", (double)x);
     cJSON_AddNumberToObject(result_obj, "y", (double)y);

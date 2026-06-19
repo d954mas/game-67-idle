@@ -36,6 +36,12 @@
 - Start new games with a fresh project wiki and `tasks/active/` work items.
 - Prefer small native slices; tests, spikes, prototypes, and slices use same gates.
 - Game visuals use real assets through engine asset paths; shape/debug renderers are debug-only.
+- Coordinate convention is Y-up for game/world/UI projections and logical UI
+  layout. If a platform/input backend reports Y-down window coordinates, convert
+  only at the boundary; do not make gameplay or UI code Y-down internally.
+- UI text uses the engine font/text renderer and packed fonts. Handmade
+  pixel/shape `draw_text` is debug-only fallback and is not acceptable in
+  product screenshots or playable visual passes.
 - First playable screen: one location, primary path, next action, visible progress, clear locks.
 - Named references/mismatches need the smallest honest Reference Digest before implementation.
 

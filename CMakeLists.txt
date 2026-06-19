@@ -242,11 +242,25 @@ if(NOT EMSCRIPTEN)
         DEPENDS
             build_mech_builder_battler_packs
             tools/mech-builder-battler/build_packs.c
+            tools/mech-builder-battler/generate_starter_mech_meshes.py
             assets/shaders/mech_mesh_inst.vert
             assets/shaders/mech_mesh_inst.frag
+            assets/shaders/slug_text.vert
+            assets/shaders/slug_text.frag
             assets/shaders/common/instance.glsl
             assets/shaders/common/globals.glsl
-            assets/meshes/starter_cube_normals.gltf
+            external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf
+            assets/meshes/mech_starter_torso.gltf
+            assets/meshes/mech_starter_pelvis.gltf
+            assets/meshes/mech_starter_head.gltf
+            assets/meshes/mech_starter_shoulder.gltf
+            assets/meshes/mech_starter_limb.gltf
+            assets/meshes/mech_starter_forearm.gltf
+            assets/meshes/mech_starter_weapon.gltf
+            assets/meshes/mech_starter_foot.gltf
+            assets/meshes/mech_starter_rocket_pod.gltf
+            assets/meshes/mech_starter_rocket_tube.gltf
+            assets/meshes/mech_starter_vent.gltf
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         COMMENT "Building Mech Builder Battler mesh pack"
         VERBATIM
