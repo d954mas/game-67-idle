@@ -62,6 +62,7 @@ def main() -> int:
         capture(game, "mech_t0026_hero_modular_overlay_hangar_smoke.png", wait_frames=1)
         capture(game, "mech_t0027_assault_walker_hero_hangar_smoke.png", wait_frames=1)
         capture(game, "mech_t0032_assault_kitbash_hangar_smoke.png", wait_frames=1)
+        capture(game, "mech_t0033_stylized_studs_world_hangar_smoke.png", wait_frames=1)
         capture(game, "mech_t0029_arena_dressing_hangar_smoke.png", wait_frames=1)
         capture(game, "mech_t0030_lighting_material_hangar_smoke.png", wait_frames=1)
 
@@ -82,6 +83,7 @@ def main() -> int:
         capture(game, "mech_t0030_lighting_material_battle_smoke.png", wait_frames=1)
         capture(game, "mech_t0031_combat_clarity_battle_smoke.png", wait_frames=1)
         capture(game, "mech_t0032_assault_kitbash_battle_smoke.png", wait_frames=1)
+        capture(game, "mech_t0033_stylized_studs_world_battle_smoke.png", wait_frames=1)
         capture(game, "mech_t0021_battle_smoke.png", wait_frames=1)
         capture(game, "mech_t0024_robot_enemy_asset_smoke.png", wait_frames=1)
         capture(game, "mech_t0027_assault_walker_battle_smoke.png", wait_frames=1)

@@ -1173,6 +1173,17 @@ static void draw_stud_grid(float x, float z, float y, int cols, int rows,
   }
 }
 
+static void draw_world_stud(float x, float z, float y, float size,
+                            const float color[4]) {
+  nt_shape_renderer_cube((float[3]){x, y, z},
+                         (float[3]){size, size * 0.34F, size}, color);
+  nt_shape_renderer_cube((float[3]){x - size * 0.18F, y + size * 0.12F,
+                                    z - size * 0.18F},
+                         (float[3]){size * 0.32F, size * 0.05F,
+                                    size * 0.32F},
+                         (float[4]){0.76F, 1.0F, 0.36F, color[3] * 0.45F});
+}
+
 static void draw_stylized_grass_motif(float x, float z, float s,
                                       const float color[4]) {
   const float y = 0.075F;
@@ -1270,7 +1281,9 @@ static void draw_floor_grid(float half, bool hangar) {
   const float *grass = COL_BG_FLOOR;
   const float tile_a[4] = {0.58F, 0.86F, 0.45F, 1.0F};
   const float tile_b[4] = {0.42F, 0.74F, 0.32F, 1.0F};
-  const float stud[4] = {0.30F, 0.58F, 0.23F, 0.72F};
+  const float stud[4] = {0.30F, 0.58F, 0.23F, 0.58F};
+  const float stud_soft[4] = {0.48F, 0.78F, 0.27F, 0.44F};
+  const float motif_shadow[4] = {0.30F, 0.64F, 0.20F, 0.34F};
   const float motif[4] = {0.62F, 0.95F, 0.18F, 0.62F};
   const float blue_block[4] = {0.06F, 0.42F, 1.0F, 1.0F};
   const float yellow_block[4] = {1.0F, 0.78F, 0.12F, 1.0F};
@@ -1294,9 +1307,14 @@ static void draw_floor_grid(float half, bool hangar) {
       const int motif_gap =
           ((x + 8) % 6 <= 1 && (z + 7) % 5 <= 1) ||
           ((x + z + 16) % 9 == 0);
-      if ((x % 2 == 0) && (z % 2 == 0) && !motif_gap) {
-        nt_shape_renderer_cube((float[3]){fx, 0.045F, fz},
-                               (float[3]){0.18F, 0.08F, 0.18F}, stud);
+      if (motif_gap) {
+        draw_floor_panel(fx, fz, 0.70F, 0.28F, motif_shadow);
+      } else {
+        draw_world_stud(fx - 0.24F, fz - 0.22F, 0.050F, 0.15F, stud);
+        draw_world_stud(fx + 0.24F, fz + 0.22F, 0.050F, 0.15F, stud_soft);
+        if (((x * 3 + z * 5) & 3) == 0) {
+          draw_world_stud(fx + 0.23F, fz - 0.24F, 0.048F, 0.12F, stud_soft);
+        }
       }
     }
   }
@@ -1304,6 +1322,8 @@ static void draw_floor_grid(float half, bool hangar) {
   for (int z = -6; z <= 6; z += 3) {
     for (int x = -7; x <= 7; x += 4) {
       const float offset = (float)(((x * 17) + (z * 11)) % 5) * 0.13F;
+      draw_floor_panel((float)x + offset, (float)z - offset, 0.92F, 0.32F,
+                       motif_shadow);
       draw_stylized_grass_motif((float)x + offset, (float)z - offset, 0.92F,
                                 motif);
     }
