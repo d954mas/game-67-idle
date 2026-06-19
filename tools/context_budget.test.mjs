@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { HOT_DOC_BUDGETS, LIVE_STATUS_MAX_CHARS } from "./context_budget_config.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -96,6 +97,11 @@ test("context budget applies tighter default caps to live status docs", () => {
   } finally {
     cleanup(dir);
   }
+});
+
+test("live status budget is shared with taskboard validation", () => {
+  const statusBudget = HOT_DOC_BUDGETS.find((doc) => doc.path.replaceAll("\\", "/") === "tasks/STATUS.md");
+  assert.equal(statusBudget.maxChars, LIVE_STATUS_MAX_CHARS);
 });
 
 test("context budget applies the task store hot guide cap", () => {

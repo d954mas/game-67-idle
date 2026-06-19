@@ -33,6 +33,7 @@ const COPY = [
   "tools/ai.mjs",
   "tools/ai.test.mjs",
   "tools/context_budget.mjs",
+  "tools/context_budget_config.mjs",
   "tools/context_budget.test.mjs",
   "tools/doc_reference_check.mjs",
   "tools/doc_reference_check.test.mjs",

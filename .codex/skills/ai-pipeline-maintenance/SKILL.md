@@ -14,6 +14,8 @@ for playable changes and `chat-session-reflection` for pure retrospectives.
 - `references/pipeline-maintenance-playbook.md`: audit flow, split decisions,
   source-of-truth placement, validator updates, validation matrix, and report
   shape.
+- `references/skill-placement.md`: when to keep rules in hot docs, move them to
+  a skill reference, update an existing skill, or create a new skill.
 - `AI_PIPELINE.md`: hot workflow map and high-level operating rules.
 - `docs/ai-pipeline/agent-workflow.md`: context policy, Markdown shape, and
   multi-agent boundaries.

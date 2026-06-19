@@ -3,6 +3,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { DEFAULT_HOT_DOC_MAX_CHARS, HOT_DOC_BUDGETS, SKILL_ENTRYPOINT_MAX_CHARS } from "./context_budget_config.mjs";
 
 const args = process.argv.slice(2);
 
@@ -11,8 +12,8 @@ function usage() {
   node tools/context_budget.mjs [--root <dir>] [--max-skill-chars <n>] [--max-doc-chars <n>] [--json]
 
 Defaults:
-  --max-skill-chars 3000   max chars for each .codex/skills/*/SKILL.md entrypoint
-  --max-doc-chars   6500   max chars for hot root/status instruction docs;
+  --max-skill-chars ${SKILL_ENTRYPOINT_MAX_CHARS}   max chars for each .codex/skills/*/SKILL.md entrypoint
+  --max-doc-chars   ${DEFAULT_HOT_DOC_MAX_CHARS}   max chars for hot root/status instruction docs;
                             when omitted, tighter per-file defaults apply`);
   process.exit(2);
 }
@@ -36,20 +37,13 @@ function takeString(name, fallback) {
 }
 
 const root = resolve(takeString("--root", process.cwd()));
-const maxSkillChars = takeNumber("--max-skill-chars", 3000);
+const maxSkillChars = takeNumber("--max-skill-chars", SKILL_ENTRYPOINT_MAX_CHARS);
 const maxDocCharsProvided = args.includes("--max-doc-chars");
-const maxDocChars = takeNumber("--max-doc-chars", 6500);
+const maxDocChars = takeNumber("--max-doc-chars", DEFAULT_HOT_DOC_MAX_CHARS);
 const json = args.includes("--json");
 if (json) args.splice(args.indexOf("--json"), 1);
 if (args.includes("--help") || args.includes("-h")) usage();
 if (args.length > 0) usage();
-
-const hotDocs = [
-  { path: "AGENTS.md", maxChars: 3300 },
-  { path: "AI_PIPELINE.md", maxChars: 2200 },
-  { path: join("tasks", "STATUS.md"), maxChars: 2400 },
-  { path: join("tasks", "README.md"), maxChars: 3000 },
-];
 
 function measure(relPath, kind, maxChars) {
   const abs = join(root, relPath);
@@ -80,7 +74,7 @@ function skillEntrypoints() {
 }
 
 const records = [
-  ...hotDocs.map((doc) => {
+  ...HOT_DOC_BUDGETS.map((doc) => {
     const limit = maxDocCharsProvided ? maxDocChars : Math.min(maxDocChars, doc.maxChars);
     return measure(doc.path, "hot_doc", limit);
   }).filter(Boolean),

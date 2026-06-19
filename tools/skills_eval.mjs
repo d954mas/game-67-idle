@@ -55,6 +55,7 @@ const SKILL_CHECKS = [
       "docs/ai-pipeline/quality-validation.md",
       "docs/ai-pipeline/profiling-reuse.md",
       "pipeline-maintenance-playbook.md",
+      "skill-placement.md",
       "git status --short --untracked-files=all",
       "tools/taskboard/cli.mjs summary",
       "tools/context_budget.mjs",
@@ -69,6 +70,9 @@ const SKILL_CHECKS = [
       "Mechanical Guard Pattern",
       "Validation Matrix",
       "Report Shape",
+      "Create New Skill",
+      "Update Existing Skill",
+      "Keep Hot Docs Thin",
     ],
   },
   {

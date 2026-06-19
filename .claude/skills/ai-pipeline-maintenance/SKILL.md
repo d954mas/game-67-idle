@@ -12,3 +12,4 @@ source of truth shared by all agent CLIs). Read that file and follow it.
 Reference playbooks (load only when the canonical skill says to):
 
 - `.codex/skills/ai-pipeline-maintenance/references/pipeline-maintenance-playbook.md`
+- `.codex/skills/ai-pipeline-maintenance/references/skill-placement.md`
