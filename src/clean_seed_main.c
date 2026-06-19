@@ -1925,6 +1925,30 @@ static void draw_assault_motion_effects(void) {
           (0.06F + stomp * 0.07F) * root_scale,
           (float[4]){0.86F, 1.0F, 0.62F, 0.22F + stomp * 0.22F});
     }
+
+    const float back_x = sinf(yaw);
+    const float back_z = cosf(yaw);
+    const float side_x = cosf(yaw);
+    const float side_z = -sinf(yaw);
+    for (int trail = 0; trail < 3; ++trail) {
+      const float t = (float)trail;
+      const float width = (0.48F + t * 0.20F) * root_scale;
+      const float lift = (0.58F + t * 0.16F) * root_scale;
+      const float back = (0.74F + t * 0.34F) * root_scale;
+      const float start[3] = {root_x - back_x * (back * 0.30F),
+                              0.36F + lift,
+                              root_z - back_z * (back * 0.30F)};
+      const float left[3] = {root_x - back_x * back - side_x * width,
+                             0.26F + lift * 0.40F,
+                             root_z - back_z * back - side_z * width};
+      const float right[3] = {root_x - back_x * back + side_x * width,
+                              0.26F + lift * 0.40F,
+                              root_z - back_z * back + side_z * width};
+      const float alpha = (0.18F + stomp * 0.20F) * (1.0F - t * 0.20F);
+      nt_shape_renderer_line(start, left, (float[4]){0.0F, 0.95F, 1.0F, alpha});
+      nt_shape_renderer_line(start, right,
+                             (float[4]){1.0F, 0.70F, 0.08F, alpha * 0.86F});
+    }
   }
 
   if (attack_t > 0.02F || heat_t > 0.05F || target_charge > 0.02F) {
@@ -1943,6 +1967,24 @@ static void draw_assault_motion_effects(void) {
                                   blue);
     nt_shape_renderer_circle_wire(cannon_r, (0.26F + glow * 0.18F) * root_scale,
                                   orange);
+    const float muzzle_back = 0.44F * root_scale;
+    const float muzzle_forward = (0.72F + glow * 0.34F) * root_scale;
+    const float dir_x = sinf(yaw);
+    const float dir_z = -cosf(yaw);
+    nt_shape_renderer_line(
+        (float[3]){cannon_l[0] - dir_x * muzzle_back, cannon_l[1],
+                   cannon_l[2] - dir_z * muzzle_back},
+        (float[3]){cannon_l[0] + dir_x * muzzle_forward,
+                   cannon_l[1] + 0.04F * root_scale,
+                   cannon_l[2] + dir_z * muzzle_forward},
+        (float[4]){1.0F, 0.62F, 0.04F, 0.34F + glow * 0.28F});
+    nt_shape_renderer_line(
+        (float[3]){cannon_r[0] - dir_x * muzzle_back, cannon_r[1],
+                   cannon_r[2] - dir_z * muzzle_back},
+        (float[3]){cannon_r[0] + dir_x * muzzle_forward,
+                   cannon_r[1] + 0.04F * root_scale,
+                   cannon_r[2] + dir_z * muzzle_forward},
+        (float[4]){0.0F, 0.95F, 1.0F, 0.32F + glow * 0.28F});
     if (target >= 0) {
       const float target_pos[3] = {s_game.drones[target].x, 0.92F,
                                    s_game.drones[target].z};
@@ -2621,10 +2663,12 @@ static void draw_mesh_mech(float w, float h) {
   const float idle_bob = sinf(walk * 1.55F) * (hangar ? 0.035F : 0.018F);
   const float step = sinf(walk);
   const float step_alt = sinf(walk + 3.14159265F);
+  const float local_vx = (s_game.mech_vx * yaw_cos) - (s_game.mech_vz * yaw_sin);
+  const float local_vz = (s_game.mech_vx * yaw_sin) + (s_game.mech_vz * yaw_cos);
   const float strafe_lean =
-      hangar ? 0.0F : clampf(s_game.mech_vx * -0.055F, -0.18F, 0.18F);
+      hangar ? 0.0F : clampf(local_vx * -0.072F, -0.24F, 0.24F);
   const float forward_lean =
-      hangar ? 0.0F : clampf(s_game.mech_vz * 0.035F, -0.12F, 0.12F);
+      hangar ? 0.0F : clampf(local_vz * 0.052F, -0.18F, 0.18F);
   const bool use_assault_hero = true;
   const bool use_source_hero = !use_assault_hero;
   const int source_hero_index = MECH_MESH_PARTS - 1;

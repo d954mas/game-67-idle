@@ -28,7 +28,7 @@ Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 `T0021` is done, `T0022` refreshed the mismatch audit, and `T0023` / `T0025` /
 `T0026` / `T0027` / `T0028` / `T0029` / `T0030` / `T0031` / `T0032` / `T0033` /
-`T0034` / `T0035` / `T0036` / `T0037` / `T0038` are in review after
+`T0034` / `T0035` / `T0036` / `T0037` / `T0038` / `T0039` are in review after
 asset-first Roblox-like visual passes.
 Current baseline: sourced Assault Walker hero, CC0 Quaternius enemy, Sentinel
 Mech side-pad display, stylized-studs world texture, and CC0 Kenney station
@@ -41,11 +41,11 @@ toy/block world, stylized studs surfaces, and Foundry Warden mini-boss.
 
 ## Next Priorities
 
-1. Review `T0038`, then continue asset-first visual work with an animated mech
+1. Review `T0039`, then continue asset-first visual work with an animated mech
    source or stronger authored mech materials.
 2. Keep reference constraints from
    `gamedesign/projects/mech-builder-battler/references/current_build_mismatch_audit_2026-06-19.md`.
 3. Keep latest product evidence in
-   `gamedesign/projects/mech-builder-battler/evidence/t0038_hero_mech_material_attack_read_2026-06-20.md`.
+   `gamedesign/projects/mech-builder-battler/evidence/t0039_hero_motion_attack_juice_2026-06-20.md`.
 4. Defer web/mobile export work until explicitly approved; preserve
    mobile-style controls/readability in the PC harness.
