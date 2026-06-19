@@ -12,7 +12,8 @@ function usage() {
 
 Defaults:
   --max-skill-chars 4500   max chars for each .codex/skills/*/SKILL.md entrypoint
-  --max-doc-chars   6500   max chars for hot root/status instruction docs`);
+  --max-doc-chars   6500   max chars for hot root/status instruction docs;
+                            when omitted, tighter per-file defaults apply`);
   process.exit(2);
 }
 
@@ -36,6 +37,7 @@ function takeString(name, fallback) {
 
 const root = resolve(takeString("--root", process.cwd()));
 const maxSkillChars = takeNumber("--max-skill-chars", 4500);
+const maxDocCharsProvided = args.includes("--max-doc-chars");
 const maxDocChars = takeNumber("--max-doc-chars", 6500);
 const json = args.includes("--json");
 if (json) args.splice(args.indexOf("--json"), 1);
@@ -43,10 +45,10 @@ if (args.includes("--help") || args.includes("-h")) usage();
 if (args.length > 0) usage();
 
 const hotDocs = [
-  "AGENTS.md",
-  "AI_PIPELINE.md",
-  join("tasks", "STATUS.md"),
-  join("tasks", "README.md"),
+  { path: "AGENTS.md", maxChars: 5200 },
+  { path: "AI_PIPELINE.md", maxChars: 6500 },
+  { path: join("tasks", "STATUS.md"), maxChars: 3200 },
+  { path: join("tasks", "README.md"), maxChars: 4500 },
 ];
 
 function measure(relPath, kind, maxChars) {
@@ -78,7 +80,10 @@ function skillEntrypoints() {
 }
 
 const records = [
-  ...hotDocs.map((path) => measure(path, "hot_doc", maxDocChars)).filter(Boolean),
+  ...hotDocs.map((doc) => {
+    const limit = maxDocCharsProvided ? maxDocChars : Math.min(maxDocChars, doc.maxChars);
+    return measure(doc.path, "hot_doc", limit);
+  }).filter(Boolean),
   ...skillEntrypoints().map((path) => measure(path, "skill_entrypoint", maxSkillChars)).filter(Boolean),
 ].sort((a, b) => b.chars - a.chars || a.path.localeCompare(b.path));
 
@@ -89,7 +94,8 @@ if (json) {
 } else {
   console.log("context budget report");
   console.log(`root: ${root}`);
-  console.log(`limits: skill_entrypoint<=${maxSkillChars} chars, hot_doc<=${maxDocChars} chars`);
+  const docLimit = maxDocCharsProvided ? `${maxDocChars} chars` : "per-file defaults";
+  console.log(`limits: skill_entrypoint<=${maxSkillChars} chars, hot_doc<=${docLimit}`);
   console.log("\nTop hot context entrypoints:");
   for (const record of records.slice(0, 12)) {
     const status = record.ok ? "ok" : "FAIL";

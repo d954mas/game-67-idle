@@ -54,7 +54,8 @@ node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brie
 - next priorities.
 
 Every concrete claim should point to a task, design doc, command, or evidence
-path. Keep `STATUS.md` under 6000 characters; validation enforces this.
+path. Keep `STATUS.md` compact; `tools/context_budget.mjs` enforces the hot-doc
+cap and taskboard validation keeps it below the hard store limit.
 
 Update `STATUS.md` when current goal, gate, blockers, required validation, last
 known good evidence, or next priorities change. Put detailed history in task
