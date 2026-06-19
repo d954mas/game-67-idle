@@ -59,6 +59,7 @@ def main() -> int:
         ok &= check("hangar ui", {"action.battle", "slot.shoulder"}.issubset(ids), sorted(ids))
         capture(game, "mech_t0021_hangar_smoke.png")
         capture(game, "mech_t0025_hero_toy_material_smoke.png", wait_frames=1)
+        capture(game, "mech_t0026_hero_modular_overlay_hangar_smoke.png", wait_frames=1)
 
         state = game.click_ui("action.battle", wait_frames=12)
         ok &= check("battle starts", state.get("screen") == "battle" and state.get("alive_drones", 0) > 0, state)
@@ -75,6 +76,7 @@ def main() -> int:
         moved = moved_x > 0.25 or moved_z > 0.25
         ok &= check("wasd movement changes mech position", moved, state)
         capture(game, "mech_t0023_moving_strafe_smoke.png", wait_frames=1)
+        capture(game, "mech_t0026_hero_modular_motion_smoke.png", wait_frames=1)
         game.result("input.key", {"key": "D", "down": False})
         game.result("input.key", {"key": "W", "down": False})
         game.wait_frames(8)

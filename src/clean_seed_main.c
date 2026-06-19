@@ -141,12 +141,15 @@ typedef struct MeshMechRuntime {
   nt_resource_t vs;
   nt_resource_t fs;
   nt_resource_t robot_fs;
+  nt_resource_t solid_vs;
+  nt_resource_t solid_fs;
   nt_resource_t text_vs;
   nt_resource_t text_fs;
   nt_resource_t mech_atlas;
   nt_resource_t ui_font_res;
   nt_material_t material;
   nt_material_t robot_material;
+  nt_material_t solid_material;
   nt_material_t text_material;
   nt_font_t ui_font;
   nt_entity_t parts[MECH_MESH_PARTS];
@@ -572,6 +575,16 @@ static void source_mech_pose(bool hangar, float *root_x, float *root_z,
   *root_z = hangar ? 0.4F : s_game.mech_z;
   *root_scale = hangar ? 1.18F : 0.88F;
   *yaw = hangar ? (2.74F + sinf(time * 0.65F) * 0.05F) : s_game.mech_facing;
+}
+
+static bool source_hero_overlay_part(int index, bool rockets) {
+  if (index == 26 || index == 27 || (index >= 34 && index <= 45)) {
+    return true;
+  }
+  if (rockets && index >= 20 && index <= 25) {
+    return true;
+  }
+  return false;
 }
 
 static void source_mech_cannon_points(float root_x, float root_z, float yaw,
@@ -1789,6 +1802,11 @@ static bool mesh_mech_ready(void) {
   if (!robot_mat_info || !robot_mat_info->ready) {
     return false;
   }
+  const nt_material_info_t *solid_mat_info =
+      nt_material_get_info(s_mesh_mech.solid_material);
+  if (!solid_mat_info || !solid_mat_info->ready) {
+    return false;
+  }
   if (!nt_resource_is_ready(s_mesh_mech.mech_atlas)) {
     return false;
   }
@@ -1842,6 +1860,12 @@ static void init_mesh_mech(void) {
   s_mesh_mech.robot_fs = nt_resource_request(
       nt_hash64_str("assets/shaders/mech_mesh_color_inst.frag"),
       NT_ASSET_SHADER_CODE);
+  s_mesh_mech.solid_vs = nt_resource_request(
+      nt_hash64_str("assets/shaders/mech_mesh_solid_inst.vert"),
+      NT_ASSET_SHADER_CODE);
+  s_mesh_mech.solid_fs = nt_resource_request(
+      nt_hash64_str("assets/shaders/mech_mesh_solid_inst.frag"),
+      NT_ASSET_SHADER_CODE);
   s_mesh_mech.text_vs = nt_resource_request(
       nt_hash64_str("assets/shaders/slug_text.vert"), NT_ASSET_SHADER_CODE);
   s_mesh_mech.text_fs = nt_resource_request(
@@ -1887,6 +1911,21 @@ static void init_mesh_mech(void) {
       .cull_mode = NT_CULL_NONE,
       .color_mode = NT_COLOR_MODE_FLOAT4,
       .label = "robot_enemy_mesh_parts",
+  });
+  s_mesh_mech.solid_material = nt_material_create(&(nt_material_create_desc_t){
+      .vs = s_mesh_mech.solid_vs,
+      .fs = s_mesh_mech.solid_fs,
+      .attr_map =
+          {
+              {.stream_name = "position", .location = 0},
+              {.stream_name = "normal", .location = 1},
+          },
+      .attr_map_count = 2,
+      .depth_test = true,
+      .depth_write = true,
+      .cull_mode = NT_CULL_NONE,
+      .color_mode = NT_COLOR_MODE_FLOAT4,
+      .label = "hero_modular_overlay_parts",
   });
   s_mesh_mech.text_material = nt_material_create(&(nt_material_create_desc_t){
       .vs = s_mesh_mech.text_vs,
@@ -1976,6 +2015,7 @@ static void shutdown_mesh_mech(void) {
   nt_entity_shutdown();
   nt_material_destroy(s_mesh_mech.material);
   nt_material_destroy(s_mesh_mech.robot_material);
+  nt_material_destroy(s_mesh_mech.solid_material);
   nt_material_destroy(s_mesh_mech.text_material);
   nt_font_destroy(s_mesh_mech.ui_font);
   nt_font_shutdown();
@@ -2018,12 +2058,16 @@ static void draw_mesh_mech(float w, float h) {
   uint32_t item_count = 0;
   for (int i = 0; i < MECH_MESH_PARTS; ++i) {
     const MeshPartSpec *spec = &MESH_MECH_PARTS[i];
-    if (use_source_hero && i != source_hero_index) {
+    const bool hero_overlay =
+        use_source_hero && source_hero_overlay_part(i, rockets);
+    if (use_source_hero && i != source_hero_index && !hero_overlay) {
       continue;
     }
     if ((spec->flags & MECH_PART_ROCKETS_ONLY) && !rockets) {
       continue;
     }
+    const nt_material_t part_material =
+        hero_overlay ? s_mesh_mech.solid_material : s_mesh_mech.material;
     uint32_t mesh_id = nt_resource_get(s_mesh_mech.meshes[spec->mesh_kind]);
     nt_entity_t entity = s_mesh_mech.parts[i];
     float lx = spec->pos[0];
@@ -2117,6 +2161,76 @@ static void draw_mesh_mech(float w, float h) {
     case 25:
       ly += recoil * 0.04F + sinf(time * 3.2F + (float)i) * 0.012F;
       break;
+    case 26:
+      ly += recoil * 0.035F + sinf(time * 2.2F) * 0.006F;
+      lz += recoil * 0.09F;
+      scale_x *= 0.92F;
+      scale_y *= 0.72F;
+      break;
+    case 27:
+      ly += sinf(time * 2.8F) * 0.005F;
+      scale_x *= 0.72F;
+      scale_y *= 0.78F;
+      scale_z *= 0.70F;
+      break;
+    case 28:
+    case 30:
+    case 32:
+      ly += step * move_t * 0.035F;
+      lz += step_alt * move_t * 0.055F;
+      roll += step * move_t * 0.06F;
+      scale_x *= 0.78F;
+      break;
+    case 29:
+    case 31:
+    case 33:
+      ly += step_alt * move_t * 0.035F;
+      lz += step * move_t * 0.055F;
+      roll += step_alt * move_t * 0.06F;
+      scale_x *= 0.78F;
+      break;
+    case 34:
+    case 35:
+      ly += recoil * 0.030F + sinf(time * 2.6F + (float)i) * 0.010F;
+      lz += recoil * 0.060F;
+      scale_x *= 0.88F;
+      break;
+    case 36:
+    case 37:
+      ly += recoil * 0.020F;
+      lz += recoil * 0.050F;
+      scale_x *= 0.92F;
+      scale_y *= 0.84F;
+      break;
+    case 38:
+    case 39:
+    case 40:
+    case 41:
+      ly += sinf(time * 4.1F + (float)i) * 0.008F;
+      lz += recoil * 0.070F;
+      break;
+    case 42:
+    case 43:
+      lz += recoil * 0.060F;
+      roll -= move_t * 0.035F;
+      scale_y *= 0.82F + move_t * 0.10F;
+      break;
+    case 44:
+    case 45:
+      lz += recoil * 0.060F;
+      roll += move_t * 0.035F;
+      scale_y *= 0.82F + move_t * 0.10F;
+      break;
+    case 46:
+    case 47:
+      ly += step * move_t * 0.032F;
+      lz += step * move_t * 0.045F;
+      break;
+    case 48:
+    case 49:
+      ly += step_alt * move_t * 0.032F;
+      lz += step_alt * move_t * 0.045F;
+      break;
     default:
       break;
     }
@@ -2134,14 +2248,15 @@ static void draw_mesh_mech(float w, float h) {
     scl[2] = scale_z * root_scale;
     *nt_transform_comp_dirty(entity) = true;
     *nt_mesh_comp_handle(entity) = (nt_mesh_t){.id = mesh_id};
+    *nt_material_comp_handle(entity) = part_material;
     nt_drawable_comp_set_color(entity, spec->color[0], spec->color[1],
                                spec->color[2], spec->color[3]);
 
     s_mesh_mech.items[item_count].sort_key =
-        nt_sort_key_opaque(s_mesh_mech.material.id, mesh_id);
+        nt_sort_key_opaque(part_material.id, mesh_id);
     s_mesh_mech.items[item_count].entity = entity.id;
     s_mesh_mech.items[item_count].batch_key =
-        nt_batch_key(s_mesh_mech.material.id, mesh_id);
+        nt_batch_key(part_material.id, mesh_id);
     item_count++;
   }
 
@@ -2213,84 +2328,6 @@ static void draw_mesh_mech(float w, float h) {
   nt_gfx_bind_uniform_buffer(s_mesh_mech.frame_ubo, 0);
   nt_sort_by_key(s_mesh_mech.items, item_count, s_mesh_mech.sort_scratch);
   nt_mesh_renderer_draw_list(s_mesh_mech.items, item_count);
-}
-
-static void draw_source_mech_hardpoints(void) {
-  if (!mesh_mech_ready()) {
-    return;
-  }
-
-  const bool hangar = s_game.screen != SCREEN_BATTLE;
-  float root_x = 0.0F;
-  float root_z = 0.0F;
-  float root_scale = 1.0F;
-  float yaw = 0.0F;
-  source_mech_pose(hangar, &root_x, &root_z, &root_scale, &yaw);
-  float q_y[4];
-  float q_x[4];
-  float q_barrel[4];
-  q_axis(0.0F, 1.0F, 0.0F, yaw, q_y);
-  q_axis(1.0F, 0.0F, 0.0F, 1.5708F, q_x);
-  glm_quat_mul(q_y, q_x, q_barrel);
-  nt_shape_renderer_set_depth(false);
-
-  for (int side = -1; side <= 1; side += 2) {
-    float socket[3];
-    mech_point(root_x, root_z, yaw, (float)side * 0.72F, 2.62F, 0.08F,
-               root_scale, socket);
-    nt_shape_renderer_cube_rot(
-        socket,
-        (float[3]){0.46F * root_scale, 0.18F * root_scale,
-                   0.54F * root_scale},
-        q_y, COL_METAL_DARK);
-    nt_shape_renderer_sphere(
-        (float[3]){socket[0], socket[1] + (0.13F * root_scale), socket[2]},
-        0.13F * root_scale, s_game.rockets_equipped ? COL_GREEN : COL_AMBER);
-
-    if (s_game.rockets_equipped) {
-      float pod[3];
-      mech_point(root_x, root_z, yaw, (float)side * 1.18F, 2.80F, -0.34F,
-                 root_scale, pod);
-      nt_shape_renderer_cube_rot(
-          pod,
-          (float[3]){0.54F * root_scale, 0.34F * root_scale,
-                     0.62F * root_scale},
-          q_y, COL_AMBER);
-      for (int tube = -1; tube <= 1; tube += 2) {
-        float barrel[3];
-        mech_point(root_x, root_z, yaw, (float)side * 1.18F,
-                   2.80F + ((float)tube * 0.12F), -0.78F, root_scale, barrel);
-        nt_shape_renderer_cylinder_rot(barrel, 0.14F * root_scale,
-                                       0.68F * root_scale, q_barrel,
-                                       COL_METAL_DARK);
-        float cap[3];
-        source_mech_rocket_point(root_x, root_z, yaw, root_scale, side, tube,
-                                 cap);
-        nt_shape_renderer_sphere(cap, 0.09F * root_scale, COL_EMISSIVE);
-        if (!hangar && s_game.rocket_flash > 0.0F) {
-          const float flash = clampf(s_game.rocket_flash / 1.45F, 0.0F, 1.0F);
-          float blast[3];
-          mech_point(root_x, root_z, yaw, (float)side * (1.28F + flash * 0.18F),
-                     2.80F + ((float)tube * 0.12F), -1.82F - (flash * 0.34F),
-                     root_scale, blast);
-          nt_shape_renderer_line(
-              cap, blast,
-              tube < 0 ? (float[4]){1.0F, 0.64F, 0.06F, 0.95F}
-                       : (float[4]){0.0F, 0.95F, 1.0F, 0.95F});
-          nt_shape_renderer_sphere(
-              blast, (0.10F + (flash * 0.12F)) * root_scale,
-              tube < 0 ? COL_AMBER : COL_EMISSIVE);
-          nt_shape_renderer_sphere_wire(
-              cap, (0.18F + (flash * 0.20F)) * root_scale,
-              tube < 0 ? COL_AMBER : COL_EMISSIVE);
-        }
-      }
-    } else {
-      nt_shape_renderer_circle_wire_rot(
-          socket, 0.34F * root_scale, q_barrel,
-          (float[4]){1.0F, 0.48F, 0.05F, 0.78F});
-    }
-  }
 }
 
 static void draw_world(float w, float h) {
@@ -2663,7 +2700,6 @@ static void frame(void) {
   draw_world(w, h);
   nt_shape_renderer_flush();
   draw_mesh_mech(w, h);
-  draw_source_mech_hardpoints();
   nt_shape_renderer_flush();
   draw_hud(w, h);
   nt_shape_renderer_flush();

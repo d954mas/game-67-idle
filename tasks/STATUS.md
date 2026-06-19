@@ -28,11 +28,11 @@ Reusable sidecar modules, tools, skills, and game code may be edited here.
 ## Current Gate
 
 `T0021` is done, `T0022` refreshed the reference mismatch audit, and `T0023` /
-`T0025` are in review after the asset-first Roblox-like visual passes. Current
-baseline: downloaded CC0 Quaternius hero mech, stylized studs/world props,
-module-bound attack/movement VFX, a material-split CC0 Quaternius robot enemy,
-and a brighter toy/plastic hero mech atlas. Iteration remains native PC;
-mobile/web is the UX/export target.
+`T0025` / `T0026` are in review after asset-first Roblox-like visual passes.
+Current baseline: downloaded CC0 Quaternius hero mech/enemy, stylized
+studs/world props, module-bound attack/movement VFX, brighter toy/plastic hero
+atlas, and mesh-rendered hero rails/slots instead of shape debug circles.
+Iteration remains native PC; mobile/web is the UX/export target.
 Accepted: one owned mech, PvE first, semi-auto arena, floating joystick/WASD,
 resources -> hangar purchase/craft, shoulder rockets, drone swarm proof, short
 dash, `Cooling`, a fixed three-quarter/isometric camera, bright Roblox-like
@@ -40,11 +40,12 @@ toy/block world, stylized studs surfaces, and Foundry Warden mini-boss.
 
 ## Next Priorities
 
-1. Review `T0023`-`T0025` evidence and start the next asset-first visual slice:
-   stronger modular/rigged player mech structure and animation.
+1. Review `T0023`-`T0026` evidence and start the next asset-first visual slice:
+   source/download a stronger modular or rigged Roblox-like player mech asset
+   with clear license/provenance, then replace or kitbash the current hero base.
 2. Keep reference constraints from
    `gamedesign/projects/mech-builder-battler/references/current_build_mismatch_audit_2026-06-19.md`.
 3. Keep latest product evidence in
-   `gamedesign/projects/mech-builder-battler/evidence/t0025_hero_mech_toy_material_pass_2026-06-19.md`.
+   `gamedesign/projects/mech-builder-battler/evidence/t0026_hero_modular_overlay_motion_pass_2026-06-20.md`.
 4. Defer web/mobile export work until explicitly approved; preserve
    mobile-style controls/readability in the PC harness.

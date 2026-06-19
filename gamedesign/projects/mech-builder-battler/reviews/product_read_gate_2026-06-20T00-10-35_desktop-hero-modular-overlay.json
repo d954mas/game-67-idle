@@ -50,7 +50,5 @@
   "next": "Source or author a stronger modular/rigged Roblox-like hero mech asset and replace the current single-mesh base.",
   "verification": {
     "required": false
-  },
-  "markdown": "gamedesign\\projects\\mech-builder-battler\\reviews\\product_read_gate_2026-06-20T00-10-35_desktop-hero-modular-overlay.md",
-  "json": "gamedesign\\projects\\mech-builder-battler\\reviews\\product_read_gate_2026-06-20T00-10-35_desktop-hero-modular-overlay.json"
+  }
 }

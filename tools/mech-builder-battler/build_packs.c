@@ -87,6 +87,10 @@ int main(int argc, char *argv[]) {
                         NT_BUILD_SHADER_FRAGMENT);
   nt_builder_add_shader(ctx, "assets/shaders/mech_mesh_color_inst.frag",
                         NT_BUILD_SHADER_FRAGMENT);
+  nt_builder_add_shader(ctx, "assets/shaders/mech_mesh_solid_inst.vert",
+                        NT_BUILD_SHADER_VERTEX);
+  nt_builder_add_shader(ctx, "assets/shaders/mech_mesh_solid_inst.frag",
+                        NT_BUILD_SHADER_FRAGMENT);
   nt_builder_add_shader(ctx, "assets/shaders/slug_text.vert",
                         NT_BUILD_SHADER_VERTEX);
   nt_builder_add_shader(ctx, "assets/shaders/slug_text.frag",
