@@ -37,9 +37,10 @@ node tools/product_gate/repeated_failure_guard.mjs
 - AI facade/profile changes: `node --test tools/ai.test.mjs` and focused
   `tools/ai_profile` tests
 - Reusable pipeline: `node tools/ai.mjs validate`
-- Review-stage context pressure: `node tools/ai.mjs validate --review`
+- Review-stage context/cap pressure: `node tools/ai.mjs validate --review`
 - Portable/export/runtime gates: `node tools/ai.mjs validate --full`
 
 Escalate validation only when the changed behavior or export path requires it.
-Full portable validation is a final/broad gate, not the default after every
-small edit.
+Context budgets are a review/compression gate, not a normal implementation
+blocker. Full portable validation is a final/broad gate, not the default after
+every small edit.

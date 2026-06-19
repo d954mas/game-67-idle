@@ -39,5 +39,5 @@ node tools/ai.mjs validate --review
 node tools/ai.mjs validate --full
 ```
 
-Use quick validation after normal pipeline edits; `--review` for strict
-context review; `--full` for export, runtime, or deep asset gates.
+Use quick validation after normal pipeline edits; `--review` when intentionally
+reviewing context/caps; `--full` for export, runtime, or deep asset gates.

@@ -5,32 +5,29 @@ description: Use when adding, reviewing, reorganizing, or promoting game-design 
 
 # Design Source Knowledge
 
-Operate design knowledge as an evidence trail: source -> source note ->
-reusable or project-specific conclusion -> index/log update -> cited claim.
+Operate design knowledge as an evidence trail:
+source -> source note -> conclusion -> index/log update -> cited claim.
 
 ## Load Only What Applies
 
-- `references/source-routing.md`: required docs and routing between
-  `gamedesign/sources/`, `gamedesign/knowledge/`, project wiki, `tasks/`, `tmp/`.
+- `references/source-routing.md`: required docs and routing between shared
+  sources, reusable knowledge, project wiki, `tasks/`, and `tmp/`.
 - `references/source-intake-promotion.md`: Source Intake, source quality,
-  evidence labels (`observed`, `secondary`, `inferred`, `unknown`), Promotion
-  Workflow.
+  labels (`observed`, `secondary`, `inferred`, `unknown`), Promotion Workflow.
 - `references/reference-work-review.md`: Reference-Driven Work,
-  `reference_deconstruction.md`, Source Ladder, current-build mismatch, "not
-  ready for implementation", Quality Review, index/log updates, Report.
+  `reference_deconstruction.md`, Source Ladder, mismatch, review, and Report.
 - `references/templates.md`: load only for creating/substantially rewriting
   source notes, knowledge pages, project reference notes, or review reports.
 
 ## Default Workflow
 
-1. Read `AGENTS.md` plus the relevant `gamedesign/` README/index files.
-2. Decide route before editing: source shelf, reusable knowledge, project wiki,
+1. Read `AGENTS.md` and the relevant `gamedesign/` README/index.
+2. Route before editing: source shelf, reusable knowledge, project wiki,
    `tasks/`, or `tmp/`.
 3. Add source notes before conclusions when external evidence matters.
-4. Keep reusable principles in `gamedesign/knowledge/`; keep current game facts
+4. Keep reusable principles in `gamedesign/knowledge/`; current-game facts stay
    in the active project wiki.
-5. Link conclusions to sources, update index/logs on discoverability changes,
-   and report evidence gaps plainly.
+5. Link conclusions to sources, update index/logs, and state evidence gaps.
 
 ## Non-Negotiables
 

@@ -21,7 +21,7 @@ Modes:
   --quick    core workflow validation only (default; use this after narrow edits)
   --full     quick checks plus deep asset/runtime validation + a minimal export
              self-check (reserve for portable-base/export/runtime/release gates)
-  --review   add review-stage gates, including strict aggregate context budgets
+  --review   add review-stage gates, including strict context budgets
   --dry-run  print the selected commands without running them
 
 Export depth (with --full):
@@ -267,14 +267,15 @@ if (fullMode && existsSync(exportDir)) {
 }
 
 // Quick core workflow checks. These are safe as the default validation path
-// after narrow pipeline/tooling edits.
+// after narrow pipeline/tooling edits. Context budgets are review-only here:
+// the budget tool itself stays strict, but normal validation should not block
+// implementation just because hot docs need a future compression pass.
 run("taskboard summary", ["tools/taskboard/cli.mjs", "summary"]);
 run("ai facade syntax", ["--check", "tools/ai.mjs"]);
 run("ai facade tests", ["--test", "tools/ai.test.mjs"]);
 run("skill eval", ["tools/skills_eval.mjs"]);
 run("skills sync check", ["tools/skills_sync.mjs", "--check"]);
 run("skills sync tests", ["--test", "tools/skills_sync.test.mjs"]);
-run("context budget report", ["tools/context_budget.mjs"]);
 if (reviewMode) {
   run("context budget review", ["tools/context_budget.mjs", "--review"]);
 }
