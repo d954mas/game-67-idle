@@ -62,6 +62,7 @@ def main() -> int:
         state = game.click_ui("action.battle", wait_frames=12)
         ok &= check("battle starts", state.get("screen") == "battle" and state.get("alive_drones", 0) > 0, state)
         capture(game, "mech_t0021_battle_smoke.png")
+        capture(game, "mech_t0024_robot_enemy_asset_smoke.png", wait_frames=1)
         start_x = float(state.get("mech_x", 0.0))
         start_z = float(state.get("mech_z", 0.0))
         game.result("input.key", {"key": "D", "down": True})

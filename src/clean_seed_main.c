@@ -49,7 +49,9 @@
 #define ROCKET_COST 120
 #define CAPTURE_PATH_MAX 512
 #define MECH_MESH_PARTS 51
-#define MECH_MESH_TYPES 16
+#define ROBOT_ENEMY_MESH_PARTS 7
+#define MECH_MESH_TYPES 23
+#define MECH_MESH_RENDER_ITEMS (MECH_MESH_PARTS + (MAX_DRONES * ROBOT_ENEMY_MESH_PARTS))
 #define MECH_PART_ROCKETS_ONLY 0x01U
 
 typedef enum {
@@ -116,6 +118,13 @@ typedef enum {
   MECH_MESH_ARMOR_PLATE,
   MECH_MESH_VISOR,
   MECH_MESH_QUATERNIUS,
+  MECH_MESH_ROBOT_ENEMY_MAIN2,
+  MECH_MESH_ROBOT_ENEMY_MAIN,
+  MECH_MESH_ROBOT_ENEMY_EDGE,
+  MECH_MESH_ROBOT_ENEMY_DARK,
+  MECH_MESH_ROBOT_ENEMY_EYE,
+  MECH_MESH_ROBOT_ENEMY_GREY,
+  MECH_MESH_ROBOT_ENEMY_LIGHTGREY,
 } MeshPartMesh;
 
 typedef struct MeshPartSpec {
@@ -131,16 +140,19 @@ typedef struct MeshMechRuntime {
   nt_resource_t meshes[MECH_MESH_TYPES];
   nt_resource_t vs;
   nt_resource_t fs;
+  nt_resource_t robot_fs;
   nt_resource_t text_vs;
   nt_resource_t text_fs;
   nt_resource_t mech_atlas;
   nt_resource_t ui_font_res;
   nt_material_t material;
+  nt_material_t robot_material;
   nt_material_t text_material;
   nt_font_t ui_font;
   nt_entity_t parts[MECH_MESH_PARTS];
-  nt_render_item_t items[MECH_MESH_PARTS];
-  nt_render_item_t sort_scratch[MECH_MESH_PARTS];
+  nt_entity_t enemy_robots[MAX_DRONES][ROBOT_ENEMY_MESH_PARTS];
+  nt_render_item_t items[MECH_MESH_RENDER_ITEMS];
+  nt_render_item_t sort_scratch[MECH_MESH_RENDER_ITEMS];
   nt_buffer_t frame_ubo;
   bool initialized;
   bool pack_logged;
@@ -452,6 +464,13 @@ static const char *MESH_MECH_RESOURCE_PATHS[MECH_MESH_TYPES] = {
     "assets/meshes/mech_starter_armor_plate.gltf",
     "assets/meshes/mech_starter_visor.gltf",
     "assets/meshes/poly_pizza_quaternius_mech_cc0.glb",
+    "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_main2_static_cc0.gltf",
+    "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_main_static_cc0.gltf",
+    "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_edge_static_cc0.gltf",
+    "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_dark_static_cc0.gltf",
+    "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_eye_static_cc0.gltf",
+    "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_grey_static_cc0.gltf",
+    "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_lightgrey_static_cc0.gltf",
 };
 
 static void ortho(float left, float right, float bottom, float top,
@@ -794,11 +813,15 @@ static void parse_args(int argc, char **argv) {
 
 static void spawn_drones(int battle_index) {
   const int count = battle_index == 0 ? 4 : 6;
+  const float spawn_x[MAX_DRONES] = {3.8F, -3.6F, 4.8F, -4.7F,
+                                    0.5F, 2.4F,  -2.7F, 0.0F};
+  const float spawn_z[MAX_DRONES] = {-0.9F, -1.6F, -2.8F, -3.6F,
+                                    -4.2F, -5.1F, -5.4F, -6.2F};
   for (int i = 0; i < MAX_DRONES; ++i) {
     s_game.drones[i].alive = i < count;
     s_game.drones[i].hp = battle_index == 0 ? 38.0F : 44.0F;
-    s_game.drones[i].x = -4.6F + (float)(i % 3) * 2.1F;
-    s_game.drones[i].z = -2.5F - (float)(i / 3) * 1.7F;
+    s_game.drones[i].x = spawn_x[i];
+    s_game.drones[i].z = spawn_z[i];
   }
 }
 
@@ -1421,6 +1444,19 @@ static void draw_drone(const Drone *d, bool target) {
   if (!d->alive) {
     return;
   }
+  if (mesh_mech_ready()) {
+    draw_shadow(d->x, d->z, target ? 1.10F : 0.88F, target ? 0.80F : 0.64F,
+                target ? 0.26F : 0.18F);
+    if (target) {
+      nt_shape_renderer_circle_wire((float[3]){d->x, 0.06F, d->z}, 0.72F,
+                                    COL_WARNING);
+      nt_shape_renderer_circle_wire((float[3]){d->x, 0.08F, d->z}, 1.05F,
+                                    (float[4]){1.0F, 0.48F, 0.05F, 0.45F});
+      nt_shape_renderer_sphere((float[3]){d->x, 0.82F, d->z - 0.08F}, 0.14F,
+                               COL_EMISSIVE);
+    }
+    return;
+  }
   draw_shadow(d->x, d->z, 0.95F, 0.72F, 0.22F);
   const float bob = sinf((float)g_nt_app.frame * 0.08F + d->x) * 0.08F;
   const float y = 0.88F + bob;
@@ -1748,6 +1784,11 @@ static bool mesh_mech_ready(void) {
   if (!mat_info || !mat_info->ready) {
     return false;
   }
+  const nt_material_info_t *robot_mat_info =
+      nt_material_get_info(s_mesh_mech.robot_material);
+  if (!robot_mat_info || !robot_mat_info->ready) {
+    return false;
+  }
   if (!nt_resource_is_ready(s_mesh_mech.mech_atlas)) {
     return false;
   }
@@ -1777,11 +1818,11 @@ static void init_mesh_mech(void) {
   nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
   nt_material_desc_t mat_desc = nt_material_desc_defaults();
   nt_material_init(&mat_desc);
-  nt_entity_init(&(nt_entity_desc_t){.max_entities = 64});
-  nt_transform_comp_init(&(nt_transform_comp_desc_t){.capacity = 64});
-  nt_mesh_comp_init(&(nt_mesh_comp_desc_t){.capacity = 64});
-  nt_material_comp_init(&(nt_material_comp_desc_t){.capacity = 64});
-  nt_drawable_comp_init(&(nt_drawable_comp_desc_t){.capacity = 64});
+  nt_entity_init(&(nt_entity_desc_t){.max_entities = 128});
+  nt_transform_comp_init(&(nt_transform_comp_desc_t){.capacity = 128});
+  nt_mesh_comp_init(&(nt_mesh_comp_desc_t){.capacity = 128});
+  nt_material_comp_init(&(nt_material_comp_desc_t){.capacity = 128});
+  nt_drawable_comp_init(&(nt_drawable_comp_desc_t){.capacity = 128});
 
   nt_mesh_renderer_desc_t mesh_desc = nt_mesh_renderer_desc_defaults();
   nt_mesh_renderer_init(&mesh_desc);
@@ -1798,6 +1839,9 @@ static void init_mesh_mech(void) {
   s_mesh_mech.fs =
       nt_resource_request(nt_hash64_str("assets/shaders/mech_mesh_inst.frag"),
                           NT_ASSET_SHADER_CODE);
+  s_mesh_mech.robot_fs = nt_resource_request(
+      nt_hash64_str("assets/shaders/mech_mesh_color_inst.frag"),
+      NT_ASSET_SHADER_CODE);
   s_mesh_mech.text_vs = nt_resource_request(
       nt_hash64_str("assets/shaders/slug_text.vert"), NT_ASSET_SHADER_CODE);
   s_mesh_mech.text_fs = nt_resource_request(
@@ -1828,6 +1872,22 @@ static void init_mesh_mech(void) {
       .color_mode = NT_COLOR_MODE_FLOAT4,
       .label = "mech_starter_mesh_parts",
   });
+  s_mesh_mech.robot_material = nt_material_create(&(nt_material_create_desc_t){
+      .vs = s_mesh_mech.vs,
+      .fs = s_mesh_mech.robot_fs,
+      .attr_map =
+          {
+              {.stream_name = "position", .location = 0},
+              {.stream_name = "normal", .location = 1},
+              {.stream_name = "uv0", .location = 2},
+          },
+      .attr_map_count = 3,
+      .depth_test = true,
+      .depth_write = true,
+      .cull_mode = NT_CULL_NONE,
+      .color_mode = NT_COLOR_MODE_FLOAT4,
+      .label = "robot_enemy_mesh_parts",
+  });
   s_mesh_mech.text_material = nt_material_create(&(nt_material_create_desc_t){
       .vs = s_mesh_mech.text_vs,
       .fs = s_mesh_mech.text_fs,
@@ -1856,6 +1916,17 @@ static void init_mesh_mech(void) {
     nt_material_comp_add(s_mesh_mech.parts[i]);
     nt_drawable_comp_add(s_mesh_mech.parts[i]);
     *nt_material_comp_handle(s_mesh_mech.parts[i]) = s_mesh_mech.material;
+  }
+  for (int i = 0; i < MAX_DRONES; ++i) {
+    for (int part = 0; part < ROBOT_ENEMY_MESH_PARTS; ++part) {
+      s_mesh_mech.enemy_robots[i][part] = nt_entity_create();
+      nt_transform_comp_add(s_mesh_mech.enemy_robots[i][part]);
+      nt_mesh_comp_add(s_mesh_mech.enemy_robots[i][part]);
+      nt_material_comp_add(s_mesh_mech.enemy_robots[i][part]);
+      nt_drawable_comp_add(s_mesh_mech.enemy_robots[i][part]);
+      *nt_material_comp_handle(s_mesh_mech.enemy_robots[i][part]) =
+          s_mesh_mech.robot_material;
+    }
   }
 
   s_mesh_mech.frame_ubo = nt_gfx_make_buffer(&(nt_buffer_desc_t){
@@ -1904,6 +1975,7 @@ static void shutdown_mesh_mech(void) {
   nt_transform_comp_shutdown();
   nt_entity_shutdown();
   nt_material_destroy(s_mesh_mech.material);
+  nt_material_destroy(s_mesh_mech.robot_material);
   nt_material_destroy(s_mesh_mech.text_material);
   nt_font_destroy(s_mesh_mech.ui_font);
   nt_font_shutdown();
@@ -2071,6 +2143,67 @@ static void draw_mesh_mech(float w, float h) {
     s_mesh_mech.items[item_count].batch_key =
         nt_batch_key(s_mesh_mech.material.id, mesh_id);
     item_count++;
+  }
+
+  if (!hangar) {
+    const MeshPartMesh robot_meshes[ROBOT_ENEMY_MESH_PARTS] = {
+        MECH_MESH_ROBOT_ENEMY_MAIN2,     MECH_MESH_ROBOT_ENEMY_MAIN,
+        MECH_MESH_ROBOT_ENEMY_EDGE,      MECH_MESH_ROBOT_ENEMY_DARK,
+        MECH_MESH_ROBOT_ENEMY_EYE,       MECH_MESH_ROBOT_ENEMY_GREY,
+        MECH_MESH_ROBOT_ENEMY_LIGHTGREY,
+    };
+    const float robot_colors[ROBOT_ENEMY_MESH_PARTS][4] = {
+        {0.72F, 0.72F, 0.66F, 1.0F}, {1.00F, 0.46F, 0.08F, 1.0F},
+        {0.96F, 0.96F, 0.88F, 1.0F}, {0.055F, 0.075F, 0.070F, 1.0F},
+        {1.00F, 0.08F, 0.02F, 1.0F}, {0.28F, 0.28F, 0.30F, 1.0F},
+        {0.43F, 0.43F, 0.45F, 1.0F},
+    };
+    const int target = target_drone();
+    for (int i = 0; i < MAX_DRONES; ++i) {
+      if (!s_game.drones[i].alive) {
+        continue;
+      }
+      const float to_player_x = s_game.mech_x - s_game.drones[i].x;
+      const float to_player_z = s_game.mech_z - s_game.drones[i].z;
+      const float enemy_yaw = atan2f(to_player_x, to_player_z);
+      const bool is_target = i == target;
+      const float bob = sinf(time * 4.2F + (float)i) * 0.018F;
+      const float enemy_scale = is_target ? 1.75F : 1.52F;
+      const float pos[3] = {s_game.drones[i].x,
+                            0.05F + (enemy_scale * 0.00379914F) + bob,
+                            s_game.drones[i].z};
+      for (int part = 0; part < ROBOT_ENEMY_MESH_PARTS; ++part) {
+        const uint32_t enemy_mesh_id =
+            nt_resource_get(s_mesh_mech.meshes[robot_meshes[part]]);
+        nt_entity_t entity = s_mesh_mech.enemy_robots[i][part];
+        float *part_pos = nt_transform_comp_position(entity);
+        part_pos[0] = pos[0];
+        part_pos[1] = pos[1];
+        part_pos[2] = pos[2];
+        q_pose(enemy_yaw, 0.0F, is_target ? 0.05F : 0.0F,
+               nt_transform_comp_rotation(entity));
+        float *scl = nt_transform_comp_scale(entity);
+        scl[0] = enemy_scale;
+        scl[1] = enemy_scale;
+        scl[2] = enemy_scale;
+        *nt_transform_comp_dirty(entity) = true;
+        *nt_mesh_comp_handle(entity) = (nt_mesh_t){.id = enemy_mesh_id};
+        const float pulse = is_target && part == 4
+                                ? 0.18F * (0.5F + 0.5F * sinf(time * 9.0F))
+                                : 0.0F;
+        nt_drawable_comp_set_color(
+            entity, fminf(robot_colors[part][0] + pulse, 1.0F),
+            fminf(robot_colors[part][1] + pulse * 0.25F, 1.0F),
+            fminf(robot_colors[part][2] + pulse * 0.10F, 1.0F),
+            robot_colors[part][3]);
+        s_mesh_mech.items[item_count].sort_key =
+            nt_sort_key_opaque(s_mesh_mech.robot_material.id, enemy_mesh_id);
+        s_mesh_mech.items[item_count].entity = entity.id;
+        s_mesh_mech.items[item_count].batch_key =
+            nt_batch_key(s_mesh_mech.robot_material.id, enemy_mesh_id);
+        item_count++;
+      }
+    }
   }
   nt_transform_comp_update();
 

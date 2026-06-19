@@ -27,11 +27,12 @@ Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 ## Current Gate
 
-First native PC prototype slice `T0021` is done, `T0022` refreshed the reference
-mismatch audit, and `T0023` is in review after the Roblox-like visual pass:
-downloaded CC0 Quaternius hero mech, restored atlas color, raised studs/world
-props, visible shoulder modules, attack VFX tied to mech modules, and WASD
-movement proof. Iteration remains native PC; mobile/web is the UX/export target.
+`T0021` is done, `T0022` refreshed the reference mismatch audit, and `T0023` /
+`T0024` are in review after the asset-first Roblox-like visual passes. Current
+baseline: downloaded CC0 Quaternius hero mech, stylized studs/world props,
+module-bound attack/movement VFX, and a material-split CC0 Quaternius robot
+enemy in battle. Iteration remains native PC; mobile/web is the UX/export
+target.
 Accepted: one owned mech, PvE first, semi-auto arena, floating joystick/WASD,
 resources -> hangar purchase/craft, shoulder rockets, drone swarm proof, short
 dash, `Cooling`, a fixed three-quarter/isometric camera, bright Roblox-like
@@ -39,12 +40,11 @@ toy/block world, stylized studs surfaces, and Foundry Warden mini-boss.
 
 ## Next Priorities
 
-1. Review `T0023` evidence and start the next asset-first visual slice: source
-   or author a stronger modular/rigged Roblox-like mech so movement and module
-   slots come from the model, not only runtime VFX overlays.
+1. Review `T0023`/`T0024` evidence and start the next asset-first visual slice:
+   source or author a stronger modular/rigged Roblox-like player mech.
 2. Keep reference constraints from
    `gamedesign/projects/mech-builder-battler/references/current_build_mismatch_audit_2026-06-19.md`.
 3. Keep latest product evidence in
-   `gamedesign/projects/mech-builder-battler/evidence/t0023_roblox_like_visual_pass_2026-06-19.md`.
+   `gamedesign/projects/mech-builder-battler/evidence/t0024_cc0_robot_enemy_asset_runtime_pass_2026-06-19.md`.
 4. Defer web/mobile export work until explicitly approved; preserve
    mobile-style controls/readability in the PC harness.

@@ -232,6 +232,33 @@ if(NOT EMSCRIPTEN)
 
     set(MECH_BUILDER_PACK "${MECH_BUILDER_PACK_DIR}/mech_builder_battler_mesh.ntpack")
     set(MECH_BUILDER_PACK_OUTPUT "${MECH_BUILDER_ASSETS_DIR}/mech_builder_battler_mesh.ntpack")
+    set(ROBOT_ENEMY_SOURCE_GLB
+        "${CMAKE_SOURCE_DIR}/assets/source/models/quaternius/poly_pizza_quaternius_robot_enemy_legs_gun_cc0.glb"
+    )
+    set(ROBOT_ENEMY_STATIC_MESHES
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_main2_static_cc0.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_main_static_cc0.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_edge_static_cc0.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_dark_static_cc0.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_eye_static_cc0.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_grey_static_cc0.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_lightgrey_static_cc0.gltf"
+    )
+    add_custom_command(
+        OUTPUT ${ROBOT_ENEMY_STATIC_MESHES}
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/mech-builder-battler/extract_static_gltf.py"
+            --split-materials
+            "${ROBOT_ENEMY_SOURCE_GLB}"
+            "${CMAKE_SOURCE_DIR}/assets/meshes"
+            poly_pizza_quaternius_robot_enemy_legs_gun
+        DEPENDS
+            "${ROBOT_ENEMY_SOURCE_GLB}"
+            tools/mech-builder-battler/extract_static_gltf.py
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Extracting static material meshes from CC0 robot enemy GLB"
+        VERBATIM
+    )
     target_compile_definitions(${GAME_TARGET} PRIVATE
         "MECH_BUILDER_PACK_PATH=\"${MECH_BUILDER_PACK_OUTPUT}\""
     )
@@ -242,9 +269,11 @@ if(NOT EMSCRIPTEN)
         DEPENDS
             build_mech_builder_battler_packs
             tools/mech-builder-battler/build_packs.c
+            tools/mech-builder-battler/extract_static_gltf.py
             tools/mech-builder-battler/generate_starter_mech_meshes.py
             assets/shaders/mech_mesh_inst.vert
             assets/shaders/mech_mesh_inst.frag
+            assets/shaders/mech_mesh_color_inst.frag
             assets/shaders/slug_text.vert
             assets/shaders/slug_text.frag
             assets/shaders/common/instance.glsl
@@ -266,6 +295,7 @@ if(NOT EMSCRIPTEN)
             assets/meshes/mech_starter_armor_plate.gltf
             assets/meshes/mech_starter_visor.gltf
             assets/meshes/poly_pizza_quaternius_mech_cc0.glb
+            ${ROBOT_ENEMY_STATIC_MESHES}
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         COMMENT "Building Mech Builder Battler mesh pack"
         VERBATIM
