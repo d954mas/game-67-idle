@@ -475,6 +475,25 @@ function splitFrontmatter(text) {
   return { frontmatter: match[1], body: match[2] };
 }
 
+function readReferenceBodies(skillDir) {
+  const refsDir = join(skillDir, "references");
+  if (!existsSync(refsDir)) return "";
+  const bodies = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name);
+      const stat = statSync(path);
+      if (stat.isDirectory()) {
+        walk(path);
+      } else if (name.endsWith(".md")) {
+        bodies.push(readFileSync(path, "utf8"));
+      }
+    }
+  };
+  walk(refsDir);
+  return bodies.join("\n");
+}
+
 function includesText(haystack, needle) {
   return haystack.toLocaleLowerCase().includes(needle.toLocaleLowerCase());
 }
@@ -494,7 +513,8 @@ for (const name of readdirSync(skillRoot)) {
 }
 
 for (const check of SKILL_CHECKS) {
-  const file = join(skillRoot, check.name, "SKILL.md");
+  const skillDir = join(skillRoot, check.name);
+  const file = join(skillDir, "SKILL.md");
   if (!existsSync(file)) {
     console.error(`FAIL ${check.name}: missing ${file}`);
     failures += 1;
@@ -502,8 +522,9 @@ for (const check of SKILL_CHECKS) {
   }
 
   const { frontmatter, body } = splitFrontmatter(readFileSync(file, "utf8"));
+  const bodyWithReferences = `${body}\n${readReferenceBodies(skillDir)}`;
   const missingFrontmatter = check.frontmatter.filter((needle) => !includesText(frontmatter, needle));
-  const missingBody = check.body.filter((needle) => !includesText(body, needle));
+  const missingBody = check.body.filter((needle) => !includesText(bodyWithReferences, needle));
 
   if (missingFrontmatter.length === 0 && missingBody.length === 0) {
     console.log(`PASS ${check.name}`);

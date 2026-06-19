@@ -12,3 +12,4 @@ source of truth shared by all agent CLIs). Read that file and follow it.
 Reference playbooks (load only when the canonical skill says to):
 
 - `.codex/skills/generated-game-ui-assets/references/ui-asset-rules.md`
+- `.codex/skills/generated-game-ui-assets/references/ui-workflow-gates.md`

@@ -27,6 +27,8 @@ Current gate is reusable pipeline quality, not game content:
 
 - hot docs are short maps, not duplicated encyclopedias;
 - detailed procedures live in skills/references/tools;
+- large skills can be split without losing eval coverage because
+  `tools/skills_eval.mjs` checks `references/*.md` as part of the skill body;
 - repeated strict/product gate FAIL loops are caught by
   `tools/product_gate/repeated_failure_guard.mjs`;
 - portable validation still passes.
@@ -50,9 +52,13 @@ node tools/pipeline_validate.mjs
   `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md`.
 - Pipeline source-of-truth docs are `AGENTS.md`, `AI_PIPELINE.md`,
   `tasks/README.md`, and `.codex/skills/`.
+- `generated-game-ui-assets` now keeps its hot `SKILL.md` as a short router and
+  loads workflow/gate details from
+  `.codex/skills/generated-game-ui-assets/references/ui-workflow-gates.md`.
 
 ## Next Priorities
 
-1. Finish Markdown reduction without reintroducing duplicate rules.
-2. Validate the reusable guard and portable pipeline.
-3. Commit the pipeline cleanup as a universal process/tooling change.
+1. Continue splitting oversized skills only when their details can move behind
+   references without losing eval coverage.
+2. Keep process fixes mechanical: validators/tools first, prompt rules second.
+3. Run quick reusable pipeline validation before committing pipeline changes.
