@@ -38,6 +38,7 @@ const COPY = [
   "tools/pipeline_validate.mjs",
   "tools/pipeline_validate.test.mjs",
   "tools/skills_sync.mjs",
+  "tools/skills_sync.test.mjs",
   "tools/ai_profile",
   "tools/assets/job/new_art_job.mjs",
   "tools/assets/job/plan_source_sheet_prompt.mjs",

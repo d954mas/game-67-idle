@@ -101,6 +101,9 @@ node tools/pipeline_validate.mjs
 - `design-source-knowledge` now keeps its hot `SKILL.md` as a short router and
   loads source routing, source intake/promotion, reference-driven review, and
   Markdown templates from `.codex/skills/design-source-knowledge/references/`.
+- `tools/skills_sync.mjs --check` now fails on stale generated `.claude` skill
+  pointers; normal sync removes generated orphans and preserves hand-written
+  `.claude` skills.
 
 ## Next Priorities
 
