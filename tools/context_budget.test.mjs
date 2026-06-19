@@ -102,10 +102,10 @@ test("context budget applies the task store hot guide cap", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "tasks", "README.md"), "x".repeat(3400), "utf8");
+    writeFileSync(join(dir, "tasks", "README.md"), "x".repeat(3100), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /tasks\/README\.md: 3400 chars > 3300/);
+    assert.match(result.stderr, /tasks\/README\.md: 3100 chars > 3000/);
   } finally {
     cleanup(dir);
   }

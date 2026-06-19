@@ -1,6 +1,6 @@
 # Task Store
 
-Single source of truth for current work items and live project status.
+Single source of truth for current work and live project status.
 
 - Current tasks: `tasks/active/`
 - Archived done/dropped tasks: `tasks/archive/<epic-id>/` or
@@ -8,8 +8,8 @@ Single source of truth for current work items and live project status.
 - Epics: `tasks/epics/`
 - Live status index: `tasks/STATUS.md`
 
-Archived tasks are history. Load them only for evidence, review, regression
-debugging, or current links.
+Archived tasks are history; load only for evidence, review, regression
+debugging, or linked current work.
 
 ## Commands
 
@@ -23,15 +23,13 @@ node tools/taskboard/cli.mjs set T0001 --status doing
 node tools/taskboard/cli.mjs validate
 ```
 
-For hidden lanes, add `--ideas`, `--review`, or `--archive` to `list`.
+Hidden lanes: add `--ideas`, `--review`, or `--archive` to `list`.
 
-Board:
+Board, only for board work or user requests:
 
 ```powershell
 node tools/taskboard/server.mjs
 ```
-
-Open `http://127.0.0.1:8070/` only for board work or user requests.
 
 Fresh game kickoff:
 
@@ -41,43 +39,38 @@ node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brie
 
 ## Live Status
 
-`tasks/STATUS.md` is a short operational index, not a log. It should answer:
-current goal, blockers, debt, gate, validation, last good evidence, and next
-priorities.
+`tasks/STATUS.md` is a short operational index, not a log. It answers current
+goal, blockers, debt, gate, validation, last evidence, and next priorities.
 
-Every concrete claim should point to a task, design doc, command, or evidence
-path. Keep `STATUS.md` compact; `tools/context_budget.mjs` and taskboard
-validation enforce limits.
+Every concrete claim should point to a task, doc, command, or evidence path.
+Keep history in task logs, not status; budgets enforce this.
 
 Update `STATUS.md` when goal, gate, blockers, validation, evidence, or
-priorities change. Put history in task logs, not status.
+priorities change.
 
 ## Minimal Context
 
-For long-running work, resumes, planning, multi-agent work, and code/doc edits:
+For substantial work:
 
 1. Read `AGENTS.md`.
 2. Run `node tools/taskboard/cli.mjs context`.
-3. Read only the task/evidence files directly needed for the decision.
+3. Read only task/evidence files needed for the decision.
 4. Load one matching skill.
 
 Do not load completed tasks, review queues, old logs, P3 ideas, unrelated
-epics, broad design docs, or build artifacts by default. Prefer `summary` and
-`context` unless editing/auditing status.
+epics, broad design docs, or build artifacts by default.
 
-Search current context before history. Scope searches to likely folders before
-repo-wide search.
+Search current context before history; scope searches before repo-wide search.
 
 ## Detailed Protocol
 
-Load `tasks/guides/task-store-reference.md` only when changing/auditing task
-lifecycle, scope intake, backlog refinement, evidence rules, checkpoints, or
-hand-written task format.
+Load `tasks/guides/task-store-reference.md` when changing/auditing lifecycle,
+scope intake, backlog refinement, evidence, checkpoints, or hand-written format.
 
 ## Done And Evidence
 
 A task is done only when `## Done when` boxes are checked and `## Log` proves
-them.
+them. Detailed lifecycle rules live in the guide.
 
 Smallest reliable validation by change type:
 
