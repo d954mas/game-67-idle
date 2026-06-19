@@ -67,6 +67,9 @@ node tools/pipeline_validate.mjs
 - `primary-gdd-pipeline` now keeps its hot `SKILL.md` as a short router and
   loads core DoD, reference, fake-shot, runtime asset, and handoff gates from
   `.codex/skills/primary-gdd-pipeline/references/gdd-core-gates.md`.
+- `delegated-image-generation` now keeps its hot `SKILL.md` as a short router
+  and loads generation paths, verification/prompt gotchas, throughput, and asset
+  handoff detail from `.codex/skills/delegated-image-generation/references/`.
 
 ## Next Priorities
 
