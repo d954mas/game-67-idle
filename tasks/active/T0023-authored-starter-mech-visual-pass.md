@@ -43,7 +43,7 @@ Design inputs:
 - [x] The world reads as an intentional Roblox-like block arena, not debug cubes.
 - [ ] Movement reads as a mech: clear facing, strafe/turn feedback, body weight,
       step motion, and no "only forward/back" feel.
-- [ ] Attack reads as a mech action: visible weapon recoil, muzzle flash/tracer,
+- [x] Attack reads as a mech action: visible weapon recoil, muzzle flash/tracer,
       hit feedback, and heat/vent response.
 - [x] The mech keeps visible modular slots, including shoulder rocket sockets
       before purchase and equipped rocket modules after purchase.
@@ -123,3 +123,9 @@ Design inputs:
   Also downloaded Poly Pizza/Quaternius `Robot Enemy Legs Gun` as a CC0 source
   candidate for future modular robot/mech parts; it is not the runtime hero.
 - 2026-06-19: product gate PASS (desktop-rocket-modules); review: gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T17-52-23-263Z_desktop-rocket-modules.md; screenshot: build/captures/mech_t0021_rockets_smoke.png; next: continue to the next narrow slice
+- 2026-06-19: Bound cannon/rocket attack effects to visible source-mech module
+  points instead of the old procedural cube-mech muzzle coordinates. Added
+  twin cannon flashes/tracers, visible rocket tube plumes, target hit rings,
+  and heat/vent lines, then extended the smoke harness with specific cannon and
+  rocket attack captures.
+- 2026-06-19: product gate PASS (desktop-attack); review: gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T23-05-35_desktop-attack.md; screenshot: build/captures/mech_t0023_rocket_attack_smoke.png; next: prove movement weight with moving/strafe screenshot evidence

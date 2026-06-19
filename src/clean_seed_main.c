@@ -175,6 +175,8 @@ static const float COL_GREEN[4] = {0.18F, 0.85F, 0.38F, 1.0F};
 static const float COL_WHITE[4] = {0.92F, 0.98F, 1.0F, 1.0F};
 static const float COL_PANEL[4] = {0.035F, 0.105F, 0.13F, 1.0F};
 
+static bool mesh_mech_ready(void);
+
 static const MeshPartSpec MESH_MECH_PARTS[MECH_MESH_PARTS] = {
     {{0.0F, 1.62F, 0.0F},
      {1.20F, 1.46F, 0.86F},
@@ -542,6 +544,38 @@ static void mech_point(float root_x, float root_z, float yaw, float lx, float ly
   out[0] = root_x + (((lx * c) + (lz * s)) * scale);
   out[1] = 0.25F + (ly * scale);
   out[2] = root_z + (((lz * c) - (lx * s)) * scale);
+}
+
+static void source_mech_pose(bool hangar, float *root_x, float *root_z,
+                             float *root_scale, float *yaw) {
+  const float time = (float)nt_time_now();
+  *root_x = hangar ? 0.0F : s_game.mech_x;
+  *root_z = hangar ? 0.4F : s_game.mech_z;
+  *root_scale = hangar ? 1.18F : 0.88F;
+  *yaw = hangar ? (2.74F + sinf(time * 0.65F) * 0.05F) : s_game.mech_facing;
+}
+
+static void source_mech_cannon_points(float root_x, float root_z, float yaw,
+                                      float root_scale, float left[3],
+                                      float right[3]) {
+  const float recoil = s_game.mech_recoil * 0.10F;
+  mech_point(root_x, root_z, yaw, -0.78F, 1.70F, -1.24F + recoil, root_scale,
+             left);
+  mech_point(root_x, root_z, yaw, 0.78F, 1.70F, -1.24F + recoil, root_scale,
+             right);
+}
+
+static void source_mech_rocket_point(float root_x, float root_z, float yaw,
+                                     float root_scale, int side, int tube,
+                                     float out[3]) {
+  mech_point(root_x, root_z, yaw, (float)side * 1.18F,
+             2.80F + ((float)tube * 0.12F), -1.12F, root_scale, out);
+}
+
+static void source_mech_vent_point(float root_x, float root_z, float yaw,
+                                   float root_scale, int side, float out[3]) {
+  mech_point(root_x, root_z, yaw, (float)side * 0.36F, 2.06F, 0.48F,
+             root_scale, out);
 }
 
 static void rect2(float x, float y, float w, float h, const float color[4]) {
@@ -1410,62 +1444,121 @@ static void draw_drone(const Drone *d, bool target) {
 
 static void draw_projectiles(void) {
   const int target = target_drone();
-  float muzzle[3];
-  float muzzle_l[3];
-  float muzzle_r[3];
-  mech_point(s_game.mech_x, s_game.mech_z, s_game.mech_facing, 2.36F, 1.42F,
-             -1.10F, 0.88F, muzzle);
-  mech_point(s_game.mech_x, s_game.mech_z, s_game.mech_facing, -0.62F, 3.12F,
-             -0.58F, 0.88F, muzzle_l);
-  mech_point(s_game.mech_x, s_game.mech_z, s_game.mech_facing, 0.62F, 3.12F,
-             -0.58F, 0.88F, muzzle_r);
+  const bool use_source_mech = mesh_mech_ready();
+  float root_x = s_game.mech_x;
+  float root_z = s_game.mech_z;
+  float root_scale = 0.88F;
+  float yaw = s_game.mech_facing;
+  float cannon_l[3];
+  float cannon_r[3];
+  float rocket_l[3];
+  float rocket_r[3];
+  if (use_source_mech) {
+    source_mech_pose(false, &root_x, &root_z, &root_scale, &yaw);
+    source_mech_cannon_points(root_x, root_z, yaw, root_scale, cannon_l,
+                              cannon_r);
+    source_mech_rocket_point(root_x, root_z, yaw, root_scale, -1, -1,
+                             rocket_l);
+    source_mech_rocket_point(root_x, root_z, yaw, root_scale, 1, 1, rocket_r);
+  } else {
+    mech_point(root_x, root_z, yaw, -1.55F, 1.42F, -1.10F, root_scale,
+               cannon_l);
+    mech_point(root_x, root_z, yaw, 1.55F, 1.42F, -1.10F, root_scale,
+               cannon_r);
+    mech_point(root_x, root_z, yaw, -0.62F, 3.12F, -0.58F, root_scale,
+               rocket_l);
+    mech_point(root_x, root_z, yaw, 0.62F, 3.12F, -0.58F, root_scale,
+               rocket_r);
+  }
   if (target >= 0 && s_game.hit_flash > 0.0F) {
     const float flash = clampf(s_game.hit_flash / 0.16F, 0.0F, 1.0F);
     const float target_pos[3] = {s_game.drones[target].x, 0.9F,
                                  s_game.drones[target].z};
     nt_shape_renderer_line(
-        muzzle, (float[3]){target_pos[0], target_pos[1] + 0.08F, target_pos[2]},
-        (float[4]){1.0F, 0.76F, 0.18F, 1.0F});
+        cannon_l,
+        (float[3]){target_pos[0] - 0.10F, target_pos[1] + 0.10F,
+                   target_pos[2]},
+        (float[4]){1.0F, 0.78F, 0.16F, 1.0F});
     nt_shape_renderer_line(
-        (float[3]){muzzle[0], muzzle[1] + 0.04F, muzzle[2]},
-        (float[3]){target_pos[0], target_pos[1] - 0.05F, target_pos[2]},
-        (float[4]){0.0F, 0.96F, 1.0F, 0.75F});
+        cannon_r,
+        (float[3]){target_pos[0] + 0.10F, target_pos[1] - 0.04F,
+                   target_pos[2]},
+        (float[4]){0.0F, 0.96F, 1.0F, 0.82F});
+    nt_shape_renderer_line(
+        (float[3]){cannon_l[0], cannon_l[1] + 0.04F, cannon_l[2]},
+        (float[3]){target_pos[0], target_pos[1] + 0.18F, target_pos[2]},
+        (float[4]){1.0F, 0.24F, 0.02F, 0.60F});
     nt_shape_renderer_sphere(
         (float[3]){target_pos[0], target_pos[1], target_pos[2]},
         0.24F + (0.18F * flash), COL_AMBER);
-    nt_shape_renderer_sphere(muzzle, 0.18F + (0.18F * flash), COL_WARNING);
-    nt_shape_renderer_sphere_wire(muzzle, 0.34F + (0.22F * flash),
+    nt_shape_renderer_sphere(cannon_l, 0.14F + (0.16F * flash), COL_WARNING);
+    nt_shape_renderer_sphere(cannon_r, 0.14F + (0.16F * flash), COL_EMISSIVE);
+    nt_shape_renderer_sphere_wire(cannon_l, 0.28F + (0.20F * flash),
                                   (float[4]){0.0F, 0.92F, 1.0F, 0.75F});
+    nt_shape_renderer_sphere_wire(cannon_r, 0.28F + (0.20F * flash),
+                                  (float[4]){1.0F, 0.70F, 0.08F, 0.70F});
   }
   if (s_game.rocket_flash > 0.0F) {
     const float fade = clampf(s_game.rocket_flash / 1.45F, 0.0F, 1.0F);
     for (int i = 0; i < MAX_DRONES; ++i) {
       if (s_game.drones[i].alive) {
+        float pod_l[3] = {rocket_l[0], rocket_l[1], rocket_l[2]};
+        float pod_r[3] = {rocket_r[0], rocket_r[1], rocket_r[2]};
+        if (use_source_mech) {
+          source_mech_rocket_point(root_x, root_z, yaw, root_scale, -1,
+                                   (i & 1) ? 1 : -1, pod_l);
+          source_mech_rocket_point(root_x, root_z, yaw, root_scale, 1,
+                                   (i & 1) ? -1 : 1, pod_r);
+        }
         nt_shape_renderer_line(
-            muzzle_l,
+            pod_l,
             (float[3]){s_game.drones[i].x, 1.0F, s_game.drones[i].z},
             COL_AMBER);
         nt_shape_renderer_line(
-            muzzle_r,
+            pod_r,
             (float[3]){s_game.drones[i].x, 1.0F, s_game.drones[i].z},
-            (float[4]){1.0F, 0.24F, 0.02F, 1.0F});
+            (float[4]){0.0F, 0.92F, 1.0F, 1.0F});
         nt_shape_renderer_sphere(
             (float[3]){s_game.drones[i].x, 1.0F, s_game.drones[i].z},
             0.34F + (0.38F * fade), COL_AMBER);
+        nt_shape_renderer_sphere_wire(
+            (float[3]){s_game.drones[i].x, 1.0F, s_game.drones[i].z},
+            0.56F + (0.44F * fade),
+            (float[4]){0.0F, 0.92F, 1.0F, 0.62F});
       }
     }
     nt_shape_renderer_line(
-        muzzle_l,
-        (float[3]){muzzle_l[0] - 1.4F, muzzle_l[1] - 0.42F,
-                   muzzle_l[2] - 3.2F},
+        rocket_l,
+        (float[3]){rocket_l[0] - 1.4F, rocket_l[1] - 0.42F,
+                   rocket_l[2] - 3.2F},
         (float[4]){1.0F, 0.64F, 0.06F, fade});
     nt_shape_renderer_line(
-        muzzle_r,
-        (float[3]){muzzle_r[0] + 1.4F, muzzle_r[1] - 0.42F,
-                   muzzle_r[2] - 3.2F},
+        rocket_r,
+        (float[3]){rocket_r[0] + 1.4F, rocket_r[1] - 0.42F,
+                   rocket_r[2] - 3.2F},
         (float[4]){0.0F, 0.92F, 1.0F, fade});
-    nt_shape_renderer_sphere(muzzle_l, 0.20F + fade * 0.20F, COL_AMBER);
-    nt_shape_renderer_sphere(muzzle_r, 0.20F + fade * 0.20F, COL_WARNING);
+    nt_shape_renderer_sphere(rocket_l, 0.20F + fade * 0.20F, COL_AMBER);
+    nt_shape_renderer_sphere(rocket_r, 0.20F + fade * 0.20F, COL_EMISSIVE);
+  }
+
+  const float vent_power =
+      clampf((s_game.heat - 0.45F) * 1.8F, 0.0F, 1.0F) +
+      (s_game.hit_flash > 0.0F ? 0.35F : 0.0F) +
+      (s_game.rocket_flash > 0.0F ? 0.55F : 0.0F);
+  if (use_source_mech && vent_power > 0.02F) {
+    for (int side = -1; side <= 1; side += 2) {
+      float vent[3];
+      source_mech_vent_point(root_x, root_z, yaw, root_scale, side, vent);
+      for (int i = 0; i < 3; ++i) {
+        const float offset = ((float)i - 1.0F) * 0.10F * root_scale;
+        const float rise = (0.42F + (float)i * 0.18F) * root_scale;
+        nt_shape_renderer_line(
+            (float[3]){vent[0] + offset, vent[1], vent[2]},
+            (float[3]){vent[0] + offset + ((float)side * 0.12F * vent_power),
+                       vent[1] + rise, vent[2] + (0.10F * vent_power)},
+            (float[4]){0.76F, 0.98F, 1.0F, 0.24F + (0.24F * vent_power)});
+      }
+    }
   }
 }
 
@@ -1732,15 +1825,15 @@ static void draw_mesh_mech(float w, float h) {
   const bool hangar = s_game.screen != SCREEN_BATTLE;
   const bool rockets = s_game.rockets_equipped;
   const float time = (float)nt_time_now();
-  const float root_x = hangar ? 0.0F : s_game.mech_x;
-  const float root_z = hangar ? 0.4F : s_game.mech_z;
-  const float root_scale = hangar ? 1.18F : 0.88F;
+  float root_x = 0.0F;
+  float root_z = 0.0F;
+  float root_scale = 1.0F;
+  float yaw = 0.0F;
+  source_mech_pose(hangar, &root_x, &root_z, &root_scale, &yaw);
   const float speed = hangar ? 0.0F : len2(s_game.mech_vx, s_game.mech_vz);
   const float move_t = clampf(speed / 4.0F, 0.0F, 1.0F);
   const float walk = hangar ? time * 1.25F : s_game.mech_walk;
   const float recoil = hangar ? 0.0F : s_game.mech_recoil;
-  const float yaw = hangar ? (2.74F + sinf(time * 0.65F) * 0.05F)
-                           : s_game.mech_facing;
   const float yaw_sin = sinf(yaw);
   const float yaw_cos = cosf(yaw);
   const float idle_bob = sinf(walk * 1.55F) * (hangar ? 0.035F : 0.018F);
@@ -1898,12 +1991,11 @@ static void draw_source_mech_hardpoints(void) {
   }
 
   const bool hangar = s_game.screen != SCREEN_BATTLE;
-  const float time = (float)nt_time_now();
-  const float root_x = hangar ? 0.0F : s_game.mech_x;
-  const float root_z = hangar ? 0.4F : s_game.mech_z;
-  const float root_scale = hangar ? 1.18F : 0.88F;
-  const float yaw = hangar ? (2.74F + sinf(time * 0.65F) * 0.05F)
-                           : s_game.mech_facing;
+  float root_x = 0.0F;
+  float root_z = 0.0F;
+  float root_scale = 1.0F;
+  float yaw = 0.0F;
+  source_mech_pose(hangar, &root_x, &root_z, &root_scale, &yaw);
   float q_y[4];
   float q_x[4];
   float q_barrel[4];
@@ -1942,9 +2034,26 @@ static void draw_source_mech_hardpoints(void) {
                                        0.68F * root_scale, q_barrel,
                                        COL_METAL_DARK);
         float cap[3];
-        mech_point(root_x, root_z, yaw, (float)side * 1.18F,
-                   2.80F + ((float)tube * 0.12F), -1.12F, root_scale, cap);
+        source_mech_rocket_point(root_x, root_z, yaw, root_scale, side, tube,
+                                 cap);
         nt_shape_renderer_sphere(cap, 0.09F * root_scale, COL_EMISSIVE);
+        if (!hangar && s_game.rocket_flash > 0.0F) {
+          const float flash = clampf(s_game.rocket_flash / 1.45F, 0.0F, 1.0F);
+          float blast[3];
+          mech_point(root_x, root_z, yaw, (float)side * (1.28F + flash * 0.18F),
+                     2.80F + ((float)tube * 0.12F), -1.82F - (flash * 0.34F),
+                     root_scale, blast);
+          nt_shape_renderer_line(
+              cap, blast,
+              tube < 0 ? (float[4]){1.0F, 0.64F, 0.06F, 0.95F}
+                       : (float[4]){0.0F, 0.95F, 1.0F, 0.95F});
+          nt_shape_renderer_sphere(
+              blast, (0.10F + (flash * 0.12F)) * root_scale,
+              tube < 0 ? COL_AMBER : COL_EMISSIVE);
+          nt_shape_renderer_sphere_wire(
+              cap, (0.18F + (flash * 0.20F)) * root_scale,
+              tube < 0 ? COL_AMBER : COL_EMISSIVE);
+        }
       }
     } else {
       nt_shape_renderer_circle_wire_rot(

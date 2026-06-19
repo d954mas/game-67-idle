@@ -50,7 +50,5 @@
   "next": "Next visual slice should prove movement weight with a captured moving/strafe frame.",
   "verification": {
     "required": false
-  },
-  "markdown": "gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T23-05-35_desktop-attack.md",
-  "json": "gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T23-05-35_desktop-attack.json"
+  }
 }

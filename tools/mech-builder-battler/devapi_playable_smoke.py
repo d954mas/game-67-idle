@@ -24,8 +24,8 @@ def check(name: str, condition: object, detail: object = None) -> bool:
     return False
 
 
-def capture(game, name: str) -> str:
-    path = game.capture_screenshot(f"build/captures/{name}", wait_frames=6, audit=False)
+def capture(game, name: str, wait_frames: int = 6) -> str:
+    path = game.capture_screenshot(f"build/captures/{name}", wait_frames=wait_frames, audit=False)
     assert_pixel_health(path)
     print(f"SHOT {path}")
     return path
@@ -61,6 +61,8 @@ def main() -> int:
         state = game.click_ui("action.battle", wait_frames=12)
         ok &= check("battle starts", state.get("screen") == "battle" and state.get("alive_drones", 0) > 0, state)
         capture(game, "mech_t0021_battle_smoke.png")
+        game.wait_frames(22)
+        capture(game, "mech_t0023_cannon_attack_smoke.png")
 
         game.wait_frames(260)
         state = game.result("game.state")
@@ -77,7 +79,11 @@ def main() -> int:
 
         state = game.click_ui("action.retest", wait_frames=14)
         ok &= check("retest battle starts", state.get("screen") == "battle" and state.get("battle_index") == 1, state)
-        capture(game, "mech_t0021_rockets_smoke.png")
+        game.wait_frames(18)
+        state = game.result("game.action.use_special")
+        ok &= check("rocket attack fired", state.get("rockets_equipped") is True and state.get("heat", 0) > 0.3, state)
+        capture(game, "mech_t0021_rockets_smoke.png", wait_frames=1)
+        capture(game, "mech_t0023_rocket_attack_smoke.png", wait_frames=1)
 
     return 0 if ok else 1
 

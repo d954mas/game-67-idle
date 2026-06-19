@@ -33,6 +33,10 @@ updated: 2026-06-19
 - Added visible shoulder hardpoints to the downloaded hero mech: locked orange
   sockets before purchase and amber rocket pods with cyan caps after purchase.
   The overlay is a runtime module-readability pass, not a final authored mesh.
+- Bound the current battle attack effects to visible source-mech module points:
+  twin cannon muzzle flashes/tracers now come from the mech cannons, rocket
+  trails/plumes come from shoulder tube caps, and heat/vent lines rise from the
+  mech body after firing.
 - Downloaded a second CC0 Quaternius source candidate, `Robot Enemy Legs Gun`,
   for future modular robot/mech part sourcing. It is recorded as source
   provenance only and is not currently packed into runtime.
@@ -41,7 +45,9 @@ updated: 2026-06-19
 
 - Hangar: `build/captures/mech_t0021_hangar_smoke.png`
 - Battle: `build/captures/mech_t0021_battle_smoke.png`
+- Cannon attack: `build/captures/mech_t0023_cannon_attack_smoke.png`
 - Rocket-equipped battle: `build/captures/mech_t0021_rockets_smoke.png`
+- Rocket attack: `build/captures/mech_t0023_rocket_attack_smoke.png`
 
 Visual judgment:
 
@@ -62,6 +68,9 @@ Visual judgment:
 - The rocket purchase now changes the mech silhouette in the screenshot: the
   shoulder sockets visibly become rocket pods instead of only changing the HUD
   button.
+- The attack frame now reads as a mech action rather than detached VFX: the
+  screenshot shows source-model cannons/pods, recoil, projectile lines, hit
+  rings, and heat/vent response in the same native battle state.
 
 ## Residual Risk
 
@@ -72,6 +81,9 @@ Visual judgment:
   combat.
 - The current hardpoints are a readable runtime overlay. A later final model
   should turn them into authored mesh parts or a modular GLB set.
+- Rocket trails and hardpoint plumes are intentionally exaggerated runtime VFX.
+  They are useful for readability now, but final art should replace the overlay
+  look with authored modular launchers or a stronger downloaded mech source.
 - The stylized-studs ground is procedural proof, not yet a shippable texture
   asset. A future texture pass should decide tileable vs non-tileable up front
   and record provenance using `game-texture-generation`.
@@ -90,6 +102,9 @@ Visual judgment:
 - Rocket-module visual product gate:
   `gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T17-52-23-263Z_desktop-rocket-modules.md`,
   pass with all visual scores at 4/5 and no major issue.
+- Attack-read visual product gate:
+  `gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T23-05-35_desktop-attack.md`,
+  pass with all visual scores at 4/5 and one minor authored-module caveat.
 - `.codex/skills/game-texture-generation`: `quick_validate.py` pass.
 
 ## Downloaded Asset Provenance
