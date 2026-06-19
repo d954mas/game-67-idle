@@ -15,10 +15,11 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
   asset-backed, with a dimmed fullscreen backing plus a larger native `nt_gfx`
   solid/detail layer: material atlas sampling, native trim, side/back/ceiling
   construction, warmer bounce/fill, boxed floor/ceiling/light-trough interior
-  geometry, a darker less image-like portal backing, and native central
-  fluorescent fill/wall-wash lighting. It still does not reach production-quality
-  Backrooms construction because the portal interior remains a hybrid
-  matte/composite plus native overlay.
+  geometry, a darker less image-like portal backing, native central fluorescent
+  fill/wall-wash lighting, and brighter threshold/ceiling/floor spill around
+  the portal entrance. It still does not reach production-quality Backrooms
+  construction because the portal interior remains a hybrid matte/composite plus
+  native overlay.
 - T0011 / https://github.com/d954mas/neotolis-engine/issues/238 tracks an
   engine-facing dependency for true fast multi-pass portal rendering: public
   `nt_gfx` render-target/framebuffer support. The game repo must not patch
@@ -61,12 +62,12 @@ node tools/taskboard/cli.mjs validate
   scene foundation: rooms, material/light/finish/authored-construction
   descriptors, portal descriptors, flags, validation, and GPU params.
 - `src/clean_seed_main.c` composites a dimmed portal backing, then draws a
-  separate native room pass. The current status JSON proves 1230 portal overlay
-  vertices: 780 non-blended solid-shell vertices and 450 blended detail
+  separate native room pass. The current status JSON proves 1386 portal overlay
+  vertices: 936 non-blended solid-shell vertices and 450 blended detail
   vertices, including a darker portal backing, larger rear wall massing, boxed
-  floor/ceiling volumes, fluorescent strip/pool geometry, native central
-  light-fill/wall-wash shading, generated material atlas sampling, and copied
-  mark feedback.
+  floor/ceiling volumes, near-field threshold construction, fluorescent
+  strip/pool geometry, native central light-fill/wall-wash shading, generated
+  material atlas sampling, and copied mark feedback.
 - `tools/assets/build_backrooms_liminal_materials.py` builds the current
   Backrooms material source asset atomically into
   `assets/backrooms-liminal/materials/portal_material_atlas.ppm` plus
@@ -87,6 +88,8 @@ node tools/taskboard/cli.mjs validate
   assets/backrooms-liminal/materials/portal_material_atlas.ppm`.
 - `build/captures/backrooms_t0010_impossible_geometry.png` is the latest native
   proof screenshot for the data-driven impossible room.
+- `build/captures/backrooms_t0010_gameplay.mp4` is the latest native gameplay
+  video proof: 18.0s, 1280x720, H.264, 30fps.
 - `build/captures/backrooms_t0010_impossible_geometry_uizoom.png` is the latest
   readability montage; readability passed but must still be eyeballed.
 - `gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md`

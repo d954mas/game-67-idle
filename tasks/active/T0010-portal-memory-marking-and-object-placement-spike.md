@@ -6,7 +6,7 @@ epic: E001
 priority: P1
 tags: [prototype, backrooms-liminal, portal-rendering, marking, object-puzzle, native-first]
 created: 2026-06-18
-updated: 2026-06-18
+updated: 2026-06-19
 ---
 
 ## What
@@ -360,3 +360,19 @@ and reveal a real exit.
   audience fit: the native light source is more honest, but the aperture is
   still too dark and needs brighter fully authored native surfaces or T0011
   render-target portal support.
+- 2026-06-19: product gate FAIL (desktop); review: gamedesign\projects\backrooms-liminal\reviews\t0010_portal_memory_visual_gate.md; screenshot: build/captures/backrooms_t0010_impossible_geometry.png; next: Continue toward a true multi-pass/render-target portal path via T0011, or further replace the remaining portal matte with opaque native authored room surfaces and stronger integrated lighting before adding new content.
+- 2026-06-19: Native threshold-exposure slice added brighter near-field return
+  construction boxes, stronger threshold/ceiling/floor light spill, and higher
+  native shell/material exposure so the aperture reads less like a black portal
+  rectangle and more like a built impossible room. The T0010 scenario now
+  reports `native_overlay.last_vertex_count = 1386`,
+  `native_overlay.room_mesh_vertex_count = 1302`,
+  `native_overlay.solid_pass_vertex_count = 936`, and
+  `native_overlay.blended_detail_vertex_count = 450`. Native build, material
+  atlas rebuild, T0010 capture, smoke, readability zoom, taskboard validation,
+  strict product gate, and slice hygiene ran. Product gate remains FAIL for art
+  quality and audience fit: the room is brighter and more constructed, but it
+  still needs render-target-quality spatial lighting/material response or more
+  opaque authored native room replacement before content expansion. Recorded
+  gameplay video proof at `build/captures/backrooms_t0010_gameplay.mp4`
+  (18.0s, 1280x720, H.264, 30fps).
