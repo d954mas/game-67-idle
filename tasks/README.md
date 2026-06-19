@@ -77,56 +77,11 @@ Search current context before history. Scope code/design searches to the likely
 area (`src/`, `tools/`, `.codex/skills/`, active project folder) before using
 repo-wide search.
 
-## Intent To Scope
+## Detailed Protocol
 
-Users describe work naturally; do not require task IDs.
-
-Before broad edits or expensive validation, state:
-
-- interpreted goal;
-- selected task/epic or why no durable task is needed;
-- first action;
-- out of scope.
-
-Ask one concise clarification only when multiple plausible scopes, project
-direction changes, destructive task/status moves, or broad irreversible work are
-in play.
-
-## Task Lifecycle
-
-Task statuses: `idea -> backlog -> todo -> doing -> review -> done`, plus
-`dropped`.
-
-Epic statuses: `idea -> active -> done`, plus `dropped`.
-
-- `idea`: raw intake; do not implement from it.
-- `backlog`: refined, checkable, ready to schedule.
-- `todo`: selected next work.
-- `doing`: active work.
-- `review`: awaiting human or explicit cleanup review.
-- `done`: acceptance criteria checked and evidence logged.
-- `dropped`: intentionally closed; never delete task files to hide work.
-
-Default `list` shows actionable current work only. Use `list --review` only for
-review cleanup, `list --ideas` for raw intake, and `list --archive` for history.
-
-## Create Or Refine
-
-Create/refine a task when work needs durable tracking beyond the current reply:
-
-- distinct feature/fix/policy/validator/cleanup;
-- deferred user idea that must not be lost;
-- source-of-truth or reusable pipeline behavior changes;
-- broad work that cannot finish immediately.
-
-Do not create a task for a tiny direct edit, a validation command, or a duplicate
-of existing work.
-
-A backlog task must have:
-
-- non-empty `## What`;
-- checkable `## Done when`;
-- clear scope boundaries or open questions.
+Load `tasks/guides/task-store-reference.md` when changing or auditing task
+lifecycle, scope intake, backlog refinement, evidence rules, checkpoint shape,
+or hand-written task format. Do not load it for normal orientation.
 
 ## Done And Evidence
 
@@ -152,49 +107,3 @@ node tools/product_gate/repeated_failure_guard.mjs
 
 If validation is too slow, unavailable, or fails for an unrelated environment
 reason, record that explicitly. Do not silently mark the task done.
-
-## Checkpoints
-
-Leave the repo resumable without chat history.
-
-Record a checkpoint when:
-
-- task status changes;
-- validation evidence changes;
-- current goal/gate/blockers/next priorities change;
-- work pauses partially complete;
-- another agent/session must continue.
-
-Where information goes:
-
-- task `## Log`: detailed evidence, command paths, decisions, unresolved issues;
-- `STATUS.md`: short current index only;
-- final response: concise human summary and validation.
-
-## Format
-
-```markdown
----
-id: T0001
-title: First playable action
-status: backlog
-epic: E001
-priority: P2
-tags: [state, core-loop]
-created: 2026-06-11
-updated: 2026-06-11
----
-
-## What
-
-## Done when
-
-- [ ] checkable acceptance criterion
-
-## Open questions
-
-## Log
-```
-
-Prefer `node tools/taskboard/cli.mjs new` over hand-created files so IDs do not
-collide. Run `node tools/taskboard/cli.mjs validate` after bulk edits.

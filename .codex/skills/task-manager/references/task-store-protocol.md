@@ -1,7 +1,8 @@
 # Task Store Protocol
 
-Authoritative store and live-status rules live in `tasks/README.md`; the live
-status index is `tasks/STATUS.md`.
+Authoritative store and live-status rules live in `tasks/README.md`; detailed
+lifecycle/evidence/format rules live in `tasks/guides/task-store-reference.md`;
+the live status index is `tasks/STATUS.md`.
 
 ## Orientation
 

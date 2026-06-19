@@ -76,10 +76,10 @@ test("context budget supports json output", () => {
 test("context budget default hot doc limit is tight enough for live docs", () => {
   const dir = tempDir();
   try {
-    writeFixture(dir, "short skill\n", "x".repeat(7100));
+    writeFixture(dir, "short skill\n", "x".repeat(6600));
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /AGENTS\.md: 7100 chars > 7000/);
+    assert.match(result.stderr, /AGENTS\.md: 6600 chars > 6500/);
   } finally {
     cleanup(dir);
   }

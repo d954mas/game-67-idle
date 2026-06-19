@@ -97,6 +97,7 @@ const COPY = [
   "AI_PIPELINE.md",
   "AI_PIPELINE_HISTORY.md",
   "tasks/README.md",
+  "tasks/guides",
 ];
 
 const AGENTS_TEMPLATE = `# AGENTS.md
