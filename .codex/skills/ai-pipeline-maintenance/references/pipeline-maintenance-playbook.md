@@ -37,6 +37,7 @@ For every new mandatory rule, prefer:
 Common guards:
 
 - `node tools/context_budget.mjs`
+- `node tools/context_budget.mjs --review` for strict context-budget review
 - `node tools/doc_reference_check.mjs`
 - `node tools/skills_eval.mjs`
 - `node tools/skills_sync.mjs --check`
@@ -46,8 +47,8 @@ Common guards:
 
 ## Validation Matrix
 
-- Hot docs or context budgets: context budget tests, doc reference check,
-  quick pipeline.
+- Hot docs or context budgets: `context_budget.mjs --review`, context budget
+  tests, doc reference check, quick pipeline.
 - Skill entrypoints/references: `node tools/skills_eval.mjs`,
   `node tools/skills_sync.mjs --check`, context budget, quick pipeline.
 - Product gate/tooling: focused product-gate tests plus quick pipeline.

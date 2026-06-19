@@ -86,7 +86,7 @@ test("context budget default hot doc limit is tight enough for live docs", () =>
     writeFixture(dir, "short skill\n", "x".repeat(6600));
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /AGENTS\.md: 6600 chars > 2800/);
+    assert.match(result.stderr, /AGENTS\.md: 6600 chars > 3400/);
   } finally {
     cleanup(dir);
   }
@@ -114,10 +114,10 @@ test("context budget applies the task store hot guide cap", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "tasks", "README.md"), "x".repeat(2500), "utf8");
+    writeFileSync(join(dir, "tasks", "README.md"), "x".repeat(3100), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /tasks\/README\.md: 2500 chars > 2400/);
+    assert.match(result.stderr, /tasks\/README\.md: 3100 chars > 3000/);
   } finally {
     cleanup(dir);
   }
@@ -127,10 +127,10 @@ test("context budget applies the split pipeline map cap", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "AI_PIPELINE.md"), "x".repeat(1900), "utf8");
+    writeFileSync(join(dir, "AI_PIPELINE.md"), "x".repeat(2300), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /AI_PIPELINE\.md: 1900 chars > 1800/);
+    assert.match(result.stderr, /AI_PIPELINE\.md: 2300 chars > 2200/);
   } finally {
     cleanup(dir);
   }
@@ -140,10 +140,10 @@ test("context budget applies the tools README cap", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "tools", "README.md"), "x".repeat(2500), "utf8");
+    writeFileSync(join(dir, "tools", "README.md"), "x".repeat(3100), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /tools\/README\.md: 2500 chars > 2400/);
+    assert.match(result.stderr, /tools\/README\.md: 3100 chars > 3000/);
   } finally {
     cleanup(dir);
   }
@@ -153,10 +153,10 @@ test("context budget applies pipeline reference caps", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "x".repeat(2300), "utf8");
+    writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "x".repeat(2700), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /docs\/ai-pipeline\/agent-workflow\.md: 2300 chars > 2200/);
+    assert.match(result.stderr, /docs\/ai-pipeline\/agent-workflow\.md: 2700 chars > 2600/);
   } finally {
     cleanup(dir);
   }
@@ -165,10 +165,59 @@ test("context budget applies pipeline reference caps", () => {
 test("context budget default skill entrypoint cap stays tight", () => {
   const dir = tempDir();
   try {
-    writeFixture(dir, "x".repeat(2500));
+    writeFixture(dir, "x".repeat(2900));
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /\.codex\/skills\/sample\/SKILL\.md: 2500 chars > 2400/);
+    assert.match(result.stderr, /\.codex\/skills\/sample\/SKILL\.md: 2900 chars > 2800/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("context budget review mode applies stricter per-file targets", () => {
+  const dir = tempDir();
+  try {
+    writeFixture(dir, "short skill\n", "x".repeat(2900));
+    const result = run(["--root", dir, "--review"]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /AGENTS\.md: 2900 chars > 2800/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("context budget review mode fails aggregate hot doc growth", () => {
+  const dir = tempDir();
+  try {
+    writeFixture(dir);
+    writeFileSync(join(dir, "AGENTS.md"), "x".repeat(2790), "utf8");
+    writeFileSync(join(dir, "AI_PIPELINE.md"), "x".repeat(1790), "utf8");
+    writeFileSync(join(dir, "tasks", "STATUS.md"), "x".repeat(2390), "utf8");
+    writeFileSync(join(dir, "tasks", "README.md"), "x".repeat(2390), "utf8");
+    writeFileSync(join(dir, "tools", "README.md"), "x".repeat(2390), "utf8");
+    writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "x".repeat(2190), "utf8");
+    writeFileSync(join(dir, "docs", "ai-pipeline", "quality-validation.md"), "x".repeat(2190), "utf8");
+    writeFileSync(join(dir, "docs", "ai-pipeline", "profiling-reuse.md"), "x".repeat(2190), "utf8");
+    const result = run(["--root", dir, "--review"]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /<hot-doc-total>: 18320 chars > 17800/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("context budget review mode fails aggregate skill entrypoint growth", () => {
+  const dir = tempDir();
+  try {
+    writeFixture(dir);
+    for (let i = 0; i < 12; i++) {
+      const skillDir = join(dir, ".codex", "skills", `sample-${i}`);
+      mkdirSync(skillDir, { recursive: true });
+      writeFileSync(join(skillDir, "SKILL.md"), "x".repeat(2390), "utf8");
+    }
+    const result = run(["--root", dir, "--review"]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /<skill-entrypoint-total>: 28692 chars > 27000/);
   } finally {
     cleanup(dir);
   }

@@ -3,13 +3,23 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { DEFAULT_HOT_DOC_MAX_CHARS, HOT_DOC_BUDGETS, SKILL_ENTRYPOINT_MAX_CHARS } from "./context_budget_config.mjs";
+import {
+  DEFAULT_HOT_DOC_MAX_CHARS,
+  HOT_DOC_BUDGETS,
+  HOT_DOC_TOTAL_MAX_CHARS,
+  REVIEW_DEFAULT_HOT_DOC_MAX_CHARS,
+  REVIEW_HOT_DOC_TOTAL_MAX_CHARS,
+  REVIEW_SKILL_ENTRYPOINT_MAX_CHARS,
+  REVIEW_SKILL_ENTRYPOINT_TOTAL_MAX_CHARS,
+  SKILL_ENTRYPOINT_MAX_CHARS,
+  SKILL_ENTRYPOINT_TOTAL_MAX_CHARS,
+} from "./context_budget_config.mjs";
 
 const args = process.argv.slice(2);
 
 function usage() {
   console.error(`usage:
-  node tools/context_budget.mjs [--root <dir>] [--max-skill-chars <n>] [--max-doc-chars <n>] [--json]
+  node tools/context_budget.mjs [--root <dir>] [--review] [--max-skill-chars <n>] [--max-doc-chars <n>] [--json]
 
 Defaults:
   --max-skill-chars ${SKILL_ENTRYPOINT_MAX_CHARS}   max chars for each .codex/skills/*/SKILL.md entrypoint
@@ -37,9 +47,11 @@ function takeString(name, fallback) {
 }
 
 const root = resolve(takeString("--root", process.cwd()));
-const maxSkillChars = takeNumber("--max-skill-chars", SKILL_ENTRYPOINT_MAX_CHARS);
+const reviewMode = args.includes("--review");
+if (reviewMode) args.splice(args.indexOf("--review"), 1);
+const maxSkillChars = takeNumber("--max-skill-chars", reviewMode ? REVIEW_SKILL_ENTRYPOINT_MAX_CHARS : SKILL_ENTRYPOINT_MAX_CHARS);
 const maxDocCharsProvided = args.includes("--max-doc-chars");
-const maxDocChars = takeNumber("--max-doc-chars", DEFAULT_HOT_DOC_MAX_CHARS);
+const maxDocChars = takeNumber("--max-doc-chars", reviewMode ? REVIEW_DEFAULT_HOT_DOC_MAX_CHARS : DEFAULT_HOT_DOC_MAX_CHARS);
 const json = args.includes("--json");
 if (json) args.splice(args.indexOf("--json"), 1);
 if (args.includes("--help") || args.includes("-h")) usage();
@@ -75,21 +87,32 @@ function skillEntrypoints() {
 
 const records = [
   ...HOT_DOC_BUDGETS.map((doc) => {
-    const limit = maxDocCharsProvided ? maxDocChars : Math.min(maxDocChars, doc.maxChars);
+    const perFileMax = reviewMode ? (doc.reviewMaxChars || doc.maxChars) : doc.maxChars;
+    const limit = maxDocCharsProvided ? maxDocChars : Math.min(maxDocChars, perFileMax);
     return measure(doc.path, "hot_doc", limit);
   }).filter(Boolean),
   ...skillEntrypoints().map((path) => measure(path, "skill_entrypoint", maxSkillChars)).filter(Boolean),
 ].sort((a, b) => b.chars - a.chars || a.path.localeCompare(b.path));
 
-const failures = records.filter((record) => !record.ok);
+const hotDocTotal = records.filter((record) => record.kind === "hot_doc").reduce((sum, record) => sum + record.chars, 0);
+const skillTotal = records.filter((record) => record.kind === "skill_entrypoint").reduce((sum, record) => sum + record.chars, 0);
+const hotDocTotalMax = reviewMode ? REVIEW_HOT_DOC_TOTAL_MAX_CHARS : HOT_DOC_TOTAL_MAX_CHARS;
+const skillTotalMax = reviewMode ? REVIEW_SKILL_ENTRYPOINT_TOTAL_MAX_CHARS : SKILL_ENTRYPOINT_TOTAL_MAX_CHARS;
+const totals = [
+  { path: "<hot-doc-total>", kind: "aggregate", chars: hotDocTotal, max_chars: hotDocTotalMax, ok: hotDocTotal <= hotDocTotalMax },
+  { path: "<skill-entrypoint-total>", kind: "aggregate", chars: skillTotal, max_chars: skillTotalMax, ok: skillTotal <= skillTotalMax },
+];
+const failures = [...records.filter((record) => !record.ok), ...totals.filter((record) => !record.ok)];
 
 if (json) {
-  console.log(JSON.stringify({ ok: failures.length === 0, root, records, failures }, null, 2));
+  console.log(JSON.stringify({ ok: failures.length === 0, root, mode: reviewMode ? "review" : "normal", totals, records, failures }, null, 2));
 } else {
   console.log("context budget report");
   console.log(`root: ${root}`);
+  console.log(`mode: ${reviewMode ? "review" : "normal"}`);
   const docLimit = maxDocCharsProvided ? `${maxDocChars} chars` : "per-file defaults";
   console.log(`limits: skill_entrypoint<=${maxSkillChars} chars, hot_doc<=${docLimit}`);
+  console.log(`totals: hot_docs=${hotDocTotal}/${hotDocTotalMax}, skill_entrypoints=${skillTotal}/${skillTotalMax}`);
   console.log("\nTop hot context entrypoints:");
   for (const record of records.slice(0, 12)) {
     const status = record.ok ? "ok" : "FAIL";
