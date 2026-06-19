@@ -133,6 +133,7 @@ typedef struct MeshMechRuntime {
   nt_resource_t fs;
   nt_resource_t text_vs;
   nt_resource_t text_fs;
+  nt_resource_t mech_atlas;
   nt_resource_t ui_font_res;
   nt_material_t material;
   nt_material_t text_material;
@@ -427,7 +428,7 @@ static const MeshPartSpec MESH_MECH_PARTS[MECH_MESH_PARTS] = {
      MECH_MESH_HYDRAULIC},
     {{0.0F, 0.0F, 0.0F},
      {126.0F, 126.0F, 126.0F},
-     {0.22F, 0.72F, 0.32F, 1.0F},
+     {1.0F, 1.0F, 1.0F, 1.0F},
      0,
      MECH_MESH_QUATERNIUS},
 };
@@ -1041,6 +1042,20 @@ static void draw_baseplate_block(float x, float z, float sx, float sz,
                          color);
 }
 
+static void draw_stud_grid(float x, float z, float y, int cols, int rows,
+                           float step, const float color[4]) {
+  const float start_x = -0.5F * (float)(cols - 1) * step;
+  const float start_z = -0.5F * (float)(rows - 1) * step;
+  for (int row = 0; row < rows; ++row) {
+    for (int col = 0; col < cols; ++col) {
+      nt_shape_renderer_cube(
+          (float[3]){x + start_x + ((float)col * step), y,
+                     z + start_z + ((float)row * step)},
+          (float[3]){0.16F, 0.055F, 0.16F}, color);
+    }
+  }
+}
+
 static void draw_stylized_grass_motif(float x, float z, float s,
                                       const float color[4]) {
   const float y = 0.075F;
@@ -1070,6 +1085,11 @@ static void draw_floor_grid(float half, bool hangar) {
   const float yellow_block[4] = {1.0F, 0.78F, 0.12F, 1.0F};
   const float red_block[4] = {1.0F, 0.16F, 0.16F, 1.0F};
   const float white_block[4] = {0.88F, 0.95F, 1.0F, 1.0F};
+  const float pad_stud[4] = {0.36F, 0.64F, 0.83F, 1.0F};
+  const float blue_stud[4] = {0.03F, 0.25F, 0.82F, 1.0F};
+  const float yellow_stud[4] = {0.82F, 0.55F, 0.02F, 1.0F};
+  const float red_stud[4] = {0.78F, 0.06F, 0.06F, 1.0F};
+  const float white_stud[4] = {0.70F, 0.83F, 0.94F, 1.0F};
 
   nt_shape_renderer_rect_rot((float[3]){0.0F, -0.03F, 0.0F},
                              (float[2]){half * 2.35F, half * 2.12F}, floor_rot,
@@ -1100,6 +1120,8 @@ static void draw_floor_grid(float half, bool hangar) {
 
   draw_baseplate_block(0.0F, hangar ? 0.15F : 1.45F, 5.4F, 4.1F,
                        (float[4]){0.54F, 0.76F, 0.95F, 1.0F});
+  draw_stud_grid(0.0F, hangar ? 0.15F : 1.45F, 0.125F, 7, 5, 0.72F,
+                 pad_stud);
   draw_baseplate_block(0.0F, hangar ? -1.95F : -0.68F, 5.7F, 0.18F,
                        yellow_block);
   draw_baseplate_block(0.0F, hangar ? 2.25F : 3.58F, 5.7F, 0.18F, blue_block);
@@ -1107,19 +1129,26 @@ static void draw_floor_grid(float half, bool hangar) {
   if (hangar) {
     nt_shape_renderer_cube((float[3]){-4.1F, 0.46F, 2.8F},
                            (float[3]){1.7F, 0.9F, 1.2F}, red_block);
+    draw_stud_grid(-4.1F, 2.8F, 0.94F, 3, 2, 0.52F, red_stud);
     nt_shape_renderer_cube((float[3]){-4.1F, 1.08F, 2.8F},
                            (float[3]){1.34F, 0.28F, 0.88F}, yellow_block);
+    draw_stud_grid(-4.1F, 2.8F, 1.25F, 2, 1, 0.52F, yellow_stud);
     nt_shape_renderer_cube((float[3]){4.2F, 0.42F, 2.35F},
                            (float[3]){1.5F, 0.82F, 1.15F}, blue_block);
+    draw_stud_grid(4.2F, 2.35F, 0.86F, 3, 2, 0.48F, blue_stud);
     nt_shape_renderer_cube((float[3]){4.2F, 1.02F, 2.35F},
                            (float[3]){1.04F, 0.28F, 0.82F}, white_block);
+    draw_stud_grid(4.2F, 2.35F, 1.19F, 2, 1, 0.42F, white_stud);
     for (int i = -2; i <= 2; ++i) {
       const float x = (float)i * 2.7F;
       nt_shape_renderer_cube((float[3]){x, 0.22F, -4.35F},
                              (float[3]){1.6F, 0.44F, 1.6F},
                              (i & 1) ? yellow_block : blue_block);
+      draw_stud_grid(x, -4.35F, 0.47F, 2, 2, 0.56F,
+                     (i & 1) ? yellow_stud : blue_stud);
       nt_shape_renderer_cube((float[3]){x, 0.70F, -4.35F},
                              (float[3]){1.12F, 0.36F, 1.12F}, white_block);
+      draw_stud_grid(x, -4.35F, 0.91F, 2, 2, 0.42F, white_stud);
     }
   } else {
     for (int i = -2; i <= 2; ++i) {
@@ -1127,11 +1156,15 @@ static void draw_floor_grid(float half, bool hangar) {
       nt_shape_renderer_cube((float[3]){x, 0.42F, -4.8F},
                              (float[3]){1.8F, 0.84F, 1.2F},
                              (i & 1) ? red_block : yellow_block);
+      draw_stud_grid(x, -4.8F, 0.87F, 3, 2, 0.52F,
+                     (i & 1) ? red_stud : yellow_stud);
     }
     nt_shape_renderer_cube((float[3]){-6.4F, 0.95F, -1.2F},
                            (float[3]){0.52F, 1.9F, 0.52F}, blue_block);
+    draw_stud_grid(-6.4F, -1.2F, 1.93F, 1, 1, 0.48F, blue_stud);
     nt_shape_renderer_cube((float[3]){6.4F, 0.95F, -1.2F},
                            (float[3]){0.52F, 1.9F, 0.52F}, red_block);
+    draw_stud_grid(6.4F, -1.2F, 1.93F, 1, 1, 0.48F, red_stud);
   }
 }
 
@@ -1525,6 +1558,9 @@ static bool mesh_mech_ready(void) {
   if (!mat_info || !mat_info->ready) {
     return false;
   }
+  if (!nt_resource_is_ready(s_mesh_mech.mech_atlas)) {
+    return false;
+  }
   for (int i = 0; i < MECH_MESH_TYPES; ++i) {
     if (!nt_resource_is_ready(s_mesh_mech.meshes[i])) {
       return false;
@@ -1540,6 +1576,8 @@ static void init_mesh_mech(void) {
 
   nt_hash_init(&(nt_hash_desc_t){0});
   nt_resource_init(&(nt_resource_desc_t){0});
+  nt_resource_set_activator(NT_ASSET_TEXTURE, nt_gfx_activate_texture,
+                            nt_gfx_deactivate_texture);
   nt_resource_set_activator(NT_ASSET_MESH, nt_gfx_activate_mesh,
                             nt_gfx_deactivate_mesh);
   nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader,
@@ -1574,17 +1612,26 @@ static void init_mesh_mech(void) {
       nt_hash64_str("assets/shaders/slug_text.vert"), NT_ASSET_SHADER_CODE);
   s_mesh_mech.text_fs = nt_resource_request(
       nt_hash64_str("assets/shaders/slug_text.frag"), NT_ASSET_SHADER_CODE);
+  s_mesh_mech.mech_atlas = nt_resource_request(
+      nt_hash64_str("assets/textures/poly_pizza_quaternius_mech_cc0_atlas.png"),
+      NT_ASSET_TEXTURE);
   s_mesh_mech.ui_font_res =
       nt_resource_request(nt_hash64_str("mech/ui_font"), NT_ASSET_FONT);
   s_mesh_mech.material = nt_material_create(&(nt_material_create_desc_t){
       .vs = s_mesh_mech.vs,
       .fs = s_mesh_mech.fs,
+      .textures =
+          {
+              {.name = "u_mech_texture", .resource = s_mesh_mech.mech_atlas},
+          },
+      .texture_count = 1,
       .attr_map =
           {
               {.stream_name = "position", .location = 0},
               {.stream_name = "normal", .location = 1},
+              {.stream_name = "uv0", .location = 2},
           },
-      .attr_map_count = 2,
+      .attr_map_count = 3,
       .depth_test = true,
       .depth_write = true,
       .cull_mode = NT_CULL_NONE,

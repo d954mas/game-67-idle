@@ -23,6 +23,13 @@ updated: 2026-06-19
 - Integrated a downloaded CC0 hero mech source model from Poly Pizza/Quaternius
   as the visible runtime mech body. The previous procedural block mech remains
   packed as fallback/kitbash source, but the current render path hides it.
+- Extracted the model's embedded `Atlas.png` from the GLB, packed it as a
+  runtime `NT_ASSET_TEXTURE`, added `TEXCOORD_0` to the source mech stream, and
+  changed the mech shader to light the atlas color instead of tinting the whole
+  model with one flat instance color.
+- Added raised studs to the hangar pad and toy-block props so the world reads
+  more like a physical block/baseplate set in perspective, not only a flat
+  checker texture.
 
 ## Screenshot Evidence
 
@@ -41,25 +48,34 @@ Visual judgment:
 - After the downloaded model integration, the player mech now reads as a
   Roblox-like toy mech/suit silhouette with built-in cannons and mechanical
   legs, rather than a project-authored pile of blocks.
+- After the atlas integration, the mech keeps the downloaded model's green
+  armor, gray cannons, dark joints, and orange/brown accent parts. This closes
+  the previous single-green-material caveat for the current CC0 asset.
+- The new raised studs make the hangar pad and prop blocks read more like
+  chunky toy construction pieces at the native camera distance.
 
 ## Residual Risk
 
-- This is still not final hero mech quality. The next art pass should use either
-  a stronger downloaded/permissively licensed model source or a more deliberate
-  block-kit modeling pass with better silhouette design before expanding combat.
+- This is still not final hero mech quality. The next art pass should keep using
+  permissively licensed downloaded/source assets where they beat procedural
+  shapes, and either find a stronger Roblox-like mech source or create a more
+  deliberate block-kit model with clearer customization slots before expanding
+  combat.
 - The stylized-studs ground is procedural proof, not yet a shippable texture
   asset. A future texture pass should decide tileable vs non-tileable up front
   and record provenance using `game-texture-generation`.
-- The Quaternius model's original color separation is in its GLB material
-  texture atlas. The current runtime mesh path only uses position/normal plus an
-  instance color, so the model is temporarily tinted as a single green toy
-  material. A follow-up texture/material integration pass should restore the
-  atlas or rebuild the material colors through a supported engine path.
+- The Quaternius atlas is a 32x32 low-poly palette/atlas, not a rich material
+  set with normals/roughness/emissive maps. It is correct for the downloaded
+  asset, but a future higher-quality mech may need a stronger material source.
 
 ## Validation
 
 - `cmake --build --preset native-debug --target game_seed`: pass.
 - `py -3.12 tools/mech-builder-battler/devapi_playable_smoke.py 9124`: pass.
+- `mesh_mech_ready`: pass in DevAPI smoke after texture material integration.
+- Strict visual product gate:
+  `gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T17-37-47-327Z_desktop-hangar.md`,
+  pass with all visual scores at 4/5 and no major issue.
 - `.codex/skills/game-texture-generation`: `quick_validate.py` pass.
 
 ## Downloaded Asset Provenance
@@ -68,7 +84,9 @@ Visual judgment:
 - Source page: `https://poly.pizza/m/o3Ps8z8ByP`.
 - Downloaded preview: `assets/source/models/quaternius/poly_pizza_quaternius_mech_cc0_preview.jpg`.
 - Downloaded source GLB: `assets/source/models/quaternius/poly_pizza_quaternius_mech_cc0.glb`.
+- Extracted source atlas: `assets/source/models/quaternius/poly_pizza_quaternius_mech_cc0_atlas.png`.
 - Runtime mesh copy: `assets/meshes/poly_pizza_quaternius_mech_cc0.glb`.
+- Runtime atlas: `assets/textures/poly_pizza_quaternius_mech_cc0_atlas.png`.
 - License as shown on source page on 2026-06-19: Public Domain (CC0 1.0).
-- Runtime caveat: mesh is used; original texture atlas/color material is not yet
-  restored in the runtime shader.
+- Texture usage class: mech asset material, unique non-tileable atlas driven by
+  the GLB UVs. It should not be reused as a world/baseplate tile.

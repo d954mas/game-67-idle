@@ -38,7 +38,7 @@ Design inputs:
 
 ## Done when
 
-- [ ] Native `game_seed` still builds and runs the first mech loop.
+- [x] Native `game_seed` still builds and runs the first mech loop.
 - [x] The starter mech no longer reads as cube-kitbashed at gameplay scale.
 - [x] The world reads as an intentional Roblox-like block arena, not debug cubes.
 - [ ] Movement reads as a mech: clear facing, strafe/turn feedback, body weight,
@@ -51,10 +51,10 @@ Design inputs:
       separation, bevel/normal readability, and contact shadow grounding.
 - [x] The hangar and rocket battle screenshots are recaptured and linked from
       evidence.
-- [ ] Strict visual product gate passes with `art_quality >= 4` and no major
+- [x] Strict visual product gate passes with `art_quality >= 4` and no major
       issue for starter mech model quality, or any failure is logged with the
       next corrective action.
-- [ ] `node tools/taskboard/cli.mjs validate` passes.
+- [x] `node tools/taskboard/cli.mjs validate` passes.
 
 ## Open questions
 
@@ -108,3 +108,12 @@ Design inputs:
   packed through the existing mesh pack. Current caveat: original GLB texture
   atlas/material colors are not restored yet; runtime uses a temporary green
   toy material.
+- 2026-06-19: Restored the downloaded GLB material colors by extracting its
+  embedded 32x32 `Atlas.png`, packing it as `NT_ASSET_TEXTURE`, adding `uv0`
+  to the source mech stream, and sampling it in the mech shader. Also added
+  raised studs to the hangar pad and block props. New smoke screenshots show a
+  textured green/gray/orange toy mech on a more physical Roblox-like baseplate.
+- 2026-06-19: Strict product-read gate passed for the hangar screenshot with
+  all visual scores at 4/5 and no major issue. Minor caveat remains: future
+  passes should present customization slots more strongly.
+- 2026-06-19: product gate PASS (desktop-hangar); review: gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T17-37-47-327Z_desktop-hangar.md; screenshot: build/captures/mech_t0021_hangar_smoke.png; next: continue to the next narrow slice

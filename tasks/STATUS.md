@@ -42,6 +42,8 @@ mini-boss.
 
 1. Run `T0023`: improve the mech and Roblox-like world as the first priority.
    The mech must read as a deliberate toy/block mech character, not a cube pile.
+   Current pass uses a CC0 Poly Pizza/Quaternius mech with restored atlas color
+   and raised studs on the pad/props.
 2. Keep reference constraints from
    `gamedesign/projects/mech-builder-battler/references/current_build_mismatch_audit_2026-06-19.md`.
 3. Keep product evidence in

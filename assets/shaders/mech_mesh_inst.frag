@@ -4,9 +4,12 @@ precision mediump float;
 
 in vec3 v_normal;
 in vec3 v_world_pos;
+in vec2 v_uv0;
 in vec4 v_color;
 
 out vec4 frag_color;
+
+uniform sampler2D u_mech_texture;
 
 void main() {
     vec3 normal = normalize(v_normal);
@@ -19,10 +22,12 @@ void main() {
     float specular = pow(max(dot(normal, half_dir), 0.0), 30.0);
     float broad_spec = pow(max(dot(normal, half_dir), 0.0), 7.0);
     float rim = pow(1.0 - max(dot(normal, view_dir), 0.0), 2.1);
-    float bright_color = max(max(v_color.r, v_color.g), v_color.b);
-    float chroma = bright_color - min(min(v_color.r, v_color.g), v_color.b);
+    vec4 texel = texture(u_mech_texture, v_uv0);
+    vec3 source_color = clamp(texel.rgb * v_color.rgb, 0.0, 1.0);
+    float bright_color = max(max(source_color.r, source_color.g), source_color.b);
+    float chroma = bright_color - min(min(source_color.r, source_color.g), source_color.b);
     float emissive = smoothstep(0.62, 1.0, bright_color) * smoothstep(0.22, 0.78, chroma);
-    vec3 base = pow(v_color.rgb, vec3(0.78));
+    vec3 base = pow(source_color, vec3(0.78));
     vec3 lit = base * (0.46 + diffuse * 0.66 + fill * 0.18);
     lit += vec3(1.0, 0.96, 0.82) * specular * 0.22;
     lit += vec3(0.72, 0.88, 1.0) * broad_spec * 0.10;
@@ -30,5 +35,5 @@ void main() {
     lit += base * emissive * 0.30;
     lit = clamp(lit, 0.0, 1.0);
     lit = pow(lit, vec3(0.92));
-    frag_color = vec4(lit, v_color.a);
+    frag_color = vec4(lit, texel.a * v_color.a);
 }
