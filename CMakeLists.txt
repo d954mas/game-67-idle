@@ -232,6 +232,25 @@ if(NOT EMSCRIPTEN)
 
     set(MECH_BUILDER_PACK "${MECH_BUILDER_PACK_DIR}/mech_builder_battler_mesh.ntpack")
     set(MECH_BUILDER_PACK_OUTPUT "${MECH_BUILDER_ASSETS_DIR}/mech_builder_battler_mesh.ntpack")
+    set(HERO_MECH_SOURCE_ATLAS
+        "${CMAKE_SOURCE_DIR}/assets/source/models/quaternius/poly_pizza_quaternius_mech_cc0_atlas.png"
+    )
+    set(HERO_MECH_TOY_ATLAS
+        "${CMAKE_SOURCE_DIR}/assets/textures/poly_pizza_quaternius_mech_toy_atlas.png"
+    )
+    add_custom_command(
+        OUTPUT "${HERO_MECH_TOY_ATLAS}"
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/mech-builder-battler/recolor_mech_atlas.py"
+            "${HERO_MECH_SOURCE_ATLAS}"
+            "${HERO_MECH_TOY_ATLAS}"
+        DEPENDS
+            "${HERO_MECH_SOURCE_ATLAS}"
+            tools/mech-builder-battler/recolor_mech_atlas.py
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Generating toy/plastic hero mech atlas from CC0 source atlas"
+        VERBATIM
+    )
     set(ROBOT_ENEMY_SOURCE_GLB
         "${CMAKE_SOURCE_DIR}/assets/source/models/quaternius/poly_pizza_quaternius_robot_enemy_legs_gun_cc0.glb"
     )
@@ -271,6 +290,7 @@ if(NOT EMSCRIPTEN)
             tools/mech-builder-battler/build_packs.c
             tools/mech-builder-battler/extract_static_gltf.py
             tools/mech-builder-battler/generate_starter_mech_meshes.py
+            tools/mech-builder-battler/recolor_mech_atlas.py
             assets/shaders/mech_mesh_inst.vert
             assets/shaders/mech_mesh_inst.frag
             assets/shaders/mech_mesh_color_inst.frag
@@ -296,6 +316,7 @@ if(NOT EMSCRIPTEN)
             assets/meshes/mech_starter_visor.gltf
             assets/meshes/poly_pizza_quaternius_mech_cc0.glb
             ${ROBOT_ENEMY_STATIC_MESHES}
+            "${HERO_MECH_TOY_ATLAS}"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         COMMENT "Building Mech Builder Battler mesh pack"
         VERBATIM

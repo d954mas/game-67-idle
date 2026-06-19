@@ -58,6 +58,7 @@ def main() -> int:
         ids = {node.get("id") for node in tree.get("nodes", [])}
         ok &= check("hangar ui", {"action.battle", "slot.shoulder"}.issubset(ids), sorted(ids))
         capture(game, "mech_t0021_hangar_smoke.png")
+        capture(game, "mech_t0025_hero_toy_material_smoke.png", wait_frames=1)
 
         state = game.click_ui("action.battle", wait_frames=12)
         ok &= check("battle starts", state.get("screen") == "battle" and state.get("alive_drones", 0) > 0, state)

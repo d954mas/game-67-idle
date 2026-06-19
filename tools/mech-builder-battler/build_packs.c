@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
                         });
   }
   nt_builder_add_texture(
-      ctx, "assets/textures/poly_pizza_quaternius_mech_cc0_atlas.png", NULL);
+      ctx, "assets/textures/poly_pizza_quaternius_mech_toy_atlas.png", NULL);
   nt_builder_add_shader(ctx, "assets/shaders/mech_mesh_inst.vert",
                         NT_BUILD_SHADER_VERTEX);
   nt_builder_add_shader(ctx, "assets/shaders/mech_mesh_inst.frag",

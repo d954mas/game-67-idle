@@ -1847,7 +1847,7 @@ static void init_mesh_mech(void) {
   s_mesh_mech.text_fs = nt_resource_request(
       nt_hash64_str("assets/shaders/slug_text.frag"), NT_ASSET_SHADER_CODE);
   s_mesh_mech.mech_atlas = nt_resource_request(
-      nt_hash64_str("assets/textures/poly_pizza_quaternius_mech_cc0_atlas.png"),
+      nt_hash64_str("assets/textures/poly_pizza_quaternius_mech_toy_atlas.png"),
       NT_ASSET_TEXTURE);
   s_mesh_mech.ui_font_res =
       nt_resource_request(nt_hash64_str("mech/ui_font"), NT_ASSET_FONT);
