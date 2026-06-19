@@ -615,6 +615,16 @@ static bool source_hero_overlay_part(int index, bool rockets) {
   return false;
 }
 
+static bool assault_hero_kitbash_part(int index, bool rockets) {
+  if (index == 13 || index == 26 || index == 27 || (index >= 34 && index <= 49)) {
+    return true;
+  }
+  if (rockets && index >= 20 && index <= 25) {
+    return true;
+  }
+  return false;
+}
+
 static void source_mech_cannon_points(float root_x, float root_z, float yaw,
                                       float root_scale, float left[3],
                                       float right[3]) {
@@ -2349,7 +2359,8 @@ static void draw_mesh_mech(float w, float h) {
                               &item_count);
   }
   for (int i = 0; i < MECH_MESH_PARTS; ++i) {
-    if (use_assault_hero) {
+    const bool assault_overlay = use_assault_hero && assault_hero_kitbash_part(i, rockets);
+    if (use_assault_hero && !assault_overlay) {
       continue;
     }
     const MeshPartSpec *spec = &MESH_MECH_PARTS[i];
@@ -2373,6 +2384,73 @@ static void draw_mesh_mech(float w, float h) {
     float scale_x = spec->size[0];
     float scale_y = spec->size[1];
     float scale_z = spec->size[2];
+
+    if (assault_overlay) {
+      lx *= 0.92F;
+      lz -= 0.34F;
+      scale_x *= 0.74F;
+      scale_y *= 0.74F;
+      scale_z *= 0.74F;
+      pitch += forward_lean * 0.35F - recoil * 0.18F;
+      roll += strafe_lean * 0.45F;
+
+      if (i == 13) {
+        lx = 0.82F;
+        ly = 1.70F + idle_bob * 0.25F;
+        lz = -1.26F + recoil * 0.42F;
+        scale_x = 0.18F;
+        scale_y = 0.22F;
+        scale_z = 0.86F + recoil * 0.30F;
+        pitch -= recoil * 0.22F;
+      } else if (i >= 20 && i <= 25) {
+        const float side = i == 20 || i == 22 || i == 24 ? -1.0F : 1.0F;
+        lx = side * ((i < 24) ? 0.82F : 0.58F);
+        ly = (i < 22) ? 2.64F : ((i < 24) ? 2.86F : 2.54F);
+        lz = (i < 24) ? -0.62F : -1.02F;
+        scale_x *= 0.86F;
+        scale_y *= 0.82F;
+        scale_z *= 0.92F + recoil * 0.12F;
+        pitch -= recoil * 0.10F;
+      } else if (i == 26 || i == 27) {
+        lx = 0.0F;
+        ly = i == 26 ? 1.68F : 1.96F;
+        lz = i == 26 ? -0.92F : -1.04F;
+        scale_x *= i == 26 ? 1.12F : 0.82F;
+        scale_y *= i == 26 ? 0.86F : 0.70F;
+        scale_z *= 0.70F;
+        pitch += sinf(time * 2.2F) * 0.018F;
+      } else if (i >= 34 && i <= 41) {
+        const float side = i < 38 ? -1.0F : 1.0F;
+        const float row = (float)((i - 34) & 3);
+        lx = side * (0.72F + row * 0.13F);
+        ly = 2.24F + sinf(time * 3.0F + row) * 0.018F;
+        lz = -0.90F - row * 0.035F + recoil * 0.08F;
+        scale_x *= 0.72F;
+        scale_y *= 0.82F;
+        scale_z *= 0.78F;
+        roll += side * (0.10F + move_t * 0.07F);
+      } else if (i >= 42 && i <= 45) {
+        const float side = i < 44 ? -1.0F : 1.0F;
+        const float phase = side < 0.0F ? step : step_alt;
+        lx = side * 1.05F;
+        ly = 1.52F + phase * move_t * 0.08F;
+        lz = -0.60F + recoil * 0.06F;
+        scale_x *= 0.76F;
+        scale_y *= 0.88F + move_t * 0.14F;
+        scale_z *= 0.76F;
+        roll += side * (0.18F + phase * move_t * 0.12F);
+      } else if (i >= 46 && i <= 49) {
+        const float side = i < 48 ? -1.0F : 1.0F;
+        const float phase = side < 0.0F ? step : step_alt;
+        lx = side * 0.62F;
+        ly = 0.62F + fmaxf(phase, 0.0F) * move_t * 0.10F;
+        lz = -0.74F + phase * move_t * 0.10F;
+        scale_x *= 0.82F;
+        scale_y *= 0.82F + move_t * 0.10F;
+        scale_z *= 0.82F;
+        pitch += phase * move_t * 0.20F;
+      }
+    }
 
     if (i == source_hero_index) {
       ly += idle_bob * 0.20F + move_t * 0.015F;
@@ -2543,15 +2621,34 @@ static void draw_mesh_mech(float w, float h) {
     scl[2] = scale_z * root_scale;
     *nt_transform_comp_dirty(entity) = true;
     *nt_mesh_comp_handle(entity) = (nt_mesh_t){.id = mesh_id};
-    *nt_material_comp_handle(entity) = part_material;
-    nt_drawable_comp_set_color(entity, spec->color[0], spec->color[1],
-                               spec->color[2], spec->color[3]);
+    *nt_material_comp_handle(entity) = assault_overlay ? s_mesh_mech.solid_material : part_material;
+    float out_color[4] = {spec->color[0], spec->color[1], spec->color[2], spec->color[3]};
+    if (assault_overlay) {
+      const float glow = clampf((s_game.heat - 0.24F) * 1.20F, 0.0F, 1.0F) +
+                         fmaxf(s_game.hit_flash, s_game.rocket_flash * 0.35F) * 0.12F;
+      if (i == 13 || (i >= 20 && i <= 25)) {
+        out_color[0] = fminf(1.0F, 0.98F + glow * 0.12F);
+        out_color[1] = fminf(1.0F, 0.46F + glow * 0.26F);
+        out_color[2] = fminf(1.0F, 0.06F + glow * 0.18F);
+      } else if (i == 27 || (i >= 34 && i <= 41) || i >= 46) {
+        out_color[0] = fminf(1.0F, 0.05F + glow * 0.16F);
+        out_color[1] = fminf(1.0F, 0.86F + glow * 0.14F);
+        out_color[2] = 1.0F;
+      } else {
+        out_color[0] = 0.76F;
+        out_color[1] = 0.88F;
+        out_color[2] = 0.92F;
+      }
+      out_color[3] = 1.0F;
+    }
+    nt_drawable_comp_set_color(entity, out_color[0], out_color[1],
+                               out_color[2], out_color[3]);
 
     s_mesh_mech.items[item_count].sort_key =
-        nt_sort_key_opaque(part_material.id, mesh_id);
+        nt_sort_key_opaque((assault_overlay ? s_mesh_mech.solid_material : part_material).id, mesh_id);
     s_mesh_mech.items[item_count].entity = entity.id;
     s_mesh_mech.items[item_count].batch_key =
-        nt_batch_key(part_material.id, mesh_id);
+        nt_batch_key((assault_overlay ? s_mesh_mech.solid_material : part_material).id, mesh_id);
     item_count++;
   }
 
