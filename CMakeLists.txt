@@ -165,10 +165,18 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_log
     nt_math
     nt_time
-    glad
-    stb_image_write
     game_state
 )
+# glad (GL loader) and stb_image_write (PNG writer) are native-only engine deps:
+# the engine adds deps/glad + deps/stb only inside if(NOT EMSCRIPTEN), so these
+# targets do not exist on wasm. On wasm nt_gfx supplies GL via Emscripten's
+# WebGL2/GLES3 layer (gl/nt_gfx_gl_ctx_web.c) and no game source writes PNGs.
+if(NOT EMSCRIPTEN)
+    target_link_libraries(${GAME_TARGET} PRIVATE
+        glad
+        stb_image_write
+    )
+endif()
 if(GAME_DEVAPI_ENABLED)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_devapi nt_devapi_net)
 else()
