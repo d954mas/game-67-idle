@@ -140,7 +140,10 @@ made before a generation is spent.
   plan against the accepted fake shot/reference/art target and list the visible
   mismatches. After each meaningful render change, capture a new native
   screenshot, update the mismatch list, and run or record the product-read gate
-  verdict before adding features or content.
+  verdict before adding features or content. For first-person, driving,
+  platforming, or other feel-critical native games, the first contract must
+  include a control/performance smoke before video or visual polish: movement,
+  camera/mouse-look, primary interaction, and a simple frame-time budget.
 - **Native PC scale/focus proof is an early gate.** For any playable native UI,
   prove the authored UI scale on a real desktop window before art polish or
   content expansion. The first proof must answer: where am I, what is active,
@@ -173,6 +176,12 @@ made before a generation is spent.
   `node tools/ai.mjs close-slice` so the task log records the gate, validation
   evidence, and next action. If the gate fails, feature/content expansion stays
   frozen unless the lead explicitly accepts the debt for that slice.
+  If two consecutive strict gates fail for the same major reason, stop the
+  local polish loop. Do not keep stacking visual tweaks under the same failed
+  strategy. Write the repeated failure as `symptom / cause / required different
+  path` in the task log, create or update the architecture/tooling/source-asset
+  task that would actually change the result, and continue only with that new
+  path or explicit lead acceptance.
   For beautiful, casual, generated-UI, fake-shot, or child-testable prototype
   work, add `--visual-strict` to the product gate and score composition,
   readability, UI controls, action direction, art quality, and audience fit.
@@ -432,7 +441,13 @@ profiling, or a requested retrospective. Use `--profile-mode off` when even
 passive telemetry would be noise.
 
 **AI workflow review (opt-in).** For a deeper look at a single session, run
-`node tools/ai.mjs status --verbose` for the full per-record breakdown. The old
+`node tools/ai.mjs import-codex-session` first, then
+`node tools/ai.mjs status --verbose` for the full per-record breakdown. A
+retrospective requested for a long session must cite the imported profile id,
+record count, active-work/idle split, largest coverage gaps, repeated commands,
+slowest command, product-gate history, and final gate truth. Do not answer a
+12-hour-session review from the short `reflect` closeout artifact; `reflect` is
+only the final summary after the real evidence pass. The old
 cross-session deep-retrospective chain (baseline capture, review/followups,
 baseline comparison, reflection packet/draft/review) was retired: each session
 here is a different game/task, so cross-session baselines are not comparable and
