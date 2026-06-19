@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import vm from "node:vm";
 import {
   parseDoc, serializeDoc, slugify, createTask, createEpic, listTasks,
-  listEpics, updateDoc, findDoc, validateStore,
+  listEpics, updateDoc, findDoc, validateStore, LIVE_STATUS_MAX_CHARS,
 } from "./lib.mjs";
 
 function tempRoot(t) {
@@ -157,6 +157,27 @@ ${"evidence\n".repeat(300)}
   assert.match(result.stdout, /T0002 .* Current todo/);
   assert.doesNotMatch(result.stdout, /T0001 .* Old review/);
   assert.match(result.stdout, /1 review task\(s\) hidden/);
+});
+
+test("cli context default status cap follows live status budget", (t) => {
+  const root = tempRoot(t);
+  mkdirSync(join(root, "tasks"), { recursive: true });
+  writeFileSync(
+    join(root, "tasks", "STATUS.md"),
+    `# Project Status
+
+## Current Goal
+
+${"goal line\n".repeat(400)}
+THIS_SHOULD_BE_BEYOND_DEFAULT_CONTEXT
+`,
+  );
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "context"], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, new RegExp(`status_warning: large; digest is capped at ${LIVE_STATUS_MAX_CHARS} chars`));
+  assert.match(result.stdout, /truncated/);
+  assert.doesNotMatch(result.stdout, /THIS_SHOULD_BE_BEYOND_DEFAULT_CONTEXT/);
 });
 
 test("cli context lists active tasks without embedding large task bodies", (t) => {

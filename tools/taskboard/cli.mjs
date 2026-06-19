@@ -7,14 +7,14 @@
 //   node tools/taskboard/cli.mjs new task --title "..." [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
 //   node tools/taskboard/cli.mjs new epic --title "..." [--status active]
 //   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"]
-//   node tools/taskboard/cli.mjs context [--status-max-chars 8000] [--tasks-limit 25]
+//   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
 //   node tools/taskboard/cli.mjs validate
 //
 // Agents: prefer `new` over hand-writing files so IDs never collide.
 
 import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
-  updateDoc, validateStore, TASK_STATUSES,
+  updateDoc, validateStore, TASK_STATUSES, LIVE_STATUS_MAX_CHARS,
 } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -160,7 +160,7 @@ function renderSummary(root, options) {
 function renderContext(root, options) {
   const statusFile = join(root, "tasks", "STATUS.md");
   const status = existsSync(statusFile) ? readFileSync(statusFile, "utf8") : "";
-  const statusMaxChars = numberArg(options["status-max-chars"], 8000);
+  const statusMaxChars = numberArg(options["status-max-chars"], LIVE_STATUS_MAX_CHARS);
   const tasksLimit = numberArg(options["tasks-limit"], 25);
   const sections = [
     "Current Goal",
