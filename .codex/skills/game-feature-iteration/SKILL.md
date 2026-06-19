@@ -5,8 +5,9 @@ description: Use when implementing, changing, debugging, or validating a playabl
 
 # Game Feature Iteration
 
-Use this skill to make small, playable game changes without losing project
-context.
+Use this skill as a thin router for small, verified playable increments. Keep
+project-specific state in project docs and load detailed references only when
+their trigger applies.
 
 ## Load Only What Applies
 
@@ -19,35 +20,23 @@ context.
   feel, Build, Launch, And Release Tasks, slice hygiene, 30 changed files,
   promise push, stale fail audits.
 
-## Minimal Workflow
+## Router Workflow
 
-1. Read local source of truth first: `AGENTS.md`, compact current context, active
-   project state/runbooks, relevant design docs, build presets, and nearby code.
-   Prefer `node tools/ai.mjs context`; if absent, use
+1. Read local source of truth first: `AGENTS.md`, compact context, active
+   state/runbooks, relevant design docs, build presets, and nearby code. Prefer
+   `node tools/ai.mjs context`; otherwise use
    `tools/game_context/iteration_context.mjs`.
-2. Select one task scope. For non-trivial playable, visual, pipeline, or tooling
-   work, set passive profiling scope with
-   `node tools/ai.mjs start <task-id> <iteration>` or state profiling is
-   unavailable/off.
-3. State the selected runtime harness before implementation and why local rules
-   allow it.
-4. If a named reference drives the work, load `playable-feature-gates.md` and
-   verify the reference deconstruction is ready before coding.
-5. Identify the smallest playable slice that satisfies the request.
-6. For visual, FTUE, feel, audience, or casual-product work, load the product
-   gate section and inspect/capture the first playable screen before broadening
-   scope. Use `product_gate/review.mjs` or `node tools/ai.mjs gate`; use
-   `close-slice` for handoff evidence when available.
-7. For non-trivial implementation, use `iteration-cycle-playbook.md`.
-8. Keep implementation close to existing engine/game patterns. Avoid broad
-   refactors unless the feature cannot be implemented safely without them.
-9. Validate the primary runtime target first; validate secondary targets only
-   when relevant or requested. Default to native desktop when the project does
-   not define another primary target.
-10. Capture evidence and report what changed, how to run it, and what was
-    verified.
-11. Before committing or handing off a prototype slice, use the slice hygiene
-    gate from `playable-feature-gates.md`.
+2. Select one task scope and the primary runtime harness. For non-trivial
+   playable, visual, pipeline, or tooling work, set passive profiling scope or
+   state why profiling is unavailable.
+3. If the task is non-trivial, load `iteration-cycle-playbook.md`; implement the
+   smallest playable slice, validate the primary target first, capture evidence,
+   update durable state only when useful, then commit intentional files.
+4. If the work touches named references, first-player clarity, visual/product
+   feel, build/release tasks, or prototype handoff, load
+   `playable-feature-gates.md` before coding and follow its reference
+   deconstruction, product gate, native desktop, `product_gate/review.mjs`,
+   `node tools/ai.mjs gate`, `close-slice`, and slice hygiene rules.
 
 ## Discovery
 
@@ -63,12 +52,11 @@ If naming differs, infer equivalent directories from the repository.
 
 ## Always-On Rules
 
-- Treat the local primary runtime as the platform gate; do not pivot to web for
-  playable work without explicit user request or approval.
-- Make one coherent gameplay increment at a time.
+- Treat the local primary runtime as the platform gate; default to native desktop
+  unless the project defines another target.
+- Do not pivot playable work to web without explicit user request or approval.
+- Make one coherent gameplay increment at a time and avoid unrelated refactors.
 - Preserve engine/submodule/vendor boundaries unless explicitly requested.
-- Keep reusable workflow in skills and project-specific facts/run commands in
-  project docs.
 - Product gate fail blocks feature/content expansion unless the lead explicitly
   accepts the debt.
 - Keep product/readability, game-loop/fun, art-source/assets, and
