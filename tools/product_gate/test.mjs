@@ -237,6 +237,66 @@ Create the portal render-target architecture path instead of polishing the same 
   }
 });
 
+test("repeated failure guard catches an interleaved (non-consecutive) FAIL loop", () => {
+  const dir = tempDir();
+  try {
+    writeTaskWithBody(dir, "T0203", { title: "Portal visual pass", tags: ["portal", "visual"] }, `## What
+
+Improve the portal visual.
+
+## Done when
+
+- [ ] strict gate passes
+
+## Log
+
+- 2026-06-19: strict product gate FAIL for art quality: lighting still flat; next: add more glow polish.
+- 2026-06-19: strict product gate FAIL for readability: ui text unreadable; next: bigger font.
+- 2026-06-19: strict product gate FAIL for art quality: lighting still flat; next: add more trim polish.
+- 2026-06-19: strict product gate FAIL for readability: ui text unreadable; next: bolder font.
+- 2026-06-19: strict product gate FAIL for art quality: lighting still flat; next: add more contrast polish.
+`);
+    const result = runRaw([
+      "tools/product_gate/repeated_failure_guard.mjs",
+      "--root", dir,
+      "--max-repeat", "2",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /T0203 repeats strict\/product FAIL "art_quality"/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("repeated failure guard clusters an explicit [GATE]: FAIL verdict line", () => {
+  const dir = tempDir();
+  try {
+    writeTaskWithBody(dir, "T0204", { title: "Source palette pass", tags: ["source"] }, `## What
+
+Lock the source palette.
+
+## Done when
+
+- [ ] gate passes
+
+## Log
+
+- 2026-06-19: [ART-SOURCE]: FAIL palette drifts off the bible; next: regenerate the swatch sheet.
+- 2026-06-19: [ART-SOURCE]: FAIL palette drifts off the bible; next: regenerate the swatch sheet.
+- 2026-06-19: [ART-SOURCE]: FAIL palette drifts off the bible; next: regenerate the swatch sheet.
+`);
+    const result = runRaw([
+      "tools/product_gate/repeated_failure_guard.mjs",
+      "--root", dir,
+      "--max-repeat", "2",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /T0204 repeats strict\/product FAIL "ART-SOURCE:/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("close slice refuses failed gate in strict mode", () => {
   const dir = tempDir();
   try {

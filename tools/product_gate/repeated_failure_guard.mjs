@@ -99,8 +99,15 @@ function hasGateFail(text) {
   return (
     /\b(product|strict)\s+gate\b[\s\S]{0,180}\bfail\b/i.test(flat) ||
     /\bfail\b[\s\S]{0,180}\b(product|strict)\s+gate\b/i.test(flat) ||
-    /\bproduct\s+gate\s+remains\s+fail\b/i.test(flat)
+    /\bproduct\s+gate\s+remains\s+fail\b/i.test(flat) ||
+    /\[[a-z][a-z0-9-]+\]\s*:\s*fail\b/i.test(flat)
   );
+}
+
+// Optional explicit one-line gate verdict: [GATE-ID]: PASS|CONCERNS|FAIL.
+function gateVerdict(text) {
+  const match = String(text || "").match(/\[([a-z][a-z0-9-]+)\]\s*:\s*(pass|concerns|fail)\b/i);
+  return match ? { gate: match[1].toUpperCase(), verdict: match[2].toUpperCase() } : null;
 }
 
 function normalizeWords(text) {
@@ -140,6 +147,14 @@ function reasonSignature(text) {
     .filter((word) => word.length >= 5 && !STOP_WORDS.has(word))
     .slice(0, 8);
   return words.join("_") || "unknown";
+}
+
+// Cluster key for a FAIL entry: prefer an explicit gate id + reason so the same
+// gate's repeated FAILs group; fall back to the axis/reason heuristic.
+function failSignature(text) {
+  const reason = reasonSignature(text);
+  const verdict = gateVerdict(text);
+  return verdict && verdict.verdict === "FAIL" ? `${verdict.gate}:${reason}` : reason;
 }
 
 function leadAccepted(text) {
@@ -190,19 +205,21 @@ function overlapsSupport(task, entries, supportDocs) {
   return false;
 }
 
+// Count TOTAL occurrences per signature (not only consecutive runs), so an agent
+// that interleaves two failing axes cannot slip a 3rd same-axis FAIL past the
+// guard by alternating reasons.
 function repeatedFailures(task, maxRepeat) {
   const entries = logEntries(task.body).filter(hasGateFail);
-  const repeats = [];
-  let current = null;
+  const bySignature = new Map();
   for (const entry of entries) {
-    const signature = reasonSignature(entry);
-    if (!current || current.signature !== signature) {
-      current = { signature, entries: [entry] };
-    } else {
-      current.entries.push(entry);
-    }
-    if (current.entries.length === maxRepeat + 1) {
-      repeats.push({ signature, entries: [...current.entries] });
+    const signature = failSignature(entry);
+    if (!bySignature.has(signature)) bySignature.set(signature, []);
+    bySignature.get(signature).push(entry);
+  }
+  const repeats = [];
+  for (const [signature, sigEntries] of bySignature) {
+    if (sigEntries.length >= maxRepeat + 1) {
+      repeats.push({ signature, entries: sigEntries });
     }
   }
   return repeats;

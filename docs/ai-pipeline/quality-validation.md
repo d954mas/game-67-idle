@@ -1,38 +1,35 @@
 # Quality And Validation Reference
 
-Detailed portable quality-gate and validation rules. Load this file when
-changing validation routing, product gates, done criteria, or repeated-failure
-guards.
+Portable quality-gate and validation rules. Load when changing validation
+routing, product gates, done criteria, or repeated-failure guards.
 
 ## Quality Gates
 
-Gates are separate verdicts:
+Separate verdicts:
 
 - Product/readability: can a new player understand and operate the screen?
-- Game-loop/fun: is there a hook, repeatable loop, reward, and next-5-minutes
-  reason to continue?
-- Art-source/assets: are runtime assets real, traceable, and appropriate for
-  the target?
+- Game-loop/fun: hook, repeatable loop, reward, reason to continue?
+- Art-source/assets: are runtime assets real, traceable, target-appropriate?
 - Technical/build: does the changed runtime/tooling actually work?
 
-Do not call a slice done from one green gate. Builds, probes, crop audits, and
-manifests support the verdict; they do not replace player-facing judgment.
+Do not call a slice done from one green gate; builds/probes/audits support a
+verdict, not replace player-facing judgment. For a contested gate the lead runs
+ONE independent verifier in a clean context that re-runs only the named check and
+returns CONFIRM/REFUTE (`node tools/ai.mjs gate ... --verify`, opt-in): a green
+gate is not self-graded.
 
-For a contested or high-stakes gate, the lead can run ONE independent verifier in
-a clean context whose only job is to re-run the named validator/screenshot check
-and return CONFIRM or REFUTE — a green gate is not self-graded. Request it with
-`node tools/ai.mjs gate ... --verify` (records a pending verification; opt-in,
-default off).
-
-When a strict/product gate fails twice for the same major reason, stop the local
-polish loop. Create or link the different path: architecture, tooling, source
-asset, reference, or explicit lead acceptance. This is enforced by:
+When a strict/product gate fails twice for the same major reason, stop polishing
+and create/link a different path (architecture, tooling, source asset, reference)
+or record explicit lead acceptance. Enforced by:
 
 ```powershell
 node tools/product_gate/repeated_failure_guard.mjs
 ```
 
-`node tools/ai.mjs validate` runs that guard in quick mode.
+`node tools/ai.mjs validate` runs it in quick mode. Gate lines may carry a
+parseable `[GATE-ID]: PASS|CONCERNS|FAIL` verdict; the guard clusters a gate's
+FAILs by it and counts TOTAL (not just consecutive) occurrences, so interleaved
+axes can't slip a loop past.
 
 ## Validation Defaults
 
@@ -40,18 +37,13 @@ node tools/product_gate/repeated_failure_guard.mjs
 - Skill/process changes: `node tools/skills_eval.mjs`
 - Product gate changes: `node --test tools/product_gate/test.mjs`
 - Taskboard changes: `node --test tools/taskboard/test.mjs`
-- AI facade/profile changes: `node --test tools/ai.test.mjs` and focused
+- AI facade/profile changes: `node --test tools/ai.test.mjs` + focused
   `tools/ai_profile` tests
 - Reusable pipeline: `node tools/ai.mjs validate`
 - Review-stage context/cap pressure: `node tools/ai.mjs validate --review`
 - Portable/export/runtime gates: `node tools/ai.mjs validate --full`
-- Visual/playable game changes: native scenario plus screenshot/video/product
-  gate evidence
+- Visual/playable changes: native scenario plus screenshot/video/product gate
+  evidence
 
-This list is the single source of truth for validation-by-change-type; other
-docs point here instead of restating it.
-
-Escalate validation only when the changed behavior or export path requires it.
-Context budgets are a review/compression gate, not a normal implementation
-blocker. Full portable validation is a final/broad gate, not the default after
-every small edit.
+Escalate validation only when the change/export path requires it; budgets are
+a review gate and full validation a final gate, not defaults after small edits.
