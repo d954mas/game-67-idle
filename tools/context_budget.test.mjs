@@ -19,10 +19,14 @@ function cleanup(dir) {
 
 function writeFixture(dir, skillBody = "short skill\n", agentBody = "# AGENTS\n") {
   mkdirSync(join(dir, ".codex", "skills", "sample"), { recursive: true });
+  mkdirSync(join(dir, "docs", "ai-pipeline"), { recursive: true });
   mkdirSync(join(dir, "tasks"), { recursive: true });
   writeFileSync(join(dir, ".codex", "skills", "sample", "SKILL.md"), skillBody, "utf8");
   writeFileSync(join(dir, "AGENTS.md"), agentBody, "utf8");
   writeFileSync(join(dir, "AI_PIPELINE.md"), "# Pipeline\n", "utf8");
+  writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "# Agent Workflow\n", "utf8");
+  writeFileSync(join(dir, "docs", "ai-pipeline", "quality-validation.md"), "# Quality\n", "utf8");
+  writeFileSync(join(dir, "docs", "ai-pipeline", "profiling-reuse.md"), "# Profiling\n", "utf8");
   mkdirSync(join(dir, "tools"), { recursive: true });
   writeFileSync(join(dir, "tools", "README.md"), "# Tools\n", "utf8");
   writeFileSync(join(dir, "tasks", "STATUS.md"), "# Status\n", "utf8");
@@ -140,6 +144,19 @@ test("context budget applies the tools README cap", () => {
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /tools\/README\.md: 6600 chars > 6500/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("context budget applies pipeline reference caps", () => {
+  const dir = tempDir();
+  try {
+    writeFixture(dir);
+    writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "x".repeat(3100), "utf8");
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /docs\/ai-pipeline\/agent-workflow\.md: 3100 chars > 3000/);
   } finally {
     cleanup(dir);
   }
