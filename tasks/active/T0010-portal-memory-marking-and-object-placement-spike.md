@@ -376,3 +376,14 @@ and reveal a real exit.
   opaque authored native room replacement before content expansion. Recorded
   gameplay video proof at `build/captures/backrooms_t0010_gameplay.mp4`
   (18.0s, 1280x720, H.264, 30fps).
+- 2026-06-19: Performance/control gate slice measured the already-committed
+  threshold-exposure build before changes: native debug frame wait was about
+  `20.00 ms/frame` median, `20.23 ms` p95, framebuffer readback cost was
+  `38-71 ms` per capture, and synthetic mouse movement did not change yaw
+  (`0 -> 0`). Added game-local mouse-look through public `nt_input` pointer
+  deltas, added `game.perf.stats`, and promoted the measurement into
+  `py -3.12 tools/perf/backrooms_perf_gate.py`. Current gate PASS:
+  median `20.00 ms`, p95 `20.06 ms`, max `20.08 ms`, 3 draw calls, 1392 frame
+  vertices, 1386 portal overlay vertices against a 1450 budget, and mouse yaw
+  `0.0000 -> 0.3960`. Evidence:
+  `gamedesign/projects/backrooms-liminal/reviews/perf_gate_latest.md`.

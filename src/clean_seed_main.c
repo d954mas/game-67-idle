@@ -703,6 +703,8 @@ static float clampf(float v, float lo, float hi) {
 
 static float absf(float v) { return v < 0.0F ? -v : v; }
 
+static float clamp_absf(float v, float max_abs) { return clampf(v, -max_abs, max_abs); }
+
 static float approachf(float value, float target, float step) {
     if (value < target) {
         return value + fminf(step, target - value);
@@ -769,6 +771,17 @@ static bool near_locked_door(void) { return s_game.side_room_visits >= 3 && dist
 static bool near_fuse(void) { return !s_game.fuse_found && s_game.portal_exit_revealed && near_locked_door(); }
 
 static bool near_exit(void) { return s_game.fuse_found && s_game.z < 1.85F && absf(s_game.x) < 0.9F; }
+
+static float mouse_look_dx(void) {
+    float dx = 0.0F;
+    for (int i = 0; i < NT_INPUT_MAX_POINTERS; ++i) {
+        const nt_pointer_t *pointer = &g_nt_input.pointers[i];
+        if (pointer->active && pointer->type == (uint8_t)NT_POINTER_MOUSE) {
+            dx += pointer->dx;
+        }
+    }
+    return clamp_absf(dx, 180.0F);
+}
 
 static bool can_use_context(void) {
     return !s_game.won && !s_game.caught && (near_mark_surface() || near_door_handle() || near_locked_door() || near_exit());
@@ -2019,6 +2032,10 @@ static void update_game(void) {
     if (nt_input_key_is_down(NT_KEY_ARROW_RIGHT) || nt_input_key_is_down(NT_KEY_R)) {
         s_game.yaw += turn;
     }
+    const float mouse_turn = mouse_look_dx() * 0.0022F;
+    if (fabsf(mouse_turn) > 0.0001F) {
+        s_game.yaw += mouse_turn;
+    }
 
     const float fwd_x = sinf(s_game.yaw);
     const float fwd_z = cosf(s_game.yaw);
@@ -2338,6 +2355,38 @@ static bool ep_game_state(const cJSON *params, cJSON **result, char *error, int 
     return true;
 }
 
+static bool ep_game_perf_stats(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
+    (void)params;
+    (void)error;
+    (void)error_cap;
+    (void)user;
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "frame", (double)g_nt_app.frame);
+    cJSON_AddNumberToObject(root, "time", (double)g_nt_app.time);
+    cJSON_AddNumberToObject(root, "target_dt_ms", (double)(g_nt_app.target_dt * 1000.0F));
+    cJSON_AddNumberToObject(root, "framebuffer_width", (double)g_nt_window.fb_width);
+    cJSON_AddNumberToObject(root, "framebuffer_height", (double)g_nt_window.fb_height);
+
+    cJSON *gfx = cJSON_CreateObject();
+    cJSON_AddNumberToObject(gfx, "draw_calls", (double)g_nt_gfx.frame_stats.draw_calls);
+    cJSON_AddNumberToObject(gfx, "draw_calls_instanced", (double)g_nt_gfx.frame_stats.draw_calls_instanced);
+    cJSON_AddNumberToObject(gfx, "vertices", (double)g_nt_gfx.frame_stats.vertices);
+    cJSON_AddNumberToObject(gfx, "indices", (double)g_nt_gfx.frame_stats.indices);
+    cJSON_AddNumberToObject(gfx, "instances", (double)g_nt_gfx.frame_stats.instances);
+    cJSON_AddItemToObject(root, "gfx", gfx);
+
+    cJSON *portal = cJSON_CreateObject();
+    cJSON_AddNumberToObject(portal, "overlay_vertices", (double)s_last_portal_overlay_vertices);
+    cJSON_AddNumberToObject(portal, "room_mesh_vertices", (double)s_last_portal_room_mesh_vertices);
+    cJSON_AddNumberToObject(portal, "solid_shell_vertices", (double)s_last_portal_shell_vertices);
+    cJSON_AddNumberToObject(portal, "blended_detail_vertices", (double)s_last_portal_blended_vertices);
+    cJSON_AddNumberToObject(portal, "vertex_capacity", (double)PORTAL_OVERLAY_MAX_VERTICES);
+    cJSON_AddItemToObject(root, "portal", portal);
+
+    *result = root;
+    return true;
+}
+
 static bool ep_game_reset_playtest(const cJSON *params, cJSON **result, char *error, int error_cap, void *user) {
     (void)params;
     (void)error;
@@ -2521,6 +2570,7 @@ static void register_game_endpoints(void) {
     nt_devapi_register_builtins();
     game_state_register_devapi();
     nt_devapi_register("game.state", ep_game_state, NULL);
+    nt_devapi_register("game.perf.stats", ep_game_perf_stats, NULL);
     nt_devapi_register("game.reset_playtest", ep_game_reset_playtest, NULL);
     nt_devapi_register("game.action.use", ep_game_action_use, NULL);
     nt_devapi_register("game.action.place_mark", ep_game_action_place_mark, NULL);

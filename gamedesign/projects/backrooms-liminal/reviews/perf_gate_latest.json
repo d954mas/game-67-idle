@@ -1,0 +1,74 @@
+{
+  "verdict": "PASS",
+  "window_size": "1280x720",
+  "frames_per_sample": 5,
+  "frame_wait_ms_per_frame": {
+    "samples": 80,
+    "median": 20.00097000054666,
+    "p95": 20.059940000646748,
+    "max": 20.210680000309367
+  },
+  "perf_stats": {
+    "frame": 585,
+    "time": 9.734328269958496,
+    "target_dt_ms": 16.666667938232422,
+    "framebuffer_width": 1280,
+    "framebuffer_height": 720,
+    "gfx": {
+      "draw_calls": 3,
+      "draw_calls_instanced": 0,
+      "vertices": 1392,
+      "indices": 0,
+      "instances": 0
+    },
+    "portal": {
+      "overlay_vertices": 1386,
+      "room_mesh_vertices": 1302,
+      "solid_shell_vertices": 936,
+      "blended_detail_vertices": 450,
+      "vertex_capacity": 1536
+    }
+  },
+  "mouse_look": {
+    "yaw_before": 0.0,
+    "yaw_after": 0.3959999978542328,
+    "yaw_delta": 0.3959999978542328
+  },
+  "checks": {
+    "median_ms": {
+      "value": 20.00097000054666,
+      "budget": 22.0,
+      "status": "PASS"
+    },
+    "p95_ms": {
+      "value": 20.059940000646748,
+      "budget": 25.0,
+      "status": "PASS"
+    },
+    "max_ms": {
+      "value": 20.210680000309367,
+      "budget": 35.0,
+      "status": "PASS"
+    },
+    "draw_calls": {
+      "value": 3,
+      "budget": 8,
+      "status": "PASS"
+    },
+    "frame_vertices": {
+      "value": 1392,
+      "budget": 3200,
+      "status": "PASS"
+    },
+    "portal_overlay_vertices": {
+      "value": 1386,
+      "budget": 1450,
+      "status": "PASS"
+    },
+    "mouse_look": {
+      "value": 0.3959999978542328,
+      "budget": ">=0.05 yaw delta",
+      "status": "PASS"
+    }
+  }
+}

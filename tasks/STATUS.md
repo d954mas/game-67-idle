@@ -12,14 +12,10 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 
 - No native runtime blocker is known for the current game repo slice.
 - T0010 product gate is still red. The portal proof is now scene-driven and
-  asset-backed, with a dimmed fullscreen backing plus a larger native `nt_gfx`
-  solid/detail layer: material atlas sampling, native trim, side/back/ceiling
-  construction, warmer bounce/fill, boxed floor/ceiling/light-trough interior
-  geometry, a darker less image-like portal backing, native central fluorescent
-  fill/wall-wash lighting, and brighter threshold/ceiling/floor spill around
-  the portal entrance. It still does not reach production-quality Backrooms
-  construction because the portal interior remains a hybrid matte/composite plus
-  native overlay.
+  asset-backed, with generated material sampling and a larger native `nt_gfx`
+  solid/detail portal-room layer. It still does not reach production-quality
+  Backrooms construction because the portal interior remains a hybrid
+  matte/composite plus native overlay.
 - T0011 / https://github.com/d954mas/neotolis-engine/issues/238 tracks an
   engine-facing dependency for true fast multi-pass portal rendering: public
   `nt_gfx` render-target/framebuffer support. The game repo must not patch
@@ -28,8 +24,10 @@ enough to grow into arbitrary levels instead of another one-off shader trick.
 
 ## Non-blocking Debt
 
-- Current profiling scope is usable for normal review:
-  `T0010/opaque-native-dominant-room`.
+- AI profiling scope is set to `T0010/opaque-native-dominant-room`, but the
+  current profile guard reported unresolved failed records during the
+  performance pass. Do not use AI profile output as runtime performance
+  evidence until the profile is cleaned up or re-imported.
 - T0001-T0008 are in review with historical evidence. Do not expand them unless
   the lead asks; current actionable work is T0009/T0010 plus the T0011 engine
   issue.
@@ -42,7 +40,9 @@ native build, DevAPI smoke, T0010 portal-memory scenario,
 `build/captures/backrooms_t0010_impossible_geometry.png`, readability zoom,
 strict product gate
 `gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md`,
-and taskboard validation.
+native debug performance gate
+`gamedesign/projects/backrooms-liminal/reviews/perf_gate_latest.md`, and
+taskboard validation.
 
 ## Required Validation
 
@@ -53,6 +53,7 @@ cmake --build --preset native-debug --target game_seed
 py -3.12 tmp/capture_backrooms_t0010_portal_memory.py
 py -3.12 tools/devapi/smoke.py
 py -3.12 tools/devapi/ui_readability.py build\captures\backrooms_t0010_impossible_geometry.png
+py -3.12 tools/perf/backrooms_perf_gate.py
 node tools/taskboard/cli.mjs validate
 ```
 
@@ -62,12 +63,9 @@ node tools/taskboard/cli.mjs validate
   scene foundation: rooms, material/light/finish/authored-construction
   descriptors, portal descriptors, flags, validation, and GPU params.
 - `src/clean_seed_main.c` composites a dimmed portal backing, then draws a
-  separate native room pass. The current status JSON proves 1386 portal overlay
+  separate native room pass. The latest status JSON proves 1386 portal overlay
   vertices: 936 non-blended solid-shell vertices and 450 blended detail
-  vertices, including a darker portal backing, larger rear wall massing, boxed
-  floor/ceiling volumes, near-field threshold construction, fluorescent
-  strip/pool geometry, native central light-fill/wall-wash shading, generated
-  material atlas sampling, and copied mark feedback.
+  vertices.
 - `tools/assets/build_backrooms_liminal_materials.py` builds the current
   Backrooms material source asset atomically into
   `assets/backrooms-liminal/materials/portal_material_atlas.ppm` plus
@@ -95,6 +93,9 @@ node tools/taskboard/cli.mjs validate
 - `gamedesign/projects/backrooms-liminal/reviews/t0010_portal_memory_visual_gate.md`
   is the latest strict desktop product gate and is FAIL for art quality and
   audience fit.
+- `gamedesign/projects/backrooms-liminal/reviews/perf_gate_latest.md` is the
+  latest native debug performance gate and currently passes, including
+  1386/1450 portal overlay vertices and mouse-look yaw delta 0.396.
 
 ## Next Priorities
 
