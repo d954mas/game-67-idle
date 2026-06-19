@@ -10,10 +10,8 @@ Current source-of-truth docs are `AGENTS.md`, `AI_PIPELINE.md`,
 
 Pipeline cleanup evidence moved out of `tasks/STATUS.md`:
 
-- Backrooms runtime/perf evidence remains in `build/captures/` and
-  `gamedesign/projects/backrooms-liminal/reviews/`.
-- Engine render-target issue evidence remains in
-  `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md`.
+- Closed game/runtime evidence is preserved in git snapshots and should not
+  remain in the hot taskboard after a reset-to-seed.
 - Profiling hot hook writes are serialized with a short file lock and covered by
   a parallel JSONL append regression test, so concurrent validations do not
   corrupt `tmp/session_profiles/sessions/*.jsonl`.

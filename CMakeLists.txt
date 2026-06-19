@@ -144,8 +144,6 @@ if(NOT EMSCRIPTEN AND SKELETAL_ANIMATION_OZZ_SOURCE_DIR)
 endif()
 
 add_executable(${GAME_TARGET}
-    src/backrooms_portal_scene.c
-    src/backrooms_portal_scene.h
     src/clean_seed_main.c
     src/game_audio.c
     src/game_audio.h

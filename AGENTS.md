@@ -2,8 +2,8 @@
 
 ## Current Work
 
-- Focus: universal AI pipeline cleanup; keep process lightweight.
-- `Backrooms Liminal` is closed unless the lead reopens game work.
+- Focus: clean AI-first native game seed for the next iteration.
+- No active game concept is selected; capture the user's concept before game work.
 - Engine submodule: `external/neotolis-engine`; use public APIs only.
 
 ## Source Map
