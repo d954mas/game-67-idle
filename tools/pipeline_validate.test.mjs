@@ -40,6 +40,7 @@ test("pipeline validation full dry-run runs the minimal export check by default"
   assert.match(result.stdout, /mode: full \(dry-run\)/);
   assert.match(result.stdout, /== generated art job node tests/);
   assert.match(result.stdout, /tools\/assets\/job\/new_generation_record\.test\.mjs/);
+  assert.match(result.stdout, /tools\.assets\.cutout\.route_cutout_test/);
   assert.match(result.stdout, /== portable export/);
   assert.match(result.stdout, /== exported skill eval/);
   assert.match(result.stdout, /== exported taskboard validate/);
@@ -57,6 +58,23 @@ test("pipeline validation asset guards point at real nested test paths", () => {
   assert.doesNotMatch(source, /"tools", "assets", "new_generation_record\.test\.mjs"/);
   assert.doesNotMatch(source, /"tools", "assets", "normalize_source_sheet_chroma_test\.py"/);
   assert.doesNotMatch(source, /"tools", "assets", "audit_generated_source_derivation_test\.py"/);
+});
+
+test("pipeline validation shares full asset test lists between root and export", () => {
+  const source = readFileSync(resolve(root, "tools/pipeline_validate.mjs"), "utf8");
+  assert.match(source, /const GENERATED_ART_JOB_NODE_TESTS = \[/);
+  assert.match(source, /const SOURCE_SHEET_PREPROCESSING_TESTS = \[/);
+  assert.match(source, /const GENERATED_UI_ASSET_AUDIT_TESTS = \[/);
+  assert.match(source, /const GENERATED_SOURCE_DERIVATION_TESTS = \[/);
+  assert.match(source, /"tools\.assets\.cutout\.route_cutout_test"/);
+  assert.match(
+    source,
+    /runPythonUnittests\("exported source sheet preprocessing tests", python, SOURCE_SHEET_PREPROCESSING_TESTS,/,
+  );
+  assert.match(
+    source,
+    /runNodeTests\("exported generated art job node tests", GENERATED_ART_JOB_NODE_TESTS,/,
+  );
 });
 
 test("pipeline validation full --reexport-tests dry-run runs the full in-export battery", () => {
