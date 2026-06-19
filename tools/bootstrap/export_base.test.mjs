@@ -45,6 +45,9 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(existsSync(join(target, "gamedesign", "README.md")), true);
     assert.equal(existsSync(join(target, "gamedesign", "sources", "README.md")), true);
     assert.equal(existsSync(join(target, "docs", "ai-pipeline", "agent-workflow.md")), true);
+    assert.equal(existsSync(join(target, "docs", "ai-pipeline", "quality-validation.md")), true);
+    assert.equal(existsSync(join(target, "docs", "ai-pipeline", "profiling-reuse.md")), true);
+    assert.equal(existsSync(join(target, "tools", "README.md")), true);
     assert.equal(existsSync(join(target, ".claude", "skills", "task-manager", "SKILL.md")), true);
     assert.equal(existsSync(join(target, "tools", "context_budget_config.mjs")), true);
 
@@ -54,6 +57,8 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.match(guide, /Task Store Reference/);
     const pipeline = readFileSync(join(target, "AI_PIPELINE.md"), "utf8");
     assert.match(pipeline, /docs\/ai-pipeline\/agent-workflow\.md/);
+    assert.match(pipeline, /docs\/ai-pipeline\/quality-validation\.md/);
+    assert.match(pipeline, /docs\/ai-pipeline\/profiling-reuse\.md/);
 
     const docRefs = runInTarget(target, ["tools/doc_reference_check.mjs"]);
     assert.equal(docRefs.status, 0, docRefs.stderr);
