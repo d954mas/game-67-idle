@@ -1,6 +1,6 @@
 ---
 name: delegated-image-generation
-description: "Use when the agent must GENERATE real raster art: fake shots, icon/source sheets, sprites, or UI art, but has no native image model. Prefer Codex CLI imagegen via `codex exec` and `scripts/codex_imagegen.sh`; use Antigravity/agy CLI only as fallback. Load references for exact commands, real-generation prompts, verify-by-size checks, and dead-ends."
+description: "Use when the agent must GENERATE real raster art: fake shots, icon/source sheets, sprites, or UI art, but has no native image model. Prefer Codex CLI imagegen via `codex exec` and `scripts/codex_imagegen.sh`; use Antigravity/agy CLI only as fallback. Load references for exact commands, real-generation prompts, verify-by-size checks, and dead-ends. Owns raster CREATION only: cutting/manifests go to generated-game-ui-assets; art-direction judgment to game-visual-art-direction."
 ---
 
 # Delegated Image Generation
