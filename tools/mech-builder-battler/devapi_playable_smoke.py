@@ -78,6 +78,7 @@ def main() -> int:
         moved = moved_x > 0.25 or moved_z > 0.25
         ok &= check("wasd movement changes mech position", moved, state)
         capture(game, "mech_t0030_lighting_material_battle_smoke.png", wait_frames=1)
+        capture(game, "mech_t0031_combat_clarity_battle_smoke.png", wait_frames=1)
         capture(game, "mech_t0021_battle_smoke.png", wait_frames=1)
         capture(game, "mech_t0024_robot_enemy_asset_smoke.png", wait_frames=1)
         capture(game, "mech_t0027_assault_walker_battle_smoke.png", wait_frames=1)

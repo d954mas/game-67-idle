@@ -1228,9 +1228,11 @@ static void draw_arena_dressing(bool hangar) {
                    (i & 1) ? yellow_stud : blue_stud);
   }
 
-  draw_block_pylon(-7.35F, rail_z_front + 0.35F, hangar ? 1.35F : 1.55F,
-                   blue_block, white_block, blue_stud);
-  draw_block_pylon(7.35F, rail_z_front + 0.35F, hangar ? 1.35F : 1.55F,
+  const float front_pylon_h = hangar ? 1.35F : 1.22F;
+  const float right_front_pylon_x = hangar ? 7.35F : 8.25F;
+  draw_block_pylon(-7.35F, rail_z_front + 0.35F, front_pylon_h, blue_block,
+                   white_block, blue_stud);
+  draw_block_pylon(right_front_pylon_x, rail_z_front + 0.35F, front_pylon_h,
                    red_block, white_block, red_stud);
   draw_block_pylon(-7.35F, rail_z_back - 0.35F, hangar ? 1.20F : 1.42F,
                    yellow_block, white_block, yellow_stud);
@@ -1831,28 +1833,28 @@ static void draw_assault_motion_effects(void) {
   const int target = target_drone();
   const float target_charge =
       target >= 0
-          ? 0.34F +
-                0.10F * (0.5F + 0.5F * sinf((float)nt_time_now() * 9.0F))
+          ? 0.26F +
+                0.08F * (0.5F + 0.5F * sinf((float)nt_time_now() * 9.0F))
           : 0.0F;
 
   if (stomp > 0.04F) {
     const int active_row = step > 0.0F ? -1 : 1;
-    const float stomp_ring[4] = {1.0F, 0.72F, 0.08F, 0.34F + stomp * 0.36F};
-    const float cyan_ring[4] = {0.0F, 0.92F, 1.0F, 0.22F + stomp * 0.30F};
+    const float stomp_ring[4] = {1.0F, 0.72F, 0.08F, 0.24F + stomp * 0.24F};
+    const float cyan_ring[4] = {0.0F, 0.92F, 1.0F, 0.16F + stomp * 0.20F};
     for (int side = -1; side <= 1; side += 2) {
       float foot[3];
       source_mech_foot_point(root_x, root_z, yaw, root_scale, side, active_row,
                              foot);
       nt_shape_renderer_circle_wire(
           (float[3]){foot[0], 0.105F, foot[2]},
-          (0.42F + stomp * 0.38F) * root_scale, stomp_ring);
+          (0.34F + stomp * 0.26F) * root_scale, stomp_ring);
       nt_shape_renderer_circle_wire(
           (float[3]){foot[0], 0.13F, foot[2]},
-          (0.24F + stomp * 0.24F) * root_scale, cyan_ring);
+          (0.20F + stomp * 0.18F) * root_scale, cyan_ring);
       nt_shape_renderer_sphere(
           (float[3]){foot[0], 0.17F + stomp * 0.05F, foot[2]},
-          (0.08F + stomp * 0.10F) * root_scale,
-          (float[4]){0.86F, 1.0F, 0.62F, 0.34F + stomp * 0.28F});
+          (0.06F + stomp * 0.07F) * root_scale,
+          (float[4]){0.86F, 1.0F, 0.62F, 0.22F + stomp * 0.22F});
     }
   }
 
@@ -1862,28 +1864,28 @@ static void draw_assault_motion_effects(void) {
     source_mech_cannon_points(root_x, root_z, yaw, root_scale, cannon_l,
                               cannon_r);
     const float glow = fmaxf(fmaxf(attack_t, heat_t * 0.55F), target_charge);
-    const float orange[4] = {1.0F, 0.55F, 0.04F, 0.36F + glow * 0.46F};
-    const float blue[4] = {0.0F, 0.92F, 1.0F, 0.32F + glow * 0.44F};
-    nt_shape_renderer_sphere(cannon_l, (0.18F + glow * 0.28F) * root_scale,
+    const float orange[4] = {1.0F, 0.55F, 0.04F, 0.28F + glow * 0.34F};
+    const float blue[4] = {0.0F, 0.92F, 1.0F, 0.26F + glow * 0.32F};
+    nt_shape_renderer_sphere(cannon_l, (0.14F + glow * 0.20F) * root_scale,
                              orange);
-    nt_shape_renderer_sphere(cannon_r, (0.18F + glow * 0.28F) * root_scale,
+    nt_shape_renderer_sphere(cannon_r, (0.14F + glow * 0.20F) * root_scale,
                              blue);
-    nt_shape_renderer_circle_wire(cannon_l, (0.34F + glow * 0.26F) * root_scale,
+    nt_shape_renderer_circle_wire(cannon_l, (0.26F + glow * 0.18F) * root_scale,
                                   blue);
-    nt_shape_renderer_circle_wire(cannon_r, (0.34F + glow * 0.26F) * root_scale,
+    nt_shape_renderer_circle_wire(cannon_r, (0.26F + glow * 0.18F) * root_scale,
                                   orange);
     if (target >= 0) {
       const float target_pos[3] = {s_game.drones[target].x, 0.92F,
                                    s_game.drones[target].z};
       nt_shape_renderer_line(cannon_l, target_pos,
                              (float[4]){1.0F, 0.58F, 0.04F,
-                                        0.24F + target_charge * 0.42F});
+                                        0.18F + target_charge * 0.30F});
       nt_shape_renderer_line(cannon_r,
                              (float[3]){target_pos[0] + 0.14F,
                                         target_pos[1] + 0.06F,
                                         target_pos[2]},
                              (float[4]){0.0F, 0.92F, 1.0F,
-                                        0.20F + target_charge * 0.38F});
+                                        0.16F + target_charge * 0.28F});
     }
 
     for (int side = -1; side <= 1; side += 2) {
@@ -1894,7 +1896,7 @@ static void draw_assault_motion_effects(void) {
           (float[3]){vent[0] + (float)side * 0.28F * root_scale,
                      vent[1] + (0.70F + glow * 0.34F) * root_scale,
                      vent[2] + 0.16F * root_scale},
-          (float[4]){0.76F, 0.98F, 1.0F, 0.22F + glow * 0.34F});
+          (float[4]){0.76F, 0.98F, 1.0F, 0.16F + glow * 0.24F});
     }
   }
 }
@@ -1903,9 +1905,10 @@ static void build_frame_uniforms(float w, float h, bool hangar,
                                  nt_frame_uniforms_t *uniforms,
                                  float out_vp[16]) {
   const float aspect = h > 0.0F ? w / h : 1.777F;
-  const vec3 eye = {hangar ? 3.6F : 5.4F, hangar ? 3.7F : 6.0F,
-                    hangar ? 6.8F : 9.4F};
-  const vec3 center = {0.0F, hangar ? 1.75F : 0.95F, hangar ? 0.2F : 0.2F};
+  const vec3 eye = {hangar ? 3.6F : 5.8F, hangar ? 3.7F : 6.3F,
+                    hangar ? 6.8F : 10.2F};
+  const vec3 center = {hangar ? 0.0F : 0.15F, hangar ? 1.75F : 1.08F,
+                       hangar ? 0.2F : 0.65F};
   const vec3 up = {0.0F, 1.0F, 0.0F};
   mat4 view;
   mat4 proj;
@@ -1913,7 +1916,7 @@ static void build_frame_uniforms(float w, float h, bool hangar,
   glm_lookat((vec3){eye[0], eye[1], eye[2]},
              (vec3){center[0], center[1], center[2]},
              (vec3){up[0], up[1], up[2]}, view);
-  glm_perspective(glm_rad(hangar ? 48.0F : 58.0F), aspect, 0.1F, 80.0F, proj);
+  glm_perspective(glm_rad(hangar ? 48.0F : 55.0F), aspect, 0.1F, 80.0F, proj);
   glm_mat4_mul(proj, view, vp);
 
   if (out_vp) {
@@ -1943,8 +1946,8 @@ static void build_frame_uniforms(float w, float h, bool hangar,
 static void setup_perspective(float w, float h, bool hangar) {
   float vp[16];
   build_frame_uniforms(w, h, hangar, NULL, vp);
-  const vec3 eye = {hangar ? 3.6F : 5.4F, hangar ? 3.7F : 6.0F,
-                    hangar ? 6.8F : 9.4F};
+  const vec3 eye = {hangar ? 3.6F : 5.8F, hangar ? 3.7F : 6.3F,
+                    hangar ? 6.8F : 10.2F};
   nt_shape_renderer_set_vp((float *)vp);
   nt_shape_renderer_set_cam_pos((float[3]){eye[0], eye[1], eye[2]});
   nt_shape_renderer_set_depth(true);
