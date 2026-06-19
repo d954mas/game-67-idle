@@ -159,6 +159,43 @@ ${"evidence\n".repeat(300)}
   assert.match(result.stdout, /1 review task\(s\) hidden/);
 });
 
+test("cli context lists active tasks without embedding large task bodies", (t) => {
+  const root = tempRoot(t);
+  mkdirSync(join(root, "tasks"), { recursive: true });
+  writeFileSync(
+    join(root, "tasks", "STATUS.md"),
+    `# Project Status
+
+## Current Goal
+
+Keep context compact.
+`,
+  );
+  createTask(root, {
+    title: "Large active task",
+    status: "doing",
+    priority: "P0",
+    body: `## What
+
+${"LARGE_TASK_BODY_SHOULD_NOT_APPEAR\n".repeat(300)}
+
+## Done when
+
+- [ ] compact context stays row-only
+
+## Open questions
+
+## Log
+`,
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "context"], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /T0001 .* Large active task/);
+  assert.doesNotMatch(result.stdout, /LARGE_TASK_BODY_SHOULD_NOT_APPEAR/);
+  assert.match(result.stdout, /inspect only the linked task files/);
+});
+
 test("cli summary is short and avoids full task list noise", (t) => {
   const root = tempRoot(t);
   mkdirSync(join(root, "tasks"), { recursive: true });
