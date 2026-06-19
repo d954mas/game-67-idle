@@ -97,3 +97,16 @@ test("context budget applies tighter default caps to live status docs", () => {
     cleanup(dir);
   }
 });
+
+test("context budget applies the split pipeline map cap", () => {
+  const dir = tempDir();
+  try {
+    writeFixture(dir);
+    writeFileSync(join(dir, "AI_PIPELINE.md"), "x".repeat(3700), "utf8");
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /AI_PIPELINE\.md: 3700 chars > 3600/);
+  } finally {
+    cleanup(dir);
+  }
+});

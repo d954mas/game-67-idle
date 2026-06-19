@@ -97,6 +97,7 @@ const COPY = [
   "tools/bootstrap/export_base.test.mjs",
   "tools/bootstrap/reset_to_seed.mjs",
   "gamedesign/knowledge",
+  "docs/ai-pipeline",
   "AI_PIPELINE.md",
   "AI_PIPELINE_HISTORY.md",
   "tasks/README.md",

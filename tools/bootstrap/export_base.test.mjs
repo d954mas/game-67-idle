@@ -34,12 +34,15 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(existsSync(join(target, "tasks", "README.md")), true);
     assert.equal(existsSync(join(target, "tasks", "STATUS.md")), true);
     assert.equal(existsSync(join(target, "tasks", "guides", "task-store-reference.md")), true);
+    assert.equal(existsSync(join(target, "docs", "ai-pipeline", "agent-workflow.md")), true);
     assert.equal(existsSync(join(target, ".claude", "skills", "task-manager", "SKILL.md")), true);
 
     const readme = readFileSync(join(target, "tasks", "README.md"), "utf8");
     assert.match(readme, /tasks\/guides\/task-store-reference\.md/);
     const guide = readFileSync(join(target, "tasks", "guides", "task-store-reference.md"), "utf8");
     assert.match(guide, /Task Store Reference/);
+    const pipeline = readFileSync(join(target, "AI_PIPELINE.md"), "utf8");
+    assert.match(pipeline, /docs\/ai-pipeline\/agent-workflow\.md/);
   } finally {
     cleanup(dir);
   }

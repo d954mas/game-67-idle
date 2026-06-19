@@ -28,6 +28,7 @@ if (args.length > 0) usage();
 const roots = [
   "AGENTS.md",
   "AI_PIPELINE.md",
+  join("docs", "ai-pipeline"),
   join("tools", "README.md"),
   join("tasks"),
   join(".codex", "skills"),
@@ -77,6 +78,7 @@ function isPathLikeBacktick(ref) {
     ref.startsWith("AGENTS.md") ||
     ref.startsWith("AI_PIPELINE.md") ||
     ref.startsWith("AI_PIPELINE_HISTORY.md") ||
+    ref.startsWith("docs/") ||
     ref.startsWith("README.md")
   );
 }

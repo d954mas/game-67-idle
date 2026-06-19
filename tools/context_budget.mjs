@@ -46,7 +46,7 @@ if (args.length > 0) usage();
 
 const hotDocs = [
   { path: "AGENTS.md", maxChars: 5200 },
-  { path: "AI_PIPELINE.md", maxChars: 6500 },
+  { path: "AI_PIPELINE.md", maxChars: 3600 },
   { path: join("tasks", "STATUS.md"), maxChars: 3200 },
   { path: join("tasks", "README.md"), maxChars: 4500 },
 ];

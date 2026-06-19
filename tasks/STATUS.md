@@ -53,7 +53,7 @@ node tools/pipeline_validate.mjs
 
 - Historical pipeline evidence is summarized in `tasks/archive/README.md`.
 - Pipeline source-of-truth docs are `AGENTS.md`, `AI_PIPELINE.md`,
-  `tasks/README.md`, and `.codex/skills/`.
+  `docs/ai-pipeline/`, `tasks/README.md`, and `.codex/skills/`.
 - Quick validation includes skill eval/sync, context budget, repeated product
   fail guard, taskboard validation/tests, profiling tests, game-context tests,
   and product-gate tests via `node tools/pipeline_validate.mjs`.
