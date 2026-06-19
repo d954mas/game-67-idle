@@ -55,6 +55,9 @@ node tools/pipeline_validate.mjs
 - Profiling hot hook writes are serialized with a short file lock and covered by
   a parallel JSONL append regression test, so concurrent validations do not
   corrupt `tmp/session_profiles/sessions/*.jsonl`.
+- `task-manager` now keeps its hot `SKILL.md` as a short router and loads task
+  store, state transition, review queue, prototype closeout, and reporting
+  details from `.codex/skills/task-manager/references/task-store-protocol.md`.
 - `generated-game-ui-assets` now keeps its hot `SKILL.md` as a short router and
   loads workflow/gate, tier, slice9, atlas, icon, and responsive UI details from
   `.codex/skills/generated-game-ui-assets/references/`.

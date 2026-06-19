@@ -8,3 +8,7 @@ description: "Use when capturing, refining, decomposing, planning, prioritizing,
 
 Canonical instructions live in `.codex/skills/task-manager/SKILL.md` (single
 source of truth shared by all agent CLIs). Read that file and follow it.
+
+Reference playbooks (load only when the canonical skill says to):
+
+- `.codex/skills/task-manager/references/task-store-protocol.md`

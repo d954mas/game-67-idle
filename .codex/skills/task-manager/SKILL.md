@@ -9,47 +9,30 @@ Keep all project work captured, refined, and planned in the markdown task
 store. The user is the lead: high-level direction and feedback only; agents
 question, research, refine, decompose, and execute.
 
-Store and live-status rules: `tasks/README.md`.
-Live status index: `tasks/STATUS.md`.
-Fast status: `node tools/taskboard/cli.mjs summary`.
-Compact current-context digest: `node tools/taskboard/cli.mjs context`.
-CLI: `node tools/taskboard/cli.mjs <summary|list|context|show|new|set|validate>`.
-`list` shows current work only; use `list --review` only for review cleanup.
-User-facing board: `node tools/taskboard/server.mjs` -> `http://127.0.0.1:8070/`.
+## Load Only What Applies
+
+- `references/task-store-protocol.md`: task/status source of truth, CLI usage,
+  state transitions, review queue handling, prototype closeout, refinement bar,
+  and reporting rules.
+
+## Fast Commands
+
+- Summary: `node tools/taskboard/cli.mjs summary`.
+- Current-context digest: `node tools/taskboard/cli.mjs context`.
+- CLI: `node tools/taskboard/cli.mjs <summary|list|context|show|new|set|validate>`.
+- User-facing board: `node tools/taskboard/server.mjs` ->
+  `http://127.0.0.1:8070/`.
 
 ## Workflow
 
-1. Follow `tasks/README.md` for the minimal current-context protocol, status
-   updates, task format, and state transitions. Start quick orientation with
-   `node tools/taskboard/cli.mjs summary`; use
-   `node tools/taskboard/cli.mjs context` for long work. Read full
-   `tasks/STATUS.md` only when changing it or auditing a specific linked claim.
-2. Capture anything the user wants that will not be done right now as a task.
+1. Start quick orientation with `cli.mjs summary`; use `cli.mjs context` for
+   long work. Read full `tasks/STATUS.md` only when changing it or auditing a
+   specific linked claim.
+2. Follow `tasks/README.md` and load the task-store protocol when changing
+   tasks, status, epics, review items, or reporting shape.
+3. Capture anything the user wants that will not be done right now as a task.
    Losing a stated idea is a failure; when in doubt, capture as `status: idea`.
-3. Refine before implementing: an `idea` task needs answered user questions,
-   researched context, and checkable `## Done when` before it moves to `backlog`.
-4. Decompose large requests into an epic plus tasks each completable in one
-   focused session; scope boundaries live in the epic's in/out-of-scope.
+4. Refine before implementing; a `backlog` task needs checkable `## Done when`
+   and enough context to execute without guessing.
 5. Track honestly: `doing` on start, `review` when awaiting feedback, `done`
    only with ticked criteria and an evidence line in `## Log`.
-
-Treat `review` as a separate acceptance/cleanup queue, not default current
-work. Do not inspect the review queue during normal game implementation unless
-the user asks to review/close old tasks or the current decision depends on a
-specific review item.
-
-When the user says a prototype/game was only a test run or should stop, stop
-implementation first and follow the latest explicit instruction for task/status
-disposition. If the lead asks to close it, set related tasks and epics to
-`dropped` or `review` with a log entry, let the tooling archive only files whose
-status becomes terminal, update `tasks/STATUS.md`, and keep only reusable
-lessons in pipeline docs/skills. Never delete task files to hide closed work.
-
-## Refinement bar
-
-A `backlog` task must answer: what visible change proves it done, what is out
-of scope, and which docs/data/skills it touches. Otherwise it stays `idea`
-with `## Open questions` for the user.
-
-When the user asks "where are we" or "what next", follow the reporting rules in
-`tasks/README.md`.
