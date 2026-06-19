@@ -33,11 +33,9 @@ Report:
 
 - profile file and whether it exists;
 - record count;
-- review confidence;
-- unresolved failures;
+- unresolved failures and recovered ones;
 - wall-clock coverage;
-- missing context inputs;
-- largest context input when relevant;
+- slowest recorded work and most-run (repeated) commands;
 - long manual/research/review gaps;
 - stale bundles or stale artifacts if they limit confidence.
 

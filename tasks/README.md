@@ -38,14 +38,5 @@ and build artifacts unless linked.
 A task is done only when `## Done when` is checked and `## Log` proves it. Use
 the guide for lifecycle, scope intake, evidence, checkpoints, and manual format.
 
-Gate map:
-
-- docs/status/process: `node tools/taskboard/cli.mjs validate`
-- skill/process: `node tools/skills_eval.mjs`
-- product gate/tooling: `node --test tools/product_gate/test.mjs`
-- taskboard/tooling: `node --test tools/taskboard/test.mjs`
-- reusable pipeline: `node tools/ai.mjs validate`
-- portable/export/runtime: `node tools/ai.mjs validate --full`
-- visual/playable: native scenario plus screenshot/video/gate evidence
-
+Validation by change type: `docs/ai-pipeline/quality-validation.md`.
 Repeated strict/product failures: `node tools/product_gate/repeated_failure_guard.mjs`.

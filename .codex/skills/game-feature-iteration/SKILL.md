@@ -19,10 +19,9 @@ applies.
 
 ## Router Workflow
 
-1. Read local source of truth: `AGENTS.md`, `node tools/ai.mjs context` or
-   `tools/game_context/iteration_context.mjs`, relevant docs, and nearby code.
-2. Select one task scope and primary runtime harness. Set passive profiling for
-   non-trivial work or state why unavailable.
+1. Read local source of truth: `AGENTS.md`,
+   `node tools/game_context/iteration_context.mjs`, relevant docs, and nearby code.
+2. Select one task scope and primary runtime harness.
 3. For non-trivial work, load `iteration-cycle-playbook.md`; implement the
    smallest playable slice, validate primary target first, capture evidence, and
    commit intentional files.

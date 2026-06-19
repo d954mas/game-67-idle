@@ -39,6 +39,11 @@ node tools/product_gate/repeated_failure_guard.mjs
 - Reusable pipeline: `node tools/ai.mjs validate`
 - Review-stage context/cap pressure: `node tools/ai.mjs validate --review`
 - Portable/export/runtime gates: `node tools/ai.mjs validate --full`
+- Visual/playable game changes: native scenario plus screenshot/video/product
+  gate evidence
+
+This list is the single source of truth for validation-by-change-type; other
+docs point here instead of restating it.
 
 Escalate validation only when the changed behavior or export path requires it.
 Context budgets are a review/compression gate, not a normal implementation

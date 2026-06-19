@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 export const CATEGORIES = new Set([
@@ -30,10 +30,6 @@ export function localDate() {
 
 export function defaultProfilePath() {
   return resolve("tmp", "session_profiles", `session_profile_${localDate()}.jsonl`);
-}
-
-export function defaultScopePath() {
-  return resolve("tmp", "session_profiles", "current_scope.json");
 }
 
 /* Per-session profile logs (written by the hook) live one file per session, so
@@ -85,10 +81,6 @@ export function latestSessionProfilePath() {
     }
   }
   return best;
-}
-
-export function profileScopePath() {
-  return resolve(envString("AI_PROFILE_SCOPE_FILE") || defaultScopePath());
 }
 
 export function timestamp() {
@@ -152,25 +144,6 @@ function envString(name) {
   return value === undefined ? "" : String(value).trim();
 }
 
-export function readProfileScope(scopePath = profileScopePath()) {
-  const target = resolve(scopePath);
-  if (!existsSync(target)) return { path: target, exists: false, valid: true, work_item: "", iteration: "", error: "" };
-  try {
-    const parsed = JSON.parse(readFileSync(target, "utf8"));
-    return {
-      path: target,
-      exists: true,
-      valid: true,
-      work_item: String(parsed.work_item || "").trim(),
-      iteration: String(parsed.iteration || "").trim(),
-      updated_at: String(parsed.updated_at || ""),
-      error: "",
-    };
-  } catch (error) {
-    return { path: target, exists: true, valid: false, work_item: "", iteration: "", error: error.message };
-  }
-}
-
 export function numberArg(values, key) {
   const value = stringArg(values, key, "");
   if (!value) return undefined;
@@ -178,23 +151,7 @@ export function numberArg(values, key) {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
-export function parseContextInput(raw) {
-  const parts = raw.split(":");
-  let charsIndex = parts.findIndex((part, index) => index > 0 && Number.isFinite(Number(part)));
-  if (charsIndex === -1) charsIndex = 1;
-  const path = parts.slice(0, charsIndex).join(":");
-  const charsRaw = parts[charsIndex] || "0";
-  const reasonParts = parts.slice(charsIndex + 1);
-  const chars = Number(charsRaw);
-  return {
-    path,
-    chars: Number.isFinite(chars) ? chars : 0,
-    reason: reasonParts.join(":"),
-  };
-}
-
 export function buildRecord(values, extra = {}) {
-  const profileScope = readProfileScope();
   const record = {
     ts: stringArg(values, "ts", timestamp()),
     phase: stringArg(values, "phase"),
@@ -211,10 +168,10 @@ export function buildRecord(values, extra = {}) {
   const contextRisk = stringArg(values, "context-risk", "");
   if (contextRisk) record.context_risk = contextRisk;
 
-  const workItem = stringArg(values, "work-item", envString("AI_PROFILE_WORK_ITEM") || profileScope.work_item);
+  const workItem = stringArg(values, "work-item", envString("AI_PROFILE_WORK_ITEM"));
   if (workItem) record.work_item = workItem;
 
-  const iteration = stringArg(values, "iteration", envString("AI_PROFILE_ITERATION") || profileScope.iteration);
+  const iteration = stringArg(values, "iteration", envString("AI_PROFILE_ITERATION"));
   if (iteration) record.iteration = iteration;
 
   const wasteReason = stringArg(values, "waste-reason", "");
@@ -240,9 +197,6 @@ export function buildRecord(values, extra = {}) {
 
   const evidence = listArg(values, "evidence");
   if (evidence.length > 0) record.evidence = evidence;
-
-  const contextInputs = listArg(values, "context-input").map(parseContextInput);
-  if (contextInputs.length > 0) record.context_inputs = contextInputs;
 
   return record;
 }

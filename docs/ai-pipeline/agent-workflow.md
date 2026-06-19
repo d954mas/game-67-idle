@@ -47,13 +47,14 @@ evidence files, or final reports, not hot instruction files.
 
 1. Interpret the user request into one working scope.
 2. Select or create a task only when durable tracking is useful.
-3. For non-trivial work, start/passively record profiling scope or state why it
-   is unavailable.
-4. Read only files needed for the selected scope.
-5. Make the smallest coherent change.
-6. Run the narrowest validation that proves the change.
-7. Record evidence in the task/status/final response when the work changes
+3. Read only files needed for the selected scope.
+4. Make the smallest coherent change.
+5. Run the narrowest validation that proves the change.
+6. Record evidence in the task/status/final response when the work changes
    project state.
+
+Profiling needs no work-loop step: the PostToolUse hook records every tool call
+automatically. Review a session with `node tools/ai.mjs status`.
 
 Use multiple agents only for independent side work with clear owner, artifact,
 evidence, and boundary. The main integrator owns merge, validation, and status.

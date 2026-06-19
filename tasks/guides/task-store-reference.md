@@ -60,16 +60,8 @@ A backlog task must have:
 A task is done only when `## Done when` boxes are checked and `## Log` contains
 the evidence that proves them.
 
-Smallest reliable validation by change type:
-
-- docs/status/process: `node tools/taskboard/cli.mjs validate`
-- skill/process: `node tools/skills_eval.mjs`
-- product gate/tooling: `node --test tools/product_gate/test.mjs`
-- taskboard/tooling: `node --test tools/taskboard/test.mjs`
-- reusable pipeline: `node tools/ai.mjs validate`
-- portable/export/runtime: `node tools/ai.mjs validate --full`
-- visual/playable game change: native scenario plus screenshot/video/product
-  gate evidence
+Smallest reliable validation by change type lives in one place:
+`docs/ai-pipeline/quality-validation.md`.
 
 Repeated strict/product gate failures are validated by:
 

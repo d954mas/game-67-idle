@@ -8,13 +8,13 @@ taskboard behavior, product gates, or portable export.
 1. Inspect current state, not memory: `git status --short --untracked-files=all`,
    `node tools/taskboard/cli.mjs summary`, and, for context review,
    `node tools/context_budget.mjs --review`.
-2. Confirm profiling scope for non-trivial pipeline/tooling sessions with
-   `node tools/ai.mjs status --require-current-scope-usable`; start or state
-   unavailable if needed.
-3. Identify the repeated failure or duplication: oversized hot doc, duplicated
+2. Identify the repeated failure or duplication: oversized hot doc, duplicated
    rule, root/export drift, stale skill pointer, weak validation routing, or
    missing source-of-truth.
-4. Make one coherent change and keep unrelated game/content work out of scope.
+3. Make one coherent change and keep unrelated game/content work out of scope.
+
+Profiling needs no setup: the hook records tool calls automatically; read a
+session with `node tools/ai.mjs status` when reviewing pipeline friction.
 
 ## Split Decisions
 

@@ -18,7 +18,7 @@ options:
   --probe-evidence <text>       gameplay/probe/scenario evidence
   --product-gate <path>         product gate JSON or Markdown evidence
   --screenshot <path>           screenshot evidence path
-  --profile-guard <path|text>   profiler guard evidence from ai.mjs status --require-current-scope-usable
+  --profile-guard <path|text>   optional profiler-review note from ai.mjs status
   --known-red-gate <text>       accepted red gate/stale fail audit note
   --json-output <path>
   --report <path>

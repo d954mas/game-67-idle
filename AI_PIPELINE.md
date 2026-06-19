@@ -19,7 +19,7 @@ task/evidence file, one matching skill, and at most one deep reference above.
 
 - Keep hot Markdown short; move procedure/history behind references, skills,
   tasks, or validators.
-- For non-trivial work, set passive profiling scope or say why unavailable.
+- Profiling is automatic (PostToolUse hook); read a session with `node tools/ai.mjs status`.
 - Make one scoped change, then run the narrowest command that proves it.
 - Do not call a playable/visual slice done from one green gate; product,
   game-loop, art-source, and technical gates stay separate.

@@ -10,6 +10,7 @@
 
 - Game/runtime: `src/`.
 - Runtime infra: `state/`, `tools/state_codegen/`, `src/devapi/`, `tools/devapi/`, `src/game_storage.*`, `external/cjson/`.
+- Game-specific tools/scripts: `tools/<game-id>/` only; never in shared `tools/` dirs (reset removes that folder).
 - Design: GDDs in `gamedesign/projects/<game-id>/`; reusable knowledge in `gamedesign/knowledge/`; sources in `gamedesign/sources/`.
 - Work/status: `tasks/`; rules in `tasks/README.md`.
 - Skills: `.codex/skills/`; `.claude/skills/` is generated.
@@ -20,7 +21,7 @@
 - Workflow: `AI_PIPELINE.md` and `docs/ai-pipeline/agent-workflow.md`.
 - Substantial work loads taskboard context, one task/evidence file, one skill.
 - Skip archives, old logs, broad design, builds, and generated files unless linked.
-- Non-trivial game/visual/pipeline/tooling work needs profiling scope or unavailable note.
+- Profiling is automatic (PostToolUse hook); review a session with `node tools/ai.mjs status`.
 
 ## Game Work Rules
 

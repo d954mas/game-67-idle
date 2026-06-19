@@ -13,8 +13,8 @@ what should change next time.
 
 - `references/reflection-evidence-intake.md`: durable evidence order,
   high-cost context rules, and evidence quality fields.
-- `references/reflection-profiling.md`: passive profiling telemetry,
-  `tools/ai.mjs` status/import/reflect commands, and retired deep chains.
+- `references/reflection-profiling.md`: passive profiling telemetry and the
+  `tools/ai.mjs` status/import commands.
 - `references/reflection-output-rules.md`: retrospective shape,
   `symptom` / `cause` / `faster path`, audit areas, Top 10 improvements, and
   durable capture.
@@ -22,8 +22,8 @@ what should change next time.
 ## Default Workflow
 
 1. State scope: session, objective, and evidence inspected.
-2. Report evidence quality: profile file, record count, review confidence,
-   unresolved failures, wall-clock coverage, and missing context inputs.
+2. Report evidence quality: profile file, record count, unresolved failures,
+   wall-clock coverage, slowest work, and command repeats/friction.
 3. Summarize factual progress briefly.
 4. Identify largest bottlenecks with `symptom`, `cause`, and `faster path`.
 5. Audit tool use, context management, planning, product quality, and agent

@@ -6,15 +6,16 @@ pipeline routing, or portable-base export.
 
 ## Profiling
 
-Profiling is passive telemetry for repeated failures, slow commands, large
-context reads, and long gaps. It should not become another project.
+Profiling is passive telemetry for repeated failures, slow commands, and long
+gaps. It should not become another project.
 
-Use `node tools/ai.mjs` for normal work: `start`, `run`, `context`,
-`checkpoint`, `status`, and `reflect`.
+The PostToolUse hook records every tool call automatically; there is no manual
+step. Review a session with `node tools/ai.mjs status` (`--verbose` for coverage
+gaps and parse errors). `node tools/ai.mjs import-codex-session` recovers missed
+Codex failures (and `status` runs it by default).
 
-Deep import/status/retrospective work is opt-in for AI workflow review or
-profiler fixes. Do not commit raw telemetry from `tmp/session_profiles/`; commit
-only durable lessons, rules, tools, or tasks.
+Do not commit raw telemetry from `tmp/session_profiles/`; commit only durable
+lessons, rules, tools, or tasks.
 
 ## Assets And Visual Work
 

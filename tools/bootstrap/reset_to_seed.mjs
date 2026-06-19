@@ -11,7 +11,7 @@
 // safe). After applying, review the game-named files it lists, then run
 // `node tools/ai.mjs validate --full`.
 
-import { existsSync, rmSync, readdirSync } from "node:fs";
+import { existsSync, rmSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -38,19 +38,38 @@ if (git(["rev-parse", "--verify", "--quiet", seedRef]).status !== 0) {
 
 // Files restored verbatim from the clean seed reference.
 const RESTORE = ["src/clean_seed_main.c", "CMakeLists.txt", "tasks/STATUS.md"];
-// Whole directories that are always game-specific.
-const REMOVE_DIRS = [`gamedesign/projects/${gameId}`, "assets/runtime"];
-// Game-named loose files discovered under src/ and assets/ (id with - or _).
+// Whole directories that are always game-specific. Game tooling lives under
+// tools/<game-id>/ by convention, so it is removed wholesale here.
+const REMOVE_DIRS = [`gamedesign/projects/${gameId}`, "assets/runtime", `tools/${gameId}`];
+// Game-named loose files discovered anywhere under src/, assets/, tools/, state/
+// (id with - or _). The recursive tools/ scan is the fallback that catches game
+// scripts which leaked into shared dirs instead of tools/<game-id>/ -- the exact
+// bug that stranded backrooms_* under tools/assets and tools/perf.
 const idUnder = gameId.replace(/-/g, "_");
 const matchers = [new RegExp(`^${idUnder}`), new RegExp(gameId.replace(/[-_]/g, "[-_]"))];
+const SKIP_DIRS = new Set(["node_modules", ".git", "__pycache__"]);
 const looseFiles = [];
-for (const dir of ["src", "assets"]) {
-  const abs = join(root, dir);
-  if (!existsSync(abs)) continue;
+const scan = (relDir) => {
+  const abs = join(root, relDir);
+  if (!existsSync(abs)) return;
   for (const name of readdirSync(abs)) {
-    if (matchers.some((m) => m.test(name))) looseFiles.push(`${dir}/${name}`);
+    if (SKIP_DIRS.has(name)) continue;
+    const relPath = `${relDir}/${name}`;
+    let isDir = false;
+    try {
+      isDir = statSync(join(root, relPath)).isDirectory();
+    } catch {
+      continue;
+    }
+    if (isDir) {
+      if (relPath === `tools/${gameId}`) continue; // removed wholesale above
+      scan(relPath);
+    } else if (matchers.some((m) => m.test(name))) {
+      looseFiles.push(relPath);
+    }
   }
-}
+};
+["src", "assets", "tools", "state"].forEach(scan);
 
 console.log(`reset_to_seed: game-id=${gameId}  seed-ref=${seedRef}  mode=${apply ? "APPLY" : "dry-run"}\n`);
 console.log("Restore from seed ref:");
