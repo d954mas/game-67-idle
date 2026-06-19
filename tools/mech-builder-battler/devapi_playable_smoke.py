@@ -61,6 +61,7 @@ def main() -> int:
         capture(game, "mech_t0025_hero_toy_material_smoke.png", wait_frames=1)
         capture(game, "mech_t0026_hero_modular_overlay_hangar_smoke.png", wait_frames=1)
         capture(game, "mech_t0027_assault_walker_hero_hangar_smoke.png", wait_frames=1)
+        capture(game, "mech_t0029_arena_dressing_hangar_smoke.png", wait_frames=1)
 
         state = game.click_ui("action.battle", wait_frames=12)
         ok &= check("battle starts", state.get("screen") == "battle" and state.get("alive_drones", 0) > 0, state)
@@ -68,6 +69,7 @@ def main() -> int:
         capture(game, "mech_t0024_robot_enemy_asset_smoke.png", wait_frames=1)
         capture(game, "mech_t0027_assault_walker_battle_smoke.png", wait_frames=1)
         capture(game, "mech_t0028_assault_walker_cannon_recoil_smoke.png", wait_frames=1)
+        capture(game, "mech_t0029_arena_dressing_battle_smoke.png", wait_frames=1)
         start_x = float(state.get("mech_x", 0.0))
         start_z = float(state.get("mech_z", 0.0))
         game.result("input.key", {"key": "D", "down": True})

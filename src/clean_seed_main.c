@@ -1181,6 +1181,78 @@ static void draw_stylized_grass_motif(float x, float z, float s,
                          (float[4]){0.82F, 1.0F, 0.24F, 0.55F});
 }
 
+static void draw_block_pylon(float x, float z, float h, const float body[4],
+                             const float cap[4], const float stud[4]) {
+  nt_shape_renderer_cube((float[3]){x, h * 0.5F, z},
+                         (float[3]){0.52F, h, 0.52F}, body);
+  nt_shape_renderer_cube((float[3]){x, h + 0.16F, z},
+                         (float[3]){0.78F, 0.30F, 0.78F}, cap);
+  draw_stud_grid(x, z, h + 0.34F, 1, 1, 0.42F, stud);
+}
+
+static void draw_pad_energy_ring(float x, float z, float radius,
+                                 const float color[4]) {
+  const float floor_rot[4] = {0.7071068F, 0.0F, 0.0F, 0.7071068F};
+  nt_shape_renderer_circle_wire_rot((float[3]){x, 0.16F, z}, radius, floor_rot,
+                                    color);
+  nt_shape_renderer_circle_wire_rot((float[3]){x, 0.18F, z}, radius * 0.70F,
+                                    floor_rot,
+                                    (float[4]){1.0F, 1.0F, 1.0F,
+                                               color[3] * 0.25F});
+}
+
+static void draw_arena_dressing(bool hangar) {
+  const float blue_block[4] = {0.06F, 0.42F, 1.0F, 1.0F};
+  const float yellow_block[4] = {1.0F, 0.78F, 0.12F, 1.0F};
+  const float red_block[4] = {1.0F, 0.16F, 0.16F, 1.0F};
+  const float white_block[4] = {0.88F, 0.95F, 1.0F, 1.0F};
+  const float dark_block[4] = {0.28F, 0.54F, 0.34F, 1.0F};
+  const float blue_stud[4] = {0.03F, 0.25F, 0.82F, 1.0F};
+  const float yellow_stud[4] = {0.82F, 0.55F, 0.02F, 1.0F};
+  const float red_stud[4] = {0.78F, 0.06F, 0.06F, 1.0F};
+  const float cyan_glow[4] = {0.0F, 0.92F, 1.0F, 0.34F};
+  const float amber_glow[4] = {1.0F, 0.58F, 0.04F, 0.32F};
+
+  const float rail_z_front = hangar ? -6.10F : -6.20F;
+  const float rail_z_back = hangar ? 5.20F : 5.65F;
+  draw_baseplate_block(0.0F, rail_z_front, 14.4F, 0.16F, dark_block);
+  draw_baseplate_block(0.0F, rail_z_back, 14.4F, 0.16F, dark_block);
+  draw_baseplate_block(-7.70F, -0.35F, 0.16F, 10.3F, dark_block);
+  draw_baseplate_block(7.70F, -0.35F, 0.16F, 10.3F, dark_block);
+
+  for (int i = -3; i <= 3; ++i) {
+    const float x = (float)i * 2.25F;
+    draw_baseplate_block(x, rail_z_back - 0.18F, 1.02F, 0.24F,
+                         (i & 1) ? yellow_block : blue_block);
+    draw_stud_grid(x, rail_z_back - 0.18F, 0.22F, 2, 1, 0.42F,
+                   (i & 1) ? yellow_stud : blue_stud);
+  }
+
+  draw_block_pylon(-7.35F, rail_z_front + 0.35F, hangar ? 1.35F : 1.55F,
+                   blue_block, white_block, blue_stud);
+  draw_block_pylon(7.35F, rail_z_front + 0.35F, hangar ? 1.35F : 1.55F,
+                   red_block, white_block, red_stud);
+  draw_block_pylon(-7.35F, rail_z_back - 0.35F, hangar ? 1.20F : 1.42F,
+                   yellow_block, white_block, yellow_stud);
+  draw_block_pylon(7.35F, rail_z_back - 0.35F, hangar ? 1.20F : 1.42F,
+                   blue_block, white_block, blue_stud);
+
+  for (int side = -1; side <= 1; side += 2) {
+    const float x = (float)side * 7.10F;
+    nt_shape_renderer_line((float[3]){x, 1.18F, rail_z_front + 0.48F},
+                           (float[3]){x, 1.18F, rail_z_back - 0.55F},
+                           side < 0 ? cyan_glow : amber_glow);
+    nt_shape_renderer_line((float[3]){x, 0.82F, rail_z_front + 0.48F},
+                           (float[3]){x, 0.82F, rail_z_back - 0.55F},
+                           side < 0 ? amber_glow : cyan_glow);
+  }
+
+  draw_pad_energy_ring(0.0F, hangar ? 0.15F : 1.45F, hangar ? 2.25F : 2.05F,
+                       cyan_glow);
+  draw_pad_energy_ring(0.0F, hangar ? 0.15F : 1.45F, hangar ? 1.25F : 1.12F,
+                       amber_glow);
+}
+
 static void draw_floor_grid(float half, bool hangar) {
   const float floor_rot[4] = {0.7071068F, 0.0F, 0.0F, 0.7071068F};
   const float *grass = COL_BG_FLOOR;
@@ -1232,6 +1304,7 @@ static void draw_floor_grid(float half, bool hangar) {
   draw_baseplate_block(0.0F, hangar ? -1.95F : -0.68F, 5.7F, 0.18F,
                        yellow_block);
   draw_baseplate_block(0.0F, hangar ? 2.25F : 3.58F, 5.7F, 0.18F, blue_block);
+  draw_arena_dressing(hangar);
 
   if (hangar) {
     nt_shape_renderer_cube((float[3]){-4.1F, 0.46F, 2.8F},
