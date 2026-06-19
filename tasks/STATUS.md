@@ -55,6 +55,9 @@ node tools/pipeline_validate.mjs
 - `generated-game-ui-assets` now keeps its hot `SKILL.md` as a short router and
   loads workflow/gate details from
   `.codex/skills/generated-game-ui-assets/references/ui-workflow-gates.md`.
+- `game-visual-art-direction` also keeps its hot `SKILL.md` as a short router
+  and loads visual workflow/gate detail from
+  `.codex/skills/game-visual-art-direction/references/visual-workflow-gates.md`.
 
 ## Next Priorities
 
