@@ -51,59 +51,14 @@ node tools/pipeline_validate.mjs
 
 ## Last Known Good Evidence
 
-- Backrooms runtime/perf evidence remains in `build/captures/` and
-  `gamedesign/projects/backrooms-liminal/reviews/`.
-- Engine render-target issue evidence remains in
-  `tasks/active/T0011-engine-render-target-api-for-portal-rendering.md`.
+- Historical pipeline evidence is summarized in `tasks/archive/README.md`.
 - Pipeline source-of-truth docs are `AGENTS.md`, `AI_PIPELINE.md`,
   `tasks/README.md`, and `.codex/skills/`.
-- Profiling hot hook writes are serialized with a short file lock and covered by
-  a parallel JSONL append regression test, so concurrent validations do not
-  corrupt `tmp/session_profiles/sessions/*.jsonl`.
-- `tools/context_budget.mjs` is part of quick pipeline validation and guards
-  hot docs plus `.codex/skills/*/SKILL.md` entrypoints from silently growing
-  past the current progressive-disclosure budget.
-- Full pipeline validation now chooses a Python runner by required asset-test
-  modules (`PIL`, `numpy`, `scipy`, `pymatting`) instead of accepting the first
-  interpreter with `--version`, avoiding late failures on the local `python
-  3.14` without SciPy or direct `C:\Python312\python.exe` without user-site
-  cutout deps. `AI_PIPELINE_PYTHON` can supply an explicit command with args.
-- `task-manager` now keeps its hot `SKILL.md` as a short router and loads task
-  store, state transition, review queue, prototype closeout, and reporting
-  details from `.codex/skills/task-manager/references/task-store-protocol.md`.
-- `generated-game-ui-assets` now keeps its hot `SKILL.md` as a short router and
-  loads workflow/gate, tier, slice9, atlas, icon, and responsive UI details from
-  `.codex/skills/generated-game-ui-assets/references/`.
-- `game-visual-art-direction` also keeps its hot `SKILL.md` as a short router
-  and loads visual workflow/gate detail from
-  `.codex/skills/game-visual-art-direction/references/visual-workflow-gates.md`.
-- `game-feature-iteration` now keeps its hot `SKILL.md` as a short router and
-  loads playable/reference/product/build gate detail from
-  `.codex/skills/game-feature-iteration/references/playable-feature-gates.md`.
-- `game-asset-pipeline` now keeps its hot `SKILL.md` as a short router and
-  loads source/cutout/pack-builder detail from
-  `.codex/skills/game-asset-pipeline/references/`.
-- `primary-gdd-pipeline` now keeps its hot `SKILL.md` as a short router and
-  loads DoD, reference, fake-shot, runtime asset, handoff, review, and
-  stewardship detail from `.codex/skills/primary-gdd-pipeline/references/`.
-- `delegated-image-generation` now keeps its hot `SKILL.md` as a short router
-  and loads generation paths, verification/prompt gotchas, throughput, and asset
-  handoff detail from `.codex/skills/delegated-image-generation/references/`.
-- `game-state-management` now keeps its hot `SKILL.md` as a short router and
-  loads state workflow/rules, state contract, and review checklist detail from
-  `.codex/skills/game-state-management/references/`.
-- `game-runtime-automation` now keeps its hot `SKILL.md` as a short router and
-  loads runtime workflow/scaffold, Visual QA, and DevAPI command-bus detail from
-  `.codex/skills/game-runtime-automation/references/`.
-- `chat-session-reflection` now keeps its hot `SKILL.md` as a short router and
-  loads evidence intake, profiling, and retrospective output rules from
-  `.codex/skills/chat-session-reflection/references/`.
-- `design-source-knowledge` now keeps its hot `SKILL.md` as a short router and
-  loads source routing, source intake/promotion, reference-driven review, and
-  Markdown templates from `.codex/skills/design-source-knowledge/references/`.
-- `tools/skills_sync.mjs --check` now fails on stale generated `.claude` skill
-  pointers; normal sync removes generated orphans and preserves hand-written
-  `.claude` skills.
+- Quick validation includes skill eval/sync, context budget, repeated product
+  fail guard, taskboard validation/tests, profiling tests, game-context tests,
+  and product-gate tests via `node tools/pipeline_validate.mjs`.
+- Full/export validation is still explicit:
+  `node tools/pipeline_validate.mjs --full`.
 
 ## Next Priorities
 
