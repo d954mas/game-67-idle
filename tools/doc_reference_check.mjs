@@ -28,6 +28,7 @@ if (args.length > 0) usage();
 const roots = [
   "AGENTS.md",
   "AI_PIPELINE.md",
+  join("tools", "README.md"),
   join("tasks"),
   join(".codex", "skills"),
 ];

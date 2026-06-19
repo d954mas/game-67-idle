@@ -30,43 +30,20 @@ inspection.
 ### `portable_ai_pipeline`
 
 Generic workflow tools for AI-assisted development. These move to a clean new
-game project:
+game project. The executable source of truth is the `COPY` allowlist in
+`tools/bootstrap/export_base.mjs`; `tools/bootstrap/export_base.test.mjs` proves
+the exported base includes task guides and generated skill pointers.
 
-- `tools/ai.mjs` - fast facade for `start`, `focus`, `context`, `checkpoint`,
-  `run`, `validate`, `status`, and `reflect`
-- `tools/ai.test.mjs`
-- `tools/context_budget.mjs`
-- `tools/context_budget.test.mjs`
-- `tools/ai_profile/`
-- `tools/taskboard/`
-- `tools/game_context/`
-- `tools/product_gate/`
-- `tools/bootstrap/export_base.mjs`
-- `tools/pipeline_validate.mjs`
-- `tools/skills_eval.mjs`
-- `tools/skills_sync.mjs`
-- `tools/assets/job/new_art_job.mjs`
-- `tools/assets/job/plan_source_sheet_prompt.mjs`
-- `tools/assets/job/plan_missing_source_family_prompts.mjs`
-- `tools/assets/job/new_generation_record.mjs`
-- `tools/assets/job/validate_art_job.mjs`
-- `tools/assets/job/audit_slice9_design_policy.mjs`
-- `tools/assets/job/audit_atlas_metadata.mjs`
-- `tools/assets/job/audit_asset_semantic_style.mjs`
-- `tools/assets/pack/build_ui_atlas_pack.py`
-- `tools/assets/pack/audit_ui_atlas_pack.py`
-- `tools/assets/job/audit_runtime_ui_asset_usage.mjs`
-- `tools/assets/job/audit_source_family_coverage.mjs`
-- `tools/assets/chroma_key_alpha.py`
-- `tools/assets/cutout/dual_plate_alpha.py`
-- `tools/assets/cutout/route_cutout.py`
-- `tools/assets/intake/normalize_source_sheet_chroma.py`
-- `tools/assets/intake/audit_source_sheet_intake.py`
-- `tools/assets/crop/plan_runtime_crops_from_intake.py`
-- `tools/assets/assemble/build_runtime_assets_from_crop_plan.py`
-- `tools/assets/cutout/key_matte.py`
-- `tools/assets/audit/render_ui_composition_proof.py`
-- `tools/assets/audit/audit_generated_source_derivation.py`
+Portable categories:
+
+- facade, validation, context, and doc guards: `tools/ai.mjs`,
+  `tools/pipeline_validate.mjs`, `tools/context_budget.mjs`,
+  `tools/doc_reference_check.mjs`, `tools/skills_eval.mjs`, and
+  `tools/skills_sync.mjs`;
+- workflow state and profiling: `tools/taskboard/`, `tools/ai_profile/`;
+- game startup/runtime proof: `tools/game_context/`, `tools/product_gate/`;
+- reusable asset pipeline helpers under `tools/assets/`;
+- bootstrap/export helpers under `tools/bootstrap/`.
 
 `tools/product_gate/review.mjs` creates the durable screenshot/player-read
 gate for visual, FTUE, and audience-test slices. Use it through
