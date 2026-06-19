@@ -3,12 +3,15 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <direct.h>
+#include <io.h>
 #else
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
 #endif
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -327,16 +330,67 @@ static void session_profile_path(char *out, size_t out_size, const char *harness
 #endif
 }
 
-static void json_escape(FILE *f, const char *s) {
+static void append_char(char *buf, size_t cap, size_t *len, char c) {
+    if (*len + 1 >= cap) return;
+    buf[(*len)++] = c;
+    buf[*len] = '\0';
+}
+
+static void append_str(char *buf, size_t cap, size_t *len, const char *s) {
+    while (*s && *len + 1 < cap) buf[(*len)++] = *s++;
+    buf[*len] = '\0';
+}
+
+static void append_fmt(char *buf, size_t cap, size_t *len, const char *fmt, ...) {
+    if (*len >= cap) return;
+    va_list args;
+    va_start(args, fmt);
+    int n = vsnprintf(buf + *len, cap - *len, fmt, args);
+    va_end(args);
+    if (n < 0) return;
+    size_t add = (size_t)n;
+    if (add >= cap - *len) {
+        *len = cap - 1;
+        buf[*len] = '\0';
+    } else {
+        *len += add;
+    }
+}
+
+static void append_json_escape(char *buf, size_t cap, size_t *len, const char *s) {
     for (; *s; s++) {
         unsigned char c = (unsigned char)*s;
-        if (c == '"' || c == '\\') fprintf(f, "\\%c", c);
-        else if (c == '\n') fputs("\\n", f);
-        else if (c == '\r') fputs("\\r", f);
-        else if (c == '\t') fputs("\\t", f);
-        else if (c < 32) fprintf(f, "\\u%04x", c);
-        else fputc(c, f);
+        if (c == '"' || c == '\\') append_fmt(buf, cap, len, "\\%c", c);
+        else if (c == '\n') append_str(buf, cap, len, "\\n");
+        else if (c == '\r') append_str(buf, cap, len, "\\r");
+        else if (c == '\t') append_str(buf, cap, len, "\\t");
+        else if (c < 32) append_fmt(buf, cap, len, "\\u%04x", c);
+        else append_char(buf, cap, len, (char)c);
     }
+}
+
+static bool lock_profile_file(FILE *f) {
+#ifdef _WIN32
+    HANDLE h = (HANDLE)_get_osfhandle(_fileno(f));
+    if (h == INVALID_HANDLE_VALUE) return false;
+    OVERLAPPED ov;
+    memset(&ov, 0, sizeof(ov));
+    return LockFileEx(h, LOCKFILE_EXCLUSIVE_LOCK, 0, 0xffffffff, 0xffffffff, &ov) != 0;
+#else
+    return flock(fileno(f), LOCK_EX) == 0;
+#endif
+}
+
+static void unlock_profile_file(FILE *f) {
+#ifdef _WIN32
+    HANDLE h = (HANDLE)_get_osfhandle(_fileno(f));
+    if (h == INVALID_HANDLE_VALUE) return;
+    OVERLAPPED ov;
+    memset(&ov, 0, sizeof(ov));
+    UnlockFileEx(h, 0, 0xffffffff, 0xffffffff, &ov);
+#else
+    flock(fileno(f), LOCK_UN);
+#endif
 }
 
 static void trim_first_line(char *s) {
@@ -354,39 +408,56 @@ static void append_record(const char *profile, const char *event_type, const cha
     } else {
         default_profile_path(path, sizeof(path));
     }
-    FILE *f = fopen(path, "ab");
-    if (!f) return;
     char ts[64];
     timestamp_now(ts, sizeof(ts));
-    fprintf(f, "{\"ts\":\"%s\",\"phase\":\"session\",\"category\":\"%s\",\"intent\":\"", ts, category);
-    json_escape(f, intent);
-    fprintf(f, "\",\"result\":\"%s\",\"value\":\"%s\",\"event_type\":\"%s\",\"tools\":[\"", result, value, event_type);
-    json_escape(f, harness);
-    fputc('/', f);
-    json_escape(f, tool);
-    fputs("\"]", f);
+
+    char line[8192];
+    size_t len = 0;
+    line[0] = '\0';
+    append_fmt(line, sizeof(line), &len,
+               "{\"ts\":\"%s\",\"phase\":\"session\",\"category\":\"%s\",\"intent\":\"",
+               ts, category);
+    append_json_escape(line, sizeof(line), &len, intent);
+    append_fmt(line, sizeof(line), &len,
+               "\",\"result\":\"%s\",\"value\":\"%s\",\"event_type\":\"%s\",\"tools\":[\"",
+               result, value, event_type);
+    append_json_escape(line, sizeof(line), &len, harness);
+    append_char(line, sizeof(line), &len, '/');
+    append_json_escape(line, sizeof(line), &len, tool);
+    append_str(line, sizeof(line), &len, "\"]");
     if (command && *command) {
-        fputs(",\"commands\":[\"", f);
-        json_escape(f, command);
-        fputs("\"]", f);
+        append_str(line, sizeof(line), &len, ",\"commands\":[\"");
+        append_json_escape(line, sizeof(line), &len, command);
+        append_str(line, sizeof(line), &len, "\"]");
     }
     /* Per-session attribution so parallel work never mixes. */
     if (g_session_id[0]) {
-        fputs(",\"session_id\":\"", f);
-        json_escape(f, g_session_id);
-        fputc('"', f);
+        append_str(line, sizeof(line), &len, ",\"session_id\":\"");
+        append_json_escape(line, sizeof(line), &len, g_session_id);
+        append_char(line, sizeof(line), &len, '"');
     }
     if (harness && *harness) {
-        fputs(",\"harness\":\"", f);
-        json_escape(f, harness);
-        fputc('"', f);
+        append_str(line, sizeof(line), &len, ",\"harness\":\"");
+        append_json_escape(line, sizeof(line), &len, harness);
+        append_char(line, sizeof(line), &len, '"');
     }
     if (g_cwd[0]) {
-        fputs(",\"cwd\":\"", f);
-        json_escape(f, g_cwd);
-        fputc('"', f);
+        append_str(line, sizeof(line), &len, ",\"cwd\":\"");
+        append_json_escape(line, sizeof(line), &len, g_cwd);
+        append_char(line, sizeof(line), &len, '"');
     }
-    fputs("}\n", f);
+    append_str(line, sizeof(line), &len, "}\n");
+
+    FILE *f = fopen(path, "ab");
+    if (!f) return;
+    if (!lock_profile_file(f)) {
+        fclose(f);
+        return;
+    }
+    fseek(f, 0, SEEK_END);
+    fwrite(line, 1, len, f);
+    fflush(f);
+    unlock_profile_file(f);
     fclose(f);
 }
 

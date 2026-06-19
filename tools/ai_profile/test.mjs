@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -79,6 +79,30 @@ function runFastHook(payload, profile, harness = "codex") {
     stdio: ["pipe", "pipe", "pipe"],
   });
   assert.equal(result.status, 0, `hook_record_fast\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+}
+
+function runFastHookAsync(payload, profile, harness = "codex") {
+  const exe = join(root, "tools", "ai_profile", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast");
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(exe, [harness], {
+      cwd: root,
+      env: { ...process.env, AI_PROFILE_FILE: profile },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`hook_record_fast exited ${code}\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+        return;
+      }
+      resolvePromise();
+    });
+    child.stdin.end(JSON.stringify(payload));
+  });
 }
 
 test("scope file supplies metadata after CLI and env fallbacks", () => {
@@ -303,6 +327,31 @@ test("hook_record_fast records work and skips successful plumbing when built", {
     assert.equal(records[0].category, "validation");
     assert.equal(records[0].result, "pass");
     assert.deepEqual(records[0].commands, ["node --test tools/ai_profile/test.mjs"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("hook_record_fast keeps parallel JSONL appends valid", {
+  skip: !existsSync(join(root, "tools", "ai_profile", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
+}, async () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "fast-hook-parallel.jsonl");
+    const events = Array.from({ length: 32 }, (_, index) => ({
+      hook_event_name: "PostToolUse",
+      tool_name: "Bash",
+      tool_input: {
+        command: `node tools/pipeline_validate.mjs --parallel-case ${index} ${"x".repeat(180)}`,
+      },
+      tool_response: { exit_code: 0 },
+    }));
+
+    await Promise.all(events.map((payload) => runFastHookAsync(payload, profile)));
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, events.length);
+    assert.equal(new Set(records.map((record) => record.commands[0])).size, events.length);
   } finally {
     cleanup(dir);
   }
