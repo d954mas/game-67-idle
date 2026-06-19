@@ -384,6 +384,9 @@ if(NOT EMSCRIPTEN)
             assets/meshes/mech_starter_visor.gltf
             assets/meshes/mech_world_studs_floor.gltf
             assets/meshes/poly_pizza_quaternius_mech_cc0.glb
+            assets/meshes/kenney_modular_space_gate_cc0.glb
+            assets/meshes/kenney_modular_space_corridor_wide_cc0.glb
+            assets/meshes/kenney_modular_space_room_small_cc0.glb
             ${ROBOT_ENEMY_STATIC_MESHES}
             ${ASSAULT_WALKER_STATIC_MESHES}
             ${SENTINEL_MECH_STATIC_MESHES}

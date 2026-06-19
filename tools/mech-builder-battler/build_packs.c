@@ -62,6 +62,9 @@ static const char *MESH_ASSETS[] = {
     "assets/meshes/poly_pizza_tekano_sentinel_mech_mat15_static_ccby30.gltf",
     "assets/meshes/poly_pizza_tekano_sentinel_mech_mat12_static_ccby30.gltf",
     "assets/meshes/poly_pizza_tekano_sentinel_mech_mat23_static_ccby30.gltf",
+    "assets/meshes/kenney_modular_space_gate_cc0.glb",
+    "assets/meshes/kenney_modular_space_corridor_wide_cc0.glb",
+    "assets/meshes/kenney_modular_space_room_small_cc0.glb",
 };
 
 static const char *pack_path(const char *dir, const char *name) {

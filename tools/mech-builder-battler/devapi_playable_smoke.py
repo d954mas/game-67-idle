@@ -65,6 +65,7 @@ def main() -> int:
         capture(game, "mech_t0033_stylized_studs_world_hangar_smoke.png", wait_frames=1)
         capture(game, "mech_t0034_textured_floor_hangar_smoke.png", wait_frames=1)
         capture(game, "mech_t0035_asset_first_sentinel_hangar_smoke.png", wait_frames=1)
+        capture(game, "mech_t0036_kenney_space_props_hangar_smoke.png", wait_frames=1)
         capture(game, "mech_t0029_arena_dressing_hangar_smoke.png", wait_frames=1)
         capture(game, "mech_t0030_lighting_material_hangar_smoke.png", wait_frames=1)
 

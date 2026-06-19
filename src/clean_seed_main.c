@@ -52,9 +52,10 @@
 #define ROBOT_ENEMY_MESH_PARTS 7
 #define ASSAULT_WALKER_MESH_PARTS 13
 #define SENTINEL_SHOWCASE_MESH_PARTS 10
+#define KENNEY_WORLD_PROP_PARTS 3
 #define MECH_MESH_ENTITY_CAPACITY 160
-#define MECH_MESH_TYPES 47
-#define MECH_MESH_RENDER_ITEMS (1 + MECH_MESH_PARTS + ASSAULT_WALKER_MESH_PARTS + SENTINEL_SHOWCASE_MESH_PARTS + (MAX_DRONES * ROBOT_ENEMY_MESH_PARTS))
+#define MECH_MESH_TYPES 50
+#define MECH_MESH_RENDER_ITEMS (1 + MECH_MESH_PARTS + ASSAULT_WALKER_MESH_PARTS + SENTINEL_SHOWCASE_MESH_PARTS + KENNEY_WORLD_PROP_PARTS + (MAX_DRONES * ROBOT_ENEMY_MESH_PARTS))
 #define MECH_PART_ROCKETS_ONLY 0x01U
 
 typedef enum {
@@ -152,6 +153,9 @@ typedef enum {
   MECH_MESH_SENTINEL_MAT15,
   MECH_MESH_SENTINEL_MAT12,
   MECH_MESH_SENTINEL_MAT23,
+  MECH_MESH_KENNEY_SPACE_GATE,
+  MECH_MESH_KENNEY_SPACE_CORRIDOR_WIDE,
+  MECH_MESH_KENNEY_SPACE_ROOM_SMALL,
 } MeshPartMesh;
 
 typedef struct MeshPartSpec {
@@ -185,6 +189,7 @@ typedef struct MeshMechRuntime {
   nt_entity_t parts[MECH_MESH_PARTS];
   nt_entity_t assault_hero[ASSAULT_WALKER_MESH_PARTS];
   nt_entity_t sentinel_showcase[SENTINEL_SHOWCASE_MESH_PARTS];
+  nt_entity_t kenney_world_props[KENNEY_WORLD_PROP_PARTS];
   nt_entity_t enemy_robots[MAX_DRONES][ROBOT_ENEMY_MESH_PARTS];
   nt_render_item_t items[MECH_MESH_RENDER_ITEMS];
   nt_render_item_t sort_scratch[MECH_MESH_RENDER_ITEMS];
@@ -530,6 +535,9 @@ static const char *MESH_MECH_RESOURCE_PATHS[MECH_MESH_TYPES] = {
     "assets/meshes/poly_pizza_tekano_sentinel_mech_mat15_static_ccby30.gltf",
     "assets/meshes/poly_pizza_tekano_sentinel_mech_mat12_static_ccby30.gltf",
     "assets/meshes/poly_pizza_tekano_sentinel_mech_mat23_static_ccby30.gltf",
+    "assets/meshes/kenney_modular_space_gate_cc0.glb",
+    "assets/meshes/kenney_modular_space_corridor_wide_cc0.glb",
+    "assets/meshes/kenney_modular_space_room_small_cc0.glb",
 };
 
 static void ortho(float left, float right, float bottom, float top,
@@ -2269,6 +2277,15 @@ static void init_mesh_mech(void) {
     *nt_material_comp_handle(s_mesh_mech.sentinel_showcase[part]) =
         s_mesh_mech.robot_material;
   }
+  for (int part = 0; part < KENNEY_WORLD_PROP_PARTS; ++part) {
+    s_mesh_mech.kenney_world_props[part] = nt_entity_create();
+    nt_transform_comp_add(s_mesh_mech.kenney_world_props[part]);
+    nt_mesh_comp_add(s_mesh_mech.kenney_world_props[part]);
+    nt_material_comp_add(s_mesh_mech.kenney_world_props[part]);
+    nt_drawable_comp_add(s_mesh_mech.kenney_world_props[part]);
+    *nt_material_comp_handle(s_mesh_mech.kenney_world_props[part]) =
+        s_mesh_mech.solid_material;
+  }
   for (int i = 0; i < MAX_DRONES; ++i) {
     for (int part = 0; part < ROBOT_ENEMY_MESH_PARTS; ++part) {
       s_mesh_mech.enemy_robots[i][part] = nt_entity_create();
@@ -2473,6 +2490,54 @@ static void append_sentinel_showcase_items(float time, uint32_t *item_count) {
   }
 }
 
+static void append_kenney_world_prop_items(bool hangar, uint32_t *item_count) {
+  const MeshPartMesh prop_meshes[KENNEY_WORLD_PROP_PARTS] = {
+      MECH_MESH_KENNEY_SPACE_GATE,
+      MECH_MESH_KENNEY_SPACE_CORRIDOR_WIDE,
+      MECH_MESH_KENNEY_SPACE_ROOM_SMALL,
+  };
+  const float prop_pos[KENNEY_WORLD_PROP_PARTS][3] = {
+      {4.95F, 0.48F, -3.55F},
+      {-5.25F, 0.38F, -4.50F},
+      {0.0F, 0.34F, 5.80F},
+  };
+  const float prop_scale[KENNEY_WORLD_PROP_PARTS][3] = {
+      {0.40F, 0.40F, 0.40F},
+      {0.30F, 0.30F, 0.30F},
+      {0.28F, 0.28F, 0.28F},
+  };
+  const float prop_yaw[KENNEY_WORLD_PROP_PARTS] = {0.72F, -0.55F, 3.14159265F};
+  const float prop_colors[KENNEY_WORLD_PROP_PARTS][4] = {
+      {0.84F, 0.94F, 1.0F, 1.0F},
+      {0.22F, 0.44F, 0.95F, 1.0F},
+      {0.90F, 0.98F, 0.92F, 1.0F},
+  };
+  for (int part = 0; part < KENNEY_WORLD_PROP_PARTS; ++part) {
+    const uint32_t mesh_id = nt_resource_get(s_mesh_mech.meshes[prop_meshes[part]]);
+    nt_entity_t entity = s_mesh_mech.kenney_world_props[part];
+    float *pos = nt_transform_comp_position(entity);
+    pos[0] = prop_pos[part][0];
+    pos[1] = prop_pos[part][1] + (hangar ? 0.0F : -0.06F);
+    pos[2] = prop_pos[part][2];
+    q_pose(prop_yaw[part], 0.0F, 0.0F, nt_transform_comp_rotation(entity));
+    float *scl = nt_transform_comp_scale(entity);
+    scl[0] = prop_scale[part][0];
+    scl[1] = prop_scale[part][1];
+    scl[2] = prop_scale[part][2];
+    *nt_transform_comp_dirty(entity) = true;
+    *nt_mesh_comp_handle(entity) = (nt_mesh_t){.id = mesh_id};
+    *nt_material_comp_handle(entity) = s_mesh_mech.solid_material;
+    nt_drawable_comp_set_color(entity, prop_colors[part][0], prop_colors[part][1],
+                               prop_colors[part][2], prop_colors[part][3]);
+    s_mesh_mech.items[*item_count].sort_key =
+        nt_sort_key_opaque(s_mesh_mech.solid_material.id, mesh_id);
+    s_mesh_mech.items[*item_count].entity = entity.id;
+    s_mesh_mech.items[*item_count].batch_key =
+        nt_batch_key(s_mesh_mech.solid_material.id, mesh_id);
+    (*item_count)++;
+  }
+}
+
 static void draw_mesh_mech(float w, float h) {
   if (!mesh_mech_ready()) {
     return;
@@ -2525,6 +2590,8 @@ static void draw_mesh_mech(float w, float h) {
   s_mesh_mech.items[item_count].batch_key =
       nt_batch_key(s_mesh_mech.world_material.id, floor_mesh_id);
   item_count++;
+
+  append_kenney_world_prop_items(hangar, &item_count);
 
   if (use_assault_hero) {
     append_assault_hero_items(root_x, root_z, root_scale, yaw, move_t, walk,
