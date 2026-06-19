@@ -48,6 +48,10 @@ function readJsonl(file) {
     .map((line) => JSON.parse(line));
 }
 
+function escapeForRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function runHook(payload, profile, harness = "codex", env = {}) {
   const result = spawnSync(process.execPath, ["tools/ai_profile/hook_record.mjs", harness], {
     cwd: root,
@@ -1099,6 +1103,8 @@ test("status current-scope guard fails when only start was recorded", () => {
 
     assert.equal(result.status, 3);
     assert.match(result.stdout, /Current scope review confidence: broken/);
+    assert.match(result.stdout, new RegExp(`Profile: ${escapeForRegExp(resolve(profile))}`));
+    assert.match(result.stdout, new RegExp(`Scope file: ${escapeForRegExp(resolve(scope))}`));
     assert.match(result.stderr, /current_scope_too_shallow/);
     assert.match(result.stderr, /node tools\/ai\.mjs checkpoint/);
     const status = readJson(statusJson);

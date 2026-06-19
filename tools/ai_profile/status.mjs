@@ -689,6 +689,11 @@ function renderPassiveMarkdown(status) {
   const largestContext = status.passive_summary.largest_context_input;
   lines.push(`# AI Profile Passive Status - ${basename(status.profile)}`);
   lines.push("");
+  lines.push(`Profile: ${status.profile}`);
+  if (status.profile_files.length > 1) {
+    lines.push(`Profile files: ${status.profile_files.join(", ")}`);
+  }
+  lines.push(`Scope file: ${status.scope.path || "none"}`);
   lines.push(`Mode: passive`);
   lines.push(`Records: ${status.records}`);
   lines.push(`Unresolved failures: ${status.unresolved_failed_records}`);
