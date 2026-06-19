@@ -12,3 +12,4 @@ source of truth shared by all agent CLIs). Read that file and follow it.
 Reference playbooks (load only when the canonical skill says to):
 
 - `.codex/skills/game-feature-iteration/references/iteration-cycle-playbook.md`
+- `.codex/skills/game-feature-iteration/references/playable-feature-gates.md`

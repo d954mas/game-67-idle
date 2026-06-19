@@ -58,6 +58,9 @@ node tools/pipeline_validate.mjs
 - `game-visual-art-direction` also keeps its hot `SKILL.md` as a short router
   and loads visual workflow/gate detail from
   `.codex/skills/game-visual-art-direction/references/visual-workflow-gates.md`.
+- `game-feature-iteration` now keeps its hot `SKILL.md` as a short router and
+  loads playable/reference/product/build gate detail from
+  `.codex/skills/game-feature-iteration/references/playable-feature-gates.md`.
 
 ## Next Priorities
 
