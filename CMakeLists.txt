@@ -106,10 +106,13 @@ target_include_directories(game_state PUBLIC "${GAME_STATE_GENERATED_DIR}" src)
 target_link_libraries(game_state PUBLIC cjson)
 target_compile_definitions(game_state PRIVATE _CRT_SECURE_NO_WARNINGS)
 # nt_devapi (engine) provides the command bus + NT_DEVAPI_ENABLED=1 (PUBLIC) for
-# the generated game.state.* handlers; OFF -> undefined -> the devapi source is
-# compiled out.
+# the generated game.state.* handlers. When the gate is OFF the engine target is
+# absent, so define the macro =0 here (PUBLIC, propagates to game_seed) — the
+# `#if NT_DEVAPI_ENABLED` guards need it defined, not undefined (-Werror,-Wundef).
 if(GAME_DEVAPI_ENABLED)
     target_link_libraries(game_state PUBLIC nt_devapi)
+else()
+    target_compile_definitions(game_state PUBLIC NT_DEVAPI_ENABLED=0)
 endif()
 nt_set_warning_flags(game_state)
 nt_set_sanitizer_flags(game_state)
@@ -168,6 +171,8 @@ target_link_libraries(${GAME_TARGET} PRIVATE
 )
 if(GAME_DEVAPI_ENABLED)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_devapi nt_devapi_net)
+else()
+    target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=0)
 endif()
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http)

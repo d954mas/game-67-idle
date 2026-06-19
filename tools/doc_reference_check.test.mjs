@@ -179,3 +179,39 @@ test("doc reference check fails a missing non-markdown tool reference", () => {
     cleanup(dir);
   }
 });
+
+test("doc reference check tolerates an omitted regenerated subsystem", () => {
+  // The portable export base omits tools/devapi + tools/state_codegen; a skill
+  // referencing them must not fail when the whole subsystem dir is absent.
+  const dir = tempDir();
+  try {
+    writeMinimalRoot(dir);
+    writeFileSync(
+      join(dir, ".codex", "skills", "sample", "SKILL.md"),
+      "See `references/detail.md`, `tools/devapi/devapi_client.py`, and `tools/state_codegen/generate_state.py`.\n",
+      "utf8",
+    );
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("doc reference check still fails a missing file inside a present subsystem", () => {
+  const dir = tempDir();
+  try {
+    writeMinimalRoot(dir);
+    mkdirSync(join(dir, "tools", "devapi"), { recursive: true });
+    writeFileSync(
+      join(dir, ".codex", "skills", "sample", "SKILL.md"),
+      "See `references/detail.md` and `tools/devapi/missing_client.py`.\n",
+      "utf8",
+    );
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /tools\/devapi\/missing_client\.py/);
+  } finally {
+    cleanup(dir);
+  }
+});

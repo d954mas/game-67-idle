@@ -188,4 +188,10 @@ void game_devapi_ui_register(void) {
     (void)nt_devapi_register(&descs[3], ep_entity_list, NULL);
 }
 
+#else
+
+/* Keep the translation unit non-empty when the DevAPI is gated off (ISO C
+   requires at least one declaration; -Werror,-Wempty-translation-unit). */
+typedef int game_devapi_ui_disabled_tu;
+
 #endif
