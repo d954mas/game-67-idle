@@ -37,3 +37,9 @@ content. Green checks should mean a real artifact exists.
 
 - 2026-06-19: epic opened after deep pipeline review + agentic-gamedev competitor
   study. Profiler collapse + reset/gate-map dedup already landed (commit 97c0169).
+- 2026-06-19: executed. T0001-T0006 + T0009 DONE and committed (close_slice
+  arbiter, --verify, parseable verdict + total guard, honest skill presence check,
+  art-cluster disambiguation, non-.md doc-ref checks, dormant product-gate gate).
+  T0008 DROPPED (per-call node hook overhead vs the C fast-path). T0007 DEFERRED
+  (lead's live AGENTS.md concept edits + native-PC invariant now concept-variable).
+  T0010 deferred (post-prototype style-lock). Net: 7/9 done, 2 closed-with-reason.
