@@ -129,6 +129,8 @@ endif()
 
 add_executable(${GAME_TARGET}
     src/clean_seed_main.c
+    src/game_devapi_ui.c
+    src/game_devapi_ui.h
     src/game_audio.c
     src/game_audio.h
 )

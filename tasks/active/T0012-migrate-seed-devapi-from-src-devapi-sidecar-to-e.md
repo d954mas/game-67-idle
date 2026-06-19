@@ -69,3 +69,14 @@ EMSCRIPTEN/Release link with zero nt_devapi_* symbols; (12) validate + screensho
   REMAINING: Pass 2 port ui.*/entity.list (game-side UI adapter on the engine bus),
   Pass 3 rewire the python client + smoke (ping/game.state/ui.click/screenshot),
   Pass 4 verify EMSCRIPTEN/Release link with zero nt_devapi_* + update the skill.
+- 2026-06-19: PASS 1 RUNTIME-VERIFIED + engine pulled to c0ade084 (UI menu/dropdown,
+  no devapi change). Launched game_seed --devapi 9123; TCP smoke: ping, endpoints
+  (37 cmds), game.state, command.describe, game.action.cycle all OK on the native bus.
+- 2026-06-19: PASS 2 DONE + RUNTIME-VERIFIED. New src/game_devapi_ui.{c,h}: game-side
+  UI-tree model + ui.tree/ui.element/ui.click + entity.list registered group="game"
+  on the engine bus; ui.click injects via nt_input_inject_pointer (DOWN+UP). Seed
+  re-adds the per-frame UI-tree rebuild. Smoke: 41 cmds; ui.tree=[root,seed.cycle,
+  seed.progress]; ui.click seed.cycle drove the game (test_ui_clicks 0->1, shape
+  cube->sphere). Wire shapes that changed vs the sidecar (clients must follow): get
+  -> {path,value}, ui.tree -> {nodes[]}, entity.list -> {entities[]}, engine ok/error
+  envelope. REMAINING: Pass 3 (python client/CLI + smoke), Pass 4 (skill + wasm/release).

@@ -4,6 +4,7 @@
 #if NT_DEVAPI_ENABLED
 #include "devapi/nt_devapi.h"
 #include "devapi/nt_devapi_net.h"
+#include "game_devapi_ui.h"
 #endif
 #include "game_state.h"
 #include "graphics/nt_gfx.h"
@@ -268,6 +269,14 @@ static void register_game_endpoints(void) {
     (void)nt_devapi_register(&descs[0], ep_game_state, NULL);
     (void)nt_devapi_register(&descs[1], ep_game_reset_playtest, NULL);
     (void)nt_devapi_register(&descs[2], ep_game_action_cycle, NULL);
+    game_devapi_ui_register();
+}
+
+static void register_ui_devapi(float w, float h) {
+    game_devapi_ui_clear();
+    (void)game_devapi_ui_register_node("root", "", "screen", "Game Seed", "Clean seed runtime", 0.0F, 0.0F, w, h, true, true);
+    (void)game_devapi_ui_register_node("seed.cycle", "root", "button", "Cycle Seed", g_game_state.test_button_text, s_cycle_box.x, s_cycle_box.y, s_cycle_box.w, s_cycle_box.h, true, true);
+    (void)game_devapi_ui_register_node("seed.progress", "root", "meter", "Seed Progress", g_game_state.test_label_text, w * 0.5F - 160.0F, s_cycle_box.y - 34.0F, 320.0F, 14.0F, true, true);
 }
 #endif
 
@@ -284,6 +293,12 @@ static void frame(void) {
     const float h = (float)(g_nt_window.fb_height ? g_nt_window.fb_height : g_nt_window.height);
     layout(w, h);
     handle_input();
+
+#if NT_DEVAPI_ENABLED
+    if (s_devapi_enabled) {
+        register_ui_devapi(w, h);
+    }
+#endif
 
 #ifndef NT_PLATFORM_WEB
     if (nt_window_should_close() || nt_input_key_is_pressed(NT_KEY_ESCAPE)) {
