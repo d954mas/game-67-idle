@@ -127,10 +127,10 @@ test("context budget applies the split pipeline map cap", () => {
 test("context budget default skill entrypoint cap stays tight", () => {
   const dir = tempDir();
   try {
-    writeFixture(dir, "x".repeat(3900));
+    writeFixture(dir, "x".repeat(3600));
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /\.codex\/skills\/sample\/SKILL\.md: 3900 chars > 3800/);
+    assert.match(result.stderr, /\.codex\/skills\/sample\/SKILL\.md: 3600 chars > 3500/);
   } finally {
     cleanup(dir);
   }
