@@ -29,11 +29,30 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.match(result.stdout, /== doc reference tests/);
   assert.match(result.stdout, /== bootstrap export tests/);
   assert.match(result.stdout, /== repeated product gate failure guard/);
-  assert.match(result.stdout, /== product gate tests/);
   assert.doesNotMatch(result.stdout, /== portable export/);
   assert.doesNotMatch(result.stdout, /== exported ai profile tests/);
   assert.match(result.stdout, /reusable pipeline quick validation passed/);
   assert.match(result.stdout, /node tools\/ai\.mjs validate --full/);
+});
+
+test("quick validation skips the product-gate suite in a clean seed", () => {
+  const result = run(["--dry-run"], { NT_FORCE_CONCEPT: "0" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /== product gate tests/);
+  assert.match(result.stdout, /skipped product gate tests/);
+});
+
+test("quick validation runs the product-gate suite with --with-assets", () => {
+  const result = run(["--with-assets", "--dry-run"], { NT_FORCE_CONCEPT: "0" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /== product gate tests/);
+  assert.doesNotMatch(result.stdout, /skipped product gate tests/);
+});
+
+test("quick validation runs the product-gate suite when a game concept is active", () => {
+  const result = run(["--dry-run"], { NT_FORCE_CONCEPT: "1" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /== product gate tests/);
 });
 
 test("pipeline validation review dry-run adds strict context budget review", () => {

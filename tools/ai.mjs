@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 
 function usage() {
   console.error(`usage:
-  node tools/ai.mjs validate [--quick|--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune]
+  node tools/ai.mjs validate [--quick|--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune] [--with-assets]
   node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--no-import-codex-session]
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail [gate options]
@@ -96,7 +96,7 @@ function maybeImportCodexSession(args) {
 }
 
 function pipelineValidateArgs(args) {
-  const allowedFlags = new Set(["--quick", "--full", "--review", "--dry-run", "--reexport-tests", "--no-prune"]);
+  const allowedFlags = new Set(["--quick", "--full", "--review", "--dry-run", "--reexport-tests", "--no-prune", "--with-assets"]);
   const valueFlags = new Set(["--keep-exports"]);
   const out = ["tools/pipeline_validate.mjs"];
   for (let index = 0; index < args.length; index += 1) {

@@ -9,6 +9,19 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+
+// The product-gate suite is dormant in a clean seed: it only matters once a game
+// with art/runtime is active. STATUS.md is the single signal (same phrase as the
+// status/runtime guard below); --with-assets and --full force it on. NT_FORCE_CONCEPT
+// (0/1) overrides for deterministic tests.
+function hasActiveConcept() {
+  if (process.env.NT_FORCE_CONCEPT === "1") return true;
+  if (process.env.NT_FORCE_CONCEPT === "0") return false;
+  const statusPath = join(root, "tasks", "STATUS.md");
+  if (!existsSync(statusPath)) return true;
+  return !/no active game concept/i.test(readFileSync(statusPath, "utf8"));
+}
+
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const exportDir = join(root, "tmp", `pipeline-validate-${stamp}`);
 const args = process.argv.slice(2);
@@ -23,6 +36,8 @@ Modes:
              self-check (reserve for portable-base/export/runtime/release gates)
   --review   add review-stage gates, including strict context budgets
   --dry-run  print the selected commands without running them
+  --with-assets run the product-gate suite even when STATUS has no active game
+             concept (auto-on under --full or once a game is active)
 
 Export depth (with --full):
   --reexport-tests  also re-run the full test battery inside the export. Default
@@ -53,7 +68,7 @@ let keepExports = 3;
 }
 const prune = !args.includes("--no-prune");
 
-const allowedArgs = new Set(["--quick", "--full", "--review", "--dry-run", "--reexport-tests", "--no-prune", "--help", "-h"]);
+const allowedArgs = new Set(["--quick", "--full", "--review", "--dry-run", "--reexport-tests", "--no-prune", "--with-assets", "--help", "-h"]);
 for (const arg of args) {
   if (!allowedArgs.has(arg)) usage();
 }
@@ -64,6 +79,7 @@ const fullMode = args.includes("--full");
 const reviewMode = args.includes("--review");
 const mode = fullMode ? "full" : "quick";
 const dryRun = args.includes("--dry-run");
+const runAssets = args.includes("--with-assets") || fullMode || hasActiveConcept();
 
 const GENERATED_ART_JOB_NODE_TESTS = [
   "tools/assets/job/plan_source_sheet_prompt.test.mjs",
@@ -314,8 +330,10 @@ run("ai profile tests", ["--test", "tools/ai_profile/test.mjs"]);
 if (existsSync(join(root, "tools", "game_context", "test.mjs"))) {
   run("game context tests", ["--test", "tools/game_context/test.mjs"]);
 }
-if (existsSync(join(root, "tools", "product_gate", "test.mjs"))) {
+if (runAssets && existsSync(join(root, "tools", "product_gate", "test.mjs"))) {
   run("product gate tests", ["--test", "tools/product_gate/test.mjs"]);
+} else if (!runAssets) {
+  console.log("\nskipped product gate tests (no active game concept; pass --with-assets or --full to run)");
 }
 
 if (!fullMode) {
