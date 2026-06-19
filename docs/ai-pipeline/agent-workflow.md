@@ -1,13 +1,13 @@
 # Agent Workflow Reference
 
-Portable rules for agent behavior. Load when changing context policy, work-loop
-behavior, multi-agent usage, or hot Markdown structure.
+Portable rules for agent behavior. Load when changing context policy, work-loop,
+multi-agent use, or hot docs.
 
 ## Roles
 
 - Lead: sets direction, taste, priority, and acceptance.
-- Agent: turns intent into scoped work, asks only necessary questions, researches
-  when references matter, implements small slices, and proves results.
+- Agent: turns intent into scoped work, asks only necessary questions,
+  researches when refs matter, implements small slices, and proves results.
 
 ## Agent-Facing Docs
 
@@ -15,12 +15,11 @@ behavior, multi-agent usage, or hot Markdown structure.
 - `AI_PIPELINE.md`: reusable workflow map and context policy.
 - `tasks/README.md`: task store commands and lifecycle.
 - `.codex/skills/*/SKILL.md`: one focused procedure per task type.
-- Skill `references/` and `gamedesign/knowledge/`: deeper method, examples, and
+- Skill `references/` and `gamedesign/knowledge/`: deeper method, examples,
   lessons loaded only when needed.
 
-Do not duplicate rules. Put each rule where the agent first needs it, link to
-the deeper source, then delete stale anecdotes once encoded as a tool,
-validator, task rule, or skill.
+Do not duplicate rules. Put each rule where first needed, link deeper source,
+then delete stale anecdotes once encoded as tool, validator, task rule, or skill.
 
 Write agent Markdown as:
 
@@ -43,8 +42,8 @@ Prefer scoped search and compact command output over whole-file dumps. Use
 archives, old logs, generated artifacts, and broad design folders only when
 task-linked or requested.
 
-Keep stable context byte-stable inside a session. Put volatile facts in tasks,
-status, evidence files, or final reports, not hot instruction files.
+Keep stable context byte-stable in-session. Put volatile facts in tasks, status,
+evidence files, or final reports, not hot instruction files.
 
 ## Work Loop
 
@@ -59,5 +58,4 @@ status, evidence files, or final reports, not hot instruction files.
    project state.
 
 Use multiple agents only for independent side work with clear owner, artifact,
-evidence, and out-of-scope boundary. The main integrator owns merge,
-validation, and status.
+evidence, and boundary. The main integrator owns merge, validation, and status.

@@ -7,8 +7,8 @@ Source of truth for current work.
 - Epics: `tasks/epics/`
 - Live index: `tasks/STATUS.md`
 
-Archived tasks are history; load only for linked evidence, regression debugging,
-review cleanup, or explicit user request.
+Archived tasks are history; load only for linked evidence, regression debug,
+review cleanup, or user request.
 
 ## Commands
 
@@ -23,7 +23,7 @@ node tools/taskboard/cli.mjs set T0001 --status doing
 node tools/taskboard/cli.mjs validate
 ```
 
-Board/server only when requested: `node tools/taskboard/server.mjs`.
+Board when requested: `node tools/taskboard/server.mjs`.
 
 ```powershell
 node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"
@@ -31,12 +31,12 @@ node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brie
 
 ## Live Status
 
-`tasks/STATUS.md` is a short operational index: goal, blockers, debt, gate,
+`tasks/STATUS.md` is a short index: goal, blockers, debt, gate,
 validation, evidence, next priorities. It is not a log.
 
-Every claim points to a task, doc, command, or evidence path. Keep history in
-task logs. Update only when goal/gate/blockers, validation, evidence, or
-priorities change.
+Every claim points to a task, doc, command, or evidence. Keep history in task
+logs. Update only when goal/gate/blockers, validation, evidence, or priorities
+change.
 
 ## Minimal Context
 
@@ -47,12 +47,12 @@ For substantial work:
 3. Read only task/evidence files needed for the decision.
 4. Load one matching skill.
 
-Default searches stay current/scoped: avoid completed tasks, review queues, old
-logs, P3 ideas, unrelated epics, broad design docs, and build artifacts.
+Searches stay current/scoped: avoid completed tasks, review queues, old
+logs, P3 ideas, unrelated epics, broad design docs, build artifacts.
 
 ## Detailed Protocol
 
-Load `tasks/guides/task-store-reference.md` only when changing/auditing task
+Load `tasks/guides/task-store-reference.md` only when changing/auditing
 lifecycle, scope intake, backlog, evidence, checkpoints, or manual format.
 
 ## Done And Validation

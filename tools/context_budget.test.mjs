@@ -86,7 +86,7 @@ test("context budget default hot doc limit is tight enough for live docs", () =>
     writeFixture(dir, "short skill\n", "x".repeat(6600));
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /AGENTS\.md: 6600 chars > 3000/);
+    assert.match(result.stderr, /AGENTS\.md: 6600 chars > 2800/);
   } finally {
     cleanup(dir);
   }
@@ -114,10 +114,10 @@ test("context budget applies the task store hot guide cap", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "tasks", "README.md"), "x".repeat(2600), "utf8");
+    writeFileSync(join(dir, "tasks", "README.md"), "x".repeat(2500), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /tasks\/README\.md: 2600 chars > 2500/);
+    assert.match(result.stderr, /tasks\/README\.md: 2500 chars > 2400/);
   } finally {
     cleanup(dir);
   }
@@ -140,10 +140,10 @@ test("context budget applies the tools README cap", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "tools", "README.md"), "x".repeat(2600), "utf8");
+    writeFileSync(join(dir, "tools", "README.md"), "x".repeat(2500), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /tools\/README\.md: 2600 chars > 2500/);
+    assert.match(result.stderr, /tools\/README\.md: 2500 chars > 2400/);
   } finally {
     cleanup(dir);
   }
@@ -153,10 +153,10 @@ test("context budget applies pipeline reference caps", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "x".repeat(2400), "utf8");
+    writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "x".repeat(2300), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /docs\/ai-pipeline\/agent-workflow\.md: 2400 chars > 2300/);
+    assert.match(result.stderr, /docs\/ai-pipeline\/agent-workflow\.md: 2300 chars > 2200/);
   } finally {
     cleanup(dir);
   }
@@ -165,10 +165,10 @@ test("context budget applies pipeline reference caps", () => {
 test("context budget default skill entrypoint cap stays tight", () => {
   const dir = tempDir();
   try {
-    writeFixture(dir, "x".repeat(2700));
+    writeFixture(dir, "x".repeat(2500));
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /\.codex\/skills\/sample\/SKILL\.md: 2700 chars > 2600/);
+    assert.match(result.stderr, /\.codex\/skills\/sample\/SKILL\.md: 2500 chars > 2400/);
   } finally {
     cleanup(dir);
   }
