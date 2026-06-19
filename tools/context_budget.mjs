@@ -11,7 +11,7 @@ function usage() {
   node tools/context_budget.mjs [--root <dir>] [--max-skill-chars <n>] [--max-doc-chars <n>] [--json]
 
 Defaults:
-  --max-skill-chars 3500   max chars for each .codex/skills/*/SKILL.md entrypoint
+  --max-skill-chars 3450   max chars for each .codex/skills/*/SKILL.md entrypoint
   --max-doc-chars   6500   max chars for hot root/status instruction docs;
                             when omitted, tighter per-file defaults apply`);
   process.exit(2);
@@ -36,7 +36,7 @@ function takeString(name, fallback) {
 }
 
 const root = resolve(takeString("--root", process.cwd()));
-const maxSkillChars = takeNumber("--max-skill-chars", 3500);
+const maxSkillChars = takeNumber("--max-skill-chars", 3450);
 const maxDocCharsProvided = args.includes("--max-doc-chars");
 const maxDocChars = takeNumber("--max-doc-chars", 6500);
 const json = args.includes("--json");
