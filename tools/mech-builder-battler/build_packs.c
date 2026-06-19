@@ -24,6 +24,11 @@ static const char *MESH_ASSETS[] = {
     "assets/meshes/mech_starter_rocket_pod.gltf",
     "assets/meshes/mech_starter_rocket_tube.gltf",
     "assets/meshes/mech_starter_vent.gltf",
+    "assets/meshes/mech_starter_hydraulic.gltf",
+    "assets/meshes/mech_starter_joint.gltf",
+    "assets/meshes/mech_starter_armor_plate.gltf",
+    "assets/meshes/mech_starter_visor.gltf",
+    "assets/meshes/poly_pizza_quaternius_mech_cc0.glb",
 };
 
 static const char *pack_path(const char *dir, const char *name) {

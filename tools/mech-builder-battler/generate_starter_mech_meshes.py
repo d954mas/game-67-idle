@@ -2,9 +2,9 @@
 """Generate authored low-poly starter mech part meshes.
 
 The generated glTF files are project-owned source assets for the first
-high-fidelity starter pass. They are intentionally simple, but they avoid the
-single stretched-cube look by giving each mech part a distinct silhouette and
-normal-bearing faceted surfaces.
+Roblox-like starter pass. They stay blocky on purpose, but each part carries a
+clear mech role: chunky torso, cockpit head, oversized shoulders, broad feet,
+studs, armor plates, and readable module sockets.
 """
 
 from __future__ import annotations
@@ -119,10 +119,10 @@ def bevel_box(bevel: float = 0.11) -> Mesh:
 def tapered_body() -> Mesh:
     m = Mesh()
     layers = [
-        (-0.56, 0.42, 0.34),
-        (-0.22, 0.50, 0.42),
-        (0.24, 0.68, 0.50),
-        (0.58, 0.50, 0.38),
+        (-0.56, 0.46, 0.36),
+        (-0.22, 0.58, 0.48),
+        (0.30, 0.74, 0.54),
+        (0.58, 0.66, 0.48),
     ]
     rings = []
     for y, x, z in layers:
@@ -133,34 +133,34 @@ def tapered_body() -> Mesh:
             m.add_face([a[j], a[(j + 1) % 4], b[(j + 1) % 4], b[j]])
     m.add_face([rings[0][3], rings[0][2], rings[0][1], rings[0][0]])
     m.add_face([rings[-1][0], rings[-1][1], rings[-1][2], rings[-1][3]])
-    # Raised chest armor and a rear reactor ridge add a hero silhouette without
-    # changing the runtime material path.
-    m.add_face([(-0.38, 0.02, -0.54), (0.38, 0.02, -0.54), (0.30, 0.40, -0.58), (-0.30, 0.40, -0.58)])
-    m.add_face([(-0.16, -0.42, 0.48), (0.16, -0.42, 0.48), (0.12, 0.52, 0.58), (-0.12, 0.52, 0.58)])
+    # Raised block plates keep the silhouette closer to a toy mech than a
+    # tapered realistic robot.
+    m.add_face([(-0.44, -0.16, -0.56), (0.44, -0.16, -0.56), (0.38, 0.46, -0.62), (-0.38, 0.46, -0.62)])
+    m.add_face([(-0.26, -0.48, 0.50), (0.26, -0.48, 0.50), (0.22, 0.56, 0.62), (-0.22, 0.56, 0.62)])
+    m.add_face([(-0.68, 0.18, -0.40), (-0.48, 0.18, -0.40), (-0.48, 0.54, -0.42), (-0.68, 0.54, -0.42)])
+    m.add_face([(0.48, 0.18, -0.40), (0.68, 0.18, -0.40), (0.68, 0.54, -0.42), (0.48, 0.54, -0.42)])
     return m
 
 
 def cockpit_head() -> Mesh:
-    m = Mesh()
-    bottom = [(-0.50, -0.36, -0.38), (0.50, -0.36, -0.38), (0.44, -0.36, 0.30), (-0.44, -0.36, 0.30)]
-    top = [(-0.34, 0.34, -0.30), (0.34, 0.34, -0.30), (0.22, 0.34, 0.18), (-0.22, 0.34, 0.18)]
-    for i in range(4):
-        m.add_face([bottom[i], bottom[(i + 1) % 4], top[(i + 1) % 4], top[i]])
-    m.add_face([bottom[3], bottom[2], bottom[1], bottom[0]])
-    m.add_face([top[0], top[1], top[2], top[3]])
-    m.add_face([(-0.42, -0.08, -0.42), (0.42, -0.08, -0.42), (0.28, 0.16, -0.48), (-0.28, 0.16, -0.48)])
+    m = bevel_box(0.10)
+    # Forward brow and rear plug read like a Roblox block helmet/cockpit.
+    m.add_face([(-0.50, 0.12, -0.56), (0.50, 0.12, -0.56), (0.42, 0.36, -0.62), (-0.42, 0.36, -0.62)])
+    m.add_face([(-0.26, -0.28, 0.50), (0.26, -0.28, 0.50), (0.22, 0.28, 0.58), (-0.22, 0.28, 0.58)])
     return m
 
 
 def foot_skid() -> Mesh:
     m = Mesh()
-    b = [(-0.58, -0.28, -0.62), (0.58, -0.28, -0.62), (0.52, -0.28, 0.58), (-0.52, -0.28, 0.58)]
-    t = [(-0.44, 0.22, -0.34), (0.44, 0.22, -0.34), (0.30, 0.22, 0.44), (-0.30, 0.22, 0.44)]
+    b = [(-0.62, -0.30, -0.66), (0.62, -0.30, -0.66), (0.60, -0.30, 0.62), (-0.60, -0.30, 0.62)]
+    t = [(-0.54, 0.24, -0.48), (0.54, 0.24, -0.48), (0.42, 0.24, 0.46), (-0.42, 0.24, 0.46)]
     for i in range(4):
         m.add_face([b[i], b[(i + 1) % 4], t[(i + 1) % 4], t[i]])
     m.add_face([b[3], b[2], b[1], b[0]])
     m.add_face([t[0], t[1], t[2], t[3]])
-    m.add_face([(-0.62, -0.10, -0.66), (0.62, -0.10, -0.66), (0.46, 0.02, -0.44), (-0.46, 0.02, -0.44)])
+    m.add_face([(-0.64, -0.08, -0.70), (0.64, -0.08, -0.70), (0.48, 0.08, -0.46), (-0.48, 0.08, -0.46)])
+    m.add_face([(-0.46, 0.24, 0.02), (-0.18, 0.24, 0.02), (-0.18, 0.36, 0.28), (-0.46, 0.36, 0.28)])
+    m.add_face([(0.18, 0.24, 0.02), (0.46, 0.24, 0.02), (0.46, 0.36, 0.28), (0.18, 0.36, 0.28)])
     return m
 
 
@@ -181,6 +181,63 @@ def cylinder_z(sides: int = 14) -> Mesh:
         m.add_face([p0, p1, p2, p3], norm((math.cos((a0 + a1) * 0.5), math.sin((a0 + a1) * 0.5), 0)))
         m.add_face([front_center, p3, p2], (0, 0, 1))
         m.add_face([back_center, p1, p0], (0, 0, -1))
+    return m
+
+
+def cylinder_y(sides: int = 14) -> Mesh:
+    m = Mesh()
+    r = 0.5
+    y0 = -0.5
+    y1 = 0.5
+    top_center = (0.0, y1, 0.0)
+    bottom_center = (0.0, y0, 0.0)
+    for i in range(sides):
+        a0 = (i / sides) * math.tau
+        a1 = ((i + 1) / sides) * math.tau
+        p0 = (math.cos(a0) * r, y0, math.sin(a0) * r)
+        p1 = (math.cos(a1) * r, y0, math.sin(a1) * r)
+        p2 = (math.cos(a1) * r, y1, math.sin(a1) * r)
+        p3 = (math.cos(a0) * r, y1, math.sin(a0) * r)
+        m.add_face([p0, p1, p2, p3], norm((math.cos((a0 + a1) * 0.5), 0, math.sin((a0 + a1) * 0.5))))
+        m.add_face([top_center, p2, p3], (0, 1, 0))
+        m.add_face([bottom_center, p0, p1], (0, -1, 0))
+    return m
+
+
+def lowpoly_joint() -> Mesh:
+    m = Mesh()
+    top = (0.0, 0.48, 0.0)
+    bottom = (0.0, -0.48, 0.0)
+    ring = []
+    for i in range(8):
+        a = (i / 8) * math.tau
+        ring.append((math.cos(a) * 0.50, 0.0, math.sin(a) * 0.50))
+    for i in range(8):
+        m.add_face([top, ring[i], ring[(i + 1) % 8]])
+        m.add_face([bottom, ring[(i + 1) % 8], ring[i]])
+    return m
+
+
+def armor_plate() -> Mesh:
+    m = Mesh()
+    front = [(-0.56, -0.42, -0.16), (0.56, -0.42, -0.16), (0.42, 0.42, -0.20), (-0.42, 0.42, -0.20)]
+    back = [(-0.40, -0.32, 0.16), (0.40, -0.32, 0.16), (0.30, 0.32, 0.18), (-0.30, 0.32, 0.18)]
+    m.add_face(front)
+    m.add_face([back[3], back[2], back[1], back[0]])
+    for i in range(4):
+        m.add_face([front[i], front[(i + 1) % 4], back[(i + 1) % 4], back[i]])
+    m.add_face([(-0.30, -0.06, -0.24), (0.30, -0.06, -0.24), (0.24, 0.16, -0.26), (-0.24, 0.16, -0.26)])
+    return m
+
+
+def visor_plate() -> Mesh:
+    m = Mesh()
+    front = [(-0.52, -0.16, -0.08), (0.52, -0.16, -0.08), (0.42, 0.16, -0.10), (-0.42, 0.16, -0.10)]
+    back = [(-0.42, -0.12, 0.08), (0.42, -0.12, 0.08), (0.34, 0.12, 0.08), (-0.34, 0.12, 0.08)]
+    m.add_face(front)
+    m.add_face([back[3], back[2], back[1], back[0]])
+    for i in range(4):
+        m.add_face([front[i], front[(i + 1) % 4], back[(i + 1) % 4], back[i]])
     return m
 
 
@@ -229,6 +286,10 @@ def main() -> int:
         "mech_starter_rocket_pod": cylinder_z(16),
         "mech_starter_rocket_tube": cylinder_z(12),
         "mech_starter_vent": bevel_box(0.08),
+        "mech_starter_hydraulic": cylinder_y(14),
+        "mech_starter_joint": lowpoly_joint(),
+        "mech_starter_armor_plate": armor_plate(),
+        "mech_starter_visor": visor_plate(),
     }
     for name, mesh in meshes.items():
         write_mesh(name, mesh)

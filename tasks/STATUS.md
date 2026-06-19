@@ -28,20 +28,20 @@ Reusable sidecar modules, tools, skills, and game code may be edited here.
 ## Current Gate
 
 First native PC prototype slice `T0021` is done and `T0022` refreshed the
-reference mismatch audit against current screenshots. The loop works, DevAPI
-smoke passes, and the strict product gate is PASS after the starter mech moved
-to a mesh/material/normal path. Art debt remains: `T0023` must replace the
-cube-kitbashed starter with an authored/high-fidelity mech. Iteration remains
-native PC; mobile/web is the UX/export target. Accepted: one owned mech, PvE
-first, semi-auto arena, floating joystick/WASD, resources -> hangar
-purchase/craft, shoulder rockets, drone swarm proof, short dash, `Cooling`, a
-fixed three-quarter/isometric camera, industrial salvage sport, and Foundry
-Warden mini-boss.
+reference mismatch audit against current screenshots. The loop works and DevAPI
+smoke passes. The art target has pivoted: `T0023` is now P0 and must improve the
+visual, Roblox-like world, and starter mech until the player no longer reads as
+a simple set of cubes. Iteration remains native PC; mobile/web is the UX/export
+target. Accepted: one owned mech, PvE first, semi-auto arena, floating
+joystick/WASD, resources -> hangar purchase/craft, shoulder rockets, drone swarm
+proof, short dash, `Cooling`, a fixed three-quarter/isometric camera, bright
+Roblox-like toy/block world, stylized studs surfaces, and Foundry Warden
+mini-boss.
 
 ## Next Priorities
 
-1. Run `T0023`: replace the cube-kitbashed starter with an authored or
-   generated high-fidelity mech asset using the proven mesh/material pack path.
+1. Run `T0023`: improve the mech and Roblox-like world as the first priority.
+   The mech must read as a deliberate toy/block mech character, not a cube pile.
 2. Keep reference constraints from
    `gamedesign/projects/mech-builder-battler/references/current_build_mismatch_audit_2026-06-19.md`.
 3. Keep product evidence in

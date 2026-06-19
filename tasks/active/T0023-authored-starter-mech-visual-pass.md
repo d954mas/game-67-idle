@@ -11,18 +11,20 @@ updated: 2026-06-19
 
 ## What
 
-Replace the current cube-kitbashed starter mech presentation with a hero-mech
-quality pass while preserving the working native harness and the proven
-`mech_builder_battler_mesh.ntpack` runtime route. Combat, economy, and upgrade
-depth are deliberately paused until controlling and watching the mech feels good.
+Replace the current cube-kitbashed starter mech presentation and plain prototype
+world with a Roblox-like mech/toy-block visual pass while preserving the working
+native harness and the proven `mech_builder_battler_mesh.ntpack` runtime route.
+Combat, economy, and upgrade depth are deliberately paused until the mech and
+world look good at first glance.
 
 Scope boundaries:
 
 - In scope: starter mech source/runtime asset, stronger modular silhouette,
-  separate readable parts, idle/move/attack animation, weapon recoil, foot
-  motion, body lean, painted-metal material language, stronger lighting/shader
-  response, bevel/normal readability, shoulder rocket sockets/modules,
-  screenshot proof, and strict visual product gate.
+  non-cube-pile mech readability, Roblox-like toy/block world, stylized studs
+  surfaces, separate readable parts, idle/move/attack animation, weapon recoil,
+  foot motion, body lean, toy-plastic/painted material language, stronger
+  lighting/shader response, bevel/normal readability, shoulder rocket
+  sockets/modules, screenshot proof, and strict visual product gate.
 - Out of scope: web/mobile export, PvP, new economy systems, broad enemy
   roster, reward tuning, progression expansion, final monetization, exact
   reference UI copying, and full MechLab.
@@ -37,16 +39,17 @@ Design inputs:
 ## Done when
 
 - [ ] Native `game_seed` still builds and runs the first mech loop.
-- [ ] The starter mech no longer reads as cube-kitbashed at gameplay scale.
+- [x] The starter mech no longer reads as cube-kitbashed at gameplay scale.
+- [x] The world reads as an intentional Roblox-like block arena, not debug cubes.
 - [ ] Movement reads as a mech: clear facing, strafe/turn feedback, body weight,
       step motion, and no "only forward/back" feel.
 - [ ] Attack reads as a mech action: visible weapon recoil, muzzle flash/tracer,
       hit feedback, and heat/vent response.
 - [ ] The mech keeps visible modular slots, including shoulder rocket sockets
       before purchase and equipped rocket modules after purchase.
-- [ ] Materials/lighting show stronger painted metal, dark joints, rim/key
+- [x] Materials/lighting show stronger painted metal, dark joints, rim/key
       separation, bevel/normal readability, and contact shadow grounding.
-- [ ] The hangar and rocket battle screenshots are recaptured and linked from
+- [x] The hangar and rocket battle screenshots are recaptured and linked from
       evidence.
 - [ ] Strict visual product gate passes with `art_quality >= 4` and no major
       issue for starter mech model quality, or any failure is logged with the
@@ -86,3 +89,22 @@ Design inputs:
   recaptured smoke screenshots. Residual visual risk remains: silhouette and
   source model quality still need another art pass before calling the mech
   beautiful.
+- 2026-06-19: Lead rejected the current direction as still not working and
+  pivoted the art target to "mechs in a Roblox world." New interpretation for
+  this native harness: Roblox-like toy/block world, intentional chunky modular
+  mechs, bright readable materials, and playful block environment. Do not keep
+  chasing realistic/complex mech fidelity before this style pass lands.
+- 2026-06-19: Added Roblox-like runtime visual pass: bright green block
+  baseplate, raised studs, stylized grass/leaf motifs, colored block props,
+  toy-plastic shader tuning, and a chunkier block-form starter mech. Evidence:
+  `gamedesign/projects/mech-builder-battler/evidence/t0023_roblox_like_visual_pass_2026-06-19.md`.
+- 2026-06-19: Added `game-texture-generation` skill for standalone texture work
+  only. It records generated/downloaded texture source, license/provenance, and
+  whether the texture must tile. Atlas, trim-sheet, icon, and UI sheet work
+  remains owned by existing UI/icon and asset-pipeline workflows.
+- 2026-06-19: Corrected route after lead challenge: stopped relying only on the
+  procedural mech and integrated a downloaded CC0 Poly Pizza/Quaternius `Mech`
+  GLB as the visible runtime hero silhouette. It is scaled/rotated into Y-up and
+  packed through the existing mesh pack. Current caveat: original GLB texture
+  atlas/material colors are not restored yet; runtime uses a temporary green
+  toy material.

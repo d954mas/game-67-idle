@@ -261,6 +261,11 @@ if(NOT EMSCRIPTEN)
             assets/meshes/mech_starter_rocket_pod.gltf
             assets/meshes/mech_starter_rocket_tube.gltf
             assets/meshes/mech_starter_vent.gltf
+            assets/meshes/mech_starter_hydraulic.gltf
+            assets/meshes/mech_starter_joint.gltf
+            assets/meshes/mech_starter_armor_plate.gltf
+            assets/meshes/mech_starter_visor.gltf
+            assets/meshes/poly_pizza_quaternius_mech_cc0.glb
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         COMMENT "Building Mech Builder Battler mesh pack"
         VERBATIM

@@ -48,8 +48,8 @@
 #define MAX_DRONES 8
 #define ROCKET_COST 120
 #define CAPTURE_PATH_MAX 512
-#define MECH_MESH_PARTS 42
-#define MECH_MESH_TYPES 11
+#define MECH_MESH_PARTS 51
+#define MECH_MESH_TYPES 16
 #define MECH_PART_ROCKETS_ONLY 0x01U
 
 typedef enum {
@@ -111,6 +111,11 @@ typedef enum {
   MECH_MESH_ROCKET_POD,
   MECH_MESH_ROCKET_TUBE,
   MECH_MESH_VENT,
+  MECH_MESH_HYDRAULIC,
+  MECH_MESH_JOINT,
+  MECH_MESH_ARMOR_PLATE,
+  MECH_MESH_VISOR,
+  MECH_MESH_QUATERNIUS,
 } MeshPartMesh;
 
 typedef struct MeshPartSpec {
@@ -154,14 +159,14 @@ static UiBox s_special_box;
 static char s_pending_capture_path[CAPTURE_PATH_MAX];
 #endif
 
-static const float COL_BG_FLOOR[4] = {0.12F, 0.15F, 0.17F, 1.0F};
-static const float COL_METAL[4] = {0.52F, 0.63F, 0.70F, 1.0F};
-static const float COL_METAL_DARK[4] = {0.13F, 0.17F, 0.20F, 1.0F};
-static const float COL_METAL_HI[4] = {0.78F, 0.88F, 0.92F, 1.0F};
-static const float COL_ARMOR_DEEP[4] = {0.035F, 0.22F, 0.44F, 1.0F};
-static const float COL_ARMOR_BLUE[4] = {0.08F, 0.47F, 0.85F, 1.0F};
-static const float COL_ARMOR_LIGHT[4] = {0.28F, 0.78F, 1.0F, 1.0F};
-static const float COL_EMISSIVE[4] = {0.02F, 0.92F, 1.0F, 1.0F};
+static const float COL_BG_FLOOR[4] = {0.38F, 0.78F, 0.35F, 1.0F};
+static const float COL_METAL[4] = {0.76F, 0.84F, 0.90F, 1.0F};
+static const float COL_METAL_DARK[4] = {0.22F, 0.32F, 0.40F, 1.0F};
+static const float COL_METAL_HI[4] = {0.88F, 0.92F, 0.96F, 1.0F};
+static const float COL_ARMOR_DEEP[4] = {0.06F, 0.24F, 0.76F, 1.0F};
+static const float COL_ARMOR_BLUE[4] = {0.0F, 0.45F, 1.0F, 1.0F};
+static const float COL_ARMOR_LIGHT[4] = {0.0F, 0.86F, 1.0F, 1.0F};
+static const float COL_EMISSIVE[4] = {0.0F, 0.95F, 1.0F, 1.0F};
 static const float COL_AMBER[4] = {1.0F, 0.48F, 0.05F, 1.0F};
 static const float COL_WARNING[4] = {1.0F, 0.18F, 0.08F, 1.0F};
 static const float COL_MAGENTA[4] = {0.86F, 0.12F, 1.0F, 1.0F};
@@ -172,7 +177,7 @@ static const float COL_PANEL[4] = {0.035F, 0.105F, 0.13F, 1.0F};
 static const MeshPartSpec MESH_MECH_PARTS[MECH_MESH_PARTS] = {
     {{0.0F, 1.62F, 0.0F},
      {1.20F, 1.46F, 0.86F},
-     {0.08F, 0.47F, 0.85F, 1.0F},
+     {0.04F, 0.34F, 0.70F, 1.0F},
      0,
      MECH_MESH_TORSO},
     {{0.0F, 0.92F, 0.04F},
@@ -207,32 +212,32 @@ static const MeshPartSpec MESH_MECH_PARTS[MECH_MESH_PARTS] = {
      MECH_MESH_PELVIS},
     {{-1.18F, 2.48F, 0.02F},
      {0.86F, 0.42F, 0.88F},
-     {0.28F, 0.78F, 1.0F, 1.0F},
+     {0.08F, 0.42F, 0.78F, 1.0F},
      0,
      MECH_MESH_SHOULDER},
     {{1.18F, 2.48F, 0.02F},
      {0.86F, 0.42F, 0.88F},
-     {0.08F, 0.47F, 0.85F, 1.0F},
+     {0.06F, 0.35F, 0.70F, 1.0F},
      0,
      MECH_MESH_SHOULDER},
     {{-1.56F, 1.78F, -0.02F},
-     {0.38F, 0.92F, 0.38F},
-     {0.52F, 0.63F, 0.70F, 1.0F},
+     {0.58F, 0.92F, 0.54F},
+     {0.0F, 0.45F, 1.0F, 1.0F},
      0,
-     MECH_MESH_LIMB},
+     MECH_MESH_FOREARM},
     {{1.56F, 1.78F, -0.02F},
-     {0.38F, 0.92F, 0.38F},
-     {0.52F, 0.63F, 0.70F, 1.0F},
+     {0.58F, 0.92F, 0.54F},
+     {0.0F, 0.45F, 1.0F, 1.0F},
      0,
-     MECH_MESH_LIMB},
+     MECH_MESH_FOREARM},
     {{-1.92F, 1.38F, -0.18F},
-     {0.42F, 0.82F, 0.42F},
-     {0.28F, 0.78F, 1.0F, 1.0F},
+     {0.56F, 0.72F, 0.56F},
+     {0.10F, 0.58F, 1.0F, 1.0F},
      0,
      MECH_MESH_FOREARM},
     {{1.92F, 1.38F, -0.18F},
-     {0.42F, 0.82F, 0.42F},
-     {0.28F, 0.78F, 1.0F, 1.0F},
+     {0.56F, 0.72F, 0.56F},
+     {0.10F, 0.58F, 1.0F, 1.0F},
      0,
      MECH_MESH_FOREARM},
     {{2.24F, 1.18F, -0.66F},
@@ -241,23 +246,23 @@ static const MeshPartSpec MESH_MECH_PARTS[MECH_MESH_PARTS] = {
      0,
      MECH_MESH_WEAPON},
     {{-0.62F, 0.58F, -0.08F},
-     {0.48F, 0.92F, 0.48F},
-     {0.13F, 0.17F, 0.20F, 1.0F},
+     {0.62F, 1.02F, 0.58F},
+     {0.0F, 0.45F, 1.0F, 1.0F},
      0,
      MECH_MESH_LIMB},
     {{0.62F, 0.58F, -0.08F},
-     {0.48F, 0.92F, 0.48F},
-     {0.13F, 0.17F, 0.20F, 1.0F},
+     {0.62F, 1.02F, 0.58F},
+     {0.0F, 0.45F, 1.0F, 1.0F},
      0,
      MECH_MESH_LIMB},
     {{-0.70F, 0.08F, -0.30F},
-     {0.78F, 0.28F, 1.08F},
-     {0.52F, 0.63F, 0.70F, 1.0F},
+     {0.92F, 0.34F, 1.06F},
+     {0.76F, 0.84F, 0.90F, 1.0F},
      0,
      MECH_MESH_FOOT},
     {{0.70F, 0.08F, -0.30F},
-     {0.78F, 0.28F, 1.08F},
-     {0.52F, 0.63F, 0.70F, 1.0F},
+     {0.92F, 0.34F, 1.06F},
+     {0.76F, 0.84F, 0.90F, 1.0F},
      0,
      MECH_MESH_FOOT},
     {{-0.56F, 0.20F, 0.34F},
@@ -301,55 +306,55 @@ static const MeshPartSpec MESH_MECH_PARTS[MECH_MESH_PARTS] = {
      MECH_PART_ROCKETS_ONLY,
      MECH_MESH_ROCKET_TUBE},
     {{0.0F, 1.78F, -0.56F},
-     {0.78F, 0.44F, 0.10F},
-     {0.28F, 0.78F, 1.0F, 1.0F},
+     {0.82F, 0.52F, 0.18F},
+     {0.02F, 0.82F, 1.0F, 1.0F},
      0,
-     MECH_MESH_VENT},
+     MECH_MESH_ARMOR_PLATE},
     {{0.0F, 1.50F, -0.62F},
      {0.34F, 0.22F, 0.08F},
      {0.02F, 0.92F, 1.0F, 1.0F},
      0,
-     MECH_MESH_VENT},
+     MECH_MESH_VISOR},
     {{-0.44F, 1.18F, -0.48F},
      {0.24F, 0.42F, 0.12F},
      {0.035F, 0.22F, 0.44F, 1.0F},
      0,
-     MECH_MESH_LIMB},
+     MECH_MESH_ARMOR_PLATE},
     {{0.44F, 1.18F, -0.48F},
      {0.24F, 0.42F, 0.12F},
      {0.035F, 0.22F, 0.44F, 1.0F},
      0,
-     MECH_MESH_LIMB},
+     MECH_MESH_ARMOR_PLATE},
     {{-0.74F, 0.72F, -0.50F},
-     {0.34F, 0.30F, 0.16F},
-     {0.78F, 0.88F, 0.92F, 1.0F},
+     {0.46F, 0.22F, 0.18F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
      0,
-     MECH_MESH_SHOULDER},
+     MECH_MESH_VISOR},
     {{0.74F, 0.72F, -0.50F},
-     {0.34F, 0.30F, 0.16F},
-     {0.78F, 0.88F, 0.92F, 1.0F},
+     {0.46F, 0.22F, 0.18F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
      0,
-     MECH_MESH_SHOULDER},
+     MECH_MESH_VISOR},
     {{-0.72F, 0.18F, -0.86F},
      {0.42F, 0.12F, 0.30F},
      {0.02F, 0.92F, 1.0F, 1.0F},
      0,
-     MECH_MESH_VENT},
+     MECH_MESH_VISOR},
     {{0.72F, 0.18F, -0.86F},
      {0.42F, 0.12F, 0.30F},
      {0.02F, 0.92F, 1.0F, 1.0F},
      0,
-     MECH_MESH_VENT},
+     MECH_MESH_VISOR},
     {{-1.20F, 2.80F, -0.42F},
      {0.52F, 0.16F, 0.16F},
      {0.02F, 0.92F, 1.0F, 1.0F},
      0,
-     MECH_MESH_VENT},
+     MECH_MESH_VISOR},
     {{1.20F, 2.80F, -0.42F},
      {0.52F, 0.16F, 0.16F},
      {0.02F, 0.92F, 1.0F, 1.0F},
      0,
-     MECH_MESH_VENT},
+     MECH_MESH_VISOR},
     {{-1.34F, 2.30F, -0.42F},
      {0.58F, 0.18F, 0.14F},
      {0.78F, 0.88F, 0.92F, 1.0F},
@@ -380,6 +385,51 @@ static const MeshPartSpec MESH_MECH_PARTS[MECH_MESH_PARTS] = {
      {0.02F, 0.92F, 1.0F, 1.0F},
      0,
      MECH_MESH_VENT},
+    {{-0.30F, 1.92F, -0.78F},
+     {0.16F, 0.16F, 0.08F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_ROCKET_TUBE},
+    {{0.30F, 1.92F, -0.78F},
+     {0.16F, 0.16F, 0.08F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_ROCKET_TUBE},
+    {{-1.46F, 2.76F, -0.24F},
+     {0.18F, 0.08F, 0.18F},
+     {0.28F, 0.78F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_HYDRAULIC},
+    {{-0.98F, 2.76F, -0.24F},
+     {0.18F, 0.08F, 0.18F},
+     {0.28F, 0.78F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_HYDRAULIC},
+    {{0.98F, 2.76F, -0.24F},
+     {0.18F, 0.08F, 0.18F},
+     {0.28F, 0.78F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_HYDRAULIC},
+    {{1.46F, 2.76F, -0.24F},
+     {0.18F, 0.08F, 0.18F},
+     {0.28F, 0.78F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_HYDRAULIC},
+    {{-0.70F, 0.38F, -0.42F},
+     {0.16F, 0.07F, 0.16F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_HYDRAULIC},
+    {{0.70F, 0.38F, -0.42F},
+     {0.16F, 0.07F, 0.16F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0,
+     MECH_MESH_HYDRAULIC},
+    {{0.0F, 0.0F, 0.0F},
+     {126.0F, 126.0F, 126.0F},
+     {0.22F, 0.72F, 0.32F, 1.0F},
+     0,
+     MECH_MESH_QUATERNIUS},
 };
 
 static const char *MESH_MECH_RESOURCE_PATHS[MECH_MESH_TYPES] = {
@@ -394,6 +444,11 @@ static const char *MESH_MECH_RESOURCE_PATHS[MECH_MESH_TYPES] = {
     "assets/meshes/mech_starter_rocket_pod.gltf",
     "assets/meshes/mech_starter_rocket_tube.gltf",
     "assets/meshes/mech_starter_vent.gltf",
+    "assets/meshes/mech_starter_hydraulic.gltf",
+    "assets/meshes/mech_starter_joint.gltf",
+    "assets/meshes/mech_starter_armor_plate.gltf",
+    "assets/meshes/mech_starter_visor.gltf",
+    "assets/meshes/poly_pizza_quaternius_mech_cc0.glb",
 };
 
 static void ortho(float left, float right, float bottom, float top,
@@ -980,79 +1035,112 @@ static void draw_floor_panel(float x, float z, float sx, float sz,
                              floor_rot, color);
 }
 
+static void draw_baseplate_block(float x, float z, float sx, float sz,
+                                 const float color[4]) {
+  nt_shape_renderer_cube((float[3]){x, 0.035F, z}, (float[3]){sx, 0.07F, sz},
+                         color);
+}
+
+static void draw_stylized_grass_motif(float x, float z, float s,
+                                      const float color[4]) {
+  const float y = 0.075F;
+  nt_shape_renderer_line((float[3]){x - 0.42F * s, y, z - 0.24F * s},
+                         (float[3]){x + 0.42F * s, y, z + 0.24F * s}, color);
+  nt_shape_renderer_line((float[3]){x - 0.18F * s, y, z - 0.08F * s},
+                         (float[3]){x - 0.58F * s, y, z + 0.24F * s}, color);
+  nt_shape_renderer_line((float[3]){x - 0.02F * s, y, z + 0.02F * s},
+                         (float[3]){x - 0.26F * s, y, z + 0.46F * s}, color);
+  nt_shape_renderer_line((float[3]){x + 0.14F * s, y, z + 0.10F * s},
+                         (float[3]){x + 0.48F * s, y, z + 0.48F * s}, color);
+  nt_shape_renderer_line((float[3]){x + 0.24F * s, y, z + 0.16F * s},
+                         (float[3]){x + 0.66F * s, y, z - 0.04F * s}, color);
+  nt_shape_renderer_line((float[3]){x + 0.02F * s, y + 0.01F, z - 0.18F * s},
+                         (float[3]){x + 0.34F * s, y + 0.01F, z - 0.46F * s},
+                         (float[4]){0.82F, 1.0F, 0.24F, 0.55F});
+}
+
 static void draw_floor_grid(float half, bool hangar) {
   const float floor_rot[4] = {0.7071068F, 0.0F, 0.0F, 0.7071068F};
-  nt_shape_renderer_rect_rot((float[3]){0.0F, -0.02F, 0.0F},
-                             (float[2]){half * 2.2F, half * 2.0F}, floor_rot,
-                             COL_BG_FLOOR);
-  draw_floor_panel(0.0F, hangar ? 0.4F : 1.6F, 4.8F, 3.6F,
-                   (float[4]){0.10F, 0.20F, 0.24F, 1.0F});
-  draw_floor_panel(0.0F, hangar ? 0.4F : 1.6F, 5.1F, 0.08F,
-                   (float[4]){0.0F, 0.95F, 1.0F, 0.85F});
-  draw_floor_panel(0.0F, (hangar ? 0.4F : 1.6F) - 1.78F, 5.1F, 0.08F,
-                   COL_AMBER);
-  for (int i = -4; i <= 4; ++i) {
-    const float stripe_x = (float)i * 0.62F;
-    draw_floor_panel(stripe_x, hangar ? 2.18F : -0.22F, 0.34F, 0.72F,
-                     (i % 2) == 0 ? COL_AMBER : COL_METAL_DARK);
+  const float *grass = COL_BG_FLOOR;
+  const float tile_a[4] = {0.58F, 0.86F, 0.45F, 1.0F};
+  const float tile_b[4] = {0.42F, 0.74F, 0.32F, 1.0F};
+  const float stud[4] = {0.30F, 0.58F, 0.23F, 0.72F};
+  const float motif[4] = {0.62F, 0.95F, 0.18F, 0.62F};
+  const float blue_block[4] = {0.06F, 0.42F, 1.0F, 1.0F};
+  const float yellow_block[4] = {1.0F, 0.78F, 0.12F, 1.0F};
+  const float red_block[4] = {1.0F, 0.16F, 0.16F, 1.0F};
+  const float white_block[4] = {0.88F, 0.95F, 1.0F, 1.0F};
+
+  nt_shape_renderer_rect_rot((float[3]){0.0F, -0.03F, 0.0F},
+                             (float[2]){half * 2.35F, half * 2.12F}, floor_rot,
+                             grass);
+  for (int z = -7; z <= 7; ++z) {
+    for (int x = -8; x <= 8; ++x) {
+      const float fx = (float)x;
+      const float fz = (float)z;
+      draw_floor_panel(fx, fz, 0.94F, 0.94F,
+                       ((x + z) & 1) == 0 ? tile_a : tile_b);
+      const int motif_gap =
+          ((x + 8) % 6 <= 1 && (z + 7) % 5 <= 1) ||
+          ((x + z + 16) % 9 == 0);
+      if ((x % 2 == 0) && (z % 2 == 0) && !motif_gap) {
+        nt_shape_renderer_cube((float[3]){fx, 0.045F, fz},
+                               (float[3]){0.18F, 0.08F, 0.18F}, stud);
+      }
+    }
   }
-  nt_shape_renderer_rect((float[3]){0.0F, 2.7F, -half + 0.08F},
-                         (float[2]){half * 2.2F, 5.4F},
-                         (float[4]){0.045F, 0.075F, 0.09F, 1.0F});
-  nt_shape_renderer_rect((float[3]){-half - 0.2F, 2.3F, -1.0F},
-                         (float[2]){half * 1.65F, 4.6F},
-                         (float[4]){0.035F, 0.058F, 0.068F, 1.0F});
-  const float grid_col[4] = {0.25F, 0.36F, 0.42F, 0.65F};
-  for (int i = -8; i <= 8; ++i) {
-    const float p = (float)i;
-    nt_shape_renderer_line((float[3]){-half, 0.01F, p},
-                           (float[3]){half, 0.01F, p}, grid_col);
-    nt_shape_renderer_line((float[3]){p, 0.01F, -half},
-                           (float[3]){p, 0.01F, half}, grid_col);
+
+  for (int z = -6; z <= 6; z += 3) {
+    for (int x = -7; x <= 7; x += 4) {
+      const float offset = (float)(((x * 17) + (z * 11)) % 5) * 0.13F;
+      draw_stylized_grass_motif((float)x + offset, (float)z - offset, 0.92F,
+                                motif);
+    }
   }
+
+  draw_baseplate_block(0.0F, hangar ? 0.15F : 1.45F, 5.4F, 4.1F,
+                       (float[4]){0.54F, 0.76F, 0.95F, 1.0F});
+  draw_baseplate_block(0.0F, hangar ? -1.95F : -0.68F, 5.7F, 0.18F,
+                       yellow_block);
+  draw_baseplate_block(0.0F, hangar ? 2.25F : 3.58F, 5.7F, 0.18F, blue_block);
+
   if (hangar) {
+    nt_shape_renderer_cube((float[3]){-4.1F, 0.46F, 2.8F},
+                           (float[3]){1.7F, 0.9F, 1.2F}, red_block);
+    nt_shape_renderer_cube((float[3]){-4.1F, 1.08F, 2.8F},
+                           (float[3]){1.34F, 0.28F, 0.88F}, yellow_block);
+    nt_shape_renderer_cube((float[3]){4.2F, 0.42F, 2.35F},
+                           (float[3]){1.5F, 0.82F, 1.15F}, blue_block);
+    nt_shape_renderer_cube((float[3]){4.2F, 1.02F, 2.35F},
+                           (float[3]){1.04F, 0.28F, 0.82F}, white_block);
+    for (int i = -2; i <= 2; ++i) {
+      const float x = (float)i * 2.7F;
+      nt_shape_renderer_cube((float[3]){x, 0.22F, -4.35F},
+                             (float[3]){1.6F, 0.44F, 1.6F},
+                             (i & 1) ? yellow_block : blue_block);
+      nt_shape_renderer_cube((float[3]){x, 0.70F, -4.35F},
+                             (float[3]){1.12F, 0.36F, 1.12F}, white_block);
+    }
+  } else {
     for (int i = -2; i <= 2; ++i) {
       const float x = (float)i * 3.0F;
-      nt_shape_renderer_cube((float[3]){x, 2.1F, -6.7F},
-                             (float[3]){0.32F, 4.2F, 0.32F}, COL_METAL_DARK);
-      nt_shape_renderer_cube((float[3]){x, 4.3F, -6.7F},
-                             (float[3]){1.5F, 0.16F, 0.22F}, COL_AMBER);
-      nt_shape_renderer_line((float[3]){x - 0.52F, 4.1F, -6.55F},
-                             (float[3]){x - 1.2F, 0.05F, -1.8F},
-                             (float[4]){1.0F, 0.48F, 0.04F, 0.55F});
-      nt_shape_renderer_line((float[3]){x + 0.52F, 4.1F, -6.55F},
-                             (float[3]){x + 1.2F, 0.05F, -1.8F},
-                             (float[4]){0.0F, 0.82F, 1.0F, 0.38F});
+      nt_shape_renderer_cube((float[3]){x, 0.42F, -4.8F},
+                             (float[3]){1.8F, 0.84F, 1.2F},
+                             (i & 1) ? red_block : yellow_block);
     }
-    nt_shape_renderer_cube((float[3]){-3.7F, 0.55F, 2.6F},
-                           (float[3]){1.3F, 0.72F, 1.0F}, COL_METAL_DARK);
-    nt_shape_renderer_cube((float[3]){-3.7F, 1.02F, 2.6F},
-                           (float[3]){1.0F, 0.14F, 0.78F}, COL_AMBER);
-    nt_shape_renderer_cube((float[3]){3.9F, 0.45F, 1.9F},
-                           (float[3]){1.1F, 0.56F, 0.9F}, COL_ARMOR_DEEP);
-    nt_shape_renderer_cube_wire((float[3]){3.9F, 0.45F, 1.9F},
-                                (float[3]){1.16F, 0.62F, 0.96F},
-                                (float[4]){0.0F, 0.90F, 1.0F, 0.60F});
-  } else {
-    nt_shape_renderer_cube((float[3]){-7.2F, 0.42F, -4.8F},
-                           (float[3]){0.35F, 0.82F, 2.8F}, COL_METAL_DARK);
-    nt_shape_renderer_cube((float[3]){7.2F, 0.42F, -4.8F},
-                           (float[3]){0.35F, 0.82F, 2.8F}, COL_METAL_DARK);
-    nt_shape_renderer_line((float[3]){-7.1F, 0.95F, -4.8F},
-                           (float[3]){7.1F, 0.95F, -4.8F}, COL_AMBER);
-    for (int side = -1; side <= 1; side += 2) {
-      nt_shape_renderer_cube((float[3]){(float)side * 6.4F, 1.15F, -1.2F},
-                             (float[3]){0.32F, 2.0F, 0.32F}, COL_ARMOR_DEEP);
-      nt_shape_renderer_sphere((float[3]){(float)side * 6.4F, 2.35F, -1.2F},
-                               0.22F, COL_MAGENTA);
-    }
+    nt_shape_renderer_cube((float[3]){-6.4F, 0.95F, -1.2F},
+                           (float[3]){0.52F, 1.9F, 0.52F}, blue_block);
+    nt_shape_renderer_cube((float[3]){6.4F, 0.95F, -1.2F},
+                           (float[3]){0.52F, 1.9F, 0.52F}, red_block);
   }
 }
 
 static void draw_shadow(float x, float z, float sx, float sz, float alpha) {
   const float rot[4] = {0.7071068F, 0.0F, 0.0F, 0.7071068F};
+  const float shade = 0.86F - clampf(alpha, 0.0F, 1.0F) * 0.42F;
   nt_shape_renderer_rect_rot((float[3]){x, 0.018F, z}, (float[2]){sx, sz}, rot,
-                             (float[4]){0.0F, 0.0F, 0.0F, alpha});
+                             (float[4]){0.24F * shade, 0.58F * shade,
+                                        0.22F * shade, 1.0F});
 }
 
 static void draw_joint_sphere(float x, float y, float z, float r) {
@@ -1615,10 +1703,15 @@ static void draw_mesh_mech(float w, float h) {
       hangar ? 0.0F : clampf(s_game.mech_vx * -0.055F, -0.18F, 0.18F);
   const float forward_lean =
       hangar ? 0.0F : clampf(s_game.mech_vz * 0.035F, -0.12F, 0.12F);
+  const bool use_source_hero = true;
+  const int source_hero_index = MECH_MESH_PARTS - 1;
 
   uint32_t item_count = 0;
   for (int i = 0; i < MECH_MESH_PARTS; ++i) {
     const MeshPartSpec *spec = &MESH_MECH_PARTS[i];
+    if (use_source_hero && i != source_hero_index) {
+      continue;
+    }
     if ((spec->flags & MECH_PART_ROCKETS_ONLY) && !rockets) {
       continue;
     }
@@ -1632,6 +1725,19 @@ static void draw_mesh_mech(float w, float h) {
     float scale_x = spec->size[0];
     float scale_y = spec->size[1];
     float scale_z = spec->size[2];
+
+    if (i == source_hero_index) {
+      ly += idle_bob * 0.20F + move_t * 0.015F;
+      pitch -= 1.5707963F;
+      pitch += forward_lean * 0.35F;
+      roll += strafe_lean * 0.35F;
+      lz += recoil * 0.10F;
+      if (hangar) {
+        scale_x *= 0.72F;
+        scale_y *= 0.72F;
+        scale_z *= 0.72F;
+      }
+    }
 
     switch (i) {
     case 0:
@@ -2104,7 +2210,7 @@ static void frame(void) {
     nt_text_renderer_restore_gpu();
   }
   nt_gfx_begin_pass(&(nt_pass_desc_t){
-      .clear_color = {0.035F, 0.065F, 0.085F, 1.0F}, .clear_depth = 1.0F});
+      .clear_color = {0.56F, 0.82F, 1.0F, 1.0F}, .clear_depth = 1.0F});
   draw_world(w, h);
   nt_shape_renderer_flush();
   draw_mesh_mech(w, h);

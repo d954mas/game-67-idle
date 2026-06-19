@@ -1,0 +1,4 @@
+interface:
+  display_name: "Game Texture Generation"
+  short_description: "Generate, source, and validate game textures"
+  default_prompt: "Use $game-texture-generation to generate or source game textures with tiling and provenance decisions."
