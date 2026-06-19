@@ -112,10 +112,22 @@ const retiredCommandPatterns = [
       "retired command `node tools/ai.mjs reflect --deep`; use `node tools/ai.mjs status` plus short `node tools/ai.mjs reflect`",
   },
 ];
+const retiredPhrasePatterns = [
+  {
+    pattern: /\bcontext pressure\b/i,
+    message:
+      "retired phrase `context pressure`; use `context/cap review` so normal validation is not implied to be a budget gate",
+  },
+];
 
 for (const file of files) {
   const rawText = readFileSync(file, "utf8");
   for (const retired of retiredCommandPatterns) {
+    if (retired.pattern.test(rawText)) {
+      problems.push(`${rel(file)} -> ${retired.message}`);
+    }
+  }
+  for (const retired of retiredPhrasePatterns) {
     if (retired.pattern.test(rawText)) {
       problems.push(`${rel(file)} -> ${retired.message}`);
     }

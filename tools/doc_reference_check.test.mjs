@@ -139,3 +139,16 @@ test("doc reference check rejects direct pipeline validator command in docs", ()
     cleanup(dir);
   }
 });
+
+test("doc reference check rejects retired context pressure wording", () => {
+  const dir = tempDir();
+  try {
+    writeMinimalRoot(dir);
+    writeFileSync(join(dir, "AI_PIPELINE.md"), "Use --review for strict context pressure.\n", "utf8");
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /retired phrase `context pressure`/);
+  } finally {
+    cleanup(dir);
+  }
+});
