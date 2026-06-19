@@ -95,9 +95,23 @@ function resolveReference(sourceFile, ref) {
 
 const files = roots.flatMap((entry) => walkMarkdown(join(root, entry)));
 const problems = [];
+const retiredCommandPatterns = [
+  {
+    pattern: /\bnode\s+tools[\\/]ai\.mjs\s+validate\s+--file\b/i,
+    message:
+      "retired command `node tools/ai.mjs validate --file`; use a focused test or `node tools/pipeline_validate.mjs`",
+  },
+];
 
 for (const file of files) {
-  const text = stripCodeFences(readFileSync(file, "utf8"));
+  const rawText = readFileSync(file, "utf8");
+  for (const retired of retiredCommandPatterns) {
+    if (retired.pattern.test(rawText)) {
+      problems.push(`${rel(file)} -> ${retired.message}`);
+    }
+  }
+
+  const text = stripCodeFences(rawText);
   const candidates = [];
   for (const match of text.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
     candidates.push({ value: match[1], kind: "link" });

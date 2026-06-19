@@ -88,3 +88,20 @@ test("doc reference check still fails missing markdown links", () => {
     cleanup(dir);
   }
 });
+
+test("doc reference check rejects retired ai validate file command", () => {
+  const dir = tempDir();
+  try {
+    writeMinimalRoot(dir);
+    writeFileSync(
+      join(dir, "AI_PIPELINE.md"),
+      "Old command:\n\n```powershell\nnode tools/ai.mjs validate --file AI_PIPELINE.md\n```\n",
+      "utf8",
+    );
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /retired command `node tools\/ai\.mjs validate --file`/);
+  } finally {
+    cleanup(dir);
+  }
+});
