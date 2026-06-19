@@ -5,45 +5,42 @@ description: Use when adding, reviewing, reorganizing, or promoting game-design 
 
 # Design Source Knowledge
 
-Operate the design knowledge base as an evidence trail:
-source material -> source note -> reusable or project-specific conclusion ->
-index/log update -> cited claim in design work.
+Operate the design knowledge base as an evidence trail: source material ->
+source note -> reusable or project-specific conclusion -> index/log update ->
+cited claim in design work.
 
 ## Load Only What Applies
 
-- `references/source-routing.md`: required docs to read first, folder routing
-  between `gamedesign/sources/`, `gamedesign/knowledge/`, project wiki,
-  `tasks/`, and `tmp/`.
-- `references/source-intake-promotion.md`: Source Intake requirements, source
-  quality, evidence labels (`observed`, `secondary`, `inferred`, `unknown`),
-  and Promotion Workflow.
+- `references/source-routing.md`: required docs and folder routing between
+  `gamedesign/sources/`, `gamedesign/knowledge/`, project wiki, `tasks/`, and
+  `tmp/`.
+- `references/source-intake-promotion.md`: Source Intake, source quality,
+  evidence labels (`observed`, `secondary`, `inferred`, `unknown`), and
+  Promotion Workflow.
 - `references/reference-work-review.md`: Reference-Driven Work,
-  `reference_deconstruction.md`, Source Ladder, current-build mismatch,
-  "not ready for implementation", Quality Review, index/log updates, and Report.
+  `reference_deconstruction.md`, Source Ladder, current-build mismatch, "not
+  ready for implementation", Quality Review, index/log updates, and Report.
 - `references/templates.md`: load only when creating or substantially rewriting
   source notes, knowledge pages, project reference notes, or source-review
   reports.
 
 ## Default Workflow
 
-1. Read `AGENTS.md` and the relevant `gamedesign/` README/index files.
+1. Read `AGENTS.md` plus the relevant `gamedesign/` README/index files.
 2. Decide route before editing: reusable source shelf, reusable knowledge,
    project wiki, `tasks/`, or `tmp/`.
-3. Add or update source notes before extracting conclusions when external
-   evidence matters.
-4. Promote only reusable principles to `gamedesign/knowledge/`; keep current
-   game facts in the active project wiki.
-5. Link important conclusions back to source notes, update index/logs when
-   discoverability changes, and report evidence gaps plainly.
+3. Add source notes before conclusions when external evidence matters.
+4. Keep reusable principles in `gamedesign/knowledge/`; keep current game facts
+   in the active project wiki.
+5. Link conclusions to sources, update index/logs when discoverability changes,
+   and report evidence gaps plainly.
 
 ## Non-Negotiables
 
-- Do not put current-game facts, balance numbers, screenshots, implementation
-  status, accepted GDD facts, or playtest results in reusable knowledge.
-- Do not use search snippets, thumbnails, memory, or store copy as mechanics
-  proof.
-- Do not claim "grounded in refs" unless the durable deconstruction supports
-  at least three labeled facts and one current-build mismatch.
-- If evidence is incomplete, say "not ready for implementation" and name the
-  missing evidence.
+- Keep current-game facts, balance, screenshots, implementation status,
+  accepted GDD facts, and playtest results out of reusable knowledge.
+- Do not use snippets, thumbnails, memory, or store copy as mechanics proof.
+- Claim "grounded in refs" only with durable deconstruction supporting at least
+  three labeled facts and one current-build mismatch.
+- If evidence is incomplete, say "not ready for implementation" and name gaps.
 - Do not bury work status in design data files; use `tasks/`.
