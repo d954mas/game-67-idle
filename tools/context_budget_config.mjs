@@ -3,7 +3,7 @@ import { join } from "node:path";
 export const SKILL_ENTRYPOINT_MAX_CHARS = 3000;
 export const DEFAULT_HOT_DOC_MAX_CHARS = 6500;
 
-export const AGENTS_MAX_CHARS = 3300;
+export const AGENTS_MAX_CHARS = 3000;
 export const AI_PIPELINE_MAX_CHARS = 2200;
 export const LIVE_STATUS_MAX_CHARS = 2400;
 export const TASKS_README_MAX_CHARS = 3000;
