@@ -23,6 +23,8 @@ function writeFixture(dir, skillBody = "short skill\n", agentBody = "# AGENTS\n"
   writeFileSync(join(dir, ".codex", "skills", "sample", "SKILL.md"), skillBody, "utf8");
   writeFileSync(join(dir, "AGENTS.md"), agentBody, "utf8");
   writeFileSync(join(dir, "AI_PIPELINE.md"), "# Pipeline\n", "utf8");
+  mkdirSync(join(dir, "tools"), { recursive: true });
+  writeFileSync(join(dir, "tools", "README.md"), "# Tools\n", "utf8");
   writeFileSync(join(dir, "tasks", "STATUS.md"), "# Status\n", "utf8");
   writeFileSync(join(dir, "tasks", "README.md"), "# Tasks\n", "utf8");
 }
@@ -125,6 +127,19 @@ test("context budget applies the split pipeline map cap", () => {
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /AI_PIPELINE\.md: 2300 chars > 2200/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("context budget applies the tools README cap", () => {
+  const dir = tempDir();
+  try {
+    writeFixture(dir);
+    writeFileSync(join(dir, "tools", "README.md"), "x".repeat(6600), "utf8");
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /tools\/README\.md: 6600 chars > 6500/);
   } finally {
     cleanup(dir);
   }
