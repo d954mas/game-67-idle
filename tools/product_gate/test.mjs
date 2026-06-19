@@ -141,6 +141,102 @@ test("product read gate appends task log when requested", () => {
   }
 });
 
+function writeTaskWithBody(rootDir, id, fields, body) {
+  const taskDir = join(rootDir, "tasks", "active");
+  mkdirSync(taskDir, { recursive: true });
+  writeFileSync(join(taskDir, `${id}-test.md`), `---
+id: ${id}
+title: ${fields.title || "Test task"}
+status: ${fields.status || "doing"}
+priority: ${fields.priority || "P1"}
+tags: [${(fields.tags || ["test"]).join(", ")}]
+created: 2026-06-19
+updated: 2026-06-19
+---
+
+${body}
+`, "utf8");
+}
+
+test("repeated failure guard rejects same strict gate loop without support task", () => {
+  const dir = tempDir();
+  try {
+    writeTaskWithBody(dir, "T0200", {
+      title: "Portal visual pass",
+      tags: ["portal", "visual"],
+    }, `## What
+
+Improve the portal visual.
+
+## Done when
+
+- [ ] strict gate passes
+
+## Log
+
+- 2026-06-19: strict product gate FAIL for art quality and audience fit: screenshot still reads like shader trick; next: add more glow polish.
+- 2026-06-19: strict product gate FAIL for art quality and audience fit: screenshot still reads like shader trick; next: add more trim polish.
+- 2026-06-19: strict product gate FAIL for art quality and audience fit: screenshot still reads like shader trick; next: add more contrast polish.
+`);
+    const result = runRaw([
+      "tools/product_gate/repeated_failure_guard.mjs",
+      "--root", dir,
+      "--max-repeat", "2",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /T0200 repeats strict\/product FAIL "art_quality\+audience_fit"/);
+    assert.match(result.stderr, /support task or lead acceptance/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("repeated failure guard allows same strict gate loop with support task", () => {
+  const dir = tempDir();
+  try {
+    writeTaskWithBody(dir, "T0201", {
+      title: "Portal visual pass",
+      tags: ["portal", "visual"],
+    }, `## What
+
+Improve the portal visual.
+
+## Done when
+
+- [ ] strict gate passes
+
+## Log
+
+- 2026-06-19: strict product gate FAIL for art quality and audience fit: portal screenshot still reads like shader trick; next: add more glow polish.
+- 2026-06-19: strict product gate FAIL for art quality and audience fit: portal screenshot still reads like shader trick; next: add more trim polish.
+- 2026-06-19: strict product gate FAIL for art quality and audience fit: portal screenshot still reads like shader trick; next: move to render-target architecture.
+`);
+    writeTaskWithBody(dir, "T0202", {
+      title: "Portal render-target architecture task",
+      status: "backlog",
+      tags: ["architecture", "tooling", "portal", "render-target"],
+    }, `## What
+
+Create the portal render-target architecture path instead of polishing the same screenshot.
+
+## Done when
+
+- [ ] render target API path exists
+
+## Log
+`);
+    const result = runRaw([
+      "tools/product_gate/repeated_failure_guard.mjs",
+      "--root", dir,
+      "--max-repeat", "2",
+    ]);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /ok: no repeated strict\/product gate FAIL loop/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("close slice refuses failed gate in strict mode", () => {
   const dir = tempDir();
   try {
@@ -319,7 +415,9 @@ test("product read gate loads reusable state matrix JSON", () => {
   try {
     const screenshot = join(dir, "screen.png");
     const matrix = join(dir, "matrix.json");
+    const markdown = join(dir, "gate.md");
     const json = join(dir, "gate.json");
+    const latest = join(dir, "latest.json");
     writeFileSync(screenshot, "png", "utf8");
     writeFileSync(matrix, `${JSON.stringify({
       schema: "game.live_state_acceptance_matrix",
@@ -341,7 +439,9 @@ test("product read gate loads reusable state matrix JSON", () => {
       "--game-look", "It has runtime art, readable UI, and game feedback.",
       "--state-matrix", matrix,
       "--covered-state", "first_screen:screen.png",
+      "--output", markdown,
       "--json-output", json,
+      "--index-output", latest,
       "--strict",
     ]);
     assert.equal(result.status, 0, result.stderr);

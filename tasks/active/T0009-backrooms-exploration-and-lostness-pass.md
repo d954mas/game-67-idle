@@ -1,12 +1,12 @@
 ---
 id: T0009
 title: Backrooms exploration and lostness pass
-status: doing
+status: review
 epic: E001
 priority: P1
 tags: [prototype, backrooms-liminal, native-first, horror, exploration, research]
 created: 2026-06-18
-updated: 2026-06-18
+updated: 2026-06-19
 ---
 
 ## What
@@ -51,3 +51,4 @@ disoriented while still having a playable goal.
   focused T0009 scenario PASS, UI readability PASS, taskboard validate PASS,
   slice hygiene WARN with known red visual gate and profiler guard explicitly
   not used as acceptance evidence.
+- 2026-06-19: Backrooms implementation is closed as a finished experiment per lead direction; keep evidence for review, do not resume game work unless explicitly reopened.

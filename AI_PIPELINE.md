@@ -1,518 +1,168 @@
 # AI Pipeline
 
-How the human lead and AI agents work together in this repository, and which
-parts move to the next game project. `AGENTS.md` holds project-specific rules;
-this file holds the reusable process.
+Reusable process for human-led, AI-assisted game development. `AGENTS.md` holds
+repo-specific rules; this file holds portable workflow policy.
 
 ## Roles
 
-- **Lead (user):** sets high-level direction, gives taste and feedback,
-  accepts or rejects gates. Does not write detailed specs.
-- **Agents:** ask clarifying questions, research before acting, refine and
-  decompose requests, implement in small playable slices, and prove results
-  with evidence (commands, screenshots, scenario runs).
+- Lead: sets direction, taste, priority, and acceptance. The lead does not need
+  to write detailed specs.
+- Agent: turns intent into scoped work, asks only necessary questions, researches
+  when references matter, implements small slices, and proves results with
+  evidence.
 
-## Agent entry points
+## Agent-Facing Docs
 
-| Agent CLI | Rules file | Skills |
-|---|---|---|
-| Codex | `AGENTS.md` | `.codex/skills/` (canonical) |
-| Claude Code | `CLAUDE.md` (imports `AGENTS.md`) | `.claude/skills/` (generated pointers) |
+Keep hot Markdown short and stable.
 
-`.claude/skills/` is generated; never edit it by hand. After adding or
-renaming a skill in `.codex/skills/`, run:
+- `AGENTS.md`: project map, hard rules, validation defaults.
+- `AI_PIPELINE.md`: reusable workflow and context policy.
+- `tasks/README.md`: task store commands and lifecycle.
+- `.codex/skills/*/SKILL.md`: one focused procedure per task type.
+- Skill `references/` and `gamedesign/knowledge/`: detailed method, examples,
+  research, and historical lessons loaded only when needed.
 
-```powershell
-node tools/skills_sync.mjs
-```
+Do not duplicate the same rule in every file. Put each rule where the agent
+first needs it, then link to the deeper source. Delete stale anecdotes once the
+lesson is encoded as a tool, validator, task rule, or skill.
 
-## Image / asset pipeline map
+Write agent Markdown as:
 
-Generation is an agent recipe (a **skill**); everything after is deterministic
-tooling in `tools/assets/`, grouped by stage. Game-specific tools live in
-their own `tools/<game-id>/` folder, never in `tools/assets/`.
+- decision rule first;
+- shortest required command;
+- source-of-truth path;
+- stop condition;
+- no long chat history, no broad checklists in hot context.
 
-| # | Stage | Home | Entry |
-|---|---|---|---|
-| 1 | Generate art | skill `.codex/skills/delegated-image-generation/` | `scripts/codex_imagegen.sh` / `generate_image.py` / `gen_dual_plate.sh` (dual pair via chain) |
-| — | Art job + prompt | `tools/assets/job/` | `node new_art_job.mjs` → `plan_source_sheet_prompt.mjs` → `validate_art_job.mjs` |
-| 2 | Intake / normalize | `tools/assets/intake/` | `normalize_source_sheet_chroma.py` → `audit_source_sheet_intake.py` |
-| 3 | Crop plan | `tools/assets/crop/` | `plan_runtime_crops_from_intake.py` |
-| 4 | Cut + assemble runtime assets | `tools/assets/assemble/` + `tools/assets/cutout/` | `build_runtime_assets_from_crop_plan.py`; cutout path 1 `cutout/key_matte.py`, path 2 `cutout/dual_plate_alpha.py` (+ `dual_plate_pair_gate.py`); shared `chroma_key_alpha.py` |
-| — | Route cutout path | `tools/assets/cutout/` | `route_cutout.py` — `soft_score` from the flat-key source auto-picks path 1 vs path 2; `--auto-dual` launches `gen_dual_plate.sh` |
-| 5 | Atlas / pack | `tools/assets/pack/` | `build_ui_atlas_pack.py` → `audit_ui_atlas_pack.py` |
-| 6 | Audits / proofs | `tools/assets/audit/` + `tools/assets/job/` | `render_ui_composition_proof.py`, `audit_generated_source_derivation.py`; node `audit_*.mjs` |
-| — | Orchestrator (runs 2→6) | `tools/assets/job/` | `node run_ui_asset_tier.mjs` |
-| — | Shared utils | `tools/assets/` | `atomic_io.py`, `chroma_key_alpha.py` |
-| — | Dev-only (benchmarks/profiling) | `tools/assets/_dev/` | off the runtime path |
+## Context Policy
 
-Cutout has **two paths**: path 1 `key_matte` (single flat-key background →
-known-key trimap + closed-form matte + colour decontamination; for opaque art and
-flat-key holes) and path 2 `dual_plate` (same subject on white + black plates →
-exact alpha from the difference; for glow / shadow / glass / particles), with
-`dual_plate_pair_gate` rejecting a redrawn/misaligned plate pair before extraction.
-`route_cutout.py` decides which path automatically from the single flat-key
-source — a wide soft/semi-transparent zone (`soft_score >= 0.11` or a deep
-transition) routes to `dual_plate`, opaque art to `key_matte` — so the choice is
-made before a generation is spent.
+Default context for substantial work:
 
-## Flow: idea to shipped
+1. `AGENTS.md`
+2. `node tools/taskboard/cli.mjs context`
+3. one relevant task or evidence file
+4. one matching skill
 
-| Stage | What happens | Skill / tool |
-|---|---|---|
-| 0. Startup gate | Before implementation, prove one active concept, one actionable task, one project wiki, a native/runtime harness, and a named visual/product proof gate | `tools/game_context/new_prototype.mjs`, `tools/game_context/iteration_context.mjs`, `task-manager`, `primary-gdd-pipeline` |
-| 1. Capture | Every stated idea becomes a task; deferred work is never lost | `task-manager`, `tasks/` store, `tools/taskboard/` |
-| 2. Refine | Questions to the lead + research; `idea` -> `backlog` with checkable done-when | `task-manager` |
-| 3. Design | Concept, GDD, refs, visual proof, data contracts | `primary-gdd-pipeline` (incl. design stewardship), `gamedesign/` |
-| 4. Implement | Smallest playable slice; schema-first state; explicit asset paths | `game-feature-iteration`, `game-state-management`, `game-asset-pipeline` |
-| 5. Validate | Agent drives the running game and captures evidence | `game-runtime-automation` (DevAPI + visual QA) |
-| 6. Release | Explicit build/serve/package tasks | `game-feature-iteration` (build/release section) |
-| 7. Learn | On failure, name the missing component (instruction, source of truth, tool, validator, eval, recovery path) and encode the fix there, not only in prompts; lessons -> `gamedesign/knowledge/` | `gamedesign/knowledge/agent_legibility.md`, all skills |
+Prefer scoped search and compact command output over whole-file dumps. Use
+archives, old task logs, generated artifacts, and broad design folders only when
+the current task links to them or the user asks for review/history.
 
-## Conventions that make this fast
+Keep stable context byte-stable inside a session when possible. Put volatile
+session facts in tasks, status, evidence files, or final reports rather than
+rewriting hot instruction files repeatedly.
 
-- **One source of truth per thing.** Skills: `.codex/skills/`. Task/status
-  conventions: `tasks/README.md`. State shape: `state/*.schema.json`.
-  Generated files are regenerated, not edited.
-- **Tools are assistants, not gates.** Tool defaults must be quiet, bounded, and
-  advisory. A script should summarize the useful next action by default and
-  require an explicit `--verbose`, `--deep`, `--all`, `--review`, or
-  `--include-final` style flag for exhaustive output, broad validation,
-  generated handoff artifacts, or old queues. If a script creates process work
-  during normal game implementation, simplify the script or move that behavior
-  behind an explicit deep mode.
-- **Tools have portability layers.** Before cleaning a project or exporting a
-  new game base, use `tools/README.md`.
-  `portable_ai_pipeline` moves to new games, `reusable_game_infrastructure`
-  moves only when the runtime matches, and project-specific tooling is
-  deleted, archived, or intentionally adapted.
-- **Art iterations are packetized.** For generated game art, start from an
-  accepted visual target, write an art request packet, slice from a manifest,
-  run an explicit pack/material build, and validate in the primary runtime. For
-  generated UI, research/source notes come first when the pipeline is being
-  changed; current notes live in
-  `gamedesign/sources/generated_game_ui_asset_pipeline_research_2026-06-14.md`.
-  Do not keep crop coordinates, content safe areas, or slice9 decisions only in
-  chat. Start generated runtime UI work with
-  `.codex/skills/generated-game-ui-assets/`; it coordinates art direction,
-  asset pipeline, composition/derivation audits, responsive layout audits, and
-  runtime proof.
-  Accepted generated source sheets must carry provenance: provider/model or
-  workflow, workflow file/json, seed or no-seed reason, prompt, negative prompt, source family
-  role, accepted source image, and rejected candidate notes. Record it with
-  `node tools/assets/job/new_generation_record.mjs` and reference the created file
-  from `expected_outputs.generation_records`. Generated/artist records need a
-  real workflow path or non-empty workflow JSON; dummy `{}` provenance is
-  draft-only and cannot pass the final-art gate. If a provider does not expose
-  a stable seed, record a concrete no-seed reason rather than writing `unknown`
-  as a pseudo-seed. Procedural or programmer-art
-  fallbacks may prove geometry, but they do not satisfy final generated-art
-  work unless an explicit debug exception is recorded in the generation record
-  and the art job.
-  Reusable guidance: `gamedesign/knowledge/ai_art_iteration_pipeline.md`.
-  For new multi-asset passes, scaffold the contract with
-  `node tools/assets/job/new_art_job.mjs`, run
-  `node tools/assets/job/validate_art_job.mjs --job <job>` before generation, and
-  run `node tools/assets/job/validate_art_job.mjs --job <job> --strict` after
-  slicing/runtime manifests exist. Run
-  `node tools/assets/job/validate_art_job.mjs --job <job> --final-art` before
-  claiming a final generated/artist art pass; this must fail while any accepted
-  source is procedural debug art or has partial/unknown generation provenance.
-  Before slicing a generated UI source sheet, run
-  `py -3.12 tools/assets/intake/normalize_source_sheet_chroma.py --source <raw-sheet> --output <clean-sheet>`
-  when the generator produced a non-flat chroma background, then run
-  `py -3.12 tools/assets/intake/audit_source_sheet_intake.py --source <source-sheet> --json-output <audit.json> --report <audit.md>`
-  to catch non-flat chroma backgrounds, merged components, clipped components,
-  and too-small gutters. Cut runtime PNGs through the principled cutout
-  (`py -3.12 tools/assets/cutout/route_cutout.py` auto-picks `key_matte` vs
-  `dual_plate`) so clipped alpha bounds and chroma-key edge fringe are resolved
-  at the source, then verify with
-  `py -3.12 tools/assets/audit/audit_generated_source_derivation.py --crop-manifest <crop-manifest>`
-  after slicing and the visual gate (`node tools/product_gate/review.mjs`)
-  as the backstop a JSON validator cannot replace.
-- **Visual-first session contract.** For visual, UI, FTUE, feel, or
-  audience-test work, write a 5-line contract before coding: `goal`,
-  `non-goal`, `proof`, `stop condition`, and `likely files`. The proof must
-  name a native screenshot/product gate/art audit, not only a build command.
-  The same contract and gates apply to spikes, test runs, prototypes, and real
-  game slices; the label changes expected durability, not the quality bar.
-  Before visual code changes, compare the current native screenshot or capture
-  plan against the accepted fake shot/reference/art target and list the visible
-  mismatches. After each meaningful render change, capture a new native
-  screenshot, update the mismatch list, and run or record the product-read gate
-  verdict before adding features or content. For first-person, driving,
-  platforming, or other feel-critical native games, the first contract must
-  include a control/performance smoke before video or visual polish: movement,
-  camera/mouse-look, primary interaction, and a simple frame-time budget.
-- **Native PC scale/focus proof is an early gate.** For any playable native UI,
-  prove the authored UI scale on a real desktop window before art polish or
-  content expansion. The first proof must answer: where am I, what is active,
-  what can I click now, what is locked, and does input/DevAPI enabled state
-  match the visual state. Use the project's reference-resolution scale layer
-  (for this engine, `nt_ui_scale` or an equivalent logical viewport) before
-  claiming the UI is reviewable. A framebuffer/product gate alone is not enough
-  if the lead will play in a normal PC window.
-- **First-player focus comes before art polish.** Before polishing art, the
-  first screen must have one current location, one active primary path, one
-  next action, visible reward/progress, and clear locked/future states. Future
-  activities may be shown as roadmap tabs or disabled/locked affordances when
-  that helps communicate scope, but they must not look or behave like active
-  implemented buttons.
-- **Product-read gates stop content expansion.** For game work where visual,
-  FTUE, gameplay feel, or audience testing matters, the first playable screen
-  must pass a screenshot/player-read review before adding more content or
-  systems. The review asks: where am I, what can I do now, what changed after
-  input, what is the reward, and does this look like a game rather than a
-  debug tool? If the answer is weak, freeze scope and fix the screen/loop
-  first. Passing builds, scenarios, or probes is not enough. Use
-  `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate` to write the
-  durable gate artifact. A gate pass only proves the states it covers: define a
-  live-state matrix from `gamedesign/knowledge/live_state_acceptance_matrix.md`
-  and pass it through `--state-matrix`, or pass required/covered/debt states via
-  `--require-state`,
-  `--covered-state`, and `--not-covered-state`. Gate logs must say `PASS for
-  covered states`, not broad UI acceptance when states remain untested. Before
-  handing off a slice, use
-  `node tools/ai.mjs close-slice` so the task log records the gate, validation
-  evidence, and next action. If the gate fails, feature/content expansion stays
-  frozen unless the lead explicitly accepts the debt for that slice.
-  If two consecutive strict gates fail for the same major reason, stop the
-  local polish loop. Do not keep stacking visual tweaks under the same failed
-  strategy. Write the repeated failure as `symptom / cause / required different
-  path` in the task log, create or update the architecture/tooling/source-asset
-  task that would actually change the result, and continue only with that new
-  path or explicit lead acceptance.
-  For beautiful, casual, generated-UI, fake-shot, or child-testable prototype
-  work, add `--visual-strict` to the product gate and score composition,
-  readability, UI controls, action direction, art quality, and audience fit.
-  A pass requires all six scores at least 4/5 and no blocker/major visual issue.
-  If an independent visual/UI critic is needed, create a packet first with
-  `node tools/ai.mjs critic` and use its findings as the source for the strict
-  gate verdict.
-- **Gate verdicts are separate.** Product/readability, game-loop/fun,
-  art-source/assets, and technical/build gates must be reported independently.
-  A green build, clean crop, or passing automation scenario is supporting
-  evidence, not acceptance for the player-facing product.
-- **Responsive UI needs geometry evidence.** For desktop/mobile UI composition,
-  pair screenshot gates with a UI-tree layout audit when the runtime exposes
-  element bounds. Use `node tools/product_gate/responsive_layout_audit.mjs` to
-  check required action nodes, minimum touch sizes, non-overlap, and portrait
-  primary-action layout. This catches compressed clickable zones that a static
-  screenshot review can miss.
-- **References are a gate only when they drive the work.** If the user names a
-  reference or says the build does not match one, use the smallest honest mode:
-  quick check, central deconstruction, or deep deconstruction. Before
-  reference-driven implementation, the durable doc must support a short
-  Reference Digest: mode, sources checked, observed facts, borrow/avoid/copy
-  risk, current-build mismatch, and next native proof. Details live in
-  `gamedesign/knowledge/reference_deconstruction.md` and
-  `.codex/skills/primary-gdd-pipeline/references/reference-research-playbook.md`.
-- **Record process pain sparingly.** Use `AI_PIPELINE_HISTORY.md` for
-  occasional dated notes about time sinks, agent mistakes, and pipeline
-  improvement ideas. Use `chat-session-reflection` for deeper retrospectives of
-  long multi-turn sessions. Do not use the history file as a task board or
-  project status file.
-- **Profiling scope is mandatory; collection stays passive.** At the start of
-  any non-trivial game, visual, pipeline, or tooling session, select a task
-  scope and run `node tools/ai.mjs start <task-id> <iteration>`, or explicitly
-  state that profiling is unavailable/off for this environment. Its job is to
-  reveal where an AI agent gets stuck, not to become another workflow. Normal work uses
-  `node tools/ai.mjs run`/`checkpoint`/`status`; deep reflection is opt-in. Full
-  policy and commands are in the "AI session profiling" section below. External
-  AI observability platforms (LangSmith, Phoenix, Langfuse, Braintrust, OTLP
-  export) stay gated: local JSONL in `tmp/session_profiles/` is the baseline
-  evidence source, and an external pilot needs a concrete trigger. Decision
-  criteria are in `AI_PIPELINE_HISTORY.md`.
-- **Long-session checkpoints.** Every 60-90 minutes, write a short checkpoint:
-  objective, proof so far, blocker/risk, and next action. It can be a chat
-  update plus `node tools/ai.mjs checkpoint`, and it should prevent silent
-  drift into broad systems work.
-- **Runtime base is protected in this repository.** `state/`,
-  `tools/state_codegen/`, `src/devapi/`, `tools/devapi/`,
-  `src/game_storage.*`, and `external/cjson/` are reusable AI/runtime
-  infrastructure for the clean seed. Do not delete them during game cleanup.
-- **Evidence or it did not happen.** A task is `done` only with ticked
-  `## Done when` boxes and an evidence line in `## Log`.
-- **Prototype commit/review hygiene.** Before committing or handing off a
-  prototype slice, run the hygiene audit and record the result:
-  `node tools/product_gate/slice_hygiene.mjs --strict ...`. A normal slice over
-  30 changed files should be split by phase unless the lead explicitly asked
-  for an end-of-experiment snapshot; use `--snapshot` only for that case.
-  Include build/probe evidence, product gate, screenshot evidence, profiler
-  guard evidence from `node tools/ai.mjs status --require-current-scope-usable`,
-  taskboard validation, known red gates, and diff size in review notes. Do not
-  promise push until the command or `git status -sb`/remote checks show a usable
-  push target. Changed fail/stale audit artifacts must be refreshed, archived as
-  historical evidence, or called out with `--known-red-gate` and final notes.
-- **Small slices.** Prefer one playable iteration over broad speculative work.
-- **Startup gate before code.** At the start of a new prototype, prefer
-  `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`
-  to create the first wiki/task/status skeleton and gate evidence. After a
-  pivot or manual setup, run `node tools/game_context/iteration_context.mjs`.
-  If `prototype_startup_gate.status` is `not_ready_for_implementation`, do not
-  begin broad runtime implementation. First create/repair the active concept,
-  task, project wiki, runtime harness, and visual/product proof gate.
-- **Prototype pause/close protocol.** When the lead says a game/prototype was
-  only a test run, is no longer active, or should stop, stop game implementation
-  immediately and ask or follow the latest explicit instruction for task/status
-  disposition. Do not automatically drop tasks, close epics, or rewrite
-  `tasks/STATUS.md` just because the word "test" was used. Preserve evidence
-  historically and move only reusable lessons into pipeline docs/skills.
-- **Visual failure is a stop condition.** If the lead rejects a screenshot or
-  runtime build as ugly, unclear, or unplayable, stop feature expansion. Create
-  a rescue task, a visual/product failure report, and the smallest runtime
-  screenshot proof needed for the next pass.
-- Scratch-vs-durable paths and platform validation order are project rules in
-  `AGENTS.md`, not repeated here.
+## Work Loop
 
-## Multi-agent work packets
-
-Use multiple agents only when the user asks for parallel/delegated work or when
-the current environment explicitly supports it. Prefer one linear agent loop for
-small or tightly coupled work.
-
-Delegate only bounded sidecar work that can run in parallel without blocking the
-main integration path. Do not delegate the immediate critical-path task when the
-next local action depends on its result.
-
-Each work packet must state:
-
-- role and objective
-- owned files, subsystem, or responsibility
-- expected artifact or answer
-- validation/evidence to return
-- out-of-scope boundaries
-- warning not to revert or overwrite other active work
-
-Split implementation packets by disjoint write scope. Split verification packets
-by independent risk: gameplay, visual/readability, build/release, data/state, or
-tooling. A verifier should report findings and evidence, not silently rewrite
-the owner packet.
-
-The lead/integrator keeps responsibility for:
-
-- selecting packet boundaries
-- reviewing returned changes or findings
-- reconciling conflicts
-- running the final evidence gate
-- updating task logs and `STATUS.md` when the gate or next priorities change
-
-## Tool and validation discipline
-
-Use tools to reduce uncertainty, not to collect context indiscriminately.
-
-The native-PC platform gate (native PC first; web/mobile only with explicit
-user permission) is a project rule in `AGENTS.md`; it is not repeated here.
-
-Default order for substantial work:
-
-1. Load the minimal current context from `tasks/README.md`, starting with
-   `node tools/ai.mjs summary` or `node tools/taskboard/cli.mjs summary`. Use
-   `node tools/ai.mjs context -- node tools/taskboard/cli.mjs context` only
-   when the summary is not enough; never read a large `tasks/STATUS.md`
-   wholesale for orientation.
-2. Select or create one task scope, then run
-   `node tools/ai.mjs start <task-id> <iteration>` for long implementation,
-   visual, research, or tooling work. If profiling is unavailable, state that
-   explicitly in the checkpoint/final instead of silently working without it.
-3. Inspect only the files needed for the selected scope.
-4. Prefer scoped search before repo-wide search.
+1. Interpret the user request into one working scope.
+2. Select or create a task only when durable tracking is useful.
+3. For non-trivial work, start/passively record profiling scope or state why it
+   is unavailable.
+4. Read only files needed for the selected scope.
 5. Make the smallest coherent change.
 6. Run the narrowest validation that proves the change.
-7. Escalate to broader validation only when the scope or risk requires it.
+7. Record evidence in the task/status/final response when the work changes
+   project state.
 
-For reusable/process/tooling work, run the quick reusable-pipeline validation
-described below as the default gate, and only escalate to the full gate when the
-change affects shared behavior or the portable export path. Re-running the full
-gate after every small edit is waste unless the previous gate failed or new
-shared behavior changed.
+Use multiple agents only for independent side work with clear ownership,
+expected artifact, evidence, and out-of-scope boundaries. The main integrator
+keeps final responsibility for merge, validation, and status.
 
-For pipeline/tooling changes, prove both the current repository and the portable
-export path when the change affects future projects. For game/runtime changes,
-prove the specific playable or visual behavior, not only that the build
-compiles.
+## Quality Gates
 
-For reusable skill/process changes, also run `node tools/skills_eval.mjs`. The
-eval is intentionally small and static: it checks that key skill activation
-phrases and required output/process anchors have not been lost.
+Gates are separate verdicts:
 
-For quick reusable-pipeline validation, run `node tools/pipeline_validate.mjs`
-(or its alias `node tools/ai.mjs validate`). It validates the core
-workflow/tooling path without portable export, runtime configure, or deep
-generated-asset tests. For the full reusable-base gate, run
-`node tools/pipeline_validate.mjs --full` (alias: `node tools/ai.mjs validate
---full`). Full mode validates this repo
-(including runtime seed checks: state codegen and CMake configure when those
-files are present), exports a fresh portable base, and validates the exported
-project from inside the exported folder. Treat full mode as a broad/final gate:
-run it once after narrower checks pass, unless debugging a failure in the
-exporter itself. The runtime seed checks skip automatically in workflow-only
-exports.
+- Product/readability: can a new player understand and operate the screen?
+- Game-loop/fun: is there a hook, repeatable loop, reward, and next-5-minutes
+  reason to continue?
+- Art-source/assets: are runtime assets real, traceable, and appropriate for
+  the target?
+- Technical/build: does the changed runtime/tooling actually work?
 
-Do not use old task logs, generated files, build outputs, or archived design
-handoffs as current truth unless they are linked from `STATUS.md`, an active
-task, or fresh validation evidence.
+Do not call a slice done from one green gate. Builds, probes, crop audits, and
+manifests support the verdict; they do not replace player-facing judgment.
 
-## AI session profiling
-
-**Coverage is automatic and low-overhead.** Profiling is wired into BOTH
-harnesses as hooks (`.claude/settings.json` for Claude Code, `.codex/hooks.json`
-for Codex). The hot path runs the native `tools/ai_profile/hook_record_fast`
-(`.exe` on Windows) on `PostToolUse` + `SessionStart`, appending records to
-`tmp/session_profiles/`; rebuild it with
-`node tools/ai_profile/build_hook_record_fast.mjs` after changing the C source or
-on a new OS. The JS `hook_record.mjs` remains the richer fallback/test path and
-Codex transcript recovery path. Successful read-only plumbing commands are
-skipped, and there is no default `PreToolUse` hook because doubling every command
-is too expensive for long sessions. For Codex failures that the harness did not
-emit through `PostToolUse`, run `node tools/ai_profile/import_codex_session.mjs`
-before retrospective analysis to import missed failures from the local Codex
-session transcript. `node tools/ai.mjs status` reads the result. The hook is
-silent and never blocks the agent. `ai.mjs start/run` are still available for
-explicit scope/wrapping.
-
-This intentionally uses two sources:
-
-- Hook records are the primary live source: low-overhead, normalized, project
-  local, and quiet enough to leave on during long work.
-- Codex session JSONL is a secondary analysis source: noisy, harness-owned, and
-  imported after long work only to backfill missed failures or audit hook gaps.
-
-Profiling shows where an AI agent gets stuck without turning telemetry into a
-second project. Scope selection is mandatory for non-trivial sessions, but
-normal game work must not pause to repair stale historical summaries.
-`reflect`'s gap checkpoint remains opt-in (`--gap-checkpoint`). For prototype
-handoff or retrospective claims, check the current-scope profiler guard; if it
-is missing or stale, record that as an evidence gap instead of pretending the
-profile explains the whole session.
-
-**What to learn.** A useful profile answers: which commands failed; which were
-slow; which context reads were large; where long manual/research/review gaps
-happened; and whether broad validation repeated without a good reason. If it
-does not answer one of those, do not collect it during normal game work.
-
-**Do not profile the profiler.** Do not perf-profile the profiler, the
-validators, or the asset-audit tools as default work. Optimizing how fast an
-audit runs is not game progress. (Anti-pattern from the fishing iteration: one
-source-sheet intake was re-profiled 22 times, and a day's telemetry was 70%
-validation records.) Only measure tool performance when the user explicitly asks
-to speed up a specific tool.
-
-Use the facade, not `tools/ai_profile/*`, for normal work:
+When a strict/product gate fails twice for the same major reason, stop the local
+polish loop. Create or link the different path: architecture, tooling, source
+asset, reference, or explicit lead acceptance. This is enforced by:
 
 ```powershell
+node tools/product_gate/repeated_failure_guard.mjs
+```
+
+`node tools/pipeline_validate.mjs` runs that guard in quick mode.
+
+## Validation Defaults
+
+- Task/status docs: `node tools/taskboard/cli.mjs validate`
+- Skill/process changes: `node tools/skills_eval.mjs`
+- Product gate changes: `node --test tools/product_gate/test.mjs`
+- Taskboard changes: `node --test tools/taskboard/test.mjs`
+- AI facade/profile changes: `node --test tools/ai.test.mjs` and focused
+  `tools/ai_profile` tests
+- Reusable pipeline: `node tools/pipeline_validate.mjs`
+- Portable/export/runtime gates: `node tools/pipeline_validate.mjs --full`
+
+Escalate validation only when the changed behavior or export path requires it.
+Full portable validation is a final/broad gate, not the default after every
+small edit.
+
+## Profiling
+
+Profiling is passive telemetry for finding repeated failures, slow commands,
+large context reads, and long gaps. It should not become another project.
+
+Use the facade for normal work:
+
+```powershell
+node tools/ai.mjs start <task-id> <iteration>
 node tools/ai.mjs run -- <command>
-node tools/ai.mjs context --path <file>
-node tools/ai.mjs context -- <read-only-command>
-node tools/ai.mjs checkpoint "Reviewed generated assets"
+node tools/ai.mjs context -- <read-command>
+node tools/ai.mjs checkpoint "short note"
 node tools/ai.mjs status
 node tools/ai.mjs reflect
 ```
 
-Passive defaults:
+Deep import/status/retrospective work is opt-in for AI workflow review or
+profiler fixes. Do not commit raw telemetry from `tmp/session_profiles/`; commit
+only durable lessons, rules, tools, or task changes.
 
-- `run` records only failed commands or commands slower than `--profile-slow-ms`
-  (default `30000`).
-- `context` records only failed or large context reads over
-  `--profile-context-chars` (default `10000`).
-- `checkpoint` records only long gaps over `--min-gap-min` (default `10`).
-- `status` prints the short diagnostic: unresolved failures, slowest recorded
-  work, largest context input, and whether normal work needs action. It should
-  usually end with `No profiling maintenance needed for normal game work.` If it
-  reports unresolved failures, inspect them; if it only reports low coverage or
-  old historical issues in verbose mode, ignore that during normal game
-  development.
-- `reflect` writes a short session closeout summary; add `--gap-checkpoint` only
-  when you want it to record a long unprofiled work gap first.
+## Assets And Visual Work
 
-Before long prototype work, reset the current scope with
-`node tools/ai.mjs start <task-id> <iteration>` after selecting the task. Treat
-`Review confidence: broken` as a review blocker and `partial` as a warning that
-conclusions must name the missing telemetry. Low wall-clock coverage means the
-profile is not complete evidence of where session time went; review notes must
-cite the largest coverage gaps from `node tools/ai.mjs status` or mark those
-intervals as unknown. For AI workflow, profiler, or retrospective review slices,
-run `node tools/ai.mjs status --require-current-scope-usable` before claiming
-profiling evidence; if it fails, fix scope/checkpoints or explicitly record the
-missing telemetry.
+Use skills instead of copying asset procedure into hot docs:
 
-Use `--profile-mode full` only when the task is explicitly about AI workflow,
-profiling, or a requested retrospective. Use `--profile-mode off` when even
-passive telemetry would be noise.
+- `primary-gdd-pipeline`: concept, GDD, core loop, references, fake shots.
+- `game-visual-art-direction`: art direction, visual targets, visual gates.
+- `generated-game-ui-assets`: generated UI kits and runtime composition proof.
+- `game-asset-pipeline`: source/runtime asset boundaries, manifests, packs.
+- `game-feature-iteration`: playable native slice/build/release loop.
+- `game-runtime-automation`: DevAPI, screenshots, video, scenario proof.
 
-**AI workflow review (opt-in).** For a deeper look at a single session, run
-`node tools/ai.mjs import-codex-session` first, then
-`node tools/ai.mjs status --verbose` for the full per-record breakdown. A
-retrospective requested for a long session must cite the imported profile id,
-record count, active-work/idle split, largest coverage gaps, repeated commands,
-slowest command, product-gate history, and final gate truth. Do not answer a
-12-hour-session review from the short `reflect` closeout artifact; `reflect` is
-only the final summary after the real evidence pass. The old
-cross-session deep-retrospective chain (baseline capture, review/followups,
-baseline comparison, reflection packet/draft/review) was retired: each session
-here is a different game/task, so cross-session baselines are not comparable and
-were never captured. Keep profiling lightweight — passive JSONL log,
-`ai status`, and a short `ai reflect` closeout.
+Generated/free art is allowed only as runtime-ready art that reaches the visual
+target. Debug/procedural placeholders prove geometry; they do not satisfy a
+final-art claim unless explicitly recorded as debug debt.
 
-**When to use it.** Use scoped passive profiling for every non-trivial session,
-especially when it runs longer than about an hour; a command/build/test loop is
-repeating; packaging, release, art generation, or reference research has many
-steps; the user asks where the agent got stuck; or context compaction/repeated
-loading becomes a risk. For a tiny one-command answer, no profiling scope is
-needed.
+## Prototype Pause Or Close
 
-**Artifact policy.** Commit reusable profiling code and this policy. Do not
-commit raw telemetry by default: `tmp/session_profiles/*.jsonl`, generated
-session summaries, recovered thread dumps, or one-off timing extracts. Promote
-only durable lessons, task changes, rule changes, or tool fixes.
+When the lead says a prototype/game is done, stopped, or only a test, stop game
+implementation. Then follow the latest explicit instruction for task/status
+disposition. Do not silently archive, drop, or rewrite active work unless that
+is part of the requested pipeline cleanup.
 
-**Validation.** After changing profiler behavior, run the narrow tests that
-cover the change (`node --test tools/ai.test.mjs`,
-`node --test tools/ai_profile/test.mjs`). Use broad validation only when the
-change affects the portable base or shared workflow behavior.
+Preserve evidence historically. Promote only reusable lessons into pipeline
+docs/skills/tools.
 
-## Reuse in a new project
+## Reuse In A New Project
 
-This repository contains both:
-
-- a clean runtime seed: `src/`, `state/`, save/load, DevAPI, capture, and
-  native/web build wiring;
-- a portable AI workflow base copied by `tools/bootstrap/export_base.mjs`.
-
-The current exporter is workflow-first. It intentionally copies agent skills,
-taskboard, pipeline docs, and reusable design knowledge. It does not copy the C
-runtime seed unless the exporter is explicitly extended for a runtime template.
-
-Export the portable AI base into a fresh repository:
+The portable AI workflow is exported with:
 
 ```powershell
 node tools/bootstrap/export_base.mjs --target C:\projects\new-game
 ```
 
-Portable (copied by the exporter):
+Portable by default: agent skills, taskboard, `tools/ai.mjs`,
+`tools/pipeline_validate.mjs`, product gate tools, game-context tools, generated
+art job scaffolding, reusable design knowledge, `AI_PIPELINE.md`,
+`tasks/README.md`, starter `tasks/STATUS.md`, and starter agent files.
 
-- `.codex/skills/` - all skills are written engine-agnostic: they discover
-  local conventions instead of assuming this repo's layout.
-- `tools/ai.mjs`, `tools/ai.test.mjs`, `tools/skills_sync.mjs`,
-  `tools/skills_eval.mjs`,
-  `tools/pipeline_validate.mjs`, `tools/ai_profile/`,
-  `tools/game_context/`, `tools/product_gate/`, `tools/assets/job/new_art_job.mjs`,
-  `tools/assets/job/new_generation_record.mjs`, `tools/assets/job/validate_art_job.mjs`,
-  `tools/assets/audit/audit_generated_source_derivation.py`, `tools/taskboard/`, `tools/README.md` - fast AI
-  workflow facade, skill mirroring, skill regression checks, reusable-base
-  validation, AI session profiling internals, game iteration context, generated
-  art job scaffolding/validation, task store UI/CLI, and tool portability map.
-- `gamedesign/knowledge/` - accumulated design lessons.
-- `AI_PIPELINE.md`, `tasks/README.md`, starter `tasks/STATUS.md`, starter
-  `AGENTS.md` / `CLAUDE.md`.
-
-Stays behind in workflow-only exports: runtime `src/`, `state/` schemas,
-`tools/devapi/` scripts, build presets, and `gamedesign/<concept>/` docs/data.
-In this repository those runtime files are still protected reusable seed
-infrastructure, not old-game debris. The DevAPI pattern also travels via
-`.codex/skills/game-runtime-automation/references/devapi-pattern.md`; each
-future engine setup can either reuse this seed or implement the same bridge
-locally.
-
-After exporting: fill the `## Project` and `## Direction` sections of the new
-`AGENTS.md`, then start at stage 1 with the first ideas as tasks.
+Runtime seed files (`src/`, `state/`, DevAPI, CMake presets) move only when the
+exporter/runtime template explicitly supports that target.

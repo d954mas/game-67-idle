@@ -1,7 +1,7 @@
 ---
 id: T0010
 title: Portal memory marking and object-placement spike
-status: doing
+status: review
 epic: E001
 priority: P1
 tags: [prototype, backrooms-liminal, portal-rendering, marking, object-puzzle, native-first]
@@ -387,3 +387,4 @@ and reveal a real exit.
   vertices, 1386 portal overlay vertices against a 1450 budget, and mouse yaw
   `0.0000 -> 0.3960`. Evidence:
   `gamedesign/projects/backrooms-liminal/reviews/perf_gate_latest.md`.
+- 2026-06-19: Backrooms implementation is closed as a finished experiment per lead direction; keep portal evidence for review, do not continue visual/game work unless explicitly reopened.

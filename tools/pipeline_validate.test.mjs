@@ -19,6 +19,7 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /mode: quick \(dry-run\)/);
   assert.match(result.stdout, /== ai facade tests/);
+  assert.match(result.stdout, /== repeated product gate failure guard/);
   assert.match(result.stdout, /== product gate tests/);
   assert.doesNotMatch(result.stdout, /== portable export/);
   assert.doesNotMatch(result.stdout, /== exported ai profile tests/);

@@ -154,6 +154,7 @@ run("ai facade tests", ["--test", "tools/ai.test.mjs"]);
 run("skill eval", ["tools/skills_eval.mjs"]);
 run("skills sync check", ["tools/skills_sync.mjs", "--check"]);
 run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
+run("repeated product gate failure guard", ["tools/product_gate/repeated_failure_guard.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
 
 // Guard: catch a STATUS<->runtime contradiction. A "clean seed" repo must not

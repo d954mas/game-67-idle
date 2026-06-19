@@ -1,7 +1,7 @@
 ---
 id: T0011
 title: Engine render-target API for portal rendering
-status: backlog
+status: review
 epic: E001
 priority: P1
 tags: [engine, neotolis-engine, rendering, render-target, portal-rendering]
@@ -171,3 +171,4 @@ Minimal acceptance test:
   current game can build a data-driven portal-scene contract, but the engine
   lacks the public render-target/framebuffer API needed for fast, beautiful,
   reusable multi-pass portal rendering.
+- 2026-06-19: Backrooms is closed as a finished experiment; keep the render-target engine issue as review evidence for future reopened portal work, not current actionable game work.

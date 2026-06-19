@@ -1,11 +1,11 @@
 ---
 id: E001
 title: Backrooms Liminal prototype
-status: active
+status: done
 priority: P1
 tags: [prototype, backrooms-liminal]
 created: 2026-06-18
-updated: 2026-06-18
+updated: 2026-06-19
 ---
 
 ## Goal
@@ -24,3 +24,4 @@ Create the first native playable slice for `Backrooms Liminal` with a clear prod
 - Broad economy/content expansion before the first proof gate passes.
 
 ## Log
+- 2026-06-19: Prototype closed as a finished experiment; future work is universal pipeline/tooling unless the lead explicitly reopens Backrooms.
