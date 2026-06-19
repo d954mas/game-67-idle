@@ -61,6 +61,9 @@ node tools/pipeline_validate.mjs
 - `game-feature-iteration` now keeps its hot `SKILL.md` as a short router and
   loads playable/reference/product/build gate detail from
   `.codex/skills/game-feature-iteration/references/playable-feature-gates.md`.
+- `game-asset-pipeline` now keeps its hot `SKILL.md` as a short router and
+  loads source/cutout/pack-builder detail from
+  `.codex/skills/game-asset-pipeline/references/`.
 
 ## Next Priorities
 
