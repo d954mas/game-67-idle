@@ -20,7 +20,7 @@ function usage() {
   node tools/ai.mjs context [context options] -- <command> [args...]
   node tools/ai.mjs checkpoint <intent> [--force] [--min-gap-min <n>] [checkpoint options]
   node tools/ai.mjs run [--profile-mode passive|full|off] [--profile-slow-ms <n>] [--phase <name>] [--category <name>] [--intent <text>] [--value <name>] -- <command> [args...]
-  node tools/ai.mjs validate [--quick|--full] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune]
+  node tools/ai.mjs validate [--quick|--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune]
   node tools/ai.mjs critic --project <game-id> --task <task-id> --screenshot <path> --target <path|text> --output <packet.md> [critic options]
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail [gate options]
   node tools/ai.mjs close-slice --task <task-id> --project <game-id> --evidence <text> [close options]
@@ -139,7 +139,7 @@ function stripImportFlags(args) {
 }
 
 function pipelineValidateArgs(args) {
-  const allowedFlags = new Set(["--quick", "--full", "--dry-run", "--reexport-tests", "--no-prune"]);
+  const allowedFlags = new Set(["--quick", "--full", "--review", "--dry-run", "--reexport-tests", "--no-prune"]);
   const valueFlags = new Set(["--keep-exports"]);
   const out = ["tools/pipeline_validate.mjs"];
   for (let index = 0; index < args.length; index += 1) {

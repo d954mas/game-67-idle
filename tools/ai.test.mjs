@@ -299,6 +299,14 @@ test("validate forwards supported pipeline options", () => {
   assert.match(result.stdout, /== exported ai profile tests/);
 });
 
+test("validate forwards review pipeline option", () => {
+  const result = run(["validate", "--review", "--dry-run"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /mode: quick\+review \(dry-run\)/);
+  assert.match(result.stdout, /== context budget review/);
+});
+
 test("validate rejects stale file-scoped option instead of ignoring it", () => {
   const result = run(["validate", "--file", "AI_PIPELINE.md", "--dry-run"]);
 
