@@ -38,9 +38,10 @@ salvage sport, Foundry Warden mini-boss.
 
 ## Next Priorities
 
-1. Start `T0021`: first native PC playable slice with vivid 3D mech visuals.
-2. Capture hangar/battle/special/reward/upgrade/retest screenshots as soon as
-   the slice renders.
+1. Continue `T0021`: improve the first native PC playable slice visual quality
+   from primitive-built prototype toward model-like mech presentation.
+2. Keep the current screenshot evidence:
+   `gamedesign/projects/mech-builder-battler/evidence/t0021_runtime_visual_review_2026-06-19.md`.
 3. Run `T0022`: update Mech Arena/CATS/Mechangelion mismatch audits against
    the first native capture.
 4. Defer web/mobile export work until explicitly approved; preserve

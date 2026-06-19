@@ -1,7 +1,7 @@
 ---
 id: T0021
 title: First native PC playable slice for Mech Builder Battler
-status: todo
+status: doing
 epic: ""
 priority: P0
 tags: [implementation, native, prototype, 3d, mechs, vertical-slice]
@@ -41,21 +41,21 @@ Scope boundaries:
 
 ## Done when
 
-- [ ] Native build runs the mech slice from the current `master` worktree.
-- [ ] Hangar screen shows one large readable 3D mech, a clear `Battle` action,
+- [x] Native build runs the mech slice from the current `master` worktree.
+- [x] Hangar screen shows one large readable 3D mech, a clear `Battle` action,
       and a visible shoulder-module upgrade destination.
-- [ ] Battle screen supports WASD movement, auto-target, primary cannon, dash,
+- [x] Battle screen supports WASD movement, auto-target, primary cannon, dash,
       heat/`Cooling`, and a drone wave.
-- [ ] First battle grants salvage/resources and routes the player to a guided
+- [x] First battle grants salvage/resources and routes the player to a guided
       shoulder rocket purchase/craft/equip.
-- [ ] Equipping shoulder rockets visibly changes the mech model or attack
+- [x] Equipping shoulder rockets visibly changes the mech model or attack
       effect.
-- [ ] Second battle prompt and/or battle proves rockets against drones.
-- [ ] Screenshot evidence exists for hangar, battle, special effect, reward,
+- [x] Second battle prompt and/or battle proves rockets against drones.
+- [x] Screenshot evidence exists for hangar, battle, special effect, reward,
       upgraded hangar, and retest prompt.
-- [ ] Visual review records whether the result still reads as tooling/debug
+- [x] Visual review records whether the result still reads as tooling/debug
       shapes; feature expansion stops on a blocker/major visual mismatch.
-- [ ] Smallest proving build/run plus relevant validation passes, or any
+- [x] Smallest proving build/run plus relevant validation passes, or any
       failure is logged with next action.
 
 ## Open questions
@@ -68,3 +68,13 @@ Scope boundaries:
 
 - 2026-06-19: Created from accepted design handoff and readiness audit. This is
   the next implementation task after research/review synthesis.
+- 2026-06-19: Started native runtime implementation in `src/clean_seed_main.c`:
+  replacing clean seed with hangar/battle/reward/upgrade/retest playable slice.
+- 2026-06-19: Built native `game_seed`, added `game.capture.framebuffer`, and
+  captured the first screenshot sequence under `build/captures/`. Added visual
+  review at
+  `gamedesign/projects/mech-builder-battler/evidence/t0021_runtime_visual_review_2026-06-19.md`.
+  The slice proves the loop, but visual quality remains below the accepted
+  GLB/model-like bar and needs another art pass.
+- 2026-06-19: Re-ran `game_seed`, DevAPI playable smoke, taskboard validation,
+  doc reference check, and `git diff --check` from `master`; all passed.
