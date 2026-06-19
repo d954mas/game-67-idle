@@ -7,10 +7,9 @@
 AI tooling must make game work faster:
 
 - default output is short and actionable;
-- broad, slow, destructive, artifact-heavy, or deep-retrospective behavior needs
-  explicit flag or user/task need;
-- stale generated diagnostics do not block normal game work;
-- scratch output goes to `tmp/` or another ignored path unless promoted;
+- broad/slow/destructive/artifact-heavy modes need explicit flag or task need;
+- stale diagnostics do not block normal work;
+- scratch output goes to `tmp/` unless promoted;
 - narrow proof runs before broad/final checks;
 - failures report the next useful action.
 
@@ -29,11 +28,8 @@ Copied to clean games by `tools/bootstrap/export_base.mjs`:
 - reusable asset helpers: `tools/assets/`;
 - export helpers: `tools/bootstrap/`.
 
-Product gates route through `node tools/ai.mjs gate`, `critic`, and
-`close-slice`.
-
-Detailed product policy lives in `docs/ai-pipeline/quality-validation.md` and
-the game feature/visual skills.
+Product gates route through `node tools/ai.mjs gate`, `critic`, and `close-slice`.
+Policy lives in `docs/ai-pipeline/quality-validation.md` and game/visual skills.
 
 ## Runtime Infrastructure
 
@@ -54,8 +50,7 @@ Do not load this README as an asset manual. Use:
   atlases, derivation, composition proof, and responsive UI gates.
 
 Short rule: preserve provenance, separate generated/runtime assets, validate
-manifests before final-art claims, and write human-readable proof without making
-timing/debug artifacts normal blockers.
+manifests before final-art claims, and keep timing/debug data out of normal blockers.
 
 ## Cleanup And Validation
 
@@ -69,5 +64,5 @@ node tools/ai.mjs validate --review
 node tools/ai.mjs validate --full
 ```
 
-Underlying: `tools/pipeline_validate.mjs`. `--review` adds strict context pressure. `--full` exports to
-`tmp/pipeline-validate-<stamp>/` and prunes to the newest 3 by default.
+Underlying: `tools/pipeline_validate.mjs`. `--review` adds strict context
+pressure; `--full` exports to `tmp/pipeline-validate-<stamp>/` and keeps newest 3.

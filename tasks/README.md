@@ -31,12 +31,11 @@ node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brie
 
 ## Live Status
 
-`tasks/STATUS.md` is a short index: goal, blockers, debt, gate,
-validation, evidence, next priorities. It is not a log.
+`tasks/STATUS.md` is a short index: goal, blockers, debt, gate, validation,
+evidence, next priorities. It is not a log.
 
 Every claim points to a task, doc, command, or evidence. Keep history in task
-logs. Update only when goal/gate/blockers, validation, evidence, or priorities
-change.
+logs. Update only when goal, gate, blockers, validation, evidence, or priorities change.
 
 ## Minimal Context
 
@@ -47,18 +46,18 @@ For substantial work:
 3. Read only task/evidence files needed for the decision.
 4. Load one matching skill.
 
-Searches stay current/scoped: avoid completed tasks, review queues, old
-logs, P3 ideas, unrelated epics, broad design docs, build artifacts.
+Search current scope only; avoid archives, review queues, P3 ideas, broad design,
+and build artifacts unless linked.
 
 ## Detailed Protocol
 
-Load `tasks/guides/task-store-reference.md` only when changing/auditing
-lifecycle, scope intake, backlog, evidence, checkpoints, or manual format.
+Load `tasks/guides/task-store-reference.md` only when changing task lifecycle,
+scope intake, evidence, checkpoints, or manual format.
 
 ## Done And Validation
 
 A task is done only when `## Done when` boxes are checked and `## Log` proves
-them. If validation is slow, unavailable, or environment-broken, record it.
+them. Record slow, unavailable, or environment-broken validation.
 
 Smallest reliable gates:
 
