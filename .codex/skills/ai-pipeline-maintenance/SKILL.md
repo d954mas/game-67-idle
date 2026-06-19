@@ -5,51 +5,43 @@ description: "Use when maintaining or improving the reusable AI development pipe
 
 # AI Pipeline Maintenance
 
-Use this skill for workflow/tooling changes to the AI-first game-development
-base. It is not for ordinary game feature work; use `game-feature-iteration`
-for playable changes and `chat-session-reflection` for pure retrospectives.
+Use this skill for AI workflow/tooling changes. It is not for ordinary playable
+game work; use `game-feature-iteration` for runtime features and
+`chat-session-reflection` for pure retrospectives.
 
 ## Load Only What Applies
 
-- `references/pipeline-maintenance-playbook.md`: audit flow, split decisions,
-  source-of-truth placement, validator updates, validation matrix, and report
-  shape.
-- `references/skill-placement.md`: when to keep rules in hot docs, move them to
-  a skill reference, update an existing skill, or create a new skill.
-- `AI_PIPELINE.md`: hot workflow map and high-level operating rules.
-- `docs/ai-pipeline/agent-workflow.md`: context policy, Markdown shape, and
-  multi-agent boundaries.
-- `docs/ai-pipeline/quality-validation.md`: gate taxonomy, validation routing,
-  and repeated strict/product failure policy.
-- `docs/ai-pipeline/profiling-reuse.md`: passive profiling, prototype closeout,
-  asset routing, and portable export.
+- `references/pipeline-maintenance-playbook.md`: audit flow, source-of-truth,
+  Mechanical Guard Pattern, Validation Matrix, and Report Shape.
+- `references/skill-placement.md`: Update Existing Skill, Create New Skill, and
+  Keep Hot Docs Thin decisions.
+- `AI_PIPELINE.md`: portable workflow map.
+- `docs/ai-pipeline/agent-workflow.md`: context, Markdown shape, multi-agent use.
+- `docs/ai-pipeline/quality-validation.md`: gate taxonomy and repeated
+  strict/product failure policy.
+- `docs/ai-pipeline/profiling-reuse.md`: profiling, closeout, assets, export.
 
 ## Default Workflow
 
-1. Check current state: `git status --short --untracked-files=all`,
+1. Inspect state with `git status --short --untracked-files=all`,
    `node tools/taskboard/cli.mjs summary`, and `node tools/context_budget.mjs`.
-2. Pick one maintenance scope: hot docs, skill entrypoints, validators,
-   profiling, taskboard, product gates, export, or post-review cleanup.
-3. Move repeated procedure behind a reference, skill, task rule, or tool. Keep
-   hot files as maps and decision rules.
-4. When a rule becomes mandatory, encode it in a validator or test instead of
-   adding more prose.
-5. Run the narrow proof first, then `node tools/pipeline_validate.mjs` before
-   committing pipeline changes.
+2. Pick one scope: hot docs, skill entrypoints, validators, profiling,
+   taskboard, product gates, export, or post-review cleanup.
+3. Move repeated procedure behind a reference, skill, task rule, or tool; keep
+   hot files as maps.
+4. Put mandatory rules in validators/tests where practical, then run the narrow
+   proof and `node tools/pipeline_validate.mjs`.
 
 ## Placement Rules
 
-- Project policy and boundaries: `AGENTS.md`.
-- Portable workflow map: `AI_PIPELINE.md`.
-- Detailed reusable procedure: `docs/ai-pipeline/` or skill `references/`.
-- Repeatable task-specific agent behavior: `.codex/skills/<skill>/`.
-- Work status and durable evidence: `tasks/STATUS.md` and task logs.
+- Policy/boundaries: `AGENTS.md`; portable map: `AI_PIPELINE.md`.
+- Reusable method: `docs/ai-pipeline/` or skill `references/`.
+- Repeatable agent behavior: `.codex/skills/<skill>/`.
+- Work state/evidence: `tasks/STATUS.md`, task logs, evidence files.
 - Mechanical invariants: `tools/*` validators/tests.
 
 ## Stop Conditions
 
-- Do not mark the broad pipeline goal done from one green check; prove each
-  changed contract with current files and commands.
+- Do not mark the broad pipeline goal done from one green check.
 - Do not move project-specific facts into reusable skills or knowledge.
-- Do not leave `.claude/skills` stale after changing `.codex/skills`; run
-  `node tools/skills_sync.mjs` or `--check`.
+- After changing `.codex/skills`, run `node tools/skills_sync.mjs` or `--check`.
