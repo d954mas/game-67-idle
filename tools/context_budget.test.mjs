@@ -102,10 +102,10 @@ test("context budget applies the split pipeline map cap", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "AI_PIPELINE.md"), "x".repeat(3700), "utf8");
+    writeFileSync(join(dir, "AI_PIPELINE.md"), "x".repeat(2300), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /AI_PIPELINE\.md: 3700 chars > 3600/);
+    assert.match(result.stderr, /AI_PIPELINE\.md: 2300 chars > 2200/);
   } finally {
     cleanup(dir);
   }

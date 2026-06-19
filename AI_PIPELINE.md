@@ -1,65 +1,42 @@
 # AI Pipeline
 
-Reusable process for human-led, AI-assisted game development. `AGENTS.md` holds
-repo-specific rules; this file is the hot-context map for portable workflow.
+Portable map for human-led, AI-assisted game work. `AGENTS.md` owns
+repo-specific rules; this file only routes agents to the right workflow source.
 
-Keep this file short. Load deeper files only when the current task needs them:
+## Load Only What Applies
 
-- `docs/ai-pipeline/agent-workflow.md`: roles, context policy, work loop,
-  multi-agent boundaries, and Markdown-writing rules.
-- `docs/ai-pipeline/quality-validation.md`: separate quality gates, validation
-  defaults, and the repeated strict/product failure stop.
-- `docs/ai-pipeline/profiling-reuse.md`: passive profiling, prototype closeout,
-  visual/asset routing, and portable export.
+- Agent behavior, context policy, Markdown shape, or multi-agent use:
+  `docs/ai-pipeline/agent-workflow.md`
+- Done criteria, validation routing, product gates, or repeated failure stops:
+  `docs/ai-pipeline/quality-validation.md`
+- Profiling, prototype closeout, visual/asset routing, or portable export:
+  `docs/ai-pipeline/profiling-reuse.md`
 
-## Default Context
+Default context for substantial work: `AGENTS.md`, then
+`node tools/taskboard/cli.mjs context`, then one task/evidence file, one matching
+skill, and at most one deep pipeline reference above.
 
-For substantial work:
+## Operating Rules
 
-1. `AGENTS.md`
-2. `node tools/taskboard/cli.mjs context`
-3. one relevant task or evidence file
-4. one matching skill
-5. one deep pipeline doc from `docs/ai-pipeline/` only when needed
-
-Prefer scoped search and compact command output over whole-file dumps. Keep
-volatile session facts in tasks, status, evidence files, or final reports rather
-than rewriting hot instruction files repeatedly.
-
-## Default Loop
-
-1. Interpret the user request into one working scope.
-2. Select or create durable tracking only when useful.
-3. For non-trivial work, set passive profiling scope or state why unavailable.
-4. Read only files needed for the scope.
-5. Make the smallest coherent change.
-6. Run the narrowest validation that proves the change.
-7. Record evidence in the task/status/final response when project state changes.
-
-Use multiple agents only for independent side work with clear ownership,
-expected artifact, evidence, and out-of-scope boundaries. The main integrator
-keeps final responsibility for merge, validation, and status.
-
-## Hard Stops
-
-- Do not call a playable/visual slice done from one green gate. Product,
+- Keep hot Markdown short and stable; move procedure, examples, and history
+  behind references, skills, tasks, or validators.
+- For non-trivial work, set passive profiling scope or say why unavailable.
+- Make one scoped change, then run the narrowest command that proves it.
+- Do not call a playable/visual slice done from one green gate: product,
   game-loop, art-source, and technical gates are separate verdicts.
-- When a strict/product gate fails twice for the same major reason, stop the
-  local polish loop and change path: architecture, tooling, source asset,
-  reference, or explicit lead acceptance.
-- When the lead says a prototype/game is done, stopped, or only a test, stop
-  game implementation and follow the latest task/status instruction.
-- Repeated failures should become tools, validators, skills, or compact rules,
-  not more duplicated prose.
+- If strict/product fails twice for the same major reason, stop local polish and
+  change path: architecture, tooling, source asset, reference, or lead
+  acceptance.
+- If the lead says a game/prototype is done, stopped, or only a test, stop game
+  implementation and follow task/status instructions.
 
-## Core Commands
+## Common Commands
 
 ```powershell
 node tools/taskboard/cli.mjs context
 node tools/pipeline_validate.mjs
 node tools/pipeline_validate.mjs --full
-node tools/product_gate/repeated_failure_guard.mjs
 ```
 
-Use `node tools/pipeline_validate.mjs` after normal pipeline/tooling edits.
-Use `--full` when export/runtime/deep asset coverage is relevant.
+Use quick pipeline validation after normal pipeline/tooling edits. Use `--full`
+for export, runtime, release, or deep asset gates.
