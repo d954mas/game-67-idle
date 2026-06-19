@@ -111,16 +111,8 @@ small edit.
 Profiling is passive telemetry for finding repeated failures, slow commands,
 large context reads, and long gaps. It should not become another project.
 
-Use the facade for normal work:
-
-```powershell
-node tools/ai.mjs start <task-id> <iteration>
-node tools/ai.mjs run -- <command>
-node tools/ai.mjs context -- <read-command>
-node tools/ai.mjs checkpoint "short note"
-node tools/ai.mjs status
-node tools/ai.mjs reflect
-```
+Use `node tools/ai.mjs` for normal work: `start`, `run`, `context`,
+`checkpoint`, `status`, and `reflect`.
 
 Deep import/status/retrospective work is opt-in for AI workflow review or
 profiler fixes. Do not commit raw telemetry from `tmp/session_profiles/`; commit
@@ -128,14 +120,11 @@ only durable lessons, rules, tools, or task changes.
 
 ## Assets And Visual Work
 
-Use skills instead of copying asset procedure into hot docs:
-
-- `primary-gdd-pipeline`: concept, GDD, core loop, references, fake shots.
-- `game-visual-art-direction`: art direction, visual targets, visual gates.
-- `generated-game-ui-assets`: generated UI kits and runtime composition proof.
-- `game-asset-pipeline`: source/runtime asset boundaries, manifests, packs.
-- `game-feature-iteration`: playable native slice/build/release loop.
-- `game-runtime-automation`: DevAPI, screenshots, video, scenario proof.
+Use skills instead of copying asset procedure into hot docs. The common route is
+`primary-gdd-pipeline` -> `game-visual-art-direction` ->
+`generated-game-ui-assets` / `game-asset-pipeline` ->
+`game-feature-iteration` / `game-runtime-automation`, loading only the skill
+that matches the current task.
 
 Generated/free art is allowed only as runtime-ready art that reaches the visual
 target. Debug/procedural placeholders prove geometry; they do not satisfy a
@@ -161,8 +150,8 @@ node tools/bootstrap/export_base.mjs --target C:\projects\new-game
 
 Portable by default: agent skills, taskboard, `tools/ai.mjs`,
 `tools/pipeline_validate.mjs`, product gate tools, game-context tools, generated
-art job scaffolding, reusable design knowledge, `AI_PIPELINE.md`,
-`tasks/README.md`, starter `tasks/STATUS.md`, and starter agent files.
+art job scaffolding, reusable design knowledge, and starter agent/task files.
+The exact allowlist lives in `tools/bootstrap/export_base.mjs`.
 
 Runtime seed files (`src/`, `state/`, DevAPI, CMake presets) move only when the
 exporter/runtime template explicitly supports that target.

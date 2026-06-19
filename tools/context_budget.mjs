@@ -12,7 +12,7 @@ function usage() {
 
 Defaults:
   --max-skill-chars 4500   max chars for each .codex/skills/*/SKILL.md entrypoint
-  --max-doc-chars   8000   max chars for hot root/status instruction docs`);
+  --max-doc-chars   7000   max chars for hot root/status instruction docs`);
   process.exit(2);
 }
 
@@ -36,7 +36,7 @@ function takeString(name, fallback) {
 
 const root = resolve(takeString("--root", process.cwd()));
 const maxSkillChars = takeNumber("--max-skill-chars", 4500);
-const maxDocChars = takeNumber("--max-doc-chars", 8000);
+const maxDocChars = takeNumber("--max-doc-chars", 7000);
 const json = args.includes("--json");
 if (json) args.splice(args.indexOf("--json"), 1);
 if (args.includes("--help") || args.includes("-h")) usage();
