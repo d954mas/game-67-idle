@@ -70,6 +70,9 @@ node tools/pipeline_validate.mjs
 - `delegated-image-generation` now keeps its hot `SKILL.md` as a short router
   and loads generation paths, verification/prompt gotchas, throughput, and asset
   handoff detail from `.codex/skills/delegated-image-generation/references/`.
+- `game-state-management` now keeps its hot `SKILL.md` as a short router and
+  loads state workflow/rules, state contract, and review checklist detail from
+  `.codex/skills/game-state-management/references/`.
 
 ## Next Priorities
 

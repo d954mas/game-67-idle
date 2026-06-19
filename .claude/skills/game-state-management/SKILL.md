@@ -12,3 +12,5 @@ source of truth shared by all agent CLIs). Read that file and follow it.
 Reference playbooks (load only when the canonical skill says to):
 
 - `.codex/skills/game-state-management/references/state-contract.md`
+- `.codex/skills/game-state-management/references/state-review-checklist.md`
+- `.codex/skills/game-state-management/references/state-workflow-rules.md`
