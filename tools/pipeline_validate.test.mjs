@@ -55,7 +55,7 @@ test("pipeline validation full dry-run runs the minimal export check by default"
   assert.match(result.stdout, /tools\/assets\/job\/new_generation_record\.test\.mjs/);
   assert.match(result.stdout, /tools\.assets\.cutout\.route_cutout_test/);
   assert.match(result.stdout, /== portable export/);
-  assert.match(result.stdout, /== exported skill eval/);
+  assert.match(result.stdout, /== exported skill presence check/);
   assert.match(result.stdout, /== exported taskboard validate/);
   // Default --full skips the redundant in-export test battery.
   assert.doesNotMatch(result.stdout, /== exported ai profile tests/);

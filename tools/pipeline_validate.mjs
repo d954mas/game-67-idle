@@ -27,7 +27,7 @@ Modes:
 Export depth (with --full):
   --reexport-tests  also re-run the full test battery inside the export. Default
                     skips it (the suites already ran in-repo this invocation;
-                    the export + skill eval + taskboard validate already prove
+                    the export + skill presence check + taskboard validate already prove
                     the copy is runnable). Use after export-tooling changes.
 
 Housekeeping:
@@ -273,7 +273,7 @@ if (fullMode && existsSync(exportDir)) {
 run("taskboard summary", ["tools/taskboard/cli.mjs", "summary"]);
 run("ai facade syntax", ["--check", "tools/ai.mjs"]);
 run("ai facade tests", ["--test", "tools/ai.test.mjs"]);
-run("skill eval", ["tools/skills_eval.mjs"]);
+run("skill presence check", ["tools/skills_eval.mjs"]);
 run("skills sync check", ["tools/skills_sync.mjs", "--check"]);
 run("skills sync tests", ["--test", "tools/skills_sync.test.mjs"]);
 if (reviewMode) {
@@ -358,7 +358,7 @@ if (existsSync(join(root, "CMakePresets.json"))) {
 // runnable project. The full test battery below already ran in-repo this same
 // invocation, so it is re-run in the export only with --reexport-tests.
 run("portable export", ["tools/bootstrap/export_base.mjs", "--target", exportDir]);
-run("exported skill eval", ["tools/skills_eval.mjs"], { cwd: exportDir });
+run("exported skill presence check", ["tools/skills_eval.mjs"], { cwd: exportDir });
 run("exported doc reference check", ["tools/doc_reference_check.mjs"], { cwd: exportDir });
 run("exported taskboard validate", ["tools/taskboard/cli.mjs", "validate"], { cwd: exportDir });
 

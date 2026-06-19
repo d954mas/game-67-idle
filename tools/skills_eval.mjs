@@ -1,3 +1,6 @@
+// Skill PRESENCE check: asserts each .codex/skills/*/SKILL.md (+ its references)
+// still contains its required anchor strings. This is a lint for presence, NOT a
+// behavioural/quality eval — the human rubric (skill-eval-playbook.md) is that.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -546,7 +549,7 @@ function includesText(haystack, needle) {
 let failures = 0;
 
 // Every skill in .codex/skills must have a check entry; a skill silently
-// outside the eval is how regressions slip through.
+// outside the presence check is how regressions slip through.
 const checkedNames = new Set(SKILL_CHECKS.map((c) => c.name));
 for (const name of readdirSync(skillRoot)) {
   const dir = join(skillRoot, name);
@@ -587,8 +590,8 @@ for (const check of SKILL_CHECKS) {
 }
 
 if (failures > 0) {
-  console.error(`\nskill eval failed: ${failures} skill(s) need attention`);
+  console.error(`\nskill presence check failed: ${failures} skill(s) need attention`);
   process.exit(1);
 }
 
-console.log(`skill eval passed: ${SKILL_CHECKS.length} skill(s) checked`);
+console.log(`skill presence check passed: ${SKILL_CHECKS.length} skill(s) checked (anchor presence only, not behaviour)`);
