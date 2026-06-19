@@ -362,6 +362,7 @@ if(NOT EMSCRIPTEN)
             assets/shaders/mech_mesh_color_inst.frag
             assets/shaders/mech_mesh_solid_inst.vert
             assets/shaders/mech_mesh_solid_inst.frag
+            assets/shaders/mech_mesh_station_inst.frag
             assets/shaders/slug_text.vert
             assets/shaders/slug_text.frag
             assets/shaders/common/instance.glsl
