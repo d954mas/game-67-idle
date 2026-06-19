@@ -24,6 +24,14 @@ function runExport(target) {
   });
 }
 
+function runInTarget(target, args) {
+  return spawnSync(process.execPath, args, {
+    cwd: target,
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+}
+
 test("portable export includes task guides and generated skill pointers", () => {
   const dir = tempDir();
   try {
@@ -34,6 +42,8 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(existsSync(join(target, "tasks", "README.md")), true);
     assert.equal(existsSync(join(target, "tasks", "STATUS.md")), true);
     assert.equal(existsSync(join(target, "tasks", "guides", "task-store-reference.md")), true);
+    assert.equal(existsSync(join(target, "gamedesign", "README.md")), true);
+    assert.equal(existsSync(join(target, "gamedesign", "sources", "README.md")), true);
     assert.equal(existsSync(join(target, "docs", "ai-pipeline", "agent-workflow.md")), true);
     assert.equal(existsSync(join(target, ".claude", "skills", "task-manager", "SKILL.md")), true);
 
@@ -43,6 +53,14 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.match(guide, /Task Store Reference/);
     const pipeline = readFileSync(join(target, "AI_PIPELINE.md"), "utf8");
     assert.match(pipeline, /docs\/ai-pipeline\/agent-workflow\.md/);
+
+    const docRefs = runInTarget(target, ["tools/doc_reference_check.mjs"]);
+    assert.equal(docRefs.status, 0, docRefs.stderr);
+    assert.match(docRefs.stdout, /markdown file\(s\) checked/);
+
+    const contextBudget = runInTarget(target, ["tools/context_budget.mjs"]);
+    assert.equal(contextBudget.status, 0, contextBudget.stderr);
+    assert.match(contextBudget.stdout, /ok: context budgets pass/);
   } finally {
     cleanup(dir);
   }

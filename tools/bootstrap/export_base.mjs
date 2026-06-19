@@ -5,7 +5,7 @@
 // Copies the reusable pieces (skills, taskboard, skill sync, design knowledge,
 // pipeline doc, task store conventions) and writes starter AGENTS.md /
 // CLAUDE.md. Existing files in the target are preserved unless --force.
-// See AI_PIPELINE.md "Reuse in a new project" for what intentionally stays.
+// See AI_PIPELINE.md and docs/ai-pipeline/profiling-reuse.md for what stays.
 
 import { cpSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join, resolve, basename } from "node:path";
@@ -96,7 +96,9 @@ const COPY = [
   "tools/bootstrap/export_base.mjs",
   "tools/bootstrap/export_base.test.mjs",
   "tools/bootstrap/reset_to_seed.mjs",
+  "gamedesign/README.md",
   "gamedesign/knowledge",
+  "gamedesign/sources",
   "docs/ai-pipeline",
   "AI_PIPELINE.md",
   "AI_PIPELINE_HISTORY.md",
