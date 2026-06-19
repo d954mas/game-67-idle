@@ -22,8 +22,7 @@ bounded, and advisory:
   a new process obligation by default.
 
 When adding or changing a tool, prefer `summary`/passive output as the default
-and `--verbose`, `--deep`, `--all`, or an explicit subcommand for exhaustive
-inspection.
+and `--verbose`, `--all`, or an explicit subcommand for exhaustive inspection.
 
 ## Layers
 

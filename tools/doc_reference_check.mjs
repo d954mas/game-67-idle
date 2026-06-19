@@ -101,6 +101,11 @@ const retiredCommandPatterns = [
     message:
       "retired command `node tools/ai.mjs validate --file`; use a focused test or `node tools/pipeline_validate.mjs`",
   },
+  {
+    pattern: /\bnode\s+tools[\\/]ai\.mjs\s+reflect\s+--deep\b/i,
+    message:
+      "retired command `node tools/ai.mjs reflect --deep`; use `node tools/ai.mjs status` plus short `node tools/ai.mjs reflect`",
+  },
 ];
 
 for (const file of files) {

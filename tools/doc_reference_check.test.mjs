@@ -105,3 +105,20 @@ test("doc reference check rejects retired ai validate file command", () => {
     cleanup(dir);
   }
 });
+
+test("doc reference check rejects retired deep reflection command", () => {
+  const dir = tempDir();
+  try {
+    writeMinimalRoot(dir);
+    writeFileSync(
+      join(dir, "AI_PIPELINE.md"),
+      "Old command:\n\n```powershell\nnode tools/ai.mjs reflect --deep\n```\n",
+      "utf8",
+    );
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /retired command `node tools\/ai\.mjs reflect --deep`/);
+  } finally {
+    cleanup(dir);
+  }
+});
