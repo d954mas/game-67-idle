@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,6 +38,8 @@ test("pipeline validation full dry-run runs the minimal export check by default"
   const result = run(["--full", "--dry-run"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /mode: full \(dry-run\)/);
+  assert.match(result.stdout, /== generated art job node tests/);
+  assert.match(result.stdout, /tools\/assets\/job\/new_generation_record\.test\.mjs/);
   assert.match(result.stdout, /== portable export/);
   assert.match(result.stdout, /== exported skill eval/);
   assert.match(result.stdout, /== exported taskboard validate/);
@@ -44,6 +47,16 @@ test("pipeline validation full dry-run runs the minimal export check by default"
   assert.doesNotMatch(result.stdout, /== exported ai profile tests/);
   assert.match(result.stdout, /skipped the in-export test battery/);
   assert.match(result.stdout, /reusable pipeline validation passed/);
+});
+
+test("pipeline validation asset guards point at real nested test paths", () => {
+  const source = readFileSync(resolve(root, "tools/pipeline_validate.mjs"), "utf8");
+  assert.match(source, /"tools", "assets", "job", "new_generation_record\.test\.mjs"/);
+  assert.match(source, /"tools", "assets", "intake", "normalize_source_sheet_chroma_test\.py"/);
+  assert.match(source, /"tools", "assets", "audit", "audit_generated_source_derivation_test\.py"/);
+  assert.doesNotMatch(source, /"tools", "assets", "new_generation_record\.test\.mjs"/);
+  assert.doesNotMatch(source, /"tools", "assets", "normalize_source_sheet_chroma_test\.py"/);
+  assert.doesNotMatch(source, /"tools", "assets", "audit_generated_source_derivation_test\.py"/);
 });
 
 test("pipeline validation full --reexport-tests dry-run runs the full in-export battery", () => {

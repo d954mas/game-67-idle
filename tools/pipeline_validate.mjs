@@ -277,7 +277,7 @@ if (!fullMode) {
 
 // Full validation is intentionally explicit: it repeats relevant checks in a
 // fresh export and includes heavy asset/runtime validation.
-if (existsSync(join(root, "tools", "assets", "new_generation_record.test.mjs"))) {
+if (existsSync(join(root, "tools", "assets", "job", "new_generation_record.test.mjs"))) {
   run("generated art job node tests", [
     "--test",
     "tools/assets/job/plan_source_sheet_prompt.test.mjs",
@@ -342,7 +342,7 @@ if (existsSync(join(exportDir, "tools", "game_context", "test.mjs"))) {
 if (existsSync(join(exportDir, "tools", "product_gate", "test.mjs"))) {
   run("exported product gate tests", ["--test", "tools/product_gate/test.mjs"], { cwd: exportDir });
 }
-if (existsSync(join(exportDir, "tools", "assets", "new_generation_record.test.mjs"))) {
+if (existsSync(join(exportDir, "tools", "assets", "job", "new_generation_record.test.mjs"))) {
   run("exported generated art job node tests", [
     "--test",
     "tools/assets/job/plan_source_sheet_prompt.test.mjs",
@@ -356,7 +356,7 @@ if (existsSync(join(exportDir, "tools", "assets", "new_generation_record.test.mj
     "tools/assets/job/audit_source_family_coverage.test.mjs",
   ], { cwd: exportDir });
 }
-if (existsSync(join(exportDir, "tools", "assets", "normalize_source_sheet_chroma_test.py"))) {
+if (existsSync(join(exportDir, "tools", "assets", "intake", "normalize_source_sheet_chroma_test.py"))) {
   python ||= findPythonRunner();
   run("exported source sheet preprocessing tests", [...python.args, "-m", "unittest", "tools.assets.atomic_io_test", "tools.assets.chroma_key_alpha_test", "tools.assets.cutout.dual_plate_alpha_test", "tools.assets.cutout.dual_plate_pair_gate_test", "tools.assets.cutout.key_matte_test", "tools.assets.intake.normalize_source_sheet_chroma_test", "tools.assets.intake.audit_source_sheet_intake_test"], {
     cwd: exportDir,
@@ -370,7 +370,7 @@ if (existsSync(join(exportDir, "tools", "assets", "audit", "render_ui_compositio
     exe: python.exe,
   });
 }
-if (existsSync(join(exportDir, "tools", "assets", "audit_generated_source_derivation_test.py"))) {
+if (existsSync(join(exportDir, "tools", "assets", "audit", "audit_generated_source_derivation_test.py"))) {
   python ||= findPythonRunner();
   run("exported generated source derivation audit tests", [...python.args, "-m", "unittest", "tools.assets.audit.audit_generated_source_derivation_test"], {
     cwd: exportDir,
