@@ -51,8 +51,10 @@
 #define MECH_MESH_PARTS 51
 #define ROBOT_ENEMY_MESH_PARTS 7
 #define ASSAULT_WALKER_MESH_PARTS 13
-#define MECH_MESH_TYPES 37
-#define MECH_MESH_RENDER_ITEMS (1 + MECH_MESH_PARTS + ASSAULT_WALKER_MESH_PARTS + (MAX_DRONES * ROBOT_ENEMY_MESH_PARTS))
+#define SENTINEL_SHOWCASE_MESH_PARTS 10
+#define MECH_MESH_ENTITY_CAPACITY 160
+#define MECH_MESH_TYPES 47
+#define MECH_MESH_RENDER_ITEMS (1 + MECH_MESH_PARTS + ASSAULT_WALKER_MESH_PARTS + SENTINEL_SHOWCASE_MESH_PARTS + (MAX_DRONES * ROBOT_ENEMY_MESH_PARTS))
 #define MECH_PART_ROCKETS_ONLY 0x01U
 
 typedef enum {
@@ -140,6 +142,16 @@ typedef enum {
   MECH_MESH_ASSAULT_WALKER_GREY_D,
   MECH_MESH_ASSAULT_WALKER_GREY_D_NONE,
   MECH_MESH_WORLD_STUDS_FLOOR,
+  MECH_MESH_SENTINEL_MAT18,
+  MECH_MESH_SENTINEL_MAT16,
+  MECH_MESH_SENTINEL_MAT9,
+  MECH_MESH_SENTINEL_MAT17,
+  MECH_MESH_SENTINEL_MAT13,
+  MECH_MESH_SENTINEL_MAT21,
+  MECH_MESH_SENTINEL_MAT20,
+  MECH_MESH_SENTINEL_MAT15,
+  MECH_MESH_SENTINEL_MAT12,
+  MECH_MESH_SENTINEL_MAT23,
 } MeshPartMesh;
 
 typedef struct MeshPartSpec {
@@ -172,6 +184,7 @@ typedef struct MeshMechRuntime {
   nt_entity_t world_floor;
   nt_entity_t parts[MECH_MESH_PARTS];
   nt_entity_t assault_hero[ASSAULT_WALKER_MESH_PARTS];
+  nt_entity_t sentinel_showcase[SENTINEL_SHOWCASE_MESH_PARTS];
   nt_entity_t enemy_robots[MAX_DRONES][ROBOT_ENEMY_MESH_PARTS];
   nt_render_item_t items[MECH_MESH_RENDER_ITEMS];
   nt_render_item_t sort_scratch[MECH_MESH_RENDER_ITEMS];
@@ -507,6 +520,16 @@ static const char *MESH_MECH_RESOURCE_PATHS[MECH_MESH_TYPES] = {
     "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_static_ccby30.gltf",
     "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_none_static_ccby30.gltf",
     "assets/meshes/mech_world_studs_floor.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat18_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat16_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat9_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat17_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat13_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat21_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat20_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat15_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat12_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat23_static_ccby30.gltf",
 };
 
 static void ortho(float left, float right, float bottom, float top,
@@ -2073,11 +2096,14 @@ static void init_mesh_mech(void) {
   nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
   nt_material_desc_t mat_desc = nt_material_desc_defaults();
   nt_material_init(&mat_desc);
-  nt_entity_init(&(nt_entity_desc_t){.max_entities = 128});
-  nt_transform_comp_init(&(nt_transform_comp_desc_t){.capacity = 128});
-  nt_mesh_comp_init(&(nt_mesh_comp_desc_t){.capacity = 128});
-  nt_material_comp_init(&(nt_material_comp_desc_t){.capacity = 128});
-  nt_drawable_comp_init(&(nt_drawable_comp_desc_t){.capacity = 128});
+  nt_entity_init(&(nt_entity_desc_t){.max_entities = MECH_MESH_ENTITY_CAPACITY});
+  nt_transform_comp_init(
+      &(nt_transform_comp_desc_t){.capacity = MECH_MESH_ENTITY_CAPACITY});
+  nt_mesh_comp_init(&(nt_mesh_comp_desc_t){.capacity = MECH_MESH_ENTITY_CAPACITY});
+  nt_material_comp_init(
+      &(nt_material_comp_desc_t){.capacity = MECH_MESH_ENTITY_CAPACITY});
+  nt_drawable_comp_init(
+      &(nt_drawable_comp_desc_t){.capacity = MECH_MESH_ENTITY_CAPACITY});
 
   nt_mesh_renderer_desc_t mesh_desc = nt_mesh_renderer_desc_defaults();
   nt_mesh_renderer_init(&mesh_desc);
@@ -2234,6 +2260,15 @@ static void init_mesh_mech(void) {
     *nt_material_comp_handle(s_mesh_mech.assault_hero[part]) =
         s_mesh_mech.robot_material;
   }
+  for (int part = 0; part < SENTINEL_SHOWCASE_MESH_PARTS; ++part) {
+    s_mesh_mech.sentinel_showcase[part] = nt_entity_create();
+    nt_transform_comp_add(s_mesh_mech.sentinel_showcase[part]);
+    nt_mesh_comp_add(s_mesh_mech.sentinel_showcase[part]);
+    nt_material_comp_add(s_mesh_mech.sentinel_showcase[part]);
+    nt_drawable_comp_add(s_mesh_mech.sentinel_showcase[part]);
+    *nt_material_comp_handle(s_mesh_mech.sentinel_showcase[part]) =
+        s_mesh_mech.robot_material;
+  }
   for (int i = 0; i < MAX_DRONES; ++i) {
     for (int part = 0; part < ROBOT_ENEMY_MESH_PARTS; ++part) {
       s_mesh_mech.enemy_robots[i][part] = nt_entity_create();
@@ -2388,6 +2423,56 @@ static void append_assault_hero_items(float root_x, float root_z, float root_sca
   }
 }
 
+static void append_sentinel_showcase_items(float time, uint32_t *item_count) {
+  const MeshPartMesh sentinel_meshes[SENTINEL_SHOWCASE_MESH_PARTS] = {
+      MECH_MESH_SENTINEL_MAT18, MECH_MESH_SENTINEL_MAT16,
+      MECH_MESH_SENTINEL_MAT9,  MECH_MESH_SENTINEL_MAT17,
+      MECH_MESH_SENTINEL_MAT13, MECH_MESH_SENTINEL_MAT21,
+      MECH_MESH_SENTINEL_MAT20, MECH_MESH_SENTINEL_MAT15,
+      MECH_MESH_SENTINEL_MAT12, MECH_MESH_SENTINEL_MAT23,
+  };
+  const float sentinel_colors[SENTINEL_SHOWCASE_MESH_PARTS][4] = {
+      {0.88F, 0.92F, 0.96F, 1.0F}, {0.18F, 0.28F, 0.92F, 1.0F},
+      {0.04F, 0.08F, 0.15F, 1.0F}, {1.00F, 0.72F, 0.08F, 1.0F},
+      {0.20F, 0.86F, 1.00F, 1.0F}, {0.98F, 0.18F, 0.14F, 1.0F},
+      {0.55F, 0.62F, 0.70F, 1.0F}, {0.12F, 0.16F, 0.22F, 1.0F},
+      {0.72F, 0.82F, 0.88F, 1.0F}, {0.98F, 0.98F, 0.92F, 1.0F},
+  };
+  const float scale = 0.55F;
+  const float min_y = -2.64851F;
+  const float bob = sinf(time * 1.7F) * 0.018F;
+  const float model_x = -4.35F;
+  const float model_y = 0.06F - (min_y * scale) + bob;
+  const float model_z = 0.72F;
+  const float yaw = -0.72F + sinf(time * 0.45F) * 0.035F;
+  for (int part = 0; part < SENTINEL_SHOWCASE_MESH_PARTS; ++part) {
+    const uint32_t mesh_id = nt_resource_get(s_mesh_mech.meshes[sentinel_meshes[part]]);
+    nt_entity_t entity = s_mesh_mech.sentinel_showcase[part];
+    float *pos = nt_transform_comp_position(entity);
+    pos[0] = model_x;
+    pos[1] = model_y;
+    pos[2] = model_z;
+    q_pose(yaw, 0.0F, 0.0F, nt_transform_comp_rotation(entity));
+    float *scl = nt_transform_comp_scale(entity);
+    scl[0] = scale;
+    scl[1] = scale;
+    scl[2] = scale;
+    *nt_transform_comp_dirty(entity) = true;
+    *nt_mesh_comp_handle(entity) = (nt_mesh_t){.id = mesh_id};
+    *nt_material_comp_handle(entity) = s_mesh_mech.robot_material;
+    nt_drawable_comp_set_color(entity, sentinel_colors[part][0],
+                               sentinel_colors[part][1],
+                               sentinel_colors[part][2],
+                               sentinel_colors[part][3]);
+    s_mesh_mech.items[*item_count].sort_key =
+        nt_sort_key_opaque(s_mesh_mech.robot_material.id, mesh_id);
+    s_mesh_mech.items[*item_count].entity = entity.id;
+    s_mesh_mech.items[*item_count].batch_key =
+        nt_batch_key(s_mesh_mech.robot_material.id, mesh_id);
+    (*item_count)++;
+  }
+}
+
 static void draw_mesh_mech(float w, float h) {
   if (!mesh_mech_ready()) {
     return;
@@ -2445,6 +2530,9 @@ static void draw_mesh_mech(float w, float h) {
     append_assault_hero_items(root_x, root_z, root_scale, yaw, move_t, walk,
                               idle_bob, recoil, strafe_lean, forward_lean,
                               &item_count);
+  }
+  if (hangar) {
+    append_sentinel_showcase_items(time, &item_count);
   }
   for (int i = 0; i < MECH_MESH_PARTS; ++i) {
     const bool assault_overlay = use_assault_hero && assault_hero_kitbash_part(i, rockets);

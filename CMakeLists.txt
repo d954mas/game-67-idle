@@ -257,6 +257,9 @@ if(NOT EMSCRIPTEN)
     set(ASSAULT_WALKER_SOURCE_GLB
         "${CMAKE_SOURCE_DIR}/assets/source/models/poly_pizza/alimayo_arango/poly_pizza_alimayo_mech_assault_walker_ccby30.glb"
     )
+    set(SENTINEL_MECH_SOURCE_GLB
+        "${CMAKE_SOURCE_DIR}/assets/source/models/poly_pizza/tekano_bob/poly_pizza_tekano_sentinel_mech_ccby30.glb"
+    )
     set(ROBOT_ENEMY_STATIC_MESHES
         "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_main2_static_cc0.gltf"
         "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_main_static_cc0.gltf"
@@ -312,6 +315,34 @@ if(NOT EMSCRIPTEN)
         COMMENT "Extracting static material meshes from CC-BY Assault Walker GLB"
         VERBATIM
     )
+    set(SENTINEL_MECH_STATIC_MESHES
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_tekano_sentinel_mech_mat18_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_tekano_sentinel_mech_mat16_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_tekano_sentinel_mech_mat9_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_tekano_sentinel_mech_mat17_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_tekano_sentinel_mech_mat13_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_tekano_sentinel_mech_mat21_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_tekano_sentinel_mech_mat20_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_tekano_sentinel_mech_mat15_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_tekano_sentinel_mech_mat12_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_tekano_sentinel_mech_mat23_static_ccby30.gltf"
+    )
+    add_custom_command(
+        OUTPUT ${SENTINEL_MECH_STATIC_MESHES}
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/mech-builder-battler/extract_static_gltf.py"
+            --split-materials
+            "${SENTINEL_MECH_SOURCE_GLB}"
+            "${CMAKE_SOURCE_DIR}/assets/meshes"
+            poly_pizza_tekano_sentinel_mech
+            ccby30
+        DEPENDS
+            "${SENTINEL_MECH_SOURCE_GLB}"
+            tools/mech-builder-battler/extract_static_gltf.py
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Extracting static material meshes from CC-BY Sentinel Mech GLB"
+        VERBATIM
+    )
     target_compile_definitions(${GAME_TARGET} PRIVATE
         "MECH_BUILDER_PACK_PATH=\"${MECH_BUILDER_PACK_OUTPUT}\""
     )
@@ -355,6 +386,7 @@ if(NOT EMSCRIPTEN)
             assets/meshes/poly_pizza_quaternius_mech_cc0.glb
             ${ROBOT_ENEMY_STATIC_MESHES}
             ${ASSAULT_WALKER_STATIC_MESHES}
+            ${SENTINEL_MECH_STATIC_MESHES}
             "${HERO_MECH_TOY_ATLAS}"
             assets/textures/mech_builder_battler_stylized_studs_grass_tile_v1.png
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"

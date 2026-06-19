@@ -52,6 +52,16 @@ static const char *MESH_ASSETS[] = {
     "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_static_ccby30.gltf",
     "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_none_static_ccby30.gltf",
     "assets/meshes/mech_world_studs_floor.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat18_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat16_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat9_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat17_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat13_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat21_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat20_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat15_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat12_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_tekano_sentinel_mech_mat23_static_ccby30.gltf",
 };
 
 static const char *pack_path(const char *dir, const char *name) {
