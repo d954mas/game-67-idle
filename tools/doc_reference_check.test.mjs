@@ -152,3 +152,30 @@ test("doc reference check rejects retired context pressure wording", () => {
     cleanup(dir);
   }
 });
+
+test("doc reference check passes an existing non-markdown tool reference", () => {
+  const dir = tempDir();
+  try {
+    writeMinimalRoot(dir);
+    mkdirSync(join(dir, "tools"), { recursive: true });
+    writeFileSync(join(dir, "tools", "sample_tool.mjs"), "// sample\n", "utf8");
+    writeFileSync(join(dir, "tasks", "README.md"), "Run `tools/sample_tool.mjs`.\n", "utf8");
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("doc reference check fails a missing non-markdown tool reference", () => {
+  const dir = tempDir();
+  try {
+    writeMinimalRoot(dir);
+    writeFileSync(join(dir, "tasks", "README.md"), "Run `tools/missing_tool.mjs`.\n", "utf8");
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /tools\/missing_tool\.mjs/);
+  } finally {
+    cleanup(dir);
+  }
+});

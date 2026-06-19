@@ -62,7 +62,7 @@ function cleanReference(value) {
   let ref = value.trim();
   if (!ref || isExternal(ref)) return null;
   ref = ref.split("#", 1)[0].trim();
-  if (!ref.endsWith(".md")) return null;
+  if (!/\.(md|mjs|py|sh|json)$/.test(ref)) return null;
   if (/[<>*?]/.test(ref)) return null;
   return ref.replaceAll("\\", "/");
 }
@@ -75,6 +75,8 @@ function isPathLikeBacktick(ref) {
     ref.startsWith("gamedesign/") ||
     ref.startsWith("tasks/") ||
     ref.startsWith("tools/") ||
+    ref.startsWith("scripts/") ||
+    ref.startsWith("state/") ||
     ref.startsWith("AGENTS.md") ||
     ref.startsWith("AI_PIPELINE.md") ||
     ref.startsWith("AI_PIPELINE_HISTORY.md") ||
@@ -138,7 +140,7 @@ for (const file of files) {
   for (const match of text.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
     candidates.push({ value: match[1], kind: "link" });
   }
-  for (const match of text.matchAll(/`([^`]+\.md(?:#[^`]*)?)`/g)) {
+  for (const match of text.matchAll(/`([^`]+\.(?:md|mjs|py|sh|json)(?:#[^`]*)?)`/g)) {
     candidates.push({ value: match[1], kind: "backtick" });
   }
 
@@ -159,4 +161,4 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log(`ok: ${files.length} markdown file(s) checked for local .md references`);
+console.log(`ok: ${files.length} markdown file(s) checked for local file references`);
