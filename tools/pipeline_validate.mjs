@@ -232,6 +232,7 @@ run("skills sync tests", ["--test", "tools/skills_sync.test.mjs"]);
 run("context budget report", ["tools/context_budget.mjs"]);
 run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
 run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
+run("bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"]);
 run("repeated product gate failure guard", ["tools/product_gate/repeated_failure_guard.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
 
@@ -328,6 +329,7 @@ if (!args.includes("--reexport-tests")) {
 }
 
 run("exported ai facade tests", ["--test", "tools/ai.test.mjs"], { cwd: exportDir });
+run("exported bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"], { cwd: exportDir });
 run("exported taskboard tests", ["--test", "tools/taskboard/test.mjs"], { cwd: exportDir });
 run("exported ai profile tests", ["--test", "tools/ai_profile/test.mjs"], { cwd: exportDir });
 if (existsSync(join(exportDir, "tools", "game_context", "test.mjs"))) {
