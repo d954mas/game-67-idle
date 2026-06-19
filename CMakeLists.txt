@@ -254,6 +254,9 @@ if(NOT EMSCRIPTEN)
     set(ROBOT_ENEMY_SOURCE_GLB
         "${CMAKE_SOURCE_DIR}/assets/source/models/quaternius/poly_pizza_quaternius_robot_enemy_legs_gun_cc0.glb"
     )
+    set(ASSAULT_WALKER_SOURCE_GLB
+        "${CMAKE_SOURCE_DIR}/assets/source/models/poly_pizza/alimayo_arango/poly_pizza_alimayo_mech_assault_walker_ccby30.glb"
+    )
     set(ROBOT_ENEMY_STATIC_MESHES
         "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_main2_static_cc0.gltf"
         "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_main_static_cc0.gltf"
@@ -276,6 +279,37 @@ if(NOT EMSCRIPTEN)
             tools/mech-builder-battler/extract_static_gltf.py
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         COMMENT "Extracting static material meshes from CC0 robot enemy GLB"
+        VERBATIM
+    )
+    set(ASSAULT_WALKER_STATIC_MESHES
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_005_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_005_ao_2_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_005_uv_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_006_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_001_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_uv_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_002_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_003_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_004_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_004_none_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_static_ccby30.gltf"
+        "${CMAKE_SOURCE_DIR}/assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_none_static_ccby30.gltf"
+    )
+    add_custom_command(
+        OUTPUT ${ASSAULT_WALKER_STATIC_MESHES}
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/mech-builder-battler/extract_static_gltf.py"
+            --split-materials
+            "${ASSAULT_WALKER_SOURCE_GLB}"
+            "${CMAKE_SOURCE_DIR}/assets/meshes"
+            poly_pizza_alimayo_mech_assault_walker
+            ccby30
+        DEPENDS
+            "${ASSAULT_WALKER_SOURCE_GLB}"
+            tools/mech-builder-battler/extract_static_gltf.py
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Extracting static material meshes from CC-BY Assault Walker GLB"
         VERBATIM
     )
     target_compile_definitions(${GAME_TARGET} PRIVATE
@@ -318,6 +352,7 @@ if(NOT EMSCRIPTEN)
             assets/meshes/mech_starter_visor.gltf
             assets/meshes/poly_pizza_quaternius_mech_cc0.glb
             ${ROBOT_ENEMY_STATIC_MESHES}
+            ${ASSAULT_WALKER_STATIC_MESHES}
             "${HERO_MECH_TOY_ATLAS}"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         COMMENT "Building Mech Builder Battler mesh pack"

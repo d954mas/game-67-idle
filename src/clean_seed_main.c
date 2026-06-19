@@ -50,8 +50,9 @@
 #define CAPTURE_PATH_MAX 512
 #define MECH_MESH_PARTS 51
 #define ROBOT_ENEMY_MESH_PARTS 7
-#define MECH_MESH_TYPES 23
-#define MECH_MESH_RENDER_ITEMS (MECH_MESH_PARTS + (MAX_DRONES * ROBOT_ENEMY_MESH_PARTS))
+#define ASSAULT_WALKER_MESH_PARTS 13
+#define MECH_MESH_TYPES 36
+#define MECH_MESH_RENDER_ITEMS (MECH_MESH_PARTS + ASSAULT_WALKER_MESH_PARTS + (MAX_DRONES * ROBOT_ENEMY_MESH_PARTS))
 #define MECH_PART_ROCKETS_ONLY 0x01U
 
 typedef enum {
@@ -125,6 +126,19 @@ typedef enum {
   MECH_MESH_ROBOT_ENEMY_EYE,
   MECH_MESH_ROBOT_ENEMY_GREY,
   MECH_MESH_ROBOT_ENEMY_LIGHTGREY,
+  MECH_MESH_ASSAULT_WALKER_GREEN,
+  MECH_MESH_ASSAULT_WALKER_GREEN_AO,
+  MECH_MESH_ASSAULT_WALKER_GREEN_UV,
+  MECH_MESH_ASSAULT_WALKER_GREY_A,
+  MECH_MESH_ASSAULT_WALKER_GLASS,
+  MECH_MESH_ASSAULT_WALKER_BLACK,
+  MECH_MESH_ASSAULT_WALKER_BLACK_UV,
+  MECH_MESH_ASSAULT_WALKER_GREY_B,
+  MECH_MESH_ASSAULT_WALKER_DARK,
+  MECH_MESH_ASSAULT_WALKER_GREY_C,
+  MECH_MESH_ASSAULT_WALKER_GREY_C_NONE,
+  MECH_MESH_ASSAULT_WALKER_GREY_D,
+  MECH_MESH_ASSAULT_WALKER_GREY_D_NONE,
 } MeshPartMesh;
 
 typedef struct MeshPartSpec {
@@ -153,6 +167,7 @@ typedef struct MeshMechRuntime {
   nt_material_t text_material;
   nt_font_t ui_font;
   nt_entity_t parts[MECH_MESH_PARTS];
+  nt_entity_t assault_hero[ASSAULT_WALKER_MESH_PARTS];
   nt_entity_t enemy_robots[MAX_DRONES][ROBOT_ENEMY_MESH_PARTS];
   nt_render_item_t items[MECH_MESH_RENDER_ITEMS];
   nt_render_item_t sort_scratch[MECH_MESH_RENDER_ITEMS];
@@ -474,6 +489,19 @@ static const char *MESH_MECH_RESOURCE_PATHS[MECH_MESH_TYPES] = {
     "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_eye_static_cc0.gltf",
     "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_grey_static_cc0.gltf",
     "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_lightgrey_static_cc0.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_005_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_005_ao_2_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_005_uv_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_006_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_001_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_uv_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_002_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_003_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_004_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_004_none_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_none_static_ccby30.gltf",
 };
 
 static void ortho(float left, float right, float bottom, float top,
@@ -1956,6 +1984,15 @@ static void init_mesh_mech(void) {
     nt_drawable_comp_add(s_mesh_mech.parts[i]);
     *nt_material_comp_handle(s_mesh_mech.parts[i]) = s_mesh_mech.material;
   }
+  for (int part = 0; part < ASSAULT_WALKER_MESH_PARTS; ++part) {
+    s_mesh_mech.assault_hero[part] = nt_entity_create();
+    nt_transform_comp_add(s_mesh_mech.assault_hero[part]);
+    nt_mesh_comp_add(s_mesh_mech.assault_hero[part]);
+    nt_material_comp_add(s_mesh_mech.assault_hero[part]);
+    nt_drawable_comp_add(s_mesh_mech.assault_hero[part]);
+    *nt_material_comp_handle(s_mesh_mech.assault_hero[part]) =
+        s_mesh_mech.robot_material;
+  }
   for (int i = 0; i < MAX_DRONES; ++i) {
     for (int part = 0; part < ROBOT_ENEMY_MESH_PARTS; ++part) {
       s_mesh_mech.enemy_robots[i][part] = nt_entity_create();
@@ -2026,6 +2063,69 @@ static void shutdown_mesh_mech(void) {
   memset(&s_mesh_mech, 0, sizeof(s_mesh_mech));
 }
 
+static void append_assault_hero_items(float root_x, float root_z, float root_scale,
+                                      float yaw, float move_t, float idle_bob,
+                                      float recoil, float strafe_lean,
+                                      float forward_lean, uint32_t *item_count) {
+  const MeshPartMesh assault_meshes[ASSAULT_WALKER_MESH_PARTS] = {
+      MECH_MESH_ASSAULT_WALKER_GREEN,
+      MECH_MESH_ASSAULT_WALKER_GREEN_AO,
+      MECH_MESH_ASSAULT_WALKER_GREEN_UV,
+      MECH_MESH_ASSAULT_WALKER_GREY_A,
+      MECH_MESH_ASSAULT_WALKER_GLASS,
+      MECH_MESH_ASSAULT_WALKER_BLACK,
+      MECH_MESH_ASSAULT_WALKER_BLACK_UV,
+      MECH_MESH_ASSAULT_WALKER_GREY_B,
+      MECH_MESH_ASSAULT_WALKER_DARK,
+      MECH_MESH_ASSAULT_WALKER_GREY_C,
+      MECH_MESH_ASSAULT_WALKER_GREY_C_NONE,
+      MECH_MESH_ASSAULT_WALKER_GREY_D,
+      MECH_MESH_ASSAULT_WALKER_GREY_D_NONE,
+  };
+  const float assault_colors[ASSAULT_WALKER_MESH_PARTS][4] = {
+      {0.20F, 0.78F, 0.34F, 1.0F}, {0.18F, 0.66F, 0.28F, 1.0F},
+      {0.30F, 0.92F, 0.42F, 1.0F}, {0.78F, 0.86F, 0.86F, 1.0F},
+      {0.22F, 0.92F, 1.0F, 0.92F}, {0.055F, 0.065F, 0.070F, 1.0F},
+      {0.035F, 0.045F, 0.052F, 1.0F}, {0.70F, 0.78F, 0.80F, 1.0F},
+      {0.12F, 0.15F, 0.16F, 1.0F}, {0.88F, 0.92F, 0.90F, 1.0F},
+      {0.82F, 0.88F, 0.88F, 1.0F}, {0.76F, 0.84F, 0.84F, 1.0F},
+      {0.68F, 0.76F, 0.78F, 1.0F},
+  };
+  const float assault_scale = root_scale * 0.16F;
+  const float source_min_y = -8.9889545F;
+  const float bob = idle_bob * root_scale + (move_t * 0.018F);
+  const float model_y = 0.05F - (source_min_y * assault_scale) + bob;
+  const float model_z = root_z + recoil * root_scale * 0.12F;
+  const float roll = strafe_lean * 0.38F;
+  const float pitch = forward_lean * 0.25F;
+  for (int part = 0; part < ASSAULT_WALKER_MESH_PARTS; ++part) {
+    const uint32_t mesh_id = nt_resource_get(s_mesh_mech.meshes[assault_meshes[part]]);
+    nt_entity_t entity = s_mesh_mech.assault_hero[part];
+    float *pos = nt_transform_comp_position(entity);
+    pos[0] = root_x;
+    pos[1] = model_y;
+    pos[2] = model_z;
+    q_pose(yaw + 3.14159265F, pitch, roll, nt_transform_comp_rotation(entity));
+    float *scl = nt_transform_comp_scale(entity);
+    scl[0] = assault_scale;
+    scl[1] = assault_scale;
+    scl[2] = assault_scale;
+    *nt_transform_comp_dirty(entity) = true;
+    *nt_mesh_comp_handle(entity) = (nt_mesh_t){.id = mesh_id};
+    *nt_material_comp_handle(entity) = s_mesh_mech.robot_material;
+    nt_drawable_comp_set_color(entity, assault_colors[part][0],
+                               assault_colors[part][1],
+                               assault_colors[part][2],
+                               assault_colors[part][3]);
+    s_mesh_mech.items[*item_count].sort_key =
+        nt_sort_key_opaque(s_mesh_mech.robot_material.id, mesh_id);
+    s_mesh_mech.items[*item_count].entity = entity.id;
+    s_mesh_mech.items[*item_count].batch_key =
+        nt_batch_key(s_mesh_mech.robot_material.id, mesh_id);
+    (*item_count)++;
+  }
+}
+
 static void draw_mesh_mech(float w, float h) {
   if (!mesh_mech_ready()) {
     return;
@@ -2052,11 +2152,19 @@ static void draw_mesh_mech(float w, float h) {
       hangar ? 0.0F : clampf(s_game.mech_vx * -0.055F, -0.18F, 0.18F);
   const float forward_lean =
       hangar ? 0.0F : clampf(s_game.mech_vz * 0.035F, -0.12F, 0.12F);
-  const bool use_source_hero = true;
+  const bool use_assault_hero = true;
+  const bool use_source_hero = !use_assault_hero;
   const int source_hero_index = MECH_MESH_PARTS - 1;
 
   uint32_t item_count = 0;
+  if (use_assault_hero) {
+    append_assault_hero_items(root_x, root_z, root_scale, yaw, move_t, idle_bob,
+                              recoil, strafe_lean, forward_lean, &item_count);
+  }
   for (int i = 0; i < MECH_MESH_PARTS; ++i) {
+    if (use_assault_hero) {
+      continue;
+    }
     const MeshPartSpec *spec = &MESH_MECH_PARTS[i];
     const bool hero_overlay =
         use_source_hero && source_hero_overlay_part(i, rockets);

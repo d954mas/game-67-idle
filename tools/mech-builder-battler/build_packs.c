@@ -8,7 +8,9 @@
 
 #include "nt_builder.h"
 
+#include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 static char s_path_buf[512];
 
@@ -36,6 +38,19 @@ static const char *MESH_ASSETS[] = {
     "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_eye_static_cc0.gltf",
     "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_grey_static_cc0.gltf",
     "assets/meshes/poly_pizza_quaternius_robot_enemy_legs_gun_lightgrey_static_cc0.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_005_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_005_ao_2_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_005_uv_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_006_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_001_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_uv_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_002_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_003_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_004_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_004_none_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_static_ccby30.gltf",
+    "assets/meshes/poly_pizza_alimayo_mech_assault_walker_material_007_none_static_ccby30.gltf",
 };
 
 static const char *pack_path(const char *dir, const char *name) {
@@ -72,7 +87,9 @@ int main(int argc, char *argv[]) {
 
   const size_t mesh_count = sizeof(MESH_ASSETS) / sizeof(MESH_ASSETS[0]);
   for (size_t i = 0; i < mesh_count; ++i) {
-    const bool source_mech = i >= mesh_count - 8U;
+    const bool source_mech =
+        strcmp(MESH_ASSETS[i], "assets/meshes/poly_pizza_quaternius_mech_cc0.glb") ==
+        0;
     nt_builder_add_mesh(ctx, MESH_ASSETS[i],
                         &(nt_mesh_opts_t){
                             .layout = source_mech ? source_mech_layout : layout,

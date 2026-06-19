@@ -255,13 +255,13 @@ def build_static_gltf(src: Path, dst: Path, material_filter: int | None = None) 
     return True
 
 
-def split_materials(src: Path, dst_dir: Path, prefix: str) -> None:
+def split_materials(src: Path, dst_dir: Path, prefix: str, suffix: str = "cc0") -> None:
     doc, _blob = read_glb(src)
     dst_dir.mkdir(parents=True, exist_ok=True)
     written = 0
     for index, material in enumerate(doc.get("materials", [])):
         name = str(material.get("name") or f"mat_{index}")
-        dst = dst_dir / f"{prefix}_{material_slug(name, index)}_static_cc0.gltf"
+        dst = dst_dir / f"{prefix}_{material_slug(name, index)}_static_{suffix}.gltf"
         if build_static_gltf(src, dst, material_filter=index):
             print(dst.as_posix())
             written += 1
@@ -270,13 +270,13 @@ def split_materials(src: Path, dst_dir: Path, prefix: str) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) == 5 and argv[1] == "--split-materials":
-        split_materials(Path(argv[2]), Path(argv[3]), argv[4])
+    if len(argv) in (5, 6) and argv[1] == "--split-materials":
+        split_materials(Path(argv[2]), Path(argv[3]), argv[4], argv[5] if len(argv) == 6 else "cc0")
         return 0
     if len(argv) != 3:
         print(
             "usage: extract_static_gltf.py <input.glb> <output.gltf>\n"
-            "   or: extract_static_gltf.py --split-materials <input.glb> <output-dir> <prefix>",
+            "   or: extract_static_gltf.py --split-materials <input.glb> <output-dir> <prefix> [license-suffix]",
             file=sys.stderr,
         )
         return 2
