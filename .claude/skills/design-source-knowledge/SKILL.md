@@ -11,4 +11,7 @@ source of truth shared by all agent CLIs). Read that file and follow it.
 
 Reference playbooks (load only when the canonical skill says to):
 
+- `.codex/skills/design-source-knowledge/references/reference-work-review.md`
+- `.codex/skills/design-source-knowledge/references/source-intake-promotion.md`
+- `.codex/skills/design-source-knowledge/references/source-routing.md`
 - `.codex/skills/design-source-knowledge/references/templates.md`

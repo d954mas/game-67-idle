@@ -79,6 +79,9 @@ node tools/pipeline_validate.mjs
 - `chat-session-reflection` now keeps its hot `SKILL.md` as a short router and
   loads evidence intake, profiling, and retrospective output rules from
   `.codex/skills/chat-session-reflection/references/`.
+- `design-source-knowledge` now keeps its hot `SKILL.md` as a short router and
+  loads source routing, source intake/promotion, reference-driven review, and
+  Markdown templates from `.codex/skills/design-source-knowledge/references/`.
 
 ## Next Priorities
 
