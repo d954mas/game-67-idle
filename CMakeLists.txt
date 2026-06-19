@@ -55,6 +55,8 @@ endif()
 
 set(GAME_TARGET game_seed)
 set(GAME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/build/${GAME_TARGET}/${NT_PRESET_NAME}")
+set(MECH_BUILDER_PACK_DIR "${CMAKE_SOURCE_DIR}/build/mech-builder-battler")
+set(MECH_BUILDER_ASSETS_DIR "${GAME_OUTPUT_DIR}/assets")
 
 # cJSON comes from the engine `cjson` target (single cJSON across the engine bus
 # and the game-owned handlers — two cJSON builds would clash on cJSON_* symbols).
@@ -214,6 +216,52 @@ nt_set_sanitizer_flags(${GAME_TARGET})
 set_target_properties(${GAME_TARGET} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}"
 )
+
+if(NOT EMSCRIPTEN)
+    add_executable(build_mech_builder_battler_packs
+        tools/mech-builder-battler/build_packs.c
+    )
+    target_link_libraries(build_mech_builder_battler_packs PRIVATE nt_builder nt_log)
+    target_compile_definitions(build_mech_builder_battler_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(build_mech_builder_battler_packs PRIVATE -U_DLL)
+    nt_set_warning_flags(build_mech_builder_battler_packs)
+    nt_set_sanitizer_flags(build_mech_builder_battler_packs)
+    set_target_properties(build_mech_builder_battler_packs PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}"
+    )
+
+    set(MECH_BUILDER_PACK "${MECH_BUILDER_PACK_DIR}/mech_builder_battler_mesh.ntpack")
+    set(MECH_BUILDER_PACK_OUTPUT "${MECH_BUILDER_ASSETS_DIR}/mech_builder_battler_mesh.ntpack")
+    target_compile_definitions(${GAME_TARGET} PRIVATE
+        "MECH_BUILDER_PACK_PATH=\"${MECH_BUILDER_PACK_OUTPUT}\""
+    )
+    add_custom_command(
+        OUTPUT "${MECH_BUILDER_PACK}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${MECH_BUILDER_PACK_DIR}"
+        COMMAND $<TARGET_FILE:build_mech_builder_battler_packs> "${MECH_BUILDER_PACK_DIR}"
+        DEPENDS
+            build_mech_builder_battler_packs
+            tools/mech-builder-battler/build_packs.c
+            assets/shaders/mech_mesh_inst.vert
+            assets/shaders/mech_mesh_inst.frag
+            assets/shaders/common/instance.glsl
+            assets/shaders/common/globals.glsl
+            assets/meshes/starter_cube_normals.gltf
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Building Mech Builder Battler mesh pack"
+        VERBATIM
+    )
+    add_custom_command(
+        OUTPUT "${MECH_BUILDER_PACK_OUTPUT}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${MECH_BUILDER_ASSETS_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${MECH_BUILDER_PACK}" "${MECH_BUILDER_PACK_OUTPUT}"
+        DEPENDS "${MECH_BUILDER_PACK}"
+        COMMENT "Copying Mech Builder Battler mesh pack -> ${NT_PRESET_NAME}/assets/"
+        VERBATIM
+    )
+    add_custom_target(mech_builder_battler_packs DEPENDS "${MECH_BUILDER_PACK_OUTPUT}")
+    add_dependencies(${GAME_TARGET} mech_builder_battler_packs)
+endif()
 
 if(EMSCRIPTEN)
     set_target_properties(${GAME_TARGET} PROPERTIES SUFFIX ".html" OUTPUT_NAME "index")

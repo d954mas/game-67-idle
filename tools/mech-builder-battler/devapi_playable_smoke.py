@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
@@ -50,7 +49,9 @@ def main() -> int:
         }
         ok &= check("required endpoints", required.issubset(endpoints), sorted(required - endpoints))
 
+        game.wait_frames(20)
         state = game.result("game.state")
+        ok &= check("mesh mech ready", state.get("mesh_mech_ready") is True, state)
         ok &= check("starts in hangar", state.get("screen") == "hangar", state)
         tree = game.result("ui.tree")
         ids = {node.get("id") for node in tree.get("nodes", [])}

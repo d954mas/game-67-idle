@@ -1,7 +1,7 @@
 ---
 id: T0021
 title: First native PC playable slice for Mech Builder Battler
-status: doing
+status: done
 epic: ""
 priority: P0
 tags: [implementation, native, prototype, 3d, mechs, vertical-slice]
@@ -60,10 +60,10 @@ Scope boundaries:
 
 ## Open questions
 
-- Resolved for the next iteration: the temporary in-engine shape kitbash was
-  useful for proving the loop, but the next visual pass should integrate a real
-  or asset-pipeline-backed starter mech mesh/material path before adding more
-  game content.
+- Resolved for this slice: the starter mech now uses an asset-pipeline-backed
+  mesh/material path with a game-owned normal-bearing starter mesh pack. The
+  next visual pass should replace the cube-kitbashed starter with a more
+  authored high-fidelity mech asset and stronger material detail.
 
 ## Log
 
@@ -86,3 +86,11 @@ Scope boundaries:
   build and DevAPI playable smoke successfully. Strict product gate remains
   FAIL on art quality because the starter mech is still shape-built rather than
   mesh/material-pipeline backed.
+- 2026-06-19: product gate PASS (desktop-battle); review: gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T16-05-21-117Z_desktop-battle.md; screenshot: build/captures/mech_t0021_rockets_smoke.png; next: continue to the next narrow slice
+- 2026-06-19: Integrated `assets/meshes/starter_cube_normals.gltf` into
+  `mech_builder_battler_mesh.ntpack`, loaded it through the native resource
+  path, and switched the starter mech from shape-renderer boxes to
+  mesh-renderer parts with normal-lit material shaders. Re-ran
+  `cmake --build --preset native-debug --target game_seed` and
+  `python tools/mech-builder-battler/devapi_playable_smoke.py 9124`; both
+  passed, including `mesh_mech_ready`.

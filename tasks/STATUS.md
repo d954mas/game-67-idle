@@ -27,25 +27,24 @@ Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 ## Current Gate
 
-First native PC prototype is open via `T0021`. The playable loop works, but the
-latest strict product gate is FAIL on art quality because the starter mech is
-still shape-built rather than mesh/material-pipeline backed. Feature/content
-expansion stays frozen until the starter mech visual path improves. Exact
-UI/economy/combat pacing and final reference-driven art remain gated behind
-current-build screenshots and stronger reference evidence (`T0022`).
-Implementation/iteration remains native PC; mobile/web is the UX/export target.
-Accepted: one owned mech, PvE first, semi-auto arena, floating joystick/WASD,
-resources -> hangar purchase/craft, shoulder rockets, drone swarm proof, short
-dash, `Cooling` UI label, fixed three-quarter/isometric camera, landscape-first,
-industrial salvage sport, Foundry Warden mini-boss.
+First native PC prototype slice `T0021` is done: the loop works, screenshots
+exist, DevAPI smoke passes, and the latest strict product gate is PASS after the
+starter mech moved to an asset-pipeline-backed mesh/material/normal path. Art
+debt remains: replace the cube-kitbashed starter with an authored/high-fidelity
+mech. Exact UI/economy/combat pacing and final reference-driven art remain
+gated behind `T0022`. Iteration remains native PC; mobile/web is the UX/export
+target. Accepted: one owned mech, PvE first, semi-auto arena, floating
+joystick/WASD, resources -> hangar purchase/craft, shoulder rockets, drone
+swarm proof, short dash, `Cooling` UI label, fixed three-quarter/isometric
+camera, landscape-first, industrial salvage sport, Foundry Warden mini-boss.
 
 ## Next Priorities
 
-1. Continue `T0021`: integrate a real or asset-pipeline-backed starter mech
-   mesh/material path before adding enemies, meta systems, or more progression.
+1. Run `T0022`: update Mech Arena/CATS/Mechangelion mismatch audits against
+   the latest native capture and PASS gate.
 2. Keep the current screenshot/product gate evidence:
    `gamedesign/projects/mech-builder-battler/evidence/t0021_runtime_visual_review_2026-06-19.md`.
-3. Run `T0022`: update Mech Arena/CATS/Mechangelion mismatch audits against
-   the first native capture.
+3. Plan the next narrow visual pass: replace the cube-kitbashed starter with an
+   authored/high-fidelity mech asset using the proven mesh/material pack path.
 4. Defer web/mobile export work until explicitly approved; preserve
    mobile-style controls/readability in the PC harness.

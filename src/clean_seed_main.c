@@ -6,11 +6,26 @@
 #include "devapi/nt_devapi_net.h"
 #include "game_devapi_ui.h"
 #endif
+#include "drawable_comp/nt_drawable_comp.h"
+#include "entity/nt_entity.h"
+#include "fs/nt_fs.h"
 #include "game_state.h"
 #include "graphics/nt_gfx.h"
+#include "hash/nt_hash.h"
+#include "http/nt_http.h"
 #include "input/nt_input.h"
+#include "material/nt_material.h"
+#include "material_comp/nt_material_comp.h"
 #include "math/nt_math.h"
+#include "mesh_comp/nt_mesh_comp.h"
+#include "nt_pack_format.h"
+#include "render/nt_render_defs.h"
+#include "render/nt_render_items.h"
+#include "renderers/nt_mesh_renderer.h"
 #include "renderers/nt_shape_renderer.h"
+#include "resource/nt_resource.h"
+#include "time/nt_time.h"
+#include "transform_comp/nt_transform_comp.h"
 #include "window/nt_window.h"
 
 #ifdef NT_PLATFORM_WEB
@@ -31,6 +46,8 @@
 #define MAX_DRONES 8
 #define ROCKET_COST 120
 #define CAPTURE_PATH_MAX 512
+#define MECH_MESH_PARTS 26
+#define MECH_PART_ROCKETS_ONLY 0x01U
 
 typedef enum {
   SCREEN_HANGAR = 0,
@@ -74,11 +91,33 @@ typedef struct MechGame {
   Drone drones[MAX_DRONES];
 } MechGame;
 
+typedef struct MeshPartSpec {
+  float pos[3];
+  float size[3];
+  float color[4];
+  uint8_t flags;
+} MeshPartSpec;
+
+typedef struct MeshMechRuntime {
+  nt_hash32_t pack_id;
+  nt_resource_t mesh;
+  nt_resource_t vs;
+  nt_resource_t fs;
+  nt_material_t material;
+  nt_entity_t parts[MECH_MESH_PARTS];
+  nt_render_item_t items[MECH_MESH_PARTS];
+  nt_render_item_t sort_scratch[MECH_MESH_PARTS];
+  nt_buffer_t frame_ubo;
+  bool initialized;
+  bool pack_logged;
+} MeshMechRuntime;
+
 static bool s_devapi_enabled;
 static uint16_t s_devapi_port = CLEAN_SEED_DEVAPI_PORT_DEFAULT;
 static int s_window_width = 1280;
 static int s_window_height = 720;
 static MechGame s_game;
+static MeshMechRuntime s_mesh_mech;
 static UiBox s_primary_box;
 static UiBox s_secondary_box;
 static UiBox s_dash_box;
@@ -101,6 +140,113 @@ static const float COL_MAGENTA[4] = {0.86F, 0.12F, 1.0F, 1.0F};
 static const float COL_GREEN[4] = {0.18F, 0.85F, 0.38F, 1.0F};
 static const float COL_WHITE[4] = {0.92F, 0.98F, 1.0F, 1.0F};
 static const float COL_PANEL[4] = {0.035F, 0.105F, 0.13F, 1.0F};
+
+static const MeshPartSpec MESH_MECH_PARTS[MECH_MESH_PARTS] = {
+    {{0.0F, 1.62F, 0.0F},
+     {1.08F, 1.32F, 0.72F},
+     {0.08F, 0.47F, 0.85F, 1.0F},
+     0},
+    {{0.0F, 0.92F, 0.04F},
+     {0.92F, 0.38F, 0.60F},
+     {0.035F, 0.22F, 0.44F, 1.0F},
+     0},
+    {{0.0F, 2.36F, 0.05F},
+     {1.42F, 0.34F, 0.76F},
+     {0.035F, 0.22F, 0.44F, 1.0F},
+     0},
+    {{0.0F, 1.88F, -0.50F},
+     {0.70F, 0.24F, 0.12F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0},
+    {{0.0F, 2.78F, -0.06F},
+     {0.58F, 0.48F, 0.42F},
+     {0.52F, 0.63F, 0.70F, 1.0F},
+     0},
+    {{0.0F, 2.84F, -0.44F},
+     {0.54F, 0.12F, 0.08F},
+     {0.02F, 0.92F, 1.0F, 1.0F},
+     0},
+    {{0.0F, 2.64F, 0.44F},
+     {0.74F, 0.48F, 0.34F},
+     {0.13F, 0.17F, 0.20F, 1.0F},
+     0},
+    {{-1.03F, 2.50F, 0.02F},
+     {0.72F, 0.34F, 0.78F},
+     {0.28F, 0.78F, 1.0F, 1.0F},
+     0},
+    {{1.03F, 2.50F, 0.02F},
+     {0.72F, 0.34F, 0.78F},
+     {0.08F, 0.47F, 0.85F, 1.0F},
+     0},
+    {{-1.40F, 1.78F, 0.0F},
+     {0.32F, 0.82F, 0.32F},
+     {0.52F, 0.63F, 0.70F, 1.0F},
+     0},
+    {{1.40F, 1.78F, 0.0F},
+     {0.32F, 0.82F, 0.32F},
+     {0.52F, 0.63F, 0.70F, 1.0F},
+     0},
+    {{-1.78F, 1.44F, -0.16F},
+     {0.34F, 0.74F, 0.36F},
+     {0.28F, 0.78F, 1.0F, 1.0F},
+     0},
+    {{1.78F, 1.44F, -0.16F},
+     {0.34F, 0.74F, 0.36F},
+     {0.28F, 0.78F, 1.0F, 1.0F},
+     0},
+    {{1.98F, 1.20F, -0.60F},
+     {0.18F, 0.20F, 0.82F},
+     {1.0F, 0.48F, 0.05F, 1.0F},
+     0},
+    {{-0.50F, 0.58F, -0.06F},
+     {0.42F, 0.78F, 0.40F},
+     {0.13F, 0.17F, 0.20F, 1.0F},
+     0},
+    {{0.50F, 0.58F, -0.06F},
+     {0.42F, 0.78F, 0.40F},
+     {0.13F, 0.17F, 0.20F, 1.0F},
+     0},
+    {{-0.56F, 0.08F, -0.22F},
+     {0.58F, 0.22F, 0.86F},
+     {0.52F, 0.63F, 0.70F, 1.0F},
+     0},
+    {{0.56F, 0.08F, -0.22F},
+     {0.58F, 0.22F, 0.86F},
+     {0.52F, 0.63F, 0.70F, 1.0F},
+     0},
+    {{-0.56F, 0.20F, 0.34F},
+     {0.46F, 0.24F, 0.38F},
+     {0.28F, 0.78F, 1.0F, 1.0F},
+     0},
+    {{0.56F, 0.20F, 0.34F},
+     {0.46F, 0.24F, 0.38F},
+     {0.28F, 0.78F, 1.0F, 1.0F},
+     0},
+    {{-0.62F, 2.92F, 0.02F},
+     {0.38F, 0.34F, 0.82F},
+     {1.0F, 0.48F, 0.05F, 1.0F},
+     MECH_PART_ROCKETS_ONLY},
+    {{0.62F, 2.92F, 0.02F},
+     {0.38F, 0.34F, 0.82F},
+     {1.0F, 0.48F, 0.05F, 1.0F},
+     MECH_PART_ROCKETS_ONLY},
+    {{-0.62F, 3.18F, 0.02F},
+     {0.30F, 0.18F, 0.72F},
+     {0.78F, 0.88F, 0.92F, 1.0F},
+     MECH_PART_ROCKETS_ONLY},
+    {{0.62F, 3.18F, 0.02F},
+     {0.30F, 0.18F, 0.72F},
+     {0.78F, 0.88F, 0.92F, 1.0F},
+     MECH_PART_ROCKETS_ONLY},
+    {{-0.42F, 2.91F, -0.48F},
+     {0.18F, 0.18F, 0.28F},
+     {1.0F, 0.18F, 0.08F, 1.0F},
+     MECH_PART_ROCKETS_ONLY},
+    {{0.42F, 2.91F, -0.48F},
+     {0.18F, 0.18F, 0.28F},
+     {1.0F, 0.18F, 0.08F, 1.0F},
+     MECH_PART_ROCKETS_ONLY},
+};
 
 static void ortho(float left, float right, float bottom, float top,
                   float near_z, float far_z, float out[16]) {
@@ -940,7 +1086,9 @@ static void draw_projectiles(void) {
   }
 }
 
-static void setup_perspective(float w, float h, bool hangar) {
+static void build_frame_uniforms(float w, float h, bool hangar,
+                                 nt_frame_uniforms_t *uniforms,
+                                 float out_vp[16]) {
   const float aspect = h > 0.0F ? w / h : 1.777F;
   const vec3 eye = {hangar ? 4.4F : 5.4F, hangar ? 4.1F : 6.0F,
                     hangar ? 8.4F : 9.4F};
@@ -954,6 +1102,36 @@ static void setup_perspective(float w, float h, bool hangar) {
              (vec3){up[0], up[1], up[2]}, view);
   glm_perspective(glm_rad(hangar ? 54.0F : 58.0F), aspect, 0.1F, 80.0F, proj);
   glm_mat4_mul(proj, view, vp);
+
+  if (out_vp) {
+    memcpy(out_vp, vp, sizeof(float) * 16);
+  }
+  if (uniforms) {
+    memset(uniforms, 0, sizeof(*uniforms));
+    memcpy(uniforms->view_proj, vp, 64);
+    memcpy(uniforms->view, view, 64);
+    memcpy(uniforms->proj, proj, 64);
+    uniforms->camera_pos[0] = eye[0];
+    uniforms->camera_pos[1] = eye[1];
+    uniforms->camera_pos[2] = eye[2];
+    uniforms->time[0] = (float)nt_time_now();
+    uniforms->time[1] = g_nt_app.dt;
+    if (w > 0.0F && h > 0.0F) {
+      uniforms->resolution[0] = w;
+      uniforms->resolution[1] = h;
+      uniforms->resolution[2] = 1.0F / w;
+      uniforms->resolution[3] = 1.0F / h;
+    }
+    uniforms->near_far[0] = 0.1F;
+    uniforms->near_far[1] = 80.0F;
+  }
+}
+
+static void setup_perspective(float w, float h, bool hangar) {
+  float vp[16];
+  build_frame_uniforms(w, h, hangar, NULL, vp);
+  const vec3 eye = {hangar ? 4.4F : 5.4F, hangar ? 4.1F : 6.0F,
+                    hangar ? 8.4F : 9.4F};
   nt_shape_renderer_set_vp((float *)vp);
   nt_shape_renderer_set_cam_pos((float[3]){eye[0], eye[1], eye[2]});
   nt_shape_renderer_set_depth(true);
@@ -967,20 +1145,201 @@ static void setup_ortho(float w, float h) {
   nt_shape_renderer_set_depth(false);
 }
 
+static bool mesh_mech_ready(void) {
+  if (!s_mesh_mech.initialized) {
+    return false;
+  }
+  const nt_material_info_t *mat_info =
+      nt_material_get_info(s_mesh_mech.material);
+  return mat_info && mat_info->ready && nt_resource_is_ready(s_mesh_mech.mesh);
+}
+
+static void init_mesh_mech(void) {
+  if (s_mesh_mech.initialized) {
+    return;
+  }
+
+  nt_hash_init(&(nt_hash_desc_t){0});
+  nt_resource_init(&(nt_resource_desc_t){0});
+  nt_resource_set_activator(NT_ASSET_MESH, nt_gfx_activate_mesh,
+                            nt_gfx_deactivate_mesh);
+  nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader,
+                            nt_gfx_deactivate_shader);
+  nt_resource_set_activate_time_budget(0);
+
+  nt_material_desc_t mat_desc = nt_material_desc_defaults();
+  nt_material_init(&mat_desc);
+  nt_entity_init(&(nt_entity_desc_t){.max_entities = 64});
+  nt_transform_comp_init(&(nt_transform_comp_desc_t){.capacity = 64});
+  nt_mesh_comp_init(&(nt_mesh_comp_desc_t){.capacity = 64});
+  nt_material_comp_init(&(nt_material_comp_desc_t){.capacity = 64});
+  nt_drawable_comp_init(&(nt_drawable_comp_desc_t){.capacity = 64});
+
+  nt_mesh_renderer_desc_t mesh_desc = nt_mesh_renderer_desc_defaults();
+  nt_mesh_renderer_init(&mesh_desc);
+
+  s_mesh_mech.pack_id = nt_hash32_str("mech_builder_battler_mesh");
+  s_mesh_mech.mesh = nt_resource_request(
+      nt_hash64_str("assets/meshes/starter_cube_normals.gltf"), NT_ASSET_MESH);
+  s_mesh_mech.vs =
+      nt_resource_request(nt_hash64_str("assets/shaders/mech_mesh_inst.vert"),
+                          NT_ASSET_SHADER_CODE);
+  s_mesh_mech.fs =
+      nt_resource_request(nt_hash64_str("assets/shaders/mech_mesh_inst.frag"),
+                          NT_ASSET_SHADER_CODE);
+  s_mesh_mech.material = nt_material_create(&(nt_material_create_desc_t){
+      .vs = s_mesh_mech.vs,
+      .fs = s_mesh_mech.fs,
+      .attr_map =
+          {
+              {.stream_name = "position", .location = 0},
+              {.stream_name = "normal", .location = 1},
+          },
+      .attr_map_count = 2,
+      .depth_test = true,
+      .depth_write = true,
+      .cull_mode = NT_CULL_BACK,
+      .color_mode = NT_COLOR_MODE_FLOAT4,
+      .label = "mech_starter_mesh_parts",
+  });
+
+  for (int i = 0; i < MECH_MESH_PARTS; ++i) {
+    s_mesh_mech.parts[i] = nt_entity_create();
+    nt_transform_comp_add(s_mesh_mech.parts[i]);
+    nt_mesh_comp_add(s_mesh_mech.parts[i]);
+    nt_material_comp_add(s_mesh_mech.parts[i]);
+    nt_drawable_comp_add(s_mesh_mech.parts[i]);
+    *nt_material_comp_handle(s_mesh_mech.parts[i]) = s_mesh_mech.material;
+  }
+
+  s_mesh_mech.frame_ubo = nt_gfx_make_buffer(&(nt_buffer_desc_t){
+      .type = NT_BUFFER_UNIFORM,
+      .usage = NT_USAGE_DYNAMIC,
+      .size = sizeof(nt_frame_uniforms_t),
+      .label = "mech_frame_uniforms",
+  });
+
+  nt_resource_mount(s_mesh_mech.pack_id, 100);
+#ifdef NT_CDN_URL
+  nt_resource_load_auto(s_mesh_mech.pack_id,
+                        NT_CDN_URL "/mech_builder_battler_mesh.ntpack");
+#elif defined(MECH_BUILDER_PACK_PATH)
+  nt_resource_load_auto(s_mesh_mech.pack_id, MECH_BUILDER_PACK_PATH);
+#else
+  nt_resource_load_auto(s_mesh_mech.pack_id,
+                        "assets/mech_builder_battler_mesh.ntpack");
+#endif
+
+  s_mesh_mech.initialized = true;
+}
+
+static void step_mesh_mech(void) {
+  if (!s_mesh_mech.initialized) {
+    return;
+  }
+  nt_resource_step();
+  nt_material_step();
+  if (!s_mesh_mech.pack_logged &&
+      nt_resource_pack_state(s_mesh_mech.pack_id) == NT_PACK_STATE_READY) {
+    s_mesh_mech.pack_logged = true;
+  }
+}
+
+static void shutdown_mesh_mech(void) {
+  if (!s_mesh_mech.initialized) {
+    return;
+  }
+  nt_mesh_renderer_shutdown();
+  nt_drawable_comp_shutdown();
+  nt_material_comp_shutdown();
+  nt_mesh_comp_shutdown();
+  nt_transform_comp_shutdown();
+  nt_entity_shutdown();
+  nt_material_destroy(s_mesh_mech.material);
+  nt_material_shutdown();
+  nt_resource_shutdown();
+  nt_hash_shutdown();
+  nt_gfx_destroy_buffer(s_mesh_mech.frame_ubo);
+  memset(&s_mesh_mech, 0, sizeof(s_mesh_mech));
+}
+
+static void draw_mesh_mech(float w, float h) {
+  if (!mesh_mech_ready()) {
+    return;
+  }
+
+  const bool hangar = s_game.screen != SCREEN_BATTLE;
+  const bool rockets = s_game.rockets_equipped;
+  const float root_x = hangar ? 0.0F : s_game.mech_x;
+  const float root_z = hangar ? 0.4F : s_game.mech_z;
+  const float root_scale = hangar ? 1.18F : 0.88F;
+  const float yaw = hangar ? 0.18F : -0.10F;
+  float q_y[4];
+  q_axis(0.0F, 1.0F, 0.0F, yaw, q_y);
+
+  uint32_t mesh_id = nt_resource_get(s_mesh_mech.mesh);
+  uint32_t item_count = 0;
+  for (int i = 0; i < MECH_MESH_PARTS; ++i) {
+    const MeshPartSpec *spec = &MESH_MECH_PARTS[i];
+    if ((spec->flags & MECH_PART_ROCKETS_ONLY) && !rockets) {
+      continue;
+    }
+    nt_entity_t entity = s_mesh_mech.parts[i];
+    float *pos = nt_transform_comp_position(entity);
+    pos[0] = root_x + (spec->pos[0] * root_scale);
+    pos[1] = 0.25F + (spec->pos[1] * root_scale);
+    pos[2] = root_z + (spec->pos[2] * root_scale);
+    memcpy(nt_transform_comp_rotation(entity), q_y, sizeof(float) * 4);
+    float *scl = nt_transform_comp_scale(entity);
+    scl[0] = spec->size[0] * root_scale;
+    scl[1] = spec->size[1] * root_scale;
+    scl[2] = spec->size[2] * root_scale;
+    *nt_transform_comp_dirty(entity) = true;
+    *nt_mesh_comp_handle(entity) = (nt_mesh_t){.id = mesh_id};
+    nt_drawable_comp_set_color(entity, spec->color[0], spec->color[1],
+                               spec->color[2], spec->color[3]);
+
+    s_mesh_mech.items[item_count].sort_key =
+        nt_sort_key_opaque(s_mesh_mech.material.id, mesh_id);
+    s_mesh_mech.items[item_count].entity = entity.id;
+    s_mesh_mech.items[item_count].batch_key =
+        nt_batch_key(s_mesh_mech.material.id, mesh_id);
+    item_count++;
+  }
+  nt_transform_comp_update();
+
+  nt_frame_uniforms_t uniforms;
+  build_frame_uniforms(w, h, hangar, &uniforms, NULL);
+  nt_gfx_update_buffer(s_mesh_mech.frame_ubo, &uniforms, sizeof(uniforms));
+  nt_gfx_bind_uniform_buffer(s_mesh_mech.frame_ubo, 0);
+  nt_sort_by_key(s_mesh_mech.items, item_count, s_mesh_mech.sort_scratch);
+  nt_mesh_renderer_draw_list(s_mesh_mech.items, item_count);
+}
+
 static void draw_world(float w, float h) {
   const bool hangar = s_game.screen != SCREEN_BATTLE;
+  const bool use_mesh_mech = mesh_mech_ready();
   setup_perspective(w, h, hangar);
   draw_floor_grid(ARENA_HALF, hangar);
   if (s_game.screen == SCREEN_BATTLE) {
-    draw_mech(s_game.mech_x, s_game.mech_z, 0.88F, s_game.rockets_equipped,
-              false);
+    if (use_mesh_mech) {
+      draw_shadow(s_game.mech_x, s_game.mech_z + 0.08F, 2.8F * 0.88F,
+                  2.1F * 0.88F, 0.38F);
+    } else {
+      draw_mech(s_game.mech_x, s_game.mech_z, 0.88F, s_game.rockets_equipped,
+                false);
+    }
     const int target = target_drone();
     for (int i = 0; i < MAX_DRONES; ++i) {
       draw_drone(&s_game.drones[i], i == target);
     }
     draw_projectiles();
   } else {
-    draw_mech(0.0F, 0.4F, 1.18F, s_game.rockets_equipped, true);
+    if (use_mesh_mech) {
+      draw_shadow(0.0F, 0.48F, 2.8F * 1.18F, 2.1F * 1.18F, 0.38F);
+    } else {
+      draw_mech(0.0F, 0.4F, 1.18F, s_game.rockets_equipped, true);
+    }
     if (s_game.screen == SCREEN_UPGRADE || s_game.screen == SCREEN_REWARD ||
         s_game.screen == SCREEN_RETEST) {
       nt_shape_renderer_cube((float[3]){3.2F, 0.45F, -1.2F},
@@ -1134,6 +1493,7 @@ static bool emit_state(cJSON *result_obj) {
   cJSON_AddNumberToObject(result_obj, "heat", (double)s_game.heat);
   cJSON_AddNumberToObject(result_obj, "mech_x", (double)s_game.mech_x);
   cJSON_AddNumberToObject(result_obj, "mech_z", (double)s_game.mech_z);
+  cJSON_AddBoolToObject(result_obj, "mesh_mech_ready", mesh_mech_ready());
   return true;
 }
 
@@ -1292,6 +1652,7 @@ static void frame(void) {
   layout(w, h);
   handle_input();
   update_battle(g_nt_app.dt);
+  step_mesh_mech();
 
 #if NT_DEVAPI_ENABLED
   if (s_devapi_enabled) {
@@ -1313,6 +1674,7 @@ static void frame(void) {
       .clear_color = {0.035F, 0.065F, 0.085F, 1.0F}, .clear_depth = 1.0F});
   draw_world(w, h);
   nt_shape_renderer_flush();
+  draw_mesh_mech(w, h);
   draw_hud(w, h);
   nt_shape_renderer_flush();
   maybe_capture_framebuffer();
@@ -1341,7 +1703,11 @@ int main(int argc, char **argv) {
   nt_gfx_desc_t gfx_desc = nt_gfx_desc_defaults();
   gfx_desc.depth = true;
   nt_gfx_init(&gfx_desc);
+  nt_gfx_register_global_block("Globals", 0);
   nt_shape_renderer_init();
+  nt_http_init();
+  nt_fs_init();
+  init_mesh_mech();
 
 #if NT_DEVAPI_ENABLED
   if (s_devapi_enabled) {
@@ -1373,6 +1739,9 @@ int main(int argc, char **argv) {
   }
 #endif
   nt_shape_renderer_shutdown();
+  shutdown_mesh_mech();
+  nt_fs_shutdown();
+  nt_http_shutdown();
   nt_gfx_shutdown();
   nt_input_shutdown();
   nt_window_shutdown();

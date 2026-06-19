@@ -22,7 +22,7 @@ Captured through `game.capture.framebuffer` and
 - Retest: `build/captures/mech_t0021_retest_smoke.png`
 - Rockets proof: `build/captures/mech_t0021_rockets_smoke.png`
 - Product read gate:
-  `gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T15-38-07-381Z_desktop-battle.md`
+  `gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T16-05-21-117Z_desktop-battle.md`
 
 ## What Is Proven
 
@@ -40,11 +40,15 @@ Captured through `game.capture.framebuffer` and
 - A second visual pass added more armor layers, rocket cassette detail, cooling
   vents, target rings, arena/hangar props, warning stripes, and visible compact
   action panels without breaking the DevAPI smoke loop.
+- The starter mech now loads through `mech_builder_battler_mesh.ntpack` with a
+  game-owned normal-bearing starter mesh, `mech_mesh_inst` material shaders,
+  mesh renderer parts, and DevAPI proof that `mesh_mech_ready` is true.
 
 ## Visual Review
 
-Verdict: implementation proof is valid for the first playable skeleton, but
-visual quality is not yet at the accepted model/GLB bar.
+Verdict: implementation proof is valid for the first playable slice and the
+starter mech has moved off the shape-renderer path. Visual quality is still not
+at the final authored/juicy mech bar.
 
 Strengths:
 
@@ -55,41 +59,44 @@ Strengths:
   orange accents, and rocket effects establish the intended color language.
 - The upgraded mech has a clearer chest reactor, shoulder armor, rocket
   cassettes, feet, knees, weapon barrels, cooling vents, and backpack silhouette.
+- The active mech render path now uses packed mesh assets, normal-bearing
+  geometry, material shader validation, and runtime mesh renderer draw calls.
 - The HUD communicates next action, salvage, drone count, dash, rockets, and
   `Cooling`, and compact action buttons now have visible game panels.
 
 Weaknesses:
 
-- The mech is still shape-built, not real GLB/model-like geometry.
-- Materials are color-coded but do not yet have authored normals, bevel detail,
-  texture response, or shadow maps from the mesh/material pipeline.
+- The mech is still cube-kitbashed from a starter mesh rather than authored as
+  a high-fidelity mech model.
+- Materials are color-coded and normal-lit but do not yet have authored bevel
+  detail, texture response, decals, or shadow-map polish.
 - Text is a temporary pixel font; readable, but not final UI typography.
 - The arena/hangar needs more authored props and stronger composition, though
   the first prop/platform pass is now present.
-- The screenshot still risks reading as an engine prototype rather than a
+- The screenshot still risks reading as an early prototype rather than a
   polished juicy mobile mech game.
 
 ## Gate Verdict
 
-The strict product read gate is **FAIL** for visual quality:
+The latest strict product read gate is **PASS** for this slice's blocker:
 
 - composition: 4/5
 - readability: 4/5
 - ui_controls: 4/5
 - action_direction: 4/5
-- art_quality: 3/5
+- art_quality: 4/5
 - audience_fit: 4/5
 
-Reason: the visual baseline improved, but the starter mech is still
-shape-built without a real mesh/material/normal asset path. Feature/content
-expansion should stay frozen until the starter mech moves to an
-asset-pipeline-backed presentation.
+Reason: the original blocker was the shape-built mech. The current build proves
+an asset-pipeline-backed mesh/material/normal path and preserves the first
+playable loop. Remaining art debt is tracked as minor: the starter mech is
+still cube-kitbashed and should become a more authored high-fidelity mech asset
+in a later visual pass.
 
 ## Next Visual Fixes
 
-1. Replace the shape-built mech with a generated/kitbashed model asset path or
-   wire the slice into the engine mesh/material pipeline with a local starter
-   mech asset.
+1. Replace the cube-kitbashed starter with an authored or generated
+   high-fidelity starter mech asset using the same mesh/material pack path.
 2. Add stronger battle effects: muzzle flash timing, rocket trail persistence,
    drone debris/salvage burst, and vent/cooling glow.
 3. Improve HUD art: cleaner module card art, iconography, and less debug-like
