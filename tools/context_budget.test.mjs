@@ -79,7 +79,7 @@ test("context budget default hot doc limit is tight enough for live docs", () =>
     writeFixture(dir, "short skill\n", "x".repeat(6600));
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /AGENTS\.md: 6600 chars > 5200/);
+    assert.match(result.stderr, /AGENTS\.md: 6600 chars > 4300/);
   } finally {
     cleanup(dir);
   }

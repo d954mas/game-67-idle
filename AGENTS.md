@@ -28,22 +28,21 @@
 
 ## Context Rules
 
-- Load the smallest current context that lets you choose the next action:
-  `AGENTS.md`, `node tools/taskboard/cli.mjs context`, one relevant task, and
-  one matching skill.
-- Do not read archives, old logs, broad design folders, build outputs, or
-  generated files unless a current source links to them or the task is a review.
-- Use skills for detailed procedures. `AGENTS.md` is a map, not an encyclopedia.
+- Generic context/work-loop policy: `AI_PIPELINE.md` and
+  `docs/ai-pipeline/agent-workflow.md`.
+- Start substantial work with `node tools/taskboard/cli.mjs context`, one
+  relevant task/evidence file, and one matching skill.
+- Avoid archives, old logs, broad design folders, build outputs, and generated
+  files unless the current task links to them or asks for review/history.
 - For non-trivial game, visual, pipeline, or tooling sessions, set a profiling
   scope with `node tools/ai.mjs start <task-id> <iteration>` or state why
   profiling is unavailable.
 
 ## Game Work Rules
 
-- Native desktop/PC is the primary playable harness. Do not create web/mobile
-  prototypes, start web servers, open localhost, or install browser/frontend
-  tooling for playable game work unless the user explicitly asked for web/mobile
-  work or approved the exception.
+- Native desktop/PC is the primary playable harness. No web/mobile prototypes,
+  servers, localhost, or browser/frontend tooling for playable work unless the
+  user explicitly asks or approves the exception.
 - Start new games with a fresh project wiki under
   `gamedesign/projects/<game-id>/` and fresh tasks in `tasks/active/`.
 - Prefer small playable native slices over broad speculative systems.
@@ -53,26 +52,22 @@
   renderers are for debug only, not shipped game visuals.
 - First playable screen: one current location, one active primary path, one next
   action, visible reward/progress, and clear locked/future states.
-- References are required when the user names a reference or says the build does
-  not match one. Record the smallest honest Reference Digest before implementing
-  reference-driven gameplay/UI/balance/final art.
+- References are required when the user names one or says the build mismatches
+  one. Record the smallest honest Reference Digest before implementing.
 
 ## Gates
 
-- Keep verdicts separate: product/readability, game-loop/fun, art-source/assets,
-  and technical/build evidence do not substitute for each other.
-- Passing builds, probes, manifests, and audits are evidence, not acceptance.
-  A slice is not done if it does not look/feel like the intended game or a new
-  player cannot understand what to do.
-- Visual/readability work needs screenshot evidence and, for UI/text, zoomed
-  readability proof. Judge the whole screen before/after; do not trade one
-  visual failure for another.
-- If the lead rejects a screenshot/build as ugly, unclear, or unplayable, stop
-  feature/content expansion and fix the product failure first.
-- Repeated strict/product gate failures must change path. The reusable guard is
-  `node tools/product_gate/repeated_failure_guard.mjs`; it fails when the same
-  failure repeats without an architecture/tooling/source support task or explicit
-  lead acceptance.
+- Gate taxonomy and reusable validation defaults live in
+  `docs/ai-pipeline/quality-validation.md`.
+- Passing builds/probes/manifests/audits are evidence, not acceptance. A slice
+  is not done if it does not look/feel right or a new player cannot operate it.
+- Visual/readability work needs screenshot evidence; UI/text needs zoomed
+  readability proof and before/after whole-screen judgment.
+- Lead rejection of a screenshot/build as ugly, unclear, or unplayable freezes
+  feature/content expansion until the product failure is fixed.
+- Repeated strict/product gate failures must change path. The guard is
+  `node tools/product_gate/repeated_failure_guard.mjs`; it fails on repeat
+  failures without support task or explicit lead acceptance.
 
 ## Validation Defaults
 
