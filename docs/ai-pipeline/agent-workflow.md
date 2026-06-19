@@ -1,31 +1,26 @@
 # Agent Workflow Reference
 
-Detailed portable workflow rules for agent behavior. Load this file when
-changing agent context policy, work-loop behavior, multi-agent usage, or hot
-Markdown structure.
+Portable rules for agent behavior. Load when changing context policy, work-loop
+behavior, multi-agent usage, or hot Markdown structure.
 
 ## Roles
 
-- Lead: sets direction, taste, priority, and acceptance. The lead does not need
-  to write detailed specs.
+- Lead: sets direction, taste, priority, and acceptance.
 - Agent: turns intent into scoped work, asks only necessary questions, researches
-  when references matter, implements small slices, and proves results with
-  evidence.
+  when references matter, implements small slices, and proves results.
 
 ## Agent-Facing Docs
-
-Keep hot Markdown short and stable.
 
 - `AGENTS.md`: project map, hard rules, validation defaults.
 - `AI_PIPELINE.md`: reusable workflow map and context policy.
 - `tasks/README.md`: task store commands and lifecycle.
 - `.codex/skills/*/SKILL.md`: one focused procedure per task type.
-- Skill `references/` and `gamedesign/knowledge/`: detailed method, examples,
-  research, and historical lessons loaded only when needed.
+- Skill `references/` and `gamedesign/knowledge/`: deeper method, examples, and
+  lessons loaded only when needed.
 
-Do not duplicate the same rule in every file. Put each rule where the agent
-first needs it, then link to the deeper source. Delete stale anecdotes once the
-lesson is encoded as a tool, validator, task rule, or skill.
+Do not duplicate rules. Put each rule where the agent first needs it, link to
+the deeper source, then delete stale anecdotes once encoded as a tool,
+validator, task rule, or skill.
 
 Write agent Markdown as:
 
@@ -33,7 +28,7 @@ Write agent Markdown as:
 - shortest required command;
 - source-of-truth path;
 - stop condition;
-- no long chat history, no broad checklists in hot context.
+- no chat history or broad checklists in hot context.
 
 ## Context Policy
 
@@ -45,12 +40,11 @@ Default context for substantial work is:
 4. one matching skill
 
 Prefer scoped search and compact command output over whole-file dumps. Use
-archives, old task logs, generated artifacts, and broad design folders only when
-the current task links to them or the user asks for review/history.
+archives, old logs, generated artifacts, and broad design folders only when
+task-linked or requested.
 
-Keep stable context byte-stable inside a session when possible. Put volatile
-session facts in tasks, status, evidence files, or final reports rather than
-rewriting hot instruction files repeatedly.
+Keep stable context byte-stable inside a session. Put volatile facts in tasks,
+status, evidence files, or final reports, not hot instruction files.
 
 ## Work Loop
 
@@ -64,6 +58,6 @@ rewriting hot instruction files repeatedly.
 7. Record evidence in the task/status/final response when the work changes
    project state.
 
-Use multiple agents only for independent side work with clear ownership,
-expected artifact, evidence, and out-of-scope boundaries. The main integrator
-keeps final responsibility for merge, validation, and status.
+Use multiple agents only for independent side work with clear owner, artifact,
+evidence, and out-of-scope boundary. The main integrator owns merge,
+validation, and status.
