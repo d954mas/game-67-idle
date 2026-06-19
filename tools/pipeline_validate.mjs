@@ -230,8 +230,10 @@ run("skill eval", ["tools/skills_eval.mjs"]);
 run("skills sync check", ["tools/skills_sync.mjs", "--check"]);
 run("skills sync tests", ["--test", "tools/skills_sync.test.mjs"]);
 run("context budget report", ["tools/context_budget.mjs"]);
+run("doc reference check", ["tools/doc_reference_check.mjs"]);
 run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
 run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
+run("doc reference tests", ["--test", "tools/doc_reference_check.test.mjs"]);
 run("bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"]);
 run("repeated product gate failure guard", ["tools/product_gate/repeated_failure_guard.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
@@ -319,6 +321,7 @@ if (existsSync(join(root, "CMakePresets.json"))) {
 // invocation, so it is re-run in the export only with --reexport-tests.
 run("portable export", ["tools/bootstrap/export_base.mjs", "--target", exportDir]);
 run("exported skill eval", ["tools/skills_eval.mjs"], { cwd: exportDir });
+run("exported doc reference check", ["tools/doc_reference_check.mjs"], { cwd: exportDir });
 run("exported taskboard validate", ["tools/taskboard/cli.mjs", "validate"], { cwd: exportDir });
 
 if (!args.includes("--reexport-tests")) {
@@ -329,6 +332,7 @@ if (!args.includes("--reexport-tests")) {
 }
 
 run("exported ai facade tests", ["--test", "tools/ai.test.mjs"], { cwd: exportDir });
+run("exported doc reference tests", ["--test", "tools/doc_reference_check.test.mjs"], { cwd: exportDir });
 run("exported bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"], { cwd: exportDir });
 run("exported taskboard tests", ["--test", "tools/taskboard/test.mjs"], { cwd: exportDir });
 run("exported ai profile tests", ["--test", "tools/ai_profile/test.mjs"], { cwd: exportDir });

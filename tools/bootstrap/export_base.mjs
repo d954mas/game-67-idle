@@ -34,6 +34,8 @@ const COPY = [
   "tools/ai.test.mjs",
   "tools/context_budget.mjs",
   "tools/context_budget.test.mjs",
+  "tools/doc_reference_check.mjs",
+  "tools/doc_reference_check.test.mjs",
   "tools/skills_eval.mjs",
   "tools/pipeline_validate.mjs",
   "tools/pipeline_validate.test.mjs",

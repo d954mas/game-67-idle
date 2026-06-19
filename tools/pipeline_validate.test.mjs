@@ -22,7 +22,9 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.match(result.stdout, /== ai facade tests/);
   assert.match(result.stdout, /== skills sync tests/);
   assert.match(result.stdout, /== context budget report/);
+  assert.match(result.stdout, /== doc reference check/);
   assert.match(result.stdout, /== context budget tests/);
+  assert.match(result.stdout, /== doc reference tests/);
   assert.match(result.stdout, /== bootstrap export tests/);
   assert.match(result.stdout, /== repeated product gate failure guard/);
   assert.match(result.stdout, /== product gate tests/);
@@ -48,6 +50,7 @@ test("pipeline validation full --reexport-tests dry-run runs the full in-export 
   const result = run(["--full", "--reexport-tests", "--dry-run"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /mode: full \(dry-run\)/);
+  assert.match(result.stdout, /== exported doc reference tests/);
   assert.match(result.stdout, /== exported bootstrap export tests/);
   assert.match(result.stdout, /== exported ai profile tests/);
   assert.doesNotMatch(result.stdout, /skipped the in-export test battery/);
