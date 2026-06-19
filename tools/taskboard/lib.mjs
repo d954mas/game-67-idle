@@ -11,7 +11,7 @@ import { basename, join, resolve, dirname } from "node:path";
 export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done", "dropped"];
 export const EPIC_STATUSES = ["idea", "active", "done", "dropped"];
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
-export const LIVE_STATUS_MAX_CHARS = 6000;
+export const LIVE_STATUS_MAX_CHARS = 2400;
 
 export function findRoot(start = process.cwd()) {
   if (process.env.TASKBOARD_ROOT) {

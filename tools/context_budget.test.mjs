@@ -89,10 +89,10 @@ test("context budget applies tighter default caps to live status docs", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "tasks", "STATUS.md"), "x".repeat(3300), "utf8");
+    writeFileSync(join(dir, "tasks", "STATUS.md"), "x".repeat(2500), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /tasks\/STATUS\.md: 3300 chars > 3200/);
+    assert.match(result.stderr, /tasks\/STATUS\.md: 2500 chars > 2400/);
   } finally {
     cleanup(dir);
   }
