@@ -199,7 +199,9 @@ Test task.
 
 ## Log
 `, "utf8");
-    writeFileSync(gate, `${JSON.stringify({ verdict: "pass", surface: "desktop", screenshot: "tmp/screen.png", markdown: "gate.md", next: "Next slice" })}\n`, "utf8");
+    const shot = join(dir, "screen.png");
+    writeFileSync(shot, "png", "utf8");
+    writeFileSync(gate, `${JSON.stringify({ verdict: "pass", surface: "desktop", screenshot: shot, markdown: "gate.md", next: "Next slice" })}\n`, "utf8");
     const result = run([
       "close-slice",
       "--project", "rune-marches",

@@ -263,7 +263,9 @@ test("close slice logs passing gate evidence and can set status", () => {
   try {
     writeTask(dir, "T0097");
     const gate = join(dir, "gate.json");
-    writeFileSync(gate, `${JSON.stringify({ verdict: "pass", surface: "desktop", screenshot: "tmp/screen.png", markdown: "gate.md", next: "Next slice" })}\n`, "utf8");
+    const shot = join(dir, "screen.png");
+    writeFileSync(shot, "png", "utf8");
+    writeFileSync(gate, `${JSON.stringify({ verdict: "pass", surface: "desktop", screenshot: shot, markdown: "gate.md", next: "Next slice" })}\n`, "utf8");
     const result = runRaw([
       "tools/product_gate/close_slice.mjs",
       "--project", "rune-marches",
@@ -280,6 +282,49 @@ test("close slice logs passing gate evidence and can set status", () => {
     assert.match(task, /status: review/);
     assert.match(task, /close-slice PASS gate/);
     assert.match(task, /build passed \| scenario passed/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("close slice refuses a pass close when the gate screenshot file is missing", () => {
+  const dir = tempDir();
+  try {
+    writeTask(dir, "T0099");
+    const gate = join(dir, "gate.json");
+    writeFileSync(gate, `${JSON.stringify({ verdict: "pass", surface: "desktop", screenshot: join(dir, "never-made.png"), markdown: "gate.md", next: "n" })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/close_slice.mjs",
+      "--project", "rune-marches",
+      "--task", "T0099",
+      "--gate", gate,
+      "--evidence", "build passed",
+      "--strict",
+    ], { env: { TASKBOARD_ROOT: dir } });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /do not exist on disk/);
+    assert.match(result.stderr, /never-made\.png/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("close slice allows a partial close with a missing artifact under --allow-fail", () => {
+  const dir = tempDir();
+  try {
+    writeTask(dir, "T0100");
+    const gate = join(dir, "gate.json");
+    writeFileSync(gate, `${JSON.stringify({ verdict: "fail", surface: "desktop", screenshot: join(dir, "never-made.png"), markdown: "gate.md", next: "n" })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/close_slice.mjs",
+      "--project", "rune-marches",
+      "--task", "T0100",
+      "--gate", gate,
+      "--evidence", "partial handoff",
+      "--allow-fail",
+    ], { env: { TASKBOARD_ROOT: dir } });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Close Slice/);
   } finally {
     cleanup(dir);
   }

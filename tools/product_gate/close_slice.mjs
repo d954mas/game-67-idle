@@ -46,6 +46,14 @@ function fail(message) {
   process.exit(1);
 }
 
+// A single path-like token (no spaces, has a separator and an extension), so a
+// command line passed as evidence ("node --test tools/x.mjs") is not mistaken
+// for a file path.
+function looksLikePath(value) {
+  const v = String(value || "");
+  return !/\s/.test(v) && /[\\/]/.test(v) && /\.[a-z0-9]{2,5}$/i.test(v);
+}
+
 function latestGatePath(project) {
   const safe = String(project || "")
     .toLowerCase()
@@ -82,6 +90,26 @@ if (values.evidence.length === 0) fail("--evidence is required");
 const gate = readJson(gatePath);
 if (values.strict && gate.verdict !== "pass" && !values.allowFail) {
   fail(`product gate is ${gate.verdict}; rerun with --allow-fail only for an explicit partial handoff`);
+}
+
+// Evidence-as-arbiter: a real (non-partial) close must reference artifacts that
+// actually exist on disk, so a green slice cannot point at a screenshot or
+// evidence file that was never produced. --allow-fail is the explicit
+// partial-handoff escape that waives this.
+if (!values.allowFail) {
+  const missing = [];
+  if (gate.verdict === "pass" && !gate.screenshot) {
+    missing.push("gate.screenshot (a passing slice must name a screenshot)");
+  }
+  if (gate.screenshot && !existsSync(resolve(gate.screenshot))) {
+    missing.push(gate.screenshot);
+  }
+  for (const item of values.evidence) {
+    if (looksLikePath(item) && !existsSync(resolve(item))) missing.push(item);
+  }
+  if (missing.length > 0) {
+    fail(`close references artifacts that do not exist on disk: ${missing.join(", ")}. Create them, or use --allow-fail for an explicit partial handoff.`);
+  }
 }
 
 const log = [
