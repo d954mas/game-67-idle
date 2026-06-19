@@ -1,7 +1,7 @@
 ---
 id: T0022
 title: Reference evidence refresh after first mech screenshot
-status: todo
+status: done
 epic: ""
 priority: P1
 tags: [gamedesign, references, evidence, review, screenshots, mechs]
@@ -31,22 +31,30 @@ Scope boundaries:
 
 ## Done when
 
-- [ ] The first native screenshot sequence is linked from the project wiki or
+- [x] The first native screenshot sequence is linked from the project wiki or
       an evidence folder.
-- [ ] Each central reference doc names the current build capture or explicitly
+- [x] Each central reference doc names the current build capture or explicitly
       explains why it is missing.
-- [ ] Mismatch audit lists concrete gaps in first screen, controls, combat
+- [x] Mismatch audit lists concrete gaps in first screen, controls, combat
       response, reward, upgrade, and visual composition.
-- [ ] The next implementation pass is tied to one screenshot/DevAPI proof.
-- [ ] `node tools/taskboard/cli.mjs validate` passes or any failure is logged.
+- [x] The next implementation pass is tied to one screenshot/DevAPI proof.
+- [x] `node tools/taskboard/cli.mjs validate` passes or any failure is logged.
 
 ## Open questions
 
 - Do we need owned gameplay captures from installed reference games before
   tuning exact pacing, or are official/store/support sources enough for the
-  first prototype review?
+  first prototype review? Answer for this task: not needed to close the
+  current-build mismatch audit, but still required before copying exact pacing,
+  UI, economy, or live-reference details.
 
 ## Log
 
 - 2026-06-19: Created as the research follow-up that becomes possible only
   after the first runtime screenshot exists.
+- 2026-06-19: Added
+  `gamedesign/projects/mech-builder-battler/references/current_build_mismatch_audit_2026-06-19.md`,
+  linked the first native screenshot sequence from the project wiki, and updated
+  the Mech Arena, CATS, and Mechangelion deconstructions with current capture
+  paths, concrete mismatches, and next native proof targets. Validation:
+  `node tools/taskboard/cli.mjs validate`.

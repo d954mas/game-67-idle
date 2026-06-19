@@ -38,8 +38,8 @@ progression, and copy-risk.
 - [x] Reward/progression UI recorded at system level.
 - [x] Borrow/avoid/copy-risk recorded.
 - [x] Mobile/web translation recorded.
+- [x] Current build mismatch audit captured.
 - [ ] Current gameplay video timestamps captured.
-- [ ] Current build mismatch audit captured.
 - [ ] Local screenshot board saved.
 
 ## Evidence Board
@@ -200,15 +200,33 @@ visible reward, immediate hangar upgrade.
 
 ## Current Build Mismatch
 
-No current build exists for `mech-builder-battler`. First mismatch audit should
-compare a future capture against this checklist:
+Current native build captures exist and are indexed in
+[Current Build Mismatch Audit](current_build_mismatch_audit_2026-06-19.md).
+Primary battle capture:
+`build/captures/mech_t0021_rockets_smoke.png`.
 
-- Does the first screen show the mech as the largest object?
-- Is `Battle` the obvious next action?
-- Can the player understand the first combat input without precise aim?
-- Does the special action visibly express the equipped part?
-- Does the reward attach back to the mech?
-- Is there zero shop/offer interruption before the first loop completes?
+Current matches:
+
+- The hangar makes the owned mech the largest object and gives `Battle` as the
+  dominant action.
+- The battle uses a readable three-quarter arena view, automatic target focus,
+  dash, shoulder rockets, drones, and compact HUD.
+- The reward attaches directly back to the mech through the shoulder module
+  purchase/equip flow.
+- No shop/offer interruption appears before the first loop completes.
+
+Current mismatches:
+
+- Mobile floating joystick remains a target, not a runtime-proven control.
+- Incoming-damage/lock-on warnings and enemy telegraphs are still thin.
+- The hero mech is mesh/material-backed, but still cube-kitbashed rather than
+  authored to the accepted model-quality bar.
+- Hangar readiness/power is intentionally one-mech only, but needs a clearer
+  casual "ready/power" affordance.
+
+Next proof: native hangar plus battle screenshot after an authored starter mech
+visual pass, with one readable enemy telegraph and the no-offer first loop
+preserved.
 
 ## Source Gaps
 

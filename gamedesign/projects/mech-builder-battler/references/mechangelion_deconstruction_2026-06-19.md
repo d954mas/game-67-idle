@@ -37,9 +37,9 @@ than the Mech Arena and CATS packets.
 - [x] Boss framing recorded from store/secondary visual/text.
 - [x] Borrow/avoid/copy-risk recorded.
 - [x] Mobile/web translation recorded.
+- [x] Current build mismatch audit captured.
 - [ ] Current gameplay video timestamps captured.
 - [ ] First-launch sequence captured.
-- [ ] Current build mismatch audit captured.
 - [ ] Local screenshot board saved.
 
 ## Evidence Board
@@ -181,15 +181,31 @@ CATS' build-proof loop.
 
 ## Current Build Mismatch
 
-No current build exists for `mech-builder-battler`. First mismatch audit should
-compare a future capture against this checklist:
+Current native build captures exist and are indexed in
+[Current Build Mismatch Audit](current_build_mismatch_audit_2026-06-19.md).
+Primary battle capture:
+`build/captures/mech_t0021_rockets_smoke.png`.
 
-- Does the first fight show an enemy big enough to feel spectacular?
-- Are combat buttons large and understandable?
-- Does at least one action come from an equipped part?
-- Does the first upgrade visibly improve attack, defense, or mobility?
-- Is the fight short enough for casual replay?
-- Are there no forced ad/offer interruptions before the first loop completes?
+Current matches:
+
+- Combat uses a small number of readable actions: movement, dash, rocket
+  special, and Cooling.
+- The rocket action comes from an equipped part and visibly changes the mech.
+- The first upgrade improves attack output in a simple, understandable way.
+- The first loop completes without forced ad/offer interruptions.
+
+Current mismatches:
+
+- Enemy scale is not yet spectacular; drones do not satisfy the boss-scale
+  fantasy.
+- Defense/armor progression is not proven; dash exists, but there is no large
+  telegraphed attack to dodge or block.
+- Runtime touch hit targets and floating joystick are not proven.
+- VFX persistence and authored robot model quality are still early.
+
+Next proof: native Foundry Warden or shield-guard encounter screenshot with a
+large telegraphed attack, clear dash/defense response, and readable mech
+silhouette through effects.
 
 ## Source Gaps
 

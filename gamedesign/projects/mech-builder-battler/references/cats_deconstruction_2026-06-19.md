@@ -39,8 +39,8 @@ and the danger of low-agency combat.
 - [x] Difficulty/ad pressure risk recorded.
 - [x] Borrow/avoid/copy-risk recorded.
 - [x] Mobile/web translation recorded.
+- [x] Current build mismatch audit captured.
 - [ ] Current gameplay video timestamps captured.
-- [ ] Current build mismatch audit captured.
 - [ ] Local screenshot board saved.
 
 ## Evidence Board
@@ -199,15 +199,36 @@ mech-pilot fantasy through at least one active combat decision.
 
 ## Current Build Mismatch
 
-No current build exists for `mech-builder-battler`. First mismatch audit should
-compare a future capture against this checklist:
+Current native build captures exist and are indexed in
+[Current Build Mismatch Audit](current_build_mismatch_audit_2026-06-19.md).
+Primary upgrade and retest captures:
+`build/captures/mech_t0021_upgrade_smoke.png` and
+`build/captures/mech_t0021_rockets_smoke.png`.
 
-- Is the mech the central owned object on the first screen?
-- Are part slots visually obvious without opening a dense inventory?
-- Does the first battle prove one equipped part quickly?
-- Does the player have at least one active intervention in battle?
-- Does the reward return to a specific slot or part family?
-- Are there no forced timers/ads before the first satisfying loop?
+Current matches:
+
+- The mech is the central owned object on the first screen.
+- The first reward returns to a specific shoulder module slot/family.
+- The second battle proves the equipped rockets with visible modules and
+  rocket effects.
+- The player has active dash/rocket interventions instead of fully passive
+  combat.
+- There are no forced timers, chests, ads, or offer prompts before the first
+  satisfying loop.
+
+Current mismatches:
+
+- Part slots are not yet a full physical build grammar; only the shoulder
+  module is strongly exposed.
+- Upgrade lacks a before/after comparison and does not yet express style choice
+  beyond "rockets equipped".
+- Drones prove that rockets fire, but not yet that the build solved a specific
+  enemy role or counter.
+- Failure/counter-learning is absent, so buildcraft depth remains shallow.
+
+Next proof: native upgrade/hangar screenshot with at least three physical part
+hotspots and a before/after shoulder rocket comparison, followed by a battle
+capture where rockets solve a drone swarm faster than baseline.
 
 ## Source Gaps
 

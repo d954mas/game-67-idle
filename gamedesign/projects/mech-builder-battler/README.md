@@ -63,6 +63,12 @@ readable effects are core to the concept, not late polish.
 - [Reference readiness and prototype plan](design/reference_readiness_and_prototype_plan_2026-06-19.md)
   - consolidated audit of what the references prove, what remains blocked, and
   the first native PC playable slice decomposition.
+- [Current build mismatch audit](references/current_build_mismatch_audit_2026-06-19.md)
+  - screenshot-backed comparison of the first native build against Mech Arena,
+  CATS, and Mechangelion translation rules.
+- [T0021 runtime visual review](evidence/t0021_runtime_visual_review_2026-06-19.md)
+  - current native screenshot board, PASS product gate link, and remaining
+  visual debt after the mesh/material starter mech pass.
 - [Lead review packet](design/lead_review_packet_2026-06-19.md) - decision
   matrix and review checklist for accepting or revising first-slice choices
   before fake shots or implementation.
@@ -105,10 +111,14 @@ readable effects are core to the concept, not late polish.
 
 ## Current Implementation Readiness
 
-The first native PC prototype can start from the accepted decisions above and
-the [readiness/prototype plan](design/reference_readiness_and_prototype_plan_2026-06-19.md).
-Exact UI, economy, battle pacing, and final reference-driven art remain locked
-behind current-build screenshots and stronger evidence boards.
-
-Next implementation task:
+The first native PC prototype slice is implemented and evidence-backed in
 [T0021 - First native PC playable slice](../../../tasks/active/T0021-first-native-pc-playable-slice-for-mech-builder-battler.md).
+It proves hangar -> battle -> reward -> upgrade -> retest, WASD as the PC
+adapter for the accepted floating-joystick target, and a mesh/material-backed
+starter mech path.
+
+Current review task:
+[T0022 - Reference evidence refresh](../../../tasks/active/T0022-reference-evidence-refresh-after-first-mech-screenshot.md).
+Exact mobile controls, richer economy pacing, final reference-driven UI, boss
+spectacle, and authored high-fidelity mech art remain locked behind the current
+mismatch audit and the next native screenshot proof.
