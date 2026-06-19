@@ -8,7 +8,9 @@ timestamp: 2026-06-19T00:00:00Z
 
 # Mechanics And Meta Matrix
 
-Status: design synthesis for lead review, not implementation-ready.
+Status: accepted mechanics/meta synthesis for the first native PC prototype.
+Exact tuning, economy values, reference UI copying, and final art remain gated
+behind runtime screenshot evidence and source-board refresh.
 
 This document translates the current reference set into concrete mechanics and
 meta decisions for `mech-builder-battler`. It is project-specific and belongs in
@@ -33,7 +35,10 @@ Inputs:
 
 Implementation boundary:
 
-- No code, no final art, no economy tuning from this doc alone.
+- Prototype code may start from the accepted decisions in this doc and the
+  readiness/prototype plan.
+- No final art, exact economy tuning, or exact reference UI/combat copying from
+  this doc alone.
 - Store pages prove market-facing features and risk surfaces, not exact first
   minute pacing or balance.
 - Exact UI, economy values, enemy timings, and final art still need fake shots,

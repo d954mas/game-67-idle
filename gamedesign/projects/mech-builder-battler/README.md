@@ -60,6 +60,9 @@ readable effects are core to the concept, not late polish.
   roles, grind guardrails, resources, archetypes, MVP scope, and anti-scope.
 - [Design review](design/design_review_2026-06-19.md) - review verdict for the
   current reference, GDD, mechanics, meta, fake-shot, and first-slice package.
+- [Reference readiness and prototype plan](design/reference_readiness_and_prototype_plan_2026-06-19.md)
+  - consolidated audit of what the references prove, what remains blocked, and
+  the first native PC playable slice decomposition.
 - [Lead review packet](design/lead_review_packet_2026-06-19.md) - decision
   matrix and review checklist for accepting or revising first-slice choices
   before fake shots or implementation.
@@ -99,3 +102,13 @@ readable effects are core to the concept, not late polish.
 - First mini-boss: Foundry Warden industrial machine.
 - First playable should use ready/generated GLB-style models, lighting,
   shadows, normals/materials, and juicy effects rather than debug shapes.
+
+## Current Implementation Readiness
+
+The first native PC prototype can start from the accepted decisions above and
+the [readiness/prototype plan](design/reference_readiness_and_prototype_plan_2026-06-19.md).
+Exact UI, economy, battle pacing, and final reference-driven art remain locked
+behind current-build screenshots and stronger evidence boards.
+
+Next implementation task:
+[T0021 - First native PC playable slice](../../../tasks/active/T0021-first-native-pc-playable-slice-for-mech-builder-battler.md).

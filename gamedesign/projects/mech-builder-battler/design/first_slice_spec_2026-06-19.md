@@ -8,17 +8,20 @@ timestamp: 2026-06-19T00:00:00Z
 
 # First Slice Spec
 
-Status: design-ready for lead review, not implementation-ready.
+Status: ready to start the first native PC prototype from accepted decisions.
+Exact reference UI/economy/combat pacing and final art remain gated behind
+current-build screenshot evidence and stronger source boards.
 
 This spec translates the first-pass [GDD draft](gdd_draft_2026-06-19.md) into a
 small vertical slice target. It is intentionally scoped to one playable loop:
 hangar -> battle -> reward -> upgrade -> second battle prompt.
 
-Implementation remains gated on:
+Implementation boundaries:
 
 - native PC slice plan that preserves mobile/web UX constraints;
-- accepted handoff decisions and visual direction; final art polish still
-  needs fake shot or visual target evidence;
+- accepted handoff decisions and visual direction;
+- final art polish still needs runtime screenshot evidence against the fake
+  shots or visual target;
 - current-build/prototype mismatch capture;
 - stronger screenshot/gameplay evidence before copying exact reference UI,
   economy, combat pacing, or final art.
@@ -31,6 +34,7 @@ Implementation remains gated on:
 - [Mech Arena deconstruction](../references/mech_arena_deconstruction_2026-06-19.md)
 - [CATS deconstruction](../references/cats_deconstruction_2026-06-19.md)
 - [Mechangelion deconstruction](../references/mechangelion_deconstruction_2026-06-19.md)
+- [Reference readiness and prototype plan](reference_readiness_and_prototype_plan_2026-06-19.md)
 
 ## Slice Goal
 
@@ -392,15 +396,16 @@ and answer:
 
 ## Acceptance Criteria
 
-The first slice is ready to implement only when:
+The first native PC prototype is ready to start when:
 
 - native PC implementation slice is scoped with mobile-style controls/readability;
 - landscape-first orientation is used;
-- rough runtime visuals follow the accepted visual direction; final polish uses
-  fake shot or visual target evidence;
-- this spec is accepted or edited by the lead;
+- rough runtime visuals follow the accepted visual direction;
 - one scoped implementation task is created from this spec;
 - screenshot proof plan names the exact screens to capture.
+
+This state is now represented by
+`tasks/active/T0021-first-native-pc-playable-slice-for-mech-builder-battler.md`.
 
 The first playable is acceptable only when:
 
@@ -414,5 +419,6 @@ The first playable is acceptable only when:
 ## Review Questions
 
 All major first-slice decisions are accepted. Remaining review should focus on
-implementation proof quality, readability, and whether fake shots need another
-iteration before final art.
+implementation proof quality, readability, and whether the first native
+screenshot sequence matches the visual target strongly enough before expanding
+content.
