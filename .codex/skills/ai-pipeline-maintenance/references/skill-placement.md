@@ -17,6 +17,26 @@ Use the smallest durable home that lets the next agent load only what applies.
 7. Cross-project conceptual guidance -> `docs/ai-pipeline/` or
    `gamedesign/knowledge/`, depending on domain.
 
+## New Skill Triage
+
+Before creating a skill, inspect current ownership:
+
+```powershell
+rg -n "<trigger or workflow phrase>" .codex/skills/*/SKILL.md .codex/skills/*/references
+```
+
+Then answer:
+
+- What user phrase should activate it?
+- What work does the agent repeat, not merely remember?
+- What tool preferences, permissions, validation, or report shape differ from
+  existing skills?
+- What can stay behind references so startup context remains small?
+- What eval anchor proves the skill still exists after future cleanup?
+
+If those answers point to an existing owner, update that skill or add a
+reference under it instead of creating a new skill.
+
 ## Update Existing Skill
 
 Prefer an existing skill when:
@@ -45,7 +65,7 @@ Create a new skill only when all are true:
 - the startup description can be concise and activation-specific.
 
 Do not create a skill for one task, one game fact, one command alias, or a rule
-that belongs in a validator.
+that belongs in a validator, task log, or project GDD.
 
 ## Keep Hot Docs Thin
 
