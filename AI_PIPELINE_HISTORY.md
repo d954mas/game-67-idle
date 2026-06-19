@@ -11,6 +11,18 @@ sessions, use the `chat-session-reflection` skill.
 Compact reusable lessons about AI-assisted development. Keep each entry under
 about 10 lines.
 
+### 2026-06-19 - Portal Visual Work Needs An Architecture Gate Before More Polish
+
+- Context: Backrooms T0010 improved the impossible-room portal through many
+  native overlay/material/light slices, but the strict product gate still failed
+  art quality and audience fit.
+- Root cause: iteration kept adding authored shell geometry and shader lighting
+  after the lead had identified the real issue: it still read like a
+  shader/composite trick, not a production rendered room.
+- Fix: when a visual feature depends on missing render architecture, create the
+  engine-facing task early, add a native perf/control gate, and freeze further
+  content/polish until the next slice proves the real render path.
+
 ### 2026-06-18 - Native PC Scale/Focus Must Be Early Evidence
 
 - Context: Mine Cards T0001 passed several screenshot/product-read gates, but
