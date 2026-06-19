@@ -13,9 +13,8 @@ release-quality presentation. For reusable runtime UI kits, pair it with
 ## Load Only What Applies
 
 - `references/visual-workflow-gates.md`: accepted visual target, reference
-  deconstruction, screen grammar, mismatch audit, Reference Intake/Digest,
-  Art-First Gate, Reusable UI Gate, generated asset rules, Visual Review
-  Checklist, and report shape.
+  deconstruction, screen grammar, mismatch audit, Art-First Gate, Reusable UI
+  Gate, generated asset rules, and report shape.
 - `gamedesign/knowledge/reference_deconstruction.md`: full method for named
   references or lead-rejected reference mismatch.
 - `.codex/skills/generated-game-ui-assets/`: reusable runtime UI kit production.
@@ -26,19 +25,16 @@ release-quality presentation. For reusable runtime UI kits, pair it with
 ## Default Route
 
 1. Load active task, accepted visual target, screenshot, runtime harness, and
-   only the relevant project rules/reference sections.
+   only the relevant project/reference sections.
 2. Write the 5-line visual session contract: goal, non-goal, proof, stop
    condition, likely files.
 3. Produce Reference Digest before final art when named references drive the
-   look.
-4. Track screenshot-vs-target mismatch before and after changes; close named
-   mismatch items with new native proof.
-5. For multi-asset work, create an art job with
-   `tools/assets/job/new_art_job.mjs` and keep provenance/composition data in
-   files.
-6. Inspect generated outputs before integration; reject weak, unreadable,
+   look; include current screenshot-vs-target mismatch.
+4. For multi-asset work, create an art job with
+   `tools/assets/job/new_art_job.mjs` and keep provenance/composition in files.
+5. Inspect generated outputs before integration; reject weak, unreadable,
    watermarked, fused, or style-drifted assets.
-7. Validate in the primary runtime with screenshot evidence plus
+6. Validate in the primary runtime with screenshot evidence plus
    `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate`; hand off
    with `node tools/ai.mjs close-slice` when available.
 
