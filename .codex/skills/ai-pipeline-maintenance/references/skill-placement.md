@@ -120,6 +120,7 @@ After moving rules between files and skills, run:
 
 ```powershell
 node tools/context_budget.mjs
+node tools/context_budget.mjs --review
 node tools/skills_eval.mjs
 node tools/skills_sync.mjs --check
 node tools/doc_reference_check.mjs

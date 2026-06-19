@@ -18,7 +18,7 @@ subcommands for exhaustive work.
 
 ## Portable AI Pipeline
 
-Copied to clean games by `tools/bootstrap/export_base.mjs`:
+Copied by `tools/bootstrap/export_base.mjs`:
 
 - agent facade and validators: `tools/ai.mjs`, `tools/pipeline_validate.mjs`,
   `tools/context_budget.mjs`, `tools/doc_reference_check.mjs`,
@@ -28,8 +28,8 @@ Copied to clean games by `tools/bootstrap/export_base.mjs`:
 - reusable asset helpers: `tools/assets/`;
 - export helpers: `tools/bootstrap/`.
 
-Product gates route through `node tools/ai.mjs gate`, `critic`, and `close-slice`.
-Policy lives in `docs/ai-pipeline/quality-validation.md` and game/visual skills.
+Product gates route through `node tools/ai.mjs gate`, `critic`, `close-slice`.
+Policy: `docs/ai-pipeline/quality-validation.md` and game/visual skills.
 
 ## Runtime Infrastructure
 
@@ -43,7 +43,7 @@ Copy/adapt after engine/runtime policy is known.
 
 ## Asset Routing
 
-Do not load this README as an asset manual. Use:
+Do not load this as an asset manual. Use:
 
 - `.codex/skills/game-asset-pipeline/` for source/provenance/cutout/pack work;
 - `.codex/skills/generated-game-ui-assets/` for UI source sheets, slice9,
@@ -64,5 +64,5 @@ node tools/ai.mjs validate --review
 node tools/ai.mjs validate --full
 ```
 
-Underlying: `tools/pipeline_validate.mjs`. `--review` adds strict context
-pressure; `--full` exports to `tmp/pipeline-validate-<stamp>/` and keeps newest 3.
+Underlying: `tools/pipeline_validate.mjs`. `--review` adds context/cap review;
+`--full` exports to `tmp/pipeline-validate-<stamp>/` and keeps newest 3.

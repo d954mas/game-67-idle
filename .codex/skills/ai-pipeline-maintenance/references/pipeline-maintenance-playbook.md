@@ -6,7 +6,8 @@ taskboard behavior, product gates, or portable export.
 ## Audit Flow
 
 1. Inspect current state, not memory: `git status --short --untracked-files=all`,
-   `node tools/taskboard/cli.mjs summary`, and `node tools/context_budget.mjs`.
+   `node tools/taskboard/cli.mjs summary`, and, for context review,
+   `node tools/context_budget.mjs --review`.
 2. Confirm profiling scope for non-trivial pipeline/tooling sessions with
    `node tools/ai.mjs status --require-current-scope-usable`; start or state
    unavailable if needed.
@@ -36,15 +37,15 @@ For every new mandatory rule, prefer:
 
 Common guards:
 
-- `node tools/context_budget.mjs`
-- `node tools/context_budget.mjs --review` for strict context-budget review
+- `node tools/context_budget.mjs` for direct budget diagnostics
+- `node tools/context_budget.mjs --review` for strict context/cap review
 - `node tools/doc_reference_check.mjs`
 - `node tools/skills_eval.mjs`
 - `node tools/skills_sync.mjs --check`
 - `node tools/product_gate/repeated_failure_guard.mjs`
 - `node tools/taskboard/cli.mjs validate`
 - `node tools/ai.mjs validate`
-- `node tools/ai.mjs validate --review` for review-stage context pressure
+- `node tools/ai.mjs validate --review` for review-stage context/cap pressure
 - underlying implementation: `tools/pipeline_validate.mjs`
 
 ## Validation Matrix
