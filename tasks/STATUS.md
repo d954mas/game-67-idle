@@ -7,9 +7,8 @@ mobile/web-targeted 3D mech builder battler, implemented and iterated first in
 the native PC harness.
 
 Project wiki: `gamedesign/projects/mech-builder-battler/README.md`.
-Latest control note: `gamedesign/projects/mech-builder-battler/references/mobile_control_patterns_2026-06-19.md`.
-Readiness/prototype plan:
-`gamedesign/projects/mech-builder-battler/design/reference_readiness_and_prototype_plan_2026-06-19.md`.
+Latest control note:
+`gamedesign/projects/mech-builder-battler/references/mobile_control_patterns_2026-06-19.md`.
 
 ## Current Runtime Surface
 
@@ -27,12 +26,11 @@ Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 ## Current Gate
 
-`T0021` is done, `T0022` refreshed the reference mismatch audit, and `T0023` /
-`T0025` / `T0026` / `T0027` are in review after asset-first Roblox-like visual
-passes. Current baseline: sourced CC-BY Poly Pizza Assault Walker hero mech,
-downloaded CC0 Quaternius enemy, stylized studs/world props, module-bound
-attack/movement VFX, brighter toy/plastic hero colors, and mesh-rendered hero
-parts instead of shape debug circles.
+`T0021` is done, `T0022` refreshed the mismatch audit, and `T0023` / `T0025` /
+`T0026` / `T0027` / `T0028` are in review after asset-first Roblox-like visual
+passes. Current baseline: sourced CC-BY Assault Walker hero with whole-body
+motion/recoil, stomp rings, weapon charge, target beams, CC0 Quaternius enemy,
+studs/world props, and mesh-rendered hero parts instead of shape debug circles.
 Iteration remains native PC; mobile/web is the UX/export target.
 Accepted: one owned mech, PvE first, semi-auto arena, floating joystick/WASD,
 resources -> hangar purchase/craft, shoulder rockets, drone swarm proof, short
@@ -41,12 +39,11 @@ toy/block world, stylized studs surfaces, and Foundry Warden mini-boss.
 
 ## Next Priorities
 
-1. Review `T0023`-`T0027` evidence and start the next visual slice: authored
-   Assault Walker movement/attack animation, stronger lighting/material polish,
-   or a Roblox-like world material pass around the new hero.
+1. Review `T0028`, then choose the next visual slice: parted limb motion,
+   lighting/material polish, or richer Roblox-like world dressing.
 2. Keep reference constraints from
    `gamedesign/projects/mech-builder-battler/references/current_build_mismatch_audit_2026-06-19.md`.
 3. Keep latest product evidence in
-   `gamedesign/projects/mech-builder-battler/evidence/t0027_assault_walker_hero_asset_pass_2026-06-20.md`.
+   `gamedesign/projects/mech-builder-battler/evidence/t0028_assault_walker_motion_attack_read_2026-06-20.md`.
 4. Defer web/mobile export work until explicitly approved; preserve
    mobile-style controls/readability in the PC harness.
