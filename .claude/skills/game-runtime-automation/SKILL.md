@@ -12,3 +12,5 @@ source of truth shared by all agent CLIs). Read that file and follow it.
 Reference playbooks (load only when the canonical skill says to):
 
 - `.codex/skills/game-runtime-automation/references/devapi-pattern.md`
+- `.codex/skills/game-runtime-automation/references/runtime-workflow-rules.md`
+- `.codex/skills/game-runtime-automation/references/visual-qa-checklist.md`
