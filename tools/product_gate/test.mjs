@@ -330,6 +330,37 @@ test("close slice allows a partial close with a missing artifact under --allow-f
   }
 });
 
+test("product read gate --verify records a pending verification section", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    writeFileSync(screenshot, "png", "utf8");
+    const output = join(dir, "gate.md");
+    const json = join(dir, "gate.json");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "rune-marches",
+      "--screenshot", screenshot,
+      "--verdict", "pass",
+      "--where", "A fantasy road screen.",
+      "--action", "Tap the Scout button.",
+      "--response", "The route advances.",
+      "--reward", "Coins and progress appear.",
+      "--game-look", "Map art replaces debug widgets.",
+      "--output", output,
+      "--json-output", json,
+      "--index-output", join(dir, "latest.json"),
+      "--verify",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Verification: pending independent confirmation/);
+    assert.equal(readFileSync(json, "utf8").includes("\"required\": true"), true);
+    assert.match(readFileSync(output, "utf8"), /## Verification/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("product read gate refuses pass with missing player-read answers", () => {
   const dir = tempDir();
   try {

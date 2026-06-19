@@ -18,6 +18,12 @@ Gates are separate verdicts:
 Do not call a slice done from one green gate. Builds, probes, crop audits, and
 manifests support the verdict; they do not replace player-facing judgment.
 
+For a contested or high-stakes gate, the lead can run ONE independent verifier in
+a clean context whose only job is to re-run the named validator/screenshot check
+and return CONFIRM or REFUTE — a green gate is not self-graded. Request it with
+`node tools/ai.mjs gate ... --verify` (records a pending verification; opt-in,
+default off).
+
 When a strict/product gate fails twice for the same major reason, stop the local
 polish loop. Create or link the different path: architecture, tooling, source
 asset, reference, or explicit lead acceptance. This is enforced by:

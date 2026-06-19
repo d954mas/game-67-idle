@@ -27,7 +27,8 @@ Options:
   --next <text>          required for strict fail
   --index-output <path>  latest-gate JSON index path
   --task-log             append a compact evidence line to the task log
-  --strict               fail if a pass lacks strong answers or a fail lacks next action`);
+  --strict               fail if a pass lacks strong answers or a fail lacks next action
+  --verify               request one independent clean-context re-check (records a pending verification; default off)`);
   process.exit(2);
 }
 
@@ -39,6 +40,7 @@ function parseArgs(argv) {
     else if (arg === "--strict") values.strict = true;
     else if (arg === "--visual-strict") values.visualStrict = true;
     else if (arg === "--task-log") values.taskLog = true;
+    else if (arg === "--verify") values.verify = true;
     else if (arg === "--visual-score") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) fail(`${arg} requires a value`);
@@ -397,6 +399,13 @@ function renderMarkdown(record) {
     }
     lines.push("");
   }
+  if (record.verification && record.verification.required) {
+    lines.push("## Verification");
+    lines.push("");
+    lines.push(`Status: ${record.verification.status} (independent confirmation requested)`);
+    lines.push(`Recheck: ${record.verification.recheck}`);
+    lines.push("");
+  }
   return lines.join("\n");
 }
 
@@ -464,6 +473,13 @@ const record = {
   },
   problem: values.problem || "",
   next: values.next || "",
+  verification: values.verify
+    ? {
+        required: true,
+        status: "pending",
+        recheck: "Re-run this gate's named check (screenshot + validator) in a clean, independent context and return CONFIRM or REFUTE. A green gate is not self-graded.",
+      }
+    : { required: false },
 };
 
 mkdirSync(dirname(resolve(output)), { recursive: true });
@@ -481,3 +497,6 @@ console.log(`Markdown: ${output}`);
 console.log(`JSON: ${jsonOutput}`);
 console.log(`Latest: ${indexOutput}`);
 console.log(`Next: ${record.verdict === "pass" ? "continue to the next narrow slice" : (record.next || "fix the screen before adding content")}`);
+if (record.verification.required) {
+  console.log("Verification: pending independent confirmation (run one clean-context verifier; CONFIRM/REFUTE)");
+}

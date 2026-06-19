@@ -1,7 +1,7 @@
 ---
 id: T0002
 title: "review.mjs --verify: opt-in fresh-context adversarial re-check"
-status: backlog
+status: done
 epic: E001
 priority: P2
 tags: [pipeline, gates]
@@ -19,10 +19,15 @@ survey /ultrareview), not a roster.
 
 ## Done when
 
-- [ ] review.mjs accepts `--verify` and documents the independent-recheck convention
-- [ ] docs/ai-pipeline/quality-validation.md has one line describing the opt-in verifier
-- [ ] default behavior is unchanged when `--verify` is absent
+- [x] review.mjs accepts `--verify` and documents the independent-recheck convention
+- [x] docs/ai-pipeline/quality-validation.md has one line describing the opt-in verifier
+- [x] default behavior is unchanged when `--verify` is absent
 
 ## Open questions
 
 ## Log
+
+- 2026-06-19: review.mjs gains opt-in `--verify` — records a pending independent
+  verification (verification.required + a Verification section in md/json + a
+  console line), default off so existing behaviour is unchanged. Convention
+  documented in quality-validation.md. Tests: product_gate 30/30, validate green.
