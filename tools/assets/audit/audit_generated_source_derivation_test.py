@@ -1,4 +1,5 @@
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -102,7 +103,7 @@ class GeneratedSourceDerivationAuditTests(unittest.TestCase):
             manifest = write_manifest(tmp, source, output)
 
             result = run(
-                ["python", str(SCRIPT), "--crop-manifest", str(manifest)],
+                [sys.executable, str(SCRIPT), "--crop-manifest", str(manifest)],
                 cwd=ROOT,
                 text=True,
                 capture_output=True,
@@ -124,7 +125,7 @@ class GeneratedSourceDerivationAuditTests(unittest.TestCase):
             manifest = write_manifest(tmp, source, output)
 
             result = run(
-                ["python", str(SCRIPT), "--crop-manifest", str(manifest)],
+                [sys.executable, str(SCRIPT), "--crop-manifest", str(manifest)],
                 cwd=ROOT,
                 text=True,
                 capture_output=True,
@@ -143,7 +144,7 @@ class GeneratedSourceDerivationAuditTests(unittest.TestCase):
             manifest = write_manifest(tmp, source, output, key_color="#00ff00")
 
             result = run(
-                ["python", str(SCRIPT), "--crop-manifest", str(manifest)],
+                [sys.executable, str(SCRIPT), "--crop-manifest", str(manifest)],
                 cwd=ROOT,
                 text=True,
                 capture_output=True,
@@ -162,7 +163,7 @@ class GeneratedSourceDerivationAuditTests(unittest.TestCase):
             manifest = write_manifest(tmp, source, output, allow_procedural=True)
 
             result = run(
-                ["python", str(SCRIPT), "--crop-manifest", str(manifest)],
+                [sys.executable, str(SCRIPT), "--crop-manifest", str(manifest)],
                 cwd=ROOT,
                 text=True,
                 capture_output=True,

@@ -149,17 +149,7 @@ function splitCommandLine(command) {
   const parts = [];
   let current = "";
   let quote = "";
-  let escaping = false;
   for (const char of command.trim()) {
-    if (escaping) {
-      current += char;
-      escaping = false;
-      continue;
-    }
-    if (char === "\\") {
-      escaping = true;
-      continue;
-    }
     if (quote) {
       if (char === quote) quote = "";
       else current += char;
@@ -178,7 +168,6 @@ function splitCommandLine(command) {
     }
     current += char;
   }
-  if (escaping) current += "\\";
   if (current) parts.push(current);
   return parts;
 }

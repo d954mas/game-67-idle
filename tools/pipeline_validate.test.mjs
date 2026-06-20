@@ -156,6 +156,15 @@ test("pipeline validation dry-run shows configured Python command with args", ()
   assert.match(result.stdout, /\$ uv run python -m unittest/);
 });
 
+test("pipeline validation preserves Windows Python paths", () => {
+  const result = run(["--full", "--dry-run"], {
+    AI_PIPELINE_PYTHON: "C:\\tmp\\ai_pipeline_py312_codex\\Scripts\\python.exe",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /python runner: <dry-run> C:\\tmp\\ai_pipeline_py312_codex\\Scripts\\python\.exe/);
+  assert.match(result.stdout, /\$ C:\\tmp\\ai_pipeline_py312_codex\\Scripts\\python\.exe -m unittest/);
+});
+
 test("pipeline validation full Python failure guidance is actionable", () => {
   const source = readFileSync(resolve(root, "tools/pipeline_validate.mjs"), "utf8");
   assert.match(source, /py -3\.12 -m pip install pillow numpy scipy pymatting/);

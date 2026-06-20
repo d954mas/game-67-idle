@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 from typing import Any
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -72,6 +73,17 @@ def alpha_bbox(image: Image.Image, threshold: int = 12) -> tuple[int, int, int, 
     return alpha.point(lambda value: 255 if value > threshold else 0).getbbox()
 
 
+def hard_key_cutout(image: Image.Image, key: tuple[int, int, int], tolerance: int = 12) -> Image.Image:
+    rgba = image.convert("RGBA")
+    array = np.asarray(rgba, dtype=np.int16)
+    key_array = np.asarray(key, dtype=np.int16)
+    distance = np.max(np.abs(array[..., :3] - key_array), axis=2)
+    output = array.copy()
+    output[..., 3] = np.where(distance <= tolerance, 0, 255)
+    output[output[..., 3] == 0, :3] = 0
+    return Image.fromarray(np.clip(output, 0, 255).astype(np.uint8), "RGBA")
+
+
 def crop_trimmed(
     source: Image.Image,
     crop: dict[str, Any],
@@ -101,11 +113,13 @@ def crop_trimmed(
         if strict_route:
             raise SystemExit(f"route error: {note}")
         print(f"WARN route: {note}", file=sys.stderr)
-    # Principled matte: known-key trimap -> closed-form -> ML foreground
-    # decontamination -> Vlahos despill, run PER CROP (the closed-form solve is
-    # global). It finalizes the crop (despill + bleed + repair + zero) inside the
-    # matte, so there is no post-crop hygiene to re-run here.
-    rgba = key_matte_cutout(region, key)
+        rgba = hard_key_cutout(region, key)
+    else:
+        # Principled matte: known-key trimap -> closed-form -> ML foreground
+        # decontamination -> Vlahos despill, run PER CROP (the closed-form solve is
+        # global). It finalizes the crop (despill + bleed + repair + zero) inside the
+        # matte, so there is no post-crop hygiene to re-run here.
+        rgba = key_matte_cutout(region, key)
     bbox = alpha_bbox(rgba)
     if bbox is None:
         raise SystemExit(f"{crop.get('id', 'crop')} produced empty alpha after keying")

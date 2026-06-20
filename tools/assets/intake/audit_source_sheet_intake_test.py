@@ -1,5 +1,6 @@
 import json
 import importlib.util
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -31,7 +32,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),
@@ -59,7 +60,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),
@@ -89,7 +90,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),
@@ -130,7 +131,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),
@@ -164,7 +165,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),
@@ -209,7 +210,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),
@@ -262,7 +263,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),
@@ -293,7 +294,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),
@@ -329,7 +330,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),
@@ -355,7 +356,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(tight)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(tight),
@@ -412,7 +413,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),
@@ -440,7 +441,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),
@@ -487,7 +488,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             image.save(source)
             result = run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--source",
                     str(source),

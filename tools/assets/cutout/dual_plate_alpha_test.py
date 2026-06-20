@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -104,7 +105,7 @@ class DualPlateAlphaTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--light",
                     str(light_path),
@@ -153,7 +154,7 @@ class DualPlateAlphaTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--light",
                     str(light_path),
@@ -179,7 +180,7 @@ class DualPlateAlphaTests(unittest.TestCase):
 
             no_fail_result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--light",
                     str(light_path),

@@ -90,8 +90,6 @@ def key_matte_cutout(
             timings[name] = round((perf_counter() - start) * 1000.0, 2)
         return perf_counter()
 
-    from pymatting import estimate_alpha_cf, estimate_foreground_ml
-
     step = perf_counter()
     rgba = image.convert("RGBA")
     original_size = rgba.size
@@ -110,6 +108,8 @@ def key_matte_cutout(
     trimap[distance >= foreground_tolerance] = 1.0
     step = _mark("prep_trimap", step)
     if np.any(trimap == 0.5):
+        from pymatting import estimate_alpha_cf, estimate_foreground_ml
+
         # Solve the unknown edge band with the closed-form matte + ML foreground.
         try:
             alpha = np.clip(estimate_alpha_cf(rgb, trimap), 0.0, 1.0)

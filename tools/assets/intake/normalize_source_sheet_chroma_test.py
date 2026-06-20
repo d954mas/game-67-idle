@@ -1,3 +1,4 @@
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -24,7 +25,7 @@ class NormalizeSourceSheetChromaTests(unittest.TestCase):
             image.save(source)
 
             result = run(
-                ["python", str(SCRIPT), "--source", str(source), "--output", str(output), "--key-tolerance", "16"],
+                [sys.executable, str(SCRIPT), "--source", str(source), "--output", str(output), "--key-tolerance", "16"],
                 cwd=ROOT,
                 text=True,
                 capture_output=True,
@@ -33,7 +34,7 @@ class NormalizeSourceSheetChromaTests(unittest.TestCase):
 
             audit = run(
                 [
-                    "python",
+                    sys.executable,
                     str(AUDIT),
                     "--source",
                     str(output),

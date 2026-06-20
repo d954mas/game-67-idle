@@ -1,5 +1,6 @@
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -68,7 +69,7 @@ class RenderUiCompositionProofTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--asset-manifest",
                     "manifest.json",
@@ -140,7 +141,7 @@ class RenderUiCompositionProofTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--asset-manifest",
                     "manifest.json",
@@ -199,7 +200,7 @@ class RenderUiCompositionProofTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--asset-manifest",
                     "manifest.json",
@@ -287,7 +288,7 @@ class RenderUiCompositionProofTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--asset-manifest",
                     "manifest.json",
@@ -355,7 +356,7 @@ class RenderUiCompositionProofTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--asset-manifest",
                     "manifest.json",
@@ -421,7 +422,7 @@ class RenderUiCompositionProofTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--asset-manifest",
                     "manifest.json",
@@ -475,7 +476,7 @@ class RenderUiCompositionProofTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--asset-manifest",
                     "manifest.json",
@@ -527,7 +528,7 @@ class RenderUiCompositionProofTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "python",
+                    sys.executable,
                     str(SCRIPT),
                     "--asset-manifest",
                     "manifest.json",
