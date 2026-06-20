@@ -19,7 +19,7 @@ Pipeline cleanup evidence moved out of `tasks/STATUS.md`:
   hot docs plus `.codex/skills/*/SKILL.md` entrypoints from silently growing
   past the current progressive-disclosure budget.
 - Full pipeline validation chooses a Python runner by required asset-test
-  modules (`PIL`, `numpy`, `scipy`, `pymatting`) and supports explicit
+  modules (`PIL`, `numpy`, `scipy`) and supports explicit
   `AI_PIPELINE_PYTHON` commands with args.
 - `task-manager`, `generated-game-ui-assets`, `game-visual-art-direction`,
   `game-feature-iteration`, `game-asset-pipeline`, `primary-gdd-pipeline`,

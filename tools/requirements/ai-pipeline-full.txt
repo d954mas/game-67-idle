@@ -1,0 +1,7 @@
+# Full AI-pipeline Python gates.
+#
+# Keep this pinned. Installing unpinned latest numeric/image wheels has produced
+# import/API drift in full gates.
+Pillow==12.2.0
+numpy==2.4.6
+scipy==1.17.1

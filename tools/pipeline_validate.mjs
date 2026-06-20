@@ -51,7 +51,8 @@ Housekeeping:
 
 Environment:
   AI_PIPELINE_PYTHON  Python command for full Python gates; may include args,
-                      for example "C:\\venv\\Scripts\\python.exe" or "uv run python"`);
+                      for example "C:\\venv\\Scripts\\python.exe" or "uv run python".
+                      Install tools/requirements/ai-pipeline-full.txt into that runner.`);
   process.exit(2);
 }
 
@@ -124,6 +125,7 @@ function run(label, args, opts = {}) {
   if (dryRun) return;
   const result = spawnSync(exe, args, {
     cwd,
+    env: process.env,
     stdio: "inherit",
     shell: false,
   });
@@ -180,6 +182,30 @@ function configuredPythonCandidate() {
   return { exe: parts[0], args: parts.slice(1), source: "AI_PIPELINE_PYTHON" };
 }
 
+function pythonProbe(requiredModules) {
+  const lines = ["import sys"];
+  const handled = new Set();
+  if (requiredModules.includes("PIL")) {
+    lines.push("from PIL import Image, ImageDraw");
+    handled.add("PIL");
+  }
+  if (requiredModules.includes("numpy")) {
+    lines.push("import numpy as np");
+    lines.push("np.zeros((1, 1))");
+    lines.push("np.asarray([1])");
+    handled.add("numpy");
+  }
+  if (requiredModules.includes("scipy")) {
+    lines.push("from scipy import ndimage");
+    handled.add("scipy");
+  }
+  for (const name of requiredModules) {
+    if (!handled.has(name)) lines.push(`import ${name}`);
+  }
+  lines.push("print(sys.version.split()[0])");
+  return lines.join("; ");
+}
+
 function findPythonRunner(requiredModules = []) {
   const configured = configuredPythonCandidate();
   if (dryRun) {
@@ -200,11 +226,7 @@ function findPythonRunner(requiredModules = []) {
     { exe: "python", args: [] },
     { exe: "python3", args: [] },
   );
-  const probe = [
-    "import sys",
-    ...requiredModules.map((name) => `import ${name}`),
-    "print(sys.version.split()[0])",
-  ].join("; ");
+  const probe = pythonProbe(requiredModules);
   const skipped = [];
   for (const candidate of candidates) {
     if (candidate.exe.includes("\\") && !existsSync(candidate.exe)) {
@@ -214,6 +236,7 @@ function findPythonRunner(requiredModules = []) {
     const result = spawnSync(candidate.exe, [...candidate.args, "-c", probe], {
       cwd: root,
       encoding: "utf8",
+      env: process.env,
       shell: false,
       stdio: "pipe",
     });
@@ -231,7 +254,7 @@ function findPythonRunner(requiredModules = []) {
   for (const item of skipped) console.error(`- tried ${item}`);
   if (requiredModules.length) {
     console.error(
-      `hint: install full-gate modules into the selected runner, for example: py -3.12 -m pip install pillow numpy scipy pymatting`,
+      `hint: install full-gate modules into the selected runner: py -3.12 -m pip install -r tools/requirements/ai-pipeline-full.txt`,
     );
     console.error(`hint: set AI_PIPELINE_PYTHON to a prepared venv or runner when the default Python is not the right one.`);
   }
@@ -347,7 +370,7 @@ if (existsSync(join(root, "tools", "assets", "job", "new_generation_record.test.
 }
 let python = null;
 if (existsSync(join(root, "tools", "assets", "intake", "normalize_source_sheet_chroma_test.py"))) {
-  python = findPythonRunner(["PIL", "numpy", "scipy", "pymatting"]);
+  python = findPythonRunner(["PIL", "numpy", "scipy"]);
   runPythonUnittests("source sheet preprocessing tests", python, SOURCE_SHEET_PREPROCESSING_TESTS);
 }
 if (existsSync(join(root, "tools", "assets", "audit", "render_ui_composition_proof_test.py"))) {

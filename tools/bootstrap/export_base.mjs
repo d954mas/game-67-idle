@@ -43,6 +43,7 @@ const COPY = [
   "tools/skills_sync.mjs",
   "tools/skills_sync.test.mjs",
   "tools/ai_profile",
+  "tools/requirements/ai-pipeline-full.txt",
   "tools/assets/job/new_art_job.mjs",
   "tools/assets/job/plan_source_sheet_prompt.mjs",
   "tools/assets/job/plan_source_sheet_prompt.test.mjs",

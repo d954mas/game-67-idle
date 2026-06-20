@@ -167,7 +167,18 @@ test("pipeline validation preserves Windows Python paths", () => {
 
 test("pipeline validation full Python failure guidance is actionable", () => {
   const source = readFileSync(resolve(root, "tools/pipeline_validate.mjs"), "utf8");
-  assert.match(source, /py -3\.12 -m pip install pillow numpy scipy pymatting/);
+  assert.match(source, /py -3\.12 -m pip install -r tools\/requirements\/ai-pipeline-full\.txt/);
   assert.match(source, /AI_PIPELINE_PYTHON/);
   assert.match(source, /prepared venv or runner/);
+});
+
+test("pipeline validation probes Python dependency APIs without hidden environment workarounds", () => {
+  const source = readFileSync(resolve(root, "tools/pipeline_validate.mjs"), "utf8");
+  assert.doesNotMatch(source, /NUMBA_DISABLE_JIT/);
+  assert.doesNotMatch(source, /pythonGateEnv/);
+  assert.match(source, /from PIL import Image, ImageDraw/);
+  assert.match(source, /np\.zeros\(\(1, 1\)\)/);
+  assert.match(source, /np\.asarray\(\[1\]\)/);
+  assert.match(source, /from scipy import ndimage/);
+  assert.doesNotMatch(source, /env: \{ \.\.\.process\.env, \.\.\.env \}/);
 });

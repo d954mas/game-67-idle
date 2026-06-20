@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Timing harness for the two cutout paths, for optimization work.
 
-Path 1 (key_matte): per-step breakdown (prep+trimap, closed-form alpha, ML
-foreground, finalize) at a couple of input sizes — the closed-form solve scales
-with pixel count, so size matters.
+Path 1 (key_matte): per-step breakdown (prep+trimap, alpha band, foreground
+preserve, finalize) at a couple of input sizes. Size still matters, but there
+is no JIT-backed global solver in the default path.
 Path 2 (dual_plate): extraction (Theorem-4 proj) + the pair consistency gate.
 
 Generation timing is external (gpt-image-2 via API, ~30-60 s/image) and is not
@@ -44,7 +44,7 @@ def median_ms(fn) -> float:
 
 def profile_key_matte(name: str, crop: Image.Image) -> None:
     timings: dict = {}
-    key_matte_cutout(crop, (0, 255, 0), timings=timings)  # warmup (numba JIT) + fill steps
+    key_matte_cutout(crop, (0, 255, 0), timings=timings)  # warmup + fill steps
     total = median_ms(lambda: key_matte_cutout(crop, (0, 255, 0)))
     print(f"  path1 key_matte [{name}] {crop.width}x{crop.height}: {total} ms total")
     for step, ms in timings.items():

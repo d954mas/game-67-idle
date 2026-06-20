@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""Principled single-background cutout: known-key trimap -> closed-form alpha
-matte -> ML foreground (edge-colour) decontamination.
+"""Deterministic single-background cutout: known-key trimap -> bounded alpha
+band -> edge-colour decontamination.
 
-This is path 1 done right. Instead of hand-tuned RGB despill/halo heuristics
-(which conflate "is this the key hue" with "is this background" and destroy any
-subject that uses the key hue), it:
+This is path 1 for opaque art and flat-key holes. Instead of importing a
+JIT-backed global matte solver in the default gate, it:
 
 1. builds a trimap from the KNOWN key colour distance
    (sure-bg = flat exact key anywhere, incl. interior holes;
     sure-fg = far from key; unknown = the thin band between),
-2. solves the unknown band with a closed-form matte (pymatting), and
-3. decontaminates edge colour with multi-level foreground estimation.
+2. assigns a bounded smooth alpha across the unknown key-distance band, and
+3. decontaminates edge colour with deterministic image hygiene.
 
 Use it for OPAQUE art and flat-key holes (rings, gaps, crisp silhouettes). Soft
 fractional alpha (soft shadow, glow, glass, smoke) is mathematically
 unrecoverable from one background -- route those to dual-plate
 (``dual_plate_alpha.py``).
 
-Requires numpy + pymatting (hard pipeline deps); there is no heuristic fallback.
-A crop with no soft edge band (opaque art / flat-key holes) skips the closed-form
-solve entirely, so the heavy path runs only when there is fractional alpha to solve.
+Requires numpy. There is no dependency on JIT-backed matting packages in the
+default validation path.
+A crop with no soft edge band (opaque art / flat-key holes) skips alpha-band
+work entirely.
 """
 from __future__ import annotations
 
@@ -81,10 +81,9 @@ def key_matte_cutout(
     timings: dict | None = None,
 ) -> Image.Image:
     """Return an RGBA cutout of ``image`` against the flat ``key`` colour using a
-    closed-form matte. Intended to run PER CROP (small image); running it on a
-    full multi-thousand-pixel source sheet is slow because the closed-form solve
-    is global. Pass ``timings`` (a dict) to record per-step milliseconds for
-    profiling/optimization."""
+    bounded key-distance alpha band. Intended to run PER CROP (small image);
+    run routing/audits on full source sheets before extracting crops. Pass
+    ``timings`` (a dict) to record per-step milliseconds for profiling."""
     def _mark(name: str, start: float) -> float:
         if timings is not None:
             timings[name] = round((perf_counter() - start) * 1000.0, 2)
@@ -108,34 +107,26 @@ def key_matte_cutout(
     trimap[distance >= foreground_tolerance] = 1.0
     step = _mark("prep_trimap", step)
     if np.any(trimap == 0.5):
-        from pymatting import estimate_alpha_cf, estimate_foreground_ml
-
-        # Solve the unknown edge band with the closed-form matte + ML foreground.
-        try:
-            alpha = np.clip(estimate_alpha_cf(rgb, trimap), 0.0, 1.0)
-            foreground = np.clip(estimate_foreground_ml(rgb, alpha), 0.0, 1.0)
-        except Exception:
-            # Solver could not handle this trimap: degrade to a hard binary alpha
-            # (sure-fg + unknown -> opaque), never a heuristic keyer.
-            alpha = np.where(trimap >= 0.5, 1.0, 0.0)
-            foreground = rgb
-        step = _mark("alpha_closed_form", step)
-        step = _mark("foreground_ml", step)
+        band = (distance - float(exact_tolerance)) / max(1.0, float(foreground_tolerance - exact_tolerance))
+        alpha = np.clip(band, 0.0, 1.0)
+        alpha = alpha * alpha * (3.0 - 2.0 * alpha)
+        alpha[trimap == 0.0] = 0.0
+        alpha[trimap == 1.0] = 1.0
+        foreground = rgb
+        step = _mark("alpha_band", step)
+        step = _mark("foreground_preserve", step)
     else:
         # No unknown band: opaque art / flat-key holes only. The global solve and
         # ML foreground would be a no-op, so skip both heavy steps -- the alpha IS
         # the trimap and every visible pixel is already its own foreground.
         alpha = trimap
         foreground = rgb
-        step = _mark("alpha_closed_form", step)
-        step = _mark("foreground_ml", step)
+        step = _mark("alpha_band", step)
+        step = _mark("foreground_preserve", step)
 
-    # estimate_foreground_ml smooths colour, which blurs crisp interior detail
-    # (text, wood grain, outlines). The estimate is only NEEDED where alpha is
-    # fractional (the soft edge being decontaminated); an opaque pixel already
-    # IS its own foreground. So composite at the ORIGINAL resolution: keep the
-    # crisp original RGB where opaque, blend in the estimate only across the thin
-    # edge band. This also undoes any work-resolution downscale blur.
+    # Composite at the ORIGINAL resolution: keep the crisp original RGB where
+    # opaque, blend in the band foreground only across the thin edge band. This
+    # also undoes any work-resolution downscale blur.
     if work.size == original_size:
         alpha_full = alpha
         estimated_full = foreground * 255.0
@@ -159,9 +150,9 @@ def key_matte_cutout(
     output_array[..., :3] = np.rint(np.clip(foreground_full, 0.0, 255.0)).astype(np.uint8)
     output_array[..., 3] = np.rint(np.clip(alpha_full * 255.0, 0.0, 255.0)).astype(np.uint8)
     result = Image.fromarray(output_array, "RGBA")
-    # estimate_foreground_ml decontaminates the bulk; one general key-spill pass
-    # (keyed on the actual key colour, not per-palette magic numbers) clears the
-    # residual anti-aliased edge fringe. Then method-agnostic atlas hygiene.
+    # One general key-spill pass (keyed on the actual key colour, not per-palette
+    # magic numbers) clears the residual anti-aliased edge fringe. Then
+    # method-agnostic atlas hygiene.
     # Q3: the sharp _limit_despill above usually clears all key spill, so skip the
     # (expensive integral-image) decontamination unless visible spill remains.
     if _has_key_spill(result, key):
