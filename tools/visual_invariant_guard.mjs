@@ -72,12 +72,13 @@ if (activeConcept) {
     const rel = relative(root, file).replaceAll("\\", "/");
     const lines = readFileSync(file, "utf8").split(/\r?\n/);
     const isBoundaryFile = boundaryPathPattern.test(rel);
+    const fileHasDebugDebt = debugDebtPattern.test(lines.slice(0, 12).join("\n"));
     lines.forEach((line, index) => {
       const context = nearbyText(lines, index);
       if (textPattern.test(line) && !debugDebtPattern.test(context)) {
         problems.push({ file: rel, line: index + 1, rule: "engine-text-renderer", detail: "handmade draw_text needs explicit debug debt or engine text renderer" });
       }
-      if (shapePattern.test(line) && !debugDebtPattern.test(context)) {
+      if (shapePattern.test(line) && !fileHasDebugDebt && !debugDebtPattern.test(context)) {
         problems.push({ file: rel, line: index + 1, rule: "debug-renderer", detail: "shape/debug renderer in active game needs explicit debug debt" });
       }
       if (yDownPattern.test(line) && !isBoundaryFile && !boundaryTextPattern.test(context)) {

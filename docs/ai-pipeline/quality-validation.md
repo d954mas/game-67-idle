@@ -45,5 +45,12 @@ axes can't slip a loop past.
 - Visual/playable changes: native scenario plus screenshot/video/product gate
   evidence
 
+Playable smoke scripts should expose acceptance criteria as named checks, not
+just generic pass/fail. Prefer stable ids such as
+`accept.first_rune_claims_without_opening_gate`,
+`accept.chest_opens_after_combat`, and `visual.screenshot_captured`, then print
+a compact summary. Keep task `Done when` readable in Markdown while making the
+runtime contract machine-checkable.
+
 Escalate validation only when the change/export path requires it; budgets are
 a review gate and full validation a final gate, not defaults after small edits.
