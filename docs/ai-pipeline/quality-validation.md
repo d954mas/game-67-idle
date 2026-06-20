@@ -12,11 +12,10 @@ Separate verdicts:
 - Art-source/assets: are runtime assets real, traceable, target-appropriate?
 - Technical/build: does the changed runtime/tooling actually work?
 
-Do not call a slice done from one green gate; builds/probes/audits support a
-verdict, not replace player-facing judgment. For a contested gate the lead runs
-ONE independent verifier in a clean context that re-runs only the named check and
-returns CONFIRM/REFUTE (`node tools/ai.mjs gate ... --verify`, opt-in): a green
-gate is not self-graded.
+Do not call a slice done from one green gate; builds/probes/audits support, not
+replace, player-facing judgment. For a contested gate, run one clean-context
+verifier on only the named check (`node tools/ai.mjs gate ... --verify`):
+CONFIRM/REFUTE, no self-grading.
 
 When a strict/product gate fails twice for the same major reason, stop polishing
 and create/link a different path (architecture, tooling, source asset, reference)
@@ -25,6 +24,10 @@ or record explicit lead acceptance. Enforced by:
 ```powershell
 node tools/product_gate/repeated_failure_guard.mjs
 ```
+
+Visual rejection: run
+`node tools/product_gate/visual_rejection_lock.mjs --project <id> --task <TID> --screenshot <path> --problem "<why rejected>" --next "<different path>"`
+first.
 
 `node tools/ai.mjs validate` runs it in quick mode. Gate lines may carry a
 parseable `[GATE-ID]: PASS|CONCERNS|FAIL` verdict; the guard clusters a gate's
@@ -45,12 +48,10 @@ axes can't slip a loop past.
 - Visual/playable changes: native scenario plus screenshot/video/product gate
   evidence
 
-Playable smoke scripts should expose acceptance criteria as named checks, not
-just generic pass/fail. Prefer stable ids such as
-`accept.first_rune_claims_without_opening_gate`,
-`accept.chest_opens_after_combat`, and `visual.screenshot_captured`, then print
-a compact summary. Keep task `Done when` readable in Markdown while making the
-runtime contract machine-checkable.
+Playable smokes should expose acceptance as named checks, not generic pass/fail.
+Prefer stable ids such as `accept.chest_opens_after_combat` and
+`visual.screenshot_captured`, then print a compact summary. Keep task
+`Done when` readable while the runtime contract stays machine-checkable.
 
 Escalate validation only when the change/export path requires it; budgets are
 a review gate and full validation a final gate, not defaults after small edits.

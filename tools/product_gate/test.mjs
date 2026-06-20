@@ -141,6 +141,49 @@ test("product read gate appends task log when requested", () => {
   }
 });
 
+test("visual rejection lock records strict visual fail and task evidence", () => {
+  const dir = tempDir();
+  try {
+    writeTask(dir, "T0094");
+    const screenshot = join(dir, "lead-rejected.png");
+    const markdown = join(dir, "visual-lock.md");
+    const json = join(dir, "visual-lock.json");
+    const latest = join(dir, "visual-lock-latest.json");
+    writeFileSync(screenshot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/visual_rejection_lock.mjs",
+      "--project", "visual-test",
+      "--task", "T0094",
+      "--surface", "desktop",
+      "--screenshot", screenshot,
+      "--problem", "The world still reads like debug cubes instead of authored game art.",
+      "--next", "Replace blockout surfaces with sourced materials and run a new visual gate.",
+      "--axis", "art_quality",
+      "--severity", "major",
+      "--output", markdown,
+      "--json-output", json,
+      "--index-output", latest,
+    ], { env: { TASKBOARD_ROOT: dir } });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(readFileSync(markdown, "utf8"), /Verdict: \*\*FAIL\*\*/);
+    const record = JSON.parse(readFileSync(json, "utf8"));
+    assert.equal(record.verdict, "fail");
+    assert.equal(record.visual_critique.strict, true);
+    assert.equal(record.visual_critique.scores.art_quality, 1);
+    assert.deepEqual(record.visual_critique.issues[0], {
+      severity: "major",
+      axis: "art_quality",
+      text: "The world still reads like debug cubes instead of authored game art.",
+    });
+    assert.equal(JSON.parse(readFileSync(latest, "utf8")).json, json);
+    const task = readFileSync(join(dir, "tasks", "active", "T0094-test.md"), "utf8");
+    assert.match(task, /product gate FAIL/);
+    assert.match(task, /Replace blockout surfaces with sourced materials/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 function writeTaskWithBody(rootDir, id, fields, body) {
   const taskDir = join(rootDir, "tasks", "active");
   mkdirSync(taskDir, { recursive: true });
