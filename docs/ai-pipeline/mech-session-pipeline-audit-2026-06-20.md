@@ -58,7 +58,10 @@ stopped; use this as evidence for pipeline improvements before the next game.
 - The project-specific Mech Builder Battler playable smoke now exposes split
   suites: `contract`, `asset-load`, `visual-framing`, `movement`,
   `combat-pacing`, `reward-loop`, and `upgrade-special`.
+- Stopped-prototype taskboard noise is archived; the unresolved lead-rejection
+  task is dropped instead of left as current work.
 
 ## Remaining Work
 
-- Clean or archive stopped-prototype taskboard noise before the next game.
+- No remaining blocker from this audit. Separate backlog items may still exist,
+  but the mech-session review fixes are complete.

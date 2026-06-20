@@ -1,12 +1,12 @@
 ---
 id: T0024
 title: CC0 robot enemy asset runtime pass
-status: review
+status: done
 epic: ""
 priority: P0
 tags: [implementation, visual, assets, 3d, mechs, native]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -53,3 +53,4 @@ Scope boundaries:
   material-split static meshes derived from the source GLB, the battle smoke
   screenshot shows the low-poly robot enemy with red eye/orange shell/grey
   weapon parts, and native build plus DevAPI smoke pass.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

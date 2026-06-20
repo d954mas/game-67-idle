@@ -1,12 +1,12 @@
 ---
 id: T0018
 title: Mechanics and meta matrix for Mech Builder Battler
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [gamedesign, mechanics, meta, progression, mobile, web, mechs]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -45,3 +45,4 @@ Scope boundaries:
   after refreshing Google Play store-page evidence for Mech Arena, CATS, and
   War Robots. Kept status in `review` because it is design synthesis for lead
   acceptance, not implementation authorization.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

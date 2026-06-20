@@ -1,7 +1,7 @@
 ---
 id: T0034
 title: Textured world floor runtime path
-status: review
+status: done
 priority: P0
 tags: [implementation, visual, texture, world, mesh, native]
 created: 2026-06-20
@@ -50,3 +50,4 @@ procedural proof.
   `gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-20T01-55-10_desktop-textured-floor-runtime.md`;
   evidence:
   `gamedesign/projects/mech-builder-battler/evidence/t0034_textured_world_floor_runtime_path_2026-06-20.md`.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

@@ -1,7 +1,7 @@
 ---
 id: T0035
 title: Asset-first Roblox-like mech/world intake
-status: review
+status: done
 priority: P0
 tags: [visual, assets, mech, world, sourcing, native]
 created: 2026-06-20
@@ -55,3 +55,4 @@ not from more hand-authored block placeholders.
   `gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-20T02-05-10_desktop-asset-first-sentinel-showcase.md`;
   evidence:
   `gamedesign/projects/mech-builder-battler/evidence/t0035_asset_first_sentinel_showcase_2026-06-20.md`.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

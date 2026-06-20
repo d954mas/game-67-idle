@@ -1,12 +1,12 @@
 ---
 id: T0015
 title: Lead review packet for Mech Builder Battler
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [gamedesign, review, decisions, mobile, web, mechs]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -44,3 +44,4 @@ Scope boundaries:
   `gamedesign/projects/mech-builder-battler/design/lead_review_packet_2026-06-19.md`
   with decision matrix, recommended first-slice choices, fake-shot brief, pivot
   map, and review checklist.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

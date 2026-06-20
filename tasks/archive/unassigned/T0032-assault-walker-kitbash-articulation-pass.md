@@ -1,7 +1,7 @@
 ---
 id: T0032
 title: Assault Walker kitbash articulation pass
-status: review
+status: done
 priority: P0
 tags: [implementation, visual, mech, animation, kitbash, native]
 created: 2026-06-20
@@ -46,3 +46,4 @@ modules.
   Captured T0032 hangar/battle screenshots and recorded strict product gate
   PASS for `desktop-assault-kitbash-articulation`.
 - 2026-06-20: product gate PASS (desktop-assault-kitbash-articulation); review: gamedesign\projects\mech-builder-battler\reviews\product_read_gate_2026-06-20T01-32-10_desktop-assault-kitbash-articulation.md; screenshot: build/captures/mech_t0032_assault_kitbash_hangar_smoke.png; next: continue to the next narrow slice
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

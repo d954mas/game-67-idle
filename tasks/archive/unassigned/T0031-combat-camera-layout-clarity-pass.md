@@ -1,7 +1,7 @@
 ---
 id: T0031
 title: Combat camera and layout clarity pass
-status: review
+status: done
 priority: P0
 tags: [implementation, visual, camera, layout, readability, native]
 created: 2026-06-20
@@ -41,3 +41,4 @@ better in action before adding more combat/progression scope.
 - 2026-06-20: Tuned battle camera/framing, softened foreground pylon pressure,
   reduced stomp/weapon VFX intensity, added T0031 smoke capture, and recorded
   strict product gate PASS for `desktop-combat-camera-layout-clarity`.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

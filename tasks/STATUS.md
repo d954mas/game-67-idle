@@ -36,7 +36,9 @@ post-prototype status cleanup.
 Fixed so far: OKF-style shared asset catalog, legal asset intake helper,
 texture tiling audit workflow, strict lead-rejection closeout guard, and split
 Mech Builder Battler smoke suites for contract, asset-load, visual framing,
-movement, combat pacing, reward loop, and upgrade/special proofs.
+movement, combat pacing, reward loop, and upgrade/special proofs. Stopped
+Mech Builder Battler taskboard items are archived; `T0040` is dropped as an
+unresolved lead rejection.
 
 Latest audit:
 `docs/ai-pipeline/mech-session-pipeline-audit-2026-06-20.md`.
@@ -50,4 +52,5 @@ felt suspect.
 
 ## Next Priorities
 
-1. Clean/archive stopped-prototype taskboard noise before starting a new game.
+1. Ready to start a fresh game concept or continue separate pipeline backlog
+   work such as `T0007`.

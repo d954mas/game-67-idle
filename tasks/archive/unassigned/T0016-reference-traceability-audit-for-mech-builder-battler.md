@@ -1,12 +1,12 @@
 ---
 id: T0016
 title: Reference traceability audit for Mech Builder Battler
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [gamedesign, audit, references, traceability, mechs]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -45,3 +45,4 @@ Scope boundaries:
   `gamedesign/projects/mech-builder-battler/design/reference_traceability_audit_2026-06-19.md`.
   Kept task in `review` because it supports lead acceptance and fake-shot
   planning, not implementation.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

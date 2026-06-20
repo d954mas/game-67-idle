@@ -6,7 +6,7 @@ epic: ""
 priority: P0
 tags: [implementation, native, prototype, 3d, mechs, vertical-slice]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -94,3 +94,4 @@ Scope boundaries:
   `cmake --build --preset native-debug --target game_seed` and
   `python tools/mech-builder-battler/devapi_playable_smoke.py 9124`; both
   passed, including `mesh_mech_ready`.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

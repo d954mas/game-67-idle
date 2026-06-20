@@ -1,7 +1,7 @@
 ---
 id: T0026
 title: Hero mech modular overlay motion pass
-status: review
+status: done
 epic: ""
 priority: P0
 tags: [implementation, visual, assets, 3d, mechs, native, animation]
@@ -50,3 +50,4 @@ Scope boundaries:
   `build/captures/mech_t0026_hero_modular_overlay_hangar_smoke.png`,
   `build/captures/mech_t0026_hero_modular_motion_smoke.png`.
 - 2026-06-20: product gate PASS (desktop-hero-modular-overlay); review: gamedesign\projects\mech-builder-battler\reviews\product_read_gate_2026-06-20T00-10-35_desktop-hero-modular-overlay.md; screenshot: build/captures/mech_t0026_hero_modular_overlay_hangar_smoke.png; next: continue to the next narrow slice
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

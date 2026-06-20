@@ -1,7 +1,7 @@
 ---
 id: T0040
 title: Mech animation and battle-feel rejection fix
-status: doing
+status: dropped
 priority: P0
 tags: [visual, animation, controls, battle, native, lead-rejection]
 created: 2026-06-20
@@ -37,3 +37,4 @@ mech, the arena feels too small, and movement/facing feels incorrect.
 - 2026-06-20: Created from lead rejection. Stopped expanding static asset intake;
   the next proof must improve animation, arena scale, battle pacing, and control
   feel.
+- 2026-06-20: Post-prototype cleanup: dropped unresolved lead-rejection fix because the user stopped the game before accepting the visual/battle-feel direction.

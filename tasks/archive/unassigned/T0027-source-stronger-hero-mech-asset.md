@@ -1,7 +1,7 @@
 ---
 id: T0027
 title: Source stronger hero mech asset
-status: review
+status: done
 epic: ""
 priority: P0
 tags: [implementation, visual, assets, 3d, mechs, native, sourcing]
@@ -52,3 +52,4 @@ Scope boundaries:
   continue to the next narrow slice.
 - 2026-06-20: Validation passed: `node tools/taskboard/cli.mjs validate`,
   `node tools/ai.mjs validate --with-assets`, and `git diff --check`.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

@@ -1,12 +1,12 @@
 ---
 id: T0011
 title: Research casual mobile web mech builder battler references
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [research, gamedesign, mobile, web, mechs]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -98,3 +98,4 @@ Scope boundaries:
 - 2026-06-19: `node tools/taskboard/cli.mjs validate` passed after the visual
   packet update. Did not keep touching broader pipeline/tool validation because
   another agent is currently working on pipeline, tools, and engine changes.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

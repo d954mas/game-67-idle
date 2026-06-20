@@ -6,7 +6,7 @@ epic: ""
 priority: P1
 tags: [gamedesign, references, evidence, review, screenshots, mechs]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -58,3 +58,4 @@ Scope boundaries:
   the Mech Arena, CATS, and Mechangelion deconstructions with current capture
   paths, concrete mismatches, and next native proof targets. Validation:
   `node tools/taskboard/cli.mjs validate`.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

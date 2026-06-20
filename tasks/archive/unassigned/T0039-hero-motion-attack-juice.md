@@ -1,11 +1,11 @@
 ---
 id: T0039
 title: Hero motion attack juice
-status: review
+status: done
 priority: P0
 tags: [visual, mech, motion, attack, native]
 created: 2026-06-20
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 # T0039 - Hero Motion Attack Juice
@@ -42,3 +42,4 @@ make the heavy robot feel alive without adding new mechanics.
   muzzle streaks, and captured
   `build/captures/mech_t0039_hero_motion_attack_smoke.png`.
 - 2026-06-19: product gate PASS (desktop-hero-motion-attack-juice); review: gamedesign\projects\mech-builder-battler\reviews\product_read_gate_2026-06-20T02-39-10_desktop-hero-motion-attack-juice.md; screenshot: build/captures/mech_t0039_hero_motion_attack_smoke.png; next: continue to the next narrow slice
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

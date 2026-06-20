@@ -1,12 +1,12 @@
 ---
 id: T0020
 title: Design review for Mech Builder Battler
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [gamedesign, design-review, gdd, references, mechanics, meta, mechs]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -44,3 +44,4 @@ Scope boundaries:
   `gamedesign/projects/mech-builder-battler/design/design_review_2026-06-19.md`.
   Kept task in `review`: the review is complete, but lead acceptance is still
   required before implementation.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

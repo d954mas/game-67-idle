@@ -1,12 +1,12 @@
 ---
 id: T0019
 title: Reference evidence capture plan for Mech Builder Battler
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [gamedesign, references, evidence, capture-plan, mobile, web, mechs]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -52,3 +52,4 @@ Scope boundaries:
   `gamedesign/projects/mech-builder-battler/references/reference_evidence_capture_plan_2026-06-19.md`.
   Kept task in `review`: the plan is complete, but the evidence boards
   themselves still need capture before exact implementation claims are ready.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

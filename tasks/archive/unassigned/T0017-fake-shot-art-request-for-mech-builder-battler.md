@@ -1,12 +1,12 @@
 ---
 id: T0017
 title: Fake shot art request for Mech Builder Battler
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [gamedesign, art-direction, fake-shot, mobile, web, mechs]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -45,3 +45,4 @@ Scope boundaries:
   `gamedesign/projects/mech-builder-battler/design/fake_shot_art_request_2026-06-19.md`.
   Kept task in `review` because the packet needs lead acceptance before image
   generation or runtime visual work.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

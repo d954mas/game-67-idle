@@ -1,12 +1,12 @@
 ---
 id: T0023
 title: Authored starter mech visual pass
-status: review
+status: done
 epic: ""
 priority: P0
 tags: [implementation, visual, assets, 3d, mechs, native]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -134,3 +134,4 @@ Design inputs:
   streaks, strafe streaks, and a smoke check that holds `W+D` through
   `input.key` before capture.
 - 2026-06-19: product gate PASS (desktop-movement); review: gamedesign/projects/mech-builder-battler/reviews/product_read_gate_2026-06-19T23-11-37_desktop-movement.md; screenshot: build/captures/mech_t0023_moving_strafe_smoke.png; next: source or author a stronger modular/rigged Roblox-like mech asset
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

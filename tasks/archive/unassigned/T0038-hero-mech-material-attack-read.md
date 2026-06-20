@@ -1,11 +1,11 @@
 ---
 id: T0038
 title: Hero mech material attack read
-status: review
+status: done
 priority: P0
 tags: [visual, mech, materials, attack, native]
 created: 2026-06-20
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 # T0038 - Hero Mech Material Attack Read
@@ -39,3 +39,4 @@ accents, and clearer attack state at gameplay camera size.
   battle framing, and captured
   `build/captures/mech_t0038_hero_material_attack_read_smoke.png`.
 - 2026-06-19: product gate PASS (desktop-hero-mech-material-attack-read); review: gamedesign\projects\mech-builder-battler\reviews\product_read_gate_2026-06-20T02-32-20_desktop-hero-mech-material-attack-read.md; screenshot: build/captures/mech_t0038_hero_material_attack_read_smoke.png; next: continue to the next narrow slice
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

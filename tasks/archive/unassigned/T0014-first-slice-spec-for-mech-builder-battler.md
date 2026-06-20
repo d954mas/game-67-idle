@@ -1,12 +1,12 @@
 ---
 id: T0014
 title: First slice spec for Mech Builder Battler
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [gamedesign, spec, mvp, mobile, web, mechs]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -47,3 +47,4 @@ Scope boundaries:
   `gamedesign/projects/mech-builder-battler/design/first_slice_spec_2026-06-19.md`.
   Kept task in `review` because the next step is lead review and fake-shot or
   native PC slice-scope acceptance.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

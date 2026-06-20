@@ -1,7 +1,7 @@
 ---
 id: T0037
 title: Station plastic world composition
-status: review
+status: done
 priority: P0
 tags: [visual, materials, world, props, native]
 created: 2026-06-20
@@ -44,3 +44,4 @@ feel like a juicy Roblox-like toy station without expanding combat scope.
   prop hangar framing from 3 to 8 instances, and captured
   `build/captures/mech_t0037_station_plastic_hangar_smoke.png`.
 - 2026-06-19: product gate PASS (desktop-station-plastic-world-composition); review: gamedesign\projects\mech-builder-battler\reviews\product_read_gate_2026-06-20T02-24-40_desktop-station-plastic-world-composition.md; screenshot: build/captures/mech_t0037_station_plastic_hangar_smoke.png; next: continue to the next narrow slice
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

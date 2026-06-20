@@ -1,12 +1,12 @@
 ---
 id: T0025
 title: Hero mech toy material readability pass
-status: review
+status: done
 epic: ""
 priority: P0
 tags: [implementation, visual, assets, 3d, mechs, native]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -47,3 +47,4 @@ Scope boundaries:
   screenshot: `build/captures/mech_t0025_hero_toy_material_smoke.png`; native
   build and DevAPI smoke passed.
 - 2026-06-19: product gate PASS (desktop-hero-toy-material); review: gamedesign\projects\mech-builder-battler\reviews\product_read_gate_2026-06-19T23-56-31_desktop-hero-toy-material.md; screenshot: build/captures/mech_t0025_hero_toy_material_smoke.png; next: continue to the next narrow slice
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.

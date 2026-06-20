@@ -1,12 +1,12 @@
 ---
 id: T0013
 title: Draft GDD for Mech Builder Battler
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [gamedesign, gdd, mobile, web, mechs]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -47,3 +47,4 @@ Scope boundaries:
   `gamedesign/projects/mech-builder-battler/design/gdd_draft_2026-06-19.md`.
   Kept task in `review` because the next step is lead review/acceptance, not
   runtime implementation.
+- 2026-06-20: Post-prototype cleanup: archived as historical Mech Builder Battler work after the user stopped the game.
