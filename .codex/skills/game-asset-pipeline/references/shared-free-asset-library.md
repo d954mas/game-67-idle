@@ -84,6 +84,24 @@ The helper records size, SHA256, `download-log.md`, and `intake.json`. It does
 not approve the license; the agent still has to perform the license gate before
 moving anything into `catalog/` or a project.
 
+After the license gate passes, accept the incoming asset with the catalog helper:
+
+```powershell
+node tools/assets/intake/accept_incoming_asset.mjs --source <source> --slug <asset-slug> --asset-id <source>__<asset-slug>__<license> --kind <model|texture|material|audio|ui> --title "<title>" --description "<searchable sentence>" --license-name <license> --license-url <url> --tags "<comma,tags>" --source-page-url <asset-page-url> --author-vendor "<name>"
+```
+
+For texture assets, store the tiling decision and proof paths in the catalog
+record when applicable:
+
+```powershell
+node tools/assets/intake/accept_incoming_asset.mjs --source <source> --slug <asset-slug> --asset-id <asset-id> --kind texture --title "<title>" --description "<text>" --license-name <license> --license-url <url> --tags "texture,tileable,ground" --tileable true --wrap-mode repeat --preview-2x2 previews/<asset-id>/tile_2x2.png --seam-audit previews/<asset-id>/tile_audit.json
+```
+
+Acceptance copies the downloaded file, `download-log.md`, and `intake.json` into
+`files/<kind>/<asset-id>/`, writes `catalog/<kind>/<asset-id>.md`, and creates a
+license note under `licenses/<asset-id>/`. The catalog entry is the source of
+truth for search; do not rely on `_incoming/` paths after acceptance.
+
 ## License Gate
 
 An asset can move into `catalog/` only when the Markdown record states:

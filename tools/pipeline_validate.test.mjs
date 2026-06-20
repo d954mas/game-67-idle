@@ -29,6 +29,8 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.match(result.stdout, /== doc reference tests/);
   assert.match(result.stdout, /== bootstrap export tests/);
   assert.match(result.stdout, /== repeated product gate failure guard/);
+  assert.match(result.stdout, /== visual invariant guard/);
+  assert.match(result.stdout, /== visual invariant guard tests/);
   assert.doesNotMatch(result.stdout, /== portable export/);
   assert.doesNotMatch(result.stdout, /== exported ai profile tests/);
   assert.match(result.stdout, /reusable pipeline quick validation passed/);
@@ -152,4 +154,11 @@ test("pipeline validation dry-run shows configured Python command with args", ()
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /python runner: <dry-run> uv run python/);
   assert.match(result.stdout, /\$ uv run python -m unittest/);
+});
+
+test("pipeline validation full Python failure guidance is actionable", () => {
+  const source = readFileSync(resolve(root, "tools/pipeline_validate.mjs"), "utf8");
+  assert.match(source, /py -3\.12 -m pip install pillow numpy scipy pymatting/);
+  assert.match(source, /AI_PIPELINE_PYTHON/);
+  assert.match(source, /prepared venv or runner/);
 });

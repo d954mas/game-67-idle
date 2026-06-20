@@ -240,6 +240,12 @@ function findPythonRunner(requiredModules = []) {
   const modules = requiredModules.length ? ` with required modules: ${requiredModules.join(", ")}` : "";
   console.error(`error: no working Python runner found${modules}`);
   for (const item of skipped) console.error(`- tried ${item}`);
+  if (requiredModules.length) {
+    console.error(
+      `hint: install full-gate modules into the selected runner, for example: py -3.12 -m pip install pillow numpy scipy pymatting`,
+    );
+    console.error(`hint: set AI_PIPELINE_PYTHON to a prepared venv or runner when the default Python is not the right one.`);
+  }
   process.exit(1);
 }
 
@@ -302,6 +308,8 @@ run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
 run("doc reference tests", ["--test", "tools/doc_reference_check.test.mjs"]);
 run("bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"]);
 run("repeated product gate failure guard", ["tools/product_gate/repeated_failure_guard.mjs"]);
+run("visual invariant guard", ["tools/visual_invariant_guard.mjs"]);
+run("visual invariant guard tests", ["--test", "tools/visual_invariant_guard.test.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
 
 // Guard: catch a STATUS<->runtime contradiction. A "clean seed" repo must not
