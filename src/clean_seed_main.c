@@ -45,6 +45,9 @@
 
 #define CLEAN_SEED_DEVAPI_PORT_DEFAULT 9123
 #define ARENA_HALF 8.0F
+#define ARENA_X_LIMIT 8.2F
+#define ARENA_Z_MIN -6.8F
+#define ARENA_Z_MAX 7.4F
 #define MAX_DRONES 8
 #define ROCKET_COST 120
 #define CAPTURE_PATH_MAX 512
@@ -98,6 +101,7 @@ typedef struct MechGame {
   float mech_facing;
   float mech_walk;
   float mech_recoil;
+  float mech_turn;
   int salvage;
   int battle_index;
   bool rockets_equipped;
@@ -902,14 +906,14 @@ static void parse_args(int argc, char **argv) {
 }
 
 static void spawn_drones(int battle_index) {
-  const int count = battle_index == 0 ? 4 : 6;
-  const float spawn_x[MAX_DRONES] = {3.8F, -3.6F, 4.8F, -4.7F,
-                                    0.5F, 2.4F,  -2.7F, 0.0F};
-  const float spawn_z[MAX_DRONES] = {-0.9F, -1.6F, -2.8F, -3.6F,
-                                    -4.2F, -5.1F, -5.4F, -6.2F};
+  const int count = battle_index == 0 ? 5 : 7;
+  const float spawn_x[MAX_DRONES] = {5.8F, -5.4F, 7.0F, -6.8F,
+                                    0.4F, 3.5F,  -3.9F, 0.0F};
+  const float spawn_z[MAX_DRONES] = {-3.4F, -4.2F, -5.4F, -6.2F,
+                                    -5.8F, -6.7F, -6.4F, -6.8F};
   for (int i = 0; i < MAX_DRONES; ++i) {
     s_game.drones[i].alive = i < count;
-    s_game.drones[i].hp = battle_index == 0 ? 38.0F : 44.0F;
+    s_game.drones[i].hp = battle_index == 0 ? 96.0F : 120.0F;
     s_game.drones[i].x = spawn_x[i];
     s_game.drones[i].z = spawn_z[i];
   }
@@ -956,15 +960,16 @@ static int target_drone(void) {
 static void start_battle(void) {
   s_game.screen = SCREEN_BATTLE;
   s_game.mech_x = 0.0F;
-  s_game.mech_z = 2.6F;
+  s_game.mech_z = 5.2F;
   s_game.mech_vx = 0.0F;
   s_game.mech_vz = 0.0F;
   s_game.mech_facing = 0.0F;
   s_game.mech_walk = 0.0F;
   s_game.mech_recoil = 0.0F;
+  s_game.mech_turn = 0.0F;
   s_game.heat = 0.05F;
-  s_game.cannon_cd = 0.25F;
-  s_game.rocket_cd = s_game.rockets_equipped ? 0.5F : 999.0F;
+  s_game.cannon_cd = 0.75F;
+  s_game.rocket_cd = s_game.rockets_equipped ? 2.2F : 999.0F;
   s_game.dash_cd = 0.0F;
   s_game.dash_flash = 0.0F;
   s_game.rocket_flash = 0.0F;
@@ -998,7 +1003,7 @@ static void fire_rockets(void) {
       s_game.heat > 0.82F) {
     return;
   }
-  s_game.rocket_cd = 3.5F;
+  s_game.rocket_cd = 5.4F;
   s_game.heat = clampf(s_game.heat + 0.42F, 0.0F, 1.0F);
   s_game.rocket_flash = 1.45F;
   s_game.mech_recoil = 1.0F;
@@ -1007,7 +1012,7 @@ static void fire_rockets(void) {
     if (!s_game.drones[i].alive) {
       continue;
     }
-    s_game.drones[i].hp -= 70.0F;
+    s_game.drones[i].hp -= 42.0F;
     s_game.drones[i].z -= 0.45F;
     if (s_game.drones[i].hp <= 0.0F) {
       s_game.drones[i].alive = false;
@@ -1024,7 +1029,7 @@ static void dash(void) {
   s_game.dash_flash = 0.35F;
   s_game.heat = clampf(s_game.heat + 0.12F, 0.0F, 1.0F);
   s_game.mech_vz -= 5.6F;
-  s_game.mech_z = clampf(s_game.mech_z - 0.34F, -0.8F, 5.4F);
+  s_game.mech_z = clampf(s_game.mech_z - 0.34F, ARENA_Z_MIN, ARENA_Z_MAX);
 }
 
 static void handle_button_click(void) {
@@ -1106,29 +1111,34 @@ static void update_battle(float dt) {
   if (l > 0.001F) {
     dx /= l;
     dz /= l;
-    move_speed = 4.0F;
+    move_speed = 3.25F;
   }
   const float target_vx = dx * move_speed;
   const float target_vz = dz * move_speed;
-  s_game.mech_vx = approachf(s_game.mech_vx, target_vx, dt * 14.0F);
-  s_game.mech_vz = approachf(s_game.mech_vz, target_vz, dt * 14.0F);
-  s_game.mech_x = clampf(s_game.mech_x + (s_game.mech_vx * dt), -5.8F, 5.8F);
-  s_game.mech_z = clampf(s_game.mech_z + (s_game.mech_vz * dt), -0.8F, 5.4F);
+  s_game.mech_vx = approachf(s_game.mech_vx, target_vx, dt * 10.5F);
+  s_game.mech_vz = approachf(s_game.mech_vz, target_vz, dt * 10.5F);
+  s_game.mech_x =
+      clampf(s_game.mech_x + (s_game.mech_vx * dt), -ARENA_X_LIMIT, ARENA_X_LIMIT);
+  s_game.mech_z =
+      clampf(s_game.mech_z + (s_game.mech_vz * dt), ARENA_Z_MIN, ARENA_Z_MAX);
   const float actual_speed = len2(s_game.mech_vx, s_game.mech_vz);
-  if (actual_speed > 0.12F) {
+  const float prev_facing = s_game.mech_facing;
+  const int aim_target = target_drone();
+  if (aim_target >= 0) {
+    const float ax = s_game.drones[aim_target].x - s_game.mech_x;
+    const float az = s_game.drones[aim_target].z - s_game.mech_z;
+    s_game.mech_facing =
+        approach_angle(s_game.mech_facing, atan2f(ax, -az),
+                       dt * (actual_speed > 0.12F ? 4.8F : 3.5F));
+  } else if (actual_speed > 0.12F) {
     s_game.mech_facing =
         approach_angle(s_game.mech_facing, atan2f(s_game.mech_vx, -s_game.mech_vz),
-                       dt * 7.5F);
-  } else {
-    const int aim_target = target_drone();
-    if (aim_target >= 0) {
-      const float ax = s_game.drones[aim_target].x - s_game.mech_x;
-      const float az = s_game.drones[aim_target].z - s_game.mech_z;
-      s_game.mech_facing =
-          approach_angle(s_game.mech_facing, atan2f(ax, -az), dt * 3.0F);
-    }
+                       dt * 5.2F);
   }
-  s_game.mech_walk += actual_speed * dt * 4.4F;
+  const float turn_signal = clampf(angle_delta(prev_facing, s_game.mech_facing) * 8.0F,
+                                   -1.0F, 1.0F);
+  s_game.mech_turn = approachf(s_game.mech_turn, turn_signal, dt * 7.5F);
+  s_game.mech_walk += actual_speed * dt * 5.8F;
 
   s_game.battle_time += dt;
   s_game.cannon_cd -= dt;
@@ -1137,7 +1147,7 @@ static void update_battle(float dt) {
   s_game.dash_flash = clampf(s_game.dash_flash - dt, 0.0F, 1.0F);
   s_game.rocket_flash = clampf(s_game.rocket_flash - dt, 0.0F, 1.0F);
   s_game.hit_flash = clampf(s_game.hit_flash - dt, 0.0F, 1.0F);
-  s_game.mech_recoil = clampf(s_game.mech_recoil - dt * 4.4F, 0.0F, 1.0F);
+  s_game.mech_recoil = clampf(s_game.mech_recoil - dt * 3.2F, 0.0F, 1.0F);
   s_game.heat = clampf(s_game.heat - (dt * 0.18F), 0.0F, 1.0F);
 
   for (int i = 0; i < MAX_DRONES; ++i) {
@@ -1148,7 +1158,7 @@ static void update_battle(float dt) {
     const float oz = s_game.mech_z - s_game.drones[i].z;
     const float l2 = len2(ox, oz);
     if (l2 > 0.2F) {
-      const float speed = s_game.battle_index == 0 ? 0.72F : 0.95F;
+      const float speed = s_game.battle_index == 0 ? 0.34F : 0.46F;
       s_game.drones[i].x += (ox / l2) * dt * speed;
       s_game.drones[i].z += (oz / l2) * dt * speed;
     }
@@ -1156,23 +1166,23 @@ static void update_battle(float dt) {
 
   const int target = target_drone();
   if (target >= 0 && s_game.cannon_cd <= 0.0F && s_game.heat < 0.96F) {
-    s_game.cannon_cd = 0.55F;
-    s_game.heat = clampf(s_game.heat + 0.055F, 0.0F, 1.0F);
-    s_game.hit_flash = 0.26F;
-    s_game.mech_recoil = fmaxf(s_game.mech_recoil, 0.48F);
-    s_game.drones[target].hp -= s_game.rockets_equipped ? 26.0F : 24.0F;
+    s_game.cannon_cd = 1.08F;
+    s_game.heat = clampf(s_game.heat + 0.040F, 0.0F, 1.0F);
+    s_game.hit_flash = 0.34F;
+    s_game.mech_recoil = fmaxf(s_game.mech_recoil, 0.56F);
+    s_game.drones[target].hp -= s_game.rockets_equipped ? 18.0F : 15.0F;
     s_game.drones[target].z -= 0.08F;
     if (s_game.drones[target].hp <= 0.0F) {
       s_game.drones[target].alive = false;
     }
   }
 
-  if (s_game.rockets_equipped && s_game.battle_time > 0.8F &&
+  if (s_game.rockets_equipped && s_game.battle_time > 4.0F &&
       s_game.rocket_cd <= 0.0F && alive_count() >= 2) {
     fire_rockets();
   }
 
-  if (alive_count() == 0 || s_game.battle_time > 38.0F) {
+  if (alive_count() == 0 || s_game.battle_time > 78.0F) {
     finish_battle();
   }
 }
@@ -1275,10 +1285,13 @@ static void draw_arena_dressing(bool hangar) {
 
   const float rail_z_front = hangar ? -6.10F : -6.20F;
   const float rail_z_back = hangar ? 5.20F : 5.65F;
-  draw_baseplate_block(0.0F, rail_z_front, 14.4F, 0.16F, dark_block);
-  draw_baseplate_block(0.0F, rail_z_back, 14.4F, 0.16F, dark_block);
-  draw_baseplate_block(-7.70F, -0.35F, 0.16F, 10.3F, dark_block);
-  draw_baseplate_block(7.70F, -0.35F, 0.16F, 10.3F, dark_block);
+  const float arena_width = hangar ? 14.4F : 17.4F;
+  const float arena_depth = hangar ? 10.3F : 15.0F;
+  const float side_rail_x = hangar ? 7.70F : 8.85F;
+  draw_baseplate_block(0.0F, rail_z_front, arena_width, 0.16F, dark_block);
+  draw_baseplate_block(0.0F, rail_z_back, arena_width, 0.16F, dark_block);
+  draw_baseplate_block(-side_rail_x, -0.35F, 0.16F, arena_depth, dark_block);
+  draw_baseplate_block(side_rail_x, -0.35F, 0.16F, arena_depth, dark_block);
 
   for (int i = -3; i <= 3; ++i) {
     const float x = (float)i * 2.25F;
@@ -1289,18 +1302,19 @@ static void draw_arena_dressing(bool hangar) {
   }
 
   const float front_pylon_h = hangar ? 1.35F : 1.22F;
-  const float right_front_pylon_x = hangar ? 7.35F : 8.25F;
-  draw_block_pylon(-7.35F, rail_z_front + 0.35F, front_pylon_h, blue_block,
+  const float left_pylon_x = hangar ? -7.35F : -8.35F;
+  const float right_front_pylon_x = hangar ? 7.35F : 8.35F;
+  draw_block_pylon(left_pylon_x, rail_z_front + 0.35F, front_pylon_h, blue_block,
                    white_block, blue_stud);
   draw_block_pylon(right_front_pylon_x, rail_z_front + 0.35F, front_pylon_h,
                    red_block, white_block, red_stud);
-  draw_block_pylon(-7.35F, rail_z_back - 0.35F, hangar ? 1.20F : 1.42F,
+  draw_block_pylon(left_pylon_x, rail_z_back - 0.35F, hangar ? 1.20F : 1.42F,
                    yellow_block, white_block, yellow_stud);
-  draw_block_pylon(7.35F, rail_z_back - 0.35F, hangar ? 1.20F : 1.42F,
+  draw_block_pylon(right_front_pylon_x, rail_z_back - 0.35F, hangar ? 1.20F : 1.42F,
                    blue_block, white_block, blue_stud);
 
   for (int side = -1; side <= 1; side += 2) {
-    const float x = (float)side * 7.10F;
+    const float x = (float)side * (hangar ? 7.10F : 8.20F);
     nt_shape_renderer_line((float[3]){x, 1.18F, rail_z_front + 0.48F},
                            (float[3]){x, 1.18F, rail_z_back - 0.55F},
                            side < 0 ? cyan_glow : amber_glow);
@@ -1309,9 +1323,9 @@ static void draw_arena_dressing(bool hangar) {
                            side < 0 ? amber_glow : cyan_glow);
   }
 
-  draw_pad_energy_ring(0.0F, hangar ? 0.15F : 1.45F, hangar ? 2.25F : 2.05F,
+  draw_pad_energy_ring(0.0F, hangar ? 0.15F : 1.20F, hangar ? 2.25F : 3.10F,
                        cyan_glow);
-  draw_pad_energy_ring(0.0F, hangar ? 0.15F : 1.45F, hangar ? 1.25F : 1.12F,
+  draw_pad_energy_ring(0.0F, hangar ? 0.15F : 1.20F, hangar ? 1.25F : 1.72F,
                        amber_glow);
 }
 
@@ -1368,13 +1382,17 @@ static void draw_floor_grid(float half, bool hangar) {
     }
   }
 
-  draw_baseplate_block(0.0F, hangar ? 0.15F : 1.45F, 5.4F, 4.1F,
+  draw_baseplate_block(0.0F, hangar ? 0.15F : 1.20F,
+                       hangar ? 5.4F : 8.6F, hangar ? 4.1F : 6.8F,
                        (float[4]){0.54F, 0.76F, 0.95F, 1.0F});
-  draw_stud_grid(0.0F, hangar ? 0.15F : 1.45F, 0.125F, 7, 5, 0.72F,
+  draw_stud_grid(0.0F, hangar ? 0.15F : 1.20F, 0.125F,
+                 hangar ? 7 : 11, hangar ? 5 : 9, 0.72F,
                  pad_stud);
-  draw_baseplate_block(0.0F, hangar ? -1.95F : -0.68F, 5.7F, 0.18F,
+  draw_baseplate_block(0.0F, hangar ? -1.95F : -2.28F,
+                       hangar ? 5.7F : 8.9F, 0.18F,
                        yellow_block);
-  draw_baseplate_block(0.0F, hangar ? 2.25F : 3.58F, 5.7F, 0.18F, blue_block);
+  draw_baseplate_block(0.0F, hangar ? 2.25F : 4.92F,
+                       hangar ? 5.7F : 8.9F, 0.18F, blue_block);
   draw_arena_dressing(hangar);
 
   if (hangar) {
@@ -2016,10 +2034,10 @@ static void build_frame_uniforms(float w, float h, bool hangar,
                                  nt_frame_uniforms_t *uniforms,
                                  float out_vp[16]) {
   const float aspect = h > 0.0F ? w / h : 1.777F;
-  const vec3 eye = {hangar ? 3.6F : 5.1F, hangar ? 3.7F : 5.7F,
-                    hangar ? 6.8F : 8.8F};
-  const vec3 center = {hangar ? 0.0F : 0.10F, hangar ? 1.75F : 1.16F,
-                       hangar ? 0.2F : 0.46F};
+  const vec3 eye = {hangar ? 3.6F : 6.6F, hangar ? 3.7F : 7.2F,
+                    hangar ? 6.8F : 11.6F};
+  const vec3 center = {hangar ? 0.0F : 0.10F, hangar ? 1.75F : 1.08F,
+                       hangar ? 0.2F : 0.38F};
   const vec3 up = {0.0F, 1.0F, 0.0F};
   mat4 view;
   mat4 proj;
@@ -2027,7 +2045,7 @@ static void build_frame_uniforms(float w, float h, bool hangar,
   glm_lookat((vec3){eye[0], eye[1], eye[2]},
              (vec3){center[0], center[1], center[2]},
              (vec3){up[0], up[1], up[2]}, view);
-  glm_perspective(glm_rad(hangar ? 48.0F : 51.0F), aspect, 0.1F, 80.0F, proj);
+  glm_perspective(glm_rad(hangar ? 48.0F : 56.0F), aspect, 0.1F, 90.0F, proj);
   glm_mat4_mul(proj, view, vp);
 
   if (out_vp) {
@@ -2050,15 +2068,15 @@ static void build_frame_uniforms(float w, float h, bool hangar,
       uniforms->resolution[3] = 1.0F / h;
     }
     uniforms->near_far[0] = 0.1F;
-    uniforms->near_far[1] = 80.0F;
+    uniforms->near_far[1] = 90.0F;
   }
 }
 
 static void setup_perspective(float w, float h, bool hangar) {
   float vp[16];
   build_frame_uniforms(w, h, hangar, NULL, vp);
-  const vec3 eye = {hangar ? 3.6F : 5.1F, hangar ? 3.7F : 5.7F,
-                    hangar ? 6.8F : 8.8F};
+  const vec3 eye = {hangar ? 3.6F : 6.6F, hangar ? 3.7F : 7.2F,
+                    hangar ? 6.8F : 11.6F};
   nt_shape_renderer_set_vp((float *)vp);
   nt_shape_renderer_set_cam_pos((float[3]){eye[0], eye[1], eye[2]});
   nt_shape_renderer_set_depth(true);
@@ -2430,6 +2448,7 @@ static void append_assault_hero_items(float root_x, float root_z, float root_sca
                                       float yaw, float move_t, float walk,
                                       float idle_bob, float recoil,
                                       float strafe_lean, float forward_lean,
+                                      float turn_lean,
                                       uint32_t *item_count) {
   const MeshPartMesh assault_meshes[ASSAULT_WALKER_MESH_PARTS] = {
       MECH_MESH_ASSAULT_WALKER_GREEN,
@@ -2458,6 +2477,8 @@ static void append_assault_hero_items(float root_x, float root_z, float root_sca
   const float assault_scale = root_scale * 0.16F;
   const float source_min_y = -8.9889545F;
   const float step = sinf(walk);
+  const float idle_sway = sinf(walk * 0.62F);
+  const float servo = sinf(walk * 2.8F);
   const float stomp = move_t * fabsf(step);
   const float attack_t = fmaxf(clampf(s_game.hit_flash / 0.16F, 0.0F, 1.0F),
                                clampf(s_game.rocket_flash / 1.45F, 0.0F, 1.0F));
@@ -2466,11 +2487,13 @@ static void append_assault_hero_items(float root_x, float root_z, float root_sca
       idle_bob * root_scale + (move_t * 0.018F) - (stomp * 0.020F);
   const float model_y = 0.05F - (source_min_y * assault_scale) + bob;
   const float model_z =
-      root_z + recoil * root_scale * 0.16F - (move_t * step * root_scale * 0.025F);
-  const float roll = strafe_lean * 0.46F + step * move_t * 0.055F;
-  const float pitch = forward_lean * 0.32F - recoil * 0.14F + stomp * 0.050F;
-  const float squash = 1.0F - stomp * 0.035F + attack_t * 0.018F;
-  const float spread = 1.0F + stomp * 0.020F + attack_t * 0.012F;
+      root_z + recoil * root_scale * 0.22F - (move_t * step * root_scale * 0.045F);
+  const float roll = strafe_lean * 0.56F + turn_lean * 0.20F +
+                     step * move_t * 0.095F + idle_sway * 0.030F;
+  const float pitch = forward_lean * 0.40F - recoil * 0.22F + stomp * 0.075F +
+                      servo * (0.018F + move_t * 0.020F);
+  const float squash = 1.0F - stomp * 0.055F + attack_t * 0.030F;
+  const float spread = 1.0F + stomp * 0.035F + attack_t * 0.020F;
   for (int part = 0; part < ASSAULT_WALKER_MESH_PARTS; ++part) {
     const uint32_t mesh_id = nt_resource_get(s_mesh_mech.meshes[assault_meshes[part]]);
     nt_entity_t entity = s_mesh_mech.assault_hero[part];
@@ -2478,11 +2501,12 @@ static void append_assault_hero_items(float root_x, float root_z, float root_sca
     pos[0] = root_x;
     pos[1] = model_y;
     pos[2] = model_z;
-    q_pose(yaw + 3.14159265F, pitch, roll, nt_transform_comp_rotation(entity));
+    q_pose(yaw + 3.14159265F + turn_lean * 0.025F, pitch, roll,
+           nt_transform_comp_rotation(entity));
     float *scl = nt_transform_comp_scale(entity);
     scl[0] = assault_scale * spread;
     scl[1] = assault_scale * squash;
-    scl[2] = assault_scale * (spread + recoil * 0.018F);
+    scl[2] = assault_scale * (spread + recoil * 0.035F);
     *nt_transform_comp_dirty(entity) = true;
     *nt_mesh_comp_handle(entity) = (nt_mesh_t){.id = mesh_id};
     *nt_material_comp_handle(entity) = s_mesh_mech.robot_material;
@@ -2664,11 +2688,12 @@ static void draw_mesh_mech(float w, float h) {
   const float step = sinf(walk);
   const float step_alt = sinf(walk + 3.14159265F);
   const float local_vx = (s_game.mech_vx * yaw_cos) - (s_game.mech_vz * yaw_sin);
-  const float local_vz = (s_game.mech_vx * yaw_sin) + (s_game.mech_vz * yaw_cos);
+  const float local_vz = (s_game.mech_vx * yaw_sin) - (s_game.mech_vz * yaw_cos);
   const float strafe_lean =
-      hangar ? 0.0F : clampf(local_vx * -0.072F, -0.24F, 0.24F);
+      hangar ? 0.0F : clampf(local_vx * -0.105F, -0.34F, 0.34F);
   const float forward_lean =
-      hangar ? 0.0F : clampf(local_vz * 0.052F, -0.18F, 0.18F);
+      hangar ? 0.0F : clampf(local_vz * 0.072F, -0.24F, 0.24F);
+  const float turn_lean = hangar ? sinf(time * 0.72F) * 0.12F : s_game.mech_turn;
   const bool use_assault_hero = true;
   const bool use_source_hero = !use_assault_hero;
   const int source_hero_index = MECH_MESH_PARTS - 1;
@@ -2701,7 +2726,7 @@ static void draw_mesh_mech(float w, float h) {
   if (use_assault_hero) {
     append_assault_hero_items(root_x, root_z, root_scale, yaw, move_t, walk,
                               idle_bob, recoil, strafe_lean, forward_lean,
-                              &item_count);
+                              turn_lean, &item_count);
   }
   if (hangar) {
     append_sentinel_showcase_items(time, &item_count);

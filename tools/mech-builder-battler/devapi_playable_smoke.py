@@ -31,8 +31,20 @@ def capture(game, name: str, wait_frames: int = 6) -> str:
     return path
 
 
+def wait_for_screen(game, screen: str, max_frames: int = 3600, step_frames: int = 60) -> dict:
+    state = game.result("game.state")
+    waited = 0
+    while state.get("screen") != screen and waited < max_frames:
+        game.wait_frames(step_frames)
+        waited += step_frames
+        state = game.result("game.state")
+    state["waited_frames"] = waited
+    return state
+
+
 def main() -> int:
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 9124
+    movement_only = "--movement-only" in sys.argv[2:]
     SHOT_DIR.mkdir(parents=True, exist_ok=True)
     ok = True
     with running_game(port=port, fresh_state=True, window_size="1280x720") as game:
@@ -109,6 +121,16 @@ def main() -> int:
 
         game.wait_frames(260)
         state = game.result("game.state")
+        ok &= check(
+            "first battle remains playable after movement review",
+            state.get("screen") == "battle" and state.get("alive_drones", 0) > 0,
+            state,
+        )
+        capture(game, "mech_t0040_larger_slower_battle_smoke.png", wait_frames=1)
+        if movement_only:
+            return 0 if ok else 1
+
+        state = wait_for_screen(game, "reward", max_frames=4200)
         ok &= check("first battle reward", state.get("screen") == "reward" and state.get("salvage") == 120, state)
         capture(game, "mech_t0021_reward_smoke.png")
 
@@ -122,7 +144,7 @@ def main() -> int:
 
         state = game.click_ui("action.retest", wait_frames=14)
         ok &= check("retest battle starts", state.get("screen") == "battle" and state.get("battle_index") == 1, state)
-        game.wait_frames(18)
+        game.wait_frames(150)
         state = game.result("game.action.use_special")
         ok &= check("rocket attack fired", state.get("rockets_equipped") is True and state.get("heat", 0) > 0.3, state)
         capture(game, "mech_t0021_rockets_smoke.png", wait_frames=1)
