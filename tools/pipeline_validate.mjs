@@ -102,6 +102,7 @@ const SOURCE_SHEET_PREPROCESSING_TESTS = [
   "tools.assets.cutout.route_cutout_test",
   "tools.assets.intake.normalize_source_sheet_chroma_test",
   "tools.assets.intake.audit_source_sheet_intake_test",
+  "tools.assets.intake.audit_tileable_texture_test",
 ];
 
 const GENERATED_UI_ASSET_AUDIT_TESTS = [

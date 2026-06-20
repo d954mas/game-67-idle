@@ -2,21 +2,18 @@
 
 ## Current Work
 
-- Focus: concept/GDD research for `Mech Builder Battler`
-  (`mech-builder-battler`), a casual mobile/web 3D mech builder battler.
-- Current task: `T0011` reference research, deconstruction, core loop,
-  gameplay, mechanics, meta, and visual reference packet before implementation.
-- Product target is mobile/web UX, controls, readability, and session shape.
-  Development, playtesting, and iteration still use the native PC harness.
-  Do not start web/mobile export or frontend/runtime-path work without approval.
+- Focus: post-prototype pipeline cleanup after `Mech Builder Battler`.
+- The mech prototype is stopped; no more game/content/export work without a
+  fresh explicit request.
 - Engine submodule: `external/neotolis-engine`; use public APIs only.
 
 ## Source Map
 
 - Game/runtime: `src/`.
-- Runtime infra: `state/`, `tools/state_codegen/`, `src/devapi/`, `tools/devapi/`, `src/game_storage.*`, `external/cjson/`.
-- Game-specific tools/scripts: `tools/<game-id>/` only; never in shared `tools/` dirs (reset removes that folder).
+- Runtime infra: `state/`, `tools/state_codegen/`, `src/devapi/`, `tools/devapi/`, `src/game_storage.*`.
+- Game-specific tools/scripts: `tools/<game-id>/` only; reset removes that folder.
 - Design: GDDs in `gamedesign/projects/<game-id>/`; reusable knowledge in `gamedesign/knowledge/`; sources in `gamedesign/sources/`.
+- Shared source asset library: `C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets`.
 - Work/status: `tasks/`; rules in `tasks/README.md`.
 - Skills: `.codex/skills/`; `.claude/skills/` is generated.
 - Workflow: `AI_PIPELINE.md`; transient output: `tmp/`.
@@ -30,18 +27,18 @@
 
 ## Game Work Rules
 
-- Native PC is the playable harness for implementation and iteration. Mobile/web
-  requirements inform controls, UI scale, readability, session length, and
-  performance targets; they do not replace the PC harness without approval.
+- Native PC is the playable harness. Mobile/web informs controls, UI scale,
+  readability, session length, and performance; it does not replace PC without approval.
 - Start new games with a fresh project wiki and `tasks/active/` work items.
 - Prefer small native slices; tests, spikes, prototypes, and slices use same gates.
 - Game visuals use real assets through engine asset paths; shape/debug renderers are debug-only.
+- For important visuals, use legal downloaded/generated source assets early;
+  shared downloads need license, provenance, and integrity notes before import.
 - Coordinate convention is Y-up for game/world/UI projections and logical UI
   layout. If a platform/input backend reports Y-down window coordinates, convert
   only at the boundary; do not make gameplay or UI code Y-down internally.
-- UI text uses the engine font/text renderer and packed fonts. Handmade
-  pixel/shape `draw_text` is debug-only fallback and is not acceptable in
-  product screenshots or playable visual passes.
+- UI text uses engine fonts. Handmade pixel/shape `draw_text` is debug-only and
+  not acceptable in product screenshots or playable visual passes.
 - First playable screen: one location, primary path, next action, visible progress, clear locks.
 - Named references/mismatches need the smallest honest Reference Digest before implementation.
 

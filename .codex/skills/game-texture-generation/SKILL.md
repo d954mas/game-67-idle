@@ -17,9 +17,11 @@ paint, panels, emissive details, decals, and stylized studs/baseplate surfaces.
    repeat-x, repeat-y, or unique non-tileable.
 3. Record source route and provenance: generated, downloaded, stock,
    marketplace, hand-authored, or procedural.
-4. Verify scale, seams, mips/zoom, style fit, and runtime path before claiming
+4. For repeat textures, create a 2x2 preview and seam audit with
+   `tools/assets/intake/audit_tileable_texture.py`.
+5. Verify scale, seams, mips/zoom, style fit, and runtime path before claiming
    the texture is integrated.
-5. Use `game-asset-pipeline` for pack/runtime integration after the source is
+6. Use `game-asset-pipeline` for pack/runtime integration after the source is
    stable.
 
 If the work is an atlas, sprite sheet, icon sheet, UI atlas, UV atlas, or trim

@@ -17,6 +17,9 @@ Use this as the minimum source record for generated or downloaded textures.
 - Expected world scale:
 - Camera distance where it must read:
 - Seam validation method: offset preview / 2x2 grid / runtime screenshot / not applicable
+- Seam audit path:
+- 2x2 preview path:
+- UV assumption for model use:
 
 ## Source
 

@@ -2,9 +2,10 @@
 
 ## Current Goal
 
-Active game: `Mech Builder Battler` (`mech-builder-battler`): casual
-mobile/web-targeted 3D mech builder battler, implemented and iterated first in
-the native PC harness.
+Post-prototype pipeline cleanup after `Mech Builder Battler`
+(`mech-builder-battler`). The mech prototype is stopped; do not continue game
+implementation, content, web/mobile export, or frontend/runtime work without a
+fresh explicit request.
 
 Project wiki: `gamedesign/projects/mech-builder-battler/README.md`.
 Latest control note:
@@ -26,28 +27,28 @@ Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 ## Current Gate
 
-`T0021` is done, `T0022` refreshed the mismatch audit, and `T0023` / `T0025` /
-`T0026` / `T0027` / `T0028` / `T0029` / `T0030` / `T0031` / `T0032` / `T0033` /
-`T0034` / `T0035` / `T0036` / `T0037` / `T0038` / `T0039` are in review after
-asset-first Roblox-like visual passes. `T0040` is doing after lead feedback:
-the mech still reads like a static plastic figurine, the battle is too fast to
-test movement, the arena is too small, and WASD/facing feels incorrect.
-Current baseline: sourced Assault Walker hero, CC0 Quaternius enemy, Sentinel
-Mech side-pad display, stylized-studs world texture, and CC0 Kenney station
-props with a plastic shader. Iteration remains native PC; mobile/web is the
-UX/export target.
-Accepted: one owned mech, PvE first, semi-auto arena, floating joystick/WASD,
-resources -> hangar purchase/craft, shoulder rockets, drone swarm proof, short
-dash, `Cooling`, a fixed three-quarter/isometric camera, bright Roblox-like
-toy/block world, stylized studs surfaces, and Foundry Warden mini-boss.
+The current gate is reusable pipeline quality, not game feature progress. The
+session review identified these priority fixes: hard visual/runtime invariants,
+OKF-style shared asset catalog, legal downloaded asset intake, texture
+generation/tiling workflow, lead-rejection gates, split smoke tests, and
+post-prototype status cleanup.
+
+Latest audit:
+`docs/ai-pipeline/mech-session-pipeline-audit-2026-06-20.md`.
+
+Historical prototype baseline: sourced Assault Walker hero, CC0 Quaternius
+enemy, Sentinel Mech side-pad display, stylized-studs world texture, and CC0
+Kenney station props with a plastic shader. The prototype stopped because the
+mech still read as a static/plastic figure, animation/material quality was not
+high enough, battle pacing was too fast, arena framing was weak, and controls
+felt suspect.
 
 ## Next Priorities
 
-1. Finish `T0040`: animation/turn/recoil read, slower test battle, larger
-   arena, and clearer WASD/facing before more asset sourcing or combat content.
-2. Keep reference constraints from
-   `gamedesign/projects/mech-builder-battler/references/current_build_mismatch_audit_2026-06-19.md`.
-3. Keep latest product evidence in
-   `gamedesign/projects/mech-builder-battler/evidence/t0039_hero_motion_attack_juice_2026-06-20.md`.
-4. Defer web/mobile export work until explicitly approved; preserve
-   mobile-style controls/readability in the PC harness.
+1. Validate and commit the OKF-style shared asset catalog and texture workflow
+   pipeline changes.
+2. Add lead-rejection/product-gate guard so exact lead feedback blocks closeout
+   until proven fixed.
+3. Split native smoke tests into movement, visual framing, combat pacing,
+   reward loop, and asset-load proofs before the next playable game iteration.
+4. Clean/archive stopped-prototype taskboard noise before starting a new game.

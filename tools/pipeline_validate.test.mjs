@@ -86,6 +86,7 @@ test("pipeline validation asset guards point at real nested test paths", () => {
   const source = readFileSync(resolve(root, "tools/pipeline_validate.mjs"), "utf8");
   assert.match(source, /"tools", "assets", "job", "new_generation_record\.test\.mjs"/);
   assert.match(source, /"tools", "assets", "intake", "normalize_source_sheet_chroma_test\.py"/);
+  assert.match(source, /"tools\.assets\.intake\.audit_tileable_texture_test"/);
   assert.match(source, /"tools", "assets", "audit", "audit_generated_source_derivation_test\.py"/);
   assert.doesNotMatch(source, /"tools", "assets", "new_generation_record\.test\.mjs"/);
   assert.doesNotMatch(source, /"tools", "assets", "normalize_source_sheet_chroma_test\.py"/);

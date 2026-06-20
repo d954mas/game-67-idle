@@ -25,6 +25,12 @@ Use skills instead of copying asset procedure into hot docs. Common route:
 `game-feature-iteration` / `game-runtime-automation`; load only the matching
 skill.
 
+For downloaded/free source assets, use the shared source library at
+`C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets` through the
+`game-asset-pipeline` skill. It is an OKF-style Markdown provenance and reuse
+catalog, not a runtime path; search `catalog/**/*.md` by tags/description first,
+then copy selected assets into project-local asset folders before integration.
+
 Generated/free art is allowed only as runtime-ready art that reaches the visual
 target. Debug/procedural placeholders prove geometry, not final-art quality,
 unless recorded as debug debt.

@@ -60,3 +60,27 @@ create a replacement source.
   type before promising it as implemented.
 - **Provenance**: keep generation prompt, source URL, no-seed reason, or license
   note near the project art/source record.
+
+For repeat textures, run the tile audit helper:
+
+```powershell
+py -3.12 tools/assets/intake/audit_tileable_texture.py --source <texture.png> --preview <texture_2x2.png> --json-output <audit.json> --report <audit.md>
+```
+
+Use `--max-mean-edge-delta` and `--max-edge-delta` when a texture claims strict
+seamlessness. The numeric audit catches obvious edge mismatches; the 2x2 preview
+is still required because a mathematically seamless texture can be visually
+repetitive, noisy, or wrong scale.
+
+## Model Material Textures
+
+For model-specific materials, do not default to tileable. First decide:
+
+- reusable tiled material on UVs, such as metal panels or rubber joints;
+- unique non-tileable part texture, such as a mech torso paint mask;
+- decal layer, such as stripes, scorch marks, labels, or face plates;
+- material map set, such as albedo plus normal/roughness/metalness/emissive.
+
+Texture generation for models should state the UV assumption. If UVs are
+unknown, generate a reusable material or decal candidate and prove it in a
+model/material viewer before claiming it works on the model.

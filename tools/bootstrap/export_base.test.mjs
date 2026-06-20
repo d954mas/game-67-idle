@@ -50,6 +50,14 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(existsSync(join(target, "tools", "README.md")), true);
     assert.equal(existsSync(join(target, ".claude", "skills", "task-manager", "SKILL.md")), true);
     assert.equal(existsSync(join(target, "tools", "context_budget_config.mjs")), true);
+    assert.equal(
+      existsSync(join(target, "tools", "assets", "intake", "download_source_asset.mjs")),
+      true,
+    );
+    assert.equal(
+      existsSync(join(target, "tools", "assets", "intake", "audit_tileable_texture.py")),
+      true,
+    );
 
     const readme = readFileSync(join(target, "tasks", "README.md"), "utf8");
     assert.match(readme, /tasks\/guides\/task-store-reference\.md/);
