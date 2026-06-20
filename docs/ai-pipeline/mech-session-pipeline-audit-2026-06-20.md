@@ -55,9 +55,10 @@ stopped; use this as evidence for pipeline improvements before the next game.
 - `tools/product_gate/close_slice.mjs` blocks strict closeout of
   `lead-rejection` tasks unless `--resolved-rejection` names the exact rejected
   issue and proof.
+- The project-specific Mech Builder Battler playable smoke now exposes split
+  suites: `contract`, `asset-load`, `visual-framing`, `movement`,
+  `combat-pacing`, `reward-loop`, and `upgrade-special`.
 
 ## Remaining Work
 
-- Split native smoke tests into movement, visual framing, combat pacing, reward,
-  and asset-load proof commands.
 - Clean or archive stopped-prototype taskboard noise before the next game.

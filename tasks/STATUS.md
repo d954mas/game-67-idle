@@ -34,7 +34,9 @@ generation/tiling workflow, lead-rejection gates, split smoke tests, and
 post-prototype status cleanup.
 
 Fixed so far: OKF-style shared asset catalog, legal asset intake helper,
-texture tiling audit workflow, and strict lead-rejection closeout guard.
+texture tiling audit workflow, strict lead-rejection closeout guard, and split
+Mech Builder Battler smoke suites for contract, asset-load, visual framing,
+movement, combat pacing, reward loop, and upgrade/special proofs.
 
 Latest audit:
 `docs/ai-pipeline/mech-session-pipeline-audit-2026-06-20.md`.
@@ -48,6 +50,4 @@ felt suspect.
 
 ## Next Priorities
 
-1. Split native smoke tests into movement, visual framing, combat pacing,
-   reward loop, and asset-load proofs before the next playable game iteration.
-2. Clean/archive stopped-prototype taskboard noise before starting a new game.
+1. Clean/archive stopped-prototype taskboard noise before starting a new game.

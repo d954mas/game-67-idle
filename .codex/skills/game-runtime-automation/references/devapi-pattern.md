@@ -95,6 +95,12 @@ Bots: launch fresh with DevAPI (fail if the port is busy unless `reuse_existing`
 `ping` + `endpoints`, read state, issue one action, wait only as long as needed,
 re-read and assert.
 
+For game-specific playable smoke scripts, prefer named suites over one monolith
+when a prototype needs multiple proof types. The Mech Builder Battler example is
+its project-specific playable smoke with `--suite movement` or
+`--suite asset-load,visual-framing`; keep contract, asset load, movement, combat
+pacing, reward loop, and special/upgrade proof separable.
+
 ```python
 with running_game(port=9123) as game:
     for _ in range(8):
