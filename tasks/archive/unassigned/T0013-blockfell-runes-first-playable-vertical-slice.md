@@ -1,7 +1,7 @@
 ---
 id: T0013
 title: Blockfell Runes first playable vertical slice
-status: review
+status: dropped
 epic: ""
 priority: P1
 tags: [gameplay, native, visual, devapi]
@@ -213,3 +213,4 @@ evidence.
   `py -3.12 tools/devapi/smoke.py 9123`, and
   `py -3.12 tools/devapi/pixel_health.py build/captures/blockfell_camp_mesh_pass.png`.
   Pixel health: 960x540, 7017 sampled unique colors, 278 buckets.
+- 2026-06-20: Closed Blockfell Runes before clean new-game iteration.

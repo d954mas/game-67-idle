@@ -2,46 +2,43 @@
 
 ## Current Goal
 
-Active concept: `blockfell-runes`, native PC 3D block-fantasy action RPG.
-Primary task: T0013 Blockfell Runes first playable vertical slice.
+No active game concept is selected. This repository is a clean AI-first native
+game seed, ready for the next game.
 
-## Blocking Work
+The asset/cutout pipeline was reviewed and optimized this iteration (key_matte
+default, route_cutout auto-picker, dual_plate; the per-asset edge-color audit
+removed; ~4000 lines of legacy/dead code dropped) — see git history.
 
-- No blocking work for the current vertical slice.
+Mine Cards was a prior pipeline test run; its full game, GDD, and tasks are
+preserved in tag `mine-cards-snapshot-2026-06-18` and removed from the working
+tree so the next game starts clean. Reusable lessons live in
+`AI_PIPELINE_HISTORY.md`.
 
-## Non-blocking Debt
+## Current Runtime Surface
 
-- T0010 is a deferred post-prototype asset consistency idea; do not start it
-  before Blockfell Runes has accepted art direction and batch content.
-- T0013 still uses procedural shape models/materials; replace with legal
-  project-local assets before claiming final visual quality.
+Native `game_seed` is the clean seed work surface:
+
+```powershell
+cmake --build --preset native-debug --target game_seed
+build/game_seed/native-debug/game_seed.exe --devapi 9123
+```
+
+Runtime entrypoint: `src/clean_seed_main.c` (362-line debug template).
+
+The engine submodule at `external/neotolis-engine` is read-only from this repo.
+Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 ## Current Gate
 
-Keep the native slice playable and evidence-backed: movement, combat, loot,
-rune progress, gate opening, screenshot proof.
-
-## Required Validation
-
-```powershell
-node tools/taskboard/cli.mjs validate
-cmake --build --preset native-debug --target game_seed
-py -3.12 tools/devapi/smoke.py 9123
-```
-
-Do not use context budget or `validate --review` as a normal development gate;
-run it only on explicit request or during review.
-
-## Last Known Good Evidence
-
-- 2026-06-20: build and `py -3.12 tools/devapi/smoke.py 9123` passed.
-- 2026-06-20: latest visual proof:
-  `build/captures/blockfell_art_cleanup_pass.png`; pixel health passed.
-- Detailed evidence is in T0013 and `gamedesign/projects/blockfell-runes/`.
+Capture the user's game concept (references, audience, platform, no-go
+constraints), then run the Stage 0 prototype startup path and create a fresh
+project wiki plus exactly one scoped task/epic before implementation. Do not
+invent a concept.
 
 ## Next Priorities
 
-1. Replace procedural geometry/materials with legal project-local assets.
-2. Add readable engine-font labels/tooltips for controls and objectives.
-3. Expand the first route only after the current combat/loot/rune loop remains
-   validated by native smoke and screenshot evidence.
+1. Capture the next game concept, then scaffold a fresh project wiki + one
+   scoped task/epic before implementation.
+2. Keep reusable pipeline/skills/knowledge clean and current between games.
+3. Keep native PC scale/focus + visual/teachability/core-loop proof as early
+   gates for the next playable UI.

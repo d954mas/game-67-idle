@@ -2,8 +2,8 @@
 
 ## Now
 
-- Focus: `blockfell-runes`, native PC 3D block-fantasy action RPG slice.
-- Slice: exploration, camp combat, loot chest, three runes, gate.
+- Focus: clean AI-first native game seed.
+- No active game concept; capture user's concept before game work.
 - Engine: `external/neotolis-engine`; public APIs only.
 
 ## Map

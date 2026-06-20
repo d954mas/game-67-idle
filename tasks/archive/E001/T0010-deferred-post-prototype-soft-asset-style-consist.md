@@ -1,12 +1,12 @@
 ---
 id: T0010
 title: "DEFERRED post-prototype: soft asset style-consistency (reference-anchor + tone-outlier check)"
-status: idea
+status: dropped
 epic: E001
 priority: P3
 tags: [assets, deferred]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -45,3 +45,4 @@ into validate_art_job, palette.json next to the art bible.
 ## Open questions
 
 ## Log
+- 2026-06-20: Dropped deferred Blockfell asset-consistency idea with the retired game.
