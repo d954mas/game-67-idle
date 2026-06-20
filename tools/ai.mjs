@@ -17,6 +17,7 @@ function usage() {
   node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--no-import-codex-session]
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail [gate options]
+  node tools/ai.mjs visual-reject --project <game-id> --task <task-id> --screenshot <path> --problem <text> --next <text> [visual rejection options]
   node tools/ai.mjs critic --project <game-id> --task <task-id> --screenshot <path> --target <path|text> --output <packet.md> [critic options]
   node tools/ai.mjs close-slice --task <task-id> --project <game-id> --evidence <text> [--resolved-rejection <text>] [close options]
 
@@ -26,6 +27,7 @@ Commands:
             --verbose for the full per-record breakdown
   import-codex-session  recover missed failed Codex shell calls into the session log
   gate      write a product-read screenshot gate before expanding game content
+  visual-reject record a lead visual rejection as a strict visual FAIL gate
   critic    write a reusable visual/UI critic packet before a strict product gate
   close-slice require product gate + evidence before handoff/review
 
@@ -139,6 +141,8 @@ if (command === "status") {
 if (command === "import-codex-session") run(["tools/ai_profile/import_codex_session.mjs", ...argv]);
 
 if (command === "gate") run(["tools/product_gate/review.mjs", ...argv]);
+
+if (command === "visual-reject") run(["tools/product_gate/visual_rejection_lock.mjs", ...argv]);
 
 if (command === "critic") run(["tools/product_gate/visual_critique_packet.mjs", ...argv]);
 

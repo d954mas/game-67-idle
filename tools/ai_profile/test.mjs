@@ -151,6 +151,31 @@ test("hook_record logs failed command result records", () => {
   }
 });
 
+test("hook_record marks full Python dependency failures as environment blocked", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "hook-env-blocked.jsonl");
+    runHook({
+      hook_event_name: "PostToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "node tools/ai.mjs validate --full" },
+      tool_response: {
+        exit_code: 1,
+        output: "error: no working Python runner found with required modules: PIL, numpy, scipy\nhint: install full-gate modules into the selected runner: py -3.12 -m pip install -r tools/requirements/ai-pipeline-full.txt",
+      },
+    }, profile);
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].result, "fail");
+    assert.equal(records[0].value, "necessary_overhead");
+    assert.equal(records[0].failure_kind, "environment_blocked");
+    assert.match(records[0].blocked_by, /missing full-gate Python modules/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("hook_record skips successful read-only plumbing commands", () => {
   const dir = tempDir();
   try {
@@ -389,10 +414,46 @@ test("status classifies recovered vs unresolved failures", () => {
 
     const result = run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson]);
     const status = readJson(statusJson);
+    assert.equal(status.resolved_later_failed_records, 1);
     assert.equal(status.recovered_failed_records, 1);
     assert.equal(status.unresolved_failed_records, 1);
     assert.match(result.stdout, /Unresolved failures: 1/);
+    assert.match(result.stdout, /Resolved later failures: 1/);
     assert.match(status.next_action, /unresolved failed commands/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status separates environment-blocked failures from unresolved failures", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "environment-blocked.jsonl");
+    const statusJson = join(dir, "status.json");
+    writeJsonl(profile, [
+      {
+        ts: "2026-06-13T10:00:00+05:00",
+        phase: "session",
+        category: "validation",
+        intent: "auto:Bash",
+        result: "fail",
+        value: "necessary_overhead",
+        event_type: "tool_call_result",
+        commands: ["node tools/ai.mjs validate --full"],
+        session_id: "s1",
+        failure_kind: "environment_blocked",
+        blocked_by: "missing full-gate Python modules; install tools/requirements/ai-pipeline-full.txt or set AI_PIPELINE_PYTHON",
+      },
+    ]);
+
+    const result = run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson, "--verbose"]);
+    const status = readJson(statusJson);
+    assert.equal(status.unresolved_failed_records, 0);
+    assert.equal(status.environment_blocked_failed_records, 1);
+    assert.equal(status.environment_blocked_reasons[0].count, 1);
+    assert.match(result.stdout, /Environment-blocked failures: 1/);
+    assert.match(result.stdout, /Environment Blockers/);
+    assert.match(status.next_action, /Environment blockers remain/);
   } finally {
     cleanup(dir);
   }

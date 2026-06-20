@@ -236,12 +236,18 @@ function commandKeys(record) {
   return keys;
 }
 
+function isEnvironmentBlocked(record) {
+  return record.failure_kind === "environment_blocked";
+}
+
 /* A failed record is "recovered" if the same command passed on a later line, and
  * "unresolved" otherwise -- so a retried-then-fixed command is not an alarm. */
 function classifyFailedRecords(records) {
   const passedLater = new Map();
-  let recovered = 0;
+  let resolvedLater = 0;
+  let environmentBlocked = 0;
   let unresolved = 0;
+  const environmentBlockedReasons = new Map();
   for (const record of [...records].sort((a, b) => b.__line - a.__line)) {
     const keys = commandKeys(record);
     if (record.result === "pass") {
@@ -249,10 +255,21 @@ function classifyFailedRecords(records) {
       continue;
     }
     if (record.result !== "fail") continue;
-    if (keys.some((key) => passedLater.has(key))) recovered += 1;
+    if (keys.some((key) => passedLater.has(key))) resolvedLater += 1;
+    else if (isEnvironmentBlocked(record)) {
+      environmentBlocked += 1;
+      const reason = String(record.blocked_by || "environment blocker").trim();
+      environmentBlockedReasons.set(reason, (environmentBlockedReasons.get(reason) || 0) + 1);
+    }
     else unresolved += 1;
   }
-  return { recovered, unresolved };
+  return {
+    resolvedLater,
+    recovered: resolvedLater,
+    environmentBlocked,
+    unresolved,
+    environmentBlockedReasons: [...environmentBlockedReasons.entries()].map(([reason, count]) => ({ reason, count })),
+  };
 }
 
 /* Normalize a command to a tool-level key: strip leading env assignments, take
@@ -320,6 +337,8 @@ function buildStatus(profilePaths) {
     nextAction = "No tool calls recorded yet in this session.";
   } else if (failedClassification.unresolved > 0) {
     nextAction = "Inspect the unresolved failed commands before drawing conclusions.";
+  } else if (failedClassification.environmentBlocked > 0) {
+    nextAction = "Environment blockers remain; prepare the required local dependencies before repeating those gates.";
   } else if (lowCoverage) {
     nextAction = "Wall-clock coverage is low; long manual/research stretches are uncaptured, so treat time-spend claims as partial.";
   } else {
@@ -342,7 +361,10 @@ function buildStatus(profilePaths) {
       intent: latest.intent || "",
     } : null,
     failed_records: failedRecords,
-    recovered_failed_records: failedClassification.recovered,
+    resolved_later_failed_records: failedClassification.resolvedLater,
+    recovered_failed_records: failedClassification.resolvedLater,
+    environment_blocked_failed_records: failedClassification.environmentBlocked,
+    environment_blocked_reasons: failedClassification.environmentBlockedReasons,
     unresolved_failed_records: failedClassification.unresolved,
     wall_clock_coverage: coverage,
     low_profile_coverage: lowCoverage,
@@ -368,7 +390,8 @@ function renderStatus(status, { verbose }) {
   if (status.profile_files.length > 1) lines.push(`Profile files: ${status.profile_files.join(", ")}`);
   lines.push(`Records: ${status.records}`);
   lines.push(`Unresolved failures: ${status.unresolved_failed_records}`);
-  lines.push(`Recovered failures: ${status.recovered_failed_records}`);
+  lines.push(`Resolved later failures: ${status.resolved_later_failed_records}`);
+  lines.push(`Environment-blocked failures: ${status.environment_blocked_failed_records}`);
   const coverage = status.wall_clock_coverage;
   lines.push(`Active work: ${formatMs(coverage.active_ms)} of ${formatMs(coverage.effective_span_ms)} effective (${formatPercent(coverage.coverage_ratio)})${coverage.idle_ms > 0 ? `; ${formatMs(coverage.idle_ms)} idle excluded` : ""}`);
   if (status.latest_record) {
@@ -413,6 +436,13 @@ function renderStatus(status, { verbose }) {
     lines.push("");
     lines.push("## Errors");
     for (const error of status.errors) lines.push(`- ${error}`);
+  }
+  if (verbose && status.environment_blocked_reasons.length > 0) {
+    lines.push("");
+    lines.push("## Environment Blockers");
+    for (const item of status.environment_blocked_reasons) {
+      lines.push(`- ${item.count}x ${item.reason}`);
+    }
   }
 
   lines.push("");

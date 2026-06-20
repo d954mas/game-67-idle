@@ -121,6 +121,29 @@ function parseCodexCommandArguments(raw) {
   }
 }
 
+function responseText(response) {
+  if (!response || typeof response !== "object") return String(response || "");
+  return [
+    response.output,
+    response.stdout,
+    response.stderr,
+    response.message,
+    response.error,
+  ].filter((value) => value !== undefined && value !== null).map(String).join("\n");
+}
+
+function environmentBlockReason(command, output) {
+  const text = `${command || ""}\n${output || ""}`;
+  if (
+    /no working Python runner found/i.test(text)
+    || /ModuleNotFoundError:\s*No module named ['"]?(?:PIL|numpy|scipy)['"]?/i.test(text)
+    || /AI_PIPELINE_PYTHON/i.test(text) && /tools\/requirements\/ai-pipeline-full\.txt|ai-pipeline-full\.txt/i.test(text)
+  ) {
+    return "missing full-gate Python modules; install tools/requirements/ai-pipeline-full.txt or set AI_PIPELINE_PYTHON";
+  }
+  return "";
+}
+
 function readSessionTailLines(sessionFile) {
   const maxBytes = Math.max(4096, Number(process.env.CODEX_SESSION_RECOVERY_BYTES || 1024 * 1024));
   const stats = statSync(sessionFile);
@@ -170,19 +193,22 @@ async function recoverCodexFailedCommands(profilePath, harness, stamp = {}) {
     const command = commandsByCallId.get(callId);
     if (!command) continue;
     const cmd1 = command.split(/\r?\n/)[0].trim().slice(0, 200);
+    const blockedBy = environmentBlockReason(cmd1, output);
     appendRecord(profilePath, buildRecord({
       phase: "session",
       category: inferCategory(cmd1),
       result: "fail",
-      value: "rework",
+      value: blockedBy ? "necessary_overhead" : "rework",
       intent: "auto:codex-session-recovery",
       tool: ["codex/session-jsonl"],
       command: [cmd1],
+      ...(blockedBy ? { "blocked-by": blockedBy } : {}),
     }, {
       event_type: "tool_call_result_recovered",
       source_call_id: callId,
       source_session_file: sessionFile,
       exit_code: exitCode,
+      ...(blockedBy ? { failure_kind: "environment_blocked" } : {}),
       ...stamp,
     }));
     seen.add(callId);
@@ -276,11 +302,13 @@ function readStdin() {
     if (result !== "fail" && isReadOnlyPlumbingCommand(cmd1)) process.exit(0);
 
     const { appendRecord, buildRecord } = await loadProfileLib();
+    const blockedBy = result === "fail" ? environmentBlockReason(cmd1, responseText(response)) : "";
     appendRecord(profilePath, buildRecord({
       ...baseValues,
       result,
-      value: result === "fail" ? "rework" : "unknown",
-    }, { event_type: "tool_call_result", ...stamp }));
+      value: blockedBy ? "necessary_overhead" : (result === "fail" ? "rework" : "unknown"),
+      ...(blockedBy ? { "blocked-by": blockedBy } : {}),
+    }, { event_type: "tool_call_result", ...(blockedBy ? { failure_kind: "environment_blocked" } : {}), ...stamp }));
     await recoverCodexFailedCommands(profilePath, harness, stamp);
   } catch {
     // swallow — a profiling hook must never disrupt the agent

@@ -261,6 +261,16 @@ function findPythonRunner(requiredModules = []) {
   process.exit(1);
 }
 
+function fullPythonRequiredModules() {
+  const modules = new Set();
+  if (existsSync(join(root, "tools", "assets", "intake", "normalize_source_sheet_chroma_test.py"))) {
+    modules.add("PIL");
+    modules.add("numpy");
+    modules.add("scipy");
+  }
+  return [...modules];
+}
+
 // Full mode copies the repo into tmp/pipeline-validate-<stamp>/. Left unchecked
 // these accumulate (observed: 126 dirs / 362MB). Prune to the newest N.
 function pruneOldExports(keep) {
@@ -365,12 +375,17 @@ if (!fullMode) {
 
 // Full validation is intentionally explicit: it repeats relevant checks in a
 // fresh export and includes heavy asset/runtime validation.
+let python = null;
+const requiredFullPythonModules = fullPythonRequiredModules();
+if (requiredFullPythonModules.length > 0) {
+  console.log("\n== full Python dependency preflight");
+  python = findPythonRunner(requiredFullPythonModules);
+}
+
 if (existsSync(join(root, "tools", "assets", "job", "new_generation_record.test.mjs"))) {
   runNodeTests("generated art job node tests", GENERATED_ART_JOB_NODE_TESTS);
 }
-let python = null;
 if (existsSync(join(root, "tools", "assets", "intake", "normalize_source_sheet_chroma_test.py"))) {
-  python = findPythonRunner(["PIL", "numpy", "scipy"]);
   runPythonUnittests("source sheet preprocessing tests", python, SOURCE_SHEET_PREPROCESSING_TESTS);
 }
 if (existsSync(join(root, "tools", "assets", "audit", "render_ui_composition_proof_test.py"))) {

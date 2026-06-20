@@ -72,7 +72,12 @@ test("pipeline validation full dry-run runs the minimal export check by default"
   const result = run(["--full", "--dry-run"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /mode: full \(dry-run\)/);
+  assert.match(result.stdout, /== full Python dependency preflight/);
   assert.match(result.stdout, /== generated art job node tests/);
+  assert.ok(
+    result.stdout.indexOf("== full Python dependency preflight") < result.stdout.indexOf("== generated art job node tests"),
+    "full Python dependency preflight should run before deep full gates",
+  );
   assert.match(result.stdout, /tools\/assets\/job\/new_generation_record\.test\.mjs/);
   assert.match(result.stdout, /tools\.assets\.cutout\.route_cutout_test/);
   assert.match(result.stdout, /== portable export/);

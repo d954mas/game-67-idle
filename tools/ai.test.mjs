@@ -110,6 +110,61 @@ test("gate forwards product-read review options", () => {
   }
 });
 
+test("visual-reject forwards strict visual rejection lock options", () => {
+  const dir = tempDir();
+  try {
+    const taskDir = join(dir, "tasks", "active");
+    mkdirSync(taskDir, { recursive: true });
+    writeFileSync(join(taskDir, "T0094-test.md"), `---
+id: T0094
+title: Visual rejection
+status: doing
+priority: P0
+tags: [visual]
+created: 2026-06-20
+updated: 2026-06-20
+---
+
+## What
+
+Fix lead rejected visual.
+
+## Done when
+
+- [ ] strict visual gate passes
+
+## Log
+`, "utf8");
+    const screenshot = join(dir, "screen.png");
+    const output = join(dir, "visual-reject.md");
+    const json = join(dir, "visual-reject.json");
+    writeFileSync(screenshot, "png", "utf8");
+
+    const result = run([
+      "visual-reject",
+      "--project", "visual-test",
+      "--task", "T0094",
+      "--screenshot", screenshot,
+      "--problem", "The screen still reads like debug cubes instead of authored game art.",
+      "--next", "Replace blockout surfaces with sourced materials and rerun the gate.",
+      "--output", output,
+      "--json-output", json,
+      "--index-output", join(dir, "latest.json"),
+    ], { env: { ...process.env, TASKBOARD_ROOT: dir } });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Product Read Gate/);
+    assert.equal(existsSync(output), true);
+    const gate = readJson(json);
+    assert.equal(gate.verdict, "fail");
+    assert.equal(gate.visual_critique.strict, true);
+    const task = readFileSync(join(taskDir, "T0094-test.md"), "utf8");
+    assert.match(task, /product gate FAIL/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("critic forwards visual critique packet options", () => {
   const dir = tempDir();
   try {
