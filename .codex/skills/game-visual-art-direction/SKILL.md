@@ -33,7 +33,9 @@ runtime UI kits, pair with `.codex/skills/generated-game-ui-assets/`.
    watermarked, fused, or drifting assets.
 6. Validate in primary runtime with screenshot evidence plus
    `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate`; hand off
-   with `node tools/ai.mjs close-slice`.
+   with `node tools/ai.mjs close-slice`. If the task has `lead-rejection` or
+   lead-rejected wording, strict close must include `--resolved-rejection` with
+   the exact rejected issue and proof.
 
 ## Stop Conditions
 

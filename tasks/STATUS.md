@@ -33,6 +33,9 @@ OKF-style shared asset catalog, legal downloaded asset intake, texture
 generation/tiling workflow, lead-rejection gates, split smoke tests, and
 post-prototype status cleanup.
 
+Fixed so far: OKF-style shared asset catalog, legal asset intake helper,
+texture tiling audit workflow, and strict lead-rejection closeout guard.
+
 Latest audit:
 `docs/ai-pipeline/mech-session-pipeline-audit-2026-06-20.md`.
 
@@ -45,10 +48,6 @@ felt suspect.
 
 ## Next Priorities
 
-1. Validate and commit the OKF-style shared asset catalog and texture workflow
-   pipeline changes.
-2. Add lead-rejection/product-gate guard so exact lead feedback blocks closeout
-   until proven fixed.
-3. Split native smoke tests into movement, visual framing, combat pacing,
+1. Split native smoke tests into movement, visual framing, combat pacing,
    reward loop, and asset-load proofs before the next playable game iteration.
-4. Clean/archive stopped-prototype taskboard noise before starting a new game.
+2. Clean/archive stopped-prototype taskboard noise before starting a new game.

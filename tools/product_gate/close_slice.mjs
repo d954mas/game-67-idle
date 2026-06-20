@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { findDoc, findRoot } from "../taskboard/lib.mjs";
 
 function usage() {
   console.error(`usage:
@@ -10,6 +11,8 @@ function usage() {
 Options:
   --evidence <text>      repeatable validation evidence line
   --next <text>          next action or handoff note
+  --resolved-rejection <text>
+                         required for strict close of lead-rejection tasks
   --status <status>      optional task status to set, e.g. review
   --allow-fail           allow closing a partial slice with a failed gate
   --strict               require a passing gate unless --allow-fail is set`);
@@ -66,6 +69,23 @@ function readJson(path) {
   return JSON.parse(readFileSync(resolve(path), "utf8"));
 }
 
+function tagsOf(doc) {
+  return Array.isArray(doc?.fields?.tags) ? doc.fields.tags.map((tag) => String(tag).toLowerCase()) : [];
+}
+
+function taskHasLeadRejection(doc) {
+  const tags = tagsOf(doc);
+  const text = `${doc?.fields?.title || ""}\n${doc?.body || ""}`.toLowerCase();
+  return tags.includes("lead-rejection") ||
+    /\blead[- ]rejection\b/.test(text) ||
+    /\blead[- ]rejected\b/.test(text) ||
+    /\blead feedback\b/.test(text);
+}
+
+function resolvedRejectionText(values) {
+  return String(values["resolved-rejection"] || "").trim();
+}
+
 function taskboardSet(task, args) {
   const result = spawnSync(process.execPath, ["tools/taskboard/cli.mjs", "set", task, ...args], {
     cwd: process.cwd(),
@@ -90,6 +110,14 @@ if (values.evidence.length === 0) fail("--evidence is required");
 const gate = readJson(gatePath);
 if (values.strict && gate.verdict !== "pass" && !values.allowFail) {
   fail(`product gate is ${gate.verdict}; rerun with --allow-fail only for an explicit partial handoff`);
+}
+
+const taskRoot = findRoot();
+const taskDoc = findDoc(taskRoot, values.task);
+if (!taskDoc) fail(`task not found: ${values.task}`);
+const resolvedRejection = resolvedRejectionText(values);
+if (taskHasLeadRejection(taskDoc) && !values.allowFail && resolvedRejection.length < 12) {
+  fail(`task ${values.task} is lead-rejection work; strict close requires --resolved-rejection <evidence> naming the exact rejected issue and proof`);
 }
 
 // Evidence-as-arbiter: a real (non-partial) close must reference artifacts that
@@ -117,8 +145,9 @@ const log = [
   `gate: ${gate.markdown || gatePath}`,
   `screenshot: ${gate.screenshot || "(missing)"}`,
   `evidence: ${values.evidence.join(" | ")}`,
+  resolvedRejection ? `resolved rejection: ${resolvedRejection}` : null,
   `next: ${values.next || gate.next || "(none)"}`,
-].join("; ");
+].filter(Boolean).join("; ");
 
 taskboardSet(values.task, ["--log", log]);
 if (values.status) taskboardSet(values.task, ["--status", values.status]);

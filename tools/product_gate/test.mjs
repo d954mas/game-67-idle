@@ -347,6 +347,79 @@ test("close slice logs passing gate evidence and can set status", () => {
   }
 });
 
+test("close slice refuses strict close of lead-rejection task without resolved rejection proof", () => {
+  const dir = tempDir();
+  try {
+    writeTaskWithBody(dir, "T0096", {
+      title: "Fix lead-rejected mech visual",
+      tags: ["visual", "lead-rejection"],
+    }, `## What
+
+Fix the lead rejection: mech looks like plastic cubes instead of a mech.
+
+## Done when
+
+- [ ] strict gate passes
+
+## Log
+`);
+    const gate = join(dir, "gate.json");
+    const shot = join(dir, "screen.png");
+    writeFileSync(shot, "png", "utf8");
+    writeFileSync(gate, `${JSON.stringify({ verdict: "pass", surface: "desktop", screenshot: shot, markdown: "gate.md", next: "Review with lead" })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/close_slice.mjs",
+      "--project", "mech-builder-battler",
+      "--task", "T0096",
+      "--gate", gate,
+      "--evidence", "build passed",
+      "--strict",
+    ], { env: { TASKBOARD_ROOT: dir } });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /lead-rejection work/);
+    assert.match(result.stderr, /--resolved-rejection/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("close slice logs resolved rejection proof for lead-rejection task", () => {
+  const dir = tempDir();
+  try {
+    writeTaskWithBody(dir, "T0095", {
+      title: "Fix lead-rejected mech visual",
+      tags: ["visual", "lead-rejection"],
+    }, `## What
+
+Fix the lead rejection: mech looks like plastic cubes instead of a mech.
+
+## Done when
+
+- [ ] strict gate passes
+
+## Log
+`);
+    const gate = join(dir, "gate.json");
+    const shot = join(dir, "screen.png");
+    writeFileSync(shot, "png", "utf8");
+    writeFileSync(gate, `${JSON.stringify({ verdict: "pass", surface: "desktop", screenshot: shot, markdown: "gate.md", next: "Review with lead" })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/close_slice.mjs",
+      "--project", "mech-builder-battler",
+      "--task", "T0095",
+      "--gate", gate,
+      "--evidence", "build passed",
+      "--resolved-rejection", "Lead rejected plastic cube mech; screenshot and gate prove authored mech parts, metal material, and animation read.",
+      "--strict",
+    ], { env: { TASKBOARD_ROOT: dir } });
+    assert.equal(result.status, 0, result.stderr);
+    const task = readFileSync(join(dir, "tasks", "active", "T0095-test.md"), "utf8");
+    assert.match(task, /resolved rejection: Lead rejected plastic cube mech/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("close slice refuses a pass close when the gate screenshot file is missing", () => {
   const dir = tempDir();
   try {

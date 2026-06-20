@@ -37,4 +37,6 @@ applies.
 - Make one coherent gameplay increment at a time and avoid unrelated refactors.
 - Preserve engine/submodule/vendor boundaries unless explicitly requested.
 - Product gate fail blocks feature/content expansion unless lead accepts debt.
+- `lead-rejection` tasks need `node tools/ai.mjs close-slice --resolved-rejection
+  "<exact rejected issue and proof>"` for strict closeout.
 - Keep product, game-loop, art-source, and technical gates separate.

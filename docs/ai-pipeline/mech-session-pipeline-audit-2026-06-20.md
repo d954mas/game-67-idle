@@ -52,11 +52,12 @@ stopped; use this as evidence for pipeline improvements before the next game.
 - Texture work uses `game-texture-generation` with explicit usage class,
   tiling contract, model UV assumption, 2x2 preview, and seam audit.
 - New helper tools cover download intake and tileable texture audit.
+- `tools/product_gate/close_slice.mjs` blocks strict closeout of
+  `lead-rejection` tasks unless `--resolved-rejection` names the exact rejected
+  issue and proof.
 
 ## Remaining Work
 
-- Add a lead-rejection/product-gate guard that blocks pass/closeout while the
-  exact rejection reason is unresolved.
 - Split native smoke tests into movement, visual framing, combat pacing, reward,
   and asset-load proof commands.
 - Clean or archive stopped-prototype taskboard noise before the next game.

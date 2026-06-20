@@ -54,6 +54,9 @@ it with `--state-matrix`, `--require-state`, `--covered-state`, and
 `node tools/ai.mjs close-slice` before handoff when the slice depends on
 product-read evidence.
 
+If the task carries `lead-rejection` or lead-rejected wording, strict closeout
+must also pass `--resolved-rejection "<exact rejected issue and proof>"`.
+
 For visual-first work, write the 5-line session contract: goal, non-goal, proof,
 stop condition, likely files. Before coding, compare the current native
 screenshot or capture plan against the accepted fake shot/reference/art target

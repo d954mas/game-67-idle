@@ -128,6 +128,10 @@ what reward appeared, and why this looks like a game, the visual work is not
 done. Use `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate`, then
 `node tools/ai.mjs close-slice` for handoff evidence.
 
+For lead-rejected visual work, tag the task with `lead-rejection` and close only
+with `node tools/ai.mjs close-slice --resolved-rejection "<exact rejected issue
+and proof>"`. The closeout tool blocks strict pass without that proof.
+
 For beautiful/casual/generated-UI/fake-shot/child-testable work, use
 `--visual-strict` and score `composition`, `readability`, `ui_controls`,
 `action_direction`, `art_quality`, and `audience_fit`. A pass needs every score
