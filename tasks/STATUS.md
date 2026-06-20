@@ -36,7 +36,7 @@ run it only on explicit request or during review.
 
 - 2026-06-20: build and `py -3.12 tools/devapi/smoke.py 9123` passed.
 - 2026-06-20: latest visual proof:
-  `build/captures/blockfell_authored_asset_pass.png`; pixel health passed.
+  `build/captures/blockfell_art_cleanup_pass.png`; pixel health passed.
 - Detailed evidence is in T0013 and `gamedesign/projects/blockfell-runes/`.
 
 ## Next Priorities

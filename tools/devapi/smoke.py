@@ -16,6 +16,7 @@ SLICE = {
         "quest.chain",
         "combat.status",
         "loot.status",
+        "ability.belt",
         "action.claim",
         "action.attack",
     },

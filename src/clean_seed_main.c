@@ -16,6 +16,7 @@
 #include "window/nt_window.h"
 
 #include "blockfell_authored_assets.h"
+#include "blockfell_texture_assets.h"
 
 #ifdef NT_PLATFORM_WEB
 #include "platform/web/nt_platform_web.h"
@@ -108,6 +109,16 @@ static int s_player_hp = PLAYER_MAX_HP;
 static float s_player_hit_flash;
 static float s_attack_cd;
 static float s_slash_timer;
+static float s_hit_burst_timer;
+static float s_loot_burst_timer;
+static float s_gate_burst_timer;
+static float s_rune_burst_timer;
+static float s_hit_effect_x;
+static float s_hit_effect_z;
+static float s_loot_effect_x;
+static float s_loot_effect_z;
+static float s_rune_effect_x;
+static float s_rune_effect_z;
 static bool s_chest_open;
 static UiBox s_action_box;
 static UiBox s_attack_box;
@@ -316,7 +327,11 @@ static void sync_labels(void) {
 }
 
 static void refresh_gate(void) {
+    const bool was_open = g_game_state.tutorial_done;
     g_game_state.tutorial_done = g_game_state.wallet_soft >= RUNE_TARGET;
+    if (!was_open && g_game_state.tutorial_done) {
+        s_gate_burst_timer = 1.20F;
+    }
     sync_labels();
     game_state_mark_dirty();
 }
@@ -333,6 +348,16 @@ static void reset_slice(void) {
     s_player_hit_flash = 0.0F;
     s_attack_cd = 0.0F;
     s_slash_timer = 0.0F;
+    s_hit_burst_timer = 0.0F;
+    s_loot_burst_timer = 0.0F;
+    s_gate_burst_timer = 0.0F;
+    s_rune_burst_timer = 0.0F;
+    s_hit_effect_x = s_player_x;
+    s_hit_effect_z = s_player_z;
+    s_loot_effect_x = s_player_x;
+    s_loot_effect_z = s_player_z;
+    s_rune_effect_x = s_player_x;
+    s_rune_effect_z = s_player_z;
     s_chest_open = false;
     s_runes[0] = (RuneSite){.x = -4.9F, .z = -4.0F, .claimed = false, .requires_combat = false, .requires_chest = false};
     s_runes[1] = (RuneSite){.x = 1.2F, .z = 3.6F, .claimed = false, .requires_combat = true, .requires_chest = false};
@@ -354,6 +379,9 @@ static bool claim_rune(void) {
     if (g_game_state.wallet_soft < RUNE_TARGET) {
         g_game_state.wallet_soft += 1;
     }
+    s_rune_burst_timer = 0.72F;
+    s_rune_effect_x = s_runes[rune_index].x;
+    s_rune_effect_z = s_runes[rune_index].z;
     refresh_gate();
     return true;
 }
@@ -364,6 +392,9 @@ static bool open_chest(void) {
     }
     s_chest_open = true;
     g_game_state.wallet_hard += 25;
+    s_loot_burst_timer = 1.05F;
+    s_loot_effect_x = s_chest_x;
+    s_loot_effect_z = s_chest_z;
     refresh_gate();
     return true;
 }
@@ -389,10 +420,14 @@ static bool attack(void) {
         }
         enemy->hp -= 1;
         enemy->hit_flash = 0.20F;
+        s_hit_burst_timer = 0.38F;
+        s_hit_effect_x = enemy->x;
+        s_hit_effect_z = enemy->z;
         hit = true;
         if (enemy->hp <= 0) {
             enemy->alive = false;
             g_game_state.wallet_hard += 5;
+            s_loot_burst_timer = 0.55F;
         }
     }
     refresh_gate();
@@ -418,9 +453,12 @@ static void parse_args(int argc, char **argv) {
 }
 
 static void layout(float w) {
-    const float button_w = w < 620.0F ? w * 0.36F : 180.0F;
-    s_action_box = (UiBox){.x = w * 0.5F - button_w - 8.0F, .y = 24.0F, .w = button_w, .h = 46.0F};
-    s_attack_box = (UiBox){.x = w * 0.5F + 8.0F, .y = 24.0F, .w = button_w, .h = 46.0F};
+    const float slot = 54.0F;
+    const float step = 66.0F;
+    const float belt_x = w * 0.5F - 166.0F;
+    const float belt_y = 28.0F;
+    s_attack_box = (UiBox){.x = belt_x, .y = belt_y, .w = slot, .h = slot};
+    s_action_box = (UiBox){.x = belt_x + step, .y = belt_y, .w = slot, .h = slot};
 }
 
 static const char *s_mat_vs_src = "precision mediump float;\n"
@@ -451,15 +489,18 @@ static const char *s_mat_fs_src = "precision mediump float;\n"
                                   "void main() {\n"
                                   "    vec4 tex = texture(u_tex, v_uv);\n"
                                   "    vec3 n = normalize(v_normal);\n"
-                                  "    vec3 key = normalize(vec3(-0.56, 0.76, -0.34));\n"
-                                  "    vec3 fill = normalize(vec3(0.36, 0.42, 0.68));\n"
+                                  "    vec3 key = normalize(vec3(-0.58, 0.78, -0.30));\n"
+                                  "    vec3 fill = normalize(vec3(0.42, 0.36, 0.72));\n"
                                   "    float key_l = max(dot(n, key), 0.0);\n"
                                   "    float fill_l = max(dot(n, fill), 0.0);\n"
                                   "    float rim = pow(1.0 - abs(n.y), 2.0) * 0.16;\n"
                                   "    float height = clamp(v_world.y * 0.055, 0.0, 0.16);\n"
-                                  "    vec3 lit = tex.rgb * v_color.rgb * (0.50 + key_l * 0.42 + fill_l * 0.13 + rim + height);\n"
-                                  "    vec3 sky = vec3(0.50, 0.70, 0.86);\n"
-                                  "    float fog = clamp((v_world.z + 8.0) * 0.020 + max(v_world.y - 1.0, 0.0) * 0.030, 0.0, 0.28);\n"
+                                  "    vec3 warm = vec3(1.10, 1.02, 0.88);\n"
+                                  "    vec3 cool = vec3(0.72, 0.86, 1.06);\n"
+                                  "    vec3 lit = tex.rgb * v_color.rgb * (0.45 + key_l * 0.52) * mix(cool, warm, key_l);\n"
+                                  "    lit += tex.rgb * v_color.rgb * (fill_l * 0.14 + rim + height);\n"
+                                  "    vec3 sky = vec3(0.42, 0.62, 0.78);\n"
+                                  "    float fog = clamp((v_world.z + 8.0) * 0.018 + max(v_world.y - 1.0, 0.0) * 0.026, 0.0, 0.22);\n"
                                   "    frag_color = vec4(mix(lit, sky, fog), tex.a * v_color.a);\n"
                                   "}\n";
 
@@ -485,12 +526,16 @@ static const char *s_asset_fs_src = "precision mediump float;\n"
                                     "out vec4 frag_color;\n"
                                     "void main() {\n"
                                     "    vec3 n = normalize(v_normal);\n"
-                                    "    vec3 key = normalize(vec3(-0.52, 0.80, -0.30));\n"
-                                    "    vec3 fill = normalize(vec3(0.48, 0.32, 0.72));\n"
-                                    "    float l = 0.46 + max(dot(n, key), 0.0) * 0.44 + max(dot(n, fill), 0.0) * 0.14;\n"
+                                    "    vec3 key = normalize(vec3(-0.56, 0.80, -0.26));\n"
+                                    "    vec3 fill = normalize(vec3(0.48, 0.30, 0.76));\n"
+                                    "    float key_l = max(dot(n, key), 0.0);\n"
+                                    "    float fill_l = max(dot(n, fill), 0.0);\n"
+                                    "    vec3 warm = vec3(1.10, 1.02, 0.88);\n"
+                                    "    vec3 cool = vec3(0.70, 0.84, 1.06);\n"
+                                    "    float l = 0.42 + key_l * 0.54 + fill_l * 0.14;\n"
                                     "    float rim = pow(1.0 - abs(n.y), 2.0) * 0.18;\n"
                                     "    float height = clamp(v_world.y * 0.06, 0.0, 0.18);\n"
-                                    "    vec3 color = v_color.rgb * (l + rim + height);\n"
+                                    "    vec3 color = v_color.rgb * (l + rim + height) * mix(cool, warm, key_l);\n"
                                     "    frag_color = vec4(color, v_color.a);\n"
                                     "}\n";
 
@@ -520,14 +565,14 @@ static void fill_texel(uint8_t *pixels, int x, int y, int r, int g, int b, int a
 }
 
 static void build_material_texture(MaterialKind kind, uint8_t pixels[MATERIAL_TEX_SIZE * MATERIAL_TEX_SIZE * 4]) {
+    if (kind == MAT_GRASS) {
+        memcpy(pixels, BF_TEX_GRASS_CC0, MATERIAL_TEX_SIZE * MATERIAL_TEX_SIZE * 4);
+        return;
+    }
     for (int y = 0; y < MATERIAL_TEX_SIZE; ++y) {
         for (int x = 0; x < MATERIAL_TEX_SIZE; ++x) {
             const int n = (int)(tex_noise(x, y, (int)kind + 7) & 31U) - 15;
-            if (kind == MAT_GRASS) {
-                const bool blade = ((x + y * 3) % 11) == 0 || ((x * 2 + y) % 17) == 0 || ((x + y) % 23) == 0;
-                const bool clover = (tex_noise(x / 4, y / 4, 91) & 31U) == 0U;
-                fill_texel(pixels, x, y, clover ? 76 + n : 50 + n, blade ? 130 + n : 88 + n, blade ? 54 + n : 42 + n, 255);
-            } else if (kind == MAT_PATH) {
+            if (kind == MAT_PATH) {
                 const bool pebble = (tex_noise(x / 2, y / 2, 22) & 7U) == 0U;
                 const bool rut = abs((x + y / 2) % 19 - 9) < 2;
                 fill_texel(pixels, x, y, pebble ? 168 + n : 132 + n - (rut ? 18 : 0), pebble ? 130 + n : 102 + n - (rut ? 12 : 0), pebble ? 84 + n : 62 + n - (rut ? 8 : 0), 255);
@@ -755,7 +800,7 @@ static void material_wall_x(MaterialKind kind, float x, float y, float z, float 
     material_quad(kind, a, b, c, d, (float[4]){0.0F, 0.0F, repeat, repeat}, color, (float[3]){-1.0F, 0.0F, 0.0F}, vp);
 }
 
-static void draw_authored_mesh(const BlockfellAssetMesh *mesh, float x, float z, float scale, float yaw, const float tint[4], const float vp[16]) {
+static void draw_authored_mesh_scaled(const BlockfellAssetMesh *mesh, float x, float z, float sx, float sy, float sz, float yaw, const float tint[4], const float vp[16]) {
     if (!s_asset_pass_ready || mesh->vertex_count > ASSET_MAX_VERTICES || mesh->index_count > ASSET_MAX_INDICES) {
         return;
     }
@@ -765,9 +810,9 @@ static void draw_authored_mesh(const BlockfellAssetMesh *mesh, float x, float z,
     uint16_t indices[ASSET_MAX_INDICES];
     for (uint16_t i = 0; i < mesh->vertex_count; ++i) {
         const BlockfellAssetVertex *src = &mesh->vertices[i];
-        const float px = src->pos[0] * scale;
-        const float py = src->pos[1] * scale;
-        const float pz = src->pos[2] * scale;
+        const float px = src->pos[0] * sx;
+        const float py = src->pos[1] * sy;
+        const float pz = src->pos[2] * sz;
         const float nx = src->normal[0];
         const float nz = src->normal[2];
         vertices[i] = *src;
@@ -794,13 +839,26 @@ static void draw_authored_mesh(const BlockfellAssetMesh *mesh, float x, float z,
     nt_gfx_draw_indexed(0, mesh->index_count, mesh->vertex_count);
 }
 
+static void draw_authored_mesh(const BlockfellAssetMesh *mesh, float x, float z, float scale, float yaw, const float tint[4], const float vp[16]) {
+    draw_authored_mesh_scaled(mesh, x, z, scale, scale, scale, yaw, tint, vp);
+}
+
 static void cube3(const float center[3], const float size[3], const float color[4]) {
     nt_shape_renderer_cube(center, size, color);
-    nt_shape_renderer_cube_wire(center, size, (float[4]){0.02F, 0.03F, 0.04F, 0.42F});
 }
 
 static void rect2(float x, float y, float w, float h, const float color[4]) {
     nt_shape_renderer_rect((float[3]){x + w * 0.5F, y + h * 0.5F, 0.0F}, (float[2]){w, h}, color);
+}
+
+static void draw_backdrop(float w, float h) {
+    float vp[16];
+    ortho(0.0F, w, 0.0F, h, -1.0F, 1.0F, vp);
+    nt_shape_renderer_set_vp(vp);
+    nt_shape_renderer_set_cam_pos((float[3]){0.0F, 0.0F, 1.0F});
+    nt_shape_renderer_set_depth(false);
+    rect2(0.0F, 0.0F, w, h, (float[4]){0.49F, 0.68F, 0.82F, 1.0F});
+    nt_shape_renderer_flush();
 }
 
 static void diamond2(float x, float y, float radius, const float color[4]) {
@@ -808,9 +866,19 @@ static void diamond2(float x, float y, float radius, const float color[4]) {
     nt_shape_renderer_triangle((float[3]){x, y + radius, 0.0F}, (float[3]){x, y - radius, 0.0F}, (float[3]){x - radius, y, 0.0F}, color);
 }
 
+static void ui_slab(float x, float y, float w, float h, const float body[4], const float trim[4]) {
+    rect2(x + 4.0F, y - 5.0F, w, h, (float[4]){0.02F, 0.025F, 0.028F, 0.42F});
+    rect2(x, y, w, h, body);
+    rect2(x + 4.0F, y + h - 5.0F, w - 8.0F, 5.0F, (float[4]){trim[0] * 1.15F, trim[1] * 1.10F, trim[2] * 1.05F, trim[3]});
+    rect2(x + 4.0F, y, w - 8.0F, 4.0F, (float[4]){0.06F, 0.07F, 0.065F, trim[3] * 0.70F});
+    rect2(x, y + 4.0F, 4.0F, h - 8.0F, trim);
+    rect2(x + w - 4.0F, y + 4.0F, 4.0F, h - 8.0F, trim);
+    diamond2(x + 5.0F, y + h - 5.0F, 5.0F, trim);
+    diamond2(x + w - 5.0F, y + h - 5.0F, 5.0F, trim);
+}
+
 static void tri3(const float a[3], const float b[3], const float c[3], const float color[4]) {
     nt_shape_renderer_triangle(a, b, c, color);
-    nt_shape_renderer_triangle_wire(a, b, c, (float[4]){0.02F, 0.03F, 0.04F, 0.32F});
 }
 
 static void quad3(const float a[3], const float b[3], const float c[3], const float d[3], const float color[4]) {
@@ -826,12 +894,18 @@ static void diamond3(float x, float y, float z, float radius, const float color[
 }
 
 static void ground_shadow(float x, float z, float radius, float alpha) {
-    nt_shape_renderer_cylinder((float[3]){x + 0.28F, 0.022F, z - 0.24F}, radius, 0.018F, (float[4]){0.02F, 0.03F, 0.03F, alpha});
+    const float sx = x + 0.28F;
+    const float sz = z - 0.24F;
+    nt_shape_renderer_cylinder((float[3]){sx, 0.018F, sz}, radius * 1.32F, 0.010F, (float[4]){0.22F, 0.38F, 0.28F, alpha * 0.05F});
+    nt_shape_renderer_cylinder((float[3]){sx, 0.021F, sz}, radius * 0.86F, 0.012F, (float[4]){0.18F, 0.32F, 0.24F, alpha * 0.08F});
+    nt_shape_renderer_cylinder((float[3]){sx, 0.024F, sz}, radius * 0.48F, 0.014F, (float[4]){0.15F, 0.27F, 0.21F, alpha * 0.07F});
 }
 
 static void light_pool(float x, float z, float radius, const float color[4]) {
-    nt_shape_renderer_cylinder((float[3]){x, 0.031F, z}, radius, 0.016F, color);
-    nt_shape_renderer_cylinder_wire((float[3]){x, 0.047F, z}, radius * 0.66F, 0.03F, (float[4]){color[0], color[1], color[2], color[3] * 0.74F});
+    const float outer[4] = {0.23F + color[0] * 0.16F, 0.38F + color[1] * 0.12F, 0.28F + color[2] * 0.12F, color[3] * 0.52F};
+    const float inner[4] = {0.26F + color[0] * 0.22F, 0.42F + color[1] * 0.16F, 0.30F + color[2] * 0.16F, color[3] * 0.24F};
+    nt_shape_renderer_cylinder((float[3]){x, 0.031F, z}, radius, 0.016F, outer);
+    nt_shape_renderer_cylinder((float[3]){x, 0.050F, z}, radius * 0.52F, 0.014F, inner);
 }
 
 static void long_shadow(float x, float z, float length, float width, float alpha) {
@@ -844,7 +918,12 @@ static void long_shadow(float x, float z, float length, float width, float alpha
     const float b[3] = {x - side_x * width, y, z - side_z * width};
     const float c[3] = {x + dir_x * length - side_x * width * 0.44F, y, z + dir_z * length - side_z * width * 0.44F};
     const float d[3] = {x + dir_x * length + side_x * width * 0.44F, y, z + dir_z * length + side_z * width * 0.44F};
-    quad3(a, b, c, d, (float[4]){0.01F, 0.02F, 0.02F, alpha});
+    quad3(a, b, c, d, (float[4]){0.18F, 0.32F, 0.24F, alpha * 0.26F});
+    const float e[3] = {x + side_x * width * 0.72F, y + 0.004F, z + side_z * width * 0.72F};
+    const float f[3] = {x - side_x * width * 0.72F, y + 0.004F, z - side_z * width * 0.72F};
+    const float g[3] = {x + dir_x * length * 0.58F - side_x * width * 0.24F, y + 0.004F, z + dir_z * length * 0.58F - side_z * width * 0.24F};
+    const float hh[3] = {x + dir_x * length * 0.58F + side_x * width * 0.24F, y + 0.004F, z + dir_z * length * 0.58F + side_z * width * 0.24F};
+    quad3(e, f, g, hh, (float[4]){0.16F, 0.29F, 0.22F, alpha * 0.09F});
 }
 
 static void ground_patch(float x, float z, float sx, float sz, const float color[4]) {
@@ -858,12 +937,44 @@ static void draw_grass_tuft(float x, float z, float scale) {
     nt_shape_renderer_line((float[3]){x, 0.05F, z}, (float[3]){x + 0.02F, 0.42F * scale, z + 0.10F * scale}, (float[4]){0.13F, 0.56F, 0.23F, 1.0F});
 }
 
+static void crystal_spire(float x, float z, float height, float radius, const float color[4]) {
+    const float y0 = 0.05F;
+    const float ym = y0 + height * 0.46F;
+    const float y1 = y0 + height;
+    const float top[3] = {x, y1, z};
+    const float bottom[3] = {x, y0, z};
+    const float p0[3] = {x - radius, ym, z};
+    const float p1[3] = {x, ym, z - radius * 0.72F};
+    const float p2[3] = {x + radius, ym, z};
+    const float p3[3] = {x, ym, z + radius * 0.72F};
+    tri3(top, p0, p1, color);
+    tri3(top, p1, p2, (float[4]){color[0] * 1.10F, color[1] * 1.05F, color[2], color[3]});
+    tri3(top, p2, p3, (float[4]){color[0] * 0.82F, color[1] * 0.92F, color[2], color[3]});
+    tri3(top, p3, p0, (float[4]){color[0] * 0.72F, color[1] * 0.82F, color[2] * 0.95F, color[3]});
+    tri3(bottom, p1, p0, (float[4]){color[0] * 0.50F, color[1] * 0.62F, color[2] * 0.72F, color[3]});
+    tri3(bottom, p2, p1, (float[4]){color[0] * 0.60F, color[1] * 0.72F, color[2] * 0.82F, color[3]});
+    tri3(bottom, p3, p2, (float[4]){color[0] * 0.48F, color[1] * 0.58F, color[2] * 0.72F, color[3]});
+    tri3(bottom, p0, p3, (float[4]){color[0] * 0.42F, color[1] * 0.52F, color[2] * 0.64F, color[3]});
+}
+
+static void rock_facet(float x, float z, float h, float r, float shade) {
+    const float a[3] = {x - r * 0.90F, 0.04F, z - r * 0.55F};
+    const float b[3] = {x + r * 0.82F, 0.04F, z - r * 0.48F};
+    const float c[3] = {x + r * 0.66F, 0.04F, z + r * 0.72F};
+    const float d[3] = {x - r * 0.72F, 0.04F, z + r * 0.66F};
+    const float peak[3] = {x - r * 0.10F, h, z - r * 0.06F};
+    tri3(peak, a, b, (float[4]){0.32F * shade, 0.36F * shade, 0.40F * shade, 1.0F});
+    tri3(peak, b, c, (float[4]){0.24F * shade, 0.28F * shade, 0.34F * shade, 1.0F});
+    tri3(peak, c, d, (float[4]){0.18F * shade, 0.22F * shade, 0.28F * shade, 1.0F});
+    tri3(peak, d, a, (float[4]){0.28F * shade, 0.31F * shade, 0.34F * shade, 1.0F});
+}
+
 static void draw_crystal_cluster(float x, float z, float scale) {
     ground_shadow(x, z, 0.62F * scale, 0.25F);
-    cube3((float[3]){x, 0.38F * scale, z}, (float[3]){0.22F * scale, 0.76F * scale, 0.22F * scale}, (float[4]){0.12F, 0.78F, 0.95F, 0.92F});
-    cube3((float[3]){x + 0.28F * scale, 0.28F * scale, z - 0.12F * scale}, (float[3]){0.18F * scale, 0.56F * scale, 0.18F * scale}, (float[4]){0.16F, 0.88F, 0.70F, 0.86F});
-    cube3((float[3]){x - 0.24F * scale, 0.24F * scale, z + 0.14F * scale}, (float[3]){0.16F * scale, 0.48F * scale, 0.16F * scale}, (float[4]){0.38F, 0.94F, 1.0F, 0.82F});
-    nt_shape_renderer_sphere_wire((float[3]){x, 0.74F * scale, z}, 0.52F * scale, (float[4]){0.60F, 0.96F, 1.0F, 0.40F});
+    crystal_spire(x, z, 0.95F * scale, 0.20F * scale, (float[4]){0.12F, 0.78F, 0.95F, 0.92F});
+    crystal_spire(x + 0.28F * scale, z - 0.12F * scale, 0.70F * scale, 0.16F * scale, (float[4]){0.16F, 0.88F, 0.70F, 0.86F});
+    crystal_spire(x - 0.24F * scale, z + 0.14F * scale, 0.56F * scale, 0.14F * scale, (float[4]){0.38F, 0.94F, 1.0F, 0.82F});
+    nt_shape_renderer_sphere((float[3]){x, 0.74F * scale, z}, 0.38F * scale, (float[4]){0.42F, 0.92F, 1.0F, 0.24F});
 }
 
 static void draw_banner(float x, float z, float height, const float color[4]) {
@@ -874,23 +985,37 @@ static void draw_banner(float x, float z, float height, const float color[4]) {
 
 static void draw_block_tree(float x, float z, float scale) {
     ground_shadow(x, z, 0.62F * scale, 0.24F);
-    cube3((float[3]){x, 0.42F * scale, z}, (float[3]){0.28F * scale, 0.84F * scale, 0.28F * scale}, (float[4]){0.30F, 0.18F, 0.11F, 1.0F});
-    cube3((float[3]){x, 1.02F * scale, z}, (float[3]){1.05F * scale, 0.78F * scale, 1.05F * scale}, (float[4]){0.05F, 0.34F, 0.20F, 1.0F});
-    cube3((float[3]){x, 1.54F * scale, z}, (float[3]){0.72F * scale, 0.58F * scale, 0.72F * scale}, (float[4]){0.04F, 0.45F, 0.24F, 1.0F});
-    cube3((float[3]){x + 0.22F * scale, 1.28F * scale, z - 0.28F * scale}, (float[3]){0.36F * scale, 0.26F * scale, 0.36F * scale}, (float[4]){0.12F, 0.55F, 0.28F, 1.0F});
 }
 
 static void draw_mountain(float x, float z, float h, float shade) {
+    (void)h;
+    (void)shade;
     ground_shadow(x, z, 1.7F, 0.20F);
-    cube3((float[3]){x, h * 0.18F, z}, (float[3]){2.8F, h * 0.36F, 2.8F}, (float[4]){0.22F * shade, 0.26F * shade, 0.31F * shade, 1.0F});
-    cube3((float[3]){x, h * 0.47F, z}, (float[3]){2.0F, h * 0.30F, 2.0F}, (float[4]){0.28F * shade, 0.31F * shade, 0.35F * shade, 1.0F});
-    cube3((float[3]){x, h * 0.74F, z}, (float[3]){1.05F, h * 0.25F, 1.05F}, (float[4]){0.78F, 0.87F, 0.93F, 1.0F});
-    cube3((float[3]){x - 0.48F, h * 0.91F, z - 0.22F}, (float[3]){0.44F, h * 0.08F, 0.54F}, (float[4]){0.92F, 0.96F, 1.0F, 1.0F});
 }
 
 static void draw_world_floor(void) {
     const float floor_rot[4] = {0.7071068F, 0.0F, 0.0F, 0.7071068F};
-    nt_shape_renderer_rect_rot((float[3]){0.0F, 0.0F, 0.0F}, (float[2]){22.0F, 22.0F}, floor_rot, (float[4]){0.26F, 0.48F, 0.33F, 1.0F});
+    const float rim_x[12] = {-10.7F, -7.2F, -2.2F, 3.6F, 9.6F, 10.9F, 8.7F, 3.4F, -1.8F, -6.8F, -10.8F, -11.3F};
+    const float rim_z[12] = {-4.0F, -8.8F, -10.8F, -10.1F, -6.5F, -1.1F, 4.5F, 8.7F, 10.7F, 9.4F, 5.3F, 0.6F};
+    for (int i = 0; i < 12; ++i) {
+        const int j = (i + 1) % 12;
+        const float shade = 1.0F - (float)(i % 3) * 0.045F;
+        tri3((float[3]){0.0F, 0.0F, 0.0F}, (float[3]){rim_x[i], 0.0F, rim_z[i]}, (float[3]){rim_x[j], 0.0F, rim_z[j]},
+             (float[4]){0.25F * shade, 0.47F * shade, 0.32F * shade, 1.0F});
+    }
+    for (int i = 0; i < 12; ++i) {
+        const int j = (i + 1) % 12;
+        const float bx0 = rim_x[i] * 0.88F;
+        const float bz0 = rim_z[i] * 0.88F;
+        const float bx1 = rim_x[j] * 0.88F;
+        const float bz1 = rim_z[j] * 0.88F;
+        const float cool = (float)(i % 2) * 0.025F;
+        quad3((float[3]){rim_x[i], -0.02F, rim_z[i]}, (float[3]){rim_x[j], -0.02F, rim_z[j]}, (float[3]){bx1, -1.18F, bz1}, (float[3]){bx0, -1.18F, bz0},
+              (float[4]){0.13F + cool, 0.29F + cool, 0.21F + cool * 0.7F, 1.0F});
+    }
+    nt_shape_renderer_rect_rot((float[3]){-6.2F, 0.018F, 6.0F}, (float[2]){3.4F, 2.1F}, floor_rot, (float[4]){0.18F, 0.38F, 0.26F, 0.44F});
+    nt_shape_renderer_rect_rot((float[3]){7.6F, 0.018F, -4.8F}, (float[2]){3.1F, 2.4F}, floor_rot, (float[4]){0.20F, 0.40F, 0.27F, 0.38F});
+    nt_shape_renderer_rect_rot((float[3]){8.2F, 0.018F, 3.6F}, (float[2]){2.8F, 1.6F}, floor_rot, (float[4]){0.32F, 0.50F, 0.33F, 0.34F});
     nt_shape_renderer_rect_rot((float[3]){0.2F, 0.012F, -0.8F}, (float[2]){14.8F, 1.28F}, floor_rot, (float[4]){0.58F, 0.51F, 0.35F, 1.0F});
     nt_shape_renderer_rect_rot((float[3]){2.2F, 0.014F, 2.8F}, (float[2]){5.2F, 1.20F}, floor_rot, (float[4]){0.66F, 0.59F, 0.39F, 1.0F});
     nt_shape_renderer_rect_rot((float[3]){4.7F, 0.016F, -1.9F}, (float[2]){3.9F, 1.10F}, floor_rot, (float[4]){0.63F, 0.56F, 0.36F, 1.0F});
@@ -899,10 +1024,6 @@ static void draw_world_floor(void) {
     ground_patch(1.1F, 2.8F, 1.1F, 0.50F, (float[4]){0.43F, 0.34F, 0.25F, 0.72F});
     ground_patch(3.6F, -2.7F, 1.0F, 0.42F, (float[4]){0.72F, 0.60F, 0.36F, 0.70F});
     ground_patch(5.7F, 3.7F, 1.6F, 0.64F, (float[4]){0.22F, 0.28F, 0.29F, 0.55F});
-    for (int i = -8; i <= 8; i += 2) {
-        nt_shape_renderer_line((float[3]){(float)i, 0.025F, -9.5F}, (float[3]){(float)i, 0.025F, 9.5F}, (float[4]){0.12F, 0.24F, 0.17F, 0.25F});
-        nt_shape_renderer_line((float[3]){-9.5F, 0.025F, (float)i}, (float[3]){9.5F, 0.025F, (float)i}, (float[4]){0.12F, 0.24F, 0.17F, 0.25F});
-    }
     draw_grass_tuft(-6.0F, -1.2F, 1.0F);
     draw_grass_tuft(-3.2F, 0.4F, 0.8F);
     draw_grass_tuft(0.4F, -4.8F, 0.9F);
@@ -916,23 +1037,17 @@ static void draw_torch(float x, float z) {
     nt_shape_renderer_cylinder((float[3]){x, 0.035F, z}, 0.70F, 0.025F, (float[4]){0.95F, 0.42F, 0.06F, 0.20F});
     cube3((float[3]){x, 0.46F, z}, (float[3]){0.14F, 0.92F, 0.14F}, (float[4]){0.20F, 0.12F, 0.08F, 1.0F});
     nt_shape_renderer_sphere((float[3]){x, 1.06F, z}, 0.18F, (float[4]){1.0F, 0.42F, 0.10F, 0.92F});
-    nt_shape_renderer_sphere_wire((float[3]){x, 1.06F, z}, 0.32F, (float[4]){1.0F, 0.74F, 0.22F, 0.56F});
+    nt_shape_renderer_sphere((float[3]){x, 1.06F, z}, 0.32F, (float[4]){1.0F, 0.72F, 0.22F, 0.18F});
     nt_shape_renderer_line((float[3]){x, 1.10F, z}, (float[3]){x - 0.28F, 1.70F, z - 0.18F}, (float[4]){1.0F, 0.70F, 0.20F, 0.30F});
     nt_shape_renderer_line((float[3]){x, 1.06F, z}, (float[3]){x + 0.22F, 1.56F, z + 0.14F}, (float[4]){1.0F, 0.55F, 0.14F, 0.26F});
 }
 
 static void draw_sun_rig(void) {
     nt_shape_renderer_sphere((float[3]){-7.2F, 8.8F, -2.4F}, 0.58F, (float[4]){1.0F, 0.80F, 0.34F, 1.0F});
-    nt_shape_renderer_sphere_wire((float[3]){-7.2F, 8.8F, -2.4F}, 0.94F, (float[4]){1.0F, 0.88F, 0.48F, 0.55F});
-    nt_shape_renderer_line((float[3]){-6.8F, 7.7F, -2.0F}, (float[3]){-4.8F, 3.6F, 0.8F}, (float[4]){1.0F, 0.86F, 0.45F, 0.32F});
-    nt_shape_renderer_line((float[3]){-7.4F, 7.8F, -2.4F}, (float[3]){-5.2F, 3.8F, 2.4F}, (float[4]){1.0F, 0.86F, 0.45F, 0.24F});
-    nt_shape_renderer_line((float[3]){-7.1F, 7.6F, -2.2F}, (float[3]){-0.8F, 3.2F, 4.8F}, (float[4]){1.0F, 0.92F, 0.58F, 0.18F});
-    nt_shape_renderer_line((float[3]){-7.0F, 7.4F, -2.6F}, (float[3]){2.8F, 2.8F, 2.0F}, (float[4]){1.0F, 0.82F, 0.36F, 0.16F});
+    nt_shape_renderer_sphere((float[3]){-7.2F, 8.8F, -2.4F}, 0.94F, (float[4]){1.0F, 0.86F, 0.42F, 0.18F});
 }
 
 static void draw_atmosphere(void) {
-    nt_shape_renderer_line((float[3]){-8.2F, 0.78F, 6.4F}, (float[3]){7.6F, 0.92F, 6.0F}, (float[4]){0.70F, 0.84F, 0.90F, 0.16F});
-    nt_shape_renderer_line((float[3]){-6.6F, 1.20F, 4.8F}, (float[3]){6.8F, 1.34F, 4.5F}, (float[4]){0.70F, 0.84F, 0.90F, 0.12F});
     light_pool(-7.2F, -2.0F, 1.35F, (float[4]){0.50F, 0.88F, 0.62F, 0.07F});
     light_pool(5.4F, -1.4F, 1.22F, (float[4]){0.25F, 0.92F, 1.0F, 0.12F});
     light_pool(6.3F, 3.2F, 1.36F, (float[4]){0.22F, 0.84F, 1.0F, 0.12F});
@@ -953,27 +1068,12 @@ static void draw_environment(void) {
     draw_block_tree(5.6F, 1.2F, 0.74F);
     draw_block_tree(-7.6F, 4.6F, 0.82F);
     ground_shadow(-2.4F, 4.2F, 1.4F, 0.30F);
-    cube3((float[3]){-2.4F, 0.18F, 4.2F}, (float[3]){2.2F, 0.36F, 1.0F}, (float[4]){0.34F, 0.35F, 0.34F, 1.0F});
-    cube3((float[3]){-2.4F, 0.72F, 4.2F}, (float[3]){1.45F, 0.72F, 0.82F}, (float[4]){0.26F, 0.27F, 0.28F, 1.0F});
-    cube3((float[3]){-2.4F, 1.34F, 4.2F}, (float[3]){1.05F, 0.52F, 0.72F}, (float[4]){0.40F, 0.36F, 0.30F, 1.0F});
-    cube3((float[3]){-2.92F, 1.74F, 3.86F}, (float[3]){0.24F, 0.18F, 0.14F}, (float[4]){0.12F, 0.75F, 0.94F, 1.0F});
-    cube3((float[3]){-2.12F, 1.70F, 3.86F}, (float[3]){0.24F, 0.14F, 0.14F}, (float[4]){0.12F, 0.75F, 0.94F, 1.0F});
     ground_shadow(s_camp_x, s_camp_z, 1.45F, 0.34F);
-    cube3((float[3]){s_camp_x, 0.14F, s_camp_z}, (float[3]){2.8F, 0.28F, 2.4F}, (float[4]){0.30F, 0.27F, 0.24F, 1.0F});
-    cube3((float[3]){s_camp_x - 0.35F, 0.32F, s_camp_z - 0.98F}, (float[3]){1.0F, 0.13F, 0.18F}, (float[4]){0.20F, 0.12F, 0.08F, 1.0F});
-    cube3((float[3]){s_camp_x + 0.62F, 0.34F, s_camp_z - 0.76F}, (float[3]){0.86F, 0.12F, 0.18F}, (float[4]){0.26F, 0.16F, 0.10F, 1.0F});
-    cube3((float[3]){s_camp_x - 1.1F, 0.42F, s_camp_z + 0.8F}, (float[3]){0.34F, 0.84F, 0.34F}, (float[4]){0.13F, 0.11F, 0.09F, 1.0F});
-    cube3((float[3]){s_camp_x + 1.1F, 0.42F, s_camp_z + 0.8F}, (float[3]){0.34F, 0.84F, 0.34F}, (float[4]){0.13F, 0.11F, 0.09F, 1.0F});
-    cube3((float[3]){s_camp_x, 0.84F, s_camp_z + 0.8F}, (float[3]){2.6F, 0.16F, 0.22F}, (float[4]){0.46F, 0.08F, 0.10F, 1.0F});
     draw_banner(s_camp_x - 1.34F, s_camp_z + 1.15F, 1.55F, (float[4]){0.56F, 0.04F, 0.08F, 1.0F});
     draw_banner(s_camp_x + 0.78F, s_camp_z + 1.20F, 1.42F, (float[4]){0.20F, 0.04F, 0.06F, 1.0F});
     draw_torch(s_camp_x - 1.45F, s_camp_z - 0.75F);
     draw_torch(s_camp_x + 1.45F, s_camp_z - 0.75F);
     ground_shadow(s_chest_x, s_chest_z, 0.9F, 0.30F);
-    cube3((float[3]){3.7F, 0.22F, -2.6F}, (float[3]){1.7F, 0.44F, 1.1F}, (float[4]){0.35F, 0.24F, 0.15F, 1.0F});
-    cube3((float[3]){3.7F, s_chest_open ? 0.78F : 0.58F, -2.9F}, (float[3]){1.5F, 0.22F, 0.26F}, s_chest_open ? (float[4]){0.95F, 0.68F, 0.17F, 1.0F} : (float[4]){0.18F, 0.12F, 0.08F, 1.0F});
-    cube3((float[3]){3.18F, 0.48F, -2.02F}, (float[3]){0.14F, 0.28F, 0.10F}, (float[4]){0.92F, 0.68F, 0.18F, 1.0F});
-    cube3((float[3]){4.22F, 0.48F, -2.02F}, (float[3]){0.14F, 0.28F, 0.10F}, (float[4]){0.92F, 0.68F, 0.18F, 1.0F});
     nt_shape_renderer_sphere((float[3]){-6.7F, 0.10F, 6.8F}, 0.62F, (float[4]){0.20F, 0.58F, 0.82F, 0.72F});
     nt_shape_renderer_sphere((float[3]){-6.1F, 0.08F, 6.2F}, 0.50F, (float[4]){0.20F, 0.58F, 0.82F, 0.60F});
     draw_crystal_cluster(-6.2F, -4.4F, 0.62F);
@@ -991,17 +1091,19 @@ static void draw_rune_sites(void) {
         ground_shadow(site->x, site->z, 0.92F, 0.30F);
         light_pool(site->x, site->z, 1.28F, unlocked ? (float[4]){0.20F, 0.88F, 1.0F, 0.13F} : (float[4]){0.05F, 0.08F, 0.10F, 0.08F});
         nt_shape_renderer_cylinder((float[3]){site->x, 0.034F, site->z}, 1.08F, 0.026F, unlocked ? (float[4]){0.18F, 0.80F, 0.96F, 0.18F} : (float[4]){0.02F, 0.03F, 0.04F, 0.18F});
-        cube3((float[3]){site->x, 0.22F, site->z}, (float[3]){1.28F, 0.44F, 1.28F}, (float[4]){0.30F, 0.31F, 0.34F, 1.0F});
-        cube3((float[3]){site->x, 0.74F, site->z}, (float[3]){0.62F, 0.58F, 0.62F}, unlocked ? (float[4]){0.43F, 0.44F, 0.50F, 1.0F} : (float[4]){0.17F, 0.18F, 0.21F, 1.0F});
-        cube3((float[3]){site->x - 0.36F, 0.56F, site->z - 0.36F}, (float[3]){0.16F, 0.10F, 0.16F}, unlocked ? (float[4]){0.12F, 0.78F, 0.96F, 1.0F} : (float[4]){0.09F, 0.10F, 0.12F, 1.0F});
-        cube3((float[3]){site->x + 0.36F, 0.56F, site->z + 0.36F}, (float[3]){0.16F, 0.10F, 0.16F}, unlocked ? (float[4]){0.12F, 0.78F, 0.96F, 1.0F} : (float[4]){0.09F, 0.10F, 0.12F, 1.0F});
+        nt_shape_renderer_cylinder((float[3]){site->x, 0.17F, site->z}, 0.64F, 0.28F, (float[4]){0.30F, 0.31F, 0.34F, 1.0F});
+        rock_facet(site->x, site->z, 1.12F, 0.42F, unlocked ? 1.04F : 0.56F);
+        crystal_spire(site->x - 0.34F, site->z - 0.28F, 0.42F, 0.08F, unlocked ? (float[4]){0.12F, 0.78F, 0.96F, 0.88F} : (float[4]){0.08F, 0.10F, 0.12F, 0.82F});
+        crystal_spire(site->x + 0.32F, site->z + 0.30F, 0.38F, 0.07F, unlocked ? (float[4]){0.12F, 0.78F, 0.96F, 0.88F} : (float[4]){0.08F, 0.10F, 0.12F, 0.82F});
         if (site->claimed) {
             nt_shape_renderer_sphere((float[3]){site->x, 1.20F, site->z}, 0.34F, (float[4]){0.18F, 0.96F, 0.74F, 0.92F});
         } else {
             nt_shape_renderer_sphere((float[3]){site->x, 1.20F, site->z}, 0.26F + 0.06F * glow, unlocked ? (float[4]){0.22F, 0.86F, 1.0F, 0.90F} : (float[4]){0.12F, 0.14F, 0.16F, 0.80F});
         }
         if (near) {
-            nt_shape_renderer_cylinder_wire((float[3]){site->x, 0.08F, site->z}, INTERACT_RADIUS, 0.10F, unlocked ? (float[4]){0.98F, 0.84F, 0.24F, 1.0F} : (float[4]){0.74F, 0.18F, 0.16F, 1.0F});
+            nt_shape_renderer_cylinder((float[3]){site->x, 0.075F, site->z}, INTERACT_RADIUS, 0.035F,
+                                       unlocked ? (float[4]){0.98F, 0.80F, 0.20F, 0.18F} : (float[4]){0.72F, 0.16F, 0.12F, 0.16F});
+            diamond3(site->x, 1.70F, site->z, 0.18F, unlocked ? (float[4]){1.0F, 0.86F, 0.28F, 0.78F} : (float[4]){0.70F, 0.18F, 0.14F, 0.70F});
         }
     }
 }
@@ -1010,21 +1112,21 @@ static void draw_gate(void) {
     const bool open = g_game_state.tutorial_done;
     ground_shadow(s_gate_x, s_gate_z, 1.7F, 0.36F);
     light_pool(s_gate_x, s_gate_z, 1.85F, open ? (float[4]){0.20F, 0.85F, 1.0F, 0.18F} : (float[4]){0.04F, 0.08F, 0.10F, 0.08F});
-    cube3((float[3]){s_gate_x - 1.0F, 1.1F, s_gate_z}, (float[3]){0.65F, 2.2F, 0.78F}, (float[4]){0.30F, 0.32F, 0.36F, 1.0F});
-    cube3((float[3]){s_gate_x + 1.0F, 1.1F, s_gate_z}, (float[3]){0.65F, 2.2F, 0.78F}, (float[4]){0.30F, 0.32F, 0.36F, 1.0F});
-    cube3((float[3]){s_gate_x, 2.25F, s_gate_z}, (float[3]){2.7F, 0.55F, 0.82F}, (float[4]){0.24F, 0.25F, 0.29F, 1.0F});
-    cube3((float[3]){s_gate_x - 1.0F, 2.32F, s_gate_z - 0.38F}, (float[3]){0.36F, 0.18F, 0.12F}, (float[4]){0.15F, 0.85F, 1.0F, 1.0F});
-    cube3((float[3]){s_gate_x + 1.0F, 2.32F, s_gate_z - 0.38F}, (float[3]){0.36F, 0.18F, 0.12F}, (float[4]){0.15F, 0.85F, 1.0F, 1.0F});
+    quad3((float[3]){s_gate_x - 1.44F, 0.16F, s_gate_z - 0.42F}, (float[3]){s_gate_x - 0.62F, 0.16F, s_gate_z - 0.42F}, (float[3]){s_gate_x - 0.74F, 2.38F, s_gate_z - 0.36F}, (float[3]){s_gate_x - 1.28F, 2.22F, s_gate_z - 0.36F}, (float[4]){0.30F, 0.33F, 0.37F, 1.0F});
+    quad3((float[3]){s_gate_x + 0.62F, 0.16F, s_gate_z - 0.42F}, (float[3]){s_gate_x + 1.44F, 0.16F, s_gate_z - 0.42F}, (float[3]){s_gate_x + 1.28F, 2.22F, s_gate_z - 0.36F}, (float[3]){s_gate_x + 0.74F, 2.38F, s_gate_z - 0.36F}, (float[4]){0.26F, 0.29F, 0.34F, 1.0F});
+    quad3((float[3]){s_gate_x - 1.28F, 2.10F, s_gate_z - 0.38F}, (float[3]){s_gate_x + 1.28F, 2.10F, s_gate_z - 0.38F}, (float[3]){s_gate_x + 0.94F, 2.78F, s_gate_z - 0.32F}, (float[3]){s_gate_x - 0.94F, 2.78F, s_gate_z - 0.32F}, (float[4]){0.24F, 0.27F, 0.31F, 1.0F});
+    crystal_spire(s_gate_x - 1.0F, s_gate_z - 0.38F, 0.48F, 0.10F, (float[4]){0.15F, 0.85F, 1.0F, 1.0F});
+    crystal_spire(s_gate_x + 1.0F, s_gate_z - 0.38F, 0.48F, 0.10F, (float[4]){0.15F, 0.85F, 1.0F, 1.0F});
     if (open) {
         nt_shape_renderer_sphere((float[3]){s_gate_x, 1.1F, s_gate_z - 0.18F}, 0.86F, (float[4]){0.18F, 0.75F, 0.95F, 0.58F});
-        nt_shape_renderer_sphere_wire((float[3]){s_gate_x, 1.1F, s_gate_z - 0.18F}, 1.10F, (float[4]){0.78F, 0.98F, 1.0F, 0.75F});
+        nt_shape_renderer_sphere((float[3]){s_gate_x, 1.1F, s_gate_z - 0.18F}, 1.10F, (float[4]){0.34F, 0.94F, 1.0F, 0.16F});
     } else {
         for (int i = 0; i < 4; ++i) {
             const float x = s_gate_x - 0.54F + (float)i * 0.36F;
-            cube3((float[3]){x, 1.03F, s_gate_z - 0.06F}, (float[3]){0.14F, 1.55F, 0.18F}, (float[4]){0.17F, 0.19F, 0.21F, 1.0F});
+            nt_shape_renderer_cylinder((float[3]){x, 1.03F, s_gate_z - 0.06F}, 0.07F, 1.55F, (float[4]){0.17F, 0.19F, 0.21F, 1.0F});
         }
         if (is_near_gate()) {
-            nt_shape_renderer_cylinder_wire((float[3]){s_gate_x, 0.08F, s_gate_z}, 1.45F, 0.10F, (float[4]){0.95F, 0.30F, 0.22F, 1.0F});
+            nt_shape_renderer_cylinder((float[3]){s_gate_x, 0.075F, s_gate_z}, 1.45F, 0.035F, (float[4]){0.95F, 0.30F, 0.22F, 0.18F});
         }
     }
 }
@@ -1038,15 +1140,14 @@ static void draw_objective_marker(void) {
     const float marker_y = stage == OBJ_ENTER_GATE || stage == OBJ_DONE ? 3.1F : 2.25F;
     const float radius = done ? 0.52F : 0.42F;
     const float color[4] = {done ? 0.28F : 1.0F, done ? 1.0F : 0.82F, done ? 0.58F : 0.18F, 0.92F};
-    nt_shape_renderer_line((float[3]){s_player_x, 0.12F, s_player_z}, (float[3]){tx, 0.12F, tz}, (float[4]){color[0], color[1], color[2], 0.34F});
-    nt_shape_renderer_cylinder_wire((float[3]){tx, 0.10F, tz}, 0.78F, 0.08F, color);
-    nt_shape_renderer_line((float[3]){tx, 0.24F, tz}, (float[3]){tx, marker_y, tz}, (float[4]){color[0], color[1], color[2], 0.52F});
+    nt_shape_renderer_cylinder((float[3]){tx, 0.085F, tz}, 0.82F, 0.035F, (float[4]){color[0], color[1], color[2], 0.16F});
+    nt_shape_renderer_line((float[3]){tx, 0.24F, tz}, (float[3]){tx, marker_y, tz}, (float[4]){color[0], color[1], color[2], 0.38F});
     diamond3(tx, marker_y, tz, radius, color);
-    nt_shape_renderer_sphere_wire((float[3]){tx, marker_y, tz}, radius * 0.86F, (float[4]){color[0], color[1], color[2], 0.70F});
+    nt_shape_renderer_sphere((float[3]){tx, marker_y, tz}, radius * 0.80F, (float[4]){color[0], color[1], color[2], 0.14F});
     if (stage == OBJ_CLEAR_CAMP) {
-        nt_shape_renderer_cylinder_wire((float[3]){s_camp_x, 0.18F, s_camp_z}, 1.76F, 0.12F, (float[4]){0.94F, 0.18F, 0.12F, 0.84F});
+        nt_shape_renderer_cylinder((float[3]){s_camp_x, 0.13F, s_camp_z}, 1.76F, 0.050F, (float[4]){0.58F, 0.24F, 0.16F, 0.08F});
     } else if (stage == OBJ_OPEN_CHEST) {
-        nt_shape_renderer_sphere_wire((float[3]){s_chest_x, 0.78F, s_chest_z}, 0.76F, (float[4]){1.0F, 0.72F, 0.18F, 0.84F});
+        nt_shape_renderer_sphere((float[3]){s_chest_x, 0.78F, s_chest_z}, 0.76F, (float[4]){1.0F, 0.72F, 0.18F, 0.15F});
     }
 }
 
@@ -1054,29 +1155,22 @@ static void draw_enemy(const Enemy *enemy) {
     if (!enemy->alive) {
         ground_shadow(enemy->x, enemy->z, 0.46F, 0.20F);
         long_shadow(enemy->x, enemy->z, 0.92F, 0.28F, 0.20F);
-        cube3((float[3]){enemy->x, 0.08F, enemy->z}, (float[3]){0.72F, 0.16F, 0.54F}, (float[4]){0.18F, 0.12F, 0.12F, 1.0F});
+        quad3((float[3]){enemy->x - 0.42F, 0.08F, enemy->z - 0.22F}, (float[3]){enemy->x + 0.34F, 0.08F, enemy->z - 0.18F},
+              (float[3]){enemy->x + 0.28F, 0.22F, enemy->z + 0.18F}, (float[3]){enemy->x - 0.46F, 0.18F, enemy->z + 0.16F},
+              (float[4]){0.18F, 0.10F, 0.10F, 1.0F});
         return;
     }
-    const float flash = enemy->hit_flash > 0.0F ? 1.0F : 0.0F;
     ground_shadow(enemy->x, enemy->z, 0.54F, 0.32F);
     long_shadow(enemy->x, enemy->z, 1.25F, 0.34F, 0.24F);
-    cube3((float[3]){enemy->x, 0.52F, enemy->z}, (float[3]){0.58F, 0.72F, 0.46F}, (float[4]){0.56F + flash * 0.28F, 0.13F, 0.14F, 1.0F});
-    cube3((float[3]){enemy->x - 0.01F, 0.71F, enemy->z - 0.245F}, (float[3]){0.50F, 0.055F, 0.035F}, (float[4]){0.82F, 0.28F, 0.12F, 1.0F});
-    quad3((float[3]){enemy->x - 0.33F, 0.92F, enemy->z - 0.24F}, (float[3]){enemy->x + 0.33F, 0.92F, enemy->z - 0.24F}, (float[3]){enemy->x + 0.22F, 0.36F, enemy->z - 0.50F}, (float[3]){enemy->x - 0.22F, 0.36F, enemy->z - 0.50F}, (float[4]){0.15F, 0.05F, 0.06F, 1.0F});
-    tri3((float[3]){enemy->x - 0.30F, 0.90F, enemy->z + 0.24F}, (float[3]){enemy->x + 0.30F, 0.90F, enemy->z + 0.24F}, (float[3]){enemy->x, 1.22F, enemy->z + 0.14F}, (float[4]){0.82F, 0.34F, 0.16F, 1.0F});
-    cube3((float[3]){enemy->x, 1.08F, enemy->z}, (float[3]){0.44F, 0.40F, 0.44F}, (float[4]){0.80F, 0.55F, 0.38F, 1.0F});
-    cube3((float[3]){enemy->x - 0.10F, 1.10F, enemy->z - 0.225F}, (float[3]){0.07F, 0.055F, 0.035F}, (float[4]){1.0F, 0.30F, 0.12F, 1.0F});
-    cube3((float[3]){enemy->x + 0.10F, 1.10F, enemy->z - 0.225F}, (float[3]){0.07F, 0.055F, 0.035F}, (float[4]){1.0F, 0.30F, 0.12F, 1.0F});
-    cube3((float[3]){enemy->x - 0.19F, 1.36F, enemy->z - 0.12F}, (float[3]){0.12F, 0.20F, 0.12F}, (float[4]){0.22F, 0.08F, 0.05F, 1.0F});
-    cube3((float[3]){enemy->x + 0.19F, 1.36F, enemy->z - 0.12F}, (float[3]){0.12F, 0.20F, 0.12F}, (float[4]){0.22F, 0.08F, 0.05F, 1.0F});
-    tri3((float[3]){enemy->x - 0.30F, 1.26F, enemy->z}, (float[3]){enemy->x - 0.68F, 1.36F, enemy->z - 0.08F}, (float[3]){enemy->x - 0.34F, 1.10F, enemy->z - 0.12F}, (float[4]){0.72F, 0.64F, 0.48F, 1.0F});
-    tri3((float[3]){enemy->x + 0.30F, 1.26F, enemy->z}, (float[3]){enemy->x + 0.68F, 1.36F, enemy->z - 0.08F}, (float[3]){enemy->x + 0.34F, 1.10F, enemy->z - 0.12F}, (float[4]){0.72F, 0.64F, 0.48F, 1.0F});
-    cube3((float[3]){enemy->x - 0.40F, 0.48F, enemy->z}, (float[3]){0.16F, 0.58F, 0.16F}, (float[4]){0.38F, 0.08F, 0.09F, 1.0F});
-    cube3((float[3]){enemy->x + 0.40F, 0.48F, enemy->z}, (float[3]){0.16F, 0.58F, 0.16F}, (float[4]){0.38F, 0.08F, 0.09F, 1.0F});
-    cube3((float[3]){enemy->x + 0.52F, 0.64F, enemy->z - 0.08F}, (float[3]){0.12F, 0.42F, 0.42F}, (float[4]){0.14F, 0.12F, 0.12F, 1.0F});
-    cube3((float[3]){enemy->x + 0.59F, 0.68F, enemy->z - 0.30F}, (float[3]){0.035F, 0.22F, 0.22F}, (float[4]){0.84F, 0.38F, 0.18F, 1.0F});
-    nt_shape_renderer_line((float[3]){enemy->x - 0.45F, 0.78F, enemy->z}, (float[3]){enemy->x - 0.92F, 0.92F, enemy->z + 0.36F}, (float[4]){0.86F, 0.82F, 0.68F, 1.0F});
-    tri3((float[3]){enemy->x - 0.92F, 0.92F, enemy->z + 0.36F}, (float[3]){enemy->x - 1.12F, 0.78F, enemy->z + 0.52F}, (float[3]){enemy->x - 0.88F, 0.68F, enemy->z + 0.64F}, (float[4]){0.72F, 0.72F, 0.66F, 1.0F});
+    const float flash = enemy->hit_flash > 0.0F ? 1.0F : 0.0F;
+    (void)flash;
+    nt_shape_renderer_line((float[3]){enemy->x - 0.42F, 0.70F, enemy->z + 0.02F}, (float[3]){enemy->x - 0.94F, 0.94F, enemy->z + 0.34F}, (float[4]){0.86F, 0.82F, 0.68F, 1.0F});
+    tri3((float[3]){enemy->x - 0.94F, 0.94F, enemy->z + 0.34F}, (float[3]){enemy->x - 1.16F, 0.78F, enemy->z + 0.52F}, (float[3]){enemy->x - 0.88F, 0.66F, enemy->z + 0.62F}, (float[4]){0.72F, 0.72F, 0.66F, 1.0F});
+    for (int i = 0; i < 3; ++i) {
+        const bool full = i < enemy->hp;
+        diamond3(enemy->x - 0.24F + (float)i * 0.24F, 1.55F, enemy->z - 0.02F, 0.055F,
+                 full ? (float[4]){0.92F, 0.14F, 0.12F, 0.96F} : (float[4]){0.16F, 0.06F, 0.06F, 0.72F});
+    }
 }
 
 static void draw_enemies(void) {
@@ -1088,32 +1182,45 @@ static void draw_enemies(void) {
 static void draw_player(void) {
     const float x = s_player_x;
     const float z = s_player_z;
-    const float flash = s_player_hit_flash > 0.0F ? 0.25F : 0.0F;
     ground_shadow(x, z, 0.58F, 0.34F);
     long_shadow(x, z, 1.46F, 0.38F, 0.26F);
-    quad3((float[3]){x - 0.34F, 1.02F, z - 0.30F}, (float[3]){x + 0.34F, 1.02F, z - 0.30F}, (float[3]){x + 0.44F, 0.12F, z - 0.62F}, (float[3]){x - 0.44F, 0.12F, z - 0.62F}, (float[4]){0.08F, 0.12F, 0.24F, 1.0F});
-    cube3((float[3]){x, 0.66F, z - 0.31F}, (float[3]){0.48F, 0.70F, 0.12F}, (float[4]){0.10F, 0.16F, 0.30F, 1.0F});
-    cube3((float[3]){x, 0.58F, z}, (float[3]){0.58F, 0.78F, 0.42F}, (float[4]){0.22F + flash, 0.45F, 0.82F, 1.0F});
-    cube3((float[3]){x, 0.83F, z - 0.225F}, (float[3]){0.42F, 0.055F, 0.035F}, (float[4]){0.84F, 0.94F, 1.0F, 1.0F});
-    diamond3(x, 0.64F, z - 0.235F, 0.085F, (float[4]){0.18F, 0.92F, 1.0F, 1.0F});
-    tri3((float[3]){x - 0.28F, 0.96F, z + 0.24F}, (float[3]){x + 0.28F, 0.96F, z + 0.24F}, (float[3]){x, 1.22F, z + 0.18F}, (float[4]){0.72F, 0.84F, 0.96F, 1.0F});
-    cube3((float[3]){x, 1.16F, z}, (float[3]){0.46F, 0.42F, 0.46F}, (float[4]){0.93F, 0.77F, 0.55F, 1.0F});
-    cube3((float[3]){x, 1.43F, z}, (float[3]){0.56F, 0.18F, 0.52F}, (float[4]){0.12F, 0.14F, 0.18F, 1.0F});
-    tri3((float[3]){x - 0.20F, 1.54F, z - 0.16F}, (float[3]){x, 1.88F, z}, (float[3]){x + 0.20F, 1.54F, z - 0.16F}, (float[4]){0.78F, 0.86F, 0.94F, 1.0F});
-    cube3((float[3]){x - 0.43F, 0.52F, z}, (float[3]){0.20F, 0.62F, 0.20F}, (float[4]){0.17F, 0.32F, 0.62F, 1.0F});
-    cube3((float[3]){x + 0.43F, 0.52F, z}, (float[3]){0.20F, 0.62F, 0.20F}, (float[4]){0.17F, 0.32F, 0.62F, 1.0F});
-    cube3((float[3]){x - 0.58F, 0.70F, z + 0.10F}, (float[3]){0.12F, 0.54F, 0.42F}, (float[4]){0.16F, 0.20F, 0.24F, 1.0F});
-    cube3((float[3]){x - 0.64F, 0.74F, z - 0.12F}, (float[3]){0.035F, 0.36F, 0.22F}, (float[4]){0.84F, 0.94F, 1.0F, 1.0F});
-    nt_shape_renderer_sphere_wire((float[3]){x - 0.62F, 0.74F, z + 0.12F}, 0.32F, (float[4]){0.72F, 0.82F, 0.88F, 0.88F});
-    cube3((float[3]){x - 0.18F, 0.15F, z}, (float[3]){0.18F, 0.32F, 0.20F}, (float[4]){0.09F, 0.10F, 0.12F, 1.0F});
-    cube3((float[3]){x + 0.18F, 0.15F, z}, (float[3]){0.18F, 0.32F, 0.20F}, (float[4]){0.09F, 0.10F, 0.12F, 1.0F});
     const float sx = x + sinf(s_player_facing) * 0.82F;
     const float sz = z + cosf(s_player_facing) * 0.82F;
-    nt_shape_renderer_line((float[3]){x + 0.34F, 0.74F, z}, (float[3]){sx, 0.98F, sz}, (float[4]){0.88F, 0.93F, 0.96F, 1.0F});
-    tri3((float[3]){sx, 0.98F, sz}, (float[3]){sx + sinf(s_player_facing) * 0.26F + 0.08F, 1.06F, sz + cosf(s_player_facing) * 0.26F}, (float[3]){sx + sinf(s_player_facing) * 0.26F - 0.08F, 0.88F, sz + cosf(s_player_facing) * 0.26F}, (float[4]){0.88F, 0.94F, 1.0F, 1.0F});
-    nt_shape_renderer_line((float[3]){x + 0.34F, 0.74F, z}, (float[3]){sx + 0.18F, 1.08F, sz + 0.16F}, (float[4]){0.60F, 0.92F, 1.0F, 0.62F});
     if (s_slash_timer > 0.0F) {
-        nt_shape_renderer_cylinder_wire((float[3]){sx, 0.72F, sz}, ATTACK_RADIUS * 0.48F, 0.08F, (float[4]){0.94F, 0.96F, 1.0F, 0.90F});
+        tri3((float[3]){sx - 0.40F, 0.52F, sz + 0.10F}, (float[3]){sx + 0.62F, 1.08F, sz - 0.12F}, (float[3]){sx + 0.28F, 0.84F, sz + 0.22F}, (float[4]){0.76F, 0.96F, 1.0F, 0.62F});
+    }
+}
+
+static void draw_feedback_effects(void) {
+    if (s_hit_burst_timer > 0.0F) {
+        const float t = clampf(s_hit_burst_timer / 0.38F, 0.0F, 1.0F);
+        const float r = 0.42F + (1.0F - t) * 0.56F;
+        nt_shape_renderer_cylinder((float[3]){s_hit_effect_x, 0.74F, s_hit_effect_z}, r, 0.035F, (float[4]){1.0F, 0.22F, 0.12F, 0.18F * t});
+        nt_shape_renderer_line((float[3]){s_hit_effect_x - r, 0.88F, s_hit_effect_z}, (float[3]){s_hit_effect_x + r, 1.16F, s_hit_effect_z}, (float[4]){1.0F, 0.84F, 0.34F, 0.70F * t});
+        nt_shape_renderer_line((float[3]){s_hit_effect_x, 0.82F, s_hit_effect_z - r}, (float[3]){s_hit_effect_x, 1.14F, s_hit_effect_z + r}, (float[4]){1.0F, 0.74F, 0.24F, 0.62F * t});
+    }
+    if (s_loot_burst_timer > 0.0F) {
+        const float t = clampf(s_loot_burst_timer / 1.05F, 0.0F, 1.0F);
+        const float rise = (1.0F - t) * 0.55F;
+        for (int i = 0; i < 5; ++i) {
+            const float angle = (float)i * 1.256F;
+            const float x = s_loot_effect_x + cosf(angle) * (0.34F + rise);
+            const float z = s_loot_effect_z + sinf(angle) * (0.24F + rise * 0.45F);
+            diamond3(x, 0.74F + rise + (float)(i % 2) * 0.12F, z, 0.10F, (float[4]){1.0F, 0.74F, 0.18F, 0.82F * t});
+        }
+        nt_shape_renderer_sphere((float[3]){s_loot_effect_x, 0.80F + rise, s_loot_effect_z}, 0.54F + rise * 0.30F, (float[4]){1.0F, 0.78F, 0.22F, 0.18F * t});
+    }
+    if (s_rune_burst_timer > 0.0F) {
+        const float t = clampf(s_rune_burst_timer / 0.72F, 0.0F, 1.0F);
+        nt_shape_renderer_cylinder((float[3]){s_rune_effect_x, 0.16F, s_rune_effect_z}, 0.78F + (1.0F - t) * 0.80F, 0.045F, (float[4]){0.20F, 0.94F, 1.0F, 0.18F * t});
+        nt_shape_renderer_line((float[3]){s_rune_effect_x, 0.28F, s_rune_effect_z}, (float[3]){s_rune_effect_x, 2.00F + (1.0F - t) * 0.60F, s_rune_effect_z}, (float[4]){0.24F, 0.94F, 1.0F, 0.62F * t});
+    }
+    if (s_gate_burst_timer > 0.0F) {
+        const float t = clampf(s_gate_burst_timer / 1.20F, 0.0F, 1.0F);
+        nt_shape_renderer_cylinder((float[3]){s_gate_x, 0.20F, s_gate_z}, 1.24F + (1.0F - t) * 1.12F, 0.045F, (float[4]){0.28F, 1.0F, 0.82F, 0.18F * t});
+        nt_shape_renderer_sphere((float[3]){s_gate_x, 1.38F, s_gate_z - 0.18F}, 1.08F + (1.0F - t) * 0.64F, (float[4]){0.64F, 1.0F, 0.94F, 0.16F * t});
+        nt_shape_renderer_line((float[3]){s_gate_x - 0.96F, 0.26F, s_gate_z}, (float[3]){s_gate_x, 2.80F, s_gate_z - 0.18F}, (float[4]){0.42F, 1.0F, 0.92F, 0.56F * t});
+        nt_shape_renderer_line((float[3]){s_gate_x + 0.96F, 0.26F, s_gate_z}, (float[3]){s_gate_x, 2.80F, s_gate_z - 0.18F}, (float[4]){0.42F, 1.0F, 0.92F, 0.56F * t});
     }
 }
 
@@ -1139,7 +1246,53 @@ static void draw_material_overlays(const float vp[16]) {
     material_wall_x(MAT_STONE, -1.88F, 0.94F, 4.2F, 0.92F, 1.2F, 2.0F, (float[4]){0.80F, 0.88F, 0.92F, 0.42F}, vp);
 }
 
+static void draw_authored_tree(float x, float z, float scale, float yaw, const float tint[4], const float vp[16]) {
+    draw_authored_mesh_scaled(&BF_MESH_PINE_TRUNK, x, z, scale * 0.82F, scale * 1.06F, scale * 0.82F, yaw, (float[4]){0.96F, 0.94F, 0.90F, 1.0F}, vp);
+    draw_authored_mesh_scaled(&BF_MESH_PINE_CROWN, x, z, scale * 1.02F, scale * 1.08F, scale * 0.92F, yaw, tint, vp);
+    draw_authored_mesh_scaled(&BF_MESH_PINE_CROWN, x + cosf(yaw) * 0.10F * scale, z + sinf(yaw) * 0.10F * scale,
+                              scale * 0.68F, scale * 0.68F, scale * 0.62F, yaw + 0.46F, (float[4]){tint[0] * 0.90F, tint[1] * 1.04F, tint[2] * 0.96F, tint[3]}, vp);
+}
+
+static void draw_authored_mountain(float x, float z, float sx, float sy, float sz, float yaw, const float tint[4], const float vp[16]) {
+    draw_authored_mesh_scaled(&BF_MESH_MOUNTAIN_BODY, x, z, sx, sy, sz, yaw, tint, vp);
+    draw_authored_mesh_scaled(&BF_MESH_MOUNTAIN_SNOW, x, z, sx * 0.56F, sy, sz * 0.56F, yaw, (float[4]){0.86F, 0.94F, 1.0F, 1.0F}, vp);
+    draw_authored_mesh_scaled(&BF_MESH_ROCK_SHARD, x - 0.52F * sx, z + 0.22F * sz, sx * 0.30F, sy * 0.28F, sz * 0.30F, yaw + 0.42F,
+                              (float[4]){tint[0] * 0.92F, tint[1] * 0.94F, tint[2] * 0.98F, 1.0F}, vp);
+    draw_authored_mesh_scaled(&BF_MESH_ROCK_SHARD, x + 0.42F * sx, z - 0.16F * sz, sx * 0.25F, sy * 0.22F, sz * 0.25F, yaw - 0.34F,
+                              (float[4]){tint[0] * 0.82F, tint[1] * 0.88F, tint[2] * 0.94F, 1.0F}, vp);
+}
+
 static void draw_authored_asset_overlays(const float vp[16]) {
+    draw_authored_mountain(-8.0F, 6.0F, 1.90F, 3.26F, 1.62F, 0.08F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
+    draw_authored_mountain(-5.2F, 8.0F, 1.48F, 2.64F, 1.32F, -0.20F, (float[4]){0.92F, 0.96F, 1.02F, 1.0F}, vp);
+    draw_authored_mountain(7.3F, 7.0F, 1.96F, 3.58F, 1.66F, 0.16F, (float[4]){0.94F, 0.98F, 1.04F, 1.0F}, vp);
+    draw_authored_mountain(9.0F, -1.5F, 1.66F, 2.95F, 1.38F, -0.16F, (float[4]){0.86F, 0.92F, 0.98F, 1.0F}, vp);
+    draw_authored_tree(-7.0F, -2.0F, 1.02F, 0.30F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
+    draw_authored_tree(-4.5F, 3.2F, 0.92F, -0.18F, (float[4]){0.86F, 1.0F, 0.90F, 1.0F}, vp);
+    draw_authored_tree(2.6F, 5.8F, 1.04F, 0.52F, (float[4]){0.92F, 1.0F, 0.96F, 1.0F}, vp);
+    draw_authored_tree(7.2F, -4.0F, 0.94F, -0.42F, (float[4]){0.86F, 0.96F, 0.88F, 1.0F}, vp);
+    draw_authored_tree(-1.5F, -6.6F, 0.80F, 0.10F, (float[4]){0.90F, 0.98F, 0.92F, 1.0F}, vp);
+    draw_authored_tree(5.6F, 1.2F, 0.76F, 0.74F, (float[4]){0.90F, 1.0F, 0.92F, 1.0F}, vp);
+    draw_authored_tree(-7.6F, 4.6F, 0.82F, -0.34F, (float[4]){0.88F, 0.96F, 0.92F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_ROCK_SHARD, -8.2F, 5.4F, 1.18F, 0.20F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_ROCK_SHARD, 7.4F, 5.8F, 1.34F, -0.28F, (float[4]){0.92F, 0.96F, 1.0F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_ROCK_SHARD, 6.3F, 3.5F, 0.82F, 0.86F, (float[4]){0.82F, 0.94F, 1.0F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_ROCK_SHARD, -2.8F, 4.4F, 0.74F, -0.32F, (float[4]){0.94F, 0.98F, 1.0F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_RUIN_TRIM, -2.4F, 3.82F, 1.22F, 0.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_RUIN_TRIM, s_gate_x, s_gate_z - 0.50F, 1.12F, 0.0F, g_game_state.tutorial_done ? (float[4]){0.72F, 1.0F, 1.14F, 1.0F} : (float[4]){0.86F, 0.92F, 1.0F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_PATH_STONE, -4.6F, -3.8F, 0.82F, 0.12F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_PATH_STONE, -2.4F, -2.8F, 0.74F, -0.22F, (float[4]){0.94F, 0.94F, 0.90F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_PATH_STONE, 0.1F, -1.0F, 0.88F, 0.18F, (float[4]){0.96F, 0.96F, 0.92F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_PATH_STONE, 2.0F, 1.6F, 0.76F, -0.18F, (float[4]){0.98F, 0.94F, 0.86F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_PATH_STONE, 3.8F, 2.7F, 0.70F, 0.28F, (float[4]){0.92F, 0.92F, 0.86F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_CAMP_DAIS, s_camp_x, s_camp_z, 1.0F, 0.0F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_CAMP_CANOPY, s_camp_x, s_camp_z, 1.0F, 0.0F, (float[4]){0.72F, 0.78F, 0.78F, 1.0F}, vp);
+    draw_authored_mesh_scaled(&BF_MESH_PINE_TRUNK, s_camp_x - 1.10F, s_camp_z + 0.80F, 0.78F, 1.20F, 0.78F, 0.0F,
+                              (float[4]){0.70F, 0.70F, 0.68F, 1.0F}, vp);
+    draw_authored_mesh_scaled(&BF_MESH_PINE_TRUNK, s_camp_x + 1.10F, s_camp_z + 0.80F, 0.78F, 1.20F, 0.78F, 0.0F,
+                              (float[4]){0.70F, 0.70F, 0.68F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_CHEST_BODY, s_chest_x, s_chest_z, 1.0F, 0.0F, s_chest_open ? (float[4]){1.08F, 1.02F, 0.92F, 1.0F} : (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_CHEST_LID, s_chest_x, s_chest_z, 1.0F, 0.0F, s_chest_open ? (float[4]){1.18F, 1.06F, 0.72F, 1.0F} : (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
     for (int i = 0; i < RUNE_SITE_COUNT; ++i) {
         const float tint = rune_unlocked(&s_runes[i]) ? 1.0F : 0.58F;
         draw_authored_mesh(&BF_MESH_RUNE_SPIRE, s_runes[i].x, s_runes[i].z, 1.0F, 0.78F, (float[4]){tint, tint, tint, 1.0F}, vp);
@@ -1149,30 +1302,36 @@ static void draw_authored_asset_overlays(const float vp[16]) {
     draw_authored_mesh(&BF_MESH_CHEST_LOCK, s_chest_x, s_chest_z, 1.0F, 0.0F, s_chest_open ? (float[4]){1.15F, 1.05F, 0.70F, 1.0F} : (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
     draw_authored_mesh(&BF_MESH_CAMP_STANDARD, s_camp_x - 1.20F, s_camp_z + 1.08F, 1.0F, 0.12F, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
     draw_authored_mesh(&BF_MESH_CAMP_STANDARD, s_camp_x + 0.92F, s_camp_z + 1.20F, 0.82F, -0.18F, (float[4]){0.74F, 0.78F, 0.86F, 1.0F}, vp);
-    draw_authored_mesh(&BF_MESH_HERO_CAPE, s_player_x, s_player_z, 1.05F, s_player_facing, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
-    draw_authored_mesh(&BF_MESH_HERO_CUIRASS, s_player_x, s_player_z, 1.04F, s_player_facing, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
-    draw_authored_mesh(&BF_MESH_HERO_CREST, s_player_x, s_player_z, 1.02F, s_player_facing, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
+    const float hero_flash = s_player_hit_flash > 0.0F ? 1.18F : 1.0F;
+    draw_authored_mesh(&BF_MESH_HERO_CAPE, s_player_x, s_player_z, 1.16F, s_player_facing, (float[4]){hero_flash, hero_flash, hero_flash, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_HERO_BODY, s_player_x, s_player_z, 1.18F, s_player_facing, (float[4]){hero_flash, hero_flash, hero_flash, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_HERO_CUIRASS, s_player_x, s_player_z, 1.16F, s_player_facing, (float[4]){1.08F, 1.08F, 1.08F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_HERO_HEAD, s_player_x, s_player_z, 1.16F, s_player_facing, (float[4]){hero_flash, hero_flash, hero_flash, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_HERO_CREST, s_player_x, s_player_z, 1.14F, s_player_facing, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
+    draw_authored_mesh(&BF_MESH_HERO_SWORD, s_player_x, s_player_z, 1.16F, s_player_facing, (float[4]){1.0F, 1.0F, 1.0F, 1.0F}, vp);
     for (int i = 0; i < ENEMY_COUNT; ++i) {
         const Enemy *enemy = &s_enemies[i];
         if (!enemy->alive) {
             continue;
         }
         const float tint = enemy->hit_flash > 0.0F ? 1.35F : 1.0F;
-        draw_authored_mesh(&BF_MESH_ENEMY_MASK, enemy->x, enemy->z, 1.0F, 0.0F, (float[4]){tint, 1.0F, 1.0F, 1.0F}, vp);
-        draw_authored_mesh(&BF_MESH_ENEMY_HORNS, enemy->x, enemy->z, 1.0F, 0.0F, (float[4]){tint, 1.0F, 1.0F, 1.0F}, vp);
+        draw_authored_mesh(&BF_MESH_ENEMY_BODY, enemy->x, enemy->z, 1.12F, 0.0F, (float[4]){tint, 1.0F, 1.0F, 1.0F}, vp);
+        draw_authored_mesh(&BF_MESH_ENEMY_HEAD, enemy->x, enemy->z, 1.12F, 0.0F, (float[4]){tint, 1.0F, 1.0F, 1.0F}, vp);
+        draw_authored_mesh(&BF_MESH_ENEMY_MASK, enemy->x, enemy->z, 1.12F, 0.0F, (float[4]){tint, 1.0F, 1.0F, 1.0F}, vp);
+        draw_authored_mesh(&BF_MESH_ENEMY_HORNS, enemy->x, enemy->z, 1.12F, 0.0F, (float[4]){tint, 1.0F, 1.0F, 1.0F}, vp);
     }
 }
 
 static void draw_3d_scene(float w, float h) {
     const float aspect = h > 0.0F ? w / h : 1.0F;
-    vec3 eye = {s_player_x + 6.8F, 7.4F, s_player_z - 10.2F};
-    vec3 center = {s_player_x + 2.4F, 0.90F, s_player_z + 5.0F};
+    vec3 eye = {s_player_x + 8.8F, 9.2F, s_player_z - 8.8F};
+    vec3 center = {s_player_x + 0.9F, 0.58F, s_player_z + 1.7F};
     vec3 up = {0.0F, 1.0F, 0.0F};
     mat4 view;
     mat4 proj;
     mat4 vp;
     glm_lookat(eye, center, up, view);
-    glm_perspective(glm_rad(58.0F), aspect, 0.1F, 70.0F, proj);
+    glm_perspective(glm_rad(49.0F), aspect, 0.1F, 76.0F, proj);
     glm_mat4_mul(proj, view, vp);
     nt_shape_renderer_set_vp((float *)vp);
     nt_shape_renderer_set_cam_pos((float[3]){eye[0], eye[1], eye[2]});
@@ -1184,6 +1343,7 @@ static void draw_3d_scene(float w, float h) {
     draw_objective_marker();
     draw_enemies();
     draw_player();
+    draw_feedback_effects();
     nt_shape_renderer_flush();
     draw_material_overlays((const float *)vp);
     draw_authored_asset_overlays((const float *)vp);
@@ -1197,31 +1357,11 @@ static void draw_hud(float w, float h) {
     nt_shape_renderer_set_depth(false);
     nt_shape_renderer_set_line_width(2.0F);
 
-    rect2(16.0F, h - 58.0F, 166.0F, 42.0F, (float[4]){0.05F, 0.08F, 0.10F, 0.62F});
-    for (int i = 0; i < RUNE_TARGET; ++i) {
-        const float x = 44.0F + (float)i * 46.0F;
-        const bool lit = i < g_game_state.wallet_soft;
-        diamond2(x, h - 37.0F, 15.0F, lit ? (float[4]){0.15F, 0.92F, 1.0F, 1.0F} : (float[4]){0.20F, 0.28F, 0.32F, 1.0F});
-        nt_shape_renderer_circle_wire((float[3]){x, h - 37.0F, 0.0F}, 19.0F, lit ? (float[4]){0.74F, 0.98F, 1.0F, 0.80F} : (float[4]){0.08F, 0.12F, 0.14F, 0.80F});
-    }
-
-    rect2(202.0F, h - 58.0F, 188.0F, 42.0F, (float[4]){0.05F, 0.08F, 0.10F, 0.62F});
-    for (int i = 0; i < PLAYER_MAX_HP; ++i) {
-        rect2(220.0F + (float)i * 26.0F, h - 44.0F, 18.0F, 18.0F, i < s_player_hp ? (float[4]){0.88F, 0.12F, 0.18F, 1.0F} : (float[4]){0.20F, 0.11F, 0.13F, 1.0F});
-    }
-
-    rect2(w - 184.0F, h - 58.0F, 168.0F, 42.0F, (float[4]){0.05F, 0.08F, 0.10F, 0.62F});
-    for (int i = 0; i < ENEMY_COUNT; ++i) {
-        const bool alive = i < alive_enemy_count();
-        diamond2(w - 154.0F + (float)i * 34.0F, h - 37.0F, 11.0F, alive ? (float[4]){0.86F, 0.16F, 0.18F, 1.0F} : (float[4]){0.16F, 0.24F, 0.18F, 1.0F});
-    }
-
     const ObjectiveStage stage = objective_stage();
-    const float chain_x = w * 0.5F - 168.0F;
-    const float chain_y = h - 140.0F;
-    rect2(chain_x - 18.0F, chain_y - 19.0F, 372.0F, 38.0F, (float[4]){0.04F, 0.07F, 0.09F, 0.50F});
+    const float chain_x = w * 0.5F - 132.0F;
+    const float chain_y = 102.0F;
     for (int i = 0; i < 6; ++i) {
-        const float x = chain_x + (float)i * 66.0F;
+        const float x = chain_x + (float)i * 52.0F;
         const bool complete = objective_step_complete(i);
         const bool current = i == (int)stage || (stage == OBJ_DONE && i == 5);
         const float color_done[4] = {0.18F, 0.86F, 0.54F, 1.0F};
@@ -1229,39 +1369,57 @@ static void draw_hud(float w, float h) {
         const float color_locked[4] = {0.18F, 0.24F, 0.28F, 1.0F};
         const float *color = complete ? color_done : (current ? color_current : color_locked);
         if (i < 5) {
-            rect2(x + 16.0F, chain_y - 2.0F, 34.0F, 4.0F, complete ? (float[4]){0.16F, 0.70F, 0.46F, 1.0F} : (float[4]){0.16F, 0.20F, 0.23F, 1.0F});
+            rect2(x + 12.0F, chain_y - 1.0F, 28.0F, 3.0F, complete ? (float[4]){0.62F, 0.54F, 0.30F, 0.95F} : (float[4]){0.22F, 0.20F, 0.18F, 0.88F});
         }
         if (i == 1) {
-            diamond2(x, chain_y, current ? 15.0F : 12.0F, color);
+            diamond2(x, chain_y, current ? 10.0F : 8.0F, color);
         } else if (i == 2) {
-            rect2(x - 12.0F, chain_y - 9.0F, current ? 26.0F : 22.0F, current ? 18.0F : 16.0F, color);
-            rect2(x - 8.0F, chain_y + 7.0F, current ? 18.0F : 14.0F, 5.0F, (float[4]){0.95F, 0.66F, 0.17F, 1.0F});
+            rect2(x - 8.0F, chain_y - 6.0F, current ? 18.0F : 16.0F, current ? 13.0F : 11.0F, color);
+            rect2(x - 5.0F, chain_y + 5.0F, current ? 12.0F : 10.0F, 4.0F, (float[4]){0.95F, 0.66F, 0.17F, 1.0F});
         } else if (i == 5) {
-            rect2(x - 13.0F, chain_y - 14.0F, 6.0F, 28.0F, color);
-            rect2(x + 7.0F, chain_y - 14.0F, 6.0F, 28.0F, color);
-            rect2(x - 13.0F, chain_y + 10.0F, 26.0F, 6.0F, color);
+            rect2(x - 9.0F, chain_y - 11.0F, 5.0F, 22.0F, color);
+            rect2(x + 5.0F, chain_y - 11.0F, 5.0F, 22.0F, color);
+            rect2(x - 9.0F, chain_y + 7.0F, 19.0F, 5.0F, color);
         } else {
-            diamond2(x, chain_y, current ? 15.0F : 12.0F, color);
-            nt_shape_renderer_circle_wire((float[3]){x, chain_y, 0.0F}, current ? 19.0F : 15.0F, color);
+            diamond2(x, chain_y, current ? 10.0F : 8.0F, color);
+            if (current) {
+                diamond2(x, chain_y, 15.0F, (float[4]){color[0], color[1], color[2], 0.22F});
+            }
         }
     }
 
-    rect2(s_action_box.x, s_action_box.y, s_action_box.w, s_action_box.h, (float[4]){0.05F, 0.07F, 0.09F, 0.70F});
-    rect2(s_attack_box.x, s_attack_box.y, s_attack_box.w, s_attack_box.h, (float[4]){0.05F, 0.07F, 0.09F, 0.70F});
-    nt_shape_renderer_circle((float[3]){s_action_box.x + 30.0F, s_action_box.y + 23.0F, 0.0F}, 15.0F, action_ready() ? (float[4]){0.14F, 0.88F, 1.0F, 1.0F} : (float[4]){0.34F, 0.36F, 0.36F, 1.0F});
-    diamond2(s_action_box.x + 30.0F, s_action_box.y + 23.0F, 10.0F, (float[4]){0.98F, 0.91F, 0.42F, 1.0F});
-    rect2(s_action_box.x + 58.0F, s_action_box.y + 14.0F, s_action_box.w - 76.0F, 18.0F, action_ready() ? (float[4]){0.12F, 0.72F, 0.86F, 1.0F} : (float[4]){0.20F, 0.24F, 0.26F, 1.0F});
-    nt_shape_renderer_circle((float[3]){s_attack_box.x + 30.0F, s_attack_box.y + 23.0F, 0.0F}, 15.0F, s_attack_cd <= 0.0F ? (float[4]){0.90F, 0.22F, 0.17F, 1.0F} : (float[4]){0.35F, 0.14F, 0.14F, 1.0F});
-    nt_shape_renderer_line((float[3]){s_attack_box.x + 22.0F, s_attack_box.y + 16.0F, 0.0F}, (float[3]){s_attack_box.x + 38.0F, s_attack_box.y + 32.0F, 0.0F}, (float[4]){0.96F, 0.94F, 0.88F, 1.0F});
-    rect2(s_attack_box.x + 58.0F, s_attack_box.y + 14.0F, s_attack_box.w - 76.0F, 18.0F, (float[4]){0.68F, 0.14F, 0.12F, 1.0F});
+    const float belt_x = w * 0.5F - 166.0F;
+    const float belt_y = 28.0F;
+    ui_slab(belt_x - 16.0F, belt_y - 12.0F, 334.0F, 76.0F, (float[4]){0.13F, 0.12F, 0.10F, 0.88F}, (float[4]){0.58F, 0.43F, 0.20F, 0.92F});
+    for (int i = 0; i < 5; ++i) {
+        const float x = belt_x + (float)i * 66.0F;
+        const bool ready = (i == 0 && s_attack_cd <= 0.0F) || (i == 1 && action_ready()) || (i == 2 && s_chest_open) || (i == 3 && g_game_state.wallet_soft >= RUNE_TARGET) || (i == 4 && g_game_state.tutorial_done);
+        const bool active = (i == 0 && s_slash_timer > 0.0F) || (i == 1 && action_ready()) || (i == (int)objective_stage());
+        ui_slab(x, belt_y, 54.0F, 54.0F,
+                active ? (float[4]){0.18F, 0.20F, 0.17F, 0.94F} : (float[4]){0.09F, 0.10F, 0.09F, 0.94F},
+                ready ? (float[4]){0.78F, 0.58F, 0.24F, 0.96F} : (float[4]){0.28F, 0.27F, 0.24F, 0.88F});
+        rect2(x + 8.0F, belt_y + 8.0F, 38.0F, 38.0F, ready ? (float[4]){0.11F, 0.13F, 0.12F, 0.82F} : (float[4]){0.08F, 0.08F, 0.08F, 0.82F});
+        if (i == 0) {
+            nt_shape_renderer_line((float[3]){x + 17.0F, belt_y + 16.0F, 0.0F}, (float[3]){x + 37.0F, belt_y + 38.0F, 0.0F}, ready ? (float[4]){0.96F, 0.95F, 0.88F, 1.0F} : (float[4]){0.34F, 0.36F, 0.36F, 1.0F});
+            tri3((float[3]){x + 37.0F, belt_y + 38.0F, 0.0F}, (float[3]){x + 42.0F, belt_y + 30.0F, 0.0F}, (float[3]){x + 30.0F, belt_y + 34.0F, 0.0F}, ready ? (float[4]){0.82F, 0.92F, 1.0F, 1.0F} : (float[4]){0.30F, 0.34F, 0.36F, 1.0F});
+        } else if (i == 1) {
+            diamond2(x + 27.0F, belt_y + 28.0F, 14.0F, ready ? (float[4]){0.98F, 0.82F, 0.22F, 1.0F} : (float[4]){0.34F, 0.32F, 0.22F, 1.0F});
+        } else if (i == 2) {
+            rect2(x + 14.0F, belt_y + 18.0F, 28.0F, 18.0F, ready ? (float[4]){0.92F, 0.62F, 0.18F, 1.0F} : (float[4]){0.32F, 0.23F, 0.14F, 1.0F});
+            rect2(x + 18.0F, belt_y + 34.0F, 20.0F, 6.0F, (float[4]){0.96F, 0.78F, 0.34F, ready ? 1.0F : 0.45F});
+        } else if (i == 3) {
+            diamond2(x + 27.0F, belt_y + 29.0F, 16.0F, ready ? (float[4]){0.20F, 0.94F, 1.0F, 1.0F} : (float[4]){0.12F, 0.28F, 0.32F, 1.0F});
+            nt_shape_renderer_circle_wire((float[3]){x + 27.0F, belt_y + 29.0F, 0.0F}, 20.0F, ready ? (float[4]){0.60F, 0.98F, 1.0F, 0.92F} : (float[4]){0.14F, 0.24F, 0.28F, 0.78F});
+        } else {
+            rect2(x + 17.0F, belt_y + 13.0F, 7.0F, 30.0F, ready ? (float[4]){0.22F, 0.88F, 0.54F, 1.0F} : (float[4]){0.20F, 0.24F, 0.26F, 1.0F});
+            rect2(x + 31.0F, belt_y + 13.0F, 7.0F, 30.0F, ready ? (float[4]){0.22F, 0.88F, 0.54F, 1.0F} : (float[4]){0.20F, 0.24F, 0.26F, 1.0F});
+            rect2(x + 17.0F, belt_y + 37.0F, 21.0F, 7.0F, ready ? (float[4]){0.22F, 0.88F, 0.54F, 1.0F} : (float[4]){0.20F, 0.24F, 0.26F, 1.0F});
+        }
+        if (!ready) {
+            rect2(x + 4.0F, belt_y + 4.0F, 46.0F, 46.0F, (float[4]){0.0F, 0.0F, 0.0F, 0.24F});
+        }
+    }
 
-    const float gate_meter = g_game_state.tutorial_done ? 1.0F : (float)g_game_state.wallet_soft / (float)RUNE_TARGET;
-    rect2(w * 0.5F - 118.0F, h - 92.0F, 236.0F, 12.0F, (float[4]){0.04F, 0.08F, 0.10F, 0.58F});
-    rect2(w * 0.5F - 118.0F, h - 92.0F, 236.0F * gate_meter, 12.0F,
-          g_game_state.tutorial_done ? (float[4]){0.22F, 0.88F, 0.54F, 1.0F} : (float[4]){0.12F, 0.75F, 0.96F, 1.0F});
-    const float loot_w = clampf((float)g_game_state.wallet_hard / 45.0F, 0.0F, 1.0F);
-    rect2(w * 0.5F - 118.0F, h - 112.0F, 236.0F, 8.0F, (float[4]){0.04F, 0.08F, 0.10F, 0.50F});
-    rect2(w * 0.5F - 118.0F, h - 112.0F, 236.0F * loot_w, 8.0F, (float[4]){0.95F, 0.66F, 0.17F, 1.0F});
 }
 
 static void update_enemies(float dt) {
@@ -1299,6 +1457,10 @@ static void handle_input(void) {
     s_attack_cd = fmaxf(0.0F, s_attack_cd - g_nt_app.dt);
     s_slash_timer = fmaxf(0.0F, s_slash_timer - g_nt_app.dt);
     s_player_hit_flash = fmaxf(0.0F, s_player_hit_flash - g_nt_app.dt);
+    s_hit_burst_timer = fmaxf(0.0F, s_hit_burst_timer - g_nt_app.dt);
+    s_loot_burst_timer = fmaxf(0.0F, s_loot_burst_timer - g_nt_app.dt);
+    s_gate_burst_timer = fmaxf(0.0F, s_gate_burst_timer - g_nt_app.dt);
+    s_rune_burst_timer = fmaxf(0.0F, s_rune_burst_timer - g_nt_app.dt);
     if (s_player_hp <= 0) {
         if (nt_input_key_is_pressed(NT_KEY_R)) {
             reset_slice();
@@ -1580,6 +1742,7 @@ static void register_ui_devapi(float w, float h) {
     (void)game_devapi_ui_register_node("quest.chain", "root", "meter", "Quest Chain", "Route progress", w * 0.5F - 186.0F, h - 159.0F, 372.0F, 38.0F, true, true);
     (void)game_devapi_ui_register_node("combat.status", "root", "meter", "Combat", "Enemy camp status", w - 184.0F, h - 58.0F, 168.0F, 42.0F, true, true);
     (void)game_devapi_ui_register_node("loot.status", "root", "meter", "Loot", "Chest and gold progress", w * 0.5F - 118.0F, h - 112.0F, 236.0F, 8.0F, true, true);
+    (void)game_devapi_ui_register_node("ability.belt", "root", "toolbar", "Ability Belt", "Offline action slots", w * 0.5F - 180.0F, 70.0F, 332.0F, 62.0F, true, true);
     (void)game_devapi_ui_register_node("action.claim", "root", "button", "Context Action", g_game_state.test_button_text, s_action_box.x, s_action_box.y, s_action_box.w, s_action_box.h, action_ready(), true);
     (void)game_devapi_ui_register_node("action.attack", "root", "button", "Attack", "Strike", s_attack_box.x, s_attack_box.y, s_attack_box.w, s_attack_box.h, s_attack_cd <= 0.0F, true);
 }
@@ -1617,7 +1780,8 @@ static void frame(void) {
         material_pass_init();
         asset_pass_init();
     }
-    nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.70F, 0.86F, 1.0F}, .clear_depth = 1.0F});
+    nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.40F, 0.62F, 0.76F, 1.0F}, .clear_depth = 1.0F});
+    draw_backdrop(w, h);
     draw_3d_scene(w, h);
     nt_shape_renderer_flush();
     draw_hud(w, h);

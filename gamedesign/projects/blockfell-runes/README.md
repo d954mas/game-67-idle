@@ -9,6 +9,10 @@ updated: 2026-06-20
 
 # Blockfell Runes
 
+Updated reference direction: offline isometric fantasy sandbox/ARPG readability
+in the broad style lane of Albion Online, without copying its brand, UI, icons,
+classes, economy, MMO model, or assets.
+
 Native PC 3D block-fantasy action RPG slice from the user's request:
 "3д скайрим в мире роблокса".
 
@@ -43,6 +47,18 @@ Lighting/material-depth evidence:
 Authored asset pass evidence:
 `build/captures/blockfell_authored_asset_pass.png`.
 
+Authored prop pass evidence:
+`build/captures/blockfell_prop_asset_pass.png`.
+
+Authored environment pass evidence:
+`build/captures/blockfell_environment_asset_pass.png`.
+
+Offline reference pass evidence:
+`build/captures/blockfell_offline_reference_pass.png`.
+
+Art cleanup pass evidence:
+`build/captures/blockfell_art_cleanup_pass.png`.
+
 ## Current Debt
 
 - Visuals are procedural shape-rendered models. This is acceptable for the first
@@ -70,3 +86,15 @@ Authored asset pass evidence:
   first runtime mesh overlays for hero armor/cape/crest and enemy masks/horns.
   This starts replacing placeholder visuals, but the base world and many props
   still need a full accepted asset set.
+- The 2026-06-20 authored prop pass expands the same project-local mesh kit to
+  route-critical world objects: rune spires/glyphs, gate keystone, chest lock
+  plate, and camp standards.
+- The 2026-06-20 authored environment pass adds project-local pine crowns, rock
+  shards, ruin trims, and path stones to make the first route read less like
+  pure shape-rendered terrain.
+- The 2026-06-20 offline reference pass responds to the Albion-like reference
+  by changing presentation grammar: more isometric camera framing and a
+  five-slot action belt, while keeping the game local/offline and original.
+- The 2026-06-20 art cleanup pass responds to the lead rejection that the visual
+  still looked like debug by removing global wireframes, the visible ground
+  grid, and top debug-style status panels.
