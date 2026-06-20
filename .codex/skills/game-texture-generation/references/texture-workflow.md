@@ -4,12 +4,12 @@
 
 - **Tileable material**: floors, walls, terrain, baseplates, metal panels, roads,
   fabric, water, lava. Must be seamless if repeated in world space.
-- **Asset material**: standalone texture for props, weapons, mech armor, joints,
+- **Asset material**: standalone texture for props, weapons, armor, joints,
   plastic blocks, painted metal, rubber, glass, energy cores, or emissive strips.
   Tiling depends on UVs and mesh scale; do not assume it must be seamless.
-- **Mech material**: armor paint, panel noise, edge wear, warning stripes, vents,
-  cockpit glass, emissive core, dark joint material, or weapon metal. Decide
-  whether it is a reusable material or a unique part texture.
+- **Painted metal material**: armor paint, panel noise, edge wear, warning
+  stripes, vents, glass, emissive core, dark joint material, or weapon metal.
+  Decide whether it is a reusable material or a unique part texture.
 - **One-off decal**: logo-free iconography, scorch marks, stickers, posters,
   hazard labels, character face plates. Usually clamp; do not force seamlessness.
 - **Material map set**: albedo plus normal/roughness/metalness/emissive. Keep map
@@ -77,7 +77,7 @@ repetitive, noisy, or wrong scale.
 For model-specific materials, do not default to tileable. First decide:
 
 - reusable tiled material on UVs, such as metal panels or rubber joints;
-- unique non-tileable part texture, such as a mech torso paint mask;
+- unique non-tileable part texture, such as a hero torso paint mask;
 - decal layer, such as stripes, scorch marks, labels, or face plates;
 - material map set, such as albedo plus normal/roughness/metalness/emissive.
 

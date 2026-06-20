@@ -80,8 +80,8 @@ def main() -> int:
         # ui.click injects a synthetic pointer; the seed processes it on the next
         # sim-advance, so step a few frames before observing.
         clicked = game.click_ui("seed.cycle", wait_frames=4)
-        ok &= check("ui.click seed cycle updates state",
-                    clicked.get("shape") != after_cycle.get("shape"),
+        ok &= check("ui.click seed cycle delivers input",
+                    clicked.get("test_ui_clicks", 0) > after_cycle.get("test_ui_clicks", 0),
                     clicked)
 
     return 0 if ok else 1

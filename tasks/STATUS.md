@@ -2,55 +2,43 @@
 
 ## Current Goal
 
-Post-prototype pipeline cleanup after `Mech Builder Battler`
-(`mech-builder-battler`). The mech prototype is stopped; do not continue game
-implementation, content, web/mobile export, or frontend/runtime work without a
-fresh explicit request.
+No active game concept is selected. This repository is a clean AI-first native
+game seed, ready for the next game.
 
-Project wiki: `gamedesign/projects/mech-builder-battler/README.md`.
-Latest control note:
-`gamedesign/projects/mech-builder-battler/references/mobile_control_patterns_2026-06-19.md`.
+The asset/cutout pipeline was reviewed and optimized this iteration (key_matte
+default, route_cutout auto-picker, dual_plate; the per-asset edge-color audit
+removed; ~4000 lines of legacy/dead code dropped) — see git history.
+
+Mine Cards was a prior pipeline test run; its full game, GDD, and tasks are
+preserved in tag `mine-cards-snapshot-2026-06-18` and removed from the working
+tree so the next game starts clean. Reusable lessons live in
+`AI_PIPELINE_HISTORY.md`.
 
 ## Current Runtime Surface
 
-Native `game_seed` is the work surface:
+Native `game_seed` is the clean seed work surface:
 
 ```powershell
 cmake --build --preset native-debug --target game_seed
 build/game_seed/native-debug/game_seed.exe --devapi 9123
 ```
 
-Runtime entrypoint: `src/clean_seed_main.c`.
+Runtime entrypoint: `src/clean_seed_main.c` (362-line debug template).
 
 The engine submodule at `external/neotolis-engine` is read-only from this repo.
 Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 ## Current Gate
 
-The current gate is reusable pipeline quality, not game feature progress. The
-session review identified these priority fixes: hard visual/runtime invariants,
-OKF-style shared asset catalog, legal downloaded asset intake, texture
-generation/tiling workflow, lead-rejection gates, split smoke tests, and
-post-prototype status cleanup.
-
-Fixed so far: OKF-style shared asset catalog, legal asset intake helper,
-texture tiling audit workflow, strict lead-rejection closeout guard, and split
-Mech Builder Battler smoke suites for contract, asset-load, visual framing,
-movement, combat pacing, reward loop, and upgrade/special proofs. Stopped
-Mech Builder Battler taskboard items are archived; `T0040` is dropped as an
-unresolved lead rejection.
-
-Latest audit:
-`docs/ai-pipeline/mech-session-pipeline-audit-2026-06-20.md`.
-
-Historical prototype baseline: sourced Assault Walker hero, CC0 Quaternius
-enemy, Sentinel Mech side-pad display, stylized-studs world texture, and CC0
-Kenney station props with a plastic shader. The prototype stopped because the
-mech still read as a static/plastic figure, animation/material quality was not
-high enough, battle pacing was too fast, arena framing was weak, and controls
-felt suspect.
+Capture the user's game concept (references, audience, platform, no-go
+constraints), then run the Stage 0 prototype startup path and create a fresh
+project wiki plus exactly one scoped task/epic before implementation. Do not
+invent a concept.
 
 ## Next Priorities
 
-1. Ready to start a fresh game concept or continue separate pipeline backlog
-   work such as `T0007`.
+1. Capture the next game concept, then scaffold a fresh project wiki + one
+   scoped task/epic before implementation.
+2. Keep reusable pipeline/skills/knowledge clean and current between games.
+3. Keep native PC scale/focus + visual/teachability/core-loop proof as early
+   gates for the next playable UI.

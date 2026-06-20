@@ -25,11 +25,9 @@ reference if it pushes over. Borrowed: Spec-Kit constitution shrunk to ~10 lines
 
 ## Open questions
 
-- DEFERRED: AGENTS.md is the lead's active concept surface (edited live for
-  "Mech Builder Battler"), and the "Native PC only" invariant is now
-  concept-variable (mobile/web approved for this concept), so the consolidation is
-  partially stale. Do the Invariants block (excluding the now-variable native-PC
-  line) once the concept's harness/runtime decision settles, to avoid clobbering
-  the lead's concurrent edits.
+- DEFERRED: AGENTS.md is the lead's active concept surface between prototypes,
+  and platform/harness wording can be concept-variable. Do the invariants block
+  once the next concept's harness/runtime decision settles, to avoid clobbering
+  lead edits.
 
 ## Log

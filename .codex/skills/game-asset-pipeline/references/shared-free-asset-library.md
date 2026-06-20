@@ -23,7 +23,7 @@ accepted asset by copying or converting required files into project-local
 Always search Markdown records before opening binary folders:
 
 ```powershell
-rg -n "tags:.*mech|has_animation: true|license: CC0" C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets\catalog
+rg -n "tags:.*vehicle|has_animation: true|license: CC0" C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets\catalog
 rg -n "tileable: true|kind: texture|metal|normal|roughness" C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets\catalog
 ```
 
@@ -51,7 +51,7 @@ Use asset ids shaped as:
 <source>__<asset-slug>__<license>
 ```
 
-Example: `quaternius__animated-mech-pack__cc0`.
+Example: `quaternius__animated-robot-pack__cc0`.
 
 ## Download Intake
 
@@ -96,7 +96,7 @@ type: Game Asset
 title: Short Human Title
 description: One sentence for search and selection.
 resource: files/models/<asset-id>/
-tags: [model, mech, cc0, stylized]
+tags: [model, vehicle, cc0, stylized]
 timestamp: 2026-06-20T00:00:00Z
 asset_id: <source>__<asset-slug>__<license>
 kind: model

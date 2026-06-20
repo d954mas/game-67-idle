@@ -2,9 +2,9 @@
 
 ## Current Work
 
-- Focus: post-prototype pipeline cleanup after `Mech Builder Battler`.
-- The mech prototype is stopped; no more game/content/export work without a
-  fresh explicit request.
+- Focus: clean AI-first native game seed for the next iteration.
+- No active game concept is selected; capture the user's concept before game
+  work.
 - Engine submodule: `external/neotolis-engine`; use public APIs only.
 
 ## Source Map

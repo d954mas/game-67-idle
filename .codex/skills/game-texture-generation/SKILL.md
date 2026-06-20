@@ -1,18 +1,18 @@
 ---
 name: game-texture-generation
-description: Use when generating, downloading, adapting, reviewing, or integrating standalone game material textures for world surfaces, ground, terrain, props, assets, mech parts, armor, metal, plastic, painted surfaces, panels, emissive details, decals, normal/roughness maps, stylized studs/baseplate surfaces, stock textures, marketplace/downloaded assets, and texture provenance/licensing decisions. Do not use for atlases, trim sheets, icon sheets, or UI atlases; use the existing generated-game-ui-assets or asset pipeline workflows for those. Pair with game-asset-pipeline when packing or runtime-loading the texture.
+description: Use when generating, downloading, adapting, reviewing, or integrating standalone game material textures for world surfaces, ground, terrain, props, assets, armor parts, metal, plastic, painted surfaces, panels, emissive details, decals, normal/roughness maps, stylized studs/baseplate surfaces, stock textures, marketplace/downloaded assets, and texture provenance/licensing decisions. Do not use for atlases, trim sheets, icon sheets, or UI atlases; use the existing generated-game-ui-assets or asset pipeline workflows for those. Pair with game-asset-pipeline when packing or runtime-loading the texture.
 ---
 
 # Game Texture Generation
 
 Use this skill before creating or sourcing standalone game material textures for
-the world, ground, terrain, props, assets, mech parts, armor, metal, plastic,
-paint, panels, emissive details, decals, and stylized studs/baseplate surfaces.
+the world, ground, terrain, props, assets, armor parts, metal, plastic, paint,
+panels, emissive details, decals, and stylized studs/baseplate surfaces.
 
 ## Workflow
 
-1. Define the texture usage class first: tileable material, asset material, mech
-   material, one-off decal, material map set, or procedural proof.
+1. Define the texture usage class first: tileable material, asset material,
+   painted metal material, one-off decal, material map set, or procedural proof.
 2. Decide the tiling contract before generation/download: repeat, clamp,
    repeat-x, repeat-y, or unique non-tileable.
 3. Record source route and provenance: generated, downloaded, stock,

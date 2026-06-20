@@ -351,11 +351,11 @@ test("close slice refuses strict close of lead-rejection task without resolved r
   const dir = tempDir();
   try {
     writeTaskWithBody(dir, "T0096", {
-      title: "Fix lead-rejected mech visual",
+      title: "Fix lead-rejected hero visual",
       tags: ["visual", "lead-rejection"],
     }, `## What
 
-Fix the lead rejection: mech looks like plastic cubes instead of a mech.
+Fix the lead rejection: hero looks like plastic cubes instead of authored art.
 
 ## Done when
 
@@ -369,7 +369,7 @@ Fix the lead rejection: mech looks like plastic cubes instead of a mech.
     writeFileSync(gate, `${JSON.stringify({ verdict: "pass", surface: "desktop", screenshot: shot, markdown: "gate.md", next: "Review with lead" })}\n`, "utf8");
     const result = runRaw([
       "tools/product_gate/close_slice.mjs",
-      "--project", "mech-builder-battler",
+      "--project", "visual-test",
       "--task", "T0096",
       "--gate", gate,
       "--evidence", "build passed",
@@ -387,11 +387,11 @@ test("close slice logs resolved rejection proof for lead-rejection task", () => 
   const dir = tempDir();
   try {
     writeTaskWithBody(dir, "T0095", {
-      title: "Fix lead-rejected mech visual",
+      title: "Fix lead-rejected hero visual",
       tags: ["visual", "lead-rejection"],
     }, `## What
 
-Fix the lead rejection: mech looks like plastic cubes instead of a mech.
+Fix the lead rejection: hero looks like plastic cubes instead of authored art.
 
 ## Done when
 
@@ -405,16 +405,16 @@ Fix the lead rejection: mech looks like plastic cubes instead of a mech.
     writeFileSync(gate, `${JSON.stringify({ verdict: "pass", surface: "desktop", screenshot: shot, markdown: "gate.md", next: "Review with lead" })}\n`, "utf8");
     const result = runRaw([
       "tools/product_gate/close_slice.mjs",
-      "--project", "mech-builder-battler",
+      "--project", "visual-test",
       "--task", "T0095",
       "--gate", gate,
       "--evidence", "build passed",
-      "--resolved-rejection", "Lead rejected plastic cube mech; screenshot and gate prove authored mech parts, metal material, and animation read.",
+      "--resolved-rejection", "Lead rejected plastic cube hero; screenshot and gate prove authored parts, material separation, and animation read.",
       "--strict",
     ], { env: { TASKBOARD_ROOT: dir } });
     assert.equal(result.status, 0, result.stderr);
     const task = readFileSync(join(dir, "tasks", "active", "T0095-test.md"), "utf8");
-    assert.match(task, /resolved rejection: Lead rejected plastic cube mech/);
+    assert.match(task, /resolved rejection: Lead rejected plastic cube hero/);
   } finally {
     cleanup(dir);
   }

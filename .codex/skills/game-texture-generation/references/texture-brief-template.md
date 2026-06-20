@@ -6,7 +6,7 @@ Use this as the minimum source record for generated or downloaded textures.
 
 - Texture name:
 - Project/game:
-- Usage class: tileable material / asset material / mech material / one-off decal / material map set / procedural proof
+- Usage class: tileable material / asset material / painted metal material / one-off decal / material map set / procedural proof
 - Runtime target path:
 - Source path:
 
