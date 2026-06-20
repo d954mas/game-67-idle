@@ -1,18 +1,14 @@
 # Profiling And Reuse Reference
 
-Portable rules for profiling, visual/asset routing, prototype closeout, and
-export. Load when changing profiler behavior, prototype lifecycle, visual
-pipeline routing, or portable-base export.
+Portable rules for profiling, visual/asset routing, prototype closeout, and export.
 
 ## Profiling
 
-Profiling is passive telemetry for repeated failures, slow commands, and long
-gaps. It should not become another project.
+Profiling is passive telemetry for repeated failures, slow commands, and gaps.
 
-The PostToolUse hook records every tool call automatically; there is no manual
-step. Review a session with `node tools/ai.mjs status` (`--verbose` for coverage
-gaps and parse errors). `node tools/ai.mjs import-codex-session` recovers missed
-Codex failures (and `status` runs it by default).
+The PostToolUse hook records tool calls automatically. Review a session with
+`node tools/ai.mjs status`; use `--verbose` for coverage gaps. `status` runs
+`node tools/ai.mjs import-codex-session` to recover missed Codex failures.
 
 Do not commit raw telemetry from `tmp/session_profiles/`; commit only durable
 lessons, rules, tools, or tasks.
@@ -25,24 +21,21 @@ Use skills instead of copying asset procedure into hot docs. Common route:
 `game-feature-iteration` / `game-runtime-automation`; load only the matching
 skill.
 
-For downloaded/free source assets, use the shared source library at
-`C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets` through the
-`game-asset-pipeline` skill. It is an OKF-style Markdown provenance and reuse
-catalog, not a runtime path; search `catalog/**/*.md` by tags/description first,
-then copy selected assets into project-local asset folders before integration.
+For downloaded/free source assets, use
+`C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets` through
+`game-asset-pipeline`. It is an OKF-style provenance catalog, not a runtime path:
+search `catalog/**/*.md`, then copy selected files into project-local assets.
 
-Generated/free art is allowed only as runtime-ready art that reaches the visual
-target. Debug/procedural placeholders prove geometry, not final-art quality,
-unless recorded as debug debt.
+Generated/free art is allowed only as runtime-ready art that reaches the target.
+Debug/procedural placeholders prove geometry, not final-art quality.
 
 ## Prototype Pause Or Close
 
 When the lead says a prototype/game is done, stopped, or only a test, stop game
-implementation. Follow the latest explicit task/status instruction. Do not
-silently archive, drop, or rewrite active work unless requested.
+implementation. Do not archive, drop, or rewrite active work unless requested.
 
-Preserve evidence historically. Promote only reusable lessons into
-pipeline docs/skills/tools.
+Preserve evidence historically. Promote only reusable lessons into pipeline docs,
+skills, or tools.
 
 ## Reuse In A New Project
 
@@ -54,8 +47,8 @@ node tools/bootstrap/export_base.mjs --target C:\projects\new-game
 
 Portable by default: skills, taskboard, `tools/ai.mjs`,
 `tools/pipeline_validate.mjs`, product gates, game-context tools, generated art
-job scaffolding, reusable design knowledge, and starter agent/task files.
-The exact allowlist lives in `tools/bootstrap/export_base.mjs`.
+job scaffolding, reusable design knowledge, and starter agent/task files. The
+allowlist lives in `tools/bootstrap/export_base.mjs`.
 
 Runtime seed files (`src/`, `state/`, DevAPI, CMake presets) move only when the
 exporter/runtime template explicitly supports that target.

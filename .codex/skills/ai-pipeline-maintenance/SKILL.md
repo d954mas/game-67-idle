@@ -5,9 +5,7 @@ description: "Use when maintaining or improving the reusable AI development pipe
 
 # AI Pipeline Maintenance
 
-Use for AI workflow/tooling changes, not ordinary playable game work. Use
-`game-feature-iteration` for runtime features and `chat-session-reflection` for
-pure retrospectives.
+Use for AI workflow/tooling changes, not ordinary playable game work.
 
 ## Load Only What Applies
 
@@ -28,8 +26,7 @@ pure retrospectives.
    `node tools/context_budget.mjs --review`.
 2. Pick one scope: hot docs, skill entrypoints, validators, profiling,
    taskboard, product gates, export, or post-review cleanup.
-3. Move repeated procedure behind a reference, skill, task rule, or tool; keep
-   hot files as maps.
+3. Move repeated procedure behind a reference, skill, task rule, or tool.
 4. Put mandatory rules in validators/tests where practical, then run the
    narrow proof and `node tools/ai.mjs validate`.
 
@@ -43,6 +40,6 @@ pure retrospectives.
 
 ## Stop Conditions
 
-- Do not mark the broad pipeline goal done from one green check.
-- Do not move project-specific facts into reusable skills or knowledge.
+- Do not mark broad pipeline work done from one green check.
+- Do not move project facts into reusable skills/knowledge.
 - After changing `.codex/skills`, run `node tools/skills_sync.mjs` or `--check`.

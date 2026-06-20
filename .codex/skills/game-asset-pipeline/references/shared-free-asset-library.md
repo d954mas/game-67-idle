@@ -32,6 +32,12 @@ Open the matching `catalog/<kind>/<asset-id>.md` record, then follow its
 
 ## Folder Contract
 
+Bootstrap the folder contract before the first download on a machine:
+
+```powershell
+node tools/assets/intake/bootstrap_shared_asset_library.mjs
+```
+
 - `_incoming/`: unreviewed downloads. Do not integrate into a game from here.
 - `_quarantine/`: unclear license, partial download, broken extraction,
   suspicious provenance, or reference-only assets.

@@ -5,9 +5,7 @@ description: Use when reflecting on a long AI-assisted work session, chat histor
 
 # Chat Session Reflection
 
-Produce a blunt retrospective, not a progress report. The goal is to identify
-where the AI agent got stuck, what durable evidence supports that claim, and
-what should change next time.
+Produce a blunt retrospective, not a progress report.
 
 ## Load Only What Applies
 
@@ -15,21 +13,19 @@ what should change next time.
   high-cost context rules, and evidence quality fields.
 - `references/reflection-profiling.md`: passive profiling telemetry and the
   `tools/ai.mjs` status/import commands.
-- `references/reflection-output-rules.md`: retrospective shape,
-  `symptom` / `cause` / `faster path`, audit areas, Top 10 improvements, and
-  durable capture.
+- `references/reflection-output-rules.md`: retrospective shape, `symptom`,
+  `cause`, `faster path`, audit areas, Top 10 improvements, durable capture.
 
 ## Default Workflow
 
 1. State scope: session, objective, and evidence inspected.
-2. Report evidence quality: profile file, record count, unresolved failures,
-   wall-clock coverage, slowest work, and command repeats/friction.
+2. Report evidence quality: profile file, records, unresolved failures,
+   wall-clock coverage, slowest work, command repeats/friction.
 3. Summarize factual progress briefly.
 4. Identify largest bottlenecks with `symptom`, `cause`, and `faster path`.
 5. Audit tool use, context management, planning, product quality, and agent
    behavior separately.
-6. End with highest-leverage process changes; include Top 10 improvements for a
-   requested deep review.
+6. End with highest-leverage process changes; include Top 10 for deep review.
 
 ## Non-Negotiables
 
@@ -37,7 +33,7 @@ what should change next time.
 - Do not infer time spent from memory when profiler coverage is broken; mark it
   partial, likely, or unknown.
 - Do not invent concrete examples; if evidence is missing, say so.
-- Distinguish product problems, pipeline problems, and agent behavior problems.
+- Distinguish product, pipeline, and agent behavior problems.
 - Do not mark the project goal complete from a retrospective.
 - Keep raw telemetry and generated reflection artifacts in `tmp/session_profiles`
   unless the lead asks to preserve them.

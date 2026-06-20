@@ -5,8 +5,7 @@ description: "Use when generating, cutting, validating, integrating, or reviewin
 
 # Generated Game UI Assets
 
-Use for production generated runtime UI. Keep this entrypoint as a router; load
-deep art, asset, or runtime workflows only when needed.
+Use for production generated runtime UI. Keep this entrypoint as a router.
 
 ## Load Only What Applies
 
@@ -16,13 +15,13 @@ deep art, asset, or runtime workflows only when needed.
 - `references/ui-asset-rules.md`: slice9/content bounds, atlas reuse, cleanup,
   source-derived PNGs, desktop/portrait layout, and responsive rules.
 - `game-visual-art-direction`, `game-asset-pipeline`, or
-  `game-runtime-automation`: load only when deeper domain work is required.
+  `game-runtime-automation`: load only for deeper domain work.
 
 ## Minimal Workflow
 
 1. Read project rules, active task, visual target, screenshot, runtime harness.
 2. Write the 5-line session contract: source art, manifests, proof, screenshot
-   gate, and runtime integration evidence.
+   gate, runtime evidence.
 3. Use one art job as the unit: art bible -> source family -> intake ->
    manifests -> contact sheet -> composition proof -> runtime/product gate.
 4. Keep source families separate; full mockups only as visual targets.
@@ -30,10 +29,10 @@ deep art, asset, or runtime workflows only when needed.
 
 ## Stop Conditions
 
-- Reject baked text, fake letters, fused controls, tight gutters, clipped
-  silhouettes, key-color contamination, or weak isolation.
-- Product/readability, lead, or mobile-density fail freezes feature/content
-  expansion until the earliest failed stage is fixed.
+- Reject baked text, fake letters, fused controls, tight gutters, clipping,
+  key-color contamination, or weak isolation.
+- Product/readability, lead, or mobile-density fail freezes expansion until the
+  earliest failed stage is fixed.
 - Technical crop/audit pass is not a beauty pass; judge the assembled screen.
 - Procedural/programmer-art scaffolds are debug debt unless lead-accepted.
 

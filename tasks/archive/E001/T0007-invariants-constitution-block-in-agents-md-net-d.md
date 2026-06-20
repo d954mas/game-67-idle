@@ -1,12 +1,12 @@
 ---
 id: T0007
 title: Invariants/constitution block in AGENTS.md (net dedup)
-status: backlog
+status: done
 epic: E001
 priority: P3
 tags: [pipeline, docs]
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-06-20
 ---
 
 ## What
@@ -20,8 +20,8 @@ reference if it pushes over. Borrowed: Spec-Kit constitution shrunk to ~10 lines
 
 ## Done when
 
-- [ ] AGENTS.md has one Invariants block and the duplicated rule lines are removed elsewhere
-- [ ] context budget (review) stays under cap; validate green
+- [x] AGENTS.md has one Invariants block and the duplicated rule lines are removed elsewhere
+- [x] context budget (review) stays under cap; validate green
 
 ## Open questions
 
@@ -31,3 +31,9 @@ reference if it pushes over. Borrowed: Spec-Kit constitution shrunk to ~10 lines
   lead edits.
 
 ## Log
+
+- 2026-06-20: Added compact `AGENTS.md` Invariants block for native PC harness,
+  Y-up, engine text renderer, real legal assets, and debug-only placeholder
+  renderers; removed duplicated rule lines from Game Work.
+- 2026-06-20: Ran `node tools/context_budget.mjs --review` and
+  `node tools/skills_eval.mjs`; both passed.

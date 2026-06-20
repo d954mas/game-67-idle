@@ -257,6 +257,7 @@ const SKILL_CHECKS = [
       "OKF Markdown records",
       "tags/resource",
       "ai_pipeline_assets",
+      "bootstrap_shared_asset_library.mjs",
       "download_source_asset.mjs",
       "_quarantine",
       "license",

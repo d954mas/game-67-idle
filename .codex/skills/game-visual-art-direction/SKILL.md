@@ -6,8 +6,7 @@ description: Use when defining, generating, reviewing, integrating, or improving
 # Game Visual Art Direction
 
 Use when visual quality is part of the task: generated art, sprites, UI kits,
-fake shots, polished builds, or release-quality presentation. For reusable
-runtime UI kits, pair with `.codex/skills/generated-game-ui-assets/`.
+fake shots, polished builds, or release-quality presentation.
 
 ## Load Only What Applies
 
@@ -16,14 +15,14 @@ runtime UI kits, pair with `.codex/skills/generated-game-ui-assets/`.
   Gate, generated asset rules, report.
 - `gamedesign/knowledge/reference_deconstruction.md`: named references or
   lead-rejected reference mismatch.
-- `.codex/skills/generated-game-ui-assets/`: reusable runtime UI kit production.
-- `.codex/skills/game-asset-pipeline/`: art jobs, manifests, provenance, packs.
-- `.codex/skills/game-runtime-automation/`: native screenshot/video proof.
+- `generated-game-ui-assets`: reusable runtime UI kit production.
+- `game-asset-pipeline`: art jobs, manifests, provenance, packs.
+- `game-runtime-automation`: native screenshot/video proof.
 
 ## Default Route
 
 1. Load active task, accepted target, screenshot, runtime harness, and only
-   relevant project/reference sections.
+   relevant references.
 2. Write the 5-line visual session contract: goal, non-goal, proof, stop
    condition, likely files.
 3. Produce Reference Digest before final art when named refs drive the look;
@@ -31,11 +30,9 @@ runtime UI kits, pair with `.codex/skills/generated-game-ui-assets/`.
 4. For multi-asset work, create an art job with `tools/assets/job/new_art_job.mjs`.
 5. Inspect generated outputs before integration; reject weak, unreadable,
    watermarked, fused, or drifting assets.
-6. Validate in primary runtime with screenshot evidence plus
-   `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate`; hand off
-   with `node tools/ai.mjs close-slice`. If the task has `lead-rejection` or
-   lead-rejected wording, strict close must include `--resolved-rejection` with
-   the exact rejected issue and proof.
+6. Validate in primary runtime with screenshot evidence plus product gate; hand
+   off with `node tools/ai.mjs close-slice`. For `lead-rejection` tasks, strict
+   close needs `--resolved-rejection` with exact issue and proof.
 
 ## Stop Conditions
 

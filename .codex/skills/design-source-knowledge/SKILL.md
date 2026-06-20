@@ -5,17 +5,16 @@ description: Use when adding, reviewing, reorganizing, or promoting game-design 
 
 # Design Source Knowledge
 
-Operate design knowledge as an evidence trail:
-source -> source note -> conclusion -> index/log update -> cited claim.
+Operate design knowledge as: source -> note -> conclusion -> index/log -> cited claim.
 
 ## Load Only What Applies
 
 - `references/source-routing.md`: required docs and routing between shared
   sources, reusable knowledge, project wiki, `tasks/`, and `tmp/`.
-- `references/source-intake-promotion.md`: Source Intake, source quality,
-  labels (`observed`, `secondary`, `inferred`, `unknown`), Promotion Workflow.
+- `references/source-intake-promotion.md`: Source Intake, source quality, labels
+  (`observed`, `secondary`, `inferred`, `unknown`), Promotion Workflow.
 - `references/reference-work-review.md`: Reference-Driven Work,
-  `reference_deconstruction.md`, Source Ladder, mismatch, review, and Report.
+  `reference_deconstruction.md`, Source Ladder, mismatch, review, Report.
 - `references/templates.md`: load only for creating/substantially rewriting
   source notes, knowledge pages, project reference notes, or review reports.
 
@@ -26,15 +25,15 @@ source -> source note -> conclusion -> index/log update -> cited claim.
    `tasks/`, or `tmp/`.
 3. Add source notes before conclusions when external evidence matters.
 4. Keep reusable principles in `gamedesign/knowledge/`; current-game facts stay
-   in the active project wiki.
+   in project wiki.
 5. Link conclusions to sources, update index/logs, and state evidence gaps.
 
 ## Non-Negotiables
 
-- Keep current-game facts, balance, screenshots, implementation status, accepted
-  GDD facts, and playtest results out of reusable knowledge.
+- Keep current-game facts, screenshots, status, GDD facts, and playtest results
+  out of reusable knowledge.
 - Do not use snippets, thumbnails, memory, or store copy as mechanics proof.
-- Claim "grounded in refs" only with durable deconstruction supporting at least
-  three labeled facts and one current-build mismatch.
+- Claim "grounded in refs" only with durable deconstruction: 3 labeled facts and
+  1 current-build mismatch.
 - If evidence is incomplete, say "not ready for implementation" and name gaps.
 - Do not bury work status in design data files; use `tasks/`.
