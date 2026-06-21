@@ -988,7 +988,7 @@ function currentOrchestrationPreflightGuidance() {
     const taskRoot = findTaskboardRoot(process.cwd());
     const taskIds = currentDoingOrchestrationTaskIds(taskRoot);
     if (taskIds.length === 1) return "preflight the current task with `node tools/ai.mjs orchestration-check --current --json`";
-    if (taskIds.length === 0) return `create one current task with \`node tools/ai.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --tool-use-guard "${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}" --expected-output "..." --evidence-command "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent-thread-id" --stop-condition "..." --independent-reviewer "..." --json\`, then run \`node tools/ai.mjs orchestration-check --current --json\``;
+    if (taskIds.length === 0) return "create one current orchestration task with `node tools/ai.mjs orchestration-bootstrap` using bounded packet fields, then run `node tools/ai.mjs orchestration-check --current --json`";
     return "resolve multiple current `doing` pipeline/orchestration tasks to exactly one, then run `node tools/ai.mjs orchestration-check --current --json`";
   } catch {
     // Status should stay diagnostic even if a taskboard checkout is incomplete.
