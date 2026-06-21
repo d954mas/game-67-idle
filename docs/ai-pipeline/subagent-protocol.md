@@ -104,6 +104,10 @@ node tools/ai.mjs orchestration-trace --session <codex-session.jsonl> --json-out
 node tools/ai.mjs orchestration-trace --parent-thread-id <id> --session-root <dir> --min-agents <n> --json-output <trace.json>
 ```
 
+For newer substantial pipeline/orchestration tasks, taskboard validation expects
+the packet's `evidence command` to include either `node tools/ai.mjs
+orchestration-trace ...` or `node tools/ai.mjs status --agent-rollup ...`.
+
 Use transcript mode when the parent session exposes spawn/wait/close tool calls;
 it verifies call order and completed wait/close outputs. Use
 `parent-thread-id` mode when subagent `session_meta` files are the available

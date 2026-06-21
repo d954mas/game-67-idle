@@ -18,6 +18,10 @@ export const PRIORITIES = ["P0", "P1", "P2", "P3"];
 const ORCHESTRATION_REVIEW_STATUSES = new Set(["review", "done"]);
 // T0028 introduced the mechanical guard; older archives keep their legacy logs.
 const ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID = 28;
+// T0031 introduced machine-readable orchestration trace evidence. Older review
+// tasks keep their label-only packet history; newer substantial orchestration
+// tasks must include an executable trace/status evidence command.
+const ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID = 31;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
   "orchestration",
@@ -45,6 +49,10 @@ const ORCHESTRATION_REQUIRED_FIELDS = [
   ["stop condition", /\bstop condition\b/i],
   ["independent reviewer", /\bindependent\s+(?:reviewer|verifier)\b/i],
 ];
+const ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS = [
+  /\bnode\s+tools\/ai\.mjs\s+orchestration-trace\b/i,
+];
+const ORCHESTRATION_EVIDENCE_FIELD_PATTERN = /\b(?:evidence command|evidence artifact|artifact)\b/i;
 const ORCHESTRATION_PACKET_TEMPLATE = `- orchestration: used
   objective: <non-empty>
   allowed files: <non-empty>
@@ -452,10 +460,11 @@ function orchestrationEvidenceProblem(doc) {
     return null;
   }
   const log = sectionText(doc.body, "Log");
-  if (hasOrchestrationUsedEvidence(log) || hasSmallScopeOrchestrationException(log)) {
+  const requireMachineEvidence = requiresOrchestrationMachineEvidence(doc);
+  if (hasOrchestrationUsedEvidence(log, requireMachineEvidence) || hasSmallScopeOrchestrationException(log)) {
     return null;
   }
-  const missing = missingOrchestrationFields(log);
+  const missing = missingOrchestrationFields(log, requireMachineEvidence);
   const detail = missing.length ? ` (missing/invalid: ${missing.join(", ")})` : "";
   return {
     code: "orchestration_evidence_missing",
@@ -496,22 +505,28 @@ function isArchivedOrchestrationGuardCandidate(doc) {
   return match ? Number(match[1]) >= ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID : true;
 }
 
-function hasOrchestrationUsedEvidence(log) {
+function hasOrchestrationUsedEvidence(log, requireMachineEvidence = false) {
   return orchestrationUsedBlocks(log).some((block) =>
-    ORCHESTRATION_REQUIRED_FIELDS.every(([, pattern]) => hasMeaningfulFieldValue(block, pattern)),
+    ORCHESTRATION_REQUIRED_FIELDS.every(([, pattern]) => hasMeaningfulFieldValue(block, pattern))
+      && (!requireMachineEvidence || hasMachineEvidenceCommand(block)),
   );
 }
 
-function missingOrchestrationFields(log) {
+function missingOrchestrationFields(log, requireMachineEvidence = false) {
   const blocks = orchestrationUsedBlocks(log);
   if (!blocks.length) {
     return ["orchestration: used packet"];
   }
-  let bestMissing = ORCHESTRATION_REQUIRED_FIELDS.map(([name]) => name);
+  const baseline = ORCHESTRATION_REQUIRED_FIELDS.map(([name]) => name);
+  if (requireMachineEvidence) baseline.push("machine evidence command");
+  let bestMissing = baseline;
   for (const block of blocks) {
     const missing = ORCHESTRATION_REQUIRED_FIELDS
       .filter(([, pattern]) => !hasMeaningfulFieldValue(block, pattern))
       .map(([name]) => name);
+    if (requireMachineEvidence && !hasMachineEvidenceCommand(block)) {
+      missing.push("machine evidence command");
+    }
     if (missing.length < bestMissing.length) {
       bestMissing = missing;
     }
@@ -545,6 +560,46 @@ function hasMeaningfulFieldValue(text, fieldPattern) {
     return true;
   }
   return false;
+}
+
+function hasMachineEvidenceCommand(block) {
+  const evidence = fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN).replaceAll("\\", "/");
+  if (ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS.some((pattern) => pattern.test(evidence))) {
+    return true;
+  }
+  return (
+    /\bnode\s+tools\/ai\.mjs\s+status\b/i.test(evidence)
+    && /\s--agent-rollup\b/i.test(evidence)
+    && (/\s--parent-thread-id\b/i.test(evidence) || /\s--trace-session\b/i.test(evidence))
+  );
+}
+
+function requiresOrchestrationMachineEvidence(doc) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID : true;
+}
+
+function fieldValue(text, fieldPattern) {
+  const lines = String(text || "").split(/\r?\n/);
+  const out = [];
+  let collecting = false;
+  for (const line of lines) {
+    const match = line.match(/^\s*(?:[-*]\s*)?(.+?)\s*:\s*(.*)$/);
+    if (match) {
+      if (collecting && isOrchestrationFieldLabel(match[1])) break;
+      if (fieldPattern.test(match[1])) {
+        collecting = true;
+        out.push(match[2].trim());
+        continue;
+      }
+    }
+    if (collecting) out.push(line.trim());
+  }
+  return out.join(" ").trim();
+}
+
+function isOrchestrationFieldLabel(label) {
+  return ORCHESTRATION_REQUIRED_FIELDS.some(([, pattern]) => pattern.test(label));
 }
 
 function hasSmallScopeOrchestrationException(log) {

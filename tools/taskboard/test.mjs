@@ -35,6 +35,22 @@ ${log}
 `;
 }
 
+function writeTaskDoc(root, fields, body) {
+  const dir = join(root, "tasks", "active");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, `${fields.id}-${slugify(fields.title || "task")}.md`),
+    serializeDoc({
+      status: "todo",
+      priority: "P1",
+      tags: [],
+      created: "2026-06-21",
+      updated: "2026-06-21",
+      ...fields,
+    }, body),
+  );
+}
+
 test("frontmatter roundtrip preserves fields and body", () => {
   const fields = {
     id: "T0001",
@@ -598,6 +614,141 @@ test("orchestration template can be filled and accepted", (t) => {
   });
   const updated = updateDoc(root, "T0001", { fields: { status: "review" } });
   assert.equal(updated.fields.status, "review");
+});
+
+test("validateStore requires machine orchestration evidence for trace-era tasks", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0031",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].code, "orchestration_evidence_missing");
+  assert.deepEqual(problems[0].missingFields, ["machine evidence command"]);
+  assert.match(problems[0].message, /missing\/invalid: machine evidence command/);
+});
+
+test("validateStore preserves pre-trace orchestration packet compatibility", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0030",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope`));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore rejects machine evidence mentioned outside evidence command", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0031",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs
+  stop condition: tests pass after node tools/ai.mjs orchestration-trace --parent-thread-id parent
+  independent reviewer: reviewed guard scope`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence command"]);
+});
+
+test("validateStore accepts orchestration-trace machine evidence for trace-era tasks", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0031",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope`));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore rejects agent-rollup evidence without an agent source", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0032",
+    title: "Pipeline profiling guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs status --agent-rollup
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence command"]);
+});
+
+test("validateStore accepts agent-rollup machine evidence for trace-era tasks", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0032",
+    title: "Pipeline profiling guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs status --agent-rollup --parent-thread-id parent
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope`));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore accepts wrapped machine evidence command", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0033",
+    title: "Pipeline profiling guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs;
+    node tools/ai.mjs status --agent-rollup --trace-session tmp/session.jsonl
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope`));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
 });
 
 test("validateStore rejects oversized live status", (t) => {
