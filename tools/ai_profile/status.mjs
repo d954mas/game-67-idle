@@ -435,8 +435,10 @@ function buildAgentRollupHint(values) {
 function statusSelectionArgs(values) {
   const out = [];
   const profile = stringArg(values, "profile", "");
+  const session = stringArg(values, "session", "");
   const harness = stringArg(values, "harness", "");
   if (profile) out.push("--profile", profile);
+  if (!profile && session) out.push("--session", session);
   if (harness) out.push("--harness", harness);
   if (values.all === true) out.push("--all");
   if (values.verbose === true) out.push("--verbose");

@@ -409,6 +409,26 @@ test("status imports Codex session before analysis", () => {
   }
 });
 
+test("status preserves profile session selection", () => {
+  const sessionId = "facade-session-selection-test";
+  const sessionsDir = join(root, "tmp", "session_profiles", "sessions");
+  const profile = join(sessionsDir, `2026-06-21__codex__${sessionId}.jsonl`);
+  try {
+    mkdirSync(sessionsDir, { recursive: true });
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", duration_ms: 1000, commands: ["node selected-session.js"], session_id: sessionId },
+    ]);
+
+    const result = run(["status", "--session", sessionId, "--no-import-codex-session"]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, new RegExp(sessionId));
+    assert.match(result.stdout, /node selected-session\.js/);
+  } finally {
+    rmSync(profile, { force: true });
+  }
+});
+
 test("status forwards agent rollup options", () => {
   const dir = tempDir();
   try {

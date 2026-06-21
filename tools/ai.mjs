@@ -73,21 +73,8 @@ function flagValue(args, flag) {
   return value && !value.startsWith("--") ? value : "";
 }
 
-function stripFlagsWithValues(args, flags) {
-  const out = [];
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (flags.has(arg)) {
-      if (args[index + 1] && !args[index + 1].startsWith("--")) index += 1;
-      continue;
-    }
-    out.push(arg);
-  }
-  return out;
-}
-
-function stripImportFlags(args) {
-  return stripFlagsWithValues(withoutFlag(args, "--no-import-codex-session"), new Set(["--session"]));
+function statusArgs(args) {
+  return withoutFlag(args, "--no-import-codex-session");
 }
 
 function maybeImportCodexSession(args) {
@@ -139,7 +126,7 @@ if (command === "validate") run(pipelineValidateArgs(argv));
 
 if (command === "status") {
   maybeImportCodexSession(argv);
-  run(["tools/ai_profile/status.mjs", ...stripImportFlags(argv)]);
+  run(["tools/ai_profile/status.mjs", ...statusArgs(argv)]);
 }
 
 if (command === "import-codex-session") run(["tools/ai_profile/import_codex_session.mjs", ...argv]);
