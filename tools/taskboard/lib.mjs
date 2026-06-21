@@ -464,7 +464,7 @@ function orchestrationEvidenceProblem(doc) {
   const requireMachineEvidence = requiresOrchestrationMachineEvidence(doc);
   if (
     hasOrchestrationUsedEvidence(log, requireMachineEvidence)
-    && (!requireMachineEvidence || hasMachineEvidencePassAfterOrchestration(log))
+    && (!requireMachineEvidence || hasMatchingMachineEvidencePassAfterOrchestration(log))
   ) {
     return null;
   }
@@ -535,7 +535,7 @@ function missingOrchestrationFields(log, requireMachineEvidence = false) {
     if (requireMachineEvidence && !hasMachineEvidenceCommand(block)) {
       missing.push("machine evidence command");
     }
-    if (requireMachineEvidence && !hasMachineEvidencePassAfterOrchestration(log)) {
+    if (requireMachineEvidence && !hasMatchingMachineEvidencePassAfterOrchestration(log, block)) {
       missing.push("machine evidence pass");
     }
     if (missing.length < bestMissing.length) {
@@ -574,22 +574,68 @@ function hasMeaningfulFieldValue(text, fieldPattern) {
 }
 
 function hasMachineEvidenceCommand(block) {
-  return isMachineEvidenceText(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN));
+  return machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN)).length > 0;
 }
 
-function hasMachineEvidencePassAfterOrchestration(log) {
-  return evidencePassBlocksAfterOrchestration(log).some(isMachineEvidenceText);
+function hasMatchingMachineEvidencePassAfterOrchestration(log, declaredBlock = "") {
+  const declared = declaredBlock
+    ? machineEvidenceSignatures(fieldValue(declaredBlock, ORCHESTRATION_EVIDENCE_FIELD_PATTERN))
+    : orchestrationUsedBlocks(log)
+      .flatMap((block) => machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN)));
+  if (declared.length === 0) return false;
+  const passSignatures = evidencePassBlocksAfterOrchestration(log).flatMap(machineEvidenceSignatures);
+  return declared.some((expected) => passSignatures.some((actual) => machineEvidenceSignaturesMatch(expected, actual)));
 }
 
-function isMachineEvidenceText(text) {
+function machineEvidenceSignatures(text) {
   const evidence = String(text || "").replaceAll("\\", "/");
-  if (ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS.some((pattern) => pattern.test(evidence))) {
-    return true;
+  const signatures = [];
+  const chunks = evidence.split(/(?=\bnode\s+tools\/ai\.mjs\s+(?:orchestration-trace|status)\b)/i);
+  for (const chunk of chunks) {
+    const command = chunk.split(/(?:\s*;\s*|\r?\n\s*[-*]\s+)/, 1)[0] || "";
+    if (ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS.some((pattern) => pattern.test(command))) {
+      signatures.push({
+        kind: "orchestration-trace",
+        source: commandSourceSignature(command, ["--parent-thread-id", "--session"]),
+      });
+      continue;
+    }
+    if (
+      /\bnode\s+tools\/ai\.mjs\s+status\b/i.test(command)
+      && /\s--agent-rollup\b/i.test(command)
+      && (/\s--parent-thread-id\b/i.test(command) || /\s--trace-session\b/i.test(command))
+    ) {
+      signatures.push({
+        kind: "status-agent-rollup",
+        source: commandSourceSignature(command, ["--parent-thread-id", "--trace-session"]),
+      });
+    }
   }
+  return signatures;
+}
+
+function commandSourceSignature(command, flags) {
+  for (const flag of flags) {
+    const escaped = flag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = command.match(new RegExp(`(?:^|\\s)${escaped}(?:=|\\s+)(?:"([^"]+)"|'([^']+)'|(\\S+))`, "i"));
+    if (match) return `${flag}=${normalizeMachineEvidenceValue(match[1] || match[2] || match[3] || "")}`;
+  }
+  return "";
+}
+
+function normalizeMachineEvidenceValue(value) {
+  return String(value || "")
+    .replaceAll("\\", "/")
+    .trim()
+    .replace(/^[`'"]+|[`'",.;)]+$/g, "")
+    .toLowerCase();
+}
+
+function machineEvidenceSignaturesMatch(expected, actual) {
+  if (!expected || !actual || expected.kind !== actual.kind) return false;
+  if (expected.source || actual.source) return expected.source === actual.source;
   return (
-    /\bnode\s+tools\/ai\.mjs\s+status\b/i.test(evidence)
-    && /\s--agent-rollup\b/i.test(evidence)
-    && (/\s--parent-thread-id\b/i.test(evidence) || /\s--trace-session\b/i.test(evidence))
+    expected.kind === actual.kind
   );
 }
 

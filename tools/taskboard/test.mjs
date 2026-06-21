@@ -736,6 +736,48 @@ test("validateStore rejects non-machine PASS evidence for trace-era tasks", (t) 
   assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
 });
 
+test("validateStore rejects PASS evidence for a different machine command", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0031",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs status --agent-rollup --parent-thread-id parent\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
+});
+
+test("validateStore rejects PASS evidence with a different agent source", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0032",
+    title: "Pipeline profiling guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs status --agent-rollup --parent-thread-id parent-a
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs status --agent-rollup --parent-thread-id parent-b\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
+});
+
 test("validateStore rejects machine PASS evidence before orchestration packet", (t) => {
   const root = tempRoot(t);
   writeTaskDoc(root, {
@@ -815,6 +857,46 @@ test("validateStore accepts wrapped machine evidence command", (t) => {
   --trace-session tmp/session.jsonl\`; output showed Agent Rollup`));
 
   assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore accepts matching machine evidence with equivalent flag syntax and slashes", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0037",
+    title: "Pipeline profiling guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs status --agent-rollup --trace-session tmp\\session.jsonl
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs status --agent-rollup --trace-session=tmp/session.jsonl\` (2 agents)`));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore rejects same machine kind with different trace session", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0037",
+    title: "Pipeline profiling guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs status --agent-rollup --trace-session tmp/session-a.jsonl
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs status --agent-rollup --trace-session tmp/session-b.jsonl\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
 });
 
 test("validateStore rejects oversized live status", (t) => {
