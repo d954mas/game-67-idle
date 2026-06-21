@@ -1167,6 +1167,47 @@ test("validateStore accepts stronger min-agents PASS for default strict agent-ro
   assert.deepEqual(validateStoreDetailed(root), []);
 });
 
+test("validateStore rejects unbounded allowed files for new orchestration tasks", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0076",
+    title: "Pipeline allowed files guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify bounded allowed files
+  allowed files: tools/**
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["allowed files bounds"]);
+});
+
+test("validateStore keeps pre-T0076 allowed files compatibility", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0032",
+    title: "Pipeline legacy orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify legacy task compatibility
+  allowed files: tools/**
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
 test("validateStore accepts wrapped machine evidence command", (t) => {
   const root = tempRoot(t);
   writeTaskDoc(root, {
@@ -1447,6 +1488,59 @@ test("cli orchestration-check rejects missing tool-use guard while validate stay
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /missing\/invalid: tool-use guard/);
   assert.deepEqual(validateStore(root), []);
+});
+
+test("cli orchestration-check rejects unbounded allowed files", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  const invalidValues = [
+    "everything",
+    "tools/**",
+    "tools/*",
+    "tools/**/test.mjs",
+    "../tools/taskboard/lib.mjs",
+    "C:\\projects\\game-67-idle\\tools\\taskboard\\lib.mjs",
+    "https://example.test/file.md",
+  ];
+  const cli = join(import.meta.dirname, "cli.mjs");
+  for (const [index, allowedFiles] of invalidValues.entries()) {
+    const task = createTask(root, {
+      title: `Subagent packet preflight ${index}`,
+      status: "doing",
+      body: taskBodyWithLog(`- orchestration: used
+  objective: verify subagent packet before launch
+  allowed files: ${allowedFiles}
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: ${command}
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+    });
+    const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
+    assert.notEqual(result.status, 0, allowedFiles);
+    assert.match(result.stdout, /missing\/invalid: allowed files bounds/, allowedFiles);
+  }
+});
+
+test("cli orchestration-check accepts bounded allowed file patterns", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  const task = createTask(root, {
+    title: "Subagent packet preflight",
+    status: "doing",
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify subagent packet before launch
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/active/T*.md; tools/ai*.mjs; tools/taskboard/**; docs/ai-pipeline/**
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: ${command}
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /ok: orchestration packet preflight passed/);
 });
 
 test("cli orchestration-check rejects placeholder tool-use guard", (t) => {
@@ -1776,6 +1870,25 @@ test("cli orchestration-bootstrap rejects invalid machine evidence command witho
   assert.equal(parsed.ok, false);
   assert.equal(parsed.problem.code, "invalid_evidence_command");
   assert.match(parsed.problem.message, /machine-verifiable orchestration command/);
+  assert.deepEqual(listTasks(root), []);
+});
+
+test("cli orchestration-bootstrap rejects invalid allowed files without creating tasks", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [
+    cli,
+    "orchestration-bootstrap",
+    ...bootstrapArgs({ "allowed-files": "tools/**" }),
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stderr, "");
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "invalid_allowed_files");
+  assert.match(parsed.problem.message, /bounded repo-local file paths/);
   assert.deepEqual(listTasks(root), []);
 });
 

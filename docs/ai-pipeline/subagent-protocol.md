@@ -102,8 +102,11 @@ For genuinely small work:
 - orchestration: not needed - small scope: one-file/docs-only/no code ...
 ```
 
-The taskboard guard is label-based. It proves that orchestration was considered
-and recorded; it does not parse app internals by itself.
+The taskboard guard is mostly label-based, but new preflight packets also parse
+`allowed files` as bounded repo-local paths or patterns. Use exact files,
+final-segment file globs such as `tasks/active/T*.md`, or scoped recursive
+globs such as `tools/taskboard/**`. Do not use absolute paths, `..`, broad root
+globs like `tools/**`, or prose such as `all files`.
 
 For transcript/session evidence, add an evidence command with the focused trace
 tool:

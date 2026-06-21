@@ -24,6 +24,7 @@ const ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID = 28;
 // tasks must include an executable trace/status evidence command and a recorded
 // PASS result for one such command.
 const ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID = 31;
+const ORCHESTRATION_ALLOWED_FILES_BOUNDS_MIN_TASK_ID = 76;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
   "orchestration",
@@ -59,6 +60,7 @@ const ORCHESTRATION_PREFLIGHT_FIELDS = [
 const ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS = [
   /\bnode\s+tools\/ai\.mjs\s+orchestration-trace\b/i,
 ];
+const ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN = /\b(?:allowed files?|inputs?)\b/i;
 const ORCHESTRATION_EVIDENCE_FIELD_PATTERN = /\b(?:evidence command|evidence artifact|artifact)\b/i;
 const ORCHESTRATION_PACKET_TEMPLATE = `- orchestration: used
   objective: <non-empty>
@@ -84,6 +86,7 @@ export function orchestrationPreflightProblem(doc) {
     requireMachineEvidence: true,
     requireMachineEvidencePass: false,
     requiredFields: ORCHESTRATION_PREFLIGHT_FIELDS,
+    requireBoundedAllowedFiles: true,
   });
   if (!missing.length) return null;
   const taskId = doc.fields?.id || "";
@@ -495,8 +498,10 @@ function orchestrationEvidenceProblem(doc) {
   }
   const log = sectionText(doc.body, "Log");
   const requireMachineEvidence = requiresOrchestrationMachineEvidence(doc);
+  const requireBoundedAllowedFiles = requiresOrchestrationAllowedFilesBounds(doc);
   if (
     hasOrchestrationUsedEvidence(log, requireMachineEvidence)
+    && (!requireBoundedAllowedFiles || hasBoundedOrchestrationAllowedFiles(log))
     && (!requireMachineEvidence || hasMatchingMachineEvidencePassAfterOrchestration(log))
   ) {
     return null;
@@ -507,6 +512,7 @@ function orchestrationEvidenceProblem(doc) {
   const missing = missingOrchestrationFields(log, {
     requireMachineEvidence,
     requireMachineEvidencePass: requireMachineEvidence,
+    requireBoundedAllowedFiles,
   });
   const detail = missing.length ? ` (missing/invalid: ${missing.join(", ")})` : "";
   return {
@@ -572,6 +578,7 @@ function missingOrchestrationFields(log, options = {}) {
   const {
     requireMachineEvidence = false,
     requireMachineEvidencePass = requireMachineEvidence,
+    requireBoundedAllowedFiles = false,
     requiredFields = ORCHESTRATION_REQUIRED_FIELDS,
   } = typeof options === "boolean" ? { requireMachineEvidence: options } : options;
   const blocks = orchestrationUsedBlocks(log);
@@ -579,6 +586,7 @@ function missingOrchestrationFields(log, options = {}) {
     return ["orchestration: used packet"];
   }
   const baseline = requiredFields.map(([name]) => name);
+  if (requireBoundedAllowedFiles) baseline.push("allowed files bounds");
   if (requireMachineEvidence) baseline.push("machine evidence command");
   if (requireMachineEvidencePass) baseline.push("machine evidence pass");
   let bestMissing = baseline;
@@ -586,6 +594,13 @@ function missingOrchestrationFields(log, options = {}) {
     const missing = requiredFields
       .filter(([, pattern]) => !hasMeaningfulFieldValue(block, pattern))
       .map(([name]) => name);
+    if (
+      requireBoundedAllowedFiles
+      && hasMeaningfulFieldValue(block, ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN)
+      && !isBoundedOrchestrationAllowedFiles(fieldValue(block, ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN))
+    ) {
+      missing.push("allowed files bounds");
+    }
     if (requireMachineEvidence && !hasMachineEvidenceCommand(block)) {
       missing.push("machine evidence command");
     }
@@ -631,8 +646,60 @@ function hasMachineEvidenceCommand(block) {
   return machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN)).length > 0;
 }
 
+function hasBoundedOrchestrationAllowedFiles(log) {
+  return orchestrationUsedBlocks(log).some((block) =>
+    isBoundedOrchestrationAllowedFiles(fieldValue(block, ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN)),
+  );
+}
+
 export function isMachineEvidenceCommand(text) {
   return machineEvidenceSignatures(text).length > 0;
+}
+
+export function isBoundedOrchestrationAllowedFiles(text) {
+  return boundedAllowedFilesProblem(text) === "";
+}
+
+function boundedAllowedFilesProblem(text) {
+  const value = String(text || "").trim();
+  if (!value || /^(tbd|todo|none|n\/a|na|unknown|\.\.\.)$/i.test(value)) return "empty allowed files";
+  const entries = value
+    .split(/[;,]/)
+    .map((entry) => entry.trim().replace(/^[`'"]+|[`'"]+$/g, ""))
+    .filter(Boolean);
+  if (entries.length === 0) return "empty allowed files";
+  if (entries.length > 16) return "too many allowed file entries";
+  for (const entry of entries) {
+    const normalized = entry.replaceAll("\\", "/");
+    if (!normalized || /\s/.test(normalized)) return `invalid allowed file entry: ${entry}`;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(normalized)) return `non-local allowed file entry: ${entry}`;
+    if (/^(?:[a-z]:|\/)/i.test(normalized)) return `absolute allowed file entry: ${entry}`;
+    if (normalized.includes("//")) return `invalid allowed file entry: ${entry}`;
+    if (normalized === "." || normalized === "*" || normalized === "**") return `too broad allowed file entry: ${entry}`;
+    if (normalized.endsWith("/")) return `directory-only allowed file entry: ${entry}`;
+    const segments = normalized.split("/");
+    if (segments.some((segment) => !segment || segment === "." || segment === "..")) {
+      return `path traversal allowed file entry: ${entry}`;
+    }
+    const recursiveIndex = segments.indexOf("**");
+    if (recursiveIndex >= 0) {
+      if (recursiveIndex !== segments.length - 1 || segments.length < 3) return `too broad allowed file entry: ${entry}`;
+      continue;
+    }
+    if (segments.some((segment) => segment.includes("**"))) return `too broad allowed file entry: ${entry}`;
+    const wildcardSegments = segments.filter((segment) => /[*?[\]{}]/.test(segment));
+    if (wildcardSegments.length > 1 || (wildcardSegments.length === 1 && wildcardSegments[0] !== segments[segments.length - 1])) {
+      return `unbounded wildcard allowed file entry: ${entry}`;
+    }
+    const leaf = segments[segments.length - 1];
+    if (/[*?[\]{}]/.test(leaf) && (leaf === "*" || !/\.[^./*?[\]{}]+$/.test(leaf))) {
+      return `unbounded wildcard allowed file entry: ${entry}`;
+    }
+    if (!/[*?[\]{}]/.test(leaf) && !leaf.includes(".")) {
+      return `directory-like allowed file entry: ${entry}`;
+    }
+  }
+  return "";
 }
 
 function hasMatchingMachineEvidencePassAfterOrchestration(log, declaredBlock = "") {
@@ -739,6 +806,11 @@ function requiresOrchestrationMachineEvidence(doc) {
   return match ? Number(match[1]) >= ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID : true;
 }
 
+function requiresOrchestrationAllowedFilesBounds(doc) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= ORCHESTRATION_ALLOWED_FILES_BOUNDS_MIN_TASK_ID : true;
+}
+
 function fieldValue(text, fieldPattern) {
   const lines = String(text || "").split(/\r?\n/);
   const out = [];
@@ -759,7 +831,7 @@ function fieldValue(text, fieldPattern) {
 }
 
 function isOrchestrationFieldLabel(label) {
-  return ORCHESTRATION_REQUIRED_FIELDS.some(([, pattern]) => pattern.test(label));
+  return ORCHESTRATION_PREFLIGHT_FIELDS.some(([, pattern]) => pattern.test(label));
 }
 
 function hasSmallScopeOrchestrationException(log) {
