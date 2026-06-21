@@ -108,6 +108,17 @@ function startPreflightLog() {
   independent reviewer: reviewed start preflight scope`;
 }
 
+function closeoutLogWithoutToolGuard(command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent") {
+  return `- orchestration: used
+  objective: harden review closeout lifecycle
+  allowed files: tools/taskboard/lib.mjs
+  expected output: focused taskboard tests
+  evidence command: ${command}
+  stop condition: taskboard tests pass
+  independent reviewer: reviewed lifecycle scope
+- evidence: PASS \`${command}\``;
+}
+
 test("frontmatter roundtrip preserves fields and body", () => {
   const fields = {
     id: "T0001",
@@ -652,6 +663,83 @@ Add a gameplay menu for hero skill choices.
   assert.equal(updated.fields.status, "review");
 });
 
+test("validateStore classifies T0079 broad substantial work for start preflight", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0079",
+    title: "Gameplay runtime playtest pass",
+    status: "doing",
+    tags: ["gameplay"],
+  }, taskBodyWithLog("- 2026-06-21: Started broad gameplay/runtime work without a preflight packet."));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].code, "orchestration_start_preflight_missing");
+  assert.deepEqual(problems[0].missingFields, ["orchestration: used packet"]);
+});
+
+test("validateStore preserves pre-T0079 broad work compatibility", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0078",
+    title: "Gameplay runtime playtest pass",
+    status: "doing",
+    tags: ["gameplay"],
+  }, `## What
+
+Exercise a gameplay runtime check.
+
+## Done when
+
+- [ ] the check can remain in progress
+
+## Open questions
+
+## Log
+
+- 2026-06-21: Legacy broad gameplay/runtime work started before broad classification.
+`);
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore accepts T0079 broad work with small-scope exception", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0079",
+    title: "Visual review wording tweak",
+    status: "review",
+    tags: ["visual", "review"],
+  }, taskBodyWithLog("- orchestration: not needed - small scope: docs-only review wording tweak"));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore does not classify T0079 small gameplay task without broad scope cue", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0079",
+    title: "Add player skills menu",
+    status: "doing",
+    tags: ["gameplay"],
+  }, `## What
+
+Add a gameplay menu for hero skill choices.
+
+## Done when
+
+- [ ] the menu can move to review
+
+## Open questions
+
+## Log
+
+- 2026-06-21: Implemented gameplay menu validation.
+`);
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
 test("validateStore reports active done task missing orchestration evidence", (t) => {
   const root = tempRoot(t);
   createTask(root, {
@@ -856,6 +944,98 @@ test("validateStore keeps T0078 review closeout stricter than start preflight", 
   assert.equal(problems.length, 1);
   assert.equal(problems[0].code, "orchestration_evidence_missing");
   assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
+});
+
+test("validateStore rejects T0079 review closeout without preflight fields", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  writeTaskDoc(root, {
+    id: "T0079",
+    title: "Taskboard pipeline review guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(closeoutLogWithoutToolGuard(command)));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].code, "orchestration_evidence_missing");
+  assert.deepEqual(problems[0].missingFields, ["tool-use guard"]);
+});
+
+test("createTask rejects generated T0079 review or done task without closeout preflight fields", (t) => {
+  const root = tempRoot(t);
+  for (let i = 0; i < 78; i += 1) {
+    createTask(root, { title: `Seed ${i + 1}`, status: "idea" });
+  }
+
+  assert.throws(
+    () => createTask(root, {
+      title: "Taskboard pipeline review guard",
+      status: "review",
+      tags: ["pipeline", "orchestration"],
+      body: taskBodyWithLog(closeoutLogWithoutToolGuard()),
+    }),
+    /missing\/invalid: tool-use guard/,
+  );
+  assert.throws(
+    () => createTask(root, {
+      title: "Taskboard pipeline done guard",
+      status: "done",
+      tags: ["pipeline", "orchestration"],
+      body: taskBodyWithLog(closeoutLogWithoutToolGuard()),
+    }),
+    /missing\/invalid: tool-use guard/,
+  );
+});
+
+test("updateDoc rejects T0079 direct closeout transition without preflight fields", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0079",
+    title: "Taskboard pipeline review guard",
+    status: "todo",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(closeoutLogWithoutToolGuard()));
+
+  assert.throws(
+    () => updateDoc(root, "T0079", { fields: { status: "review" } }),
+    /missing\/invalid: tool-use guard/,
+  );
+  assert.throws(
+    () => updateDoc(root, "T0079", { fields: { status: "done" } }),
+    /missing\/invalid: tool-use guard/,
+  );
+});
+
+test("updateDoc rejects body-only removal of T0079 closeout preflight fields", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  writeTaskDoc(root, {
+    id: "T0079",
+    title: "Taskboard pipeline review guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`${startPreflightLog()}
+- evidence: PASS \`${command}\``));
+
+  assert.throws(
+    () => updateDoc(root, "T0079", { body: taskBodyWithLog(closeoutLogWithoutToolGuard(command)) }),
+    /missing\/invalid: tool-use guard/,
+  );
+});
+
+test("validateStore accepts T0079 review closeout with preflight fields and PASS evidence", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  writeTaskDoc(root, {
+    id: "T0079",
+    title: "Taskboard pipeline review guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`${startPreflightLog()}
+- evidence: PASS \`${command}\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
 });
 
 test("validateStoreDetailed reports structured orchestration problem", (t) => {
@@ -1755,6 +1935,25 @@ test("cli set --json reports structured start preflight transition failure", (t)
   assert.equal(parsed.problem.status, "doing");
   assert.deepEqual(parsed.problem.missingFields, ["orchestration: used packet"]);
   assert.match(parsed.problem.nextAction, /orchestration-check T0078 --json/);
+});
+
+test("cli set --json reports structured T0079 closeout preflight failure", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0079",
+    title: "Taskboard pipeline review guard",
+    status: "todo",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(closeoutLogWithoutToolGuard()));
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "set", "T0079", "--status", "review", "--json"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "orchestration_evidence_missing");
+  assert.equal(parsed.problem.taskId, "T0079");
+  assert.deepEqual(parsed.problem.missingFields, ["tool-use guard"]);
+  assert.ok(parsed.problem.acceptedFields.includes("tool-use guard"));
 });
 
 test("cli orchestration-check passes complete preflight packet without PASS evidence", (t) => {

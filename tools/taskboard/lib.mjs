@@ -27,6 +27,8 @@ const ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID = 31;
 const ORCHESTRATION_ALLOWED_FILES_BOUNDS_MIN_TASK_ID = 76;
 const ORCHESTRATION_TRACE_ARTIFACT_MIN_TASK_ID = 77;
 const ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID = 78;
+const ORCHESTRATION_BROAD_WORK_MIN_TASK_ID = 79;
+const ORCHESTRATION_CLOSEOUT_PREFLIGHT_FIELDS_MIN_TASK_ID = 79;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
   "orchestration",
@@ -40,6 +42,82 @@ const ORCHESTRATION_KEYWORDS = [
   "tools/skills_sync",
   ".codex/skills",
   "skill entrypoint",
+];
+const ORCHESTRATION_BROAD_DOMAIN_TAGS = new Set([
+  "gameplay",
+  "runtime",
+  "visual",
+  "asset",
+  "assets",
+  "art",
+  "product",
+  "review",
+  "playtest",
+  "ui",
+  "ux",
+  "devapi",
+]);
+const ORCHESTRATION_BROAD_SCOPE_TAGS = new Set([
+  "substantial",
+  "workflow",
+  "multi-file",
+  "slice",
+  "native",
+  "playable",
+  "harness",
+  "gate",
+]);
+const ORCHESTRATION_BROAD_DOMAIN_KEYWORDS = [
+  "gameplay",
+  "runtime",
+  "visual",
+  "asset",
+  "assets",
+  "art direction",
+  "product",
+  "playtest",
+  "review",
+  "ui/ux",
+  "devapi",
+];
+const ORCHESTRATION_BROAD_SCOPE_KEYWORDS = [
+  "substantial",
+  "broad",
+  "multi-file",
+  "native slice",
+  "playable slice",
+  "product pass",
+  "visual pass",
+  "asset pipeline",
+  "runtime pack",
+  "generated pack",
+  "review workflow",
+  "workflow guard",
+  "devapi smoke",
+  "playtest harness",
+  "reference digest",
+  "screenshot evidence",
+  "gamedesign/projects",
+  "tools/product_gate",
+  "tools/game_context",
+  "tools/visual",
+  "tools/assets",
+  "src/",
+  "state/",
+];
+const ORCHESTRATION_BROAD_STANDALONE_PHRASES = [
+  "asset pipeline",
+  "runtime pack",
+  "generated pack",
+  "product gate",
+  "playtest harness",
+  "review workflow",
+  "workflow guard",
+  "devapi smoke",
+  "visual pass",
+  "product pass",
+  "native slice",
+  "playable slice",
 ];
 const SMALL_SCOPE_REASON_PATTERNS = [
   /^one-file\b/i,
@@ -344,6 +422,12 @@ export function createTask(root, input = {}) {
   if (problem) {
     throw validationError(problem);
   }
+  if (ORCHESTRATION_REVIEW_STATUSES.has(fields.status) && requiresOrchestrationCloseoutPreflightFields({ fields })) {
+    const evidenceProblem = orchestrationEvidenceProblem({ kind: "task", file: "", fields, body }, root);
+    if (evidenceProblem) {
+      throw validationError(evidenceProblem);
+    }
+  }
   const file = join(dir, `${id}-${slugify(fields.title)}.md`);
   writeFileSync(file, serializeDoc(fields, body));
   return { kind: "task", file, fields, body };
@@ -401,6 +485,12 @@ export function updateDoc(root, id, patch = {}) {
     }
   }
   if (requiresOrchestrationTransitionGuard(doc, fields)) {
+    const problem = orchestrationEvidenceProblem({ ...doc, fields, body }, root);
+    if (problem) {
+      throw validationError(problem);
+    }
+  }
+  if (requiresOrchestrationCurrentCloseoutGuard(doc, fields, body)) {
     const problem = orchestrationEvidenceProblem({ ...doc, fields, body }, root);
     if (problem) {
       throw validationError(problem);
@@ -511,6 +601,16 @@ function requiresOrchestrationTransitionGuard(doc, fields) {
   );
 }
 
+function requiresOrchestrationCurrentCloseoutGuard(doc, fields, body) {
+  return (
+    doc.kind === "task"
+    && doc.fields.status === fields.status
+    && ORCHESTRATION_REVIEW_STATUSES.has(fields.status)
+    && requiresOrchestrationCloseoutPreflightFields(doc)
+    && body !== doc.body
+  );
+}
+
 function requiresOrchestrationStartPreflightGuard(doc, fields) {
   return doc.kind === "task" && doc.fields.status !== fields.status && fields.status === "doing";
 }
@@ -544,33 +644,31 @@ function orchestrationEvidenceProblem(doc, root = "") {
     return null;
   }
   const log = sectionText(doc.body, "Log");
-  const requireMachineEvidence = requiresOrchestrationMachineEvidence(doc);
-  const requireBoundedAllowedFiles = requiresOrchestrationAllowedFilesBounds(doc);
-  const requireTraceArtifact = requiresOrchestrationTraceArtifact(doc);
-  if (
-    hasOrchestrationUsedEvidence(log, requireMachineEvidence)
-    && (!requireBoundedAllowedFiles || hasBoundedOrchestrationAllowedFiles(log))
-    && (!requireMachineEvidence || hasMatchingMachineEvidencePassAfterOrchestration(log, "", { root, requireTraceArtifact }))
-  ) {
-    return null;
-  }
   if (hasSmallScopeOrchestrationException(log)) {
     return null;
   }
+  const requireMachineEvidence = requiresOrchestrationMachineEvidence(doc);
+  const requireBoundedAllowedFiles = requiresOrchestrationAllowedFilesBounds(doc);
+  const requireTraceArtifact = requiresOrchestrationTraceArtifact(doc);
+  const requiredFields = requiresOrchestrationCloseoutPreflightFields(doc)
+    ? ORCHESTRATION_PREFLIGHT_FIELDS
+    : ORCHESTRATION_REQUIRED_FIELDS;
   const missing = missingOrchestrationFields(log, {
     requireMachineEvidence,
     requireMachineEvidencePass: requireMachineEvidence,
     requireBoundedAllowedFiles,
     requireTraceArtifact,
+    requiredFields,
     root,
   });
+  if (!missing.length) return null;
   const detail = missing.length ? ` (missing/invalid: ${missing.join(", ")})` : "";
   return {
     code: "orchestration_evidence_missing",
     taskId: doc.fields.id,
     status: doc.fields.status,
     missingFields: missing,
-    acceptedFields: ORCHESTRATION_REQUIRED_FIELDS.map(([name]) => name),
+    acceptedFields: requiredFields.map(([name]) => name),
     template: ORCHESTRATION_PACKET_TEMPLATE,
     message: `${doc.fields.id}: substantial pipeline/orchestration task needs orchestration evidence before review/done${detail}`,
   };
@@ -596,7 +694,25 @@ function isSubstantialOrchestrationTask(doc) {
     Array.isArray(doc.fields.tags) ? doc.fields.tags.join(" ") : doc.fields.tags || "",
     doc.body || "",
   ].join("\n");
-  return ORCHESTRATION_KEYWORDS.some((keyword) => haystack.toLowerCase().includes(keyword.toLowerCase()));
+  const normalizedHaystack = haystack.toLowerCase();
+  if (ORCHESTRATION_KEYWORDS.some((keyword) => normalizedHaystack.includes(keyword.toLowerCase()))) {
+    return true;
+  }
+  if (!requiresBroadOrchestrationClassification(doc)) {
+    return false;
+  }
+  const tags = Array.isArray(doc.fields.tags)
+    ? doc.fields.tags
+    : String(doc.fields.tags || "").split(/[\s,]+/);
+  const normalizedTags = tags.map((tag) => String(tag || "").trim().toLowerCase()).filter(Boolean);
+  const hasDomainTag = normalizedTags.some((tag) => ORCHESTRATION_BROAD_DOMAIN_TAGS.has(tag));
+  const hasScopeTag = normalizedTags.some((tag) => ORCHESTRATION_BROAD_SCOPE_TAGS.has(tag));
+  const hasDomainKeyword = ORCHESTRATION_BROAD_DOMAIN_KEYWORDS.some((keyword) => normalizedHaystack.includes(keyword.toLowerCase()));
+  const hasScopeKeyword = ORCHESTRATION_BROAD_SCOPE_KEYWORDS.some((keyword) => normalizedHaystack.includes(keyword.toLowerCase()));
+  if (ORCHESTRATION_BROAD_STANDALONE_PHRASES.some((phrase) => normalizedHaystack.includes(phrase.toLowerCase()))) {
+    return true;
+  }
+  return (hasDomainTag || hasDomainKeyword) && (hasScopeTag || hasScopeKeyword);
 }
 
 export function currentDoingOrchestrationTaskIds(root) {
@@ -615,13 +731,6 @@ export function inferCurrentDoingOrchestrationTaskId(root) {
 function isArchivedOrchestrationGuardCandidate(doc) {
   const match = String(doc.fields.id || "").match(/^T(\d+)$/);
   return match ? Number(match[1]) >= ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID : true;
-}
-
-function hasOrchestrationUsedEvidence(log, requireMachineEvidence = false) {
-  return orchestrationUsedBlocks(log).some((block) =>
-    ORCHESTRATION_REQUIRED_FIELDS.every(([, pattern]) => hasMeaningfulFieldValue(block, pattern))
-      && (!requireMachineEvidence || hasMachineEvidenceCommand(block)),
-  );
 }
 
 function missingOrchestrationFields(log, options = {}) {
@@ -699,12 +808,6 @@ function hasMachineEvidenceCommand(block) {
   return machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN)).length > 0;
 }
 
-function hasBoundedOrchestrationAllowedFiles(log) {
-  return orchestrationUsedBlocks(log).some((block) =>
-    isBoundedOrchestrationAllowedFiles(fieldValue(block, ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN)),
-  );
-}
-
 export function isMachineEvidenceCommand(text) {
   return machineEvidenceSignatures(text).length > 0;
 }
@@ -753,10 +856,6 @@ function boundedAllowedFilesProblem(text) {
     }
   }
   return "";
-}
-
-function hasMatchingMachineEvidencePassAfterOrchestration(log, declaredBlock = "", options = {}) {
-  return machineEvidencePassProblem(log, declaredBlock, options) === "";
 }
 
 function machineEvidencePassProblem(log, declaredBlock = "", options = {}) {
@@ -954,6 +1053,16 @@ function requiresOrchestrationTraceArtifact(doc) {
 function requiresOrchestrationStartPreflight(doc) {
   const match = String(doc.fields.id || "").match(/^T(\d+)$/);
   return match ? Number(match[1]) >= ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID : true;
+}
+
+function requiresBroadOrchestrationClassification(doc) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= ORCHESTRATION_BROAD_WORK_MIN_TASK_ID : true;
+}
+
+function requiresOrchestrationCloseoutPreflightFields(doc) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= ORCHESTRATION_CLOSEOUT_PREFLIGHT_FIELDS_MIN_TASK_ID : true;
 }
 
 function fieldValue(text, fieldPattern) {

@@ -81,8 +81,10 @@ policy.
 ## Task Start Guard
 
 New substantial pipeline/orchestration tasks cannot enter or remain in `doing`
-without a complete preflight packet. This is a start gate only: it requires
-bounded scope, tool-use guard, expected output, evidence command, stop
+without a complete preflight packet. T0079+ broad substantial game, visual,
+asset, review, runtime, product, and DevAPI workflow tasks are also classified
+when a domain signal is paired with a scope/workflow signal. The start gate
+requires bounded scope, tool-use guard, expected output, evidence command, stop
 condition, and reviewer plan, but it does not require a later `PASS` line.
 
 ## Task Closeout Guard
@@ -101,7 +103,9 @@ without one of these `## Log` markers:
   independent reviewer: <non-empty>
 ```
 
-`tool-use guard` is template-default but validator-optional for older packets.
+`tool-use guard` is template-default. It is validator-optional for older
+packets, but T0079+ review/done closeout requires the same preflight field set
+so a task cannot skip `doing` and close without a complete packet.
 
 For genuinely small work:
 
