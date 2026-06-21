@@ -4,17 +4,10 @@
 
 - Focus: clean AI-first native game seed.
 - Active game concept: `Dragon Grove` (dragon-grove), original merge-3 dragon
-  grove puzzle: merge eggs, sprouts, and dragons on a small Y-up grid to
-  restore a clearing.
+  grove puzzle on a small Y-up grid.
 - Closed prototype: `Ember Road` (ember-road) is archived; do not continue its
   gameplay, visual, UX, asset, or runtime work unless lead reopens it.
 - Engine: `external/neotolis-engine`; public APIs only.
-
-## Project
-
-- Active game concept: `Dragon Grove` (dragon-grove), original merge-3 dragon
-  grove puzzle: merge eggs, sprouts, and dragons on a small Y-up grid to
-  restore a clearing.
 
 ## Map
 

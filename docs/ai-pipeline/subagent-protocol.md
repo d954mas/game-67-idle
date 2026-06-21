@@ -88,6 +88,10 @@ The lead must verify current files before copying a subagent claim into
 task/status/docs. If subagents conflict, the lead decides the source of truth
 and records uncertainty instead of merging prose.
 
+After a subagent reaches a final status, close it once its result is integrated
+or explicitly rejected. Completed agents left open consume the concurrency limit
+and make later orchestration slower.
+
 ## Review
 
 Use an independent reviewer/verifier for substantial code, pipeline,

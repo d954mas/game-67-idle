@@ -18,6 +18,8 @@ cleanup, or user request.
 - Validate: `node tools/taskboard/cli.mjs validate`.
 - Orchestrate: `node tools/ai.mjs orchestration-check --current --json`,
   then `node tools/ai.mjs orchestration-evidence --current --run --json`.
+  For delegated work, follow the compact operator path in
+  `docs/ai-pipeline/agent-workflow.md`.
 - Board when requested: `node tools/taskboard/server.mjs`.
 - New game: `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`.
 

@@ -1,13 +1,11 @@
-# Agent Workflow Reference
+# Agent Workflow
 
-Portable agent rules. Load when changing context policy, work-loop,
-multi-agent use, or hot docs.
+Load when changing context policy, work-loop, multi-agent use, or hot docs.
 
 ## Roles
 
-- Lead: sets direction, taste, priority, and acceptance.
-- Agent: scopes intent, asks only necessary questions, researches when refs
-  matter, implements small slices, and proves results.
+- Lead: direction, priority, acceptance.
+- Agent: scopes, researches refs when needed, changes small slices, proves work.
 
 ## Agent-Facing Docs
 
@@ -15,33 +13,20 @@ multi-agent use, or hot docs.
 - `AI_PIPELINE.md`: reusable workflow map and context policy.
 - `tasks/README.md`: task store commands and lifecycle.
 - `.codex/skills/*/SKILL.md`: one focused procedure per task type.
-- Skill `references/` and `gamedesign/knowledge/`: deeper method loaded on need.
+- Skill `references/` and `gamedesign/knowledge/`: deeper method on need.
 
-Do not duplicate rules. Put each rule where first needed, link deeper source,
-then delete anecdotes once encoded as tool, validator, task rule, or skill.
-
-Write agent Markdown as:
-
-- decision rule first;
-- shortest required command;
-- source-of-truth path;
-- stop condition;
-- no chat history or broad checklists in hot context.
+Do not duplicate rules. Prefer decision rule, shortest command, source path,
+stop condition, and no anecdotes.
 
 ## Context Policy
 
-Default substantial-work context:
-
-1. `AGENTS.md`
-2. `node tools/taskboard/cli.mjs context`
-3. one relevant task or evidence file
-4. one matching skill
+Default substantial-work context: `AGENTS.md`,
+`node tools/taskboard/cli.mjs context`, one task/evidence file, one skill.
 
 Prefer scoped search and compact output over whole-file dumps. Use archives,
 logs, generated artifacts, and broad design only when task-linked or requested.
 
-Keep stable context byte-stable in-session. Put volatile facts in tasks, status,
-evidence files, or final reports, not hot instruction files.
+Put volatile facts in tasks, status, evidence, or final reports.
 
 ## Work Loop
 
@@ -53,14 +38,23 @@ evidence files, or final reports, not hot instruction files.
 6. Record evidence in the task/status/final response when the work changes
    project state.
 
-Profiling needs no work-loop step: the PostToolUse hook records every tool call
-automatically. Review a session with `node tools/ai.mjs status`.
+Profiling is passive. Review with `node tools/ai.mjs status`.
 
 ## Subagents
 
-For substantial work, use subagents for independent research, exploration,
-disjoint edits, generation, review, or verification. The main agent remains
-orchestrator/integrator and owns task/status, hot files, validation, and commits.
+Use subagents for independent research, disjoint edits, generation, review, or
+verification. The lead owns task/status, hot files, validation, and commits.
+
+Operator path:
+
+1. Load context, create/select one task, and preflight it.
+2. Build each prompt from `subagent-packet-template`; check file or here-string
+   packets before launch.
+3. Spawn bounded independent packets; keep the immediate blocker local and work
+   on non-overlapping lead tasks while agents run.
+4. Wait for needed results, verify current files, integrate findings, close
+   completed agents, and record changes.
+5. Check workflow manifest, strict evidence, reviewer PASS, validation, commit.
 
 Load `docs/ai-pipeline/subagent-protocol.md` for packet schema, ownership,
 handoff fields, review rules, and context-budget decisions.

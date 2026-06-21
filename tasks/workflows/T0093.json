@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "kind": "orchestration-workflow",
+  "task_id": "T0093",
+  "status": "review",
+  "objective": "Add a compact operator happy path for delegated orchestration so a lead can go from context to packet check, spawn/wait/close, integration, manifest, evidence, reviewer PASS, validation, and cleanup without assembling steps from several docs.",
+  "scope": {
+      "included": [
+        "AGENTS.md",
+        "docs/ai-pipeline/agent-workflow.md",
+      "docs/ai-pipeline/subagent-protocol.md",
+      "tasks/README.md",
+      "tasks/active/T*.md",
+      "tasks/evidence/T*.json",
+      "tasks/workflows/T*.json"
+    ],
+    "excluded": [
+      "files and systems outside the declared allowed files"
+    ]
+  },
+  "packets": [
+    {
+      "id": "lead-implementation",
+      "objective": "Hot docs expose a short orchestration happy path and explicit completed-agent cleanup step; protocol remains the deeper source; docs stay under context budget.",
+      "status": "integrated",
+        "allowed_files": [
+          "AGENTS.md",
+          "docs/ai-pipeline/agent-workflow.md",
+        "docs/ai-pipeline/subagent-protocol.md",
+        "tasks/README.md",
+        "tasks/active/T*.md",
+        "tasks/evidence/T*.json",
+        "tasks/workflows/T*.json"
+      ],
+      "evidence_refs": [
+        "tasks/evidence/T0093-status-rollup.json"
+      ]
+    }
+  ],
+  "budgets": {
+    "max_agents": 2,
+    "context": "Bounded to taskboard, docs, task, workflow, and evidence files.",
+    "validation": "Focused tests plus taskboard validation and strict status evidence."
+  },
+  "verification": {
+    "strategy": "machine gates plus independent review",
+    "commands": [
+      "node tools/context_budget.mjs --review",
+      "node tools/doc_reference_check.mjs",
+      "node tools/taskboard/cli.mjs validate --json",
+      "node tools/ai.mjs orchestration-check --current --json",
+      "node tools/taskboard/cli.mjs orchestration-workflow-check T0093 --json",
+      "node tools/ai.mjs validate --review",
+      "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 1 --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\\Users\\ROG\\.codex\\sessions\\2026\\06\\21 --agent-cwd C:\\projects\\game-67-idle --no-import-codex-session --agent-rollup-evidence --json-output tasks/evidence/T0093-status-rollup.json --json"
+    ],
+    "evidence_refs": [
+      "tasks/evidence/T0093-status-rollup.json"
+    ]
+  },
+  "integration": {
+    "owner": "lead",
+    "policy": "Lead integrates subagent findings, updates packet statuses before closeout, and keeps manifest refs tied to the machine evidence artifact."
+  },
+  "evidence_refs": [
+    "tasks/evidence/T0093-status-rollup.json"
+  ],
+  "updated_at": "2026-06-21"
+}
