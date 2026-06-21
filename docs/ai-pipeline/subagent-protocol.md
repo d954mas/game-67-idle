@@ -30,10 +30,16 @@ Every subagent gets a packet:
 objective:
 allowed files or inputs:
 forbidden files:
+tool-use guard:
 expected output:
 evidence command or artifact:
 stop condition:
 ```
+
+Use `tool-use guard` to prevent known subagent command mistakes: give exact
+existing paths or a discovery command before reads, use `Select-Object -Skip`
+and `-First` for line windows, and include a trace evidence source plus
+`--json-output` for orchestration checks.
 
 If the packet touches repo state, include the current project boundary from
 `AGENTS.md`, such as active concept, closed prototype status, engine policy, and
@@ -81,11 +87,14 @@ without one of these `## Log` markers:
 - orchestration: used
   objective: <non-empty>
   allowed files: <non-empty>
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
   expected output: <non-empty>
   evidence command: <non-empty>
   stop condition: <non-empty>
   independent reviewer: <non-empty>
 ```
+
+`tool-use guard` is template-default but validator-optional for older packets.
 
 For genuinely small work:
 

@@ -1129,6 +1129,9 @@ test("cli orchestration-template prints accepted packet shape", () => {
   assert.match(result.stdout, /^- orchestration: used/m);
   assert.match(result.stdout, /objective: <non-empty>/);
   assert.match(result.stdout, /allowed files: <non-empty>/);
+  assert.match(result.stdout, /tool-use guard: exact paths or discovery/);
+  assert.match(result.stdout, /Select-Object -Skip\/-First/);
+  assert.match(result.stdout, /trace commands need an evidence source and --json-output/);
   assert.match(result.stdout, /expected output: <non-empty>/);
   assert.match(result.stdout, /evidence command: <non-empty>/);
   assert.match(result.stdout, /stop condition: <non-empty>/);

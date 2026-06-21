@@ -57,6 +57,7 @@ const ORCHESTRATION_EVIDENCE_FIELD_PATTERN = /\b(?:evidence command|evidence art
 const ORCHESTRATION_PACKET_TEMPLATE = `- orchestration: used
   objective: <non-empty>
   allowed files: <non-empty>
+  tool-use guard: exact paths or discovery (rg --files/Test-Path) before reads; use Select-Object -Skip/-First for ranges; trace commands need an evidence source and --json-output
   expected output: <non-empty>
   evidence command: <non-empty>
   stop condition: <non-empty>
