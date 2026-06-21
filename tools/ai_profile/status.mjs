@@ -260,6 +260,7 @@ function classifyFailedRecords(records) {
   let environmentBlocked = 0;
   let unresolved = 0;
   const environmentBlockedReasons = new Map();
+  const unresolvedRecords = [];
   for (const record of [...records].sort((a, b) => b.__line - a.__line)) {
     const keys = commandKeys(record);
     if (record.result === "pass") {
@@ -273,13 +274,17 @@ function classifyFailedRecords(records) {
       const reason = String(record.blocked_by || "environment blocker").trim();
       environmentBlockedReasons.set(reason, (environmentBlockedReasons.get(reason) || 0) + 1);
     }
-    else unresolved += 1;
+    else {
+      unresolved += 1;
+      unresolvedRecords.push(record);
+    }
   }
   return {
     resolvedLater,
     recovered: resolvedLater,
     environmentBlocked,
     unresolved,
+    unresolvedRecords,
     environmentBlockedReasons: [...environmentBlockedReasons.entries()].map(([reason, count]) => ({ reason, count })),
   };
 }
@@ -485,6 +490,31 @@ function addFailureStats(total, stats) {
   return total;
 }
 
+function failureSample(agent, source, record) {
+  const command = String(record.commands?.[0] || "");
+  return {
+    agent_id: agent.id || "",
+    nickname: agent.nickname || "",
+    role: agent.role || "",
+    source,
+    command_key: commandKey(command),
+    command: command.slice(0, 240),
+    exit_code: record.exit_code,
+    line: record.__line,
+    source_call_id: record.source_call_id || "",
+    source_session_file: record.source_session_file || "",
+  };
+}
+
+function renderFailureSample(sample) {
+  const agent = sample.nickname || sample.agent_id || "(unknown)";
+  const role = sample.role ? ` [${sample.role}]` : "";
+  const source = sample.source || "unknown";
+  const line = sample.line !== undefined ? `:${sample.line}` : "";
+  const exit = sample.exit_code !== undefined ? ` exit ${sample.exit_code}` : "";
+  return `- unresolved: ${agent}${role} ${source}${line} ${sample.command_key}${exit} - ${sample.command}`;
+}
+
 function buildAgentProfileRollup(agents, values) {
   const profileDir = stringArg(values, "agent-profile-dir", "") || sessionsDir();
   const files = listSessionProfiles(profileDir);
@@ -493,9 +523,11 @@ function buildAgentProfileRollup(agents, values) {
   const errors = [];
   const allRecords = [];
   const failed = { unresolved: 0, resolvedLater: 0, environmentBlocked: 0 };
+  const unresolvedFailureSamples = [];
 
   for (const agent of agents) {
     const file = findAgentProfileFile(agent, files);
+    const source = file ? "profile" : "transcript";
     const parsed = file ? parseProfiles([file]) : readTranscriptProfileRecords(agent.sessionFile, agent.id);
     const records = parsed.records;
     if (records.length === 0) {
@@ -507,14 +539,19 @@ function buildAgentProfileRollup(agents, values) {
       id: agent.id,
       nickname: agent.nickname || "",
       role: agent.role || "",
-      source: file ? "profile" : "transcript",
+      source,
       profile: file || "",
       session_file: agent.sessionFile || "",
       records: records.length,
       recorded_ms: recordedMs,
     });
     for (const error of parsed.errors) errors.push(file ? `${file}: ${error}` : error);
-    addFailureStats(failed, classifyFailedRecords(records));
+    const failureStats = classifyFailedRecords(records);
+    addFailureStats(failed, failureStats);
+    for (const record of failureStats.unresolvedRecords) {
+      if (unresolvedFailureSamples.length >= 10) break;
+      unresolvedFailureSamples.push(failureSample(agent, source, record));
+    }
     allRecords.push(...records.map((record) => ({ ...record, agent_id: agent.id })));
   }
 
@@ -533,6 +570,7 @@ function buildAgentProfileRollup(agents, values) {
     recorded_ms: allRecords.reduce((sum, record) => sum + Math.max(0, Number(record.duration_ms || 0)), 0),
     command_rollup: commandRollup(allRecords),
     unresolved_failed_records: failed.unresolved,
+    unresolved_failure_samples: unresolvedFailureSamples,
     recovered_failed_records: failed.resolvedLater,
     environment_blocked_failed_records: failed.environmentBlocked,
     errors,
@@ -784,6 +822,9 @@ function renderStatus(status, { verbose }) {
       lines.push(`- recorded command time: ${formatMs(profileRollup.recorded_ms)}`);
       if (profileRollup.unresolved_failed_records > 0) {
         lines.push(`- unresolved agent failures: ${profileRollup.unresolved_failed_records}`);
+        for (const sample of profileRollup.unresolved_failure_samples.slice(0, verbose ? 10 : 3)) {
+          lines.push(renderFailureSample(sample));
+        }
       }
       const agentTimeSinks = profileRollup.command_rollup.by_time.slice(0, 3);
       if (agentTimeSinks.length > 0) {

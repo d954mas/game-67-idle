@@ -769,7 +769,7 @@ test("status reports agent rollup when requested", () => {
     ]);
     writeJsonl(join(agentProfileDir, "2026-06-21__codex__22222222.jsonl"), [
       { ts: "2026-06-21T10:03:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "unknown", value: "necessary_overhead", event_type: "tool_call_start", commands: ["node --test tools/agent.test.mjs"], session_id: agentB },
-      { ts: "2026-06-21T10:03:01+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/agent.test.mjs"], session_id: agentB },
+      { ts: "2026-06-21T10:03:01+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node --test tools/agent.test.mjs"], session_id: agentB, exit_code: 1 },
     ]);
 
     const result = run([
@@ -795,12 +795,31 @@ test("status reports agent rollup when requested", () => {
     assert.equal(status.agent_rollup.profile_rollup.transcript_agent_count, 0);
     assert.equal(status.agent_rollup.profile_rollup.records, 2);
     assert.equal(status.agent_rollup.profile_rollup.recorded_ms, 3000);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 1);
+    assert.deepEqual(status.agent_rollup.profile_rollup.unresolved_failure_samples.map((sample) => ({
+      agent_id: sample.agent_id,
+      role: sample.role,
+      source: sample.source,
+      command_key: sample.command_key,
+      command: sample.command,
+      exit_code: sample.exit_code,
+      line: sample.line,
+    })), [{
+      agent_id: agentB,
+      role: "test verifier",
+      source: "profile",
+      command_key: "node agent.test.mjs",
+      command: "node --test tools/agent.test.mjs",
+      exit_code: 1,
+      line: 2,
+    }]);
     assert.equal(status.agent_rollup.profile_rollup.command_rollup.by_time[0].key, "node agent.test.mjs");
     assert.match(result.stdout, /## Agent Rollup/);
     assert.match(result.stdout, /subagent sessions: 2/);
     assert.match(result.stdout, /## Agent Profile Rollup/);
     assert.match(result.stdout, /telemetry agents: 2\/2/);
     assert.match(result.stdout, /sources: profiles=2, transcripts=0/);
+    assert.match(result.stdout, /unresolved: agent-22222222-2222-4222-8222-222222222222 \[test verifier\] profile:2 node agent\.test\.mjs exit 1 - node --test tools\/agent\.test\.mjs/);
     assert.match(result.stdout, /node agent\.test\.mjs: 3\.0s total over 2 run\(s\)/);
   } finally {
     cleanup(dir);
@@ -847,9 +866,29 @@ test("status falls back to subagent transcripts when profile logs are absent", (
     assert.equal(status.agent_rollup.profile_rollup.transcript_agent_count, 2);
     assert.equal(status.agent_rollup.profile_rollup.recorded_ms, 3500);
     assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 1);
+    assert.deepEqual(status.agent_rollup.profile_rollup.unresolved_failure_samples.map((sample) => ({
+      agent_id: sample.agent_id,
+      nickname: sample.nickname,
+      role: sample.role,
+      command_key: sample.command_key,
+      command: sample.command,
+      exit_code: sample.exit_code,
+      source: sample.source,
+      line: sample.line,
+    })), [{
+      agent_id: agentA,
+      nickname: `agent-${agentA}`,
+      role: "test verifier",
+      command_key: "node same.test.mjs",
+      command: "node --test tools/same.test.mjs",
+      exit_code: 1,
+      source: "transcript",
+      line: 3,
+    }]);
     assert.equal(status.agent_rollup.profile_rollup.command_rollup.by_time[0].key, "node same.test.mjs");
     assert.match(result.stdout, /sources: profiles=0, transcripts=2/);
     assert.match(result.stdout, /unresolved agent failures: 1/);
+    assert.match(result.stdout, new RegExp(`unresolved: agent-${agentA} \\[test verifier\\] transcript:3 node same\\.test\\.mjs exit 1 - node --test tools/same\\.test\\.mjs`));
   } finally {
     cleanup(dir);
   }
@@ -889,8 +928,22 @@ test("status transcript fallback treats search no-match as pass", () => {
     assert.equal(status.agent_rollup.profile_rollup.telemetry_agent_count, 1);
     assert.equal(status.agent_rollup.profile_rollup.records, 3);
     assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 1);
+    assert.deepEqual({
+      source: status.agent_rollup.profile_rollup.unresolved_failure_samples[0].source,
+      command_key: status.agent_rollup.profile_rollup.unresolved_failure_samples[0].command_key,
+      command: status.agent_rollup.profile_rollup.unresolved_failure_samples[0].command,
+      exit_code: status.agent_rollup.profile_rollup.unresolved_failure_samples[0].exit_code,
+      line: status.agent_rollup.profile_rollup.unresolved_failure_samples[0].line,
+    }, {
+      source: "transcript",
+      command_key: "rg",
+      command: "rg --badflag",
+      exit_code: 2,
+      line: 7,
+    });
     assert.equal(status.agent_rollup.profile_rollup.command_rollup.by_time.find((entry) => entry.key === "rg")?.fails, 1);
     assert.match(result.stdout, /unresolved agent failures: 1/);
+    assert.match(result.stdout, /unresolved: agent-55555555-5555-4555-8555-555555555555 \[test verifier\] transcript:7 rg exit 2 - rg --badflag/);
   } finally {
     cleanup(dir);
   }
