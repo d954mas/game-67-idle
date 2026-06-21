@@ -168,6 +168,17 @@ reads that compact status artifact and requires
 `agent_rollup.ok`, `agent_rollup.strict_ok`, declared source, declared minimum
 agent count, clean profile rollup, and no rollup problems.
 
+For T0088+ substantial orchestration closeout, record a structured verifier
+result after the machine evidence. `CONCERNS` or `FAIL` may be logged, but
+review/done closeout requires a later `PASS` block:
+
+```text
+- reviewer: PASS
+  checked: <evidence, tests, scope, or risk reviewed>
+  risks: <none remaining, accepted debt, or residual risk>
+  action: <ready for review/done or exact next action>
+```
+
 Strict status rollup defaults to `--min-agents 1`; raise it when the packet
 expects several independent agents.
 

@@ -2074,6 +2074,179 @@ test("validateStore accepts valid parent status artifact for T0080+ evidence", (
   assert.deepEqual(validateStoreDetailed(root), []);
 });
 
+test("validateStore preserves T0087 compatibility without reviewer pass evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0087",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore rejects T0088 closeout without structured reviewer pass evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0088",
+    title: "Pipeline reviewer evidence guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify reviewer evidence
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["reviewer pass"]);
+});
+
+test("validateStore rejects T0088 reviewer concerns as closeout pass", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0088",
+    title: "Pipeline reviewer evidence guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify reviewer evidence
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\`
+- reviewer: CONCERNS
+  checked: evidence and tests
+  risks: unresolved reviewer concern
+  action: do not close yet`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["reviewer pass"]);
+});
+
+test("validateStore rejects T0088 reviewer pass before machine evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0088",
+    title: "Pipeline reviewer evidence guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify reviewer evidence
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- reviewer: PASS
+  checked: evidence and tests
+  risks: none
+  action: ready for review
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["reviewer pass"]);
+});
+
+test("validateStore keeps T0088 doing preflight independent of reviewer pass", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0088",
+    title: "Pipeline reviewer evidence guard",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify reviewer evidence
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope`));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("updateDoc rejects T0088 review transition without structured reviewer pass", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0088",
+    title: "Pipeline reviewer evidence guard",
+    status: "todo",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify reviewer evidence
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  assert.throws(
+    () => updateDoc(root, "T0088", { fields: { status: "review" } }),
+    /reviewer pass/,
+  );
+});
+
+test("validateStore accepts T0088 structured reviewer pass after machine evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0088",
+    title: "Pipeline reviewer evidence guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify reviewer evidence
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
 test("validateStore accepts valid dual-source status artifact for T0080+ evidence", (t) => {
   const root = tempRoot(t);
   writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({

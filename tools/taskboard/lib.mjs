@@ -31,6 +31,7 @@ const ORCHESTRATION_BROAD_WORK_MIN_TASK_ID = 79;
 const ORCHESTRATION_CLOSEOUT_PREFLIGHT_FIELDS_MIN_TASK_ID = 79;
 const ORCHESTRATION_STATUS_ARTIFACT_MIN_TASK_ID = 80;
 const ORCHESTRATION_TOOL_USE_GUARD_DETAILS_MIN_TASK_ID = 82;
+const ORCHESTRATION_REVIEWER_EVIDENCE_MIN_TASK_ID = 88;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
   "orchestration",
@@ -655,6 +656,7 @@ function orchestrationEvidenceProblem(doc, root = "") {
   const requireTraceArtifact = requiresOrchestrationTraceArtifact(doc);
   const requireStatusArtifact = requiresOrchestrationStatusArtifact(doc);
   const requireToolUseGuardDetails = requiresOrchestrationToolUseGuardDetails(doc);
+  const requireReviewerEvidence = requiresOrchestrationReviewerEvidence(doc);
   const requiredFields = requiresOrchestrationCloseoutPreflightFields(doc)
     ? ORCHESTRATION_PREFLIGHT_FIELDS
     : ORCHESTRATION_REQUIRED_FIELDS;
@@ -665,6 +667,7 @@ function orchestrationEvidenceProblem(doc, root = "") {
     requireTraceArtifact,
     requireStatusArtifact,
     requireToolUseGuardDetails,
+    requireReviewerEvidence,
     requiredFields,
     root,
   });
@@ -748,6 +751,7 @@ function missingOrchestrationFields(log, options = {}) {
     requireTraceArtifact = false,
     requireStatusArtifact = false,
     requireToolUseGuardDetails = false,
+    requireReviewerEvidence = false,
     requiredFields = ORCHESTRATION_REQUIRED_FIELDS,
     root = "",
   } = typeof options === "boolean" ? { requireMachineEvidence: options } : options;
@@ -760,6 +764,7 @@ function missingOrchestrationFields(log, options = {}) {
   if (requireToolUseGuardDetails) baseline.push("tool-use guard details");
   if (requireMachineEvidence) baseline.push("machine evidence command");
   if (requireMachineEvidencePass) baseline.push("machine evidence pass");
+  if (requireReviewerEvidence) baseline.push("reviewer pass");
   let bestMissing = baseline;
   for (const block of blocks) {
     const missing = requiredFields
@@ -786,11 +791,42 @@ function missingOrchestrationFields(log, options = {}) {
       const evidenceProblem = machineEvidencePassProblem(log, block, { root, requireTraceArtifact, requireStatusArtifact });
       if (evidenceProblem) missing.push(evidenceProblem);
     }
+    if (requireReviewerEvidence && !hasReviewerPassAfterMachineEvidence(log)) {
+      missing.push("reviewer pass");
+    }
     if (missing.length < bestMissing.length) {
       bestMissing = missing;
     }
   }
   return bestMissing;
+}
+
+function hasReviewerPassAfterMachineEvidence(log) {
+  const lines = String(log || "").split(/\r?\n/);
+  let sawMachineEvidencePass = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/^\s*[-*]\s+evidence\s*:\s*PASS\b/i.test(lines[i]) && isMachineEvidenceCommand(lines[i])) {
+      sawMachineEvidencePass = true;
+      continue;
+    }
+    if (!sawMachineEvidencePass || !/^\s*[-*]\s+(?:reviewer|verifier)\s*:\s*PASS\b/i.test(lines[i])) {
+      continue;
+    }
+    const block = [lines[i]];
+    for (let j = i + 1; j < lines.length; j += 1) {
+      if (/^\s*[-*]\s+\S/.test(lines[j])) break;
+      block.push(lines[j]);
+    }
+    const text = block.join("\n");
+    if (
+      hasMeaningfulFieldValue(text, /\bchecked\b/i)
+      && hasMeaningfulFieldValue(text, /\brisks\b/i)
+      && hasMeaningfulFieldValue(text, /\baction\b/i)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function orchestrationUsedBlocks(log) {
@@ -1200,6 +1236,11 @@ function requiresOrchestrationStatusArtifact(doc) {
 function requiresOrchestrationToolUseGuardDetails(doc) {
   const match = String(doc.fields.id || "").match(/^T(\d+)$/);
   return match ? Number(match[1]) >= ORCHESTRATION_TOOL_USE_GUARD_DETAILS_MIN_TASK_ID : true;
+}
+
+function requiresOrchestrationReviewerEvidence(doc) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= ORCHESTRATION_REVIEWER_EVIDENCE_MIN_TASK_ID : true;
 }
 
 function fieldValue(text, fieldPattern) {
