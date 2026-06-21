@@ -43,6 +43,36 @@ function writeJsonl(file, records) {
   writeFileSync(file, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
 }
 
+function writeTaskboardTask(rootDir, { id = "T0001", status = "doing", tags = ["pipeline", "orchestration"] } = {}) {
+  const activeDir = join(rootDir, "tasks", "active");
+  mkdirSync(activeDir, { recursive: true });
+  const file = join(activeDir, `${id.toLowerCase()}-status-test.md`);
+  writeFileSync(file, `---
+id: ${id}
+title: Status preflight inference
+status: ${status}
+epic: ""
+priority: P2
+tags: [${tags.join(", ")}]
+created: 2026-06-21
+updated: 2026-06-21
+---
+
+## What
+
+Test task.
+
+## Done when
+
+- [ ] checked
+
+## Open questions
+
+## Log
+`, "utf8");
+  return file;
+}
+
 function multiAgentCall(callId, name, args = {}, timestamp = "2026-06-21T10:00:00.000Z") {
   return {
     timestamp,
@@ -135,6 +165,13 @@ function writeUnresolvedAgentRollout(dir, { file, agent, parent, timestamp = "20
     shellCall(callId, "node --test tools/agent.test.mjs", "2026-06-21T10:03:01.000Z"),
     shellOutput(callId, "Exit code: 1\nWall time: 0.1 seconds\nOutput:\nnot ok 1 real validation failure\n", "2026-06-21T10:03:02.000Z"),
   ]);
+}
+
+function writeCleanTailRollouts(dir, parent, prefix = "ffffffff-ffff-4fff-8fff-fffffffffff") {
+  writeToolUsageAgentRollout(dir, { file: "rollout-bad.jsonl", agent: `${prefix}1`, parent, timestamp: "2026-06-21T10:00:00.000Z" });
+  writeCleanAgentRollout(dir, { file: "rollout-clean-1.jsonl", agent: `${prefix}2`, parent, timestamp: "2026-06-21T10:01:00.000Z", callId: "clean_one" });
+  writeCleanAgentRollout(dir, { file: "rollout-clean-2.jsonl", agent: `${prefix}3`, parent, timestamp: "2026-06-21T10:02:00.000Z", callId: "clean_two" });
+  writeCleanAgentRollout(dir, { file: "rollout-clean-3.jsonl", agent: `${prefix}4`, parent, timestamp: "2026-06-21T10:03:00.000Z", callId: "clean_three" });
 }
 
 function runHook(payload, profile, harness = "codex", env = {}) {
@@ -1324,7 +1361,7 @@ test("status next action reports clean tail after old agent tool-usage failures"
       "--session-root", dir,
       "--agent-cwd", root,
       "--json-output", statusJson,
-    ]);
+    ], { env: { TASKBOARD_ROOT: dir } });
     const status = readJson(statusJson);
     assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_failed_records, 1);
     assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_clean_tail_agents, 3);
@@ -1333,6 +1370,100 @@ test("status next action reports clean tail after old agent tool-usage failures"
     assert.match(result.stdout, /agent tool-usage clean tail: 3 agent\(s\)/);
     assert.match(result.stdout, /Recent subagents are clean of classified tool-use failures/);
     assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check <task-id> --json/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status clean-tail next action infers current preflight task id", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    writeTaskboardTask(dir, { id: "T1234", status: "doing", tags: ["pipeline", "orchestration"] });
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeCleanTailRollouts(dir, parent);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ], { env: { TASKBOARD_ROOT: dir } });
+    const status = readJson(statusJson);
+    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check T1234 --json/);
+    assert.doesNotMatch(status.next_action, /<task-id>/);
+    assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check T1234 --json/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status clean-tail next action keeps placeholder when current task id is ambiguous", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    writeTaskboardTask(dir, { id: "T1234", status: "doing", tags: ["pipeline", "orchestration"] });
+    writeTaskboardTask(dir, { id: "T1235", status: "doing", tags: ["pipeline", "orchestration"] });
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeCleanTailRollouts(dir, parent, "abababab-abab-4aba-8aba-ababababab");
+
+    run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ], { env: { TASKBOARD_ROOT: dir } });
+    const status = readJson(statusJson);
+    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check <task-id> --json/);
+    assert.doesNotMatch(status.next_action, /orchestration-check T1234 --json/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status clean-tail next action ignores non-current or non-orchestration tasks", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    writeTaskboardTask(dir, { id: "T1234", status: "review", tags: ["pipeline", "orchestration"] });
+    writeTaskboardTask(dir, { id: "T1235", status: "doing", tags: ["gameplay"] });
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeCleanTailRollouts(dir, parent, "bcbcbcbc-bcbc-4bcb-8bcb-bcbcbcbcbc");
+
+    run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ], { env: { TASKBOARD_ROOT: dir } });
+    const status = readJson(statusJson);
+    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check <task-id> --json/);
+    assert.doesNotMatch(status.next_action, /orchestration-check T1234 --json/);
+    assert.doesNotMatch(status.next_action, /orchestration-check T1235 --json/);
   } finally {
     cleanup(dir);
   }

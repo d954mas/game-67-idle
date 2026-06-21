@@ -535,6 +535,14 @@ function isSubstantialOrchestrationTask(doc) {
   return ORCHESTRATION_KEYWORDS.some((keyword) => haystack.toLowerCase().includes(keyword.toLowerCase()));
 }
 
+export function inferCurrentDoingOrchestrationTaskId(root) {
+  const candidates = listTasks(root)
+    .filter((task) => task.fields.status === "doing")
+    .filter((task) => isSubstantialOrchestrationTask(task))
+    .filter((task) => task.fields.id);
+  return candidates.length === 1 ? candidates[0].fields.id : "";
+}
+
 function isArchivedOrchestrationGuardCandidate(doc) {
   const match = String(doc.fields.id || "").match(/^T(\d+)$/);
   return match ? Number(match[1]) >= ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID : true;

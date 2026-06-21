@@ -13,6 +13,7 @@ import {
   todaySessionProfiles,
 } from "./profile_lib.mjs";
 import { buildOrchestrationTrace, buildTrace, todaySessionRoot } from "./orchestration_trace.mjs";
+import { findRoot as findTaskboardRoot, inferCurrentDoingOrchestrationTaskId } from "../taskboard/lib.mjs";
 
 function usage() {
   console.error(`usage:
@@ -869,6 +870,17 @@ function formatCommandArg(value) {
   return `"${text.replaceAll('"', '\\"')}"`;
 }
 
+function currentOrchestrationPreflightCommand() {
+  try {
+    const taskRoot = findTaskboardRoot(process.cwd());
+    const taskId = inferCurrentDoingOrchestrationTaskId(taskRoot);
+    if (taskId) return `node tools/ai.mjs orchestration-check ${taskId} --json`;
+  } catch {
+    // Status should stay diagnostic even if a taskboard checkout is incomplete.
+  }
+  return "node tools/ai.mjs orchestration-check <task-id> --json";
+}
+
 function buildStatus(profilePaths, values = {}) {
   const files = Array.isArray(profilePaths) ? profilePaths : [profilePaths];
   const parsed = parseProfiles(files);
@@ -900,7 +912,7 @@ function buildStatus(profilePaths, values = {}) {
   } else if (unresolvedAgentFailures > 0) {
     nextAction = "Inspect unresolved agent failure samples before trusting the orchestration rollup.";
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0 && agentToolUsageCleanTailAgents >= 3) {
-    nextAction = "Recent subagents are clean of classified tool-use failures; keep the printed prevention hints in packets and preflight the next task with `node tools/ai.mjs orchestration-check <task-id> --json` before launching delegated work.";
+    nextAction = `Recent subagents are clean of classified tool-use failures; keep the printed prevention hints in packets and preflight the next task with \`${currentOrchestrationPreflightCommand()}\` before launching delegated work.`;
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0) {
     nextAction = "Apply the printed agent tool-use prevention hints to subagent packets, prompts, or templates before the next delegated run.";
   } else if (agentToolUsageFailures > 0) {
