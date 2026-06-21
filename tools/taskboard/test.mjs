@@ -10,6 +10,7 @@ import {
   parseDoc, serializeDoc, slugify, createTask, createEpic, listTasks,
   listEpics, updateDoc, findDoc, validateStore, validateStoreDetailed,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate, orchestrationPreflightProblem,
+  subagentPacketTemplate, subagentPacketProblem,
   orchestrationWorkflowTemplate,
   DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
@@ -189,6 +190,23 @@ function closeoutLogWithoutToolGuard(command = "node tools/ai.mjs status --agent
   stop condition: taskboard tests pass
   independent reviewer: reviewed lifecycle scope
 - evidence: PASS \`${command}\``;
+}
+
+function validSubagentPacket() {
+  return `objective: Verify the reusable packet shape.
+allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+forbidden files: AGENTS.md; src/clean_seed_main.c
+tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+expected output: PASS or CONCERNS with exact evidence.
+evidence command or artifact: node --test --test-name-pattern "subagent packet" tools/taskboard/test.mjs
+stop condition: focused packet checks pass or a blocker is found.
+handoff:
+  findings: exact findings and verdict
+  files: files inspected
+  commands/evidence: commands run and results
+  risks: residual risks
+  owner action: lead next action
+  not-done: explicit gaps`;
 }
 
 test("frontmatter roundtrip preserves fields and body", () => {
@@ -3442,6 +3460,103 @@ test("cli orchestration-template prints accepted packet shape", () => {
   assert.match(result.stdout, /evidence command: <non-empty>/);
   assert.match(result.stdout, /stop condition: <non-empty>/);
   assert.match(result.stdout, /independent reviewer: <non-empty>/);
+});
+
+test("subagent packet template contains tool-use guard and handoff fields", () => {
+  const template = subagentPacketTemplate();
+
+  assert.match(template, /objective:/);
+  assert.match(template, /allowed files:/);
+  assert.match(template, /forbidden files:/);
+  assert.ok(template.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
+  assert.match(template, /evidence command or artifact:/);
+  assert.match(template, /handoff:/);
+  for (const label of ["findings", "files", "commands/evidence", "risks", "owner action", "not-done"]) {
+    assert.match(template, new RegExp(`${label}:`));
+  }
+});
+
+test("subagent packet check accepts complete packet", () => {
+  assert.equal(subagentPacketProblem(validSubagentPacket()), null);
+});
+
+test("subagent packet check rejects weak tool-use guard", () => {
+  const packet = validSubagentPacket().replace(DEFAULT_ORCHESTRATION_TOOL_USE_GUARD, "be careful");
+  const problem = subagentPacketProblem(packet);
+
+  assert.equal(problem.code, "subagent_packet_invalid");
+  assert.ok(problem.missingFields.includes("tool-use guard details"));
+});
+
+test("subagent packet check rejects unbounded allowed files", () => {
+  const packet = validSubagentPacket().replace("tools/taskboard/lib.mjs; tools/taskboard/test.mjs", "tools/**");
+  const problem = subagentPacketProblem(packet);
+
+  assert.equal(problem.code, "subagent_packet_invalid");
+  assert.ok(problem.missingFields.includes("bounded allowed files"));
+});
+
+test("subagent packet check rejects missing handoff subfields", () => {
+  const packet = validSubagentPacket().replace("  not-done: explicit gaps", "");
+  const problem = subagentPacketProblem(packet);
+
+  assert.equal(problem.code, "subagent_packet_invalid");
+  assert.ok(problem.missingFields.includes("handoff not-done"));
+});
+
+test("cli subagent-packet-template prints reusable packet", () => {
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "subagent-packet-template"], { encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /objective:/);
+  assert.ok(result.stdout.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
+  assert.match(result.stdout, /handoff:/);
+});
+
+test("cli subagent-template alias prints reusable packet", () => {
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "subagent-template"], { encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /objective:/);
+  assert.ok(result.stdout.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
+});
+
+test("cli subagent-packet-check reports structured failures", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "subagent-packet-check", "--text", "objective: only this", "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "subagent_packet_invalid");
+  assert.ok(parsed.problem.missingFields.includes("tool-use guard"));
+  assert.ok(parsed.problem.missingFields.includes("handoff"));
+});
+
+test("cli subagent-packet-check accepts file input", (t) => {
+  const root = tempRoot(t);
+  const packet = join(root, "packet.txt");
+  writeFileSync(packet, validSubagentPacket());
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "subagent-packet-check", "--file", packet, "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.problem, null);
+});
+
+test("cli subagent-check alias accepts text input", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "subagent-check", "--text", validSubagentPacket(), "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
 });
 
 function bootstrapArgs(overrides = {}) {

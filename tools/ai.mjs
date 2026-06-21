@@ -18,6 +18,8 @@ function usage() {
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
   node tools/ai.mjs orchestration-trace [--session <codex-session.jsonl>] [--parent-thread-id <id>] [trace options]
   node tools/ai.mjs orchestration-template
+  node tools/ai.mjs subagent-packet-template|subagent-template
+  node tools/ai.mjs subagent-packet-check|subagent-check --file packet.txt|--text "..." [--json]
   node tools/ai.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--json]
   node tools/ai.mjs orchestration-check <task-id>|--id <task-id>|--file <task.md>|--current [--json]
   node tools/ai.mjs orchestration-evidence [--current|--task <task-id>|--id <task-id>|--file <task.md>] [--run] [--json]
@@ -37,6 +39,8 @@ Commands:
   import-codex-session  recover missed failed Codex shell calls into the session log
   orchestration-trace   verify multi-agent transcript/session evidence for task closeout
   orchestration-template print the orchestration packet template for subagent tasks
+  subagent-packet-template print a reusable prompt packet for spawn_agent delegation
+  subagent-packet-check validate a subagent prompt packet before launching a delegated run
   orchestration-bootstrap create a current task with a complete orchestration packet
   orchestration-check   preflight-check an orchestration packet before launching subagents
   orchestration-evidence infer, print, or run strict compact subagent status evidence for the current orchestration task
@@ -145,6 +149,10 @@ if (command === "import-codex-session") run(["tools/ai_profile/import_codex_sess
 if (command === "orchestration-trace") run(["tools/ai_profile/orchestration_trace.mjs", ...argv]);
 
 if (command === "orchestration-template") run(["tools/taskboard/cli.mjs", "orchestration-template", ...argv]);
+
+if (command === "subagent-packet-template" || command === "subagent-template") run(["tools/taskboard/cli.mjs", "subagent-packet-template", ...argv]);
+
+if (command === "subagent-packet-check" || command === "subagent-check") run(["tools/taskboard/cli.mjs", "subagent-packet-check", ...argv]);
 
 if (command === "orchestration-bootstrap") run(["tools/taskboard/cli.mjs", "orchestration-bootstrap", ...argv]);
 

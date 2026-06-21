@@ -155,6 +155,20 @@ const ORCHESTRATION_PACKET_TEMPLATE = `- orchestration: used
   evidence command: <non-empty>
   stop condition: <non-empty>
   independent reviewer: <non-empty>`;
+const SUBAGENT_PACKET_TEMPLATE = `objective: <bounded subagent objective>
+allowed files: <repo-local files or bounded patterns>
+forbidden files: <files or areas the subagent must not touch>
+tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+expected output: <concise final report or changed files>
+evidence command or artifact: <read-only command, focused test, or artifact path>
+stop condition: <when the subagent must stop>
+handoff:
+  findings: <facts or verdict>
+  files: <files inspected or changed>
+  commands/evidence: <commands run and results>
+  risks: <remaining risk>
+  owner action: <what the lead must do next>
+  not-done: <explicit gaps>`;
 
 function orchestrationPreflightNextAction(taskId) {
   const selector = taskId || "<task-id>";
@@ -163,6 +177,63 @@ function orchestrationPreflightNextAction(taskId) {
 
 export function orchestrationPacketTemplate() {
   return ORCHESTRATION_PACKET_TEMPLATE;
+}
+
+export function subagentPacketTemplate() {
+  return SUBAGENT_PACKET_TEMPLATE;
+}
+
+export function subagentPacketProblem(text) {
+  const packet = String(text || "");
+  const missing = [];
+  const required = [
+    ["objective", /\bobjective\b/i],
+    ["allowed files", /\b(?:allowed files?|inputs?)\b/i],
+    ["forbidden files", /\bforbidden files?\b/i],
+    ["tool-use guard", /\btool-use\s+guard\b/i],
+    ["expected output", /\bexpected output\b/i],
+    ["evidence command or artifact", /\b(?:evidence command or artifact|evidence command|evidence artifact|artifact)\b/i],
+    ["stop condition", /\bstop condition\b/i],
+    ["handoff", /\bhandoff\b/i],
+  ];
+  for (const [name, pattern] of required) {
+    if (!hasText(packetFieldValue(packet, pattern))) missing.push(name);
+  }
+  const allowed = packetFieldValue(packet, ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN);
+  if (allowed && boundedAllowedFilesProblem(allowed)) missing.push("bounded allowed files");
+  const guard = packetFieldValue(packet, /\btool-use\s+guard\b/i);
+  if (guard && !isDetailedToolUseGuard(guard)) missing.push("tool-use guard details");
+  const handoff = packetFieldValue(packet, /\bhandoff\b/i);
+  for (const label of ["findings", "files", "commands/evidence", "risks", "owner action", "not-done"]) {
+    const pattern = new RegExp(`\\b${escapeRegExp(label)}\\b`, "i");
+    if (!pattern.test(handoff)) missing.push(`handoff ${label}`);
+  }
+  if (!missing.length) return null;
+  return {
+    code: "subagent_packet_invalid",
+    missingFields: [...new Set(missing)],
+    template: SUBAGENT_PACKET_TEMPLATE,
+    message: `subagent packet failed (missing/invalid: ${[...new Set(missing)].join(", ")})`,
+  };
+}
+
+function packetFieldValue(text, fieldPattern) {
+  const lines = String(text || "").split(/\r?\n/);
+  const out = [];
+  let collecting = false;
+  for (const line of lines) {
+    const match = line.match(/^\s*(?:[-*]\s*)?(.+?)\s*:\s*(.*)$/);
+    if (match) {
+      if (collecting && !/^\s/.test(line)) break;
+      if (fieldPattern.test(match[1])) {
+        collecting = true;
+        out.push(match[2].trim());
+        continue;
+      }
+    }
+    if (collecting) out.push(line.trim());
+  }
+  return out.join(" ").trim();
 }
 
 export function orchestrationWorkflowTemplate(taskId = "T0000") {

@@ -9,6 +9,8 @@
 //   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
 //   node tools/taskboard/cli.mjs orchestration-template
+//   node tools/taskboard/cli.mjs subagent-packet-template|subagent-template
+//   node tools/taskboard/cli.mjs subagent-packet-check|subagent-check --file packet.txt|--text "..." [--json]
 //   node tools/taskboard/cli.mjs orchestration-workflow-template [--task-id T0001] [--json]
 //   node tools/taskboard/cli.mjs orchestration-workflow-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
 //   node tools/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
@@ -21,7 +23,7 @@ import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
   updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
-  orchestrationWorkflowTemplate,
+  subagentPacketTemplate, subagentPacketProblem, orchestrationWorkflowTemplate,
   orchestrationPreflightProblem, orchestrationWorkflowManifestProblem,
   parseDoc, currentDoingOrchestrationTaskIds,
   isMachineEvidenceCommand, isBoundedOrchestrationAllowedFiles,
@@ -222,6 +224,24 @@ function readTaskFileArg(value) {
       display_id: parsed.fields.id || rel,
     },
   };
+}
+
+function readSubagentPacketArg(args) {
+  if (args.file && args.text) fail("use only one subagent-packet-check input: --file or --text");
+  if (typeof args.text === "string") return args.text;
+  if (args.file) {
+    const requested = args.file;
+    const file = isAbsolute(requested) ? resolve(requested) : resolve(root, requested);
+    const rel = relative(root, file);
+    if (rel.startsWith("..") || isAbsolute(rel)) {
+      fail("--file must be inside the repository root");
+    }
+    if (!existsSync(file)) {
+      fail(`no such file: ${requested}`);
+    }
+    return readFileSync(file, "utf8");
+  }
+  fail("usage: subagent-packet-check --file packet.txt|--text \"...\" [--json]");
 }
 
 function readTaskForOrchestrationCheck(args) {
@@ -514,6 +534,29 @@ switch (cmd) {
     console.log(orchestrationPacketTemplate());
     break;
   }
+  case "subagent-packet-template":
+  case "subagent-template": {
+    console.log(subagentPacketTemplate());
+    break;
+  }
+  case "subagent-packet-check":
+  case "subagent-check": {
+    const problem = subagentPacketProblem(readSubagentPacketArg(args));
+    if (args.json) {
+      writeJson({
+        ok: !problem,
+        problem,
+      });
+      process.exit(problem ? 1 : 0);
+    }
+    if (problem) {
+      console.log(`problem: ${problem.message}`);
+      console.log("hint: start from `node tools/taskboard/cli.mjs subagent-packet-template`");
+      process.exit(1);
+    }
+    console.log("ok: subagent packet passed");
+    break;
+  }
   case "orchestration-workflow-template": {
     const taskId = typeof args["task-id"] === "string" ? args["task-id"].trim() : "T0000";
     const payload = orchestrationWorkflowTemplate(taskId || "T0000");
@@ -750,7 +793,7 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|orchestration-workflow-template|orchestration-workflow-check|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
+    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|subagent-packet-template|subagent-template|subagent-packet-check|subagent-check|orchestration-workflow-template|orchestration-workflow-check|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
     process.exit(cmd ? 1 : 0);
 }
 

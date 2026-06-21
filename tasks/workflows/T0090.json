@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "kind": "orchestration-workflow",
+  "task_id": "T0090",
+  "status": "review",
+  "objective": "Add a reusable operator-facing subagent packet template/check path so manual delegated prompts consistently include the known tool-use guard, bounded scope, evidence, handoff fields, and closeout expectations instead of relying on memory.",
+  "scope": {
+    "included": [
+      "tools/taskboard/lib.mjs",
+      "tools/taskboard/cli.mjs",
+      "tools/taskboard/test.mjs",
+      "tools/ai.mjs",
+      "tools/ai.test.mjs",
+      "docs/ai-pipeline/subagent-protocol.md",
+      "tasks/active/T0090-add-reusable-subagent-packet-template.md",
+      "tasks/evidence/T0090-status-rollup.json",
+      "tasks/workflows/T0090.json"
+    ],
+    "excluded": [
+      "game implementation",
+      "runtime visuals",
+      "asset generation",
+      "taskboard storage model changes"
+    ]
+  },
+  "packets": [
+    {
+      "id": "design-review",
+      "objective": "Review whether the subagent packet template/check should be separate from task orchestration templates and identify tests/docs risks.",
+      "status": "integrated",
+      "allowed_files": [
+        "tools/taskboard/lib.mjs",
+        "tools/taskboard/cli.mjs",
+        "tools/taskboard/test.mjs",
+        "tools/ai.mjs",
+        "tools/ai.test.mjs",
+        "docs/ai-pipeline/subagent-protocol.md"
+      ],
+      "evidence_refs": [
+        "tasks/evidence/T0090-status-rollup.json"
+      ]
+    },
+    {
+      "id": "implementation",
+      "objective": "Expose subagent packet template/check commands through taskboard and ai facade without mutating task state.",
+      "status": "integrated",
+      "allowed_files": [
+        "tools/taskboard/lib.mjs",
+        "tools/taskboard/cli.mjs",
+        "tools/ai.mjs"
+      ],
+      "evidence_refs": [
+        "tasks/evidence/T0090-status-rollup.json"
+      ]
+    },
+    {
+      "id": "tests",
+      "objective": "Cover template contents, valid packets, weak guard rejection, unbounded allowed files, missing handoff fields, CLI aliases, and facade forwarding.",
+      "status": "integrated",
+      "allowed_files": [
+        "tools/taskboard/test.mjs",
+        "tools/ai.test.mjs"
+      ],
+      "evidence_refs": [
+        "tasks/evidence/T0090-status-rollup.json"
+      ]
+    },
+    {
+      "id": "operator-docs",
+      "objective": "Document the reusable packet commands before manual spawn_agent launches.",
+      "status": "integrated",
+      "allowed_files": [
+        "docs/ai-pipeline/subagent-protocol.md"
+      ],
+      "evidence_refs": [
+        "tasks/evidence/T0090-status-rollup.json"
+      ]
+    }
+  ],
+  "budgets": {
+    "max_agents": 2,
+    "context": "Bounded to taskboard packet helpers, ai facade forwarding, subagent protocol docs, T0090 task/evidence/workflow files, and focused tests.",
+    "validation": "Focused subagent-packet tests, full taskboard and ai facade tests, taskboard validation, orchestration preflight, workflow manifest check, review validation, and strict compact status evidence."
+  },
+  "verification": {
+    "strategy": "machine gates plus independent design review and lead integration",
+    "commands": [
+      "node --test --test-name-pattern \"subagent packet|subagent-packet|subagent-template|subagent-check\" tools/taskboard/test.mjs",
+      "node --test --test-name-pattern \"subagent-packet|subagent-template|subagent-check\" tools/ai.test.mjs",
+      "node --test tools/taskboard/test.mjs",
+      "node --test tools/ai.test.mjs",
+      "node tools/taskboard/cli.mjs validate --json",
+      "node tools/ai.mjs orchestration-check --current --json",
+      "node tools/taskboard/cli.mjs orchestration-workflow-check T0090 --json",
+      "node tools/ai.mjs validate --review"
+    ],
+    "evidence_refs": [
+      "tasks/evidence/T0090-status-rollup.json"
+    ]
+  },
+  "integration": {
+    "owner": "lead",
+    "policy": "Lead keeps task-level orchestration packets separate from prompt-level subagent packets, accepts both explicit and short aliases, and uses the packet check as friction reduction rather than mandatory task state."
+  },
+  "evidence_refs": [
+    "tasks/evidence/T0090-status-rollup.json"
+  ],
+  "updated_at": "2026-06-21"
+}

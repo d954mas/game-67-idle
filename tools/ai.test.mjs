@@ -609,6 +609,50 @@ test("orchestration-template forwards taskboard template", () => {
   assert.match(result.stdout, /independent reviewer:/);
 });
 
+test("subagent-packet-template forwards taskboard template", () => {
+  const result = run(["subagent-packet-template"]);
+  const direct = spawnSync(process.execPath, ["tools/taskboard/cli.mjs", "subagent-packet-template"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: "pipe",
+    shell: false,
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(direct.status, 0, direct.stderr || direct.stdout);
+  assert.equal(result.stdout, direct.stdout);
+  assert.match(result.stdout, /objective:/);
+  assert.ok(result.stdout.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
+  assert.match(result.stdout, /handoff:/);
+});
+
+test("subagent-packet-check forwards structured validation", () => {
+  const result = run(["subagent-packet-check", "--text", "objective: weak packet", "--json"]);
+
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr, "");
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "subagent_packet_invalid");
+  assert.ok(parsed.problem.missingFields.includes("tool-use guard"));
+});
+
+test("subagent-template alias forwards taskboard template", () => {
+  const result = run(["subagent-template"]);
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /objective:/);
+  assert.ok(result.stdout.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
+});
+
+test("subagent-check alias forwards structured validation", () => {
+  const result = run(["subagent-check", "--text", "objective: weak packet", "--json"]);
+
+  assert.equal(result.status, 1);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.problem.code, "subagent_packet_invalid");
+});
+
 function bootstrapArgs(overrides = {}) {
   const values = {
     title: "Facade bootstrap",
