@@ -911,6 +911,8 @@ function buildStatus(profilePaths, values = {}) {
     nextAction = "No tool calls recorded yet in this session.";
   } else if (failedClassification.unresolved > 0) {
     nextAction = "Inspect the unresolved failed commands before drawing conclusions.";
+  } else if (agentRollup?.enabled && agentRollup.ok !== true) {
+    nextAction = "Fix the agent rollup evidence source or required agent count before trusting this orchestration evidence.";
   } else if (unresolvedAgentFailures > 0) {
     nextAction = "Inspect unresolved agent failure samples before trusting the orchestration rollup.";
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0 && agentToolUsageCleanTailAgents >= 3) {

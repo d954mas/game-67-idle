@@ -713,6 +713,31 @@ test("status forwards agent rollup options", () => {
   }
 });
 
+test("status reports failed strict agent rollup as next action", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+
+    const result = run([
+      "status",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--no-import-codex-session",
+    ]);
+
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /missing parent thread id for agent rollup/);
+    assert.match(result.stdout, /Fix the agent rollup evidence source or required agent count/);
+    assert.doesNotMatch(result.stdout, /No profiling action needed/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status forwards omitted agent rollup hint context", () => {
   const dir = tempDir();
   try {
