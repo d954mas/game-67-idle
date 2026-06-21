@@ -39,7 +39,7 @@ the orchestration packet.
   objective: require later machine PASS evidence to match the declared orchestration machine evidence
   allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs, tasks/active/T0037-match-declared-orchestration-machine-pass-eviden.md
   expected output: taskboard rejects unrelated machine PASS evidence and accepts semantically matching trace/status evidence despite harmless formatting differences
-  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs status --agent-rollup --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session; node tools/taskboard/cli.mjs validate; node tools/ai.mjs validate --review
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session; node tools/taskboard/cli.mjs validate; node tools/ai.mjs validate --review
   stop condition: matching stays static and compares command kind plus source identity, not full raw strings or arbitrary log prose
   independent reviewer: Zeno reviewed matching semantics and false-positive risks
 - reviewer: PASS Zeno recommended source-identity matching: command kind plus
@@ -51,3 +51,4 @@ the orchestration packet.
 - evidence: PASS `node tools/taskboard/cli.mjs validate`
 - evidence: PASS `node tools/ai.mjs validate --review`
 - evidence: PASS `git diff --check`
+- evidence: PASS current strict `node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session` (26 subagent sessions); refreshed after T0039 strict evidence contract.

@@ -443,6 +443,7 @@ test("status forwards agent rollup options", () => {
       "status",
       "--profile", profile,
       "--agent-rollup",
+      "--require-agent-rollup-ok",
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,

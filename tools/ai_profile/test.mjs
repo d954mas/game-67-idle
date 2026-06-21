@@ -629,6 +629,45 @@ test("status reads a session log and reports records, slowest, and rollup", () =
   }
 });
 
+test("status command rollup strips PowerShell env assignments", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    writeJsonl(profile, [
+      {
+        ts: "2026-06-13T10:00:00+05:00",
+        phase: "session",
+        category: "validation",
+        intent: "auto:Bash",
+        result: "pass",
+        value: "unknown",
+        event_type: "tool_call_result",
+        commands: ["$env:AI_PIPELINE_PYTHON='C:\\Users\\ROG\\.cache\\codex-runtimes\\python\\python.exe'; node tools/ai.mjs validate --full"],
+        session_id: "s1",
+      },
+      {
+        ts: "2026-06-13T10:00:01+05:00",
+        phase: "session",
+        category: "validation",
+        intent: "auto:Bash",
+        result: "pass",
+        value: "unknown",
+        event_type: "tool_call_result",
+        commands: ["AI_PIPELINE_PYTHON=/tmp/python node tools/ai.mjs validate --review"],
+        session_id: "s1",
+      },
+    ]);
+
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    const status = readJson(statusJson);
+    const keys = status.command_rollup.by_count.map((entry) => entry.key);
+    assert.deepEqual(keys, ["node ai.mjs"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status reports agent rollup when requested", () => {
   const dir = tempDir();
   try {
@@ -645,6 +684,7 @@ test("status reports agent rollup when requested", () => {
       "tools/ai_profile/status.mjs",
       "--profile", profile,
       "--agent-rollup",
+      "--require-agent-rollup-ok",
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,
@@ -765,7 +805,16 @@ test("status agent rollup reports missing parent id without failing status", () 
     ]);
 
     const result = run(["tools/ai_profile/status.mjs", "--profile", profile, "--agent-rollup", "--session-root", dir, "--agent-cwd", root]);
+    assert.equal(result.status, 0);
     assert.match(result.stdout, /problem: missing parent thread id for agent rollup/);
+
+    const strict = spawnSync(process.execPath, ["tools/ai_profile/status.mjs", "--profile", profile, "--agent-rollup", "--require-agent-rollup-ok", "--session-root", dir, "--agent-cwd", root], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    assert.equal(strict.status, 1);
+    assert.match(strict.stdout, /problem: missing parent thread id for agent rollup/);
   } finally {
     cleanup(dir);
   }
@@ -793,11 +842,26 @@ test("status reports incomplete trace-session rollup without failing status", ()
       "--json-output", statusJson,
     ]);
     const status = readJson(statusJson);
+    assert.equal(result.status, 0);
     assert.equal(status.agent_rollup.enabled, true);
     assert.equal(status.agent_rollup.ok, false);
     assert.equal(status.agent_rollup.source, "trace-session");
     assert.equal(status.agent_rollup.calls_count, 1);
     assert.match(result.stdout, /problem: missing wait for agent-1/);
+
+    const strict = spawnSync(process.execPath, [
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--trace-session", session,
+    ], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    assert.equal(strict.status, 1);
+    assert.match(strict.stdout, /problem: missing wait for agent-1/);
   } finally {
     cleanup(dir);
   }

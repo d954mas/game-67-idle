@@ -39,7 +39,7 @@ machine orchestration evidence was actually run. A packet-level
   objective: require PASS evidence for machine orchestration checks in taskboard
   allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs, docs/ai-pipeline/subagent-protocol.md, tasks/active/T0034-require-pass-evidence-for-orchestration-machine-.md
   expected output: taskboard rejects T0031+ machine evidence commands without a later evidence: PASS machine check and accepts trace/status PASS evidence
-  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs status --agent-rollup --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session; node tools/taskboard/cli.mjs validate; node tools/ai.mjs validate --review
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session; node tools/taskboard/cli.mjs validate; node tools/ai.mjs validate --review
   stop condition: validation stays static and checks recorded PASS evidence without executing arbitrary task-log commands
   independent reviewer: Hume reviewed PASS evidence guard scope and false-positive risks
 - reviewer: PASS Hume found the guard direction reasonable, flagged the
@@ -51,3 +51,4 @@ machine orchestration evidence was actually run. A packet-level
 - evidence: PASS `node tools/taskboard/cli.mjs validate`
 - evidence: PASS `node tools/ai.mjs validate --review`
 - evidence: PASS `git diff --check`
+- evidence: PASS current strict `node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session` (26 subagent sessions); refreshed after T0039 strict evidence contract.

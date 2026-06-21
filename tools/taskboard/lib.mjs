@@ -605,6 +605,7 @@ function machineEvidenceSignatures(text) {
     if (
       /\bnode\s+tools\/ai\.mjs\s+status\b/i.test(command)
       && /\s--agent-rollup\b/i.test(command)
+      && /\s--require-agent-rollup-ok\b/i.test(command)
       && (/\s--parent-thread-id\b/i.test(command) || /\s--trace-session\b/i.test(command))
     ) {
       signatures.push({

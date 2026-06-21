@@ -36,7 +36,7 @@ command, not only a complete prose packet.
   objective: require machine-readable orchestration evidence for new substantial pipeline/orchestration tasks
   allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs, docs/ai-pipeline/subagent-protocol.md, tasks/active/T0033-require-machine-orchestration-evidence-in-taskbo.md
   expected output: taskboard guard rejects trace-era packets without orchestration-trace/status agent-rollup evidence and accepts both machine evidence commands
-  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs status --agent-rollup --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session; node tools/taskboard/cli.mjs validate; node tools/ai.mjs validate --review
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session; node tools/taskboard/cli.mjs validate; node tools/ai.mjs validate --review
   stop condition: validation is static and machine-evidence-aware without executing arbitrary task log commands
   independent reviewer: Kant reviewed guard compatibility risks and false positives
 
@@ -58,3 +58,4 @@ command, not only a complete prose packet.
   whole packet, requiring `--parent-thread-id` or `--trace-session` for
   `status --agent-rollup`, and keeping validation static rather than executing
   task-log commands. Implemented with regression tests.
+- evidence: PASS current strict `node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session` (26 subagent sessions); refreshed after T0039 strict evidence contract.

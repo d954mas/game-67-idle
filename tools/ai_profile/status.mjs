@@ -15,7 +15,7 @@ import { buildOrchestrationTrace, buildTrace, todaySessionRoot } from "./orchest
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--verbose] [--agent-rollup]
+  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--verbose] [--agent-rollup] [--require-agent-rollup-ok]
 
 Profiling is fully passive: the PostToolUse hook records every tool call to a
 per-session log automatically. This command READS that log and reports the
@@ -32,7 +32,8 @@ Agent rollup is analysis-time only: pass --agent-rollup with --parent-thread-id
 <id> and optional --session-root <dir>, --agent-cwd <path>, --min-agents <n>.
 Use --trace-session <codex-session.jsonl> when checking parent transcript calls.
 If CODEX_SESSION_FILE points at the parent session, --agent-rollup can infer its
-id.`);
+id. Add --require-agent-rollup-ok only for strict task evidence; it exits
+nonzero when the rollup is missing or incomplete.`);
   process.exit(2);
 }
 
@@ -285,6 +286,9 @@ function classifyFailedRecords(records) {
  * (so "node tools/ai.mjs status" -> "node ai.mjs"). */
 function commandKey(cmd) {
   let text = String(cmd || "").trim();
+  while (/^\$env:[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:"[^"]*"|'[^']*'|[^;]+)\s*;\s*/i.test(text)) {
+    text = text.replace(/^\$env:[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:"[^"]*"|'[^']*'|[^;]+)\s*;\s*/i, "");
+  }
   while (/^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+/.test(text)) {
     text = text.replace(/^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+/, "");
   }
@@ -637,3 +641,6 @@ if (jsonOutputFile) {
   writeFileSync(target, `${JSON.stringify(status, null, 2)}\n`, "utf8");
 }
 process.stdout.write(rendered);
+if (values["require-agent-rollup-ok"] === true && status.agent_rollup?.ok !== true) {
+  process.exit(1);
+}

@@ -38,7 +38,7 @@ existing command/time/failure profile.
   objective: add agent-aware profiling status rollup without adding live hook overhead
   allowed files: tools/ai_profile/status.mjs, tools/ai_profile/orchestration_trace.mjs, tools/ai_profile/test.mjs, tools/ai.mjs, tools/ai.test.mjs, docs/ai-pipeline/profiling-reuse.md, tasks/active/T0032-add-agent-aware-profiling-rollup.md
   expected output: opt-in status agent_rollup JSON/render output, facade flag, focused tests, profiling docs, task evidence
-  evidence command: node --test tools/ai_profile/test.mjs; node --test tools/ai.test.mjs; node tools/ai.mjs status --agent-rollup --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session; node tools/taskboard/cli.mjs validate; node tools/ai.mjs validate --review
+  evidence command: node --test tools/ai_profile/test.mjs; node --test tools/ai.test.mjs; node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session; node tools/taskboard/cli.mjs validate; node tools/ai.mjs validate --review
   stop condition: status shows diagnostic agent rollup but does not automatically accept or close agent work
   independent reviewer: Ohm reviewed status integration risks and flag/schema contract
 
@@ -55,3 +55,4 @@ existing command/time/failure profile.
 - reviewer: Ohm requested distinct `--agent-rollup` / `--trace-session` flags,
   `agent_rollup` JSON, diagnostic non-acceptance semantics, and incomplete
   traces that do not fail normal status. Implemented and covered by tests.
+- evidence: PASS current strict `node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session` (26 subagent sessions); refreshed after T0039 strict evidence contract.
