@@ -13,7 +13,7 @@ import {
   todaySessionProfiles,
 } from "./profile_lib.mjs";
 import { buildOrchestrationTrace, buildTrace, todaySessionRoot } from "./orchestration_trace.mjs";
-import { findRoot as findTaskboardRoot, inferCurrentDoingOrchestrationTaskId } from "../taskboard/lib.mjs";
+import { currentDoingOrchestrationTaskIds, findRoot as findTaskboardRoot } from "../taskboard/lib.mjs";
 
 function usage() {
   console.error(`usage:
@@ -870,15 +870,17 @@ function formatCommandArg(value) {
   return `"${text.replaceAll('"', '\\"')}"`;
 }
 
-function currentOrchestrationPreflightCommand() {
+function currentOrchestrationPreflightGuidance() {
   try {
     const taskRoot = findTaskboardRoot(process.cwd());
-    const taskId = inferCurrentDoingOrchestrationTaskId(taskRoot);
-    if (taskId) return `node tools/ai.mjs orchestration-check ${taskId} --json`;
+    const taskIds = currentDoingOrchestrationTaskIds(taskRoot);
+    if (taskIds.length === 1) return `preflight the next task with \`node tools/ai.mjs orchestration-check ${taskIds[0]} --json\``;
+    if (taskIds.length === 0) return "create or refine one `doing` pipeline/orchestration task with a complete orchestration packet, then run `node tools/ai.mjs orchestration-check <task-id> --json`";
+    return "resolve multiple current `doing` pipeline/orchestration tasks, then run `node tools/ai.mjs orchestration-check <task-id> --json`";
   } catch {
     // Status should stay diagnostic even if a taskboard checkout is incomplete.
   }
-  return "node tools/ai.mjs orchestration-check <task-id> --json";
+  return "preflight the next task with `node tools/ai.mjs orchestration-check <task-id> --json`";
 }
 
 function buildStatus(profilePaths, values = {}) {
@@ -912,7 +914,7 @@ function buildStatus(profilePaths, values = {}) {
   } else if (unresolvedAgentFailures > 0) {
     nextAction = "Inspect unresolved agent failure samples before trusting the orchestration rollup.";
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0 && agentToolUsageCleanTailAgents >= 3) {
-    nextAction = `Recent subagents are clean of classified tool-use failures; keep the printed prevention hints in packets and preflight the next task with \`${currentOrchestrationPreflightCommand()}\` before launching delegated work.`;
+    nextAction = `Recent subagents are clean of classified tool-use failures; keep the printed prevention hints in packets, ${currentOrchestrationPreflightGuidance()} before launching delegated work.`;
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0) {
     nextAction = "Apply the printed agent tool-use prevention hints to subagent packets, prompts, or templates before the next delegated run.";
   } else if (agentToolUsageFailures > 0) {

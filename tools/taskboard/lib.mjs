@@ -535,12 +535,17 @@ function isSubstantialOrchestrationTask(doc) {
   return ORCHESTRATION_KEYWORDS.some((keyword) => haystack.toLowerCase().includes(keyword.toLowerCase()));
 }
 
-export function inferCurrentDoingOrchestrationTaskId(root) {
-  const candidates = listTasks(root)
+export function currentDoingOrchestrationTaskIds(root) {
+  return listTasks(root)
     .filter((task) => task.fields.status === "doing")
     .filter((task) => isSubstantialOrchestrationTask(task))
-    .filter((task) => task.fields.id);
-  return candidates.length === 1 ? candidates[0].fields.id : "";
+    .map((task) => task.fields.id)
+    .filter(Boolean);
+}
+
+export function inferCurrentDoingOrchestrationTaskId(root) {
+  const candidates = currentDoingOrchestrationTaskIds(root);
+  return candidates.length === 1 ? candidates[0] : "";
 }
 
 function isArchivedOrchestrationGuardCandidate(doc) {
