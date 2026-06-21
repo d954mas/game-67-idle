@@ -406,6 +406,49 @@ function buildAgentRollup(values) {
   };
 }
 
+function buildAgentRollupHint(values) {
+  if (values["agent-rollup"] === true || values.agents === true) return null;
+  const parentThreadId = readSessionMetaId(process.env.CODEX_SESSION_FILE || "");
+  if (!parentThreadId) return null;
+  const sessionRoot = stringArg(values, "session-root", "") || todaySessionRoot();
+  const cwd = stringArg(values, "agent-cwd", stringArg(values, "cwd", process.cwd()));
+  const trace = buildTrace({ sessionRoot, parentThreadId, minAgents: 0, cwd });
+  if ((trace.count || 0) === 0) return null;
+  const command = [
+    "node", "tools/ai.mjs", "status",
+    ...statusSelectionArgs(values),
+    "--agent-rollup",
+    "--parent-thread-id", parentThreadId,
+    "--session-root", sessionRoot,
+    "--agent-cwd", cwd,
+    ...(values["no-import-codex-session"] === true ? ["--no-import-codex-session"] : []),
+  ].map(formatCommandArg).join(" ");
+  return {
+    parent_thread_id: parentThreadId,
+    session_root: sessionRoot,
+    cwd,
+    subagent_session_count: trace.count || 0,
+    command,
+  };
+}
+
+function statusSelectionArgs(values) {
+  const out = [];
+  const profile = stringArg(values, "profile", "");
+  const harness = stringArg(values, "harness", "");
+  if (profile) out.push("--profile", profile);
+  if (harness) out.push("--harness", harness);
+  if (values.all === true) out.push("--all");
+  if (values.verbose === true) out.push("--verbose");
+  return out;
+}
+
+function formatCommandArg(value) {
+  const text = String(value);
+  if (!/\s/.test(text)) return text;
+  return `"${text.replaceAll('"', '\\"')}"`;
+}
+
 function buildStatus(profilePaths, values = {}) {
   const files = Array.isArray(profilePaths) ? profilePaths : [profilePaths];
   const parsed = parseProfiles(files);
@@ -419,6 +462,7 @@ function buildStatus(profilePaths, values = {}) {
     .sort((a, b) => Number(b.duration_ms || 0) - Number(a.duration_ms || 0))[0] || null;
   const lowCoverage = isLowCoverage(coverage);
   const agentRollup = buildAgentRollup(values);
+  const agentRollupHint = buildAgentRollupHint(values);
 
   let nextAction;
   if (!parsed.exists) {
@@ -462,6 +506,7 @@ function buildStatus(profilePaths, values = {}) {
     low_profile_coverage: lowCoverage,
     command_rollup: commandRollup(records),
     agent_rollup: agentRollup,
+    agent_rollup_hint: agentRollupHint,
     slowest_record: slowest ? {
       line: slowest.__line,
       duration_ms: Number(slowest.duration_ms || 0),
@@ -541,6 +586,12 @@ function renderStatus(status, { verbose }) {
       }
       if (agentRollup.agents.length > 10) lines.push(`- ... ${agentRollup.agents.length - 10} more`);
     }
+  }
+  if (!agentRollup?.enabled && status.agent_rollup_hint) {
+    lines.push("");
+    lines.push("## Agent Rollup");
+    lines.push("- not included in this status run");
+    lines.push(`- run: \`${status.agent_rollup_hint.command}\``);
   }
 
   if (verbose && coverage.largest_gaps.length > 0) {

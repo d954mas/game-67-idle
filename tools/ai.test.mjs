@@ -436,3 +436,33 @@ test("status forwards agent rollup options", () => {
     cleanup(dir);
   }
 });
+
+test("status forwards omitted agent rollup hint context", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    const parentSession = join(dir, "parent-session.jsonl");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(parentSession, [{ type: "session_meta", payload: { id: parent } }]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta("subagent-a", parent, root)]);
+
+    const result = run([
+      "status",
+      "--profile", profile,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--no-import-codex-session",
+    ], { env: { ...process.env, CODEX_SESSION_FILE: parentSession } });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /not included in this status run/);
+    assert.match(result.stdout, new RegExp(`status --profile .* --agent-rollup --parent-thread-id ${parent}`));
+    assert.match(result.stdout, /--session-root/);
+    assert.match(result.stdout, /--agent-cwd/);
+  } finally {
+    cleanup(dir);
+  }
+});

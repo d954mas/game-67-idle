@@ -12,7 +12,9 @@ The PostToolUse hook records tool calls automatically. Review a session with
 Use `--agent-rollup` for optional analysis-time subagent diagnostics; pass
 `--parent-thread-id` for subagent session metadata, or `--trace-session` for
 parent transcript spawn/wait/close checks. This is diagnostic evidence, not
-automatic acceptance of agent work.
+automatic acceptance of agent work. When a parent session id and matching
+subagent session metadata exist, but agent rollup is omitted, `status` prints
+the focused `--agent-rollup` command so subagent work is not invisible.
 
 Do not commit raw telemetry from `tmp/session_profiles/`; commit only durable
 lessons, rules, tools, or tasks.

@@ -664,6 +664,98 @@ test("status reports agent rollup when requested", () => {
   }
 });
 
+test("status hints when agent rollup is omitted but parent session id is available", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parentSession = join(dir, "parent-session.jsonl");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(parentSession, [{ type: "session_meta", payload: { id: parent } }]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta("subagent-a", parent, root, "2026-06-21T10:00:00.000Z")]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ], { env: { CODEX_SESSION_FILE: parentSession } });
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.enabled, false);
+    assert.equal(status.agent_rollup_hint.parent_thread_id, parent);
+    assert.equal(status.agent_rollup_hint.subagent_session_count, 1);
+    assert.ok(
+      status.agent_rollup_hint.command.includes(`--session-root ${dir}`)
+        || status.agent_rollup_hint.command.includes(`--session-root "${dir}"`),
+      status.agent_rollup_hint.command,
+    );
+    assert.match(status.agent_rollup_hint.command, /--agent-cwd/);
+    assert.match(result.stdout, /not included in this status run/);
+    assert.match(result.stdout, /status .* --agent-rollup/);
+    assert.match(result.stdout, new RegExp(`--parent-thread-id ${parent}`));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status does not hint agent rollup when no matching subagent sessions exist", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parentSession = join(dir, "parent-session.jsonl");
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(parentSession, [{ type: "session_meta", payload: { id: "parent-thread-1" } }]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ], { env: { CODEX_SESSION_FILE: parentSession } });
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup_hint, null);
+    assert.doesNotMatch(result.stdout, /not included in this status run/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status does not hint agent rollup for another cwd", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parentSession = join(dir, "parent-session.jsonl");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(parentSession, [{ type: "session_meta", payload: { id: parent } }]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta("subagent-a", parent, join(dir, "other-project"))]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ], { env: { CODEX_SESSION_FILE: parentSession } });
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup_hint, null);
+    assert.doesNotMatch(result.stdout, /not included in this status run/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status agent rollup reports missing parent id without failing status", () => {
   const dir = tempDir();
   try {
