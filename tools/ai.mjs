@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 function usage() {
   console.error(`usage:
   node tools/ai.mjs validate [--quick|--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune] [--with-assets]
-  node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--agent-rollup] [--require-agent-rollup-ok] [--parent-thread-id <id>|--trace-session <p>] [--session-root <dir>] [--agent-cwd <path>] [--min-agents <n>] [--json-output <p>] [--no-import-codex-session]
+  node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--agent-rollup] [--require-agent-rollup-ok] [--parent-thread-id <id>|--trace-session <p>] [--session-root <dir>] [--agent-cwd <path>] [--min-agents <n>] [--agent-rollup-evidence] [--json-output <p>] [--no-import-codex-session]
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
   node tools/ai.mjs orchestration-trace [--session <codex-session.jsonl>] [--parent-thread-id <id>] [trace options]
   node tools/ai.mjs orchestration-template
@@ -31,7 +31,8 @@ Commands:
   status    read the passive per-session profile (the hook auto-records every tool call);
             --verbose for the full per-record breakdown; --agent-rollup adds a subagent rollup;
             --require-agent-rollup-ok makes that rollup a strict evidence check; use
-            --min-agents <n> with an explicit --parent-thread-id or --trace-session for task evidence
+            --min-agents <n> with an explicit --parent-thread-id or --trace-session for task evidence;
+            --agent-rollup-evidence writes compact taskboard JSON when used with --json-output
   import-codex-session  recover missed failed Codex shell calls into the session log
   orchestration-trace   verify multi-agent transcript/session evidence for task closeout
   orchestration-template print the orchestration packet template for subagent tasks

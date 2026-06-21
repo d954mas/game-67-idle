@@ -17,7 +17,7 @@ import { currentDoingOrchestrationTaskIds, DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--verbose] [--agent-rollup] [--require-agent-rollup-ok]
+  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--agent-rollup-evidence] [--verbose] [--agent-rollup] [--require-agent-rollup-ok]
 
 Profiling is fully passive: the PostToolUse hook records every tool call to a
 per-session log automatically. This command READS that log and reports the
@@ -37,7 +37,10 @@ It also reads matching subagent profile logs from --agent-profile-dir
 Use --trace-session <codex-session.jsonl> when checking parent transcript calls.
 If CODEX_SESSION_FILE points at the parent session, --agent-rollup can infer its
 id. Add --require-agent-rollup-ok only for strict task evidence; it exits
-nonzero when the rollup is missing or incomplete.`);
+nonzero when the rollup is missing or incomplete.
+
+Use --agent-rollup-evidence with --json-output for a compact, sanitized
+taskboard evidence artifact instead of a full local diagnostic status dump.`);
   process.exit(2);
 }
 
@@ -301,6 +304,33 @@ function isStrictAgentRollupCommand(command) {
     && /\s--require-agent-rollup-ok\b/i.test(text);
 }
 
+function isAiHelpProbeCommand(command) {
+  return /\bnode(?:\.exe|\.cmd)?\s+tools\/ai\.mjs\s+(?:--help|-h|help)\b/i.test(normalizeCommand(command));
+}
+
+function isFailedReadOnlyDiscoveryCommand(command) {
+  const text = normalizeCommand(command);
+  return /\bGet-ChildItem\b/i.test(text) || /\brg(?:\.exe)?\s+--files\b/i.test(text);
+}
+
+function isAgentEvidenceProbeRecord(record) {
+  return isAgentEvidenceProbe(record)
+    || (record.commands || []).some((command) => isStrictAgentRollupCommand(command) || isAiHelpProbeCommand(command));
+}
+
+function isAgentToolUsageRecord(record) {
+  return isAgentToolUsage(record)
+    || (record.commands || []).some((command) => isFailedReadOnlyDiscoveryCommand(command));
+}
+
+function inferredFailureReason(record, fallback) {
+  if (record.blocked_by) return String(record.blocked_by).trim();
+  if ((record.commands || []).some(isStrictAgentRollupCommand)) return "failed strict agent rollup probe";
+  if ((record.commands || []).some(isAiHelpProbeCommand)) return "failed help/usage probe";
+  if ((record.commands || []).some(isFailedReadOnlyDiscoveryCommand)) return "failed read-only discovery command";
+  return fallback;
+}
+
 function transcriptFailureDetails(command, output) {
   const text = String(output || "");
   if (isStrictAgentRollupCommand(command) && /strict problem:|Fix the agent rollup evidence|Inspect unresolved agent failure samples/i.test(text)) {
@@ -387,15 +417,15 @@ function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}
       if (externalRecoveryKind(keys, eventTime(record), recoveryPassesByKey) === "node-test-file") parentNodeTestFileRecovered += 1;
       else parentExactRecovered += 1;
     }
-    else if (isAgentToolUsage(record)) {
+    else if (isAgentToolUsageRecord(record)) {
       agentToolUsage += 1;
-      const reason = String(record.blocked_by || "agent tool-usage failure").trim();
+      const reason = inferredFailureReason(record, "agent tool-usage failure");
       agentToolUsageReasons.set(reason, (agentToolUsageReasons.get(reason) || 0) + 1);
       agentToolUsageRecords.push(record);
     }
-    else if (isAgentEvidenceProbe(record)) {
+    else if (isAgentEvidenceProbeRecord(record)) {
       agentEvidenceProbe += 1;
-      const reason = String(record.blocked_by || "agent evidence-probe failure").trim();
+      const reason = inferredFailureReason(record, "agent evidence-probe failure");
       agentEvidenceProbeReasons.set(reason, (agentEvidenceProbeReasons.get(reason) || 0) + 1);
       agentEvidenceProbeRecords.push(record);
     }
@@ -1044,6 +1074,42 @@ function buildStatus(profilePaths, values = {}) {
   };
 }
 
+function compactAgentRollupEvidence(status) {
+  const rollup = status.agent_rollup || {};
+  const profileRollup = rollup.profile_rollup || {};
+  return {
+    schema_version: 2,
+    kind: "status-agent-rollup-evidence",
+    generated_at: new Date().toISOString(),
+    valid: status.valid === true,
+    errors: Array.isArray(status.errors) ? status.errors : [],
+    agent_rollup: {
+      enabled: rollup.enabled === true,
+      ok: rollup.ok === true,
+      strict_ok: rollup.strict_ok === true,
+      source: rollup.source || "",
+      parent_thread_id: rollup.parent_thread_id || "",
+      trace_session: rollup.trace_session || "",
+      min_agents: Number(rollup.min_agents ?? 0),
+      subagent_session_count: Number(rollup.subagent_session_count ?? 0),
+      count: Number(rollup.count ?? 0),
+      roles: Array.isArray(rollup.roles)
+        ? rollup.roles.map((item) => ({
+          role: String(item.role || ""),
+          count: Number(item.count || 0),
+        }))
+        : [],
+      problems: Array.isArray(rollup.problems) ? rollup.problems : [],
+      strict_problems: Array.isArray(rollup.strict_problems) ? rollup.strict_problems : [],
+      profile_rollup: {
+        missing_agent_telemetry_count: Number(profileRollup.missing_agent_telemetry_count ?? 0),
+        unresolved_failed_records: Number(profileRollup.unresolved_failed_records ?? 0),
+        errors: Array.isArray(profileRollup.errors) ? profileRollup.errors : [],
+      },
+    },
+  };
+}
+
 function renderStatus(status, { verbose }) {
   const lines = [];
   lines.push(`# AI Profile - ${basename(status.profile)}`);
@@ -1222,7 +1288,10 @@ const rendered = renderStatus(status, { verbose: values.verbose === true });
 if (jsonOutputFile) {
   const target = resolve(jsonOutputFile);
   mkdirSync(dirname(target), { recursive: true });
-  writeFileSync(target, `${JSON.stringify(status, null, 2)}\n`, "utf8");
+  const payload = values["agent-rollup-evidence"] === true
+    ? compactAgentRollupEvidence(status)
+    : status;
+  writeFileSync(target, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 process.stdout.write(rendered);
 if (values["require-agent-rollup-ok"] === true && status.agent_rollup?.ok !== true) {

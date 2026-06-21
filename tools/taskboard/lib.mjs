@@ -29,6 +29,7 @@ const ORCHESTRATION_TRACE_ARTIFACT_MIN_TASK_ID = 77;
 const ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID = 78;
 const ORCHESTRATION_BROAD_WORK_MIN_TASK_ID = 79;
 const ORCHESTRATION_CLOSEOUT_PREFLIGHT_FIELDS_MIN_TASK_ID = 79;
+const ORCHESTRATION_STATUS_ARTIFACT_MIN_TASK_ID = 80;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
   "orchestration",
@@ -650,6 +651,7 @@ function orchestrationEvidenceProblem(doc, root = "") {
   const requireMachineEvidence = requiresOrchestrationMachineEvidence(doc);
   const requireBoundedAllowedFiles = requiresOrchestrationAllowedFilesBounds(doc);
   const requireTraceArtifact = requiresOrchestrationTraceArtifact(doc);
+  const requireStatusArtifact = requiresOrchestrationStatusArtifact(doc);
   const requiredFields = requiresOrchestrationCloseoutPreflightFields(doc)
     ? ORCHESTRATION_PREFLIGHT_FIELDS
     : ORCHESTRATION_REQUIRED_FIELDS;
@@ -658,6 +660,7 @@ function orchestrationEvidenceProblem(doc, root = "") {
     requireMachineEvidencePass: requireMachineEvidence,
     requireBoundedAllowedFiles,
     requireTraceArtifact,
+    requireStatusArtifact,
     requiredFields,
     root,
   });
@@ -739,6 +742,7 @@ function missingOrchestrationFields(log, options = {}) {
     requireMachineEvidencePass = requireMachineEvidence,
     requireBoundedAllowedFiles = false,
     requireTraceArtifact = false,
+    requireStatusArtifact = false,
     requiredFields = ORCHESTRATION_REQUIRED_FIELDS,
     root = "",
   } = typeof options === "boolean" ? { requireMachineEvidence: options } : options;
@@ -766,7 +770,7 @@ function missingOrchestrationFields(log, options = {}) {
       missing.push("machine evidence command");
     }
     if (requireMachineEvidencePass) {
-      const evidenceProblem = machineEvidencePassProblem(log, block, { root, requireTraceArtifact });
+      const evidenceProblem = machineEvidencePassProblem(log, block, { root, requireTraceArtifact, requireStatusArtifact });
       if (evidenceProblem) missing.push(evidenceProblem);
     }
     if (missing.length < bestMissing.length) {
@@ -859,7 +863,7 @@ function boundedAllowedFilesProblem(text) {
 }
 
 function machineEvidencePassProblem(log, declaredBlock = "", options = {}) {
-  const { root = "", requireTraceArtifact = false } = options;
+  const { root = "", requireTraceArtifact = false, requireStatusArtifact = false } = options;
   const declared = declaredBlock
     ? machineEvidenceSignatures(fieldValue(declaredBlock, ORCHESTRATION_EVIDENCE_FIELD_PATTERN))
     : orchestrationUsedBlocks(log)
@@ -872,6 +876,13 @@ function machineEvidencePassProblem(log, declaredBlock = "", options = {}) {
       if (!machineEvidenceSignaturesMatch(expected, actual)) continue;
       if (requireTraceArtifact && expected.kind === "orchestration-trace") {
         const problem = traceArtifactProblem(expected, root);
+        if (problem) {
+          artifactMismatch = true;
+          continue;
+        }
+      }
+      if (requireStatusArtifact && expected.kind === "status-agent-rollup") {
+        const problem = statusArtifactProblem(expected, root);
         if (problem) {
           artifactMismatch = true;
           continue;
@@ -908,9 +919,16 @@ function machineEvidenceSignatures(text) {
       && /\s--require-agent-rollup-ok\b/i.test(command)
       && (/\s--parent-thread-id\b/i.test(command) || /\s--trace-session\b/i.test(command))
     ) {
+      const artifact = commandSourceSignature(command, ["--json-output"]);
+      const parentThreadId = commandSourceSignature(command, ["--parent-thread-id"]);
+      const traceSession = commandSourceSignature(command, ["--trace-session"]);
       signatures.push({
         kind: "status-agent-rollup",
-        source: commandSourceSignature(command, ["--parent-thread-id", "--trace-session"]),
+        source: parentThreadId || traceSession,
+        parent_thread_id: commandFlagRawValue(command, ["--parent-thread-id"]),
+        trace_session: commandFlagRawValue(command, ["--trace-session"]),
+        artifact,
+        artifact_path: commandFlagRawValue(command, ["--json-output"]),
         min_agents: commandMinAgents(command),
       });
     }
@@ -958,7 +976,11 @@ function normalizeMachineEvidenceValue(value) {
 function machineEvidenceSignaturesMatch(expected, actual) {
   if (!expected || !actual || expected.kind !== actual.kind) return false;
   if ((actual.min_agents ?? 1) < (expected.min_agents ?? 1)) return false;
-  if (expected.artifact || actual.artifact) return expected.artifact === actual.artifact && expected.source === actual.source;
+  if (expected.artifact || actual.artifact) {
+    if (expected.artifact && !actual.artifact) return false;
+    if (!expected.artifact && actual.artifact) return expected.source === actual.source;
+    return expected.artifact === actual.artifact && expected.source === actual.source;
+  }
   if (expected.source || actual.source) return expected.source === actual.source;
   return (
     expected.kind === actual.kind
@@ -1035,6 +1057,76 @@ function traceArtifactProblem(signature, root) {
   return "";
 }
 
+function statusArtifactProblem(signature, root) {
+  if (!root) return "missing taskboard root";
+  const artifactPath = cleanMachineEvidenceValue(signature.artifact_path || String(signature.artifact || "").replace(/^--json-output=/i, ""));
+  if (!artifactPath) return "missing status artifact path";
+  if (!artifactPath.toLowerCase().endsWith(".json")) return "status artifact is not json";
+  if (/^[a-z][a-z0-9+.-]*:/i.test(artifactPath) || /^(?:[a-z]:|\/)/i.test(artifactPath)) {
+    return "status artifact is not repo-local";
+  }
+  const rootPath = resolve(root);
+  const targetPath = resolve(rootPath, artifactPath);
+  const rel = relative(rootPath, targetPath);
+  if (!rel || rel.startsWith("..") || /^[a-z]:/i.test(rel)) return "status artifact is outside taskboard root";
+  if (!existsSync(targetPath)) return "missing status artifact";
+  const stats = statSync(targetPath);
+  if (!stats.isFile()) return "status artifact is not a file";
+  if (stats.size > 1024 * 1024) return "status artifact is too large";
+
+  let artifact;
+  try {
+    artifact = JSON.parse(readFileSync(targetPath, "utf8"));
+  } catch {
+    return "invalid status artifact json";
+  }
+
+  if (artifact?.kind !== "status-agent-rollup-evidence") return "status artifact is not compact evidence";
+  if (artifact?.schema_version !== 2) return "status artifact schema mismatch";
+  if (typeof artifact.generated_at !== "string" || Number.isNaN(Date.parse(artifact.generated_at))) return "status artifact missing generated timestamp";
+  if (artifact.valid !== true) return "status artifact top-level status invalid";
+  if (Array.isArray(artifact.errors) && artifact.errors.length > 0) return "status artifact has top-level errors";
+  for (const key of ["profile", "profile_files", "command_rollup", "slowest_record", "failed_records", "latest_record"]) {
+    if (Object.hasOwn(artifact, key)) return "status artifact is not compact evidence";
+  }
+
+  const rollup = artifact?.agent_rollup;
+  if (rollup?.enabled !== true) return "status artifact missing agent rollup";
+  if (rollup.ok !== true) return "status artifact agent rollup did not pass";
+  if (rollup.strict_ok !== true) return "status artifact strict rollup did not pass";
+  if (Array.isArray(rollup.problems) && rollup.problems.length > 0) return "status artifact agent rollup has problems";
+  if (Array.isArray(rollup.strict_problems) && rollup.strict_problems.length > 0) return "status artifact strict rollup has problems";
+
+  const expectedMinAgents = signature.min_agents ?? 1;
+  const artifactMinAgents = Number(rollup.min_agents ?? 0);
+  if (!Number.isFinite(artifactMinAgents) || artifactMinAgents < expectedMinAgents) return "status artifact min agents too low";
+  const count = Number(rollup.subagent_session_count ?? rollup.count ?? (Array.isArray(rollup.agents) ? rollup.agents.length : 0));
+  if (!Number.isFinite(count) || count < expectedMinAgents) return "status artifact subagent count too low";
+  const rollupCount = Number(rollup.count ?? 0);
+  if (!Number.isFinite(rollupCount) || rollupCount < expectedMinAgents) return "status artifact agent count too low";
+  if (Array.isArray(rollup.roles)) {
+    const roleCount = rollup.roles.reduce((sum, item) => sum + Number(item?.count || 0), 0);
+    if (roleCount > 0 && roleCount !== rollupCount) return "status artifact role count mismatch";
+  }
+  const profileRollup = rollup.profile_rollup || {};
+  if (Number(profileRollup.missing_agent_telemetry_count || 0) > 0) return "status artifact missing agent telemetry";
+  if (Number(profileRollup.unresolved_failed_records || 0) > 0) return "status artifact has unresolved agent failures";
+  if (Array.isArray(profileRollup.errors) && profileRollup.errors.length > 0) return "status artifact profile rollup has errors";
+
+  if (signature.parent_thread_id) {
+    const expected = normalizeMachineEvidenceValue(signature.parent_thread_id);
+    if (normalizeMachineEvidenceValue(rollup.parent_thread_id) !== expected) return "status artifact parent thread mismatch";
+  }
+  if (signature.trace_session) {
+    const expected = normalizeMachineEvidenceValue(signature.trace_session);
+    if (normalizeMachineEvidenceValue(rollup.trace_session) !== expected) return "status artifact trace session mismatch";
+  }
+  if (!signature.parent_thread_id && !signature.trace_session) {
+    return "status artifact source mismatch";
+  }
+  return "";
+}
+
 function requiresOrchestrationMachineEvidence(doc) {
   const match = String(doc.fields.id || "").match(/^T(\d+)$/);
   return match ? Number(match[1]) >= ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID : true;
@@ -1063,6 +1155,11 @@ function requiresBroadOrchestrationClassification(doc) {
 function requiresOrchestrationCloseoutPreflightFields(doc) {
   const match = String(doc.fields.id || "").match(/^T(\d+)$/);
   return match ? Number(match[1]) >= ORCHESTRATION_CLOSEOUT_PREFLIGHT_FIELDS_MIN_TASK_ID : true;
+}
+
+function requiresOrchestrationStatusArtifact(doc) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= ORCHESTRATION_STATUS_ARTIFACT_MIN_TASK_ID : true;
 }
 
 function fieldValue(text, fieldPattern) {

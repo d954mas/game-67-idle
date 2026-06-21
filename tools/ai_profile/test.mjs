@@ -934,6 +934,64 @@ test("status reports agent rollup when requested", () => {
   }
 });
 
+test("status writes compact agent rollup evidence artifact", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const agentProfileDir = join(dir, "profiles");
+    const evidenceJson = join(dir, "status-evidence.json");
+    const parent = "parent-thread-1";
+    const agentA = "33333333-3333-4333-8333-333333333333";
+    const agentB = "44444444-4444-4444-8444-444444444444";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta(agentA, parent, root, "2026-06-21T10:00:00.000Z")]);
+    writeJsonl(join(dir, "rollout-b.jsonl"), [subagentSessionMeta(agentB, parent, root, "2026-06-21T10:01:00.000Z")]);
+    mkdirSync(agentProfileDir, { recursive: true });
+    for (const agent of [agentA, agentB]) {
+      writeJsonl(join(agentProfileDir, `2026-06-21__codex__${agent.slice(0, 8)}.jsonl`), [
+        { ts: "2026-06-21T10:02:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "unknown", value: "necessary_overhead", event_type: "tool_call_start", commands: ["node --test tools/agent.test.mjs"], session_id: agent },
+        { ts: "2026-06-21T10:02:01+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/agent.test.mjs"], session_id: agent },
+      ]);
+    }
+
+    run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--agent-profile-dir", agentProfileDir,
+      "--min-agents", "2",
+      "--agent-rollup-evidence",
+      "--json-output", evidenceJson,
+    ]);
+    const evidence = readJson(evidenceJson);
+    assert.equal(evidence.kind, "status-agent-rollup-evidence");
+    assert.equal(evidence.schema_version, 2);
+    assert.match(evidence.generated_at, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(evidence.valid, true);
+    assert.deepEqual(evidence.errors, []);
+    assert.equal(evidence.agent_rollup.ok, true);
+    assert.equal(evidence.agent_rollup.strict_ok, true);
+    assert.equal(evidence.agent_rollup.parent_thread_id, parent);
+    assert.equal(evidence.agent_rollup.min_agents, 2);
+    assert.equal(evidence.agent_rollup.subagent_session_count, 2);
+    assert.equal(evidence.agent_rollup.profile_rollup.missing_agent_telemetry_count, 0);
+    assert.equal(evidence.agent_rollup.profile_rollup.unresolved_failed_records, 0);
+    assert.equal(Object.hasOwn(evidence, "profile"), false);
+    assert.equal(Object.hasOwn(evidence, "profile_files"), false);
+    assert.equal(Object.hasOwn(evidence, "command_rollup"), false);
+    assert.equal(Object.hasOwn(evidence, "slowest_record"), false);
+    assert.equal(Object.hasOwn(evidence.agent_rollup, "agents"), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status agent rollup classifies parent-recovered failures by later parent pass", () => {
   const dir = tempDir();
   try {
@@ -1418,6 +1476,51 @@ test("strict status agent rollup ignores failed diagnostic strict-status probes"
     assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
     assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 1);
     assert.match(result.stdout, /agent evidence-probe failures: 1/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("strict status agent rollup classifies profile diagnostic failures outside unresolved", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const agentProfileDir = join(dir, "profiles");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const agent = "99999999-9999-4999-8999-999999999999";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node tools/ai.mjs validate --review"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [
+      subagentSessionMeta(agent, parent, root, "2026-06-21T10:00:00.000Z"),
+    ]);
+    mkdirSync(agentProfileDir, { recursive: true });
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__99999999.jsonl"), [
+      { ts: "2026-06-21T10:00:01+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 1 --json"], session_id: agent, exit_code: 1 },
+      { ts: "2026-06-21T10:00:02+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node tools/ai.mjs --help"], session_id: agent, exit_code: 1 },
+      { ts: "2026-06-21T10:00:03+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["Get-ChildItem -Path tasks\\active,tasks\\review -File -ErrorAction SilentlyContinue | Select-Object FullName"], session_id: agent, exit_code: 1 },
+    ]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--agent-profile-dir", agentProfileDir,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.ok, true);
+    assert.equal(status.agent_rollup.strict_ok, true);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
+    assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 2);
+    assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_failed_records, 1);
+    assert.match(result.stdout, /agent evidence-probe failures: 2/);
+    assert.match(result.stdout, /agent tool-usage failures: 1/);
   } finally {
     cleanup(dir);
   }

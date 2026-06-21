@@ -97,6 +97,41 @@ function passingSessionTrace(session = "tmp/session.jsonl") {
   };
 }
 
+function passingStatusRollup({
+  parentThreadId = "parent",
+  traceSession = "",
+  source = "parent-thread",
+  count = 2,
+  minAgents = 2,
+} = {}) {
+  return {
+    schema_version: 2,
+    kind: "status-agent-rollup-evidence",
+    generated_at: "2026-06-21T12:00:00.000Z",
+    valid: true,
+    errors: [],
+    agent_rollup: {
+      enabled: true,
+      ok: true,
+      strict_ok: true,
+      strict_problems: [],
+      source,
+      parent_thread_id: parentThreadId,
+      trace_session: traceSession,
+      min_agents: minAgents,
+      subagent_session_count: count,
+      count,
+      roles: [{ role: "explorer", count }],
+      problems: [],
+      profile_rollup: {
+        missing_agent_telemetry_count: 0,
+        unresolved_failed_records: 0,
+        errors: [],
+      },
+    },
+  };
+}
+
 function startPreflightLog() {
   return `- orchestration: used
   objective: verify orchestration preflight before work starts
@@ -1693,6 +1728,338 @@ test("validateStore accepts stronger min-agents PASS for default strict agent-ro
   stop condition: tests pass
   independent reviewer: reviewed guard scope
 - evidence: PASS \`node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore preserves pre-T0080 strict status compatibility without artifact", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  writeTaskDoc(root, {
+    id: "T0079",
+    title: "Pipeline status legacy guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify legacy status evidence
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore rejects T0080 strict status evidence without json output", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore rejects missing status artifact for T0080+ evidence", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("updateDoc rejects review transition with missing status artifact for T0080+ evidence", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  assert.throws(
+    () => updateDoc(root, "T0080", { fields: { status: "review" } }),
+    /machine evidence artifact/,
+  );
+});
+
+test("validateStore rejects failing status artifact for T0080+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", {
+    ...passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }),
+    agent_rollup: {
+      ...passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }).agent_rollup,
+      strict_ok: false,
+      strict_problems: ["missing telemetry for 1 subagent session(s)"],
+    },
+  });
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore rejects raw full status artifact for T0080+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", {
+    schema_version: 2,
+    valid: true,
+    errors: [],
+    profile: "tmp/session_profiles/sessions/status.jsonl",
+    command_rollup: [],
+    agent_rollup: passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }).agent_rollup,
+  });
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore rejects invalid top-level status artifact for T0080+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", {
+    ...passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }),
+    valid: false,
+    errors: ["line 1: invalid JSON"],
+  });
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore rejects status PASS with different json output", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status-a.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  writeJsonFile(root, "tasks/evidence/status-b.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const declared = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status-a.json --json";
+  const actual = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status-b.json --json";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${declared}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${actual}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
+});
+
+test("validateStore rejects non-local status artifact paths for T0080+ evidence", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent --agent-rollup-evidence --json-output ../status.json --json";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore rejects status artifact source or count mismatch for T0080+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "other-parent", count: 1, minAgents: 1 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore accepts valid parent status artifact for T0080+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore accepts valid dual-source status artifact for T0080+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({
+    parentThreadId: "parent",
+    traceSession: "tmp/session.jsonl",
+    source: "trace-session+parent-thread",
+    count: 2,
+    minAgents: 2,
+  }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --trace-session tmp/session.jsonl --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore accepts valid trace-session status artifact for T0080+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({
+    parentThreadId: "",
+    traceSession: "tmp/session.jsonl",
+    source: "trace-session",
+    count: 2,
+    minAgents: 2,
+  }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --trace-session tmp/session.jsonl --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0080",
+    title: "Pipeline status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify status artifacts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
 
   assert.deepEqual(validateStoreDetailed(root), []);
 });

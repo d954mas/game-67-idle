@@ -137,7 +137,15 @@ log entry for that approved machine evidence command. The validator checks the
 command shape and recorded PASS line; it does not execute commands copied from
 task logs. For new `orchestration-trace ... --json-output <file>` evidence, it
 also reads the declared repo-local JSON artifact and requires a passing trace
-that matches the declared source and minimum agent count.
+that matches the declared source and minimum agent count. T0080+ strict
+`status --agent-rollup` evidence also needs
+`--agent-rollup-evidence --json-output <repo-local.json>`. Keep raw full status
+JSON in `tmp/` for diagnostics only; committed task evidence should be the
+compact artifact under `tasks/evidence/`. The validator reads that compact
+status artifact and requires `kind: status-agent-rollup-evidence`,
+`valid: true`, empty errors, `agent_rollup.ok`, `agent_rollup.strict_ok`,
+declared source, declared minimum agent count, clean profile rollup, and no
+rollup problems.
 
 Strict status rollup defaults to `--min-agents 1`; raise it when the packet
 expects several independent agents.
