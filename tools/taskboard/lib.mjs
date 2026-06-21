@@ -14,7 +14,7 @@ export { LIVE_STATUS_MAX_CHARS };
 export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done", "dropped"];
 export const EPIC_STATUSES = ["idea", "active", "done", "dropped"];
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
-export const DEFAULT_ORCHESTRATION_TOOL_USE_GUARD = "verify paths with rg --files/Test-Path before reads; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence or trace/status commands with evidence source and --json-output";
+export const DEFAULT_ORCHESTRATION_TOOL_USE_GUARD = "verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output";
 
 const ORCHESTRATION_REVIEW_STATUSES = new Set(["review", "done"]);
 // T0028 introduced the mechanical guard; older archives keep their legacy logs.
@@ -203,6 +203,9 @@ export function subagentPacketProblem(text) {
   if (allowed && boundedAllowedFilesProblem(allowed)) missing.push("bounded allowed files");
   const guard = packetFieldValue(packet, /\btool-use\s+guard\b/i);
   if (guard && !isDetailedToolUseGuard(guard)) missing.push("tool-use guard details");
+  const evidence = packetFieldValue(packet, /\b(?:evidence command or artifact|evidence command|evidence artifact|artifact)\b/i);
+  const evidenceProblem = evidence ? subagentEvidenceCommandProblem(evidence) : "";
+  if (evidenceProblem) missing.push(evidenceProblem);
   const handoff = packetFieldValue(packet, /\bhandoff\b/i);
   for (const label of ["findings", "files", "commands/evidence", "risks", "owner action", "not-done"]) {
     const pattern = new RegExp(`\\b${escapeRegExp(label)}\\b`, "i");
@@ -215,6 +218,17 @@ export function subagentPacketProblem(text) {
     template: SUBAGENT_PACKET_TEMPLATE,
     message: `subagent packet failed (missing/invalid: ${[...new Set(missing)].join(", ")})`,
   };
+}
+
+function subagentEvidenceCommandProblem(text) {
+  const value = String(text || "").replaceAll("\\", "/");
+  if (!/\bnode\s+tools\/ai\.mjs\s+(?:orchestration-trace|status)\b/i.test(value)) return "";
+  const signatures = machineEvidenceSignatures(value);
+  if (!signatures.length) return "machine evidence source";
+  if (signatures.some((signature) => signature.kind === "status-agent-rollup" && !signature.compact_artifact)) {
+    return "compact status evidence";
+  }
+  return "";
 }
 
 function packetFieldValue(text, fieldPattern) {
@@ -1185,12 +1199,13 @@ function hasMeaningfulFieldValue(text, fieldPattern) {
 function isDetailedToolUseGuard(text) {
   const value = String(text || "").toLowerCase();
   const hasPathGuard = (
-    value.includes("exact path")
-    || value.includes("discovery")
-    || value.includes("rg --files")
+    value.includes("rg --files")
     || value.includes("test-path")
   );
-  const hasLineWindowGuard = value.includes("select-object -skip") && value.includes("-first");
+  const hasLineWindowGuard = value.includes("select-object -skip")
+    && value.includes("-first")
+    && value.includes("format-hex -count")
+    && value.includes("select-object -index");
   const hasEvidenceGuard = (
     (
       value.includes("orchestration-evidence")

@@ -27,13 +27,20 @@ overlapping writes.
 Every subagent gets a packet:
 
 ```text
-objective:
-allowed files or inputs:
-forbidden files:
-tool-use guard:
-expected output:
-evidence command or artifact:
-stop condition:
+objective: <bounded subagent objective>
+allowed files: <repo-local files or bounded patterns>
+forbidden files: <files or areas the subagent must not touch>
+tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
+expected output: <concise final report or changed files>
+evidence command or artifact: <read-only command, focused test, or artifact path>
+stop condition: <when the subagent must stop>
+handoff:
+  findings: <facts or verdict>
+  files: <files inspected or changed>
+  commands/evidence: <commands run and results>
+  risks: <remaining risk>
+  owner action: <what the lead must do next>
+  not-done: <explicit gaps>
 ```
 
 Before launching a manual `spawn_agent`, start from the reusable packet:
@@ -52,11 +59,12 @@ template shape directly and keep every field visible in the prompt.
 Short aliases `subagent-template` and `subagent-check` are accepted; the
 `subagent-packet-*` names are preferred in docs because they are explicit.
 
-Use `tool-use guard` to prevent known subagent command mistakes: verify paths
-with `rg --files` or `Test-Path` before reads, use
-`Select-Object -Skip/-First` instead of `Format-Hex -Count` or
-`Select-Object -Index` for line windows, and use `orchestration-evidence` or
-trace/status commands with an evidence source and `--json-output`.
+Use `tool-use guard` to prevent known subagent command mistakes: verify exact
+repo paths with `rg --files` or `Test-Path` before `Get-Content` or other
+reads, use `Select-Object -Skip/-First` instead of `Format-Hex -Count` or
+`Select-Object -Index` for line windows, and use
+`orchestration-evidence --current --run --json` or trace/status commands with
+an explicit evidence source and `--json-output`.
 
 If the packet touches repo state, include the current project boundary from
 `AGENTS.md`, such as active concept, closed prototype status, engine policy, and
@@ -117,7 +125,7 @@ without one of these `## Log` markers:
 - orchestration: used
   objective: <non-empty>
   allowed files: <non-empty>
-  tool-use guard: verify paths with rg --files/Test-Path before reads; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence or trace/status commands with evidence source and --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: <non-empty>
   evidence command: <non-empty>
   stop condition: <non-empty>

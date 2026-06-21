@@ -1032,6 +1032,24 @@ test("validateStore rejects T0082 preflight missing safe line-window guard detai
   assert.deepEqual(problems[0].missingFields, ["tool-use guard details"]);
 });
 
+test("validateStore rejects alias-only tool-use guard wording", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0082",
+    title: "Taskboard pipeline tool-use guard",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(startPreflightLog().replace(
+    DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
+    "exact paths/discovery before reads; safe line ranges; trace source plus --json-output",
+  )));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].code, "orchestration_start_preflight_missing");
+  assert.deepEqual(problems[0].missingFields, ["tool-use guard details"]);
+});
+
 test("validateStore rejects T0082 preflight missing evidence-source guard details", (t) => {
   const root = tempRoot(t);
   writeTaskDoc(root, {
@@ -1864,7 +1882,7 @@ test("validateStore preserves pre-T0080 strict status compatibility without arti
   }, taskBodyWithLog(`- orchestration: used
   objective: verify legacy status evidence
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -1885,7 +1903,7 @@ test("validateStore rejects T0080 strict status evidence without json output", (
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -1908,7 +1926,7 @@ test("validateStore rejects missing status artifact for T0080+ evidence", (t) =>
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -1931,7 +1949,7 @@ test("updateDoc rejects review transition with missing status artifact for T0080
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -1963,7 +1981,7 @@ test("validateStore rejects failing status artifact for T0080+ evidence", (t) =>
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -1994,7 +2012,7 @@ test("validateStore rejects raw full status artifact for T0080+ evidence", (t) =
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -2022,7 +2040,7 @@ test("validateStore rejects invalid top-level status artifact for T0080+ evidenc
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -2048,7 +2066,7 @@ test("validateStore rejects status PASS with different json output", (t) => {
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${declared}
   stop condition: tests pass
@@ -2071,7 +2089,7 @@ test("validateStore rejects non-local status artifact paths for T0080+ evidence"
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -2095,7 +2113,7 @@ test("validateStore rejects status artifact source or count mismatch for T0080+ 
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -2119,7 +2137,7 @@ test("validateStore accepts valid parent status artifact for T0080+ evidence", (
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -2881,7 +2899,7 @@ test("validateStore accepts valid dual-source status artifact for T0080+ evidenc
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -2909,7 +2927,7 @@ test("validateStore accepts valid trace-session status artifact for T0080+ evide
   }, taskBodyWithLog(`- orchestration: used
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
@@ -2929,7 +2947,7 @@ test("validateStore rejects unbounded allowed files for new orchestration tasks"
   }, taskBodyWithLog(`- orchestration: used
   objective: verify bounded allowed files
   allowed files: tools/**
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: focused guard tests
   evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
   stop condition: tests pass
@@ -3187,7 +3205,7 @@ test("cli orchestration-check passes complete preflight packet without PASS evid
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
   allowed files: tools/taskboard/lib.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
@@ -3208,7 +3226,7 @@ test("cli orchestration-check accepts positional task id", (t) => {
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
   allowed files: tools/taskboard/cli.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
@@ -3229,7 +3247,7 @@ test("cli orchestration-check --id emits resolved file in json", (t) => {
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
   allowed files: tools/taskboard/cli.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
@@ -3270,7 +3288,7 @@ test("cli orchestration-check rejects conflicting selectors", (t) => {
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
   allowed files: tools/taskboard/cli.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
@@ -3324,7 +3342,7 @@ test("cli orchestration-check rejects unbounded allowed files", (t) => {
       body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
   allowed files: ${allowedFiles}
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
@@ -3345,7 +3363,7 @@ test("cli orchestration-check accepts bounded allowed file patterns", (t) => {
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/active/T*.md; tools/ai*.mjs; tools/taskboard/**; docs/ai-pipeline/**
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
@@ -3385,7 +3403,7 @@ test("cli orchestration-check --json rejects missing machine evidence source", (
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
   allowed files: tools/taskboard/lib.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs orchestration-trace --json-output tmp/trace.json --json
   stop condition: preflight reports ok
@@ -3412,7 +3430,7 @@ test("orchestration preflight next action falls back without task id", () => {
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
   allowed files: tools/taskboard/lib.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs orchestration-trace --json-output tmp/trace.json --json
   stop condition: preflight reports ok
@@ -3440,7 +3458,7 @@ test("cli orchestration-check --file does not use file fallback as task id in ne
   }, taskBodyWithLog(`- orchestration: used
   objective: verify file fallback behavior
   allowed files: tools/taskboard/lib.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs orchestration-trace --json-output tmp/trace.json --json
   stop condition: preflight reports ok
@@ -3466,7 +3484,7 @@ test("cli orchestration-check --current resolves one doing orchestration task", 
     body: taskBodyWithLog(`- orchestration: used
   objective: verify current packet before launch
   allowed files: tools/taskboard/lib.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
   stop condition: preflight reports ok
@@ -3511,7 +3529,7 @@ test("cli orchestration-check --current rejects multiple current tasks", (t) => 
       body: taskBodyWithLog(`- orchestration: used
   objective: verify current packet before launch
   allowed files: tools/taskboard/lib.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
   stop condition: preflight reports ok
@@ -3555,7 +3573,7 @@ test("cli orchestration-check --current keeps non-json ambiguous selector failur
       body: taskBodyWithLog(`- orchestration: used
   objective: verify current packet before launch
   allowed files: tools/taskboard/lib.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
   stop condition: preflight reports ok
@@ -3579,7 +3597,7 @@ test("cli orchestration-check --current rejects conflicting selectors", (t) => {
     body: taskBodyWithLog(`- orchestration: used
   objective: verify current packet before launch
   allowed files: tools/taskboard/lib.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
   stop condition: preflight reports ok
@@ -3613,6 +3631,10 @@ test("subagent packet template contains tool-use guard and handoff fields", () =
   assert.match(template, /allowed files:/);
   assert.match(template, /forbidden files:/);
   assert.ok(template.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
+  assert.match(template, /rg --files\/Test-Path/);
+  assert.match(template, /Format-Hex -Count/);
+  assert.match(template, /Select-Object -Index/);
+  assert.match(template, /orchestration-evidence --current --run --json/);
   assert.match(template, /evidence command or artifact:/);
   assert.match(template, /handoff:/);
   for (const label of ["findings", "files", "commands/evidence", "risks", "owner action", "not-done"]) {
@@ -3638,6 +3660,28 @@ test("subagent packet check rejects unbounded allowed files", () => {
 
   assert.equal(problem.code, "subagent_packet_invalid");
   assert.ok(problem.missingFields.includes("bounded allowed files"));
+});
+
+test("subagent packet check rejects machine evidence without source", () => {
+  const packet = validSubagentPacket().replace(
+    "node --test --test-name-pattern \"subagent packet\" tools/taskboard/test.mjs",
+    "node tools/ai.mjs orchestration-trace --json-output tmp/trace.json --json",
+  );
+  const problem = subagentPacketProblem(packet);
+
+  assert.equal(problem.code, "subagent_packet_invalid");
+  assert.ok(problem.missingFields.includes("machine evidence source"));
+});
+
+test("subagent packet check rejects status evidence without compact artifact", () => {
+  const packet = validSubagentPacket().replace(
+    "node --test --test-name-pattern \"subagent packet\" tools/taskboard/test.mjs",
+    "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent --json-output tasks/evidence/T0000-status-rollup.json --json",
+  );
+  const problem = subagentPacketProblem(packet);
+
+  assert.equal(problem.code, "subagent_packet_invalid");
+  assert.ok(problem.missingFields.includes("compact status evidence"));
 });
 
 test("subagent packet check rejects missing handoff subfields", () => {
@@ -3942,7 +3986,7 @@ test("cli orchestration-bootstrap rejects existing current task without creating
     body: taskBodyWithLog(`- orchestration: used
   objective: verify existing current
   allowed files: tools/taskboard/cli.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: preflight passes
   evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
   stop condition: preflight passes
