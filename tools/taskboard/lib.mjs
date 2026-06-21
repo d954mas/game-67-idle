@@ -32,6 +32,7 @@ const ORCHESTRATION_CLOSEOUT_PREFLIGHT_FIELDS_MIN_TASK_ID = 79;
 const ORCHESTRATION_STATUS_ARTIFACT_MIN_TASK_ID = 80;
 const ORCHESTRATION_TOOL_USE_GUARD_DETAILS_MIN_TASK_ID = 82;
 const ORCHESTRATION_REVIEWER_EVIDENCE_MIN_TASK_ID = 88;
+const ORCHESTRATION_WORKFLOW_MANIFEST_MIN_TASK_ID = 89;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
   "orchestration",
@@ -145,6 +146,7 @@ const ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS = [
 ];
 const ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN = /\b(?:allowed files?|inputs?)\b/i;
 const ORCHESTRATION_EVIDENCE_FIELD_PATTERN = /\b(?:evidence command|evidence artifact|artifact)\b/i;
+const ORCHESTRATION_WORKFLOW_MANIFEST_PATTERN = /\bworkflow\s+manifest\b/i;
 const ORCHESTRATION_PACKET_TEMPLATE = `- orchestration: used
   objective: <non-empty>
   allowed files: <non-empty>
@@ -161,6 +163,45 @@ function orchestrationPreflightNextAction(taskId) {
 
 export function orchestrationPacketTemplate() {
   return ORCHESTRATION_PACKET_TEMPLATE;
+}
+
+export function orchestrationWorkflowTemplate(taskId = "T0000") {
+  return {
+    schema_version: 1,
+    kind: "orchestration-workflow",
+    task_id: taskId,
+    status: "review",
+    objective: "Describe the workflow objective.",
+    scope: {
+      included: ["repo-local files or task scope"],
+      excluded: ["out-of-scope areas"],
+    },
+    packets: [
+      {
+        id: "packet-001",
+        objective: "Bounded worker or verifier packet.",
+        status: "integrated",
+        allowed_files: ["tools/taskboard/lib.mjs"],
+        evidence_refs: ["tasks/evidence/<task-id>-status-rollup.json"],
+      },
+    ],
+    budgets: {
+      max_agents: 2,
+      context: "Bounded to taskboard, docs, task, workflow, and evidence files.",
+      validation: "Focused tests plus taskboard validation and strict status evidence.",
+    },
+    verification: {
+      strategy: "independent_review",
+      commands: ["node --test tools/taskboard/test.mjs"],
+      evidence_refs: ["tasks/evidence/<task-id>-status-rollup.json"],
+    },
+    integration: {
+      owner: "lead",
+      policy: "lead integrates verified packet outputs and records unresolved gaps",
+    },
+    evidence_refs: ["tasks/evidence/<task-id>-status-rollup.json"],
+    updated_at: "YYYY-MM-DD",
+  };
 }
 
 export function orchestrationPreflightProblem(doc) {
@@ -184,6 +225,15 @@ export function orchestrationPreflightProblem(doc) {
     message: `${taskId || "task"}: orchestration packet preflight failed (missing/invalid: ${missing.join(", ")})`,
     nextAction: orchestrationPreflightNextAction(taskId),
   };
+}
+
+export function orchestrationWorkflowManifestProblem(doc, root = "") {
+  const log = sectionText(doc.body || "", "Log");
+  const declaredArtifacts = orchestrationUsedBlocks(log)
+    .flatMap((block) => machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN)))
+    .map((signature) => signature.artifact_path)
+    .filter(Boolean);
+  return workflowManifestProblem(log, root, doc.fields?.id || "", doc.fields?.status || "", declaredArtifacts);
 }
 
 export function findRoot(start = process.cwd()) {
@@ -657,6 +707,7 @@ function orchestrationEvidenceProblem(doc, root = "") {
   const requireStatusArtifact = requiresOrchestrationStatusArtifact(doc);
   const requireToolUseGuardDetails = requiresOrchestrationToolUseGuardDetails(doc);
   const requireReviewerEvidence = requiresOrchestrationReviewerEvidence(doc);
+  const requireWorkflowManifest = requiresOrchestrationWorkflowManifest(doc);
   const requiredFields = requiresOrchestrationCloseoutPreflightFields(doc)
     ? ORCHESTRATION_PREFLIGHT_FIELDS
     : ORCHESTRATION_REQUIRED_FIELDS;
@@ -668,6 +719,9 @@ function orchestrationEvidenceProblem(doc, root = "") {
     requireStatusArtifact,
     requireToolUseGuardDetails,
     requireReviewerEvidence,
+    requireWorkflowManifest,
+    expectedTaskId: doc.fields.id,
+    expectedStatus: doc.fields.status,
     requiredFields,
     root,
   });
@@ -752,6 +806,9 @@ function missingOrchestrationFields(log, options = {}) {
     requireStatusArtifact = false,
     requireToolUseGuardDetails = false,
     requireReviewerEvidence = false,
+    requireWorkflowManifest = false,
+    expectedTaskId = "",
+    expectedStatus = "",
     requiredFields = ORCHESTRATION_REQUIRED_FIELDS,
     root = "",
   } = typeof options === "boolean" ? { requireMachineEvidence: options } : options;
@@ -765,6 +822,7 @@ function missingOrchestrationFields(log, options = {}) {
   if (requireMachineEvidence) baseline.push("machine evidence command");
   if (requireMachineEvidencePass) baseline.push("machine evidence pass");
   if (requireReviewerEvidence) baseline.push("reviewer pass");
+  if (requireWorkflowManifest) baseline.push("workflow manifest");
   let bestMissing = baseline;
   for (const block of blocks) {
     const missing = requiredFields
@@ -794,11 +852,145 @@ function missingOrchestrationFields(log, options = {}) {
     if (requireReviewerEvidence && !hasReviewerPassAfterMachineEvidence(log)) {
       missing.push("reviewer pass");
     }
+    if (requireWorkflowManifest) {
+      const declaredArtifacts = machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN))
+        .map((signature) => signature.artifact_path)
+        .filter(Boolean);
+      const workflowProblem = workflowManifestProblem(log, root, expectedTaskId, expectedStatus, declaredArtifacts);
+      if (workflowProblem) missing.push(workflowProblem);
+    }
     if (missing.length < bestMissing.length) {
       bestMissing = missing;
     }
   }
   return bestMissing;
+}
+
+function workflowManifestProblem(log, root, expectedTaskId = "", expectedStatus = "", requiredEvidenceRefs = []) {
+  const manifestPath = workflowManifestPath(log);
+  if (!manifestPath) return "workflow manifest";
+  return workflowManifestArtifactProblem(manifestPath, root, expectedTaskId, expectedStatus, requiredEvidenceRefs);
+}
+
+function workflowManifestPath(log) {
+  for (const line of String(log || "").split(/\r?\n/)) {
+    const match = line.match(/^\s*[-*]?\s*workflow\s+manifest\s*:\s*(.+)$/i);
+    if (!match) continue;
+    return cleanMachineEvidenceValue(match[1]);
+  }
+  return "";
+}
+
+function workflowManifestArtifactProblem(manifestPath, root, expectedTaskId = "", expectedStatus = "", requiredEvidenceRefs = []) {
+  if (!root) return "workflow manifest root";
+  const artifactPath = cleanMachineEvidenceValue(manifestPath);
+  if (!artifactPath) return "workflow manifest";
+  if (!artifactPath.toLowerCase().endsWith(".json")) return "workflow manifest json";
+  const pathProblem = repoLocalPathProblem(artifactPath);
+  if (pathProblem) return `workflow manifest ${pathProblem}`;
+  const normalized = artifactPath.replaceAll("\\", "/");
+  if (!/^tasks\/workflows\/T\d+[^/]*\.json$/i.test(normalized)) return "workflow manifest path";
+  if (expectedTaskId && !normalized.toUpperCase().startsWith(`TASKS/WORKFLOWS/${String(expectedTaskId).toUpperCase()}`)) return "workflow manifest path task mismatch";
+  const rootPath = resolve(root);
+  const targetPath = resolve(rootPath, artifactPath);
+  const rel = relative(rootPath, targetPath);
+  if (!rel || rel.startsWith("..") || /^[a-z]:/i.test(rel)) return "workflow manifest outside root";
+  if (!existsSync(targetPath)) return "workflow manifest missing";
+  const stats = statSync(targetPath);
+  if (!stats.isFile()) return "workflow manifest file";
+  if (stats.size > 256 * 1024) return "workflow manifest too large";
+
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(targetPath, "utf8"));
+  } catch {
+    return "workflow manifest invalid json";
+  }
+  return workflowManifestContentProblem(manifest, expectedTaskId, expectedStatus, root, requiredEvidenceRefs);
+}
+
+function workflowManifestContentProblem(manifest, expectedTaskId = "", expectedStatus = "", root = "", requiredEvidenceRefs = []) {
+  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return "workflow manifest object";
+  if (manifest.schema_version !== 1) return "workflow manifest schema";
+  if (manifest.kind !== "orchestration-workflow") return "workflow manifest kind";
+  if (!/^T\d+$/i.test(String(manifest.task_id || ""))) return "workflow manifest task id";
+  if (expectedTaskId && String(manifest.task_id || "").toUpperCase() !== String(expectedTaskId).toUpperCase()) return "workflow manifest task mismatch";
+  if (expectedStatus && String(manifest.status || "") !== String(expectedStatus)) return "workflow manifest status mismatch";
+  if (!hasText(manifest.objective)) return "workflow manifest objective";
+  if (!["planned", "in_progress", "review", "done", "blocked"].includes(String(manifest.status || ""))) return "workflow manifest status";
+  if (!nonEmptyStringArray(manifest.scope?.included)) return "workflow manifest scope";
+  if (!Array.isArray(manifest.scope?.excluded) || !manifest.scope.excluded.every(hasText)) return "workflow manifest scope";
+  if (!manifest.budgets || typeof manifest.budgets !== "object" || Array.isArray(manifest.budgets)) return "workflow manifest budgets";
+  if (!Number.isInteger(manifest.budgets.max_agents) || manifest.budgets.max_agents <= 0) return "workflow manifest budgets";
+  if (!hasText(manifest.budgets.context)) return "workflow manifest budgets";
+  if (!Array.isArray(manifest.packets) || manifest.packets.length === 0) return "workflow manifest packets";
+  const packetIds = new Set();
+  for (const packet of manifest.packets) {
+    if (!packet || typeof packet !== "object" || Array.isArray(packet)) return "workflow manifest packet";
+    if (!hasText(packet.id) || !hasText(packet.objective)) return "workflow manifest packet";
+    if (packetIds.has(packet.id)) return "workflow manifest packet duplicate";
+    packetIds.add(packet.id);
+    if (!["integrated", "cancelled"].includes(String(packet.status || ""))) return "workflow manifest packet status";
+    if (!nonEmptyStringArray(packet.allowed_files)) return "workflow manifest packet";
+    if (boundedAllowedFilesProblem(packet.allowed_files.join("; "))) return "workflow manifest packet allowed files";
+    const packetEvidenceProblem = repoLocalExistingRefsProblem(packet.evidence_refs, root);
+    if (packetEvidenceProblem) return `workflow manifest packet ${packetEvidenceProblem}`;
+    if (!evidenceRefsInclude(packet.evidence_refs, requiredEvidenceRefs)) return "workflow manifest packet evidence refs missing declared artifact";
+  }
+  if (!hasText(manifest.verification?.strategy)) return "workflow manifest verification";
+  if (!nonEmptyStringArray(manifest.verification?.commands)) return "workflow manifest verification";
+  const verificationEvidenceProblem = repoLocalExistingRefsProblem(manifest.verification?.evidence_refs, root);
+  if (verificationEvidenceProblem) return `workflow manifest verification ${verificationEvidenceProblem}`;
+  if (!evidenceRefsInclude(manifest.verification?.evidence_refs, requiredEvidenceRefs)) return "workflow manifest verification evidence refs missing declared artifact";
+  if (!hasText(manifest.integration?.owner) || !hasText(manifest.integration?.policy)) return "workflow manifest integration";
+  const evidenceProblem = repoLocalExistingRefsProblem(manifest.evidence_refs, root);
+  if (evidenceProblem) return `workflow manifest ${evidenceProblem}`;
+  if (!evidenceRefsInclude(manifest.evidence_refs, requiredEvidenceRefs)) return "workflow manifest evidence refs missing declared artifact";
+  return "";
+}
+
+function evidenceRefsInclude(refs, requiredRefs = []) {
+  const required = requiredRefs.map(normalizeMachineEvidenceValue).filter(Boolean);
+  if (required.length === 0) return true;
+  const actual = new Set((Array.isArray(refs) ? refs : []).map(normalizeMachineEvidenceValue).filter(Boolean));
+  return required.every((ref) => actual.has(ref));
+}
+
+function repoLocalExistingRefsProblem(refs, root) {
+  if (!nonEmptyStringArray(refs)) return "evidence refs";
+  if (!root) return "evidence refs root";
+  const rootPath = resolve(root);
+  for (const ref of refs) {
+    const cleaned = cleanMachineEvidenceValue(ref);
+    const pathProblem = repoLocalPathProblem(cleaned);
+    if (pathProblem) return `evidence refs ${pathProblem}`;
+    const targetPath = resolve(rootPath, cleaned);
+    const rel = relative(rootPath, targetPath);
+    if (!rel || rel.startsWith("..") || /^[a-z]:/i.test(rel)) return "evidence refs outside root";
+    if (!existsSync(targetPath)) return "evidence refs missing";
+    const stats = statSync(targetPath);
+    if (!stats.isFile()) return "evidence refs file";
+    if (stats.size > 1024 * 1024) return "evidence refs too large";
+  }
+  return "";
+}
+
+function repoLocalPathProblem(value) {
+  const normalized = String(value || "").replaceAll("\\", "/");
+  if (!normalized) return "path";
+  if (/^[a-z][a-z0-9+.-]*:/i.test(normalized) || /^(?:[a-z]:|\/)/i.test(normalized)) return "repo-local";
+  if (normalized.includes("//")) return "path";
+  const segments = normalized.split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === "..")) return "path";
+  return "";
+}
+
+function hasText(value) {
+  return typeof value === "string" && value.trim() && !/^(tbd|todo|none|n\/a|na|unknown|\.\.\.)$/i.test(value.trim());
+}
+
+function nonEmptyStringArray(value) {
+  return Array.isArray(value) && value.length > 0 && value.every(hasText);
 }
 
 function hasReviewerPassAfterMachineEvidence(log) {
@@ -1241,6 +1433,11 @@ function requiresOrchestrationToolUseGuardDetails(doc) {
 function requiresOrchestrationReviewerEvidence(doc) {
   const match = String(doc.fields.id || "").match(/^T(\d+)$/);
   return match ? Number(match[1]) >= ORCHESTRATION_REVIEWER_EVIDENCE_MIN_TASK_ID : true;
+}
+
+function requiresOrchestrationWorkflowManifest(doc) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= ORCHESTRATION_WORKFLOW_MANIFEST_MIN_TASK_ID : true;
 }
 
 function fieldValue(text, fieldPattern) {

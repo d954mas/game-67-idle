@@ -9,6 +9,8 @@
 //   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
 //   node tools/taskboard/cli.mjs orchestration-template
+//   node tools/taskboard/cli.mjs orchestration-workflow-template [--task-id T0001] [--json]
+//   node tools/taskboard/cli.mjs orchestration-workflow-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
 //   node tools/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
 //   node tools/taskboard/cli.mjs orchestration-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
 //   node tools/taskboard/cli.mjs validate [--json]
@@ -19,7 +21,9 @@ import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
   updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
-  orchestrationPreflightProblem, parseDoc, currentDoingOrchestrationTaskIds,
+  orchestrationWorkflowTemplate,
+  orchestrationPreflightProblem, orchestrationWorkflowManifestProblem,
+  parseDoc, currentDoingOrchestrationTaskIds,
   isMachineEvidenceCommand, isBoundedOrchestrationAllowedFiles,
   DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
@@ -510,6 +514,56 @@ switch (cmd) {
     console.log(orchestrationPacketTemplate());
     break;
   }
+  case "orchestration-workflow-template": {
+    const taskId = typeof args["task-id"] === "string" ? args["task-id"].trim() : "T0000";
+    const payload = orchestrationWorkflowTemplate(taskId || "T0000");
+    if (args.json) {
+      writeJson(payload);
+    } else {
+      console.log(JSON.stringify(payload, null, 2));
+    }
+    break;
+  }
+  case "orchestration-workflow-check": {
+    let doc;
+    try {
+      doc = readTaskForOrchestrationCheck(args);
+    } catch (error) {
+      if (isSelectorProblem(error)) {
+        if (args.json) {
+          writeJson({
+            ok: false,
+            file: null,
+            problem: error,
+          });
+          process.exit(1);
+        }
+        fail(error.message);
+      }
+      throw error;
+    }
+    const problem = orchestrationWorkflowManifestProblem(doc, root);
+    if (args.json) {
+      writeJson({
+        ok: !problem,
+        file: relative(root, doc.file),
+        problem: problem ? {
+          code: "orchestration_workflow_manifest_invalid",
+          taskId: doc.fields?.id || "",
+          message: `${doc.fields?.id || "task"}: workflow manifest failed (${problem})`,
+          missingFields: [problem],
+        } : null,
+      });
+      process.exit(problem ? 1 : 0);
+    }
+    if (problem) {
+      console.log(`problem: ${doc.fields?.id || "task"} workflow manifest failed (${problem})`);
+      console.log("hint: record `- workflow manifest: tasks/workflows/<task-id>.json` and validate the artifact before closeout");
+      process.exit(1);
+    }
+    console.log(`ok: workflow manifest passed for ${relative(root, doc.file)}`);
+    break;
+  }
   case "orchestration-bootstrap": {
     if (args.help === true || args.h === true) {
       console.log(orchestrationBootstrapUsage());
@@ -696,7 +750,7 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
+    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|orchestration-workflow-template|orchestration-workflow-check|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
     process.exit(cmd ? 1 : 0);
 }
 

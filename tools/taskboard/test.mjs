@@ -10,6 +10,7 @@ import {
   parseDoc, serializeDoc, slugify, createTask, createEpic, listTasks,
   listEpics, updateDoc, findDoc, validateStore, validateStoreDetailed,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate, orchestrationPreflightProblem,
+  orchestrationWorkflowTemplate,
   DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
 
@@ -56,6 +57,42 @@ function writeJsonFile(root, relPath, value) {
   const file = join(root, relPath);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function passingWorkflowManifest(taskId = "T0089") {
+  return {
+    ...orchestrationWorkflowTemplate(taskId),
+    objective: "Verify durable orchestration workflow state.",
+    status: "review",
+    scope: {
+      included: ["tools/taskboard/lib.mjs", "tools/taskboard/test.mjs"],
+      excluded: ["gameplay implementation"],
+    },
+    packets: [
+      {
+        id: "packet-001",
+        objective: "Implement and verify workflow manifest guard.",
+        status: "integrated",
+        allowed_files: ["tools/taskboard/lib.mjs", "tools/taskboard/test.mjs"],
+        evidence_refs: ["tasks/evidence/status.json"],
+      },
+    ],
+    budgets: {
+      max_agents: 2,
+      context: "Bounded to taskboard workflow files.",
+      validation: "Focused tests plus strict status artifact.",
+    },
+    verification: {
+      strategy: "independent_review",
+      commands: ["node --test tools/taskboard/test.mjs"],
+      evidence_refs: ["tasks/evidence/status.json"],
+    },
+    integration: {
+      owner: "lead",
+      policy: "Lead integrates subagent results after machine evidence and review.",
+    },
+    evidence_refs: ["tasks/evidence/status.json"],
+  };
 }
 
 function passingParentTrace(parentThreadId = "parent", count = 2) {
@@ -2245,6 +2282,423 @@ test("validateStore accepts T0088 structured reviewer pass after machine evidenc
   action: ready for review`));
 
   assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore preserves T0088 compatibility without workflow manifest", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0088",
+    title: "Pipeline reviewer evidence guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify reviewer evidence
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore rejects T0089 closeout without workflow manifest", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["workflow manifest"]);
+});
+
+test("validateStore rejects T0089 workflow manifest task mismatch", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  writeJsonFile(root, "tasks/workflows/T0089.json", passingWorkflowManifest("T0090"));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- workflow manifest: tasks/workflows/T0089.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["workflow manifest task mismatch"]);
+});
+
+test("validateStore rejects T0089 workflow manifest path task mismatch", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  writeJsonFile(root, "tasks/workflows/T0099.json", passingWorkflowManifest("T0089"));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- workflow manifest: tasks/workflows/T0099.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["workflow manifest path task mismatch"]);
+});
+
+test("validateStore rejects T0089 workflow manifest status mismatch", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const manifest = passingWorkflowManifest("T0089");
+  manifest.status = "done";
+  writeJsonFile(root, "tasks/workflows/T0089.json", manifest);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- workflow manifest: tasks/workflows/T0089.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["workflow manifest status mismatch"]);
+});
+
+test("validateStore rejects T0089 workflow manifest non-terminal packet", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const manifest = passingWorkflowManifest("T0089");
+  manifest.packets[0].status = "planned";
+  writeJsonFile(root, "tasks/workflows/T0089.json", manifest);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- workflow manifest: tasks/workflows/T0089.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["workflow manifest packet status"]);
+});
+
+test("validateStore rejects T0089 workflow manifest unbounded packet files", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const manifest = passingWorkflowManifest("T0089");
+  manifest.packets[0].allowed_files = ["tools/**"];
+  writeJsonFile(root, "tasks/workflows/T0089.json", manifest);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- workflow manifest: tasks/workflows/T0089.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["workflow manifest packet allowed files"]);
+});
+
+test("validateStore rejects T0089 workflow manifest duplicate packet ids", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const manifest = passingWorkflowManifest("T0089");
+  manifest.packets.push({ ...manifest.packets[0] });
+  writeJsonFile(root, "tasks/workflows/T0089.json", manifest);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- workflow manifest: tasks/workflows/T0089.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["workflow manifest packet duplicate"]);
+});
+
+test("validateStore rejects T0089 workflow manifest missing evidence ref", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const manifest = passingWorkflowManifest("T0089");
+  manifest.evidence_refs = ["tasks/evidence/missing-status.json"];
+  writeJsonFile(root, "tasks/workflows/T0089.json", manifest);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- workflow manifest: tasks/workflows/T0089.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["workflow manifest evidence refs missing"]);
+});
+
+test("validateStore rejects T0089 workflow manifest evidence refs unrelated to declared artifact", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  writeJsonFile(root, "tasks/evidence/other.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const manifest = passingWorkflowManifest("T0089");
+  manifest.packets[0].evidence_refs = ["tasks/evidence/other.json"];
+  manifest.verification.evidence_refs = ["tasks/evidence/other.json"];
+  manifest.evidence_refs = ["tasks/evidence/other.json"];
+  writeJsonFile(root, "tasks/workflows/T0089.json", manifest);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- workflow manifest: tasks/workflows/T0089.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["workflow manifest packet evidence refs missing declared artifact"]);
+});
+
+test("validateStore accepts T0089 valid workflow manifest", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  writeJsonFile(root, "tasks/workflows/T0089.json", passingWorkflowManifest("T0089"));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- workflow manifest: tasks/workflows/T0089.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: workflow manifest, evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("cli orchestration-workflow-template emits parseable manifest", () => {
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-workflow-template", "--task-id", "T0089", "--json"], { cwd: import.meta.dirname, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.kind, "orchestration-workflow");
+  assert.equal(parsed.schema_version, 1);
+  assert.equal(parsed.task_id, "T0089");
+  assert.ok(Array.isArray(parsed.packets));
+  assert.ok(parsed.packets.length > 0);
+  assert.equal(parsed.status, "review");
+  assert.equal(parsed.packets[0].status, "integrated");
+});
+
+test("cli orchestration-workflow-check reports focused manifest failures", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- workflow manifest: tasks/workflows/T0089.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-workflow-check", "T0089", "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "orchestration_workflow_manifest_invalid");
+  assert.deepEqual(parsed.problem.missingFields, ["workflow manifest missing"]);
+});
+
+test("cli orchestration-workflow-check accepts valid manifest", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  writeJsonFile(root, "tasks/workflows/T0089.json", passingWorkflowManifest("T0089"));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- workflow manifest: tasks/workflows/T0089.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: workflow manifest, evidence artifact, focused tests, and scope
+  risks: none remaining
+  action: ready for review`));
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-workflow-check", "T0089", "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.problem, null);
 });
 
 test("validateStore accepts valid dual-source status artifact for T0080+ evidence", (t) => {

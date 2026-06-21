@@ -182,6 +182,31 @@ review/done closeout requires a later `PASS` block:
 Strict status rollup defaults to `--min-agents 1`; raise it when the packet
 expects several independent agents.
 
+For T0089+ substantial orchestration closeout, also record a repo-local workflow
+manifest after the packet and before review/done:
+
+```text
+- workflow manifest: tasks/workflows/T0089.json
+```
+
+Create the initial shape with:
+
+```text
+node tools/taskboard/cli.mjs orchestration-workflow-template --task-id T0089 --json
+node tools/taskboard/cli.mjs orchestration-workflow-check T0089 --json
+```
+
+The manifest is cold workflow state, not a replacement for task logs. It must
+match the task id and closeout status, describe included and excluded scope,
+list packets with terminal `integrated` or `cancelled` status, record bounded
+agent/context/validation budgets, name verification commands, identify the lead
+integration owner/policy, and reference existing repo-local evidence artifacts.
+Each packet's `allowed_files` uses the same bounded path rules as the task
+packet. Evidence refs must include the machine artifact declared by the task's
+`evidence command` / later `evidence: PASS` line. Keep manifests under
+`tasks/workflows/<task-id>*.json`; keep compact machine evidence under
+`tasks/evidence/`.
+
 Use transcript mode when the parent session exposes spawn/wait/close tool calls;
 it verifies call order and completed wait/close outputs. Use
 `parent-thread-id` mode when subagent `session_meta` files are the available
