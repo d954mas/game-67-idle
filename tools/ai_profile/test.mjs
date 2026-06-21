@@ -709,7 +709,7 @@ test("status reads a session log and reports records, slowest, and rollup", () =
   }
 });
 
-test("status command rollup strips PowerShell env assignments", () => {
+test("status command rollup strips shell assignment wrappers", () => {
   const dir = tempDir();
   try {
     const profile = join(dir, "session.jsonl");
@@ -737,12 +737,36 @@ test("status command rollup strips PowerShell env assignments", () => {
         commands: ["AI_PIPELINE_PYTHON=/tmp/python node tools/ai.mjs validate --review"],
         session_id: "s1",
       },
+      {
+        ts: "2026-06-13T10:00:02+05:00",
+        phase: "session",
+        category: "tooling",
+        intent: "auto:Bash",
+        result: "pass",
+        value: "unknown",
+        event_type: "tool_call_result",
+        commands: ["$i=0; Get-Content tools/ai_profile/status.mjs | ForEach-Object { $i++; $_ }"],
+        session_id: "s1",
+      },
+      {
+        ts: "2026-06-13T10:00:03+05:00",
+        phase: "session",
+        category: "tooling",
+        intent: "auto:Bash",
+        result: "pass",
+        value: "unknown",
+        event_type: "tool_call_result",
+        commands: ["Get-Content tools/ai_profile/test.mjs"],
+        session_id: "s1",
+      },
     ]);
 
     run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson]);
     const status = readJson(statusJson);
     const keys = status.command_rollup.by_count.map((entry) => entry.key);
-    assert.deepEqual(keys, ["node ai.mjs"]);
+    assert.deepEqual(keys, ["node ai.mjs", "Get-Content"]);
+    assert.equal(status.command_rollup.by_count.find((entry) => entry.key === "Get-Content")?.count, 2);
+    assert.ok(!keys.includes("$i=0;"));
   } finally {
     cleanup(dir);
   }
@@ -906,7 +930,7 @@ test("status transcript fallback treats search no-match as pass", () => {
     ]);
     writeJsonl(join(dir, "rollout-a.jsonl"), [
       subagentSessionMeta(agent, parent, root, "2026-06-21T10:00:00.000Z"),
-      shellCall("call_rg_nomatch", "rg definitely-not-present", "2026-06-21T10:00:01.000Z"),
+      shellCall("call_rg_nomatch", "$i=0; rg definitely-not-present", "2026-06-21T10:00:01.000Z"),
       shellOutput("call_rg_nomatch", "Exit code: 1\nWall time: 0.5 seconds\nOutput:\n", "2026-06-21T10:00:02.000Z"),
       shellCall("call_select_nomatch", "Select-String -Path tools/ai_profile/status.mjs -Pattern definitely-not-present", "2026-06-21T10:00:03.000Z"),
       shellOutput("call_select_nomatch", "Exit code: 1\nWall time: 0.6 seconds\nOutput:\n", "2026-06-21T10:00:04.000Z"),

@@ -289,17 +289,11 @@ function classifyFailedRecords(records) {
   };
 }
 
-/* Normalize a command to a tool-level key: strip leading env assignments, take
- * the first token's basename, and for interpreters append the script basename
- * (so "node tools/ai.mjs status" -> "node ai.mjs"). */
+/* Normalize a command to a tool-level key: strip leading shell assignment
+ * wrappers, take the first token's basename, and for interpreters append the
+ * script basename (so "node tools/ai.mjs status" -> "node ai.mjs"). */
 function commandKey(cmd) {
-  let text = String(cmd || "").trim();
-  while (/^\$env:[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:"[^"]*"|'[^']*'|[^;]+)\s*;\s*/i.test(text)) {
-    text = text.replace(/^\$env:[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:"[^"]*"|'[^']*'|[^;]+)\s*;\s*/i, "");
-  }
-  while (/^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+/.test(text)) {
-    text = text.replace(/^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+/, "");
-  }
+  const text = stripLeadingCommandAssignments(cmd);
   const tokens = text.split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return "shell";
   const base = (segment) => segment.split(/[\\/]/).pop() || segment;
@@ -311,10 +305,13 @@ function commandKey(cmd) {
   return key;
 }
 
-function stripLeadingEnvAssignments(cmd) {
+function stripLeadingCommandAssignments(cmd) {
   let text = String(cmd || "").trim();
   while (/^\$env:[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:"[^"]*"|'[^']*'|[^;]+)\s*;\s*/i.test(text)) {
     text = text.replace(/^\$env:[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:"[^"]*"|'[^']*'|[^;]+)\s*;\s*/i, "");
+  }
+  while (/^\$[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:"[^"]*"|'[^']*'|-?\d+(?:\.\d+)?|\$true|\$false)\s*;\s*/i.test(text)) {
+    text = text.replace(/^\$[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:"[^"]*"|'[^']*'|-?\d+(?:\.\d+)?|\$true|\$false)\s*;\s*/i, "");
   }
   while (/^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+/.test(text)) {
     text = text.replace(/^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+/, "");
@@ -323,7 +320,7 @@ function stripLeadingEnvAssignments(cmd) {
 }
 
 function isSearchCommand(cmd) {
-  const text = stripLeadingEnvAssignments(String(cmd || "")).split(/\r?\n/)[0].trim().toLowerCase();
+  const text = stripLeadingCommandAssignments(String(cmd || "")).split(/\r?\n/)[0].trim().toLowerCase();
   return /^(?:rg|grep|egrep|fgrep|findstr|ack|select-string)(?:\s|$)/.test(text);
 }
 
