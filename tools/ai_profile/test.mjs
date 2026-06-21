@@ -44,7 +44,7 @@ function writeJsonl(file, records) {
   writeFileSync(file, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
 }
 
-function writeTaskboardTask(rootDir, { id = "T0001", status = "doing", tags = ["pipeline", "orchestration"] } = {}) {
+function writeTaskboardTask(rootDir, { id = "T0001", status = "doing", tags = ["pipeline", "orchestration"], evidenceCommand = "" } = {}) {
   const activeDir = join(rootDir, "tasks", "active");
   mkdirSync(activeDir, { recursive: true });
   const file = join(activeDir, `${id.toLowerCase()}-status-test.md`);
@@ -70,6 +70,16 @@ Test task.
 ## Open questions
 
 ## Log
+${evidenceCommand ? `
+- orchestration: used
+  objective: test orchestration wrapper
+  allowed files: tools/ai_profile/**
+  tool-use guard: exact paths/discovery before reads; trace/status commands include evidence source and --json-output where applicable
+  expected output: wrapper evidence works
+  evidence command: ${evidenceCommand}
+  stop condition: wrapper exits successfully
+  independent reviewer: test harness
+` : ""}
 `, "utf8");
   return file;
 }
@@ -987,6 +997,151 @@ test("status writes compact agent rollup evidence artifact", () => {
     assert.equal(Object.hasOwn(evidence, "command_rollup"), false);
     assert.equal(Object.hasOwn(evidence, "slowest_record"), false);
     assert.equal(Object.hasOwn(evidence.agent_rollup, "agents"), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration evidence dry-run uses current task command and writes nothing", () => {
+  const dir = tempDir();
+  try {
+    const sessionRoot = join(dir, "sessions");
+    const artifact = join(dir, "tasks", "evidence", "T0001-status-rollup.json");
+    const evidenceCommand = `node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent-thread-1 --session-root "${sessionRoot}" --agent-cwd "${dir}" --agent-rollup-evidence --json-output tasks/evidence/T0001-status-rollup.json`;
+    writeTaskboardTask(dir, { id: "T0001", evidenceCommand });
+
+    const result = spawnSync(process.execPath, ["tools/ai_profile/orchestration_evidence.mjs", "--current", "--json"], {
+      cwd: root,
+      env: { ...process.env, TASKBOARD_ROOT: dir, CODEX_SESSION_FILE: "" },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.mode, "dry-run");
+    assert.equal(parsed.task_id, "T0001");
+    assert.equal(parsed.inference_source, "task-command");
+    assert.equal(parsed.artifact.replaceAll("\\", "/"), "tasks/evidence/T0001-status-rollup.json");
+    assert.equal(parsed.artifact_source, "task-command");
+    assert.match(parsed.command, /node tools\/ai\.mjs status --agent-rollup --require-agent-rollup-ok/);
+    assert.match(parsed.command, /--agent-rollup-evidence/);
+    assert.match(parsed.command, /--json-output/);
+    assert.equal(existsSync(artifact), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration evidence run writes compact status artifact", () => {
+  const dir = tempDir();
+  try {
+    const sessionRoot = join(dir, "sessions");
+    const agentProfileDir = join(dir, "agent-profiles");
+    const parentProfile = join(dir, "parent-profile.jsonl");
+    const parent = "parent-thread-1";
+    const agentA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const agentB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    mkdirSync(sessionRoot, { recursive: true });
+    mkdirSync(agentProfileDir, { recursive: true });
+    writeJsonl(parentProfile, [
+      { ts: "2026-06-21T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: parent },
+    ]);
+    writeJsonl(join(sessionRoot, "rollout-a.jsonl"), [subagentSessionMeta(agentA, parent, dir, "2026-06-21T10:00:00.000Z")]);
+    writeJsonl(join(sessionRoot, "rollout-b.jsonl"), [subagentSessionMeta(agentB, parent, dir, "2026-06-21T10:01:00.000Z")]);
+    for (const agent of [agentA, agentB]) {
+      writeJsonl(join(agentProfileDir, `2026-06-21__codex__${agent.slice(0, 8)}.jsonl`), [
+        { ts: "2026-06-21T10:02:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "unknown", value: "necessary_overhead", event_type: "tool_call_start", commands: ["node --test tools/agent.test.mjs"], session_id: agent },
+        { ts: "2026-06-21T10:02:01+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/agent.test.mjs"], session_id: agent },
+      ]);
+    }
+    const evidenceCommand = `node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id ${parent} --session-root "${sessionRoot}" --agent-cwd "${dir}" --profile "${parentProfile}" --agent-rollup-evidence --json-output tasks/evidence/T0001-status-rollup.json`;
+    writeTaskboardTask(dir, { id: "T0001", evidenceCommand });
+
+    const result = spawnSync(process.execPath, [
+      "tools/ai_profile/orchestration_evidence.mjs",
+      "--current",
+      "--run",
+      "--json",
+      "--agent-profile-dir", agentProfileDir,
+    ], {
+      cwd: root,
+      env: { ...process.env, TASKBOARD_ROOT: dir, CODEX_SESSION_FILE: "" },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.status_ok, true);
+    assert.equal(parsed.mode, "run");
+    assert.equal(parsed.stdout.includes("strict problem:"), false);
+    const evidence = readJson(join(dir, "tasks", "evidence", "T0001-status-rollup.json"));
+    assert.equal(evidence.kind, "status-agent-rollup-evidence");
+    assert.equal(evidence.valid, true);
+    assert.equal(evidence.agent_rollup.strict_ok, true);
+    assert.equal(evidence.agent_rollup.subagent_session_count, 2);
+    assert.equal(evidence.agent_rollup.profile_rollup.unresolved_failed_records, 0);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration evidence fails closed when source cannot be inferred", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "plain-profile.jsonl");
+    writeTaskboardTask(dir, { id: "T0001" });
+    writeJsonl(profile, [
+      { ts: "2026-06-21T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "parent" },
+    ]);
+
+    const result = spawnSync(process.execPath, [
+      "tools/ai_profile/orchestration_evidence.mjs",
+      "--current",
+      "--profile", profile,
+      "--json",
+    ], {
+      cwd: root,
+      env: { ...process.env, TASKBOARD_ROOT: dir, CODEX_SESSION_FILE: "" },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    assert.equal(result.status, 1);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.task_id, "T0001");
+    assert.match(parsed.problem, /could not infer parent thread id/);
+    assert.match(parsed.next_action, /--parent-thread-id/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration evidence fails closed when explicit task is missing", () => {
+  const dir = tempDir();
+  try {
+    const result = spawnSync(process.execPath, [
+      "tools/ai_profile/orchestration_evidence.mjs",
+      "--task", "T9999",
+      "--parent-thread-id", "parent-thread-1",
+      "--session-root", dir,
+      "--json",
+    ], {
+      cwd: root,
+      env: { ...process.env, TASKBOARD_ROOT: dir, CODEX_SESSION_FILE: "" },
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    assert.equal(result.status, 1);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, false);
+    assert.match(parsed.problem, /task not found: T9999/);
+    assert.doesNotMatch(parsed.stdout || "", /T9999-status-rollup/);
   } finally {
     cleanup(dir);
   }

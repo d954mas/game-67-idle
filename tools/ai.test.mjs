@@ -550,6 +550,47 @@ test("orchestration-check forwards current selector JSON failures", () => {
   }
 });
 
+test("orchestration-evidence forwards current dry-run wrapper", () => {
+  const dir = tempDir();
+  try {
+    const sessionRoot = join(dir, "sessions");
+    writeTaskFile(dir, "T0001", `## What
+
+Validate current orchestration evidence wrapper through the AI facade.
+
+## Done when
+
+- [ ] wrapper dry-run passes
+
+## Open questions
+
+## Log
+
+- orchestration: used
+  objective: verify current facade evidence forwarding
+  allowed files: tools/ai.mjs; tools/ai_profile/**
+  tool-use guard: exact paths/discovery before reads; trace/status commands include evidence source and --json-output where applicable
+  expected output: facade forwards evidence wrapper
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent-thread-1 --session-root "${sessionRoot}" --agent-cwd "${dir}" --agent-rollup-evidence --json-output tasks/evidence/T0001-status-rollup.json
+  stop condition: json output is ok
+  independent reviewer: reviewed facade forwarding
+`);
+
+    const result = run(["orchestration-evidence", "--current", "--json"], {
+      env: { ...process.env, TASKBOARD_ROOT: dir, CODEX_SESSION_FILE: "" },
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.task_id, "T0001");
+    assert.equal(parsed.inference_source, "task-command");
+    assert.match(parsed.command, /node tools\/ai\.mjs status --agent-rollup --require-agent-rollup-ok/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("orchestration-template forwards taskboard template", () => {
   const result = run(["orchestration-template"]);
   const direct = spawnSync(process.execPath, ["tools/taskboard/cli.mjs", "orchestration-template"], {

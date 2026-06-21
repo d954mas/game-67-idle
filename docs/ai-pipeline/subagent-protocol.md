@@ -127,25 +127,45 @@ node tools/ai.mjs orchestration-trace --session <codex-session.jsonl> --json-out
 node tools/ai.mjs orchestration-trace --parent-thread-id <id> --session-root <dir> --min-agents <n> --json-output <trace.json>
 ```
 
-For newer substantial pipeline/orchestration tasks, taskboard validation expects
-the packet's `evidence command` to include either `node tools/ai.mjs
-orchestration-trace ...` with `--session`/`--parent-thread-id` and
-`--json-output`, or
-strict `node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok ...`.
+For newer substantial pipeline/orchestration tasks, use the safe status wrapper
+as the operator path:
+
+```text
+node tools/ai.mjs orchestration-evidence --current
+node tools/ai.mjs orchestration-evidence --current --run
+```
+
+The default dry-run infers the current task, evidence source, session root,
+agent cwd, minimum agent count, and compact artifact path, then prints the exact
+strict status command. `--run` executes it and writes the compact artifact under
+`tasks/evidence/`. If source inference is ambiguous, the wrapper fails closed
+and tells the operator to pass `--parent-thread-id <id>` or
+`--trace-session <file>` explicitly.
+
+The wrapper is the safe path for strict status evidence. Trace-only packets
+still use `node tools/ai.mjs orchestration-trace ...` directly; do not assume the
+wrapper will infer trace-command fields unless the task also declares strict
+`status --agent-rollup` evidence or the operator passes explicit wrapper flags.
+
+Task packets still declare the underlying machine evidence command so taskboard
+validation has a stable signature to inspect. The packet's `evidence command`
+must include either `node tools/ai.mjs orchestration-trace ...` with
+`--session`/`--parent-thread-id` and `--json-output`, or strict
+`node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok ...`.
 Before moving the task to review/done, record a later `- evidence: PASS ...`
-log entry for that approved machine evidence command. The validator checks the
-command shape and recorded PASS line; it does not execute commands copied from
-task logs. For new `orchestration-trace ... --json-output <file>` evidence, it
-also reads the declared repo-local JSON artifact and requires a passing trace
-that matches the declared source and minimum agent count. T0080+ strict
-`status --agent-rollup` evidence also needs
-`--agent-rollup-evidence --json-output <repo-local.json>`. Keep raw full status
-JSON in `tmp/` for diagnostics only; committed task evidence should be the
-compact artifact under `tasks/evidence/`. The validator reads that compact
-status artifact and requires `kind: status-agent-rollup-evidence`,
-`valid: true`, empty errors, `agent_rollup.ok`, `agent_rollup.strict_ok`,
-declared source, declared minimum agent count, clean profile rollup, and no
-rollup problems.
+log entry for that approved machine evidence command or for the wrapper run
+that produced the same artifact. The validator checks the command shape and
+recorded PASS line; it does not execute commands copied from task logs. For new
+`orchestration-trace ... --json-output <file>` evidence, it also reads the
+declared repo-local JSON artifact and requires a passing trace that matches the
+declared source and minimum agent count. T0080+ strict `status --agent-rollup`
+evidence also needs `--agent-rollup-evidence --json-output <repo-local.json>`.
+Keep raw full status JSON in `tmp/` for diagnostics only; committed task
+evidence should be the compact artifact under `tasks/evidence/`. The validator
+reads that compact status artifact and requires
+`kind: status-agent-rollup-evidence`, `valid: true`, empty errors,
+`agent_rollup.ok`, `agent_rollup.strict_ok`, declared source, declared minimum
+agent count, clean profile rollup, and no rollup problems.
 
 Strict status rollup defaults to `--min-agents 1`; raise it when the packet
 expects several independent agents.
