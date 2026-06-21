@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
-import { isMachineEvidenceCommand } from "../taskboard/lib.mjs";
+import { isCloseoutReadyMachineEvidenceCommand, isMachineEvidenceCommand } from "../taskboard/lib.mjs";
 
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -1086,6 +1086,13 @@ test("orchestration evidence run writes compact status artifact", () => {
     assert.equal(parsed.status_ok, true);
     assert.equal(parsed.mode, "run");
     assert.equal(parsed.stdout.includes("strict problem:"), false);
+    assert.match(parsed.next_action, /append task log evidence after success: - evidence: PASS `node tools\/ai\.mjs status/);
+    assert.doesNotMatch(parsed.next_action, /PASS tasks[\\/]+evidence/);
+    const passCommand = parsed.next_action.match(/- evidence: PASS `([^`]+)`/)?.[1] || "";
+    assert.equal(isMachineEvidenceCommand(passCommand), true);
+    assert.equal(isCloseoutReadyMachineEvidenceCommand(passCommand), true);
+    assert.match(passCommand, /--agent-rollup-evidence/);
+    assert.match(passCommand, /--json-output tasks[\\/]+evidence[\\/]+T0001-status-rollup\.json/);
     const evidence = readJson(join(dir, "tasks", "evidence", "T0001-status-rollup.json"));
     assert.equal(evidence.kind, "status-agent-rollup-evidence");
     assert.equal(evidence.valid, true);
@@ -1669,8 +1676,10 @@ test("strict status agent rollup treats failed structured validator probes as ev
       shellOutput("call_packet_probe", "Exit code: 1\nWall time: 0.2 seconds\nOutput:\n{\"ok\":false,\"problem\":{\"code\":\"subagent_packet_invalid\"}}\n", "2026-06-21T10:00:02.000Z"),
       shellCall("call_workflow_probe", "node tools/taskboard/cli.mjs orchestration-workflow-check T0092 --json", "2026-06-21T10:00:03.000Z"),
       shellOutput("call_workflow_probe", "Exit code: 1\nWall time: 0.2 seconds\nOutput:\n{\"ok\":false,\"problem\":{\"code\":\"orchestration_workflow_manifest_invalid\",\"message\":\"T0092: workflow manifest failed (workflow manifest)\"}}\n", "2026-06-21T10:00:04.000Z"),
-      shellCall("call_read", "rg --files tools/ai_profile", "2026-06-21T10:00:05.000Z"),
-      shellOutput("call_read", "Exit code: 0\nWall time: 0.1 seconds\nOutput:\ntools/ai_profile/status.mjs\n", "2026-06-21T10:00:06.000Z"),
+      shellCall("call_workflow_alias_probe", "node tools/taskboard/cli.mjs workflow-check T0092 --json", "2026-06-21T10:00:05.000Z"),
+      shellOutput("call_workflow_alias_probe", "Exit code: 1\nWall time: 0.2 seconds\nOutput:\nunknown command\nusage: cli.mjs <list|context|show|new|set|orchestration-template|orchestration-workflow-check|validate> ...\n", "2026-06-21T10:00:06.000Z"),
+      shellCall("call_read", "rg --files tools/ai_profile", "2026-06-21T10:00:07.000Z"),
+      shellOutput("call_read", "Exit code: 0\nWall time: 0.1 seconds\nOutput:\ntools/ai_profile/status.mjs\n", "2026-06-21T10:00:08.000Z"),
     ]);
 
     const result = run([
@@ -1688,7 +1697,9 @@ test("strict status agent rollup treats failed structured validator probes as ev
     assert.equal(status.agent_rollup.strict_ok, true);
     assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
     assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 2);
+    assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_failed_records, 1);
     assert.match(result.stdout, /agent evidence-probe failures: 2/);
+    assert.match(result.stdout, /tool-usage: agent-99999999-9999-4999-8999-999999999998 \[test verifier\] transcript:7 node cli\.mjs \(invalid orchestration command alias\)/);
     assert.doesNotMatch(result.stdout, /unresolved: agent-99999999-9999-4999-8999-999999999998/);
   } finally {
     cleanup(dir);

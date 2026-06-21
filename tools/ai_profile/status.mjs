@@ -310,7 +310,7 @@ function isAiHelpProbeCommand(command) {
 
 function isStructuredValidationProbeCommand(command) {
   const text = normalizeCommand(command);
-  return /\bnode(?:\.exe|\.cmd)?\s+tools\/(?:ai\.mjs|taskboard\/cli\.mjs)\s+(?:subagent-packet-check|subagent-check|orchestration-workflow-check)\b/i.test(text);
+  return /\bnode(?:\.exe|\.cmd)?\s+tools\/(?:ai\.mjs|taskboard\/cli\.mjs)\s+(?:subagent-packet-check|subagent-check|orchestration-workflow-check|workflow-check)\b/i.test(text);
 }
 
 function isFailedReadOnlyDiscoveryCommand(command) {
@@ -332,6 +332,7 @@ function inferredFailureReason(record, fallback) {
   if (record.blocked_by) return String(record.blocked_by).trim();
   if ((record.commands || []).some(isStrictAgentRollupCommand)) return "failed strict agent rollup probe";
   if ((record.commands || []).some(isAiHelpProbeCommand)) return "failed help/usage probe";
+  if ((record.commands || []).some(isStructuredValidationProbeCommand)) return "failed structured validation probe";
   if ((record.commands || []).some(isFailedReadOnlyDiscoveryCommand)) return "failed read-only discovery command";
   return fallback;
 }
@@ -346,6 +347,9 @@ function transcriptFailureDetails(command, output) {
     && /subagent_packet_invalid|orchestration_workflow_manifest_invalid|workflow manifest failed|use only one subagent-packet-check input/i.test(text)
   ) {
     return { failure_kind: "agent_evidence_probe", blocked_by: "failed structured validation probe" };
+  }
+  if (isStructuredValidationProbeCommand(command) && /unknown command|usage: cli\.mjs/i.test(text)) {
+    return { failure_kind: "agent_tool_usage", blocked_by: "invalid orchestration command alias" };
   }
   if (/ItemNotFoundException|ObjectNotFound/.test(text)) {
     return { failure_kind: "agent_tool_usage", blocked_by: "missing local file/path" };

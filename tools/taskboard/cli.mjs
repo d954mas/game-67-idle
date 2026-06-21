@@ -28,7 +28,7 @@ import {
   orchestrationWorkflowInitPayload,
   orchestrationPreflightProblem, orchestrationWorkflowManifestProblem,
   parseDoc, currentDoingOrchestrationTaskIds,
-  isMachineEvidenceCommand, isBoundedOrchestrationAllowedFiles,
+  isCloseoutReadyMachineEvidenceCommand, isBoundedOrchestrationAllowedFiles,
   DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -152,7 +152,7 @@ function bootstrapMachineEvidenceProblem(command) {
   return {
     code: "invalid_evidence_command",
     evidenceCommand: command,
-    message: "--evidence-command must be a machine-verifiable orchestration command: status --agent-rollup --require-agent-rollup-ok with a source, or orchestration-trace with source plus --json-output",
+    message: "--evidence-command must be closeout-ready machine evidence: status --agent-rollup --require-agent-rollup-ok with a source plus --agent-rollup-evidence --json-output, or orchestration-trace with source plus --json-output",
   };
 }
 
@@ -640,7 +640,8 @@ switch (cmd) {
     }
     break;
   }
-  case "orchestration-workflow-check": {
+  case "orchestration-workflow-check":
+  case "workflow-check": {
     let doc;
     try {
       doc = readTaskForOrchestrationCheck(args);
@@ -702,7 +703,7 @@ switch (cmd) {
       }
       fail(problem.message);
     }
-    if (!isMachineEvidenceCommand(argText(args, "evidence-command"))) {
+    if (!isCloseoutReadyMachineEvidenceCommand(argText(args, "evidence-command"))) {
       const problem = bootstrapMachineEvidenceProblem(argText(args, "evidence-command"));
       if (args.json) {
         writeJson({ ok: false, problem });
@@ -866,7 +867,7 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|subagent-packet-template|subagent-template|subagent-packet-check|subagent-check|orchestration-workflow-template|orchestration-workflow-init|orchestration-workflow-check|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
+    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|subagent-packet-template|subagent-template|subagent-packet-check|subagent-check|orchestration-workflow-template|orchestration-workflow-init|orchestration-workflow-check|workflow-check|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
     process.exit(cmd ? 1 : 0);
 }
 

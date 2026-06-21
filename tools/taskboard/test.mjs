@@ -2719,6 +2719,39 @@ test("cli orchestration-workflow-check accepts valid manifest", (t) => {
   assert.equal(parsed.problem, null);
 });
 
+test("cli workflow-check alias accepts valid manifest", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  writeJsonFile(root, "tasks/workflows/T0089.json", passingWorkflowManifest("T0089"));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0089",
+    title: "Pipeline workflow manifest guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/workflows/T*.json
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: workflow manifest validates
+  evidence command: ${command}
+  stop condition: workflow-check passes
+  independent reviewer: reviewed workflow manifest
+- workflow manifest: tasks/workflows/T0089.json
+- evidence: PASS \`${command}\`
+- reviewer: PASS
+  checked: workflow manifest alias
+  risks: none
+  action: ready`));
+
+  const result = spawnSync(process.execPath, [cli, "workflow-check", "T0089", "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.problem, null);
+});
+
 test("orchestration workflow init payload uses task packet fields", (t) => {
   const root = tempRoot(t);
   const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
@@ -3725,7 +3758,7 @@ function bootstrapArgs(overrides = {}) {
     objective: "verify bootstrap command",
     "allowed-files": "tools/taskboard/cli.mjs",
     "expected-output": "preflight passes",
-    "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent",
+    "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
     "stop-condition": "current preflight passes",
     "independent-reviewer": "reviewed bootstrap contract",
     ...overrides,
@@ -3769,6 +3802,27 @@ test("cli orchestration-bootstrap creates a current preflight-valid task", (t) =
   assert.match(doc.body, /allowed files: tools\/taskboard\/cli\.mjs/);
   assert.ok(doc.body.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
   assert.match(doc.body, /evidence command: node tools\/ai\.mjs status --agent-rollup/);
+
+  const check = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(check.status, 0, check.stderr || check.stdout);
+  assert.equal(JSON.parse(check.stdout).problem, null);
+});
+
+test("cli orchestration-bootstrap accepts closeout-ready trace-session status evidence", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [
+    cli,
+    "orchestration-bootstrap",
+    ...bootstrapArgs({
+      "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --trace-session tmp/session.jsonl --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
+    }),
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
 
   const check = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
   assert.equal(check.status, 0, check.stderr || check.stdout);
@@ -3837,7 +3891,26 @@ test("cli orchestration-bootstrap rejects invalid machine evidence command witho
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.ok, false);
   assert.equal(parsed.problem.code, "invalid_evidence_command");
-  assert.match(parsed.problem.message, /machine-verifiable orchestration command/);
+  assert.match(parsed.problem.message, /closeout-ready machine evidence/);
+  assert.deepEqual(listTasks(root), []);
+});
+
+test("cli orchestration-bootstrap rejects weak strict status evidence without compact artifact", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [
+    cli,
+    "orchestration-bootstrap",
+    ...bootstrapArgs({ "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent" }),
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stderr, "");
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "invalid_evidence_command");
+  assert.match(parsed.problem.message, /--agent-rollup-evidence --json-output/);
   assert.deepEqual(listTasks(root), []);
 });
 

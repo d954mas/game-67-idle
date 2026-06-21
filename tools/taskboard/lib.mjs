@@ -1212,6 +1212,14 @@ export function isMachineEvidenceCommand(text) {
   return machineEvidenceSignatures(text).length > 0;
 }
 
+export function isCloseoutReadyMachineEvidenceCommand(text) {
+  return machineEvidenceSignatures(text).some((signature) => {
+    if (signature.kind === "orchestration-trace") return Boolean(signature.source && signature.artifact);
+    if (signature.kind !== "status-agent-rollup") return false;
+    return Boolean(signature.source && signature.artifact && signature.compact_artifact);
+  });
+}
+
 export function isBoundedOrchestrationAllowedFiles(text) {
   return boundedAllowedFilesProblem(text) === "";
 }
@@ -1325,6 +1333,7 @@ function machineEvidenceSignatures(text) {
         trace_session: commandFlagRawValue(command, ["--trace-session"]),
         artifact,
         artifact_path: commandFlagRawValue(command, ["--json-output"]),
+        compact_artifact: /\s--agent-rollup-evidence\b/i.test(command),
         min_agents: commandMinAgents(command),
       });
     }

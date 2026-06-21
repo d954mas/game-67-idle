@@ -339,6 +339,7 @@ function buildResult(values) {
   if (profile) statusOptions.push("--profile", profile);
   const agentProfileDir = stringArg(values, "agent-profile-dir", "");
   if (agentProfileDir) statusOptions.push("--agent-profile-dir", agentProfileDir);
+  const command = commandString(["node", "tools/ai.mjs", "status", ...statusOptions]);
 
   return {
     ok: true,
@@ -356,9 +357,9 @@ function buildResult(values) {
     session_root: sessionRoot,
     agent_cwd: agentCwd,
     command_args: [process.execPath, statusScript, ...statusOptions],
-    command: commandString(["node", "tools/ai.mjs", "status", ...statusOptions]),
+    command,
     next_action: values.run === true
-      ? `append task log evidence after success: - evidence: PASS ${artifact.relative}`
+      ? `append task log evidence after success: - evidence: PASS \`${command}\``
       : "run with `--run` to write strict compact status evidence",
   };
 }

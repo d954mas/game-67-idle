@@ -762,7 +762,7 @@ function bootstrapArgs(overrides = {}) {
     objective: "verify facade bootstrap forwarding",
     "allowed-files": "tools/ai.mjs",
     "expected-output": "facade creates task",
-    "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent",
+    "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
     "stop-condition": "current preflight passes",
     "independent-reviewer": "reviewed facade bootstrap",
     ...overrides,
@@ -844,6 +844,30 @@ test("orchestration-bootstrap forwards invalid evidence command failures", () =>
     const parsed = JSON.parse(result.stdout);
     assert.equal(parsed.ok, false);
     assert.equal(parsed.problem.code, "invalid_evidence_command");
+    const taskRoot = join(dir, "tasks", "active");
+    assert.equal(existsSync(taskRoot), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration-bootstrap rejects weak status evidence without compact artifact", () => {
+  const dir = tempDir();
+  try {
+    const result = run([
+      "orchestration-bootstrap",
+      ...bootstrapArgs({ "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent" }),
+      "--json",
+    ], {
+      env: { ...process.env, TASKBOARD_ROOT: dir },
+    });
+
+    assert.equal(result.status, 1);
+    assert.equal(result.stderr, "");
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.problem.code, "invalid_evidence_command");
+    assert.match(parsed.problem.message, /--agent-rollup-evidence --json-output/);
     const taskRoot = join(dir, "tasks", "active");
     assert.equal(existsSync(taskRoot), false);
   } finally {
