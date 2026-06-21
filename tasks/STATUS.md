@@ -40,7 +40,7 @@ is out of scope unless the lead reopens game implementation.
 ```powershell
 node tools/taskboard/cli.mjs validate
 node tools/context_budget.mjs --review
-node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session --verbose
+node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok ... # use current parent/session values in task evidence
 node tools/ai.mjs validate --review
 ```
 
