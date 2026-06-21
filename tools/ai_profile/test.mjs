@@ -888,6 +888,61 @@ test("status next action stays generic for clean agent rollup", () => {
   }
 });
 
+test("status reports hidden unresolved agent failure sample count", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const agentProfileDir = join(dir, "profiles");
+    const statusJson = join(dir, "status.json");
+    const verboseStatusJson = join(dir, "status-verbose.json");
+    const parent = "parent-thread-1";
+    const agent = "88888888-8888-4888-8888-888888888888";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta(agent, parent, root, "2026-06-21T10:00:00.000Z")]);
+    mkdirSync(agentProfileDir, { recursive: true });
+    const records = [];
+    for (let index = 1; index <= 12; index += 1) {
+      records.push({
+        ts: `2026-06-21T10:${String(index).padStart(2, "0")}:00+05:00`,
+        phase: "session",
+        category: "validation",
+        intent: "auto:Bash",
+        result: "fail",
+        value: "rework",
+        event_type: "tool_call_result",
+        commands: [`node --test tools/agent-${index}.test.mjs`],
+        session_id: agent,
+        exit_code: 1,
+      });
+    }
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__88888888.jsonl"), records);
+
+    const args = [
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--agent-profile-dir", agentProfileDir,
+    ];
+    const normal = run([...args, "--json-output", statusJson]);
+    const verbose = run([...args, "--verbose", "--json-output", verboseStatusJson]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 12);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failure_samples.length, 10);
+    assert.equal((normal.stdout.match(/^- unresolved:/gm) || []).length, 3);
+    assert.match(normal.stdout, /\.\.\. 9 more unresolved agent failure\(s\) not shown/);
+    assert.equal((verbose.stdout.match(/^- unresolved:/gm) || []).length, 10);
+    assert.match(verbose.stdout, /\.\.\. 2 more unresolved agent failure\(s\) not shown/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status falls back to subagent transcripts when profile logs are absent", () => {
   const dir = tempDir();
   try {

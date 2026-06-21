@@ -822,9 +822,13 @@ function renderStatus(status, { verbose }) {
       lines.push(`- recorded command time: ${formatMs(profileRollup.recorded_ms)}`);
       if (profileRollup.unresolved_failed_records > 0) {
         lines.push(`- unresolved agent failures: ${profileRollup.unresolved_failed_records}`);
-        for (const sample of profileRollup.unresolved_failure_samples.slice(0, verbose ? 10 : 3)) {
+        const sampleLimit = verbose ? 10 : 3;
+        const samples = profileRollup.unresolved_failure_samples.slice(0, sampleLimit);
+        for (const sample of samples) {
           lines.push(renderFailureSample(sample));
         }
+        const hiddenSamples = Math.max(0, profileRollup.unresolved_failed_records - samples.length);
+        if (hiddenSamples > 0) lines.push(`- ... ${hiddenSamples} more unresolved agent failure(s) not shown`);
       }
       const agentTimeSinks = profileRollup.command_rollup.by_time.slice(0, 3);
       if (agentTimeSinks.length > 0) {
