@@ -9,6 +9,7 @@
 //   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
 //   node tools/taskboard/cli.mjs orchestration-template
+//   node tools/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
 //   node tools/taskboard/cli.mjs orchestration-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
 //   node tools/taskboard/cli.mjs validate [--json]
 //
@@ -78,6 +79,16 @@ function writeJson(value) {
 
 const CURRENT_PREFLIGHT_NEXT_ACTION = "create or refine exactly one `doing` pipeline/orchestration task, then run `node tools/ai.mjs orchestration-check --current --json`";
 const AMBIGUOUS_CURRENT_PREFLIGHT_NEXT_ACTION = "set exactly one pipeline/orchestration task to `doing`, then run `node tools/ai.mjs orchestration-check --current --json`";
+const ORCHESTRATION_BOOTSTRAP_REQUIRED_ARGS = [
+  "title",
+  "objective",
+  "allowed-files",
+  "expected-output",
+  "evidence-command",
+  "stop-condition",
+  "independent-reviewer",
+];
+const DEFAULT_ORCHESTRATION_TOOL_USE_GUARD = "exact paths/discovery before reads; use Select-Object -Skip/-First for line windows; trace/status commands include evidence source and --json-output where applicable";
 
 function currentSelectorProblem(code, message, ids = [], nextAction = CURRENT_PREFLIGHT_NEXT_ACTION) {
   return {
@@ -91,6 +102,65 @@ function currentSelectorProblem(code, message, ids = [], nextAction = CURRENT_PR
 
 function isSelectorProblem(error) {
   return error && typeof error === "object" && error.selector === "current" && typeof error.message === "string";
+}
+
+function argText(args, key) {
+  const value = args[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function splitTags(value) {
+  return value ? String(value).split(",").map((s) => s.trim()).filter(Boolean) : [];
+}
+
+function uniqueTags(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function missingBootstrapArgs(args) {
+  return ORCHESTRATION_BOOTSTRAP_REQUIRED_ARGS
+    .filter((key) => !argText(args, key))
+    .map((key) => `--${key}`);
+}
+
+function bootstrapMissingProblem(missingArgs) {
+  return {
+    code: "missing_required_argument",
+    missingArgs,
+    message: `orchestration-bootstrap missing required argument(s): ${missingArgs.join(", ")}`,
+  };
+}
+
+function bootstrapCurrentProblem(ids) {
+  return {
+    code: "current_task_exists",
+    taskIds: ids,
+    message: `current doing pipeline/orchestration task already exists: ${ids.join(", ")}; finish or move it before bootstrapping another`,
+  };
+}
+
+function orchestrationBootstrapBody(args) {
+  return `## What
+
+${argText(args, "objective")}
+
+## Done when
+
+- [ ] ${argText(args, "stop-condition")}
+
+## Open questions
+
+## Log
+
+- orchestration: used
+  objective: ${argText(args, "objective")}
+  allowed files: ${argText(args, "allowed-files")}
+  tool-use guard: ${argText(args, "tool-use-guard") || DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: ${argText(args, "expected-output")}
+  evidence command: ${argText(args, "evidence-command")}
+  stop condition: ${argText(args, "stop-condition")}
+  independent reviewer: ${argText(args, "independent-reviewer")}
+`;
 }
 
 function readTaskFileArg(value) {
@@ -405,6 +475,57 @@ switch (cmd) {
     console.log(orchestrationPacketTemplate());
     break;
   }
+  case "orchestration-bootstrap": {
+    const missingArgs = missingBootstrapArgs(args);
+    if (missingArgs.length) {
+      const problem = bootstrapMissingProblem(missingArgs);
+      if (args.json) {
+        writeJson({ ok: false, problem });
+        process.exit(1);
+      }
+      fail(problem.message);
+    }
+    const currentIds = currentDoingOrchestrationTaskIds(root);
+    if (currentIds.length) {
+      const problem = bootstrapCurrentProblem(currentIds);
+      if (args.json) {
+        writeJson({ ok: false, problem });
+        process.exit(1);
+      }
+      fail(problem.message);
+    }
+    const tags = uniqueTags([
+      "pipeline",
+      "orchestration",
+      "subagents",
+      ...splitTags(args.tags),
+    ]);
+    const doc = createTask(root, {
+      title: argText(args, "title"),
+      status: "doing",
+      epic: argText(args, "epic"),
+      priority: argText(args, "priority"),
+      tags,
+      body: orchestrationBootstrapBody(args),
+    });
+    const payload = {
+      ok: true,
+      doc: {
+        id: doc.fields.id,
+        status: doc.fields.status,
+        tags: doc.fields.tags || [],
+        file: relative(root, doc.file),
+      },
+      nextAction: "node tools/ai.mjs orchestration-check --current --json",
+    };
+    if (args.json) {
+      writeJson(payload);
+    } else {
+      console.log(`created ${doc.fields.id}: ${relative(root, doc.file)}`);
+      console.log(`next: ${payload.nextAction}`);
+    }
+    break;
+  }
   case "orchestration-check": {
     let doc;
     try {
@@ -520,7 +641,7 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|orchestration-check|validate> ...  (see header comment)");
+    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
     process.exit(cmd ? 1 : 0);
 }
 

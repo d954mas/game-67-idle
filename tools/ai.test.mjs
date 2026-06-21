@@ -567,6 +567,61 @@ test("orchestration-template forwards taskboard template", () => {
   assert.match(result.stdout, /independent reviewer:/);
 });
 
+function bootstrapArgs(overrides = {}) {
+  const values = {
+    title: "Facade bootstrap",
+    objective: "verify facade bootstrap forwarding",
+    "allowed-files": "tools/ai.mjs",
+    "expected-output": "facade creates task",
+    "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent",
+    "stop-condition": "current preflight passes",
+    "independent-reviewer": "reviewed facade bootstrap",
+    ...overrides,
+  };
+  return Object.entries(values).flatMap(([key, value]) => value === undefined ? [] : [`--${key}`, value]);
+}
+
+test("orchestration-bootstrap forwards taskboard bootstrap", () => {
+  const dir = tempDir();
+  try {
+    const result = run(["orchestration-bootstrap", ...bootstrapArgs(), "--json"], {
+      env: { ...process.env, TASKBOARD_ROOT: dir },
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.doc.status, "doing");
+    assert.match(parsed.nextAction, /orchestration-check --current --json/);
+
+    const check = run(["orchestration-check", "--current", "--json"], {
+      env: { ...process.env, TASKBOARD_ROOT: dir },
+    });
+    assert.equal(check.status, 0, check.stderr || check.stdout);
+    assert.equal(JSON.parse(check.stdout).problem, null);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration-bootstrap forwards missing argument failures", () => {
+  const dir = tempDir();
+  try {
+    const result = run(["orchestration-bootstrap", ...bootstrapArgs({ objective: undefined }), "--json"], {
+      env: { ...process.env, TASKBOARD_ROOT: dir },
+    });
+
+    assert.equal(result.status, 1);
+    assert.equal(result.stderr, "");
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.problem.code, "missing_required_argument");
+    assert.deepEqual(parsed.problem.missingArgs, ["--objective"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status imports Codex session before analysis", () => {
   const dir = tempDir();
   try {

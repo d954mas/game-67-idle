@@ -1619,6 +1619,98 @@ test("cli orchestration-template prints accepted packet shape", () => {
   assert.match(result.stdout, /independent reviewer: <non-empty>/);
 });
 
+function bootstrapArgs(overrides = {}) {
+  const values = {
+    title: "Bootstrap orchestration task",
+    objective: "verify bootstrap command",
+    "allowed-files": "tools/taskboard/cli.mjs",
+    "expected-output": "preflight passes",
+    "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent",
+    "stop-condition": "current preflight passes",
+    "independent-reviewer": "reviewed bootstrap contract",
+    ...overrides,
+  };
+  return Object.entries(values).flatMap(([key, value]) => value === undefined ? [] : [`--${key}`, value]);
+}
+
+test("cli orchestration-bootstrap creates a current preflight-valid task", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [
+    cli,
+    "orchestration-bootstrap",
+    ...bootstrapArgs({ tags: "taskboard" }),
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.doc.status, "doing");
+  assert.deepEqual(parsed.doc.tags, ["pipeline", "orchestration", "subagents", "taskboard"]);
+  assert.match(parsed.nextAction, /orchestration-check --current --json/);
+
+  const doc = findDoc(root, parsed.doc.id);
+  assert.ok(doc);
+  assert.match(doc.body, /objective: verify bootstrap command/);
+  assert.match(doc.body, /allowed files: tools\/taskboard\/cli\.mjs/);
+  assert.match(doc.body, /tool-use guard: exact paths\/discovery before reads/);
+  assert.match(doc.body, /evidence command: node tools\/ai\.mjs status --agent-rollup/);
+
+  const check = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(check.status, 0, check.stderr || check.stdout);
+  assert.equal(JSON.parse(check.stdout).problem, null);
+});
+
+test("cli orchestration-bootstrap rejects missing args without creating tasks", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [
+    cli,
+    "orchestration-bootstrap",
+    ...bootstrapArgs({ objective: undefined }),
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stderr, "");
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "missing_required_argument");
+  assert.deepEqual(parsed.problem.missingArgs, ["--objective"]);
+  assert.deepEqual(listTasks(root), []);
+});
+
+test("cli orchestration-bootstrap rejects existing current task without creating another", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Existing current",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify existing current
+  allowed files: tools/taskboard/cli.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: preflight passes
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  stop condition: preflight passes
+  independent reviewer: reviewed current task`),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [
+    cli,
+    "orchestration-bootstrap",
+    ...bootstrapArgs(),
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.problem.code, "current_task_exists");
+  assert.deepEqual(parsed.problem.taskIds, ["T0001"]);
+  assert.equal(listTasks(root).length, 1);
+});
+
 test("markdown preview renders task syntax and escapes html", () => {
   const sandbox = {};
   sandbox.globalThis = sandbox;

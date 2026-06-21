@@ -18,6 +18,7 @@ function usage() {
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
   node tools/ai.mjs orchestration-trace [--session <codex-session.jsonl>] [--parent-thread-id <id>] [trace options]
   node tools/ai.mjs orchestration-template
+  node tools/ai.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--json]
   node tools/ai.mjs orchestration-check <task-id>|--id <task-id>|--file <task.md>|--current [--json]
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail|review [gate options]
   node tools/ai.mjs visual-reject --project <game-id> --task <task-id> --screenshot <path> --problem <text> --next <text> [visual rejection options]
@@ -33,6 +34,7 @@ Commands:
   import-codex-session  recover missed failed Codex shell calls into the session log
   orchestration-trace   verify multi-agent transcript/session evidence for task closeout
   orchestration-template print the orchestration packet template for subagent tasks
+  orchestration-bootstrap create a current task with a complete orchestration packet
   orchestration-check   preflight-check an orchestration packet before launching subagents
   gate      write a product-read screenshot gate before expanding game content
   visual-reject record a lead visual rejection as a strict visual FAIL gate
@@ -139,6 +141,8 @@ if (command === "import-codex-session") run(["tools/ai_profile/import_codex_sess
 if (command === "orchestration-trace") run(["tools/ai_profile/orchestration_trace.mjs", ...argv]);
 
 if (command === "orchestration-template") run(["tools/taskboard/cli.mjs", "orchestration-template", ...argv]);
+
+if (command === "orchestration-bootstrap") run(["tools/taskboard/cli.mjs", "orchestration-bootstrap", ...argv]);
 
 if (command === "orchestration-check") run(["tools/taskboard/cli.mjs", "orchestration-check", ...argv]);
 
