@@ -449,6 +449,24 @@ Validate orchestration packet through the AI facade.
   }
 });
 
+test("orchestration-template forwards taskboard template", () => {
+  const result = run(["orchestration-template"]);
+  const direct = spawnSync(process.execPath, ["tools/taskboard/cli.mjs", "orchestration-template"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: "pipe",
+    shell: false,
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(direct.status, 0, direct.stderr || direct.stdout);
+  assert.equal(result.stdout, direct.stdout);
+  assert.match(result.stdout, /- orchestration: used/);
+  assert.match(result.stdout, /tool-use guard:/);
+  assert.match(result.stdout, /evidence command:/);
+  assert.match(result.stdout, /independent reviewer:/);
+});
+
 test("status imports Codex session before analysis", () => {
   const dir = tempDir();
   try {

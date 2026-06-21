@@ -17,6 +17,7 @@ function usage() {
   node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--agent-rollup] [--require-agent-rollup-ok] [--no-import-codex-session]
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
   node tools/ai.mjs orchestration-trace [--session <codex-session.jsonl>] [--parent-thread-id <id>] [trace options]
+  node tools/ai.mjs orchestration-template
   node tools/ai.mjs orchestration-check <task-id>|--id <task-id>|--file <task.md> [--json]
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail|review [gate options]
   node tools/ai.mjs visual-reject --project <game-id> --task <task-id> --screenshot <path> --problem <text> --next <text> [visual rejection options]
@@ -31,6 +32,7 @@ Commands:
             --require-agent-rollup-ok makes that rollup a strict evidence check
   import-codex-session  recover missed failed Codex shell calls into the session log
   orchestration-trace   verify multi-agent transcript/session evidence for task closeout
+  orchestration-template print the orchestration packet template for subagent tasks
   orchestration-check   preflight-check an orchestration packet before launching subagents
   gate      write a product-read screenshot gate before expanding game content
   visual-reject record a lead visual rejection as a strict visual FAIL gate
@@ -135,6 +137,8 @@ if (command === "status") {
 if (command === "import-codex-session") run(["tools/ai_profile/import_codex_session.mjs", ...argv]);
 
 if (command === "orchestration-trace") run(["tools/ai_profile/orchestration_trace.mjs", ...argv]);
+
+if (command === "orchestration-template") run(["tools/taskboard/cli.mjs", "orchestration-template", ...argv]);
 
 if (command === "orchestration-check") run(["tools/taskboard/cli.mjs", "orchestration-check", ...argv]);
 
