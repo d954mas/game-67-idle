@@ -43,6 +43,12 @@ handoff:
   not-done: <explicit gaps>
 ```
 
+If `evidence command or artifact` uses `node tools/ai.mjs orchestration-trace`,
+include `--session` or `--parent-thread-id` plus `--json-output`. If it uses
+`node tools/ai.mjs status --agent-rollup`, include an explicit source
+(`--parent-thread-id` or `--trace-session`), `--require-agent-rollup-ok`,
+`--agent-rollup-evidence`, and `--json-output`.
+
 Before launching a manual `spawn_agent`, start from the reusable packet:
 
 ```text

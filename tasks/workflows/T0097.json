@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "kind": "orchestration-workflow",
+  "task_id": "T0097",
+  "status": "review",
+  "objective": "Move explicit trace/status evidence-source requirements closer to the first subagent packet example so agents do not miss source and compact artifact requirements when copying the packet.",
+  "scope": {
+    "included": [
+      "docs/ai-pipeline/subagent-protocol.md",
+      "tasks/active/T*.md",
+      "tasks/evidence/T*.json",
+      "tasks/workflows/T*.json"
+    ],
+    "excluded": [
+      "files and systems outside the declared allowed files"
+    ]
+  },
+  "packets": [
+    {
+      "id": "lead-implementation",
+      "objective": "Subagent protocol packet section directly tells agents that trace/status evidence commands need explicit source and json output, while docs validation and strict orchestration evidence pass.",
+      "status": "integrated",
+      "allowed_files": [
+        "docs/ai-pipeline/subagent-protocol.md",
+        "tasks/active/T*.md",
+        "tasks/evidence/T*.json",
+        "tasks/workflows/T*.json"
+      ],
+      "evidence_refs": [
+        "tasks/evidence/T0097-status-rollup.json"
+      ]
+    }
+  ],
+  "budgets": {
+    "max_agents": 2,
+    "context": "Bounded to taskboard, docs, task, workflow, and evidence files.",
+    "validation": "Focused tests plus taskboard validation and strict status evidence."
+  },
+  "verification": {
+    "strategy": "machine gates plus independent review",
+    "commands": [
+      "node tools/doc_reference_check.mjs",
+      "node tools/context_budget.mjs --review",
+      "node tools/taskboard/cli.mjs validate --json",
+      "node tools/ai.mjs orchestration-evidence --current --run --json",
+      "node tools/taskboard/cli.mjs orchestration-workflow-check T0097 --json",
+      "node tools/ai.mjs validate --review"
+    ],
+    "evidence_refs": [
+      "tasks/evidence/T0097-status-rollup.json"
+    ]
+  },
+  "integration": {
+    "owner": "lead",
+    "policy": "Lead integrates subagent findings, updates packet statuses before closeout, and keeps manifest refs tied to the machine evidence artifact."
+  },
+  "evidence_refs": [
+    "tasks/evidence/T0097-status-rollup.json"
+  ],
+  "updated_at": "2026-06-21"
+}
