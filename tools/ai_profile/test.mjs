@@ -1638,6 +1638,8 @@ test("strict status agent rollup ignores failed diagnostic strict-status probes"
     assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
     assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 1);
     assert.match(result.stdout, /agent evidence-probe failures: 1/);
+    assert.match(result.stdout, /evidence-probe: agent-99999999-9999-4999-8999-999999999999 \[test verifier\] transcript:3 node ai\.mjs \(failed strict agent rollup probe\) exit 1/);
+    assert.doesNotMatch(result.stdout, /unresolved: agent-99999999-9999-4999-8999-999999999999 \[test verifier\] transcript:3 node ai\.mjs/);
   } finally {
     cleanup(dir);
   }
@@ -1682,6 +1684,8 @@ test("strict status agent rollup classifies profile diagnostic failures outside 
     assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 2);
     assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_failed_records, 1);
     assert.match(result.stdout, /agent evidence-probe failures: 2/);
+    assert.match(result.stdout, /evidence-probe: agent-99999999-9999-4999-8999-999999999999 \[test verifier\] profile:1 node ai\.mjs \(failed strict agent rollup probe\) exit 1/);
+    assert.doesNotMatch(result.stdout, /unresolved: agent-99999999-9999-4999-8999-999999999999 \[test verifier\] profile:1 node ai\.mjs/);
     assert.match(result.stdout, /agent tool-usage failures: 1/);
   } finally {
     cleanup(dir);

@@ -33,6 +33,8 @@ task/evidence file, one matching skill, and at most one deep reference above.
 
 ```powershell
 node tools/taskboard/cli.mjs context
+node tools/ai.mjs orchestration-check --current --json
+node tools/ai.mjs orchestration-evidence --current --run --json
 node tools/ai.mjs validate
 node tools/ai.mjs validate --review
 node tools/ai.mjs validate --full
@@ -40,3 +42,5 @@ node tools/ai.mjs validate --full
 
 Use quick validation after normal pipeline edits; `--review` when intentionally
 reviewing context/caps; `--full` for export, runtime, or deep asset gates.
+Use the orchestration commands for substantial delegated work: preflight before
+launching subagents, evidence after their results are integrated.

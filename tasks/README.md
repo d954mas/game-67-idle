@@ -16,6 +16,8 @@ cleanup, or user request.
 - Inspect: `list`, `list --review`, `show T0001`.
 - Change: `new task --title "..." --epic E001 --priority P1`, `set T0001 --status doing`.
 - Validate: `node tools/taskboard/cli.mjs validate`.
+- Orchestrate: `node tools/ai.mjs orchestration-check --current --json`,
+  then `node tools/ai.mjs orchestration-evidence --current --run --json`.
 - Board when requested: `node tools/taskboard/server.mjs`.
 - New game: `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`.
 

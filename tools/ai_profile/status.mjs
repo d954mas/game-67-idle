@@ -421,13 +421,13 @@ function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}
       agentToolUsage += 1;
       const reason = inferredFailureReason(record, "agent tool-usage failure");
       agentToolUsageReasons.set(reason, (agentToolUsageReasons.get(reason) || 0) + 1);
-      agentToolUsageRecords.push(record);
+      agentToolUsageRecords.push({ ...record, blocked_by: reason });
     }
     else if (isAgentEvidenceProbeRecord(record)) {
       agentEvidenceProbe += 1;
       const reason = inferredFailureReason(record, "agent evidence-probe failure");
       agentEvidenceProbeReasons.set(reason, (agentEvidenceProbeReasons.get(reason) || 0) + 1);
-      agentEvidenceProbeRecords.push(record);
+      agentEvidenceProbeRecords.push({ ...record, blocked_by: reason });
     }
     else {
       unresolved += 1;
@@ -691,6 +691,16 @@ function renderAgentToolUsageSample(sample) {
   const line = sample.line !== undefined ? `:${sample.line}` : "";
   const reason = sample.blocked_by ? ` (${sample.blocked_by})` : "";
   return `- tool-usage: ${agent}${role} ${source}${line} ${sample.command_key}${reason} - ${sample.command}`;
+}
+
+function renderAgentEvidenceProbeSample(sample) {
+  const agent = sample.nickname || sample.agent_id || "(unknown)";
+  const role = sample.role ? ` [${sample.role}]` : "";
+  const source = sample.source || "unknown";
+  const line = sample.line !== undefined ? `:${sample.line}` : "";
+  const reason = sample.blocked_by ? ` (${sample.blocked_by})` : "";
+  const exit = sample.exit_code !== undefined ? ` exit ${sample.exit_code}` : "";
+  return `- evidence-probe: ${agent}${role} ${source}${line} ${sample.command_key}${reason}${exit} - ${sample.command}`;
 }
 
 function agentToolUsagePreventionHints(profileRollup, rollupContext = {}) {
@@ -1215,7 +1225,7 @@ function renderStatus(status, { verbose }) {
         const sampleLimit = verbose ? 10 : 3;
         const samples = profileRollup.agent_evidence_probe_failure_samples.slice(0, sampleLimit);
         for (const sample of samples) {
-          lines.push(renderFailureSample(sample));
+          lines.push(renderAgentEvidenceProbeSample(sample));
         }
         const hiddenSamples = Math.max(0, profileRollup.agent_evidence_probe_failed_records - samples.length);
         if (hiddenSamples > 0) lines.push(`- ... ${hiddenSamples} more agent evidence-probe failure(s) not shown`);
