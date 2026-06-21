@@ -43,6 +43,51 @@ function writeJsonl(file, records) {
   writeFileSync(file, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
 }
 
+function multiAgentCall(callId, name, args = {}, timestamp = "2026-06-21T10:00:00.000Z") {
+  return {
+    timestamp,
+    type: "response_item",
+    payload: {
+      type: "function_call",
+      name,
+      call_id: callId,
+      arguments: JSON.stringify(args),
+    },
+  };
+}
+
+function multiAgentOutput(callId, output = {}) {
+  return {
+    type: "response_item",
+    payload: {
+      type: "function_call_output",
+      call_id: callId,
+      output: JSON.stringify(output),
+    },
+  };
+}
+
+function subagentSessionMeta(id, parentThreadId, cwd = root, timestamp = "2026-06-21T10:00:00.000Z") {
+  return {
+    type: "session_meta",
+    payload: {
+      id,
+      timestamp,
+      cwd,
+      thread_source: "subagent",
+      agent_nickname: `agent-${id}`,
+      agent_role: "test verifier",
+      source: {
+        subagent: {
+          thread_spawn: {
+            parent_thread_id: parentThreadId,
+          },
+        },
+      },
+    },
+  };
+}
+
 function runHook(payload, profile, harness = "codex", env = {}) {
   const result = spawnSync(process.execPath, ["tools/ai_profile/hook_record.mjs", harness], {
     cwd: root,
@@ -365,6 +410,191 @@ test("hook_record recover-only imports Codex failed shell commands", () => {
     assert.equal(records[0].event_type, "tool_call_result_recovered");
     assert.equal(records[0].source_call_id, "call_recover_only");
     assert.deepEqual(records[0].commands, ["node --test tools/ai_profile/test.mjs"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration trace passes spawn wait close transcript", () => {
+  const dir = tempDir();
+  try {
+    const session = join(dir, "codex-session.jsonl");
+    const trace = join(dir, "trace.json");
+    writeJsonl(session, [
+      multiAgentCall("call_spawn", "multi_agent_v1.spawn_agent", { agent_type: "explorer" }),
+      multiAgentOutput("call_spawn", { agent_id: "agent-1", nickname: "Ada" }),
+      multiAgentCall("call_wait", "multi_agent_v1.wait_agent", { targets: ["agent-1"] }),
+      multiAgentOutput("call_wait", { status: { "agent-1": { completed: "done" } } }),
+      multiAgentCall("call_close", "multi_agent_v1.close_agent", { target: "agent-1" }),
+      multiAgentOutput("call_close", { previous_status: { completed: "done" } }),
+    ]);
+
+    const result = run(["tools/ai_profile/orchestration_trace.mjs", "--session", session, "--json-output", trace, "--json"]);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.calls.length, 3);
+    assert.deepEqual(parsed.problems, []);
+    assert.equal(readJson(trace).ok, true);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration trace fails missing wait and close", () => {
+  const dir = tempDir();
+  try {
+    const session = join(dir, "codex-session.jsonl");
+    writeJsonl(session, [
+      multiAgentCall("call_spawn", "multi_agent_v1.spawn_agent", { agent_type: "explorer" }),
+      multiAgentOutput("call_spawn", { agent_id: "agent-1" }),
+    ]);
+
+    const result = spawnSync(process.execPath, ["tools/ai_profile/orchestration_trace.mjs", "--session", session, "--json"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+    assert.notEqual(result.status, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, false);
+    assert.deepEqual(parsed.missing.map((item) => item.operation), ["wait", "close"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration trace fails close before wait", () => {
+  const dir = tempDir();
+  try {
+    const session = join(dir, "codex-session.jsonl");
+    writeJsonl(session, [
+      multiAgentCall("call_spawn", "spawn_agent", {}),
+      multiAgentOutput("call_spawn", { agent_id: "agent-1" }),
+      multiAgentCall("call_close", "close_agent", { target: "agent-1" }),
+      multiAgentOutput("call_close", { previous_status: { completed: "done" } }),
+      multiAgentCall("call_wait", "wait_agent", { targets: ["agent-1"] }),
+      multiAgentOutput("call_wait", { status: { "agent-1": { completed: "done" } } }),
+    ]);
+
+    const result = spawnSync(process.execPath, ["tools/ai_profile/orchestration_trace.mjs", "--session", session, "--json"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+    assert.notEqual(result.status, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.unordered[0].operation, "close_before_wait");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration trace ignores unrelated transcript calls", () => {
+  const dir = tempDir();
+  try {
+    const session = join(dir, "codex-session.jsonl");
+    writeJsonl(session, [
+      multiAgentCall("call_shell", "shell_command", { command: "git status --short" }),
+      multiAgentOutput("call_shell", { output: "clean" }),
+    ]);
+
+    const result = spawnSync(process.execPath, ["tools/ai_profile/orchestration_trace.mjs", "--session", session, "--json"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+    assert.notEqual(result.status, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, false);
+    assert.deepEqual(parsed.calls, []);
+    assert.ok(parsed.problems.includes("no multi-agent orchestration calls found in session"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration trace fails without an evidence source", () => {
+  const result = spawnSync(process.execPath, ["tools/ai_profile/orchestration_trace.mjs", "--json"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.ok(parsed.problems.includes("missing evidence source: pass --session or --parent-thread-id"));
+});
+
+test("orchestration trace fails timed out or incomplete agent outputs", () => {
+  const dir = tempDir();
+  try {
+    const session = join(dir, "codex-session.jsonl");
+    writeJsonl(session, [
+      multiAgentCall("call_spawn", "spawn_agent", {}),
+      multiAgentOutput("call_spawn", { agent_id: "agent-1" }),
+      multiAgentCall("call_wait", "wait_agent", { targets: ["agent-1"] }),
+      multiAgentOutput("call_wait", { timed_out: true, status: { "agent-1": {} } }),
+      multiAgentCall("call_close", "close_agent", { target: "agent-1" }),
+      multiAgentOutput("call_close", { previous_status: { running: true } }),
+    ]);
+
+    const result = spawnSync(process.execPath, ["tools/ai_profile/orchestration_trace.mjs", "--session", session, "--json"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: "pipe",
+    });
+    assert.notEqual(result.status, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, false);
+    assert.deepEqual(parsed.incomplete.map((item) => item.operation), ["wait_timeout", "close_incomplete"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration trace accepts targetless wait when output status names the agent", () => {
+  const dir = tempDir();
+  try {
+    const session = join(dir, "codex-session.jsonl");
+    writeJsonl(session, [
+      multiAgentCall("call_spawn", "spawn_agent", {}),
+      multiAgentOutput("call_spawn", { agent_id: "agent-1" }),
+      multiAgentCall("call_wait", "wait_agent", {}),
+      multiAgentOutput("call_wait", { status: { "agent-1": { completed: "done" } } }),
+      multiAgentCall("call_close", "close_agent", { target: "agent-1" }),
+      multiAgentOutput("call_close", { previous_status: { completed: "done" } }),
+    ]);
+
+    const result = run(["tools/ai_profile/orchestration_trace.mjs", "--session", session, "--json"]);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.calls.find((call) => call.operation === "wait").targets[0], "agent-1");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration trace counts subagent sessions by parent thread", () => {
+  const dir = tempDir();
+  try {
+    const parent = "parent-thread-1";
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta("subagent-a", parent)]);
+    writeJsonl(join(dir, "rollout-b.jsonl"), [subagentSessionMeta("subagent-b", parent)]);
+    writeJsonl(join(dir, "rollout-other.jsonl"), [subagentSessionMeta("subagent-other", "other-parent")]);
+
+    const result = run([
+      "tools/ai_profile/orchestration_trace.mjs",
+      "--session-root", dir,
+      "--parent-thread-id", parent,
+      "--min-agents", "2",
+      "--cwd", root,
+      "--json",
+    ]);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.subagentSessionCount, 2);
+    assert.deepEqual(parsed.subagentSessions.map((agent) => agent.id), ["subagent-a", "subagent-b"]);
   } finally {
     cleanup(dir);
   }

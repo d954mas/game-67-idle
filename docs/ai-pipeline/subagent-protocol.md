@@ -93,8 +93,23 @@ For genuinely small work:
 - orchestration: not needed - small scope: one-file/docs-only/no code ...
 ```
 
-The guard is label-based for now. It proves that orchestration was considered
-and recorded; it does not inspect transcripts yet.
+The taskboard guard is label-based. It proves that orchestration was considered
+and recorded; it does not parse app internals by itself.
+
+For transcript/session evidence, add an evidence command with the focused trace
+tool:
+
+```text
+node tools/ai.mjs orchestration-trace --session <codex-session.jsonl> --json-output <trace.json>
+node tools/ai.mjs orchestration-trace --parent-thread-id <id> --session-root <dir> --min-agents <n> --json-output <trace.json>
+```
+
+Use transcript mode when the parent session exposes spawn/wait/close tool calls;
+it verifies call order and completed wait/close outputs. Use
+`parent-thread-id` mode when subagent `session_meta` files are the available
+evidence; this proves matching subagent sessions exist, not that they completed
+useful work. The lead still verifies the traced agents, final messages, and
+artifacts match the task scope before closeout.
 
 Run `node tools/taskboard/cli.mjs validate` before closeout. If the packet is
 missing or malformed, the CLI names the missing/invalid field labels and prints

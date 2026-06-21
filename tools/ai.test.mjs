@@ -39,6 +39,10 @@ function readJsonl(file) {
     .map((line) => JSON.parse(line));
 }
 
+function writeJsonl(file, records) {
+  writeFileSync(file, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
+}
+
 function writeFailedCodexSession(file, callId = "call_facade_import") {
   writeFileSync(file, [
     JSON.stringify({
@@ -58,6 +62,29 @@ function writeFailedCodexSession(file, callId = "call_facade_import") {
       },
     }),
   ].join("\n") + "\n", "utf8");
+}
+
+function multiAgentCall(callId, name, args = {}) {
+  return {
+    type: "response_item",
+    payload: {
+      type: "function_call",
+      name,
+      call_id: callId,
+      arguments: JSON.stringify(args),
+    },
+  };
+}
+
+function multiAgentOutput(callId, output = {}) {
+  return {
+    type: "response_item",
+    payload: {
+      type: "function_call_output",
+      call_id: callId,
+      output: JSON.stringify(output),
+    },
+  };
 }
 
 test("unknown command prints usage and exits non-zero", () => {
@@ -313,6 +340,30 @@ test("import-codex-session forwards profile and session options", () => {
     assert.equal(records.length, 1);
     assert.equal(records[0].event_type, "tool_call_result_recovered");
     assert.equal(records[0].source_call_id, "call_facade_import");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration-trace forwards transcript options", () => {
+  const dir = tempDir();
+  try {
+    const session = join(dir, "codex-session.jsonl");
+    const trace = join(dir, "trace.json");
+    writeJsonl(session, [
+      multiAgentCall("call_spawn", "multi_agent_v1.spawn_agent", { agent_type: "reviewer" }),
+      multiAgentOutput("call_spawn", { agent_id: "agent-1" }),
+      multiAgentCall("call_wait", "multi_agent_v1.wait_agent", { targets: ["agent-1"] }),
+      multiAgentOutput("call_wait", { status: { "agent-1": { completed: "done" } } }),
+      multiAgentCall("call_close", "multi_agent_v1.close_agent", { target: "agent-1" }),
+      multiAgentOutput("call_close", { previous_status: { completed: "done" } }),
+    ]);
+
+    const result = run(["orchestration-trace", "--session", session, "--json-output", trace, "--json"]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).ok, true);
+    assert.equal(readJson(trace).calls.length, 3);
   } finally {
     cleanup(dir);
   }
