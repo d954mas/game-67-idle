@@ -680,7 +680,7 @@ test("validateStore rejects machine evidence mentioned outside evidence command"
   assert.deepEqual(problems[0].missingFields, ["machine evidence command", "machine evidence pass"]);
 });
 
-test("validateStore accepts orchestration-trace machine evidence for trace-era tasks", (t) => {
+test("validateStore rejects orchestration-trace evidence without json output", (t) => {
   const root = tempRoot(t);
   writeTaskDoc(root, {
     id: "T0031",
@@ -696,6 +696,46 @@ test("validateStore accepts orchestration-trace machine evidence for trace-era t
   independent reviewer: reviewed guard scope
 - evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json\``));
 
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence command", "machine evidence pass"]);
+});
+
+test("validateStore accepts orchestration-trace machine evidence with json output", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0031",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore accepts orchestration-trace session evidence with json output", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0042",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --session tmp/session.jsonl --json-output tmp/trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --session tmp/session.jsonl --json-output tmp/trace.json --json\``));
+
   assert.deepEqual(validateStoreDetailed(root), []);
 });
 
@@ -710,7 +750,7 @@ test("validateStore rejects machine evidence command without PASS evidence", (t)
   objective: verify taskboard orchestration guard
   allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
   expected output: focused guard tests
-  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json
   stop condition: tests pass
   independent reviewer: reviewed guard scope`));
 
@@ -751,10 +791,31 @@ test("validateStore rejects orchestration-trace PASS without matching evidence s
   objective: verify taskboard orchestration guard
   allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
   expected output: focused guard tests
-  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json
   stop condition: tests pass
   independent reviewer: reviewed guard scope
-- evidence: PASS \`node tools/ai.mjs orchestration-trace --json\``));
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --json-output tmp/trace.json --json\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
+});
+
+test("validateStore rejects orchestration-trace PASS with different json output", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0042",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace-a.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace-b.json --json\``));
 
   const problems = validateStoreDetailed(root);
   assert.equal(problems.length, 1);
@@ -772,7 +833,7 @@ test("validateStore rejects non-machine PASS evidence for trace-era tasks", (t) 
   objective: verify taskboard orchestration guard
   allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
   expected output: focused guard tests
-  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json
   stop condition: tests pass
   independent reviewer: reviewed guard scope
 - evidence: PASS \`node --test tools/taskboard/test.mjs\``));
@@ -793,7 +854,7 @@ test("validateStore rejects PASS evidence for a different machine command", (t) 
   objective: verify taskboard orchestration guard
   allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
   expected output: focused guard tests
-  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json
   stop condition: tests pass
   independent reviewer: reviewed guard scope
 - evidence: PASS \`node tools/ai.mjs status --agent-rollup --parent-thread-id parent\``));
@@ -831,12 +892,12 @@ test("validateStore rejects machine PASS evidence before orchestration packet", 
     title: "Pipeline orchestration guard",
     status: "review",
     tags: ["pipeline", "orchestration"],
-  }, taskBodyWithLog(`- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json\`
+  }, taskBodyWithLog(`- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json\`
 - orchestration: used
   objective: verify taskboard orchestration guard
   allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
   expected output: focused guard tests
-  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json
   stop condition: tests pass
   independent reviewer: reviewed guard scope`));
 

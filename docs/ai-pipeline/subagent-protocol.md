@@ -106,7 +106,8 @@ node tools/ai.mjs orchestration-trace --parent-thread-id <id> --session-root <di
 
 For newer substantial pipeline/orchestration tasks, taskboard validation expects
 the packet's `evidence command` to include either `node tools/ai.mjs
-orchestration-trace ...` with `--session`/`--parent-thread-id`, or
+orchestration-trace ...` with `--session`/`--parent-thread-id` and
+`--json-output`, or
 strict `node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok ...`.
 Before moving the task to review/done, record a later `- evidence: PASS ...`
 log entry for that approved machine evidence command. The validator checks the

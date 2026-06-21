@@ -552,7 +552,7 @@ function orchestrationUsedBlocks(log) {
     if (!/orchestration:\s*used\b/i.test(lines[i])) continue;
     const block = [lines[i]];
     for (let j = i + 1; j < lines.length; j += 1) {
-      if (/^\s*[-*]\s+(?:\d{4}-\d{2}-\d{2}\s*:|orchestration\s*:)/i.test(lines[j])) break;
+      if (/^\s*[-*]\s+\S/.test(lines[j])) break;
       block.push(lines[j]);
     }
     blocks.push(block.join("\n"));
@@ -595,10 +595,12 @@ function machineEvidenceSignatures(text) {
     const command = chunk.split(/(?:\s*;\s*|\r?\n\s*[-*]\s+)/, 1)[0] || "";
     if (ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS.some((pattern) => pattern.test(command))) {
       const source = commandSourceSignature(command, ["--parent-thread-id", "--session"]);
-      if (!source) continue;
+      const artifact = commandSourceSignature(command, ["--json-output"]);
+      if (!source || !artifact) continue;
       signatures.push({
         kind: "orchestration-trace",
         source,
+        artifact,
       });
       continue;
     }
@@ -636,6 +638,7 @@ function normalizeMachineEvidenceValue(value) {
 
 function machineEvidenceSignaturesMatch(expected, actual) {
   if (!expected || !actual || expected.kind !== actual.kind) return false;
+  if (expected.artifact || actual.artifact) return expected.artifact === actual.artifact && expected.source === actual.source;
   if (expected.source || actual.source) return expected.source === actual.source;
   return (
     expected.kind === actual.kind
