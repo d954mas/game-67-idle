@@ -718,7 +718,7 @@ function agentToolUsagePreventionHints(profileRollup, rollupContext = {}) {
     ].filter(Boolean).join(" ");
     hints.push({
       reason: "missing orchestration evidence source",
-      hint: `Use an evidence source for orchestration traces: \`${command}\`.`,
+      hint: `Prefer task-scoped evidence with \`node tools/ai.mjs orchestration-evidence --current --run --json\`; for raw trace fallback use an evidence source: \`${command}\`.`,
     });
   }
   return hints;

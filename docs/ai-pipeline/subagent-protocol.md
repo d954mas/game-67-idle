@@ -133,7 +133,7 @@ as the operator path:
 
 ```text
 node tools/ai.mjs orchestration-evidence --current
-node tools/ai.mjs orchestration-evidence --current --run
+node tools/ai.mjs orchestration-evidence --current --run --json
 ```
 
 The default dry-run infers the current task, evidence source, session root,

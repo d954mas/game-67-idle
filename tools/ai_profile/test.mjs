@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
-import { DEFAULT_ORCHESTRATION_TOOL_USE_GUARD } from "../taskboard/lib.mjs";
+import { DEFAULT_ORCHESTRATION_TOOL_USE_GUARD, isMachineEvidenceCommand } from "../taskboard/lib.mjs";
 
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -1493,13 +1493,20 @@ test("status agent rollup separates transcript tool-usage failures from unresolv
       "invalid shell command/parameter",
       "missing orchestration evidence source",
     ]);
+    const evidenceHint = profileRollup.agent_tool_usage_prevention_hints.find((item) => item.reason === "missing orchestration evidence source");
+    assert.ok(evidenceHint);
+    assert.match(evidenceHint.hint, /node tools\/ai\.mjs orchestration-evidence --current --run --json/);
+    assert.match(evidenceHint.hint, /orchestration-trace --parent-thread-id parent-thread-1/);
+    const fallback = evidenceHint.hint.match(/`(node tools\/ai\.mjs orchestration-trace[^`]+)`/)?.[1] || "";
+    assert.equal(isMachineEvidenceCommand(fallback), true);
     assert.equal(profileRollup.unresolved_failed_records, 1);
     assert.equal(profileRollup.unresolved_failure_samples[0].command, "node --test tools/real.test.mjs");
     assert.match(result.stdout, /agent tool-usage failures: 3/);
     assert.match(result.stdout, /tool-usage: agent-dddddddd-dddd-4ddd-8ddd-dddddddddddd \[test verifier\] transcript:3 Get-Content \(missing local file\/path\)/);
     assert.match(result.stdout, /prevent missing local file\/path: Verify paths with `rg --files <scope>` or `Test-Path -LiteralPath <path>` before reads\./);
     assert.match(result.stdout, /prevent invalid shell command\/parameter: Avoid unsupported PowerShell shapes/);
-    assert.match(result.stdout, /prevent missing orchestration evidence source: Use an evidence source/);
+    assert.match(result.stdout, /prevent missing orchestration evidence source: Prefer task-scoped evidence with `node tools\/ai\.mjs orchestration-evidence --current --run --json`/);
+    assert.match(result.stdout, /for raw trace fallback use an evidence source/);
     assert.match(result.stdout, /orchestration-trace --parent-thread-id parent-thread-1 --session-root .* --cwd .* --json-output tmp\/orchestration-trace\.json --json/);
     assert.match(result.stdout, /unresolved agent failures: 1/);
     assert.match(result.stdout, /unresolved: agent-dddddddd-dddd-4ddd-8ddd-dddddddddddd \[test verifier\] transcript:9 node real\.test\.mjs exit 1/);
