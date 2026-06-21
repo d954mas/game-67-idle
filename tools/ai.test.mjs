@@ -87,6 +87,27 @@ function multiAgentOutput(callId, output = {}) {
   };
 }
 
+function subagentSessionMeta(id, parentThreadId, cwd = root) {
+  return {
+    type: "session_meta",
+    payload: {
+      id,
+      timestamp: "2026-06-21T10:00:00.000Z",
+      cwd,
+      thread_source: "subagent",
+      agent_nickname: `agent-${id}`,
+      agent_role: "test reviewer",
+      source: {
+        subagent: {
+          thread_spawn: {
+            parent_thread_id: parentThreadId,
+          },
+        },
+      },
+    },
+  };
+}
+
 test("unknown command prints usage and exits non-zero", () => {
   const result = run(["definitely-not-a-command"]);
   assert.equal(result.status, 2);
@@ -383,6 +404,34 @@ test("status imports Codex session before analysis", () => {
     assert.equal(records[0].event_type, "tool_call_result_recovered");
     assert.equal(records[0].source_call_id, "call_status_import");
     assert.match(result.stdout, /Unresolved failures: 1/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status forwards agent rollup options", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta("subagent-a", parent)]);
+
+    const result = run([
+      "status",
+      "--profile", profile,
+      "--agent-rollup",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--no-import-codex-session",
+    ]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /## Agent Rollup/);
+    assert.match(result.stdout, /subagent sessions: 1/);
   } finally {
     cleanup(dir);
   }

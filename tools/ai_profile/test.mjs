@@ -629,6 +629,88 @@ test("status reads a session log and reports records, slowest, and rollup", () =
   }
 });
 
+test("status reports agent rollup when requested", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta("subagent-a", parent, root, "2026-06-21T10:00:00.000Z")]);
+    writeJsonl(join(dir, "rollout-b.jsonl"), [subagentSessionMeta("subagent-b", parent, root, "2026-06-21T10:01:00.000Z")]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--min-agents", "2",
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.enabled, true);
+    assert.equal(status.agent_rollup.ok, true);
+    assert.equal(status.agent_rollup.source, "parent-thread");
+    assert.equal(status.agent_rollup.subagent_session_count, 2);
+    assert.deepEqual(status.agent_rollup.roles, [{ role: "test verifier", count: 2 }]);
+    assert.match(result.stdout, /## Agent Rollup/);
+    assert.match(result.stdout, /subagent sessions: 2/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status agent rollup reports missing parent id without failing status", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+
+    const result = run(["tools/ai_profile/status.mjs", "--profile", profile, "--agent-rollup", "--session-root", dir, "--agent-cwd", root]);
+    assert.match(result.stdout, /problem: missing parent thread id for agent rollup/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status reports incomplete trace-session rollup without failing status", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const session = join(dir, "codex-session.jsonl");
+    const statusJson = join(dir, "status.json");
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(session, [
+      multiAgentCall("call_spawn", "spawn_agent", {}),
+      multiAgentOutput("call_spawn", { agent_id: "agent-1" }),
+    ]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--trace-session", session,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.enabled, true);
+    assert.equal(status.agent_rollup.ok, false);
+    assert.equal(status.agent_rollup.source, "trace-session");
+    assert.equal(status.agent_rollup.calls_count, 1);
+    assert.match(result.stdout, /problem: missing wait for agent-1/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status classifies recovered vs unresolved failures", () => {
   const dir = tempDir();
   try {

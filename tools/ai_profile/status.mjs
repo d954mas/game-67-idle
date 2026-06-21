@@ -6,14 +6,16 @@ import {
   deriveSessionId,
   latestSessionProfilePath,
   listSessionProfiles,
+  numberArg,
   parseArgs,
   stringArg,
   todaySessionProfiles,
 } from "./profile_lib.mjs";
+import { buildOrchestrationTrace, buildTrace, todaySessionRoot } from "./orchestration_trace.mjs";
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--verbose]
+  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--verbose] [--agent-rollup]
 
 Profiling is fully passive: the PostToolUse hook records every tool call to a
 per-session log automatically. This command READS that log and reports the
@@ -24,7 +26,13 @@ Default reads the ACTIVE session log (the current session, self-identified from
 the harness env; newest tmp/session_profiles/sessions/*.jsonl as a fallback).
 --harness <name> picks the newest log for that harness; --all aggregates today's
 session logs; --session <id> picks one session; --profile <p> reads an explicit
-file. --verbose adds coverage gaps and parse errors.`);
+file. --verbose adds coverage gaps and parse errors.
+
+Agent rollup is analysis-time only: pass --agent-rollup with --parent-thread-id
+<id> and optional --session-root <dir>, --agent-cwd <path>, --min-agents <n>.
+Use --trace-session <codex-session.jsonl> when checking parent transcript calls.
+If CODEX_SESSION_FILE points at the parent session, --agent-rollup can infer its
+id.`);
   process.exit(2);
 }
 
@@ -315,7 +323,90 @@ function commandRollup(records) {
   };
 }
 
-function buildStatus(profilePaths) {
+function readSessionMetaId(file) {
+  if (!file || !existsSync(file)) return "";
+  try {
+    const firstLine = readFileSync(file, "utf8").split(/\r?\n/, 1)[0] || "";
+    const line = JSON.parse(firstLine);
+    if (line.type === "session_meta" && line.payload?.id) return String(line.payload.id);
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function roleRollup(agents) {
+  const roles = new Map();
+  for (const agent of agents) {
+    const role = agent.role || "(no-role)";
+    roles.set(role, (roles.get(role) || 0) + 1);
+  }
+  return [...roles.entries()]
+    .map(([role, count]) => ({ role, count }))
+    .sort((a, b) => b.count - a.count || a.role.localeCompare(b.role));
+}
+
+function traceSource(traceSession, parentThreadId) {
+  if (traceSession && parentThreadId) return "trace-session+parent-thread";
+  if (traceSession) return "trace-session";
+  if (parentThreadId) return "parent-thread";
+  return "none";
+}
+
+function buildAgentRollup(values) {
+  if (values["agent-rollup"] !== true && values.agents !== true) return { enabled: false };
+  const traceSession = stringArg(values, "trace-session", "");
+  const parentThreadId = stringArg(values, "parent-thread-id", "") || readSessionMetaId(process.env.CODEX_SESSION_FILE || "");
+  const sessionRoot = stringArg(values, "session-root", "") || todaySessionRoot();
+  const cwd = stringArg(values, "agent-cwd", stringArg(values, "cwd", process.cwd()));
+  const rawMinAgents = numberArg(values, "min-agents");
+  const minAgents = Number.isFinite(rawMinAgents) ? Math.max(0, rawMinAgents) : 0;
+  if (!parentThreadId && !traceSession) {
+    return {
+      enabled: true,
+      source: "none",
+      ok: false,
+      parent_thread_id: "",
+      trace_session: "",
+      session_root: sessionRoot,
+      cwd,
+      min_agents: minAgents,
+      calls_count: 0,
+      subagent_session_count: 0,
+      count: 0,
+      roles: [],
+      first_agent_ts: "",
+      latest_agent_ts: "",
+      agents: [],
+      problems: ["missing parent thread id for agent rollup"],
+    };
+  }
+
+  const trace = traceSession
+    ? buildOrchestrationTrace({ session: traceSession, sessionRoot, parentThreadId, minAgents, cwd })
+    : buildTrace({ sessionRoot, parentThreadId, minAgents, cwd });
+  const agents = trace.agents || trace.subagentSessions || [];
+  return {
+    enabled: true,
+    ok: trace.ok,
+    source: traceSource(traceSession, parentThreadId),
+    parent_thread_id: parentThreadId,
+    trace_session: traceSession,
+    session_root: sessionRoot,
+    cwd,
+    min_agents: minAgents,
+    calls_count: trace.calls?.length || 0,
+    subagent_session_count: trace.count ?? trace.subagentSessionCount ?? agents.length,
+    count: agents.length,
+    roles: roleRollup(agents),
+    first_agent_ts: agents[0]?.timestamp || "",
+    latest_agent_ts: agents[agents.length - 1]?.timestamp || "",
+    agents,
+    problems: trace.problems,
+  };
+}
+
+function buildStatus(profilePaths, values = {}) {
   const files = Array.isArray(profilePaths) ? profilePaths : [profilePaths];
   const parsed = parseProfiles(files);
   const records = parsed.records;
@@ -327,6 +418,7 @@ function buildStatus(profilePaths) {
     .filter((record) => Number(record.duration_ms || 0) > 0)
     .sort((a, b) => Number(b.duration_ms || 0) - Number(a.duration_ms || 0))[0] || null;
   const lowCoverage = isLowCoverage(coverage);
+  const agentRollup = buildAgentRollup(values);
 
   let nextAction;
   if (!parsed.exists) {
@@ -369,6 +461,7 @@ function buildStatus(profilePaths) {
     wall_clock_coverage: coverage,
     low_profile_coverage: lowCoverage,
     command_rollup: commandRollup(records),
+    agent_rollup: agentRollup,
     slowest_record: slowest ? {
       line: slowest.__line,
       duration_ms: Number(slowest.duration_ms || 0),
@@ -425,6 +518,31 @@ function renderStatus(status, { verbose }) {
     }
   }
 
+  const agentRollup = status.agent_rollup;
+  if (agentRollup?.enabled) {
+    lines.push("");
+    lines.push("## Agent Rollup");
+    if (!agentRollup.ok) {
+      for (const problem of agentRollup.problems) lines.push(`- problem: ${problem}`);
+    }
+    lines.push(`- source: ${agentRollup.source}`);
+    lines.push(`- transcript calls: ${agentRollup.calls_count}`);
+    lines.push(`- subagent sessions: ${agentRollup.subagent_session_count}`);
+    if (agentRollup.parent_thread_id) lines.push(`- parent thread: ${agentRollup.parent_thread_id}`);
+    if (agentRollup.roles.length > 0) {
+      lines.push(`- roles: ${agentRollup.roles.map((entry) => `${entry.role}=${entry.count}`).join(", ")}`);
+    }
+    if (agentRollup.first_agent_ts || agentRollup.latest_agent_ts) {
+      lines.push(`- span: ${agentRollup.first_agent_ts || "unknown"} -> ${agentRollup.latest_agent_ts || "unknown"}`);
+    }
+    if (verbose && agentRollup.agents.length > 0) {
+      for (const agent of agentRollup.agents.slice(0, 10)) {
+        lines.push(`- ${agent.id} ${agent.nickname || "(unnamed)"} [${agent.role || "(no-role)"}]`);
+      }
+      if (agentRollup.agents.length > 10) lines.push(`- ... ${agentRollup.agents.length - 10} more`);
+    }
+  }
+
   if (verbose && coverage.largest_gaps.length > 0) {
     lines.push("");
     lines.push("## Largest Coverage Gaps");
@@ -457,7 +575,7 @@ if (values.help) usage();
 
 const profilePaths = resolveProfilePaths(values);
 const jsonOutputFile = stringArg(values, "json-output", "");
-const status = buildStatus(profilePaths);
+const status = buildStatus(profilePaths, values);
 const rendered = renderStatus(status, { verbose: values.verbose === true });
 
 if (jsonOutputFile) {

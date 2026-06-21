@@ -9,6 +9,10 @@ Profiling is passive telemetry for repeated failures, slow commands, and gaps.
 The PostToolUse hook records tool calls automatically. Review a session with
 `node tools/ai.mjs status`; use `--verbose` for coverage gaps. `status` runs
 `node tools/ai.mjs import-codex-session` to recover missed Codex failures.
+Use `--agent-rollup` for optional analysis-time subagent diagnostics; pass
+`--parent-thread-id` for subagent session metadata, or `--trace-session` for
+parent transcript spawn/wait/close checks. This is diagnostic evidence, not
+automatic acceptance of agent work.
 
 Do not commit raw telemetry from `tmp/session_profiles/`; commit only durable
 lessons, rules, tools, or tasks.

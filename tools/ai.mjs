@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 function usage() {
   console.error(`usage:
   node tools/ai.mjs validate [--quick|--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune] [--with-assets]
-  node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--no-import-codex-session]
+  node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--agent-rollup] [--no-import-codex-session]
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
   node tools/ai.mjs orchestration-trace [--session <codex-session.jsonl>] [--parent-thread-id <id>] [trace options]
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail|review [gate options]
@@ -26,7 +26,7 @@ function usage() {
 Commands:
   validate  run reusable-pipeline validation; unknown options fail instead of being silently ignored
   status    read the passive per-session profile (the hook auto-records every tool call);
-            --verbose for the full per-record breakdown
+            --verbose for the full per-record breakdown; --agent-rollup adds a subagent rollup
   import-codex-session  recover missed failed Codex shell calls into the session log
   orchestration-trace   verify multi-agent transcript/session evidence for task closeout
   gate      write a product-read screenshot gate before expanding game content

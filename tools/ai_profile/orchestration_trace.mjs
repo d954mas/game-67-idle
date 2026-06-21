@@ -25,7 +25,7 @@ function argValue(args, flag) {
   return value && !value.startsWith("--") ? value : "";
 }
 
-function todaySessionRoot() {
+export function todaySessionRoot() {
   const now = new Date();
   return join(
     homedir(),
