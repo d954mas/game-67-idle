@@ -29,11 +29,9 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.match(result.stdout, /== doc reference tests/);
   assert.match(result.stdout, /== bootstrap export tests/);
   assert.match(result.stdout, /== repeated product gate failure guard/);
-  assert.match(result.stdout, /== Ember Road asset pack contract guard/);
-  assert.match(result.stdout, /== Ember Road asset pack contract guard tests/);
+  assert.doesNotMatch(result.stdout, /Ember Road/);
   assert.match(result.stdout, /== visual invariant guard/);
   assert.match(result.stdout, /== visual invariant guard tests/);
-  assert.match(result.stdout, /== Ember Road Y-up layout audit/);
   assert.doesNotMatch(result.stdout, /== portable export/);
   assert.doesNotMatch(result.stdout, /== exported ai profile tests/);
   assert.match(result.stdout, /reusable pipeline quick validation passed/);
@@ -59,7 +57,7 @@ test("quick validation runs the product-gate suite when a game concept is active
   const result = run(["--dry-run"], { NT_FORCE_CONCEPT: "1" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /== product gate tests/);
-  assert.match(result.stdout, /== Ember Road Y-up layout audit/);
+  assert.doesNotMatch(result.stdout, /Ember Road/);
 });
 
 test("pipeline validation review dry-run adds strict context budget review", () => {

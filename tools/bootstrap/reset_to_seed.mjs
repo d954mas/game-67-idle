@@ -41,6 +41,9 @@ const RESTORE = ["src/clean_seed_main.c", "CMakeLists.txt", "tasks/STATUS.md"];
 // Whole directories that are always game-specific. Game tooling lives under
 // tools/<game-id>/ by convention, so it is removed wholesale here.
 const REMOVE_DIRS = [`gamedesign/projects/${gameId}`, "assets/runtime", `tools/${gameId}`];
+// Common game-specific files that historically leaked under generic names and
+// therefore are not caught by the game-id loose-file scan.
+const REMOVE_FILES = ["src/game_actions.c", "src/game_actions.h", "tools/devapi/smoke.py"];
 // Game-named loose files discovered anywhere under src/, assets/, tools/, state/
 // (id with - or _). The recursive tools/ scan is the fallback that catches game
 // scripts which leaked into shared dirs instead of tools/<game-id>/ -- the exact
@@ -76,6 +79,8 @@ console.log("Restore from seed ref:");
 RESTORE.forEach((f) => console.log(`  git checkout ${seedRef} -- ${f}`));
 console.log("\nRemove game directories:");
 REMOVE_DIRS.forEach((p) => console.log(`  rm -rf ${p}`));
+console.log("\nRemove known game-specific loose files:");
+REMOVE_FILES.forEach((p) => console.log(`  rm ${p}`));
 console.log("\nRemove game-named loose files (auto-detected):");
 console.log(looseFiles.length ? looseFiles.map((f) => `  rm ${f}`).join("\n") : "  (none)");
 console.log("\nReview manually (CMake target blocks + task epics/archive are game-named):");
@@ -91,7 +96,7 @@ for (const f of RESTORE) {
   const r = git(["checkout", seedRef, "--", f]);
   console.log(r.status === 0 ? `restored ${f}` : `WARN could not restore ${f}: ${(r.stderr || "").trim()}`);
 }
-for (const p of [...REMOVE_DIRS, ...looseFiles]) {
+for (const p of [...REMOVE_DIRS, ...REMOVE_FILES, ...looseFiles]) {
   const abs = join(root, p);
   if (existsSync(abs)) {
     rmSync(abs, { recursive: true, force: true });

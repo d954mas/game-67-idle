@@ -2,49 +2,48 @@
 
 ## Current Goal
 
-Build `Ember Road` (ember-road), but feature/content expansion is frozen by
-renewed visual/UX rejection. T0024 is the active reset: stronger refs, a
-product-read/native proof plan, and Y-up proof before any Depth 2 work.
+No active game concept is selected. This repository is a clean AI-first native
+game seed, ready for the next game.
 
-## Current Gates
+The asset/cutout pipeline was reviewed and optimized this iteration (key_matte
+default, route_cutout auto-picker, dual_plate; the per-asset edge-color audit
+removed; ~4000 lines of legacy/dead code dropped) — see git history.
 
-T0018-T0023 remain rejection evidence. T0024 has stronger refs, native forge
-before/after captures, a lead packet, and a native REVIEW pass. Forge/workbench,
-lantern, action plaque, result strip, and badge are source-derived. Verdict
-remains REVIEW pending lead acceptance. Standard validation runs the Y-up audit:
-larger logical `y` is higher; Y-down is boundary-only.
+Mine Cards was a prior pipeline test run; its full game, GDD, and tasks are
+preserved in tag `mine-cards-snapshot-2026-06-18` and removed from the working
+tree so the next game starts clean. Reusable lessons live in
+`AI_PIPELINE_HISTORY.md`.
 
-## Non-blocking Debt
+Ember Road was closed after visual/UX review. Its full game state is preserved
+in tag `ember-road-snapshot-2026-06-21`; active tasks were dropped/archive-kept,
+and game-specific runtime, assets, project docs, and tools were removed from
+the working tree.
 
-- Move game-side `game.capture.framebuffer` into reusable DevAPI later.
-- Resume/re-entry remains live-state debt unless a slice needs it.
+## Current Runtime Surface
 
-## Required Validation
+Native `game_seed` is the clean seed work surface:
 
-Runtime changes require build, smoke, captures, strict gate, taskboard validate,
-visual invariant guard, Y-up audit, and `node tools/ai.mjs validate`.
+```powershell
+cmake --build --preset native-debug --target game_seed
+build/game_seed/native-debug/game_seed.exe --devapi 9123
+```
 
-## Evidence
+Runtime entrypoint: `src/clean_seed_main.c` (362-line debug template).
 
-- `gamedesign/projects/ember-road/references/stronger_visual_ux_reference_refresh_2026-06-21.md`
-- `tasks/active/T0024-stronger-ember-road-reference-and-ux-reset.md`
-- `gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-slice9_design_policy_audit.md`
-- `gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-source_derivation_audit.md`
-- `gamedesign/projects/ember-road/data/ember-road-town-forge-v2-asset_manifest.json`
-- `gamedesign/projects/ember-road/reviews/T0024_town_forge_native_scene_anchor_review.md`
-- `gamedesign/projects/ember-road/reviews/T0024_town_forge_y_up_layout_audit.md`
-- `gamedesign/projects/ember-road/reviews/T0024_town_forge_lead_acceptance_packet.md`
-- `gamedesign/projects/ember-road/reviews/T0024_town_forge_lead_acceptance_moment.png`
-- `build/captures/ember-road/state_town_lantern_upgrade.png`
-- `build/captures/ember-road/state_town_lantern_forged.png`
+The engine submodule at `external/neotolis-engine` is read-only from this repo.
+Reusable sidecar modules, tools, skills, and game code may be edited here.
+
+## Current Gate
+
+Capture the user's game concept (references, audience, platform, no-go
+constraints), then run the Stage 0 prototype startup path and create a fresh
+project wiki plus exactly one scoped task/epic before implementation. Do not
+invent a concept.
 
 ## Next Priorities
 
-1. Get lead acceptance on the refreshed native forge screenshots, or continue
-   with another visual-only correction if rejected.
-2. Keep Depth 2 gameplay, economy, and extra rewards blocked until the visual
-   proof is accepted.
-3. Regenerate/repair remaining blocked source-sheet components only if needed
-   for final-art acceptance.
-4. Preserve Y-up game/world/UI layout always; convert Y-down only at renderer,
-   input, screenshot, or DevAPI boundaries.
+1. Capture the next game concept, then scaffold a fresh project wiki + one
+   scoped task/epic before implementation.
+2. Keep reusable pipeline/skills/knowledge clean and current between games.
+3. Keep native PC scale/focus + visual/teachability/core-loop proof as early
+   gates for the next playable UI.

@@ -88,8 +88,9 @@ use tree indices as long-term selectors.
 
 Shared harness: `tools/devapi/devapi_client.py` (`request`, `result`,
 `wait_frames`, `observe`, sequential `step`, `endpoint_methods`, `click_ui`,
-`capture_screenshot`, recording helpers). Canonical smoke:
-`tools/devapi/smoke.py`. One-shot CLI: `tools/devapi/devapi_cli.py`.
+`capture_screenshot`, recording helpers). One-shot CLI:
+`tools/devapi/devapi_cli.py`. Smoke scripts are game-specific and should live
+under `tools/<game-id>/` for the active prototype.
 
 Bots: launch fresh with DevAPI (fail if the port is busy unless `reuse_existing`),
 `ping` + `endpoints`, read state, issue one action, wait only as long as needed,

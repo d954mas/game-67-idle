@@ -3,12 +3,16 @@
 ## Now
 
 - Focus: clean AI-first native game seed.
-- Active game concept: `Ember Road` (ember-road), fantasy hero RPG with map travel, town hubs, quests, items, grinding, leveling, and automated battles.
+- Active game concept: none.
+- Closed prototype: `Ember Road` (ember-road) is archived as evidence/history;
+  do not continue its gameplay, visual, UX, asset, or runtime implementation
+  unless the lead explicitly reopens it.
 - Engine: `external/neotolis-engine`; public APIs only.
 
 ## Project
 
-- Active game concept: `Ember Road` (ember-road), fantasy hero RPG with map travel, town hubs, quests, items, grinding, leveling, and automated battles.
+- Active game concept: none. Keep the repo focused on the reusable AI-first
+  native game seed and pipeline until a new game is explicitly started.
 
 ## Map
 
@@ -30,11 +34,9 @@
 - Game/world/UI logic is Y-up. Convert Y-down platform/input only at boundary.
 - Product/playable visuals use engine fonts/text renderer;
   handmade pixel/shape `draw_text` is debug-only.
-- Active game builds keep the UI font in a generated runtime pack. For
-  `ember-road`, clean native builds must produce
-  `build/assets/ember-road/ember_road_base.ntpack`, copy it to
-  `build/game_seed/<preset>/assets/ember_road_base.ntpack`, include
-  `ember_road/font_ui`, and make the game target depend on that asset target.
+- Active game builds keep the UI font in a generated runtime pack. Game-specific
+  pack requirements belong to the active concept and should be removed or
+  archived when that concept is closed.
 - Important visuals use real legal assets early; debug/procedural
   placeholders are temporary debug only.
 - Downloaded/shared assets need license, provenance, integrity before import.

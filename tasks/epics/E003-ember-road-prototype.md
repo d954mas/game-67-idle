@@ -1,11 +1,11 @@
 ---
 id: E003
 title: Ember Road prototype
-status: active
+status: dropped
 priority: P1
 tags: [prototype, ember-road]
 created: 2026-06-20
-updated: 2026-06-20
+updated: 2026-06-21
 ---
 
 ## Goal
@@ -29,4 +29,7 @@ choice, XP/gold progression, and quest claim.
 
 ## Log
 
+- 2026-06-21: Lead closed the Ember Road prototype. The epic is dropped and
+  kept as historical evidence only; do not continue gameplay, visual, UX,
+  asset, or runtime work unless the lead explicitly reopens it.
 - 2026-06-20: New concept accepted from lead and scaffolded as active project.

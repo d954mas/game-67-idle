@@ -89,6 +89,23 @@ test("doc reference check still fails missing markdown links", () => {
   }
 });
 
+test("doc reference check ignores historical task archive links", () => {
+  const dir = tempDir();
+  try {
+    writeMinimalRoot(dir);
+    mkdirSync(join(dir, "tasks", "archive", "E999"), { recursive: true });
+    writeFileSync(
+      join(dir, "tasks", "archive", "E999", "T9999-old-prototype.md"),
+      "Archived task references removed prototype artifact `gamedesign/projects/old-game/gdd.md`.\n",
+      "utf8",
+    );
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 0, result.stderr);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("doc reference check rejects retired ai validate file command", () => {
   const dir = tempDir();
   try {

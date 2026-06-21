@@ -14,6 +14,12 @@ if(NOT EMSCRIPTEN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 option(GAME_DEVAPI_ENABLED "Enable game-side DevAPI command bus for agent playtests." ${GAME_DEVAPI_DEFAULT})
 
+# Engine native DevAPI: enable on the same gate as the game DevAPI so the engine
+# builds nt_devapi + nt_devapi_net. This must precede add_subdirectory.
+if(GAME_DEVAPI_ENABLED)
+    set(NT_DEVAPI_ENABLED ON CACHE BOOL "" FORCE)
+endif()
+
 if(EMSCRIPTEN)
     if(NT_WASM_QA)
         set(_nt_wasm_tier "qa")
@@ -41,13 +47,6 @@ else()
     endif()
 endif()
 
-# Engine native DevAPI: enable on the same gate as the game DevAPI so the engine
-# builds nt_devapi + nt_devapi_net (command groups default ON). Must precede the
-# engine add_subdirectory so the option is read.
-if(GAME_DEVAPI_ENABLED)
-    set(NT_DEVAPI_ENABLED ON CACHE BOOL "" FORCE)
-endif()
-
 add_subdirectory(external/neotolis-engine)
 if(NOT EMSCRIPTEN AND NOT TARGET nt_builder)
     add_subdirectory(external/neotolis-engine/tools/builder external/neotolis-engine/tools/builder)
@@ -55,16 +54,12 @@ endif()
 
 set(GAME_TARGET game_seed)
 set(GAME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/build/${GAME_TARGET}/${NT_PRESET_NAME}")
-set(EMBER_ROAD_PACK_DIR "${CMAKE_SOURCE_DIR}/build/assets/ember-road")
-set(EMBER_ROAD_GENERATED_DIR "${CMAKE_BINARY_DIR}/ember-road-generated")
-set(EMBER_ROAD_BASE_PACK "${EMBER_ROAD_PACK_DIR}/ember_road_base.ntpack")
-set(EMBER_ROAD_BASE_HEADER "${EMBER_ROAD_GENERATED_DIR}/ember_road_base.h")
-set(EMBER_ROAD_RUNTIME_ASSET_DIR "${GAME_OUTPUT_DIR}/assets")
-set(EMBER_ROAD_RUNTIME_PACK "${EMBER_ROAD_RUNTIME_ASSET_DIR}/ember_road_base.ntpack")
-file(TO_CMAKE_PATH "${EMBER_ROAD_RUNTIME_PACK}" EMBER_ROAD_RUNTIME_PACK_C)
 
-# cJSON comes from the engine `cjson` target (single cJSON across the engine bus
-# and the game-owned handlers — two cJSON builds would clash on cJSON_* symbols).
+add_library(game_cjson STATIC
+    external/cjson/cJSON.c
+    external/cjson/cJSON.h
+)
+target_include_directories(game_cjson SYSTEM PUBLIC external/cjson)
 
 set(GAME_STATE_SCHEMA "${CMAKE_SOURCE_DIR}/state/game_state.schema.json")
 set(GAME_STATE_CODEGEN "${CMAKE_SOURCE_DIR}/tools/state_codegen/generate_state.py")
@@ -109,24 +104,16 @@ add_library(game_state STATIC
     state/migrations/v0_to_v1.c
 )
 add_dependencies(game_state game_state_codegen)
-target_include_directories(game_state PUBLIC "${GAME_STATE_GENERATED_DIR}" src)
-target_link_libraries(game_state PUBLIC cjson)
-target_compile_definitions(game_state PRIVATE _CRT_SECURE_NO_WARNINGS)
-# nt_devapi (engine) provides the command bus + NT_DEVAPI_ENABLED=1 (PUBLIC) for
-# the generated game.state.* handlers. When the gate is OFF the engine target is
-# absent, so define the macro =0 here (PUBLIC, propagates to game_seed) — the
-# `#if NT_DEVAPI_ENABLED` guards need it defined, not undefined (-Werror,-Wundef).
+target_include_directories(game_state PUBLIC "${GAME_STATE_GENERATED_DIR}" src external/cjson)
+target_link_libraries(game_state PUBLIC game_cjson)
 if(GAME_DEVAPI_ENABLED)
     target_link_libraries(game_state PUBLIC nt_devapi)
 else()
     target_compile_definitions(game_state PUBLIC NT_DEVAPI_ENABLED=0)
 endif()
+target_compile_definitions(game_state PRIVATE _CRT_SECURE_NO_WARNINGS)
 nt_set_warning_flags(game_state)
 nt_set_sanitizer_flags(game_state)
-
-# The DevAPI is now the engine's native nt_devapi + nt_devapi_net (linked into
-# game_state/game_seed below); the generated game.state.* handlers compile into
-# game_state. No game-side bus/transport lib anymore.
 
 set(SKELETAL_ANIMATION_OZZ_SOURCE_DIR "" CACHE PATH "Optional ozz-animation source checkout for reusable skeletal animation extension probes.")
 if(NOT EMSCRIPTEN AND SKELETAL_ANIMATION_OZZ_SOURCE_DIR)
@@ -137,64 +124,8 @@ if(NOT EMSCRIPTEN AND SKELETAL_ANIMATION_OZZ_SOURCE_DIR)
     endif()
 endif()
 
-if(NOT EMSCRIPTEN)
-    file(GLOB EMBER_ROAD_OLD_GATE_RUNTIME_PNGS CONFIGURE_DEPENDS
-        "${CMAKE_SOURCE_DIR}/assets/runtime/ember-road-old-gate-fakeshot-v001/*.png"
-    )
-    file(GLOB EMBER_ROAD_TOWN_FORGE_RUNTIME_PNGS CONFIGURE_DEPENDS
-        "${CMAKE_SOURCE_DIR}/assets/runtime/ember-road-town-forge-v2/*.png"
-    )
-
-    add_executable(build_ember_road_packs tools/ember-road/build_packs.c)
-    target_link_libraries(build_ember_road_packs PRIVATE nt_builder nt_log)
-    target_compile_definitions(build_ember_road_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(build_ember_road_packs PRIVATE -U_DLL)
-    nt_set_warning_flags(build_ember_road_packs)
-    nt_set_sanitizer_flags(build_ember_road_packs)
-    set_target_properties(build_ember_road_packs PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tools"
-    )
-
-    add_custom_command(
-        OUTPUT
-            "${EMBER_ROAD_BASE_PACK}"
-            "${EMBER_ROAD_BASE_HEADER}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${EMBER_ROAD_PACK_DIR}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${EMBER_ROAD_GENERATED_DIR}"
-        COMMAND "$<TARGET_FILE:build_ember_road_packs>" "${EMBER_ROAD_PACK_DIR}" "${EMBER_ROAD_GENERATED_DIR}"
-        DEPENDS
-            build_ember_road_packs
-            tools/ember-road/build_packs.c
-            assets/shaders/slug_text.vert
-            assets/shaders/slug_text.frag
-            assets/shaders/sprite.vert
-            assets/shaders/sprite.frag
-            external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf
-            ${EMBER_ROAD_OLD_GATE_RUNTIME_PNGS}
-            ${EMBER_ROAD_TOWN_FORGE_RUNTIME_PNGS}
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        COMMENT "Building Ember Road runtime asset pack"
-        VERBATIM
-    )
-    add_custom_command(
-        OUTPUT "${EMBER_ROAD_RUNTIME_PACK}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${EMBER_ROAD_RUNTIME_ASSET_DIR}"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${EMBER_ROAD_BASE_PACK}" "${EMBER_ROAD_RUNTIME_PACK}"
-        DEPENDS "${EMBER_ROAD_BASE_PACK}"
-        COMMENT "Copying Ember Road runtime assets"
-        VERBATIM
-    )
-    add_custom_target(ember_road_runtime_assets
-        DEPENDS
-            "${EMBER_ROAD_BASE_HEADER}"
-            "${EMBER_ROAD_RUNTIME_PACK}"
-    )
-endif()
-
 add_executable(${GAME_TARGET}
     src/clean_seed_main.c
-    src/game_actions.c
-    src/game_actions.h
     src/game_devapi_ui.c
     src/game_devapi_ui.h
     src/game_audio.c
@@ -228,18 +159,11 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_log
     nt_math
     nt_time
+    glad
+    stb_image_write
     game_state
+    game_cjson
 )
-# glad (GL loader) and stb_image_write (PNG writer) are native-only engine deps:
-# the engine adds deps/glad + deps/stb only inside if(NOT EMSCRIPTEN), so these
-# targets do not exist on wasm. On wasm nt_gfx supplies GL via Emscripten's
-# WebGL2/GLES3 layer (gl/nt_gfx_gl_ctx_web.c) and no game source writes PNGs.
-if(NOT EMSCRIPTEN)
-    target_link_libraries(${GAME_TARGET} PRIVATE
-        glad
-        stb_image_write
-    )
-endif()
 if(GAME_DEVAPI_ENABLED)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_devapi nt_devapi_net)
 else()
@@ -252,17 +176,11 @@ else()
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_DIR}"
-    "${EMBER_ROAD_GENERATED_DIR}"
     src
+    external/cjson
     external/neotolis-engine/deps/glfw/deps
 )
-target_compile_definitions(${GAME_TARGET} PRIVATE
-    _CRT_SECURE_NO_WARNINGS
-    EMBER_ROAD_BASE_PACK_PATH="${EMBER_ROAD_RUNTIME_PACK_C}"
-)
-if(TARGET ember_road_runtime_assets)
-    add_dependencies(${GAME_TARGET} ember_road_runtime_assets)
-endif()
+target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=$<BOOL:${GAME_DEVAPI_ENABLED}> _CRT_SECURE_NO_WARNINGS)
 if(TARGET skeletal_animation_extension)
     target_link_libraries(${GAME_TARGET} PRIVATE skeletal_animation_extension)
     target_compile_definitions(${GAME_TARGET} PRIVATE SKELETAL_ANIMATION_EXTENSION_ENABLED=1)

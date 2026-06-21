@@ -39,6 +39,8 @@ function walkMarkdown(path) {
   const stat = statSync(path);
   if (stat.isFile()) return path.endsWith(".md") ? [path] : [];
   if (!stat.isDirectory()) return [];
+  const relative = rel(path);
+  if (relative === "tasks/archive" || relative.startsWith("tasks/archive/")) return [];
   const out = [];
   for (const name of readdirSync(path)) {
     out.push(...walkMarkdown(join(path, name)));
