@@ -2,13 +2,15 @@
 
 ## Current Goal
 
-Review the first native playable slice for `Dragon Grove` (dragon-grove), an
-original merge-3 dragon grove puzzle inspired by merge-game genre grammar
-without copying brand, art, UI copy, maps, or economy.
+Maintain the reusable AI pipeline/orchestration workflow. Current work is
+pipeline/taskboard/profiling, not gameplay.
+
+Dragon Grove remains review-only runtime context. Load its tasks/evidence only
+when explicitly reviewing the prototype or a validator requires it.
 
 ## Current Runtime Surface
 
-Native `game_seed` is the current prototype work surface:
+Native `game_seed` still contains the Dragon Grove debug slice under review:
 
 ```powershell
 cmake --build --preset native-debug --target game_seed
@@ -17,44 +19,40 @@ build/game_seed/native-debug/game_seed.exe --devapi 9123
 
 Runtime entrypoint: `src/clean_seed_main.c`.
 
-The engine submodule at `external/neotolis-engine` is read-only from this repo.
-Reusable sidecar modules, tools, skills, and game code may be edited here.
+`external/neotolis-engine` is read-only from this repo.
 
 ## Current Gate
 
-Task T0029 is in review. The implemented slice is one 5x5 Y-up logical grid,
-one DevAPI-backed merge-ready action, visible reward/restore feedback, and a
-blocked/no-merge state. This is a debug playable slice, not a product visual
-pass: `nt_shape_renderer` is temporary debt, and final visuals still require
-generated runtime art plus engine font/text rendering.
+Pipeline/orchestration changes need a taskboard item, scoped evidence, machine
+validation where applicable, and review validation. Use bounded subagents when
+parallel context helps.
+
+T0029 remains in review for Dragon Grove. Broad game feature/content expansion
+is out of scope unless the lead reopens game implementation.
 
 ## Blocking Work
 
-- None for the debug playable slice. Broad feature/content expansion is blocked
-  until product visual/readability review accepts or replaces the debug visuals.
+- No blocker for pipeline/orchestration cleanup.
+- Game expansion is blocked by current lead direction.
 
 ## Required Validation
 
 ```powershell
-node tools/game_context/iteration_context.mjs
 node tools/taskboard/cli.mjs validate
-cmake --build --preset native-debug --target game_seed
-py -3.12 tools/dragon-grove/smoke.py
+node tools/context_budget.mjs --review
+node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id 019ee5cc-1180-7eb3-b976-c0d90d5ac0dd --session-root C:\Users\ROG\.codex\sessions\2026\06\21 --agent-cwd C:\projects\game-67-idle --no-import-codex-session --verbose
 node tools/ai.mjs validate --review
 ```
 
 ## Last Known Good Evidence
 
-- `py -3.12 tools/dragon-grove/smoke.py` PASS: runtime `dragon_grove`,
-  `merge_count=3`, `restored_tiles=3`, level-2 reward, blocked state, `ui.tree`
-  nodes, screenshot.
-- Screenshot: `build/captures/dragon-grove-smoke.png`.
-- `node tools/ai.mjs validate --review` PASS.
+- T0055 moved to review: taskboard summary/context suppress live game sections
+  while current actionable work is pipeline/tooling-scoped.
+- `node tools/ai.mjs validate --review` PASS after T0055.
+- Dragon Grove runtime evidence remains in T0029.
 
 ## Next Priorities
 
-1. Product-review the first screen before adding systems/content.
-2. Decide whether to replace debug shapes/text with generated runtime art and
-   engine font rendering or close the experiment.
-3. If continuing, decompose `src/clean_seed_main.c` before the next runtime
-   feature.
+1. Improve orchestration from profiler/taskboard evidence.
+2. Keep subagent packets bounded, tool-safe, and machine-backed.
+3. Review/close old pipeline tasks only when doing review cleanup.
