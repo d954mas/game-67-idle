@@ -1242,6 +1242,93 @@ test("cli set --json reports structured transition failure", (t) => {
   assert.deepEqual(parsed.problem.missingFields, ["orchestration: used packet"]);
 });
 
+test("cli orchestration-check passes complete preflight packet without PASS evidence", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  const task = createTask(root, {
+    title: "Subagent packet preflight",
+    status: "doing",
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify subagent packet before launch
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: ${command}
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /ok: orchestration packet preflight passed/);
+});
+
+test("cli orchestration-check rejects missing tool-use guard while validate stays compatible", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  const task = createTask(root, {
+    title: "Subagent packet preflight",
+    status: "review",
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify subagent packet before launch
+  allowed files: tools/taskboard/lib.mjs
+  expected output: packet preflight passes
+  evidence command: ${command}
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope
+- evidence: PASS \`${command}\``),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /missing\/invalid: tool-use guard/);
+  assert.deepEqual(validateStore(root), []);
+});
+
+test("cli orchestration-check rejects placeholder tool-use guard", (t) => {
+  const root = tempRoot(t);
+  const task = createTask(root, {
+    title: "Subagent packet preflight",
+    status: "doing",
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify subagent packet before launch
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: TBD
+  expected output: packet preflight passes
+  evidence command: node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /missing\/invalid: tool-use guard/);
+});
+
+test("cli orchestration-check --json rejects missing machine evidence source", (t) => {
+  const root = tempRoot(t);
+  const task = createTask(root, {
+    title: "Subagent packet preflight",
+    status: "doing",
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify subagent packet before launch
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: node tools/ai.mjs orchestration-trace --json-output tmp/trace.json --json
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file, "--json"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.doesNotMatch(result.stdout, /^problem:/m);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "orchestration_preflight_missing");
+  assert.deepEqual(parsed.problem.missingFields, ["machine evidence command"]);
+});
+
 test("cli orchestration-template prints accepted packet shape", () => {
   const cli = join(import.meta.dirname, "cli.mjs");
   const result = spawnSync(process.execPath, [cli, "orchestration-template"], { encoding: "utf8" });

@@ -50,6 +50,11 @@ const ORCHESTRATION_REQUIRED_FIELDS = [
   ["stop condition", /\bstop condition\b/i],
   ["independent reviewer", /\bindependent\s+(?:reviewer|verifier)\b/i],
 ];
+const ORCHESTRATION_PREFLIGHT_FIELDS = [
+  ...ORCHESTRATION_REQUIRED_FIELDS.slice(0, 2),
+  ["tool-use guard", /\btool-use\s+guard\b/i],
+  ...ORCHESTRATION_REQUIRED_FIELDS.slice(2),
+];
 const ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS = [
   /\bnode\s+tools\/ai\.mjs\s+orchestration-trace\b/i,
 ];
@@ -65,6 +70,25 @@ const ORCHESTRATION_PACKET_TEMPLATE = `- orchestration: used
 
 export function orchestrationPacketTemplate() {
   return ORCHESTRATION_PACKET_TEMPLATE;
+}
+
+export function orchestrationPreflightProblem(doc) {
+  const log = sectionText(doc.body || "", "Log");
+  const missing = missingOrchestrationFields(log, {
+    requireMachineEvidence: true,
+    requireMachineEvidencePass: false,
+    requiredFields: ORCHESTRATION_PREFLIGHT_FIELDS,
+  });
+  if (!missing.length) return null;
+  return {
+    code: "orchestration_preflight_missing",
+    taskId: doc.fields?.id || "",
+    status: doc.fields?.status || "",
+    missingFields: missing,
+    acceptedFields: ORCHESTRATION_PREFLIGHT_FIELDS.map(([name]) => name),
+    template: ORCHESTRATION_PACKET_TEMPLATE,
+    message: `${doc.fields?.id || "task"}: orchestration packet preflight failed (missing/invalid: ${missing.join(", ")})`,
+  };
 }
 
 export function findRoot(start = process.cwd()) {
@@ -472,7 +496,10 @@ function orchestrationEvidenceProblem(doc) {
   if (hasSmallScopeOrchestrationException(log)) {
     return null;
   }
-  const missing = missingOrchestrationFields(log, requireMachineEvidence);
+  const missing = missingOrchestrationFields(log, {
+    requireMachineEvidence,
+    requireMachineEvidencePass: requireMachineEvidence,
+  });
   const detail = missing.length ? ` (missing/invalid: ${missing.join(", ")})` : "";
   return {
     code: "orchestration_evidence_missing",
@@ -520,23 +547,28 @@ function hasOrchestrationUsedEvidence(log, requireMachineEvidence = false) {
   );
 }
 
-function missingOrchestrationFields(log, requireMachineEvidence = false) {
+function missingOrchestrationFields(log, options = {}) {
+  const {
+    requireMachineEvidence = false,
+    requireMachineEvidencePass = requireMachineEvidence,
+    requiredFields = ORCHESTRATION_REQUIRED_FIELDS,
+  } = typeof options === "boolean" ? { requireMachineEvidence: options } : options;
   const blocks = orchestrationUsedBlocks(log);
   if (!blocks.length) {
     return ["orchestration: used packet"];
   }
-  const baseline = ORCHESTRATION_REQUIRED_FIELDS.map(([name]) => name);
+  const baseline = requiredFields.map(([name]) => name);
   if (requireMachineEvidence) baseline.push("machine evidence command");
-  if (requireMachineEvidence) baseline.push("machine evidence pass");
+  if (requireMachineEvidencePass) baseline.push("machine evidence pass");
   let bestMissing = baseline;
   for (const block of blocks) {
-    const missing = ORCHESTRATION_REQUIRED_FIELDS
+    const missing = requiredFields
       .filter(([, pattern]) => !hasMeaningfulFieldValue(block, pattern))
       .map(([name]) => name);
     if (requireMachineEvidence && !hasMachineEvidenceCommand(block)) {
       missing.push("machine evidence command");
     }
-    if (requireMachineEvidence && !hasMatchingMachineEvidencePassAfterOrchestration(log, block)) {
+    if (requireMachineEvidencePass && !hasMatchingMachineEvidencePassAfterOrchestration(log, block)) {
       missing.push("machine evidence pass");
     }
     if (missing.length < bestMissing.length) {

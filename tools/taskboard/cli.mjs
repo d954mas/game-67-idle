@@ -9,6 +9,7 @@
 //   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
 //   node tools/taskboard/cli.mjs orchestration-template
+//   node tools/taskboard/cli.mjs orchestration-check --file tasks/active/T0001-example.md [--json]
 //   node tools/taskboard/cli.mjs validate [--json]
 //
 // Agents: prefer `new` over hand-writing files so IDs never collide.
@@ -17,9 +18,10 @@ import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
   updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
+  orchestrationPreflightProblem, parseDoc,
 } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
@@ -72,6 +74,28 @@ function clampText(text, maxChars) {
 
 function writeJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+function readTaskFileArg(value) {
+  const requested = value || fail("usage: orchestration-check --file <task.md>");
+  const file = isAbsolute(requested) ? resolve(requested) : resolve(root, requested);
+  const rel = relative(root, file);
+  if (rel.startsWith("..") || isAbsolute(rel)) {
+    fail("--file must be inside the repository root");
+  }
+  if (!existsSync(file)) {
+    fail(`no such file: ${requested}`);
+  }
+  const parsed = parseDoc(readFileSync(file, "utf8"));
+  return {
+    ...parsed,
+    kind: "task",
+    file,
+    fields: {
+      ...parsed.fields,
+      id: parsed.fields.id || rel,
+    },
+  };
 }
 
 function sectionText(markdown, title) {
@@ -325,6 +349,26 @@ switch (cmd) {
     console.log(orchestrationPacketTemplate());
     break;
   }
+  case "orchestration-check": {
+    const doc = readTaskFileArg(args.file);
+    const problem = orchestrationPreflightProblem(doc);
+    if (args.json) {
+      writeJson({
+        ok: !problem,
+        file: relative(root, doc.file),
+        problem,
+      });
+      process.exit(problem ? 1 : 0);
+    }
+    if (problem) {
+      console.log(`problem: ${problem.message}`);
+      console.log(`hint: use a complete packet from \`node tools/taskboard/cli.mjs orchestration-template\` before launching subagents:`);
+      console.log(orchestrationPacketTemplate());
+      process.exit(1);
+    }
+    console.log(`ok: orchestration packet preflight passed for ${relative(root, doc.file)}`);
+    break;
+  }
   case "show": {
     const id = args._[0] || fail("usage: show <id>");
     const doc = findDoc(root, id) || fail(`no doc with id ${id}`);
@@ -404,7 +448,7 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|validate> ...  (see header comment)");
+    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|orchestration-check|validate> ...  (see header comment)");
     process.exit(cmd ? 1 : 0);
 }
 
