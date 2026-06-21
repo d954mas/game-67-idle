@@ -119,6 +119,19 @@ function reviewTasks(root) {
   return tasks;
 }
 
+function appendCurrentWork(lines, tasks, limit, overflowCommand) {
+  if (tasks.length === 0) return;
+  lines.push("");
+  lines.push("## Current Work");
+  lines.push("");
+  for (const task of tasks.slice(0, limit)) {
+    lines.push(`- ${shortRow(task)}`);
+  }
+  if (tasks.length > limit) {
+    lines.push(`- ... ${tasks.length - limit} more; run \`${overflowCommand}\` only when needed.`);
+  }
+}
+
 function renderSummary(root, options) {
   const statusFile = join(root, "tasks", "STATUS.md");
   const status = existsSync(statusFile) ? readFileSync(statusFile, "utf8") : "";
@@ -131,6 +144,7 @@ function renderSummary(root, options) {
   lines.push(`active_task_counts: ${statusCounts(listTasks(root))}`);
   lines.push(`open_actionable_tasks: ${openTasks.length}`);
   lines.push(`review_tasks: ${reviewCount}`);
+  appendCurrentWork(lines, openTasks, tasksLimit, "node tools/taskboard/cli.mjs context");
   const currentGoal = sectionText(status, "Current Goal");
   const blockers = sectionText(status, "Blocking Work") || sectionText(status, "Blockers");
   const nextPriorities = sectionText(status, "Next Priorities");
@@ -189,6 +203,7 @@ function renderContext(root, options) {
     lines.push(`status_warning: large; digest is capped at ${statusMaxChars} chars`);
   }
   lines.push(`active_task_counts: ${statusCounts(listTasks(root))}`);
+  appendCurrentWork(lines, tasks, tasksLimit, "node tools/taskboard/cli.mjs list");
   lines.push("");
 
   let remaining = statusMaxChars;

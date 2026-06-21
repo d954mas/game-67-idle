@@ -186,6 +186,8 @@ ${"evidence\n".repeat(300)}
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /# Current Context Digest/);
   assert.match(result.stdout, /status_warning: large/);
+  assert.match(result.stdout, /## Current Work/);
+  assert.ok(result.stdout.indexOf("## Current Work") < result.stdout.indexOf("## Current Goal"));
   assert.match(result.stdout, /## Current Gate/);
   assert.match(result.stdout, /Keep the context digest short/);
   assert.match(result.stdout, /T0002 .* Current todo/);
@@ -285,6 +287,8 @@ Improve the game quickly.
   assert.match(result.stdout, /active_task_counts: idea:1 backlog:0 todo:0 doing:1 review:1/);
   assert.match(result.stdout, /open_actionable_tasks: 1/);
   assert.match(result.stdout, /review_tasks: 1/);
+  assert.match(result.stdout, /## Current Work/);
+  assert.ok(result.stdout.indexOf("## Current Work") < result.stdout.indexOf("## Current Goal"));
   assert.match(result.stdout, /Improve the game quickly/);
   assert.match(result.stdout, /T0001 .* Doing task/);
   assert.doesNotMatch(result.stdout, /T0002 .* Review task/);
