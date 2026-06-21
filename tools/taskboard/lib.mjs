@@ -6,7 +6,7 @@
 // arrays as [a, b]). Keep it strict so agents and humans stay compatible.
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync, statSync, renameSync } from "node:fs";
-import { basename, join, resolve, dirname } from "node:path";
+import { basename, join, resolve, dirname, relative } from "node:path";
 import { LIVE_STATUS_MAX_CHARS } from "../context_budget_config.mjs";
 
 export { LIVE_STATUS_MAX_CHARS };
@@ -25,6 +25,7 @@ const ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID = 28;
 // PASS result for one such command.
 const ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID = 31;
 const ORCHESTRATION_ALLOWED_FILES_BOUNDS_MIN_TASK_ID = 76;
+const ORCHESTRATION_TRACE_ARTIFACT_MIN_TASK_ID = 77;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
   "orchestration",
@@ -388,7 +389,7 @@ export function updateDoc(root, id, patch = {}) {
   fields.updated = todayStamp();
   const body = patch.body !== undefined ? patch.body : doc.body;
   if (requiresOrchestrationTransitionGuard(doc, fields)) {
-    const problem = orchestrationEvidenceProblem({ ...doc, fields, body });
+    const problem = orchestrationEvidenceProblem({ ...doc, fields, body }, root);
     if (problem) {
       throw validationError(problem);
     }
@@ -464,7 +465,7 @@ export function validateStoreDetailed(root) {
       problems.push(genericProblem(`${t.fields.id}: actionable task needs non-empty What and Done when sections`, { taskId: t.fields.id }));
     }
     if (ORCHESTRATION_REVIEW_STATUSES.has(t.fields.status)) {
-      const problem = orchestrationEvidenceProblem(t);
+      const problem = orchestrationEvidenceProblem(t, root);
       if (problem) {
         problems.push(problem);
       }
@@ -475,7 +476,7 @@ export function validateStoreDetailed(root) {
       continue;
     }
     if (ORCHESTRATION_REVIEW_STATUSES.has(t.fields.status)) {
-      const problem = orchestrationEvidenceProblem(t);
+      const problem = orchestrationEvidenceProblem(t, root);
       if (problem) {
         problems.push(problem);
       }
@@ -492,17 +493,18 @@ function requiresOrchestrationTransitionGuard(doc, fields) {
   );
 }
 
-function orchestrationEvidenceProblem(doc) {
+function orchestrationEvidenceProblem(doc, root = "") {
   if (doc.kind !== "task" || !isSubstantialOrchestrationTask(doc)) {
     return null;
   }
   const log = sectionText(doc.body, "Log");
   const requireMachineEvidence = requiresOrchestrationMachineEvidence(doc);
   const requireBoundedAllowedFiles = requiresOrchestrationAllowedFilesBounds(doc);
+  const requireTraceArtifact = requiresOrchestrationTraceArtifact(doc);
   if (
     hasOrchestrationUsedEvidence(log, requireMachineEvidence)
     && (!requireBoundedAllowedFiles || hasBoundedOrchestrationAllowedFiles(log))
-    && (!requireMachineEvidence || hasMatchingMachineEvidencePassAfterOrchestration(log))
+    && (!requireMachineEvidence || hasMatchingMachineEvidencePassAfterOrchestration(log, "", { root, requireTraceArtifact }))
   ) {
     return null;
   }
@@ -513,6 +515,8 @@ function orchestrationEvidenceProblem(doc) {
     requireMachineEvidence,
     requireMachineEvidencePass: requireMachineEvidence,
     requireBoundedAllowedFiles,
+    requireTraceArtifact,
+    root,
   });
   const detail = missing.length ? ` (missing/invalid: ${missing.join(", ")})` : "";
   return {
@@ -579,7 +583,9 @@ function missingOrchestrationFields(log, options = {}) {
     requireMachineEvidence = false,
     requireMachineEvidencePass = requireMachineEvidence,
     requireBoundedAllowedFiles = false,
+    requireTraceArtifact = false,
     requiredFields = ORCHESTRATION_REQUIRED_FIELDS,
+    root = "",
   } = typeof options === "boolean" ? { requireMachineEvidence: options } : options;
   const blocks = orchestrationUsedBlocks(log);
   if (!blocks.length) {
@@ -604,8 +610,9 @@ function missingOrchestrationFields(log, options = {}) {
     if (requireMachineEvidence && !hasMachineEvidenceCommand(block)) {
       missing.push("machine evidence command");
     }
-    if (requireMachineEvidencePass && !hasMatchingMachineEvidencePassAfterOrchestration(log, block)) {
-      missing.push("machine evidence pass");
+    if (requireMachineEvidencePass) {
+      const evidenceProblem = machineEvidencePassProblem(log, block, { root, requireTraceArtifact });
+      if (evidenceProblem) missing.push(evidenceProblem);
     }
     if (missing.length < bestMissing.length) {
       bestMissing = missing;
@@ -702,14 +709,33 @@ function boundedAllowedFilesProblem(text) {
   return "";
 }
 
-function hasMatchingMachineEvidencePassAfterOrchestration(log, declaredBlock = "") {
+function hasMatchingMachineEvidencePassAfterOrchestration(log, declaredBlock = "", options = {}) {
+  return machineEvidencePassProblem(log, declaredBlock, options) === "";
+}
+
+function machineEvidencePassProblem(log, declaredBlock = "", options = {}) {
+  const { root = "", requireTraceArtifact = false } = options;
   const declared = declaredBlock
     ? machineEvidenceSignatures(fieldValue(declaredBlock, ORCHESTRATION_EVIDENCE_FIELD_PATTERN))
     : orchestrationUsedBlocks(log)
       .flatMap((block) => machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN)));
-  if (declared.length === 0) return false;
+  if (declared.length === 0) return "machine evidence pass";
   const passSignatures = evidencePassBlocksAfterOrchestration(log).flatMap(machineEvidenceSignatures);
-  return declared.some((expected) => passSignatures.some((actual) => machineEvidenceSignaturesMatch(expected, actual)));
+  let artifactMismatch = false;
+  for (const expected of declared) {
+    for (const actual of passSignatures) {
+      if (!machineEvidenceSignaturesMatch(expected, actual)) continue;
+      if (requireTraceArtifact && expected.kind === "orchestration-trace") {
+        const problem = traceArtifactProblem(expected, root);
+        if (problem) {
+          artifactMismatch = true;
+          continue;
+        }
+      }
+      return "";
+    }
+  }
+  return artifactMismatch ? "machine evidence artifact" : "machine evidence pass";
 }
 
 function machineEvidenceSignatures(text) {
@@ -726,6 +752,7 @@ function machineEvidenceSignatures(text) {
         kind: "orchestration-trace",
         source,
         artifact,
+        artifact_path: commandFlagRawValue(command, ["--json-output"]),
         min_agents: commandMinAgents(command),
       });
       continue;
@@ -763,12 +790,24 @@ function commandSourceSignature(command, flags) {
   return "";
 }
 
-function normalizeMachineEvidenceValue(value) {
+function commandFlagRawValue(command, flags) {
+  for (const flag of flags) {
+    const escaped = flag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = command.match(new RegExp(`(?:^|\\s)${escaped}(?:=|\\s+)(?:"([^"]+)"|'([^']+)'|(\\S+))`, "i"));
+    if (match) return cleanMachineEvidenceValue(match[1] || match[2] || match[3] || "");
+  }
+  return "";
+}
+
+function cleanMachineEvidenceValue(value) {
   return String(value || "")
     .replaceAll("\\", "/")
     .trim()
-    .replace(/^[`'"]+|[`'",.;)]+$/g, "")
-    .toLowerCase();
+    .replace(/^[`'"]+|[`'",.;)]+$/g, "");
+}
+
+function normalizeMachineEvidenceValue(value) {
+  return cleanMachineEvidenceValue(value).toLowerCase();
 }
 
 function machineEvidenceSignaturesMatch(expected, actual) {
@@ -801,6 +840,56 @@ function evidencePassBlocksAfterOrchestration(log) {
   return blocks;
 }
 
+function traceArtifactProblem(signature, root) {
+  if (!root) return "missing taskboard root";
+  const artifactPath = cleanMachineEvidenceValue(signature.artifact_path || String(signature.artifact || "").replace(/^--json-output=/i, ""));
+  if (!artifactPath) return "missing trace artifact path";
+  if (!artifactPath.toLowerCase().endsWith(".json")) return "trace artifact is not json";
+  if (/^[a-z][a-z0-9+.-]*:/i.test(artifactPath) || /^(?:[a-z]:|\/)/i.test(artifactPath)) {
+    return "trace artifact is not repo-local";
+  }
+  const rootPath = resolve(root);
+  const targetPath = resolve(rootPath, artifactPath);
+  const rel = relative(rootPath, targetPath);
+  if (!rel || rel.startsWith("..") || /^[a-z]:/i.test(rel)) return "trace artifact is outside taskboard root";
+  if (!existsSync(targetPath)) return "missing trace artifact";
+  const stats = statSync(targetPath);
+  if (!stats.isFile()) return "trace artifact is not a file";
+  if (stats.size > 1024 * 1024) return "trace artifact is too large";
+
+  let artifact;
+  try {
+    artifact = JSON.parse(readFileSync(targetPath, "utf8"));
+  } catch {
+    return "invalid trace artifact json";
+  }
+  if (artifact?.ok !== true) return "trace artifact did not pass";
+  if (Array.isArray(artifact.problems) && artifact.problems.length > 0) return "trace artifact has problems";
+  for (const key of ["missing", "unordered", "incomplete", "unpaired"]) {
+    if (Array.isArray(artifact[key]) && artifact[key].length > 0) return `trace artifact has ${key}`;
+  }
+
+  if (signature.source?.startsWith("--parent-thread-id=")) {
+    const expected = signature.source.replace(/^--parent-thread-id=/, "");
+    if (normalizeMachineEvidenceValue(artifact.parentThreadId) !== expected) return "trace artifact parent thread mismatch";
+    const count = Number(artifact.subagentSessionCount ?? artifact.count ?? (Array.isArray(artifact.subagentSessions) ? artifact.subagentSessions.length : 0));
+    if (!Number.isFinite(count) || count < (signature.min_agents ?? 1)) return "trace artifact subagent count too low";
+    if (!Array.isArray(artifact.subagentSessions) || artifact.subagentSessions.length !== count) return "trace artifact subagent sessions mismatch";
+    if (artifact.subagentSessions.some((agent) => !agent?.id || !agent?.sessionFile)) return "trace artifact subagent session incomplete";
+  } else if (signature.source?.startsWith("--session=")) {
+    const expected = signature.source.replace(/^--session=/, "");
+    if (normalizeMachineEvidenceValue(artifact.session) !== expected) return "trace artifact session mismatch";
+    if (!Array.isArray(artifact.calls) || artifact.calls.length === 0) return "trace artifact has no transcript calls";
+    const operations = new Set(artifact.calls.map((call) => String(call?.operation || "")));
+    for (const operation of ["spawn", "wait", "close"]) {
+      if (!operations.has(operation)) return `trace artifact missing ${operation}`;
+    }
+  } else {
+    return "trace artifact source mismatch";
+  }
+  return "";
+}
+
 function requiresOrchestrationMachineEvidence(doc) {
   const match = String(doc.fields.id || "").match(/^T(\d+)$/);
   return match ? Number(match[1]) >= ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID : true;
@@ -809,6 +898,11 @@ function requiresOrchestrationMachineEvidence(doc) {
 function requiresOrchestrationAllowedFilesBounds(doc) {
   const match = String(doc.fields.id || "").match(/^T(\d+)$/);
   return match ? Number(match[1]) >= ORCHESTRATION_ALLOWED_FILES_BOUNDS_MIN_TASK_ID : true;
+}
+
+function requiresOrchestrationTraceArtifact(doc) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= ORCHESTRATION_TRACE_ARTIFACT_MIN_TASK_ID : true;
 }
 
 function fieldValue(text, fieldPattern) {

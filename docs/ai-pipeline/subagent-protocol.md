@@ -124,7 +124,9 @@ strict `node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok ...`.
 Before moving the task to review/done, record a later `- evidence: PASS ...`
 log entry for that approved machine evidence command. The validator checks the
 command shape and recorded PASS line; it does not execute commands copied from
-task logs.
+task logs. For new `orchestration-trace ... --json-output <file>` evidence, it
+also reads the declared repo-local JSON artifact and requires a passing trace
+that matches the declared source and minimum agent count.
 
 Strict status rollup defaults to `--min-agents 1`; raise it when the packet
 expects several independent agents.

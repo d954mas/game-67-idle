@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, utimesSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import vm from "node:vm";
@@ -50,6 +50,51 @@ function writeTaskDoc(root, fields, body) {
       ...fields,
     }, body),
   );
+}
+
+function writeJsonFile(root, relPath, value) {
+  const file = join(root, relPath);
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function passingParentTrace(parentThreadId = "parent", count = 2) {
+  return {
+    ok: true,
+    session: "",
+    parentThreadId,
+    calls: [],
+    missing: [],
+    unordered: [],
+    incomplete: [],
+    unpaired: [],
+    subagentSessions: Array.from({ length: count }, (_, index) => ({
+      id: `agent-${index + 1}`,
+      sessionFile: `sessions/agent-${index + 1}.jsonl`,
+    })),
+    subagentSessionCount: count,
+    problems: [],
+  };
+}
+
+function passingSessionTrace(session = "tmp/session.jsonl") {
+  return {
+    ok: true,
+    session,
+    parentThreadId: "",
+    calls: [
+      { operation: "spawn", target: "agent-a" },
+      { operation: "wait", target: "agent-a" },
+      { operation: "close", target: "agent-a" },
+    ],
+    missing: [],
+    unordered: [],
+    incomplete: [],
+    unpaired: [],
+    subagentSessions: [],
+    subagentSessionCount: 0,
+    problems: [],
+  };
 }
 
 test("frontmatter roundtrip preserves fields and body", () => {
@@ -877,6 +922,200 @@ test("validateStore accepts orchestration-trace session evidence with json outpu
   stop condition: tests pass
   independent reviewer: reviewed guard scope
 - evidence: PASS \`node tools/ai.mjs orchestration-trace --session tmp/session.jsonl --json-output tmp/trace.json --json\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore rejects missing trace artifact for T0077+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0077",
+    title: "Pipeline trace artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify trace artifacts
+  allowed files: tools/taskboard/lib.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs orchestration-trace --parent-thread-id parent --min-agents 2 --json-output tmp/trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --min-agents 2 --json-output tmp/trace.json --json\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("updateDoc rejects review transition with missing trace artifact for T0077+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0077",
+    title: "Pipeline trace artifact guard",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify trace artifacts
+  allowed files: tools/taskboard/lib.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json\``));
+
+  assert.throws(
+    () => updateDoc(root, "T0077", { fields: { status: "review" } }),
+    /machine evidence artifact/,
+  );
+});
+
+test("validateStore rejects invalid trace artifact json for T0077+ evidence", (t) => {
+  const root = tempRoot(t);
+  mkdirSync(join(root, "tmp"), { recursive: true });
+  writeFileSync(join(root, "tmp", "trace.json"), "{not json");
+  writeTaskDoc(root, {
+    id: "T0077",
+    title: "Pipeline trace artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify trace artifacts
+  allowed files: tools/taskboard/lib.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore rejects failing trace artifact for T0077+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tmp/trace.json", {
+    ...passingParentTrace("parent", 2),
+    ok: false,
+    problems: ["expected at least 2 subagent session(s), found 1"],
+  });
+  writeTaskDoc(root, {
+    id: "T0077",
+    title: "Pipeline trace artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify trace artifacts
+  allowed files: tools/taskboard/lib.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs orchestration-trace --parent-thread-id parent --min-agents 2 --json-output tmp/trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --min-agents 2 --json-output tmp/trace.json --json\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore rejects trace artifact source or count mismatch for T0077+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tmp/trace.json", passingParentTrace("other-parent", 1));
+  writeTaskDoc(root, {
+    id: "T0077",
+    title: "Pipeline trace artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify trace artifacts
+  allowed files: tools/taskboard/lib.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs orchestration-trace --parent-thread-id parent --min-agents 2 --json-output tmp/trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --min-agents 2 --json-output tmp/trace.json --json\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore rejects non-local trace artifact paths for T0077+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0077",
+    title: "Pipeline trace artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify trace artifacts
+  allowed files: tools/taskboard/lib.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output ../trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output ../trace.json --json\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore accepts valid parent trace artifact for T0077+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tmp/trace.json", passingParentTrace("parent", 2));
+  writeTaskDoc(root, {
+    id: "T0077",
+    title: "Pipeline trace artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify trace artifacts
+  allowed files: tools/taskboard/lib.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs orchestration-trace --parent-thread-id parent --min-agents 2 --json-output tmp/trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --min-agents 2 --json-output tmp/trace.json --json\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore accepts valid session trace artifact for T0077+ evidence", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tmp/trace.json", passingSessionTrace("tmp/session.jsonl"));
+  writeTaskDoc(root, {
+    id: "T0077",
+    title: "Pipeline trace artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify trace artifacts
+  allowed files: tools/taskboard/lib.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs orchestration-trace --session tmp/session.jsonl --json-output tmp/trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --session tmp/session.jsonl --json-output tmp/trace.json --json\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore preserves pre-T0077 trace PASS compatibility without artifact", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0076",
+    title: "Pipeline legacy trace guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify legacy trace evidence
+  allowed files: tools/taskboard/lib.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json\``));
 
   assert.deepEqual(validateStoreDetailed(root), []);
 });
