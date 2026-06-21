@@ -15,6 +15,29 @@ export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "don
 export const EPIC_STATUSES = ["idea", "active", "done", "dropped"];
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
 
+const ORCHESTRATION_REVIEW_STATUSES = new Set(["review", "done"]);
+// T0028 introduced the mechanical guard; older archives keep their legacy logs.
+const ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID = 28;
+const ORCHESTRATION_KEYWORDS = [
+  "pipeline",
+  "orchestration",
+  "subagent",
+  "subagents",
+  "taskboard",
+  "AI_PIPELINE",
+  "docs/ai-pipeline",
+  "tools/pipeline_validate",
+  "tools/skills_eval",
+  "tools/skills_sync",
+  ".codex/skills",
+  "skill entrypoint",
+];
+const SMALL_SCOPE_REASON_PATTERNS = [
+  /^one-file\b/i,
+  /^docs-only\b/i,
+  /^no code\b/i,
+];
+
 export function findRoot(start = process.cwd()) {
   if (process.env.TASKBOARD_ROOT) {
     return resolve(process.env.TASKBOARD_ROOT);
@@ -300,6 +323,12 @@ export function updateDoc(root, id, patch = {}) {
   }
   fields.updated = todayStamp();
   const body = patch.body !== undefined ? patch.body : doc.body;
+  if (requiresOrchestrationTransitionGuard(doc, fields)) {
+    const problem = orchestrationEvidenceProblem({ ...doc, fields, body });
+    if (problem) {
+      throw new Error(problem);
+    }
+  }
   writeFileSync(doc.file, serializeDoc(fields, body));
   let file = doc.file;
   if (doc.kind === "task") {
@@ -327,6 +356,7 @@ function taskStorageDir(root, fields) {
 export function validateStore(root) {
   const problems = [];
   const tasks = listTasks(root);
+  const archivedTasks = listTasks(root, { includeArchive: true }).filter((t) => t.archived);
   const epics = listEpics(root);
   const statusFile = join(taskDir(root), "STATUS.md");
   if (existsSync(statusFile)) {
@@ -365,8 +395,108 @@ export function validateStore(root) {
     if (isActionableTask(t) && !hasActionableTaskBody(t.body)) {
       problems.push(`${t.fields.id}: actionable task needs non-empty What and Done when sections`);
     }
+    if (ORCHESTRATION_REVIEW_STATUSES.has(t.fields.status)) {
+      const problem = orchestrationEvidenceProblem(t);
+      if (problem) {
+        problems.push(problem);
+      }
+    }
+  }
+  for (const t of archivedTasks) {
+    if (!isArchivedOrchestrationGuardCandidate(t)) {
+      continue;
+    }
+    if (ORCHESTRATION_REVIEW_STATUSES.has(t.fields.status)) {
+      const problem = orchestrationEvidenceProblem(t);
+      if (problem) {
+        problems.push(problem);
+      }
+    }
   }
   return problems;
+}
+
+function requiresOrchestrationTransitionGuard(doc, fields) {
+  return (
+    doc.kind === "task" &&
+    doc.fields.status !== fields.status &&
+    ORCHESTRATION_REVIEW_STATUSES.has(fields.status)
+  );
+}
+
+function orchestrationEvidenceProblem(doc) {
+  if (doc.kind !== "task" || !isSubstantialOrchestrationTask(doc)) {
+    return "";
+  }
+  const log = sectionText(doc.body, "Log");
+  if (hasOrchestrationUsedEvidence(log) || hasSmallScopeOrchestrationException(log)) {
+    return "";
+  }
+  return `${doc.fields.id}: substantial pipeline/orchestration task needs orchestration evidence before review/done`;
+}
+
+function isSubstantialOrchestrationTask(doc) {
+  const haystack = [
+    doc.fields.title || "",
+    Array.isArray(doc.fields.tags) ? doc.fields.tags.join(" ") : doc.fields.tags || "",
+    doc.body || "",
+  ].join("\n");
+  return ORCHESTRATION_KEYWORDS.some((keyword) => haystack.toLowerCase().includes(keyword.toLowerCase()));
+}
+
+function isArchivedOrchestrationGuardCandidate(doc) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID : true;
+}
+
+function hasOrchestrationUsedEvidence(log) {
+  const required = [
+    /\bobjective\b/i,
+    /\b(?:allowed files?|inputs?)\b/i,
+    /\bexpected output\b/i,
+    /\b(?:evidence command|evidence artifact|artifact)\b/i,
+    /\bstop condition\b/i,
+    /\bindependent\s+(?:reviewer|verifier)\b/i,
+  ];
+  return orchestrationUsedBlocks(log).some((block) =>
+    required.every((pattern) => hasMeaningfulFieldValue(block, pattern)),
+  );
+}
+
+function orchestrationUsedBlocks(log) {
+  const lines = String(log || "").split(/\r?\n/);
+  const blocks = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!/orchestration:\s*used\b/i.test(lines[i])) continue;
+    const block = [lines[i]];
+    for (let j = i + 1; j < lines.length; j += 1) {
+      if (/^\s*[-*]\s+(?:\d{4}-\d{2}-\d{2}\s*:|orchestration\s*:)/i.test(lines[j])) break;
+      block.push(lines[j]);
+    }
+    blocks.push(block.join("\n"));
+  }
+  return blocks;
+}
+
+function hasMeaningfulFieldValue(text, fieldPattern) {
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const match = line.match(/^\s*(?:[-*]\s*)?(.+?)\s*:\s*(.*)$/);
+    if (!match || !fieldPattern.test(match[1])) continue;
+    const value = match[2].trim();
+    if (!value || /^(tbd|todo|none|n\/a|na|unknown|\.\.\.)$/i.test(value)) {
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+function hasSmallScopeOrchestrationException(log) {
+  const match = log.match(/orchestration:\s*not needed\s*-\s*small scope:\s*(.+)/i);
+  if (!match || !match[1].trim()) {
+    return false;
+  }
+  return SMALL_SCOPE_REASON_PATTERNS.some((pattern) => pattern.test(match[1]));
 }
 
 function isActionableTask(doc) {

@@ -72,6 +72,30 @@ product/visual, or asset changes. A reviewer should check evidence, scope
 creep, missing tests, context-budget risk, and contradictions with current
 policy.
 
+## Task Closeout Guard
+
+Substantial pipeline/orchestration tasks cannot move to `review` or `done`
+without one of these `## Log` markers:
+
+```text
+- orchestration: used
+  objective: <non-empty>
+  allowed files: <non-empty>
+  expected output: <non-empty>
+  evidence command: <non-empty>
+  stop condition: <non-empty>
+  independent reviewer: <non-empty>
+```
+
+For genuinely small work:
+
+```text
+- orchestration: not needed - small scope: one-file/docs-only/no code ...
+```
+
+The guard is label-based for now. It proves that orchestration was considered
+and recorded; it does not inspect transcripts yet.
+
 ## Context Budgets
 
 Context budgets are pressure signals, not taste. Do not skip required evidence

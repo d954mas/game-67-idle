@@ -354,5 +354,8 @@ function remediationHint(problem) {
   if (problem.includes("exceeds live status budget")) {
     return "replace inline history with pointers to `tasks/archive/` or `gamedesign/projects/<game-id>/`; keep `STATUS.md` as a current index";
   }
+  if (problem.includes("substantial pipeline/orchestration task needs orchestration evidence")) {
+    return "add `orchestration: used` with packet fields and an independent reviewer/verifier, or record `orchestration: not needed - small scope: <reason>`";
+  }
   return "";
 }

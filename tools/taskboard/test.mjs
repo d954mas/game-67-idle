@@ -17,6 +17,23 @@ function tempRoot(t) {
   return dir;
 }
 
+function taskBodyWithLog(log) {
+  return `## What
+
+Make taskboard pipeline work checkable.
+
+## Done when
+
+- [ ] evidence is mechanically validated
+
+## Open questions
+
+## Log
+
+${log}
+`;
+}
+
 test("frontmatter roundtrip preserves fields and body", () => {
   const fields = {
     id: "T0001",
@@ -271,6 +288,181 @@ test("updateDoc rejects invalid status", (t) => {
   assert.throws(() => updateDoc(root, "T0001", { fields: { status: "nonsense" } }), /Invalid status/);
 });
 
+test("updateDoc rejects substantial pipeline transition without orchestration evidence", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Pipeline guard",
+    status: "doing",
+    body: taskBodyWithLog("- 2026-06-21: Implemented the validator."),
+  });
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "done" } }),
+    /substantial pipeline\/orchestration task needs orchestration evidence/,
+  );
+});
+
+test("updateDoc accepts substantial pipeline transition with orchestration packet and reviewer", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Pipeline guard",
+    status: "doing",
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify the transition guard behavior
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused failing/passing taskboard tests
+  evidence command: node --test tools/taskboard/test.mjs
+  stop condition: requested guard scenarios pass
+  independent reviewer: reviewed transition and validateStore cases`),
+  });
+  const updated = updateDoc(root, "T0001", { fields: { status: "review" } });
+  assert.equal(updated.fields.status, "review");
+});
+
+test("updateDoc rejects orchestration packet labels without meaningful values", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Pipeline guard",
+    status: "doing",
+    body: taskBodyWithLog(`- orchestration: used
+  objective:
+  allowed files: TBD
+  expected output: none
+  evidence command: ...
+  stop condition: unknown
+  independent reviewer:`),
+  });
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "review" } }),
+    /substantial pipeline\/orchestration task needs orchestration evidence/,
+  );
+});
+
+test("updateDoc rejects orchestration packet assembled from separate log entries", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Pipeline guard",
+    status: "doing",
+    body: taskBodyWithLog(`- 2026-06-21: objective: old planning note
+  allowed files: tools/taskboard/lib.mjs
+  expected output: old output note
+  evidence command: old command
+  stop condition: old stop
+  independent reviewer: old reviewer
+- 2026-06-21: orchestration: used`),
+  });
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "review" } }),
+    /substantial pipeline\/orchestration task needs orchestration evidence/,
+  );
+});
+
+test("updateDoc accepts substantial task with small-scope orchestration exception", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Taskboard validator wording",
+    status: "doing",
+    body: taskBodyWithLog("- orchestration: not needed - small scope: one-file guard wording tweak"),
+  });
+  const updated = updateDoc(root, "T0001", { fields: { status: "done" } });
+  assert.equal(updated.fields.status, "done");
+});
+
+test("updateDoc rejects empty or weak small-scope orchestration exceptions", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Pipeline guard empty exception",
+    status: "doing",
+    body: taskBodyWithLog("- orchestration: not needed - small scope: "),
+  });
+  createTask(root, {
+    title: "Pipeline guard weak exception",
+    status: "doing",
+    body: taskBodyWithLog("- orchestration: not needed - small scope: no runtime change"),
+  });
+  createTask(root, {
+    title: "Pipeline guard spoofed exception",
+    status: "doing",
+    body: taskBodyWithLog("- orchestration: not needed - small scope: not one-file; touched many files"),
+  });
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "review" } }),
+    /substantial pipeline\/orchestration task needs orchestration evidence/,
+  );
+  assert.throws(
+    () => updateDoc(root, "T0002", { fields: { status: "review" } }),
+    /substantial pipeline\/orchestration task needs orchestration evidence/,
+  );
+  assert.throws(
+    () => updateDoc(root, "T0003", { fields: { status: "review" } }),
+    /substantial pipeline\/orchestration task needs orchestration evidence/,
+  );
+});
+
+test("updateDoc does not classify gameplay skills tasks as pipeline orchestration", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Add player skills menu",
+    status: "doing",
+    body: `## What
+
+Add a gameplay menu for hero skill choices.
+
+## Done when
+
+- [ ] the menu can move to review
+
+## Open questions
+
+## Log
+
+- 2026-06-21: Implemented gameplay menu validation.
+`,
+  });
+  const updated = updateDoc(root, "T0001", { fields: { status: "review" } });
+  assert.equal(updated.fields.status, "review");
+});
+
+test("validateStore reports active done task missing orchestration evidence", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Subagent guard",
+    status: "done",
+    body: taskBodyWithLog("- 2026-06-21: Closed without review."),
+  });
+  const problems = validateStore(root);
+  assert.ok(
+    problems.some((p) => p.includes("T0001: substantial pipeline/orchestration task needs orchestration evidence")),
+    problems.join("; "),
+  );
+});
+
+test("validateStore reports archived done task missing orchestration evidence", (t) => {
+  const root = tempRoot(t);
+  const archiveDir = join(root, "tasks", "archive", "E001");
+  mkdirSync(archiveDir, { recursive: true });
+  writeFileSync(
+    join(archiveDir, "T0028-pipeline-guard.md"),
+    serializeDoc(
+      {
+        id: "T0028",
+        title: "Pipeline guard",
+        status: "done",
+        epic: "E001",
+        priority: "P0",
+        tags: ["pipeline"],
+        created: "2026-06-21",
+        updated: "2026-06-21",
+      },
+      taskBodyWithLog("- 2026-06-21: Closed without orchestration evidence."),
+    ),
+  );
+  const problems = validateStore(root);
+  assert.ok(
+    problems.some((p) => p.includes("T0028: substantial pipeline/orchestration task needs orchestration evidence")),
+    problems.join("; "),
+  );
+});
+
 test("updateDoc with stale rev throws conflict", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Conflict me" });
@@ -322,6 +514,20 @@ Make the backlog item executable.
   assert.deepEqual(validateStore(root), []);
 });
 
+test("validateStore reports active review task missing orchestration evidence", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Taskboard pipeline guard",
+    status: "review",
+    body: taskBodyWithLog("- 2026-06-21: Ready for review."),
+  });
+  const problems = validateStore(root);
+  assert.ok(
+    problems.some((p) => p.includes("T0001: substantial pipeline/orchestration task needs orchestration evidence")),
+    problems.join("; "),
+  );
+});
+
 test("validateStore rejects oversized live status", (t) => {
   const root = tempRoot(t);
   mkdirSync(join(root, "tasks"), { recursive: true });
@@ -361,11 +567,18 @@ test("cli validate prints remediation hints for common failures", (t) => {
   mkdirSync(join(root, "tasks"), { recursive: true });
   writeFileSync(join(root, "tasks", "STATUS.md"), `# Project Status\n\n${"old evidence\n".repeat(700)}`);
   createTask(root, { title: "Empty backlog", status: "backlog" });
+  createTask(root, {
+    title: "Pipeline review without orchestration",
+    status: "review",
+    body: taskBodyWithLog("- 2026-06-21: Ready for review."),
+  });
   const cli = join(import.meta.dirname, "cli.mjs");
   const result = spawnSync(process.execPath, [cli, "validate"], { cwd: root, encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /problem: T0001: actionable task needs/);
   assert.match(result.stdout, /hint: fill `## What` and at least one checkable `## Done when`/);
+  assert.match(result.stdout, /problem: T0002: substantial pipeline\/orchestration task needs orchestration evidence/);
+  assert.match(result.stdout, /hint: add `orchestration: used` with packet fields/);
   assert.match(result.stdout, /problem: tasks\/STATUS\.md exceeds live status budget/);
   assert.match(result.stdout, /hint: replace inline history with pointers/);
 });
