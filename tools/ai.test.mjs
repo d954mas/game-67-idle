@@ -622,6 +622,29 @@ test("orchestration-bootstrap forwards missing argument failures", () => {
   }
 });
 
+test("orchestration-bootstrap forwards invalid evidence command failures", () => {
+  const dir = tempDir();
+  try {
+    const result = run([
+      "orchestration-bootstrap",
+      ...bootstrapArgs({ "evidence-command": "node tools/ai.mjs orchestration-check --current --json" }),
+      "--json",
+    ], {
+      env: { ...process.env, TASKBOARD_ROOT: dir },
+    });
+
+    assert.equal(result.status, 1);
+    assert.equal(result.stderr, "");
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.problem.code, "invalid_evidence_command");
+    const taskRoot = join(dir, "tasks", "active");
+    assert.equal(existsSync(taskRoot), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status imports Codex session before analysis", () => {
   const dir = tempDir();
   try {

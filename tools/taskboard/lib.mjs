@@ -630,6 +630,10 @@ function hasMachineEvidenceCommand(block) {
   return machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN)).length > 0;
 }
 
+export function isMachineEvidenceCommand(text) {
+  return machineEvidenceSignatures(text).length > 0;
+}
+
 function hasMatchingMachineEvidencePassAfterOrchestration(log, declaredBlock = "") {
   const declared = declaredBlock
     ? machineEvidenceSignatures(fieldValue(declaredBlock, ORCHESTRATION_EVIDENCE_FIELD_PATTERN))

@@ -1681,6 +1681,25 @@ test("cli orchestration-bootstrap rejects missing args without creating tasks", 
   assert.deepEqual(listTasks(root), []);
 });
 
+test("cli orchestration-bootstrap rejects invalid machine evidence command without creating tasks", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [
+    cli,
+    "orchestration-bootstrap",
+    ...bootstrapArgs({ "evidence-command": "node tools/ai.mjs orchestration-trace --json-output tmp/trace.json --json" }),
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stderr, "");
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "invalid_evidence_command");
+  assert.match(parsed.problem.message, /machine-verifiable orchestration command/);
+  assert.deepEqual(listTasks(root), []);
+});
+
 test("cli orchestration-bootstrap rejects existing current task without creating another", (t) => {
   const root = tempRoot(t);
   createTask(root, {

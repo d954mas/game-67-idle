@@ -1368,6 +1368,7 @@ test("status clean-tail next action guides task creation when no current preflig
     assert.match(status.next_action, /Recent subagents are clean of classified tool-use failures/);
     assert.match(status.next_action, /create one current task with `node tools\/ai\.mjs orchestration-bootstrap/);
     assert.match(status.next_action, /--objective "\.\.\."/);
+    assert.match(status.next_action, /--evidence-command "node tools\/ai\.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent-thread-id"/);
     assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check --current --json/);
     assert.match(result.stdout, /agent tool-usage clean tail: 3 agent\(s\)/);
     assert.match(result.stdout, /Recent subagents are clean of classified tool-use failures/);

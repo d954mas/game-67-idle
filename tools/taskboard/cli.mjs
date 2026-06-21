@@ -20,6 +20,7 @@ import {
   updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
   orchestrationPreflightProblem, parseDoc, currentDoingOrchestrationTaskIds,
+  isMachineEvidenceCommand,
 } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
@@ -136,6 +137,14 @@ function bootstrapCurrentProblem(ids) {
     code: "current_task_exists",
     taskIds: ids,
     message: `current doing pipeline/orchestration task already exists: ${ids.join(", ")}; finish or move it before bootstrapping another`,
+  };
+}
+
+function bootstrapMachineEvidenceProblem(command) {
+  return {
+    code: "invalid_evidence_command",
+    evidenceCommand: command,
+    message: "--evidence-command must be a machine-verifiable orchestration command: status --agent-rollup --require-agent-rollup-ok with a source, or orchestration-trace with source plus --json-output",
   };
 }
 
@@ -479,6 +488,14 @@ switch (cmd) {
     const missingArgs = missingBootstrapArgs(args);
     if (missingArgs.length) {
       const problem = bootstrapMissingProblem(missingArgs);
+      if (args.json) {
+        writeJson({ ok: false, problem });
+        process.exit(1);
+      }
+      fail(problem.message);
+    }
+    if (!isMachineEvidenceCommand(argText(args, "evidence-command"))) {
+      const problem = bootstrapMachineEvidenceProblem(argText(args, "evidence-command"));
       if (args.json) {
         writeJson({ ok: false, problem });
         process.exit(1);
