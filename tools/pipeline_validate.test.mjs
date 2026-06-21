@@ -30,6 +30,8 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.match(result.stdout, /== bootstrap export tests/);
   assert.match(result.stdout, /== repeated product gate failure guard/);
   assert.doesNotMatch(result.stdout, /Ember Road/);
+  assert.match(result.stdout, /== game workflow guard/);
+  assert.match(result.stdout, /== game workflow guard tests/);
   assert.match(result.stdout, /== visual invariant guard/);
   assert.match(result.stdout, /== visual invariant guard tests/);
   assert.doesNotMatch(result.stdout, /== portable export/);

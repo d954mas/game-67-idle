@@ -1,7 +1,6 @@
 # Quality And Validation Reference
 
-Portable quality-gate and validation rules. Load when changing validation
-routing, product gates, done criteria, or repeated-failure guards.
+Portable rules for gates, done criteria, or guards.
 
 ## Quality Gates
 
@@ -12,27 +11,35 @@ Separate verdicts:
 - Art-source/assets: are runtime assets real, traceable, target-appropriate?
 - Technical/build: does the changed runtime/tooling actually work?
 
-Do not call a slice done from one green gate; builds/probes/audits support, not
-replace, player-facing judgment. For a contested gate, run one clean-context
-verifier on only the named check (`node tools/ai.mjs gate ... --verify`):
-CONFIRM/REFUTE, no self-grading.
+Do not close from one green gate. Builds/probes/audits are evidence, not
+acceptance. For a contested gate, run one clean verifier on only the named check
+(`node tools/ai.mjs gate ... --verify`): CONFIRM/REFUTE, no self-grading.
 
-When a strict/product gate fails twice for the same major reason, stop polishing
-and create/link a different path (architecture, tooling, source asset, reference)
-or record explicit lead acceptance. Enforced by:
+When strict/product fails twice for the same reason, stop polishing and create
+another path (architecture, tooling, source asset, reference) or record lead
+acceptance:
 
 ```powershell
 node tools/product_gate/repeated_failure_guard.mjs
 ```
 
-Visual rejection: run
-`node tools/product_gate/visual_rejection_lock.mjs --project <id> --task <TID> --screenshot <path> --problem "<why rejected>" --next "<different path>"`
-first.
+Visual rejection first:
+`node tools/product_gate/visual_rejection_lock.mjs --project <id> --task <TID> --screenshot <path> --problem "<why rejected>" --next "<different path>"`.
 
-`node tools/ai.mjs validate` runs it in quick mode. Gate lines may carry a
-parseable `[GATE-ID]: PASS|CONCERNS|FAIL` verdict; the guard clusters a gate's
-FAILs by it and counts TOTAL (not just consecutive) occurrences, so interleaved
-axes can't slip a loop past.
+Active game workflow guard:
+
+```powershell
+node tools/game_context/workflow_guard.mjs
+```
+
+Dormant for a clean seed. For active games it fails feature/content expansion
+under unresolved lead rejection, runtime work when `data/core_loop.json` says
+references are not ready, and oversized `src/clean_seed_main.c` without an
+architecture/decomposition task. Reviews/scores are evidence only; record lead
+acceptance before overriding rejection.
+
+`node tools/ai.mjs validate` runs both. Gate logs may carry
+`[GATE-ID]: PASS|CONCERNS|FAIL`; repeated-failure guard counts total FAILs.
 
 ## Validation Defaults
 
@@ -40,18 +47,16 @@ axes can't slip a loop past.
 - Skill/process changes: `node tools/skills_eval.mjs`
 - Product gate changes: `node --test tools/product_gate/test.mjs`
 - Taskboard changes: `node --test tools/taskboard/test.mjs`
-- AI facade/profile changes: `node --test tools/ai.test.mjs` + focused
-  `tools/ai_profile` tests
+- AI facade/profile changes: `node --test tools/ai.test.mjs` + focused profile
+  tests
 - Reusable pipeline: `node tools/ai.mjs validate`
 - Review-stage context/cap pressure: `node tools/ai.mjs validate --review`
 - Portable/export/runtime gates: `node tools/ai.mjs validate --full`
 - Visual/playable changes: native scenario plus screenshot/video/product gate
   evidence
 
-Playable smokes should expose acceptance as named checks, not generic pass/fail.
-Prefer stable ids such as `accept.chest_opens_after_combat` and
-`visual.screenshot_captured`, then print a compact summary. Keep task
-`Done when` readable while the runtime contract stays machine-checkable.
+Playable smokes expose named checks, not generic pass/fail. Prefer stable ids
+such as `accept.chest_opens_after_combat`, then print a compact summary.
 
 Escalate validation only when the change/export path requires it; budgets are
 a review gate and full validation a final gate, not defaults after small edits.
