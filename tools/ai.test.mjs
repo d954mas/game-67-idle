@@ -693,7 +693,46 @@ test("status forwards agent rollup options", () => {
     writeJsonl(profile, [
       { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
     ]);
-    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta("subagent-a", parent)]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [
+      subagentSessionMeta("subagent-a", parent),
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "functions.shell_command",
+          call_id: "call_status",
+          arguments: JSON.stringify({ command: "git status --short" }),
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call_status",
+          output: "Exit code: 0\nWall time: 0.1 seconds\nOutput:\n",
+        },
+      },
+    ]);
+    writeJsonl(join(dir, "rollout-b.jsonl"), [
+      subagentSessionMeta("subagent-b", parent),
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "functions.shell_command",
+          call_id: "call_test",
+          arguments: JSON.stringify({ command: "node --test tools/ai.test.mjs" }),
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call_test",
+          output: "Exit code: 0\nWall time: 0.2 seconds\nOutput:\n",
+        },
+      },
+    ]);
 
     const result = run([
       "status",
@@ -703,12 +742,13 @@ test("status forwards agent rollup options", () => {
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,
+      "--min-agents", "2",
       "--no-import-codex-session",
     ]);
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /## Agent Rollup/);
-    assert.match(result.stdout, /subagent sessions: 1/);
+    assert.match(result.stdout, /subagent sessions: 2/);
   } finally {
     cleanup(dir);
   }

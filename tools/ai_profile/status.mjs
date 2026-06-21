@@ -290,8 +290,22 @@ function isAgentToolUsage(record) {
   return record.failure_kind === "agent_tool_usage";
 }
 
+function isAgentEvidenceProbe(record) {
+  return record.failure_kind === "agent_evidence_probe";
+}
+
+function isStrictAgentRollupCommand(command) {
+  const text = normalizeCommand(command);
+  return /\bnode(?:\.exe|\.cmd)?\s+tools\/ai\.mjs\s+status\b/i.test(text)
+    && /\s--agent-rollup\b/i.test(text)
+    && /\s--require-agent-rollup-ok\b/i.test(text);
+}
+
 function transcriptFailureDetails(command, output) {
   const text = String(output || "");
+  if (isStrictAgentRollupCommand(command) && /strict problem:|Fix the agent rollup evidence|Inspect unresolved agent failure samples/i.test(text)) {
+    return { failure_kind: "agent_evidence_probe", blocked_by: "failed strict agent rollup probe" };
+  }
   if (/ItemNotFoundException|ObjectNotFound/.test(text)) {
     return { failure_kind: "agent_tool_usage", blocked_by: "missing local file/path" };
   }
@@ -347,11 +361,14 @@ function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}
   let parentNodeTestFileRecovered = 0;
   let environmentBlocked = 0;
   let agentToolUsage = 0;
+  let agentEvidenceProbe = 0;
   let unresolved = 0;
   const environmentBlockedReasons = new Map();
   const agentToolUsageReasons = new Map();
+  const agentEvidenceProbeReasons = new Map();
   const unresolvedRecords = [];
   const agentToolUsageRecords = [];
+  const agentEvidenceProbeRecords = [];
   for (const record of [...records].sort((a, b) => b.__line - a.__line)) {
     const keys = commandKeys(record);
     if (record.result === "pass") {
@@ -376,6 +393,12 @@ function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}
       agentToolUsageReasons.set(reason, (agentToolUsageReasons.get(reason) || 0) + 1);
       agentToolUsageRecords.push(record);
     }
+    else if (isAgentEvidenceProbe(record)) {
+      agentEvidenceProbe += 1;
+      const reason = String(record.blocked_by || "agent evidence-probe failure").trim();
+      agentEvidenceProbeReasons.set(reason, (agentEvidenceProbeReasons.get(reason) || 0) + 1);
+      agentEvidenceProbeRecords.push(record);
+    }
     else {
       unresolved += 1;
       unresolvedRecords.push(record);
@@ -389,11 +412,14 @@ function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}
     recovered: resolvedLater + externallyRecovered,
     environmentBlocked,
     agentToolUsage,
+    agentEvidenceProbe,
     unresolved,
     unresolvedRecords,
     agentToolUsageRecords,
+    agentEvidenceProbeRecords,
     environmentBlockedReasons: [...environmentBlockedReasons.entries()].map(([reason, count]) => ({ reason, count })),
     agentToolUsageReasons: [...agentToolUsageReasons.entries()].map(([reason, count]) => ({ reason, count })),
+    agentEvidenceProbeReasons: [...agentEvidenceProbeReasons.entries()].map(([reason, count]) => ({ reason, count })),
   };
 }
 
@@ -598,6 +624,7 @@ function addFailureStats(total, stats) {
   total.parentNodeTestFileRecovered += stats.parentNodeTestFileRecovered;
   total.environmentBlocked += stats.environmentBlocked;
   total.agentToolUsage += stats.agentToolUsage;
+  total.agentEvidenceProbe += stats.agentEvidenceProbe;
   return total;
 }
 
@@ -682,11 +709,14 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     parentNodeTestFileRecovered: 0,
     environmentBlocked: 0,
     agentToolUsage: 0,
+    agentEvidenceProbe: 0,
   };
   const agentToolUsageReasons = new Map();
+  const agentEvidenceProbeReasons = new Map();
   const parentRecoveryPasses = buildRecoveryPassesByKey(parentRecords);
   const unresolvedFailureSamples = [];
   const agentToolUsageFailureSamples = [];
+  const agentEvidenceProbeFailureSamples = [];
   let agentToolUsageCleanTailAgents = 0;
 
   for (const agent of agents) {
@@ -717,6 +747,9 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     for (const item of failureStats.agentToolUsageReasons) {
       agentToolUsageReasons.set(item.reason, (agentToolUsageReasons.get(item.reason) || 0) + item.count);
     }
+    for (const item of failureStats.agentEvidenceProbeReasons) {
+      agentEvidenceProbeReasons.set(item.reason, (agentEvidenceProbeReasons.get(item.reason) || 0) + item.count);
+    }
     for (const record of failureStats.unresolvedRecords) {
       if (unresolvedFailureSamples.length >= 10) break;
       unresolvedFailureSamples.push(failureSample(agent, source, record));
@@ -724,6 +757,10 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     for (const record of failureStats.agentToolUsageRecords) {
       if (agentToolUsageFailureSamples.length >= 10) break;
       agentToolUsageFailureSamples.push(failureSample(agent, source, record));
+    }
+    for (const record of failureStats.agentEvidenceProbeRecords) {
+      if (agentEvidenceProbeFailureSamples.length >= 10) break;
+      agentEvidenceProbeFailureSamples.push(failureSample(agent, source, record));
     }
     allRecords.push(...records.map((record) => ({ ...record, agent_id: agent.id })));
   }
@@ -752,14 +789,38 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     parent_node_test_file_recovered_failed_records: failed.parentNodeTestFileRecovered,
     environment_blocked_failed_records: failed.environmentBlocked,
     agent_tool_usage_failed_records: failed.agentToolUsage,
+    agent_evidence_probe_failed_records: failed.agentEvidenceProbe,
     agent_tool_usage_reasons: [...agentToolUsageReasons.entries()].map(([reason, count]) => ({ reason, count })),
+    agent_evidence_probe_reasons: [...agentEvidenceProbeReasons.entries()].map(([reason, count]) => ({ reason, count })),
     agent_tool_usage_failure_samples: agentToolUsageFailureSamples,
+    agent_evidence_probe_failure_samples: agentEvidenceProbeFailureSamples,
     agent_tool_usage_clean_tail_agents: agentToolUsageCleanTailAgents,
     agent_tool_usage_prevention_hints: [],
     errors,
     profiles,
     missing,
   };
+}
+
+function strictAgentRollupProblems(rollup) {
+  if (!rollup?.enabled) return [];
+  const problems = [];
+  if (rollup.ok !== true) {
+    problems.push(...(rollup.problems?.length ? rollup.problems : ["agent rollup trace/count check failed"]));
+  }
+  const profileRollup = rollup.profile_rollup;
+  if (profileRollup) {
+    if (Number(profileRollup.unresolved_failed_records || 0) > 0) {
+      problems.push(`unresolved agent failures: ${profileRollup.unresolved_failed_records}`);
+    }
+    if (Number(profileRollup.missing_agent_telemetry_count || 0) > 0) {
+      problems.push(`missing telemetry for ${profileRollup.missing_agent_telemetry_count} subagent session(s)`);
+    }
+    if ((profileRollup.errors || []).length > 0) {
+      problems.push(`agent telemetry parse errors: ${profileRollup.errors.length}`);
+    }
+  }
+  return problems;
 }
 
 function buildAgentRollup(values, parentRecords = []) {
@@ -773,7 +834,7 @@ function buildAgentRollup(values, parentRecords = []) {
     ? Math.max(0, rawMinAgents)
     : (values["require-agent-rollup-ok"] === true ? 1 : 0);
   if (!parentThreadId && !traceSession) {
-    return {
+    const rollup = {
       enabled: true,
       source: "none",
       ok: false,
@@ -792,6 +853,12 @@ function buildAgentRollup(values, parentRecords = []) {
       profile_rollup: buildAgentProfileRollup([], values, parentRecords),
       problems: ["missing parent thread id for agent rollup"],
     };
+    const strictProblems = strictAgentRollupProblems(rollup);
+    return {
+      ...rollup,
+      strict_ok: strictProblems.length === 0,
+      strict_problems: strictProblems,
+    };
   }
 
   const trace = traceSession
@@ -804,7 +871,7 @@ function buildAgentRollup(values, parentRecords = []) {
     session_root: sessionRoot,
     cwd,
   });
-  return {
+  const rollup = {
     enabled: true,
     ok: trace.ok,
     source: traceSource(traceSession, parentThreadId),
@@ -822,6 +889,12 @@ function buildAgentRollup(values, parentRecords = []) {
     agents,
     profile_rollup: profileRollup,
     problems: trace.problems,
+  };
+  const strictProblems = strictAgentRollupProblems(rollup);
+  return {
+    ...rollup,
+    strict_ok: strictProblems.length === 0,
+    strict_problems: strictProblems,
   };
 }
 
@@ -875,7 +948,7 @@ function currentOrchestrationPreflightGuidance() {
     const taskRoot = findTaskboardRoot(process.cwd());
     const taskIds = currentDoingOrchestrationTaskIds(taskRoot);
     if (taskIds.length === 1) return "preflight the current task with `node tools/ai.mjs orchestration-check --current --json`";
-    if (taskIds.length === 0) return `create one current task with \`node tools/ai.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --tool-use-guard "${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}" --expected-output "..." --evidence-command "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent-thread-id" --stop-condition "..." --independent-reviewer "..." --json\`, then run \`node tools/ai.mjs orchestration-check --current --json\``;
+    if (taskIds.length === 0) return `create one current task with \`node tools/ai.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --tool-use-guard "${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}" --expected-output "..." --evidence-command "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent-thread-id" --stop-condition "..." --independent-reviewer "..." --json\`, then run \`node tools/ai.mjs orchestration-check --current --json\``;
     return "resolve multiple current `doing` pipeline/orchestration tasks to exactly one, then run `node tools/ai.mjs orchestration-check --current --json`";
   } catch {
     // Status should stay diagnostic even if a taskboard checkout is incomplete.
@@ -898,6 +971,7 @@ function buildStatus(profilePaths, values = {}) {
   const agentRollup = buildAgentRollup(values, records);
   const agentRollupHint = buildAgentRollupHint(values);
   const unresolvedAgentFailures = Number(agentRollup?.profile_rollup?.unresolved_failed_records || 0);
+  const missingAgentTelemetry = Number(agentRollup?.profile_rollup?.missing_agent_telemetry_count || 0);
   const agentToolUsageFailures = Number(agentRollup?.profile_rollup?.agent_tool_usage_failed_records || 0);
   const agentToolUsagePreventionHints = agentRollup?.profile_rollup?.agent_tool_usage_prevention_hints || [];
   const agentToolUsageCleanTailAgents = Number(agentRollup?.profile_rollup?.agent_tool_usage_clean_tail_agents || 0);
@@ -915,6 +989,8 @@ function buildStatus(profilePaths, values = {}) {
     nextAction = "Fix the agent rollup evidence source or required agent count before trusting this orchestration evidence.";
   } else if (unresolvedAgentFailures > 0) {
     nextAction = "Inspect unresolved agent failure samples before trusting the orchestration rollup.";
+  } else if (missingAgentTelemetry > 0) {
+    nextAction = "Inspect missing subagent telemetry before trusting the orchestration rollup.";
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0 && agentToolUsageCleanTailAgents >= 3) {
     nextAction = `Recent subagents are clean of classified tool-use failures; keep the printed prevention hints in packets, ${currentOrchestrationPreflightGuidance()} before launching delegated work.`;
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0) {
@@ -1018,6 +1094,9 @@ function renderStatus(status, { verbose }) {
     if (!agentRollup.ok) {
       for (const problem of agentRollup.problems) lines.push(`- problem: ${problem}`);
     }
+    if (agentRollup.strict_ok === false) {
+      for (const problem of agentRollup.strict_problems || []) lines.push(`- strict problem: ${problem}`);
+    }
     lines.push(`- source: ${agentRollup.source}`);
     lines.push(`- transcript calls: ${agentRollup.calls_count}`);
     lines.push(`- subagent sessions: ${agentRollup.subagent_session_count}`);
@@ -1064,6 +1143,16 @@ function renderStatus(status, { verbose }) {
         for (const item of profileRollup.agent_tool_usage_prevention_hints || []) {
           lines.push(`- prevent ${item.reason}: ${item.hint}`);
         }
+      }
+      if (profileRollup.agent_evidence_probe_failed_records > 0) {
+        lines.push(`- agent evidence-probe failures: ${profileRollup.agent_evidence_probe_failed_records}`);
+        const sampleLimit = verbose ? 10 : 3;
+        const samples = profileRollup.agent_evidence_probe_failure_samples.slice(0, sampleLimit);
+        for (const sample of samples) {
+          lines.push(renderFailureSample(sample));
+        }
+        const hiddenSamples = Math.max(0, profileRollup.agent_evidence_probe_failed_records - samples.length);
+        if (hiddenSamples > 0) lines.push(`- ... ${hiddenSamples} more agent evidence-probe failure(s) not shown`);
       }
       const agentTimeSinks = profileRollup.command_rollup.by_time.slice(0, 3);
       if (agentTimeSinks.length > 0) {
@@ -1137,5 +1226,8 @@ if (jsonOutputFile) {
 }
 process.stdout.write(rendered);
 if (values["require-agent-rollup-ok"] === true && status.agent_rollup?.ok !== true) {
+  process.exit(1);
+}
+if (values["require-agent-rollup-ok"] === true && status.agent_rollup?.strict_ok === false) {
   process.exit(1);
 }

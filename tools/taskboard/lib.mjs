@@ -659,6 +659,7 @@ function machineEvidenceSignatures(text) {
         kind: "orchestration-trace",
         source,
         artifact,
+        min_agents: commandMinAgents(command),
       });
       continue;
     }
@@ -671,10 +672,19 @@ function machineEvidenceSignatures(text) {
       signatures.push({
         kind: "status-agent-rollup",
         source: commandSourceSignature(command, ["--parent-thread-id", "--trace-session"]),
+        min_agents: commandMinAgents(command),
       });
     }
   }
   return signatures;
+}
+
+function commandMinAgents(command) {
+  const match = String(command || "").match(/(?:^|\s)--min-agents(?:=|\s+)(?:"([^"]+)"|'([^']+)'|(\S+))/i);
+  if (!match) return 1;
+  const raw = normalizeMachineEvidenceValue(match[1] || match[2] || match[3] || "");
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 1;
 }
 
 function commandSourceSignature(command, flags) {
@@ -696,6 +706,7 @@ function normalizeMachineEvidenceValue(value) {
 
 function machineEvidenceSignaturesMatch(expected, actual) {
   if (!expected || !actual || expected.kind !== actual.kind) return false;
+  if ((actual.min_agents ?? 1) < (expected.min_agents ?? 1)) return false;
   if (expected.artifact || actual.artifact) return expected.artifact === actual.artifact && expected.source === actual.source;
   if (expected.source || actual.source) return expected.source === actual.source;
   return (

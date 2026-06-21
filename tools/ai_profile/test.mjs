@@ -862,7 +862,6 @@ test("status reports agent rollup when requested", () => {
       "tools/ai_profile/status.mjs",
       "--profile", profile,
       "--agent-rollup",
-      "--require-agent-rollup-ok",
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,
@@ -873,6 +872,8 @@ test("status reports agent rollup when requested", () => {
     const status = readJson(statusJson);
     assert.equal(status.agent_rollup.enabled, true);
     assert.equal(status.agent_rollup.ok, true);
+    assert.equal(status.agent_rollup.strict_ok, false);
+    assert.deepEqual(status.agent_rollup.strict_problems, ["unresolved agent failures: 1"]);
     assert.equal(status.agent_rollup.source, "parent-thread");
     assert.equal(status.agent_rollup.subagent_session_count, 2);
     assert.deepEqual(status.agent_rollup.roles, [{ role: "test verifier", count: 2 }]);
@@ -906,9 +907,28 @@ test("status reports agent rollup when requested", () => {
     assert.match(result.stdout, /telemetry agents: 2\/2/);
     assert.match(result.stdout, /sources: profiles=2, transcripts=0/);
     assert.match(result.stdout, /unresolved: agent-22222222-2222-4222-8222-222222222222 \[test verifier\] profile:2 node agent\.test\.mjs exit 1 - node --test tools\/agent\.test\.mjs/);
+    assert.match(result.stdout, /strict problem: unresolved agent failures: 1/);
     assert.match(result.stdout, /node agent\.test\.mjs: 3\.0s total over 2 run\(s\)/);
     assert.match(status.next_action, /unresolved agent failure samples/);
     assert.match(result.stdout, /Inspect unresolved agent failure samples/);
+
+    const strict = spawnSync(process.execPath, [
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--agent-profile-dir", agentProfileDir,
+      "--min-agents", "2",
+    ], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    assert.equal(strict.status, 1);
+    assert.match(strict.stdout, /strict problem: unresolved agent failures: 1/);
   } finally {
     cleanup(dir);
   }
@@ -960,7 +980,6 @@ test("status agent rollup classifies parent-recovered failures by later parent p
       "tools/ai_profile/status.mjs",
       "--profile", profile,
       "--agent-rollup",
-      "--require-agent-rollup-ok",
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,
@@ -1031,7 +1050,6 @@ test("status agent rollup recovers single-file node tests from later parent supe
       "tools/ai_profile/status.mjs",
       "--profile", profile,
       "--agent-rollup",
-      "--require-agent-rollup-ok",
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,
@@ -1129,7 +1147,6 @@ test("status reports hidden unresolved agent failure sample count", () => {
       "tools/ai_profile/status.mjs",
       "--profile", profile,
       "--agent-rollup",
-      "--require-agent-rollup-ok",
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,
@@ -1175,7 +1192,6 @@ test("status falls back to subagent transcripts when profile logs are absent", (
       "tools/ai_profile/status.mjs",
       "--profile", profile,
       "--agent-rollup",
-      "--require-agent-rollup-ok",
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,
@@ -1245,7 +1261,6 @@ test("status agent rollup separates transcript tool-usage failures from unresolv
       "tools/ai_profile/status.mjs",
       "--profile", profile,
       "--agent-rollup",
-      "--require-agent-rollup-ok",
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,
@@ -1307,11 +1322,102 @@ test("status next action applies prevention hints for classified agent tool-usag
       "--json-output", statusJson,
     ]);
     const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.strict_ok, true);
     assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
     assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_failed_records, 1);
     assert.match(status.next_action, /Apply the printed agent tool-use prevention hints/);
     assert.match(result.stdout, /prevent missing local file\/path: Give subagents exact existing paths/);
     assert.match(result.stdout, /Apply the printed agent tool-use prevention hints/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("strict status agent rollup fails missing usable subagent telemetry", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const agent = "66666666-6666-4666-8666-666666666666";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [
+      subagentSessionMeta(agent, parent, root, "2026-06-21T10:00:00.000Z"),
+    ]);
+
+    const diagnostic = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+      "--verbose",
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.ok, true);
+    assert.equal(status.agent_rollup.strict_ok, false);
+    assert.deepEqual(status.agent_rollup.strict_problems, ["missing telemetry for 1 subagent session(s)"]);
+    assert.equal(status.agent_rollup.profile_rollup.missing_agent_telemetry_count, 1);
+    assert.match(diagnostic.stdout, /strict problem: missing telemetry for 1 subagent session\(s\)/);
+
+    const strict = spawnSync(process.execPath, [
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+    ], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    assert.equal(strict.status, 1);
+    assert.match(strict.stdout, /strict problem: missing telemetry for 1 subagent session\(s\)/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("strict status agent rollup ignores failed diagnostic strict-status probes", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const agent = "99999999-9999-4999-8999-999999999999";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node tools/ai.mjs validate --review"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [
+      subagentSessionMeta(agent, parent, root, "2026-06-21T10:00:00.000Z"),
+      shellCall("call_strict_probe", "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent-thread-1", "2026-06-21T10:00:01.000Z"),
+      shellOutput("call_strict_probe", "Exit code: 1\nWall time: 0.4 seconds\nOutput:\n## Agent Rollup\n- strict problem: unresolved agent failures: 1\n", "2026-06-21T10:00:02.000Z"),
+      shellCall("call_read", "rg --files tools/ai_profile", "2026-06-21T10:00:03.000Z"),
+      shellOutput("call_read", "Exit code: 0\nWall time: 0.1 seconds\nOutput:\ntools/ai_profile/status.mjs\n", "2026-06-21T10:00:04.000Z"),
+    ]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.ok, true);
+    assert.equal(status.agent_rollup.strict_ok, true);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
+    assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 1);
+    assert.match(result.stdout, /agent evidence-probe failures: 1/);
   } finally {
     cleanup(dir);
   }
@@ -1370,7 +1476,7 @@ test("status clean-tail next action guides task creation when no current preflig
     assert.match(status.next_action, /create one current task with `node tools\/ai\.mjs orchestration-bootstrap/);
     assert.match(status.next_action, /--objective "\.\.\."/);
     assert.ok(status.next_action.includes(`--tool-use-guard "${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}"`));
-    assert.match(status.next_action, /--evidence-command "node tools\/ai\.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent-thread-id"/);
+    assert.match(status.next_action, /--evidence-command "node tools\/ai\.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent-thread-id"/);
     assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check --current --json/);
     assert.match(result.stdout, /agent tool-usage clean tail: 3 agent\(s\)/);
     assert.match(result.stdout, /Recent subagents are clean of classified tool-use failures/);
@@ -1566,7 +1672,6 @@ test("status unresolved agent failures still outrank clean tool-use tail", () =>
       "tools/ai_profile/status.mjs",
       "--profile", profile,
       "--agent-rollup",
-      "--require-agent-rollup-ok",
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,
@@ -1614,7 +1719,6 @@ test("status next action prioritizes unresolved agent failures over environment 
       "tools/ai_profile/status.mjs",
       "--profile", profile,
       "--agent-rollup",
-      "--require-agent-rollup-ok",
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,
@@ -1655,7 +1759,6 @@ test("status transcript fallback treats search no-match as pass", () => {
       "tools/ai_profile/status.mjs",
       "--profile", profile,
       "--agent-rollup",
-      "--require-agent-rollup-ok",
       "--parent-thread-id", parent,
       "--session-root", dir,
       "--agent-cwd", root,

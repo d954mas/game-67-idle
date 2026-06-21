@@ -841,6 +841,27 @@ test("validateStore accepts orchestration-trace machine evidence with json outpu
   assert.deepEqual(validateStoreDetailed(root), []);
 });
 
+test("validateStore rejects orchestration-trace PASS with weaker min-agents", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0031",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs orchestration-trace --parent-thread-id parent --min-agents 2 --json-output tmp/trace.json --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
+});
+
 test("validateStore accepts orchestration-trace session evidence with json output", (t) => {
   const root = tempRoot(t);
   writeTaskDoc(root, {
@@ -1083,6 +1104,65 @@ test("validateStore accepts strict agent-rollup machine evidence for trace-era t
   stop condition: tests pass
   independent reviewer: reviewed guard scope
 - evidence: PASS \`node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore rejects strict agent-rollup PASS with weaker min-agents", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0032",
+    title: "Pipeline profiling guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
+});
+
+test("validateStore accepts strict agent-rollup PASS with matching min-agents", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0032",
+    title: "Pipeline profiling guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents=2 --parent-thread-id parent\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore accepts stronger min-agents PASS for default strict agent-rollup evidence", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0032",
+    title: "Pipeline profiling guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent\``));
 
   assert.deepEqual(validateStoreDetailed(root), []);
 });
