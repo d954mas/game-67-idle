@@ -1368,11 +1368,13 @@ test("status clean-tail next action guides task creation when no current preflig
     assert.match(status.next_action, /Recent subagents are clean of classified tool-use failures/);
     assert.match(status.next_action, /create one current task with `node tools\/ai\.mjs orchestration-bootstrap/);
     assert.match(status.next_action, /--objective "\.\.\."/);
+    assert.match(status.next_action, /--tool-use-guard "exact paths\/discovery before reads; use Select-Object -Skip\/-First for line windows; trace\/status commands include evidence source and --json-output where applicable"/);
     assert.match(status.next_action, /--evidence-command "node tools\/ai\.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent-thread-id"/);
     assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check --current --json/);
     assert.match(result.stdout, /agent tool-usage clean tail: 3 agent\(s\)/);
     assert.match(result.stdout, /Recent subagents are clean of classified tool-use failures/);
     assert.match(result.stdout, /node tools\/ai\.mjs orchestration-bootstrap/);
+    assert.match(result.stdout, /--tool-use-guard "exact paths\/discovery before reads; use Select-Object -Skip\/-First for line windows; trace\/status commands include evidence source and --json-output where applicable"/);
     assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check --current --json/);
   } finally {
     cleanup(dir);
@@ -1405,6 +1407,8 @@ test("status clean-tail next action preflights the current task without copying 
     assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check --current --json/);
     assert.doesNotMatch(status.next_action, /<task-id>/);
     assert.doesNotMatch(status.next_action, /orchestration-check T1234 --json/);
+    assert.doesNotMatch(status.next_action, /orchestration-bootstrap/);
+    assert.doesNotMatch(status.next_action, /--tool-use-guard/);
     assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check --current --json/);
   } finally {
     cleanup(dir);
