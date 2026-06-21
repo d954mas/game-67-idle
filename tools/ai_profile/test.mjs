@@ -867,6 +867,46 @@ test("status reports incomplete trace-session rollup without failing status", ()
   }
 });
 
+test("strict status agent rollup requires at least one matching subagent by default", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+
+    const diagnostic = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+    ]);
+    assert.equal(diagnostic.status, 0);
+    assert.match(diagnostic.stdout, /subagent sessions: 0/);
+
+    const strict = spawnSync(process.execPath, [
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+    ], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    assert.equal(strict.status, 1);
+    assert.match(strict.stdout, /expected at least 1 subagent session\(s\), found 0/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status classifies recovered vs unresolved failures", () => {
   const dir = tempDir();
   try {

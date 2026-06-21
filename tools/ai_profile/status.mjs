@@ -364,7 +364,9 @@ function buildAgentRollup(values) {
   const sessionRoot = stringArg(values, "session-root", "") || todaySessionRoot();
   const cwd = stringArg(values, "agent-cwd", stringArg(values, "cwd", process.cwd()));
   const rawMinAgents = numberArg(values, "min-agents");
-  const minAgents = Number.isFinite(rawMinAgents) ? Math.max(0, rawMinAgents) : 0;
+  const minAgents = Number.isFinite(rawMinAgents)
+    ? Math.max(0, rawMinAgents)
+    : (values["require-agent-rollup-ok"] === true ? 1 : 0);
   if (!parentThreadId && !traceSession) {
     return {
       enabled: true,

@@ -113,6 +113,9 @@ log entry for that approved machine evidence command. The validator checks the
 command shape and recorded PASS line; it does not execute commands copied from
 task logs.
 
+Strict status rollup defaults to `--min-agents 1`; raise it when the packet
+expects several independent agents.
+
 Use transcript mode when the parent session exposes spawn/wait/close tool calls;
 it verifies call order and completed wait/close outputs. Use
 `parent-thread-id` mode when subagent `session_meta` files are the available
