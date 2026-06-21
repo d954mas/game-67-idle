@@ -162,6 +162,14 @@ function writeToolUsageAgentRollout(dir, { file, agent, parent, timestamp = "202
   ]);
 }
 
+function writeEvidenceProbeAgentRollout(dir, { file, agent, parent, timestamp = "2026-06-21T10:00:00.000Z", callId = "call_strict_probe" }) {
+  writeJsonl(join(dir, file), [
+    subagentSessionMeta(agent, parent, root, timestamp),
+    shellCall(callId, `node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id ${parent}`, "2026-06-21T10:00:01.000Z"),
+    shellOutput(callId, "Exit code: 1\nWall time: 0.4 seconds\nOutput:\n## Agent Rollup\n- strict problem: unresolved agent failures: 1\n", "2026-06-21T10:00:02.000Z"),
+  ]);
+}
+
 function writeCleanAgentRollout(dir, { file, agent, parent, timestamp = "2026-06-21T10:01:00.000Z", callId = "clean_call" }) {
   writeJsonl(join(dir, file), [
     subagentSessionMeta(agent, parent, root, timestamp),
@@ -1687,6 +1695,116 @@ test("strict status agent rollup classifies profile diagnostic failures outside 
     assert.match(result.stdout, /evidence-probe: agent-99999999-9999-4999-8999-999999999999 \[test verifier\] profile:1 node ai\.mjs \(failed strict agent rollup probe\) exit 1/);
     assert.doesNotMatch(result.stdout, /unresolved: agent-99999999-9999-4999-8999-999999999999 \[test verifier\] profile:1 node ai\.mjs/);
     assert.match(result.stdout, /agent tool-usage failures: 1/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status reports evidence-probe clean tail after historical probe failures", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeEvidenceProbeAgentRollout(dir, { file: "rollout-probe.jsonl", agent: "abababab-abab-4aba-8aba-ababababab01", parent, timestamp: "2026-06-21T10:00:00.000Z" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-1.jsonl", agent: "abababab-abab-4aba-8aba-ababababab02", parent, timestamp: "2026-06-21T10:01:00.000Z", callId: "clean_one" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-2.jsonl", agent: "abababab-abab-4aba-8aba-ababababab03", parent, timestamp: "2026-06-21T10:02:00.000Z", callId: "clean_two" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-3.jsonl", agent: "abababab-abab-4aba-8aba-ababababab04", parent, timestamp: "2026-06-21T10:03:00.000Z", callId: "clean_three" });
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.ok, true);
+    assert.equal(status.agent_rollup.strict_ok, true);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
+    assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 1);
+    assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_clean_tail_agents, 3);
+    assert.match(result.stdout, /agent evidence-probe failures: 1/);
+    assert.match(result.stdout, /agent evidence-probe clean tail: 3 agent\(s\)/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status compact evidence includes evidence-probe clean tail", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const evidenceJson = join(dir, "status-evidence.json");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeEvidenceProbeAgentRollout(dir, { file: "rollout-probe.jsonl", agent: "acacacac-acac-4aca-8aca-acacacacac01", parent, timestamp: "2026-06-21T10:00:00.000Z" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-1.jsonl", agent: "acacacac-acac-4aca-8aca-acacacacac02", parent, timestamp: "2026-06-21T10:01:00.000Z", callId: "clean_one" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-2.jsonl", agent: "acacacac-acac-4aca-8aca-acacacacac03", parent, timestamp: "2026-06-21T10:02:00.000Z", callId: "clean_two" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-3.jsonl", agent: "acacacac-acac-4aca-8aca-acacacacac04", parent, timestamp: "2026-06-21T10:03:00.000Z", callId: "clean_three" });
+
+    run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--agent-rollup-evidence",
+      "--json-output", evidenceJson,
+    ]);
+    const evidence = readJson(evidenceJson);
+    assert.equal(evidence.kind, "status-agent-rollup-evidence");
+    assert.equal(evidence.agent_rollup.strict_ok, true);
+    assert.equal(evidence.agent_rollup.profile_rollup.unresolved_failed_records, 0);
+    assert.equal(evidence.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 1);
+    assert.equal(evidence.agent_rollup.profile_rollup.agent_evidence_probe_clean_tail_agents, 3);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status evidence-probe clean tail resets on later probe failure", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeEvidenceProbeAgentRollout(dir, { file: "rollout-probe-1.jsonl", agent: "babababa-baba-4bab-8bab-bababababa01", parent, timestamp: "2026-06-21T10:00:00.000Z", callId: "probe_one" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-1.jsonl", agent: "babababa-baba-4bab-8bab-bababababa02", parent, timestamp: "2026-06-21T10:01:00.000Z", callId: "clean_one" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-2.jsonl", agent: "babababa-baba-4bab-8bab-bababababa03", parent, timestamp: "2026-06-21T10:02:00.000Z", callId: "clean_two" });
+    writeEvidenceProbeAgentRollout(dir, { file: "rollout-probe-2.jsonl", agent: "babababa-baba-4bab-8bab-bababababa04", parent, timestamp: "2026-06-21T10:03:00.000Z", callId: "probe_two" });
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.ok, true);
+    assert.equal(status.agent_rollup.strict_ok, true);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
+    assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 2);
+    assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_clean_tail_agents, 0);
+    assert.match(result.stdout, /agent evidence-probe failures: 2/);
+    assert.doesNotMatch(result.stdout, /agent evidence-probe clean tail:/);
   } finally {
     cleanup(dir);
   }

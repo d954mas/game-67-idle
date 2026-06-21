@@ -758,6 +758,7 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
   const agentToolUsageFailureSamples = [];
   const agentEvidenceProbeFailureSamples = [];
   let agentToolUsageCleanTailAgents = 0;
+  let agentEvidenceProbeCleanTailAgents = 0;
 
   for (const agent of agents) {
     const file = findAgentProfileFile(agent, files);
@@ -784,6 +785,8 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     addFailureStats(failed, failureStats);
     if (failureStats.agentToolUsage > 0) agentToolUsageCleanTailAgents = 0;
     else agentToolUsageCleanTailAgents += 1;
+    if (failureStats.agentEvidenceProbe > 0) agentEvidenceProbeCleanTailAgents = 0;
+    else agentEvidenceProbeCleanTailAgents += 1;
     for (const item of failureStats.agentToolUsageReasons) {
       agentToolUsageReasons.set(item.reason, (agentToolUsageReasons.get(item.reason) || 0) + item.count);
     }
@@ -835,6 +838,7 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     agent_tool_usage_failure_samples: agentToolUsageFailureSamples,
     agent_evidence_probe_failure_samples: agentEvidenceProbeFailureSamples,
     agent_tool_usage_clean_tail_agents: agentToolUsageCleanTailAgents,
+    agent_evidence_probe_clean_tail_agents: agentEvidenceProbeCleanTailAgents,
     agent_tool_usage_prevention_hints: [],
     errors,
     profiles,
@@ -1114,6 +1118,10 @@ function compactAgentRollupEvidence(status) {
       profile_rollup: {
         missing_agent_telemetry_count: Number(profileRollup.missing_agent_telemetry_count ?? 0),
         unresolved_failed_records: Number(profileRollup.unresolved_failed_records ?? 0),
+        agent_tool_usage_failed_records: Number(profileRollup.agent_tool_usage_failed_records ?? 0),
+        agent_tool_usage_clean_tail_agents: Number(profileRollup.agent_tool_usage_clean_tail_agents ?? 0),
+        agent_evidence_probe_failed_records: Number(profileRollup.agent_evidence_probe_failed_records ?? 0),
+        agent_evidence_probe_clean_tail_agents: Number(profileRollup.agent_evidence_probe_clean_tail_agents ?? 0),
         errors: Array.isArray(profileRollup.errors) ? profileRollup.errors : [],
       },
     },
@@ -1222,6 +1230,9 @@ function renderStatus(status, { verbose }) {
       }
       if (profileRollup.agent_evidence_probe_failed_records > 0) {
         lines.push(`- agent evidence-probe failures: ${profileRollup.agent_evidence_probe_failed_records}`);
+        if (profileRollup.agent_evidence_probe_clean_tail_agents > 0) {
+          lines.push(`- agent evidence-probe clean tail: ${profileRollup.agent_evidence_probe_clean_tail_agents} agent(s)`);
+        }
         const sampleLimit = verbose ? 10 : 3;
         const samples = profileRollup.agent_evidence_probe_failure_samples.slice(0, sampleLimit);
         for (const sample of samples) {
