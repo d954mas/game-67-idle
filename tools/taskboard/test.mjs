@@ -253,6 +253,39 @@ ${"LARGE_TASK_BODY_SHOULD_NOT_APPEAR\n".repeat(300)}
   assert.match(result.stdout, /inspect only the linked task files/);
 });
 
+test("cli context omits live game sections for pipeline current work", (t) => {
+  const root = tempRoot(t);
+  mkdirSync(join(root, "tasks"), { recursive: true });
+  writeFileSync(
+    join(root, "tasks", "STATUS.md"),
+    `# Project Status
+
+## Current Goal
+
+GAME_GOAL_SHOULD_NOT_APPEAR
+
+## Next Priorities
+
+1. GAME_PRIORITY_SHOULD_NOT_APPEAR
+`,
+  );
+  createTask(root, {
+    title: "Pipeline current task",
+    status: "doing",
+    priority: "P1",
+    tags: ["pipeline", "orchestration"],
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "context"], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /## Current Work/);
+  assert.match(result.stdout, /T0001 .* Pipeline current task/);
+  assert.match(result.stdout, /## Status Context/);
+  assert.match(result.stdout, /pipeline\/tooling-scoped/);
+  assert.doesNotMatch(result.stdout, /GAME_GOAL_SHOULD_NOT_APPEAR/);
+  assert.doesNotMatch(result.stdout, /GAME_PRIORITY_SHOULD_NOT_APPEAR/);
+});
+
 test("cli summary is short and avoids full task list noise", (t) => {
   const root = tempRoot(t);
   mkdirSync(join(root, "tasks"), { recursive: true });
@@ -292,6 +325,93 @@ Improve the game quickly.
   assert.match(result.stdout, /Improve the game quickly/);
   assert.match(result.stdout, /T0001 .* Doing task/);
   assert.doesNotMatch(result.stdout, /T0002 .* Review task/);
+});
+
+test("cli summary omits live game sections for pipeline current work", (t) => {
+  const root = tempRoot(t);
+  mkdirSync(join(root, "tasks"), { recursive: true });
+  writeFileSync(
+    join(root, "tasks", "STATUS.md"),
+    `# Project Status
+
+## Current Goal
+
+GAME_GOAL_SHOULD_NOT_APPEAR
+
+## Blocking Work
+
+GAME_BLOCKER_SHOULD_NOT_APPEAR
+
+## Next Priorities
+
+1. GAME_PRIORITY_SHOULD_NOT_APPEAR
+`,
+  );
+  createTask(root, {
+    title: "Pipeline current task",
+    status: "doing",
+    priority: "P1",
+    tags: ["pipeline", "taskboard"],
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "summary"], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /## Current Work/);
+  assert.match(result.stdout, /T0001 .* Pipeline current task/);
+  assert.match(result.stdout, /## Status Context/);
+  assert.match(result.stdout, /pipeline\/tooling-scoped/);
+  assert.doesNotMatch(result.stdout, /GAME_GOAL_SHOULD_NOT_APPEAR/);
+  assert.doesNotMatch(result.stdout, /GAME_BLOCKER_SHOULD_NOT_APPEAR/);
+  assert.doesNotMatch(result.stdout, /GAME_PRIORITY_SHOULD_NOT_APPEAR/);
+});
+
+test("cli summary and context keep game sections when only task body mentions pipeline", (t) => {
+  const root = tempRoot(t);
+  mkdirSync(join(root, "tasks"), { recursive: true });
+  writeFileSync(
+    join(root, "tasks", "STATUS.md"),
+    `# Project Status
+
+## Current Goal
+
+GAME_GOAL_SHOULD_APPEAR
+
+## Next Priorities
+
+1. GAME_PRIORITY_SHOULD_APPEAR
+`,
+  );
+  createTask(root, {
+    title: "Gameplay validation task",
+    status: "doing",
+    priority: "P1",
+    tags: ["prototype", "dragon-grove"],
+    body: `## What
+
+Run node tools/ai.mjs validate --review after the gameplay smoke.
+
+## Done when
+
+- [ ] game check passes
+
+## Open questions
+
+## Log
+`,
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const summary = spawnSync(process.execPath, [cli, "summary"], { cwd: root, encoding: "utf8" });
+  assert.equal(summary.status, 0, summary.stderr);
+  assert.match(summary.stdout, /## Current Goal/);
+  assert.match(summary.stdout, /GAME_GOAL_SHOULD_APPEAR/);
+  assert.match(summary.stdout, /GAME_PRIORITY_SHOULD_APPEAR/);
+  assert.doesNotMatch(summary.stdout, /pipeline\/tooling-scoped/);
+
+  const context = spawnSync(process.execPath, [cli, "context"], { cwd: root, encoding: "utf8" });
+  assert.equal(context.status, 0, context.stderr);
+  assert.match(context.stdout, /## Current Goal/);
+  assert.match(context.stdout, /GAME_GOAL_SHOULD_APPEAR/);
+  assert.doesNotMatch(context.stdout, /pipeline\/tooling-scoped/);
 });
 
 test("updateDoc patches fields, keeps id/created, bumps updated", (t) => {

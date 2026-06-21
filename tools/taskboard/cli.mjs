@@ -102,6 +102,31 @@ function taskRank(task) {
   return statusRank * 10 + priorityRank(task.fields.priority);
 }
 
+const PIPELINE_CONTEXT_TAGS = new Set([
+  "pipeline",
+  "ai-pipeline",
+  "orchestration",
+  "taskboard",
+  "profiling",
+  "subagent",
+  "subagents",
+  "context",
+  "context-budget",
+  "skills",
+  "skills-eval",
+  "skills-sync",
+  "validation",
+  "tooling",
+]);
+
+function isPipelineContextTask(task) {
+  return (task.fields.tags || []).some((tag) => PIPELINE_CONTEXT_TAGS.has(String(tag).toLowerCase()));
+}
+
+function hasOnlyPipelineCurrentWork(tasks) {
+  return tasks.length > 0 && tasks.every(isPipelineContextTask);
+}
+
 function idNumber(task) {
   const match = String(task.fields.id || "").match(/\d+/);
   return match ? Number(match[0]) : 0;
@@ -145,19 +170,27 @@ function renderSummary(root, options) {
   lines.push(`open_actionable_tasks: ${openTasks.length}`);
   lines.push(`review_tasks: ${reviewCount}`);
   appendCurrentWork(lines, openTasks, tasksLimit, "node tools/taskboard/cli.mjs context");
+  const pipelineCurrentWork = hasOnlyPipelineCurrentWork(openTasks);
   const currentGoal = sectionText(status, "Current Goal");
   const blockers = sectionText(status, "Blocking Work") || sectionText(status, "Blockers");
   const nextPriorities = sectionText(status, "Next Priorities");
-  for (const [title, body, budget] of [
-    ["Current Goal", currentGoal, 500],
-    ["Blocking Work", blockers, 500],
-    ["Next Priorities", nextPriorities, 700],
-  ]) {
-    if (!body) continue;
+  if (pipelineCurrentWork) {
     lines.push("");
-    lines.push(`## ${title}`);
+    lines.push("## Status Context");
     lines.push("");
-    lines.push(clampText(body, budget).text || "(empty)");
+    lines.push("Live game status sections are omitted while current actionable work is pipeline/tooling-scoped.");
+  } else {
+    for (const [title, body, budget] of [
+      ["Current Goal", currentGoal, 500],
+      ["Blocking Work", blockers, 500],
+      ["Next Priorities", nextPriorities, 700],
+    ]) {
+      if (!body) continue;
+      lines.push("");
+      lines.push(`## ${title}`);
+      lines.push("");
+      lines.push(clampText(body, budget).text || "(empty)");
+    }
   }
   lines.push("");
   lines.push("## Top Open Tasks");
@@ -206,18 +239,26 @@ function renderContext(root, options) {
   appendCurrentWork(lines, tasks, tasksLimit, "node tools/taskboard/cli.mjs list");
   lines.push("");
 
+  const pipelineCurrentWork = hasOnlyPipelineCurrentWork(tasks);
   let remaining = statusMaxChars;
-  for (const section of sections) {
-    const body = sectionText(status, section);
-    if (!body) continue;
-    const sectionBudget = Math.max(600, Math.min(remaining, 1400));
-    const clipped = clampText(body, sectionBudget);
-    lines.push(`## ${section}`);
+  if (pipelineCurrentWork) {
+    lines.push("## Status Context");
     lines.push("");
-    lines.push(clipped.text || "(empty)");
+    lines.push("Live game status sections are omitted while current actionable work is pipeline/tooling-scoped.");
     lines.push("");
-    remaining -= Math.min(body.length, sectionBudget);
-    if (remaining <= 0) break;
+  } else {
+    for (const section of sections) {
+      const body = sectionText(status, section);
+      if (!body) continue;
+      const sectionBudget = Math.max(600, Math.min(remaining, 1400));
+      const clipped = clampText(body, sectionBudget);
+      lines.push(`## ${section}`);
+      lines.push("");
+      lines.push(clipped.text || "(empty)");
+      lines.push("");
+      remaining -= Math.min(body.length, sectionBudget);
+      if (remaining <= 0) break;
+    }
   }
 
   lines.push("## Actionable Tasks");
