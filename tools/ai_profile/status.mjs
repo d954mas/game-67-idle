@@ -881,6 +881,7 @@ function buildStatus(profilePaths, values = {}) {
   const agentRollupHint = buildAgentRollupHint(values);
   const unresolvedAgentFailures = Number(agentRollup?.profile_rollup?.unresolved_failed_records || 0);
   const agentToolUsageFailures = Number(agentRollup?.profile_rollup?.agent_tool_usage_failed_records || 0);
+  const agentToolUsagePreventionHints = agentRollup?.profile_rollup?.agent_tool_usage_prevention_hints || [];
 
   let nextAction;
   if (!parsed.exists) {
@@ -893,6 +894,8 @@ function buildStatus(profilePaths, values = {}) {
     nextAction = "Inspect the unresolved failed commands before drawing conclusions.";
   } else if (unresolvedAgentFailures > 0) {
     nextAction = "Inspect unresolved agent failure samples before trusting the orchestration rollup.";
+  } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0) {
+    nextAction = "Apply the printed agent tool-use prevention hints to subagent packets, prompts, or templates before the next delegated run.";
   } else if (agentToolUsageFailures > 0) {
     nextAction = "Inspect agent tool-usage failure samples to improve subagent prompts, paths, or command patterns.";
   } else if (failedClassification.environmentBlocked > 0) {
