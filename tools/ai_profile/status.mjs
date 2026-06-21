@@ -252,6 +252,24 @@ function isEnvironmentBlocked(record) {
   return record.failure_kind === "environment_blocked";
 }
 
+function isAgentToolUsage(record) {
+  return record.failure_kind === "agent_tool_usage";
+}
+
+function transcriptFailureDetails(command, output) {
+  const text = String(output || "");
+  if (/ItemNotFoundException|ObjectNotFound/.test(text)) {
+    return { failure_kind: "agent_tool_usage", blocked_by: "missing local file/path" };
+  }
+  if (/NamedParameterNotFound|ParameterBindingException|CannotConvertArgumentNoMessage/.test(text)) {
+    return { failure_kind: "agent_tool_usage", blocked_by: "invalid shell command/parameter" };
+  }
+  if (/orchestration-trace\b/.test(String(command || "")) && /missing evidence source/.test(text)) {
+    return { failure_kind: "agent_tool_usage", blocked_by: "missing orchestration evidence source" };
+  }
+  return {};
+}
+
 function buildRecoveryPassesByKey(records) {
   const passes = new Map();
   for (const record of records) {
@@ -280,9 +298,12 @@ function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}
   let resolvedLater = 0;
   let externallyRecovered = 0;
   let environmentBlocked = 0;
+  let agentToolUsage = 0;
   let unresolved = 0;
   const environmentBlockedReasons = new Map();
+  const agentToolUsageReasons = new Map();
   const unresolvedRecords = [];
+  const agentToolUsageRecords = [];
   for (const record of [...records].sort((a, b) => b.__line - a.__line)) {
     const keys = commandKeys(record);
     if (record.result === "pass") {
@@ -297,6 +318,12 @@ function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}
       environmentBlockedReasons.set(reason, (environmentBlockedReasons.get(reason) || 0) + 1);
     }
     else if (hasExternalRecoveryPass(keys, eventTime(record), recoveryPassesByKey)) externallyRecovered += 1;
+    else if (isAgentToolUsage(record)) {
+      agentToolUsage += 1;
+      const reason = String(record.blocked_by || "agent tool-usage failure").trim();
+      agentToolUsageReasons.set(reason, (agentToolUsageReasons.get(reason) || 0) + 1);
+      agentToolUsageRecords.push(record);
+    }
     else {
       unresolved += 1;
       unresolvedRecords.push(record);
@@ -307,9 +334,12 @@ function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}
     externallyRecovered,
     recovered: resolvedLater + externallyRecovered,
     environmentBlocked,
+    agentToolUsage,
     unresolved,
     unresolvedRecords,
+    agentToolUsageRecords,
     environmentBlockedReasons: [...environmentBlockedReasons.entries()].map(([reason, count]) => ({ reason, count })),
+    agentToolUsageReasons: [...agentToolUsageReasons.entries()].map(([reason, count]) => ({ reason, count })),
   };
 }
 
@@ -484,6 +514,7 @@ function readTranscriptProfileRecords(file, agentId) {
     const output = String(payload.output || "");
     const exitCode = parseTranscriptExitCode(output);
     const result = transcriptResult(call.command, exitCode);
+    const failureDetails = result === "fail" ? transcriptFailureDetails(call.command, output) : {};
     records.push({
       __line: index + 1,
       ts: line.timestamp || call.ts || "",
@@ -499,6 +530,7 @@ function readTranscriptProfileRecords(file, agentId) {
       source_call_id: callId,
       source_session_file: file,
       ...(exitCode !== undefined ? { exit_code: exitCode } : {}),
+      ...failureDetails,
     });
   }
   return { records, errors };
@@ -509,6 +541,7 @@ function addFailureStats(total, stats) {
   total.resolvedLater += stats.resolvedLater;
   total.externallyRecovered += stats.externallyRecovered;
   total.environmentBlocked += stats.environmentBlocked;
+  total.agentToolUsage += stats.agentToolUsage;
   return total;
 }
 
@@ -525,6 +558,7 @@ function failureSample(agent, source, record) {
     line: record.__line,
     source_call_id: record.source_call_id || "",
     source_session_file: record.source_session_file || "",
+    blocked_by: record.blocked_by || "",
   };
 }
 
@@ -537,6 +571,15 @@ function renderFailureSample(sample) {
   return `- unresolved: ${agent}${role} ${source}${line} ${sample.command_key}${exit} - ${sample.command}`;
 }
 
+function renderAgentToolUsageSample(sample) {
+  const agent = sample.nickname || sample.agent_id || "(unknown)";
+  const role = sample.role ? ` [${sample.role}]` : "";
+  const source = sample.source || "unknown";
+  const line = sample.line !== undefined ? `:${sample.line}` : "";
+  const reason = sample.blocked_by ? ` (${sample.blocked_by})` : "";
+  return `- tool-usage: ${agent}${role} ${source}${line} ${sample.command_key}${reason} - ${sample.command}`;
+}
+
 function buildAgentProfileRollup(agents, values, parentRecords = []) {
   const profileDir = stringArg(values, "agent-profile-dir", "") || sessionsDir();
   const files = listSessionProfiles(profileDir);
@@ -544,9 +587,11 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
   const missing = [];
   const errors = [];
   const allRecords = [];
-  const failed = { unresolved: 0, resolvedLater: 0, externallyRecovered: 0, environmentBlocked: 0 };
+  const failed = { unresolved: 0, resolvedLater: 0, externallyRecovered: 0, environmentBlocked: 0, agentToolUsage: 0 };
+  const agentToolUsageReasons = new Map();
   const parentRecoveryPasses = buildRecoveryPassesByKey(parentRecords);
   const unresolvedFailureSamples = [];
+  const agentToolUsageFailureSamples = [];
 
   for (const agent of agents) {
     const file = findAgentProfileFile(agent, files);
@@ -571,9 +616,16 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     for (const error of parsed.errors) errors.push(file ? `${file}: ${error}` : error);
     const failureStats = classifyFailedRecords(records, { recoveryPassesByKey: parentRecoveryPasses });
     addFailureStats(failed, failureStats);
+    for (const item of failureStats.agentToolUsageReasons) {
+      agentToolUsageReasons.set(item.reason, (agentToolUsageReasons.get(item.reason) || 0) + item.count);
+    }
     for (const record of failureStats.unresolvedRecords) {
       if (unresolvedFailureSamples.length >= 10) break;
       unresolvedFailureSamples.push(failureSample(agent, source, record));
+    }
+    for (const record of failureStats.agentToolUsageRecords) {
+      if (agentToolUsageFailureSamples.length >= 10) break;
+      agentToolUsageFailureSamples.push(failureSample(agent, source, record));
     }
     allRecords.push(...records.map((record) => ({ ...record, agent_id: agent.id })));
   }
@@ -599,6 +651,9 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     total_recovered_failed_records: failed.resolvedLater + failed.externallyRecovered,
     parent_recovered_failed_records: failed.externallyRecovered,
     environment_blocked_failed_records: failed.environmentBlocked,
+    agent_tool_usage_failed_records: failed.agentToolUsage,
+    agent_tool_usage_reasons: [...agentToolUsageReasons.entries()].map(([reason, count]) => ({ reason, count })),
+    agent_tool_usage_failure_samples: agentToolUsageFailureSamples,
     errors,
     profiles,
     missing,
@@ -722,6 +777,7 @@ function buildStatus(profilePaths, values = {}) {
   const agentRollup = buildAgentRollup(values, records);
   const agentRollupHint = buildAgentRollupHint(values);
   const unresolvedAgentFailures = Number(agentRollup?.profile_rollup?.unresolved_failed_records || 0);
+  const agentToolUsageFailures = Number(agentRollup?.profile_rollup?.agent_tool_usage_failed_records || 0);
 
   let nextAction;
   if (!parsed.exists) {
@@ -734,6 +790,8 @@ function buildStatus(profilePaths, values = {}) {
     nextAction = "Inspect the unresolved failed commands before drawing conclusions.";
   } else if (unresolvedAgentFailures > 0) {
     nextAction = "Inspect unresolved agent failure samples before trusting the orchestration rollup.";
+  } else if (agentToolUsageFailures > 0) {
+    nextAction = "Inspect agent tool-usage failure samples to improve subagent prompts, paths, or command patterns.";
   } else if (failedClassification.environmentBlocked > 0) {
     nextAction = "Environment blockers remain; prepare the required local dependencies before repeating those gates.";
   } else if (lowCoverage) {
@@ -861,6 +919,16 @@ function renderStatus(status, { verbose }) {
       }
       if (profileRollup.parent_recovered_failed_records > 0) {
         lines.push(`- parent-recovered agent failures: ${profileRollup.parent_recovered_failed_records}`);
+      }
+      if (profileRollup.agent_tool_usage_failed_records > 0) {
+        lines.push(`- agent tool-usage failures: ${profileRollup.agent_tool_usage_failed_records}`);
+        const sampleLimit = verbose ? 10 : 3;
+        const samples = profileRollup.agent_tool_usage_failure_samples.slice(0, sampleLimit);
+        for (const sample of samples) {
+          lines.push(renderAgentToolUsageSample(sample));
+        }
+        const hiddenSamples = Math.max(0, profileRollup.agent_tool_usage_failed_records - samples.length);
+        if (hiddenSamples > 0) lines.push(`- ... ${hiddenSamples} more agent tool-usage failure(s) not shown`);
       }
       const agentTimeSinks = profileRollup.command_rollup.by_time.slice(0, 3);
       if (agentTimeSinks.length > 0) {

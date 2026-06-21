@@ -1091,6 +1091,55 @@ test("status falls back to subagent transcripts when profile logs are absent", (
   }
 });
 
+test("status agent rollup separates transcript tool-usage failures from unresolved failures", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const agent = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [
+      subagentSessionMeta(agent, parent, root, "2026-06-21T10:00:00.000Z"),
+      shellCall("call_missing_path", "Get-Content C:\\projects\\game-67-idle\\src\\missing_state.c", "2026-06-21T10:00:01.000Z"),
+      shellOutput("call_missing_path", "Exit code: 1\nWall time: 0.3 seconds\nOutput:\nGet-Content : Cannot find path 'C:\\projects\\game-67-idle\\src\\missing_state.c' because it does not exist.\nFullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand\nItemNotFoundException\n", "2026-06-21T10:00:02.000Z"),
+      shellCall("call_bad_trace", "node tools/ai.mjs orchestration-trace --json", "2026-06-21T10:00:03.000Z"),
+      shellOutput("call_bad_trace", "Exit code: 1\nWall time: 0.4 seconds\nOutput:\n{\"ok\":false,\"problems\":[\"missing evidence source: pass --session or --parent-thread-id\"]}\n", "2026-06-21T10:00:04.000Z"),
+      shellCall("call_test_fail", "node --test tools/real.test.mjs", "2026-06-21T10:00:05.000Z"),
+      shellOutput("call_test_fail", "Exit code: 1\nWall time: 0.5 seconds\nOutput:\nnot ok 1 real validation failure\n", "2026-06-21T10:00:06.000Z"),
+    ]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    const profileRollup = status.agent_rollup.profile_rollup;
+    assert.equal(profileRollup.agent_tool_usage_failed_records, 2);
+    assert.equal(profileRollup.agent_tool_usage_failure_samples.length, 2);
+    assert.deepEqual(profileRollup.agent_tool_usage_reasons, [
+      { reason: "missing orchestration evidence source", count: 1 },
+      { reason: "missing local file/path", count: 1 },
+    ]);
+    assert.equal(profileRollup.unresolved_failed_records, 1);
+    assert.equal(profileRollup.unresolved_failure_samples[0].command, "node --test tools/real.test.mjs");
+    assert.match(result.stdout, /agent tool-usage failures: 2/);
+    assert.match(result.stdout, /tool-usage: agent-dddddddd-dddd-4ddd-8ddd-dddddddddddd \[test verifier\] transcript:3 Get-Content \(missing local file\/path\)/);
+    assert.match(result.stdout, /unresolved agent failures: 1/);
+    assert.match(result.stdout, /unresolved: agent-dddddddd-dddd-4ddd-8ddd-dddddddddddd \[test verifier\] transcript:7 node real\.test\.mjs exit 1/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status next action prioritizes unresolved agent failures over environment blockers", () => {
   const dir = tempDir();
   try {

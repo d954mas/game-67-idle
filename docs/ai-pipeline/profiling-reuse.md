@@ -12,10 +12,10 @@ The PostToolUse hook records tool calls automatically. Review a session with
 Use `--agent-rollup` for subagent diagnostics; pass `--parent-thread-id` or
 `--trace-session` for spawn/wait/close checks. Add
 `--require-agent-rollup-ok` only for closeout; it exits nonzero on incomplete
-rollups and defaults to `--min-agents 1`. Agent rollup also reports best-effort
-command telemetry from profile logs or Codex transcripts; this is diagnostic,
-not a strict gate. If matching metadata exists but rollup is omitted, `status`
-prints the focused command.
+rollups. Agent rollup reports best-effort profile/transcript telemetry; it is
+diagnostic, not a strict gate. Tool-usage failures are orchestration friction,
+not product/gate failures. If matching metadata exists but rollup is
+omitted, `status` prints the command.
 
 Do not commit raw telemetry from `tmp/session_profiles/`; commit only durable
 lessons, rules, tools, or tasks.
