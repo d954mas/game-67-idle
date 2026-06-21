@@ -239,7 +239,7 @@ function latestRecord(records) {
 }
 
 function normalizeCommand(command) {
-  return String(command || "").replaceAll("\\", "/").replace(/\s+/g, " ").trim();
+  return stripLeadingCommandAssignments(String(command || "")).replaceAll("\\", "/").replace(/\s+/g, " ").trim();
 }
 
 function commandKeys(record) {
@@ -252,11 +252,33 @@ function isEnvironmentBlocked(record) {
   return record.failure_kind === "environment_blocked";
 }
 
-/* A failed record is "recovered" if the same command passed on a later line, and
- * "unresolved" otherwise -- so a retried-then-fixed command is not an alarm. */
-function classifyFailedRecords(records) {
+function buildRecoveryPassesByKey(records) {
+  const passes = new Map();
+  for (const record of records) {
+    if (record.result !== "pass") continue;
+    const ts = eventTime(record);
+    if (ts === undefined) continue;
+    for (const key of commandKeys(record)) {
+      const times = passes.get(key) || [];
+      times.push(ts);
+      passes.set(key, times);
+    }
+  }
+  for (const times of passes.values()) times.sort((a, b) => a - b);
+  return passes;
+}
+
+function hasExternalRecoveryPass(keys, failedAt, recoveryPassesByKey) {
+  if (failedAt === undefined || recoveryPassesByKey.size === 0) return false;
+  return keys.some((key) => (recoveryPassesByKey.get(key) || []).some((passAt) => passAt > failedAt));
+}
+
+/* A failed record is "recovered" if the same command passed on a later line, or
+ * by a later external/orchestrator pass when provided. */
+function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}) {
   const passedLater = new Map();
   let resolvedLater = 0;
+  let externallyRecovered = 0;
   let environmentBlocked = 0;
   let unresolved = 0;
   const environmentBlockedReasons = new Map();
@@ -274,6 +296,7 @@ function classifyFailedRecords(records) {
       const reason = String(record.blocked_by || "environment blocker").trim();
       environmentBlockedReasons.set(reason, (environmentBlockedReasons.get(reason) || 0) + 1);
     }
+    else if (hasExternalRecoveryPass(keys, eventTime(record), recoveryPassesByKey)) externallyRecovered += 1;
     else {
       unresolved += 1;
       unresolvedRecords.push(record);
@@ -281,7 +304,8 @@ function classifyFailedRecords(records) {
   }
   return {
     resolvedLater,
-    recovered: resolvedLater,
+    externallyRecovered,
+    recovered: resolvedLater + externallyRecovered,
     environmentBlocked,
     unresolved,
     unresolvedRecords,
@@ -483,6 +507,7 @@ function readTranscriptProfileRecords(file, agentId) {
 function addFailureStats(total, stats) {
   total.unresolved += stats.unresolved;
   total.resolvedLater += stats.resolvedLater;
+  total.externallyRecovered += stats.externallyRecovered;
   total.environmentBlocked += stats.environmentBlocked;
   return total;
 }
@@ -512,14 +537,15 @@ function renderFailureSample(sample) {
   return `- unresolved: ${agent}${role} ${source}${line} ${sample.command_key}${exit} - ${sample.command}`;
 }
 
-function buildAgentProfileRollup(agents, values) {
+function buildAgentProfileRollup(agents, values, parentRecords = []) {
   const profileDir = stringArg(values, "agent-profile-dir", "") || sessionsDir();
   const files = listSessionProfiles(profileDir);
   const profiles = [];
   const missing = [];
   const errors = [];
   const allRecords = [];
-  const failed = { unresolved: 0, resolvedLater: 0, environmentBlocked: 0 };
+  const failed = { unresolved: 0, resolvedLater: 0, externallyRecovered: 0, environmentBlocked: 0 };
+  const parentRecoveryPasses = buildRecoveryPassesByKey(parentRecords);
   const unresolvedFailureSamples = [];
 
   for (const agent of agents) {
@@ -543,7 +569,7 @@ function buildAgentProfileRollup(agents, values) {
       recorded_ms: recordedMs,
     });
     for (const error of parsed.errors) errors.push(file ? `${file}: ${error}` : error);
-    const failureStats = classifyFailedRecords(records);
+    const failureStats = classifyFailedRecords(records, { recoveryPassesByKey: parentRecoveryPasses });
     addFailureStats(failed, failureStats);
     for (const record of failureStats.unresolvedRecords) {
       if (unresolvedFailureSamples.length >= 10) break;
@@ -568,7 +594,10 @@ function buildAgentProfileRollup(agents, values) {
     command_rollup: commandRollup(allRecords),
     unresolved_failed_records: failed.unresolved,
     unresolved_failure_samples: unresolvedFailureSamples,
+    same_agent_recovered_failed_records: failed.resolvedLater,
     recovered_failed_records: failed.resolvedLater,
+    total_recovered_failed_records: failed.resolvedLater + failed.externallyRecovered,
+    parent_recovered_failed_records: failed.externallyRecovered,
     environment_blocked_failed_records: failed.environmentBlocked,
     errors,
     profiles,
@@ -576,7 +605,7 @@ function buildAgentProfileRollup(agents, values) {
   };
 }
 
-function buildAgentRollup(values) {
+function buildAgentRollup(values, parentRecords = []) {
   if (values["agent-rollup"] !== true && values.agents !== true) return { enabled: false };
   const traceSession = stringArg(values, "trace-session", "");
   const parentThreadId = stringArg(values, "parent-thread-id", "") || readSessionMetaId(process.env.CODEX_SESSION_FILE || "");
@@ -603,7 +632,7 @@ function buildAgentRollup(values) {
       first_agent_ts: "",
       latest_agent_ts: "",
       agents: [],
-      profile_rollup: buildAgentProfileRollup([], values),
+      profile_rollup: buildAgentProfileRollup([], values, parentRecords),
       problems: ["missing parent thread id for agent rollup"],
     };
   }
@@ -628,7 +657,7 @@ function buildAgentRollup(values) {
     first_agent_ts: agents[0]?.timestamp || "",
     latest_agent_ts: agents[agents.length - 1]?.timestamp || "",
     agents,
-    profile_rollup: buildAgentProfileRollup(agents, values),
+    profile_rollup: buildAgentProfileRollup(agents, values, parentRecords),
     problems: trace.problems,
   };
 }
@@ -690,7 +719,7 @@ function buildStatus(profilePaths, values = {}) {
     .filter((record) => Number(record.duration_ms || 0) > 0)
     .sort((a, b) => Number(b.duration_ms || 0) - Number(a.duration_ms || 0))[0] || null;
   const lowCoverage = isLowCoverage(coverage);
-  const agentRollup = buildAgentRollup(values);
+  const agentRollup = buildAgentRollup(values, records);
   const agentRollupHint = buildAgentRollupHint(values);
   const unresolvedAgentFailures = Number(agentRollup?.profile_rollup?.unresolved_failed_records || 0);
 
@@ -829,6 +858,9 @@ function renderStatus(status, { verbose }) {
         }
         const hiddenSamples = Math.max(0, profileRollup.unresolved_failed_records - samples.length);
         if (hiddenSamples > 0) lines.push(`- ... ${hiddenSamples} more unresolved agent failure(s) not shown`);
+      }
+      if (profileRollup.parent_recovered_failed_records > 0) {
+        lines.push(`- parent-recovered agent failures: ${profileRollup.parent_recovered_failed_records}`);
       }
       const agentTimeSinks = profileRollup.command_rollup.by_time.slice(0, 3);
       if (agentTimeSinks.length > 0) {

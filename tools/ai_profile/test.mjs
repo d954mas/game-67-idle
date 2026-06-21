@@ -852,6 +852,84 @@ test("status reports agent rollup when requested", () => {
   }
 });
 
+test("status agent rollup classifies parent-recovered failures by later parent pass", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const agentProfileDir = join(dir, "profiles");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const recoveredAgent = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const unresolvedAgent = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const environmentAgent = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    writeJsonl(profile, [
+      { ts: "2026-06-21T10:01:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/early.test.mjs"], session_id: "parent" },
+      { ts: "2026-06-21T10:05:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/recovered.test.mjs"], session_id: "parent" },
+      { ts: "2026-06-21T10:06:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node tools/ai.mjs validate --full"], session_id: "parent" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta(recoveredAgent, parent, root, "2026-06-21T10:00:00.000Z")]);
+    writeJsonl(join(dir, "rollout-b.jsonl"), [subagentSessionMeta(unresolvedAgent, parent, root, "2026-06-21T10:00:01.000Z")]);
+    writeJsonl(join(dir, "rollout-c.jsonl"), [subagentSessionMeta(environmentAgent, parent, root, "2026-06-21T10:00:02.000Z")]);
+    mkdirSync(agentProfileDir, { recursive: true });
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__aaaaaaaa.jsonl"), [
+      { ts: "2026-06-21T10:02:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node --test tools/recovered.test.mjs"], session_id: recoveredAgent, exit_code: 1 },
+    ]);
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__bbbbbbbb.jsonl"), [
+      { ts: "2026-06-21T10:02:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node --test tools/early.test.mjs"], session_id: unresolvedAgent, exit_code: 1 },
+    ]);
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__cccccccc.jsonl"), [
+      {
+        ts: "2026-06-21T10:02:00+05:00",
+        phase: "session",
+        category: "validation",
+        intent: "auto:Bash",
+        result: "fail",
+        value: "necessary_overhead",
+        event_type: "tool_call_result",
+        commands: ["node tools/ai.mjs validate --full"],
+        session_id: environmentAgent,
+        exit_code: 1,
+        failure_kind: "environment_blocked",
+        blocked_by: "missing full-gate Python modules",
+      },
+    ]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--agent-profile-dir", agentProfileDir,
+      "--min-agents", "3",
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    const profileRollup = status.agent_rollup.profile_rollup;
+    assert.equal(profileRollup.parent_recovered_failed_records, 1);
+    assert.equal(profileRollup.total_recovered_failed_records, 1);
+    assert.equal(profileRollup.unresolved_failed_records, 1);
+    assert.equal(profileRollup.environment_blocked_failed_records, 1);
+    assert.deepEqual(profileRollup.unresolved_failure_samples.map((sample) => ({
+      agent_id: sample.agent_id,
+      command_key: sample.command_key,
+      command: sample.command,
+    })), [{
+      agent_id: unresolvedAgent,
+      command_key: "node early.test.mjs",
+      command: "node --test tools/early.test.mjs",
+    }]);
+    assert.match(result.stdout, /parent-recovered agent failures: 1/);
+    assert.match(result.stdout, /unresolved agent failures: 1/);
+    assert.match(result.stdout, /node early\.test\.mjs exit 1/);
+    assert.doesNotMatch(result.stdout, /node recovered\.test\.mjs exit 1/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status next action stays generic for clean agent rollup", () => {
   const dir = tempDir();
   try {
