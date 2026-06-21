@@ -930,6 +930,72 @@ test("status agent rollup classifies parent-recovered failures by later parent p
   }
 });
 
+test("status agent rollup recovers single-file node tests from later parent supersets", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const agentProfileDir = join(dir, "profiles");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const recoveredAgent = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const earlyAgent = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    const multiAgent = "abababab-abab-4bab-8bab-abababababab";
+    const filteredAgent = "cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd";
+    writeJsonl(profile, [
+      { ts: "2026-06-21T10:01:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/early.test.mjs tools/other.test.mjs"], session_id: "parent" },
+      { ts: "2026-06-21T10:04:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test --test-name-pattern smoke tools/filtered.test.mjs"], session_id: "parent" },
+      { ts: "2026-06-21T10:05:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/recovered.test.mjs tools/ai_profile/test.mjs"], session_id: "parent" },
+      { ts: "2026-06-21T10:06:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/multi-a.test.mjs"], session_id: "parent" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta(recoveredAgent, parent, root, "2026-06-21T10:00:00.000Z")]);
+    writeJsonl(join(dir, "rollout-b.jsonl"), [subagentSessionMeta(earlyAgent, parent, root, "2026-06-21T10:00:01.000Z")]);
+    writeJsonl(join(dir, "rollout-c.jsonl"), [subagentSessionMeta(multiAgent, parent, root, "2026-06-21T10:00:02.000Z")]);
+    writeJsonl(join(dir, "rollout-d.jsonl"), [subagentSessionMeta(filteredAgent, parent, root, "2026-06-21T10:00:03.000Z")]);
+    mkdirSync(agentProfileDir, { recursive: true });
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__eeeeeeee.jsonl"), [
+      { ts: "2026-06-21T10:02:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node --test tools/recovered.test.mjs"], session_id: recoveredAgent, exit_code: 1 },
+    ]);
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__ffffffff.jsonl"), [
+      { ts: "2026-06-21T10:02:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node --test tools/early.test.mjs"], session_id: earlyAgent, exit_code: 1 },
+    ]);
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__abababab.jsonl"), [
+      { ts: "2026-06-21T10:02:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node --test tools/multi-a.test.mjs tools/multi-b.test.mjs"], session_id: multiAgent, exit_code: 1 },
+    ]);
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__cdcdcdcd.jsonl"), [
+      { ts: "2026-06-21T10:02:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node --test tools/filtered.test.mjs"], session_id: filteredAgent, exit_code: 1 },
+    ]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--agent-profile-dir", agentProfileDir,
+      "--min-agents", "4",
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    const profileRollup = status.agent_rollup.profile_rollup;
+    assert.equal(profileRollup.parent_recovered_failed_records, 1);
+    assert.equal(profileRollup.parent_node_test_file_recovered_failed_records, 1);
+    assert.equal(profileRollup.parent_exact_recovered_failed_records, 0);
+    assert.equal(profileRollup.unresolved_failed_records, 3);
+    assert.deepEqual(profileRollup.unresolved_failure_samples.map((sample) => sample.command), [
+      "node --test tools/early.test.mjs",
+      "node --test tools/multi-a.test.mjs tools/multi-b.test.mjs",
+      "node --test tools/filtered.test.mjs",
+    ]);
+    assert.match(result.stdout, /parent-recovered agent failures: 1/);
+    assert.match(result.stdout, /unresolved agent failures: 3/);
+    assert.doesNotMatch(result.stdout, /node recovered\.test\.mjs exit 1/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status next action stays generic for clean agent rollup", () => {
   const dir = tempDir();
   try {

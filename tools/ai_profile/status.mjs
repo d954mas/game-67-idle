@@ -242,8 +242,41 @@ function normalizeCommand(command) {
   return stripLeadingCommandAssignments(String(command || "")).replaceAll("\\", "/").replace(/\s+/g, " ").trim();
 }
 
+function commandTokens(command) {
+  const tokens = [];
+  const text = stripLeadingCommandAssignments(command);
+  const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) tokens.push(match[1] ?? match[2] ?? match[3] ?? "");
+  return tokens;
+}
+
+function nodeTestFileRecoveryKeys(command, { failedRecord = false } = {}) {
+  const tokens = commandTokens(command);
+  const first = (tokens[0] || "").split(/[\\/]/).pop()?.replace(/\.(exe|cmd)$/i, "").toLowerCase();
+  if (first !== "node") return [];
+  const testIndex = tokens.findIndex((token) => token === "--test");
+  if (testIndex < 0) return [];
+  const unsafeFlags = new Set(["--test-name-pattern", "--test-skip-pattern", "--test-only", "--watch", "--watch-path"]);
+  if (tokens.some((token) => unsafeFlags.has(token) || [...unsafeFlags].some((flag) => token.startsWith(`${flag}=`)))) return [];
+  if (tokens.slice(0, testIndex).some((token) => token.includes("&&") || token.includes(";") || token.includes("|"))) return [];
+  const files = [];
+  for (const token of tokens.slice(testIndex + 1)) {
+    if (!token || token.startsWith("-")) continue;
+    const normalized = normalizeCommand(token);
+    if (!/\.(?:mjs|cjs|js|ts|mts|cts)$/i.test(normalized)) continue;
+    if (/[*?[\]{}]/.test(normalized)) continue;
+    files.push(normalized);
+  }
+  if (failedRecord && files.length !== 1) return [];
+  return [...new Set(files)].map((file) => `node-test-file:${file}`);
+}
+
 function commandKeys(record) {
   const keys = (record.commands || []).map(normalizeCommand).filter(Boolean);
+  for (const command of record.commands || []) {
+    keys.push(...nodeTestFileRecoveryKeys(command, { failedRecord: record.result === "fail" }));
+  }
   if (record.validation_check_id) keys.push(`validation_check:${record.validation_check_id}`);
   return keys;
 }
@@ -286,9 +319,21 @@ function buildRecoveryPassesByKey(records) {
   return passes;
 }
 
+function recoveryKeyKind(key) {
+  return String(key || "").startsWith("node-test-file:") ? "node-test-file" : "exact";
+}
+
 function hasExternalRecoveryPass(keys, failedAt, recoveryPassesByKey) {
   if (failedAt === undefined || recoveryPassesByKey.size === 0) return false;
   return keys.some((key) => (recoveryPassesByKey.get(key) || []).some((passAt) => passAt > failedAt));
+}
+
+function externalRecoveryKind(keys, failedAt, recoveryPassesByKey) {
+  if (failedAt === undefined || recoveryPassesByKey.size === 0) return "";
+  for (const key of keys) {
+    if ((recoveryPassesByKey.get(key) || []).some((passAt) => passAt > failedAt)) return recoveryKeyKind(key);
+  }
+  return "";
 }
 
 /* A failed record is "recovered" if the same command passed on a later line, or
@@ -297,6 +342,8 @@ function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}
   const passedLater = new Map();
   let resolvedLater = 0;
   let externallyRecovered = 0;
+  let parentExactRecovered = 0;
+  let parentNodeTestFileRecovered = 0;
   let environmentBlocked = 0;
   let agentToolUsage = 0;
   let unresolved = 0;
@@ -317,7 +364,11 @@ function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}
       const reason = String(record.blocked_by || "environment blocker").trim();
       environmentBlockedReasons.set(reason, (environmentBlockedReasons.get(reason) || 0) + 1);
     }
-    else if (hasExternalRecoveryPass(keys, eventTime(record), recoveryPassesByKey)) externallyRecovered += 1;
+    else if (hasExternalRecoveryPass(keys, eventTime(record), recoveryPassesByKey)) {
+      externallyRecovered += 1;
+      if (externalRecoveryKind(keys, eventTime(record), recoveryPassesByKey) === "node-test-file") parentNodeTestFileRecovered += 1;
+      else parentExactRecovered += 1;
+    }
     else if (isAgentToolUsage(record)) {
       agentToolUsage += 1;
       const reason = String(record.blocked_by || "agent tool-usage failure").trim();
@@ -332,6 +383,8 @@ function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}
   return {
     resolvedLater,
     externallyRecovered,
+    parentExactRecovered,
+    parentNodeTestFileRecovered,
     recovered: resolvedLater + externallyRecovered,
     environmentBlocked,
     agentToolUsage,
@@ -540,6 +593,8 @@ function addFailureStats(total, stats) {
   total.unresolved += stats.unresolved;
   total.resolvedLater += stats.resolvedLater;
   total.externallyRecovered += stats.externallyRecovered;
+  total.parentExactRecovered += stats.parentExactRecovered;
+  total.parentNodeTestFileRecovered += stats.parentNodeTestFileRecovered;
   total.environmentBlocked += stats.environmentBlocked;
   total.agentToolUsage += stats.agentToolUsage;
   return total;
@@ -587,7 +642,15 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
   const missing = [];
   const errors = [];
   const allRecords = [];
-  const failed = { unresolved: 0, resolvedLater: 0, externallyRecovered: 0, environmentBlocked: 0, agentToolUsage: 0 };
+  const failed = {
+    unresolved: 0,
+    resolvedLater: 0,
+    externallyRecovered: 0,
+    parentExactRecovered: 0,
+    parentNodeTestFileRecovered: 0,
+    environmentBlocked: 0,
+    agentToolUsage: 0,
+  };
   const agentToolUsageReasons = new Map();
   const parentRecoveryPasses = buildRecoveryPassesByKey(parentRecords);
   const unresolvedFailureSamples = [];
@@ -650,6 +713,8 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     recovered_failed_records: failed.resolvedLater,
     total_recovered_failed_records: failed.resolvedLater + failed.externallyRecovered,
     parent_recovered_failed_records: failed.externallyRecovered,
+    parent_exact_recovered_failed_records: failed.parentExactRecovered,
+    parent_node_test_file_recovered_failed_records: failed.parentNodeTestFileRecovered,
     environment_blocked_failed_records: failed.environmentBlocked,
     agent_tool_usage_failed_records: failed.agentToolUsage,
     agent_tool_usage_reasons: [...agentToolUsageReasons.entries()].map(([reason, count]) => ({ reason, count })),
