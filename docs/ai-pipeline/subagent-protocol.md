@@ -36,10 +36,11 @@ evidence command or artifact:
 stop condition:
 ```
 
-Use `tool-use guard` to prevent known subagent command mistakes: give exact
-existing paths or a discovery command before reads, use `Select-Object -Skip`
-and `-First` for line windows, and include a trace evidence source plus
-`--json-output` for orchestration checks.
+Use `tool-use guard` to prevent known subagent command mistakes: verify paths
+with `rg --files` or `Test-Path` before reads, use
+`Select-Object -Skip/-First` instead of `Format-Hex -Count` or
+`Select-Object -Index` for line windows, and use `orchestration-evidence` or
+trace/status commands with an evidence source and `--json-output`.
 
 If the packet touches repo state, include the current project boundary from
 `AGENTS.md`, such as active concept, closed prototype status, engine policy, and
@@ -96,7 +97,7 @@ without one of these `## Log` markers:
 - orchestration: used
   objective: <non-empty>
   allowed files: <non-empty>
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify paths with rg --files/Test-Path before reads; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence or trace/status commands with evidence source and --json-output
   expected output: <non-empty>
   evidence command: <non-empty>
   stop condition: <non-empty>

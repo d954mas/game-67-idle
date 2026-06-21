@@ -941,6 +941,72 @@ test("validateStore accepts T0078 doing task with orchestration preflight but no
   assert.deepEqual(validateStoreDetailed(root), []);
 });
 
+test("validateStore rejects T0082 preflight missing path discovery guard details", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0082",
+    title: "Taskboard pipeline tool-use guard",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(startPreflightLog().replace(
+    DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
+    "safe line ranges with Select-Object -Skip/-First; trace/status commands include evidence source and --json-output",
+  )));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].code, "orchestration_start_preflight_missing");
+  assert.deepEqual(problems[0].missingFields, ["tool-use guard details"]);
+});
+
+test("validateStore rejects T0082 preflight missing safe line-window guard details", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0082",
+    title: "Taskboard pipeline tool-use guard",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(startPreflightLog().replace(
+    DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
+    "exact paths/discovery before reads; trace/status commands include evidence source and --json-output",
+  )));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].code, "orchestration_start_preflight_missing");
+  assert.deepEqual(problems[0].missingFields, ["tool-use guard details"]);
+});
+
+test("validateStore rejects T0082 preflight missing evidence-source guard details", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0082",
+    title: "Taskboard pipeline tool-use guard",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(startPreflightLog().replace(
+    DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
+    "exact paths/discovery before reads; use Select-Object -Skip/-First for line windows",
+  )));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].code, "orchestration_start_preflight_missing");
+  assert.deepEqual(problems[0].missingFields, ["tool-use guard details"]);
+});
+
+test("validateStore accepts T0082 preflight with detailed tool-use guard", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0082",
+    title: "Taskboard pipeline tool-use guard",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(startPreflightLog()));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
 test("validateStore preserves pre-T0078 doing task compatibility", (t) => {
   const root = tempRoot(t);
   writeTaskDoc(root, {

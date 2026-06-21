@@ -1497,7 +1497,7 @@ test("status agent rollup separates transcript tool-usage failures from unresolv
     assert.equal(profileRollup.unresolved_failure_samples[0].command, "node --test tools/real.test.mjs");
     assert.match(result.stdout, /agent tool-usage failures: 3/);
     assert.match(result.stdout, /tool-usage: agent-dddddddd-dddd-4ddd-8ddd-dddddddddddd \[test verifier\] transcript:3 Get-Content \(missing local file\/path\)/);
-    assert.match(result.stdout, /prevent missing local file\/path: Give subagents exact existing paths/);
+    assert.match(result.stdout, /prevent missing local file\/path: Verify paths with `rg --files <scope>` or `Test-Path -LiteralPath <path>` before reads\./);
     assert.match(result.stdout, /prevent invalid shell command\/parameter: Avoid unsupported PowerShell shapes/);
     assert.match(result.stdout, /prevent missing orchestration evidence source: Use an evidence source/);
     assert.match(result.stdout, /orchestration-trace --parent-thread-id parent-thread-1 --session-root .* --cwd .* --json-output tmp\/orchestration-trace\.json --json/);
@@ -1539,7 +1539,7 @@ test("status next action applies prevention hints for classified agent tool-usag
     assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
     assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_failed_records, 1);
     assert.match(status.next_action, /Apply the printed agent tool-use prevention hints/);
-    assert.match(result.stdout, /prevent missing local file\/path: Give subagents exact existing paths/);
+    assert.match(result.stdout, /prevent missing local file\/path: Verify paths with `rg --files <scope>` or `Test-Path -LiteralPath <path>` before reads\./);
     assert.match(result.stdout, /Apply the printed agent tool-use prevention hints/);
   } finally {
     cleanup(dir);

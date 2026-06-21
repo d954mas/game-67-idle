@@ -14,7 +14,7 @@ export { LIVE_STATUS_MAX_CHARS };
 export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done", "dropped"];
 export const EPIC_STATUSES = ["idea", "active", "done", "dropped"];
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
-export const DEFAULT_ORCHESTRATION_TOOL_USE_GUARD = "exact paths/discovery before reads; use Select-Object -Skip/-First for line windows; trace/status commands include evidence source and --json-output where applicable";
+export const DEFAULT_ORCHESTRATION_TOOL_USE_GUARD = "verify paths with rg --files/Test-Path before reads; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence or trace/status commands with evidence source and --json-output";
 
 const ORCHESTRATION_REVIEW_STATUSES = new Set(["review", "done"]);
 // T0028 introduced the mechanical guard; older archives keep their legacy logs.
@@ -30,6 +30,7 @@ const ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID = 78;
 const ORCHESTRATION_BROAD_WORK_MIN_TASK_ID = 79;
 const ORCHESTRATION_CLOSEOUT_PREFLIGHT_FIELDS_MIN_TASK_ID = 79;
 const ORCHESTRATION_STATUS_ARTIFACT_MIN_TASK_ID = 80;
+const ORCHESTRATION_TOOL_USE_GUARD_DETAILS_MIN_TASK_ID = 82;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
   "orchestration",
@@ -168,6 +169,7 @@ export function orchestrationPreflightProblem(doc) {
     requireMachineEvidencePass: false,
     requiredFields: ORCHESTRATION_PREFLIGHT_FIELDS,
     requireBoundedAllowedFiles: true,
+    requireToolUseGuardDetails: requiresOrchestrationToolUseGuardDetails(doc),
   });
   if (!missing.length) return null;
   const taskId = doc.fields?.id || "";
@@ -652,6 +654,7 @@ function orchestrationEvidenceProblem(doc, root = "") {
   const requireBoundedAllowedFiles = requiresOrchestrationAllowedFilesBounds(doc);
   const requireTraceArtifact = requiresOrchestrationTraceArtifact(doc);
   const requireStatusArtifact = requiresOrchestrationStatusArtifact(doc);
+  const requireToolUseGuardDetails = requiresOrchestrationToolUseGuardDetails(doc);
   const requiredFields = requiresOrchestrationCloseoutPreflightFields(doc)
     ? ORCHESTRATION_PREFLIGHT_FIELDS
     : ORCHESTRATION_REQUIRED_FIELDS;
@@ -661,6 +664,7 @@ function orchestrationEvidenceProblem(doc, root = "") {
     requireBoundedAllowedFiles,
     requireTraceArtifact,
     requireStatusArtifact,
+    requireToolUseGuardDetails,
     requiredFields,
     root,
   });
@@ -743,6 +747,7 @@ function missingOrchestrationFields(log, options = {}) {
     requireBoundedAllowedFiles = false,
     requireTraceArtifact = false,
     requireStatusArtifact = false,
+    requireToolUseGuardDetails = false,
     requiredFields = ORCHESTRATION_REQUIRED_FIELDS,
     root = "",
   } = typeof options === "boolean" ? { requireMachineEvidence: options } : options;
@@ -752,6 +757,7 @@ function missingOrchestrationFields(log, options = {}) {
   }
   const baseline = requiredFields.map(([name]) => name);
   if (requireBoundedAllowedFiles) baseline.push("allowed files bounds");
+  if (requireToolUseGuardDetails) baseline.push("tool-use guard details");
   if (requireMachineEvidence) baseline.push("machine evidence command");
   if (requireMachineEvidencePass) baseline.push("machine evidence pass");
   let bestMissing = baseline;
@@ -765,6 +771,13 @@ function missingOrchestrationFields(log, options = {}) {
       && !isBoundedOrchestrationAllowedFiles(fieldValue(block, ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN))
     ) {
       missing.push("allowed files bounds");
+    }
+    if (
+      requireToolUseGuardDetails
+      && hasMeaningfulFieldValue(block, /\btool-use\s+guard\b/i)
+      && !isDetailedToolUseGuard(fieldValue(block, /\btool-use\s+guard\b/i))
+    ) {
+      missing.push("tool-use guard details");
     }
     if (requireMachineEvidence && !hasMachineEvidenceCommand(block)) {
       missing.push("machine evidence command");
@@ -806,6 +819,28 @@ function hasMeaningfulFieldValue(text, fieldPattern) {
     return true;
   }
   return false;
+}
+
+function isDetailedToolUseGuard(text) {
+  const value = String(text || "").toLowerCase();
+  const hasPathGuard = (
+    value.includes("exact path")
+    || value.includes("discovery")
+    || value.includes("rg --files")
+    || value.includes("test-path")
+  );
+  const hasLineWindowGuard = value.includes("select-object -skip") && value.includes("-first");
+  const hasEvidenceGuard = (
+    (
+      value.includes("orchestration-evidence")
+      || value.includes("evidence source")
+      || value.includes("--parent-thread-id")
+      || value.includes("--session")
+      || value.includes("--trace-session")
+    )
+    && value.includes("--json-output")
+  );
+  return hasPathGuard && hasLineWindowGuard && hasEvidenceGuard;
 }
 
 function hasMachineEvidenceCommand(block) {
@@ -1160,6 +1195,11 @@ function requiresOrchestrationCloseoutPreflightFields(doc) {
 function requiresOrchestrationStatusArtifact(doc) {
   const match = String(doc.fields.id || "").match(/^T(\d+)$/);
   return match ? Number(match[1]) >= ORCHESTRATION_STATUS_ARTIFACT_MIN_TASK_ID : true;
+}
+
+function requiresOrchestrationToolUseGuardDetails(doc) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= ORCHESTRATION_TOOL_USE_GUARD_DETAILS_MIN_TASK_ID : true;
 }
 
 function fieldValue(text, fieldPattern) {

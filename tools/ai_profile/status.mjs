@@ -699,7 +699,7 @@ function agentToolUsagePreventionHints(profileRollup, rollupContext = {}) {
   if (reasons.has("missing local file/path")) {
     hints.push({
       reason: "missing local file/path",
-      hint: "Give subagents exact existing paths or require discovery with `rg --files <scope>` / `Test-Path -LiteralPath <path>` before `Get-Content`.",
+      hint: "Verify paths with `rg --files <scope>` or `Test-Path -LiteralPath <path>` before reads.",
     });
   }
   if (reasons.has("invalid shell command/parameter")) {
