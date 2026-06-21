@@ -715,6 +715,48 @@ test("validateStore rejects machine evidence command without PASS evidence", (t)
   assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
 });
 
+test("validateStore rejects orchestration-trace command without evidence source", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0038",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --json\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence command", "machine evidence pass"]);
+});
+
+test("validateStore rejects orchestration-trace PASS without matching evidence source", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0038",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --json\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
+});
+
 test("validateStore rejects non-machine PASS evidence for trace-era tasks", (t) => {
   const root = tempRoot(t);
   writeTaskDoc(root, {

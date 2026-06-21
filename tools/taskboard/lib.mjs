@@ -594,9 +594,11 @@ function machineEvidenceSignatures(text) {
   for (const chunk of chunks) {
     const command = chunk.split(/(?:\s*;\s*|\r?\n\s*[-*]\s+)/, 1)[0] || "";
     if (ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS.some((pattern) => pattern.test(command))) {
+      const source = commandSourceSignature(command, ["--parent-thread-id", "--session"]);
+      if (!source) continue;
       signatures.push({
         kind: "orchestration-trace",
-        source: commandSourceSignature(command, ["--parent-thread-id", "--session"]),
+        source,
       });
       continue;
     }
