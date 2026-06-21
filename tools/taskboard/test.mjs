@@ -1410,6 +1410,9 @@ test("cli orchestration-check --json rejects missing machine evidence source", (
   assert.equal(parsed.ok, false);
   assert.equal(parsed.problem.code, "orchestration_preflight_missing");
   assert.deepEqual(parsed.problem.missingFields, ["machine evidence command"]);
+  assert.equal(typeof parsed.problem.nextAction, "string");
+  assert.match(parsed.problem.nextAction, /orchestration-template/);
+  assert.match(parsed.problem.nextAction, /orchestration-check <task-id> --json/);
 });
 
 test("cli orchestration-check --current resolves one doing orchestration task", (t) => {
@@ -1451,6 +1454,9 @@ test("cli orchestration-check --current rejects no current task", (t) => {
   assert.equal(parsed.problem.selector, "current");
   assert.deepEqual(parsed.problem.taskIds, []);
   assert.match(parsed.problem.message, /no current doing pipeline\/orchestration task/);
+  assert.equal(typeof parsed.problem.nextAction, "string");
+  assert.match(parsed.problem.nextAction, /exactly one `doing` pipeline\/orchestration task/);
+  assert.match(parsed.problem.nextAction, /orchestration-check --current --json/);
 });
 
 test("cli orchestration-check --current rejects multiple current tasks", (t) => {
@@ -1482,6 +1488,9 @@ test("cli orchestration-check --current rejects multiple current tasks", (t) => 
   assert.equal(parsed.problem.selector, "current");
   assert.deepEqual(parsed.problem.taskIds, ["T0001", "T0002"]);
   assert.match(parsed.problem.message, /multiple current doing pipeline\/orchestration tasks: T0001, T0002/);
+  assert.equal(typeof parsed.problem.nextAction, "string");
+  assert.match(parsed.problem.nextAction, /set exactly one pipeline\/orchestration task to `doing`/);
+  assert.match(parsed.problem.nextAction, /orchestration-check --current --json/);
 });
 
 test("cli orchestration-check --current keeps non-json selector failures on stderr", (t) => {

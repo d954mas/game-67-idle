@@ -76,12 +76,16 @@ function writeJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-function currentSelectorProblem(code, message, ids = []) {
+const CURRENT_PREFLIGHT_NEXT_ACTION = "create or refine exactly one `doing` pipeline/orchestration task, then run `node tools/ai.mjs orchestration-check --current --json`";
+const AMBIGUOUS_CURRENT_PREFLIGHT_NEXT_ACTION = "set exactly one pipeline/orchestration task to `doing`, then run `node tools/ai.mjs orchestration-check --current --json`";
+
+function currentSelectorProblem(code, message, ids = [], nextAction = CURRENT_PREFLIGHT_NEXT_ACTION) {
   return {
     code,
     selector: "current",
     taskIds: ids,
     message,
+    nextAction,
   };
 }
 
@@ -130,6 +134,7 @@ function readTaskForOrchestrationCheck(args) {
         "current_task_ambiguous",
         `multiple current doing pipeline/orchestration tasks: ${ids.join(", ")}; select one explicitly`,
         ids,
+        AMBIGUOUS_CURRENT_PREFLIGHT_NEXT_ACTION,
       );
     }
     const doc = findDoc(root, ids[0]);

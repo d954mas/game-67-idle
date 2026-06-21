@@ -502,6 +502,7 @@ test("orchestration-check forwards current selector JSON failures", () => {
     assert.equal(parsed.problem.code, "current_task_missing");
     assert.equal(parsed.problem.selector, "current");
     assert.deepEqual(parsed.problem.taskIds, []);
+    assert.match(parsed.problem.nextAction, /orchestration-check --current --json/);
   } finally {
     cleanup(dir);
   }

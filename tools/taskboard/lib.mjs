@@ -67,6 +67,7 @@ const ORCHESTRATION_PACKET_TEMPLATE = `- orchestration: used
   evidence command: <non-empty>
   stop condition: <non-empty>
   independent reviewer: <non-empty>`;
+const ORCHESTRATION_PREFLIGHT_NEXT_ACTION = "add a complete orchestration packet from `node tools/ai.mjs orchestration-template`, then rerun `node tools/ai.mjs orchestration-check <task-id> --json`";
 
 export function orchestrationPacketTemplate() {
   return ORCHESTRATION_PACKET_TEMPLATE;
@@ -88,6 +89,7 @@ export function orchestrationPreflightProblem(doc) {
     acceptedFields: ORCHESTRATION_PREFLIGHT_FIELDS.map(([name]) => name),
     template: ORCHESTRATION_PACKET_TEMPLATE,
     message: `${doc.fields?.id || "task"}: orchestration packet preflight failed (missing/invalid: ${missing.join(", ")})`,
+    nextAction: ORCHESTRATION_PREFLIGHT_NEXT_ACTION,
   };
 }
 
