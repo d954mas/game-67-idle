@@ -1329,8 +1329,10 @@ test("status next action reports clean tail after old agent tool-usage failures"
     assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_failed_records, 1);
     assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_clean_tail_agents, 3);
     assert.match(status.next_action, /Recent subagents are clean of classified tool-use failures/);
+    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check <task-id> --json/);
     assert.match(result.stdout, /agent tool-usage clean tail: 3 agent\(s\)/);
     assert.match(result.stdout, /Recent subagents are clean of classified tool-use failures/);
+    assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check <task-id> --json/);
   } finally {
     cleanup(dir);
   }

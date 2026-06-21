@@ -900,7 +900,7 @@ function buildStatus(profilePaths, values = {}) {
   } else if (unresolvedAgentFailures > 0) {
     nextAction = "Inspect unresolved agent failure samples before trusting the orchestration rollup.";
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0 && agentToolUsageCleanTailAgents >= 3) {
-    nextAction = "Recent subagents are clean of classified tool-use failures; keep the printed prevention hints in packets and watch the next delegated run.";
+    nextAction = "Recent subagents are clean of classified tool-use failures; keep the printed prevention hints in packets and preflight the next task with `node tools/ai.mjs orchestration-check <task-id> --json` before launching delegated work.";
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0) {
     nextAction = "Apply the printed agent tool-use prevention hints to subagent packets, prompts, or templates before the next delegated run.";
   } else if (agentToolUsageFailures > 0) {
