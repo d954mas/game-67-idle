@@ -1263,6 +1263,89 @@ test("cli orchestration-check passes complete preflight packet without PASS evid
   assert.match(result.stdout, /ok: orchestration packet preflight passed/);
 });
 
+test("cli orchestration-check accepts positional task id", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  const task = createTask(root, {
+    title: "Subagent packet preflight",
+    status: "doing",
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify subagent packet before launch
+  allowed files: tools/taskboard/cli.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: ${command}
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", task.fields.id], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, new RegExp(`ok: orchestration packet preflight passed for .*${task.fields.id}`));
+});
+
+test("cli orchestration-check --id emits resolved file in json", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  const task = createTask(root, {
+    title: "Subagent packet preflight",
+    status: "doing",
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify subagent packet before launch
+  allowed files: tools/taskboard/cli.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: ${command}
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--id", task.fields.id, "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.file, `tasks\\active\\${task.file.split(/[\\/]/).pop()}`);
+  assert.equal(parsed.problem, null);
+});
+
+test("cli orchestration-check rejects missing or invalid id selectors", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const missing = spawnSync(process.execPath, [cli, "orchestration-check"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /usage: orchestration-check <task-id>\|--id <task-id>\|--file <task\.md>/);
+
+  const unknown = spawnSync(process.execPath, [cli, "orchestration-check", "T9999"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(unknown.status, 0);
+  assert.match(unknown.stderr, /no task with id T9999/);
+
+  const epic = createEpic(root, { title: "Not a task", status: "active" });
+  const epicResult = spawnSync(process.execPath, [cli, "orchestration-check", epic.fields.id], { cwd: root, encoding: "utf8" });
+  assert.notEqual(epicResult.status, 0);
+  assert.match(epicResult.stderr, new RegExp(`no task with id ${epic.fields.id}`));
+});
+
+test("cli orchestration-check rejects conflicting selectors", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";
+  const task = createTask(root, {
+    title: "Subagent packet preflight",
+    status: "doing",
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify subagent packet before launch
+  allowed files: tools/taskboard/cli.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: ${command}
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", task.fields.id, "--file", task.file], { cwd: root, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /use only one selector/);
+});
+
 test("cli orchestration-check rejects missing tool-use guard while validate stays compatible", (t) => {
   const root = tempRoot(t);
   const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent";

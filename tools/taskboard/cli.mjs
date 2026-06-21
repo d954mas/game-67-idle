@@ -9,7 +9,7 @@
 //   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
 //   node tools/taskboard/cli.mjs orchestration-template
-//   node tools/taskboard/cli.mjs orchestration-check --file tasks/active/T0001-example.md [--json]
+//   node tools/taskboard/cli.mjs orchestration-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md [--json]
 //   node tools/taskboard/cli.mjs validate [--json]
 //
 // Agents: prefer `new` over hand-writing files so IDs never collide.
@@ -77,7 +77,7 @@ function writeJson(value) {
 }
 
 function readTaskFileArg(value) {
-  const requested = value || fail("usage: orchestration-check --file <task.md>");
+  const requested = value || fail("usage: orchestration-check <task-id>|--id <task-id>|--file <task.md>");
   const file = isAbsolute(requested) ? resolve(requested) : resolve(root, requested);
   const rel = relative(root, file);
   if (rel.startsWith("..") || isAbsolute(rel)) {
@@ -96,6 +96,22 @@ function readTaskFileArg(value) {
       id: parsed.fields.id || rel,
     },
   };
+}
+
+function readTaskForOrchestrationCheck(args) {
+  const id = args.id || args._[0];
+  if (args.file && id) {
+    fail("use only one selector: <task-id>, --id, or --file");
+  }
+  if (args.file) return readTaskFileArg(args.file);
+  if (!id) {
+    fail("usage: orchestration-check <task-id>|--id <task-id>|--file <task.md>");
+  }
+  const doc = findDoc(root, id);
+  if (!doc || doc.kind !== "task") {
+    fail(`no task with id ${id}`);
+  }
+  return doc;
 }
 
 function sectionText(markdown, title) {
@@ -350,7 +366,7 @@ switch (cmd) {
     break;
   }
   case "orchestration-check": {
-    const doc = readTaskFileArg(args.file);
+    const doc = readTaskForOrchestrationCheck(args);
     const problem = orchestrationPreflightProblem(doc);
     if (args.json) {
       writeJson({
