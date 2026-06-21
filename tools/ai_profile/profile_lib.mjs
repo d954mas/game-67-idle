@@ -39,17 +39,16 @@ export function sessionsDir() {
   return resolve("tmp", "session_profiles", "sessions");
 }
 
-export function listSessionProfiles() {
-  const dir = sessionsDir();
+export function listSessionProfiles(dir = sessionsDir()) {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((name) => name.endsWith(".jsonl"))
     .map((name) => resolve(dir, name));
 }
 
-export function todaySessionProfiles() {
+export function todaySessionProfiles(dir = sessionsDir()) {
   const prefix = `${localDate()}__`;
-  return listSessionProfiles().filter((path) => path.split(/[\\/]/).pop().startsWith(prefix));
+  return listSessionProfiles(dir).filter((path) => path.split(/[\\/]/).pop().startsWith(prefix));
 }
 
 /* Derive a stable session id from a Claude session_id or a Codex rollout

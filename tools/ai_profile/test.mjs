@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -63,6 +63,31 @@ function multiAgentOutput(callId, output = {}) {
       type: "function_call_output",
       call_id: callId,
       output: JSON.stringify(output),
+    },
+  };
+}
+
+function shellCall(callId, command, timestamp = "2026-06-21T10:00:00.000Z") {
+  return {
+    timestamp,
+    type: "response_item",
+    payload: {
+      type: "function_call",
+      name: "shell_command",
+      call_id: callId,
+      arguments: JSON.stringify({ command }),
+    },
+  };
+}
+
+function shellOutput(callId, output, timestamp = "2026-06-21T10:00:01.000Z") {
+  return {
+    timestamp,
+    type: "response_item",
+    payload: {
+      type: "function_call_output",
+      call_id: callId,
+      output,
     },
   };
 }
@@ -672,13 +697,82 @@ test("status reports agent rollup when requested", () => {
   const dir = tempDir();
   try {
     const profile = join(dir, "session.jsonl");
+    const agentProfileDir = join(dir, "profiles");
     const statusJson = join(dir, "status.json");
     const parent = "parent-thread-1";
+    const agentA = "11111111-1111-4111-8111-111111111111";
+    const agentB = "22222222-2222-4222-8222-222222222222";
     writeJsonl(profile, [
       { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
     ]);
-    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta("subagent-a", parent, root, "2026-06-21T10:00:00.000Z")]);
-    writeJsonl(join(dir, "rollout-b.jsonl"), [subagentSessionMeta("subagent-b", parent, root, "2026-06-21T10:01:00.000Z")]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta(agentA, parent, root, "2026-06-21T10:00:00.000Z")]);
+    writeJsonl(join(dir, "rollout-b.jsonl"), [subagentSessionMeta(agentB, parent, root, "2026-06-21T10:01:00.000Z")]);
+    mkdirSync(agentProfileDir, { recursive: true });
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__11111111.jsonl"), [
+      { ts: "2026-06-21T10:02:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "unknown", value: "necessary_overhead", event_type: "tool_call_start", commands: ["node --test tools/agent.test.mjs"], session_id: agentA },
+      { ts: "2026-06-21T10:02:02+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/agent.test.mjs"], session_id: agentA },
+    ]);
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__22222222.jsonl"), [
+      { ts: "2026-06-21T10:03:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "unknown", value: "necessary_overhead", event_type: "tool_call_start", commands: ["node --test tools/agent.test.mjs"], session_id: agentB },
+      { ts: "2026-06-21T10:03:01+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/agent.test.mjs"], session_id: agentB },
+    ]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--agent-profile-dir", agentProfileDir,
+      "--min-agents", "2",
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.enabled, true);
+    assert.equal(status.agent_rollup.ok, true);
+    assert.equal(status.agent_rollup.source, "parent-thread");
+    assert.equal(status.agent_rollup.subagent_session_count, 2);
+    assert.deepEqual(status.agent_rollup.roles, [{ role: "test verifier", count: 2 }]);
+    assert.equal(status.agent_rollup.profile_rollup.profiled_agent_count, 2);
+    assert.equal(status.agent_rollup.profile_rollup.telemetry_agent_count, 2);
+    assert.equal(status.agent_rollup.profile_rollup.transcript_agent_count, 0);
+    assert.equal(status.agent_rollup.profile_rollup.records, 2);
+    assert.equal(status.agent_rollup.profile_rollup.recorded_ms, 3000);
+    assert.equal(status.agent_rollup.profile_rollup.command_rollup.by_time[0].key, "node agent.test.mjs");
+    assert.match(result.stdout, /## Agent Rollup/);
+    assert.match(result.stdout, /subagent sessions: 2/);
+    assert.match(result.stdout, /## Agent Profile Rollup/);
+    assert.match(result.stdout, /telemetry agents: 2\/2/);
+    assert.match(result.stdout, /sources: profiles=2, transcripts=0/);
+    assert.match(result.stdout, /node agent\.test\.mjs: 3\.0s total over 2 run\(s\)/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status falls back to subagent transcripts when profile logs are absent", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const agentA = "33333333-3333-4333-8333-333333333333";
+    const agentB = "44444444-4444-4444-8444-444444444444";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [
+      subagentSessionMeta(agentA, parent, root, "2026-06-21T10:00:00.000Z"),
+      shellCall("call_a", "node --test tools/same.test.mjs", "2026-06-21T10:00:01.000Z"),
+      shellOutput("call_a", "Exit code: 1\nWall time: 2.4 seconds\nOutput:\nfail\n", "2026-06-21T10:00:04.000Z"),
+    ]);
+    writeJsonl(join(dir, "rollout-b.jsonl"), [
+      subagentSessionMeta(agentB, parent, root, "2026-06-21T10:01:00.000Z"),
+      shellCall("call_b", "node --test tools/same.test.mjs", "2026-06-21T10:01:01.000Z"),
+      shellOutput("call_b", "Exit code: 0\nWall time: 1.1 seconds\nOutput:\nok\n", "2026-06-21T10:01:03.000Z"),
+    ]);
 
     const result = run([
       "tools/ai_profile/status.mjs",
@@ -692,13 +786,15 @@ test("status reports agent rollup when requested", () => {
       "--json-output", statusJson,
     ]);
     const status = readJson(statusJson);
-    assert.equal(status.agent_rollup.enabled, true);
     assert.equal(status.agent_rollup.ok, true);
-    assert.equal(status.agent_rollup.source, "parent-thread");
-    assert.equal(status.agent_rollup.subagent_session_count, 2);
-    assert.deepEqual(status.agent_rollup.roles, [{ role: "test verifier", count: 2 }]);
-    assert.match(result.stdout, /## Agent Rollup/);
-    assert.match(result.stdout, /subagent sessions: 2/);
+    assert.equal(status.agent_rollup.profile_rollup.telemetry_agent_count, 2);
+    assert.equal(status.agent_rollup.profile_rollup.profile_agent_count, 0);
+    assert.equal(status.agent_rollup.profile_rollup.transcript_agent_count, 2);
+    assert.equal(status.agent_rollup.profile_rollup.recorded_ms, 3500);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 1);
+    assert.equal(status.agent_rollup.profile_rollup.command_rollup.by_time[0].key, "node same.test.mjs");
+    assert.match(result.stdout, /sources: profiles=0, transcripts=2/);
+    assert.match(result.stdout, /unresolved agent failures: 1/);
   } finally {
     cleanup(dir);
   }

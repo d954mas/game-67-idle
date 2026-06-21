@@ -120,9 +120,10 @@ expects several independent agents.
 Use transcript mode when the parent session exposes spawn/wait/close tool calls;
 it verifies call order and completed wait/close outputs. Use
 `parent-thread-id` mode when subagent `session_meta` files are the available
-evidence; this proves matching subagent sessions exist, not that they completed
-useful work. The lead still verifies the traced agents, final messages, and
-artifacts match the task scope before closeout.
+evidence. Status rollup can also show best-effort subagent command telemetry
+from profile logs or subagent transcripts, but the lead still verifies the
+traced agents, final messages, and artifacts match the task scope before
+closeout.
 
 Run `node tools/taskboard/cli.mjs validate` before closeout. If the packet is
 missing or malformed, the CLI names the missing/invalid field labels and prints

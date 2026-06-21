@@ -8,6 +8,7 @@ import {
   listSessionProfiles,
   numberArg,
   parseArgs,
+  sessionsDir,
   stringArg,
   todaySessionProfiles,
 } from "./profile_lib.mjs";
@@ -30,6 +31,8 @@ file. --verbose adds coverage gaps and parse errors.
 
 Agent rollup is analysis-time only: pass --agent-rollup with --parent-thread-id
 <id> and optional --session-root <dir>, --agent-cwd <path>, --min-agents <n>.
+It also reads matching subagent profile logs from --agent-profile-dir
+(default: tmp/session_profiles/sessions) when they exist.
 Use --trace-session <codex-session.jsonl> when checking parent transcript calls.
 If CODEX_SESSION_FILE points at the parent session, --agent-rollup can infer its
 id. Add --require-agent-rollup-ok only for strict task evidence; it exits
@@ -91,7 +94,7 @@ function parseProfiles(files) {
     const parsed = parseProfile(file);
     if (parsed.exists) exists = true;
     records.push(...parsed.records);
-    for (const error of parsed.errors) errors.push(`${file}: ${error}`);
+    for (const error of parsed.errors) errors.push(error);
   }
   records.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
   return { records: attachDurations(records), errors, exists };
@@ -357,6 +360,163 @@ function traceSource(traceSession, parentThreadId) {
   return "none";
 }
 
+function profileKey(file) {
+  const name = basename(file).replace(/\.jsonl$/i, "");
+  const parts = name.split("__");
+  return (parts[parts.length - 1] || name).toLowerCase();
+}
+
+function agentProfileKeys(agent) {
+  const fromId = deriveSessionId(agent.id || "");
+  const fromSessionFile = deriveSessionId(basename(agent.sessionFile || ""));
+  return [fromId.full, fromId.short, fromSessionFile.full, fromSessionFile.short]
+    .map((value) => String(value || "").toLowerCase())
+    .filter(Boolean);
+}
+
+function findAgentProfileFile(agent, files) {
+  const keys = new Set(agentProfileKeys(agent));
+  return files.find((file) => keys.has(profileKey(file))) || "";
+}
+
+function parseJsonObject(raw) {
+  try {
+    const parsed = JSON.parse(String(raw || "{}"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function parseTranscriptDurationMs(output) {
+  const match = String(output || "").match(/^Wall time:\s*([0-9.]+)\s*seconds\b/im);
+  if (!match) return 0;
+  const seconds = Number(match[1]);
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 1000) : 0;
+}
+
+function parseTranscriptExitCode(output) {
+  const match = String(output || "").match(/^Exit code:\s*(-?\d+)/im);
+  if (!match) return undefined;
+  const code = Number(match[1]);
+  return Number.isInteger(code) ? code : undefined;
+}
+
+function readTranscriptProfileRecords(file, agentId) {
+  if (!file || !existsSync(file)) return { records: [], errors: [] };
+  const calls = new Map();
+  const records = [];
+  const errors = [];
+  const text = readFileSync(file, "utf8");
+  for (const [index, rawLine] of text.split(/\r?\n/).entries()) {
+    const lineText = rawLine.trim();
+    if (!lineText) continue;
+    let line;
+    try {
+      line = JSON.parse(lineText);
+    } catch (error) {
+      errors.push(`${file}: line ${index + 1}: invalid JSON: ${error.message}`);
+      continue;
+    }
+    const payload = line?.payload;
+    if (line?.type !== "response_item" || !payload) continue;
+    if (payload.type === "function_call") {
+      const name = String(payload.name || "");
+      if (!/(^|[._-])shell_command$/.test(name)) continue;
+      const args = parseJsonObject(payload.arguments);
+      const command = String(args.command || "").trim();
+      if (command) calls.set(String(payload.call_id || ""), { command, ts: line.timestamp || "" });
+      continue;
+    }
+    if (payload.type !== "function_call_output") continue;
+    const callId = String(payload.call_id || "");
+    const call = calls.get(callId);
+    if (!call) continue;
+    const output = String(payload.output || "");
+    const exitCode = parseTranscriptExitCode(output);
+    records.push({
+      __line: index + 1,
+      ts: line.timestamp || call.ts || "",
+      phase: "session",
+      category: "tooling",
+      intent: "auto:codex-transcript",
+      result: exitCode === undefined ? "unknown" : (exitCode === 0 ? "pass" : "fail"),
+      value: "unknown",
+      event_type: "tool_call_result_transcript",
+      duration_ms: parseTranscriptDurationMs(output),
+      commands: [call.command],
+      session_id: agentId,
+      source_call_id: callId,
+      source_session_file: file,
+      ...(exitCode !== undefined ? { exit_code: exitCode } : {}),
+    });
+  }
+  return { records, errors };
+}
+
+function addFailureStats(total, stats) {
+  total.unresolved += stats.unresolved;
+  total.resolvedLater += stats.resolvedLater;
+  total.environmentBlocked += stats.environmentBlocked;
+  return total;
+}
+
+function buildAgentProfileRollup(agents, values) {
+  const profileDir = stringArg(values, "agent-profile-dir", "") || sessionsDir();
+  const files = listSessionProfiles(profileDir);
+  const profiles = [];
+  const missing = [];
+  const errors = [];
+  const allRecords = [];
+  const failed = { unresolved: 0, resolvedLater: 0, environmentBlocked: 0 };
+
+  for (const agent of agents) {
+    const file = findAgentProfileFile(agent, files);
+    const parsed = file ? parseProfiles([file]) : readTranscriptProfileRecords(agent.sessionFile, agent.id);
+    const records = parsed.records;
+    if (records.length === 0) {
+      missing.push({ id: agent.id, nickname: agent.nickname || "", role: agent.role || "" });
+      continue;
+    }
+    const recordedMs = records.reduce((sum, record) => sum + Math.max(0, Number(record.duration_ms || 0)), 0);
+    profiles.push({
+      id: agent.id,
+      nickname: agent.nickname || "",
+      role: agent.role || "",
+      source: file ? "profile" : "transcript",
+      profile: file || "",
+      session_file: agent.sessionFile || "",
+      records: records.length,
+      recorded_ms: recordedMs,
+    });
+    for (const error of parsed.errors) errors.push(file ? `${file}: ${error}` : error);
+    addFailureStats(failed, classifyFailedRecords(records));
+    allRecords.push(...records.map((record) => ({ ...record, agent_id: agent.id })));
+  }
+
+  const profileAgentCount = profiles.filter((profile) => profile.source === "profile").length;
+  const transcriptAgentCount = profiles.filter((profile) => profile.source === "transcript").length;
+  return {
+    profile_dir: profileDir,
+    agent_count: agents.length,
+    telemetry_agent_count: profiles.length,
+    profiled_agent_count: profileAgentCount,
+    profile_agent_count: profileAgentCount,
+    transcript_agent_count: transcriptAgentCount,
+    missing_agent_profile_count: agents.length - profileAgentCount,
+    missing_agent_telemetry_count: missing.length,
+    records: allRecords.length,
+    recorded_ms: allRecords.reduce((sum, record) => sum + Math.max(0, Number(record.duration_ms || 0)), 0),
+    command_rollup: commandRollup(allRecords),
+    unresolved_failed_records: failed.unresolved,
+    recovered_failed_records: failed.resolvedLater,
+    environment_blocked_failed_records: failed.environmentBlocked,
+    errors,
+    profiles,
+    missing,
+  };
+}
+
 function buildAgentRollup(values) {
   if (values["agent-rollup"] !== true && values.agents !== true) return { enabled: false };
   const traceSession = stringArg(values, "trace-session", "");
@@ -384,6 +544,7 @@ function buildAgentRollup(values) {
       first_agent_ts: "",
       latest_agent_ts: "",
       agents: [],
+      profile_rollup: buildAgentProfileRollup([], values),
       problems: ["missing parent thread id for agent rollup"],
     };
   }
@@ -408,6 +569,7 @@ function buildAgentRollup(values) {
     first_agent_ts: agents[0]?.timestamp || "",
     latest_agent_ts: agents[agents.length - 1]?.timestamp || "",
     agents,
+    profile_rollup: buildAgentProfileRollup(agents, values),
     problems: trace.problems,
   };
 }
@@ -587,6 +749,33 @@ function renderStatus(status, { verbose }) {
     }
     if (agentRollup.first_agent_ts || agentRollup.latest_agent_ts) {
       lines.push(`- span: ${agentRollup.first_agent_ts || "unknown"} -> ${agentRollup.latest_agent_ts || "unknown"}`);
+    }
+    const profileRollup = agentRollup.profile_rollup;
+    if (profileRollup && profileRollup.agent_count > 0) {
+      lines.push("");
+      lines.push("## Agent Profile Rollup");
+      lines.push(`- telemetry agents: ${profileRollup.telemetry_agent_count}/${profileRollup.agent_count}`);
+      lines.push(`- sources: profiles=${profileRollup.profile_agent_count}, transcripts=${profileRollup.transcript_agent_count}`);
+      lines.push(`- telemetry records: ${profileRollup.records}`);
+      lines.push(`- recorded command time: ${formatMs(profileRollup.recorded_ms)}`);
+      if (profileRollup.unresolved_failed_records > 0) {
+        lines.push(`- unresolved agent failures: ${profileRollup.unresolved_failed_records}`);
+      }
+      const agentTimeSinks = profileRollup.command_rollup.by_time.slice(0, 3);
+      if (agentTimeSinks.length > 0) {
+        for (const entry of agentTimeSinks) {
+          lines.push(`- ${entry.key}: ${formatMs(entry.total_ms)} total over ${entry.count} run(s), max ${formatMs(entry.max_ms)}${entry.fails > 0 ? `, ${entry.fails} failed` : ""}`);
+        }
+      }
+      if (verbose && profileRollup.missing.length > 0) {
+        lines.push(`- missing telemetry: ${profileRollup.missing.length}`);
+        for (const agent of profileRollup.missing.slice(0, 10)) {
+          lines.push(`- missing: ${agent.id} ${agent.nickname || "(unnamed)"} [${agent.role || "(no-role)"}]`);
+        }
+      }
+      if (verbose && profileRollup.errors.length > 0) {
+        for (const error of profileRollup.errors) lines.push(`- profile error: ${error}`);
+      }
     }
     if (verbose && agentRollup.agents.length > 0) {
       for (const agent of agentRollup.agents.slice(0, 10)) {
