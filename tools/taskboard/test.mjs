@@ -634,8 +634,8 @@ test("validateStore requires machine orchestration evidence for trace-era tasks"
   const problems = validateStoreDetailed(root);
   assert.equal(problems.length, 1);
   assert.equal(problems[0].code, "orchestration_evidence_missing");
-  assert.deepEqual(problems[0].missingFields, ["machine evidence command"]);
-  assert.match(problems[0].message, /missing\/invalid: machine evidence command/);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence command", "machine evidence pass"]);
+  assert.match(problems[0].message, /missing\/invalid: machine evidence command, machine evidence pass/);
 });
 
 test("validateStore preserves pre-trace orchestration packet compatibility", (t) => {
@@ -673,7 +673,7 @@ test("validateStore rejects machine evidence mentioned outside evidence command"
 
   const problems = validateStoreDetailed(root);
   assert.equal(problems.length, 1);
-  assert.deepEqual(problems[0].missingFields, ["machine evidence command"]);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence command", "machine evidence pass"]);
 });
 
 test("validateStore accepts orchestration-trace machine evidence for trace-era tasks", (t) => {
@@ -689,9 +689,72 @@ test("validateStore accepts orchestration-trace machine evidence for trace-era t
   expected output: focused guard tests
   evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
   stop condition: tests pass
-  independent reviewer: reviewed guard scope`));
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json\``));
 
   assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore rejects machine evidence command without PASS evidence", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0031",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
+});
+
+test("validateStore rejects non-machine PASS evidence for trace-era tasks", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0031",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node --test tools/taskboard/test.mjs\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
+});
+
+test("validateStore rejects machine PASS evidence before orchestration packet", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0031",
+    title: "Pipeline orchestration guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- evidence: PASS \`node tools/ai.mjs orchestration-trace --parent-thread-id parent --json\`
+- orchestration: used
+  objective: verify taskboard orchestration guard
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused guard tests
+  evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs orchestration-trace --parent-thread-id parent --json
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope`));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
 });
 
 test("validateStore rejects agent-rollup evidence without an agent source", (t) => {
@@ -711,7 +774,7 @@ test("validateStore rejects agent-rollup evidence without an agent source", (t) 
 
   const problems = validateStoreDetailed(root);
   assert.equal(problems.length, 1);
-  assert.deepEqual(problems[0].missingFields, ["machine evidence command"]);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence command", "machine evidence pass"]);
 });
 
 test("validateStore accepts agent-rollup machine evidence for trace-era tasks", (t) => {
@@ -727,7 +790,8 @@ test("validateStore accepts agent-rollup machine evidence for trace-era tasks", 
   expected output: focused guard tests
   evidence command: node --test tools/taskboard/test.mjs; node tools/ai.mjs status --agent-rollup --parent-thread-id parent
   stop condition: tests pass
-  independent reviewer: reviewed guard scope`));
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`node tools/ai.mjs status --agent-rollup --parent-thread-id parent\``));
 
   assert.deepEqual(validateStoreDetailed(root), []);
 });
@@ -746,7 +810,9 @@ test("validateStore accepts wrapped machine evidence command", (t) => {
   evidence command: node --test tools/taskboard/test.mjs;
     node tools/ai.mjs status --agent-rollup --trace-session tmp/session.jsonl
   stop condition: tests pass
-  independent reviewer: reviewed guard scope`));
+  independent reviewer: reviewed guard scope
+- evidence: PASS live \`node tools/ai.mjs status --agent-rollup
+  --trace-session tmp/session.jsonl\`; output showed Agent Rollup`));
 
   assert.deepEqual(validateStoreDetailed(root), []);
 });

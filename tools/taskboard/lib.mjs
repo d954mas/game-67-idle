@@ -20,7 +20,8 @@ const ORCHESTRATION_REVIEW_STATUSES = new Set(["review", "done"]);
 const ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID = 28;
 // T0031 introduced machine-readable orchestration trace evidence. Older review
 // tasks keep their label-only packet history; newer substantial orchestration
-// tasks must include an executable trace/status evidence command.
+// tasks must include an executable trace/status evidence command and a recorded
+// PASS result for one such command.
 const ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID = 31;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
@@ -461,7 +462,13 @@ function orchestrationEvidenceProblem(doc) {
   }
   const log = sectionText(doc.body, "Log");
   const requireMachineEvidence = requiresOrchestrationMachineEvidence(doc);
-  if (hasOrchestrationUsedEvidence(log, requireMachineEvidence) || hasSmallScopeOrchestrationException(log)) {
+  if (
+    hasOrchestrationUsedEvidence(log, requireMachineEvidence)
+    && (!requireMachineEvidence || hasMachineEvidencePassAfterOrchestration(log))
+  ) {
+    return null;
+  }
+  if (hasSmallScopeOrchestrationException(log)) {
     return null;
   }
   const missing = missingOrchestrationFields(log, requireMachineEvidence);
@@ -519,6 +526,7 @@ function missingOrchestrationFields(log, requireMachineEvidence = false) {
   }
   const baseline = ORCHESTRATION_REQUIRED_FIELDS.map(([name]) => name);
   if (requireMachineEvidence) baseline.push("machine evidence command");
+  if (requireMachineEvidence) baseline.push("machine evidence pass");
   let bestMissing = baseline;
   for (const block of blocks) {
     const missing = ORCHESTRATION_REQUIRED_FIELDS
@@ -526,6 +534,9 @@ function missingOrchestrationFields(log, requireMachineEvidence = false) {
       .map(([name]) => name);
     if (requireMachineEvidence && !hasMachineEvidenceCommand(block)) {
       missing.push("machine evidence command");
+    }
+    if (requireMachineEvidence && !hasMachineEvidencePassAfterOrchestration(log)) {
+      missing.push("machine evidence pass");
     }
     if (missing.length < bestMissing.length) {
       bestMissing = missing;
@@ -563,7 +574,15 @@ function hasMeaningfulFieldValue(text, fieldPattern) {
 }
 
 function hasMachineEvidenceCommand(block) {
-  const evidence = fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN).replaceAll("\\", "/");
+  return isMachineEvidenceText(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN));
+}
+
+function hasMachineEvidencePassAfterOrchestration(log) {
+  return evidencePassBlocksAfterOrchestration(log).some(isMachineEvidenceText);
+}
+
+function isMachineEvidenceText(text) {
+  const evidence = String(text || "").replaceAll("\\", "/");
   if (ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS.some((pattern) => pattern.test(evidence))) {
     return true;
   }
@@ -572,6 +591,26 @@ function hasMachineEvidenceCommand(block) {
     && /\s--agent-rollup\b/i.test(evidence)
     && (/\s--parent-thread-id\b/i.test(evidence) || /\s--trace-session\b/i.test(evidence))
   );
+}
+
+function evidencePassBlocksAfterOrchestration(log) {
+  const lines = String(log || "").split(/\r?\n/);
+  const blocks = [];
+  let sawOrchestrationPacket = false;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/orchestration:\s*used\b/i.test(lines[i])) {
+      sawOrchestrationPacket = true;
+    }
+    if (!sawOrchestrationPacket) continue;
+    if (!/^\s*[-*]\s+evidence\s*:\s*PASS\b/i.test(lines[i])) continue;
+    const block = [lines[i]];
+    for (let j = i + 1; j < lines.length; j += 1) {
+      if (/^\s*[-*]\s+\S/.test(lines[j])) break;
+      block.push(lines[j]);
+    }
+    blocks.push(block.join("\n"));
+  }
+  return blocks;
 }
 
 function requiresOrchestrationMachineEvidence(doc) {
