@@ -9,7 +9,7 @@
 //   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
 //   node tools/taskboard/cli.mjs orchestration-template
-//   node tools/taskboard/cli.mjs orchestration-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md [--json]
+//   node tools/taskboard/cli.mjs orchestration-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
 //   node tools/taskboard/cli.mjs validate [--json]
 //
 // Agents: prefer `new` over hand-writing files so IDs never collide.
@@ -18,7 +18,7 @@ import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
   updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
-  orchestrationPreflightProblem, parseDoc,
+  orchestrationPreflightProblem, parseDoc, currentDoingOrchestrationTaskIds,
 } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
@@ -77,7 +77,7 @@ function writeJson(value) {
 }
 
 function readTaskFileArg(value) {
-  const requested = value || fail("usage: orchestration-check <task-id>|--id <task-id>|--file <task.md>");
+  const requested = value || fail("usage: orchestration-check <task-id>|--id <task-id>|--file <task.md>|--current");
   const file = isAbsolute(requested) ? resolve(requested) : resolve(root, requested);
   const rel = relative(root, file);
   if (rel.startsWith("..") || isAbsolute(rel)) {
@@ -100,12 +100,27 @@ function readTaskFileArg(value) {
 
 function readTaskForOrchestrationCheck(args) {
   const id = args.id || args._[0];
-  if (args.file && id) {
-    fail("use only one selector: <task-id>, --id, or --file");
+  const selectors = [Boolean(args.file), Boolean(id), Boolean(args.current)].filter(Boolean).length;
+  if (selectors > 1) {
+    fail("use only one selector: <task-id>, --id, --file, or --current");
+  }
+  if (args.current) {
+    const ids = currentDoingOrchestrationTaskIds(root);
+    if (ids.length === 0) {
+      fail("no current doing pipeline/orchestration task; create or set exactly one task to doing first");
+    }
+    if (ids.length > 1) {
+      fail(`multiple current doing pipeline/orchestration tasks: ${ids.join(", ")}; select one explicitly`);
+    }
+    const doc = findDoc(root, ids[0]);
+    if (!doc || doc.kind !== "task") {
+      fail(`current task ${ids[0]} could not be resolved`);
+    }
+    return doc;
   }
   if (args.file) return readTaskFileArg(args.file);
   if (!id) {
-    fail("usage: orchestration-check <task-id>|--id <task-id>|--file <task.md>");
+    fail("usage: orchestration-check <task-id>|--id <task-id>|--file <task.md>|--current");
   }
   const doc = findDoc(root, id);
   if (!doc || doc.kind !== "task") {

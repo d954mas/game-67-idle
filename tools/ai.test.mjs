@@ -449,6 +449,44 @@ Validate orchestration packet through the AI facade.
   }
 });
 
+test("orchestration-check forwards current task selector", () => {
+  const dir = tempDir();
+  try {
+    writeTaskFile(dir, "T0001", `## What
+
+Validate current orchestration packet through the AI facade.
+
+## Done when
+
+- [ ] preflight passes
+
+## Open questions
+
+## Log
+
+- orchestration: used
+  objective: verify current facade preflight forwarding
+  allowed files: tools/ai.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: facade forwards current selector to taskboard
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  stop condition: json output is ok
+  independent reviewer: reviewed facade forwarding
+`);
+
+    const result = run(["orchestration-check", "--current", "--json"], {
+      env: { ...process.env, TASKBOARD_ROOT: dir },
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.file, "tasks\\active\\t0001-facade-test.md");
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("orchestration-template forwards taskboard template", () => {
   const result = run(["orchestration-template"]);
   const direct = spawnSync(process.execPath, ["tools/taskboard/cli.mjs", "orchestration-template"], {

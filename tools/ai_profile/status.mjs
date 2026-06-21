@@ -874,13 +874,13 @@ function currentOrchestrationPreflightGuidance() {
   try {
     const taskRoot = findTaskboardRoot(process.cwd());
     const taskIds = currentDoingOrchestrationTaskIds(taskRoot);
-    if (taskIds.length === 1) return `preflight the next task with \`node tools/ai.mjs orchestration-check ${taskIds[0]} --json\``;
-    if (taskIds.length === 0) return "create or refine one `doing` pipeline/orchestration task with a complete orchestration packet from `node tools/ai.mjs orchestration-template`, then run `node tools/ai.mjs orchestration-check <task-id> --json`";
-    return "resolve multiple current `doing` pipeline/orchestration tasks, then run `node tools/ai.mjs orchestration-check <task-id> --json`";
+    if (taskIds.length === 1) return "preflight the current task with `node tools/ai.mjs orchestration-check --current --json`";
+    if (taskIds.length === 0) return "create or refine one `doing` pipeline/orchestration task with a complete orchestration packet from `node tools/ai.mjs orchestration-template`, then run `node tools/ai.mjs orchestration-check --current --json`";
+    return "resolve multiple current `doing` pipeline/orchestration tasks to exactly one, then run `node tools/ai.mjs orchestration-check --current --json`";
   } catch {
     // Status should stay diagnostic even if a taskboard checkout is incomplete.
   }
-  return "preflight the next task with `node tools/ai.mjs orchestration-check <task-id> --json`";
+  return "preflight the current task with `node tools/ai.mjs orchestration-check --current --json`";
 }
 
 function buildStatus(profilePaths, values = {}) {

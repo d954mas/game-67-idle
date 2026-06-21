@@ -1412,6 +1412,87 @@ test("cli orchestration-check --json rejects missing machine evidence source", (
   assert.deepEqual(parsed.problem.missingFields, ["machine evidence command"]);
 });
 
+test("cli orchestration-check --current resolves one doing orchestration task", (t) => {
+  const root = tempRoot(t);
+  const task = createTask(root, {
+    title: "Current subagent packet preflight",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify current packet before launch
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.file, `tasks\\active\\${task.fields.id}-current-subagent-packet-preflight.md`);
+});
+
+test("cli orchestration-check --current rejects no current task", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /no current doing pipeline\/orchestration task/);
+  assert.equal(result.stdout, "");
+});
+
+test("cli orchestration-check --current rejects multiple current tasks", (t) => {
+  const root = tempRoot(t);
+  for (const title of ["Current packet A", "Current packet B"]) {
+    createTask(root, {
+      title,
+      status: "doing",
+      tags: ["pipeline", "orchestration"],
+      body: taskBodyWithLog(`- orchestration: used
+  objective: verify current packet before launch
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+    });
+  }
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /multiple current doing pipeline\/orchestration tasks: T0001, T0002/);
+  assert.equal(result.stdout, "");
+});
+
+test("cli orchestration-check --current rejects conflicting selectors", (t) => {
+  const root = tempRoot(t);
+  const task = createTask(root, {
+    title: "Current packet",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify current packet before launch
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", task.fields.id, "--current"], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /use only one selector/);
+});
+
 test("cli orchestration-template prints accepted packet shape", () => {
   const cli = join(import.meta.dirname, "cli.mjs");
   const result = spawnSync(process.execPath, [cli, "orchestration-template"], { encoding: "utf8" });

@@ -1366,19 +1366,19 @@ test("status clean-tail next action guides task creation when no current preflig
     assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_failed_records, 1);
     assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_clean_tail_agents, 3);
     assert.match(status.next_action, /Recent subagents are clean of classified tool-use failures/);
-    assert.match(status.next_action, /create or refine one `doing` pipeline\/orchestration task with a complete orchestration packet from `node tools\/ai\.mjs orchestration-template`, then run `node tools\/ai\.mjs orchestration-check <task-id> --json`/);
+    assert.match(status.next_action, /create or refine one `doing` pipeline\/orchestration task with a complete orchestration packet from `node tools\/ai\.mjs orchestration-template`, then run `node tools\/ai\.mjs orchestration-check --current --json`/);
     assert.match(status.next_action, /node tools\/ai\.mjs orchestration-template/);
-    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check <task-id> --json/);
+    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check --current --json/);
     assert.match(result.stdout, /agent tool-usage clean tail: 3 agent\(s\)/);
     assert.match(result.stdout, /Recent subagents are clean of classified tool-use failures/);
     assert.match(result.stdout, /node tools\/ai\.mjs orchestration-template/);
-    assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check <task-id> --json/);
+    assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check --current --json/);
   } finally {
     cleanup(dir);
   }
 });
 
-test("status clean-tail next action infers current preflight task id", () => {
+test("status clean-tail next action preflights the current task without copying its id", () => {
   const dir = tempDir();
   try {
     const profile = join(dir, "session.jsonl");
@@ -1401,9 +1401,10 @@ test("status clean-tail next action infers current preflight task id", () => {
       "--json-output", statusJson,
     ], { env: { TASKBOARD_ROOT: dir } });
     const status = readJson(statusJson);
-    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check T1234 --json/);
+    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check --current --json/);
     assert.doesNotMatch(status.next_action, /<task-id>/);
-    assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check T1234 --json/);
+    assert.doesNotMatch(status.next_action, /orchestration-check T1234 --json/);
+    assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check --current --json/);
   } finally {
     cleanup(dir);
   }
@@ -1433,8 +1434,9 @@ test("status clean-tail next action keeps placeholder when current task id is am
       "--json-output", statusJson,
     ], { env: { TASKBOARD_ROOT: dir } });
     const status = readJson(statusJson);
-    assert.match(status.next_action, /resolve multiple current `doing` pipeline\/orchestration tasks, then run `node tools\/ai\.mjs orchestration-check <task-id> --json`/);
-    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check <task-id> --json/);
+    assert.match(status.next_action, /resolve multiple current `doing` pipeline\/orchestration tasks to exactly one, then run `node tools\/ai\.mjs orchestration-check --current --json`/);
+    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check --current --json/);
+    assert.doesNotMatch(status.next_action, /<task-id>/);
     assert.doesNotMatch(status.next_action, /orchestration-check T1234 --json/);
     assert.doesNotMatch(status.next_action, /create or refine one/);
   } finally {
@@ -1467,7 +1469,7 @@ test("status clean-tail next action ignores non-current or non-orchestration tas
     ], { env: { TASKBOARD_ROOT: dir } });
     const status = readJson(statusJson);
     assert.match(status.next_action, /node tools\/ai\.mjs orchestration-template/);
-    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check <task-id> --json/);
+    assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check --current --json/);
     assert.doesNotMatch(status.next_action, /orchestration-check T1234 --json/);
     assert.doesNotMatch(status.next_action, /orchestration-check T1235 --json/);
   } finally {
