@@ -845,6 +845,44 @@ test("status reports agent rollup when requested", () => {
     assert.match(result.stdout, /sources: profiles=2, transcripts=0/);
     assert.match(result.stdout, /unresolved: agent-22222222-2222-4222-8222-222222222222 \[test verifier\] profile:2 node agent\.test\.mjs exit 1 - node --test tools\/agent\.test\.mjs/);
     assert.match(result.stdout, /node agent\.test\.mjs: 3\.0s total over 2 run\(s\)/);
+    assert.match(status.next_action, /unresolved agent failure samples/);
+    assert.match(result.stdout, /Inspect unresolved agent failure samples/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status next action stays generic for clean agent rollup", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const agentProfileDir = join(dir, "profiles");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const agent = "66666666-6666-4666-8666-666666666666";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta(agent, parent, root, "2026-06-21T10:00:00.000Z")]);
+    mkdirSync(agentProfileDir, { recursive: true });
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__66666666.jsonl"), [
+      { ts: "2026-06-21T10:02:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/agent.test.mjs"], session_id: agent },
+    ]);
+
+    run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--agent-profile-dir", agentProfileDir,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
+    assert.match(status.next_action, /No profiling action needed/);
   } finally {
     cleanup(dir);
   }
@@ -910,9 +948,61 @@ test("status falls back to subagent transcripts when profile logs are absent", (
       line: 3,
     }]);
     assert.equal(status.agent_rollup.profile_rollup.command_rollup.by_time[0].key, "node same.test.mjs");
+    assert.match(status.next_action, /unresolved agent failure samples/);
     assert.match(result.stdout, /sources: profiles=0, transcripts=2/);
     assert.match(result.stdout, /unresolved agent failures: 1/);
     assert.match(result.stdout, new RegExp(`unresolved: agent-${agentA} \\[test verifier\\] transcript:3 node same\\.test\\.mjs exit 1 - node --test tools/same\\.test\\.mjs`));
+    assert.match(result.stdout, /Inspect unresolved agent failure samples/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status next action prioritizes unresolved agent failures over environment blockers", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const agentProfileDir = join(dir, "profiles");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const agent = "77777777-7777-4777-8777-777777777777";
+    writeJsonl(profile, [
+      {
+        ts: "2026-06-13T10:00:00+05:00",
+        phase: "session",
+        category: "validation",
+        intent: "auto:Bash",
+        result: "fail",
+        value: "necessary_overhead",
+        event_type: "tool_call_result",
+        commands: ["node tools/ai.mjs validate --full"],
+        session_id: "s1",
+        failure_kind: "environment_blocked",
+        blocked_by: "missing full-gate Python modules",
+      },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta(agent, parent, root, "2026-06-21T10:00:00.000Z")]);
+    mkdirSync(agentProfileDir, { recursive: true });
+    writeJsonl(join(agentProfileDir, "2026-06-21__codex__77777777.jsonl"), [
+      { ts: "2026-06-21T10:02:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node --test tools/agent.test.mjs"], session_id: agent, exit_code: 1 },
+    ]);
+
+    run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--agent-profile-dir", agentProfileDir,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.environment_blocked_failed_records, 1);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 1);
+    assert.match(status.next_action, /unresolved agent failure samples/);
+    assert.doesNotMatch(status.next_action, /Environment blockers/);
   } finally {
     cleanup(dir);
   }

@@ -692,6 +692,7 @@ function buildStatus(profilePaths, values = {}) {
   const lowCoverage = isLowCoverage(coverage);
   const agentRollup = buildAgentRollup(values);
   const agentRollupHint = buildAgentRollupHint(values);
+  const unresolvedAgentFailures = Number(agentRollup?.profile_rollup?.unresolved_failed_records || 0);
 
   let nextAction;
   if (!parsed.exists) {
@@ -702,6 +703,8 @@ function buildStatus(profilePaths, values = {}) {
     nextAction = "No tool calls recorded yet in this session.";
   } else if (failedClassification.unresolved > 0) {
     nextAction = "Inspect the unresolved failed commands before drawing conclusions.";
+  } else if (unresolvedAgentFailures > 0) {
+    nextAction = "Inspect unresolved agent failure samples before trusting the orchestration rollup.";
   } else if (failedClassification.environmentBlocked > 0) {
     nextAction = "Environment blockers remain; prepare the required local dependencies before repeating those gates.";
   } else if (lowCoverage) {
