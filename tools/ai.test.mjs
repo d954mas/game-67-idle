@@ -64,6 +64,26 @@ function writeFailedCodexSession(file, callId = "call_facade_import") {
   ].join("\n") + "\n", "utf8");
 }
 
+function writeTaskFile(rootDir, id, body) {
+  const activeDir = join(rootDir, "tasks", "active");
+  mkdirSync(activeDir, { recursive: true });
+  const file = join(activeDir, `${id.toLowerCase()}-facade-test.md`);
+  writeFileSync(file, `---
+id: ${id}
+title: Facade orchestration check
+status: doing
+epic: ""
+priority: P2
+tags: [pipeline, orchestration]
+created: 2026-06-21
+updated: 2026-06-21
+---
+
+${body}
+`, "utf8");
+  return file;
+}
+
 function multiAgentCall(callId, name, args = {}) {
   return {
     type: "response_item",
@@ -385,6 +405,45 @@ test("orchestration-trace forwards transcript options", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).ok, true);
     assert.equal(readJson(trace).calls.length, 3);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("orchestration-check forwards taskboard preflight options", () => {
+  const dir = tempDir();
+  try {
+    writeTaskFile(dir, "T0001", `## What
+
+Validate orchestration packet through the AI facade.
+
+## Done when
+
+- [ ] preflight passes
+
+## Open questions
+
+## Log
+
+- orchestration: used
+  objective: verify facade preflight forwarding
+  allowed files: tools/ai.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: facade forwards to taskboard
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  stop condition: json output is ok
+  independent reviewer: reviewed facade forwarding
+`);
+
+    const result = run(["orchestration-check", "T0001", "--json"], {
+      env: { ...process.env, TASKBOARD_ROOT: dir },
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.file, "tasks\\active\\t0001-facade-test.md");
+    assert.equal(parsed.problem, null);
   } finally {
     cleanup(dir);
   }
