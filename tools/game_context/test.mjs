@@ -265,6 +265,25 @@ Clean template.
   writeFileSync(join(root, "CMakePresets.json"), "{}\n", "utf8");
 }
 
+function writeKickoffTemplateWithActiveNone(root) {
+  writeKickoffTemplate(root);
+  writeFileSync(join(root, "AGENTS.md"), `# AGENTS
+
+## Now
+
+- Focus: clean AI-first native game seed.
+- Active game concept: none.
+
+## Project
+
+- Active game concept: none. Focus on the reusable AI-first native game seed.
+
+## Validation
+
+- Native desktop/PC is the preferred development harness.
+`, "utf8");
+}
+
 test("new prototype kickoff creates startup-ready skeleton", (t) => {
   const fixture = tempRoot(t);
   const repoRoot = process.cwd();
@@ -391,6 +410,68 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   assert.deepEqual(gateReport.state_coverage.required, stateMatrix.required_states);
   assert.equal(gateReport.state_coverage.covered.length, 3);
   assert.equal(gateReport.state_coverage.not_covered.length, 7);
+});
+
+test("new prototype kickoff accepts active concept none seed wording", (t) => {
+  const fixture = tempRoot(t);
+  const repoRoot = process.cwd();
+  writeKickoffTemplateWithActiveNone(fixture);
+
+  const result = spawnSync(process.execPath, [
+    join(repoRoot, "tools", "game_context", "new_prototype.mjs"),
+    "--root",
+    fixture,
+    "--game-id",
+    "dragon-grove",
+    "--title",
+    "Dragon Grove",
+    "--brief",
+    "Original merge-3 dragon grove puzzle.",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    shell: false,
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const agents = readFileSync(join(fixture, "AGENTS.md"), "utf8");
+  assert.match(agents, /Active game concept: `Dragon Grove`/);
+  assert.doesNotMatch(agents, /Active game concept: none/);
+});
+
+test("new prototype kickoff refuses real active concept without force", (t) => {
+  const fixture = tempRoot(t);
+  const repoRoot = process.cwd();
+  writeKickoffTemplateWithActiveNone(fixture);
+  writeFileSync(join(fixture, "AGENTS.md"), `# AGENTS
+
+## Project
+
+- Active game concept: \`Existing Game\` (existing-game), already in progress.
+
+## Validation
+
+- Native desktop/PC is the preferred development harness.
+`, "utf8");
+
+  const result = spawnSync(process.execPath, [
+    join(repoRoot, "tools", "game_context", "new_prototype.mjs"),
+    "--root",
+    fixture,
+    "--game-id",
+    "dragon-grove",
+    "--title",
+    "Dragon Grove",
+    "--brief",
+    "Original merge-3 dragon grove puzzle.",
+  ], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    shell: false,
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /AGENTS\.md already names an active game concept/);
 });
 
 test("new prototype kickoff refuses existing project without force", (t) => {

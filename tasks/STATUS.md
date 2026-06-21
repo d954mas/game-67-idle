@@ -2,48 +2,59 @@
 
 ## Current Goal
 
-No active game concept is selected. This repository is a clean AI-first native
-game seed, ready for the next game.
-
-The asset/cutout pipeline was reviewed and optimized this iteration (key_matte
-default, route_cutout auto-picker, dual_plate; the per-asset edge-color audit
-removed; ~4000 lines of legacy/dead code dropped) — see git history.
-
-Mine Cards was a prior pipeline test run; its full game, GDD, and tasks are
-preserved in tag `mine-cards-snapshot-2026-06-18` and removed from the working
-tree so the next game starts clean. Reusable lessons live in
-`AI_PIPELINE_HISTORY.md`.
-
-Ember Road was closed after visual/UX review. Its full game state is preserved
-in tag `ember-road-snapshot-2026-06-21`; active tasks were dropped/archive-kept,
-and game-specific runtime, assets, project docs, and tools were removed from
-the working tree.
+Review the first native playable slice for `Dragon Grove` (dragon-grove), an
+original merge-3 dragon grove puzzle inspired by merge-game genre grammar
+without copying brand, art, UI copy, maps, or economy.
 
 ## Current Runtime Surface
 
-Native `game_seed` is the clean seed work surface:
+Native `game_seed` is the current prototype work surface:
 
 ```powershell
 cmake --build --preset native-debug --target game_seed
 build/game_seed/native-debug/game_seed.exe --devapi 9123
 ```
 
-Runtime entrypoint: `src/clean_seed_main.c` (362-line debug template).
+Runtime entrypoint: `src/clean_seed_main.c`.
 
 The engine submodule at `external/neotolis-engine` is read-only from this repo.
 Reusable sidecar modules, tools, skills, and game code may be edited here.
 
 ## Current Gate
 
-Capture the user's game concept (references, audience, platform, no-go
-constraints), then run the Stage 0 prototype startup path and create a fresh
-project wiki plus exactly one scoped task/epic before implementation. Do not
-invent a concept.
+Task T0029 is in review. The implemented slice is one 5x5 Y-up logical grid,
+one DevAPI-backed merge-ready action, visible reward/restore feedback, and a
+blocked/no-merge state. This is a debug playable slice, not a product visual
+pass: `nt_shape_renderer` is temporary debt, and final visuals still require
+generated runtime art plus engine font/text rendering.
+
+## Blocking Work
+
+- None for the debug playable slice. Broad feature/content expansion is blocked
+  until product visual/readability review accepts or replaces the debug visuals.
+
+## Required Validation
+
+```powershell
+node tools/game_context/iteration_context.mjs
+node tools/taskboard/cli.mjs validate
+cmake --build --preset native-debug --target game_seed
+py -3.12 tools/dragon-grove/smoke.py
+node tools/ai.mjs validate --review
+```
+
+## Last Known Good Evidence
+
+- `py -3.12 tools/dragon-grove/smoke.py` PASS: runtime `dragon_grove`,
+  `merge_count=3`, `restored_tiles=3`, level-2 reward, blocked state, `ui.tree`
+  nodes, screenshot.
+- Screenshot: `build/captures/dragon-grove-smoke.png`.
+- `node tools/ai.mjs validate --review` PASS.
 
 ## Next Priorities
 
-1. Capture the next game concept, then scaffold a fresh project wiki + one
-   scoped task/epic before implementation.
-2. Keep reusable pipeline/skills/knowledge clean and current between games.
-3. Keep native PC scale/focus + visual/teachability/core-loop proof as early
-   gates for the next playable UI.
+1. Product-review the first screen before adding systems/content.
+2. Decide whether to replace debug shapes/text with generated runtime art and
+   engine font rendering or close the experiment.
+3. If continuing, decompose `src/clean_seed_main.c` before the next runtime
+   feature.

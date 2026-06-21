@@ -1,0 +1,56 @@
+{
+  "schema": "game.core_loop.v1",
+  "game_id": "dragon-grove",
+  "title": "Dragon Grove",
+  "slice": "first native merge-3 grove",
+  "reference_grounding": {
+    "mode": "quick_check_only",
+    "digest": "gamedesign/projects/dragon-grove/reference_digest.md",
+    "borrow": [
+      "merge-3 board grammar",
+      "eggs and tiny dragons as readable rewards",
+      "restoring a magical clearing as repeated objective"
+    ],
+    "avoid": [
+      "Merge Dragons branding, art, names, maps, exact economy, and UI copy",
+      "broad collection, timers, monetization, or late-game pacing"
+    ]
+  },
+  "player_verbs": [
+    "inspect the grove",
+    "select a merge-ready group",
+    "merge three matching objects",
+    "read the reward and next blocked/restored goal"
+  ],
+  "rules": [
+    "The first slice uses a 5x5 logical Y-up grid.",
+    "Three level-1 eggs merge into one level-2 hatchling.",
+    "Three level-1 sprouts merge into one level-2 bloom.",
+    "Each successful merge restores one shadowed grove tile.",
+    "If fewer than three matching objects exist, the UI shows a blocked reason."
+  ],
+  "feedback": [
+    "The merged tile changes icon/color/tier immediately.",
+    "A message names what merged and what was restored.",
+    "HUD counters update for restored tiles and merge count.",
+    "The next merge-ready group is highlighted."
+  ],
+  "risk": [
+    "Store-page quick check is not enough for final pacing or visual parity.",
+    "Procedural shapes are acceptable only as prototype/debug visuals.",
+    "The first build can feel like a debug grid unless the action/reward text is clear."
+  ],
+  "goals": [
+    "restore three grove tiles",
+    "create one hatchling",
+    "make the next merge action obvious within five seconds"
+  ],
+  "replay_reason": "The player repeats short merges to restore more of the grove and reveal stronger dragon objects.",
+  "first_slice_acceptance": [
+    "native build opens to one grove screen",
+    "the first action merges three objects",
+    "Y-up grid coordinates are internal and documented",
+    "HUD shows goal, restored progress, and next action",
+    "blocked/no-merge state has a readable reason"
+  ]
+}

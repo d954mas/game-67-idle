@@ -65,6 +65,16 @@ function activeTaskFiles(root) {
   return readdirSync(dir).filter((name) => name.endsWith(".md") && name.toLowerCase() !== "readme.md");
 }
 
+function namesActiveConcept(text) {
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const match = line.match(/^-[ \t]*Active game concept:[ \t]*(.+)$/i);
+    if (match && !/^none\b/i.test(match[1].trim())) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function assertCleanKickoffTarget(root, gameId, options) {
   const projectDir = join(root, "gamedesign", "projects", gameId);
   if (existsSync(projectDir) && !options.force) {
@@ -75,7 +85,7 @@ function assertCleanKickoffTarget(root, gameId, options) {
     fail(`tasks/active already has ${activeTasks.length} task file(s); close or archive current work before kickoff`);
   }
   const agents = readText(join(root, "AGENTS.md"));
-  if (/Active game concept:/i.test(agents) && !options.force) {
+  if (namesActiveConcept(agents) && !options.force) {
     fail("AGENTS.md already names an active game concept");
   }
 }
@@ -89,7 +99,7 @@ function updateAgents(root, title, gameId, brief) {
     return;
   }
   const replaced = current.replace(
-    /^- No active game concept is selected\..*$/m,
+    /^-[ \t]*(?:No active game concept is selected\..*|Active game concept:[ \t]*none\b.*)$/gm,
     line,
   );
   if (replaced !== current) {
