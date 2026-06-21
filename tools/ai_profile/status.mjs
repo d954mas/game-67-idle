@@ -686,6 +686,7 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
   const parentRecoveryPasses = buildRecoveryPassesByKey(parentRecords);
   const unresolvedFailureSamples = [];
   const agentToolUsageFailureSamples = [];
+  let agentToolUsageCleanTailAgents = 0;
 
   for (const agent of agents) {
     const file = findAgentProfileFile(agent, files);
@@ -710,6 +711,8 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     for (const error of parsed.errors) errors.push(file ? `${file}: ${error}` : error);
     const failureStats = classifyFailedRecords(records, { recoveryPassesByKey: parentRecoveryPasses });
     addFailureStats(failed, failureStats);
+    if (failureStats.agentToolUsage > 0) agentToolUsageCleanTailAgents = 0;
+    else agentToolUsageCleanTailAgents += 1;
     for (const item of failureStats.agentToolUsageReasons) {
       agentToolUsageReasons.set(item.reason, (agentToolUsageReasons.get(item.reason) || 0) + item.count);
     }
@@ -750,6 +753,7 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     agent_tool_usage_failed_records: failed.agentToolUsage,
     agent_tool_usage_reasons: [...agentToolUsageReasons.entries()].map(([reason, count]) => ({ reason, count })),
     agent_tool_usage_failure_samples: agentToolUsageFailureSamples,
+    agent_tool_usage_clean_tail_agents: agentToolUsageCleanTailAgents,
     agent_tool_usage_prevention_hints: [],
     errors,
     profiles,
@@ -882,6 +886,7 @@ function buildStatus(profilePaths, values = {}) {
   const unresolvedAgentFailures = Number(agentRollup?.profile_rollup?.unresolved_failed_records || 0);
   const agentToolUsageFailures = Number(agentRollup?.profile_rollup?.agent_tool_usage_failed_records || 0);
   const agentToolUsagePreventionHints = agentRollup?.profile_rollup?.agent_tool_usage_prevention_hints || [];
+  const agentToolUsageCleanTailAgents = Number(agentRollup?.profile_rollup?.agent_tool_usage_clean_tail_agents || 0);
 
   let nextAction;
   if (!parsed.exists) {
@@ -894,6 +899,8 @@ function buildStatus(profilePaths, values = {}) {
     nextAction = "Inspect the unresolved failed commands before drawing conclusions.";
   } else if (unresolvedAgentFailures > 0) {
     nextAction = "Inspect unresolved agent failure samples before trusting the orchestration rollup.";
+  } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0 && agentToolUsageCleanTailAgents >= 3) {
+    nextAction = "Recent subagents are clean of classified tool-use failures; keep the printed prevention hints in packets and watch the next delegated run.";
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0) {
     nextAction = "Apply the printed agent tool-use prevention hints to subagent packets, prompts, or templates before the next delegated run.";
   } else if (agentToolUsageFailures > 0) {
@@ -1028,6 +1035,9 @@ function renderStatus(status, { verbose }) {
       }
       if (profileRollup.agent_tool_usage_failed_records > 0) {
         lines.push(`- agent tool-usage failures: ${profileRollup.agent_tool_usage_failed_records}`);
+        if (profileRollup.agent_tool_usage_clean_tail_agents > 0) {
+          lines.push(`- agent tool-usage clean tail: ${profileRollup.agent_tool_usage_clean_tail_agents} agent(s)`);
+        }
         const sampleLimit = verbose ? 10 : 3;
         const samples = profileRollup.agent_tool_usage_failure_samples.slice(0, sampleLimit);
         for (const sample of samples) {

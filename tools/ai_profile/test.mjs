@@ -113,6 +113,30 @@ function subagentSessionMeta(id, parentThreadId, cwd = root, timestamp = "2026-0
   };
 }
 
+function writeToolUsageAgentRollout(dir, { file, agent, parent, timestamp = "2026-06-21T10:00:00.000Z", callId = "call_missing_path" }) {
+  writeJsonl(join(dir, file), [
+    subagentSessionMeta(agent, parent, root, timestamp),
+    shellCall(callId, "Get-Content C:\\projects\\game-67-idle\\src\\missing_state.c", "2026-06-21T10:00:01.000Z"),
+    shellOutput(callId, "Exit code: 1\nWall time: 0.3 seconds\nOutput:\nGet-Content : Cannot find path 'C:\\projects\\game-67-idle\\src\\missing_state.c' because it does not exist.\nFullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand\nItemNotFoundException\n", "2026-06-21T10:00:02.000Z"),
+  ]);
+}
+
+function writeCleanAgentRollout(dir, { file, agent, parent, timestamp = "2026-06-21T10:01:00.000Z", callId = "clean_call" }) {
+  writeJsonl(join(dir, file), [
+    subagentSessionMeta(agent, parent, root, timestamp),
+    shellCall(callId, "rg --files tools/ai_profile", "2026-06-21T10:01:01.000Z"),
+    shellOutput(callId, "Exit code: 0\nWall time: 0.1 seconds\nOutput:\ntools/ai_profile/status.mjs\n", "2026-06-21T10:01:02.000Z"),
+  ]);
+}
+
+function writeUnresolvedAgentRollout(dir, { file, agent, parent, timestamp = "2026-06-21T10:03:00.000Z", callId = "call_test_fail" }) {
+  writeJsonl(join(dir, file), [
+    subagentSessionMeta(agent, parent, root, timestamp),
+    shellCall(callId, "node --test tools/agent.test.mjs", "2026-06-21T10:03:01.000Z"),
+    shellOutput(callId, "Exit code: 1\nWall time: 0.1 seconds\nOutput:\nnot ok 1 real validation failure\n", "2026-06-21T10:03:02.000Z"),
+  ]);
+}
+
 function runHook(payload, profile, harness = "codex", env = {}) {
   const result = spawnSync(process.execPath, ["tools/ai_profile/hook_record.mjs", harness], {
     cwd: root,
@@ -1250,6 +1274,160 @@ test("status next action applies prevention hints for classified agent tool-usag
     assert.match(status.next_action, /Apply the printed agent tool-use prevention hints/);
     assert.match(result.stdout, /prevent missing local file\/path: Give subagents exact existing paths/);
     assert.match(result.stdout, /Apply the printed agent tool-use prevention hints/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status next action reports clean tail after old agent tool-usage failures", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const badAgent = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const cleanAgents = [
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2",
+      "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3",
+    ];
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-bad.jsonl"), [
+      subagentSessionMeta(badAgent, parent, root, "2026-06-21T10:00:00.000Z"),
+      shellCall("call_missing_path", "Get-Content C:\\projects\\game-67-idle\\src\\missing_state.c", "2026-06-21T10:00:01.000Z"),
+      shellOutput("call_missing_path", "Exit code: 1\nWall time: 0.3 seconds\nOutput:\nGet-Content : Cannot find path 'C:\\projects\\game-67-idle\\src\\missing_state.c' because it does not exist.\nFullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand\nItemNotFoundException\n", "2026-06-21T10:00:02.000Z"),
+    ]);
+    writeJsonl(join(dir, "rollout-clean-1.jsonl"), [
+      subagentSessionMeta(cleanAgents[0], parent, root, "2026-06-21T10:01:00.000Z"),
+      shellCall("clean_one", "rg --files tools/ai_profile", "2026-06-21T10:01:01.000Z"),
+      shellOutput("clean_one", "Exit code: 0\nWall time: 0.1 seconds\nOutput:\ntools/ai_profile/status.mjs\n", "2026-06-21T10:01:02.000Z"),
+    ]);
+    writeJsonl(join(dir, "rollout-clean-2.jsonl"), [
+      subagentSessionMeta(cleanAgents[1], parent, root, "2026-06-21T10:02:00.000Z"),
+      shellCall("clean_two", "Get-Content -Path tools/ai_profile/status.mjs", "2026-06-21T10:02:01.000Z"),
+      shellOutput("clean_two", "Exit code: 0\nWall time: 0.1 seconds\nOutput:\nstatus source\n", "2026-06-21T10:02:02.000Z"),
+    ]);
+    writeJsonl(join(dir, "rollout-clean-3.jsonl"), [
+      subagentSessionMeta(cleanAgents[2], parent, root, "2026-06-21T10:03:00.000Z"),
+      shellCall("clean_three", "node --test tools/ai_profile/test.mjs", "2026-06-21T10:03:01.000Z"),
+      shellOutput("clean_three", "Exit code: 0\nWall time: 0.1 seconds\nOutput:\npass\n", "2026-06-21T10:03:02.000Z"),
+    ]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_failed_records, 1);
+    assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_clean_tail_agents, 3);
+    assert.match(status.next_action, /Recent subagents are clean of classified tool-use failures/);
+    assert.match(result.stdout, /agent tool-usage clean tail: 3 agent\(s\)/);
+    assert.match(result.stdout, /Recent subagents are clean of classified tool-use failures/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status next action keeps prevention advice for short clean tail", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeToolUsageAgentRollout(dir, { file: "rollout-bad.jsonl", agent: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", parent, timestamp: "2026-06-21T10:00:00.000Z" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-1.jsonl", agent: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1", parent, timestamp: "2026-06-21T10:01:00.000Z", callId: "clean_one" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-2.jsonl", agent: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2", parent, timestamp: "2026-06-21T10:02:00.000Z", callId: "clean_two" });
+
+    run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_clean_tail_agents, 2);
+    assert.match(status.next_action, /Apply the printed agent tool-use prevention hints/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status clean tail resets on later agent tool-usage failure", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeToolUsageAgentRollout(dir, { file: "rollout-bad-1.jsonl", agent: "cccccccc-cccc-4ccc-8ccc-ccccccccccc1", parent, timestamp: "2026-06-21T10:00:00.000Z", callId: "bad_one" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-1.jsonl", agent: "cccccccc-cccc-4ccc-8ccc-ccccccccccc2", parent, timestamp: "2026-06-21T10:01:00.000Z", callId: "clean_one" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-2.jsonl", agent: "cccccccc-cccc-4ccc-8ccc-ccccccccccc3", parent, timestamp: "2026-06-21T10:02:00.000Z", callId: "clean_two" });
+    writeToolUsageAgentRollout(dir, { file: "rollout-bad-2.jsonl", agent: "cccccccc-cccc-4ccc-8ccc-ccccccccccc4", parent, timestamp: "2026-06-21T10:03:00.000Z", callId: "bad_two" });
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_clean_tail_agents, 0);
+    assert.match(status.next_action, /Apply the printed agent tool-use prevention hints/);
+    assert.doesNotMatch(result.stdout, /agent tool-usage clean tail:/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status unresolved agent failures still outrank clean tool-use tail", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeToolUsageAgentRollout(dir, { file: "rollout-bad.jsonl", agent: "dddddddd-dddd-4ddd-8ddd-dddddddddd01", parent, timestamp: "2026-06-21T10:00:00.000Z" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-1.jsonl", agent: "dddddddd-dddd-4ddd-8ddd-dddddddddd02", parent, timestamp: "2026-06-21T10:01:00.000Z", callId: "clean_one" });
+    writeCleanAgentRollout(dir, { file: "rollout-clean-2.jsonl", agent: "dddddddd-dddd-4ddd-8ddd-dddddddddd03", parent, timestamp: "2026-06-21T10:02:00.000Z", callId: "clean_two" });
+    writeUnresolvedAgentRollout(dir, { file: "rollout-unresolved.jsonl", agent: "dddddddd-dddd-4ddd-8ddd-dddddddddd04", parent, timestamp: "2026-06-21T10:03:00.000Z" });
+
+    run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_clean_tail_agents, 3);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 1);
+    assert.match(status.next_action, /Inspect unresolved agent failure samples/);
   } finally {
     cleanup(dir);
   }
