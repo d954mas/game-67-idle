@@ -1,0 +1,43 @@
+{
+  "schema_version": 2,
+  "kind": "status-agent-rollup-evidence",
+  "generated_at": "2026-06-21T16:41:35.060Z",
+  "valid": true,
+  "errors": [],
+  "agent_rollup": {
+    "enabled": true,
+    "ok": true,
+    "strict_ok": true,
+    "source": "parent-thread",
+    "parent_thread_id": "019ee5cc-1180-7eb3-b976-c0d90d5ac0dd",
+    "trace_session": "",
+    "min_agents": 2,
+    "subagent_session_count": 117,
+    "count": 117,
+    "roles": [
+      {
+        "role": "explorer",
+        "count": 115
+      },
+      {
+        "role": "default",
+        "count": 1
+      },
+      {
+        "role": "worker",
+        "count": 1
+      }
+    ],
+    "problems": [],
+    "strict_problems": [],
+    "profile_rollup": {
+      "missing_agent_telemetry_count": 0,
+      "unresolved_failed_records": 0,
+      "agent_tool_usage_failed_records": 17,
+      "agent_tool_usage_clean_tail_agents": 8,
+      "agent_evidence_probe_failed_records": 13,
+      "agent_evidence_probe_clean_tail_agents": 2,
+      "errors": []
+    }
+  }
+}

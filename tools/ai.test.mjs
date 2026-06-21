@@ -85,6 +85,23 @@ ${body}
   return file;
 }
 
+function validSubagentPacket() {
+  return `objective: Verify facade stdin packet forwarding.
+allowed files: tools/ai.mjs; tools/ai.test.mjs
+forbidden files: AGENTS.md; src/clean_seed_main.c
+tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+expected output: PASS or CONCERNS with exact evidence.
+evidence command or artifact: node --test --test-name-pattern "subagent-packet" tools/ai.test.mjs
+stop condition: focused facade packet checks pass or a blocker is found.
+handoff:
+  findings: exact findings and verdict
+  files: files inspected
+  commands/evidence: commands run and results
+  risks: residual risks
+  owner action: lead next action
+  not-done: explicit gaps`;
+}
+
 function multiAgentCall(callId, name, args = {}) {
   return {
     type: "response_item",
@@ -637,6 +654,42 @@ test("subagent-packet-check forwards structured validation", () => {
   assert.ok(parsed.problem.missingFields.includes("tool-use guard"));
 });
 
+test("subagent-packet-check forwards stdin validation", () => {
+  const result = run(["subagent-packet-check", "--stdin", "--json"], {
+    input: validSubagentPacket(),
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.problem, null);
+});
+
+test("subagent-packet-check rejects ambiguous stdin validation", () => {
+  const result = run(["subagent-packet-check", "--stdin", "--text", validSubagentPacket(), "--json"], {
+    input: validSubagentPacket(),
+  });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /use only one subagent-packet-check input/);
+});
+
+test("subagent-packet-check rejects ambiguous stdin file validation", () => {
+  const dir = tempDir();
+  try {
+    const packet = join(dir, "packet.txt");
+    writeFileSync(packet, validSubagentPacket(), "utf8");
+    const result = run(["subagent-packet-check", "--stdin", "--file", packet, "--json"], {
+      input: validSubagentPacket(),
+    });
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /use only one subagent-packet-check input/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("subagent-template alias forwards taskboard template", () => {
   const result = run(["subagent-template"]);
 
@@ -651,6 +704,16 @@ test("subagent-check alias forwards structured validation", () => {
   assert.equal(result.status, 1);
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.problem.code, "subagent_packet_invalid");
+});
+
+test("subagent-check alias forwards stdin validation", () => {
+  const result = run(["subagent-check", "--stdin", "--json"], {
+    input: validSubagentPacket(),
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
 });
 
 test("orchestration-workflow-init forwards dry-run", () => {

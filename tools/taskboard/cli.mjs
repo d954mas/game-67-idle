@@ -10,7 +10,7 @@
 //   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
 //   node tools/taskboard/cli.mjs orchestration-template
 //   node tools/taskboard/cli.mjs subagent-packet-template|subagent-template
-//   node tools/taskboard/cli.mjs subagent-packet-check|subagent-check --file packet.txt|--text "..." [--json]
+//   node tools/taskboard/cli.mjs subagent-packet-check|subagent-check --file packet.txt|--text "..."|--stdin [--json]
 //   node tools/taskboard/cli.mjs orchestration-workflow-template [--task-id T0001] [--json]
 //   node tools/taskboard/cli.mjs orchestration-workflow-init <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--status review] [--packet-status integrated] [--output tasks/workflows/T0001.json] [--write] [--force] [--json]
 //   node tools/taskboard/cli.mjs orchestration-workflow-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
@@ -229,8 +229,10 @@ function readTaskFileArg(value) {
 }
 
 function readSubagentPacketArg(args) {
-  if (args.file && args.text) fail("use only one subagent-packet-check input: --file or --text");
+  const inputCount = [args.file, args.text, args.stdin].filter(Boolean).length;
+  if (inputCount > 1) fail("use only one subagent-packet-check input: --file, --text, or --stdin");
   if (typeof args.text === "string") return args.text;
+  if (args.stdin) return readFileSync(0, "utf8");
   if (args.file) {
     const requested = args.file;
     const file = isAbsolute(requested) ? resolve(requested) : resolve(root, requested);
@@ -243,7 +245,7 @@ function readSubagentPacketArg(args) {
     }
     return readFileSync(file, "utf8");
   }
-  fail("usage: subagent-packet-check --file packet.txt|--text \"...\" [--json]");
+  fail("usage: subagent-packet-check --file packet.txt|--text \"...\"|--stdin [--json]");
 }
 
 function workflowOutputPath(taskId, args) {

@@ -308,6 +308,11 @@ function isAiHelpProbeCommand(command) {
   return /\bnode(?:\.exe|\.cmd)?\s+tools\/ai\.mjs\s+(?:--help|-h|help)\b/i.test(normalizeCommand(command));
 }
 
+function isStructuredValidationProbeCommand(command) {
+  const text = normalizeCommand(command);
+  return /\bnode(?:\.exe|\.cmd)?\s+tools\/(?:ai\.mjs|taskboard\/cli\.mjs)\s+(?:subagent-packet-check|subagent-check|orchestration-workflow-check)\b/i.test(text);
+}
+
 function isFailedReadOnlyDiscoveryCommand(command) {
   const text = normalizeCommand(command);
   return /\bGet-ChildItem\b/i.test(text) || /\brg(?:\.exe)?\s+--files\b/i.test(text);
@@ -335,6 +340,12 @@ function transcriptFailureDetails(command, output) {
   const text = String(output || "");
   if (isStrictAgentRollupCommand(command) && /strict problem:|Fix the agent rollup evidence|Inspect unresolved agent failure samples/i.test(text)) {
     return { failure_kind: "agent_evidence_probe", blocked_by: "failed strict agent rollup probe" };
+  }
+  if (
+    isStructuredValidationProbeCommand(command)
+    && /subagent_packet_invalid|orchestration_workflow_manifest_invalid|workflow manifest failed|use only one subagent-packet-check input/i.test(text)
+  ) {
+    return { failure_kind: "agent_evidence_probe", blocked_by: "failed structured validation probe" };
   }
   if (/ItemNotFoundException|ObjectNotFound/.test(text)) {
     return { failure_kind: "agent_tool_usage", blocked_by: "missing local file/path" };

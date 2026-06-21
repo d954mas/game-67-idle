@@ -1653,6 +1653,48 @@ test("strict status agent rollup ignores failed diagnostic strict-status probes"
   }
 });
 
+test("strict status agent rollup treats failed structured validator probes as evidence probes", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const agent = "99999999-9999-4999-8999-999999999998";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node tools/ai.mjs validate --review"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [
+      subagentSessionMeta(agent, parent, root, "2026-06-21T10:00:00.000Z"),
+      shellCall("call_packet_probe", "node tools/ai.mjs subagent-packet-check --text \"objective: weak packet\" --stdin --json", "2026-06-21T10:00:01.000Z"),
+      shellOutput("call_packet_probe", "Exit code: 1\nWall time: 0.2 seconds\nOutput:\n{\"ok\":false,\"problem\":{\"code\":\"subagent_packet_invalid\"}}\n", "2026-06-21T10:00:02.000Z"),
+      shellCall("call_workflow_probe", "node tools/taskboard/cli.mjs orchestration-workflow-check T0092 --json", "2026-06-21T10:00:03.000Z"),
+      shellOutput("call_workflow_probe", "Exit code: 1\nWall time: 0.2 seconds\nOutput:\n{\"ok\":false,\"problem\":{\"code\":\"orchestration_workflow_manifest_invalid\",\"message\":\"T0092: workflow manifest failed (workflow manifest)\"}}\n", "2026-06-21T10:00:04.000Z"),
+      shellCall("call_read", "rg --files tools/ai_profile", "2026-06-21T10:00:05.000Z"),
+      shellOutput("call_read", "Exit code: 0\nWall time: 0.1 seconds\nOutput:\ntools/ai_profile/status.mjs\n", "2026-06-21T10:00:06.000Z"),
+    ]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.ok, true);
+    assert.equal(status.agent_rollup.strict_ok, true);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
+    assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 2);
+    assert.match(result.stdout, /agent evidence-probe failures: 2/);
+    assert.doesNotMatch(result.stdout, /unresolved: agent-99999999-9999-4999-8999-999999999998/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("strict status agent rollup classifies profile diagnostic failures outside unresolved", () => {
   const dir = tempDir();
   try {

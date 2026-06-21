@@ -3660,10 +3660,59 @@ test("cli subagent-packet-check accepts file input", (t) => {
   assert.equal(parsed.problem, null);
 });
 
+test("cli subagent-packet-check accepts stdin input", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "subagent-packet-check", "--stdin", "--json"], {
+    cwd: root,
+    encoding: "utf8",
+    input: validSubagentPacket(),
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.problem, null);
+});
+
+test("cli subagent-packet-check rejects ambiguous stdin input", (t) => {
+  const root = tempRoot(t);
+  const packet = join(root, "packet.txt");
+  writeFileSync(packet, validSubagentPacket());
+  const cli = join(import.meta.dirname, "cli.mjs");
+
+  for (const args of [
+    ["subagent-packet-check", "--stdin", "--text", validSubagentPacket(), "--json"],
+    ["subagent-packet-check", "--stdin", "--file", packet, "--json"],
+  ]) {
+    const result = spawnSync(process.execPath, [cli, ...args], {
+      cwd: root,
+      encoding: "utf8",
+      input: validSubagentPacket(),
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /use only one subagent-packet-check input/);
+  }
+});
+
 test("cli subagent-check alias accepts text input", (t) => {
   const root = tempRoot(t);
   const cli = join(import.meta.dirname, "cli.mjs");
   const result = spawnSync(process.execPath, [cli, "subagent-check", "--text", validSubagentPacket(), "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+});
+
+test("cli subagent-check alias accepts stdin input", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "subagent-check", "--stdin", "--json"], {
+    cwd: root,
+    encoding: "utf8",
+    input: validSubagentPacket(),
+  });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
