@@ -1,0 +1,18 @@
+{
+  "schema": "game.fake_shot_prompt_packet",
+  "version": 1,
+  "job": "gamedesign/projects/ember-road/art_requests/ember-road-old-gate-fakeshot-v001.json",
+  "source_family": "composed old gate fake shot",
+  "source_family_role": "full-screen target composition for direction review only; not a fused runtime asset",
+  "target_output": "gamedesign/projects/ember-road/art/ember-road-old-gate-fakeshot-v001.png",
+  "prompt": "Use case: ui-mockup. Asset type: game fake shot / visual target, not final runtime UI. Create a polished 16:9 fantasy browser RPG first-screen fake shot for Ember Road's Old Gate. The screen has a painted stone town gate at sunset as the main left two-thirds scene, a hero near the gate, a Gate Warden quest focus, a route strip from Old Gate to North Road and a locked Old Mine, a Road Wolf auto-battle preview, ring/XP/gold reward icons, and a persistent RPG frame with top hero/status bar, right quest rail, and bottom log/action belt. Painterly 2D fantasy browser RPG style, ornate but restrained frame, readable silhouettes, warm ember gold, forest green, weathered stone, parchment, leather, iron, muted red accents. Leave clear blank content areas for runtime text. No readable text, fake letters, numbers, logos, or watermarks. Do not copy any reference-game assets, characters, icons, names, exact UI ornament shapes, or exact layouts. The composition must be suitable for later runtime decomposition; it is not a final fused runtime UI.",
+  "negative_prompt": "debug rectangles, flat programmer art, modern mobile VIP/event clutter, city-builder UI, idle/away-time cues, unreadable pseudo-text, random letters, numbers, watermarks, logos, stock-photo look, exact copied game UI, exact copied character art, one-color purple palette, one-color blue palette, fused final runtime UI",
+  "acceptance": [
+    "looks like a fantasy browser RPG screen, not a dashboard",
+    "Old Gate location is the primary read",
+    "hero, Gate Warden, Road Wolf, route, locked Old Mine, and ring/XP/gold reward promise are visible",
+    "blank text areas and separate visual ideas support later runtime composition",
+    "no baked labels, fake text, watermark, or copied reference art",
+    "can translate to native runtime while keeping logical layout coordinates Y-up"
+  ]
+}

@@ -1,0 +1,454 @@
+{
+  "schema": "game.source_sheet_intake_audit",
+  "version": 1,
+  "source": "tmp/ember-road-town-forge-v2-ui-normalized-green.png",
+  "analysis_engine": "numpy",
+  "size": [
+    1536,
+    1024
+  ],
+  "key_color": "#00ff00",
+  "key_tolerance": 8,
+  "component_count": 20,
+  "min_component_area_px": 128,
+  "min_border_px": 24,
+  "min_gutter_px": 24,
+  "max_exact_key_conflict_px": 0,
+  "max_key_hue_conflict_ratio": 0.05,
+  "closest_gap_px": 0,
+  "closest_pair": [
+    "component_19",
+    "component_20"
+  ],
+  "candidate_key_scores": [
+    {
+      "key_color": "#0000ff",
+      "visible_px": 701140,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 0,
+      "hue_band_ratio": 0.0,
+      "score": 0.0
+    },
+    {
+      "key_color": "#00ffff",
+      "visible_px": 701140,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 0,
+      "hue_band_ratio": 0.0,
+      "score": 0.0
+    },
+    {
+      "key_color": "#ff00ff",
+      "visible_px": 701140,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 0,
+      "hue_band_ratio": 0.0,
+      "score": 0.0
+    },
+    {
+      "key_color": "#00ff00",
+      "visible_px": 701140,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 12699,
+      "hue_band_ratio": 0.018112,
+      "score": 12700.811193
+    },
+    {
+      "key_color": "#ffff00",
+      "visible_px": 701140,
+      "exact_conflict_px": 1,
+      "exact_conflict_ratio": 1e-06,
+      "hue_band_px": 20852,
+      "hue_band_ratio": 0.02974,
+      "score": 21854.974014
+    },
+    {
+      "key_color": "#ff0000",
+      "visible_px": 701140,
+      "exact_conflict_px": 0,
+      "exact_conflict_ratio": 0.0,
+      "hue_band_px": 109182,
+      "hue_band_ratio": 0.155721,
+      "score": 109197.572068
+    }
+  ],
+  "current_key_score": {
+    "key_color": "#00ff00",
+    "visible_px": 701140,
+    "exact_conflict_px": 0,
+    "exact_conflict_ratio": 0.0,
+    "hue_band_px": 12699,
+    "hue_band_ratio": 0.018112,
+    "score": 12700.811193
+  },
+  "suggested_key_color": "#0000ff",
+  "key_color_conflict_count": 0,
+  "key_color_action": "keep_current_key_color",
+  "next_prompt_key_color": "#00ff00",
+  "problem_summary": {
+    "components_with_border_gap": 0,
+    "components_with_exact_key_conflict": 0,
+    "components_with_key_hue_conflict": 0,
+    "total_exact_key_conflict_px": 0,
+    "total_key_fringe_hue_px": 0,
+    "total_purple_halo_hue_px": 0,
+    "gutter_below_min": true,
+    "worst_key_hue_component": {
+      "id": "component_1",
+      "ratio": 0.0,
+      "bbox": [
+        53,
+        39,
+        308,
+        477
+      ]
+    }
+  },
+  "blocking_reasons": [
+    {
+      "code": "unsafe_gutter",
+      "closest_gap_px": 0,
+      "minimum_px": 24,
+      "closest_pair": [
+        "component_19",
+        "component_20"
+      ],
+      "action": "regenerate_source_sheet_with_more_gutter_and_safe_border"
+    }
+  ],
+  "recommended_next_step": {
+    "action": "regenerate_source_sheet_with_more_gutter_and_safe_border",
+    "reason": "components are too close to sheet borders or each other for reliable slicing",
+    "key_color": "#00ff00"
+  },
+  "components": [
+    {
+      "id": "component_1",
+      "bbox": [
+        53,
+        39,
+        308,
+        477
+      ],
+      "area_px": 135940,
+      "visible_px": 135940,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 39
+    },
+    {
+      "id": "component_2",
+      "bbox": [
+        406,
+        39,
+        606,
+        264
+      ],
+      "area_px": 139112,
+      "visible_px": 139112,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 39
+    },
+    {
+      "id": "component_3",
+      "bbox": [
+        1059,
+        66,
+        416,
+        117
+      ],
+      "area_px": 47806,
+      "visible_px": 47806,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 61
+    },
+    {
+      "id": "component_4",
+      "bbox": [
+        1059,
+        218,
+        416,
+        120
+      ],
+      "area_px": 49010,
+      "visible_px": 49010,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 61
+    },
+    {
+      "id": "component_5",
+      "bbox": [
+        557,
+        366,
+        232,
+        152
+      ],
+      "area_px": 26563,
+      "visible_px": 26563,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 366
+    },
+    {
+      "id": "component_6",
+      "bbox": [
+        390,
+        374,
+        140,
+        137
+      ],
+      "area_px": 18862,
+      "visible_px": 18862,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 374
+    },
+    {
+      "id": "component_7",
+      "bbox": [
+        1059,
+        374,
+        416,
+        120
+      ],
+      "area_px": 49015,
+      "visible_px": 49015,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 61
+    },
+    {
+      "id": "component_8",
+      "bbox": [
+        825,
+        376,
+        196,
+        137
+      ],
+      "area_px": 21130,
+      "visible_px": 21130,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 376
+    },
+    {
+      "id": "component_9",
+      "bbox": [
+        993,
+        539,
+        160,
+        202
+      ],
+      "area_px": 17286,
+      "visible_px": 17286,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 283
+    },
+    {
+      "id": "component_10",
+      "bbox": [
+        1230,
+        545,
+        201,
+        198
+      ],
+      "area_px": 31103,
+      "visible_px": 31103,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 105
+    },
+    {
+      "id": "component_11",
+      "bbox": [
+        64,
+        567,
+        171,
+        169
+      ],
+      "area_px": 13717,
+      "visible_px": 13717,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 64
+    },
+    {
+      "id": "component_12",
+      "bbox": [
+        717,
+        569,
+        159,
+        160
+      ],
+      "area_px": 11694,
+      "visible_px": 11694,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 295
+    },
+    {
+      "id": "component_13",
+      "bbox": [
+        496,
+        570,
+        161,
+        157
+      ],
+      "area_px": 10627,
+      "visible_px": 10627,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 297
+    },
+    {
+      "id": "component_14",
+      "bbox": [
+        283,
+        571,
+        164,
+        163
+      ],
+      "area_px": 12492,
+      "visible_px": 12492,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 283
+    },
+    {
+      "id": "component_15",
+      "bbox": [
+        932,
+        769,
+        536,
+        54
+      ],
+      "area_px": 7759,
+      "visible_px": 7759,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 68
+    },
+    {
+      "id": "component_16",
+      "bbox": [
+        63,
+        771,
+        169,
+        173
+      ],
+      "area_px": 13563,
+      "visible_px": 13563,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 63
+    },
+    {
+      "id": "component_17",
+      "bbox": [
+        277,
+        776,
+        163,
+        160
+      ],
+      "area_px": 14521,
+      "visible_px": 14521,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 88
+    },
+    {
+      "id": "component_18",
+      "bbox": [
+        490,
+        778,
+        156,
+        159
+      ],
+      "area_px": 11318,
+      "visible_px": 11318,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 87
+    },
+    {
+      "id": "component_19",
+      "bbox": [
+        688,
+        778,
+        156,
+        163
+      ],
+      "area_px": 13134,
+      "visible_px": 13134,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 83
+    },
+    {
+      "id": "component_20",
+      "bbox": [
+        834,
+        859,
+        657,
+        101
+      ],
+      "area_px": 56488,
+      "visible_px": 56488,
+      "exact_key_conflict_px": 0,
+      "key_fringe_hue_px": 0,
+      "purple_halo_hue_px": 0,
+      "key_hue_conflict_ratio": 0.0,
+      "border_gap_px": 45
+    }
+  ],
+  "problems": [
+    "closest component gap 0px is below required 24px"
+  ],
+  "status": "fail"
+}

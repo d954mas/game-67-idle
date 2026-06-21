@@ -51,6 +51,9 @@ right page; it does not replace the pages.
 - [Mobile/Web Platform Design](mobile_web_platform.md) - touch, viewport,
   browser, and resume constraints.
 - [Visual Direction](visual_direction.md) - friendly readable game visuals.
+- [Game Art Contract And Visual Gate](art_contract.md) - per-game taste anchor
+  plus the three-way (pass/review/fail) visual gate that keeps universal checks
+  game-agnostic while the contract carries the taste.
 - [Asset Semantic And Style Gate](asset_semantic_style_gate.md) - reject
   generated assets that cut cleanly but mean the wrong thing or mix icon styles.
 

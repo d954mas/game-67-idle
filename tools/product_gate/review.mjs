@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 
 function usage() {
   console.error(`usage:
-  node tools/product_gate/review.mjs --project <game-id> --task <task-id> --screenshot <path> --verdict pass|fail [options]
+  node tools/product_gate/review.mjs --project <game-id> --task <task-id> --screenshot <path> --verdict pass|fail|review [options]
 
 Options:
   --surface <name>       desktop, portrait, tablet, web, or another short label
@@ -28,6 +28,8 @@ Options:
   --index-output <path>  latest-gate JSON index path
   --task-log             append a compact evidence line to the task log
   --strict               fail if a pass lacks strong answers or a fail lacks next action
+  --contract <path>      art contract JSON taste anchor; overrides pass_threshold; auto-resolved from the project when present
+  --critique <path>      machine critique JSON (game.visual_critique): fills verdict/scores/issues/answers/next from a critic instead of hand-typed flags
   --verify               request one independent clean-context re-check (records a pending verification; default off)`);
   process.exit(2);
 }
@@ -233,6 +235,95 @@ function mergeStateMatrix(values) {
   };
 }
 
+function defaultContractPath(project) {
+  return `gamedesign/projects/${sanitizeToken(project)}/art/art_contract.json`;
+}
+
+function loadContract(contractPath, { required }) {
+  const fullPath = resolve(contractPath);
+  if (!existsSync(fullPath)) {
+    if (required) fail(`art contract does not exist: ${contractPath}`);
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(fullPath, "utf8"));
+  } catch (error) {
+    fail(`art contract is not valid JSON: ${contractPath}: ${error.message}`);
+  }
+}
+
+// The art contract is the per-game taste anchor (the machine form of the visual
+// Style Brief Checklist plus reference banks). The gate reads only structural
+// knobs from it (pass_threshold) and records its path for traceability; the
+// taste fields are consumed by the visual critic, not by this pass/fail math.
+function mergeContract(values) {
+  const explicit = Boolean(values.contract);
+  const contractPath = values.contract || (values.project ? defaultContractPath(values.project) : null);
+  if (!contractPath) return values;
+  const contract = loadContract(contractPath, { required: explicit });
+  if (!contract) return values;
+  const out = { ...values, contract: relPath(contractPath), contractData: contract };
+  const threshold = Number(contract.pass_threshold);
+  if (Number.isInteger(threshold) && threshold >= 1 && threshold <= 5) out.passThreshold = threshold;
+  return out;
+}
+
+function loadCritique(critiquePath) {
+  const fullPath = resolve(critiquePath);
+  if (!existsSync(fullPath)) fail(`critique does not exist: ${critiquePath}`);
+  try {
+    return JSON.parse(readFileSync(fullPath, "utf8"));
+  } catch (error) {
+    fail(`critique is not valid JSON: ${critiquePath}: ${error.message}`);
+  }
+}
+
+const CRITIQUE_ANSWER_KEYS = [
+  ["where", "where"],
+  ["action", "action"],
+  ["response", "response"],
+  ["reward", "reward"],
+  ["game_look", "game-look"],
+];
+
+// Ingest a machine-generated visual critique (game.visual_critique) so the
+// verdict, axis scores, issues, player-read answers, and next fix come from a
+// critic that LOOKED at the screen, not from hand-typed CLI flags. Explicit CLI
+// values win, so a lead can still override any field.
+function mergeCritique(values) {
+  const critiquePath = values.critique;
+  if (!critiquePath) return values;
+  const critique = loadCritique(critiquePath);
+  const out = { ...values, critiqueSource: relPath(critiquePath), visualStrict: true };
+  if (!out.verdict && typeof critique.verdict === "string") out.verdict = critique.verdict.trim();
+
+  const seenAxes = new Set((values.visualScores || []).map((entry) => String(entry).split("=")[0].trim()));
+  const scores = [...(values.visualScores || [])];
+  const critiqueScores = critique.scores && typeof critique.scores === "object" ? critique.scores : {};
+  for (const [axis, score] of Object.entries(critiqueScores)) {
+    if (!seenAxes.has(axis)) scores.push(`${axis}=${score}`);
+  }
+  out.visualScores = scores;
+
+  const issues = [...(values.visualIssues || [])];
+  for (const issue of Array.isArray(critique.issues) ? critique.issues : []) {
+    if (issue && issue.severity && issue.axis) issues.push(`${issue.severity}:${issue.axis}:${issue.text || ""}`);
+  }
+  out.visualIssues = issues;
+
+  const critiqueAnswers = critique.answers && typeof critique.answers === "object" ? critique.answers : {};
+  for (const [critiqueKey, cliKey] of CRITIQUE_ANSWER_KEYS) {
+    if (!out[cliKey] && hasUsefulAnswer(critiqueAnswers[critiqueKey])) out[cliKey] = String(critiqueAnswers[critiqueKey]).trim();
+  }
+
+  if (!out.next && hasUsefulAnswer(critique.smallest_next_fix)) out.next = String(critique.smallest_next_fix).trim();
+  if (!out.problem) {
+    const problem = critique.problem || (out.verdict !== "pass" ? critique.smallest_next_fix : "");
+    if (problem) out.problem = String(problem).trim();
+  }
+  return out;
+}
+
 function parseVisualScores(rawScores) {
   const scores = {};
   const errors = [];
@@ -280,18 +371,21 @@ function validate(values) {
   if (!values.project) errors.push("--project is required");
   if (!values.screenshot) errors.push("--screenshot is required");
   if (!values.verdict) errors.push("--verdict is required");
-  if (values.verdict && !["pass", "fail"].includes(values.verdict)) errors.push("--verdict must be pass or fail");
+  if (values.verdict && !["pass", "fail", "review"].includes(values.verdict)) errors.push("--verdict must be pass, fail, or review");
   if (values.screenshot && !existsSync(resolve(values.screenshot))) errors.push(`screenshot does not exist: ${values.screenshot}`);
 
   const answers = ["where", "action", "response", "reward", "game-look"];
-  if (values.strict || values.verdict === "pass") {
+  // A pass always needs the player-read answers; strict pass/fail need them too.
+  // A `review` verdict is explicit doubt routed to the lead, so it requires the
+  // problem + next-check rather than confident player-read answers.
+  if (values.verdict === "pass" || (values.strict && values.verdict !== "review")) {
     for (const key of answers) {
       if (!hasUsefulAnswer(values[key])) errors.push(`--${key} needs a concrete player-read answer`);
     }
   }
-  if (values.strict && values.verdict === "fail") {
-    if (!hasUsefulAnswer(values.problem)) errors.push("--problem is required for strict fail");
-    if (!hasUsefulAnswer(values.next)) errors.push("--next is required for strict fail");
+  if (values.strict && (values.verdict === "fail" || values.verdict === "review")) {
+    if (!hasUsefulAnswer(values.problem)) errors.push(`--problem is required for strict ${values.verdict}`);
+    if (!hasUsefulAnswer(values.next)) errors.push(`--next is required for strict ${values.verdict}`);
   }
 
   const visualScores = parseVisualScores(values.visualScores);
@@ -314,18 +408,19 @@ function validate(values) {
     for (const axis of VISUAL_AXES) {
       if (visualScores.scores[axis] === undefined) errors.push(`--visual-score ${axis}=1-5 is required for --visual-strict`);
     }
+    const passThreshold = values.passThreshold || VISUAL_PASS_THRESHOLD;
     if (values.verdict === "pass") {
       for (const axis of VISUAL_AXES) {
         const score = visualScores.scores[axis];
-        if (score !== undefined && score < VISUAL_PASS_THRESHOLD) {
-          errors.push(`visual pass requires ${axis} score >= ${VISUAL_PASS_THRESHOLD}`);
+        if (score !== undefined && score < passThreshold) {
+          errors.push(`visual pass requires ${axis} score >= ${passThreshold}`);
         }
       }
       const blockingIssue = visualIssues.issues.find((issue) => issue.severity === "blocker" || issue.severity === "major");
       if (blockingIssue) errors.push(`visual pass cannot include ${blockingIssue.severity} issue for ${blockingIssue.axis}`);
     }
-    if (values.verdict === "fail" && visualIssues.issues.length === 0) {
-      errors.push("--visual-issue is required for --visual-strict fail");
+    if ((values.verdict === "fail" || values.verdict === "review") && visualIssues.issues.length === 0) {
+      errors.push(`--visual-issue is required for --visual-strict ${values.verdict}`);
     }
   }
   return errors;
@@ -347,6 +442,8 @@ function renderMarkdown(record) {
     `Verdict: **${record.verdict.toUpperCase()}**`,
     "",
     `Screenshot: \`${record.screenshot}\``,
+    ...(record.contract ? [`Contract: \`${record.contract}\``] : []),
+    ...(record.critique_source ? [`Critique: \`${record.critique_source}\``] : []),
     "",
     "## Player Read",
     "",
@@ -429,7 +526,7 @@ function runTaskLog(record, markdownPath) {
   }
 }
 
-const values = mergeStateMatrix(parseArgs(process.argv.slice(2)));
+const values = mergeCritique(mergeContract(mergeStateMatrix(parseArgs(process.argv.slice(2)))));
 if (values.help) usage();
 const surface = values.surface || "desktop";
 const output = values.output || defaultOutput(values.project, surface);
@@ -462,10 +559,12 @@ const record = {
   visual_critique: {
     strict: Boolean(values.visualStrict),
     axes: VISUAL_AXES,
-    pass_threshold: VISUAL_PASS_THRESHOLD,
+    pass_threshold: values.passThreshold || VISUAL_PASS_THRESHOLD,
     scores: visualScores.scores,
     issues: visualIssues.issues,
   },
+  contract: values.contract || "",
+  critique_source: values.critiqueSource || "",
   state_coverage: {
     required: requiredStates.required,
     covered: coveredStates.entries.map((entry) => ({ tag: entry.tag, evidence: entry.detail })),

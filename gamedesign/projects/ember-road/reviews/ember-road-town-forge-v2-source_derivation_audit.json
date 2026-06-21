@@ -1,0 +1,176 @@
+{
+  "schema": "game.generated_source_derivation_audit",
+  "version": 1,
+  "crop_manifest": "gamedesign/projects/ember-road/data/ember-road-town-forge-v2-crop_manifest.json",
+  "verdict": "pass",
+  "assets_checked": 8,
+  "assets_skipped": 0,
+  "problems": [],
+  "assets": [
+    {
+      "id": "forge_action_panel_v2",
+      "kind": "sprite",
+      "source": "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-ui-normalized-green.png",
+      "output": "assets/runtime/ember-road-town-forge-v2/forge_action_panel_v2.png",
+      "problems": [],
+      "size_match": true,
+      "reference_size": [
+        232,
+        152
+      ],
+      "output_size": [
+        232,
+        152
+      ],
+      "visible_pixels": 26563,
+      "changed_pixels": 0,
+      "changed_ratio": 0.0,
+      "mean_rgb_delta": 0.0
+    },
+    {
+      "id": "forge_result_strip_slice9_v2",
+      "kind": "slice9",
+      "source": "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-ui-normalized-green.png",
+      "output": "assets/runtime/ember-road-town-forge-v2/forge_result_strip_slice9_v2.png",
+      "problems": [],
+      "size_match": true,
+      "reference_size": [
+        416,
+        120
+      ],
+      "output_size": [
+        416,
+        120
+      ],
+      "visible_pixels": 49015,
+      "changed_pixels": 0,
+      "changed_ratio": 0.0,
+      "mean_rgb_delta": 0.0
+    },
+    {
+      "id": "mine_lantern_standalone_v2",
+      "kind": "icon",
+      "source": "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-icons-v003-normalized-magenta.png",
+      "output": "assets/runtime/ember-road-town-forge-v2/mine_lantern_standalone_v2.png",
+      "problems": [],
+      "size_match": true,
+      "reference_size": [
+        158,
+        282
+      ],
+      "output_size": [
+        158,
+        282
+      ],
+      "visible_pixels": 29877,
+      "changed_pixels": 0,
+      "changed_ratio": 0.0,
+      "mean_rgb_delta": 0.0
+    },
+    {
+      "id": "forge_lantern_ready_badge_v2",
+      "kind": "icon",
+      "source": "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-icons-v003-normalized-magenta.png",
+      "output": "assets/runtime/ember-road-town-forge-v2/forge_lantern_ready_badge_v2.png",
+      "problems": [],
+      "size_match": true,
+      "reference_size": [
+        223,
+        228
+      ],
+      "output_size": [
+        223,
+        228
+      ],
+      "visible_pixels": 37720,
+      "changed_pixels": 0,
+      "changed_ratio": 0.0,
+      "mean_rgb_delta": 0.0
+    },
+    {
+      "id": "forge_workshop_v2",
+      "kind": "sprite",
+      "source": "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-bg-normalized-green.png",
+      "output": "assets/runtime/ember-road-town-forge-v2/forge_workshop_v2.png",
+      "problems": [],
+      "size_match": true,
+      "reference_size": [
+        488,
+        360
+      ],
+      "output_size": [
+        488,
+        360
+      ],
+      "visible_pixels": 138547,
+      "changed_pixels": 0,
+      "changed_ratio": 0.0,
+      "mean_rgb_delta": 0.0
+    },
+    {
+      "id": "forge_worktable_v2",
+      "kind": "sprite",
+      "source": "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-bg-normalized-green.png",
+      "output": "assets/runtime/ember-road-town-forge-v2/forge_worktable_v2.png",
+      "problems": [],
+      "size_match": true,
+      "reference_size": [
+        410,
+        342
+      ],
+      "output_size": [
+        410,
+        342
+      ],
+      "visible_pixels": 74861,
+      "changed_pixels": 0,
+      "changed_ratio": 0.0,
+      "mean_rgb_delta": 0.0
+    },
+    {
+      "id": "forge_signpost_v2",
+      "kind": "sprite",
+      "source": "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-bg-normalized-green.png",
+      "output": "assets/runtime/ember-road-town-forge-v2/forge_signpost_v2.png",
+      "problems": [],
+      "size_match": true,
+      "reference_size": [
+        124,
+        274
+      ],
+      "output_size": [
+        124,
+        274
+      ],
+      "visible_pixels": 14788,
+      "changed_pixels": 0,
+      "changed_ratio": 0.0,
+      "mean_rgb_delta": 0.0
+    },
+    {
+      "id": "forge_floor_patch_v2",
+      "kind": "sprite",
+      "source": "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-bg-normalized-green.png",
+      "output": "assets/runtime/ember-road-town-forge-v2/forge_floor_patch_v2.png",
+      "problems": [],
+      "size_match": true,
+      "reference_size": [
+        485,
+        215
+      ],
+      "output_size": [
+        485,
+        215
+      ],
+      "visible_pixels": 79648,
+      "changed_pixels": 0,
+      "changed_ratio": 0.0,
+      "mean_rgb_delta": 0.0
+    }
+  ],
+  "thresholds": {
+    "max_changed_ratio": 0.08,
+    "max_mean_rgb_delta": 10.0,
+    "diff_threshold": 36
+  }
+}

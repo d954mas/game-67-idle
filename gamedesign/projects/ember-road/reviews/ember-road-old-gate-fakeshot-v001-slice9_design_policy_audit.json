@@ -1,0 +1,157 @@
+{
+  "schema": "game.slice9_design_policy_audit",
+  "version": 1,
+  "crop_manifest": "gamedesign/projects/ember-road/data/ember-road-old-gate-fakeshot-v001-crop_manifest.json",
+  "runtime_manifest": "gamedesign/projects/ember-road/data/ember-road-old-gate-fakeshot-v001-asset_manifest.json",
+  "verdict": "pass",
+  "problems": [],
+  "assets": [
+    {
+      "id": "route_strip_base",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/route_strip_base.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "destination_plaque_a",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/destination_plaque_a.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "destination_plaque_b",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/destination_plaque_b.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "destination_plaque_c",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/destination_plaque_c.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "destination_plaque_d",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/destination_plaque_d.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "top_status_frame",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/top_status_frame.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "status_meter_stack",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/status_meter_stack.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "quest_rail_panel",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/quest_rail_panel.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "small_panel",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/small_panel.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "wide_panel",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/wide_panel.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "reward_slot_a",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/reward_slot_a.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "reward_slot_b",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/reward_slot_b.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "reward_slot_c",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/reward_slot_c.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "reward_slot_d",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/reward_slot_d.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "reward_slot_e",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/reward_slot_e.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "primary_button_default",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/primary_button_default.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "primary_button_pressed",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/primary_button_pressed.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "primary_button_disabled",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/primary_button_disabled.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "primary_button_selected",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/primary_button_selected.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "bottom_log_belt",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/bottom_log_belt.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "route_plaque_frame",
+      "kind": "slice9",
+      "output": "assets/runtime/ember-road-old-gate-fakeshot-v001/route_plaque_frame.png",
+      "status": "pass",
+      "problems": []
+    }
+  ]
+}

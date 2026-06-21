@@ -1,0 +1,61 @@
+{
+  "schema": "game.source_family_coverage_audit",
+  "version": 1,
+  "art_job": "gamedesign/projects/ember-road/art_requests/ember-road-town-forge-v2.json",
+  "verdict": "pass",
+  "required_source_families": [
+    "composed town forge fake shot",
+    "town forge background layer sheet",
+    "forge lantern resource icon sheet",
+    "town forge character sprite sheet",
+    "fantasy forge ui frame sheet"
+  ],
+  "records": [
+    {
+      "id": "ember-road-town-forge-v2",
+      "path": "gamedesign/projects/ember-road/art/generation_records/ember-road-town-forge-v2.json",
+      "source_family": "composed town forge fake shot",
+      "source_family_role": "full-screen direction target for town forge/equipment upgrade; not a fused runtime asset",
+      "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-town-forge-v2.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "ember-road-town-forge-v2-forge-lantern-resource-icon-sheet-v001",
+      "path": "gamedesign/projects/ember-road/art/generation_records/ember-road-town-forge-v2-forge-lantern-resource-icon-sheet-v001.json",
+      "source_family": "forge lantern resource icon sheet",
+      "source_family_role": "cuttable Mine Lantern, ember shard, forge, unlock/depth, equipped result, compass, flame, lock, and unlock icons",
+      "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-town-forge-v2-forge-lantern-resource-icon-sheet-v001.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "ember-road-town-forge-v2-town-forge-background-layer-sheet-v001",
+      "path": "gamedesign/projects/ember-road/art/generation_records/ember-road-town-forge-v2-town-forge-background-layer-sheet-v001.json",
+      "source_family": "town forge background layer sheet",
+      "source_family_role": "cuttable forge/workbench, table+lantern, ember shards, Old Gate arch, awning, route marker, mine doorway, forge insert, floor patch, and warm glow overlay",
+      "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-town-forge-v2-town-forge-background-layer-sheet-v001.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "ember-road-town-forge-v2-town-forge-character-sprite-sheet-v001",
+      "path": "gamedesign/projects/ember-road/art/generation_records/ember-road-town-forge-v2-town-forge-character-sprite-sheet-v001.json",
+      "source_family": "town forge character sprite sheet",
+      "source_family_role": "cuttable hero, blacksmith/warden, lantern pickup/equip, ember shard pickup, forge sparkle, and ground shadow sprites",
+      "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-town-forge-v2-town-forge-character-sprite-sheet-v001.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "ember-road-town-forge-v2-fantasy-forge-ui-frame-sheet-v001",
+      "path": "gamedesign/projects/ember-road/art/generation_records/ember-road-town-forge-v2-fantasy-forge-ui-frame-sheet-v001.json",
+      "source_family": "fantasy forge ui frame sheet",
+      "source_family_role": "cuttable slice9-safe equipment/result rail, bottom log belt, button states, reward slots, route/depth plaques, corner caps, ember gem, lock medallion, divider, and status segment",
+      "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-town-forge-v2-fantasy-forge-ui-frame-sheet-v001.png",
+      "status": "pass",
+      "problems": []
+    }
+  ],
+  "problems": []
+}

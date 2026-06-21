@@ -1,0 +1,106 @@
+{
+  "schema": "game.runtime_crop_plan",
+  "version": 1,
+  "source": "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-icons-v003-normalized-magenta.png",
+  "source_id": "ember-road-town-forge-v2-forge-lantern-resource-icon-sheet-v003-partial",
+  "source_role": "forge lantern resource icon sheet; safe crop plus deliberate key-matte repair for standalone lantern chroma holes",
+  "output_dir": "assets/runtime/ember-road-town-forge-v2",
+  "green_screen": {
+    "mode": "chroma_key",
+    "key": "#ff00ff",
+    "notes": "Partial draft crops plus key-matte repair for clean chroma holes. Purple/magenta halo conflicts remain blocked for unrelated lock components."
+  },
+  "crops": [
+    {
+      "id": "mine_lantern_standalone_v2",
+      "kind": "icon",
+      "rect": [
+        143,
+        145,
+        158,
+        282
+      ],
+      "output": "assets/runtime/ember-road-town-forge-v2/mine_lantern_standalone_v2.png",
+      "source_component_id": "component_1",
+      "component_bbox": [
+        143,
+        145,
+        158,
+        282
+      ],
+      "semantic_role": "standalone Mine Lantern object",
+      "source_repair": "component has exact magenta chroma holes and fringe from the source sheet; per-crop route_cutout classifies it as key_matte, so key_matte intentionally removes those holes instead of preserving magenta pixels",
+      "size_class": "96px_source",
+      "preview_sizes": [
+        [
+          48,
+          48
+        ],
+        [
+          64,
+          64
+        ]
+      ],
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8
+      },
+      "chroma_key": {
+        "mode": "border_connected_and_holes",
+        "key": "#ff00ff",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "town_forge_v2",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      }
+    },
+    {
+      "id": "forge_lantern_ready_badge_v2",
+      "kind": "icon",
+      "rect": [
+        117,
+        552,
+        223,
+        228
+      ],
+      "output": "assets/runtime/ember-road-town-forge-v2/forge_lantern_ready_badge_v2.png",
+      "source_component_id": "component_6",
+      "component_bbox": [
+        117,
+        552,
+        223,
+        228
+      ],
+      "semantic_role": "Mine Lantern forged or ready result badge",
+      "size_class": "96px_source",
+      "preview_sizes": [
+        [
+          48,
+          48
+        ],
+        [
+          64,
+          64
+        ]
+      ],
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#ff00ff",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "town_forge_v2",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      }
+    }
+  ]
+}

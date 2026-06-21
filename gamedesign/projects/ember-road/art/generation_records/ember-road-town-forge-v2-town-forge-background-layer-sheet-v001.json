@@ -1,0 +1,21 @@
+{
+  "schema": "game.art_generation_record",
+  "version": 1,
+  "id": "ember-road-town-forge-v2-town-forge-background-layer-sheet-v001",
+  "provider": "openai",
+  "model_or_workflow": "built-in image_gen",
+  "workflow_json": {
+    "mode": "built-in image_gen",
+    "thread_generated_images_dir": "C:/Users/ROG/.codex/generated_images/019ee5cc-1180-7eb3-b976-c0d90d5ac0dd",
+    "source_image": "C:/Users/ROG/.codex/generated_images/019ee5cc-1180-7eb3-b976-c0d90d5ac0dd/ig_0c091ade805fe21d016a36f86ed28081919acdf22b18324305.png"
+  },
+  "prompt_packet": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-town-forge-background-layer-sheet-prompt.json",
+  "no_seed_reason": "built-in image_gen did not expose a stable seed",
+  "prompt": "Create a production source sheet for Ember Road town forge background layers and scene objects. Arrange as a row-major grid on a perfectly flat solid #00ff00 chroma-key background with at least 64px outer margin and 64px gutters between every visible pixel and shadow. Assets requested, one isolated component per slot: a forge/workbench cluster with anvil and tools; a smithing table with a glowing Mine Lantern sitting on it; an ember shard pile glow; Old Gate stone arch fragment that can sit behind the forge; wooden forge awning/timber support; small route-depth marker post with no text; glowing mine-depth doorway marker with no text; forge flame/fireplace insert; stone floor patch; subtle warm light overlay effect. Painterly 2D serious fantasy browser RPG, weathered stone, timber, iron, leather, brass, parchment accents, warm ember glow, readable silhouettes.",
+  "negative_prompt": "readable text, letters, numbers, fake glyphs, labels, counters, watermarks, copied reference-game art, copied ornaments, complete gameplay screen, UI panels, buttons, HUD, character portraits, #00ff00 inside assets, cropped objects, touching shadows, merged components, busy backgrounds, pseudo-text, logos, one fused screenshot, panel-only shop UI",
+  "source_family": "town forge background layer sheet",
+  "source_family_role": "cuttable forge/workbench, table+lantern, ember shards, Old Gate arch, awning, route marker, mine doorway, forge insert, floor patch, and warm glow overlay",
+  "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-town-forge-v2-town-forge-background-layer-sheet-v001.png",
+  "final_art_source": "generated",
+  "rejected_candidate_notes": "Accepted as first town forge background/source layer sheet. Runtime crop manifest must separate each component and treat banner/mine symbols as decorative motifs, not text."
+}

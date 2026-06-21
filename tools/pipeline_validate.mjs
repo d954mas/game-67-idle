@@ -80,7 +80,8 @@ const fullMode = args.includes("--full");
 const reviewMode = args.includes("--review");
 const mode = fullMode ? "full" : "quick";
 const dryRun = args.includes("--dry-run");
-const runAssets = args.includes("--with-assets") || fullMode || hasActiveConcept();
+const activeConcept = hasActiveConcept();
+const runAssets = args.includes("--with-assets") || fullMode || activeConcept;
 
 const GENERATED_ART_JOB_NODE_TESTS = [
   "tools/assets/job/plan_source_sheet_prompt.test.mjs",
@@ -330,8 +331,16 @@ run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
 run("doc reference tests", ["--test", "tools/doc_reference_check.test.mjs"]);
 run("bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"]);
 run("repeated product gate failure guard", ["tools/product_gate/repeated_failure_guard.mjs"]);
+if (existsSync(join(root, "tools", "ember-road", "asset_pack_contract_guard.mjs"))) {
+  run("Ember Road asset pack contract guard", ["tools/ember-road/asset_pack_contract_guard.mjs"]);
+  run("Ember Road asset pack contract guard tests", ["--test", "tools/ember-road/asset_pack_contract_guard.test.mjs"]);
+}
 run("visual invariant guard", ["tools/visual_invariant_guard.mjs"]);
 run("visual invariant guard tests", ["--test", "tools/visual_invariant_guard.test.mjs"]);
+if (activeConcept && existsSync(join(root, "tools", "ember-road", "audit_y_up_layout.py"))) {
+  const python = findPythonRunner();
+  run("Ember Road Y-up layout audit", [...python.args, "tools/ember-road/audit_y_up_layout.py", "--port", "9124"], { exe: python.exe });
+}
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
 
 // Guard: catch a STATUS<->runtime contradiction. A "clean seed" repo must not

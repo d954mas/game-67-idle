@@ -109,7 +109,10 @@ if (values.evidence.length === 0) fail("--evidence is required");
 
 const gate = readJson(gatePath);
 if (values.strict && gate.verdict !== "pass" && !values.allowFail) {
-  fail(`product gate is ${gate.verdict}; rerun with --allow-fail only for an explicit partial handoff`);
+  const hint = gate.verdict === "review"
+    ? "lead must convert it to pass/fail, or rerun with --allow-fail only for an explicit partial handoff"
+    : "rerun with --allow-fail only for an explicit partial handoff";
+  fail(`product gate is ${gate.verdict}; ${hint}`);
 }
 
 const taskRoot = findRoot();

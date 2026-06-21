@@ -1,0 +1,44 @@
+{
+  "schema": "game.source_family_prompt_queue",
+  "version": 1,
+  "art_job": "gamedesign/projects/ember-road/art_requests/ember-road-town-forge-v2.json",
+  "missing_source_families": [
+    "composed town forge fake shot",
+    "town forge background layer sheet",
+    "forge lantern resource icon sheet",
+    "town forge character sprite sheet",
+    "fantasy forge ui frame sheet"
+  ],
+  "packets": [
+    {
+      "source_family": "composed town forge fake shot",
+      "markdown": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-composed-town-forge-fake-shot-prompt.md",
+      "json": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-composed-town-forge-fake-shot-prompt.json",
+      "generation_record_command": "node tools/assets/job/new_generation_record.mjs --id <accepted-source-id> --project-dir <project-dir> --source-family \"composed town forge fake shot\" --source-family-role \"<accepted role>\" --accepted-source <path> --provider <provider> --model <model-or-workflow> --workflow-path <workflow.json> --prompt-packet gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-composed-town-forge-fake-shot-prompt.json --seed <seed> --prompt \"<prompt>\" --negative-prompt \"<negative prompt>\""
+    },
+    {
+      "source_family": "town forge background layer sheet",
+      "markdown": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-town-forge-background-layer-sheet-prompt.md",
+      "json": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-town-forge-background-layer-sheet-prompt.json",
+      "generation_record_command": "node tools/assets/job/new_generation_record.mjs --id <accepted-source-id> --project-dir <project-dir> --source-family \"town forge background layer sheet\" --source-family-role \"<accepted role>\" --accepted-source <path> --provider <provider> --model <model-or-workflow> --workflow-path <workflow.json> --prompt-packet gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-town-forge-background-layer-sheet-prompt.json --seed <seed> --prompt \"<prompt>\" --negative-prompt \"<negative prompt>\""
+    },
+    {
+      "source_family": "forge lantern resource icon sheet",
+      "markdown": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-forge-lantern-resource-icon-sheet-prompt.md",
+      "json": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-forge-lantern-resource-icon-sheet-prompt.json",
+      "generation_record_command": "node tools/assets/job/new_generation_record.mjs --id <accepted-source-id> --project-dir <project-dir> --source-family \"forge lantern resource icon sheet\" --source-family-role \"<accepted role>\" --accepted-source <path> --provider <provider> --model <model-or-workflow> --workflow-path <workflow.json> --prompt-packet gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-forge-lantern-resource-icon-sheet-prompt.json --seed <seed> --prompt \"<prompt>\" --negative-prompt \"<negative prompt>\""
+    },
+    {
+      "source_family": "town forge character sprite sheet",
+      "markdown": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-town-forge-character-sprite-sheet-prompt.md",
+      "json": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-town-forge-character-sprite-sheet-prompt.json",
+      "generation_record_command": "node tools/assets/job/new_generation_record.mjs --id <accepted-source-id> --project-dir <project-dir> --source-family \"town forge character sprite sheet\" --source-family-role \"<accepted role>\" --accepted-source <path> --provider <provider> --model <model-or-workflow> --workflow-path <workflow.json> --prompt-packet gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-town-forge-character-sprite-sheet-prompt.json --seed <seed> --prompt \"<prompt>\" --negative-prompt \"<negative prompt>\""
+    },
+    {
+      "source_family": "fantasy forge ui frame sheet",
+      "markdown": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-fantasy-forge-ui-frame-sheet-prompt.md",
+      "json": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-fantasy-forge-ui-frame-sheet-prompt.json",
+      "generation_record_command": "node tools/assets/job/new_generation_record.mjs --id <accepted-source-id> --project-dir <project-dir> --source-family \"fantasy forge ui frame sheet\" --source-family-role \"<accepted role>\" --accepted-source <path> --provider <provider> --model <model-or-workflow> --workflow-path <workflow.json> --prompt-packet gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-fantasy-forge-ui-frame-sheet-prompt.json --seed <seed> --prompt \"<prompt>\" --negative-prompt \"<negative prompt>\""
+    }
+  ]
+}

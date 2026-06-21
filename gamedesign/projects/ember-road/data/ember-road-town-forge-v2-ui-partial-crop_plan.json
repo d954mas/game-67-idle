@@ -1,0 +1,129 @@
+{
+  "schema": "game.runtime_crop_plan",
+  "version": 1,
+  "source": "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-ui-normalized-green.png",
+  "source_id": "ember-road-town-forge-v2-fantasy-forge-ui-frame-sheet-v001-partial",
+  "source_role": "fantasy forge ui frame sheet partial safe crops; whole-sheet intake failed only on component_19/component_20 gutter",
+  "output_dir": "assets/runtime/ember-road-town-forge-v2",
+  "green_screen": {
+    "mode": "chroma_key",
+    "key": "#00ff00",
+    "notes": "Partial draft crops only. Contested component_19/component_20 gutter pair is excluded."
+  },
+  "crops": [
+    {
+      "id": "forge_action_panel_v2",
+      "kind": "sprite",
+      "rect": [
+        557,
+        366,
+        232,
+        152
+      ],
+      "output": "assets/runtime/ember-road-town-forge-v2/forge_action_panel_v2.png",
+      "source_component_id": "component_5",
+      "component_bbox": [
+        557,
+        366,
+        232,
+        152
+      ],
+      "semantic_role": "source-derived forge action table panel for the town scene anchor",
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ff00",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "town_forge_v2",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      }
+    },
+    {
+      "id": "forge_result_strip_slice9_v2",
+      "kind": "slice9",
+      "rect": [
+        1059,
+        374,
+        416,
+        120
+      ],
+      "output": "assets/runtime/ember-road-town-forge-v2/forge_result_strip_slice9_v2.png",
+      "source_component_id": "component_7",
+      "component_bbox": [
+        1059,
+        374,
+        416,
+        120
+      ],
+      "semantic_role": "stretchable town forge result strip or compact button base",
+      "slice9": {
+        "left": 48,
+        "top": 24,
+        "right": 48,
+        "bottom": 24
+      },
+      "content": {
+        "x": 64,
+        "y": 24,
+        "w": 288,
+        "h": 72
+      },
+      "target_preview_sizes": [
+        [
+          160,
+          72
+        ],
+        [
+          220,
+          88
+        ],
+        [
+          360,
+          120
+        ]
+      ],
+      "stretch_policy": {
+        "center": "plain_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "simple_fixed",
+        "non_stretch_ornaments": "none"
+      },
+      "usage_policy": {
+        "size_class": "status_strip_only",
+        "min_size": [
+          160,
+          72
+        ],
+        "disallowed_uses": [
+          "large_panel",
+          "portrait_frame",
+          "full_screen_modal"
+        ],
+        "notes": "Use for compact result/status strips; do not use as an ornate large panel."
+      },
+      "trim": {
+        "mode": "alpha_bounds",
+        "padding": 8
+      },
+      "chroma_key": {
+        "mode": "border_connected",
+        "key": "#00ff00",
+        "tolerance": 8
+      },
+      "atlas": {
+        "pack_group": "town_forge_v2",
+        "allow_rotation": false,
+        "extrude": 2,
+        "shape_padding": 2
+      }
+    }
+  ]
+}

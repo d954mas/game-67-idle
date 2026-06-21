@@ -55,6 +55,13 @@ endif()
 
 set(GAME_TARGET game_seed)
 set(GAME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/build/${GAME_TARGET}/${NT_PRESET_NAME}")
+set(EMBER_ROAD_PACK_DIR "${CMAKE_SOURCE_DIR}/build/assets/ember-road")
+set(EMBER_ROAD_GENERATED_DIR "${CMAKE_BINARY_DIR}/ember-road-generated")
+set(EMBER_ROAD_BASE_PACK "${EMBER_ROAD_PACK_DIR}/ember_road_base.ntpack")
+set(EMBER_ROAD_BASE_HEADER "${EMBER_ROAD_GENERATED_DIR}/ember_road_base.h")
+set(EMBER_ROAD_RUNTIME_ASSET_DIR "${GAME_OUTPUT_DIR}/assets")
+set(EMBER_ROAD_RUNTIME_PACK "${EMBER_ROAD_RUNTIME_ASSET_DIR}/ember_road_base.ntpack")
+file(TO_CMAKE_PATH "${EMBER_ROAD_RUNTIME_PACK}" EMBER_ROAD_RUNTIME_PACK_C)
 
 # cJSON comes from the engine `cjson` target (single cJSON across the engine bus
 # and the game-owned handlers — two cJSON builds would clash on cJSON_* symbols).
@@ -130,8 +137,64 @@ if(NOT EMSCRIPTEN AND SKELETAL_ANIMATION_OZZ_SOURCE_DIR)
     endif()
 endif()
 
+if(NOT EMSCRIPTEN)
+    file(GLOB EMBER_ROAD_OLD_GATE_RUNTIME_PNGS CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/assets/runtime/ember-road-old-gate-fakeshot-v001/*.png"
+    )
+    file(GLOB EMBER_ROAD_TOWN_FORGE_RUNTIME_PNGS CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/assets/runtime/ember-road-town-forge-v2/*.png"
+    )
+
+    add_executable(build_ember_road_packs tools/ember-road/build_packs.c)
+    target_link_libraries(build_ember_road_packs PRIVATE nt_builder nt_log)
+    target_compile_definitions(build_ember_road_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(build_ember_road_packs PRIVATE -U_DLL)
+    nt_set_warning_flags(build_ember_road_packs)
+    nt_set_sanitizer_flags(build_ember_road_packs)
+    set_target_properties(build_ember_road_packs PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tools"
+    )
+
+    add_custom_command(
+        OUTPUT
+            "${EMBER_ROAD_BASE_PACK}"
+            "${EMBER_ROAD_BASE_HEADER}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${EMBER_ROAD_PACK_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${EMBER_ROAD_GENERATED_DIR}"
+        COMMAND "$<TARGET_FILE:build_ember_road_packs>" "${EMBER_ROAD_PACK_DIR}" "${EMBER_ROAD_GENERATED_DIR}"
+        DEPENDS
+            build_ember_road_packs
+            tools/ember-road/build_packs.c
+            assets/shaders/slug_text.vert
+            assets/shaders/slug_text.frag
+            assets/shaders/sprite.vert
+            assets/shaders/sprite.frag
+            external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf
+            ${EMBER_ROAD_OLD_GATE_RUNTIME_PNGS}
+            ${EMBER_ROAD_TOWN_FORGE_RUNTIME_PNGS}
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Building Ember Road runtime asset pack"
+        VERBATIM
+    )
+    add_custom_command(
+        OUTPUT "${EMBER_ROAD_RUNTIME_PACK}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${EMBER_ROAD_RUNTIME_ASSET_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${EMBER_ROAD_BASE_PACK}" "${EMBER_ROAD_RUNTIME_PACK}"
+        DEPENDS "${EMBER_ROAD_BASE_PACK}"
+        COMMENT "Copying Ember Road runtime assets"
+        VERBATIM
+    )
+    add_custom_target(ember_road_runtime_assets
+        DEPENDS
+            "${EMBER_ROAD_BASE_HEADER}"
+            "${EMBER_ROAD_RUNTIME_PACK}"
+    )
+endif()
+
 add_executable(${GAME_TARGET}
     src/clean_seed_main.c
+    src/game_actions.c
+    src/game_actions.h
     src/game_devapi_ui.c
     src/game_devapi_ui.h
     src/game_audio.c
@@ -189,10 +252,17 @@ else()
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_DIR}"
+    "${EMBER_ROAD_GENERATED_DIR}"
     src
     external/neotolis-engine/deps/glfw/deps
 )
-target_compile_definitions(${GAME_TARGET} PRIVATE _CRT_SECURE_NO_WARNINGS)
+target_compile_definitions(${GAME_TARGET} PRIVATE
+    _CRT_SECURE_NO_WARNINGS
+    EMBER_ROAD_BASE_PACK_PATH="${EMBER_ROAD_RUNTIME_PACK_C}"
+)
+if(TARGET ember_road_runtime_assets)
+    add_dependencies(${GAME_TARGET} ember_road_runtime_assets)
+endif()
 if(TARGET skeletal_animation_extension)
     target_link_libraries(${GAME_TARGET} PRIVATE skeletal_animation_extension)
     target_compile_definitions(${GAME_TARGET} PRIVATE SKELETAL_ANIMATION_EXTENSION_ENABLED=1)

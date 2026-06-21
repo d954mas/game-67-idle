@@ -8,6 +8,7 @@ function usage() {
 Fails active game work that uses product-visible debug visual paths without an
 explicit debug-debt marker:
 - handmade/pixel draw_text
+- handmade bitmap/shape font tables or glyph helpers
 - shape/debug renderers as final visuals
 - Y-down game/UI layout conventions outside platform/input/devapi boundaries`);
   process.exit(2);
@@ -54,6 +55,7 @@ function walkFiles(dir, out = []) {
 
 const debugDebtPattern = /debug[_ -]?only|debug debt|temporary debug|placeholder[_ -]?debug|iteration[_ -]?only/i;
 const textPattern = /\b(draw_text|pixel_text|bitmap_text|shape_text)\b/i;
+const manualFontPattern = /\b(glyph5|draw_text5|bitmap_font|shape_font|pixel_font|font5x7|glyph7|glyph_table)\b|(?:static\s+const\s+uint(?:8|16|32)_t\s+\w*(?:glyph|font)\w*\s*\[)/i;
 const shapePattern = /\b(nt_shape_renderer_\w*|shape_renderer|debug_renderer)\b/i;
 const yDownPattern = /\b(y[-_ ]?down|screen_y|top[- ]left)\b|(?:\b(?:height|h)\s*-\s*[^;\n]*(?:pointer|mouse|touch|cursor)?\.?y\b)/i;
 const boundaryPathPattern = /(?:^|[\\/])(input|platform|devapi|window)(?:[\\/]|$)|(?:^|[\\/])game_devapi_ui\.(?:c|h)$/i;
@@ -75,6 +77,9 @@ if (activeConcept) {
     const fileHasDebugDebt = debugDebtPattern.test(lines.slice(0, 12).join("\n"));
     lines.forEach((line, index) => {
       const context = nearbyText(lines, index);
+      if (manualFontPattern.test(line)) {
+        problems.push({ file: rel, line: index + 1, rule: "no-handmade-fonts", detail: "product/playable text must use generated font assets and the engine text renderer, not handmade glyph tables" });
+      }
       if (textPattern.test(line) && !debugDebtPattern.test(context)) {
         problems.push({ file: rel, line: index + 1, rule: "engine-text-renderer", detail: "handmade draw_text needs explicit debug debt or engine text renderer" });
       }

@@ -1,0 +1,311 @@
+{
+  "schema": "game.y_up_layout_audit",
+  "version": 1,
+  "project": "ember-road",
+  "task": "T0024",
+  "surface": "town-forge-native-v2",
+  "verdict": "pass",
+  "window_size": "1280x720",
+  "source_evidence": [
+    {
+      "label": "renderer boundary conversion",
+      "path": "src/clean_seed_main.c",
+      "line": 97
+    },
+    {
+      "label": "Y-up hit testing",
+      "path": "src/clean_seed_main.c",
+      "line": 102
+    },
+    {
+      "label": "input boundary conversion",
+      "path": "src/clean_seed_main.c",
+      "line": 988
+    },
+    {
+      "label": "DevAPI boundary conversion",
+      "path": "src/clean_seed_main.c",
+      "line": 1308
+    },
+    {
+      "label": "town forge logical box",
+      "path": "src/clean_seed_main.c",
+      "line": 186
+    },
+    {
+      "label": "source-derived action plaque",
+      "path": "src/clean_seed_main.c",
+      "line": 392
+    },
+    {
+      "label": "source-derived result strip",
+      "path": "src/clean_seed_main.c",
+      "line": 685
+    }
+  ],
+  "logical_rects": {
+    "ember.map.old_gate": {
+      "x": 104.0,
+      "y": 154.0,
+      "w": 150.0,
+      "h": 54.0,
+      "center_x": 179.0,
+      "center_y": 181.0
+    },
+    "ember.map.north_road": {
+      "x": 306.0,
+      "y": 168.0,
+      "w": 160.0,
+      "h": 58.0,
+      "center_x": 386.0,
+      "center_y": 197.0
+    },
+    "ember.map.old_mine": {
+      "x": 534.0,
+      "y": 154.0,
+      "w": 150.0,
+      "h": 54.0,
+      "center_x": 609.0,
+      "center_y": 181.0
+    },
+    "ember.scene.forge_workbench": {
+      "x": 554.3200073242188,
+      "y": 266.0,
+      "w": 250.0,
+      "h": 150.0,
+      "center_x": 679.3200073242188,
+      "center_y": 341.0
+    },
+    "ember.town.lantern_upgrade": {
+      "x": 878.0,
+      "y": 172.0,
+      "w": 324.0,
+      "h": 62.0,
+      "center_x": 1040.0,
+      "center_y": 203.0
+    },
+    "ember.forge_mine_lantern": {
+      "x": 878.0,
+      "y": 172.0,
+      "w": 324.0,
+      "h": 62.0,
+      "center_x": 1040.0,
+      "center_y": 203.0
+    },
+    "ember.primary": {
+      "x": 878.0,
+      "y": 172.0,
+      "w": 324.0,
+      "h": 62.0,
+      "center_x": 1040.0,
+      "center_y": 203.0
+    }
+  },
+  "click_state": {
+    "shape_index": 0,
+    "shape": "cube",
+    "render_mode_index": 0,
+    "render_mode": "solid_wire",
+    "camera_distance": 6,
+    "test_ui_clicks": 0,
+    "test_label_text": "Ember Road: Mine Lantern ready. Depth 2 route is lit.",
+    "test_button_text": "Enter Old Mine",
+    "settings": {
+      "master_volume": 0.75,
+      "sfx_volume": 0.800000011920929
+    },
+    "tutorial": {
+      "done": false
+    },
+    "wallet": {
+      "soft": 0,
+      "hard": 0
+    },
+    "hero": {
+      "level": 2,
+      "xp": 35,
+      "hp": 33,
+      "hp_max": 36,
+      "attack": 7,
+      "defense": 1,
+      "gold": 30
+    },
+    "location_index": 0,
+    "location": "old_gate",
+    "quest_stage_index": 3,
+    "quest_stage": "completed",
+    "battle_state_index": 0,
+    "battle_state": "none",
+    "battle": {
+      "round": 2,
+      "enemy_hp": 0,
+      "enemy_hp_max": 12,
+      "enemy_attack": 3,
+      "enemy_defense": 0,
+      "last_damage": 7,
+      "last_enemy_damage": 3,
+      "wins": 2
+    },
+    "quest": {
+      "wolf_kills": 1
+    },
+    "reward": {
+      "pending": false,
+      "item_ready": true
+    },
+    "gear": {
+      "ring_equipped": true,
+      "mine_lantern": true
+    },
+    "old_mine": {
+      "scouted": true,
+      "depth": 1,
+      "ember_shards": 0,
+      "depth_resolved": true,
+      "bat_defeated": true,
+      "bat_damage": 3,
+      "depth_gold": 4,
+      "delve_count": 1,
+      "cache_claimed": true,
+      "last_delve_shards": 1,
+      "last_delve_gold": 2,
+      "last_delve_xp": 3,
+      "depth2_unlocked": true
+    },
+    "items": {},
+    "inventory": {
+      "item_ids": []
+    },
+    "equipment": {
+      "hand_item_id": null
+    },
+    "runtime": "ember_road",
+    "primary_action_id": "ember.enter_old_mine",
+    "primary_action_label": "Enter Old Mine",
+    "objective": "Mine Lantern ready. Depth 2 route is lit.",
+    "location_title": "Old Gate Town Square",
+    "battle_text": "Lantern ready: Depth 2 route is unlocked for the next slice.",
+    "last_message": "Mine Lantern forged. Depth 2 route is now lit.",
+    "modal_or_choice_open": false,
+    "old_mine_scout_result_open": false,
+    "old_mine_depth_encounter_open": false,
+    "old_mine_next_delve_choice_open": false,
+    "old_mine_delve_reward_open": false,
+    "town_lantern_upgrade_open": false,
+    "town_lantern_forged_open": true,
+    "old_mine_depth2_unlocked": true
+  },
+  "checks": [
+    {
+      "name": "source:renderer boundary conversion",
+      "status": "pass",
+      "detail": "static float sy(float y, float h)"
+    },
+    {
+      "name": "source:Y-up hit testing",
+      "status": "pass",
+      "detail": "static bool contains_y_up"
+    },
+    {
+      "name": "source:input boundary conversion",
+      "status": "pass",
+      "detail": "const float y_up = s_view_h - pointer.y;"
+    },
+    {
+      "name": "source:DevAPI boundary conversion",
+      "status": "pass",
+      "detail": "const float y_down = s_view_h - box.y - box.h;"
+    },
+    {
+      "name": "source:town forge logical box",
+      "status": "pass",
+      "detail": "s_forge_workbench_box = (UiBox)"
+    },
+    {
+      "name": "source:source-derived action plaque",
+      "status": "pass",
+      "detail": "FORGE_ACTION_PANEL_V2"
+    },
+    {
+      "name": "source:source-derived result strip",
+      "status": "pass",
+      "detail": "FORGE_RESULT_STRIP_SLICE9_V2"
+    },
+    {
+      "name": "state:town lantern upgrade open",
+      "status": "pass",
+      "detail": "{\"action_result\": \"ok\", \"message\": \"Returned to Old Gate.\", \"shape_index\": 0, \"shape\": \"cube\", \"render_mode_index\": 0, \"render_mode\": \"solid_wire\", \"camera_distance\": 6, \"test_ui_clicks\": 0, \"test_label_text\": \"Ember Roa"
+    },
+    {
+      "name": "runtime:viewport height",
+      "status": "pass",
+      "detail": "720.0"
+    },
+    {
+      "name": "runtime:node:ember.map.old_gate",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "name": "runtime:node:ember.map.north_road",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "name": "runtime:node:ember.map.old_mine",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "name": "runtime:node:ember.scene.forge_workbench",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "name": "runtime:node:ember.town.lantern_upgrade",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "name": "runtime:node:ember.forge_mine_lantern",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "name": "runtime:node:ember.primary",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "name": "layout:route nodes ordered left-to-right",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "name": "layout:forge is above route strip in Y-up",
+      "status": "pass",
+      "detail": "forge=341.0, mine=181.0"
+    },
+    {
+      "name": "layout:forge is left of right rail action",
+      "status": "pass",
+      "detail": "forge=679.3, action_x=878.0"
+    },
+    {
+      "name": "layout:right rail action stays below forge event",
+      "status": "pass",
+      "detail": "action=203.0, forge=341.0"
+    },
+    {
+      "name": "input:ui.click forge workbench triggers lantern",
+      "status": "pass",
+      "detail": "{\"shape_index\": 0, \"shape\": \"cube\", \"render_mode_index\": 0, \"render_mode\": \"solid_wire\", \"camera_distance\": 6, \"test_ui_clicks\": 0, \"test_label_text\": \"Ember Road: Mine Lantern ready. Depth 2 route is lit.\", \"test_button"
+    },
+    {
+      "name": "input:ui.click unlocks depth 2",
+      "status": "pass",
+      "detail": "{\"shape_index\": 0, \"shape\": \"cube\", \"render_mode_index\": 0, \"render_mode\": \"solid_wire\", \"camera_distance\": 6, \"test_ui_clicks\": 0, \"test_label_text\": \"Ember Road: Mine Lantern ready. Depth 2 route is lit.\", \"test_button"
+    }
+  ],
+  "launch_log": "C:\\projects\\game-67-idle\\build\\logs\\native_devapi_9124_20260621_085457_085.log"
+}

@@ -1,0 +1,61 @@
+{
+  "schema": "game.source_family_coverage_audit",
+  "version": 1,
+  "art_job": "gamedesign/projects/ember-road/art_requests/ember-road-old-gate-fakeshot-v001.json",
+  "verdict": "pass",
+  "required_source_families": [
+    "composed old gate fake shot",
+    "old gate background layer sheet",
+    "hero npc enemy sprite sheet",
+    "quest reward route icon sheet",
+    "fantasy browser rpg ui frame sheet"
+  ],
+  "records": [
+    {
+      "id": "ember-road-old-gate-fakeshot-v001",
+      "path": "gamedesign/projects/ember-road/art/generation_records/ember-road-old-gate-fakeshot-v001.json",
+      "source_family": "composed old gate fake shot",
+      "source_family_role": "full-screen target composition for direction review only; not a fused runtime asset",
+      "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-old-gate-fakeshot-v001.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "ember-road-old-gate-background-layer-sheet-v001",
+      "path": "gamedesign/projects/ember-road/art/generation_records/ember-road-old-gate-background-layer-sheet-v001.json",
+      "source_family": "old gate background layer sheet",
+      "source_family_role": "painted Old Gate scene, route strip, destination plaque parts, and lock/quest highlight layers",
+      "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-old-gate-background-layer-sheet-v001.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "ember-road-hero-npc-enemy-sprite-sheet-v001",
+      "path": "gamedesign/projects/ember-road/art/generation_records/ember-road-hero-npc-enemy-sprite-sheet-v001.json",
+      "source_family": "hero npc enemy sprite sheet",
+      "source_family_role": "isolated hero, Gate Warden, Road Wolf, and ember slash sprites with pivots to record at crop time",
+      "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-hero-npc-enemy-sprite-sheet-v001.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "ember-road-quest-reward-route-icon-sheet-v001",
+      "path": "gamedesign/projects/ember-road/art/generation_records/ember-road-quest-reward-route-icon-sheet-v001.json",
+      "source_family": "quest reward route icon sheet",
+      "source_family_role": "quest marker, route arrow, lock, wolf marker, ring, XP, gold, sword autobattle, and claim icons",
+      "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-quest-reward-route-icon-sheet-v001.png",
+      "status": "pass",
+      "problems": []
+    },
+    {
+      "id": "ember-road-fantasy-browser-rpg-ui-frame-sheet-v001",
+      "path": "gamedesign/projects/ember-road/art/generation_records/ember-road-fantasy-browser-rpg-ui-frame-sheet-v001.json",
+      "source_family": "fantasy browser rpg ui frame sheet",
+      "source_family_role": "slice9-safe top status, quest rail, bottom log, reward slots, button states, route plaque, corners, caps, and overlays",
+      "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-fantasy-browser-rpg-ui-frame-sheet-v001.png",
+      "status": "pass",
+      "problems": []
+    }
+  ],
+  "problems": []
+}

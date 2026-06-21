@@ -196,6 +196,30 @@ test("critic forwards visual critique packet options", () => {
   }
 });
 
+test("critique forwards visual critic run options (emit mode)", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "state.png");
+    const instr = join(dir, "instruction.md");
+    writeFileSync(screenshot, "png", "utf8");
+
+    const result = run([
+      "critique",
+      "--project", "rune-marches",
+      "--shot", `first_screen:${screenshot}`,
+      "--instruction-out", instr,
+      "--out", join(dir, "critique.json"),
+    ]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Visual Critic \(emit mode\)/);
+    assert.equal(existsSync(instr), true);
+    assert.match(readFileSync(instr, "utf8"), /game\.visual_critique/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("validate forwards to the reusable pipeline validator", () => {
   const result = run(["validate", "--dry-run"]);
 

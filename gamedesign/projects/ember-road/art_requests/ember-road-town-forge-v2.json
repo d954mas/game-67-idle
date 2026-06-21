@@ -1,0 +1,257 @@
+{
+  "schema": "game.art_job",
+  "version": 1,
+  "id": "ember-road-town-forge-v2",
+  "status": "draft",
+  "asset_family": "town forge equipment direction target and source families",
+  "audience": "broad PC fantasy RPG players; serious readable browser RPG adventure, not satire, not idle, not debug UI",
+  "runtime_harness": "native PC",
+  "visual_targets": [
+    "gamedesign/projects/ember-road/references/stronger_visual_ux_reference_refresh_2026-06-21.md",
+    "build/captures/ember-road/state_town_lantern_upgrade.png"
+  ],
+  "candidate_policy": {
+    "target_count": 4,
+    "keep_raw_candidates": true,
+    "reject_to_tmp": true,
+    "accept_one_or_two_for_runtime": true
+  },
+  "reusable_kinds": [
+    "sprite",
+    "slice9",
+    "icon",
+    "tile",
+    "border",
+    "effect"
+  ],
+  "required_asset_groups": [
+    {
+      "id": "composed_town_forge_fake_shot",
+      "kind": "reference_image",
+      "role": "single composed target for the town forge upgrade state: forge/workbench in the scene, hero and blacksmith/warden focus, Mine Lantern object/result slot, ember shard cost, route strip showing Depth 2 opened, and persistent browser-RPG frame",
+      "states": [
+        "default"
+      ],
+      "content_policy": "direction target only; do not treat as one fused runtime UI image",
+      "coordinate_policy": "Y is up always. Composition notes, crop placement notes, and future runtime layout must remain Y-up; larger logical y is higher on the game screen. Any Y-down value is allowed only inside named renderer/input/screenshot/DevAPI boundary conversion code.",
+      "target_preview_sizes": [
+        [
+          1280,
+          720
+        ]
+      ]
+    },
+    {
+      "id": "town_forge_scene_layers",
+      "kind": "background",
+      "role": "painted Old Gate forge/town workbench layer, lantern crafting focus, forge glow, and route/depth marker overlays",
+      "states": [
+        "upgrade_available",
+        "forged"
+      ],
+      "content_policy": "no UI text, no baked labels, no copied reference landmarks",
+      "layer_policy": "background, forge/workbench, lantern object, ember shard glow, and route-depth highlight should be separable or reproducible"
+    },
+    {
+      "id": "forge_lantern_resource_icons",
+      "kind": "icon",
+      "role": "Mine Lantern, ember shard, forge hammer/anvil, unlock/depth, cost paid, equipped result icons",
+      "states": [
+        "default",
+        "affordable",
+        "spent",
+        "unlocked",
+        "equipped"
+      ],
+      "size_class": "64px source, preview at gameplay size",
+      "content_policy": "isolated icons with gutters; no numbers or labels baked into icons"
+    },
+    {
+      "id": "town_forge_characters",
+      "kind": "sprite",
+      "role": "isolated hero, blacksmith or Gate Warden forge pose, lantern pickup/equip marker, and small forge glow FX",
+      "states": [
+        "upgrade_available",
+        "forged"
+      ],
+      "anchor_policy": "pivot or anchor must be recorded before runtime use"
+    },
+    {
+      "id": "fantasy_forge_ui_frame",
+      "kind": "slice9",
+      "role": "ornate but readable browser-RPG frame pieces for right equipment/result rail, route strip, bottom log, reward/equipment slots, and primary button bases",
+      "states": [
+        "default",
+        "pressed",
+        "disabled",
+        "selected"
+      ],
+      "content_policy": "runtime text/icons only inside safe areas",
+      "stretch_zone_policy": "centers and long edges must be repeatable; unique ornaments stay in corners or separate overlays",
+      "decor_overlay_policy": "quest gems, banners, medallions, locks, and center ornaments must be separate overlays or fixed corner pieces, never stretched through the center",
+      "target_preview_sizes": [
+        [
+          180,
+          56
+        ],
+        [
+          360,
+          240
+        ],
+        [
+          520,
+          320
+        ]
+      ]
+    }
+  ],
+  "must_not_bake": [
+    "button labels",
+    "resource counters",
+    "timer values",
+    "tutorial text",
+    "debug text",
+    "game state values",
+    "unreadable fake letters",
+    "exact reference-game UI ornaments",
+    "numbers inside cost/result slots"
+  ],
+  "generation_contract": {
+    "source_families": [
+      "blank UI kit sheet",
+      "isolated icon sheet",
+      "world/map/background layer sheet",
+      "sprite or FX sheet",
+      "composed town forge fake shot",
+      "town forge background layer sheet",
+      "forge lantern resource icon sheet",
+      "town forge character sprite sheet",
+      "fantasy forge ui frame sheet"
+    ],
+    "final_asset_policy": {
+      "procedural_art_allowed": "debug_only",
+      "runtime_final_must_use_generated_or_artist_source": true,
+      "layered_source_required_for_ui": true,
+      "notes": "Code may cut, validate, pack, and compose. Code-generated/programmer art is not acceptable as final generated UI unless an explicit exception is recorded."
+    },
+    "source_family_roles": {
+      "blank UI kit sheet": "stretchable bases only: panels, button states, bars, frames, dividers",
+      "ui decor overlay sheet": "non-stretch ornaments, gems, badges, caps, medallions with anchors",
+      "isolated icon sheet": "semantic icons with gutters and transparent/chroma source",
+      "world/map/background layer sheet": "non-UI illustration layers or stamps",
+      "sprite or FX sheet": "isolated gameplay sprites/effects with pivots"
+      ,
+      "composed town forge fake shot": "full-screen target composition for direction review only; not a fused runtime asset",
+      "town forge background layer sheet": "painted forge/workbench scene, lantern crafting focus, route-depth marker overlays",
+      "forge lantern resource icon sheet": "Mine Lantern, ember shard, forge, unlock/depth, equipped result icons with gutters",
+      "town forge character sprite sheet": "isolated hero, blacksmith or Gate Warden forge pose, lantern pickup/equip marker, and forge glow FX",
+      "fantasy forge ui frame sheet": "slice9-safe equipment/result rail, route strip, bottom log belt, reward slots, button states, and decor overlays"
+    },
+    "prompt_constraints": [
+      "no readable text",
+      "no fake letters",
+      "no fused icons inside button backgrounds",
+      "clear gutters between assets",
+      "consistent perspective and lighting",
+      "transparent or flat chroma-key background for isolated assets",
+      "no unique decoration inside slice9 stretch zones",
+      "no copied War of Dragons, Dragon Eternity, AQW, DragonFable, AdventureQuest, Shakes and Fidget, or Wartune UI ornament shapes",
+      "Y-up must be preserved in layout notes and runtime translation; larger logical y means higher on the game screen",
+      "forge/equipment meaning must be visible in the scene, not only in the right panel"
+    ],
+    "metadata_to_record": [
+      "provider or generator",
+      "model/workflow",
+      "workflow file or workflow json",
+      "seed",
+      "prompt",
+      "negative prompt",
+      "source family role",
+      "accepted source image path",
+      "rejected candidate notes"
+    ]
+  },
+  "expected_outputs": {
+    "fake_shot": [
+      "gamedesign/projects/ember-road/art/ember-road-town-forge-v2.png"
+    ],
+    "prompt_packet": "gamedesign/projects/ember-road/art/prompts/ember-road-town-forge-v2-fakeshot-prompt.md",
+    "source_art": [
+      "gamedesign/projects/ember-road/art/ember-road-town-forge-v2.png",
+      "gamedesign/projects/ember-road/art/ember-road-town-forge-v2-forge-lantern-resource-icon-sheet-v001.png",
+      "gamedesign/projects/ember-road/art/ember-road-town-forge-v2-town-forge-background-layer-sheet-v001.png",
+      "gamedesign/projects/ember-road/art/ember-road-town-forge-v2-town-forge-character-sprite-sheet-v001.png",
+      "gamedesign/projects/ember-road/art/ember-road-town-forge-v2-fantasy-forge-ui-frame-sheet-v001.png"
+    ],
+    "required_source_families": [
+      "composed town forge fake shot",
+      "town forge background layer sheet",
+      "forge lantern resource icon sheet",
+      "town forge character sprite sheet",
+      "fantasy forge ui frame sheet"
+    ],
+    "generation_records": [
+      "gamedesign/projects/ember-road/art/generation_records/ember-road-town-forge-v2.json",
+      "gamedesign/projects/ember-road/art/generation_records/ember-road-town-forge-v2-forge-lantern-resource-icon-sheet-v001.json",
+      "gamedesign/projects/ember-road/art/generation_records/ember-road-town-forge-v2-town-forge-background-layer-sheet-v001.json",
+      "gamedesign/projects/ember-road/art/generation_records/ember-road-town-forge-v2-town-forge-character-sprite-sheet-v001.json",
+      "gamedesign/projects/ember-road/art/generation_records/ember-road-town-forge-v2-fantasy-forge-ui-frame-sheet-v001.json"
+    ],
+    "crop_manifest": "gamedesign/projects/ember-road/data/ember-road-town-forge-v2-crop_manifest.json",
+    "runtime_manifest": "gamedesign/projects/ember-road/data/ember-road-town-forge-v2-asset_manifest.json",
+    "runtime_dir": "assets/runtime/ember-road-town-forge-v2",
+    "slice9_design_audit": [
+      "gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-slice9_design_policy_audit.md",
+      "gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-slice9_design_policy_audit.json"
+    ],
+    "source_family_coverage_audit": [
+      "gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-source_family_coverage_audit.md",
+      "gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-source_family_coverage_audit.json"
+    ],
+    "source_derivation_audit": [
+      "gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-source_derivation_audit.md",
+      "gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-source_derivation_audit.json"
+    ],
+    "native_evidence": [
+      "build/captures/ember-road/state_town_lantern_upgrade.png",
+      "build/captures/ember-road/state_town_lantern_forged.png"
+    ],
+    "runtime_scope_note": "Direction fake shot is accepted for review only. Runtime crop, source-family generation, slice9 metadata, atlas packing, native integration, and product gate proof are still required before final-art or gameplay expansion claims."
+  },
+  "runtime_composition": {
+    "layout_axis": "Y-up in game/UI logic; larger logical y means higher on the game screen. Renderer, input, screenshot, and DevAPI may convert at named boundaries only; never store Y-down coordinates as layout truth.",
+    "main_scene": "painted Old Gate forge/workbench scene plus separate hero, blacksmith/warden, lantern object, ember shard glow, and route-depth markers",
+    "quest_or_equipment_rail": "slice9 rail plus runtime text, portrait/forge marker, lantern result slot, shard cost icons, and one primary button",
+    "route_strip": "destination plaques and depth marker composed over a route layer; Depth 2 unlocked after forge",
+    "bottom_log": "slice9 log/action belt plus runtime confirmation; log is confirmation, not the whole UX",
+    "buttons": "slice9 background plus runtime text/icon"
+  },
+  "qa_rejects": [
+    "random letters",
+    "watermarks",
+    "labels fused into reusable backgrounds",
+    "icons fused into buttons",
+    "wrong subject",
+    "weak silhouette at gameplay size",
+    "opaque chroma-key background",
+    "baked board state",
+    "one fused screenshot used as runtime UI",
+    "shape-rectangle programmer art",
+    "text or labels baked into reusable pieces",
+    "Y-up assumptions inverted in layout notes",
+    "panel-only forge UX with no scene object anchor"
+  ],
+  "commands": {
+    "plan_source_sheet_prompt": "node tools/assets/job/plan_source_sheet_prompt.mjs --job gamedesign/projects/ember-road/art_requests/ember-road-town-forge-v2.json --source-family \"<source family>\" --output gamedesign/projects/ember-road/art/prompts/<source-id>-prompt.md --json-output gamedesign/projects/ember-road/art/prompts/<source-id>-prompt.json",
+    "new_generation_record": "node tools/assets/job/new_generation_record.mjs --id <source-id> --project-dir gamedesign/projects/ember-road --source-family \"<source family>\" --source-family-role \"<source family role>\" --accepted-source <path> --provider <provider> --model <model-or-workflow> --workflow-path <workflow.json> --prompt-packet gamedesign/projects/ember-road/art/prompts/<source-id>-prompt.json --seed <seed> --prompt \"<prompt>\" --negative-prompt \"<negative prompt>\"",
+    "slice_assets": "fill after source sheets are accepted",
+    "validate_draft": "node tools/assets/job/validate_art_job.mjs --job gamedesign/projects/ember-road/art_requests/ember-road-town-forge-v2.json",
+    "validate_strict": "node tools/assets/job/validate_art_job.mjs --job gamedesign/projects/ember-road/art_requests/ember-road-town-forge-v2.json --strict",
+    "validate_final_art": "node tools/assets/job/validate_art_job.mjs --job gamedesign/projects/ember-road/art_requests/ember-road-town-forge-v2.json --final-art",
+    "slice9_design_audit": "node tools/assets/job/audit_slice9_design_policy.mjs --crop-manifest gamedesign/projects/ember-road/data/ember-road-town-forge-v2-crop_manifest.json --runtime-manifest gamedesign/projects/ember-road/data/ember-road-town-forge-v2-asset_manifest.json --json-output gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-slice9_design_policy_audit.json --report gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-slice9_design_policy_audit.md",
+    "source_family_coverage_audit": "node tools/assets/job/audit_source_family_coverage.mjs --job gamedesign/projects/ember-road/art_requests/ember-road-town-forge-v2.json --json-output gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-source_family_coverage_audit.json --report gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-source_family_coverage_audit.md",
+    "plan_missing_source_family_prompts": "node tools/assets/job/plan_missing_source_family_prompts.mjs --job gamedesign/projects/ember-road/art_requests/ember-road-town-forge-v2.json --coverage-audit gamedesign/projects/ember-road/reviews/ember-road-town-forge-v2-source_family_coverage_audit.json --output-dir gamedesign/projects/ember-road/art/prompts --key-color \"#00ff00\" --force",
+    "build_pack": "fill after pack builder is wired",
+    "native_evidence": "fill with DevAPI scenario command"
+  }
+}

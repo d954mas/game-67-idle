@@ -1,0 +1,84 @@
+{
+  "schema": "game.combat",
+  "project": "ember-road",
+  "mode": "automated_rounds",
+  "first_encounter": {
+    "id": "road_wolf_01",
+    "name": "Road Wolf",
+    "location": "north_road",
+    "expected_result": "hero_win"
+  },
+  "player_baseline": {
+    "hp_max": 30,
+    "hp_start": 30,
+    "attack": 5,
+    "defense": 1,
+    "speed": 1
+  },
+  "enemies": [
+    {
+      "id": "road_wolf",
+      "hp": 18,
+      "attack": 4,
+      "defense": 0,
+      "speed": 1,
+      "reward": {
+        "xp": 10,
+        "gold": 6,
+        "item_drop_table": [
+          {
+            "id": "rusty_iron_ring",
+            "chance": 1.0
+          }
+        ]
+      }
+    }
+  ],
+  "round_rules": [
+    "Hero attacks first in the first slice.",
+    "Damage is max(1, attacker_attack - defender_defense).",
+    "Enemy counterattacks only if still alive.",
+    "Fight ends when hero or enemy HP reaches 0.",
+    "Battle log shows each hit and HP delta."
+  ],
+  "outcomes": {
+    "win": {
+      "state_changes": [
+        "enemy defeated",
+        "quest objective increments",
+        "xp and gold awarded",
+        "loot result shown"
+      ],
+      "next_decision": "equip loot, fight again if available, or return to town"
+    },
+    "low_health_win": {
+      "threshold_hp": 8,
+      "state_changes": [
+        "win reward still granted",
+        "low health warning shown"
+      ],
+      "next_decision": "return to town before more fights"
+    },
+    "loss": {
+      "state_changes": [
+        "hero retreats to town at 1 HP",
+        "no battle rewards",
+        "quest objective unchanged"
+      ],
+      "next_decision": "heal or equip better gear before retry"
+    },
+    "retreat": {
+      "first_slice": "not player-triggered",
+      "future_rule": "available before combat or after a round if manual interrupts are approved"
+    }
+  },
+  "tuning_knobs": [
+    "hero_attack",
+    "hero_defense",
+    "enemy_hp",
+    "enemy_attack",
+    "xp_reward",
+    "gold_reward",
+    "drop_chance"
+  ]
+}

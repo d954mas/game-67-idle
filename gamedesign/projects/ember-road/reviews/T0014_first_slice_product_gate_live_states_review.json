@@ -1,0 +1,114 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "ember-road",
+  "task": "T0014",
+  "surface": "desktop",
+  "verdict": "pass",
+  "timestamp": "2026-06-20T17:57:25.803Z",
+  "screenshot": "build/captures/ember-road/state_first_screen.png",
+  "answers": {
+    "where": "Old Gate Town Square, a fantasy quest hub with the Gate Warden, route strip, Road Wolf target, and locked Mine route visible.",
+    "action": "Accept the wolf quest from the quest rail, then travel to North Road and run the automated Road Wolf battle.",
+    "response": "Live captures prove quest accepted feedback, travel to North Road, victory loot, readable equip/claim controls, locked route feedback, and transient reward feedback.",
+    "reward": "The first loop previews XP, gold, and the Rusty Iron Ring; after victory the loot card, equip button, and claim button are readable and separated.",
+    "game_look": "The native runtime now presents painted location art, character/enemy sprites, fantasy HUD bars, framed route plaques, parchment quest rail, reward icon, and game-styled CTA buttons from the packed atlas."
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 4,
+      "ui_controls": 4,
+      "action_direction": 4,
+      "art_quality": 4,
+      "audience_fit": 4
+    },
+    "issues": [
+      {
+        "severity": "minor",
+        "axis": "art_quality",
+        "text": "Some generated cutout edges are still prototype-quality rather than final release art."
+      },
+      {
+        "severity": "minor",
+        "axis": "ui_controls",
+        "text": "Progression panel, modal/choice, and resume/re-entry remain explicit debt beyond this first slice."
+      }
+    ]
+  },
+  "contract": "",
+  "critique_source": "",
+  "state_coverage": {
+    "required": [
+      "first_screen",
+      "hud_visible",
+      "primary_action_ready",
+      "primary_action_feedback",
+      "reward_active",
+      "locked_or_disabled_state",
+      "transient_stress_state",
+      "progression_panel_open",
+      "modal_or_choice_open",
+      "resume_or_reentry_state"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen",
+        "evidence": "build/captures/ember-road/state_first_screen.png"
+      },
+      {
+        "tag": "hud_visible",
+        "evidence": "build/captures/ember-road/state_hud_visible.png"
+      },
+      {
+        "tag": "primary_action_ready",
+        "evidence": "build/captures/ember-road/state_primary_action_ready.png"
+      },
+      {
+        "tag": "locked_or_disabled_state",
+        "evidence": "build/captures/ember-road/state_locked_or_disabled_state.png"
+      },
+      {
+        "tag": "primary_action_feedback",
+        "evidence": "build/captures/ember-road/state_primary_action_feedback.png"
+      },
+      {
+        "tag": "reward_active",
+        "evidence": "build/captures/ember-road/state_reward_active.png"
+      },
+      {
+        "tag": "transient_stress_state",
+        "evidence": "build/captures/ember-road/state_transient_stress_state.png"
+      }
+    ],
+    "not_covered": [
+      {
+        "tag": "progression_panel_open",
+        "reason": "First slice exposes inline reward/equip progression; no separate inventory/progression panel exists yet."
+      },
+      {
+        "tag": "modal_or_choice_open",
+        "reason": "First slice uses direct primary actions and has no modal or choice dialog."
+      },
+      {
+        "tag": "resume_or_reentry_state",
+        "reason": "Resume/re-entry behavior is out of scope for this first native slice."
+      }
+    ]
+  },
+  "problem": "Minor polish remains: progression/modal/resume are explicit first-slice debt, and some generated cutout edges are not final-release art quality.",
+  "next": "Proceed only to the next narrow Ember Road gameplay/content slice, while keeping future visual states under the same live-state gate.",
+  "verification": {
+    "required": false
+  }
+}

@@ -105,7 +105,7 @@ def audit_crop(
     if crop.get("allow_procedural_redraw") is True:
         result["skipped"] = "allow_procedural_redraw"
         return result
-    if crop.get("kind") not in ("slice9", "border", "tile", "sprite"):
+    if crop.get("kind") not in ("slice9", "border", "tile", "sprite", "icon"):
         result["skipped"] = "unsupported_kind"
         return result
     if not isinstance(source.get("path"), str) or not source["path"]:
@@ -149,7 +149,10 @@ def audit_crop(
     if source_image is None:
         source_image = Image.open(source_path).convert("RGBA")
         source_cache[source_path] = source_image
-    key = source_key if source_key is not None else (255, 0, 255)
+    crop_key = None
+    if isinstance(crop.get("chroma_key"), dict):
+        crop_key = parse_hex_color(crop["chroma_key"].get("key"))
+    key = crop_key if crop_key is not None else (source_key if source_key is not None else (255, 0, 255))
     reference = key_matte_cutout(source_image.crop((x, y, x + width, y + height)), key)
     stats = compare_images(reference, output, diff_threshold)
     result.update(stats)

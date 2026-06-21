@@ -1,0 +1,61 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "ember-road",
+  "task": "T0024",
+  "surface": "direction-target",
+  "verdict": "review",
+  "timestamp": "2026-06-20T20:22:46.542Z",
+  "screenshot": "gamedesign/projects/ember-road/art/ember-road-town-forge-v2.png",
+  "answers": {
+    "where": "Old Gate town forge, with the forge/workbench and mine route visible in the main scene.",
+    "action": "Use the cache shards to forge or equip the Mine Lantern, then open the next mine depth route.",
+    "response": "The lantern is shown as a crafted result in the scene and in the equipment/result rail.",
+    "reward": "The player gets a visible Mine Lantern upgrade and a Depth 2 route promise.",
+    "game_look": "The screen now reads as a fantasy browser RPG equipment event: location art, hero, blacksmith, route strip, result icons, and persistent ornate chrome all support the action."
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 4,
+      "ui_controls": 4,
+      "action_direction": 4,
+      "art_quality": 4,
+      "audience_fit": 4
+    },
+    "issues": [
+      {
+        "severity": "minor",
+        "axis": "art_quality",
+        "text": "Direction target contains a few small decorative pseudo-glyph marks; source-family generation must keep runtime text areas blank and isolated."
+      },
+      {
+        "severity": "minor",
+        "axis": "ui_controls",
+        "text": "This is still a fused fake shot, not reusable runtime UI; source families and slice9/crop manifests are required before integration."
+      }
+    ]
+  },
+  "contract": "",
+  "critique_source": "",
+  "state_coverage": {
+    "required": [],
+    "covered": [],
+    "not_covered": []
+  },
+  "problem": "Direction target is usable for the next art pass but is not native runtime proof or final reusable UI.",
+  "next": "Generate or derive separate town forge background, lantern/resource icons, character/forge FX, and frame/source families; then integrate the smallest native forge visual pass and capture state_town_lantern_upgrade_v2.png.",
+  "verification": {
+    "required": false
+  }
+}

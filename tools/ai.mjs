@@ -16,9 +16,10 @@ function usage() {
   node tools/ai.mjs validate [--quick|--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune] [--with-assets]
   node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--no-import-codex-session]
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
-  node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail [gate options]
+  node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail|review [gate options]
   node tools/ai.mjs visual-reject --project <game-id> --task <task-id> --screenshot <path> --problem <text> --next <text> [visual rejection options]
   node tools/ai.mjs critic --project <game-id> --task <task-id> --screenshot <path> --target <path|text> --output <packet.md> [critic options]
+  node tools/ai.mjs critique --project <game-id> --shot <tag:path> [--model-cmd <cmd>] [critic-run options]
   node tools/ai.mjs close-slice --task <task-id> --project <game-id> --evidence <text> [--resolved-rejection <text>] [close options]
 
 Commands:
@@ -29,6 +30,7 @@ Commands:
   gate      write a product-read screenshot gate before expanding game content
   visual-reject record a lead visual rejection as a strict visual FAIL gate
   critic    write a reusable visual/UI critic packet before a strict product gate
+  critique  run the vision art-lead critic (critic + refute) over state screenshots into a game.visual_critique JSON
   close-slice require product gate + evidence before handoff/review
 
 Profiling has no manual step. Use tools/ai_profile/* directly only when
@@ -145,6 +147,8 @@ if (command === "gate") run(["tools/product_gate/review.mjs", ...argv]);
 if (command === "visual-reject") run(["tools/product_gate/visual_rejection_lock.mjs", ...argv]);
 
 if (command === "critic") run(["tools/product_gate/visual_critique_packet.mjs", ...argv]);
+
+if (command === "critique") run(["tools/product_gate/visual_critic_run.mjs", ...argv]);
 
 if (command === "close-slice") run(["tools/product_gate/close_slice.mjs", ...argv]);
 

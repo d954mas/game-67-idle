@@ -1145,3 +1145,463 @@ test("slice hygiene fails promised push when push target is unavailable", () => 
     cleanup(dir);
   }
 });
+
+test("product read gate accepts a three-way review verdict", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    const json = join(dir, "gate.json");
+    writeFileSync(screenshot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "rune-marches",
+      "--screenshot", screenshot,
+      "--verdict", "review",
+      "--problem", "Critic and refute pass disagree on whether the CTA dominates.",
+      "--next", "Lead arbitrates the primary action hierarchy before adding content.",
+      "--output", join(dir, "gate.md"),
+      "--json-output", json,
+      "--index-output", join(dir, "latest.json"),
+      "--strict",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(readFileSync(json, "utf8")).verdict, "review");
+    assert.match(readFileSync(join(dir, "gate.md"), "utf8"), /Verdict: \*\*REVIEW\*\*/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("product read gate strict review requires problem and next", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    writeFileSync(screenshot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "rune-marches",
+      "--screenshot", screenshot,
+      "--verdict", "review",
+      "--strict",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /--problem is required for strict review/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("product read gate ingests a machine critique JSON instead of hand-typed scores", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    const critique = join(dir, "critique.json");
+    const json = join(dir, "gate.json");
+    writeFileSync(screenshot, "png", "utf8");
+    writeFileSync(critique, `${JSON.stringify({
+      schema: "game.visual_critique",
+      verdict: "fail",
+      scores: { composition: 2, readability: 1, ui_controls: 2, action_direction: 2, art_quality: 2, audience_fit: 2 },
+      issues: [{ severity: "blocker", axis: "readability", text: "HUD text sits on a busy background with no plate." }],
+      smallest_next_fix: "Add a solid HUD plate before any new content.",
+    })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "rune-marches",
+      "--screenshot", screenshot,
+      "--critique", critique,
+      "--output", join(dir, "gate.md"),
+      "--json-output", json,
+      "--index-output", join(dir, "latest.json"),
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(readFileSync(json, "utf8"));
+    assert.equal(report.verdict, "fail");
+    assert.equal(report.visual_critique.strict, true);
+    assert.equal(report.visual_critique.scores.readability, 1);
+    assert.equal(report.visual_critique.issues[0].severity, "blocker");
+    assert.equal(report.next, "Add a solid HUD plate before any new content.");
+    assert.match(report.critique_source, /critique\.json$/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("product read gate honors an art contract pass_threshold override", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    const contract = join(dir, "art_contract.json");
+    writeFileSync(screenshot, "png", "utf8");
+    writeFileSync(contract, `${JSON.stringify({ schema: "game.art_contract", pass_threshold: 5 })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "rune-marches",
+      "--screenshot", screenshot,
+      "--verdict", "pass",
+      "--where", "A bright combat screen.",
+      "--action", "Press the primary action button.",
+      "--response", "The enemy takes damage.",
+      "--reward", "A reward chip flies to the HUD.",
+      "--game-look", "Runtime art and readable UI are visible.",
+      "--contract", contract,
+      "--visual-strict",
+      "--visual-score", "composition=4",
+      "--visual-score", "readability=4",
+      "--visual-score", "ui_controls=4",
+      "--visual-score", "action_direction=4",
+      "--visual-score", "art_quality=4",
+      "--visual-score", "audience_fit=4",
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /visual pass requires composition score >= 5/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("close slice refuses a review gate in strict mode and points to the lead", () => {
+  const dir = tempDir();
+  try {
+    writeTask(dir, "T0090");
+    const gate = join(dir, "gate.json");
+    writeFileSync(gate, `${JSON.stringify({ verdict: "review", surface: "desktop", screenshot: "tmp/screen.png", markdown: "gate.md", next: "Lead to arbitrate" })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/close_slice.mjs",
+      "--project", "rune-marches",
+      "--task", "T0090",
+      "--gate", gate,
+      "--evidence", "node --test tools/product_gate/test.mjs",
+      "--strict",
+    ], { env: { TASKBOARD_ROOT: dir } });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /product gate is review/);
+    assert.match(result.stderr, /lead must convert/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("close slice allows a review gate outside strict mode (advisory)", () => {
+  const dir = tempDir();
+  try {
+    writeTask(dir, "T0091");
+    const gate = join(dir, "gate.json");
+    const shot = join(dir, "screen.png");
+    writeFileSync(shot, "png", "utf8");
+    writeFileSync(gate, `${JSON.stringify({ verdict: "review", surface: "desktop", screenshot: shot, markdown: "gate.md", next: "Lead to arbitrate" })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/close_slice.mjs",
+      "--project", "rune-marches",
+      "--task", "T0091",
+      "--gate", gate,
+      "--evidence", "advisory review handoff",
+    ], { env: { TASKBOARD_ROOT: dir } });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Gate: review/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+// A portable stub vision model: reads the instruction on stdin and emits a
+// critic critique by default, or a refute verdict (agreement controlled by the
+// REFUTE_AGREE env var) when it sees the skeptic instruction.
+function writeCriticStub(dir) {
+  const stub = join(dir, "stub-model.js");
+  writeFileSync(stub, [
+    "const fs = require('fs');",
+    "const t = fs.readFileSync(0, 'utf8');",
+    "if (/INDEPENDENT SKEPTIC/i.test(t)) {",
+    "  const agree = process.env.REFUTE_AGREE === '1';",
+    "  process.stdout.write(JSON.stringify({ agree, counter_verdict: agree ? 'fail' : 'review', reason: 'skeptic sees a different debt' }));",
+    "} else {",
+    "  process.stdout.write(JSON.stringify({ schema: 'game.visual_critique', verdict: 'fail', scores: { composition: 2, readability: 1, ui_controls: 2, action_direction: 2, art_quality: 2, audience_fit: 2 }, issues: [{ severity: 'blocker', axis: 'readability', text: 'HUD text is unreadable on a busy background.' }], answers: { where: 'A blocky valley.', action: 'Move to the rune.', response: 'The marker advances.', reward: 'A rune is claimed.', game_look: 'Block-fantasy world art.' }, smallest_next_fix: 'Add a solid HUD plate.' }));",
+    "}",
+    "",
+  ].join("\n"), "utf8");
+  return stub;
+}
+
+test("visual critic run emit mode writes an instruction and defers the model", () => {
+  const dir = tempDir();
+  try {
+    const shot = join(dir, "state_first.png");
+    const instr = join(dir, "instruction.md");
+    writeFileSync(shot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/visual_critic_run.mjs",
+      "--project", "rune-marches",
+      "--shot", `first_screen:${shot}`,
+      "--instruction-out", instr,
+      "--out", join(dir, "critique.json"),
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /emit mode/);
+    assert.match(result.stdout, /--critique/);
+    const text = readFileSync(instr, "utf8");
+    assert.match(text, /ART LEAD/);
+    assert.match(text, /game\.visual_critique/);
+    assert.match(text, /first_screen/);
+    assert.equal(existsSync(join(dir, "critique.json")), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("visual critic run reconciles a refute disagreement into a review verdict", () => {
+  const dir = tempDir();
+  try {
+    const stub = writeCriticStub(dir);
+    const shot = join(dir, "state_first.png");
+    const critique = join(dir, "critique.json");
+    writeFileSync(shot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/visual_critic_run.mjs",
+      "--project", "rune-marches",
+      "--shot", `first_screen:${shot}`,
+      "--instruction-out", join(dir, "instruction.md"),
+      "--out", critique,
+      "--model-cmd", `node "${stub}"`,
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(readFileSync(critique, "utf8"));
+    assert.equal(report.critic_verdict, "fail");
+    assert.equal(report.verdict, "review");
+    assert.equal(report.refute.agree, false);
+    assert.ok(report.issues.some((issue) => /refute pass disagreed/i.test(issue.text)));
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("visual critic run keeps the critic verdict when the refute pass agrees", () => {
+  const dir = tempDir();
+  try {
+    const stub = writeCriticStub(dir);
+    const shot = join(dir, "state_first.png");
+    const critique = join(dir, "critique.json");
+    writeFileSync(shot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/visual_critic_run.mjs",
+      "--project", "rune-marches",
+      "--shot", `first_screen:${shot}`,
+      "--instruction-out", join(dir, "instruction.md"),
+      "--out", critique,
+      "--model-cmd", `node "${stub}"`,
+    ], { env: { REFUTE_AGREE: "1" } });
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(readFileSync(critique, "utf8"));
+    assert.equal(report.verdict, "fail");
+    assert.equal(report.refute.agree, true);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("visual critic run derives shots from a covered state matrix", () => {
+  const dir = tempDir();
+  try {
+    const stub = writeCriticStub(dir);
+    const shot = join(dir, "state_first.png");
+    const matrix = join(dir, "state_matrix.json");
+    const critique = join(dir, "critique.json");
+    writeFileSync(shot, "png", "utf8");
+    writeFileSync(matrix, `${JSON.stringify({
+      schema: "game.live_state_acceptance_matrix",
+      required_states: ["first_screen"],
+      states: { first_screen: { status: "covered", evidence: shot } },
+    })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/visual_critic_run.mjs",
+      "--project", "rune-marches",
+      "--state-matrix", matrix,
+      "--instruction-out", join(dir, "instruction.md"),
+      "--out", critique,
+      "--model-cmd", `node "${stub}"`,
+    ], { env: { REFUTE_AGREE: "1" } });
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(readFileSync(critique, "utf8"));
+    assert.equal(report.shots[0].tag, "first_screen");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("visual critic run output feeds review.mjs --critique end to end", () => {
+  const dir = tempDir();
+  try {
+    const stub = writeCriticStub(dir);
+    const shot = join(dir, "state_first.png");
+    const critique = join(dir, "critique.json");
+    const gateJson = join(dir, "gate.json");
+    writeFileSync(shot, "png", "utf8");
+    const critic = runRaw([
+      "tools/product_gate/visual_critic_run.mjs",
+      "--project", "rune-marches",
+      "--shot", `first_screen:${shot}`,
+      "--instruction-out", join(dir, "instruction.md"),
+      "--out", critique,
+      "--model-cmd", `node "${stub}"`,
+    ], { env: { REFUTE_AGREE: "1" } });
+    assert.equal(critic.status, 0, critic.stderr);
+    const gate = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "rune-marches",
+      "--screenshot", shot,
+      "--critique", critique,
+      "--output", join(dir, "gate.md"),
+      "--json-output", gateJson,
+      "--index-output", join(dir, "latest.json"),
+    ]);
+    assert.equal(gate.status, 0, gate.stderr);
+    const report = JSON.parse(readFileSync(gateJson, "utf8"));
+    assert.equal(report.verdict, "fail");
+    assert.equal(report.visual_critique.scores.readability, 1);
+    assert.equal(report.next, "Add a solid HUD plate.");
+  } finally {
+    cleanup(dir);
+  }
+});
+
+// Emits prose + a decoy JSON object + the real critique (no fences), so the
+// extractor must return the largest valid object, not the first.
+function writeMessyCriticStub(dir) {
+  const stub = join(dir, "messy-model.js");
+  writeFileSync(stub, [
+    "const fs = require('fs');",
+    "const t = fs.readFileSync(0, 'utf8');",
+    "if (/INDEPENDENT SKEPTIC/i.test(t)) {",
+    "  process.stdout.write('On reflection I agree. ' + JSON.stringify({ agree: true, counter_verdict: 'fail', reason: 'concur' }));",
+    "} else {",
+    "  const decoy = JSON.stringify({ note: 'draft, ignore me' });",
+    "  const real = JSON.stringify({ schema: 'game.visual_critique', verdict: 'fail', scores: { composition: 2, readability: 1, ui_controls: 2, action_direction: 2, art_quality: 2, audience_fit: 2 }, issues: [{ severity: 'blocker', axis: 'readability', text: 'unreadable on a busy bg.' }], answers: {}, smallest_next_fix: 'Add a HUD plate.' });",
+    "  process.stdout.write('Some reasoning prose. ' + decoy + ' ... and the final critique: ' + real + ' done.');",
+    "}",
+    "",
+  ].join("\n"), "utf8");
+  return stub;
+}
+
+test("visual critic run rejects a shell-unsafe screenshot path in run mode", () => {
+  const dir = tempDir();
+  try {
+    const stub = writeCriticStub(dir);
+    const shot = join(dir, "evil;rm.png"); // ';' is legal on Windows but shell-dangerous
+    writeFileSync(shot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/visual_critic_run.mjs",
+      "--project", "rune-marches",
+      "--shot", `combat:${shot}`,
+      "--instruction-out", join(dir, "instruction.md"),
+      "--out", join(dir, "critique.json"),
+      "--model-cmd", `node "${stub}"`,
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /shell-unsafe/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("review.mjs --critique lets an explicit --visual-score override the critic (lead wins)", () => {
+  const dir = tempDir();
+  try {
+    const screenshot = join(dir, "screen.png");
+    const critique = join(dir, "critique.json");
+    const json = join(dir, "gate.json");
+    writeFileSync(screenshot, "png", "utf8");
+    writeFileSync(critique, `${JSON.stringify({
+      schema: "game.visual_critique",
+      verdict: "fail",
+      scores: { composition: 2, readability: 1, ui_controls: 2, action_direction: 2, art_quality: 2, audience_fit: 2 },
+      issues: [{ severity: "blocker", axis: "readability", text: "unreadable." }],
+      smallest_next_fix: "fix it.",
+    })}\n`, "utf8");
+    const result = runRaw([
+      "tools/product_gate/review.mjs",
+      "--project", "rune-marches",
+      "--screenshot", screenshot,
+      "--critique", critique,
+      "--visual-score", "readability=5",
+      "--output", join(dir, "gate.md"),
+      "--json-output", json,
+      "--index-output", join(dir, "latest.json"),
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(readFileSync(json, "utf8")).visual_critique.scores.readability, 5);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("visual critic run fails when the critic model returns no valid JSON", () => {
+  const dir = tempDir();
+  try {
+    const stub = join(dir, "junk-model.js");
+    writeFileSync(stub, "process.stdout.write('I cannot do that. No JSON here.');\n", "utf8");
+    const shot = join(dir, "state.png");
+    writeFileSync(shot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/visual_critic_run.mjs",
+      "--project", "rune-marches",
+      "--shot", `first_screen:${shot}`,
+      "--instruction-out", join(dir, "instruction.md"),
+      "--out", join(dir, "critique.json"),
+      "--model-cmd", `node "${stub}"`,
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /did not return a valid game\.visual_critique/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("visual critic run extracts the real critique from messy model output", () => {
+  const dir = tempDir();
+  try {
+    const stub = writeMessyCriticStub(dir);
+    const shot = join(dir, "state.png");
+    const critique = join(dir, "critique.json");
+    writeFileSync(shot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/visual_critic_run.mjs",
+      "--project", "rune-marches",
+      "--shot", `first_screen:${shot}`,
+      "--instruction-out", join(dir, "instruction.md"),
+      "--out", critique,
+      "--model-cmd", `node "${stub}"`,
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(readFileSync(critique, "utf8"));
+    assert.equal(report.verdict, "fail");
+    assert.equal(report.scores.readability, 1);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("visual critic run --no-refute keeps the critic verdict with no refute pass", () => {
+  const dir = tempDir();
+  try {
+    const stub = writeCriticStub(dir);
+    const shot = join(dir, "state.png");
+    const critique = join(dir, "critique.json");
+    writeFileSync(shot, "png", "utf8");
+    const result = runRaw([
+      "tools/product_gate/visual_critic_run.mjs",
+      "--project", "rune-marches",
+      "--shot", `first_screen:${shot}`,
+      "--instruction-out", join(dir, "instruction.md"),
+      "--out", critique,
+      "--no-refute",
+      "--model-cmd", `node "${stub}"`,
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(readFileSync(critique, "utf8"));
+    assert.equal(report.refute, null);
+    assert.equal(report.verdict, "fail");
+  } finally {
+    cleanup(dir);
+  }
+});

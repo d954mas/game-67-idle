@@ -43,6 +43,15 @@ test("rejects handmade text and debug renderer in active game runtime", (t) => {
   assert.deepEqual(report.problems.map((p) => p.rule), ["engine-text-renderer", "debug-renderer"]);
 });
 
+test("rejects handmade bitmap font tables even with debug debt", (t) => {
+  const dir = tempRoot(t);
+  writeFileSync(join(dir, "src", "main.c"), "/* temporary debug debt */\nstatic const uint8_t glyph5[7] = {0};\nvoid render(){ draw_text5(); }\n", "utf8");
+  const result = runGuard(dir);
+  assert.notEqual(result.status, 0);
+  const report = JSON.parse(result.stdout);
+  assert.deepEqual(report.problems.map((p) => p.rule), ["no-handmade-fonts", "no-handmade-fonts"]);
+});
+
 test("allows explicit debug debt and boundary Y-down conversion", (t) => {
   const dir = tempRoot(t);
   writeFileSync(join(dir, "src", "main.c"), "/* debug_only prototype marker */\nvoid render(){ nt_shape_renderer_rect(); }\n", "utf8");

@@ -1,0 +1,380 @@
+{
+  "schema": "game.asset_manifest",
+  "version": 1,
+  "art_job": "gamedesign/projects/ember-road/art_requests/ember-road-town-forge-v2.json",
+  "crop_manifest": "gamedesign/projects/ember-road/data/ember-road-town-forge-v2-crop_manifest.json",
+  "runtime_dir": "assets/runtime/ember-road-town-forge-v2",
+  "source_art": [
+    "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-ui-normalized-green.png",
+    "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-icons-v003-normalized-magenta.png",
+    "gamedesign/projects/ember-road/art/processed/ember-road-town-forge-v2-bg-normalized-green.png"
+  ],
+  "source_policy": "partial source-derived DRAFT runtime assets cut from intake-clean components and explicit key-matte chroma-hole repairs; remaining unrelated contaminated components stay blocked before final-art",
+  "assets": [
+    {
+      "id": "forge_action_panel_v2",
+      "kind": "sprite",
+      "path": "assets/runtime/ember-road-town-forge-v2/forge_action_panel_v2.png",
+      "pack_group": "town_forge_v2",
+      "source_crop": "forge_action_panel_v2",
+      "original_size": [
+        232,
+        152
+      ],
+      "trim_rect": [
+        0,
+        0,
+        232,
+        152
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false
+      },
+      "source_component_id": "component_5",
+      "component_bbox": [
+        557,
+        366,
+        232,
+        152
+      ],
+      "semantic_role": "source-derived forge action table panel for the town scene anchor",
+      "anchor": "center"
+    },
+    {
+      "id": "forge_result_strip_slice9_v2",
+      "kind": "slice9",
+      "path": "assets/runtime/ember-road-town-forge-v2/forge_result_strip_slice9_v2.png",
+      "pack_group": "town_forge_v2",
+      "source_crop": "forge_result_strip_slice9_v2",
+      "original_size": [
+        416,
+        120
+      ],
+      "trim_rect": [
+        0,
+        0,
+        416,
+        120
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false,
+        "trim_preserves_slice9": true
+      },
+      "source_component_id": "component_7",
+      "component_bbox": [
+        1059,
+        374,
+        416,
+        120
+      ],
+      "semantic_role": "stretchable town forge result strip or compact button base",
+      "anchor": "center",
+      "slice9": {
+        "left": 48,
+        "top": 24,
+        "right": 48,
+        "bottom": 24
+      },
+      "content": {
+        "x": 64,
+        "y": 24,
+        "w": 288,
+        "h": 72
+      },
+      "target_preview_sizes": [
+        [
+          160,
+          72
+        ],
+        [
+          220,
+          88
+        ],
+        [
+          360,
+          120
+        ]
+      ],
+      "stretch_policy": {
+        "center": "plain_texture",
+        "horizontal_edges": "straight_frame",
+        "vertical_edges": "straight_frame",
+        "corners": "simple_fixed",
+        "non_stretch_ornaments": "none"
+      },
+      "usage_policy": {
+        "size_class": "status_strip_only",
+        "min_size": [
+          160,
+          72
+        ],
+        "disallowed_uses": [
+          "large_panel",
+          "portrait_frame",
+          "full_screen_modal"
+        ],
+        "notes": "Use for compact result/status strips; do not use as an ornate large panel."
+      }
+    },
+    {
+      "id": "mine_lantern_standalone_v2",
+      "kind": "icon",
+      "path": "assets/runtime/ember-road-town-forge-v2/mine_lantern_standalone_v2.png",
+      "pack_group": "town_forge_v2",
+      "source_crop": "mine_lantern_standalone_v2",
+      "original_size": [
+        158,
+        282
+      ],
+      "trim_rect": [
+        0,
+        0,
+        158,
+        282
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false
+      },
+      "source_component_id": "component_1",
+      "component_bbox": [
+        143,
+        145,
+        158,
+        282
+      ],
+      "semantic_role": "standalone Mine Lantern object",
+      "anchor": "center",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "size_class": "96px_source",
+      "preview_sizes": [
+        [
+          48,
+          48
+        ],
+        [
+          64,
+          64
+        ]
+      ]
+    },
+    {
+      "id": "forge_lantern_ready_badge_v2",
+      "kind": "icon",
+      "path": "assets/runtime/ember-road-town-forge-v2/forge_lantern_ready_badge_v2.png",
+      "pack_group": "town_forge_v2",
+      "source_crop": "forge_lantern_ready_badge_v2",
+      "original_size": [
+        223,
+        228
+      ],
+      "trim_rect": [
+        0,
+        0,
+        223,
+        228
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false
+      },
+      "source_component_id": "component_6",
+      "component_bbox": [
+        117,
+        552,
+        223,
+        228
+      ],
+      "semantic_role": "Mine Lantern forged or ready result badge",
+      "anchor": "center",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "size_class": "96px_source",
+      "preview_sizes": [
+        [
+          48,
+          48
+        ],
+        [
+          64,
+          64
+        ]
+      ]
+    },
+    {
+      "id": "forge_workshop_v2",
+      "kind": "sprite",
+      "path": "assets/runtime/ember-road-town-forge-v2/forge_workshop_v2.png",
+      "pack_group": "town_forge_v2",
+      "source_crop": "forge_workshop_v2",
+      "original_size": [
+        488,
+        360
+      ],
+      "trim_rect": [
+        0,
+        0,
+        488,
+        360
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false
+      },
+      "source_component_id": "component_1",
+      "component_bbox": [
+        63,
+        21,
+        488,
+        360
+      ],
+      "semantic_role": "full town forge workshop scene prop with forge, anvil, tools, and lantern",
+      "anchor": "center"
+    },
+    {
+      "id": "forge_worktable_v2",
+      "kind": "sprite",
+      "path": "assets/runtime/ember-road-town-forge-v2/forge_worktable_v2.png",
+      "pack_group": "town_forge_v2",
+      "source_crop": "forge_worktable_v2",
+      "original_size": [
+        410,
+        342
+      ],
+      "trim_rect": [
+        0,
+        0,
+        410,
+        342
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false
+      },
+      "source_component_id": "component_2",
+      "component_bbox": [
+        640,
+        42,
+        410,
+        342
+      ],
+      "semantic_role": "full town forge worktable with lantern, ember shards, hooks, and stone bench",
+      "anchor": "center"
+    },
+    {
+      "id": "forge_signpost_v2",
+      "kind": "sprite",
+      "path": "assets/runtime/ember-road-town-forge-v2/forge_signpost_v2.png",
+      "pack_group": "town_forge_v2",
+      "source_crop": "forge_signpost_v2",
+      "original_size": [
+        124,
+        274
+      ],
+      "trim_rect": [
+        0,
+        0,
+        124,
+        274
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false
+      },
+      "source_component_id": "component_6",
+      "component_bbox": [
+        997,
+        420,
+        124,
+        274
+      ],
+      "semantic_role": "town forge signpost scene marker",
+      "anchor": "center"
+    },
+    {
+      "id": "forge_floor_patch_v2",
+      "kind": "sprite",
+      "path": "assets/runtime/ember-road-town-forge-v2/forge_floor_patch_v2.png",
+      "pack_group": "town_forge_v2",
+      "source_crop": "forge_floor_patch_v2",
+      "original_size": [
+        485,
+        215
+      ],
+      "trim_rect": [
+        0,
+        0,
+        485,
+        215
+      ],
+      "atlas_policy": {
+        "trim_mode": "alpha",
+        "alpha_bleed": true,
+        "premultiply_alpha": true,
+        "extrude": 2,
+        "shape_padding": 2,
+        "border_padding": 1,
+        "scale_variant": "1x",
+        "allow_rotation": false
+      },
+      "source_component_id": "component_9",
+      "component_bbox": [
+        537,
+        758,
+        485,
+        215
+      ],
+      "semantic_role": "stone floor patch under town forge table",
+      "anchor": "center"
+    }
+  ]
+}

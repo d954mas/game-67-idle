@@ -1,0 +1,119 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "ember-road",
+  "task": "T0019",
+  "surface": "desktop",
+  "verdict": "review",
+  "timestamp": "2026-06-20T19:30:50.991Z",
+  "screenshot": "build/captures/ember-road/state_old_mine_depth_encounter.png",
+  "answers": {
+    "where": "Old Mine Entrance after clearing the first Depth 1 encounter.",
+    "action": "The player sees Depth 1 Clear, reads the encounter reward, and can return to Old Gate.",
+    "response": "After scout, resolve_old_mine_depth defeats the Cave Bat, records damage, updates shards/gold/XP, changes the Mine route plaque to D1 DONE, and shows a framed depth result log.",
+    "reward": "The result grants +2 ember shards, +4 gold, +6 XP, records 3 bat damage, and marks bat_defeated/depth_resolved in state.",
+    "game_look": "The screen now reads as a fantasy RPG result state: dominant mine scene, right-side result rail, route-state plaques, framed bottom report log, and persistent hero HUD."
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 4,
+      "ui_controls": 4,
+      "action_direction": 4,
+      "art_quality": 4,
+      "audience_fit": 4
+    },
+    "issues": [
+      {
+        "severity": "minor",
+        "axis": "art_quality",
+        "text": "Depth result still reuses current atlas/UI pieces instead of final cut components from a dedicated mine UI kit."
+      }
+    ]
+  },
+  "contract": "",
+  "critique_source": "",
+  "state_coverage": {
+    "required": [
+      "first_screen",
+      "hud_visible",
+      "primary_action_ready",
+      "primary_action_feedback",
+      "reward_active",
+      "locked_or_disabled_state",
+      "transient_stress_state",
+      "progression_panel_open",
+      "modal_or_choice_open",
+      "old_mine_scout_result",
+      "old_mine_depth_encounter",
+      "resume_or_reentry_state"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen",
+        "evidence": "build/captures/ember-road/state_first_screen.png"
+      },
+      {
+        "tag": "hud_visible",
+        "evidence": "build/captures/ember-road/state_hud_visible.png"
+      },
+      {
+        "tag": "primary_action_ready",
+        "evidence": "build/captures/ember-road/state_primary_action_ready.png"
+      },
+      {
+        "tag": "locked_or_disabled_state",
+        "evidence": "build/captures/ember-road/state_locked_or_disabled_state.png"
+      },
+      {
+        "tag": "primary_action_feedback",
+        "evidence": "build/captures/ember-road/state_primary_action_feedback.png"
+      },
+      {
+        "tag": "reward_active",
+        "evidence": "build/captures/ember-road/state_reward_active.png"
+      },
+      {
+        "tag": "transient_stress_state",
+        "evidence": "build/captures/ember-road/state_transient_stress_state.png"
+      },
+      {
+        "tag": "progression_panel_open",
+        "evidence": "build/captures/ember-road/state_progression_panel_open.png"
+      },
+      {
+        "tag": "modal_or_choice_open",
+        "evidence": "build/captures/ember-road/state_modal_or_choice_open.png"
+      },
+      {
+        "tag": "old_mine_scout_result",
+        "evidence": "build/captures/ember-road/state_old_mine_scout_result.png"
+      },
+      {
+        "tag": "old_mine_depth_encounter",
+        "evidence": "build/captures/ember-road/state_old_mine_depth_encounter.png"
+      }
+    ],
+    "not_covered": [
+      {
+        "tag": "resume_or_reentry_state",
+        "reason": "Resume/re-entry remains out of scope for this slice."
+      }
+    ]
+  },
+  "problem": "This is still one deterministic depth result, not a repeatable dungeon loop or final sliced UI kit.",
+  "next": "If accepted, build the next narrow slice: either a repeatable depth loop or town/equipment polish; if rejected, update the exact visual/UX mismatch before more runtime work.",
+  "verification": {
+    "required": false
+  }
+}

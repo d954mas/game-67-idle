@@ -1,0 +1,17 @@
+{
+  "schema": "game.art_generation_record",
+  "version": 1,
+  "id": "ember-road-old-gate-fakeshot-v001",
+  "provider": "OpenAI Codex built-in image_gen",
+  "model_or_workflow": "built-in image generation",
+  "workflow_path": "gamedesign/projects/ember-road/art/ember-road-old-gate-fakeshot-v001-workflow.json",
+  "prompt_packet": "gamedesign/projects/ember-road/art/ember-road-old-gate-fakeshot-v001-prompt.json",
+  "no_seed_reason": "built-in image_gen did not expose a stable seed",
+  "prompt": "Composed 16:9 fantasy browser RPG Old Gate first screen with painted gate location, hero, Gate Warden, route strip, locked mine, Road Wolf preview, reward icons, top status, right quest rail, bottom log belt, blank runtime text areas.",
+  "negative_prompt": "debug rectangles, fake text, copied reference UI, copied character art, watermarks, logos, idle/VIP/event clutter",
+  "source_family": "composed old gate fake shot",
+  "source_family_role": "full-screen target composition for direction review only; not a fused runtime asset",
+  "accepted_source_image": "gamedesign/projects/ember-road/art/ember-road-old-gate-fakeshot-v001.png",
+  "final_art_source": "generated",
+  "rejected_candidate_notes": "Selected direction fake shot. Runtime decomposition remains a separate required step."
+}
