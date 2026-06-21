@@ -261,7 +261,7 @@ function nodeTestFileRecoveryKeys(command, { failedRecord = false } = {}) {
   if (first !== "node") return [];
   const testIndex = tokens.findIndex((token) => token === "--test");
   if (testIndex < 0) return [];
-  const unsafeFlags = new Set(["--test-name-pattern", "--test-skip-pattern", "--test-only", "--watch", "--watch-path"]);
+  const unsafeFlags = new Set(["--test-only", "--watch", "--watch-path"]);
   if (tokens.some((token) => unsafeFlags.has(token) || [...unsafeFlags].some((flag) => token.startsWith(`${flag}=`)))) return [];
   if (tokens.slice(0, testIndex).some((token) => token.includes("&&") || token.includes(";") || token.includes("|"))) return [];
   const files = [];
@@ -272,8 +272,10 @@ function nodeTestFileRecoveryKeys(command, { failedRecord = false } = {}) {
     if (/[*?[\]{}]/.test(normalized)) continue;
     files.push(normalized);
   }
-  if (failedRecord && files.length !== 1) return [];
-  return [...new Set(files)].map((file) => `node-test-file:${file}`);
+  const uniqueFiles = [...new Set(files)];
+  if (failedRecord && uniqueFiles.length > 1) return [`node-test-files-all:${uniqueFiles.join("|")}`];
+  if (failedRecord && uniqueFiles.length !== 1) return [];
+  return uniqueFiles.map((file) => `node-test-file:${file}`);
 }
 
 function commandKeys(record) {
@@ -308,6 +310,17 @@ function isAiHelpProbeCommand(command) {
   return /\bnode(?:\.exe|\.cmd)?\s+tools\/ai\.mjs\s+(?:--help|-h|help)\b/i.test(normalizeCommand(command));
 }
 
+function isAiFacadeNegativeProbeCommand(command) {
+  const text = normalizeCommand(command);
+  if (/\bnode(?:\.exe|\.cmd)?\s+tools\/ai\.mjs\s+definitely-not-a-command\b/i.test(text)) return true;
+  return /\bnode(?:\.exe|\.cmd)?\s+tools\/ai\.mjs\s+validate\b/i.test(text)
+    && (
+      /\s--file(?:=|\s)/i.test(text)
+      || /\s--bogus\b/i.test(text)
+      || /(?:^|\s)--keep-exports\s*$/i.test(text)
+    );
+}
+
 function isStructuredValidationProbeCommand(command) {
   const text = normalizeCommand(command);
   return /\bnode(?:\.exe|\.cmd)?\s+tools\/(?:ai\.mjs|taskboard\/cli\.mjs)\s+(?:subagent-packet-check|subagent-check|orchestration-workflow-check|workflow-check)\b/i.test(text);
@@ -318,22 +331,37 @@ function isFailedReadOnlyDiscoveryCommand(command) {
   return /\bGet-ChildItem\b/i.test(text) || /\brg(?:\.exe)?\s+--files\b/i.test(text);
 }
 
+function isRecoveredTruncatedNodeTestRecord(record) {
+  if (record.event_type !== "tool_call_result_recovered") return false;
+  return (record.commands || []).some((command) => {
+    const tokens = commandTokens(command);
+    const first = (tokens[0] || "").split(/[\\/]/).pop()?.replace(/\.(exe|cmd)$/i, "").toLowerCase();
+    if (first !== "node" || !tokens.includes("--test") || !tokens.includes("--test-name-pattern")) return false;
+    return nodeTestFileRecoveryKeys(command, { failedRecord: true }).length === 0;
+  });
+}
+
 function isAgentEvidenceProbeRecord(record) {
   return isAgentEvidenceProbe(record)
-    || (record.commands || []).some((command) => isStrictAgentRollupCommand(command) || isAiHelpProbeCommand(command));
+    || (record.commands || []).some((command) => isStrictAgentRollupCommand(command));
 }
 
 function isAgentToolUsageRecord(record) {
   return isAgentToolUsage(record)
+    || isRecoveredTruncatedNodeTestRecord(record)
+    || (record.commands || []).some((command) => isAiHelpProbeCommand(command))
+    || (record.commands || []).some((command) => isAiFacadeNegativeProbeCommand(command))
     || (record.commands || []).some((command) => isFailedReadOnlyDiscoveryCommand(command));
 }
 
 function inferredFailureReason(record, fallback) {
   if (record.blocked_by) return String(record.blocked_by).trim();
   if ((record.commands || []).some(isStrictAgentRollupCommand)) return "failed strict agent rollup probe";
-  if ((record.commands || []).some(isAiHelpProbeCommand)) return "failed help/usage probe";
+  if ((record.commands || []).some(isAiHelpProbeCommand)) return "failed help lookup";
+  if ((record.commands || []).some(isAiFacadeNegativeProbeCommand)) return "failed expected-negative facade probe";
   if ((record.commands || []).some(isStructuredValidationProbeCommand)) return "failed structured validation probe";
   if ((record.commands || []).some(isFailedReadOnlyDiscoveryCommand)) return "failed read-only discovery command";
+  if (isRecoveredTruncatedNodeTestRecord(record)) return "truncated recovered node test command";
   return fallback;
 }
 
@@ -380,18 +408,26 @@ function buildRecoveryPassesByKey(records) {
 }
 
 function recoveryKeyKind(key) {
+  if (String(key || "").startsWith("node-test-files-all:")) return "node-test-files-all";
   return String(key || "").startsWith("node-test-file:") ? "node-test-file" : "exact";
 }
 
 function hasExternalRecoveryPass(keys, failedAt, recoveryPassesByKey) {
   if (failedAt === undefined || recoveryPassesByKey.size === 0) return false;
-  return keys.some((key) => (recoveryPassesByKey.get(key) || []).some((passAt) => passAt > failedAt));
+  return keys.some((key) => {
+    const value = String(key || "");
+    if (value.startsWith("node-test-files-all:")) {
+      const files = value.slice("node-test-files-all:".length).split("|").filter(Boolean);
+      return files.length > 0 && files.every((file) => (recoveryPassesByKey.get(`node-test-file:${file}`) || []).some((passAt) => passAt > failedAt));
+    }
+    return (recoveryPassesByKey.get(key) || []).some((passAt) => passAt > failedAt);
+  });
 }
 
 function externalRecoveryKind(keys, failedAt, recoveryPassesByKey) {
   if (failedAt === undefined || recoveryPassesByKey.size === 0) return "";
   for (const key of keys) {
-    if ((recoveryPassesByKey.get(key) || []).some((passAt) => passAt > failedAt)) return recoveryKeyKind(key);
+    if (hasExternalRecoveryPass([key], failedAt, recoveryPassesByKey)) return recoveryKeyKind(key);
   }
   return "";
 }

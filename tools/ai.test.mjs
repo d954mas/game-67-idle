@@ -152,6 +152,24 @@ test("unknown command prints usage and exits non-zero", () => {
   assert.match(result.stderr, /usage:/);
 });
 
+test("help commands print usage and exit zero", () => {
+  for (const command of ["--help", "-h", "help"]) {
+    const result = run([command]);
+    assert.equal(result.status, 0, `${command} should be a successful lookup`);
+    assert.match(result.stdout, /usage:/);
+    assert.equal(result.stderr, "");
+  }
+});
+
+test("subcommand help prints usage and exits zero", () => {
+  for (const command of ["status", "validate", "import-codex-session"]) {
+    const result = run([command, "--help"]);
+    assert.equal(result.status, 0, `${command} --help should be a successful lookup`);
+    assert.match(result.stdout, /usage:/);
+    assert.equal(result.stderr, "");
+  }
+});
+
 test("retired profiler ceremony commands are gone", () => {
   for (const command of ["start", "focus", "checkpoint", "run", "context", "reflect", "summary"]) {
     const result = run([command, "--dry-run"]);
@@ -334,6 +352,16 @@ test("validate rejects stale file-scoped option instead of ignoring it", () => {
 
   assert.equal(result.status, 2);
   assert.match(result.stderr, /validate no longer supports --file/);
+});
+
+test("validate rejects unsupported options and missing values", () => {
+  const unsupported = run(["validate", "--bogus", "--dry-run"]);
+  assert.equal(unsupported.status, 2);
+  assert.match(unsupported.stderr, /unsupported validate option: --bogus/);
+
+  const missingValue = run(["validate", "--keep-exports"]);
+  assert.equal(missingValue.status, 2);
+  assert.match(missingValue.stderr, /--keep-exports requires a value/);
 });
 
 test("close-slice forwards product gate closeout options", () => {
@@ -793,21 +821,13 @@ test("orchestration-bootstrap forwards taskboard bootstrap", () => {
   }
 });
 
-test("orchestration-bootstrap --help forwards taskboard usage", () => {
+test("orchestration-bootstrap --help uses facade help path", () => {
   const result = run(["orchestration-bootstrap", "--help"]);
-  const direct = spawnSync(process.execPath, ["tools/taskboard/cli.mjs", "orchestration-bootstrap", "--help"], {
-    cwd: root,
-    encoding: "utf8",
-    shell: false,
-  });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.equal(direct.status, 0, direct.stderr || direct.stdout);
   assert.equal(result.stderr, "");
-  assert.equal(result.stdout, direct.stdout);
-  assert.match(result.stdout, /usage: node tools\/taskboard\/cli\.mjs orchestration-bootstrap/);
-  assert.match(result.stdout, /--independent-reviewer/);
-  assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check --current --json/);
+  assert.match(result.stdout, /usage:/);
+  assert.match(result.stdout, /node tools\/ai\.mjs orchestration-bootstrap/);
 });
 
 test("orchestration-bootstrap forwards missing argument failures", () => {

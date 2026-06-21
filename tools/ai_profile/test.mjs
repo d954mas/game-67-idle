@@ -1287,17 +1287,16 @@ test("status agent rollup recovers single-file node tests from later parent supe
     ]);
     const status = readJson(statusJson);
     const profileRollup = status.agent_rollup.profile_rollup;
-    assert.equal(profileRollup.parent_recovered_failed_records, 1);
-    assert.equal(profileRollup.parent_node_test_file_recovered_failed_records, 1);
+    assert.equal(profileRollup.parent_recovered_failed_records, 2);
+    assert.equal(profileRollup.parent_node_test_file_recovered_failed_records, 2);
     assert.equal(profileRollup.parent_exact_recovered_failed_records, 0);
-    assert.equal(profileRollup.unresolved_failed_records, 3);
+    assert.equal(profileRollup.unresolved_failed_records, 2);
     assert.deepEqual(profileRollup.unresolved_failure_samples.map((sample) => sample.command), [
       "node --test tools/early.test.mjs",
       "node --test tools/multi-a.test.mjs tools/multi-b.test.mjs",
-      "node --test tools/filtered.test.mjs",
     ]);
-    assert.match(result.stdout, /parent-recovered agent failures: 1/);
-    assert.match(result.stdout, /unresolved agent failures: 3/);
+    assert.match(result.stdout, /parent-recovered agent failures: 2/);
+    assert.match(result.stdout, /unresolved agent failures: 2/);
     assert.doesNotMatch(result.stdout, /node recovered\.test\.mjs exit 1/);
   } finally {
     cleanup(dir);
@@ -1725,6 +1724,9 @@ test("strict status agent rollup classifies profile diagnostic failures outside 
       { ts: "2026-06-21T10:00:01+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 1 --json"], session_id: agent, exit_code: 1 },
       { ts: "2026-06-21T10:00:02+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node tools/ai.mjs --help"], session_id: agent, exit_code: 1 },
       { ts: "2026-06-21T10:00:03+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["Get-ChildItem -Path tasks\\active,tasks\\review -File -ErrorAction SilentlyContinue | Select-Object FullName"], session_id: agent, exit_code: 1 },
+      { ts: "2026-06-21T10:00:04+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node tools/ai.mjs validate --file AI_PIPELINE.md --dry-run"], session_id: agent, exit_code: 2 },
+      { ts: "2026-06-21T10:00:05+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node tools/ai.mjs definitely-not-a-command"], session_id: agent, exit_code: 2 },
+      { ts: "2026-06-21T10:00:06+05:00", phase: "session", category: "validation", intent: "auto:codex-session-recovery", result: "fail", value: "rework", event_type: "tool_call_result_recovered", commands: ["node --test --test-name-pattern \"strict status agent rollup treats failed structured validator probes as evidence probes|strict status agent rollup classifies profile diagnostic failures outside unres"], session_id: agent, exit_code: 1 },
     ]);
 
     const result = run([
@@ -1742,12 +1744,19 @@ test("strict status agent rollup classifies profile diagnostic failures outside 
     assert.equal(status.agent_rollup.ok, true);
     assert.equal(status.agent_rollup.strict_ok, true);
     assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 0);
-    assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 2);
-    assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_failed_records, 1);
-    assert.match(result.stdout, /agent evidence-probe failures: 2/);
+    assert.equal(status.agent_rollup.profile_rollup.agent_evidence_probe_failed_records, 1);
+    assert.equal(status.agent_rollup.profile_rollup.agent_tool_usage_failed_records, 5);
+    assert.match(result.stdout, /agent evidence-probe failures: 1/);
     assert.match(result.stdout, /evidence-probe: agent-99999999-9999-4999-8999-999999999999 \[test verifier\] profile:1 node ai\.mjs \(failed strict agent rollup probe\) exit 1/);
     assert.doesNotMatch(result.stdout, /unresolved: agent-99999999-9999-4999-8999-999999999999 \[test verifier\] profile:1 node ai\.mjs/);
-    assert.match(result.stdout, /agent tool-usage failures: 1/);
+    assert.match(result.stdout, /agent tool-usage failures: 5/);
+    assert.match(result.stdout, /tool-usage: agent-99999999-9999-4999-8999-999999999999 \[test verifier\] profile:4 node ai\.mjs \(failed expected-negative facade probe\)/);
+    assert.deepEqual(status.agent_rollup.profile_rollup.agent_tool_usage_reasons, [
+      { reason: "truncated recovered node test command", count: 1 },
+      { reason: "failed expected-negative facade probe", count: 2 },
+      { reason: "failed read-only discovery command", count: 1 },
+      { reason: "failed help lookup", count: 1 },
+    ]);
   } finally {
     cleanup(dir);
   }

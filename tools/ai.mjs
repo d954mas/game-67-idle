@@ -11,8 +11,8 @@
 
 import { spawnSync } from "node:child_process";
 
-function usage() {
-  console.error(`usage:
+function usage({ exitCode = 2, stream = process.stderr } = {}) {
+  stream.write(`usage:
   node tools/ai.mjs validate [--quick|--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune] [--with-assets]
   node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--agent-rollup] [--require-agent-rollup-ok] [--parent-thread-id <id>|--trace-session <p>] [--session-root <dir>] [--agent-cwd <path>] [--min-agents <n>] [--agent-rollup-evidence] [--json-output <p>] [--no-import-codex-session]
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
@@ -53,8 +53,8 @@ Commands:
   close-slice require product gate + evidence before handoff/review
 
 Profiling has no manual step. Use tools/ai_profile/* directly only when
-debugging the profiler itself.`);
-  process.exit(2);
+debugging the profiler itself.\n`);
+  process.exit(exitCode);
 }
 
 function runNode(args) {
@@ -136,8 +136,33 @@ function pipelineValidateArgs(args) {
 }
 
 const [command, ...argv] = process.argv.slice(2);
+const HELP_FLAGS = new Set(["--help", "-h", "help"]);
+const HELPABLE_COMMANDS = new Set([
+  "validate",
+  "status",
+  "import-codex-session",
+  "orchestration-trace",
+  "orchestration-template",
+  "subagent-packet-template",
+  "subagent-template",
+  "subagent-packet-check",
+  "subagent-check",
+  "orchestration-workflow-init",
+  "orchestration-bootstrap",
+  "orchestration-check",
+  "orchestration-evidence",
+  "gate",
+  "visual-reject",
+  "critic",
+  "critique",
+  "close-slice",
+]);
 
-if (!command || command === "help" || command === "--help" || command === "-h") usage();
+if (HELP_FLAGS.has(command)) usage({ exitCode: 0, stream: process.stdout });
+if (!command) usage();
+if (HELPABLE_COMMANDS.has(command) && argv.some((arg) => HELP_FLAGS.has(arg))) {
+  usage({ exitCode: 0, stream: process.stdout });
+}
 
 if (command === "validate") run(pipelineValidateArgs(argv));
 
