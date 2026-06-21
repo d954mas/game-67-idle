@@ -96,6 +96,13 @@ For genuinely small work:
 The guard is label-based for now. It proves that orchestration was considered
 and recorded; it does not inspect transcripts yet.
 
+Run `node tools/taskboard/cli.mjs validate` before closeout. If the packet is
+missing or malformed, the CLI names the missing/invalid field labels and prints
+a compact copyable packet template. Use
+`node tools/taskboard/cli.mjs orchestration-template` for the accepted block,
+and `node tools/taskboard/cli.mjs validate --json` when another tool or agent
+needs structured `missingFields` output.
+
 ## Context Budgets
 
 Context budgets are pressure signals, not taste. Do not skip required evidence

@@ -8,7 +8,8 @@ import { spawnSync } from "node:child_process";
 import vm from "node:vm";
 import {
   parseDoc, serializeDoc, slugify, createTask, createEpic, listTasks,
-  listEpics, updateDoc, findDoc, validateStore, LIVE_STATUS_MAX_CHARS,
+  listEpics, updateDoc, findDoc, validateStore, validateStoreDetailed,
+  LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
 } from "./lib.mjs";
 
 function tempRoot(t) {
@@ -337,6 +338,38 @@ test("updateDoc rejects orchestration packet labels without meaningful values", 
   );
 });
 
+test("updateDoc reports missing orchestration packet fields", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Pipeline guard",
+    status: "doing",
+    body: taskBodyWithLog(`- orchestration: used
+  objective: improve orchestration diagnostics
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused failure details
+  evidence command: node --test tools/taskboard/test.mjs
+  stop condition: taskboard tests pass
+  independent reviewers: reviewed by a plural label`),
+  });
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "review" } }),
+    /missing\/invalid: independent reviewer/,
+  );
+});
+
+test("updateDoc reports missing orchestration packet when no block exists", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Subagent pipeline guard",
+    status: "doing",
+    body: taskBodyWithLog("- 2026-06-21: Closed without packet."),
+  });
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "review" } }),
+    /missing\/invalid: orchestration: used packet/,
+  );
+});
+
 test("updateDoc rejects orchestration packet assembled from separate log entries", (t) => {
   const root = tempRoot(t);
   createTask(root, {
@@ -528,6 +561,45 @@ test("validateStore reports active review task missing orchestration evidence", 
   );
 });
 
+test("validateStoreDetailed reports structured orchestration problem", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Taskboard pipeline guard",
+    status: "review",
+    body: taskBodyWithLog(`- orchestration: used
+  objective: improve orchestration diagnostics
+  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  expected output: focused failure details
+  evidence command: node --test tools/taskboard/test.mjs
+  stop condition: taskboard tests pass
+  independent reviewers: reviewed by a plural label`),
+  });
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].code, "orchestration_evidence_missing");
+  assert.equal(problems[0].taskId, "T0001");
+  assert.deepEqual(problems[0].missingFields, ["independent reviewer"]);
+  assert.match(problems[0].template, /independent reviewer: <non-empty>/);
+});
+
+test("orchestration template can be filled and accepted", (t) => {
+  const root = tempRoot(t);
+  const packet = orchestrationPacketTemplate()
+    .replace("objective: <non-empty>", "objective: verify packet template")
+    .replace("allowed files: <non-empty>", "allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs")
+    .replace("expected output: <non-empty>", "expected output: accepted review transition")
+    .replace("evidence command: <non-empty>", "evidence command: node --test tools/taskboard/test.mjs")
+    .replace("stop condition: <non-empty>", "stop condition: focused taskboard tests pass")
+    .replace("independent reviewer: <non-empty>", "independent reviewer: reviewed JSON output and template drift");
+  createTask(root, {
+    title: "Taskboard pipeline guard",
+    status: "doing",
+    body: taskBodyWithLog(packet),
+  });
+  const updated = updateDoc(root, "T0001", { fields: { status: "review" } });
+  assert.equal(updated.fields.status, "review");
+});
+
 test("validateStore rejects oversized live status", (t) => {
   const root = tempRoot(t);
   mkdirSync(join(root, "tasks"), { recursive: true });
@@ -578,9 +650,62 @@ test("cli validate prints remediation hints for common failures", (t) => {
   assert.match(result.stdout, /problem: T0001: actionable task needs/);
   assert.match(result.stdout, /hint: fill `## What` and at least one checkable `## Done when`/);
   assert.match(result.stdout, /problem: T0002: substantial pipeline\/orchestration task needs orchestration evidence/);
-  assert.match(result.stdout, /hint: add `orchestration: used` with packet fields/);
+  assert.match(result.stdout, /missing\/invalid: orchestration: used packet/);
+  assert.match(result.stdout, /hint: add a complete packet from `node tools\/taskboard\/cli\.mjs orchestration-template`:/);
+  assert.match(result.stdout, /objective: <non-empty>/);
+  assert.match(result.stdout, /independent reviewer: <non-empty>/);
   assert.match(result.stdout, /problem: tasks\/STATUS\.md exceeds live status budget/);
   assert.match(result.stdout, /hint: replace inline history with pointers/);
+});
+
+test("cli validate --json reports parseable orchestration fields", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Pipeline review without orchestration",
+    status: "review",
+    body: taskBodyWithLog("- 2026-06-21: Ready for review."),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "validate", "--json"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.doesNotMatch(result.stdout, /^problem:/m);
+  assert.doesNotMatch(result.stdout, /^hint:/m);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problems[0].code, "orchestration_evidence_missing");
+  assert.equal(parsed.problems[0].taskId, "T0001");
+  assert.deepEqual(parsed.problems[0].missingFields, ["orchestration: used packet"]);
+  assert.match(parsed.problems[0].template, /objective: <non-empty>/);
+});
+
+test("cli set --json reports structured transition failure", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Subagent pipeline guard",
+    status: "doing",
+    body: taskBodyWithLog("- 2026-06-21: Ready for review without packet."),
+  });
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "set", "T0001", "--status", "review", "--json"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "orchestration_evidence_missing");
+  assert.equal(parsed.problem.taskId, "T0001");
+  assert.deepEqual(parsed.problem.missingFields, ["orchestration: used packet"]);
+});
+
+test("cli orchestration-template prints accepted packet shape", () => {
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-template"], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^- orchestration: used/m);
+  assert.match(result.stdout, /objective: <non-empty>/);
+  assert.match(result.stdout, /allowed files: <non-empty>/);
+  assert.match(result.stdout, /expected output: <non-empty>/);
+  assert.match(result.stdout, /evidence command: <non-empty>/);
+  assert.match(result.stdout, /stop condition: <non-empty>/);
+  assert.match(result.stdout, /independent reviewer: <non-empty>/);
 });
 
 test("markdown preview renders task syntax and escapes html", () => {

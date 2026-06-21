@@ -6,15 +6,17 @@
 //   node tools/taskboard/cli.mjs show T0001
 //   node tools/taskboard/cli.mjs new task --title "..." [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
 //   node tools/taskboard/cli.mjs new epic --title "..." [--status active]
-//   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"]
+//   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
-//   node tools/taskboard/cli.mjs validate
+//   node tools/taskboard/cli.mjs orchestration-template
+//   node tools/taskboard/cli.mjs validate [--json]
 //
 // Agents: prefer `new` over hand-writing files so IDs never collide.
 
 import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
-  updateDoc, validateStore, TASK_STATUSES, LIVE_STATUS_MAX_CHARS,
+  updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
+  LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
 } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -66,6 +68,10 @@ function clampText(text, maxChars) {
     text: `${clipped}\n\n... truncated ${text.length - clipped.length} chars; inspect tasks/STATUS.md or linked task files only if needed.`,
     truncated: true,
   };
+}
+
+function writeJson(value) {
+  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
 function sectionText(markdown, title) {
@@ -259,6 +265,10 @@ switch (cmd) {
     process.stdout.write(renderContext(root, args));
     break;
   }
+  case "orchestration-template": {
+    console.log(orchestrationPacketTemplate());
+    break;
+  }
   case "show": {
     const id = args._[0] || fail("usage: show <id>");
     const doc = findDoc(root, id) || fail(`no doc with id ${id}`);
@@ -302,13 +312,26 @@ switch (cmd) {
     if (!Object.keys(fields).length && !patch.body) fail("nothing to set");
     try {
       const doc = updateDoc(root, id, patch);
-      console.log(`updated ${id}: ${shortRow(doc)}`);
+      if (args.json) {
+        writeJson({ ok: true, doc: { id: doc.fields.id, status: doc.fields.status, file: relative(root, doc.file) } });
+      } else {
+        console.log(`updated ${id}: ${shortRow(doc)}`);
+      }
     } catch (err) {
+      if (args.json) {
+        writeJson({ ok: false, problem: err.problem || { code: "taskboard_error", message: err.message } });
+        process.exit(1);
+      }
       fail(err.message);
     }
     break;
   }
   case "validate": {
+    const detailedProblems = validateStoreDetailed(root);
+    if (args.json) {
+      writeJson({ ok: detailedProblems.length === 0, problems: detailedProblems });
+      process.exit(detailedProblems.length ? 1 : 0);
+    }
     const problems = validateStore(root);
     if (!problems.length) {
       console.log("ok: no problems found");
@@ -325,7 +348,7 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("usage: cli.mjs <list|context|show|new|set|validate> ...  (see header comment)");
+    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|validate> ...  (see header comment)");
     process.exit(cmd ? 1 : 0);
 }
 
@@ -355,7 +378,7 @@ function remediationHint(problem) {
     return "replace inline history with pointers to `tasks/archive/` or `gamedesign/projects/<game-id>/`; keep `STATUS.md` as a current index";
   }
   if (problem.includes("substantial pipeline/orchestration task needs orchestration evidence")) {
-    return "add `orchestration: used` with packet fields and an independent reviewer/verifier, or record `orchestration: not needed - small scope: <reason>`";
+    return `add a complete packet from \`node tools/taskboard/cli.mjs orchestration-template\`:\n${orchestrationPacketTemplate()}\nor record \`orchestration: not needed - small scope: one-file/docs-only/no code ...\``;
   }
   return "";
 }

@@ -37,6 +37,25 @@ const SMALL_SCOPE_REASON_PATTERNS = [
   /^docs-only\b/i,
   /^no code\b/i,
 ];
+const ORCHESTRATION_REQUIRED_FIELDS = [
+  ["objective", /\bobjective\b/i],
+  ["allowed files", /\b(?:allowed files?|inputs?)\b/i],
+  ["expected output", /\bexpected output\b/i],
+  ["evidence command", /\b(?:evidence command|evidence artifact|artifact)\b/i],
+  ["stop condition", /\bstop condition\b/i],
+  ["independent reviewer", /\bindependent\s+(?:reviewer|verifier)\b/i],
+];
+const ORCHESTRATION_PACKET_TEMPLATE = `- orchestration: used
+  objective: <non-empty>
+  allowed files: <non-empty>
+  expected output: <non-empty>
+  evidence command: <non-empty>
+  stop condition: <non-empty>
+  independent reviewer: <non-empty>`;
+
+export function orchestrationPacketTemplate() {
+  return ORCHESTRATION_PACKET_TEMPLATE;
+}
 
 export function findRoot(start = process.cwd()) {
   if (process.env.TASKBOARD_ROOT) {
@@ -326,7 +345,7 @@ export function updateDoc(root, id, patch = {}) {
   if (requiresOrchestrationTransitionGuard(doc, fields)) {
     const problem = orchestrationEvidenceProblem({ ...doc, fields, body });
     if (problem) {
-      throw new Error(problem);
+      throw validationError(problem);
     }
   }
   writeFileSync(doc.file, serializeDoc(fields, body));
@@ -354,6 +373,10 @@ function taskStorageDir(root, fields) {
 }
 
 export function validateStore(root) {
+  return validateStoreDetailed(root).map(problemMessage);
+}
+
+export function validateStoreDetailed(root) {
   const problems = [];
   const tasks = listTasks(root);
   const archivedTasks = listTasks(root, { includeArchive: true }).filter((t) => t.archived);
@@ -362,38 +385,38 @@ export function validateStore(root) {
   if (existsSync(statusFile)) {
     const statusChars = readFileSync(statusFile, "utf8").length;
     if (statusChars > LIVE_STATUS_MAX_CHARS) {
-      problems.push(`tasks/STATUS.md exceeds live status budget (${statusChars}/${LIVE_STATUS_MAX_CHARS} chars); move historical evidence to tasks/archive/ or gamedesign/projects/`);
+      problems.push(genericProblem(`tasks/STATUS.md exceeds live status budget (${statusChars}/${LIVE_STATUS_MAX_CHARS} chars); move historical evidence to tasks/archive/ or gamedesign/projects/`));
     }
   }
   const seen = new Map();
   for (const d of [...tasks, ...epics]) {
     const id = d.fields.id;
     if (!id) {
-      problems.push(`${d.name}: missing id`);
+      problems.push(genericProblem(`${d.name}: missing id`));
       continue;
     }
     if (seen.has(id)) {
-      problems.push(`${d.name}: duplicate id ${id} (also in ${seen.get(id)})`);
+      problems.push(genericProblem(`${d.name}: duplicate id ${id} (also in ${seen.get(id)})`));
     }
     seen.set(id, d.name);
     if (!d.fields.title) {
-      problems.push(`${id}: missing title`);
+      problems.push(genericProblem(`${id}: missing title`, { taskId: id }));
     }
     const statuses = d.kind === "task" ? TASK_STATUSES : EPIC_STATUSES;
     if (!statuses.includes(d.fields.status)) {
-      problems.push(`${id}: invalid status "${d.fields.status}"`);
+      problems.push(genericProblem(`${id}: invalid status "${d.fields.status}"`, { taskId: id }));
     }
     if (d.kind === "epic" && d.fields.status === "active" && !hasActiveEpicBody(d.body)) {
-      problems.push(`${id}: active epic needs non-empty Goal, In scope, and Out of scope sections`);
+      problems.push(genericProblem(`${id}: active epic needs non-empty Goal, In scope, and Out of scope sections`, { taskId: id }));
     }
   }
   const epicIds = new Set(epics.map((e) => e.fields.id));
   for (const t of tasks) {
     if (t.fields.epic && !epicIds.has(t.fields.epic)) {
-      problems.push(`${t.fields.id}: references missing epic "${t.fields.epic}"`);
+      problems.push(genericProblem(`${t.fields.id}: references missing epic "${t.fields.epic}"`, { taskId: t.fields.id }));
     }
     if (isActionableTask(t) && !hasActionableTaskBody(t.body)) {
-      problems.push(`${t.fields.id}: actionable task needs non-empty What and Done when sections`);
+      problems.push(genericProblem(`${t.fields.id}: actionable task needs non-empty What and Done when sections`, { taskId: t.fields.id }));
     }
     if (ORCHESTRATION_REVIEW_STATUSES.has(t.fields.status)) {
       const problem = orchestrationEvidenceProblem(t);
@@ -426,13 +449,37 @@ function requiresOrchestrationTransitionGuard(doc, fields) {
 
 function orchestrationEvidenceProblem(doc) {
   if (doc.kind !== "task" || !isSubstantialOrchestrationTask(doc)) {
-    return "";
+    return null;
   }
   const log = sectionText(doc.body, "Log");
   if (hasOrchestrationUsedEvidence(log) || hasSmallScopeOrchestrationException(log)) {
-    return "";
+    return null;
   }
-  return `${doc.fields.id}: substantial pipeline/orchestration task needs orchestration evidence before review/done`;
+  const missing = missingOrchestrationFields(log);
+  const detail = missing.length ? ` (missing/invalid: ${missing.join(", ")})` : "";
+  return {
+    code: "orchestration_evidence_missing",
+    taskId: doc.fields.id,
+    status: doc.fields.status,
+    missingFields: missing,
+    acceptedFields: ORCHESTRATION_REQUIRED_FIELDS.map(([name]) => name),
+    template: ORCHESTRATION_PACKET_TEMPLATE,
+    message: `${doc.fields.id}: substantial pipeline/orchestration task needs orchestration evidence before review/done${detail}`,
+  };
+}
+
+function genericProblem(message, extras = {}) {
+  return { code: "taskboard_problem", message, ...extras };
+}
+
+function problemMessage(problem) {
+  return typeof problem === "string" ? problem : problem.message;
+}
+
+function validationError(problem) {
+  const err = new Error(problemMessage(problem));
+  err.problem = problem;
+  return err;
 }
 
 function isSubstantialOrchestrationTask(doc) {
@@ -450,17 +497,26 @@ function isArchivedOrchestrationGuardCandidate(doc) {
 }
 
 function hasOrchestrationUsedEvidence(log) {
-  const required = [
-    /\bobjective\b/i,
-    /\b(?:allowed files?|inputs?)\b/i,
-    /\bexpected output\b/i,
-    /\b(?:evidence command|evidence artifact|artifact)\b/i,
-    /\bstop condition\b/i,
-    /\bindependent\s+(?:reviewer|verifier)\b/i,
-  ];
   return orchestrationUsedBlocks(log).some((block) =>
-    required.every((pattern) => hasMeaningfulFieldValue(block, pattern)),
+    ORCHESTRATION_REQUIRED_FIELDS.every(([, pattern]) => hasMeaningfulFieldValue(block, pattern)),
   );
+}
+
+function missingOrchestrationFields(log) {
+  const blocks = orchestrationUsedBlocks(log);
+  if (!blocks.length) {
+    return ["orchestration: used packet"];
+  }
+  let bestMissing = ORCHESTRATION_REQUIRED_FIELDS.map(([name]) => name);
+  for (const block of blocks) {
+    const missing = ORCHESTRATION_REQUIRED_FIELDS
+      .filter(([, pattern]) => !hasMeaningfulFieldValue(block, pattern))
+      .map(([name]) => name);
+    if (missing.length < bestMissing.length) {
+      bestMissing = missing;
+    }
+  }
+  return bestMissing;
 }
 
 function orchestrationUsedBlocks(log) {
