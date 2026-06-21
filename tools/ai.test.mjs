@@ -449,6 +449,47 @@ Validate orchestration packet through the AI facade.
   }
 });
 
+test("orchestration-check forwards concrete preflight next action failures", () => {
+  const dir = tempDir();
+  try {
+    writeTaskFile(dir, "T0001", `## What
+
+Validate orchestration packet through the AI facade.
+
+## Done when
+
+- [ ] preflight passes
+
+## Open questions
+
+## Log
+
+- orchestration: used
+  objective: verify facade preflight failure forwarding
+  allowed files: tools/ai.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: facade forwards to taskboard
+  evidence command: node tools/ai.mjs orchestration-trace --json-output tmp/trace.json --json
+  stop condition: json output reports the failure
+  independent reviewer: reviewed facade forwarding
+`);
+
+    const result = run(["orchestration-check", "T0001", "--json"], {
+      env: { ...process.env, TASKBOARD_ROOT: dir },
+    });
+
+    assert.equal(result.status, 1);
+    assert.equal(result.stderr, "");
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.problem.code, "orchestration_preflight_missing");
+    assert.match(parsed.problem.nextAction, /orchestration-check T0001 --json/);
+    assert.doesNotMatch(parsed.problem.nextAction, /<task-id>/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("orchestration-check forwards current task selector", () => {
   const dir = tempDir();
   try {

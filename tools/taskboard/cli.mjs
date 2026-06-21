@@ -110,7 +110,7 @@ function readTaskFileArg(value) {
     file,
     fields: {
       ...parsed.fields,
-      id: parsed.fields.id || rel,
+      display_id: parsed.fields.id || rel,
     },
   };
 }

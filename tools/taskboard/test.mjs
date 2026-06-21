@@ -9,7 +9,7 @@ import vm from "node:vm";
 import {
   parseDoc, serializeDoc, slugify, createTask, createEpic, listTasks,
   listEpics, updateDoc, findDoc, validateStore, validateStoreDetailed,
-  LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
+  LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate, orchestrationPreflightProblem,
 } from "./lib.mjs";
 
 function tempRoot(t) {
@@ -1409,10 +1409,63 @@ test("cli orchestration-check --json rejects missing machine evidence source", (
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.ok, false);
   assert.equal(parsed.problem.code, "orchestration_preflight_missing");
+  assert.equal(parsed.problem.taskId, task.fields.id);
   assert.deepEqual(parsed.problem.missingFields, ["machine evidence command"]);
   assert.equal(typeof parsed.problem.nextAction, "string");
   assert.match(parsed.problem.nextAction, /orchestration-template/);
+  assert.match(parsed.problem.nextAction, /orchestration-check T0001 --json/);
+  assert.doesNotMatch(parsed.problem.nextAction, /<task-id>/);
+});
+
+test("orchestration preflight next action falls back without task id", () => {
+  const problem = orchestrationPreflightProblem({
+    fields: { status: "doing" },
+    body: taskBodyWithLog(`- orchestration: used
+  objective: verify subagent packet before launch
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: node tools/ai.mjs orchestration-trace --json-output tmp/trace.json --json
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+  });
+
+  assert.equal(problem.code, "orchestration_preflight_missing");
+  assert.equal(problem.taskId, "");
+  assert.match(problem.nextAction, /orchestration-check <task-id> --json/);
+  assert.doesNotMatch(problem.nextAction, /orchestration-check\s+--json/);
+});
+
+test("cli orchestration-check --file does not use file fallback as task id in next action", (t) => {
+  const root = tempRoot(t);
+  const activeDir = join(root, "tasks", "active");
+  mkdirSync(activeDir, { recursive: true });
+  const file = join(activeDir, "missing-id.md");
+  writeFileSync(file, serializeDoc({
+    title: "Missing id preflight",
+    status: "doing",
+    priority: "P2",
+    tags: ["pipeline", "orchestration"],
+    created: "2026-06-21",
+    updated: "2026-06-21",
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify file fallback behavior
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: node tools/ai.mjs orchestration-trace --json-output tmp/trace.json --json
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`)), "utf8");
+
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", file, "--json"], { cwd: root, encoding: "utf8" });
+  const parsed = JSON.parse(result.stdout);
+
+  assert.notEqual(result.status, 0);
+  assert.equal(parsed.problem.code, "orchestration_preflight_missing");
+  assert.equal(parsed.problem.taskId, "");
   assert.match(parsed.problem.nextAction, /orchestration-check <task-id> --json/);
+  assert.doesNotMatch(parsed.problem.nextAction, /missing-id\.md/);
 });
 
 test("cli orchestration-check --current resolves one doing orchestration task", (t) => {
