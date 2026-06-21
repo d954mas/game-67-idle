@@ -306,6 +306,29 @@ function commandKey(cmd) {
   return key;
 }
 
+function stripLeadingEnvAssignments(cmd) {
+  let text = String(cmd || "").trim();
+  while (/^\$env:[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:"[^"]*"|'[^']*'|[^;]+)\s*;\s*/i.test(text)) {
+    text = text.replace(/^\$env:[A-Za-z_][A-Za-z0-9_]*\s*=\s*(?:"[^"]*"|'[^']*'|[^;]+)\s*;\s*/i, "");
+  }
+  while (/^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+/.test(text)) {
+    text = text.replace(/^[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S+)\s+/, "");
+  }
+  return text.trim();
+}
+
+function isSearchCommand(cmd) {
+  const text = stripLeadingEnvAssignments(String(cmd || "")).split(/\r?\n/)[0].trim().toLowerCase();
+  return /^(?:rg|grep|egrep|fgrep|findstr|ack|select-string)(?:\s|$)/.test(text);
+}
+
+function transcriptResult(command, exitCode) {
+  if (exitCode === undefined) return "unknown";
+  if (exitCode === 0) return "pass";
+  if (exitCode === 1 && isSearchCommand(command)) return "pass";
+  return "fail";
+}
+
 /* Aggregate commands by tool key: which tools cost the most total time (what to
  * speed up) and which run most often (repeats / retries = friction). */
 function commandRollup(records) {
@@ -434,13 +457,14 @@ function readTranscriptProfileRecords(file, agentId) {
     if (!call) continue;
     const output = String(payload.output || "");
     const exitCode = parseTranscriptExitCode(output);
+    const result = transcriptResult(call.command, exitCode);
     records.push({
       __line: index + 1,
       ts: line.timestamp || call.ts || "",
       phase: "session",
       category: "tooling",
       intent: "auto:codex-transcript",
-      result: exitCode === undefined ? "unknown" : (exitCode === 0 ? "pass" : "fail"),
+      result,
       value: "unknown",
       event_type: "tool_call_result_transcript",
       duration_ms: parseTranscriptDurationMs(output),

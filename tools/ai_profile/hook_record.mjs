@@ -193,6 +193,7 @@ async function recoverCodexFailedCommands(profilePath, harness, stamp = {}) {
     const command = commandsByCallId.get(callId);
     if (!command) continue;
     const cmd1 = command.split(/\r?\n/)[0].trim().slice(0, 200);
+    if (exitCode === 1 && isSearchCommand(cmd1)) continue;
     const blockedBy = environmentBlockReason(cmd1, output);
     appendRecord(profilePath, buildRecord({
       phase: "session",

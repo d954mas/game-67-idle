@@ -440,6 +440,61 @@ test("hook_record recover-only imports Codex failed shell commands", () => {
   }
 });
 
+test("hook_record recover-only ignores search no-match transcript exits", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "hook-recover-search.jsonl");
+    const session = join(dir, "codex-session.jsonl");
+    writeFileSync(session, [
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          call_id: "call_rg_nomatch",
+          arguments: JSON.stringify({ command: "rg definitely-not-present" }),
+        },
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call_rg_nomatch",
+          output: "Exit code: 1\nWall time: 0.1 seconds\nOutput:\n",
+        },
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          call_id: "call_real_fail",
+          arguments: JSON.stringify({ command: "node --test tools/missing.test.mjs" }),
+        },
+      }),
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call_real_fail",
+          output: "Exit code: 1\nWall time: 0.2 seconds\nOutput:\nnot ok\n",
+        },
+      }),
+    ].join("\n") + "\n", "utf8");
+
+    runHook({}, profile, "codex", {
+      AI_PROFILE_RECOVER_ONLY: "1",
+      CODEX_SESSION_FILE: session,
+    });
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].source_call_id, "call_real_fail");
+    assert.equal(records[0].result, "fail");
+    assert.deepEqual(records[0].commands, ["node --test tools/missing.test.mjs"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("orchestration trace passes spawn wait close transcript", () => {
   const dir = tempDir();
   try {
@@ -794,6 +849,47 @@ test("status falls back to subagent transcripts when profile logs are absent", (
     assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 1);
     assert.equal(status.agent_rollup.profile_rollup.command_rollup.by_time[0].key, "node same.test.mjs");
     assert.match(result.stdout, /sources: profiles=0, transcripts=2/);
+    assert.match(result.stdout, /unresolved agent failures: 1/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status transcript fallback treats search no-match as pass", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const agent = "55555555-5555-4555-8555-555555555555";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeJsonl(join(dir, "rollout-a.jsonl"), [
+      subagentSessionMeta(agent, parent, root, "2026-06-21T10:00:00.000Z"),
+      shellCall("call_rg_nomatch", "rg definitely-not-present", "2026-06-21T10:00:01.000Z"),
+      shellOutput("call_rg_nomatch", "Exit code: 1\nWall time: 0.5 seconds\nOutput:\n", "2026-06-21T10:00:02.000Z"),
+      shellCall("call_select_nomatch", "Select-String -Path tools/ai_profile/status.mjs -Pattern definitely-not-present", "2026-06-21T10:00:03.000Z"),
+      shellOutput("call_select_nomatch", "Exit code: 1\nWall time: 0.6 seconds\nOutput:\n", "2026-06-21T10:00:04.000Z"),
+      shellCall("call_rg_error", "rg --badflag", "2026-06-21T10:00:05.000Z"),
+      shellOutput("call_rg_error", "Exit code: 2\nWall time: 0.7 seconds\nOutput:\nerror: unknown option\n", "2026-06-21T10:00:06.000Z"),
+    ]);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ]);
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.profile_rollup.telemetry_agent_count, 1);
+    assert.equal(status.agent_rollup.profile_rollup.records, 3);
+    assert.equal(status.agent_rollup.profile_rollup.unresolved_failed_records, 1);
+    assert.equal(status.agent_rollup.profile_rollup.command_rollup.by_time.find((entry) => entry.key === "rg")?.fails, 1);
     assert.match(result.stdout, /unresolved agent failures: 1/);
   } finally {
     cleanup(dir);
