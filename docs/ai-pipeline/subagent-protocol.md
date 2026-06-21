@@ -206,17 +206,24 @@ Create the initial shape with:
 
 ```text
 node tools/taskboard/cli.mjs orchestration-workflow-template --task-id T0089 --json
+node tools/ai.mjs orchestration-workflow-init --current --write --json
 node tools/taskboard/cli.mjs orchestration-workflow-check T0089 --json
 ```
 
-The manifest is cold workflow state, not a replacement for task logs. It must
-match the task id and closeout status, describe included and excluded scope,
-list packets with terminal `integrated` or `cancelled` status, record bounded
-agent/context/validation budgets, name verification commands, identify the lead
-integration owner/policy, and reference existing repo-local evidence artifacts.
-Each packet's `allowed_files` uses the same bounded path rules as the task
-packet. Evidence refs must include the machine artifact declared by the task's
-`evidence command` / later `evidence: PASS` line. Keep manifests under
+The init command reads the task packet, writes `tasks/workflows/<task-id>.json`
+without overwriting an existing file unless `--force` is passed, and prints the
+task-log marker to record. For a current `doing` task, the starter manifest uses
+`status: in_progress`; before review/done closeout, update it to the closeout
+status and set packet statuses to terminal `integrated` or `cancelled`.
+
+The manifest is cold workflow state, not a replacement for task logs. For
+closeout, it must match the task id and closeout status, describe included and
+excluded scope, list terminal packets, record bounded agent/context/validation
+budgets, name verification commands, identify the lead integration owner/policy,
+and reference existing repo-local evidence artifacts. Each packet's
+`allowed_files` uses the same bounded path rules as the task packet. Evidence
+refs must include the machine artifact declared by the task's `evidence command`
+/ later `evidence: PASS` line. Keep manifests under
 `tasks/workflows/<task-id>*.json`; keep compact machine evidence under
 `tasks/evidence/`.
 

@@ -12,6 +12,7 @@
 //   node tools/taskboard/cli.mjs subagent-packet-template|subagent-template
 //   node tools/taskboard/cli.mjs subagent-packet-check|subagent-check --file packet.txt|--text "..." [--json]
 //   node tools/taskboard/cli.mjs orchestration-workflow-template [--task-id T0001] [--json]
+//   node tools/taskboard/cli.mjs orchestration-workflow-init <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--status review] [--packet-status integrated] [--output tasks/workflows/T0001.json] [--write] [--force] [--json]
 //   node tools/taskboard/cli.mjs orchestration-workflow-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
 //   node tools/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
 //   node tools/taskboard/cli.mjs orchestration-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
@@ -24,13 +25,14 @@ import {
   updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
   subagentPacketTemplate, subagentPacketProblem, orchestrationWorkflowTemplate,
+  orchestrationWorkflowInitPayload,
   orchestrationPreflightProblem, orchestrationWorkflowManifestProblem,
   parseDoc, currentDoingOrchestrationTaskIds,
   isMachineEvidenceCommand, isBoundedOrchestrationAllowedFiles,
   DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
-import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
@@ -242,6 +244,19 @@ function readSubagentPacketArg(args) {
     return readFileSync(file, "utf8");
   }
   fail("usage: subagent-packet-check --file packet.txt|--text \"...\" [--json]");
+}
+
+function workflowOutputPath(taskId, args) {
+  const requested = typeof args.output === "string" && args.output.trim()
+    ? args.output.trim()
+    : `tasks/workflows/${taskId}.json`;
+  if (!requested.toLowerCase().endsWith(".json")) fail("--output must be a .json path");
+  const file = isAbsolute(requested) ? resolve(requested) : resolve(root, requested);
+  const rel = relative(root, file);
+  if (rel.startsWith("..") || isAbsolute(rel)) fail("--output must be inside the repository root");
+  const normalized = rel.replaceAll("\\", "/");
+  if (!/^tasks\/workflows\/T\d+[^/]*\.json$/i.test(normalized)) fail("--output must be under tasks/workflows/T*.json");
+  return { file, rel };
 }
 
 function readTaskForOrchestrationCheck(args) {
@@ -567,6 +582,62 @@ switch (cmd) {
     }
     break;
   }
+  case "orchestration-workflow-init": {
+    let doc;
+    try {
+      doc = readTaskForOrchestrationCheck(args);
+    } catch (error) {
+      if (isSelectorProblem(error)) {
+        if (args.json) {
+          writeJson({
+            ok: false,
+            file: null,
+            problem: error,
+          });
+          process.exit(1);
+        }
+        fail(error.message);
+      }
+      throw error;
+    }
+    const manifest = orchestrationWorkflowInitPayload(doc, {
+      status: typeof args.status === "string" ? args.status.trim() : "",
+      packetStatus: typeof args["packet-status"] === "string" ? args["packet-status"].trim() : "",
+    });
+    const output = workflowOutputPath(doc.fields?.id || manifest.task_id, args);
+    const exists = existsSync(output.file);
+    if (args.write && exists && !args.force) {
+      const problem = {
+        code: "workflow_manifest_exists",
+        path: output.rel,
+        message: `workflow manifest already exists: ${output.rel}; pass --force to overwrite`,
+      };
+      if (args.json) {
+        writeJson({ ok: false, path: output.rel, manifest, problem });
+        process.exit(1);
+      }
+      fail(problem.message);
+    }
+    if (args.write) {
+      mkdirSync(dirname(output.file), { recursive: true });
+      writeFileSync(output.file, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    }
+    const payload = {
+      ok: true,
+      wrote: Boolean(args.write),
+      path: output.rel,
+      log_line: `- workflow manifest: ${output.rel.replaceAll("\\", "/")}`,
+      manifest,
+    };
+    if (args.json) {
+      writeJson(payload);
+    } else {
+      console.log(args.write ? `wrote ${output.rel}` : `would write ${output.rel}`);
+      console.log(payload.log_line);
+      console.log(JSON.stringify(manifest, null, 2));
+    }
+    break;
+  }
   case "orchestration-workflow-check": {
     let doc;
     try {
@@ -793,7 +864,7 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|subagent-packet-template|subagent-template|subagent-packet-check|subagent-check|orchestration-workflow-template|orchestration-workflow-check|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
+    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|subagent-packet-template|subagent-template|subagent-packet-check|subagent-check|orchestration-workflow-template|orchestration-workflow-init|orchestration-workflow-check|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
     process.exit(cmd ? 1 : 0);
 }
 

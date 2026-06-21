@@ -275,6 +275,51 @@ export function orchestrationWorkflowTemplate(taskId = "T0000") {
   };
 }
 
+export function orchestrationWorkflowInitPayload(doc, options = {}) {
+  const taskId = String(doc?.fields?.id || "T0000");
+  const log = sectionText(doc?.body || "", "Log");
+  const block = orchestrationUsedBlocks(log)[0] || "";
+  const taskStatus = String(doc?.fields?.status || "");
+  const status = options.status || (taskStatus === "doing" ? "in_progress" : taskStatus || "in_progress");
+  const allowedText = fieldValue(block, ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN);
+  const allowedFiles = splitBoundedList(allowedText);
+  const evidenceRefs = machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN))
+    .map((signature) => signature.artifact_path)
+    .filter(Boolean);
+  const refs = evidenceRefs.length ? evidenceRefs : [`tasks/evidence/${taskId}-status-rollup.json`];
+  const terminal = ["review", "done"].includes(status);
+  return {
+    ...orchestrationWorkflowTemplate(taskId),
+    task_id: taskId,
+    status,
+    objective: fieldValue(block, /\bobjective\b/i) || sectionText(doc?.body || "", "What") || "Describe the workflow objective.",
+    scope: {
+      included: allowedFiles.length ? allowedFiles : ["repo-local files or task scope"],
+      excluded: ["files and systems outside the declared allowed files"],
+    },
+    packets: [
+      {
+        id: "lead-implementation",
+        objective: fieldValue(block, /\bexpected output\b/i) || "Implement and verify the orchestration task.",
+        status: options.packetStatus || (terminal ? "integrated" : "planned"),
+        allowed_files: allowedFiles.length ? allowedFiles : ["tools/taskboard/lib.mjs"],
+        evidence_refs: refs,
+      },
+    ],
+    verification: {
+      strategy: "machine gates plus independent review",
+      commands: ["node tools/taskboard/cli.mjs validate --json"],
+      evidence_refs: refs,
+    },
+    integration: {
+      owner: "lead",
+      policy: "Lead integrates subagent findings, updates packet statuses before closeout, and keeps manifest refs tied to the machine evidence artifact.",
+    },
+    evidence_refs: refs,
+    updated_at: todayStamp(),
+  };
+}
+
 export function orchestrationPreflightProblem(doc) {
   const log = sectionText(doc.body || "", "Log");
   const missing = missingOrchestrationFields(log, {
@@ -986,7 +1031,7 @@ function workflowManifestContentProblem(manifest, expectedTaskId = "", expectedS
   if (manifest.kind !== "orchestration-workflow") return "workflow manifest kind";
   if (!/^T\d+$/i.test(String(manifest.task_id || ""))) return "workflow manifest task id";
   if (expectedTaskId && String(manifest.task_id || "").toUpperCase() !== String(expectedTaskId).toUpperCase()) return "workflow manifest task mismatch";
-  if (expectedStatus && String(manifest.status || "") !== String(expectedStatus)) return "workflow manifest status mismatch";
+  if (expectedStatus && !workflowStatusMatches(manifest.status, expectedStatus)) return "workflow manifest status mismatch";
   if (!hasText(manifest.objective)) return "workflow manifest objective";
   if (!["planned", "in_progress", "review", "done", "blocked"].includes(String(manifest.status || ""))) return "workflow manifest status";
   if (!nonEmptyStringArray(manifest.scope?.included)) return "workflow manifest scope";
@@ -1001,7 +1046,10 @@ function workflowManifestContentProblem(manifest, expectedTaskId = "", expectedS
     if (!hasText(packet.id) || !hasText(packet.objective)) return "workflow manifest packet";
     if (packetIds.has(packet.id)) return "workflow manifest packet duplicate";
     packetIds.add(packet.id);
-    if (!["integrated", "cancelled"].includes(String(packet.status || ""))) return "workflow manifest packet status";
+    const packetStatuses = ["review", "done"].includes(String(expectedStatus || ""))
+      ? ["integrated", "cancelled"]
+      : ["planned", "in_progress", "integrated", "cancelled"];
+    if (!packetStatuses.includes(String(packet.status || ""))) return "workflow manifest packet status";
     if (!nonEmptyStringArray(packet.allowed_files)) return "workflow manifest packet";
     if (boundedAllowedFilesProblem(packet.allowed_files.join("; "))) return "workflow manifest packet allowed files";
     const packetEvidenceProblem = repoLocalExistingRefsProblem(packet.evidence_refs, root);
@@ -1025,6 +1073,20 @@ function evidenceRefsInclude(refs, requiredRefs = []) {
   if (required.length === 0) return true;
   const actual = new Set((Array.isArray(refs) ? refs : []).map(normalizeMachineEvidenceValue).filter(Boolean));
   return required.every((ref) => actual.has(ref));
+}
+
+function workflowStatusMatches(manifestStatus, expectedStatus) {
+  const actual = String(manifestStatus || "");
+  const expected = String(expectedStatus || "");
+  if (expected === "doing") return actual === "in_progress";
+  return actual === expected;
+}
+
+function splitBoundedList(text) {
+  return String(text || "")
+    .split(/[;,]/)
+    .map((entry) => entry.trim().replace(/^[`'"]+|[`'"]+$/g, ""))
+    .filter(Boolean);
 }
 
 function repoLocalExistingRefsProblem(refs, root) {

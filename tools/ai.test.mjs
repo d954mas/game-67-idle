@@ -653,6 +653,46 @@ test("subagent-check alias forwards structured validation", () => {
   assert.equal(parsed.problem.code, "subagent_packet_invalid");
 });
 
+test("orchestration-workflow-init forwards dry-run", () => {
+  const dir = tempDir();
+  try {
+    writeTaskFile(dir, "T0091", `## What
+
+Validate workflow init through the AI facade.
+
+## Done when
+
+- [ ] workflow init dry-run passes
+
+## Open questions
+
+## Log
+
+- orchestration: used
+  objective: verify workflow init forwarding
+  allowed files: tools/ai.mjs; tools/taskboard/cli.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: facade forwards workflow init
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json
+  stop condition: json output is ok
+  independent reviewer: reviewed facade forwarding
+`);
+
+    const result = run(["orchestration-workflow-init", "T0091", "--json"], {
+      env: { ...process.env, TASKBOARD_ROOT: dir },
+    });
+
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.wrote, false);
+    assert.equal(parsed.manifest.status, "in_progress");
+    assert.deepEqual(parsed.manifest.evidence_refs, ["tasks/evidence/status.json"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 function bootstrapArgs(overrides = {}) {
   const values = {
     title: "Facade bootstrap",

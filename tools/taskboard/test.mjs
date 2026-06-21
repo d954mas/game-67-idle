@@ -11,7 +11,7 @@ import {
   listEpics, updateDoc, findDoc, validateStore, validateStoreDetailed,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate, orchestrationPreflightProblem,
   subagentPacketTemplate, subagentPacketProblem,
-  orchestrationWorkflowTemplate,
+  orchestrationWorkflowTemplate, orchestrationWorkflowInitPayload,
   DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
 
@@ -2717,6 +2717,117 @@ test("cli orchestration-workflow-check accepts valid manifest", (t) => {
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.ok, true);
   assert.equal(parsed.problem, null);
+});
+
+test("orchestration workflow init payload uses task packet fields", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0091",
+    title: "Pipeline workflow init",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: create starter workflow manifest
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: workflow manifest is initialized
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed manifest init`));
+  const doc = findDoc(root, "T0091");
+  const manifest = orchestrationWorkflowInitPayload(doc);
+
+  assert.equal(manifest.task_id, "T0091");
+  assert.equal(manifest.status, "in_progress");
+  assert.equal(manifest.objective, "create starter workflow manifest");
+  assert.deepEqual(manifest.scope.included, ["tools/taskboard/lib.mjs", "tools/taskboard/test.mjs"]);
+  assert.equal(manifest.packets[0].status, "planned");
+  assert.deepEqual(manifest.evidence_refs, ["tasks/evidence/status.json"]);
+});
+
+test("cli orchestration-workflow-init dry-run does not write", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0091",
+    title: "Pipeline workflow init",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: create starter workflow manifest
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: workflow manifest is initialized
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed manifest init`));
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-workflow-init", "T0091", "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.wrote, false);
+  assert.equal(parsed.path, "tasks\\workflows\\T0091.json");
+  assert.equal(existsSync(join(root, "tasks", "workflows", "T0091.json")), false);
+});
+
+test("cli orchestration-workflow-init writes and refuses existing file", (t) => {
+  const root = tempRoot(t);
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0091",
+    title: "Pipeline workflow init",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: create starter workflow manifest
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: workflow manifest is initialized
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed manifest init`));
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const first = spawnSync(process.execPath, [cli, "orchestration-workflow-init", "T0091", "--write", "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.equal(first.status, 0, first.stderr || first.stdout);
+  assert.equal(JSON.parse(first.stdout).wrote, true);
+  assert.equal(existsSync(join(root, "tasks", "workflows", "T0091.json")), true);
+
+  const second = spawnSync(process.execPath, [cli, "orchestration-workflow-init", "T0091", "--write", "--json"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(second.status, 0);
+  const parsed = JSON.parse(second.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "workflow_manifest_exists");
+});
+
+test("cli orchestration-workflow-init starter can pass workflow-check while doing", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0091",
+    title: "Pipeline workflow init",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: create starter workflow manifest
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: workflow manifest is initialized
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed manifest init
+- workflow manifest: tasks/workflows/T0091.json`));
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const init = spawnSync(process.execPath, [cli, "orchestration-workflow-init", "T0091", "--write", "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(init.status, 0, init.stderr || init.stdout);
+
+  const check = spawnSync(process.execPath, [cli, "orchestration-workflow-check", "T0091", "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(check.status, 0, check.stderr || check.stdout);
+  assert.equal(JSON.parse(check.stdout).problem, null);
 });
 
 test("validateStore accepts valid dual-source status artifact for T0080+ evidence", (t) => {
