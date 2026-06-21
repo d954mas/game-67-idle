@@ -646,6 +646,23 @@ test("orchestration-bootstrap forwards taskboard bootstrap", () => {
   }
 });
 
+test("orchestration-bootstrap --help forwards taskboard usage", () => {
+  const result = run(["orchestration-bootstrap", "--help"]);
+  const direct = spawnSync(process.execPath, ["tools/taskboard/cli.mjs", "orchestration-bootstrap", "--help"], {
+    cwd: root,
+    encoding: "utf8",
+    shell: false,
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(direct.status, 0, direct.stderr || direct.stdout);
+  assert.equal(result.stderr, "");
+  assert.equal(result.stdout, direct.stdout);
+  assert.match(result.stdout, /usage: node tools\/taskboard\/cli\.mjs orchestration-bootstrap/);
+  assert.match(result.stdout, /--independent-reviewer/);
+  assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check --current --json/);
+});
+
 test("orchestration-bootstrap forwards missing argument failures", () => {
   const dir = tempDir();
   try {

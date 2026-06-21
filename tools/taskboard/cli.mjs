@@ -156,6 +156,24 @@ function bootstrapAllowedFilesProblem(value) {
   };
 }
 
+function orchestrationBootstrapUsage() {
+  return `usage: node tools/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
+
+Creates one current \`doing\` pipeline/orchestration task with a complete packet.
+
+Required:
+  --title                 Short task title.
+  --objective             Bounded work objective.
+  --allowed-files         Repo-local files or bounded patterns, separated by comma or semicolon.
+  --expected-output       Concrete output the task must produce.
+  --evidence-command      Machine orchestration evidence command.
+  --stop-condition        Validation and closeout condition.
+  --independent-reviewer  Reviewer/verifier plan.
+
+After creation:
+  node tools/ai.mjs orchestration-check --current --json`;
+}
+
 function orchestrationBootstrapBody(args) {
   return `## What
 
@@ -493,6 +511,10 @@ switch (cmd) {
     break;
   }
   case "orchestration-bootstrap": {
+    if (args.help === true || args.h === true) {
+      console.log(orchestrationBootstrapUsage());
+      break;
+    }
     const missingArgs = missingBootstrapArgs(args);
     if (missingArgs.length) {
       const problem = bootstrapMissingProblem(missingArgs);

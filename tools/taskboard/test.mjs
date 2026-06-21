@@ -2831,6 +2831,19 @@ function bootstrapArgs(overrides = {}) {
   return Object.entries(values).flatMap(([key, value]) => value === undefined ? [] : [`--${key}`, value]);
 }
 
+test("cli orchestration-bootstrap --help prints usage without requiring task args", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-bootstrap", "--help"], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(result.stderr, "");
+  assert.match(result.stdout, /usage: node tools\/taskboard\/cli\.mjs orchestration-bootstrap/);
+  assert.match(result.stdout, /--allowed-files/);
+  assert.match(result.stdout, /--evidence-command/);
+  assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check --current --json/);
+});
+
 test("cli orchestration-bootstrap creates a current preflight-valid task", (t) => {
   const root = tempRoot(t);
   const cli = join(import.meta.dirname, "cli.mjs");
