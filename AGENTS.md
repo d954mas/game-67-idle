@@ -4,15 +4,14 @@
 
 - Focus: clean AI-first native game seed.
 - Active game concept: none.
-- Closed prototype: `Ember Road` (ember-road) is archived as evidence/history;
-  do not continue its gameplay, visual, UX, asset, or runtime implementation
-  unless the lead explicitly reopens it.
+- Closed prototype: `Ember Road` (ember-road) is archived; do not continue its
+  gameplay, visual, UX, asset, or runtime work unless lead reopens it.
 - Engine: `external/neotolis-engine`; public APIs only.
 
 ## Project
 
-- Active game concept: none. Keep the repo focused on the reusable AI-first
-  native game seed and pipeline until a new game is explicitly started.
+- Active game concept: none. Focus on the reusable AI-first native game seed
+  and pipeline until a new game is explicitly started.
 
 ## Map
 
@@ -34,9 +33,8 @@
 - Game/world/UI logic is Y-up. Convert Y-down platform/input only at boundary.
 - Product/playable visuals use engine fonts/text renderer;
   handmade pixel/shape `draw_text` is debug-only.
-- Active game builds keep the UI font in a generated runtime pack. Game-specific
-  pack requirements belong to the active concept and should be removed or
-  archived when that concept is closed.
+- Active game builds keep the UI font in a generated runtime pack; remove or
+  archive game-specific pack rules when that concept closes.
 - Important visuals use real legal assets early; debug/procedural
   placeholders are temporary debug only.
 - Downloaded/shared assets need license, provenance, integrity before import.
@@ -48,6 +46,7 @@
 - Substantial work loads taskboard context, one task/evidence file, one skill.
 - Skip archives, logs, broad design, builds, generated files unless linked.
 - Context budget cleanup/validation is request/review-only, not a dev gate.
+- Subagents need bounded packets; main agent owns integration/status/validation.
 
 ## Game Work
 

@@ -56,5 +56,11 @@ evidence files, or final reports, not hot instruction files.
 Profiling needs no work-loop step: the PostToolUse hook records every tool call
 automatically. Review a session with `node tools/ai.mjs status`.
 
-Use multiple agents only for independent side work with clear owner, artifact,
-evidence, and boundary. The main integrator owns merge, validation, and status.
+## Subagents
+
+For substantial work, use subagents for independent research, exploration,
+disjoint edits, generation, review, or verification. The main agent remains
+orchestrator/integrator and owns task/status, hot files, validation, and commits.
+
+Load `docs/ai-pipeline/subagent-protocol.md` for packet schema, ownership,
+handoff fields, review rules, and context-budget decisions.
