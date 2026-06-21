@@ -10,6 +10,7 @@ import {
   parseDoc, serializeDoc, slugify, createTask, createEpic, listTasks,
   listEpics, updateDoc, findDoc, validateStore, validateStoreDetailed,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate, orchestrationPreflightProblem,
+  DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
 
 function tempRoot(t) {
@@ -1610,9 +1611,7 @@ test("cli orchestration-template prints accepted packet shape", () => {
   assert.match(result.stdout, /^- orchestration: used/m);
   assert.match(result.stdout, /objective: <non-empty>/);
   assert.match(result.stdout, /allowed files: <non-empty>/);
-  assert.match(result.stdout, /tool-use guard: exact paths or discovery/);
-  assert.match(result.stdout, /Select-Object -Skip\/-First/);
-  assert.match(result.stdout, /trace commands need an evidence source and --json-output/);
+  assert.ok(result.stdout.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
   assert.match(result.stdout, /expected output: <non-empty>/);
   assert.match(result.stdout, /evidence command: <non-empty>/);
   assert.match(result.stdout, /stop condition: <non-empty>/);
@@ -1654,7 +1653,7 @@ test("cli orchestration-bootstrap creates a current preflight-valid task", (t) =
   assert.ok(doc);
   assert.match(doc.body, /objective: verify bootstrap command/);
   assert.match(doc.body, /allowed files: tools\/taskboard\/cli\.mjs/);
-  assert.match(doc.body, /tool-use guard: exact paths\/discovery before reads/);
+  assert.ok(doc.body.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
   assert.match(doc.body, /evidence command: node tools\/ai\.mjs status --agent-rollup/);
 
   const check = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });

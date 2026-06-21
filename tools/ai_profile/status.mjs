@@ -13,7 +13,7 @@ import {
   todaySessionProfiles,
 } from "./profile_lib.mjs";
 import { buildOrchestrationTrace, buildTrace, todaySessionRoot } from "./orchestration_trace.mjs";
-import { currentDoingOrchestrationTaskIds, findRoot as findTaskboardRoot } from "../taskboard/lib.mjs";
+import { currentDoingOrchestrationTaskIds, DEFAULT_ORCHESTRATION_TOOL_USE_GUARD, findRoot as findTaskboardRoot } from "../taskboard/lib.mjs";
 
 function usage() {
   console.error(`usage:
@@ -869,8 +869,6 @@ function formatCommandArg(value) {
   if (!/\s/.test(text)) return text;
   return `"${text.replaceAll('"', '\\"')}"`;
 }
-
-const DEFAULT_ORCHESTRATION_TOOL_USE_GUARD = "exact paths/discovery before reads; use Select-Object -Skip/-First for line windows; trace/status commands include evidence source and --json-output where applicable";
 
 function currentOrchestrationPreflightGuidance() {
   try {

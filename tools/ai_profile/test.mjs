@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
+import { DEFAULT_ORCHESTRATION_TOOL_USE_GUARD } from "../taskboard/lib.mjs";
 
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -1368,13 +1369,13 @@ test("status clean-tail next action guides task creation when no current preflig
     assert.match(status.next_action, /Recent subagents are clean of classified tool-use failures/);
     assert.match(status.next_action, /create one current task with `node tools\/ai\.mjs orchestration-bootstrap/);
     assert.match(status.next_action, /--objective "\.\.\."/);
-    assert.match(status.next_action, /--tool-use-guard "exact paths\/discovery before reads; use Select-Object -Skip\/-First for line windows; trace\/status commands include evidence source and --json-output where applicable"/);
+    assert.ok(status.next_action.includes(`--tool-use-guard "${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}"`));
     assert.match(status.next_action, /--evidence-command "node tools\/ai\.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent-thread-id"/);
     assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check --current --json/);
     assert.match(result.stdout, /agent tool-usage clean tail: 3 agent\(s\)/);
     assert.match(result.stdout, /Recent subagents are clean of classified tool-use failures/);
     assert.match(result.stdout, /node tools\/ai\.mjs orchestration-bootstrap/);
-    assert.match(result.stdout, /--tool-use-guard "exact paths\/discovery before reads; use Select-Object -Skip\/-First for line windows; trace\/status commands include evidence source and --json-output where applicable"/);
+    assert.ok(result.stdout.includes(`--tool-use-guard "${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}"`));
     assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check --current --json/);
   } finally {
     cleanup(dir);
@@ -1474,6 +1475,7 @@ test("status clean-tail next action ignores non-current or non-orchestration tas
     ], { env: { TASKBOARD_ROOT: dir } });
     const status = readJson(statusJson);
     assert.match(status.next_action, /node tools\/ai\.mjs orchestration-bootstrap/);
+    assert.ok(status.next_action.includes(`--tool-use-guard "${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}"`));
     assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check --current --json/);
     assert.doesNotMatch(status.next_action, /orchestration-check T1234 --json/);
     assert.doesNotMatch(status.next_action, /orchestration-check T1235 --json/);

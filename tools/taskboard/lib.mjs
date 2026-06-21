@@ -14,6 +14,7 @@ export { LIVE_STATUS_MAX_CHARS };
 export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done", "dropped"];
 export const EPIC_STATUSES = ["idea", "active", "done", "dropped"];
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
+export const DEFAULT_ORCHESTRATION_TOOL_USE_GUARD = "exact paths/discovery before reads; use Select-Object -Skip/-First for line windows; trace/status commands include evidence source and --json-output where applicable";
 
 const ORCHESTRATION_REVIEW_STATUSES = new Set(["review", "done"]);
 // T0028 introduced the mechanical guard; older archives keep their legacy logs.
@@ -62,7 +63,7 @@ const ORCHESTRATION_EVIDENCE_FIELD_PATTERN = /\b(?:evidence command|evidence art
 const ORCHESTRATION_PACKET_TEMPLATE = `- orchestration: used
   objective: <non-empty>
   allowed files: <non-empty>
-  tool-use guard: exact paths or discovery (rg --files/Test-Path) before reads; use Select-Object -Skip/-First for ranges; trace commands need an evidence source and --json-output
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
   expected output: <non-empty>
   evidence command: <non-empty>
   stop condition: <non-empty>

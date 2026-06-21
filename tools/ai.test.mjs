@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
+import { DEFAULT_ORCHESTRATION_TOOL_USE_GUARD } from "./taskboard/lib.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -562,7 +563,7 @@ test("orchestration-template forwards taskboard template", () => {
   assert.equal(direct.status, 0, direct.stderr || direct.stdout);
   assert.equal(result.stdout, direct.stdout);
   assert.match(result.stdout, /- orchestration: used/);
-  assert.match(result.stdout, /tool-use guard:/);
+  assert.match(result.stdout, new RegExp(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
   assert.match(result.stdout, /evidence command:/);
   assert.match(result.stdout, /independent reviewer:/);
 });

@@ -20,7 +20,7 @@ import {
   updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
   orchestrationPreflightProblem, parseDoc, currentDoingOrchestrationTaskIds,
-  isMachineEvidenceCommand,
+  isMachineEvidenceCommand, DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
@@ -89,7 +89,6 @@ const ORCHESTRATION_BOOTSTRAP_REQUIRED_ARGS = [
   "stop-condition",
   "independent-reviewer",
 ];
-const DEFAULT_ORCHESTRATION_TOOL_USE_GUARD = "exact paths/discovery before reads; use Select-Object -Skip/-First for line windows; trace/status commands include evidence source and --json-output where applicable";
 
 function currentSelectorProblem(code, message, ids = [], nextAction = CURRENT_PREFLIGHT_NEXT_ACTION) {
   return {
