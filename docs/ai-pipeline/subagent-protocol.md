@@ -78,6 +78,13 @@ product/visual, or asset changes. A reviewer should check evidence, scope
 creep, missing tests, context-budget risk, and contradictions with current
 policy.
 
+## Task Start Guard
+
+New substantial pipeline/orchestration tasks cannot enter or remain in `doing`
+without a complete preflight packet. This is a start gate only: it requires
+bounded scope, tool-use guard, expected output, evidence command, stop
+condition, and reviewer plan, but it does not require a later `PASS` line.
+
 ## Task Closeout Guard
 
 Substantial pipeline/orchestration tasks cannot move to `review` or `done`

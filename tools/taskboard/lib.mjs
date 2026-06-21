@@ -26,6 +26,7 @@ const ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID = 28;
 const ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID = 31;
 const ORCHESTRATION_ALLOWED_FILES_BOUNDS_MIN_TASK_ID = 76;
 const ORCHESTRATION_TRACE_ARTIFACT_MIN_TASK_ID = 77;
+const ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID = 78;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
   "orchestration",
@@ -338,9 +339,14 @@ export function createTask(root, input = {}) {
     created: todayStamp(),
     updated: todayStamp(),
   };
+  const body = input.body || TASK_BODY_TEMPLATE;
+  const problem = orchestrationStartPreflightProblem({ kind: "task", file: "", fields, body });
+  if (problem) {
+    throw validationError(problem);
+  }
   const file = join(dir, `${id}-${slugify(fields.title)}.md`);
-  writeFileSync(file, serializeDoc(fields, input.body || TASK_BODY_TEMPLATE));
-  return { kind: "task", file, fields, body: input.body || TASK_BODY_TEMPLATE };
+  writeFileSync(file, serializeDoc(fields, body));
+  return { kind: "task", file, fields, body };
 }
 
 export function createEpic(root, input = {}) {
@@ -388,6 +394,12 @@ export function updateDoc(root, id, patch = {}) {
   }
   fields.updated = todayStamp();
   const body = patch.body !== undefined ? patch.body : doc.body;
+  if (requiresOrchestrationStartPreflightGuard(doc, fields)) {
+    const problem = orchestrationStartPreflightProblem({ ...doc, fields, body });
+    if (problem) {
+      throw validationError(problem);
+    }
+  }
   if (requiresOrchestrationTransitionGuard(doc, fields)) {
     const problem = orchestrationEvidenceProblem({ ...doc, fields, body }, root);
     if (problem) {
@@ -464,6 +476,12 @@ export function validateStoreDetailed(root) {
     if (isActionableTask(t) && !hasActionableTaskBody(t.body)) {
       problems.push(genericProblem(`${t.fields.id}: actionable task needs non-empty What and Done when sections`, { taskId: t.fields.id }));
     }
+    if (t.fields.status === "doing") {
+      const problem = orchestrationStartPreflightProblem(t);
+      if (problem) {
+        problems.push(problem);
+      }
+    }
     if (ORCHESTRATION_REVIEW_STATUSES.has(t.fields.status)) {
       const problem = orchestrationEvidenceProblem(t, root);
       if (problem) {
@@ -491,6 +509,34 @@ function requiresOrchestrationTransitionGuard(doc, fields) {
     doc.fields.status !== fields.status &&
     ORCHESTRATION_REVIEW_STATUSES.has(fields.status)
   );
+}
+
+function requiresOrchestrationStartPreflightGuard(doc, fields) {
+  return doc.kind === "task" && doc.fields.status !== fields.status && fields.status === "doing";
+}
+
+function orchestrationStartPreflightProblem(doc) {
+  if (
+    doc.kind !== "task"
+    || doc.fields.status !== "doing"
+    || !requiresOrchestrationStartPreflight(doc)
+    || !isSubstantialOrchestrationTask(doc)
+  ) {
+    return null;
+  }
+  const log = sectionText(doc.body, "Log");
+  if (hasSmallScopeOrchestrationException(log)) {
+    return null;
+  }
+  const problem = orchestrationPreflightProblem(doc);
+  if (!problem) {
+    return null;
+  }
+  return {
+    ...problem,
+    code: "orchestration_start_preflight_missing",
+    message: `${doc.fields.id}: substantial pipeline/orchestration task needs orchestration preflight before doing (missing/invalid: ${problem.missingFields.join(", ")})`,
+  };
 }
 
 function orchestrationEvidenceProblem(doc, root = "") {
@@ -903,6 +949,11 @@ function requiresOrchestrationAllowedFilesBounds(doc) {
 function requiresOrchestrationTraceArtifact(doc) {
   const match = String(doc.fields.id || "").match(/^T(\d+)$/);
   return match ? Number(match[1]) >= ORCHESTRATION_TRACE_ARTIFACT_MIN_TASK_ID : true;
+}
+
+function requiresOrchestrationStartPreflight(doc) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID : true;
 }
 
 function fieldValue(text, fieldPattern) {

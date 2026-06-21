@@ -97,6 +97,17 @@ function passingSessionTrace(session = "tmp/session.jsonl") {
   };
 }
 
+function startPreflightLog() {
+  return `- orchestration: used
+  objective: verify orchestration preflight before work starts
+  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused taskboard tests
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  stop condition: taskboard tests pass
+  independent reviewer: reviewed start preflight scope`;
+}
+
 test("frontmatter roundtrip preserves fields and body", () => {
   const fields = {
     id: "T0001",
@@ -745,6 +756,106 @@ test("validateStore reports active review task missing orchestration evidence", 
     problems.some((p) => p.includes("T0001: substantial pipeline/orchestration task needs orchestration evidence")),
     problems.join("; "),
   );
+});
+
+test("validateStore reports T0078 doing task missing orchestration preflight", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0078",
+    title: "Taskboard pipeline start guard",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog("- 2026-06-21: Started without a preflight packet."));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].code, "orchestration_start_preflight_missing");
+  assert.deepEqual(problems[0].missingFields, ["orchestration: used packet"]);
+  assert.match(problems[0].message, /needs orchestration preflight before doing/);
+});
+
+test("updateDoc rejects T0078 transition into doing without orchestration preflight", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0078",
+    title: "Taskboard pipeline start guard",
+    status: "todo",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog("- 2026-06-21: Ready to start."));
+
+  assert.throws(
+    () => updateDoc(root, "T0078", { fields: { status: "doing" } }),
+    /needs orchestration preflight before doing/,
+  );
+});
+
+test("createTask rejects generated T0078 doing task without orchestration preflight", (t) => {
+  const root = tempRoot(t);
+  for (let i = 0; i < 77; i += 1) {
+    createTask(root, { title: `Seed ${i + 1}`, status: "idea" });
+  }
+
+  assert.throws(
+    () => createTask(root, {
+      title: "Taskboard pipeline start guard",
+      status: "doing",
+      tags: ["pipeline", "orchestration"],
+      body: taskBodyWithLog("- 2026-06-21: Started without a preflight packet."),
+    }),
+    /needs orchestration preflight before doing/,
+  );
+});
+
+test("validateStore accepts T0078 doing task with orchestration preflight but no PASS evidence", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0078",
+    title: "Taskboard pipeline start guard",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(startPreflightLog()));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore preserves pre-T0078 doing task compatibility", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0077",
+    title: "Taskboard pipeline legacy start",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog("- 2026-06-21: Legacy task started before the start preflight gate."));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("updateDoc preserves pre-T0078 transition into doing compatibility", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0077",
+    title: "Taskboard pipeline legacy start",
+    status: "todo",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog("- 2026-06-21: Legacy task is ready to start."));
+
+  const updated = updateDoc(root, "T0077", { fields: { status: "doing" } });
+  assert.equal(updated.fields.status, "doing");
+});
+
+test("validateStore keeps T0078 review closeout stricter than start preflight", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0078",
+    title: "Taskboard pipeline review guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(startPreflightLog()));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].code, "orchestration_evidence_missing");
+  assert.deepEqual(problems[0].missingFields, ["machine evidence pass"]);
 });
 
 test("validateStoreDetailed reports structured orchestration problem", (t) => {
@@ -1586,6 +1697,29 @@ test("cli validate --json reports parseable orchestration fields", (t) => {
   assert.match(parsed.problems[0].template, /objective: <non-empty>/);
 });
 
+test("cli validate --json reports parseable orchestration start preflight fields", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0078",
+    title: "Pipeline start without preflight",
+    status: "doing",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog("- 2026-06-21: Ready to start without packet."));
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "validate", "--json"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.doesNotMatch(result.stdout, /^problem:/m);
+  assert.doesNotMatch(result.stdout, /^hint:/m);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problems[0].code, "orchestration_start_preflight_missing");
+  assert.equal(parsed.problems[0].taskId, "T0078");
+  assert.equal(parsed.problems[0].status, "doing");
+  assert.deepEqual(parsed.problems[0].missingFields, ["orchestration: used packet"]);
+  assert.match(parsed.problems[0].nextAction, /orchestration-template/);
+  assert.match(parsed.problems[0].nextAction, /orchestration-check T0078 --json/);
+});
+
 test("cli set --json reports structured transition failure", (t) => {
   const root = tempRoot(t);
   createTask(root, {
@@ -1601,6 +1735,26 @@ test("cli set --json reports structured transition failure", (t) => {
   assert.equal(parsed.problem.code, "orchestration_evidence_missing");
   assert.equal(parsed.problem.taskId, "T0001");
   assert.deepEqual(parsed.problem.missingFields, ["orchestration: used packet"]);
+});
+
+test("cli set --json reports structured start preflight transition failure", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(root, {
+    id: "T0078",
+    title: "Pipeline start without preflight",
+    status: "todo",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog("- 2026-06-21: Ready to start without packet."));
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "set", "T0078", "--status", "doing", "--json"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "orchestration_start_preflight_missing");
+  assert.equal(parsed.problem.taskId, "T0078");
+  assert.equal(parsed.problem.status, "doing");
+  assert.deepEqual(parsed.problem.missingFields, ["orchestration: used packet"]);
+  assert.match(parsed.problem.nextAction, /orchestration-check T0078 --json/);
 });
 
 test("cli orchestration-check passes complete preflight packet without PASS evidence", (t) => {
@@ -2072,6 +2226,34 @@ test("cli orchestration-bootstrap creates a current preflight-valid task", (t) =
   const check = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
   assert.equal(check.status, 0, check.stderr || check.stdout);
   assert.equal(JSON.parse(check.stdout).problem, null);
+});
+
+test("cli orchestration-bootstrap creates T0078 current task that passes start preflight validation", (t) => {
+  const root = tempRoot(t);
+  for (let i = 0; i < 77; i += 1) {
+    createTask(root, { title: `Seed ${i + 1}`, status: "dropped" });
+  }
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [
+    cli,
+    "orchestration-bootstrap",
+    ...bootstrapArgs({ tags: "taskboard" }),
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.doc.id, "T0078");
+  assert.equal(parsed.doc.status, "doing");
+
+  const check = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(check.status, 0, check.stderr || check.stdout);
+  assert.equal(JSON.parse(check.stdout).problem, null);
+
+  const validate = spawnSync(process.execPath, [cli, "validate", "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(validate.status, 0, validate.stderr || validate.stdout);
+  assert.equal(JSON.parse(validate.stdout).ok, true);
 });
 
 test("cli orchestration-bootstrap rejects missing args without creating tasks", (t) => {
