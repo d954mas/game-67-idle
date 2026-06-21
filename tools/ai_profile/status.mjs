@@ -635,6 +635,37 @@ function renderAgentToolUsageSample(sample) {
   return `- tool-usage: ${agent}${role} ${source}${line} ${sample.command_key}${reason} - ${sample.command}`;
 }
 
+function agentToolUsagePreventionHints(profileRollup, rollupContext = {}) {
+  const reasons = new Set((profileRollup.agent_tool_usage_reasons || []).map((item) => item.reason));
+  const hints = [];
+  if (reasons.has("missing local file/path")) {
+    hints.push({
+      reason: "missing local file/path",
+      hint: "Give subagents exact existing paths or require discovery with `rg --files <scope>` / `Test-Path -LiteralPath <path>` before `Get-Content`.",
+    });
+  }
+  if (reasons.has("invalid shell command/parameter")) {
+    hints.push({
+      reason: "invalid shell command/parameter",
+      hint: "Avoid unsupported PowerShell shapes such as `Format-Hex -Count` and `Select-Object -Index 96..114`; use `Select-Object -Skip <n> -First <n>` for line windows.",
+    });
+  }
+  if (reasons.has("missing orchestration evidence source")) {
+    const command = [
+      "node tools/ai.mjs orchestration-trace",
+      rollupContext.parent_thread_id ? `--parent-thread-id ${formatCommandArg(rollupContext.parent_thread_id)}` : "",
+      rollupContext.session_root ? `--session-root ${formatCommandArg(rollupContext.session_root)}` : "",
+      rollupContext.cwd ? `--cwd ${formatCommandArg(rollupContext.cwd)}` : "",
+      "--json-output tmp/orchestration-trace.json --json",
+    ].filter(Boolean).join(" ");
+    hints.push({
+      reason: "missing orchestration evidence source",
+      hint: `Use an evidence source for orchestration traces: \`${command}\`.`,
+    });
+  }
+  return hints;
+}
+
 function buildAgentProfileRollup(agents, values, parentRecords = []) {
   const profileDir = stringArg(values, "agent-profile-dir", "") || sessionsDir();
   const files = listSessionProfiles(profileDir);
@@ -719,6 +750,7 @@ function buildAgentProfileRollup(agents, values, parentRecords = []) {
     agent_tool_usage_failed_records: failed.agentToolUsage,
     agent_tool_usage_reasons: [...agentToolUsageReasons.entries()].map(([reason, count]) => ({ reason, count })),
     agent_tool_usage_failure_samples: agentToolUsageFailureSamples,
+    agent_tool_usage_prevention_hints: [],
     errors,
     profiles,
     missing,
@@ -761,6 +793,12 @@ function buildAgentRollup(values, parentRecords = []) {
     ? buildOrchestrationTrace({ session: traceSession, sessionRoot, parentThreadId, minAgents, cwd })
     : buildTrace({ sessionRoot, parentThreadId, minAgents, cwd });
   const agents = trace.agents || trace.subagentSessions || [];
+  const profileRollup = buildAgentProfileRollup(agents, values, parentRecords);
+  profileRollup.agent_tool_usage_prevention_hints = agentToolUsagePreventionHints(profileRollup, {
+    parent_thread_id: parentThreadId,
+    session_root: sessionRoot,
+    cwd,
+  });
   return {
     enabled: true,
     ok: trace.ok,
@@ -777,7 +815,7 @@ function buildAgentRollup(values, parentRecords = []) {
     first_agent_ts: agents[0]?.timestamp || "",
     latest_agent_ts: agents[agents.length - 1]?.timestamp || "",
     agents,
-    profile_rollup: buildAgentProfileRollup(agents, values, parentRecords),
+    profile_rollup: profileRollup,
     problems: trace.problems,
   };
 }
@@ -994,6 +1032,9 @@ function renderStatus(status, { verbose }) {
         }
         const hiddenSamples = Math.max(0, profileRollup.agent_tool_usage_failed_records - samples.length);
         if (hiddenSamples > 0) lines.push(`- ... ${hiddenSamples} more agent tool-usage failure(s) not shown`);
+        for (const item of profileRollup.agent_tool_usage_prevention_hints || []) {
+          lines.push(`- prevent ${item.reason}: ${item.hint}`);
+        }
       }
       const agentTimeSinks = profileRollup.command_rollup.by_time.slice(0, 3);
       if (agentTimeSinks.length > 0) {

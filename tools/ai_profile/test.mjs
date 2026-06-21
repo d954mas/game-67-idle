@@ -1173,8 +1173,10 @@ test("status agent rollup separates transcript tool-usage failures from unresolv
       shellOutput("call_missing_path", "Exit code: 1\nWall time: 0.3 seconds\nOutput:\nGet-Content : Cannot find path 'C:\\projects\\game-67-idle\\src\\missing_state.c' because it does not exist.\nFullyQualifiedErrorId : PathNotFound,Microsoft.PowerShell.Commands.GetContentCommand\nItemNotFoundException\n", "2026-06-21T10:00:02.000Z"),
       shellCall("call_bad_trace", "node tools/ai.mjs orchestration-trace --json", "2026-06-21T10:00:03.000Z"),
       shellOutput("call_bad_trace", "Exit code: 1\nWall time: 0.4 seconds\nOutput:\n{\"ok\":false,\"problems\":[\"missing evidence source: pass --session or --parent-thread-id\"]}\n", "2026-06-21T10:00:04.000Z"),
-      shellCall("call_test_fail", "node --test tools/real.test.mjs", "2026-06-21T10:00:05.000Z"),
-      shellOutput("call_test_fail", "Exit code: 1\nWall time: 0.5 seconds\nOutput:\nnot ok 1 real validation failure\n", "2026-06-21T10:00:06.000Z"),
+      shellCall("call_bad_range", "Get-Content docs\\ai-pipeline\\subagent-protocol.md | Select-Object -Index 96..114", "2026-06-21T10:00:05.000Z"),
+      shellOutput("call_bad_range", "Exit code: 1\nWall time: 0.4 seconds\nOutput:\nSelect-Object : Cannot bind parameter 'Index'. Cannot convert value \"96..114\" to type \"System.Int32\".\nFullyQualifiedErrorId : CannotConvertArgumentNoMessage,Microsoft.PowerShell.Commands.SelectObjectCommand\n", "2026-06-21T10:00:06.000Z"),
+      shellCall("call_test_fail", "node --test tools/real.test.mjs", "2026-06-21T10:00:07.000Z"),
+      shellOutput("call_test_fail", "Exit code: 1\nWall time: 0.5 seconds\nOutput:\nnot ok 1 real validation failure\n", "2026-06-21T10:00:08.000Z"),
     ]);
 
     const result = run([
@@ -1189,18 +1191,28 @@ test("status agent rollup separates transcript tool-usage failures from unresolv
     ]);
     const status = readJson(statusJson);
     const profileRollup = status.agent_rollup.profile_rollup;
-    assert.equal(profileRollup.agent_tool_usage_failed_records, 2);
-    assert.equal(profileRollup.agent_tool_usage_failure_samples.length, 2);
+    assert.equal(profileRollup.agent_tool_usage_failed_records, 3);
+    assert.equal(profileRollup.agent_tool_usage_failure_samples.length, 3);
     assert.deepEqual(profileRollup.agent_tool_usage_reasons, [
+      { reason: "invalid shell command/parameter", count: 1 },
       { reason: "missing orchestration evidence source", count: 1 },
       { reason: "missing local file/path", count: 1 },
     ]);
+    assert.deepEqual(profileRollup.agent_tool_usage_prevention_hints.map((item) => item.reason), [
+      "missing local file/path",
+      "invalid shell command/parameter",
+      "missing orchestration evidence source",
+    ]);
     assert.equal(profileRollup.unresolved_failed_records, 1);
     assert.equal(profileRollup.unresolved_failure_samples[0].command, "node --test tools/real.test.mjs");
-    assert.match(result.stdout, /agent tool-usage failures: 2/);
+    assert.match(result.stdout, /agent tool-usage failures: 3/);
     assert.match(result.stdout, /tool-usage: agent-dddddddd-dddd-4ddd-8ddd-dddddddddddd \[test verifier\] transcript:3 Get-Content \(missing local file\/path\)/);
+    assert.match(result.stdout, /prevent missing local file\/path: Give subagents exact existing paths/);
+    assert.match(result.stdout, /prevent invalid shell command\/parameter: Avoid unsupported PowerShell shapes/);
+    assert.match(result.stdout, /prevent missing orchestration evidence source: Use an evidence source/);
+    assert.match(result.stdout, /orchestration-trace --parent-thread-id parent-thread-1 --session-root .* --cwd .* --json-output tmp\/orchestration-trace\.json --json/);
     assert.match(result.stdout, /unresolved agent failures: 1/);
-    assert.match(result.stdout, /unresolved: agent-dddddddd-dddd-4ddd-8ddd-dddddddddddd \[test verifier\] transcript:7 node real\.test\.mjs exit 1/);
+    assert.match(result.stdout, /unresolved: agent-dddddddd-dddd-4ddd-8ddd-dddddddddddd \[test verifier\] transcript:9 node real\.test\.mjs exit 1/);
   } finally {
     cleanup(dir);
   }
