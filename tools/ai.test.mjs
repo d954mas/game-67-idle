@@ -487,6 +487,26 @@ Validate current orchestration packet through the AI facade.
   }
 });
 
+test("orchestration-check forwards current selector JSON failures", () => {
+  const dir = tempDir();
+  try {
+    const result = run(["orchestration-check", "--current", "--json"], {
+      env: { ...process.env, TASKBOARD_ROOT: dir },
+    });
+
+    assert.equal(result.status, 1);
+    assert.equal(result.stderr, "");
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.ok, false);
+    assert.equal(parsed.file, null);
+    assert.equal(parsed.problem.code, "current_task_missing");
+    assert.equal(parsed.problem.selector, "current");
+    assert.deepEqual(parsed.problem.taskIds, []);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("orchestration-template forwards taskboard template", () => {
   const result = run(["orchestration-template"]);
   const direct = spawnSync(process.execPath, ["tools/taskboard/cli.mjs", "orchestration-template"], {

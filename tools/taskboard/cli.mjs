@@ -76,6 +76,19 @@ function writeJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+function currentSelectorProblem(code, message, ids = []) {
+  return {
+    code,
+    selector: "current",
+    taskIds: ids,
+    message,
+  };
+}
+
+function isSelectorProblem(error) {
+  return error && typeof error === "object" && error.selector === "current" && typeof error.message === "string";
+}
+
 function readTaskFileArg(value) {
   const requested = value || fail("usage: orchestration-check <task-id>|--id <task-id>|--file <task.md>|--current");
   const file = isAbsolute(requested) ? resolve(requested) : resolve(root, requested);
@@ -107,14 +120,21 @@ function readTaskForOrchestrationCheck(args) {
   if (args.current) {
     const ids = currentDoingOrchestrationTaskIds(root);
     if (ids.length === 0) {
-      fail("no current doing pipeline/orchestration task; create or set exactly one task to doing first");
+      throw currentSelectorProblem(
+        "current_task_missing",
+        "no current doing pipeline/orchestration task; create or set exactly one task to doing first",
+      );
     }
     if (ids.length > 1) {
-      fail(`multiple current doing pipeline/orchestration tasks: ${ids.join(", ")}; select one explicitly`);
+      throw currentSelectorProblem(
+        "current_task_ambiguous",
+        `multiple current doing pipeline/orchestration tasks: ${ids.join(", ")}; select one explicitly`,
+        ids,
+      );
     }
     const doc = findDoc(root, ids[0]);
     if (!doc || doc.kind !== "task") {
-      fail(`current task ${ids[0]} could not be resolved`);
+      throw currentSelectorProblem("current_task_unresolved", `current task ${ids[0]} could not be resolved`, ids);
     }
     return doc;
   }
@@ -381,7 +401,23 @@ switch (cmd) {
     break;
   }
   case "orchestration-check": {
-    const doc = readTaskForOrchestrationCheck(args);
+    let doc;
+    try {
+      doc = readTaskForOrchestrationCheck(args);
+    } catch (error) {
+      if (isSelectorProblem(error)) {
+        if (args.json) {
+          writeJson({
+            ok: false,
+            file: null,
+            problem: error,
+          });
+          process.exit(1);
+        }
+        fail(error.message);
+      }
+      throw error;
+    }
     const problem = orchestrationPreflightProblem(doc);
     if (args.json) {
       writeJson({

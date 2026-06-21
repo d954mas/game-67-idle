@@ -1434,6 +1434,7 @@ test("cli orchestration-check --current resolves one doing orchestration task", 
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.ok, true);
   assert.equal(parsed.file, `tasks\\active\\${task.fields.id}-current-subagent-packet-preflight.md`);
+  assert.equal(parsed.problem, null);
 });
 
 test("cli orchestration-check --current rejects no current task", (t) => {
@@ -1442,8 +1443,14 @@ test("cli orchestration-check --current rejects no current task", (t) => {
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /no current doing pipeline\/orchestration task/);
-  assert.equal(result.stdout, "");
+  assert.equal(result.stderr, "");
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.file, null);
+  assert.equal(parsed.problem.code, "current_task_missing");
+  assert.equal(parsed.problem.selector, "current");
+  assert.deepEqual(parsed.problem.taskIds, []);
+  assert.match(parsed.problem.message, /no current doing pipeline\/orchestration task/);
 });
 
 test("cli orchestration-check --current rejects multiple current tasks", (t) => {
@@ -1467,8 +1474,49 @@ test("cli orchestration-check --current rejects multiple current tasks", (t) => 
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /multiple current doing pipeline\/orchestration tasks: T0001, T0002/);
+  assert.equal(result.stderr, "");
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.file, null);
+  assert.equal(parsed.problem.code, "current_task_ambiguous");
+  assert.equal(parsed.problem.selector, "current");
+  assert.deepEqual(parsed.problem.taskIds, ["T0001", "T0002"]);
+  assert.match(parsed.problem.message, /multiple current doing pipeline\/orchestration tasks: T0001, T0002/);
+});
+
+test("cli orchestration-check --current keeps non-json selector failures on stderr", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current"], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
   assert.equal(result.stdout, "");
+  assert.match(result.stderr, /error: no current doing pipeline\/orchestration task/);
+});
+
+test("cli orchestration-check --current keeps non-json ambiguous selector failures on stderr", (t) => {
+  const root = tempRoot(t);
+  for (const title of ["Current packet A", "Current packet B"]) {
+    createTask(root, {
+      title,
+      status: "doing",
+      tags: ["pipeline", "orchestration"],
+      body: taskBodyWithLog(`- orchestration: used
+  objective: verify current packet before launch
+  allowed files: tools/taskboard/lib.mjs
+  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  expected output: packet preflight passes
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  stop condition: preflight reports ok
+  independent reviewer: reviewed packet scope`),
+    });
+  }
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current"], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stdout, "");
+  assert.match(result.stderr, /error: multiple current doing pipeline\/orchestration tasks: T0001, T0002/);
 });
 
 test("cli orchestration-check --current rejects conflicting selectors", (t) => {
