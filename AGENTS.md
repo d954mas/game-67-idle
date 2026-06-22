@@ -3,9 +3,10 @@
 ## Now
 
 - Focus: clean AI-first native game seed.
-- Active game concept: `Dragon Grove` (dragon-grove), original merge-3 dragon
-  grove puzzle on a small Y-up grid.
-- Closed prototype: `Ember Road` (ember-road) is archived; do not continue its
+- No active game concept yet; runtime is reset to the clean seed, ready for the
+  next game (cozy automation, to be scaffolded).
+- Closed prototype: `Dragon Grove` (dragon-grove) is finished and archived
+  (snapshot tag `dragon-grove-snapshot-2026-06-22`); do not continue its
   gameplay, visual, UX, asset, or runtime work unless lead reopens it.
 - Engine: `external/neotolis-engine`; public APIs only.
 
@@ -74,3 +75,9 @@
 - Playable smoke prints named acceptance checks plus a compact summary.
 
 When friction repeats, prefer a tool, validator, skill, or source fix.
+
+## Project
+
+
+- Active game concept: `Cozy Automation` (cozy-automation), A small cozy automation game: place simple producers on a small grid; they generate and auto-route a resource you spend to unlock the next producer/step.
+- Active game concept: `Cozy Automation` (cozy-automation), A small cozy automation game: place simple producers on a small grid; they generate and auto-route a resource you spend to unlock the next producer/step.

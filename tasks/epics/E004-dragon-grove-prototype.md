@@ -1,11 +1,11 @@
 ---
 id: E004
 title: Dragon Grove prototype
-status: active
+status: done
 priority: P1
 tags: [prototype, dragon-grove]
 created: 2026-06-21
-updated: 2026-06-21
+updated: 2026-06-22
 ---
 
 ## Goal

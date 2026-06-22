@@ -24,7 +24,6 @@ const ORCHESTRATION_REVIEW_STATUSES = new Set(["review", "done"]);
 const ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID = 28;
 const ORCHESTRATION_ALLOWED_FILES_BOUNDS_MIN_TASK_ID = 76;
 const ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID = 78;
-const ORCHESTRATION_BROAD_WORK_MIN_TASK_ID = 79;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
   "orchestration",
@@ -38,82 +37,6 @@ const ORCHESTRATION_KEYWORDS = [
   "tools/skills_sync",
   ".codex/skills",
   "skill entrypoint",
-];
-const ORCHESTRATION_BROAD_DOMAIN_TAGS = new Set([
-  "gameplay",
-  "runtime",
-  "visual",
-  "asset",
-  "assets",
-  "art",
-  "product",
-  "review",
-  "playtest",
-  "ui",
-  "ux",
-  "devapi",
-]);
-const ORCHESTRATION_BROAD_SCOPE_TAGS = new Set([
-  "substantial",
-  "workflow",
-  "multi-file",
-  "slice",
-  "native",
-  "playable",
-  "harness",
-  "gate",
-]);
-const ORCHESTRATION_BROAD_DOMAIN_KEYWORDS = [
-  "gameplay",
-  "runtime",
-  "visual",
-  "asset",
-  "assets",
-  "art direction",
-  "product",
-  "playtest",
-  "review",
-  "ui/ux",
-  "devapi",
-];
-const ORCHESTRATION_BROAD_SCOPE_KEYWORDS = [
-  "substantial",
-  "broad",
-  "multi-file",
-  "native slice",
-  "playable slice",
-  "product pass",
-  "visual pass",
-  "asset pipeline",
-  "runtime pack",
-  "generated pack",
-  "review workflow",
-  "workflow guard",
-  "devapi smoke",
-  "playtest harness",
-  "reference digest",
-  "screenshot evidence",
-  "gamedesign/projects",
-  "tools/product_gate",
-  "tools/game_context",
-  "tools/visual",
-  "tools/assets",
-  "src/",
-  "state/",
-];
-const ORCHESTRATION_BROAD_STANDALONE_PHRASES = [
-  "asset pipeline",
-  "runtime pack",
-  "generated pack",
-  "product gate",
-  "playtest harness",
-  "review workflow",
-  "workflow guard",
-  "devapi smoke",
-  "visual pass",
-  "product pass",
-  "native slice",
-  "playable slice",
 ];
 const SMALL_SCOPE_REASON_PATTERNS = [
   /^one-file\b/i,
@@ -903,31 +826,18 @@ function validationError(problem) {
   return err;
 }
 
+// The orchestration label guard applies ONLY to genuine pipeline/orchestration
+// meta-work (keyword match). Plain game / visual / asset slices are coupled
+// single-agent work — the lead delegates by judgment, not by mandate — so they
+// are NOT force-gated with an orchestration packet. (The old broad domain+scope
+// classifier swept game tasks in; that was force-gating-era over-reach, removed.)
 function isSubstantialOrchestrationTask(doc) {
   const haystack = [
     doc.fields.title || "",
     Array.isArray(doc.fields.tags) ? doc.fields.tags.join(" ") : doc.fields.tags || "",
     doc.body || "",
-  ].join("\n");
-  const normalizedHaystack = haystack.toLowerCase();
-  if (ORCHESTRATION_KEYWORDS.some((keyword) => normalizedHaystack.includes(keyword.toLowerCase()))) {
-    return true;
-  }
-  if (!requiresBroadOrchestrationClassification(doc)) {
-    return false;
-  }
-  const tags = Array.isArray(doc.fields.tags)
-    ? doc.fields.tags
-    : String(doc.fields.tags || "").split(/[\s,]+/);
-  const normalizedTags = tags.map((tag) => String(tag || "").trim().toLowerCase()).filter(Boolean);
-  const hasDomainTag = normalizedTags.some((tag) => ORCHESTRATION_BROAD_DOMAIN_TAGS.has(tag));
-  const hasScopeTag = normalizedTags.some((tag) => ORCHESTRATION_BROAD_SCOPE_TAGS.has(tag));
-  const hasDomainKeyword = ORCHESTRATION_BROAD_DOMAIN_KEYWORDS.some((keyword) => normalizedHaystack.includes(keyword.toLowerCase()));
-  const hasScopeKeyword = ORCHESTRATION_BROAD_SCOPE_KEYWORDS.some((keyword) => normalizedHaystack.includes(keyword.toLowerCase()));
-  if (ORCHESTRATION_BROAD_STANDALONE_PHRASES.some((phrase) => normalizedHaystack.includes(phrase.toLowerCase()))) {
-    return true;
-  }
-  return (hasDomainTag || hasDomainKeyword) && (hasScopeTag || hasScopeKeyword);
+  ].join("\n").toLowerCase();
+  return ORCHESTRATION_KEYWORDS.some((keyword) => haystack.includes(keyword.toLowerCase()));
 }
 
 export function currentDoingOrchestrationTaskIds(root) {
@@ -1123,6 +1033,3 @@ function requiresOrchestrationStartPreflight(doc) {
   return taskIdAtLeast(doc, ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID);
 }
 
-function requiresBroadOrchestrationClassification(doc) {
-  return taskIdAtLeast(doc, ORCHESTRATION_BROAD_WORK_MIN_TASK_ID);
-}

@@ -1,12 +1,12 @@
 ---
 id: T0029
 title: First native playable slice for Dragon Grove
-status: review
+status: done
 epic: E004
 priority: P1
 tags: [prototype, dragon-grove, native-first]
 created: 2026-06-21
-updated: 2026-06-21
+updated: 2026-06-22
 ---
 
 ## What

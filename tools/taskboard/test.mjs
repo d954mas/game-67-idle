@@ -615,19 +615,30 @@ Add a gameplay menu for hero skill choices.
   assert.equal(updated.fields.status, "review");
 });
 
-test("validateStore classifies T0079 broad substantial work for start preflight", (t) => {
+test("validateStore does not force-gate a plain gameplay task (keyword-only classifier)", (t) => {
   const root = tempRoot(t);
   writeTaskDoc(root, {
     id: "T0079",
     title: "Gameplay runtime playtest pass",
     status: "doing",
     tags: ["gameplay"],
-  }, taskBodyWithLog("- 2026-06-21: Started broad gameplay/runtime work without a preflight packet."));
+  }, `## What
 
-  const problems = validateStoreDetailed(root);
-  assert.equal(problems.length, 1);
-  assert.equal(problems[0].code, "orchestration_start_preflight_missing");
-  assert.deepEqual(problems[0].missingFields, ["orchestration: used packet"]);
+Broad gameplay/runtime playtest work; coupled single-agent slice.
+
+## Done when
+
+- [ ] the playtest pass can move to review
+
+## Open questions
+
+## Log
+
+- 2026-06-21: Started the coupled gameplay slice; no delegation packet needed.
+`);
+
+  // Plain game/visual/asset slices are coupled single-agent work — not gated.
+  assert.deepEqual(validateStoreDetailed(root), []);
 });
 
 test("validateStore preserves pre-T0079 broad work compatibility", (t) => {

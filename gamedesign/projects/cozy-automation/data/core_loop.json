@@ -1,0 +1,11 @@
+{
+  "schema": "core_loop/v1",
+  "status": "stub",
+  "note": "Placeholder created at scaffold. Fill during design: player verbs, rules, feedback, risk, goals, replay reason, and reference grounding. Do not assume idle/away-time/reset-meta loops unless the lead chooses that direction.",
+  "player_verbs": [],
+  "rules": [],
+  "feedback": [],
+  "goals": [],
+  "replay_reason": "",
+  "reference_grounding": []
+}
