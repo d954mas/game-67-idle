@@ -668,6 +668,9 @@ test("subagent-packet-template forwards taskboard template", () => {
   assert.equal(result.stdout, direct.stdout);
   assert.match(result.stdout, /objective:/);
   assert.ok(result.stdout.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
+  assert.match(result.stdout, /orchestration-trace include --session\/--parent-thread-id and --json-output/);
+  assert.match(result.stdout, /status --agent-rollup include --parent-thread-id\/--trace-session/);
+  assert.match(result.stdout, /--agent-rollup-evidence/);
   assert.match(result.stdout, /handoff:/);
 });
 

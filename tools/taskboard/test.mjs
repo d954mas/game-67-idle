@@ -3636,6 +3636,9 @@ test("subagent packet template contains tool-use guard and handoff fields", () =
   assert.match(template, /Select-Object -Index/);
   assert.match(template, /orchestration-evidence --current --run --json/);
   assert.match(template, /evidence command or artifact:/);
+  assert.match(template, /orchestration-trace include --session\/--parent-thread-id and --json-output/);
+  assert.match(template, /status --agent-rollup include --parent-thread-id\/--trace-session/);
+  assert.match(template, /--agent-rollup-evidence/);
   assert.match(template, /handoff:/);
   for (const label of ["findings", "files", "commands/evidence", "risks", "owner action", "not-done"]) {
     assert.match(template, new RegExp(`${label}:`));
@@ -3699,7 +3702,38 @@ test("cli subagent-packet-template prints reusable packet", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /objective:/);
   assert.ok(result.stdout.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
+  assert.match(result.stdout, /status --agent-rollup include --parent-thread-id\/--trace-session/);
+  assert.match(result.stdout, /--agent-rollup-evidence/);
   assert.match(result.stdout, /handoff:/);
+});
+
+test("cli subagent-packet-template --current fills task evidence command", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const bootstrap = spawnSync(process.execPath, [
+    cli,
+    "orchestration-bootstrap",
+    ...bootstrapArgs({
+      "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent-thread-1 --session-root tmp/sessions --agent-cwd C:/projects/game-67-idle --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
+    }),
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.equal(bootstrap.status, 0, bootstrap.stderr || bootstrap.stdout);
+
+  const result = spawnSync(process.execPath, [cli, "subagent-packet-template", "--current"], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(subagentPacketProblem(result.stdout), null);
+  assert.match(result.stdout, /objective: verify bootstrap command/);
+  assert.match(result.stdout, /allowed files: tools\/taskboard\/cli\.mjs/);
+  assert.match(result.stdout, /expected output: preflight passes/);
+  assert.match(result.stdout, /evidence command or artifact: node tools\/ai\.mjs status --agent-rollup --require-agent-rollup-ok/);
+  assert.match(result.stdout, /--parent-thread-id parent-thread-1/);
+  assert.match(result.stdout, /--agent-rollup-evidence/);
+  assert.match(result.stdout, /--json-output tasks[\\/]evidence[\\/]status\.json/);
+  assert.doesNotMatch(result.stdout, /<read-only command/);
+  assert.doesNotMatch(result.stdout, /<repo-local files/);
 });
 
 test("cli subagent-template alias prints reusable packet", () => {

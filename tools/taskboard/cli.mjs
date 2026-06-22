@@ -9,7 +9,7 @@
 //   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
 //   node tools/taskboard/cli.mjs orchestration-template
-//   node tools/taskboard/cli.mjs subagent-packet-template|subagent-template
+//   node tools/taskboard/cli.mjs subagent-packet-template|subagent-template [--current|--task T0001|--id T0001|--file tasks/active/T0001-example.md]
 //   node tools/taskboard/cli.mjs subagent-packet-check|subagent-check --file packet.txt|--text "..."|--stdin [--json]
 //   node tools/taskboard/cli.mjs orchestration-workflow-template [--task-id T0001] [--json]
 //   node tools/taskboard/cli.mjs orchestration-workflow-init <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--status review] [--packet-status integrated] [--output tasks/workflows/T0001.json] [--write] [--force] [--json]
@@ -33,6 +33,7 @@ import {
 } from "./lib.mjs";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
@@ -81,6 +82,60 @@ function clampText(text, maxChars) {
     text: `${clipped}\n\n... truncated ${text.length - clipped.length} chars; inspect tasks/STATUS.md or linked task files only if needed.`,
     truncated: true,
   };
+}
+
+function subagentTemplateEvidenceArgs(args) {
+  const out = [];
+  for (const key of ["current", "task", "id", "file", "parent-thread-id", "trace-session", "session-root", "agent-cwd", "profile", "agent-profile-dir", "min-agents", "json-output"]) {
+    const value = args[key];
+    if (value === undefined) continue;
+    out.push(`--${key}`);
+    if (value !== true) out.push(String(value));
+  }
+  return out;
+}
+
+function evidenceAwareSubagentPacketTemplate(args) {
+  const hasSelector = Boolean(args.current || args.task || args.id || args.file);
+  if (!hasSelector) return subagentPacketTemplate();
+  const doc = readTaskForOrchestrationCheck({
+    ...args,
+    _: args.task ? [args.task] : [],
+  });
+  const workflow = orchestrationWorkflowInitPayload(doc);
+  const packet = workflow.packets?.[0] || {};
+  const objective = workflow.objective || packet.objective || "<bounded subagent objective>";
+  const allowedFiles = Array.isArray(packet.allowed_files) && packet.allowed_files.length
+    ? packet.allowed_files.join(";")
+    : "<repo-local files or bounded patterns>";
+  const expectedOutput = packet.objective || workflow.objective || "<concise final report or changed files>";
+
+  const evidenceScript = resolve(import.meta.dirname, "..", "ai_profile", "orchestration_evidence.mjs");
+  const result = spawnSync(process.execPath, [evidenceScript, ...subagentTemplateEvidenceArgs(args), "--json"], {
+    cwd: root,
+    encoding: "utf8",
+    shell: false,
+  });
+  if (result.status !== 0) {
+    const stderr = String(result.stderr || "").trim();
+    const stdout = String(result.stdout || "").trim();
+    fail(`could not infer subagent evidence command: ${stderr || stdout || `exit ${result.status}`}`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    fail("could not parse orchestration evidence output for subagent packet template");
+  }
+  if (!parsed?.ok || !parsed.command) {
+    fail(`could not infer subagent evidence command: ${parsed?.problem || "missing command"}`);
+  }
+  return subagentPacketTemplate()
+    .replace(/^objective: .+$/m, `objective: ${objective}`)
+    .replace(/^allowed files: .+$/m, `allowed files: ${allowedFiles}`)
+    .replace(/^expected output: .+$/m, `expected output: ${expectedOutput}`)
+    .replace(/^evidence command or artifact: .+$/m, `evidence command or artifact: ${parsed.command}`)
+    .replace(/^stop condition: .+$/m, `stop condition: ${doc.fields?.id || "task"} evidence command and requested subagent check pass, or a blocker is reported.`);
 }
 
 function writeJson(value) {
@@ -553,7 +608,7 @@ switch (cmd) {
   }
   case "subagent-packet-template":
   case "subagent-template": {
-    console.log(subagentPacketTemplate());
+    console.log(evidenceAwareSubagentPacketTemplate(args));
     break;
   }
   case "subagent-packet-check":

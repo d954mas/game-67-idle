@@ -18,7 +18,7 @@ function usage({ exitCode = 2, stream = process.stderr } = {}) {
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
   node tools/ai.mjs orchestration-trace [--session <codex-session.jsonl>] [--parent-thread-id <id>] [trace options]
   node tools/ai.mjs orchestration-template
-  node tools/ai.mjs subagent-packet-template|subagent-template
+  node tools/ai.mjs subagent-packet-template|subagent-template [--current|--task T0001|--id T0001|--file tasks/active/T0001-example.md]
   node tools/ai.mjs subagent-packet-check|subagent-check --file packet.txt|--text "..."|--stdin [--json]
   node tools/ai.mjs orchestration-workflow-init <task-id>|--id <task-id>|--file <task.md>|--current [workflow init options]
   node tools/ai.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--json]

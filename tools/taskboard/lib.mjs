@@ -160,7 +160,7 @@ allowed files: <repo-local files or bounded patterns>
 forbidden files: <files or areas the subagent must not touch>
 tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
 expected output: <concise final report or changed files>
-evidence command or artifact: <read-only command, focused test, or artifact path>
+evidence command or artifact: <read-only command, focused test, or artifact path; for orchestration-trace include --session/--parent-thread-id and --json-output; for status --agent-rollup include --parent-thread-id/--trace-session, --require-agent-rollup-ok, --agent-rollup-evidence, and --json-output>
 stop condition: <when the subagent must stop>
 handoff:
   findings: <facts or verdict>
