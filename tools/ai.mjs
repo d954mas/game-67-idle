@@ -17,7 +17,7 @@ function usage({ exitCode = 2, stream = process.stderr } = {}) {
   node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--json-output <p>] [--no-import-codex-session]
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
   node tools/ai.mjs orchestration-template
-  node tools/ai.mjs subagent-packet-template [--current|--task T0001|--id T0001|--file tasks/active/T0001-example.md]
+  node tools/ai.mjs subagent-packet-template [--preset codebase-map|review|asset-research|texture-gen|asset-intake [--targets a,b,c]]
   node tools/ai.mjs subagent-packet-check --file packet.txt|--text "..."|--stdin [--json]
   node tools/ai.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--json]
   node tools/ai.mjs orchestration-check <task-id>|--id <task-id>|--file <task.md>|--current [--json]
@@ -33,7 +33,7 @@ Commands:
             --verbose for the full per-record breakdown; --json-output writes the status JSON
   import-codex-session  recover missed failed Codex shell calls into the session log
   orchestration-template print the orchestration packet template for subagent tasks
-  subagent-packet-template print a reusable prompt packet for spawn_agent delegation
+  subagent-packet-template print a reusable delegation packet; --preset <name> emits ready packets (parallel fan-out for codebase-map/review/texture-gen via --targets, single for asset-research, staged for asset-intake); harness-neutral (Claude Agent/Workflow tool or Codex spawn_agent)
   subagent-packet-check validate a subagent prompt packet before launching a delegated run
   orchestration-bootstrap create a current task with a complete orchestration packet
   orchestration-check   preflight-check an orchestration packet before launching subagents

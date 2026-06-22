@@ -22,6 +22,7 @@ import {
   updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
   subagentPacketTemplate, subagentPacketProblem,
+  subagentPacketPresetNames, renderSubagentPacketPreset,
   orchestrationPreflightProblem,
   parseDoc, currentDoingOrchestrationTaskIds,
   isBoundedOrchestrationAllowedFiles,
@@ -527,6 +528,24 @@ switch (cmd) {
     break;
   }
   case "subagent-packet-template": {
+    if (args.preset !== undefined) {
+      if (args.preset === true) {
+        console.log(`presets: ${subagentPacketPresetNames().join(", ")}`);
+        break;
+      }
+      const targets = typeof args.targets === "string"
+        ? args.targets.split(",").map((t) => t.trim()).filter(Boolean)
+        : [];
+      try {
+        console.log(renderSubagentPacketPreset(String(args.preset), targets));
+      } catch (error) {
+        if (error && error.code === "unknown_preset") {
+          fail(`unknown preset: ${args.preset}; available: ${error.presets.join(", ")}`);
+        }
+        throw error;
+      }
+      break;
+    }
     console.log(subagentPacketTemplate());
     break;
   }

@@ -202,6 +202,178 @@ export function subagentPacketProblem(text) {
   };
 }
 
+// Harness-neutral packet presets. They emit ready-to-spawn bounded packets the
+// lead pastes into ANY harness (Claude Agent/Workflow tool, Codex spawn_agent).
+// Parallel presets fan out one worker per target; the packet is the portable
+// unit, the spawn mechanism is the thin per-harness wrapper. Advisory only.
+const SUBAGENT_PACKET_LEAN_HANDOFF = `handoff:
+  findings: <facts or verdict>
+  files: <files inspected or changed>
+  commands/evidence: <commands run and results, or artifact pointer>
+  risks: <remaining risk>
+  owner action: <what the lead decides/integrates>
+  not-done: <explicit gaps>`;
+
+function renderSubagentPacket(f) {
+  return [
+    `objective: ${f.objective}`,
+    `allowed files: ${f.allowedFiles}`,
+    `forbidden files: ${f.forbiddenFiles}`,
+    `tool-use guard: ${f.toolGuard || DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`,
+    `expected output: ${f.expectedOutput}`,
+    `evidence command or artifact: ${f.evidence}`,
+    `stop condition: ${f.stop}`,
+    SUBAGENT_PACKET_LEAN_HANDOFF,
+  ].join("\n");
+}
+
+const PARALLEL_INTRO =
+  "PARALLEL FAN-OUT: spawn one worker per packet below at the same time (Claude: multiple Agent-tool calls in one turn, or the Workflow tool; Codex: parallel spawn_agent). Each runs read-only in its own context and returns only its handoff; the lead concatenates and integrates. Disjoint scope, so workers cannot conflict. Lint one packet at a time via `node tools/ai.mjs subagent-packet-check --stdin`.";
+const SINGLE_INTRO =
+  "SINGLE WORKER: spawn one subagent (Claude Agent tool / Codex spawn_agent). It returns its handoff; the lead integrates.";
+const SEQUENTIAL_INTRO =
+  "SEQUENTIAL STAGES: run these packets in order; each stage's output feeds the next. The lead integrates between stages.";
+
+const SUBAGENT_PACKET_PRESETS = {
+  "codebase-map": {
+    mode: "parallel",
+    intro: PARALLEL_INTRO,
+    defaultTargets: ["src/<area>/**", "tools/<area>/**"],
+    build: (t) => ({
+      label: `map ${t}`,
+      text: renderSubagentPacket({
+        objective: `Map how the ${t} area works and its public entry points; produce a <=200-word brief. Read only; make no edits.`,
+        allowedFiles: t,
+        forbiddenFiles: "everything outside the allowed files; make no edits anywhere",
+        expectedOutput: "brief: entry points (file:line) + data flow + 3 risks or unknowns",
+        evidence: "inline handoff (small)",
+        stop: "entry points and data flow identified, or 10 files read",
+      }),
+    }),
+  },
+  review: {
+    mode: "parallel",
+    intro: PARALLEL_INTRO,
+    defaultTargets: ["correctness", "readability", "scope"],
+    build: (axis) => ({
+      label: `review:${axis}`,
+      text: renderSubagentPacket({
+        objective: `Review <artifact-or-feature> on ONE axis: ${axis}. You are a fresh reviewer, not the builder. Give a verdict and concrete issues only.`,
+        allowedFiles: "<dir>/<artifact-file.ext>",
+        forbiddenFiles: "no edits anywhere",
+        expectedOutput: "verdict (pass/concerns/fail) + issues (file:line + one-line fix), <=10 bullets",
+        evidence: "inline handoff",
+        stop: `the artifact is fully reviewed on the ${axis} axis`,
+      }),
+    }),
+  },
+  "asset-research": {
+    mode: "single",
+    intro: SINGLE_INTRO,
+    build: () => ({
+      label: "asset / source / license research",
+      text: renderSubagentPacket({
+        objective: "Find <N> CC0/CC-BY <asset-type> candidates for <game-id>; report license, provenance, and integrity for each. Do not import anything.",
+        allowedFiles: "gamedesign/sources/**;gamedesign/knowledge/**;tmp/<game-id>-asset-candidates.md",
+        forbiddenFiles: "src; state; any runtime pack; hot docs (AGENTS.md, AI_PIPELINE.md, tasks/STATUS.md)",
+        toolGuard: `${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}; prefer authoritative sources over SEO content farms; verify each license URL`,
+        expectedOutput: "<=5 candidates, each with URL + license + provenance + integrity check",
+        evidence: "tmp/<game-id>-asset-candidates.md",
+        stop: "5 viable candidates found OR 8 sources checked with none viable",
+      }),
+    }),
+  },
+  "texture-gen": {
+    mode: "parallel",
+    intro: `${PARALLEL_INTRO} Image gen uses the delegated-image-generation skill: Codex imagegen (Path A) first, Antigravity agy (Path B) as fallback; verify the PNG by size and eyeball.`,
+    defaultTargets: ["<asset-a>", "<asset-b>"],
+    build: (asset) => ({
+      label: `gen ${asset}`,
+      text: renderSubagentPacket({
+        objective: `Generate ${asset} via the delegated-image-generation skill (Codex imagegen Path A; Antigravity agy Path B fallback). Propose a project-local path; do NOT wire it into runtime.`,
+        allowedFiles: `tmp/gen/${asset}.png`,
+        forbiddenFiles: "src; state; any runtime pack or manifest; hot docs",
+        toolGuard: `${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}; verify the output PNG exists and its dimensions match before returning; never trust the CLI transcript`,
+        expectedOutput: "handoff with artifact path + dimensions + a one-line fake-shot self-judgment",
+        evidence: `tmp/gen/${asset}.png`,
+        stop: "one verified asset produced OR 3 generation attempts fail",
+      }),
+    }),
+  },
+  "asset-intake": {
+    mode: "sequential",
+    intro: SEQUENTIAL_INTRO,
+    stages: () => [
+      {
+        label: "stage 1: source research",
+        text: renderSubagentPacket({
+          objective: "Decide a source for <asset> in <game-id>: find a CC0/CC-BY asset (URL+license+provenance) OR write a concrete generation prompt. Do not import or generate yet.",
+          allowedFiles: "gamedesign/sources/**;gamedesign/knowledge/**;tmp/<game-id>-<asset>-intake.md",
+          forbiddenFiles: "src; state; runtime packs; hot docs",
+          toolGuard: `${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}; prefer authoritative sources; verify each license URL`,
+          expectedOutput: "a licensed source OR a ready generation prompt, written to the intake note",
+          evidence: "tmp/<game-id>-<asset>-intake.md",
+          stop: "a source or a prompt is decided",
+        }),
+      },
+      {
+        label: "stage 2: generate",
+        text: renderSubagentPacket({
+          objective: "Generate <asset> from stage 1's source/prompt via the delegated-image-generation skill (Codex imagegen Path A; Antigravity agy Path B fallback).",
+          allowedFiles: "tmp/gen/<asset>.png",
+          forbiddenFiles: "src; state; runtime packs or manifests; hot docs",
+          toolGuard: `${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}; verify the output PNG exists and dimensions match before returning; never trust the CLI transcript`,
+          expectedOutput: "the generated PNG + path + dimensions",
+          evidence: "tmp/gen/<asset>.png",
+          stop: "one verified PNG produced OR 3 attempts fail",
+        }),
+      },
+      {
+        label: "stage 3: verify + propose",
+        text: renderSubagentPacket({
+          objective: "Verify the generated <asset> (dimensions, transparency, look vs the art reference) and propose a project-local destination + provenance note. Do NOT wire it into runtime.",
+          allowedFiles: "tmp/gen/<asset>.png;tmp/<game-id>-<asset>-intake.md",
+          forbiddenFiles: "src; state; runtime packs or manifests; hot docs",
+          expectedOutput: "verdict + proposed destination path + provenance line",
+          evidence: "tmp/<game-id>-<asset>-intake.md",
+          stop: "verdict and proposed destination recorded",
+        }),
+      },
+    ],
+  },
+};
+
+export function subagentPacketPresetNames() {
+  return Object.keys(SUBAGENT_PACKET_PRESETS);
+}
+
+export function subagentPacketPreset(name, targets = []) {
+  const def = SUBAGENT_PACKET_PRESETS[name];
+  if (!def) {
+    const error = new Error(`unknown subagent packet preset: ${name}`);
+    error.code = "unknown_preset";
+    error.presets = subagentPacketPresetNames();
+    throw error;
+  }
+  let packets;
+  if (def.mode === "sequential") {
+    packets = def.stages();
+  } else if (def.mode === "single") {
+    packets = [def.build()];
+  } else {
+    const list = Array.isArray(targets) && targets.length ? targets : def.defaultTargets;
+    packets = list.map((t) => def.build(t));
+  }
+  return { name, mode: def.mode, intro: def.intro, packets };
+}
+
+export function renderSubagentPacketPreset(name, targets = []) {
+  const { intro, packets } = subagentPacketPreset(name, targets);
+  const total = packets.length;
+  const blocks = packets.map((p, i) => `# packet ${i + 1}/${total} - ${p.label}\n${p.text}`);
+  return `${intro}\n\n${blocks.join("\n\n")}`;
+}
+
 function packetFieldValue(text, fieldPattern) {
   const lines = String(text || "").split(/\r?\n/);
   const out = [];

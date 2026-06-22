@@ -11,6 +11,7 @@ import {
   listEpics, updateDoc, findDoc, validateStore, validateStoreDetailed,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate, orchestrationPreflightProblem,
   subagentPacketTemplate, subagentPacketProblem,
+  subagentPacketPreset, subagentPacketPresetNames, renderSubagentPacketPreset,
   DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
 
@@ -1456,6 +1457,63 @@ test("cli subagent-packet-template prints reusable packet", () => {
   assert.ok(result.stdout.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
   assert.match(result.stdout, /evidence command or artifact:/);
   assert.match(result.stdout, /handoff:/);
+});
+
+test("every subagent packet preset emits lint-valid packets", () => {
+  const names = subagentPacketPresetNames();
+  assert.ok(names.includes("codebase-map"));
+  assert.ok(names.includes("asset-research"));
+  for (const name of names) {
+    const { packets } = subagentPacketPreset(name);
+    assert.ok(packets.length >= 1, `${name} emits no packets`);
+    for (const packet of packets) {
+      assert.equal(subagentPacketProblem(packet.text), null, `${name}/${packet.label} is not a valid packet`);
+    }
+  }
+});
+
+test("subagent packet preset fans out one packet per target", () => {
+  const { packets, mode } = subagentPacketPreset("codebase-map", ["src/a/**", "tools/b/**"]);
+  assert.equal(mode, "parallel");
+  assert.equal(packets.length, 2);
+  assert.match(packets[0].text, /allowed files: src\/a\/\*\*/);
+  assert.match(packets[1].text, /allowed files: tools\/b\/\*\*/);
+});
+
+test("subagent packet preset rejects an unknown name and lists presets", () => {
+  assert.throws(
+    () => subagentPacketPreset("nope"),
+    (err) => err.code === "unknown_preset" && Array.isArray(err.presets) && err.presets.includes("review"),
+  );
+});
+
+test("cli subagent-packet-template --preset emits a parallel fan-out", () => {
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(
+    process.execPath,
+    [cli, "subagent-packet-template", "--preset", "codebase-map", "--targets", "src/a/**,tools/b/**"],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /PARALLEL FAN-OUT/);
+  assert.match(result.stdout, /# packet 1\/2/);
+  assert.match(result.stdout, /# packet 2\/2/);
+  assert.match(result.stdout, /allowed files: src\/a\/\*\*/);
+});
+
+test("cli subagent-packet-template --preset with no name lists presets", () => {
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "subagent-packet-template", "--preset"], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /presets: /);
+  assert.match(result.stdout, /asset-intake/);
+});
+
+test("cli subagent-packet-template --preset rejects an unknown name", () => {
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [cli, "subagent-packet-template", "--preset", "nope"], { encoding: "utf8" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /unknown preset: nope/);
 });
 
 test("cli subagent-packet-check reports structured failures", (t) => {

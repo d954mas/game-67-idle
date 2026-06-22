@@ -42,20 +42,20 @@ SCOPE -> PACKET -> SPAWN -> COMPRESSED RETURN -> INTEGRATE + GATE -> ARCHIVE
 
 1. **Scope.** Decide go/no-go via §1. If substantial, drop one line in the task `## Log`: `- orchestration: used ...` or `- orchestration: not needed - small scope: ...`. This is a *thinking* prompt, not a proof gate.
 
-2. **Packet.** Generate the shape, fill it, optionally lint:
+2. **Packet.** Generate a ready packet from a preset (§3), or the blank shape, then optionally lint:
    ```bash
-   node tools/ai.mjs subagent-packet-template               # or: node tools/taskboard/cli.mjs subagent-packet-template
-   node tools/ai.mjs subagent-packet-check --file packet.txt --json   # advisory shape lint
+   node tools/ai.mjs subagent-packet-template --preset codebase-map --targets src/world/**,state/world/**
+   node tools/ai.mjs subagent-packet-template --preset asset-research   # or review|texture-gen|asset-intake
+   node tools/ai.mjs subagent-packet-template                            # blank shape
+   node tools/ai.mjs subagent-packet-check --stdin --json               # advisory lint, one packet at a time
    ```
-   For inline prompts, copy the template shape directly. Every packet carries the 4 load-bearing slots — **objective / output format / tools-and-sources / boundaries** — without which agents "duplicate work, leave gaps, or fail to find necessary information" ([Anthropic](https://www.anthropic.com/engineering/multi-agent-research-system)). Subagents start with **fresh context** — they don't see your conversation, files, or invoked skills, so restate any rule that matters (e.g. "active concept is Dragon Grove; ignore ember-road").
+   Presets emit bounded, lint-valid, **harness-neutral** packets. Every packet carries the 4 load-bearing slots — **objective / output format / tools-and-sources / boundaries** — without which agents "duplicate work, leave gaps, or fail to find necessary information" ([Anthropic](https://www.anthropic.com/engineering/multi-agent-research-system)). Workers start with **fresh, isolated context in BOTH harnesses** — they don't see your conversation, files, or invoked skills — so restate any rule that matters (e.g. "active concept is `<game-id>`; ignore archived prototypes"; "real raster only, no drawing code").
 
-3. **Spawn — pick the primitive per task:**
+3. **Spawn — pick the primitive per task (the packet is the same; only the spawn wrapper differs — see §3b):**
    - **Main conversation** — back-and-forth, shared context, quick change. (default)
-   - **Claude Agent tool** — 1–3 self-contained workers returning a summary; restrict tools (read-only researchers get `Read, Grep, Glob`). [Claude Code subagents](https://code.claude.com/docs/en/sub-agents).
-   - **`/fork`** — when a side task needs the current conversation as background (shares prompt cache, inherits history, returns only its final message).
-   - **Workflow tool** — big read-heavy fan-out (the codebase-map / asset-intake recipes in §3).
-   - **Codex `spawn_agent`** — when you want the Codex harness (e.g. its imagegen path).
-   - Trigger parallel reads in one message: *"Map the src/ asset loader, state codegen, and DevAPI in parallel using separate read-only subagents."* Issue independent Read/Grep/Glob in a single turn, not one at a time.
+   - **Parallel fan-out (the context-isolation + parallelism win)** — N independent workers at once. Claude: *"Research X, Y, and Z in parallel using separate subagents, then synthesize."* Codex: *"Spawn one agent for X, one for Y, one for Z; wait for all; summarize."* 3–5 per batch.
+   - **Large scripted fan-out** — Claude `ultracode` workflow (`parallel()`/`pipeline()`); Codex `spawn_agents_on_csv`; or a portable `for … & wait` loop over `codex exec -o` / `claude -p` (§3b).
+   - **`/fork`** (Claude) — when a side task needs the current conversation as background (shares cache, inherits history, returns only its final message).
 
 4. **Compressed structured return.** The packet must specify the return shape. A non-fork subagent returns **only its final message**; make it the `handoff:` block (findings / files / commands-evidence / risks / owner-action / not-done). For high-volume output, use the artifact pattern: worker writes the full output to a file and returns a lightweight pointer, so heavy tokens never hit the orchestrator ([Anthropic appendix](https://www.anthropic.com/engineering/multi-agent-research-system)).
 
@@ -71,60 +71,49 @@ SCOPE -> PACKET -> SPAWN -> COMPRESSED RETURN -> INTEGRATE + GATE -> ARCHIVE
 
 ---
 
-## 3. Packet & return recipes
+## 3. Packet presets (implemented)
 
-Copyable. Fill the angle-bracket parts. `allowed files` must be bounded repo-local paths/patterns (exact files, final-segment globs like `tasks/active/T*.md`, scoped recursive globs like `tools/state_codegen/**`) — never absolute paths, `..`, broad root globs, or "all files".
+`subagent-packet-template --preset <name>` emits ready, bounded, lint-valid, **harness-neutral** packets — game-agnostic; fill the `<…>` parts. Parallel presets emit one packet per `--targets` entry; spawn them concurrently (§3b).
 
-### A. Asset / source / license research (1 agent, cheap model, read-only)
-```text
-objective: Find 1 CC0/CC-BY dragon sprite suitable for Dragon Grove merge-3 tiles; report license + provenance + integrity, do not import.
-allowed files: gamedesign/sources/**, gamedesign/knowledge/**   (read), tmp/** (write notes only)
-forbidden files: src/**, state/**, any runtime pack, hot docs
-project boundary: active concept = Dragon Grove; Y-up; real legal assets only; runtime uses project-local copies.
-tool-use guard: prefer primary/authoritative sources over SEO content farms; verify each license URL; keep evidence read-only.
-expected output: handoff block; candidate list <=5 with URL + license + provenance + integrity check.
-evidence command or artifact: tmp/dragon-sprite-candidates.md
-stop condition: 5 viable candidates found OR 8 sources checked with none viable.
-handoff: findings / files / commands-evidence / risks / owner-action(import decision is the lead's) / not-done
+| Preset | Mode | Use | `--targets` |
+|---|---|---|---|
+| `codebase-map` | parallel | map disjoint subsystems, read-only | one bounded scope per worker |
+| `review` | parallel | independent review, one axis per worker | axes, e.g. `correctness,readability,scope` |
+| `asset-research` | single | CC0/CC-BY source + license + provenance | — |
+| `texture-gen` | parallel | generate raster art (Codex imagegen → `agy` fallback) | one asset name per worker |
+| `asset-intake` | sequential | research → generate → verify + propose | — |
+
+```bash
+node tools/ai.mjs subagent-packet-template --preset codebase-map --targets src/world/**,state/world/**
+node tools/ai.mjs subagent-packet-template --preset texture-gen  --targets hero-idle,coin
+node tools/ai.mjs subagent-packet-template --preset              # list presets
 ```
 
-### B. Codebase exploration of disjoint subsystems (2–3 parallel, read-only, Haiku/Sonnet)
-Spawn one per subsystem in a single message. Per-agent packet:
-```text
-objective: Map how <subsystem> works and its public entry points; produce a <=200-word brief, no edits.
-allowed files: <e.g. src/**>  (read only — Read, Grep, Glob)
-forbidden files: everything else; make no edits
-tool-use guard: verify paths with rg --files before reading; window large files with Select-Object -Skip/-First.
-expected output: brief = entry points (file:line) + data flow + 3 risks/unknowns.
-evidence command or artifact: inline handoff (small)
-stop condition: entry points + flow identified, or 10 files read.
-```
-Lead concatenates the 2–3 briefs and synthesizes — no agent writes, so they can't conflict.
+`allowed files` in every emitted packet is bounded (exact files, final-segment globs `dir/*.ext`, or scoped recursive globs `a/b/**` — never absolute paths, `..`, root globs like `src/**`, or "all files"). The return is the `handoff:` block (findings / files / commands-evidence / risks / owner-action / not-done); for bulky output the worker writes a file and returns a pointer. A review verdict is **input to lead judgment, not a gate**. Add a new preset only when you retype the same packet a 3rd time.
 
-### C. Independent review of a finished artifact (1–3 parallel, read-only, fresh slate)
-```text
-objective: Review <file/feature> for <ONE axis: readability | state-schema correctness | art-direction match>. Verdict + concrete issues only.
-allowed files: <the artifact + its direct deps>  (read only)
-forbidden files: no edits anywhere
-project boundary: judge against <art_contract / state schema / AGENTS.md first-screen rules>; you are a fresh reviewer, not the builder.
-expected output: verdict (pass/concerns/fail) + issue list (file:line + one-line fix), <=10 bullets.
-evidence command or artifact: inline handoff
-stop condition: artifact fully reviewed on the one assigned axis.
-```
-Lead reconciles verdicts; reviewer PASS is **input, not a gate**.
+## 3b. Cross-harness fan-out (Claude + Codex)
 
-### D. Parallel texture/icon generation (1 per asset, isolated, cheap model)
-```text
-objective: Generate <asset> per delegated-image-generation; verify-by-size; propose a project-local path, do not wire into runtime.
-allowed files: tmp/gen/**, scripts/codex_imagegen.sh (read)
-forbidden files: src/**, generated runtime pack, any manifest, hot docs
-project boundary: active concept = Dragon Grove visual direction; placeholder is debug-only.
-tool-use guard: verify output file exists and dimensions match the request before returning.
-expected output: handoff with artifact path + dimensions + a one-line fake-shot self-judgment.
-evidence command or artifact: tmp/gen/<asset>.png
-stop condition: one verified asset produced OR 3 generation attempts fail.
-```
-Each writes only its own `tmp/gen/<asset>.png` — provably disjoint. Lead does cutting/manifesting/runtime-wiring (those are hot/coupled).
+The **packet body is the portable unit; only the thin spawn wrapper differs.** Never name a harness/tool/model inside the packet; use absolute paths (a worker's `cd` does not persist); declare tool policy as prose ("read-only: do not write or edit") so it holds even if the wrapper forgets to restrict tools.
+
+| Capability | Claude Code | Codex CLI |
+|---|---|---|
+| Worker primitive | Agent tool; reusable `.claude/agents` defs (MD+YAML) | `spawn_agent` (in-session) / `codex exec` (headless); `.codex/agents` defs (TOML) |
+| Fan out N parallel | N Agent calls in one turn: *"…in parallel using separate subagents"* | *"Spawn one agent per item, wait for all, then summarize"* |
+| Large scripted fan-out | `ultracode` workflow → `parallel()` / `pipeline()` | `spawn_agents_on_csv` (one worker per row) |
+| Portable script fan-out | `for i; do claude -p "$pkt" >out_$i & done; wait` | `for i; do codex exec -s read-only -o out_$i "$pkt" & done; wait` |
+| Worker model | frontmatter `model:` / env `CLAUDE_CODE_SUBAGENT_MODEL` | TOML `model` / `codex exec -m <model>` |
+| Read-only worker | `tools: Read, Grep, Glob` (or built-in **Explore**) | `sandbox_mode = "read-only"` / `codex exec -s read-only -a never` |
+| Concurrency / depth | ~10–16 concurrent; nesting depth 5 | `[agents] max_threads = 6`, `max_depth = 1` (keep at 1) |
+| Return to parent | final assistant message (in-process) | consolidated response / `-o` file / CSV `result_json` |
+
+Enable Codex multi-agent first in `~/.codex/config.toml` → `[features] multi_agent = true` (leave `max_depth = 1` — recursive fan-out is a cost bomb). Both harnesses give each worker a **fresh, isolated context** and return only its final summary — that is the context-isolation win. Many *verbose* returns re-flood the parent in either harness: enforce the compact handoff and push bulky evidence to files.
+
+### Image generation (Codex primary, Antigravity fallback)
+
+Image gen is an external shell capability, **not** a subagent — invoke it the same way under either harness, via the `delegated-image-generation` skill:
+- **Primary — Codex imagegen** (gpt-image-2): `.codex/skills/delegated-image-generation/scripts/codex_imagegen.sh`. Real output ≈ MBs; a code-drawn fake is < ~200KB.
+- **Fallback — Antigravity `agy`**: `agy -p "use your built-in image generation to create one real raster image … save the PNG to <abs path>; do not write or run any drawing code"` (wrap in a pseudo-TTY under non-TTY).
+- **Verify by file existence + size + eyeball, never by transcript** — the CLI fakes itself with a weak prompt by drawing via code. Size is a fake-detector, not quality proof; run the visual gate on the assembled screen.
 
 ---
 
@@ -149,12 +138,12 @@ Each writes only its own `tmp/gen/<asset>.png` — provably disjoint. Lead does 
 
 Each tied to a real repeating friction. Add only when the friction actually appears — a preset/view/recipe, never a required step.
 
-1. **Packet presets (small, ~½ day) — add when you retype the same packet 3rd time.** Ship 2–3 fill-in presets on the existing command, e.g. `node tools/ai.mjs subagent-packet-template --preset texture-research|codebase-map|visual-review`, reusing `subagentPacketTemplate()` in `tools/taskboard/cli.mjs`. Zero new gate, just less typing. Maps to recipes A/C above.
+1. **Packet presets — DONE.** `subagent-packet-template --preset codebase-map|review|asset-research|texture-gen|asset-intake [--targets …]` (§3). Harness-neutral, lint-valid, game-agnostic. Add a new preset only when you retype the same packet a 3rd time.
 2. **Subagent telemetry line (small, ~½ day) — add when "I don't know what ran this session" recurs.** The profiler currently records only shell/command tool calls (`tools/ai_profile/hook_record.mjs` exits early on non-command tool calls), so Agent/Task spawns are invisible. Add a tiny non-command branch recording subagent tool name + objective first line, then surface `Subagents this session: N (objectives...)` in `tools/ai_profile/status.mjs`. **Strictly diagnostic — never an acceptance condition.**
-3. **Two Workflow recipes (medium, ~1 day) — add when the same read-heavy fan-out recurs.** A `codebase-map` recipe (N disjoint read-only Explore-style agents, one per subsystem, concatenate briefs) and an `asset-intake` recipe (research license → generate/download → verify-by-size → propose project-local copy). Invocable recipes, not mandatory steps. Recipes B and D above.
-4. **A reusable read-only researcher agent file (tiny) — ONLY after you spawn the same researcher repeatedly.** A `.claude/agents/researcher.md` with `tools: Read, Grep, Glob` and `model: haiku`. One-offs stay inline; do not pre-build an agent zoo.
+3. **A saved scripted fan-out (medium) — add when the same read-heavy fan-out recurs.** Claude: save a good `ultracode` run as `/<name>` (`s` in `/workflows`). Codex: a small `spawn_agents_on_csv` or `for … codex exec … & wait` wrapper. Invocable, not a mandatory step. The §3 presets already feed these.
+4. **A reusable read-only researcher worker (tiny) — ONLY after you spawn the same researcher repeatedly.** Claude `.claude/agents/researcher.md` (`tools: Read, Grep, Glob`, `model: haiku`) or Codex `.codex/agents/researcher.toml` (`sandbox_mode = "read-only"`). One-offs stay inline; do not pre-build an agent zoo.
 
-If none of these frictions recur, add none of them. That is the correct outcome.
+If none of these remaining frictions recur, add none of them. That is the correct outcome.
 
 ---
 
