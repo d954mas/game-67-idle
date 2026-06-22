@@ -14,7 +14,7 @@ import { buildAgentToolRollup, renderAgentRollup } from "./agent_rollup.mjs";
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--agents] [--json-output <status.json>] [--verbose]
+  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--agents] [--since <Nm|Nh|Nd|ISO>] [--json-output <status.json>] [--verbose]
 
 Profiling is fully passive: the PostToolUse hook records every tool call to a
 per-session log automatically. This command READS that log and reports the

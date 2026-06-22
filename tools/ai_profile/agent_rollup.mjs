@@ -1,11 +1,12 @@
 // Per-agent tool-usage rollup (advisory, read-only, cross-harness).
 //
-// Answers "how many subagents ran, what each was asked, and which tools each
-// used" by reading the harness's OWN native transcripts (reliably linked by
-// agentId / parent_thread_id) — NOT by guessing or counting sessions as proof.
-// This is diagnostic observability for the lead to inspect/report; it is NEVER
-// an acceptance gate. (Distinct from the proof layer that was removed: that
-// attributed day-cumulative session counts to a TASK as a pass/fail condition.)
+// Answers "how many subagents ran, what each was asked, which tools each used,
+// how long they took, and whether they finished cleanly" by reading the
+// harness's OWN native transcripts (reliably linked by agentId /
+// parent_thread_id) — NOT by guessing or counting sessions as proof. Diagnostic
+// observability for the lead to inspect/report; NEVER an acceptance gate.
+// (Distinct from the removed proof layer, which attributed day-cumulative
+// session counts to a TASK as a pass/fail condition.)
 //
 // Claude: ~/.claude/projects/<proj>/<sessionId>/subagents/agent-<id>.jsonl
 //         (+ .meta.json; workflow agents under subagents/workflows/<wf>/).
@@ -22,6 +23,34 @@ function sortedTools(tools) {
 
 function toolTotal(tools) {
   return Object.values(tools).reduce((sum, n) => sum + n, 0);
+}
+
+function durationMs(firstTs, lastTs) {
+  const a = Date.parse(firstTs || "");
+  const b = Date.parse(lastTs || "");
+  return Number.isFinite(a) && Number.isFinite(b) && b >= a ? b - a : 0;
+}
+
+export function formatDuration(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return "0s";
+  const s = Math.round(ms / 1000);
+  if (s < 90) return `${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 90) return `${m}m`;
+  return `${(m / 60).toFixed(1)}h`;
+}
+
+// --since: absolute ISO time, or relative "<N>m|h|d" from now. Returns epoch ms or null.
+export function parseSince(value, now = Date.now()) {
+  if (!value || value === true) return null;
+  const relative = String(value).match(/^(\d+)\s*([mhd])$/i);
+  if (relative) {
+    const n = Number(relative[1]);
+    const unit = { m: 60_000, h: 3_600_000, d: 86_400_000 }[relative[2].toLowerCase()];
+    return now - n * unit;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /* ---- Claude ---- */
@@ -52,29 +81,35 @@ function messageText(content) {
   return "";
 }
 
-function countClaudeTools(text) {
+function readClaudeAgent(text) {
   const tools = {};
   let messages = 0;
+  let firstTs = "";
   let lastTs = "";
   let firstUser = "";
+  let toolErrors = 0;
+  let completed = false;
   for (const line of text.split(/\r?\n/)) {
     if (!line.trim()) continue;
     let record;
     try { record = JSON.parse(line); } catch { continue; }
-    if (record.timestamp) lastTs = record.timestamp;
-    if (record.type === "assistant" && record.message && Array.isArray(record.message.content)) {
-      for (const block of record.message.content) {
-        if (block && block.type === "tool_use" && block.name) {
-          tools[block.name] = (tools[block.name] || 0) + 1;
-        }
+    if (record.timestamp) { if (!firstTs) firstTs = record.timestamp; lastTs = record.timestamp; }
+    const msg = record.message || {};
+    if (record.type === "assistant" && Array.isArray(msg.content)) {
+      for (const block of msg.content) {
+        if (block && block.type === "tool_use" && block.name) tools[block.name] = (tools[block.name] || 0) + 1;
       }
+      completed = msg.content.some((b) => b && b.type === "text" && String(b.text || "").trim());
       messages += 1;
     } else if (record.type === "user") {
-      if (!firstUser && record.message) firstUser = messageText(record.message.content).trim();
+      if (!firstUser && msg.content !== undefined) firstUser = messageText(msg.content).trim();
+      if (Array.isArray(msg.content)) {
+        for (const block of msg.content) if (block && block.type === "tool_result" && block.is_error) toolErrors += 1;
+      }
       messages += 1;
     }
   }
-  return { tools, messages, lastTs, firstUser };
+  return { tools, messages, firstTs, lastTs, firstUser, toolErrors, completed };
 }
 
 export function claudeAgentRollup(sessionId, projectsRoot = join(homedir(), ".claude", "projects")) {
@@ -90,15 +125,18 @@ export function claudeAgentRollup(sessionId, projectsRoot = join(homedir(), ".cl
     }
     let text = "";
     try { text = readFileSync(file, "utf8"); } catch { continue; }
-    const { tools, messages, lastTs, firstUser } = countClaudeTools(text);
+    const parsed = readClaudeAgent(text);
     agents.push({
       id: id.slice(0, 12),
       type: meta.agentType || "",
-      objective: String(meta.description || firstUser || "").split(/\r?\n/)[0].slice(0, 120),
-      tools,
-      tool_total: toolTotal(tools),
-      messages,
-      ts: lastTs,
+      objective: String(meta.description || parsed.firstUser || "").split(/\r?\n/)[0].slice(0, 110),
+      tools: parsed.tools,
+      tool_total: toolTotal(parsed.tools),
+      tool_errors: parsed.toolErrors,
+      messages: parsed.messages,
+      duration_ms: durationMs(parsed.firstTs, parsed.lastTs),
+      status: parsed.completed ? "ok" : "incomplete",
+      ts: parsed.lastTs,
       group: file.includes(`${sep}workflows${sep}`) ? "workflow" : "agent",
     });
   }
@@ -112,7 +150,7 @@ function firstUserText(records) {
     const payload = record.payload || record;
     if (payload && payload.type === "message" && Array.isArray(payload.content)) {
       const text = payload.content.map((c) => (c && (c.text || c.input_text)) || "").join(" ").trim();
-      if (text) return text.split(/\r?\n/)[0].slice(0, 120);
+      if (text) return text.split(/\r?\n/)[0].slice(0, 110);
     }
   }
   return "";
@@ -131,26 +169,37 @@ export function codexAgentRollup(parentThreadId, dayDir) {
         .map((line) => { try { return JSON.parse(line); } catch { return null; } })
         .filter(Boolean);
     } catch { continue; }
-    const metaRecord = records.find((r) => (r.payload || r).thread_source !== undefined || (r.type === "session_meta"));
+    const metaRecord = records.find((r) => (r.payload || r).thread_source !== undefined || r.type === "session_meta");
     const meta = metaRecord ? (metaRecord.payload || metaRecord) : null;
     if (!meta || meta.thread_source !== "subagent") continue;
     const spawn = (meta.source && meta.source.subagent && meta.source.subagent.thread_spawn) || {};
     if (parentThreadId && spawn.parent_thread_id && spawn.parent_thread_id !== parentThreadId) continue;
     const tools = {};
+    let firstTs = meta.timestamp || "";
     let lastTs = meta.timestamp || "";
+    let toolErrors = 0;
+    let completed = false;
     for (const record of records) {
       const payload = record.payload || record;
+      if (record.timestamp) { if (!firstTs) firstTs = record.timestamp; lastTs = record.timestamp; }
       if (payload && payload.type === "function_call" && payload.name) {
         tools[payload.name] = (tools[payload.name] || 0) + 1;
       }
-      if (record.timestamp) lastTs = record.timestamp;
+      if (payload && payload.type === "function_call_output") {
+        const match = String(payload.output || "").match(/^Exit code:\s*(-?\d+)/m);
+        if (match && Number(match[1]) !== 0) toolErrors += 1;
+      }
+      if (payload && payload.type === "task_complete") completed = true;
     }
     agents.push({
       id: String(meta.id || entry.name).slice(0, 12),
       type: spawn.agent_role || "subagent",
-      objective: firstUserText(records) || String(spawn.agent_nickname || "").slice(0, 120),
+      objective: firstUserText(records) || String(spawn.agent_nickname || "").slice(0, 110),
       tools,
       tool_total: toolTotal(tools),
+      tool_errors: toolErrors,
+      duration_ms: durationMs(firstTs, lastTs),
+      status: completed ? "ok" : "incomplete",
       ts: lastTs,
       group: "agent",
     });
@@ -164,7 +213,7 @@ export function buildAgentToolRollup(values = {}, env = process.env) {
   const projectsRoot = env.AI_AGENT_CLAUDE_PROJECTS || join(homedir(), ".claude", "projects");
   const sessionId = (values.session && typeof values.session === "string" ? values.session : "")
     || env.CLAUDE_CODE_SESSION_ID || "";
-  const claude = sessionId ? claudeAgentRollup(sessionId, projectsRoot) : [];
+  let claude = sessionId ? claudeAgentRollup(sessionId, projectsRoot) : [];
 
   let codexDayDir = env.AI_AGENT_CODEX_DAY_DIR || "";
   let parentThreadId = env.AI_AGENT_CODEX_PARENT || "";
@@ -173,14 +222,22 @@ export function buildAgentToolRollup(values = {}, env = process.env) {
     const match = basename(env.CODEX_SESSION_FILE).match(/-([0-9a-f-]{36})\.jsonl$/i);
     if (match) parentThreadId = match[1];
   }
-  const codex = codexDayDir ? codexAgentRollup(parentThreadId, codexDayDir) : [];
-  return { claude, codex };
+  let codex = codexDayDir ? codexAgentRollup(parentThreadId, codexDayDir) : [];
+
+  const since = parseSince(values.since);
+  if (since !== null) {
+    const keep = (agent) => {
+      const t = Date.parse(agent.ts || "");
+      return Number.isFinite(t) ? t >= since : true;
+    };
+    claude = claude.filter(keep);
+    codex = codex.filter(keep);
+  }
+  return { claude, codex, since };
 }
 
 function renderSection(title, agents) {
-  const lines = [];
-  lines.push("");
-  lines.push(`## ${title}`);
+  const lines = ["", `## ${title}`];
   if (agents.length === 0) {
     lines.push("- none recorded");
     return lines;
@@ -189,22 +246,27 @@ function renderSection(title, agents) {
     const tools = sortedTools(agent.tools).map(([name, n]) => `${name} ${n}`).join(", ") || "no tool calls";
     const type = agent.type ? `[${agent.type}] ` : "";
     const objective = agent.objective || "(no objective recorded)";
-    lines.push(`- ${agent.id} ${type}${objective} — ${tools}`);
+    const meta = [
+      formatDuration(agent.duration_ms),
+      agent.tool_errors > 0 ? `${agent.tool_errors} tool-err` : null,
+      agent.status === "ok" ? "ok" : agent.status,
+    ].filter(Boolean).join(", ");
+    lines.push(`- ${agent.id} ${type}${objective} — ${tools} | ${meta}`);
   }
   const totalCalls = agents.reduce((sum, a) => sum + a.tool_total, 0);
-  lines.push(`Total: ${agents.length} agent(s), ${totalCalls} tool call(s).`);
+  const totalErr = agents.reduce((sum, a) => sum + a.tool_errors, 0);
+  lines.push(`Total: ${agents.length} agent(s), ${totalCalls} tool call(s)${totalErr > 0 ? `, ${totalErr} tool error(s)` : ""}.`);
   return lines;
 }
 
 export function renderAgentRollup(rollup) {
   const lines = [];
+  const sinceNote = rollup.since !== null && rollup.since !== undefined ? " (filtered by --since)" : "";
   if (rollup.claude.length > 0 || rollup.codex.length > 0) {
-    if (rollup.claude.length > 0) lines.push(...renderSection("Agents — Claude (advisory, from native transcripts)", rollup.claude));
-    if (rollup.codex.length > 0) lines.push(...renderSection("Agents — Codex (advisory, from native transcripts)", rollup.codex));
+    if (rollup.claude.length > 0) lines.push(...renderSection(`Agents — Claude (advisory, from native transcripts)${sinceNote}`, rollup.claude));
+    if (rollup.codex.length > 0) lines.push(...renderSection(`Agents — Codex (advisory, from native transcripts)${sinceNote}`, rollup.codex));
   } else {
-    lines.push("");
-    lines.push("## Agents (advisory)");
-    lines.push("- no subagent transcripts found for this session");
+    lines.push("", "## Agents (advisory)", `- no subagent transcripts found for this session${sinceNote}`);
   }
   return `${lines.join("\n")}\n`;
 }

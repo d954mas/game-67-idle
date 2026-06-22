@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
-import { claudeAgentRollup, codexAgentRollup } from "./agent_rollup.mjs";
+import { claudeAgentRollup, codexAgentRollup, buildAgentToolRollup, parseSince } from "./agent_rollup.mjs";
 
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -738,6 +738,68 @@ test("status --agents renders an advisory per-agent rollup", () => {
     assert.match(result.stdout, /## Agents — Claude/);
     assert.match(result.stdout, /ccc333 \[Explore\] map runtime — Read 1, Grep 1/);
     assert.match(result.stdout, /Total: 1 agent\(s\), 2 tool call\(s\)/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("agent rollup reports duration, status, and tool errors", () => {
+  const dir = tempDir();
+  try {
+    const session = "sess-dur";
+    const sub = join(dir, "proj", session, "subagents");
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(join(sub, "agent-okk111.meta.json"), JSON.stringify({ agentType: "general-purpose", description: "finished cleanly" }));
+    writeJsonl(join(sub, "agent-okk111.jsonl"), [
+      { type: "user", timestamp: "2026-06-22T10:00:00Z", message: { content: "go" } },
+      { type: "assistant", timestamp: "2026-06-22T10:00:05Z", message: { content: [{ type: "tool_use", name: "Bash" }] } },
+      { type: "user", timestamp: "2026-06-22T10:00:06Z", message: { content: [{ type: "tool_result", is_error: true }] } },
+      { type: "assistant", timestamp: "2026-06-22T10:02:00Z", message: { content: [{ type: "text", text: "done" }] } },
+    ]);
+    const [agent] = claudeAgentRollup(session, dir);
+    assert.equal(agent.status, "ok"); // ended with a text answer
+    assert.equal(agent.tool_errors, 1);
+    assert.ok(agent.duration_ms >= 120000, `duration ${agent.duration_ms}`); // 2 minutes
+
+    // Codex: task_complete -> ok; a non-zero function_call_output -> tool error
+    const cdir = join(dir, "codex");
+    mkdirSync(cdir, { recursive: true });
+    writeJsonl(join(cdir, "rollout-x.jsonl"), [
+      { type: "session_meta", timestamp: "2026-06-22T11:00:00Z", payload: { id: "tc", thread_source: "subagent", source: { subagent: { thread_spawn: { parent_thread_id: "p", agent_role: "explorer" } } } } },
+      { type: "response_item", timestamp: "2026-06-22T11:00:01Z", payload: { type: "function_call", name: "shell_command" } },
+      { type: "response_item", timestamp: "2026-06-22T11:00:02Z", payload: { type: "function_call_output", output: "Exit code: 2\n..." } },
+      { type: "event_msg", timestamp: "2026-06-22T11:00:03Z", payload: { type: "task_complete" } },
+    ]);
+    const [cagent] = codexAgentRollup("p", cdir);
+    assert.equal(cagent.status, "ok");
+    assert.equal(cagent.tool_errors, 1);
+    assert.equal(cagent.tools.shell_command, 1);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("parseSince and --since filter recent agents", () => {
+  assert.equal(parseSince("", 1000), null);
+  assert.equal(parseSince("10m", 600000 + 1000), 1000); // now - 10*60_000
+  assert.equal(parseSince("2026-06-22T10:00:30Z"), Date.parse("2026-06-22T10:00:30Z"));
+
+  const dir = tempDir();
+  try {
+    const session = "sess-since";
+    const sub = join(dir, "proj", session, "subagents");
+    mkdirSync(sub, { recursive: true });
+    for (const [id, ts] of [["old1", "2026-06-22T10:00:02Z"], ["new1", "2026-06-22T10:01:01Z"]]) {
+      writeFileSync(join(sub, `agent-${id}.meta.json`), JSON.stringify({ agentType: "general-purpose", description: id }));
+      writeJsonl(join(sub, `agent-${id}.jsonl`), [
+        { type: "assistant", timestamp: ts, message: { content: [{ type: "tool_use", name: "Read" }, { type: "text", text: "x" }] } },
+      ]);
+    }
+    const env = { AI_AGENT_CLAUDE_PROJECTS: dir, CLAUDE_CODE_SESSION_ID: session };
+    assert.equal(buildAgentToolRollup({}, env).claude.length, 2);
+    const filtered = buildAgentToolRollup({ since: "2026-06-22T10:00:30Z" }, env);
+    assert.equal(filtered.claude.length, 1);
+    assert.equal(filtered.claude[0].id, "new1");
   } finally {
     cleanup(dir);
   }
