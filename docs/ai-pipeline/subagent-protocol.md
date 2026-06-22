@@ -2,7 +2,8 @@
 
 How the lead delegates bounded work to subagents in substantial AI-pipeline,
 game, visual, asset, or review work. `docs/ai-pipeline/agent-workflow.md` is the
-hot route; this file holds the method.
+hot route; this file holds the method; day-to-day operator recipes are in
+`docs/ai-pipeline/orchestration-playbook.md`.
 
 This repo follows the model mature agent systems use (Anthropic multi-agent
 research, Claude Code subagents, OpenAI Agents SDK, LangGraph): **delegation is
