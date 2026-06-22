@@ -55,6 +55,43 @@ endif()
 set(GAME_TARGET game_seed)
 set(GAME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/build/${GAME_TARGET}/${NT_PRESET_NAME}")
 
+# ---- Cozy Automation runtime pack (UI font + sprite atlas) ----
+# A native builder bakes assets/fonts + assets/shaders + assets/raw/cozy/*.png
+# into assets/cozy_automation.ntpack and emits src/generated/cozy_automation_assets.h.
+# The game depends on this, so the pack + header are produced before it compiles.
+set(COZY_PACK_OUT_DIR "${CMAKE_SOURCE_DIR}/build/cozy")
+set(COZY_PACK_FILE "${CMAKE_SOURCE_DIR}/assets/cozy_automation.ntpack")
+set(COZY_ASSETS_HEADER "${CMAKE_SOURCE_DIR}/src/generated/cozy_automation_assets.h")
+if(NOT EMSCRIPTEN)
+    add_executable(build_cozy_packs src/build_packs.c)
+    target_link_libraries(build_cozy_packs PRIVATE nt_builder nt_log)
+    target_compile_definitions(build_cozy_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(build_cozy_packs PRIVATE -U_DLL)
+    nt_set_warning_flags(build_cozy_packs)
+    nt_set_sanitizer_flags(build_cozy_packs)
+    set_target_properties(build_cozy_packs PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/build/cozy_packer")
+
+    file(GLOB COZY_RAW_PNGS "${CMAKE_SOURCE_DIR}/assets/raw/cozy/*.png")
+    add_custom_command(
+        OUTPUT "${COZY_ASSETS_HEADER}" "${COZY_PACK_FILE}"
+        COMMAND "$<TARGET_FILE:build_cozy_packs>" "${COZY_PACK_OUT_DIR}"
+        COMMAND "${CMAKE_COMMAND}" -E copy
+            "${COZY_PACK_OUT_DIR}/cozy_automation.ntpack" "${COZY_PACK_FILE}"
+        DEPENDS build_cozy_packs
+            "${CMAKE_SOURCE_DIR}/assets/fonts/cozy_ui.ttf"
+            "${CMAKE_SOURCE_DIR}/assets/shaders/sprite.vert"
+            "${CMAKE_SOURCE_DIR}/assets/shaders/sprite.frag"
+            "${CMAKE_SOURCE_DIR}/assets/shaders/slug_text.vert"
+            "${CMAKE_SOURCE_DIR}/assets/shaders/slug_text.frag"
+            ${COZY_RAW_PNGS}
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Building cozy_automation.ntpack + generated assets header"
+        VERBATIM
+    )
+    add_custom_target(cozy_packs DEPENDS "${COZY_ASSETS_HEADER}" "${COZY_PACK_FILE}")
+endif()
+
 add_library(game_cjson STATIC
     external/cjson/cJSON.c
     external/cjson/cJSON.h
@@ -125,12 +162,15 @@ if(NOT EMSCRIPTEN AND SKELETAL_ANIMATION_OZZ_SOURCE_DIR)
 endif()
 
 add_executable(${GAME_TARGET}
-    src/clean_seed_main.c
+    src/cozy_automation_main.c
     src/game_devapi_ui.c
     src/game_devapi_ui.h
     src/game_audio.c
     src/game_audio.h
 )
+if(NOT EMSCRIPTEN)
+    add_dependencies(${GAME_TARGET} cozy_packs)
+endif()
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core
     nt_app
@@ -177,6 +217,7 @@ endif()
 target_include_directories(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_DIR}"
     src
+    "${CMAKE_SOURCE_DIR}/src/generated"
     external/cjson
     external/neotolis-engine/deps/glfw/deps
 )
