@@ -1,0 +1,3 @@
+LilitaOne.ttf — Lilita One, SIL Open Font License 1.1 (OFL).
+Source: Google Fonts (vendored via neotolis-engine assets). Free for commercial use.
+Used as the Little Lives UI font (packed into little_lives.ntpack at build time).

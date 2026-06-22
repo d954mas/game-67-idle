@@ -2,48 +2,50 @@
 
 ## Current Goal
 
-No active game concept is selected. This repository is a clean AI-first native
-game seed, ready for the next game.
+Build `Little Lives` (little-lives): a 3D Sims-like, iteratively toward a full
+game (city, multiple Sims, interactions, build, work, needs). Milestone plan:
+M1 house sandbox (now) → M2 city/lots → M3 careers/relationships/skills.
 
-The asset/cutout pipeline was reviewed and optimized this iteration (key_matte
-default, route_cutout auto-picker, dual_plate; the per-asset edge-color audit
-removed; ~4000 lines of legacy/dead code dropped) — see git history.
+## Current State
 
-Mine Cards was a prior pipeline test run; its full game, GDD, and tasks are
-preserved in tag `mine-cards-snapshot-2026-06-18` and removed from the working
-tree so the next game starts clean. Reusable lessons live in
-`AI_PIPELINE_HISTORY.md`.
+- Playable 3D Sims-like, BUILT + DevAPI-verified. Runtime: `src/clean_seed_main.c`.
+  - M1 sandbox (T0106 ✅), polish (✅).
+  - M2 city: 4-lot neighborhood, roads, travel, overview map (T0109 ✅ review).
+  - M3 careers/relationships/skills/families (T0110 ✅ review).
+  - HUD text via engine font pack (T0107 ✅ done).
+  - Furniture = real CC0 Kenney meshes with authentic per-material colours
+    (bed/fridge/shower/toilet/sofa/desk) via the shape-renderer mesh path (T0111).
+    Sims = animated blocky humanoids (real character mesh needs a rigged pipeline).
 
-Ember Road was closed after visual/UX review. Its full game state is preserved
-in tag `ember-road-snapshot-2026-06-21`; active tasks were dropped/archive-kept,
-and game-specific runtime, assets, project docs, and tools were removed from
-the working tree.
+## Blocking Work
 
-## Current Runtime Surface
+- None. Core game proven across M1–M3 + readable text HUD.
 
-Native `game_seed` is the clean seed work surface:
+## Non-blocking Debt
+
+- Sim character mesh = a rigged/textured/animated pipeline (FBX->glTF + skin +
+  ozz skeletal anim); large milestone, only if photoreal Sims wanted (T0111).
+- City: only the active lot fully simulated for player; cross-lot visiting is minimal.
+
+## Build / Run / Validate
 
 ```powershell
-cmake --build --preset native-debug --target game_seed
-build/game_seed/native-debug/game_seed.exe --devapi 9123
+cmake --build build/_cmake/native-debug --target game_seed
+build/game_seed/native-debug/game_seed.exe --devapi 9123 --window-size 1280x720
+python tmp/ll_smoke.py            # DevAPI acceptance smoke
+node tools/taskboard/cli.mjs validate
+node tools/ai.mjs validate        # pipeline + visual-invariant guard (run this!)
 ```
 
-Runtime entrypoint: `src/clean_seed_main.c` (362-line debug template).
+## Last Known Good Evidence
 
-The engine submodule at `external/neotolis-engine` is read-only from this repo.
-Reusable sidecar modules, tools, skills, and game code may be edited here.
-
-## Current Gate
-
-Capture the user's game concept (references, audience, platform, no-go
-constraints), then run the Stage 0 prototype startup path and create a fresh
-project wiki plus exactly one scoped task/epic before implementation. Do not
-invent a concept.
+- `gamedesign/projects/little-lives/reviews/city_meshes_overview.png` — neighborhood w/ mesh furniture.
+- `gamedesign/projects/little-lives/reviews/furniture_meshes.png` — multi-colour CC0 furniture.
+- `gamedesign/projects/little-lives/reviews/hud_text.png` — readable font HUD.
+- `gamedesign/projects/little-lives/reviews/sims_people.png` — humanoid Sims.
 
 ## Next Priorities
 
-1. Capture the next game concept, then scaffold a fresh project wiki + one
-   scoped task/epic before implementation.
-2. Keep reusable pipeline/skills/knowledge clean and current between games.
-3. Keep native PC scale/focus + visual/teachability/core-loop proof as early
-   gates for the next playable UI.
+1. T0111 — Sim character mesh + optional textured/lit (PBR) mesh pipeline.
+2. Lead review of M2/M3 (T0109/T0110) → close or extend.
+3. Deeper city: cross-lot visiting, neighborhood sim life.

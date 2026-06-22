@@ -4,47 +4,22 @@
   "lifetime": "persistent_profile",
   "version": 1,
   "string_max": 64,
-  "reserved": [
-    {
-      "id": 99,
-      "path": "grabbed",
-      "reason": "runtime input telemetry, not persistent state"
-    }
-  ],
   "collections": {
     "items_max": 32,
     "inventory_item_ids_max": 32
   },
   "enums": {
-    "Shape": [
-      "cube",
-      "sphere",
-      "cylinder",
-      "capsule"
+    "GameMode": [
+      "live",
+      "build"
     ],
-    "RenderMode": [
-      "solid_wire",
-      "solid",
-      "wire"
-    ],
-    "Location": [
-      "old_gate",
-      "north_road",
-      "old_mine"
-    ],
-    "QuestStage": [
-      "not_started",
-      "accepted",
-      "wolf_defeated",
-      "completed"
-    ],
-    "BattleState": [
-      "none",
-      "ready",
-      "running",
-      "victory",
-      "low_health",
-      "defeat"
+    "SimAction": [
+      "idle",
+      "walking",
+      "using",
+      "social",
+      "work",
+      "sleep"
     ]
   },
   "types": {
@@ -86,58 +61,115 @@
   },
   "fields": [
     {
-      "path": "shape_index",
+      "path": "mode_index",
       "id": 1,
       "type": "enum",
-      "default": "cube",
-      "enum": "Shape",
+      "default": "live",
+      "enum": "GameMode",
       "devapi": "read_write"
     },
     {
-      "path": "render_mode_index",
+      "path": "selected_sim",
       "id": 2,
-      "type": "enum",
-      "default": "solid_wire",
-      "enum": "RenderMode",
-      "devapi": "read_write"
-    },
-    {
-      "path": "camera_distance",
-      "id": 3,
-      "type": "float",
-      "default": 6,
-      "devapi": "read_write",
-      "min": 2.5,
-      "max": 10
-    },
-    {
-      "path": "test_ui_clicks",
-      "id": 4,
       "type": "int",
       "default": 0,
       "devapi": "read_write",
       "min": 0,
-      "max": 1000000
+      "max": 15
     },
     {
-      "path": "test_label_text",
+      "path": "sim_count",
+      "id": 3,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 16
+    },
+    {
+      "path": "clock.minutes",
+      "id": 4,
+      "type": "float",
+      "default": 480,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 1440
+    },
+    {
+      "path": "clock.day",
       "id": 5,
-      "type": "string",
-      "default": "Template ready",
-      "max_length": 63,
-      "devapi": "read_write"
+      "type": "int",
+      "default": 1,
+      "devapi": "read_write",
+      "min": 1,
+      "max": 9999
     },
     {
-      "path": "test_button_text",
+      "path": "wallet.simoleons",
       "id": 6,
-      "type": "string",
-      "default": "Cycle",
-      "max_length": 63,
-      "devapi": "read_write"
+      "type": "int",
+      "default": 2000,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 2147483647
+    },
+    {
+      "path": "stats.interactions",
+      "id": 7,
+      "type": "int",
+      "default": 0,
+      "devapi": "read_write",
+      "min": 0,
+      "max": 100000000
+    },
+    {
+      "path": "camera.yaw",
+      "id": 8,
+      "type": "float",
+      "default": 0.7,
+      "devapi": "read_write",
+      "min": -3.2,
+      "max": 3.2
+    },
+    {
+      "path": "camera.pitch",
+      "id": 9,
+      "type": "float",
+      "default": 0.62,
+      "devapi": "read_write",
+      "min": 0.1,
+      "max": 1.5
+    },
+    {
+      "path": "camera.distance",
+      "id": 10,
+      "type": "float",
+      "default": 20,
+      "devapi": "read_write",
+      "min": 6,
+      "max": 48
+    },
+    {
+      "path": "camera.target_x",
+      "id": 11,
+      "type": "float",
+      "default": 0,
+      "devapi": "read_write",
+      "min": -200,
+      "max": 200
+    },
+    {
+      "path": "camera.target_z",
+      "id": 12,
+      "type": "float",
+      "default": 0,
+      "devapi": "read_write",
+      "min": -200,
+      "max": 200
     },
     {
       "path": "settings.master_volume",
-      "id": 7,
+      "id": 13,
       "type": "float",
       "default": 0.75,
       "devapi": "read_write",
@@ -146,7 +178,7 @@
     },
     {
       "path": "settings.sfx_volume",
-      "id": 8,
+      "id": 14,
       "type": "float",
       "default": 0.8,
       "devapi": "read_write",
@@ -155,352 +187,31 @@
     },
     {
       "path": "tutorial.done",
-      "id": 9,
+      "id": 15,
       "type": "bool",
       "default": false,
       "devapi": "read_write"
     },
     {
-      "path": "wallet.soft",
-      "id": 10,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 2147483647
-    },
-    {
-      "path": "wallet.hard",
-      "id": 11,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 2147483647
-    },
-    {
       "path": "items",
-      "id": 12,
+      "id": 16,
       "type": "map<string,ItemInstance>",
       "max_count": 32,
       "devapi": "read_write"
     },
     {
       "path": "inventory.item_ids",
-      "id": 13,
+      "id": 17,
       "type": "list<string>",
       "max_count": 32,
       "devapi": "read_write"
     },
     {
       "path": "equipment.hand_item_id",
-      "id": 14,
+      "id": 18,
       "type": "string?",
       "default": null,
       "max_length": 63,
-      "devapi": "read_write"
-    },
-    {
-      "path": "hero.level",
-      "id": 15,
-      "type": "int",
-      "default": 1,
-      "devapi": "read_write",
-      "min": 1,
-      "max": 99
-    },
-    {
-      "path": "hero.xp",
-      "id": 16,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 999999
-    },
-    {
-      "path": "hero.hp",
-      "id": 17,
-      "type": "int",
-      "default": 30,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 9999
-    },
-    {
-      "path": "hero.hp_max",
-      "id": 18,
-      "type": "int",
-      "default": 30,
-      "devapi": "read_write",
-      "min": 1,
-      "max": 9999
-    },
-    {
-      "path": "hero.attack",
-      "id": 19,
-      "type": "int",
-      "default": 5,
-      "devapi": "read_write",
-      "min": 1,
-      "max": 999
-    },
-    {
-      "path": "hero.defense",
-      "id": 20,
-      "type": "int",
-      "default": 1,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 999
-    },
-    {
-      "path": "hero.gold",
-      "id": 21,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 999999
-    },
-    {
-      "path": "location_index",
-      "id": 22,
-      "type": "enum",
-      "default": "old_gate",
-      "enum": "Location",
-      "devapi": "read_write"
-    },
-    {
-      "path": "quest_stage_index",
-      "id": 23,
-      "type": "enum",
-      "default": "not_started",
-      "enum": "QuestStage",
-      "devapi": "read_write"
-    },
-    {
-      "path": "battle_state_index",
-      "id": 24,
-      "type": "enum",
-      "default": "none",
-      "enum": "BattleState",
-      "devapi": "read_write"
-    },
-    {
-      "path": "battle.round",
-      "id": 25,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 99
-    },
-    {
-      "path": "battle.enemy_hp",
-      "id": 26,
-      "type": "int",
-      "default": 18,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 9999
-    },
-    {
-      "path": "battle.enemy_hp_max",
-      "id": 27,
-      "type": "int",
-      "default": 18,
-      "devapi": "read_write",
-      "min": 1,
-      "max": 9999
-    },
-    {
-      "path": "battle.enemy_attack",
-      "id": 28,
-      "type": "int",
-      "default": 4,
-      "devapi": "read_write",
-      "min": 1,
-      "max": 999
-    },
-    {
-      "path": "battle.enemy_defense",
-      "id": 29,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 999
-    },
-    {
-      "path": "battle.last_damage",
-      "id": 30,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 9999
-    },
-    {
-      "path": "battle.last_enemy_damage",
-      "id": 31,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 9999
-    },
-    {
-      "path": "battle.wins",
-      "id": 32,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 999999
-    },
-    {
-      "path": "quest.wolf_kills",
-      "id": 33,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 99
-    },
-    {
-      "path": "reward.pending",
-      "id": 34,
-      "type": "bool",
-      "default": false,
-      "devapi": "read_write"
-    },
-    {
-      "path": "reward.item_ready",
-      "id": 35,
-      "type": "bool",
-      "default": false,
-      "devapi": "read_write"
-    },
-    {
-      "path": "gear.ring_equipped",
-      "id": 36,
-      "type": "bool",
-      "default": false,
-      "devapi": "read_write"
-    },
-    {
-      "path": "old_mine.scouted",
-      "id": 37,
-      "type": "bool",
-      "default": false,
-      "devapi": "read_write"
-    },
-    {
-      "path": "old_mine.depth",
-      "id": 38,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 99
-    },
-    {
-      "path": "old_mine.ember_shards",
-      "id": 39,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 999999
-    },
-    {
-      "path": "old_mine.depth_resolved",
-      "id": 40,
-      "type": "bool",
-      "default": false,
-      "devapi": "read_write"
-    },
-    {
-      "path": "old_mine.bat_defeated",
-      "id": 41,
-      "type": "bool",
-      "default": false,
-      "devapi": "read_write"
-    },
-    {
-      "path": "old_mine.bat_damage",
-      "id": 42,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 9999
-    },
-    {
-      "path": "old_mine.depth_gold",
-      "id": 43,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 999999
-    },
-    {
-      "path": "old_mine.delve_count",
-      "id": 44,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 999999
-    },
-    {
-      "path": "old_mine.cache_claimed",
-      "id": 45,
-      "type": "bool",
-      "default": false,
-      "devapi": "read_write"
-    },
-    {
-      "path": "old_mine.last_delve_shards",
-      "id": 46,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 999999
-    },
-    {
-      "path": "old_mine.last_delve_gold",
-      "id": 47,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 999999
-    },
-    {
-      "path": "old_mine.last_delve_xp",
-      "id": 48,
-      "type": "int",
-      "default": 0,
-      "devapi": "read_write",
-      "min": 0,
-      "max": 999999
-    },
-    {
-      "path": "gear.mine_lantern",
-      "id": 49,
-      "type": "bool",
-      "default": false,
-      "devapi": "read_write"
-    },
-    {
-      "path": "old_mine.depth2_unlocked",
-      "id": 50,
-      "type": "bool",
-      "default": false,
       "devapi": "read_write"
     }
   ]

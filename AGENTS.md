@@ -75,3 +75,7 @@
 - Playable smoke prints named acceptance checks plus a compact summary.
 
 When friction repeats, prefer a tool, validator, skill, or source fix.
+
+## Project
+
+- Active game concept: `Little Lives` (little-lives), A tiny 3D life sim: direct a Sim around a room to meet their needs (energy, hunger, fun, hygiene).

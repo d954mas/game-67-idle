@@ -13,3 +13,4 @@ __pycache__/
 
 # Builder scratch for asset packs
 assets/runtime/*/_cache/
+assets/packs/

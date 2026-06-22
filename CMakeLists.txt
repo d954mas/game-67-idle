@@ -124,6 +124,28 @@ if(NOT EMSCRIPTEN AND SKELETAL_ANIMATION_OZZ_SOURCE_DIR)
     endif()
 endif()
 
+# --- Little Lives asset pack (UI font + Slug text shaders) ---
+# Native builder runs at build time, producing the pack + generated asset header.
+set(LL_PACK_DIR "${CMAKE_SOURCE_DIR}/assets/packs")
+set(LL_PACK_HDR "${CMAKE_BINARY_DIR}/pack_generated")
+set(LL_PACK_FILE "${LL_PACK_DIR}/little_lives.ntpack")
+set(LL_PACK_HEADER "${LL_PACK_HDR}/little_lives_assets.h")
+if(NOT EMSCRIPTEN)
+    add_executable(little_lives_build_packs src/build_packs.c)
+    target_link_libraries(little_lives_build_packs PRIVATE nt_builder nt_log)
+    target_compile_definitions(little_lives_build_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(little_lives_build_packs PRIVATE -U_DLL)
+    add_custom_command(
+        OUTPUT "${LL_PACK_FILE}" "${LL_PACK_HEADER}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LL_PACK_DIR}" "${LL_PACK_HDR}"
+        COMMAND "$<TARGET_FILE:little_lives_build_packs>" "${LL_PACK_DIR}" "${LL_PACK_HDR}"
+        DEPENDS little_lives_build_packs assets/shaders/slug_text.vert assets/shaders/slug_text.frag assets/fonts/LilitaOne.ttf
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Building little_lives.ntpack (UI font + text shaders)"
+    )
+    add_custom_target(little_lives_packs DEPENDS "${LL_PACK_FILE}" "${LL_PACK_HEADER}")
+endif()
+
 add_executable(${GAME_TARGET}
     src/clean_seed_main.c
     src/game_devapi_ui.c
@@ -176,11 +198,16 @@ else()
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_DIR}"
+    "${LL_PACK_HDR}"
     src
     external/cjson
     external/neotolis-engine/deps/glfw/deps
 )
 target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=$<BOOL:${GAME_DEVAPI_ENABLED}> _CRT_SECURE_NO_WARNINGS)
+if(NOT EMSCRIPTEN)
+    add_dependencies(${GAME_TARGET} little_lives_packs)
+    target_compile_definitions(${GAME_TARGET} PRIVATE LL_HAVE_TEXT=1)
+endif()
 if(TARGET skeletal_animation_extension)
     target_link_libraries(${GAME_TARGET} PRIVATE skeletal_animation_extension)
     target_compile_definitions(${GAME_TARGET} PRIVATE SKELETAL_ANIMATION_EXTENSION_ENABLED=1)

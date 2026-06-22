@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "game_id": "little-lives",
+  "title": "Little Lives",
+  "one_line": "A tiny 3D life sim: keep one Sim's needs met by directing them around a single room.",
+  "reference_grounding": {
+    "primary": "The Sims (Maxis/EA) — the motives/needs system and the mix of Sim free-will decay with direct player commands.",
+    "borrowed": [
+      "Continuous needs (motives) that decay over real time and are refilled by interacting with furniture.",
+      "Player issues an interaction command; the Sim autonomously walks to the object and performs it.",
+      "Mood is a readable summary of how well needs are met."
+    ],
+    "explicitly_not_in_slice": [
+      "Build/Buy mode, placing furniture, multiple rooms or lots.",
+      "Multiple Sims, relationships, social needs, careers, aging.",
+      "Inventory economy / shopping (Simoleons shown as flavor only)."
+    ]
+  },
+  "player_verbs": [
+    "Orbit and zoom the 3D camera (drag to rotate, wheel to zoom) to read the room.",
+    "Direct the Sim to a piece of furniture (click its on-screen action button or press 1-4).",
+    "Triage: choose which decaying need to address next."
+  ],
+  "rules": [
+    "Four needs — Energy, Hunger, Fun, Hygiene — start partly filled (0..100) and decay continuously at different rates.",
+    "Each of four furniture pieces restores exactly one need: Bed->Energy, Fridge->Hunger, Sofa/TV->Fun, Shower->Hygiene.",
+    "Directing the Sim sets a target; the Sim walks there, then 'uses' it for a few seconds while the matching need refills.",
+    "Only one interaction at a time; a new command interrupts and re-routes.",
+    "Mood = average of the four needs. A need at/near zero is a visible red crisis."
+  ],
+  "feedback": [
+    "Four color-coded need bars (green -> amber -> red) update live.",
+    "The Sim visibly walks toward the target and plays a 'using' bob while refilling.",
+    "Mood readout (color + value) reflects the average; the lowest need is highlighted as the suggested next action.",
+    "Day clock advances; Simoleons counter shown as flavor."
+  ],
+  "risk": [
+    "Needs decay while the Sim walks/uses, so addressing one need lets others fall.",
+    "Letting a need hit zero tanks mood — the player must keep triaging."
+  ],
+  "goals": {
+    "short_term": "Raise the currently-lowest need before it reaches crisis.",
+    "session": "Keep all four needs out of the red and end the day with a good (green) mood."
+  },
+  "replay_reason": "Different decay rates and starting values force a different triage order each run; the day cycle gives a natural session boundary.",
+  "first_screen": {
+    "one_location": "A single furnished room rendered in 3D.",
+    "primary_path": "Read the need bars, pick the lowest, send the Sim to the matching furniture.",
+    "next_action": "Lowest need is highlighted; its furniture button is the call to action.",
+    "visible_progress": "Need bars rise during use; mood value climbs; interaction count increments.",
+    "locks": "Cannot start a second interaction until the current walk/use finishes (or is re-commanded)."
+  },
+  "acceptance_checks": [
+    "Scene renders a 3D room with floor/walls, four distinct furniture pieces, and a Sim.",
+    "Needs decay over time and are observable via DevAPI game.state.",
+    "Commanding furniture (key 1-4 / button) moves the Sim to it and refills the matching need.",
+    "Mood equals the average of the four needs and updates live."
+  ]
+}

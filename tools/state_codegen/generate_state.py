@@ -18,18 +18,12 @@ DEVAPI_SOURCE_PATH = OUT_DIR / "game_state_devapi.c"
 SCHEMA_HEADER_PATH = OUT_DIR / "game_state_schema.gen.h"
 SOURCE_TEMPLATE_PATH = Path(__file__).with_name("game_state.c.in")
 
+# Fields the generated template hard-codes (items/inventory/equipment) plus the
+# infra conventions every game keeps. Game-specific fields live in the schema.
 REQUIRED_FIELDS = {
-    "shape_index",
-    "render_mode_index",
-    "camera_distance",
-    "test_ui_clicks",
-    "test_label_text",
-    "test_button_text",
     "settings.master_volume",
     "settings.sfx_volume",
     "tutorial.done",
-    "wallet.soft",
-    "wallet.hard",
     "items",
     "inventory.item_ids",
     "equipment.hand_item_id",
