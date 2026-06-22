@@ -166,6 +166,7 @@ static float s_build_cz;
 // camera view-projection for this frame (for screen-space picking + billboards)
 static float s_vp[16];
 static float s_cam_eye[3] = {0.0F, 12.0F, 18.0F}; // updated each frame (fog distance)
+static float s_cam_drift_t = 0.0F;                // gentle camera breathing-drift phase
 static float s_view_w = 1280.0F;
 static float s_view_h = 720.0F;
 
@@ -420,10 +421,10 @@ static void world_init(void) {
     s_overview = false;
     g_game_state.selected_sim = 0;
 
-    // Frame the active dollhouse by default.
-    g_game_state.camera_distance = 19.0F;
-    g_game_state.camera_pitch = 0.74F;
-    g_game_state.camera_yaw = 0.72F;
+    // Frame the active dollhouse by default (authored diorama angle, ll_art.h).
+    g_game_state.camera_distance = LL_CAM_DIST;
+    g_game_state.camera_pitch = LL_CAM_PITCH;
+    g_game_state.camera_yaw = LL_CAM_YAW;
     g_game_state.camera_target_x = s_lots[0].ox;
     g_game_state.camera_target_z = s_lots[0].oz - 0.5F;
 
@@ -798,6 +799,7 @@ static void game_update(void) {
         }
     }
     ll_fx_update(dt);
+    s_cam_drift_t += dt; // gentle camera breathing-drift phase (camera life)
 
     // Mirror runtime summary into persistent state (DevAPI/save visible).
     g_game_state.sim_count = s_sim_count;
@@ -819,6 +821,12 @@ static void compute_camera(float aspect, float eye_out[3]) {
         dist = 64.0F;
         tx = 0.0F;
         tz = 0.0F;
+    } else {
+        // Camera life: a slow eased breathing orbit added ON TOP of the player's
+        // controlled angle (stored yaw/pitch unchanged, so input still wins).
+        yaw += 0.020F * sinf(s_cam_drift_t * 0.21F);
+        pitch = clampf(pitch + 0.012F * sinf(s_cam_drift_t * 0.16F + 1.0F), 0.12F, 1.45F);
+        dist += 0.30F * sinf(s_cam_drift_t * 0.13F + 2.2F);
     }
 
     float jit[3];
