@@ -24,8 +24,8 @@ never weaken gates) over its literal "split into 12 files / fan out every wave."
 | A3 | HUD polish: palette-matched flat panels, grouped corner HUD, engine-font only, readable at zoom | lead | true | night/A3-pre |
 | A4 | Juice — `ll_fx.{c,h}` new module: squash-stretch on place/select, place dust, reward sparkle, screen shake | agent+lead | true | night/A4-pre |
 | A5 | Camera life: fixed diorama angle + subtle eased drift/follow (main-loop coupled) | lead | true | night/A5-pre |
-| A6 | Gameplay depth pass: tune careers/social readability + any cheap depth (lead judgment) | lead | false | night/A6-pre |
-| A7 | Composition + balance pass: silhouette/readability from camera, grade consistency, cut noisy juice | lead | false | night/A7-pre |
+| A6 | Gameplay depth pass: tune careers/social readability + any cheap depth (lead judgment) | lead | folded-A7 | night/A6-pre |
+| A7 | Composition + balance pass: silhouette/readability from camera, grade consistency, cut noisy juice | lead | true | night/A7-pre |
 | A8 | Hardening: full smoke (named checks), `ai.mjs validate`, taskboard validate; final before/after | lead | false | night/A8-pre |
 | A9 | Morning handoff: finalize STATUS.md (shipped/parked + reasons), screenshots, telemetry | lead | false | — |
 

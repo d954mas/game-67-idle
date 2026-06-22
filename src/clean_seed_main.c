@@ -922,6 +922,31 @@ static void draw_lot(const Lot *lot, bool active) {
     ll_fog_mix(col, fog, s_daylight);
     nt_shape_renderer_rect((float[3]){ox, WALL_H * 0.5F, oz - hd}, (float[2]){hw * 2.0F, WALL_H}, col);
 
+    // Composition: a daylight window + a framed poster make the box read as a
+    // lived-in room. Detail only on the focused lot (far lots stay clean/fogged).
+    if (active) {
+        float wy = WALL_H * 0.60F;
+        float zf = oz - hd + 0.06F; // just inside the back wall, toward the camera
+        float fr[4];
+        ll_shade_n(fr, 0.34F, 0.28F, 0.22F, 1.0F, LL_NORMAL_PZ, s_daylight); // warm wood
+        nt_shape_renderer_rect((float[3]){ox, wy, zf}, (float[2]){3.6F, 1.9F}, fr);
+        float pane[3];
+        ll_sky_color(0.55F, s_daylight, pane); // sky through the glass (tracks time of day)
+        nt_shape_renderer_rect((float[3]){ox, wy, zf + 0.02F}, (float[2]){3.1F, 1.4F},
+                               (float[4]){pane[0], pane[1], pane[2], 1.0F});
+        nt_shape_renderer_rect((float[3]){ox, wy, zf + 0.03F}, (float[2]){0.09F, 1.4F}, fr); // mullions
+        nt_shape_renderer_rect((float[3]){ox, wy, zf + 0.03F}, (float[2]){3.1F, 0.09F}, fr);
+
+        float rot[4] = {0.0F, 0.7071068F, 0.0F, 0.7071068F};
+        float xf = ox - hw + 0.06F; // just inside the left (sunlit) wall
+        float pf[4];
+        ll_shade_n(pf, 0.30F, 0.24F, 0.18F, 1.0F, LL_NORMAL_PX, s_daylight);
+        nt_shape_renderer_rect_rot((float[3]){xf, WALL_H * 0.58F, oz + 2.6F}, (float[2]){1.7F, 2.0F}, rot, pf);
+        float art[4];
+        ll_shade_n(art, 0.52F, 0.70F, 0.60F, 1.0F, LL_NORMAL_PX, s_daylight); // soft landscape
+        nt_shape_renderer_rect_rot((float[3]){xf + 0.02F, WALL_H * 0.58F, oz + 2.6F}, (float[2]){1.4F, 1.65F}, rot, art);
+    }
+
     // Active-lot marker ring on the plot
     if (active) {
         float ring[4];
