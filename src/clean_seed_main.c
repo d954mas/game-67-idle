@@ -1125,9 +1125,29 @@ static void hud_layout(float w, float h) {
     }
 }
 
+// Cohesive HUD palette: warm charcoal panels, warm-gold accent, blue=info,
+// green=confirm — matched to the diorama's warm grade. (Renderer is opaque.)
+static const float HUD_PANEL[4] = {0.12F, 0.115F, 0.145F, 1.0F};
+static const float HUD_EDGE[4] = {0.30F, 0.31F, 0.38F, 1.0F};
+static const float HUD_BASE[4] = {0.04F, 0.04F, 0.06F, 1.0F};
+static const float HUD_ACCENT[4] = {0.97F, 0.80F, 0.40F, 1.0F};
+static const float HUD_INFO[4] = {0.26F, 0.46F, 0.74F, 1.0F};
+static const float HUD_GOOD[4] = {0.33F, 0.68F, 0.45F, 1.0F};
+
 static void draw_panel(float x, float y, float w, float h) {
-    rect2(x, y, w, h, (float[4]){0.10F, 0.12F, 0.18F, 0.82F});
-    rect2(x, y, w, 3.0F, (float[4]){1.0F, 1.0F, 1.0F, 0.18F});
+    rect2(x, y, w, h, HUD_PANEL);
+    rect2(x, y, w, 2.0F, HUD_EDGE);            // light top edge
+    rect2(x, y + h - 2.0F, w, 2.0F, HUD_BASE); // dark base for separation
+}
+
+// Consistent flat button: fill + lighter top highlight + accent outline when hot.
+static void draw_button(Box b, const float fill[4], bool hot) {
+    rect2(b.x, b.y, b.w, b.h, fill);
+    rect2(b.x, b.y, b.w, 2.0F,
+          (float[4]){clampf(fill[0] * 1.35F, 0.0F, 1.0F), clampf(fill[1] * 1.35F, 0.0F, 1.0F),
+                     clampf(fill[2] * 1.35F, 0.0F, 1.0F), 1.0F});
+    rect2(b.x, b.y + b.h - 2.0F, b.w, 2.0F, HUD_BASE);
+    rect2_wire(b.x, b.y, b.w, b.h, hot ? HUD_ACCENT : (float[4]){0.0F, 0.0F, 0.0F, 1.0F});
 }
 
 static void draw_sim_billboards(void) {
@@ -1182,27 +1202,24 @@ static void draw_hud(float w, float h) {
     // Neighborhood lot strip (which household is active)
     for (int l = 0; l < s_lot_count; l++) {
         Box b = s_lot_btn[l];
-        rect2(b.x, b.y, b.w, b.h,
-              (l == s_active_lot) ? (float[4]){0.95F, 0.8F, 0.3F, 1.0F} : (float[4]){0.3F, 0.34F, 0.42F, 1.0F});
-        rect2_wire(b.x, b.y, b.w, b.h, (float[4]){1.0F, 1.0F, 1.0F, 0.25F});
+        draw_button(b, (l == s_active_lot) ? HUD_ACCENT : HUD_PANEL, l == s_active_lot);
         // house glyph
-        rect2(b.x + b.w * 0.5F - 6.0F, b.y + 6.0F, 12.0F, 9.0F, (float[4]){0.9F, 0.9F, 0.95F, 0.9F});
+        rect2(b.x + b.w * 0.5F - 6.0F, b.y + 6.0F, 12.0F, 9.0F,
+              (l == s_active_lot) ? (float[4]){0.15F, 0.13F, 0.10F, 1.0F} : (float[4]){0.85F, 0.87F, 0.92F, 1.0F});
     }
 
-    // Mode button (LIVE / BUILD)
-    rect2(s_mode_btn.x, s_mode_btn.y, s_mode_btn.w, s_mode_btn.h,
-          build ? (float[4]){0.3F, 0.8F, 0.5F, 1.0F} : (float[4]){0.25F, 0.4F, 0.7F, 1.0F});
-    rect2_wire(s_mode_btn.x, s_mode_btn.y, s_mode_btn.w, s_mode_btn.h, (float[4]){1.0F, 1.0F, 1.0F, 0.4F});
+    // Mode button (LIVE / BUILD): green when building, blue when live.
+    draw_button(s_mode_btn, build ? HUD_GOOD : HUD_INFO, build);
 
-    // Overview/map toggle button
-    rect2(s_view_btn.x, s_view_btn.y, s_view_btn.w, s_view_btn.h,
-          s_overview ? (float[4]){0.85F, 0.6F, 0.25F, 1.0F} : (float[4]){0.3F, 0.5F, 0.45F, 1.0F});
-    rect2_wire(s_view_btn.x, s_view_btn.y, s_view_btn.w, s_view_btn.h, (float[4]){1.0F, 1.0F, 1.0F, 0.4F});
+    // Overview/map toggle button (gold accent when the map is open).
+    draw_button(s_view_btn, s_overview ? HUD_ACCENT : HUD_PANEL, s_overview);
     // map glyph (2x2 houses)
-    rect2(s_view_btn.x + 10.0F, s_view_btn.y + 9.0F, 7.0F, 7.0F, (float[4]){0.95F, 0.95F, 1.0F, 0.9F});
-    rect2(s_view_btn.x + 20.0F, s_view_btn.y + 9.0F, 7.0F, 7.0F, (float[4]){0.95F, 0.95F, 1.0F, 0.9F});
-    rect2(s_view_btn.x + 10.0F, s_view_btn.y + 19.0F, 7.0F, 7.0F, (float[4]){0.95F, 0.95F, 1.0F, 0.9F});
-    rect2(s_view_btn.x + 20.0F, s_view_btn.y + 19.0F, 7.0F, 7.0F, (float[4]){0.95F, 0.95F, 1.0F, 0.9F});
+    for (int gy = 0; gy < 2; gy++) {
+        for (int gx = 0; gx < 2; gx++) {
+            rect2(s_view_btn.x + 10.0F + (float)gx * 10.0F, s_view_btn.y + 9.0F + (float)gy * 10.0F, 7.0F, 7.0F,
+                  (float[4]){0.95F, 0.95F, 1.0F, 1.0F});
+        }
+    }
 
     if (build) {
         // Build palette
@@ -1240,11 +1257,9 @@ static void draw_hud(float w, float h) {
     }
 
     // Work button
-    rect2(s_work_btn.x, s_work_btn.y, s_work_btn.w, s_work_btn.h, (float[4]){0.2F, 0.45F, 0.85F, 1.0F});
-    rect2_wire(s_work_btn.x, s_work_btn.y, s_work_btn.w, s_work_btn.h, (float[4]){1.0F, 1.0F, 1.0F, 0.4F});
+    draw_button(s_work_btn, HUD_INFO, false);
     // briefcase glyph
-    rect2(s_work_btn.x + s_work_btn.w * 0.5F - 12.0F, s_work_btn.y + 9.0F, 24.0F, 16.0F,
-          (float[4]){0.85F, 0.7F, 0.3F, 1.0F});
+    rect2(s_work_btn.x + s_work_btn.w * 0.5F - 12.0F, s_work_btn.y + 9.0F, 24.0F, 16.0F, HUD_ACCENT);
 
     // Selected Sim skills (3 mini bars) + career-level pips, bottom-left of panel.
     const Sim *ss = &s_sims[sel];
