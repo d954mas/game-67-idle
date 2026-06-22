@@ -10,10 +10,11 @@ import {
   stringArg,
   todaySessionProfiles,
 } from "./profile_lib.mjs";
+import { buildAgentToolRollup, renderAgentRollup } from "./agent_rollup.mjs";
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--verbose]
+  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--agents] [--json-output <status.json>] [--verbose]
 
 Profiling is fully passive: the PostToolUse hook records every tool call to a
 per-session log automatically. This command READS that log and reports the
@@ -498,7 +499,13 @@ if (values.help) usage();
 const profilePaths = resolveProfilePaths(values);
 const jsonOutputFile = stringArg(values, "json-output", "");
 const status = buildStatus(profilePaths, values);
-const rendered = renderStatus(status, { verbose: values.verbose === true });
+let rendered = renderStatus(status, { verbose: values.verbose === true });
+
+if (values.agents === true) {
+  const agentRollup = buildAgentToolRollup(values);
+  status.agent_tool_rollup = agentRollup;
+  rendered += renderAgentRollup(agentRollup);
+}
 
 if (jsonOutputFile) {
   const target = resolve(jsonOutputFile);

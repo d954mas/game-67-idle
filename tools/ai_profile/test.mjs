@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
+import { claudeAgentRollup, codexAgentRollup } from "./agent_rollup.mjs";
 
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -653,6 +654,90 @@ test("status surfaces an advisory subagent rollup", () => {
     assert.match(rendered.stdout, /Subagents delegated: 2/);
     assert.match(rendered.stdout, /## Subagents Delegated/);
     assert.match(rendered.stdout, /map src\/world/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("claudeAgentRollup reads per-agent tools from native transcripts", () => {
+  const dir = tempDir();
+  try {
+    const session = "sess-123";
+    const sub = join(dir, "proj", session, "subagents");
+    mkdirSync(join(sub, "workflows", "wf_a"), { recursive: true });
+    // direct agent with meta description
+    writeFileSync(join(sub, "agent-aaa111.meta.json"), JSON.stringify({ agentType: "general-purpose", description: "cut the proof layer" }));
+    writeJsonl(join(sub, "agent-aaa111.jsonl"), [
+      { type: "user", timestamp: "2026-06-22T10:00:00Z", message: { content: "do the cut" } },
+      { type: "assistant", timestamp: "2026-06-22T10:00:01Z", message: { content: [{ type: "tool_use", name: "Edit" }, { type: "tool_use", name: "Read" }] } },
+      { type: "assistant", timestamp: "2026-06-22T10:00:02Z", message: { content: [{ type: "tool_use", name: "Edit" }] } },
+    ]);
+    // workflow agent, meta has no description -> objective falls back to first user text
+    writeFileSync(join(sub, "workflows", "wf_a", "agent-bbb222.meta.json"), JSON.stringify({ agentType: "general-purpose" }));
+    writeJsonl(join(sub, "workflows", "wf_a", "agent-bbb222.jsonl"), [
+      { type: "user", timestamp: "2026-06-22T10:01:00Z", message: { content: [{ type: "text", text: "map the world module" }] } },
+      { type: "assistant", timestamp: "2026-06-22T10:01:01Z", message: { content: [{ type: "tool_use", name: "Grep" }] } },
+    ]);
+    const agents = claudeAgentRollup(session, dir);
+    assert.equal(agents.length, 2);
+    const direct = agents.find((a) => a.id === "aaa111");
+    assert.equal(direct.objective, "cut the proof layer");
+    assert.deepEqual(direct.tools, { Edit: 2, Read: 1 });
+    assert.equal(direct.group, "agent");
+    const wf = agents.find((a) => a.id === "bbb222");
+    assert.equal(wf.objective, "map the world module");
+    assert.equal(wf.group, "workflow");
+    assert.equal(wf.tools.Grep, 1);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("codexAgentRollup reads subagent function-call tools and filters by parent", () => {
+  const dir = tempDir();
+  try {
+    writeJsonl(join(dir, "rollout-sub.jsonl"), [
+      { type: "session_meta", timestamp: "2026-06-22T10:00:00Z", payload: { id: "thread-child", thread_source: "subagent", source: { subagent: { thread_spawn: { parent_thread_id: "thread-parent", agent_role: "explorer", agent_nickname: "Euclid" } } } } },
+      { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "explore the asset loader" }] } },
+      { type: "response_item", payload: { type: "function_call", name: "shell_command", call_id: "1" } },
+      { type: "response_item", payload: { type: "function_call", name: "shell_command", call_id: "2" } },
+    ]);
+    // a non-subagent (main) rollout must be ignored
+    writeJsonl(join(dir, "rollout-main.jsonl"), [
+      { type: "session_meta", payload: { id: "thread-main", thread_source: "user" } },
+      { type: "response_item", payload: { type: "function_call", name: "shell_command", call_id: "9" } },
+    ]);
+    const matched = codexAgentRollup("thread-parent", dir);
+    assert.equal(matched.length, 1);
+    assert.equal(matched[0].type, "explorer");
+    assert.equal(matched[0].objective, "explore the asset loader");
+    assert.equal(matched[0].tools.shell_command, 2);
+    // a different parent yields nothing
+    assert.equal(codexAgentRollup("other-parent", dir).length, 0);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status --agents renders an advisory per-agent rollup", () => {
+  const dir = tempDir();
+  try {
+    const session = "sess-xyz";
+    const sub = join(dir, "proj", session, "subagents");
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(join(sub, "agent-ccc333.meta.json"), JSON.stringify({ agentType: "Explore", description: "map runtime" }));
+    writeJsonl(join(sub, "agent-ccc333.jsonl"), [
+      { type: "assistant", timestamp: "2026-06-22T10:00:01Z", message: { content: [{ type: "tool_use", name: "Read" }, { type: "tool_use", name: "Grep" }] } },
+    ]);
+    const profile = join(dir, "p.jsonl");
+    writeJsonl(profile, [{ ts: "2026-06-22T10:00:00.000+00:00", phase: "session", category: "tooling", result: "pass", event_type: "tool_call_result", commands: ["ls"] }]);
+    const result = run(
+      ["tools/ai_profile/status.mjs", "--profile", profile, "--agents"],
+      { env: { AI_AGENT_CLAUDE_PROJECTS: dir, CLAUDE_CODE_SESSION_ID: session, CODEX_SESSION_FILE: "" } },
+    );
+    assert.match(result.stdout, /## Agents — Claude/);
+    assert.match(result.stdout, /ccc333 \[Explore\] map runtime — Read 1, Grep 1/);
+    assert.match(result.stdout, /Total: 1 agent\(s\), 2 tool call\(s\)/);
   } finally {
     cleanup(dir);
   }

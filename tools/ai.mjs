@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 function usage({ exitCode = 2, stream = process.stderr } = {}) {
   stream.write(`usage:
   node tools/ai.mjs validate [--quick|--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune] [--with-assets]
-  node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--json-output <p>] [--no-import-codex-session]
+  node tools/ai.mjs status [--verbose] [--all] [--agents] [--harness claude|codex] [--session <id>] [--profile <p>] [--json-output <p>] [--no-import-codex-session]
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
   node tools/ai.mjs orchestration-template
   node tools/ai.mjs subagent-packet-template [--preset codebase-map|review|asset-research|texture-gen|asset-intake [--targets a,b,c]]
@@ -30,7 +30,8 @@ function usage({ exitCode = 2, stream = process.stderr } = {}) {
 Commands:
   validate  run reusable-pipeline validation; unknown options fail instead of being silently ignored
   status    read the passive per-session profile (the hook auto-records every tool call);
-            --verbose for the full per-record breakdown; --json-output writes the status JSON
+            --verbose for the full per-record breakdown; --json-output writes the status JSON;
+            --agents adds an advisory per-subagent tool-usage rollup from native harness transcripts
   import-codex-session  recover missed failed Codex shell calls into the session log
   orchestration-template print the orchestration packet template for subagent tasks
   subagent-packet-template print a reusable delegation packet; --preset <name> emits ready packets (parallel fan-out for codebase-map/review/texture-gen via --targets, single for asset-research, staged for asset-intake); harness-neutral (Claude Agent/Workflow tool or Codex spawn_agent)
