@@ -912,12 +912,29 @@ static int mesh_for_kind(int kind) {
 
 static float s_mesh_scratch[3 * 1024];
 
-// Draw every per-material sub-mesh of a model: rotate around Y by `yaw`, translate
-// to the object, tint by the material's baked Kd colour (day/night modulated).
+// Round contact shadow (fake AO) on the floor to ground a prop/sim. Opaque (the
+// renderer can't blend), faked soft with 3 concentric rings: subtle edge -> dark
+// core, each lifted slightly so the inner ring wins the depth test.
+static void draw_contact_shadow(float x, float z, float radius) {
+    float flat[4] = {0.7071068F, 0.0F, 0.0F, 0.7071068F};
+    static const float ring_r[3] = {1.0F, 0.68F, 0.40F};
+    static const float ring_t[3] = {1.0F, 0.5F, 0.0F}; // edge..core
+    for (int i = 0; i < 3; i++) {
+        float t[3];
+        ll_ao_tone(ring_t[i], s_daylight, t);
+        nt_shape_renderer_circle_rot((float[3]){x, 0.018F + 0.004F * (float)i, z},
+                                     radius * ring_r[i], flat, (float[4]){t[0], t[1], t[2], 1.0F});
+    }
+}
+
+// Draw every per-material sub-mesh of a model FACETED: each triangle is shaded by
+// its own world-space face normal against the baked sun, giving crisp low-poly
+// facets (the target look) instead of one flat colour per material.
 static void draw_mesh_object(const Object *o, int mesh_id, float yaw) {
     const LLMesh *m = &LL_MESHES[mesh_id];
     float cs = cosf(yaw);
     float sn = sinf(yaw);
+    float fog = cam_dist(o->x, o->z);
     for (int s = 0; s < m->nsubs; s++) {
         const LLSub *sm = &m->subs[s];
         if (sm->nverts > 1024) {
@@ -931,16 +948,25 @@ static void draw_mesh_object(const Object *o, int mesh_id, float yaw) {
             s_mesh_scratch[i * 3 + 1] = y;
             s_mesh_scratch[i * 3 + 2] = o->z + (-x * sn + z * cs);
         }
-        float col[4];
-        shade(col, sm->r, sm->g, sm->b, 1.0F);
-        ll_fog_mix(col, cam_dist(o->x, o->z), s_daylight);
-        nt_shape_renderer_mesh(s_mesh_scratch, (uint32_t)sm->nverts, sm->idx, (uint32_t)sm->nidx, col);
+        for (int t = 0; t + 2 < sm->nidx; t += 3) {
+            const float *a = &s_mesh_scratch[sm->idx[t + 0] * 3];
+            const float *b = &s_mesh_scratch[sm->idx[t + 1] * 3];
+            const float *c = &s_mesh_scratch[sm->idx[t + 2] * 3];
+            float n[3];
+            ll_face_normal(a, b, c, n);
+            float col[4];
+            ll_shade_n(col, sm->r, sm->g, sm->b, 1.0F, n, s_daylight);
+            ll_fog_mix(col, fog, s_daylight);
+            nt_shape_renderer_triangle(a, b, c, col);
+        }
     }
 }
 
 static void draw_object(const Object *o) {
     float col[4];
     int mid = mesh_for_kind(o->kind);
+    float shadow_r = (o->kind == OBJ_BED) ? 1.45F : (o->kind == OBJ_SOFA ? 1.15F : 0.95F);
+    draw_contact_shadow(o->x, o->z, shadow_r);
     if (mid >= 0) {
         // Face the room: the use-spot points inward from the object.
         float yaw = atan2f(o->usx - o->x, o->usz - o->z);
@@ -973,6 +999,7 @@ static void draw_sim(int idx) {
     if (s->at_work) {
         return;
     }
+    draw_contact_shadow(s->x, s->z, 0.40F);
     bool selected = (idx == g_game_state.selected_sim);
     bool walking = (s->action == GAME_STATE_SIM_ACTION_WALKING);
     float lift = walking ? fabsf(sinf(s->bob)) * 0.05F : (s->action == GAME_STATE_SIM_ACTION_SLEEP ? -0.25F : 0.0F);

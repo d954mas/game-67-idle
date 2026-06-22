@@ -47,14 +47,25 @@ static const float LL_SKY_HORIZON_NIGHT[3] = {0.16F, 0.18F, 0.30F};
 #define LL_FOG_FULL 78.0F   // fully hazed beyond this
 #define LL_FOG_MAX 0.82F    // never fully erase distant geometry
 
-// Soft contact-shadow (fake AO) quad colour under objects/sims.
-static const float LL_AO_RGBA[4] = {0.06F, 0.08F, 0.12F, 0.34F};
+// Contact-shadow (fake AO): the shape renderer does NOT alpha-blend, so shadows
+// are OPAQUE and faked soft with concentric rings (see ll_ao_tone below).
 // #endregion
 
 static inline float ll_clamp01(float v) { return v < 0.0F ? 0.0F : (v > 1.0F ? 1.0F : v); }
 
 // daylight (0.58..1.0) -> 0..1 day strength.
 static inline float ll_daynorm(float daylight) { return ll_clamp01((daylight - 0.58F) / 0.42F); }
+
+// Opaque contact-shadow tone. ring01: 0 = core (darkest) .. 1 = edge (subtlest).
+// Warm-dark and dimmed by daylight so it always reads darker than the wood floor.
+static inline void ll_ao_tone(float ring01, float daylight, float out[3]) {
+    float dn = ll_daynorm(daylight);
+    float k = 0.33F + 0.21F * ll_clamp01(ring01); // 0.33 core .. 0.54 edge
+    float dim = 0.55F + 0.45F * dn;
+    out[0] = k * 1.05F * dim;
+    out[1] = k * 0.86F * dim;
+    out[2] = k * 0.65F * dim;
+}
 
 // #region core surface lighting
 // Bake directional sun + sky fill + warm/cool grade into a base colour given the
