@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "kind": "orchestration-workflow",
+  "task_id": "T0101",
+  "status": "review",
+  "objective": "Make subagent-packet-check reject status-agent-rollup evidence commands unless they include current orchestration readiness, keeping trace evidence exempt, so manual subagent packets cannot drift from the stricter bootstrap/current evidence contract.",
+  "scope": {
+    "included": [
+      "tools/taskboard/lib.mjs",
+      "tools/taskboard/test.mjs",
+      "tools/ai.test.mjs",
+      "tasks/active/T*.md",
+      "tasks/evidence/T*.json",
+      "tasks/workflows/T*.json"
+    ],
+    "excluded": [
+      "files and systems outside the declared allowed files"
+    ]
+  },
+  "packets": [
+    {
+      "id": "lead-implementation",
+      "objective": "subagent-packet-check rejects status evidence without current readiness, accepts the primary flag and alias, keeps trace evidence accepted, and focused/full validation pass",
+      "status": "integrated",
+      "allowed_files": [
+        "tools/taskboard/lib.mjs",
+        "tools/taskboard/test.mjs",
+        "tools/ai.test.mjs",
+        "tasks/active/T*.md",
+        "tasks/evidence/T*.json",
+        "tasks/workflows/T*.json"
+      ],
+      "evidence_refs": [
+        "tasks/evidence/T0101-status-rollup.json"
+      ]
+    }
+  ],
+  "budgets": {
+    "max_agents": 2,
+    "context": "Bounded to taskboard, docs, task, workflow, and evidence files.",
+    "validation": "Focused tests plus taskboard validation and strict status evidence."
+  },
+  "verification": {
+    "strategy": "machine gates plus independent review",
+    "commands": [
+      "node tools/taskboard/cli.mjs validate --json"
+    ],
+    "evidence_refs": [
+      "tasks/evidence/T0101-status-rollup.json"
+    ]
+  },
+  "integration": {
+    "owner": "lead",
+    "policy": "Lead integrates subagent findings, updates packet statuses before closeout, and keeps manifest refs tied to the machine evidence artifact."
+  },
+  "evidence_refs": [
+    "tasks/evidence/T0101-status-rollup.json"
+  ],
+  "updated_at": "2026-06-22"
+}

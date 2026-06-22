@@ -3819,6 +3819,44 @@ test("subagent packet check rejects status evidence without compact artifact", (
   assert.ok(problem.missingFields.includes("compact status evidence"));
 });
 
+test("subagent packet check rejects status evidence without current readiness", () => {
+  const packet = validSubagentPacket().replace(
+    "node --test --test-name-pattern \"subagent packet\" tools/taskboard/test.mjs",
+    "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/T0000-status-rollup.json --json",
+  );
+  const problem = subagentPacketProblem(packet);
+
+  assert.equal(problem.code, "subagent_packet_invalid");
+  assert.ok(problem.missingFields.includes("current status readiness"));
+});
+
+test("subagent packet check accepts status evidence with current readiness", () => {
+  const packet = validSubagentPacket().replace(
+    "node --test --test-name-pattern \"subagent packet\" tools/taskboard/test.mjs",
+    "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-task --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/T0000-status-rollup.json --json",
+  );
+
+  assert.equal(subagentPacketProblem(packet), null);
+});
+
+test("subagent packet check accepts status evidence with current readiness alias", () => {
+  const packet = validSubagentPacket().replace(
+    "node --test --test-name-pattern \"subagent packet\" tools/taskboard/test.mjs",
+    "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-preflight --trace-session tmp/session.jsonl --agent-rollup-evidence --json-output tasks/evidence/T0000-status-rollup.json --json",
+  );
+
+  assert.equal(subagentPacketProblem(packet), null);
+});
+
+test("subagent packet check keeps trace evidence exempt from current readiness", () => {
+  const packet = validSubagentPacket().replace(
+    "node --test --test-name-pattern \"subagent packet\" tools/taskboard/test.mjs",
+    "node tools/ai.mjs orchestration-trace --parent-thread-id parent --session-root tmp/sessions --cwd C:/projects/game-67-idle --json-output tasks/evidence/trace.json --json",
+  );
+
+  assert.equal(subagentPacketProblem(packet), null);
+});
+
 test("subagent packet check rejects missing handoff subfields", () => {
   const packet = validSubagentPacket().replace("  not-done: explicit gaps", "");
   const problem = subagentPacketProblem(packet);

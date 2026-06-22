@@ -228,6 +228,9 @@ function subagentEvidenceCommandProblem(text) {
   if (signatures.some((signature) => signature.kind === "status-agent-rollup" && !signature.compact_artifact)) {
     return "compact status evidence";
   }
+  if (signatures.some((signature) => signature.kind === "status-agent-rollup" && !signature.current_orchestration_task)) {
+    return "current status readiness";
+  }
   return "";
 }
 
