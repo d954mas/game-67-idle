@@ -743,6 +743,26 @@ test("status --agents renders an advisory per-agent rollup", () => {
   }
 });
 
+test("claudeAgentRollup resolves a short session-id prefix", () => {
+  const dir = tempDir();
+  try {
+    const fullId = "e03c764c-7ea4-4b26-8d83-9835a1803784";
+    const sub = join(dir, "proj", fullId, "subagents");
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(join(sub, "agent-z1.meta.json"), JSON.stringify({ agentType: "Explore", description: "map state" }));
+    writeJsonl(join(sub, "agent-z1.jsonl"), [
+      { type: "assistant", timestamp: "2026-06-22T10:00:01Z", message: { content: [{ type: "tool_use", name: "Read" }, { type: "text", text: "x" }] } },
+    ]);
+    // short prefix (as printed in status output / profile filenames) must still resolve the full-uuid dir
+    const agents = claudeAgentRollup("e03c764c", dir);
+    assert.equal(agents.length, 1);
+    assert.equal(agents[0].id, "z1");
+    assert.equal(agents[0].tools.Read, 1);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("agent rollup reports duration, status, and tool errors", () => {
   const dir = tempDir();
   try {

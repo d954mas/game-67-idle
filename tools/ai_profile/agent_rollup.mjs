@@ -59,8 +59,18 @@ function findClaudeSubagentsDir(sessionId, projectsRoot) {
   if (!sessionId || !existsSync(projectsRoot)) return "";
   for (const project of readdirSync(projectsRoot, { withFileTypes: true })) {
     if (!project.isDirectory()) continue;
-    const dir = join(projectsRoot, project.name, sessionId, "subagents");
-    if (existsSync(dir)) return dir;
+    const projectDir = join(projectsRoot, project.name);
+    // Exact session-dir match (full id) — fast path.
+    const exact = join(projectDir, sessionId, "subagents");
+    if (existsSync(exact)) return exact;
+    // Short-id / prefix match: `--session e03c764c` should find dir e03c764c-<rest>.
+    let sessionDirs;
+    try { sessionDirs = readdirSync(projectDir, { withFileTypes: true }); } catch { continue; }
+    for (const entry of sessionDirs) {
+      if (!entry.isDirectory() || !entry.name.startsWith(sessionId)) continue;
+      const dir = join(projectDir, entry.name, "subagents");
+      if (existsSync(dir)) return dir;
+    }
   }
   return "";
 }
