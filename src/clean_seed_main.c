@@ -1,3 +1,6 @@
+// Clean seed: debug-only shape-renderer placeholder. Every new game starts here
+// and replaces this debug rendering with real sprite/text assets via the engine
+// renderer; until then the shape renderer below is acknowledged debug debt.
 #include "app/nt_app.h"
 #include "core/nt_core.h"
 #include "core/nt_platform.h"
