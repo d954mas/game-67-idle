@@ -3,11 +3,11 @@
 ## Now
 
 - Focus: clean AI-first native game seed.
-- No active game concept yet; runtime is reset to the clean seed, ready for the
-  next game (cozy automation, to be scaffolded).
-- Closed prototype: `Dragon Grove` (dragon-grove) is finished and archived
-  (snapshot tag `dragon-grove-snapshot-2026-06-22`); do not continue its
-  gameplay, visual, UX, asset, or runtime work unless lead reopens it.
+- No active game concept; runtime is reset to the clean seed, ready for the next
+  game iteration.
+- Closed prototypes (finished, archived; do not continue unless lead reopens):
+  `Cozy Automation` (cozy-automation, snapshot `cozy-automation-snapshot-2026-06-22`)
+  and `Dragon Grove` (dragon-grove, snapshot `dragon-grove-snapshot-2026-06-22`).
 - Engine: `external/neotolis-engine`; public APIs only.
 
 ## Map
@@ -75,9 +75,3 @@
 - Playable smoke prints named acceptance checks plus a compact summary.
 
 When friction repeats, prefer a tool, validator, skill, or source fix.
-
-## Project
-
-
-- Active game concept: `Cozy Automation` (cozy-automation), A small cozy automation game: place simple producers on a small grid; they generate and auto-route a resource you spend to unlock the next producer/step.
-- Active game concept: `Cozy Automation` (cozy-automation), A small cozy automation game: place simple producers on a small grid; they generate and auto-route a resource you spend to unlock the next producer/step.

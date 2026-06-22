@@ -1,7 +1,7 @@
 ---
 id: E006
 title: Cozy Automation prototype
-status: active
+status: done
 priority: P1
 tags: [prototype, cozy-automation]
 created: 2026-06-22

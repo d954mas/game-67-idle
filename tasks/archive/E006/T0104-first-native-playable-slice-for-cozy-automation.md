@@ -1,7 +1,7 @@
 ---
 id: T0104
 title: First native playable slice for Cozy Automation
-status: review
+status: done
 epic: E006
 priority: P1
 tags: [prototype, cozy-automation, native-first]

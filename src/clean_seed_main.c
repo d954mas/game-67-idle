@@ -1,6 +1,3 @@
-// Clean seed: debug-only shape-renderer placeholder. A real game replaces this
-// debug rendering with sprite/text assets via the engine renderer; until then
-// the shape renderer here is acknowledged debug debt.
 #include "app/nt_app.h"
 #include "core/nt_core.h"
 #include "core/nt_platform.h"
