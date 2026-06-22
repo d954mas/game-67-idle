@@ -54,7 +54,10 @@ Operator path:
    on non-overlapping lead tasks while agents run.
 4. Wait for needed results, verify current files, integrate findings, close
    completed agents, and record changes.
-5. Check workflow manifest, strict evidence, reviewer PASS, validation, commit.
+5. Verify current files, run validation, commit.
 
-Load `docs/ai-pipeline/subagent-protocol.md` for packet schema, ownership,
-handoff fields, review rules, and context-budget decisions.
+Acceptance gates the work product, not the delegation: there is no machine proof
+that a subagent ran. The lead is the backstop.
+
+Load `docs/ai-pipeline/subagent-protocol.md` for the packet, return/handoff
+fields, ownership, and acceptance.

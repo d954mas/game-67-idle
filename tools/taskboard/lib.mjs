@@ -6,7 +6,7 @@
 // arrays as [a, b]). Keep it strict so agents and humans stay compatible.
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync, statSync, renameSync } from "node:fs";
-import { basename, join, resolve, dirname, relative } from "node:path";
+import { basename, join, resolve, dirname } from "node:path";
 import { LIVE_STATUS_MAX_CHARS } from "../context_budget_config.mjs";
 
 export { LIVE_STATUS_MAX_CHARS };
@@ -14,25 +14,17 @@ export { LIVE_STATUS_MAX_CHARS };
 export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done", "dropped"];
 export const EPIC_STATUSES = ["idea", "active", "done", "dropped"];
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
-export const DEFAULT_ORCHESTRATION_TOOL_USE_GUARD = "verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output";
+export const DEFAULT_ORCHESTRATION_TOOL_USE_GUARD = "verify exact repo paths with rg --files/Test-Path before reads; use Select-Object -Skip/-First for line windows; keep evidence commands read-only";
 
 const ORCHESTRATION_REVIEW_STATUSES = new Set(["review", "done"]);
-// T0028 introduced the mechanical guard; older archives keep their legacy logs.
+// Legacy compatibility thresholds: older tasks predate the lightweight guard and
+// keep their original label history. T0028 introduced the guard; allowed-files
+// bounds and broad-domain classification arrived later, so pre-threshold tasks
+// stay exempt from those checks.
 const ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID = 28;
-// T0031 introduced machine-readable orchestration trace evidence. Older review
-// tasks keep their label-only packet history; newer substantial orchestration
-// tasks must include an executable trace/status evidence command and a recorded
-// PASS result for one such command.
-const ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID = 31;
 const ORCHESTRATION_ALLOWED_FILES_BOUNDS_MIN_TASK_ID = 76;
-const ORCHESTRATION_TRACE_ARTIFACT_MIN_TASK_ID = 77;
 const ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID = 78;
 const ORCHESTRATION_BROAD_WORK_MIN_TASK_ID = 79;
-const ORCHESTRATION_CLOSEOUT_PREFLIGHT_FIELDS_MIN_TASK_ID = 79;
-const ORCHESTRATION_STATUS_ARTIFACT_MIN_TASK_ID = 80;
-const ORCHESTRATION_TOOL_USE_GUARD_DETAILS_MIN_TASK_ID = 82;
-const ORCHESTRATION_REVIEWER_EVIDENCE_MIN_TASK_ID = 88;
-const ORCHESTRATION_WORKFLOW_MANIFEST_MIN_TASK_ID = 89;
 const ORCHESTRATION_KEYWORDS = [
   "pipeline",
   "orchestration",
@@ -141,12 +133,7 @@ const ORCHESTRATION_PREFLIGHT_FIELDS = [
   ["tool-use guard", /\btool-use\s+guard\b/i],
   ...ORCHESTRATION_REQUIRED_FIELDS.slice(2),
 ];
-const ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS = [
-  /\bnode\s+tools\/ai\.mjs\s+orchestration-trace\b/i,
-];
 const ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN = /\b(?:allowed files?|inputs?)\b/i;
-const ORCHESTRATION_EVIDENCE_FIELD_PATTERN = /\b(?:evidence command|evidence artifact|artifact)\b/i;
-const ORCHESTRATION_WORKFLOW_MANIFEST_PATTERN = /\bworkflow\s+manifest\b/i;
 const ORCHESTRATION_PACKET_TEMPLATE = `- orchestration: used
   objective: <non-empty>
   allowed files: <non-empty>
@@ -160,7 +147,7 @@ allowed files: <repo-local files or bounded patterns>
 forbidden files: <files or areas the subagent must not touch>
 tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
 expected output: <concise final report or changed files>
-evidence command or artifact: <read-only command, focused test, or artifact path; for orchestration-trace include --session/--parent-thread-id and --json-output; for status --agent-rollup include --parent-thread-id/--trace-session, --require-agent-rollup-ok, --require-current-orchestration-task, --agent-rollup-evidence, and --json-output>
+evidence command or artifact: <read-only command, focused test, or artifact path>
 stop condition: <when the subagent must stop>
 handoff:
   findings: <facts or verdict>
@@ -201,11 +188,6 @@ export function subagentPacketProblem(text) {
   }
   const allowed = packetFieldValue(packet, ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN);
   if (allowed && boundedAllowedFilesProblem(allowed)) missing.push("bounded allowed files");
-  const guard = packetFieldValue(packet, /\btool-use\s+guard\b/i);
-  if (guard && !isDetailedToolUseGuard(guard)) missing.push("tool-use guard details");
-  const evidence = packetFieldValue(packet, /\b(?:evidence command or artifact|evidence command|evidence artifact|artifact)\b/i);
-  const evidenceProblem = evidence ? subagentEvidenceCommandProblem(evidence) : "";
-  if (evidenceProblem) missing.push(evidenceProblem);
   const handoff = packetFieldValue(packet, /\bhandoff\b/i);
   for (const label of ["findings", "files", "commands/evidence", "risks", "owner action", "not-done"]) {
     const pattern = new RegExp(`\\b${escapeRegExp(label)}\\b`, "i");
@@ -218,20 +200,6 @@ export function subagentPacketProblem(text) {
     template: SUBAGENT_PACKET_TEMPLATE,
     message: `subagent packet failed (missing/invalid: ${[...new Set(missing)].join(", ")})`,
   };
-}
-
-function subagentEvidenceCommandProblem(text) {
-  const value = String(text || "").replaceAll("\\", "/");
-  if (!/\bnode\s+tools\/ai\.mjs\s+(?:orchestration-trace|status)\b/i.test(value)) return "";
-  const signatures = machineEvidenceSignatures(value);
-  if (!signatures.length) return "machine evidence source";
-  if (signatures.some((signature) => signature.kind === "status-agent-rollup" && !signature.compact_artifact)) {
-    return "compact status evidence";
-  }
-  if (signatures.some((signature) => signature.kind === "status-agent-rollup" && !signature.current_orchestration_task)) {
-    return "current status readiness";
-  }
-  return "";
 }
 
 function packetFieldValue(text, fieldPattern) {
@@ -253,98 +221,11 @@ function packetFieldValue(text, fieldPattern) {
   return out.join(" ").trim();
 }
 
-export function orchestrationWorkflowTemplate(taskId = "T0000") {
-  return {
-    schema_version: 1,
-    kind: "orchestration-workflow",
-    task_id: taskId,
-    status: "review",
-    objective: "Describe the workflow objective.",
-    scope: {
-      included: ["repo-local files or task scope"],
-      excluded: ["out-of-scope areas"],
-    },
-    packets: [
-      {
-        id: "packet-001",
-        objective: "Bounded worker or verifier packet.",
-        status: "integrated",
-        allowed_files: ["tools/taskboard/lib.mjs"],
-        evidence_refs: ["tasks/evidence/<task-id>-status-rollup.json"],
-      },
-    ],
-    budgets: {
-      max_agents: 2,
-      context: "Bounded to taskboard, docs, task, workflow, and evidence files.",
-      validation: "Focused tests plus taskboard validation and strict status evidence.",
-    },
-    verification: {
-      strategy: "independent_review",
-      commands: ["node --test tools/taskboard/test.mjs"],
-      evidence_refs: ["tasks/evidence/<task-id>-status-rollup.json"],
-    },
-    integration: {
-      owner: "lead",
-      policy: "lead integrates verified packet outputs and records unresolved gaps",
-    },
-    evidence_refs: ["tasks/evidence/<task-id>-status-rollup.json"],
-    updated_at: "YYYY-MM-DD",
-  };
-}
-
-export function orchestrationWorkflowInitPayload(doc, options = {}) {
-  const taskId = String(doc?.fields?.id || "T0000");
-  const log = sectionText(doc?.body || "", "Log");
-  const block = orchestrationUsedBlocks(log)[0] || "";
-  const taskStatus = String(doc?.fields?.status || "");
-  const status = options.status || (taskStatus === "doing" ? "in_progress" : taskStatus || "in_progress");
-  const allowedText = fieldValue(block, ORCHESTRATION_ALLOWED_FILES_FIELD_PATTERN);
-  const allowedFiles = splitBoundedList(allowedText);
-  const evidenceRefs = machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN))
-    .map((signature) => signature.artifact_path)
-    .filter(Boolean);
-  const refs = evidenceRefs.length ? evidenceRefs : [`tasks/evidence/${taskId}-status-rollup.json`];
-  const terminal = ["review", "done"].includes(status);
-  return {
-    ...orchestrationWorkflowTemplate(taskId),
-    task_id: taskId,
-    status,
-    objective: fieldValue(block, /\bobjective\b/i) || sectionText(doc?.body || "", "What") || "Describe the workflow objective.",
-    scope: {
-      included: allowedFiles.length ? allowedFiles : ["repo-local files or task scope"],
-      excluded: ["files and systems outside the declared allowed files"],
-    },
-    packets: [
-      {
-        id: "lead-implementation",
-        objective: fieldValue(block, /\bexpected output\b/i) || "Implement and verify the orchestration task.",
-        status: options.packetStatus || (terminal ? "integrated" : "planned"),
-        allowed_files: allowedFiles.length ? allowedFiles : ["tools/taskboard/lib.mjs"],
-        evidence_refs: refs,
-      },
-    ],
-    verification: {
-      strategy: "machine gates plus independent review",
-      commands: ["node tools/taskboard/cli.mjs validate --json"],
-      evidence_refs: refs,
-    },
-    integration: {
-      owner: "lead",
-      policy: "Lead integrates subagent findings, updates packet statuses before closeout, and keeps manifest refs tied to the machine evidence artifact.",
-    },
-    evidence_refs: refs,
-    updated_at: todayStamp(),
-  };
-}
-
 export function orchestrationPreflightProblem(doc) {
   const log = sectionText(doc.body || "", "Log");
   const missing = missingOrchestrationFields(log, {
-    requireMachineEvidence: true,
-    requireMachineEvidencePass: false,
     requiredFields: ORCHESTRATION_PREFLIGHT_FIELDS,
     requireBoundedAllowedFiles: true,
-    requireToolUseGuardDetails: requiresOrchestrationToolUseGuardDetails(doc),
   });
   if (!missing.length) return null;
   const taskId = doc.fields?.id || "";
@@ -358,15 +239,6 @@ export function orchestrationPreflightProblem(doc) {
     message: `${taskId || "task"}: orchestration packet preflight failed (missing/invalid: ${missing.join(", ")})`,
     nextAction: orchestrationPreflightNextAction(taskId),
   };
-}
-
-export function orchestrationWorkflowManifestProblem(doc, root = "") {
-  const log = sectionText(doc.body || "", "Log");
-  const declaredArtifacts = orchestrationUsedBlocks(log)
-    .flatMap((block) => machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN)))
-    .map((signature) => signature.artifact_path)
-    .filter(Boolean);
-  return workflowManifestProblem(log, root, doc.fields?.id || "", doc.fields?.status || "", declaredArtifacts);
 }
 
 export function findRoot(start = process.cwd()) {
@@ -609,12 +481,6 @@ export function createTask(root, input = {}) {
   if (problem) {
     throw validationError(problem);
   }
-  if (ORCHESTRATION_REVIEW_STATUSES.has(fields.status) && requiresOrchestrationCloseoutPreflightFields({ fields })) {
-    const evidenceProblem = orchestrationEvidenceProblem({ kind: "task", file: "", fields, body }, root);
-    if (evidenceProblem) {
-      throw validationError(evidenceProblem);
-    }
-  }
   const file = join(dir, `${id}-${slugify(fields.title)}.md`);
   writeFileSync(file, serializeDoc(fields, body));
   return { kind: "task", file, fields, body };
@@ -793,7 +659,6 @@ function requiresOrchestrationCurrentCloseoutGuard(doc, fields, body) {
     doc.kind === "task"
     && doc.fields.status === fields.status
     && ORCHESTRATION_REVIEW_STATUSES.has(fields.status)
-    && requiresOrchestrationCloseoutPreflightFields(doc)
     && body !== doc.body
   );
 }
@@ -834,29 +699,10 @@ function orchestrationEvidenceProblem(doc, root = "") {
   if (hasSmallScopeOrchestrationException(log)) {
     return null;
   }
-  const requireMachineEvidence = requiresOrchestrationMachineEvidence(doc);
-  const requireBoundedAllowedFiles = requiresOrchestrationAllowedFilesBounds(doc);
-  const requireTraceArtifact = requiresOrchestrationTraceArtifact(doc);
-  const requireStatusArtifact = requiresOrchestrationStatusArtifact(doc);
-  const requireToolUseGuardDetails = requiresOrchestrationToolUseGuardDetails(doc);
-  const requireReviewerEvidence = requiresOrchestrationReviewerEvidence(doc);
-  const requireWorkflowManifest = requiresOrchestrationWorkflowManifest(doc);
-  const requiredFields = requiresOrchestrationCloseoutPreflightFields(doc)
-    ? ORCHESTRATION_PREFLIGHT_FIELDS
-    : ORCHESTRATION_REQUIRED_FIELDS;
+  const requiredFields = ORCHESTRATION_REQUIRED_FIELDS;
   const missing = missingOrchestrationFields(log, {
-    requireMachineEvidence,
-    requireMachineEvidencePass: requireMachineEvidence,
-    requireBoundedAllowedFiles,
-    requireTraceArtifact,
-    requireStatusArtifact,
-    requireToolUseGuardDetails,
-    requireReviewerEvidence,
-    requireWorkflowManifest,
-    expectedTaskId: doc.fields.id,
-    expectedStatus: doc.fields.status,
-    requiredFields,
-    root,
+    requiredFields: ORCHESTRATION_REQUIRED_FIELDS,
+    requireBoundedAllowedFiles: requiresOrchestrationAllowedFilesBounds(doc),
   });
   if (!missing.length) return null;
   const detail = missing.length ? ` (missing/invalid: ${missing.join(", ")})` : "";
@@ -926,36 +772,20 @@ export function inferCurrentDoingOrchestrationTaskId(root) {
 }
 
 function isArchivedOrchestrationGuardCandidate(doc) {
-  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
-  return match ? Number(match[1]) >= ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID : true;
+  return taskIdAtLeast(doc, ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID);
 }
 
 function missingOrchestrationFields(log, options = {}) {
   const {
-    requireMachineEvidence = false,
-    requireMachineEvidencePass = requireMachineEvidence,
     requireBoundedAllowedFiles = false,
-    requireTraceArtifact = false,
-    requireStatusArtifact = false,
-    requireToolUseGuardDetails = false,
-    requireReviewerEvidence = false,
-    requireWorkflowManifest = false,
-    expectedTaskId = "",
-    expectedStatus = "",
     requiredFields = ORCHESTRATION_REQUIRED_FIELDS,
-    root = "",
-  } = typeof options === "boolean" ? { requireMachineEvidence: options } : options;
+  } = typeof options === "boolean" ? {} : options;
   const blocks = orchestrationUsedBlocks(log);
   if (!blocks.length) {
     return ["orchestration: used packet"];
   }
   const baseline = requiredFields.map(([name]) => name);
   if (requireBoundedAllowedFiles) baseline.push("allowed files bounds");
-  if (requireToolUseGuardDetails) baseline.push("tool-use guard details");
-  if (requireMachineEvidence) baseline.push("machine evidence command");
-  if (requireMachineEvidencePass) baseline.push("machine evidence pass");
-  if (requireReviewerEvidence) baseline.push("reviewer pass");
-  if (requireWorkflowManifest) baseline.push("workflow manifest");
   let bestMissing = baseline;
   for (const block of blocks) {
     const missing = requiredFields
@@ -968,30 +798,6 @@ function missingOrchestrationFields(log, options = {}) {
     ) {
       missing.push("allowed files bounds");
     }
-    if (
-      requireToolUseGuardDetails
-      && hasMeaningfulFieldValue(block, /\btool-use\s+guard\b/i)
-      && !isDetailedToolUseGuard(fieldValue(block, /\btool-use\s+guard\b/i))
-    ) {
-      missing.push("tool-use guard details");
-    }
-    if (requireMachineEvidence && !hasMachineEvidenceCommand(block)) {
-      missing.push("machine evidence command");
-    }
-    if (requireMachineEvidencePass) {
-      const evidenceProblem = machineEvidencePassProblem(log, block, { root, requireTraceArtifact, requireStatusArtifact });
-      if (evidenceProblem) missing.push(evidenceProblem);
-    }
-    if (requireReviewerEvidence && !hasReviewerPassAfterMachineEvidence(log)) {
-      missing.push("reviewer pass");
-    }
-    if (requireWorkflowManifest) {
-      const declaredArtifacts = machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN))
-        .map((signature) => signature.artifact_path)
-        .filter(Boolean);
-      const workflowProblem = workflowManifestProblem(log, root, expectedTaskId, expectedStatus, declaredArtifacts);
-      if (workflowProblem) missing.push(workflowProblem);
-    }
     if (missing.length < bestMissing.length) {
       bestMissing = missing;
     }
@@ -999,176 +805,8 @@ function missingOrchestrationFields(log, options = {}) {
   return bestMissing;
 }
 
-function workflowManifestProblem(log, root, expectedTaskId = "", expectedStatus = "", requiredEvidenceRefs = []) {
-  const manifestPath = workflowManifestPath(log);
-  if (!manifestPath) return "workflow manifest";
-  return workflowManifestArtifactProblem(manifestPath, root, expectedTaskId, expectedStatus, requiredEvidenceRefs);
-}
-
-function workflowManifestPath(log) {
-  for (const line of String(log || "").split(/\r?\n/)) {
-    const match = line.match(/^\s*[-*]?\s*workflow\s+manifest\s*:\s*(.+)$/i);
-    if (!match) continue;
-    return cleanMachineEvidenceValue(match[1]);
-  }
-  return "";
-}
-
-function workflowManifestArtifactProblem(manifestPath, root, expectedTaskId = "", expectedStatus = "", requiredEvidenceRefs = []) {
-  if (!root) return "workflow manifest root";
-  const artifactPath = cleanMachineEvidenceValue(manifestPath);
-  if (!artifactPath) return "workflow manifest";
-  if (!artifactPath.toLowerCase().endsWith(".json")) return "workflow manifest json";
-  const pathProblem = repoLocalPathProblem(artifactPath);
-  if (pathProblem) return `workflow manifest ${pathProblem}`;
-  const normalized = artifactPath.replaceAll("\\", "/");
-  if (!/^tasks\/workflows\/T\d+[^/]*\.json$/i.test(normalized)) return "workflow manifest path";
-  if (expectedTaskId && !normalized.toUpperCase().startsWith(`TASKS/WORKFLOWS/${String(expectedTaskId).toUpperCase()}`)) return "workflow manifest path task mismatch";
-  const rootPath = resolve(root);
-  const targetPath = resolve(rootPath, artifactPath);
-  const rel = relative(rootPath, targetPath);
-  if (!rel || rel.startsWith("..") || /^[a-z]:/i.test(rel)) return "workflow manifest outside root";
-  if (!existsSync(targetPath)) return "workflow manifest missing";
-  const stats = statSync(targetPath);
-  if (!stats.isFile()) return "workflow manifest file";
-  if (stats.size > 256 * 1024) return "workflow manifest too large";
-
-  let manifest;
-  try {
-    manifest = JSON.parse(readFileSync(targetPath, "utf8"));
-  } catch {
-    return "workflow manifest invalid json";
-  }
-  return workflowManifestContentProblem(manifest, expectedTaskId, expectedStatus, root, requiredEvidenceRefs);
-}
-
-function workflowManifestContentProblem(manifest, expectedTaskId = "", expectedStatus = "", root = "", requiredEvidenceRefs = []) {
-  if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) return "workflow manifest object";
-  if (manifest.schema_version !== 1) return "workflow manifest schema";
-  if (manifest.kind !== "orchestration-workflow") return "workflow manifest kind";
-  if (!/^T\d+$/i.test(String(manifest.task_id || ""))) return "workflow manifest task id";
-  if (expectedTaskId && String(manifest.task_id || "").toUpperCase() !== String(expectedTaskId).toUpperCase()) return "workflow manifest task mismatch";
-  if (expectedStatus && !workflowStatusMatches(manifest.status, expectedStatus)) return "workflow manifest status mismatch";
-  if (!hasText(manifest.objective)) return "workflow manifest objective";
-  if (!["planned", "in_progress", "review", "done", "blocked"].includes(String(manifest.status || ""))) return "workflow manifest status";
-  if (!nonEmptyStringArray(manifest.scope?.included)) return "workflow manifest scope";
-  if (!Array.isArray(manifest.scope?.excluded) || !manifest.scope.excluded.every(hasText)) return "workflow manifest scope";
-  if (!manifest.budgets || typeof manifest.budgets !== "object" || Array.isArray(manifest.budgets)) return "workflow manifest budgets";
-  if (!Number.isInteger(manifest.budgets.max_agents) || manifest.budgets.max_agents <= 0) return "workflow manifest budgets";
-  if (!hasText(manifest.budgets.context)) return "workflow manifest budgets";
-  if (!Array.isArray(manifest.packets) || manifest.packets.length === 0) return "workflow manifest packets";
-  const packetIds = new Set();
-  for (const packet of manifest.packets) {
-    if (!packet || typeof packet !== "object" || Array.isArray(packet)) return "workflow manifest packet";
-    if (!hasText(packet.id) || !hasText(packet.objective)) return "workflow manifest packet";
-    if (packetIds.has(packet.id)) return "workflow manifest packet duplicate";
-    packetIds.add(packet.id);
-    const packetStatuses = ["review", "done"].includes(String(expectedStatus || ""))
-      ? ["integrated", "cancelled"]
-      : ["planned", "in_progress", "integrated", "cancelled"];
-    if (!packetStatuses.includes(String(packet.status || ""))) return "workflow manifest packet status";
-    if (!nonEmptyStringArray(packet.allowed_files)) return "workflow manifest packet";
-    if (boundedAllowedFilesProblem(packet.allowed_files.join("; "))) return "workflow manifest packet allowed files";
-    const packetEvidenceProblem = repoLocalExistingRefsProblem(packet.evidence_refs, root);
-    if (packetEvidenceProblem) return `workflow manifest packet ${packetEvidenceProblem}`;
-    if (!evidenceRefsInclude(packet.evidence_refs, requiredEvidenceRefs)) return "workflow manifest packet evidence refs missing declared artifact";
-  }
-  if (!hasText(manifest.verification?.strategy)) return "workflow manifest verification";
-  if (!nonEmptyStringArray(manifest.verification?.commands)) return "workflow manifest verification";
-  const verificationEvidenceProblem = repoLocalExistingRefsProblem(manifest.verification?.evidence_refs, root);
-  if (verificationEvidenceProblem) return `workflow manifest verification ${verificationEvidenceProblem}`;
-  if (!evidenceRefsInclude(manifest.verification?.evidence_refs, requiredEvidenceRefs)) return "workflow manifest verification evidence refs missing declared artifact";
-  if (!hasText(manifest.integration?.owner) || !hasText(manifest.integration?.policy)) return "workflow manifest integration";
-  const evidenceProblem = repoLocalExistingRefsProblem(manifest.evidence_refs, root);
-  if (evidenceProblem) return `workflow manifest ${evidenceProblem}`;
-  if (!evidenceRefsInclude(manifest.evidence_refs, requiredEvidenceRefs)) return "workflow manifest evidence refs missing declared artifact";
-  return "";
-}
-
-function evidenceRefsInclude(refs, requiredRefs = []) {
-  const required = requiredRefs.map(normalizeMachineEvidenceValue).filter(Boolean);
-  if (required.length === 0) return true;
-  const actual = new Set((Array.isArray(refs) ? refs : []).map(normalizeMachineEvidenceValue).filter(Boolean));
-  return required.every((ref) => actual.has(ref));
-}
-
-function workflowStatusMatches(manifestStatus, expectedStatus) {
-  const actual = String(manifestStatus || "");
-  const expected = String(expectedStatus || "");
-  if (expected === "doing") return actual === "in_progress";
-  return actual === expected;
-}
-
-function splitBoundedList(text) {
-  return String(text || "")
-    .split(/[;,]/)
-    .map((entry) => entry.trim().replace(/^[`'"]+|[`'"]+$/g, ""))
-    .filter(Boolean);
-}
-
-function repoLocalExistingRefsProblem(refs, root) {
-  if (!nonEmptyStringArray(refs)) return "evidence refs";
-  if (!root) return "evidence refs root";
-  const rootPath = resolve(root);
-  for (const ref of refs) {
-    const cleaned = cleanMachineEvidenceValue(ref);
-    const pathProblem = repoLocalPathProblem(cleaned);
-    if (pathProblem) return `evidence refs ${pathProblem}`;
-    const targetPath = resolve(rootPath, cleaned);
-    const rel = relative(rootPath, targetPath);
-    if (!rel || rel.startsWith("..") || /^[a-z]:/i.test(rel)) return "evidence refs outside root";
-    if (!existsSync(targetPath)) return "evidence refs missing";
-    const stats = statSync(targetPath);
-    if (!stats.isFile()) return "evidence refs file";
-    if (stats.size > 1024 * 1024) return "evidence refs too large";
-  }
-  return "";
-}
-
-function repoLocalPathProblem(value) {
-  const normalized = String(value || "").replaceAll("\\", "/");
-  if (!normalized) return "path";
-  if (/^[a-z][a-z0-9+.-]*:/i.test(normalized) || /^(?:[a-z]:|\/)/i.test(normalized)) return "repo-local";
-  if (normalized.includes("//")) return "path";
-  const segments = normalized.split("/");
-  if (segments.some((segment) => !segment || segment === "." || segment === "..")) return "path";
-  return "";
-}
-
 function hasText(value) {
   return typeof value === "string" && value.trim() && !/^(tbd|todo|none|n\/a|na|unknown|\.\.\.)$/i.test(value.trim());
-}
-
-function nonEmptyStringArray(value) {
-  return Array.isArray(value) && value.length > 0 && value.every(hasText);
-}
-
-function hasReviewerPassAfterMachineEvidence(log) {
-  const lines = String(log || "").split(/\r?\n/);
-  let sawMachineEvidencePass = false;
-  for (let i = 0; i < lines.length; i += 1) {
-    if (/^\s*[-*]\s+evidence\s*:\s*PASS\b/i.test(lines[i]) && isMachineEvidenceCommand(lines[i])) {
-      sawMachineEvidencePass = true;
-      continue;
-    }
-    if (!sawMachineEvidencePass || !/^\s*[-*]\s+(?:reviewer|verifier)\s*:\s*PASS\b/i.test(lines[i])) {
-      continue;
-    }
-    const block = [lines[i]];
-    for (let j = i + 1; j < lines.length; j += 1) {
-      if (/^\s*[-*]\s+\S/.test(lines[j])) break;
-      block.push(lines[j]);
-    }
-    const text = block.join("\n");
-    if (
-      hasMeaningfulFieldValue(text, /\bchecked\b/i)
-      && hasMeaningfulFieldValue(text, /\brisks\b/i)
-      && hasMeaningfulFieldValue(text, /\baction\b/i)
-    ) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function orchestrationUsedBlocks(log) {
@@ -1197,53 +835,6 @@ function hasMeaningfulFieldValue(text, fieldPattern) {
     return true;
   }
   return false;
-}
-
-function isDetailedToolUseGuard(text) {
-  const value = String(text || "").toLowerCase();
-  const hasPathGuard = (
-    value.includes("rg --files")
-    || value.includes("test-path")
-  );
-  const hasLineWindowGuard = value.includes("select-object -skip")
-    && value.includes("-first")
-    && value.includes("format-hex -count")
-    && value.includes("select-object -index");
-  const hasEvidenceGuard = (
-    (
-      value.includes("orchestration-evidence")
-      || value.includes("evidence source")
-      || value.includes("--parent-thread-id")
-      || value.includes("--session")
-      || value.includes("--trace-session")
-    )
-    && value.includes("--json-output")
-  );
-  return hasPathGuard && hasLineWindowGuard && hasEvidenceGuard;
-}
-
-function hasMachineEvidenceCommand(block) {
-  return machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN)).length > 0;
-}
-
-export function isMachineEvidenceCommand(text) {
-  return machineEvidenceSignatures(text).length > 0;
-}
-
-export function isCloseoutReadyMachineEvidenceCommand(text) {
-  return machineEvidenceSignatures(text).some((signature) => {
-    if (signature.kind === "orchestration-trace") return Boolean(signature.source && signature.artifact);
-    if (signature.kind !== "status-agent-rollup") return false;
-    return Boolean(signature.source && signature.artifact && signature.compact_artifact);
-  });
-}
-
-export function isBootstrapReadyMachineEvidenceCommand(text) {
-  return machineEvidenceSignatures(text).some((signature) => {
-    if (signature.kind === "orchestration-trace") return Boolean(signature.source && signature.artifact);
-    if (signature.kind !== "status-agent-rollup") return false;
-    return Boolean(signature.source && signature.artifact && signature.compact_artifact && signature.current_orchestration_task);
-  });
 }
 
 export function isBoundedOrchestrationAllowedFiles(text) {
@@ -1290,331 +881,6 @@ function boundedAllowedFilesProblem(text) {
     }
   }
   return "";
-}
-
-function machineEvidencePassProblem(log, declaredBlock = "", options = {}) {
-  const { root = "", requireTraceArtifact = false, requireStatusArtifact = false } = options;
-  const declared = declaredBlock
-    ? machineEvidenceSignatures(fieldValue(declaredBlock, ORCHESTRATION_EVIDENCE_FIELD_PATTERN))
-    : orchestrationUsedBlocks(log)
-      .flatMap((block) => machineEvidenceSignatures(fieldValue(block, ORCHESTRATION_EVIDENCE_FIELD_PATTERN)));
-  if (declared.length === 0) return "machine evidence pass";
-  const passSignatures = evidencePassBlocksAfterOrchestration(log).flatMap(machineEvidenceSignatures);
-  let artifactMismatch = false;
-  for (const expected of declared) {
-    for (const actual of passSignatures) {
-      if (!machineEvidenceSignaturesMatch(expected, actual)) continue;
-      if (requireTraceArtifact && expected.kind === "orchestration-trace") {
-        const problem = traceArtifactProblem(expected, root);
-        if (problem) {
-          artifactMismatch = true;
-          continue;
-        }
-      }
-      if (requireStatusArtifact && expected.kind === "status-agent-rollup") {
-        const problem = statusArtifactProblem(expected, root);
-        if (problem) {
-          artifactMismatch = true;
-          continue;
-        }
-      }
-      return "";
-    }
-  }
-  return artifactMismatch ? "machine evidence artifact" : "machine evidence pass";
-}
-
-function machineEvidenceSignatures(text) {
-  const evidence = String(text || "").replaceAll("\\", "/");
-  const signatures = [];
-  const chunks = evidence.split(/(?=\bnode\s+tools\/ai\.mjs\s+(?:orchestration-trace|status)\b)/i);
-  for (const chunk of chunks) {
-    const command = chunk.split(/(?:\s*;\s*|\r?\n\s*[-*]\s+)/, 1)[0] || "";
-    if (ORCHESTRATION_MACHINE_EVIDENCE_PATTERNS.some((pattern) => pattern.test(command))) {
-      const source = commandSourceSignature(command, ["--parent-thread-id", "--session"]);
-      const artifact = commandSourceSignature(command, ["--json-output"]);
-      if (!source || !artifact) continue;
-      signatures.push({
-        kind: "orchestration-trace",
-        source,
-        artifact,
-        artifact_path: commandFlagRawValue(command, ["--json-output"]),
-        min_agents: commandMinAgents(command),
-      });
-      continue;
-    }
-    if (
-      /\bnode\s+tools\/ai\.mjs\s+status\b/i.test(command)
-      && /\s--agent-rollup\b/i.test(command)
-      && /\s--require-agent-rollup-ok\b/i.test(command)
-      && (/\s--parent-thread-id\b/i.test(command) || /\s--trace-session\b/i.test(command))
-    ) {
-      const artifact = commandSourceSignature(command, ["--json-output"]);
-      const parentThreadId = commandSourceSignature(command, ["--parent-thread-id"]);
-      const traceSession = commandSourceSignature(command, ["--trace-session"]);
-      signatures.push({
-        kind: "status-agent-rollup",
-        source: parentThreadId || traceSession,
-        parent_thread_id: commandFlagRawValue(command, ["--parent-thread-id"]),
-        trace_session: commandFlagRawValue(command, ["--trace-session"]),
-        artifact,
-        artifact_path: commandFlagRawValue(command, ["--json-output"]),
-        compact_artifact: /\s--agent-rollup-evidence\b/i.test(command),
-        current_orchestration_task: /\s--require-current-orchestration-(?:task|preflight)\b/i.test(command),
-        min_agents: commandMinAgents(command),
-      });
-    }
-  }
-  return signatures;
-}
-
-function commandMinAgents(command) {
-  const match = String(command || "").match(/(?:^|\s)--min-agents(?:=|\s+)(?:"([^"]+)"|'([^']+)'|(\S+))/i);
-  if (!match) return 1;
-  const raw = normalizeMachineEvidenceValue(match[1] || match[2] || match[3] || "");
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 1;
-}
-
-function commandSourceSignature(command, flags) {
-  for (const flag of flags) {
-    const escaped = flag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = command.match(new RegExp(`(?:^|\\s)${escaped}(?:=|\\s+)(?:"([^"]+)"|'([^']+)'|(\\S+))`, "i"));
-    if (match) return `${flag}=${normalizeMachineEvidenceValue(match[1] || match[2] || match[3] || "")}`;
-  }
-  return "";
-}
-
-function commandFlagRawValue(command, flags) {
-  for (const flag of flags) {
-    const escaped = flag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = command.match(new RegExp(`(?:^|\\s)${escaped}(?:=|\\s+)(?:"([^"]+)"|'([^']+)'|(\\S+))`, "i"));
-    if (match) return cleanMachineEvidenceValue(match[1] || match[2] || match[3] || "");
-  }
-  return "";
-}
-
-function cleanMachineEvidenceValue(value) {
-  return String(value || "")
-    .replaceAll("\\", "/")
-    .trim()
-    .replace(/^[`'"]+|[`'",.;)]+$/g, "");
-}
-
-function normalizeMachineEvidenceValue(value) {
-  return cleanMachineEvidenceValue(value).toLowerCase();
-}
-
-function machineEvidenceSignaturesMatch(expected, actual) {
-  if (!expected || !actual || expected.kind !== actual.kind) return false;
-  if ((actual.min_agents ?? 1) < (expected.min_agents ?? 1)) return false;
-  if (expected.artifact || actual.artifact) {
-    if (expected.artifact && !actual.artifact) return false;
-    if (!expected.artifact && actual.artifact) return expected.source === actual.source;
-    return expected.artifact === actual.artifact && expected.source === actual.source;
-  }
-  if (expected.source || actual.source) return expected.source === actual.source;
-  return (
-    expected.kind === actual.kind
-  );
-}
-
-function evidencePassBlocksAfterOrchestration(log) {
-  const lines = String(log || "").split(/\r?\n/);
-  const blocks = [];
-  let sawOrchestrationPacket = false;
-  for (let i = 0; i < lines.length; i += 1) {
-    if (/orchestration:\s*used\b/i.test(lines[i])) {
-      sawOrchestrationPacket = true;
-    }
-    if (!sawOrchestrationPacket) continue;
-    if (!/^\s*[-*]\s+evidence\s*:\s*PASS\b/i.test(lines[i])) continue;
-    const block = [lines[i]];
-    for (let j = i + 1; j < lines.length; j += 1) {
-      if (/^\s*[-*]\s+\S/.test(lines[j])) break;
-      block.push(lines[j]);
-    }
-    blocks.push(block.join("\n"));
-  }
-  return blocks;
-}
-
-function traceArtifactProblem(signature, root) {
-  if (!root) return "missing taskboard root";
-  const artifactPath = cleanMachineEvidenceValue(signature.artifact_path || String(signature.artifact || "").replace(/^--json-output=/i, ""));
-  if (!artifactPath) return "missing trace artifact path";
-  if (!artifactPath.toLowerCase().endsWith(".json")) return "trace artifact is not json";
-  if (/^[a-z][a-z0-9+.-]*:/i.test(artifactPath) || /^(?:[a-z]:|\/)/i.test(artifactPath)) {
-    return "trace artifact is not repo-local";
-  }
-  const rootPath = resolve(root);
-  const targetPath = resolve(rootPath, artifactPath);
-  const rel = relative(rootPath, targetPath);
-  if (!rel || rel.startsWith("..") || /^[a-z]:/i.test(rel)) return "trace artifact is outside taskboard root";
-  if (!existsSync(targetPath)) return "missing trace artifact";
-  const stats = statSync(targetPath);
-  if (!stats.isFile()) return "trace artifact is not a file";
-  if (stats.size > 1024 * 1024) return "trace artifact is too large";
-
-  let artifact;
-  try {
-    artifact = JSON.parse(readFileSync(targetPath, "utf8"));
-  } catch {
-    return "invalid trace artifact json";
-  }
-  if (artifact?.ok !== true) return "trace artifact did not pass";
-  if (Array.isArray(artifact.problems) && artifact.problems.length > 0) return "trace artifact has problems";
-  for (const key of ["missing", "unordered", "incomplete", "unpaired"]) {
-    if (Array.isArray(artifact[key]) && artifact[key].length > 0) return `trace artifact has ${key}`;
-  }
-
-  if (signature.source?.startsWith("--parent-thread-id=")) {
-    const expected = signature.source.replace(/^--parent-thread-id=/, "");
-    if (normalizeMachineEvidenceValue(artifact.parentThreadId) !== expected) return "trace artifact parent thread mismatch";
-    const count = Number(artifact.subagentSessionCount ?? artifact.count ?? (Array.isArray(artifact.subagentSessions) ? artifact.subagentSessions.length : 0));
-    if (!Number.isFinite(count) || count < (signature.min_agents ?? 1)) return "trace artifact subagent count too low";
-    if (!Array.isArray(artifact.subagentSessions) || artifact.subagentSessions.length !== count) return "trace artifact subagent sessions mismatch";
-    if (artifact.subagentSessions.some((agent) => !agent?.id || !agent?.sessionFile)) return "trace artifact subagent session incomplete";
-  } else if (signature.source?.startsWith("--session=")) {
-    const expected = signature.source.replace(/^--session=/, "");
-    if (normalizeMachineEvidenceValue(artifact.session) !== expected) return "trace artifact session mismatch";
-    if (!Array.isArray(artifact.calls) || artifact.calls.length === 0) return "trace artifact has no transcript calls";
-    const operations = new Set(artifact.calls.map((call) => String(call?.operation || "")));
-    for (const operation of ["spawn", "wait", "close"]) {
-      if (!operations.has(operation)) return `trace artifact missing ${operation}`;
-    }
-  } else {
-    return "trace artifact source mismatch";
-  }
-  return "";
-}
-
-function statusArtifactProblem(signature, root) {
-  if (!root) return "missing taskboard root";
-  const artifactPath = cleanMachineEvidenceValue(signature.artifact_path || String(signature.artifact || "").replace(/^--json-output=/i, ""));
-  if (!artifactPath) return "missing status artifact path";
-  if (!artifactPath.toLowerCase().endsWith(".json")) return "status artifact is not json";
-  if (/^[a-z][a-z0-9+.-]*:/i.test(artifactPath) || /^(?:[a-z]:|\/)/i.test(artifactPath)) {
-    return "status artifact is not repo-local";
-  }
-  const rootPath = resolve(root);
-  const targetPath = resolve(rootPath, artifactPath);
-  const rel = relative(rootPath, targetPath);
-  if (!rel || rel.startsWith("..") || /^[a-z]:/i.test(rel)) return "status artifact is outside taskboard root";
-  if (!existsSync(targetPath)) return "missing status artifact";
-  const stats = statSync(targetPath);
-  if (!stats.isFile()) return "status artifact is not a file";
-  if (stats.size > 1024 * 1024) return "status artifact is too large";
-
-  let artifact;
-  try {
-    artifact = JSON.parse(readFileSync(targetPath, "utf8"));
-  } catch {
-    return "invalid status artifact json";
-  }
-
-  if (artifact?.kind !== "status-agent-rollup-evidence") return "status artifact is not compact evidence";
-  if (artifact?.schema_version !== 2) return "status artifact schema mismatch";
-  if (typeof artifact.generated_at !== "string" || Number.isNaN(Date.parse(artifact.generated_at))) return "status artifact missing generated timestamp";
-  if (artifact.valid !== true) return "status artifact top-level status invalid";
-  if (Array.isArray(artifact.errors) && artifact.errors.length > 0) return "status artifact has top-level errors";
-  for (const key of ["profile", "profile_files", "command_rollup", "slowest_record", "failed_records", "latest_record"]) {
-    if (Object.hasOwn(artifact, key)) return "status artifact is not compact evidence";
-  }
-
-  const rollup = artifact?.agent_rollup;
-  if (rollup?.enabled !== true) return "status artifact missing agent rollup";
-  if (rollup.ok !== true) return "status artifact agent rollup did not pass";
-  if (rollup.strict_ok !== true) return "status artifact strict rollup did not pass";
-  if (Array.isArray(rollup.problems) && rollup.problems.length > 0) return "status artifact agent rollup has problems";
-  if (Array.isArray(rollup.strict_problems) && rollup.strict_problems.length > 0) return "status artifact strict rollup has problems";
-
-  const expectedMinAgents = signature.min_agents ?? 1;
-  const artifactMinAgents = Number(rollup.min_agents ?? 0);
-  if (!Number.isFinite(artifactMinAgents) || artifactMinAgents < expectedMinAgents) return "status artifact min agents too low";
-  const count = Number(rollup.subagent_session_count ?? rollup.count ?? (Array.isArray(rollup.agents) ? rollup.agents.length : 0));
-  if (!Number.isFinite(count) || count < expectedMinAgents) return "status artifact subagent count too low";
-  const rollupCount = Number(rollup.count ?? 0);
-  if (!Number.isFinite(rollupCount) || rollupCount < expectedMinAgents) return "status artifact agent count too low";
-  if (Array.isArray(rollup.roles)) {
-    const roleCount = rollup.roles.reduce((sum, item) => sum + Number(item?.count || 0), 0);
-    if (roleCount > 0 && roleCount !== rollupCount) return "status artifact role count mismatch";
-  }
-  const profileRollup = rollup.profile_rollup || {};
-  if (Number(profileRollup.missing_agent_telemetry_count || 0) > 0) return "status artifact missing agent telemetry";
-  if (Number(profileRollup.unresolved_failed_records || 0) > 0) return "status artifact has unresolved agent failures";
-  if (Array.isArray(profileRollup.errors) && profileRollup.errors.length > 0) return "status artifact profile rollup has errors";
-
-  if (signature.parent_thread_id) {
-    const expected = normalizeMachineEvidenceValue(signature.parent_thread_id);
-    if (normalizeMachineEvidenceValue(rollup.parent_thread_id) !== expected) return "status artifact parent thread mismatch";
-  }
-  if (signature.trace_session) {
-    const expected = normalizeMachineEvidenceValue(signature.trace_session);
-    if (normalizeMachineEvidenceValue(rollup.trace_session) !== expected) return "status artifact trace session mismatch";
-  }
-  if (!signature.parent_thread_id && !signature.trace_session) {
-    return "status artifact source mismatch";
-  }
-  if (signature.current_orchestration_task) {
-    const currentTask = artifact.current_orchestration_task;
-    if (currentTask?.enabled !== true) return "status artifact missing current orchestration task check";
-    if (currentTask.ok !== true) return "status artifact current orchestration task did not pass";
-    if (!Array.isArray(currentTask.task_ids) || currentTask.task_ids.length !== 1) return "status artifact current orchestration task count mismatch";
-    if (currentTask.file && repoLocalPathProblem(currentTask.file)) return "status artifact current orchestration task file is not repo-local";
-    if (currentTask.problem) return "status artifact current orchestration task has problem";
-  }
-  return "";
-}
-
-function requiresOrchestrationMachineEvidence(doc) {
-  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
-  return match ? Number(match[1]) >= ORCHESTRATION_MACHINE_EVIDENCE_MIN_TASK_ID : true;
-}
-
-function requiresOrchestrationAllowedFilesBounds(doc) {
-  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
-  return match ? Number(match[1]) >= ORCHESTRATION_ALLOWED_FILES_BOUNDS_MIN_TASK_ID : true;
-}
-
-function requiresOrchestrationTraceArtifact(doc) {
-  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
-  return match ? Number(match[1]) >= ORCHESTRATION_TRACE_ARTIFACT_MIN_TASK_ID : true;
-}
-
-function requiresOrchestrationStartPreflight(doc) {
-  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
-  return match ? Number(match[1]) >= ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID : true;
-}
-
-function requiresBroadOrchestrationClassification(doc) {
-  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
-  return match ? Number(match[1]) >= ORCHESTRATION_BROAD_WORK_MIN_TASK_ID : true;
-}
-
-function requiresOrchestrationCloseoutPreflightFields(doc) {
-  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
-  return match ? Number(match[1]) >= ORCHESTRATION_CLOSEOUT_PREFLIGHT_FIELDS_MIN_TASK_ID : true;
-}
-
-function requiresOrchestrationStatusArtifact(doc) {
-  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
-  return match ? Number(match[1]) >= ORCHESTRATION_STATUS_ARTIFACT_MIN_TASK_ID : true;
-}
-
-function requiresOrchestrationToolUseGuardDetails(doc) {
-  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
-  return match ? Number(match[1]) >= ORCHESTRATION_TOOL_USE_GUARD_DETAILS_MIN_TASK_ID : true;
-}
-
-function requiresOrchestrationReviewerEvidence(doc) {
-  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
-  return match ? Number(match[1]) >= ORCHESTRATION_REVIEWER_EVIDENCE_MIN_TASK_ID : true;
-}
-
-function requiresOrchestrationWorkflowManifest(doc) {
-  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
-  return match ? Number(match[1]) >= ORCHESTRATION_WORKFLOW_MANIFEST_MIN_TASK_ID : true;
 }
 
 function fieldValue(text, fieldPattern) {
@@ -1670,4 +936,21 @@ function sectionText(body, title) {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function taskIdAtLeast(doc, minTaskId) {
+  const match = String(doc.fields.id || "").match(/^T(\d+)$/);
+  return match ? Number(match[1]) >= minTaskId : true;
+}
+
+function requiresOrchestrationAllowedFilesBounds(doc) {
+  return taskIdAtLeast(doc, ORCHESTRATION_ALLOWED_FILES_BOUNDS_MIN_TASK_ID);
+}
+
+function requiresOrchestrationStartPreflight(doc) {
+  return taskIdAtLeast(doc, ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID);
+}
+
+function requiresBroadOrchestrationClassification(doc) {
+  return taskIdAtLeast(doc, ORCHESTRATION_BROAD_WORK_MIN_TASK_ID);
 }

@@ -23,9 +23,10 @@ Runtime entrypoint: `src/clean_seed_main.c`.
 
 ## Current Gate
 
-Pipeline/orchestration changes need a taskboard item, scoped evidence, machine
-validation where applicable, and review validation. Use bounded subagents when
-parallel context helps.
+Pipeline/orchestration changes need a taskboard item, pass validation
+(`node tools/ai.mjs validate`), and lead review. Acceptance gates the work
+product, not the delegation: there is no machine proof that a subagent ran. Use
+bounded subagents when parallel context helps; the lead is the backstop.
 
 T0029 remains in review for Dragon Grove. Broad game feature/content expansion
 is out of scope unless the lead reopens game implementation.
@@ -40,7 +41,6 @@ is out of scope unless the lead reopens game implementation.
 ```powershell
 node tools/taskboard/cli.mjs validate
 node tools/context_budget.mjs --review
-node tools/ai.mjs orchestration-evidence --current --run --json
 node tools/ai.mjs validate --review
 ```
 
@@ -53,6 +53,6 @@ node tools/ai.mjs validate --review
 
 ## Next Priorities
 
-1. Improve orchestration from profiler/taskboard evidence.
-2. Keep subagent packets bounded, tool-safe, and machine-backed.
-3. Review/close old pipeline tasks only when doing review cleanup.
+1. Keep the subagent protocol lean and packets bounded; the lead is the backstop.
+2. Archive the closed orchestration meta-tasks (T0030-T0101) during review cleanup.
+3. Mine the passive profiler for real friction; fix with tools/validators, not gates.

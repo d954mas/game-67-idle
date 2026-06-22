@@ -9,11 +9,8 @@
 //   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
 //   node tools/taskboard/cli.mjs orchestration-template
-//   node tools/taskboard/cli.mjs subagent-packet-template|subagent-template [--current|--task T0001|--id T0001|--file tasks/active/T0001-example.md]
-//   node tools/taskboard/cli.mjs subagent-packet-check|subagent-check --file packet.txt|--text "..."|--stdin [--json]
-//   node tools/taskboard/cli.mjs orchestration-workflow-template [--task-id T0001] [--json]
-//   node tools/taskboard/cli.mjs orchestration-workflow-init <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--status review] [--packet-status integrated] [--output tasks/workflows/T0001.json] [--write] [--force] [--json]
-//   node tools/taskboard/cli.mjs orchestration-workflow-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
+//   node tools/taskboard/cli.mjs subagent-packet-template [--current|--task T0001|--id T0001|--file tasks/active/T0001-example.md]
+//   node tools/taskboard/cli.mjs subagent-packet-check --file packet.txt|--text "..."|--stdin [--json]
 //   node tools/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
 //   node tools/taskboard/cli.mjs orchestration-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
 //   node tools/taskboard/cli.mjs validate [--json]
@@ -24,16 +21,14 @@ import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
   updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
-  subagentPacketTemplate, subagentPacketProblem, orchestrationWorkflowTemplate,
-  orchestrationWorkflowInitPayload,
-  orchestrationPreflightProblem, orchestrationWorkflowManifestProblem,
+  subagentPacketTemplate, subagentPacketProblem,
+  orchestrationPreflightProblem,
   parseDoc, currentDoingOrchestrationTaskIds,
-  isBootstrapReadyMachineEvidenceCommand, isBoundedOrchestrationAllowedFiles,
+  isBoundedOrchestrationAllowedFiles,
   DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
@@ -82,60 +77,6 @@ function clampText(text, maxChars) {
     text: `${clipped}\n\n... truncated ${text.length - clipped.length} chars; inspect tasks/STATUS.md or linked task files only if needed.`,
     truncated: true,
   };
-}
-
-function subagentTemplateEvidenceArgs(args) {
-  const out = [];
-  for (const key of ["current", "task", "id", "file", "parent-thread-id", "trace-session", "session-root", "agent-cwd", "profile", "agent-profile-dir", "min-agents", "json-output"]) {
-    const value = args[key];
-    if (value === undefined) continue;
-    out.push(`--${key}`);
-    if (value !== true) out.push(String(value));
-  }
-  return out;
-}
-
-function evidenceAwareSubagentPacketTemplate(args) {
-  const hasSelector = Boolean(args.current || args.task || args.id || args.file);
-  if (!hasSelector) return subagentPacketTemplate();
-  const doc = readTaskForOrchestrationCheck({
-    ...args,
-    _: args.task ? [args.task] : [],
-  });
-  const workflow = orchestrationWorkflowInitPayload(doc);
-  const packet = workflow.packets?.[0] || {};
-  const objective = workflow.objective || packet.objective || "<bounded subagent objective>";
-  const allowedFiles = Array.isArray(packet.allowed_files) && packet.allowed_files.length
-    ? packet.allowed_files.join(";")
-    : "<repo-local files or bounded patterns>";
-  const expectedOutput = packet.objective || workflow.objective || "<concise final report or changed files>";
-
-  const evidenceScript = resolve(import.meta.dirname, "..", "ai_profile", "orchestration_evidence.mjs");
-  const result = spawnSync(process.execPath, [evidenceScript, ...subagentTemplateEvidenceArgs(args), "--json"], {
-    cwd: root,
-    encoding: "utf8",
-    shell: false,
-  });
-  if (result.status !== 0) {
-    const stderr = String(result.stderr || "").trim();
-    const stdout = String(result.stdout || "").trim();
-    fail(`could not infer subagent evidence command: ${stderr || stdout || `exit ${result.status}`}`);
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(result.stdout);
-  } catch {
-    fail("could not parse orchestration evidence output for subagent packet template");
-  }
-  if (!parsed?.ok || !parsed.command) {
-    fail(`could not infer subagent evidence command: ${parsed?.problem || "missing command"}`);
-  }
-  return subagentPacketTemplate()
-    .replace(/^objective: .+$/m, `objective: ${objective}`)
-    .replace(/^allowed files: .+$/m, `allowed files: ${allowedFiles}`)
-    .replace(/^expected output: .+$/m, `expected output: ${expectedOutput}`)
-    .replace(/^evidence command or artifact: .+$/m, `evidence command or artifact: ${parsed.command}`)
-    .replace(/^stop condition: .+$/m, `stop condition: ${doc.fields?.id || "task"} evidence command and requested subagent check pass, or a blocker is reported.`);
 }
 
 function writeJson(value) {
@@ -203,14 +144,6 @@ function bootstrapCurrentProblem(ids) {
   };
 }
 
-function bootstrapMachineEvidenceProblem(command) {
-  return {
-    code: "invalid_evidence_command",
-    evidenceCommand: command,
-    message: "--evidence-command must be bootstrap-ready machine evidence: status --agent-rollup --require-agent-rollup-ok with a source plus --require-current-orchestration-task/--require-current-orchestration-preflight, --agent-rollup-evidence, and --json-output; or orchestration-trace with source plus --json-output",
-  };
-}
-
 function bootstrapAllowedFilesProblem(value) {
   return {
     code: "invalid_allowed_files",
@@ -229,14 +162,9 @@ Required:
   --objective             Bounded work objective.
   --allowed-files         Repo-local files or bounded patterns, separated by comma or semicolon.
   --expected-output       Concrete output the task must produce.
-  --evidence-command      Machine orchestration evidence command.
+  --evidence-command      Read-only command or artifact path proving the work.
   --stop-condition        Validation and closeout condition.
   --independent-reviewer  Reviewer/verifier plan.
-
-Status evidence commands must include --require-current-orchestration-task or
---require-current-orchestration-preflight plus --agent-rollup-evidence and
---json-output. Trace evidence commands only need an explicit source and
---json-output.
 
 After creation:
   node tools/ai.mjs orchestration-check --current --json`;
@@ -306,19 +234,6 @@ function readSubagentPacketArg(args) {
     return readFileSync(file, "utf8");
   }
   fail("usage: subagent-packet-check --file packet.txt|--text \"...\"|--stdin [--json]");
-}
-
-function workflowOutputPath(taskId, args) {
-  const requested = typeof args.output === "string" && args.output.trim()
-    ? args.output.trim()
-    : `tasks/workflows/${taskId}.json`;
-  if (!requested.toLowerCase().endsWith(".json")) fail("--output must be a .json path");
-  const file = isAbsolute(requested) ? resolve(requested) : resolve(root, requested);
-  const rel = relative(root, file);
-  if (rel.startsWith("..") || isAbsolute(rel)) fail("--output must be inside the repository root");
-  const normalized = rel.replaceAll("\\", "/");
-  if (!/^tasks\/workflows\/T\d+[^/]*\.json$/i.test(normalized)) fail("--output must be under tasks/workflows/T*.json");
-  return { file, rel };
 }
 
 function readTaskForOrchestrationCheck(args) {
@@ -611,13 +526,11 @@ switch (cmd) {
     console.log(orchestrationPacketTemplate());
     break;
   }
-  case "subagent-packet-template":
-  case "subagent-template": {
-    console.log(evidenceAwareSubagentPacketTemplate(args));
+  case "subagent-packet-template": {
+    console.log(subagentPacketTemplate());
     break;
   }
-  case "subagent-packet-check":
-  case "subagent-check": {
+  case "subagent-packet-check": {
     const problem = subagentPacketProblem(readSubagentPacketArg(args));
     if (args.json) {
       writeJson({
@@ -632,113 +545,6 @@ switch (cmd) {
       process.exit(1);
     }
     console.log("ok: subagent packet passed");
-    break;
-  }
-  case "orchestration-workflow-template": {
-    const taskId = typeof args["task-id"] === "string" ? args["task-id"].trim() : "T0000";
-    const payload = orchestrationWorkflowTemplate(taskId || "T0000");
-    if (args.json) {
-      writeJson(payload);
-    } else {
-      console.log(JSON.stringify(payload, null, 2));
-    }
-    break;
-  }
-  case "orchestration-workflow-init": {
-    let doc;
-    try {
-      doc = readTaskForOrchestrationCheck(args);
-    } catch (error) {
-      if (isSelectorProblem(error)) {
-        if (args.json) {
-          writeJson({
-            ok: false,
-            file: null,
-            problem: error,
-          });
-          process.exit(1);
-        }
-        fail(error.message);
-      }
-      throw error;
-    }
-    const manifest = orchestrationWorkflowInitPayload(doc, {
-      status: typeof args.status === "string" ? args.status.trim() : "",
-      packetStatus: typeof args["packet-status"] === "string" ? args["packet-status"].trim() : "",
-    });
-    const output = workflowOutputPath(doc.fields?.id || manifest.task_id, args);
-    const exists = existsSync(output.file);
-    if (args.write && exists && !args.force) {
-      const problem = {
-        code: "workflow_manifest_exists",
-        path: output.rel,
-        message: `workflow manifest already exists: ${output.rel}; pass --force to overwrite`,
-      };
-      if (args.json) {
-        writeJson({ ok: false, path: output.rel, manifest, problem });
-        process.exit(1);
-      }
-      fail(problem.message);
-    }
-    if (args.write) {
-      mkdirSync(dirname(output.file), { recursive: true });
-      writeFileSync(output.file, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-    }
-    const payload = {
-      ok: true,
-      wrote: Boolean(args.write),
-      path: output.rel,
-      log_line: `- workflow manifest: ${output.rel.replaceAll("\\", "/")}`,
-      manifest,
-    };
-    if (args.json) {
-      writeJson(payload);
-    } else {
-      console.log(args.write ? `wrote ${output.rel}` : `would write ${output.rel}`);
-      console.log(payload.log_line);
-      console.log(JSON.stringify(manifest, null, 2));
-    }
-    break;
-  }
-  case "orchestration-workflow-check":
-  case "workflow-check": {
-    let doc;
-    try {
-      doc = readTaskForOrchestrationCheck(args);
-    } catch (error) {
-      if (isSelectorProblem(error)) {
-        if (args.json) {
-          writeJson({
-            ok: false,
-            file: null,
-            problem: error,
-          });
-          process.exit(1);
-        }
-        fail(error.message);
-      }
-      throw error;
-    }
-    const problem = orchestrationWorkflowManifestProblem(doc, root);
-    if (args.json) {
-      writeJson({
-        ok: !problem,
-        file: relative(root, doc.file),
-        problem: problem ? {
-          code: "orchestration_workflow_manifest_invalid",
-          taskId: doc.fields?.id || "",
-          message: `${doc.fields?.id || "task"}: workflow manifest failed (${problem})`,
-          missingFields: [problem],
-        } : null,
-      });
-      process.exit(problem ? 1 : 0);
-    }
-    if (problem) {
-      console.log(`problem: ${doc.fields?.id || "task"} workflow manifest failed (${problem})`);
-      console.log("hint: record `- workflow manifest: tasks/workflows/<task-id>.json` and validate the artifact before closeout");
-      process.exit(1);
-    }
-    console.log(`ok: workflow manifest passed for ${relative(root, doc.file)}`);
     break;
   }
   case "orchestration-bootstrap": {
@@ -757,14 +563,6 @@ switch (cmd) {
     }
     if (!isBoundedOrchestrationAllowedFiles(argText(args, "allowed-files"))) {
       const problem = bootstrapAllowedFilesProblem(argText(args, "allowed-files"));
-      if (args.json) {
-        writeJson({ ok: false, problem });
-        process.exit(1);
-      }
-      fail(problem.message);
-    }
-    if (!isBootstrapReadyMachineEvidenceCommand(argText(args, "evidence-command"))) {
-      const problem = bootstrapMachineEvidenceProblem(argText(args, "evidence-command"));
       if (args.json) {
         writeJson({ ok: false, problem });
         process.exit(1);
@@ -927,7 +725,7 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|subagent-packet-template|subagent-template|subagent-packet-check|subagent-check|orchestration-workflow-template|orchestration-workflow-init|orchestration-workflow-check|workflow-check|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
+    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|subagent-packet-template|subagent-packet-check|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
     process.exit(cmd ? 1 : 0);
 }
 

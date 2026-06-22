@@ -102,50 +102,6 @@ handoff:
   not-done: explicit gaps`;
 }
 
-function multiAgentCall(callId, name, args = {}) {
-  return {
-    type: "response_item",
-    payload: {
-      type: "function_call",
-      name,
-      call_id: callId,
-      arguments: JSON.stringify(args),
-    },
-  };
-}
-
-function multiAgentOutput(callId, output = {}) {
-  return {
-    type: "response_item",
-    payload: {
-      type: "function_call_output",
-      call_id: callId,
-      output: JSON.stringify(output),
-    },
-  };
-}
-
-function subagentSessionMeta(id, parentThreadId, cwd = root) {
-  return {
-    type: "session_meta",
-    payload: {
-      id,
-      timestamp: "2026-06-21T10:00:00.000Z",
-      cwd,
-      thread_source: "subagent",
-      agent_nickname: `agent-${id}`,
-      agent_role: "test reviewer",
-      source: {
-        subagent: {
-          thread_spawn: {
-            parent_thread_id: parentThreadId,
-          },
-        },
-      },
-    },
-  };
-}
-
 test("unknown command prints usage and exits non-zero", () => {
   const result = run(["definitely-not-a-command"]);
   assert.equal(result.status, 2);
@@ -432,30 +388,6 @@ test("import-codex-session forwards profile and session options", () => {
   }
 });
 
-test("orchestration-trace forwards transcript options", () => {
-  const dir = tempDir();
-  try {
-    const session = join(dir, "codex-session.jsonl");
-    const trace = join(dir, "trace.json");
-    writeJsonl(session, [
-      multiAgentCall("call_spawn", "multi_agent_v1.spawn_agent", { agent_type: "reviewer" }),
-      multiAgentOutput("call_spawn", { agent_id: "agent-1" }),
-      multiAgentCall("call_wait", "multi_agent_v1.wait_agent", { targets: ["agent-1"] }),
-      multiAgentOutput("call_wait", { status: { "agent-1": { completed: "done" } } }),
-      multiAgentCall("call_close", "multi_agent_v1.close_agent", { target: "agent-1" }),
-      multiAgentOutput("call_close", { previous_status: { completed: "done" } }),
-    ]);
-
-    const result = run(["orchestration-trace", "--session", session, "--json-output", trace, "--json"]);
-
-    assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).ok, true);
-    assert.equal(readJson(trace).calls.length, 3);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("orchestration-check forwards taskboard preflight options", () => {
   const dir = tempDir();
   try {
@@ -474,9 +406,9 @@ Validate orchestration packet through the AI facade.
 - orchestration: used
   objective: verify facade preflight forwarding
   allowed files: tools/ai.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths before reads; use bounded line windows
   expected output: facade forwards to taskboard
-  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  evidence command: node --test tools/ai.test.mjs
   stop condition: json output is ok
   independent reviewer: reviewed facade forwarding
 `);
@@ -513,11 +445,10 @@ Validate orchestration packet through the AI facade.
 - orchestration: used
   objective: verify facade preflight failure forwarding
   allowed files: tools/ai.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths before reads; use bounded line windows
   expected output: facade forwards to taskboard
-  evidence command: node tools/ai.mjs orchestration-trace --json-output tmp/trace.json --json
+  evidence command: node --test tools/ai.test.mjs
   stop condition: json output reports the failure
-  independent reviewer: reviewed facade forwarding
 `);
 
     const result = run(["orchestration-check", "T0001", "--json"], {
@@ -554,9 +485,9 @@ Validate current orchestration packet through the AI facade.
 - orchestration: used
   objective: verify current facade preflight forwarding
   allowed files: tools/ai.mjs
-  tool-use guard: exact paths/discovery before reads; safe line ranges; trace source plus --json-output
+  tool-use guard: verify exact repo paths before reads; use bounded line windows
   expected output: facade forwards current selector to taskboard
-  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
+  evidence command: node --test tools/ai.test.mjs
   stop condition: json output is ok
   independent reviewer: reviewed facade forwarding
 `);
@@ -595,48 +526,6 @@ test("orchestration-check forwards current selector JSON failures", () => {
   }
 });
 
-test("orchestration-evidence forwards current dry-run wrapper", () => {
-  const dir = tempDir();
-  try {
-    const sessionRoot = join(dir, "sessions");
-    writeTaskFile(dir, "T0001", `## What
-
-Validate current orchestration evidence wrapper through the AI facade.
-
-## Done when
-
-- [ ] wrapper dry-run passes
-
-## Open questions
-
-## Log
-
-- orchestration: used
-  objective: verify current facade evidence forwarding
-  allowed files: tools/ai.mjs; tools/ai_profile/**
-  tool-use guard: exact paths/discovery before reads; trace/status commands include evidence source and --json-output where applicable
-  expected output: facade forwards evidence wrapper
-  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-task --min-agents 2 --parent-thread-id parent-thread-1 --session-root "${sessionRoot}" --agent-cwd "${dir}" --agent-rollup-evidence --json-output tasks/evidence/T0001-status-rollup.json
-  stop condition: json output is ok
-  independent reviewer: reviewed facade forwarding
-`);
-
-    const result = run(["orchestration-evidence", "--current", "--json"], {
-      env: { ...process.env, TASKBOARD_ROOT: dir, CODEX_SESSION_FILE: "" },
-    });
-
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-    const parsed = JSON.parse(result.stdout);
-    assert.equal(parsed.ok, true);
-    assert.equal(parsed.task_id, "T0001");
-    assert.equal(parsed.inference_source, "task-command");
-    assert.match(parsed.command, /node tools\/ai\.mjs status --agent-rollup --require-agent-rollup-ok/);
-    assert.match(parsed.command, /--require-current-orchestration-task/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("orchestration-template forwards taskboard template", () => {
   const result = run(["orchestration-template"]);
   const direct = spawnSync(process.execPath, ["tools/taskboard/cli.mjs", "orchestration-template"], {
@@ -669,10 +558,7 @@ test("subagent-packet-template forwards taskboard template", () => {
   assert.equal(result.stdout, direct.stdout);
   assert.match(result.stdout, /objective:/);
   assert.ok(result.stdout.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
-  assert.match(result.stdout, /orchestration-trace include --session\/--parent-thread-id and --json-output/);
-  assert.match(result.stdout, /status --agent-rollup include --parent-thread-id\/--trace-session/);
-  assert.match(result.stdout, /--require-current-orchestration-task/);
-  assert.match(result.stdout, /--agent-rollup-evidence/);
+  assert.match(result.stdout, /evidence command or artifact:/);
   assert.match(result.stdout, /handoff:/);
 });
 
@@ -723,79 +609,13 @@ test("subagent-packet-check rejects ambiguous stdin file validation", () => {
   }
 });
 
-test("subagent-template alias forwards taskboard template", () => {
-  const result = run(["subagent-template"]);
-
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /objective:/);
-  assert.ok(result.stdout.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
-});
-
-test("subagent-check alias forwards structured validation", () => {
-  const result = run(["subagent-check", "--text", "objective: weak packet", "--json"]);
-
-  assert.equal(result.status, 1);
-  const parsed = JSON.parse(result.stdout);
-  assert.equal(parsed.problem.code, "subagent_packet_invalid");
-});
-
-test("subagent-check alias forwards stdin validation", () => {
-  const result = run(["subagent-check", "--stdin", "--json"], {
-    input: validSubagentPacket(),
-  });
-
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  const parsed = JSON.parse(result.stdout);
-  assert.equal(parsed.ok, true);
-});
-
-test("orchestration-workflow-init forwards dry-run", () => {
-  const dir = tempDir();
-  try {
-    writeTaskFile(dir, "T0091", `## What
-
-Validate workflow init through the AI facade.
-
-## Done when
-
-- [ ] workflow init dry-run passes
-
-## Open questions
-
-## Log
-
-- orchestration: used
-  objective: verify workflow init forwarding
-  allowed files: tools/ai.mjs; tools/taskboard/cli.mjs
-  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
-  expected output: facade forwards workflow init
-  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json
-  stop condition: json output is ok
-  independent reviewer: reviewed facade forwarding
-`);
-
-    const result = run(["orchestration-workflow-init", "T0091", "--json"], {
-      env: { ...process.env, TASKBOARD_ROOT: dir },
-    });
-
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-    const parsed = JSON.parse(result.stdout);
-    assert.equal(parsed.ok, true);
-    assert.equal(parsed.wrote, false);
-    assert.equal(parsed.manifest.status, "in_progress");
-    assert.deepEqual(parsed.manifest.evidence_refs, ["tasks/evidence/status.json"]);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 function bootstrapArgs(overrides = {}) {
   const values = {
     title: "Facade bootstrap",
     objective: "verify facade bootstrap forwarding",
     "allowed-files": "tools/ai.mjs",
     "expected-output": "facade creates task",
-    "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-task --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
+    "evidence-command": "node --test tools/ai.test.mjs",
     "stop-condition": "current preflight passes",
     "independent-reviewer": "reviewed facade bootstrap",
     ...overrides,
@@ -853,53 +673,6 @@ test("orchestration-bootstrap forwards missing argument failures", () => {
   }
 });
 
-test("orchestration-bootstrap forwards invalid evidence command failures", () => {
-  const dir = tempDir();
-  try {
-    const result = run([
-      "orchestration-bootstrap",
-      ...bootstrapArgs({ "evidence-command": "node tools/ai.mjs orchestration-check --current --json" }),
-      "--json",
-    ], {
-      env: { ...process.env, TASKBOARD_ROOT: dir },
-    });
-
-    assert.equal(result.status, 1);
-    assert.equal(result.stderr, "");
-    const parsed = JSON.parse(result.stdout);
-    assert.equal(parsed.ok, false);
-    assert.equal(parsed.problem.code, "invalid_evidence_command");
-    const taskRoot = join(dir, "tasks", "active");
-    assert.equal(existsSync(taskRoot), false);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("orchestration-bootstrap rejects weak status evidence without compact artifact", () => {
-  const dir = tempDir();
-  try {
-    const result = run([
-      "orchestration-bootstrap",
-      ...bootstrapArgs({ "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent" }),
-      "--json",
-    ], {
-      env: { ...process.env, TASKBOARD_ROOT: dir },
-    });
-
-    assert.equal(result.status, 1);
-    assert.equal(result.stderr, "");
-    const parsed = JSON.parse(result.stdout);
-    assert.equal(parsed.ok, false);
-    assert.equal(parsed.problem.code, "invalid_evidence_command");
-    assert.match(parsed.problem.message, /--require-current-orchestration-task/);
-    const taskRoot = join(dir, "tasks", "active");
-    assert.equal(existsSync(taskRoot), false);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("status imports Codex session before analysis", () => {
   const dir = tempDir();
   try {
@@ -939,126 +712,3 @@ test("status preserves profile session selection", () => {
   }
 });
 
-test("status forwards agent rollup options", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "profile.jsonl");
-    const parent = "parent-thread-1";
-    writeJsonl(profile, [
-      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
-    ]);
-    writeJsonl(join(dir, "rollout-a.jsonl"), [
-      subagentSessionMeta("subagent-a", parent),
-      {
-        type: "response_item",
-        payload: {
-          type: "function_call",
-          name: "functions.shell_command",
-          call_id: "call_status",
-          arguments: JSON.stringify({ command: "git status --short" }),
-        },
-      },
-      {
-        type: "response_item",
-        payload: {
-          type: "function_call_output",
-          call_id: "call_status",
-          output: "Exit code: 0\nWall time: 0.1 seconds\nOutput:\n",
-        },
-      },
-    ]);
-    writeJsonl(join(dir, "rollout-b.jsonl"), [
-      subagentSessionMeta("subagent-b", parent),
-      {
-        type: "response_item",
-        payload: {
-          type: "function_call",
-          name: "functions.shell_command",
-          call_id: "call_test",
-          arguments: JSON.stringify({ command: "node --test tools/ai.test.mjs" }),
-        },
-      },
-      {
-        type: "response_item",
-        payload: {
-          type: "function_call_output",
-          call_id: "call_test",
-          output: "Exit code: 0\nWall time: 0.2 seconds\nOutput:\n",
-        },
-      },
-    ]);
-
-    const result = run([
-      "status",
-      "--profile", profile,
-      "--agent-rollup",
-      "--require-agent-rollup-ok",
-      "--parent-thread-id", parent,
-      "--session-root", dir,
-      "--agent-cwd", root,
-      "--min-agents", "2",
-      "--no-import-codex-session",
-    ]);
-
-    assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /## Agent Rollup/);
-    assert.match(result.stdout, /subagent sessions: 2/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("status reports failed strict agent rollup as next action", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "profile.jsonl");
-    writeJsonl(profile, [
-      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
-    ]);
-
-    const result = run([
-      "status",
-      "--profile", profile,
-      "--agent-rollup",
-      "--require-agent-rollup-ok",
-      "--no-import-codex-session",
-    ]);
-
-    assert.equal(result.status, 1);
-    assert.match(result.stdout, /missing parent thread id for agent rollup/);
-    assert.match(result.stdout, /Fix the agent rollup evidence source or required agent count/);
-    assert.doesNotMatch(result.stdout, /No profiling action needed/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("status forwards omitted agent rollup hint context", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "profile.jsonl");
-    const parentSession = join(dir, "parent-session.jsonl");
-    const parent = "parent-thread-1";
-    writeJsonl(profile, [
-      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
-    ]);
-    writeJsonl(parentSession, [{ type: "session_meta", payload: { id: parent } }]);
-    writeJsonl(join(dir, "rollout-a.jsonl"), [subagentSessionMeta("subagent-a", parent, root)]);
-
-    const result = run([
-      "status",
-      "--profile", profile,
-      "--session-root", dir,
-      "--agent-cwd", root,
-      "--no-import-codex-session",
-    ], { env: { ...process.env, CODEX_SESSION_FILE: parentSession } });
-
-    assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /not included in this status run/);
-    assert.match(result.stdout, new RegExp(`status --profile .* --agent-rollup --parent-thread-id ${parent}`));
-    assert.match(result.stdout, /--session-root/);
-    assert.match(result.stdout, /--agent-cwd/);
-  } finally {
-    cleanup(dir);
-  }
-});

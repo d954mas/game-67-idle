@@ -1,29 +1,19 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, relative, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import {
   defaultProfilePath,
   deriveSessionId,
   latestSessionProfilePath,
   listSessionProfiles,
-  numberArg,
   parseArgs,
-  sessionsDir,
   stringArg,
   todaySessionProfiles,
 } from "./profile_lib.mjs";
-import { buildOrchestrationTrace, buildTrace, todaySessionRoot } from "./orchestration_trace.mjs";
-import {
-  currentDoingOrchestrationTaskIds,
-  DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
-  findDoc,
-  findRoot as findTaskboardRoot,
-  orchestrationPreflightProblem,
-} from "../taskboard/lib.mjs";
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--agent-rollup-evidence] [--verbose] [--agent-rollup] [--require-agent-rollup-ok] [--require-current-orchestration-task|--require-current-orchestration-preflight]
+  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--verbose]
 
 Profiling is fully passive: the PostToolUse hook records every tool call to a
 per-session log automatically. This command READS that log and reports the
@@ -34,23 +24,8 @@ Default reads the ACTIVE session log (the current session, self-identified from
 the harness env; newest tmp/session_profiles/sessions/*.jsonl as a fallback).
 --harness <name> picks the newest log for that harness; --all aggregates today's
 session logs; --session <id> picks one session; --profile <p> reads an explicit
-file. --verbose adds coverage gaps and parse errors.
-
-Agent rollup is analysis-time only: pass --agent-rollup with --parent-thread-id
-<id> and optional --session-root <dir>, --agent-cwd <path>, --min-agents <n>.
-It also reads matching subagent profile logs from --agent-profile-dir
-(default: tmp/session_profiles/sessions) when they exist.
-Use --trace-session <codex-session.jsonl> when checking parent transcript calls.
-If CODEX_SESSION_FILE points at the parent session, --agent-rollup can infer its
-id. Add --require-agent-rollup-ok only for strict task evidence; it exits
-nonzero when the rollup is missing or incomplete.
-
-  Use --agent-rollup-evidence with --json-output for a compact, sanitized
-  taskboard evidence artifact instead of a full local diagnostic status dump.
-  Add --require-current-orchestration-task (alias:
-  --require-current-orchestration-preflight) when strict orchestration readiness
-  must fail unless exactly one current doing pipeline/orchestration task passes
-  orchestration-check --current preflight.`);
+file. --verbose adds coverage gaps and parse errors. --json-output writes the
+status JSON to a file.`);
   process.exit(2);
 }
 
@@ -256,261 +231,44 @@ function normalizeCommand(command) {
   return stripLeadingCommandAssignments(String(command || "")).replaceAll("\\", "/").replace(/\s+/g, " ").trim();
 }
 
-function commandTokens(command) {
-  const tokens = [];
-  const text = stripLeadingCommandAssignments(command);
-  const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
-  let match;
-  while ((match = pattern.exec(text)) !== null) tokens.push(match[1] ?? match[2] ?? match[3] ?? "");
-  return tokens;
-}
-
-function nodeTestFileRecoveryKeys(command, { failedRecord = false } = {}) {
-  const tokens = commandTokens(command);
-  const first = (tokens[0] || "").split(/[\\/]/).pop()?.replace(/\.(exe|cmd)$/i, "").toLowerCase();
-  if (first !== "node") return [];
-  const testIndex = tokens.findIndex((token) => token === "--test");
-  if (testIndex < 0) return [];
-  const unsafeFlags = new Set(["--test-only", "--watch", "--watch-path"]);
-  if (tokens.some((token) => unsafeFlags.has(token) || [...unsafeFlags].some((flag) => token.startsWith(`${flag}=`)))) return [];
-  if (tokens.slice(0, testIndex).some((token) => token.includes("&&") || token.includes(";") || token.includes("|"))) return [];
-  const files = [];
-  for (const token of tokens.slice(testIndex + 1)) {
-    if (!token || token.startsWith("-")) continue;
-    const normalized = normalizeCommand(token);
-    if (!/\.(?:mjs|cjs|js|ts|mts|cts)$/i.test(normalized)) continue;
-    if (/[*?[\]{}]/.test(normalized)) continue;
-    files.push(normalized);
-  }
-  const uniqueFiles = [...new Set(files)];
-  if (failedRecord && uniqueFiles.length > 1) return [`node-test-files-all:${uniqueFiles.join("|")}`];
-  if (failedRecord && uniqueFiles.length !== 1) return [];
-  return uniqueFiles.map((file) => `node-test-file:${file}`);
-}
-
-function commandKeys(record) {
-  const keys = (record.commands || []).map(normalizeCommand).filter(Boolean);
-  for (const command of record.commands || []) {
-    keys.push(...nodeTestFileRecoveryKeys(command, { failedRecord: record.result === "fail" }));
-  }
-  if (record.validation_check_id) keys.push(`validation_check:${record.validation_check_id}`);
-  return keys;
-}
-
 function isEnvironmentBlocked(record) {
   return record.failure_kind === "environment_blocked";
 }
 
-function isAgentToolUsage(record) {
-  return record.failure_kind === "agent_tool_usage";
-}
-
-function isAgentEvidenceProbe(record) {
-  return record.failure_kind === "agent_evidence_probe";
-}
-
-function isStrictAgentRollupCommand(command) {
-  const text = normalizeCommand(command);
-  return /\bnode(?:\.exe|\.cmd)?\s+tools\/ai\.mjs\s+status\b/i.test(text)
-    && /\s--agent-rollup\b/i.test(text)
-    && /\s--require-agent-rollup-ok\b/i.test(text);
-}
-
-function isAiHelpProbeCommand(command) {
-  return /\bnode(?:\.exe|\.cmd)?\s+tools\/ai\.mjs\s+(?:--help|-h|help)\b/i.test(normalizeCommand(command));
-}
-
-function isAiFacadeNegativeProbeCommand(command) {
-  const text = normalizeCommand(command);
-  if (/\bnode(?:\.exe|\.cmd)?\s+tools\/ai\.mjs\s+definitely-not-a-command\b/i.test(text)) return true;
-  return /\bnode(?:\.exe|\.cmd)?\s+tools\/ai\.mjs\s+validate\b/i.test(text)
-    && (
-      /\s--file(?:=|\s)/i.test(text)
-      || /\s--bogus\b/i.test(text)
-      || /(?:^|\s)--keep-exports\s*$/i.test(text)
-    );
-}
-
-function isStructuredValidationProbeCommand(command) {
-  const text = normalizeCommand(command);
-  return /\bnode(?:\.exe|\.cmd)?\s+tools\/(?:ai\.mjs|taskboard\/cli\.mjs)\s+(?:subagent-packet-check|subagent-check|orchestration-workflow-check|workflow-check)\b/i.test(text);
-}
-
-function isFailedReadOnlyDiscoveryCommand(command) {
-  const text = normalizeCommand(command);
-  return /\bGet-ChildItem\b/i.test(text) || /\brg(?:\.exe)?\s+--files\b/i.test(text);
-}
-
-function isRecoveredTruncatedNodeTestRecord(record) {
-  if (record.event_type !== "tool_call_result_recovered") return false;
-  return (record.commands || []).some((command) => {
-    const tokens = commandTokens(command);
-    const first = (tokens[0] || "").split(/[\\/]/).pop()?.replace(/\.(exe|cmd)$/i, "").toLowerCase();
-    if (first !== "node" || !tokens.includes("--test") || !tokens.includes("--test-name-pattern")) return false;
-    return nodeTestFileRecoveryKeys(command, { failedRecord: true }).length === 0;
-  });
-}
-
-function isAgentEvidenceProbeRecord(record) {
-  return isAgentEvidenceProbe(record)
-    || (record.commands || []).some((command) => isStrictAgentRollupCommand(command));
-}
-
-function isAgentToolUsageRecord(record) {
-  return isAgentToolUsage(record)
-    || isRecoveredTruncatedNodeTestRecord(record)
-    || (record.commands || []).some((command) => isAiHelpProbeCommand(command))
-    || (record.commands || []).some((command) => isAiFacadeNegativeProbeCommand(command))
-    || (record.commands || []).some((command) => isFailedReadOnlyDiscoveryCommand(command));
-}
-
-function inferredFailureReason(record, fallback) {
-  if (record.blocked_by) return String(record.blocked_by).trim();
-  if ((record.commands || []).some(isStrictAgentRollupCommand)) return "failed strict agent rollup probe";
-  if ((record.commands || []).some(isAiHelpProbeCommand)) return "failed help lookup";
-  if ((record.commands || []).some(isAiFacadeNegativeProbeCommand)) return "failed expected-negative facade probe";
-  if ((record.commands || []).some(isStructuredValidationProbeCommand)) return "failed structured validation probe";
-  if ((record.commands || []).some(isFailedReadOnlyDiscoveryCommand)) return "failed read-only discovery command";
-  if (isRecoveredTruncatedNodeTestRecord(record)) return "truncated recovered node test command";
-  return fallback;
-}
-
-function transcriptFailureDetails(command, output) {
-  const text = String(output || "");
-  if (isStrictAgentRollupCommand(command) && /strict problem:|Fix the agent rollup evidence|Inspect unresolved agent failure samples/i.test(text)) {
-    return { failure_kind: "agent_evidence_probe", blocked_by: "failed strict agent rollup probe" };
-  }
-  if (
-    isStructuredValidationProbeCommand(command)
-    && /subagent_packet_invalid|orchestration_workflow_manifest_invalid|workflow manifest failed|use only one subagent-packet-check input/i.test(text)
-  ) {
-    return { failure_kind: "agent_evidence_probe", blocked_by: "failed structured validation probe" };
-  }
-  if (isStructuredValidationProbeCommand(command) && /unknown command|usage: cli\.mjs/i.test(text)) {
-    return { failure_kind: "agent_tool_usage", blocked_by: "invalid orchestration command alias" };
-  }
-  if (/ItemNotFoundException|ObjectNotFound/.test(text)) {
-    return { failure_kind: "agent_tool_usage", blocked_by: "missing local file/path" };
-  }
-  if (/NamedParameterNotFound|ParameterBindingException|CannotConvertArgumentNoMessage/.test(text)) {
-    return { failure_kind: "agent_tool_usage", blocked_by: "invalid shell command/parameter" };
-  }
-  if (/orchestration-trace\b/.test(String(command || "")) && /missing evidence source/.test(text)) {
-    return { failure_kind: "agent_tool_usage", blocked_by: "missing orchestration evidence source" };
-  }
-  return {};
-}
-
-function buildRecoveryPassesByKey(records) {
-  const passes = new Map();
-  for (const record of records) {
-    if (record.result !== "pass") continue;
-    const ts = eventTime(record);
-    if (ts === undefined) continue;
-    for (const key of commandKeys(record)) {
-      const times = passes.get(key) || [];
-      times.push(ts);
-      passes.set(key, times);
-    }
-  }
-  for (const times of passes.values()) times.sort((a, b) => a - b);
-  return passes;
-}
-
-function recoveryKeyKind(key) {
-  if (String(key || "").startsWith("node-test-files-all:")) return "node-test-files-all";
-  return String(key || "").startsWith("node-test-file:") ? "node-test-file" : "exact";
-}
-
-function hasExternalRecoveryPass(keys, failedAt, recoveryPassesByKey) {
-  if (failedAt === undefined || recoveryPassesByKey.size === 0) return false;
-  return keys.some((key) => {
-    const value = String(key || "");
-    if (value.startsWith("node-test-files-all:")) {
-      const files = value.slice("node-test-files-all:".length).split("|").filter(Boolean);
-      return files.length > 0 && files.every((file) => (recoveryPassesByKey.get(`node-test-file:${file}`) || []).some((passAt) => passAt > failedAt));
-    }
-    return (recoveryPassesByKey.get(key) || []).some((passAt) => passAt > failedAt);
-  });
-}
-
-function externalRecoveryKind(keys, failedAt, recoveryPassesByKey) {
-  if (failedAt === undefined || recoveryPassesByKey.size === 0) return "";
-  for (const key of keys) {
-    if (hasExternalRecoveryPass([key], failedAt, recoveryPassesByKey)) return recoveryKeyKind(key);
-  }
-  return "";
-}
-
-/* A failed record is "recovered" if the same command passed on a later line, or
- * by a later external/orchestrator pass when provided. */
-function classifyFailedRecords(records, { recoveryPassesByKey = new Map() } = {}) {
+/* A failed record is "recovered" if the same command passed on a later line.
+ * Otherwise it is environment-blocked or unresolved. */
+function classifyFailedRecords(records) {
   const passedLater = new Map();
   let resolvedLater = 0;
-  let externallyRecovered = 0;
-  let parentExactRecovered = 0;
-  let parentNodeTestFileRecovered = 0;
   let environmentBlocked = 0;
-  let agentToolUsage = 0;
-  let agentEvidenceProbe = 0;
   let unresolved = 0;
   const environmentBlockedReasons = new Map();
-  const agentToolUsageReasons = new Map();
-  const agentEvidenceProbeReasons = new Map();
   const unresolvedRecords = [];
-  const agentToolUsageRecords = [];
-  const agentEvidenceProbeRecords = [];
   for (const record of [...records].sort((a, b) => b.__line - a.__line)) {
-    const keys = commandKeys(record);
+    const keys = (record.commands || []).map(normalizeCommand).filter(Boolean);
     if (record.result === "pass") {
       for (const key of keys) passedLater.set(key, record);
       continue;
     }
     if (record.result !== "fail") continue;
-    if (keys.some((key) => passedLater.has(key))) resolvedLater += 1;
-    else if (isEnvironmentBlocked(record)) {
+    if (keys.some((key) => passedLater.has(key))) {
+      resolvedLater += 1;
+    } else if (isEnvironmentBlocked(record)) {
       environmentBlocked += 1;
       const reason = String(record.blocked_by || "environment blocker").trim();
       environmentBlockedReasons.set(reason, (environmentBlockedReasons.get(reason) || 0) + 1);
-    }
-    else if (hasExternalRecoveryPass(keys, eventTime(record), recoveryPassesByKey)) {
-      externallyRecovered += 1;
-      if (externalRecoveryKind(keys, eventTime(record), recoveryPassesByKey) === "node-test-file") parentNodeTestFileRecovered += 1;
-      else parentExactRecovered += 1;
-    }
-    else if (isAgentToolUsageRecord(record)) {
-      agentToolUsage += 1;
-      const reason = inferredFailureReason(record, "agent tool-usage failure");
-      agentToolUsageReasons.set(reason, (agentToolUsageReasons.get(reason) || 0) + 1);
-      agentToolUsageRecords.push({ ...record, blocked_by: reason });
-    }
-    else if (isAgentEvidenceProbeRecord(record)) {
-      agentEvidenceProbe += 1;
-      const reason = inferredFailureReason(record, "agent evidence-probe failure");
-      agentEvidenceProbeReasons.set(reason, (agentEvidenceProbeReasons.get(reason) || 0) + 1);
-      agentEvidenceProbeRecords.push({ ...record, blocked_by: reason });
-    }
-    else {
+    } else {
       unresolved += 1;
       unresolvedRecords.push(record);
     }
   }
   return {
     resolvedLater,
-    externallyRecovered,
-    parentExactRecovered,
-    parentNodeTestFileRecovered,
-    recovered: resolvedLater + externallyRecovered,
+    recovered: resolvedLater,
     environmentBlocked,
-    agentToolUsage,
-    agentEvidenceProbe,
     unresolved,
     unresolvedRecords,
-    agentToolUsageRecords,
-    agentEvidenceProbeRecords,
     environmentBlockedReasons: [...environmentBlockedReasons.entries()].map(([reason, count]) => ({ reason, count })),
-    agentToolUsageReasons: [...agentToolUsageReasons.entries()].map(([reason, count]) => ({ reason, count })),
-    agentEvidenceProbeReasons: [...agentEvidenceProbeReasons.entries()].map(([reason, count]) => ({ reason, count })),
   };
 }
 
@@ -544,18 +302,6 @@ function stripLeadingCommandAssignments(cmd) {
   return text.trim();
 }
 
-function isSearchCommand(cmd) {
-  const text = stripLeadingCommandAssignments(String(cmd || "")).split(/\r?\n/)[0].trim().toLowerCase();
-  return /^(?:rg|grep|egrep|fgrep|findstr|ack|select-string)(?:\s|$)/.test(text);
-}
-
-function transcriptResult(command, exitCode) {
-  if (exitCode === undefined) return "unknown";
-  if (exitCode === 0) return "pass";
-  if (exitCode === 1 && isSearchCommand(command)) return "pass";
-  return "fail";
-}
-
 /* Aggregate commands by tool key: which tools cost the most total time (what to
  * speed up) and which run most often (repeats / retries = friction). */
 function commandRollup(records) {
@@ -580,567 +326,6 @@ function commandRollup(records) {
   };
 }
 
-function readSessionMetaId(file) {
-  if (!file || !existsSync(file)) return "";
-  try {
-    const firstLine = readFileSync(file, "utf8").split(/\r?\n/, 1)[0] || "";
-    const line = JSON.parse(firstLine);
-    if (line.type === "session_meta" && line.payload?.id) return String(line.payload.id);
-  } catch {
-    return "";
-  }
-  return "";
-}
-
-function roleRollup(agents) {
-  const roles = new Map();
-  for (const agent of agents) {
-    const role = agent.role || "(no-role)";
-    roles.set(role, (roles.get(role) || 0) + 1);
-  }
-  return [...roles.entries()]
-    .map(([role, count]) => ({ role, count }))
-    .sort((a, b) => b.count - a.count || a.role.localeCompare(b.role));
-}
-
-function traceSource(traceSession, parentThreadId) {
-  if (traceSession && parentThreadId) return "trace-session+parent-thread";
-  if (traceSession) return "trace-session";
-  if (parentThreadId) return "parent-thread";
-  return "none";
-}
-
-function profileKey(file) {
-  const name = basename(file).replace(/\.jsonl$/i, "");
-  const parts = name.split("__");
-  return (parts[parts.length - 1] || name).toLowerCase();
-}
-
-function agentProfileKeys(agent) {
-  const fromId = deriveSessionId(agent.id || "");
-  const fromSessionFile = deriveSessionId(basename(agent.sessionFile || ""));
-  return [fromId.full, fromId.short, fromSessionFile.full, fromSessionFile.short]
-    .map((value) => String(value || "").toLowerCase())
-    .filter(Boolean);
-}
-
-function findAgentProfileFile(agent, files) {
-  const keys = new Set(agentProfileKeys(agent));
-  return files.find((file) => keys.has(profileKey(file))) || "";
-}
-
-function parseJsonObject(raw) {
-  try {
-    const parsed = JSON.parse(String(raw || "{}"));
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function parseTranscriptDurationMs(output) {
-  const match = String(output || "").match(/^Wall time:\s*([0-9.]+)\s*seconds\b/im);
-  if (!match) return 0;
-  const seconds = Number(match[1]);
-  return Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 1000) : 0;
-}
-
-function parseTranscriptExitCode(output) {
-  const match = String(output || "").match(/^Exit code:\s*(-?\d+)/im);
-  if (!match) return undefined;
-  const code = Number(match[1]);
-  return Number.isInteger(code) ? code : undefined;
-}
-
-function readTranscriptProfileRecords(file, agentId) {
-  if (!file || !existsSync(file)) return { records: [], errors: [] };
-  const calls = new Map();
-  const records = [];
-  const errors = [];
-  const text = readFileSync(file, "utf8");
-  for (const [index, rawLine] of text.split(/\r?\n/).entries()) {
-    const lineText = rawLine.trim();
-    if (!lineText) continue;
-    let line;
-    try {
-      line = JSON.parse(lineText);
-    } catch (error) {
-      errors.push(`${file}: line ${index + 1}: invalid JSON: ${error.message}`);
-      continue;
-    }
-    const payload = line?.payload;
-    if (line?.type !== "response_item" || !payload) continue;
-    if (payload.type === "function_call") {
-      const name = String(payload.name || "");
-      if (!/(^|[._-])shell_command$/.test(name)) continue;
-      const args = parseJsonObject(payload.arguments);
-      const command = String(args.command || "").trim();
-      if (command) calls.set(String(payload.call_id || ""), { command, ts: line.timestamp || "" });
-      continue;
-    }
-    if (payload.type !== "function_call_output") continue;
-    const callId = String(payload.call_id || "");
-    const call = calls.get(callId);
-    if (!call) continue;
-    const output = String(payload.output || "");
-    const exitCode = parseTranscriptExitCode(output);
-    const result = transcriptResult(call.command, exitCode);
-    const failureDetails = result === "fail" ? transcriptFailureDetails(call.command, output) : {};
-    records.push({
-      __line: index + 1,
-      ts: line.timestamp || call.ts || "",
-      phase: "session",
-      category: "tooling",
-      intent: "auto:codex-transcript",
-      result,
-      value: "unknown",
-      event_type: "tool_call_result_transcript",
-      duration_ms: parseTranscriptDurationMs(output),
-      commands: [call.command],
-      session_id: agentId,
-      source_call_id: callId,
-      source_session_file: file,
-      ...(exitCode !== undefined ? { exit_code: exitCode } : {}),
-      ...failureDetails,
-    });
-  }
-  return { records, errors };
-}
-
-function addFailureStats(total, stats) {
-  total.unresolved += stats.unresolved;
-  total.resolvedLater += stats.resolvedLater;
-  total.externallyRecovered += stats.externallyRecovered;
-  total.parentExactRecovered += stats.parentExactRecovered;
-  total.parentNodeTestFileRecovered += stats.parentNodeTestFileRecovered;
-  total.environmentBlocked += stats.environmentBlocked;
-  total.agentToolUsage += stats.agentToolUsage;
-  total.agentEvidenceProbe += stats.agentEvidenceProbe;
-  return total;
-}
-
-function failureSample(agent, source, record) {
-  const command = String(record.commands?.[0] || "");
-  return {
-    agent_id: agent.id || "",
-    nickname: agent.nickname || "",
-    role: agent.role || "",
-    source,
-    command_key: commandKey(command),
-    command: command.slice(0, 240),
-    exit_code: record.exit_code,
-    line: record.__line,
-    source_call_id: record.source_call_id || "",
-    source_session_file: record.source_session_file || "",
-    blocked_by: record.blocked_by || "",
-  };
-}
-
-function renderFailureSample(sample) {
-  const agent = sample.nickname || sample.agent_id || "(unknown)";
-  const role = sample.role ? ` [${sample.role}]` : "";
-  const source = sample.source || "unknown";
-  const line = sample.line !== undefined ? `:${sample.line}` : "";
-  const exit = sample.exit_code !== undefined ? ` exit ${sample.exit_code}` : "";
-  return `- unresolved: ${agent}${role} ${source}${line} ${sample.command_key}${exit} - ${sample.command}`;
-}
-
-function renderAgentToolUsageSample(sample) {
-  const agent = sample.nickname || sample.agent_id || "(unknown)";
-  const role = sample.role ? ` [${sample.role}]` : "";
-  const source = sample.source || "unknown";
-  const line = sample.line !== undefined ? `:${sample.line}` : "";
-  const reason = sample.blocked_by ? ` (${sample.blocked_by})` : "";
-  return `- tool-usage: ${agent}${role} ${source}${line} ${sample.command_key}${reason} - ${sample.command}`;
-}
-
-function renderAgentEvidenceProbeSample(sample) {
-  const agent = sample.nickname || sample.agent_id || "(unknown)";
-  const role = sample.role ? ` [${sample.role}]` : "";
-  const source = sample.source || "unknown";
-  const line = sample.line !== undefined ? `:${sample.line}` : "";
-  const reason = sample.blocked_by ? ` (${sample.blocked_by})` : "";
-  const exit = sample.exit_code !== undefined ? ` exit ${sample.exit_code}` : "";
-  return `- evidence-probe: ${agent}${role} ${source}${line} ${sample.command_key}${reason}${exit} - ${sample.command}`;
-}
-
-function agentToolUsagePreventionHints(profileRollup, rollupContext = {}) {
-  const reasons = new Set((profileRollup.agent_tool_usage_reasons || []).map((item) => item.reason));
-  const hints = [];
-  if (reasons.has("missing local file/path")) {
-    hints.push({
-      reason: "missing local file/path",
-      hint: "Verify paths with `rg --files <scope>` or `Test-Path -LiteralPath <path>` before reads.",
-    });
-  }
-  if (reasons.has("invalid shell command/parameter")) {
-    hints.push({
-      reason: "invalid shell command/parameter",
-      hint: "Avoid unsupported PowerShell shapes such as `Format-Hex -Count` and `Select-Object -Index 96..114`; use `Select-Object -Skip <n> -First <n>` for line windows.",
-    });
-  }
-  if (reasons.has("missing orchestration evidence source")) {
-    const command = [
-      "node tools/ai.mjs orchestration-trace",
-      rollupContext.parent_thread_id ? `--parent-thread-id ${formatCommandArg(rollupContext.parent_thread_id)}` : "",
-      rollupContext.session_root ? `--session-root ${formatCommandArg(rollupContext.session_root)}` : "",
-      rollupContext.cwd ? `--cwd ${formatCommandArg(rollupContext.cwd)}` : "",
-      "--json-output tmp/orchestration-trace.json --json",
-    ].filter(Boolean).join(" ");
-    hints.push({
-      reason: "missing orchestration evidence source",
-      hint: `Prefer task-scoped evidence with \`node tools/ai.mjs orchestration-evidence --current --run --json\`; for raw trace fallback use an evidence source: \`${command}\`.`,
-    });
-  }
-  return hints;
-}
-
-function buildAgentProfileRollup(agents, values, parentRecords = []) {
-  const profileDir = stringArg(values, "agent-profile-dir", "") || sessionsDir();
-  const files = listSessionProfiles(profileDir);
-  const profiles = [];
-  const missing = [];
-  const errors = [];
-  const allRecords = [];
-  const failed = {
-    unresolved: 0,
-    resolvedLater: 0,
-    externallyRecovered: 0,
-    parentExactRecovered: 0,
-    parentNodeTestFileRecovered: 0,
-    environmentBlocked: 0,
-    agentToolUsage: 0,
-    agentEvidenceProbe: 0,
-  };
-  const agentToolUsageReasons = new Map();
-  const agentEvidenceProbeReasons = new Map();
-  const parentRecoveryPasses = buildRecoveryPassesByKey(parentRecords);
-  const unresolvedFailureSamples = [];
-  const agentToolUsageFailureSamples = [];
-  const agentEvidenceProbeFailureSamples = [];
-  let agentToolUsageCleanTailAgents = 0;
-  let agentEvidenceProbeCleanTailAgents = 0;
-
-  for (const agent of agents) {
-    const file = findAgentProfileFile(agent, files);
-    const source = file ? "profile" : "transcript";
-    const parsed = file ? parseProfiles([file]) : readTranscriptProfileRecords(agent.sessionFile, agent.id);
-    const records = parsed.records;
-    if (records.length === 0) {
-      missing.push({ id: agent.id, nickname: agent.nickname || "", role: agent.role || "" });
-      continue;
-    }
-    const recordedMs = records.reduce((sum, record) => sum + Math.max(0, Number(record.duration_ms || 0)), 0);
-    profiles.push({
-      id: agent.id,
-      nickname: agent.nickname || "",
-      role: agent.role || "",
-      source,
-      profile: file || "",
-      session_file: agent.sessionFile || "",
-      records: records.length,
-      recorded_ms: recordedMs,
-    });
-    for (const error of parsed.errors) errors.push(file ? `${file}: ${error}` : error);
-    const failureStats = classifyFailedRecords(records, { recoveryPassesByKey: parentRecoveryPasses });
-    addFailureStats(failed, failureStats);
-    if (failureStats.agentToolUsage > 0) agentToolUsageCleanTailAgents = 0;
-    else agentToolUsageCleanTailAgents += 1;
-    if (failureStats.agentEvidenceProbe > 0) agentEvidenceProbeCleanTailAgents = 0;
-    else agentEvidenceProbeCleanTailAgents += 1;
-    for (const item of failureStats.agentToolUsageReasons) {
-      agentToolUsageReasons.set(item.reason, (agentToolUsageReasons.get(item.reason) || 0) + item.count);
-    }
-    for (const item of failureStats.agentEvidenceProbeReasons) {
-      agentEvidenceProbeReasons.set(item.reason, (agentEvidenceProbeReasons.get(item.reason) || 0) + item.count);
-    }
-    for (const record of failureStats.unresolvedRecords) {
-      if (unresolvedFailureSamples.length >= 10) break;
-      unresolvedFailureSamples.push(failureSample(agent, source, record));
-    }
-    for (const record of failureStats.agentToolUsageRecords) {
-      if (agentToolUsageFailureSamples.length >= 10) break;
-      agentToolUsageFailureSamples.push(failureSample(agent, source, record));
-    }
-    for (const record of failureStats.agentEvidenceProbeRecords) {
-      if (agentEvidenceProbeFailureSamples.length >= 10) break;
-      agentEvidenceProbeFailureSamples.push(failureSample(agent, source, record));
-    }
-    allRecords.push(...records.map((record) => ({ ...record, agent_id: agent.id })));
-  }
-
-  const profileAgentCount = profiles.filter((profile) => profile.source === "profile").length;
-  const transcriptAgentCount = profiles.filter((profile) => profile.source === "transcript").length;
-  return {
-    profile_dir: profileDir,
-    agent_count: agents.length,
-    telemetry_agent_count: profiles.length,
-    profiled_agent_count: profileAgentCount,
-    profile_agent_count: profileAgentCount,
-    transcript_agent_count: transcriptAgentCount,
-    missing_agent_profile_count: agents.length - profileAgentCount,
-    missing_agent_telemetry_count: missing.length,
-    records: allRecords.length,
-    recorded_ms: allRecords.reduce((sum, record) => sum + Math.max(0, Number(record.duration_ms || 0)), 0),
-    command_rollup: commandRollup(allRecords),
-    unresolved_failed_records: failed.unresolved,
-    unresolved_failure_samples: unresolvedFailureSamples,
-    same_agent_recovered_failed_records: failed.resolvedLater,
-    recovered_failed_records: failed.resolvedLater,
-    total_recovered_failed_records: failed.resolvedLater + failed.externallyRecovered,
-    parent_recovered_failed_records: failed.externallyRecovered,
-    parent_exact_recovered_failed_records: failed.parentExactRecovered,
-    parent_node_test_file_recovered_failed_records: failed.parentNodeTestFileRecovered,
-    environment_blocked_failed_records: failed.environmentBlocked,
-    agent_tool_usage_failed_records: failed.agentToolUsage,
-    agent_evidence_probe_failed_records: failed.agentEvidenceProbe,
-    agent_tool_usage_reasons: [...agentToolUsageReasons.entries()].map(([reason, count]) => ({ reason, count })),
-    agent_evidence_probe_reasons: [...agentEvidenceProbeReasons.entries()].map(([reason, count]) => ({ reason, count })),
-    agent_tool_usage_failure_samples: agentToolUsageFailureSamples,
-    agent_evidence_probe_failure_samples: agentEvidenceProbeFailureSamples,
-    agent_tool_usage_clean_tail_agents: agentToolUsageCleanTailAgents,
-    agent_evidence_probe_clean_tail_agents: agentEvidenceProbeCleanTailAgents,
-    agent_tool_usage_prevention_hints: [],
-    errors,
-    profiles,
-    missing,
-  };
-}
-
-function strictAgentRollupProblems(rollup) {
-  if (!rollup?.enabled) return [];
-  const problems = [];
-  if (rollup.ok !== true) {
-    problems.push(...(rollup.problems?.length ? rollup.problems : ["agent rollup trace/count check failed"]));
-  }
-  const profileRollup = rollup.profile_rollup;
-  if (profileRollup) {
-    if (Number(profileRollup.unresolved_failed_records || 0) > 0) {
-      problems.push(`unresolved agent failures: ${profileRollup.unresolved_failed_records}`);
-    }
-    if (Number(profileRollup.missing_agent_telemetry_count || 0) > 0) {
-      problems.push(`missing telemetry for ${profileRollup.missing_agent_telemetry_count} subagent session(s)`);
-    }
-    if ((profileRollup.errors || []).length > 0) {
-      problems.push(`agent telemetry parse errors: ${profileRollup.errors.length}`);
-    }
-  }
-  return problems;
-}
-
-function buildAgentRollup(values, parentRecords = []) {
-  if (values["agent-rollup"] !== true && values.agents !== true) return { enabled: false };
-  const traceSession = stringArg(values, "trace-session", "");
-  const parentThreadId = stringArg(values, "parent-thread-id", "") || readSessionMetaId(process.env.CODEX_SESSION_FILE || "");
-  const sessionRoot = stringArg(values, "session-root", "") || todaySessionRoot();
-  const cwd = stringArg(values, "agent-cwd", stringArg(values, "cwd", process.cwd()));
-  const rawMinAgents = numberArg(values, "min-agents");
-  const minAgents = Number.isFinite(rawMinAgents)
-    ? Math.max(0, rawMinAgents)
-    : (values["require-agent-rollup-ok"] === true ? 1 : 0);
-  if (!parentThreadId && !traceSession) {
-    const rollup = {
-      enabled: true,
-      source: "none",
-      ok: false,
-      parent_thread_id: "",
-      trace_session: "",
-      session_root: sessionRoot,
-      cwd,
-      min_agents: minAgents,
-      calls_count: 0,
-      subagent_session_count: 0,
-      count: 0,
-      roles: [],
-      first_agent_ts: "",
-      latest_agent_ts: "",
-      agents: [],
-      profile_rollup: buildAgentProfileRollup([], values, parentRecords),
-      problems: ["missing parent thread id for agent rollup"],
-    };
-    const strictProblems = strictAgentRollupProblems(rollup);
-    return {
-      ...rollup,
-      strict_ok: strictProblems.length === 0,
-      strict_problems: strictProblems,
-    };
-  }
-
-  const trace = traceSession
-    ? buildOrchestrationTrace({ session: traceSession, sessionRoot, parentThreadId, minAgents, cwd })
-    : buildTrace({ sessionRoot, parentThreadId, minAgents, cwd });
-  const agents = trace.agents || trace.subagentSessions || [];
-  const profileRollup = buildAgentProfileRollup(agents, values, parentRecords);
-  profileRollup.agent_tool_usage_prevention_hints = agentToolUsagePreventionHints(profileRollup, {
-    parent_thread_id: parentThreadId,
-    session_root: sessionRoot,
-    cwd,
-  });
-  const rollup = {
-    enabled: true,
-    ok: trace.ok,
-    source: traceSource(traceSession, parentThreadId),
-    parent_thread_id: parentThreadId,
-    trace_session: traceSession,
-    session_root: sessionRoot,
-    cwd,
-    min_agents: minAgents,
-    calls_count: trace.calls?.length || 0,
-    subagent_session_count: trace.count ?? trace.subagentSessionCount ?? agents.length,
-    count: agents.length,
-    roles: roleRollup(agents),
-    first_agent_ts: agents[0]?.timestamp || "",
-    latest_agent_ts: agents[agents.length - 1]?.timestamp || "",
-    agents,
-    profile_rollup: profileRollup,
-    problems: trace.problems,
-  };
-  const strictProblems = strictAgentRollupProblems(rollup);
-  return {
-    ...rollup,
-    strict_ok: strictProblems.length === 0,
-    strict_problems: strictProblems,
-  };
-}
-
-function buildAgentRollupHint(values) {
-  if (values["agent-rollup"] === true || values.agents === true) return null;
-  const parentThreadId = readSessionMetaId(process.env.CODEX_SESSION_FILE || "");
-  if (!parentThreadId) return null;
-  const sessionRoot = stringArg(values, "session-root", "") || todaySessionRoot();
-  const cwd = stringArg(values, "agent-cwd", stringArg(values, "cwd", process.cwd()));
-  const trace = buildTrace({ sessionRoot, parentThreadId, minAgents: 0, cwd });
-  if ((trace.count || 0) === 0) return null;
-  const command = [
-    "node", "tools/ai.mjs", "status",
-    ...statusSelectionArgs(values),
-    "--agent-rollup",
-    "--parent-thread-id", parentThreadId,
-    "--session-root", sessionRoot,
-    "--agent-cwd", cwd,
-    ...(values["no-import-codex-session"] === true ? ["--no-import-codex-session"] : []),
-  ].map(formatCommandArg).join(" ");
-  return {
-    parent_thread_id: parentThreadId,
-    session_root: sessionRoot,
-    cwd,
-    subagent_session_count: trace.count || 0,
-    command,
-  };
-}
-
-function statusSelectionArgs(values) {
-  const out = [];
-  const profile = stringArg(values, "profile", "");
-  const session = stringArg(values, "session", "");
-  const harness = stringArg(values, "harness", "");
-  if (profile) out.push("--profile", profile);
-  if (!profile && session) out.push("--session", session);
-  if (harness) out.push("--harness", harness);
-  if (values.all === true) out.push("--all");
-  if (values.verbose === true) out.push("--verbose");
-  return out;
-}
-
-function formatCommandArg(value) {
-  const text = String(value);
-  if (!/\s/.test(text)) return text;
-  return `"${text.replaceAll('"', '\\"')}"`;
-}
-
-function currentOrchestrationPreflightGuidance() {
-  try {
-    const taskRoot = findTaskboardRoot(process.cwd());
-    const taskIds = currentDoingOrchestrationTaskIds(taskRoot);
-    if (taskIds.length === 1) return "preflight the current task with `node tools/ai.mjs orchestration-check --current --json`";
-    if (taskIds.length === 0) return "create one current orchestration task with `node tools/ai.mjs orchestration-bootstrap` using bounded packet fields, then run `node tools/ai.mjs orchestration-check --current --json`";
-    return "resolve multiple current `doing` pipeline/orchestration tasks to exactly one, then run `node tools/ai.mjs orchestration-check --current --json`";
-  } catch {
-    // Status should stay diagnostic even if a taskboard checkout is incomplete.
-  }
-  return "preflight the current task with `node tools/ai.mjs orchestration-check --current --json`";
-}
-
-function requiresCurrentOrchestrationTask(values = {}) {
-  return values["require-current-orchestration-task"] === true
-    || values["require-current-orchestration-preflight"] === true;
-}
-
-function buildCurrentOrchestrationTaskCheck(values = {}) {
-  if (!requiresCurrentOrchestrationTask(values)) return { enabled: false };
-  try {
-    const root = findTaskboardRoot(process.cwd());
-    const taskIds = currentDoingOrchestrationTaskIds(root);
-    if (taskIds.length === 0) {
-      return {
-        enabled: true,
-        ok: false,
-        root,
-        task_ids: [],
-        file: "",
-        problem: {
-          code: "current_task_missing",
-          message: "no current doing pipeline/orchestration task; create or set exactly one task to doing first",
-          nextAction: "create or refine exactly one `doing` pipeline/orchestration task, then run `node tools/ai.mjs orchestration-check --current --json`",
-        },
-      };
-    }
-    if (taskIds.length > 1) {
-      return {
-        enabled: true,
-        ok: false,
-        root,
-        task_ids: taskIds,
-        file: "",
-        problem: {
-          code: "current_task_ambiguous",
-          message: `multiple current doing pipeline/orchestration tasks: ${taskIds.join(", ")}`,
-          nextAction: "resolve multiple current `doing` pipeline/orchestration tasks to exactly one, then run `node tools/ai.mjs orchestration-check --current --json`",
-        },
-      };
-    }
-    const taskId = taskIds[0];
-    const doc = findDoc(root, taskId);
-    if (!doc) {
-      return {
-        enabled: true,
-        ok: false,
-        root,
-        task_ids: taskIds,
-        file: "",
-        problem: {
-          code: "current_task_not_found",
-          taskId,
-          message: `current orchestration task ${taskId} was not found`,
-          nextAction: "repair the taskboard entry, then run `node tools/ai.mjs orchestration-check --current --json`",
-        },
-      };
-    }
-    const problem = orchestrationPreflightProblem(doc);
-    return {
-      enabled: true,
-      ok: !problem,
-      root,
-      task_ids: taskIds,
-      file: doc.file,
-      problem,
-    };
-  } catch (error) {
-    return {
-      enabled: true,
-      ok: false,
-      root: "",
-      task_ids: [],
-      file: "",
-      problem: {
-        code: "current_task_check_failed",
-        message: error?.message || "current orchestration task check failed",
-        nextAction: "fix taskboard access, then run `node tools/ai.mjs orchestration-check --current --json`",
-      },
-    };
-  }
-}
-
 function buildStatus(profilePaths, values = {}) {
   const files = Array.isArray(profilePaths) ? profilePaths : [profilePaths];
   const parsed = parseProfiles(files);
@@ -1153,14 +338,6 @@ function buildStatus(profilePaths, values = {}) {
     .filter((record) => Number(record.duration_ms || 0) > 0)
     .sort((a, b) => Number(b.duration_ms || 0) - Number(a.duration_ms || 0))[0] || null;
   const lowCoverage = isLowCoverage(coverage);
-  const agentRollup = buildAgentRollup(values, records);
-  const agentRollupHint = buildAgentRollupHint(values);
-  const currentOrchestrationTask = buildCurrentOrchestrationTaskCheck(values);
-  const unresolvedAgentFailures = Number(agentRollup?.profile_rollup?.unresolved_failed_records || 0);
-  const missingAgentTelemetry = Number(agentRollup?.profile_rollup?.missing_agent_telemetry_count || 0);
-  const agentToolUsageFailures = Number(agentRollup?.profile_rollup?.agent_tool_usage_failed_records || 0);
-  const agentToolUsagePreventionHints = agentRollup?.profile_rollup?.agent_tool_usage_prevention_hints || [];
-  const agentToolUsageCleanTailAgents = Number(agentRollup?.profile_rollup?.agent_tool_usage_clean_tail_agents || 0);
 
   let nextAction;
   if (!parsed.exists) {
@@ -1171,20 +348,6 @@ function buildStatus(profilePaths, values = {}) {
     nextAction = "No tool calls recorded yet in this session.";
   } else if (failedClassification.unresolved > 0) {
     nextAction = "Inspect the unresolved failed commands before drawing conclusions.";
-  } else if (agentRollup?.enabled && agentRollup.ok !== true) {
-    nextAction = "Fix the agent rollup evidence source or required agent count before trusting this orchestration evidence.";
-  } else if (unresolvedAgentFailures > 0) {
-    nextAction = "Inspect unresolved agent failure samples before trusting the orchestration rollup.";
-  } else if (missingAgentTelemetry > 0) {
-    nextAction = "Inspect missing subagent telemetry before trusting the orchestration rollup.";
-  } else if (currentOrchestrationTask.enabled && currentOrchestrationTask.ok !== true) {
-    nextAction = currentOrchestrationTask.problem?.nextAction || "Fix the current orchestration task preflight before launching delegated work.";
-  } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0 && agentToolUsageCleanTailAgents >= 3) {
-    nextAction = `Recent subagents are clean of classified tool-use failures; keep the printed prevention hints in packets, ${currentOrchestrationPreflightGuidance()} before launching delegated work.`;
-  } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0) {
-    nextAction = "Apply the printed agent tool-use prevention hints to subagent packets, prompts, or templates before the next delegated run.";
-  } else if (agentToolUsageFailures > 0) {
-    nextAction = "Inspect agent tool-usage failure samples to improve subagent prompts, paths, or command patterns.";
   } else if (failedClassification.environmentBlocked > 0) {
     nextAction = "Environment blockers remain; prepare the required local dependencies before repeating those gates.";
   } else if (lowCoverage) {
@@ -1217,9 +380,6 @@ function buildStatus(profilePaths, values = {}) {
     wall_clock_coverage: coverage,
     low_profile_coverage: lowCoverage,
     command_rollup: commandRollup(records),
-    agent_rollup: agentRollup,
-    agent_rollup_hint: agentRollupHint,
-    current_orchestration_task: currentOrchestrationTask,
     slowest_record: slowest ? {
       line: slowest.__line,
       duration_ms: Number(slowest.duration_ms || 0),
@@ -1230,62 +390,6 @@ function buildStatus(profilePaths, values = {}) {
       commands: slowest.commands || [],
     } : null,
     next_action: nextAction,
-  };
-}
-
-function compactAgentRollupEvidence(status) {
-  const rollup = status.agent_rollup || {};
-  const profileRollup = rollup.profile_rollup || {};
-  const currentTask = status.current_orchestration_task || { enabled: false };
-  const currentTaskFile = currentTask.root && currentTask.file
-    ? relative(currentTask.root, currentTask.file).replaceAll("\\", "/")
-    : (currentTask.file || "");
-  return {
-    schema_version: 2,
-    kind: "status-agent-rollup-evidence",
-    generated_at: new Date().toISOString(),
-    valid: status.valid === true,
-    errors: Array.isArray(status.errors) ? status.errors : [],
-    agent_rollup: {
-      enabled: rollup.enabled === true,
-      ok: rollup.ok === true,
-      strict_ok: rollup.strict_ok === true,
-      source: rollup.source || "",
-      parent_thread_id: rollup.parent_thread_id || "",
-      trace_session: rollup.trace_session || "",
-      min_agents: Number(rollup.min_agents ?? 0),
-      subagent_session_count: Number(rollup.subagent_session_count ?? 0),
-      count: Number(rollup.count ?? 0),
-      roles: Array.isArray(rollup.roles)
-        ? rollup.roles.map((item) => ({
-          role: String(item.role || ""),
-          count: Number(item.count || 0),
-        }))
-        : [],
-      problems: Array.isArray(rollup.problems) ? rollup.problems : [],
-      strict_problems: Array.isArray(rollup.strict_problems) ? rollup.strict_problems : [],
-      profile_rollup: {
-        missing_agent_telemetry_count: Number(profileRollup.missing_agent_telemetry_count ?? 0),
-        unresolved_failed_records: Number(profileRollup.unresolved_failed_records ?? 0),
-        agent_tool_usage_failed_records: Number(profileRollup.agent_tool_usage_failed_records ?? 0),
-        agent_tool_usage_clean_tail_agents: Number(profileRollup.agent_tool_usage_clean_tail_agents ?? 0),
-        agent_evidence_probe_failed_records: Number(profileRollup.agent_evidence_probe_failed_records ?? 0),
-        agent_evidence_probe_clean_tail_agents: Number(profileRollup.agent_evidence_probe_clean_tail_agents ?? 0),
-        errors: Array.isArray(profileRollup.errors) ? profileRollup.errors : [],
-      },
-    },
-    current_orchestration_task: {
-      enabled: currentTask.enabled === true,
-      ok: currentTask.ok === true,
-      task_ids: Array.isArray(currentTask.task_ids) ? currentTask.task_ids.map(String) : [],
-      file: currentTaskFile,
-      problem: currentTask.problem ? {
-        code: currentTask.problem.code || "",
-        message: currentTask.problem.message || "",
-        nextAction: currentTask.problem.nextAction || "",
-        missingFields: Array.isArray(currentTask.problem.missingFields) ? currentTask.problem.missingFields.map(String) : [],
-      } : null,
-    },
   };
 }
 
@@ -1332,116 +436,6 @@ function renderStatus(status, { verbose }) {
     }
   }
 
-  const agentRollup = status.agent_rollup;
-  if (agentRollup?.enabled) {
-    lines.push("");
-    lines.push("## Agent Rollup");
-    if (!agentRollup.ok) {
-      for (const problem of agentRollup.problems) lines.push(`- problem: ${problem}`);
-    }
-    if (agentRollup.strict_ok === false) {
-      for (const problem of agentRollup.strict_problems || []) lines.push(`- strict problem: ${problem}`);
-    }
-    lines.push(`- source: ${agentRollup.source}`);
-    lines.push(`- transcript calls: ${agentRollup.calls_count}`);
-    lines.push(`- subagent sessions: ${agentRollup.subagent_session_count}`);
-    if (agentRollup.parent_thread_id) lines.push(`- parent thread: ${agentRollup.parent_thread_id}`);
-    if (agentRollup.roles.length > 0) {
-      lines.push(`- roles: ${agentRollup.roles.map((entry) => `${entry.role}=${entry.count}`).join(", ")}`);
-    }
-    if (agentRollup.first_agent_ts || agentRollup.latest_agent_ts) {
-      lines.push(`- span: ${agentRollup.first_agent_ts || "unknown"} -> ${agentRollup.latest_agent_ts || "unknown"}`);
-    }
-    const profileRollup = agentRollup.profile_rollup;
-    if (profileRollup && profileRollup.agent_count > 0) {
-      lines.push("");
-      lines.push("## Agent Profile Rollup");
-      lines.push(`- telemetry agents: ${profileRollup.telemetry_agent_count}/${profileRollup.agent_count}`);
-      lines.push(`- sources: profiles=${profileRollup.profile_agent_count}, transcripts=${profileRollup.transcript_agent_count}`);
-      lines.push(`- telemetry records: ${profileRollup.records}`);
-      lines.push(`- recorded command time: ${formatMs(profileRollup.recorded_ms)}`);
-      if (profileRollup.unresolved_failed_records > 0) {
-        lines.push(`- unresolved agent failures: ${profileRollup.unresolved_failed_records}`);
-        const sampleLimit = verbose ? 10 : 3;
-        const samples = profileRollup.unresolved_failure_samples.slice(0, sampleLimit);
-        for (const sample of samples) {
-          lines.push(renderFailureSample(sample));
-        }
-        const hiddenSamples = Math.max(0, profileRollup.unresolved_failed_records - samples.length);
-        if (hiddenSamples > 0) lines.push(`- ... ${hiddenSamples} more unresolved agent failure(s) not shown`);
-      }
-      if (profileRollup.parent_recovered_failed_records > 0) {
-        lines.push(`- parent-recovered agent failures: ${profileRollup.parent_recovered_failed_records}`);
-      }
-      if (profileRollup.agent_tool_usage_failed_records > 0) {
-        lines.push(`- agent tool-usage failures: ${profileRollup.agent_tool_usage_failed_records}`);
-        if (profileRollup.agent_tool_usage_clean_tail_agents > 0) {
-          lines.push(`- agent tool-usage clean tail: ${profileRollup.agent_tool_usage_clean_tail_agents} agent(s)`);
-        }
-        const sampleLimit = verbose ? 10 : 3;
-        const samples = profileRollup.agent_tool_usage_failure_samples.slice(0, sampleLimit);
-        for (const sample of samples) {
-          lines.push(renderAgentToolUsageSample(sample));
-        }
-        const hiddenSamples = Math.max(0, profileRollup.agent_tool_usage_failed_records - samples.length);
-        if (hiddenSamples > 0) lines.push(`- ... ${hiddenSamples} more agent tool-usage failure(s) not shown`);
-        for (const item of profileRollup.agent_tool_usage_prevention_hints || []) {
-          lines.push(`- prevent ${item.reason}: ${item.hint}`);
-        }
-      }
-      if (profileRollup.agent_evidence_probe_failed_records > 0) {
-        lines.push(`- agent evidence-probe failures: ${profileRollup.agent_evidence_probe_failed_records}`);
-        if (profileRollup.agent_evidence_probe_clean_tail_agents > 0) {
-          lines.push(`- agent evidence-probe clean tail: ${profileRollup.agent_evidence_probe_clean_tail_agents} agent(s)`);
-        }
-        const sampleLimit = verbose ? 10 : 3;
-        const samples = profileRollup.agent_evidence_probe_failure_samples.slice(0, sampleLimit);
-        for (const sample of samples) {
-          lines.push(renderAgentEvidenceProbeSample(sample));
-        }
-        const hiddenSamples = Math.max(0, profileRollup.agent_evidence_probe_failed_records - samples.length);
-        if (hiddenSamples > 0) lines.push(`- ... ${hiddenSamples} more agent evidence-probe failure(s) not shown`);
-      }
-      const agentTimeSinks = profileRollup.command_rollup.by_time.slice(0, 3);
-      if (agentTimeSinks.length > 0) {
-        for (const entry of agentTimeSinks) {
-          lines.push(`- ${entry.key}: ${formatMs(entry.total_ms)} total over ${entry.count} run(s), max ${formatMs(entry.max_ms)}${entry.fails > 0 ? `, ${entry.fails} failed` : ""}`);
-        }
-      }
-      if (verbose && profileRollup.missing.length > 0) {
-        lines.push(`- missing telemetry: ${profileRollup.missing.length}`);
-        for (const agent of profileRollup.missing.slice(0, 10)) {
-          lines.push(`- missing: ${agent.id} ${agent.nickname || "(unnamed)"} [${agent.role || "(no-role)"}]`);
-        }
-      }
-      if (verbose && profileRollup.errors.length > 0) {
-        for (const error of profileRollup.errors) lines.push(`- profile error: ${error}`);
-      }
-    }
-    if (verbose && agentRollup.agents.length > 0) {
-      for (const agent of agentRollup.agents.slice(0, 10)) {
-        lines.push(`- ${agent.id} ${agent.nickname || "(unnamed)"} [${agent.role || "(no-role)"}]`);
-      }
-      if (agentRollup.agents.length > 10) lines.push(`- ... ${agentRollup.agents.length - 10} more`);
-    }
-  }
-  if (!agentRollup?.enabled && status.agent_rollup_hint) {
-    lines.push("");
-    lines.push("## Agent Rollup");
-    lines.push("- not included in this status run");
-    lines.push(`- run: \`${status.agent_rollup_hint.command}\``);
-  }
-
-  const currentTask = status.current_orchestration_task;
-  if (currentTask?.enabled) {
-    lines.push("");
-    lines.push("## Current Orchestration Task");
-    lines.push(`- ok: ${currentTask.ok === true ? "true" : "false"}`);
-    if (currentTask.task_ids?.length) lines.push(`- task ids: ${currentTask.task_ids.join(", ")}`);
-    if (currentTask.file) lines.push(`- file: ${currentTask.file}`);
-    if (currentTask.problem) lines.push(`- problem: ${currentTask.problem.message}`);
-  }
-
   if (verbose && coverage.largest_gaps.length > 0) {
     lines.push("");
     lines.push("## Largest Coverage Gaps");
@@ -1480,18 +474,7 @@ const rendered = renderStatus(status, { verbose: values.verbose === true });
 if (jsonOutputFile) {
   const target = resolve(jsonOutputFile);
   mkdirSync(dirname(target), { recursive: true });
-  const payload = values["agent-rollup-evidence"] === true
-    ? compactAgentRollupEvidence(status)
-    : status;
+  const payload = status;
   writeFileSync(target, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
 }
 process.stdout.write(rendered);
-if (values["require-agent-rollup-ok"] === true && status.agent_rollup?.ok !== true) {
-  process.exit(1);
-}
-if (values["require-agent-rollup-ok"] === true && status.agent_rollup?.strict_ok === false) {
-  process.exit(1);
-}
-if (requiresCurrentOrchestrationTask(values) && status.current_orchestration_task?.ok !== true) {
-  process.exit(1);
-}

@@ -14,16 +14,13 @@ import { spawnSync } from "node:child_process";
 function usage({ exitCode = 2, stream = process.stderr } = {}) {
   stream.write(`usage:
   node tools/ai.mjs validate [--quick|--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune] [--with-assets]
-  node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--agent-rollup] [--require-agent-rollup-ok] [--require-current-orchestration-task|--require-current-orchestration-preflight] [--parent-thread-id <id>|--trace-session <p>] [--session-root <dir>] [--agent-cwd <path>] [--min-agents <n>] [--agent-rollup-evidence] [--json-output <p>] [--no-import-codex-session]
+  node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--json-output <p>] [--no-import-codex-session]
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
-  node tools/ai.mjs orchestration-trace [--session <codex-session.jsonl>] [--parent-thread-id <id>] [trace options]
   node tools/ai.mjs orchestration-template
-  node tools/ai.mjs subagent-packet-template|subagent-template [--current|--task T0001|--id T0001|--file tasks/active/T0001-example.md]
-  node tools/ai.mjs subagent-packet-check|subagent-check --file packet.txt|--text "..."|--stdin [--json]
-  node tools/ai.mjs orchestration-workflow-init <task-id>|--id <task-id>|--file <task.md>|--current [workflow init options]
+  node tools/ai.mjs subagent-packet-template [--current|--task T0001|--id T0001|--file tasks/active/T0001-example.md]
+  node tools/ai.mjs subagent-packet-check --file packet.txt|--text "..."|--stdin [--json]
   node tools/ai.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--json]
   node tools/ai.mjs orchestration-check <task-id>|--id <task-id>|--file <task.md>|--current [--json]
-  node tools/ai.mjs orchestration-evidence [--current|--task <task-id>|--id <task-id>|--file <task.md>] [--run] [--json]
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail|review [gate options]
   node tools/ai.mjs visual-reject --project <game-id> --task <task-id> --screenshot <path> --problem <text> --next <text> [visual rejection options]
   node tools/ai.mjs critic --project <game-id> --task <task-id> --screenshot <path> --target <path|text> --output <packet.md> [critic options]
@@ -33,22 +30,13 @@ function usage({ exitCode = 2, stream = process.stderr } = {}) {
 Commands:
   validate  run reusable-pipeline validation; unknown options fail instead of being silently ignored
   status    read the passive per-session profile (the hook auto-records every tool call);
-            --verbose for the full per-record breakdown; --agent-rollup adds a subagent rollup;
-            --require-agent-rollup-ok makes that rollup a strict evidence check; use
-            --min-agents <n> with an explicit --parent-thread-id or --trace-session for task evidence;
-            --require-current-orchestration-task (alias:
-            --require-current-orchestration-preflight) additionally requires one current
-            doing orchestration task with passing preflight; --agent-rollup-evidence writes
-            compact taskboard JSON when used with --json-output
+            --verbose for the full per-record breakdown; --json-output writes the status JSON
   import-codex-session  recover missed failed Codex shell calls into the session log
-  orchestration-trace   verify multi-agent transcript/session evidence for task closeout
   orchestration-template print the orchestration packet template for subagent tasks
   subagent-packet-template print a reusable prompt packet for spawn_agent delegation
   subagent-packet-check validate a subagent prompt packet before launching a delegated run
-  orchestration-workflow-init create or print a starter workflow manifest for an orchestration task
   orchestration-bootstrap create a current task with a complete orchestration packet
   orchestration-check   preflight-check an orchestration packet before launching subagents
-  orchestration-evidence infer, print, or run strict compact subagent status evidence for the current orchestration task
   gate      write a product-read screenshot gate before expanding game content
   visual-reject record a lead visual rejection as a strict visual FAIL gate
   critic    write a reusable visual/UI critic packet before a strict product gate
@@ -144,16 +132,11 @@ const HELPABLE_COMMANDS = new Set([
   "validate",
   "status",
   "import-codex-session",
-  "orchestration-trace",
   "orchestration-template",
   "subagent-packet-template",
-  "subagent-template",
   "subagent-packet-check",
-  "subagent-check",
-  "orchestration-workflow-init",
   "orchestration-bootstrap",
   "orchestration-check",
-  "orchestration-evidence",
   "gate",
   "visual-reject",
   "critic",
@@ -176,21 +159,15 @@ if (command === "status") {
 
 if (command === "import-codex-session") run(["tools/ai_profile/import_codex_session.mjs", ...argv]);
 
-if (command === "orchestration-trace") run(["tools/ai_profile/orchestration_trace.mjs", ...argv]);
-
 if (command === "orchestration-template") run(["tools/taskboard/cli.mjs", "orchestration-template", ...argv]);
 
-if (command === "subagent-packet-template" || command === "subagent-template") run(["tools/taskboard/cli.mjs", "subagent-packet-template", ...argv]);
+if (command === "subagent-packet-template") run(["tools/taskboard/cli.mjs", "subagent-packet-template", ...argv]);
 
-if (command === "subagent-packet-check" || command === "subagent-check") run(["tools/taskboard/cli.mjs", "subagent-packet-check", ...argv]);
-
-if (command === "orchestration-workflow-init") run(["tools/taskboard/cli.mjs", "orchestration-workflow-init", ...argv]);
+if (command === "subagent-packet-check") run(["tools/taskboard/cli.mjs", "subagent-packet-check", ...argv]);
 
 if (command === "orchestration-bootstrap") run(["tools/taskboard/cli.mjs", "orchestration-bootstrap", ...argv]);
 
 if (command === "orchestration-check") run(["tools/taskboard/cli.mjs", "orchestration-check", ...argv]);
-
-if (command === "orchestration-evidence") run(["tools/ai_profile/orchestration_evidence.mjs", ...argv]);
 
 if (command === "gate") run(["tools/product_gate/review.mjs", ...argv]);
 
