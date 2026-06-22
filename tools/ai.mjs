@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 function usage({ exitCode = 2, stream = process.stderr } = {}) {
   stream.write(`usage:
   node tools/ai.mjs validate [--quick|--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune] [--with-assets]
-  node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--agent-rollup] [--require-agent-rollup-ok] [--parent-thread-id <id>|--trace-session <p>] [--session-root <dir>] [--agent-cwd <path>] [--min-agents <n>] [--agent-rollup-evidence] [--json-output <p>] [--no-import-codex-session]
+  node tools/ai.mjs status [--verbose] [--all] [--harness claude|codex] [--session <id>] [--profile <p>] [--agent-rollup] [--require-agent-rollup-ok] [--require-current-orchestration-task|--require-current-orchestration-preflight] [--parent-thread-id <id>|--trace-session <p>] [--session-root <dir>] [--agent-cwd <path>] [--min-agents <n>] [--agent-rollup-evidence] [--json-output <p>] [--no-import-codex-session]
   node tools/ai.mjs import-codex-session [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
   node tools/ai.mjs orchestration-trace [--session <codex-session.jsonl>] [--parent-thread-id <id>] [trace options]
   node tools/ai.mjs orchestration-template
@@ -36,7 +36,10 @@ Commands:
             --verbose for the full per-record breakdown; --agent-rollup adds a subagent rollup;
             --require-agent-rollup-ok makes that rollup a strict evidence check; use
             --min-agents <n> with an explicit --parent-thread-id or --trace-session for task evidence;
-            --agent-rollup-evidence writes compact taskboard JSON when used with --json-output
+            --require-current-orchestration-task (alias:
+            --require-current-orchestration-preflight) additionally requires one current
+            doing orchestration task with passing preflight; --agent-rollup-evidence writes
+            compact taskboard JSON when used with --json-output
   import-codex-session  recover missed failed Codex shell calls into the session log
   orchestration-trace   verify multi-agent transcript/session evidence for task closeout
   orchestration-template print the orchestration packet template for subagent tasks

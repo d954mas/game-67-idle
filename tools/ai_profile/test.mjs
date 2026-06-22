@@ -28,6 +28,17 @@ function run(args, options = {}) {
   return result;
 }
 
+function runFail(args, options = {}) {
+  const result = spawnSync(process.execPath, args, {
+    cwd: root,
+    env: { ...process.env, ...(options.env || {}) },
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  assert.notEqual(result.status, 0, `${args.join(" ")}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  return result;
+}
+
 function readJson(file) {
   return JSON.parse(readFileSync(file, "utf8"));
 }
@@ -73,8 +84,8 @@ Test task.
 ${evidenceCommand ? `
 - orchestration: used
   objective: test orchestration wrapper
-  allowed files: tools/ai_profile/**
-  tool-use guard: exact paths/discovery before reads; trace/status commands include evidence source and --json-output where applicable
+  allowed files: tools/ai_profile/status.mjs;tools/ai_profile/test.mjs
+  tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: wrapper evidence works
   evidence command: ${evidenceCommand}
   stop condition: wrapper exits successfully
@@ -2035,6 +2046,109 @@ test("status clean-tail next action ignores non-current or non-orchestration tas
     assert.match(status.next_action, /node tools\/ai\.mjs orchestration-check --current --json/);
     assert.doesNotMatch(status.next_action, /orchestration-check T1234 --json/);
     assert.doesNotMatch(status.next_action, /orchestration-check T1235 --json/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("strict status current orchestration task requirement fails when no current task exists", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeCleanTailRollouts(dir, parent);
+
+    const result = runFail([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--require-current-orchestration-task",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ], { env: { TASKBOARD_ROOT: dir } });
+    const status = readJson(statusJson);
+    assert.equal(status.agent_rollup.strict_ok, true);
+    assert.equal(status.current_orchestration_task.enabled, true);
+    assert.equal(status.current_orchestration_task.ok, false);
+    assert.equal(status.current_orchestration_task.problem.code, "current_task_missing");
+    assert.match(result.stdout, /Current Orchestration Task/);
+    assert.match(result.stdout, /no current doing pipeline\/orchestration task/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("strict status current orchestration task requirement passes with valid preflight", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    const evidenceCommand = `node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id ${parent} --agent-rollup-evidence --json-output tasks/evidence/T1234-status-rollup.json --json`;
+    writeTaskboardTask(dir, { id: "T1234", status: "doing", tags: ["pipeline", "orchestration"], evidenceCommand });
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeCleanTailRollouts(dir, parent);
+
+    const result = run([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--require-current-orchestration-task",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--agent-rollup-evidence",
+      "--json-output", statusJson,
+    ], { env: { TASKBOARD_ROOT: dir } });
+    const evidence = readJson(statusJson);
+    assert.equal(evidence.agent_rollup.strict_ok, true);
+    assert.equal(evidence.current_orchestration_task.enabled, true);
+    assert.equal(evidence.current_orchestration_task.ok, true);
+    assert.deepEqual(evidence.current_orchestration_task.task_ids, ["T1234"]);
+    assert.match(result.stdout, /Current Orchestration Task/);
+    assert.match(result.stdout, /ok: true/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("strict status current orchestration task requirement fails on invalid preflight", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "session.jsonl");
+    const statusJson = join(dir, "status.json");
+    const parent = "parent-thread-1";
+    writeTaskboardTask(dir, { id: "T1234", status: "doing", tags: ["pipeline", "orchestration"] });
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["git status --short"], session_id: "s1" },
+    ]);
+    writeCleanTailRollouts(dir, parent);
+
+    const result = runFail([
+      "tools/ai_profile/status.mjs",
+      "--profile", profile,
+      "--agent-rollup",
+      "--require-agent-rollup-ok",
+      "--require-current-orchestration-task",
+      "--parent-thread-id", parent,
+      "--session-root", dir,
+      "--agent-cwd", root,
+      "--json-output", statusJson,
+    ], { env: { TASKBOARD_ROOT: dir } });
+    const status = readJson(statusJson);
+    assert.equal(status.current_orchestration_task.ok, false);
+    assert.equal(status.current_orchestration_task.problem.code, "orchestration_preflight_missing");
+    assert.match(result.stdout, /orchestration packet preflight failed/);
   } finally {
     cleanup(dir);
   }

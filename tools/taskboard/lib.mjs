@@ -1349,6 +1349,7 @@ function machineEvidenceSignatures(text) {
         artifact,
         artifact_path: commandFlagRawValue(command, ["--json-output"]),
         compact_artifact: /\s--agent-rollup-evidence\b/i.test(command),
+        current_orchestration_task: /\s--require-current-orchestration-(?:task|preflight)\b/i.test(command),
         min_agents: commandMinAgents(command),
       });
     }
@@ -1543,6 +1544,14 @@ function statusArtifactProblem(signature, root) {
   }
   if (!signature.parent_thread_id && !signature.trace_session) {
     return "status artifact source mismatch";
+  }
+  if (signature.current_orchestration_task) {
+    const currentTask = artifact.current_orchestration_task;
+    if (currentTask?.enabled !== true) return "status artifact missing current orchestration task check";
+    if (currentTask.ok !== true) return "status artifact current orchestration task did not pass";
+    if (!Array.isArray(currentTask.task_ids) || currentTask.task_ids.length !== 1) return "status artifact current orchestration task count mismatch";
+    if (currentTask.file && repoLocalPathProblem(currentTask.file)) return "status artifact current orchestration task file is not repo-local";
+    if (currentTask.problem) return "status artifact current orchestration task has problem";
   }
   return "";
 }

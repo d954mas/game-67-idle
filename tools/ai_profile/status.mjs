@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, relative, resolve } from "node:path";
 import {
   defaultProfilePath,
   deriveSessionId,
@@ -13,11 +13,17 @@ import {
   todaySessionProfiles,
 } from "./profile_lib.mjs";
 import { buildOrchestrationTrace, buildTrace, todaySessionRoot } from "./orchestration_trace.mjs";
-import { currentDoingOrchestrationTaskIds, DEFAULT_ORCHESTRATION_TOOL_USE_GUARD, findRoot as findTaskboardRoot } from "../taskboard/lib.mjs";
+import {
+  currentDoingOrchestrationTaskIds,
+  DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
+  findDoc,
+  findRoot as findTaskboardRoot,
+  orchestrationPreflightProblem,
+} from "../taskboard/lib.mjs";
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--agent-rollup-evidence] [--verbose] [--agent-rollup] [--require-agent-rollup-ok]
+  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--json-output <status.json>] [--agent-rollup-evidence] [--verbose] [--agent-rollup] [--require-agent-rollup-ok] [--require-current-orchestration-task|--require-current-orchestration-preflight]
 
 Profiling is fully passive: the PostToolUse hook records every tool call to a
 per-session log automatically. This command READS that log and reports the
@@ -39,8 +45,12 @@ If CODEX_SESSION_FILE points at the parent session, --agent-rollup can infer its
 id. Add --require-agent-rollup-ok only for strict task evidence; it exits
 nonzero when the rollup is missing or incomplete.
 
-Use --agent-rollup-evidence with --json-output for a compact, sanitized
-taskboard evidence artifact instead of a full local diagnostic status dump.`);
+  Use --agent-rollup-evidence with --json-output for a compact, sanitized
+  taskboard evidence artifact instead of a full local diagnostic status dump.
+  Add --require-current-orchestration-task (alias:
+  --require-current-orchestration-preflight) when strict orchestration readiness
+  must fail unless exactly one current doing pipeline/orchestration task passes
+  orchestration-check --current preflight.`);
   process.exit(2);
 }
 
@@ -1051,6 +1061,86 @@ function currentOrchestrationPreflightGuidance() {
   return "preflight the current task with `node tools/ai.mjs orchestration-check --current --json`";
 }
 
+function requiresCurrentOrchestrationTask(values = {}) {
+  return values["require-current-orchestration-task"] === true
+    || values["require-current-orchestration-preflight"] === true;
+}
+
+function buildCurrentOrchestrationTaskCheck(values = {}) {
+  if (!requiresCurrentOrchestrationTask(values)) return { enabled: false };
+  try {
+    const root = findTaskboardRoot(process.cwd());
+    const taskIds = currentDoingOrchestrationTaskIds(root);
+    if (taskIds.length === 0) {
+      return {
+        enabled: true,
+        ok: false,
+        root,
+        task_ids: [],
+        file: "",
+        problem: {
+          code: "current_task_missing",
+          message: "no current doing pipeline/orchestration task; create or set exactly one task to doing first",
+          nextAction: "create or refine exactly one `doing` pipeline/orchestration task, then run `node tools/ai.mjs orchestration-check --current --json`",
+        },
+      };
+    }
+    if (taskIds.length > 1) {
+      return {
+        enabled: true,
+        ok: false,
+        root,
+        task_ids: taskIds,
+        file: "",
+        problem: {
+          code: "current_task_ambiguous",
+          message: `multiple current doing pipeline/orchestration tasks: ${taskIds.join(", ")}`,
+          nextAction: "resolve multiple current `doing` pipeline/orchestration tasks to exactly one, then run `node tools/ai.mjs orchestration-check --current --json`",
+        },
+      };
+    }
+    const taskId = taskIds[0];
+    const doc = findDoc(root, taskId);
+    if (!doc) {
+      return {
+        enabled: true,
+        ok: false,
+        root,
+        task_ids: taskIds,
+        file: "",
+        problem: {
+          code: "current_task_not_found",
+          taskId,
+          message: `current orchestration task ${taskId} was not found`,
+          nextAction: "repair the taskboard entry, then run `node tools/ai.mjs orchestration-check --current --json`",
+        },
+      };
+    }
+    const problem = orchestrationPreflightProblem(doc);
+    return {
+      enabled: true,
+      ok: !problem,
+      root,
+      task_ids: taskIds,
+      file: doc.file,
+      problem,
+    };
+  } catch (error) {
+    return {
+      enabled: true,
+      ok: false,
+      root: "",
+      task_ids: [],
+      file: "",
+      problem: {
+        code: "current_task_check_failed",
+        message: error?.message || "current orchestration task check failed",
+        nextAction: "fix taskboard access, then run `node tools/ai.mjs orchestration-check --current --json`",
+      },
+    };
+  }
+}
+
 function buildStatus(profilePaths, values = {}) {
   const files = Array.isArray(profilePaths) ? profilePaths : [profilePaths];
   const parsed = parseProfiles(files);
@@ -1065,6 +1155,7 @@ function buildStatus(profilePaths, values = {}) {
   const lowCoverage = isLowCoverage(coverage);
   const agentRollup = buildAgentRollup(values, records);
   const agentRollupHint = buildAgentRollupHint(values);
+  const currentOrchestrationTask = buildCurrentOrchestrationTaskCheck(values);
   const unresolvedAgentFailures = Number(agentRollup?.profile_rollup?.unresolved_failed_records || 0);
   const missingAgentTelemetry = Number(agentRollup?.profile_rollup?.missing_agent_telemetry_count || 0);
   const agentToolUsageFailures = Number(agentRollup?.profile_rollup?.agent_tool_usage_failed_records || 0);
@@ -1086,6 +1177,8 @@ function buildStatus(profilePaths, values = {}) {
     nextAction = "Inspect unresolved agent failure samples before trusting the orchestration rollup.";
   } else if (missingAgentTelemetry > 0) {
     nextAction = "Inspect missing subagent telemetry before trusting the orchestration rollup.";
+  } else if (currentOrchestrationTask.enabled && currentOrchestrationTask.ok !== true) {
+    nextAction = currentOrchestrationTask.problem?.nextAction || "Fix the current orchestration task preflight before launching delegated work.";
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0 && agentToolUsageCleanTailAgents >= 3) {
     nextAction = `Recent subagents are clean of classified tool-use failures; keep the printed prevention hints in packets, ${currentOrchestrationPreflightGuidance()} before launching delegated work.`;
   } else if (agentToolUsageFailures > 0 && agentToolUsagePreventionHints.length > 0) {
@@ -1126,6 +1219,7 @@ function buildStatus(profilePaths, values = {}) {
     command_rollup: commandRollup(records),
     agent_rollup: agentRollup,
     agent_rollup_hint: agentRollupHint,
+    current_orchestration_task: currentOrchestrationTask,
     slowest_record: slowest ? {
       line: slowest.__line,
       duration_ms: Number(slowest.duration_ms || 0),
@@ -1142,6 +1236,10 @@ function buildStatus(profilePaths, values = {}) {
 function compactAgentRollupEvidence(status) {
   const rollup = status.agent_rollup || {};
   const profileRollup = rollup.profile_rollup || {};
+  const currentTask = status.current_orchestration_task || { enabled: false };
+  const currentTaskFile = currentTask.root && currentTask.file
+    ? relative(currentTask.root, currentTask.file).replaceAll("\\", "/")
+    : (currentTask.file || "");
   return {
     schema_version: 2,
     kind: "status-agent-rollup-evidence",
@@ -1175,6 +1273,18 @@ function compactAgentRollupEvidence(status) {
         agent_evidence_probe_clean_tail_agents: Number(profileRollup.agent_evidence_probe_clean_tail_agents ?? 0),
         errors: Array.isArray(profileRollup.errors) ? profileRollup.errors : [],
       },
+    },
+    current_orchestration_task: {
+      enabled: currentTask.enabled === true,
+      ok: currentTask.ok === true,
+      task_ids: Array.isArray(currentTask.task_ids) ? currentTask.task_ids.map(String) : [],
+      file: currentTaskFile,
+      problem: currentTask.problem ? {
+        code: currentTask.problem.code || "",
+        message: currentTask.problem.message || "",
+        nextAction: currentTask.problem.nextAction || "",
+        missingFields: Array.isArray(currentTask.problem.missingFields) ? currentTask.problem.missingFields.map(String) : [],
+      } : null,
     },
   };
 }
@@ -1322,6 +1432,16 @@ function renderStatus(status, { verbose }) {
     lines.push(`- run: \`${status.agent_rollup_hint.command}\``);
   }
 
+  const currentTask = status.current_orchestration_task;
+  if (currentTask?.enabled) {
+    lines.push("");
+    lines.push("## Current Orchestration Task");
+    lines.push(`- ok: ${currentTask.ok === true ? "true" : "false"}`);
+    if (currentTask.task_ids?.length) lines.push(`- task ids: ${currentTask.task_ids.join(", ")}`);
+    if (currentTask.file) lines.push(`- file: ${currentTask.file}`);
+    if (currentTask.problem) lines.push(`- problem: ${currentTask.problem.message}`);
+  }
+
   if (verbose && coverage.largest_gaps.length > 0) {
     lines.push("");
     lines.push("## Largest Coverage Gaps");
@@ -1370,5 +1490,8 @@ if (values["require-agent-rollup-ok"] === true && status.agent_rollup?.ok !== tr
   process.exit(1);
 }
 if (values["require-agent-rollup-ok"] === true && status.agent_rollup?.strict_ok === false) {
+  process.exit(1);
+}
+if (requiresCurrentOrchestrationTask(values) && status.current_orchestration_task?.ok !== true) {
   process.exit(1);
 }

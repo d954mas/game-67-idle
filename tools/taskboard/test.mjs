@@ -141,8 +141,9 @@ function passingStatusRollup({
   source = "parent-thread",
   count = 2,
   minAgents = 2,
+  currentOrchestrationTask,
 } = {}) {
-  return {
+  const artifact = {
     schema_version: 2,
     kind: "status-agent-rollup-evidence",
     generated_at: "2026-06-21T12:00:00.000Z",
@@ -168,6 +169,10 @@ function passingStatusRollup({
       },
     },
   };
+  if (currentOrchestrationTask !== undefined) {
+    artifact.current_orchestration_task = currentOrchestrationTask;
+  }
+  return artifact;
 }
 
 function startPreflightLog() {
@@ -2138,6 +2143,133 @@ test("validateStore accepts valid parent status artifact for T0080+ evidence", (
   objective: verify status artifacts
   allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
   tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  assert.deepEqual(validateStoreDetailed(root), []);
+});
+
+test("validateStore rejects current-task status evidence without current task artifact", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({ parentThreadId: "parent", count: 2, minAgents: 2 }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-task --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0087",
+    title: "Pipeline current status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify current status artifacts
+  allowed files: tools/taskboard/lib.mjs;tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore rejects failing current-task status evidence artifact", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({
+    parentThreadId: "parent",
+    count: 2,
+    minAgents: 2,
+    currentOrchestrationTask: {
+      enabled: true,
+      ok: false,
+      task_ids: [],
+      file: "",
+      problem: { code: "current_task_missing", message: "no current task" },
+    },
+  }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-preflight --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0087",
+    title: "Pipeline current status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify current status artifacts
+  allowed files: tools/taskboard/lib.mjs;tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore rejects absolute current-task status evidence file path", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({
+    parentThreadId: "parent",
+    count: 2,
+    minAgents: 2,
+    currentOrchestrationTask: {
+      enabled: true,
+      ok: true,
+      task_ids: ["T0087"],
+      file: "C:/projects/game-67-idle/tasks/active/t0087-status-test.md",
+      problem: null,
+    },
+  }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-task --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0087",
+    title: "Pipeline current status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify current status artifacts
+  allowed files: tools/taskboard/lib.mjs;tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
+  expected output: focused guard tests
+  evidence command: ${command}
+  stop condition: tests pass
+  independent reviewer: reviewed guard scope
+- evidence: PASS \`${command}\``));
+
+  const problems = validateStoreDetailed(root);
+  assert.equal(problems.length, 1);
+  assert.deepEqual(problems[0].missingFields, ["machine evidence artifact"]);
+});
+
+test("validateStore accepts current-task status evidence artifact", (t) => {
+  const root = tempRoot(t);
+  writeJsonFile(root, "tasks/evidence/status.json", passingStatusRollup({
+    parentThreadId: "parent",
+    count: 2,
+    minAgents: 2,
+    currentOrchestrationTask: {
+      enabled: true,
+      ok: true,
+      task_ids: ["T0087"],
+      file: "tasks/active/t0087-status-test.md",
+      problem: null,
+    },
+  }));
+  const command = "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-task --min-agents 2 --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json";
+  writeTaskDoc(root, {
+    id: "T0087",
+    title: "Pipeline current status artifact guard",
+    status: "review",
+    tags: ["pipeline", "orchestration"],
+  }, taskBodyWithLog(`- orchestration: used
+  objective: verify current status artifacts
+  allowed files: tools/taskboard/lib.mjs;tools/taskboard/test.mjs
+  tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
   expected output: focused guard tests
   evidence command: ${command}
   stop condition: tests pass
