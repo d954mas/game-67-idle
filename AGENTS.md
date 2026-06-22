@@ -42,7 +42,10 @@
 - Substantial work loads taskboard context, one task/evidence file, one skill.
 - Skip archives, logs, broad design, builds, generated files unless linked.
 - Context budget cleanup/validation is request/review-only, not a dev gate.
-- Subagents need bounded packets; main agent owns integration/status/validation.
+- Lead delegates parallelizable read-heavy work to subagents by default (bounded
+  packets via `subagent-packet-template --preset`); owns integration, status, and
+  validation. Acceptance gates the output, not the delegation; `status` shows what
+  ran. Method: `docs/ai-pipeline/orchestration-playbook.md`.
 
 ## Game Work
 
