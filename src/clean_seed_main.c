@@ -18,6 +18,7 @@
 #include "window/nt_window.h"
 
 #include "ll_meshes.h" // generated Kenney Furniture Kit (CC0) geometry
+#include "ll_art.h"    // frozen art-direction contract: palette + baked lighting
 
 #ifndef NT_PLATFORM_WEB
 #include <glad/gl.h> // native framebuffer readback for DevAPI screenshots
@@ -162,6 +163,7 @@ static float s_build_cz;
 
 // camera view-projection for this frame (for screen-space picking + billboards)
 static float s_vp[16];
+static float s_cam_eye[3] = {0.0F, 12.0F, 18.0F}; // updated each frame (fog distance)
 static float s_view_w = 1280.0F;
 static float s_view_h = 720.0F;
 
@@ -272,11 +274,19 @@ static void bar_color(float v01, float out[4]) {
     out[3] = 1.0F;
 }
 
+// Generic flat-lit shade (top-down key + warm/cool grade) for shapes whose
+// normal isn't worth computing (sims, small props). Surfaces with a known
+// orientation use ll_shade_n() with the real normal instead.
 static void shade(float out[4], float r, float g, float b, float a) {
-    out[0] = r * s_daylight;
-    out[1] = g * s_daylight;
-    out[2] = b * s_daylight;
-    out[3] = a;
+    ll_shade_flat(out, r, g, b, a, s_daylight);
+}
+
+// Distance from the camera eye to a world point on the floor (for aerial fog).
+static float cam_dist(float x, float z) {
+    float dx = x - s_cam_eye[0];
+    float dy = s_cam_eye[1];
+    float dz = z - s_cam_eye[2];
+    return sqrtf(dx * dx + dy * dy + dz * dz);
 }
 
 static void mat4_mul_vec4(const float m[16], const float v[4], float out[4]) {
@@ -806,27 +816,36 @@ static void compute_camera(float aspect, float eye_out[3]) {
     eye_out[0] = eye[0];
     eye_out[1] = eye[1];
     eye_out[2] = eye[2];
+    s_cam_eye[0] = eye[0];
+    s_cam_eye[1] = eye[1];
+    s_cam_eye[2] = eye[2];
 }
 // #endregion
 
 // #region 3D render
+static const float LL_NORMAL_UP[3] = {0.0F, 1.0F, 0.0F};
+
 static void draw_ground(void) {
     float col[4];
     float flat[4] = {0.7071068F, 0.0F, 0.0F, 0.7071068F};
-    // Neighborhood lawn
-    shade(col, 0.46F, 0.72F, 0.36F, 1.0F);
+    // Neighborhood lawn (up-facing, fogged toward the far horizon for depth)
+    ll_shade_n(col, 0.42F, 0.66F, 0.33F, 1.0F, LL_NORMAL_UP, s_daylight);
+    ll_fog_mix(col, cam_dist(0.0F, 0.0F) + 18.0F, s_daylight);
     nt_shape_renderer_rect_rot((float[3]){0.0F, -0.04F, 0.0F}, (float[2]){90.0F, 80.0F}, flat, col);
     // Roads: a cross between the four lots
-    shade(col, 0.34F, 0.34F, 0.38F, 1.0F);
+    ll_shade_n(col, 0.31F, 0.31F, 0.35F, 1.0F, LL_NORMAL_UP, s_daylight);
     nt_shape_renderer_rect_rot((float[3]){0.0F, 0.005F, 0.0F}, (float[2]){70.0F, 7.0F}, flat, col);  // E-W road
     nt_shape_renderer_rect_rot((float[3]){0.0F, 0.005F, 0.0F}, (float[2]){7.0F, 60.0F}, flat, col);  // N-S road
     // Road centerlines
-    shade(col, 0.85F, 0.82F, 0.45F, 1.0F);
+    ll_shade_n(col, 0.84F, 0.78F, 0.40F, 1.0F, LL_NORMAL_UP, s_daylight);
     for (int i = -16; i <= 16; i += 4) {
         nt_shape_renderer_rect_rot((float[3]){(float)i, 0.01F, 0.0F}, (float[2]){2.0F, 0.3F}, flat, col);
         nt_shape_renderer_rect_rot((float[3]){0.0F, 0.01F, (float)i}, (float[2]){0.3F, 2.0F}, flat, col);
     }
 }
+
+static const float LL_NORMAL_PX[3] = {1.0F, 0.0F, 0.0F};  // left wall inner face -> +x
+static const float LL_NORMAL_PZ[3] = {0.0F, 0.0F, 1.0F};  // back wall inner face -> +z
 
 static void draw_lot(const Lot *lot, bool active) {
     float hw = ROOM_HW;
@@ -834,17 +853,20 @@ static void draw_lot(const Lot *lot, bool active) {
     float ox = lot->ox;
     float oz = lot->oz;
     float col[4];
-    float dim = active ? 1.0F : 0.82F; // focus the active household
+    float dim = active ? 1.0F : 0.84F; // focus the active household
     float flat[4] = {0.7071068F, 0.0F, 0.0F, 0.7071068F};
+    float fog = cam_dist(ox, oz);
 
     // Plot pad (slightly raised) + wood floor
-    shade(col, 0.40F * dim, 0.60F * dim, 0.32F * dim, 1.0F);
+    ll_shade_n(col, 0.38F * dim, 0.56F * dim, 0.30F * dim, 1.0F, LL_NORMAL_UP, s_daylight);
+    ll_fog_mix(col, fog, s_daylight);
     nt_shape_renderer_rect_rot((float[3]){ox, -0.015F, oz}, (float[2]){hw * 2.0F + 3.0F, hd * 2.0F + 3.0F}, flat, col);
-    shade(col, 0.90F * dim, 0.75F * dim, 0.55F * dim, 1.0F);
+    ll_shade_n(col, 0.88F * dim, 0.73F * dim, 0.54F * dim, 1.0F, LL_NORMAL_UP, s_daylight);
+    ll_fog_mix(col, fog, s_daylight);
     nt_shape_renderer_rect_rot((float[3]){ox, 0.0F, oz}, (float[2]){hw * 2.0F, hd * 2.0F}, flat, col);
 
     if (active) {
-        shade(col, 0.82F, 0.66F, 0.47F, 1.0F);
+        ll_shade_n(col, 0.80F, 0.64F, 0.46F, 1.0F, LL_NORMAL_UP, s_daylight);
         for (int ix = 0; ix <= (int)(hw * 2.0F); ix++) {
             float x = ox - hw + (float)ix;
             nt_shape_renderer_line((float[3]){x, 0.012F, oz - hd}, (float[3]){x, 0.012F, oz + hd}, col);
@@ -855,19 +877,22 @@ static void draw_lot(const Lot *lot, bool active) {
         }
     }
 
-    // Far walls only (cutaway) so the camera sees inside.
-    shade(col, 0.74F * dim, 0.86F * dim, 0.92F * dim, 1.0F);
+    // Far walls only (cutaway) so the camera sees inside. Each wall takes its
+    // real inward normal so one catches sun and one falls into cool shadow.
+    ll_shade_n(col, 0.78F * dim, 0.82F * dim, 0.86F * dim, 1.0F, LL_NORMAL_PX, s_daylight);
+    ll_fog_mix(col, fog, s_daylight);
     {
         float rot[4] = {0.0F, 0.7071068F, 0.0F, 0.7071068F};
         nt_shape_renderer_rect_rot((float[3]){ox - hw, WALL_H * 0.5F, oz}, (float[2]){hd * 2.0F, WALL_H}, rot, col);
     }
-    shade(col, 0.96F * dim, 0.88F * dim, 0.74F * dim, 1.0F);
+    ll_shade_n(col, 0.93F * dim, 0.85F * dim, 0.72F * dim, 1.0F, LL_NORMAL_PZ, s_daylight);
+    ll_fog_mix(col, fog, s_daylight);
     nt_shape_renderer_rect((float[3]){ox, WALL_H * 0.5F, oz - hd}, (float[2]){hw * 2.0F, WALL_H}, col);
 
     // Active-lot marker ring on the plot
     if (active) {
         float ring[4];
-        shade(ring, 1.0F, 0.92F, 0.35F, 1.0F);
+        ll_shade_flat(ring, 1.0F, 0.92F, 0.35F, 1.0F, s_daylight);
         nt_shape_renderer_rect_wire_rot((float[3]){ox, 0.02F, oz}, (float[2]){hw * 2.0F + 2.4F, hd * 2.0F + 2.4F}, flat, ring);
     }
 }
@@ -908,6 +933,7 @@ static void draw_mesh_object(const Object *o, int mesh_id, float yaw) {
         }
         float col[4];
         shade(col, sm->r, sm->g, sm->b, 1.0F);
+        ll_fog_mix(col, cam_dist(o->x, o->z), s_daylight);
         nt_shape_renderer_mesh(s_mesh_scratch, (uint32_t)sm->nverts, sm->idx, (uint32_t)sm->nidx, col);
     }
 }
@@ -1653,6 +1679,23 @@ static bool ep_travel(const cJSON *params, cJSON *result_obj, nt_devapi_error *e
     return true;
 }
 
+// Debug aid: pin the clock (and optionally pause) for consistent screenshots.
+static bool ep_set_time(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
+    (void)err;
+    (void)user;
+    const cJSON *minutes = cJSON_GetObjectItemCaseSensitive(params, "minutes");
+    const cJSON *pause = cJSON_GetObjectItemCaseSensitive(params, "pause");
+    if (cJSON_IsNumber(minutes)) {
+        g_game_state.clock_minutes = clampf((float)minutes->valuedouble, 0.0F, 1439.0F);
+    }
+    if (cJSON_IsBool(pause)) {
+        s_paused = cJSON_IsTrue(pause);
+    }
+    update_clock(0.0F); // refresh daylight from the new time immediately
+    emit_state(result_obj);
+    return true;
+}
+
 static bool ep_capture(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
     (void)err;
     (void)user;
@@ -1674,6 +1717,7 @@ static void register_endpoints(void) {
         {"game.action.select", "game", "Select a sim: {sim}.", "{sim}", "{state}", "immediate", "selects sim"},
         {"game.capture.framebuffer", "game", "Write the framebuffer to a PPM file: {output}.", "{output}", "{path}", "next-frame", "writes a file"},
         {"game.action.travel", "game", "Travel to a household lot: {lot}.", "{lot}", "{state}", "immediate", "switches lot"},
+        {"game.debug.set_time", "game", "Pin clock for screenshots: {minutes,pause}.", "{minutes,pause}", "{state}", "immediate", "sets clock"},
     };
     game_state_register_devapi();
     game_devapi_ui_register();
@@ -1683,6 +1727,7 @@ static void register_endpoints(void) {
     (void)nt_devapi_register(&descs[3], ep_select, NULL);
     (void)nt_devapi_register(&descs[4], ep_capture, NULL);
     (void)nt_devapi_register(&descs[5], ep_travel, NULL);
+    (void)nt_devapi_register(&descs[6], ep_set_time, NULL);
 }
 
 static void register_ui_devapi(float w, float h) {
@@ -1880,6 +1925,20 @@ static void maybe_write_capture(int w, int h) {
 }
 #endif
 
+// Stacked horizontal bands → a low-poly vertical sky gradient (zenith → horizon).
+// Drawn in ortho with depth off so the 3D world (depth on) overwrites it.
+static void draw_sky_gradient(float w, float h) {
+    const int BANDS = 30;
+    for (int i = 0; i < BANDS; i++) {
+        float y0 = (float)i / (float)BANDS * h;
+        float bh = h / (float)BANDS + 1.5F;
+        float t = 1.0F - ((float)i + 0.5F) / (float)BANDS; // top=zenith, bottom=horizon
+        float c[3];
+        ll_sky_color(t, s_daylight, c);
+        rect2(0.0F, y0, w, bh, (float[4]){c[0], c[1], c[2], 1.0F});
+    }
+}
+
 static void frame(void) {
     nt_window_poll();
 #if NT_DEVAPI_ENABLED
@@ -1932,13 +1991,29 @@ static void frame(void) {
         nt_text_renderer_restore_gpu();
 #endif
     }
-    float sky = s_daylight;
+    float horizon[3];
+    ll_sky_color(0.0F, s_daylight, horizon);
     nt_gfx_begin_pass(&(nt_pass_desc_t){
-        .clear_color = {0.45F * sky + 0.05F, 0.62F * sky + 0.05F, 0.85F * sky + 0.05F, 1.0F},
+        .clear_color = {horizon[0], horizon[1], horizon[2], 1.0F},
         .clear_depth = 1.0F,
     });
 
+    // Sky gradient backdrop (ortho, depth off) — 3D world draws over it.
+    float ortho_sky[16];
+    memset(ortho_sky, 0, sizeof(ortho_sky));
+    ortho_sky[0] = 2.0F / w;
+    ortho_sky[5] = -2.0F / h;
+    ortho_sky[10] = -1.0F;
+    ortho_sky[12] = -1.0F;
+    ortho_sky[13] = 1.0F;
+    ortho_sky[15] = 1.0F;
+    nt_shape_renderer_set_depth(false);
+    nt_shape_renderer_set_vp(ortho_sky);
+    draw_sky_gradient(w, h);
+    nt_shape_renderer_flush();
+
     // 3D pass
+    nt_shape_renderer_set_depth(true);
     nt_shape_renderer_set_vp(s_vp);
     nt_shape_renderer_set_cam_pos(eye);
     nt_shape_renderer_set_depth(true);

@@ -1,5 +1,22 @@
 # Project Status
 
+## Night Run (branch night/little-lives-polish, 2026-06-23)
+
+Autonomous overnight polish: debug-art monolith → polished stylized low-poly.
+Plan: `gamedesign/projects/little-lives/night_plan.md`. Backlog + decisions:
+`gamedesign/projects/little-lives/night_backlog.md`. master is safe at
+`little-lives-m3-snapshot-2026-06-23` (never touched).
+
+Shipped this run:
+- **A0** `src/ll_art.h` — frozen art-direction contract (sun dir, ambient, AO,
+  fog, sky bands, warm/cool grade). One coherent lighting source for all draws.
+- **A1** render rework #1 — directional surface shading (walls now sun-warm vs
+  cool-shadow), banded gradient sky, distance fog, warm/cool grade. Gameplay
+  unchanged (smoke green). Evidence: `tasks/evidence/night-A1/`.
+
+In progress: A2 (faceted furniture + AO contact shadows) → A3 HUD → A4 juice →
+A5 camera → A6 depth → A7 compose → A8 harden → A9 handoff.
+
 ## Current Goal
 
 Build `Little Lives` (little-lives): a 3D Sims-like, iteratively toward a full
