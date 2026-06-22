@@ -19,6 +19,7 @@
 
 #include "ll_meshes.h" // generated Kenney Furniture Kit (CC0) geometry
 #include "ll_art.h"    // frozen art-direction contract: palette + baked lighting
+#include "ll_fx.h"     // juice: particles, screen shake, squash-stretch
 
 #ifndef NT_PLATFORM_WEB
 #include <glad/gl.h> // native framebuffer readback for DevAPI screenshots
@@ -102,6 +103,7 @@ typedef struct {
     float x, z;      // footprint center on the floor (world)
     float usx, usz;  // "use spot" where a Sim stands
     int used_by;     // sim index currently using it, or -1
+    float anim_t;    // placement squash-stretch timer (>=0.4 = settled)
 } Object;
 
 typedef struct {
@@ -325,6 +327,7 @@ static void place_object(int lot, int kind, float lx, float lz) {
     o->x = ox + lx;
     o->z = oz + lz;
     o->used_by = -1;
+    o->anim_t = 10.0F; // settled by default; player placement resets to 0 to pop
     // Use spot: stand just inside the room, toward the lot center, from the object.
     float dx = -lx;
     float dz = -lz;
@@ -654,6 +657,9 @@ static void sim_update(int idx, float dt, float dt_min) {
                 s->needs[NEED_FUN] = clampf(s->needs[NEED_FUN] + 0.4F * dt_min, 0.0F, 100.0F);
             }
             if (s->needs[need] >= NEED_FULL || s->use_timer > 24.0F) {
+                if (s->needs[need] >= NEED_FULL) {
+                    ll_fx_sparkle(s->x, 1.7F, s->z); // satisfied-need twinkle
+                }
                 g_game_state.stats_interactions += 1;
                 go_idle(s);
             }
@@ -689,11 +695,20 @@ static void sim_update(int idx, float dt, float dt_min) {
             s->shifts += 1;
             // Performance toward promotion: better when mood + logic are high.
             s->career_perf += 22.0F + 0.18F * sim_mood(s) + 2.0F * s->skills[SKILL_LOGIC];
+            bool promoted = false;
             if (s->career_perf >= 100.0F && s->career_level < CAREER_MAX_LEVEL) {
                 s->career_level += 1;
                 s->career_perf = 0.0F;
+                promoted = true;
             }
             s->at_work = false;
+            // Juice: coins on payout, a gold pop + bigger shake on promotion.
+            ll_fx_coins(s->x, 1.0F, s->z, 7);
+            ll_fx_shake(0.25F);
+            if (promoted) {
+                ll_fx_pop(s->x, 1.8F, s->z, (float[3]){1.0F, 0.82F, 0.26F});
+                ll_fx_shake(0.45F);
+            }
             // Work is tiring.
             s->needs[NEED_ENERGY] = clampf(s->needs[NEED_ENERGY] - 18.0F, 0.0F, 100.0F);
             s->needs[NEED_HUNGER] = clampf(s->needs[NEED_HUNGER] - 14.0F, 0.0F, 100.0F);
@@ -776,6 +791,14 @@ static void game_update(void) {
     }
     social_autopair();
 
+    // Advance placement pop timers + juice/fx (independent of game pause).
+    for (int i = 0; i < s_object_count; i++) {
+        if (s_objects[i].anim_t < 0.6F) {
+            s_objects[i].anim_t += dt;
+        }
+    }
+    ll_fx_update(dt);
+
     // Mirror runtime summary into persistent state (DevAPI/save visible).
     g_game_state.sim_count = s_sim_count;
     if (g_game_state.selected_sim >= s_sim_count) {
@@ -798,12 +821,14 @@ static void compute_camera(float aspect, float eye_out[3]) {
         tz = 0.0F;
     }
 
+    float jit[3];
+    ll_fx_shake_world(jit); // subtle whole-view jitter on impactful events
     vec3 eye = {
-        tx + dist * cosf(pitch) * sinf(yaw),
-        dist * sinf(pitch),
-        tz + dist * cosf(pitch) * cosf(yaw),
+        tx + dist * cosf(pitch) * sinf(yaw) + jit[0],
+        dist * sinf(pitch) + jit[1],
+        tz + dist * cosf(pitch) * cosf(yaw) + jit[2],
     };
-    vec3 center = {tx, 1.0F, tz};
+    vec3 center = {tx + jit[0], 1.0F + jit[1], tz + jit[2]};
     vec3 up = {0.0F, 1.0F, 0.0F};
 
     mat4 view;
@@ -935,15 +960,17 @@ static void draw_mesh_object(const Object *o, int mesh_id, float yaw) {
     float cs = cosf(yaw);
     float sn = sinf(yaw);
     float fog = cam_dist(o->x, o->z);
+    float ps[3];
+    ll_fx_pop_scale(o->anim_t, ps); // squash-stretch overshoot just after placement
     for (int s = 0; s < m->nsubs; s++) {
         const LLSub *sm = &m->subs[s];
         if (sm->nverts > 1024) {
             continue;
         }
         for (int i = 0; i < sm->nverts; i++) {
-            float x = sm->pos[i * 3 + 0];
-            float y = sm->pos[i * 3 + 1];
-            float z = sm->pos[i * 3 + 2];
+            float x = sm->pos[i * 3 + 0] * ps[0];
+            float y = sm->pos[i * 3 + 1] * ps[1]; // local y starts at floor, so base stays grounded
+            float z = sm->pos[i * 3 + 2] * ps[2];
             s_mesh_scratch[i * 3 + 0] = o->x + (x * cs + z * sn);
             s_mesh_scratch[i * 3 + 1] = y;
             s_mesh_scratch[i * 3 + 2] = o->z + (-x * sn + z * cs);
@@ -1078,6 +1105,7 @@ static void render_world(void) {
     for (int i = 0; i < s_sim_count; i++) {
         draw_sim(i);
     }
+    ll_fx_draw_world(s_daylight); // particles share the sim batch (depth on)
     draw_build_ghost();
 }
 // #endregion
@@ -1384,6 +1412,10 @@ static void try_place_object(void) {
     place_object(s_active_lot, s_build_kind, lx, lz);
     if (s_object_count > before) {
         g_game_state.wallet_simoleons -= price;
+        Object *o = &s_objects[s_object_count - 1];
+        o->anim_t = 0.0F; // kick the placement squash-stretch
+        ll_fx_dust(o->x, o->z);
+        ll_fx_shake(0.22F);
         game_state_mark_dirty();
     }
 }
@@ -2110,6 +2142,7 @@ int main(int argc, char **argv) {
     gfx_desc.depth = true;
     nt_gfx_init(&gfx_desc);
     nt_shape_renderer_init();
+    ll_fx_init();
 #ifdef LL_HAVE_TEXT
     text_init();
 #endif

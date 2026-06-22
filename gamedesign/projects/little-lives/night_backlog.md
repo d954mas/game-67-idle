@@ -22,7 +22,7 @@ never weaken gates) over its literal "split into 12 files / fan out every wave."
 | A1 | Render rework #1: directional surface shading (ground/floor/walls) + banded gradient sky + distance fog + warm/cool grade | lead | true | night/A1-pre |
 | A2 | Render rework #2: per-face faceted furniture shading + AO contact shadows under objects & sims + lit sims | lead | true | night/A2-pre |
 | A3 | HUD polish: palette-matched flat panels, grouped corner HUD, engine-font only, readable at zoom | lead | true | night/A3-pre |
-| A4 | Juice — `ll_fx.{c,h}` new module: squash-stretch on place/select, place dust, reward sparkle, screen shake | agent+lead | false | night/A4-pre |
+| A4 | Juice — `ll_fx.{c,h}` new module: squash-stretch on place/select, place dust, reward sparkle, screen shake | agent+lead | true | night/A4-pre |
 | A5 | Camera life: fixed diorama angle + subtle eased drift/follow (main-loop coupled) | lead | false | night/A5-pre |
 | A6 | Gameplay depth pass: tune careers/social readability + any cheap depth (lead judgment) | lead | false | night/A6-pre |
 | A7 | Composition + balance pass: silhouette/readability from camera, grade consistency, cut noisy juice | lead | false | night/A7-pre |
