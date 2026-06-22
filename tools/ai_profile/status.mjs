@@ -326,6 +326,21 @@ function commandRollup(records) {
   };
 }
 
+function subagentRollup(records) {
+  const spawns = records.filter((record) => record.event_type === "subagent_spawn");
+  const byType = {};
+  const objectives = [];
+  for (const record of spawns) {
+    const type = String(record.subagent_type || "").trim() || "agent";
+    byType[type] = (byType[type] || 0) + 1;
+    const objective = Array.isArray(record.commands) && record.commands.length
+      ? record.commands[0]
+      : (Array.isArray(record.command) && record.command.length ? record.command[0] : "");
+    if (objective) objectives.push(objective);
+  }
+  return { count: spawns.length, by_type: byType, objectives };
+}
+
 function buildStatus(profilePaths, values = {}) {
   const files = Array.isArray(profilePaths) ? profilePaths : [profilePaths];
   const parsed = parseProfiles(files);
@@ -380,6 +395,7 @@ function buildStatus(profilePaths, values = {}) {
     wall_clock_coverage: coverage,
     low_profile_coverage: lowCoverage,
     command_rollup: commandRollup(records),
+    subagent_rollup: subagentRollup(records),
     slowest_record: slowest ? {
       line: slowest.__line,
       duration_ms: Number(slowest.duration_ms || 0),
@@ -403,6 +419,10 @@ function renderStatus(status, { verbose }) {
   lines.push(`Unresolved failures: ${status.unresolved_failed_records}`);
   lines.push(`Resolved later failures: ${status.resolved_later_failed_records}`);
   lines.push(`Environment-blocked failures: ${status.environment_blocked_failed_records}`);
+  if (status.subagent_rollup && status.subagent_rollup.count > 0) {
+    const types = Object.entries(status.subagent_rollup.by_type).map(([type, n]) => `${type}:${n}`).join(", ");
+    lines.push(`Subagents delegated: ${status.subagent_rollup.count}${types ? ` (${types})` : ""}`);
+  }
   const coverage = status.wall_clock_coverage;
   lines.push(`Active work: ${formatMs(coverage.active_ms)} of ${formatMs(coverage.effective_span_ms)} effective (${formatPercent(coverage.coverage_ratio)})${coverage.idle_ms > 0 ? `; ${formatMs(coverage.idle_ms)} idle excluded` : ""}`);
   if (status.latest_record) {
@@ -453,6 +473,15 @@ function renderStatus(status, { verbose }) {
     lines.push("## Environment Blockers");
     for (const item of status.environment_blocked_reasons) {
       lines.push(`- ${item.count}x ${item.reason}`);
+    }
+  }
+
+  if (status.subagent_rollup && status.subagent_rollup.objectives.length > 0) {
+    lines.push("");
+    lines.push("## Subagents Delegated (advisory)");
+    for (const objective of status.subagent_rollup.objectives.slice(0, 12)) lines.push(`- ${objective}`);
+    if (status.subagent_rollup.objectives.length > 12) {
+      lines.push(`- ... ${status.subagent_rollup.objectives.length - 12} more`);
     }
   }
 

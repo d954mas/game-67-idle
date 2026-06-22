@@ -14,6 +14,7 @@ export const CATEGORIES = new Set([
   "reflection",
   "tooling",
   "handoff",
+  "delegation",
 ]);
 
 export const RESULTS = new Set(["pass", "fail", "mixed", "blocked", "skipped", "unknown"]);

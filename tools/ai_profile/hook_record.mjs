@@ -269,6 +269,31 @@ function readStdin() {
     const tool = String(pick(payload, "tool_name", "toolName") || "");
     const input = pick(payload, "tool_input", "toolInput") || {};
     const response = pick(payload, "tool_response", "toolResponse") || {};
+
+    /* Subagent-spawn telemetry (advisory, cross-harness): record Claude Agent/Task
+     * and Codex spawn_agent calls so `status` shows what the lead delegated this
+     * session. Diagnostic only — never an acceptance gate. */
+    const isSubagentSpawn = event === "PostToolUse"
+      && (/^(?:agent|task)$/i.test(tool)
+        || /(?:^|[._-])spawn_agent$/i.test(tool)
+        || pick(input, "subagent_type", "agentType", "agent_type") !== undefined);
+    if (isSubagentSpawn) {
+      const objectiveRaw = pick(input, "description", "objective", "task", "prompt", "instructions", "instruction") || "";
+      const objective = String(objectiveRaw).split(/\r?\n/)[0].trim().slice(0, 200);
+      const subType = String(pick(input, "subagent_type", "agentType", "agent_type") || "").trim();
+      const { appendRecord, buildRecord } = await loadProfileLib();
+      appendRecord(profilePath, buildRecord({
+        phase: "session",
+        category: "delegation",
+        result: "pass",
+        value: "necessary_overhead",
+        intent: `subagent:${subType || tool || "agent"}`,
+        tool: [`${harness}/${tool || "agent"}`],
+        ...(objective ? { command: [objective] } : {}),
+      }, { event_type: "subagent_spawn", subagent_type: subType, ...stamp }));
+      process.exit(0);
+    }
+
     const command = pick(input, "command");
     if (!command) process.exit(0); // only profile command/shell tool calls
 

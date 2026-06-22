@@ -614,6 +614,50 @@ test("status flags low wall-clock coverage and gaps in verbose mode", () => {
 // (hook_record.mjs) duplicate the result/category logic. This test feeds
 // identical payloads to BOTH and asserts they agree, so the two sources of
 // truth cannot silently drift (e.g. a fix applied to only one of them).
+test("hook_record logs subagent spawn telemetry for delegation tools", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "hook.jsonl");
+    runHook({ hook_event_name: "PostToolUse", tool_name: "Agent", tool_input: { description: "map world", subagent_type: "Explore", prompt: "Map src/world" }, tool_response: {} }, profile, "claude");
+    runHook({ hook_event_name: "PostToolUse", tool_name: "Task", tool_input: { description: "review readability", prompt: "Review X" }, tool_response: {} }, profile, "claude");
+    runHook({ hook_event_name: "PostToolUse", tool_name: "spawn_agent", tool_input: { instruction: "explore Y" }, tool_response: {} }, profile, "codex");
+    // a non-delegation tool with no command must NOT be recorded
+    runHook({ hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: "x" }, tool_response: {} }, profile, "claude");
+    const records = readJsonl(profile).filter((record) => record.event_type === "subagent_spawn");
+    assert.equal(records.length, 3);
+    assert.equal(records[0].subagent_type, "Explore");
+    assert.equal(records[0].category, "delegation");
+    assert.deepEqual(records[0].commands, ["map world"]);
+    assert.deepEqual(records[1].commands, ["review readability"]);
+    assert.deepEqual(records[2].commands, ["explore Y"]);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status surfaces an advisory subagent rollup", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "profile.jsonl");
+    const statusJson = join(dir, "status.json");
+    writeJsonl(profile, [
+      { ts: "2026-06-22T10:00:00.000+00:00", phase: "session", category: "delegation", result: "pass", event_type: "subagent_spawn", subagent_type: "Explore", commands: ["map src/world"] },
+      { ts: "2026-06-22T10:01:00.000+00:00", phase: "session", category: "delegation", result: "pass", event_type: "subagent_spawn", subagent_type: "Explore", commands: ["map state"] },
+      { ts: "2026-06-22T10:02:00.000+00:00", phase: "session", category: "tooling", result: "pass", event_type: "tool_call_result", commands: ["node x"] },
+    ]);
+    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    const status = readJson(statusJson);
+    assert.equal(status.subagent_rollup.count, 2);
+    assert.equal(status.subagent_rollup.by_type.Explore, 2);
+    const rendered = run(["tools/ai_profile/status.mjs", "--profile", profile]);
+    assert.match(rendered.stdout, /Subagents delegated: 2/);
+    assert.match(rendered.stdout, /## Subagents Delegated/);
+    assert.match(rendered.stdout, /map src\/world/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("hook_record_fast (C) and hook_record.mjs (JS) agree on result + category", {
   skip: !existsSync(join(root, "tools", "ai_profile", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
 }, () => {

@@ -33,6 +33,16 @@
             "commandWindows": "tools\\ai_profile\\hook_record_fast.exe codex"
           }
         ]
+      },
+      {
+        "matcher": "(?i)spawn_agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node tools/ai_profile/hook_record.mjs codex",
+            "commandWindows": "node tools\\ai_profile\\hook_record.mjs codex"
+          }
+        ]
       }
     ]
   }
