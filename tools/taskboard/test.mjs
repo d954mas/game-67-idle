@@ -3846,7 +3846,7 @@ test("cli subagent-packet-template --current fills task evidence command", (t) =
     cli,
     "orchestration-bootstrap",
     ...bootstrapArgs({
-      "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent-thread-1 --session-root tmp/sessions --agent-cwd C:/projects/game-67-idle --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
+      "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-task --min-agents 2 --parent-thread-id parent-thread-1 --session-root tmp/sessions --agent-cwd C:/projects/game-67-idle --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
     }),
     "--json",
   ], { cwd: root, encoding: "utf8" });
@@ -3861,6 +3861,7 @@ test("cli subagent-packet-template --current fills task evidence command", (t) =
   assert.match(result.stdout, /allowed files: tools\/taskboard\/cli\.mjs/);
   assert.match(result.stdout, /expected output: preflight passes/);
   assert.match(result.stdout, /evidence command or artifact: node tools\/ai\.mjs status --agent-rollup --require-agent-rollup-ok/);
+  assert.match(result.stdout, /--require-current-orchestration-task/);
   assert.match(result.stdout, /--parent-thread-id parent-thread-1/);
   assert.match(result.stdout, /--agent-rollup-evidence/);
   assert.match(result.stdout, /--json-output tasks[\\/]evidence[\\/]status\.json/);
@@ -3968,7 +3969,7 @@ function bootstrapArgs(overrides = {}) {
     objective: "verify bootstrap command",
     "allowed-files": "tools/taskboard/cli.mjs",
     "expected-output": "preflight passes",
-    "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
+    "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-task --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
     "stop-condition": "current preflight passes",
     "independent-reviewer": "reviewed bootstrap contract",
     ...overrides,
@@ -4018,14 +4019,35 @@ test("cli orchestration-bootstrap creates a current preflight-valid task", (t) =
   assert.equal(JSON.parse(check.stdout).problem, null);
 });
 
-test("cli orchestration-bootstrap accepts closeout-ready trace-session status evidence", (t) => {
+test("cli orchestration-bootstrap accepts trace-session status evidence with current readiness", (t) => {
   const root = tempRoot(t);
   const cli = join(import.meta.dirname, "cli.mjs");
   const result = spawnSync(process.execPath, [
     cli,
     "orchestration-bootstrap",
     ...bootstrapArgs({
-      "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --trace-session tmp/session.jsonl --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
+      "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-preflight --trace-session tmp/session.jsonl --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
+    }),
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, true);
+
+  const check = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(check.status, 0, check.stderr || check.stdout);
+  assert.equal(JSON.parse(check.stdout).problem, null);
+});
+
+test("cli orchestration-bootstrap accepts trace machine evidence without current status readiness", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [
+    cli,
+    "orchestration-bootstrap",
+    ...bootstrapArgs({
+      "evidence-command": "node tools/ai.mjs orchestration-trace --parent-thread-id parent --session-root tmp/sessions --cwd C:/projects/game-67-idle --min-agents 2 --json-output tasks/evidence/trace.json --json",
     }),
     "--json",
   ], { cwd: root, encoding: "utf8" });
@@ -4101,7 +4123,7 @@ test("cli orchestration-bootstrap rejects invalid machine evidence command witho
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.ok, false);
   assert.equal(parsed.problem.code, "invalid_evidence_command");
-  assert.match(parsed.problem.message, /closeout-ready machine evidence/);
+  assert.match(parsed.problem.message, /bootstrap-ready machine evidence/);
   assert.deepEqual(listTasks(root), []);
 });
 
@@ -4120,7 +4142,29 @@ test("cli orchestration-bootstrap rejects weak strict status evidence without co
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.ok, false);
   assert.equal(parsed.problem.code, "invalid_evidence_command");
-  assert.match(parsed.problem.message, /--agent-rollup-evidence --json-output/);
+  assert.match(parsed.problem.message, /--agent-rollup-evidence/);
+  assert.match(parsed.problem.message, /--json-output/);
+  assert.deepEqual(listTasks(root), []);
+});
+
+test("cli orchestration-bootstrap rejects status evidence without current readiness", (t) => {
+  const root = tempRoot(t);
+  const cli = join(import.meta.dirname, "cli.mjs");
+  const result = spawnSync(process.execPath, [
+    cli,
+    "orchestration-bootstrap",
+    ...bootstrapArgs({
+      "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
+    }),
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stderr, "");
+  const parsed = JSON.parse(result.stdout);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.problem.code, "invalid_evidence_command");
+  assert.match(parsed.problem.message, /--require-current-orchestration-task/);
   assert.deepEqual(listTasks(root), []);
 });
 

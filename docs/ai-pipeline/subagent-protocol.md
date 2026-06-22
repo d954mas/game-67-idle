@@ -47,7 +47,8 @@ If `evidence command or artifact` uses `node tools/ai.mjs orchestration-trace`,
 include `--session` or `--parent-thread-id` plus `--json-output`. If it uses
 `node tools/ai.mjs status --agent-rollup`, include an explicit source
 (`--parent-thread-id` or `--trace-session`), `--require-agent-rollup-ok`,
-`--agent-rollup-evidence`, and `--json-output`.
+`--require-current-orchestration-task`, `--agent-rollup-evidence`, and
+`--json-output`.
 
 Before launching a manual `spawn_agent`, start from the reusable packet:
 
@@ -186,7 +187,8 @@ Task packets still declare the underlying machine evidence command so taskboard
 validation has a stable signature to inspect. The packet's `evidence command`
 must include either `node tools/ai.mjs orchestration-trace ...` with
 `--session`/`--parent-thread-id` and `--json-output`, or strict
-`node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok ...`.
+`node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok
+--require-current-orchestration-task ...`.
 Before moving the task to review/done, record a later `- evidence: PASS ...`
 log entry for that approved machine evidence command or for the wrapper run
 that produced the same artifact. The validator checks the command shape and
@@ -195,6 +197,9 @@ recorded PASS line; it does not execute commands copied from task logs. For new
 declared repo-local JSON artifact and requires a passing trace that matches the
 declared source and minimum agent count. T0080+ strict `status --agent-rollup`
 evidence also needs `--agent-rollup-evidence --json-output <repo-local.json>`.
+For bootstrap/current-task readiness, status evidence must include
+`--require-current-orchestration-task` or the equivalent
+`--require-current-orchestration-preflight` alias.
 Keep raw full status JSON in `tmp/` for diagnostics only; committed task
 evidence should be the compact artifact under `tasks/evidence/`. The validator
 reads that compact status artifact and requires

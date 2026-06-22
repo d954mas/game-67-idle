@@ -327,6 +327,7 @@ function buildResult(values) {
   const statusOptions = [
     "--agent-rollup",
     "--require-agent-rollup-ok",
+    "--require-current-orchestration-task",
     "--min-agents", String(minAgents),
     "--session-root", sessionRoot,
     "--agent-cwd", agentCwd,

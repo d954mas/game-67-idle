@@ -616,7 +616,7 @@ Validate current orchestration evidence wrapper through the AI facade.
   allowed files: tools/ai.mjs; tools/ai_profile/**
   tool-use guard: exact paths/discovery before reads; trace/status commands include evidence source and --json-output where applicable
   expected output: facade forwards evidence wrapper
-  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --min-agents 2 --parent-thread-id parent-thread-1 --session-root "${sessionRoot}" --agent-cwd "${dir}" --agent-rollup-evidence --json-output tasks/evidence/T0001-status-rollup.json
+  evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-task --min-agents 2 --parent-thread-id parent-thread-1 --session-root "${sessionRoot}" --agent-cwd "${dir}" --agent-rollup-evidence --json-output tasks/evidence/T0001-status-rollup.json
   stop condition: json output is ok
   independent reviewer: reviewed facade forwarding
 `);
@@ -631,6 +631,7 @@ Validate current orchestration evidence wrapper through the AI facade.
     assert.equal(parsed.task_id, "T0001");
     assert.equal(parsed.inference_source, "task-command");
     assert.match(parsed.command, /node tools\/ai\.mjs status --agent-rollup --require-agent-rollup-ok/);
+    assert.match(parsed.command, /--require-current-orchestration-task/);
   } finally {
     cleanup(dir);
   }
@@ -670,6 +671,7 @@ test("subagent-packet-template forwards taskboard template", () => {
   assert.ok(result.stdout.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
   assert.match(result.stdout, /orchestration-trace include --session\/--parent-thread-id and --json-output/);
   assert.match(result.stdout, /status --agent-rollup include --parent-thread-id\/--trace-session/);
+  assert.match(result.stdout, /--require-current-orchestration-task/);
   assert.match(result.stdout, /--agent-rollup-evidence/);
   assert.match(result.stdout, /handoff:/);
 });
@@ -793,7 +795,7 @@ function bootstrapArgs(overrides = {}) {
     objective: "verify facade bootstrap forwarding",
     "allowed-files": "tools/ai.mjs",
     "expected-output": "facade creates task",
-    "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
+    "evidence-command": "node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --require-current-orchestration-task --parent-thread-id parent --agent-rollup-evidence --json-output tasks/evidence/status.json --json",
     "stop-condition": "current preflight passes",
     "independent-reviewer": "reviewed facade bootstrap",
     ...overrides,
@@ -890,7 +892,7 @@ test("orchestration-bootstrap rejects weak status evidence without compact artif
     const parsed = JSON.parse(result.stdout);
     assert.equal(parsed.ok, false);
     assert.equal(parsed.problem.code, "invalid_evidence_command");
-    assert.match(parsed.problem.message, /--agent-rollup-evidence --json-output/);
+    assert.match(parsed.problem.message, /--require-current-orchestration-task/);
     const taskRoot = join(dir, "tasks", "active");
     assert.equal(existsSync(taskRoot), false);
   } finally {

@@ -28,7 +28,7 @@ import {
   orchestrationWorkflowInitPayload,
   orchestrationPreflightProblem, orchestrationWorkflowManifestProblem,
   parseDoc, currentDoingOrchestrationTaskIds,
-  isCloseoutReadyMachineEvidenceCommand, isBoundedOrchestrationAllowedFiles,
+  isBootstrapReadyMachineEvidenceCommand, isBoundedOrchestrationAllowedFiles,
   DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -207,7 +207,7 @@ function bootstrapMachineEvidenceProblem(command) {
   return {
     code: "invalid_evidence_command",
     evidenceCommand: command,
-    message: "--evidence-command must be closeout-ready machine evidence: status --agent-rollup --require-agent-rollup-ok with a source plus --agent-rollup-evidence --json-output, or orchestration-trace with source plus --json-output",
+    message: "--evidence-command must be bootstrap-ready machine evidence: status --agent-rollup --require-agent-rollup-ok with a source plus --require-current-orchestration-task/--require-current-orchestration-preflight, --agent-rollup-evidence, and --json-output; or orchestration-trace with source plus --json-output",
   };
 }
 
@@ -232,6 +232,11 @@ Required:
   --evidence-command      Machine orchestration evidence command.
   --stop-condition        Validation and closeout condition.
   --independent-reviewer  Reviewer/verifier plan.
+
+Status evidence commands must include --require-current-orchestration-task or
+--require-current-orchestration-preflight plus --agent-rollup-evidence and
+--json-output. Trace evidence commands only need an explicit source and
+--json-output.
 
 After creation:
   node tools/ai.mjs orchestration-check --current --json`;
@@ -758,7 +763,7 @@ switch (cmd) {
       }
       fail(problem.message);
     }
-    if (!isCloseoutReadyMachineEvidenceCommand(argText(args, "evidence-command"))) {
+    if (!isBootstrapReadyMachineEvidenceCommand(argText(args, "evidence-command"))) {
       const problem = bootstrapMachineEvidenceProblem(argText(args, "evidence-command"));
       if (args.json) {
         writeJson({ ok: false, problem });

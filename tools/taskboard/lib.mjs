@@ -160,7 +160,7 @@ allowed files: <repo-local files or bounded patterns>
 forbidden files: <files or areas the subagent must not touch>
 tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
 expected output: <concise final report or changed files>
-evidence command or artifact: <read-only command, focused test, or artifact path; for orchestration-trace include --session/--parent-thread-id and --json-output; for status --agent-rollup include --parent-thread-id/--trace-session, --require-agent-rollup-ok, --agent-rollup-evidence, and --json-output>
+evidence command or artifact: <read-only command, focused test, or artifact path; for orchestration-trace include --session/--parent-thread-id and --json-output; for status --agent-rollup include --parent-thread-id/--trace-session, --require-agent-rollup-ok, --require-current-orchestration-task, --agent-rollup-evidence, and --json-output>
 stop condition: <when the subagent must stop>
 handoff:
   findings: <facts or verdict>
@@ -1232,6 +1232,14 @@ export function isCloseoutReadyMachineEvidenceCommand(text) {
     if (signature.kind === "orchestration-trace") return Boolean(signature.source && signature.artifact);
     if (signature.kind !== "status-agent-rollup") return false;
     return Boolean(signature.source && signature.artifact && signature.compact_artifact);
+  });
+}
+
+export function isBootstrapReadyMachineEvidenceCommand(text) {
+  return machineEvidenceSignatures(text).some((signature) => {
+    if (signature.kind === "orchestration-trace") return Boolean(signature.source && signature.artifact);
+    if (signature.kind !== "status-agent-rollup") return false;
+    return Boolean(signature.source && signature.artifact && signature.compact_artifact && signature.current_orchestration_task);
   });
 }
 
