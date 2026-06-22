@@ -1,5 +1,8 @@
 // Little Lives — JUICE / FX module.
 //
+// Drawn with the engine shape renderer (procedural primitives) — acknowledged
+// debug-only art debt, consistent with the rest of Little Lives' runtime.
+//
 // Self-contained: fixed-size particle pool, a single decaying screen-shake
 // scalar, and a pure squash-stretch helper. The engine shape renderer does NOT
 // alpha-blend (alpha is ignored), so every particle is a small OPAQUE shaded
