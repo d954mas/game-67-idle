@@ -25,6 +25,16 @@
   let q = "";
   let sort = "name";
 
+  // synthetic "no pack" bundle so loose assets aren't hidden from the Packs view
+  const LOOSE = "__loose__";
+  function loosePack() {
+    const loose = DATA.filter((c) => !c.pack);
+    if (!loose.length) return null;
+    const uniq = (k) => [...new Set(loose.flatMap((c) => vals(c, k)))];
+    return { pack: LOOSE, title: "Loose assets (no pack)", source: "various", kind: uniq("kind"), license: uniq("license"), origin: uniq("origin"), genre: [], style: [], tags: uniq("tags"), count: loose.length, covers: loose.map((c) => c.thumb).filter(Boolean).slice(0, 4), coverImg: "" };
+  }
+  function allPacks() { const lp = loosePack(); return lp ? [...PACKS, lp] : PACKS; }
+
   function route() {
     const h = (location.hash || "").replace(/^#\/?/, "");
     const [view, ...rest] = h.split("/");
@@ -122,7 +132,7 @@
     const m = $("modal");
     if (!a) { closeModal(); return; }
     let view3d;
-    if (a.model) view3d = '<model-viewer camera-controls auto-rotate shadow-intensity="1" exposure="1.1" poster="' + esc(a.thumb || "") + '" src="' + esc(a.model) + '"></model-viewer>';
+    if (a.model) view3d = '<model-viewer camera-controls auto-rotate environment-image="studio_env.hdr" tone-mapping="neutral" exposure="1" shadow-intensity="1" shadow-softness="0.8" camera-orbit="45deg 55deg auto" poster="' + esc(a.thumb || "") + '" src="' + esc(a.model) + '"></model-viewer>';
     else if (a.thumb) view3d = '<img src="' + esc(a.thumb) + '">';
     else view3d = '<div class="ph" style="font-size:60px">' + icon(a.kind) + "</div>";
     const kv = (k, v) => v ? '<div class="kv"><b>' + esc(k) + ":</b> " + v + "</div>" : "";
@@ -148,9 +158,10 @@
   // hover preview: ONE pooled live model-viewer follows the hovered model card,
   // so you can spin a model without opening it (still a single GL context).
   let hov = null, hovTimer = 0, hideTimer = 0;
-  // isometric camera + flat neutral light so the live 3D matches the isometric
-  // preview thumbnails (Kenney-style), not model-viewer's default studio look.
-  const ISO = { "environment-image": "neutral", exposure: "1", "shadow-intensity": "0.35", "camera-orbit": "45deg 60deg auto", "field-of-view": "22deg" };
+  // isometric camera + the SAME shared studio HDR the PNG thumbnails are baked
+  // with, so the live 3D and the preview are lit by one source (high warm key,
+  // low ambient → side faces stay darker than the top, edges readable).
+  const ISO = { "environment-image": "studio_env.hdr", "tone-mapping": "neutral", exposure: "1", "shadow-intensity": "0.6", "shadow-softness": "0.8", "camera-orbit": "45deg 55deg auto" };
   function ensureHov() {
     if (hov) return hov;
     hov = document.createElement("model-viewer");
@@ -200,8 +211,9 @@
     const app = $("app");
 
     if (r.view === "pack") {
-      const p = packById.get(r.arg);
-      const members = DATA.filter((a) => a.pack === r.arg);
+      const isLoose = r.arg === LOOSE;
+      const p = isLoose ? loosePack() : packById.get(r.arg);
+      const members = isLoose ? DATA.filter((a) => !a.pack) : DATA.filter((a) => a.pack === r.arg);
       const list = sortList(filterList(members, ASSET_FACETS), "assets");
       const head = p ? '<div class="detailhead"><div class="cover">' + coverInner(p) + "</div>" +
         '<div class="info"><h2>' + esc(p.title || p.pack) + "</h2>" +
@@ -211,7 +223,7 @@
         '<div class="desc">' + esc(p.description || p.body || "") + "</div>" +
         '<div class="row" style="margin-top:8px"><button class="ghost" id="editDesc">Edit description (copy _pack.md)</button></div>' +
         '<div id="editArea"></div></div></div>' : "";
-      app.innerHTML = '<div class="crumbs"><a href="#/packs">All packs</a> › ' + esc(r.arg) + "</div>" + head + layoutHtml();
+      app.innerHTML = '<div class="crumbs"><a href="#/packs">All packs</a> › ' + esc(p ? p.title : r.arg) + "</div>" + head + layoutHtml();
       $("facets").innerHTML = facetSidebar(members, ASSET_FACETS);
       $("abar").innerHTML = activeBar();
       $("grid").innerHTML = list.map(assetCard).join("");
@@ -232,12 +244,13 @@
       return;
     }
 
-    const list = sortList(filterList(PACKS, PACK_FACETS), "packs");
+    const allP = allPacks();
+    const list = sortList(filterList(allP, PACK_FACETS), "packs");
     app.innerHTML = layoutHtml();
-    $("facets").innerHTML = facetSidebar(PACKS, PACK_FACETS);
+    $("facets").innerHTML = facetSidebar(allP, PACK_FACETS);
     $("abar").innerHTML = activeBar();
     $("grid").innerHTML = list.map(packCard).join("");
-    setCount(list.length, PACKS.length);
+    setCount(list.length, allP.length);
     bindGrid();
   }
 

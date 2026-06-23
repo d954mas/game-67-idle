@@ -74,6 +74,8 @@ const COPY = [
   "tools/assets/source/find_assets.mjs",
   "tools/assets/obj_to_glb.py",
   "tools/assets/render_thumbs.py",
+  "tools/assets/make_studio_hdr.py",
+  "tools/assets/studio_env.hdr",
   "tools/assets/intake/accept_incoming_asset.mjs",
   "tools/assets/intake/bootstrap_shared_asset_library.mjs",
   "tools/asset_review/build_review.mjs",

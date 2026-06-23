@@ -15,6 +15,9 @@ argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 if len(argv) < 3:
     print("usage: -- <outdir> <size> <a.glb> [b.glb ...]")
     sys.exit(1)
+# Shared studio environment (same file the web model-viewer uses), so the PNG
+# preview and the live 3D are lit by one source. Falls back to suns if missing.
+HDR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "studio_env.hdr")
 outdir = os.path.abspath(argv[0])
 size = int(argv[1])
 glbs = argv[2:]
@@ -32,6 +35,12 @@ def setup_render():
     s.render.film_transparent = True
     s.render.image_settings.file_format = "PNG"
     s.render.image_settings.color_mode = "RGBA"
+    # Blender 4.x defaults to AgX which darkens/desaturates; flat assets want
+    # Standard so colours match the source (bright low-poly look).
+    try:
+        s.view_settings.view_transform = "Standard"
+    except Exception:
+        pass
 
 
 def world_bounds(objs):
@@ -72,16 +81,34 @@ for glb in glbs:
     look = (center - cam.location).normalized()
     cam.rotation_euler = look.to_track_quat("-Z", "Y").to_euler()
 
-    sun_data = bpy.data.lights.new("sun", "SUN")
-    sun_data.energy = 3.0
-    sun = bpy.data.objects.new("sun", sun_data)
-    scene.collection.objects.link(sun)
-    sun.rotation_euler = (math.radians(50), math.radians(10), math.radians(40))
-
     world = bpy.data.worlds.new("w")
     scene.world = world
     world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs[1].default_value = 0.7
+    nt = world.node_tree
+    bg = nt.nodes["Background"]
+    if os.path.exists(HDR_PATH):
+        # Shared equirect studio HDR (high warm key + dim cool fill + low
+        # ambient). Same source as the web model-viewer; no mapping node so the
+        # equirect maps straight, with the key near the top of the sphere.
+        env = nt.nodes.new("ShaderNodeTexEnvironment")
+        env.image = bpy.data.images.load(HDR_PATH, check_existing=True)
+        nt.links.new(env.outputs["Color"], bg.inputs["Color"])
+        bg.inputs[1].default_value = 1.0
+    else:
+        # fallback: strong directional key + modest fill + low ambient, so the
+        # lit top stays clearly brighter than the side faces (edges readable).
+        key = bpy.data.lights.new("key", "SUN")
+        key.energy = 2.6
+        key.angle = math.radians(15)
+        ko = bpy.data.objects.new("key", key)
+        scene.collection.objects.link(ko)
+        ko.rotation_euler = (math.radians(40), math.radians(6), math.radians(35))
+        fill = bpy.data.lights.new("fill", "SUN")
+        fill.energy = 0.6
+        fo = bpy.data.objects.new("fill", fill)
+        scene.collection.objects.link(fo)
+        fo.rotation_euler = (math.radians(62), 0, math.radians(215))
+        bg.inputs[1].default_value = 0.5
 
     name = os.path.splitext(os.path.basename(glb))[0]
     scene.render.filepath = os.path.join(outdir, name + ".png")
