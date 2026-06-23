@@ -111,9 +111,13 @@ async function discoverGameAssets({ base, repo }) {
 const GLB_EXT = [".glb", ".gltf"];
 const IMG_EXT = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
 
-// Build display cards + copy their media (thumbnail + .glb) into <mediaDir>,
-// referenced relatively so the page works locally and over a tunnel.
-async function buildLibraryCards(records, mediaDir) {
+const relPosix = (root, abs) => relative(root, abs).replace(/\\/g, "/");
+
+// Build display cards + their media URLs. Default: COPY media into <mediaDir>
+// (self-contained, tunnel-safe). ref mode: REFERENCE library files in place via
+// a `lib/` prefix (a 2-root server maps it) — for huge libraries where copying
+// every .glb would be hundreds of MB.
+async function buildLibraryCards(records, { mediaDir, ref = false, libRoot = "" }) {
   const cards = [];
   for (const r of records) {
     const card = {
@@ -123,13 +127,16 @@ async function buildLibraryCards(records, mediaDir) {
       sourceId: r.source_id || "", genre: [], style: [], thumb: "", model: "",
     };
     if (r.preview && existsSync(r.preview)) {
-      const dst = `${safeName(r.asset_id)}.png`;
-      try { await cp(r.preview, join(mediaDir, dst)); card.thumb = `media/${dst}`; } catch { /* skip */ }
+      if (ref) card.thumb = `lib/${relPosix(libRoot, r.preview)}`;
+      else { const dst = `${safeName(r.asset_id)}.png`; try { await cp(r.preview, join(mediaDir, dst)); card.thumb = `media/${dst}`; } catch { /* skip */ } }
     }
     if (r.kind === "model" && r.filesDir && existsSync(r.filesDir)) {
       try {
         const glb = (await readdir(r.filesDir)).find((n) => GLB_EXT.includes(extname(n).toLowerCase()));
-        if (glb) { const dst = `${safeName(r.asset_id)}.glb`; await cp(join(r.filesDir, glb), join(mediaDir, dst)); card.model = `media/${dst}`; }
+        if (glb) {
+          if (ref) card.model = `lib/${relPosix(libRoot, join(r.filesDir, glb))}`;
+          else { const dst = `${safeName(r.asset_id)}.glb`; await cp(join(r.filesDir, glb), join(mediaDir, dst)); card.model = `media/${dst}`; }
+        }
       } catch { /* skip */ }
     }
     cards.push(card);
@@ -207,9 +214,10 @@ function renderHtml({ mode, title, cards = [], packs = [] }) {
 }
 
 function parseArgs(argv) {
-  const a = { mode: "library", game: "", base: "clean-seed", library: DEFAULT_LIBRARY, repo: process.cwd(), out: "tmp/asset-review", path: "" };
+  const a = { mode: "library", game: "", base: "clean-seed", library: DEFAULT_LIBRARY, repo: process.cwd(), out: "tmp/asset-review", path: "", ref: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
+    if (arg === "--ref") { a.ref = true; continue; } // reference library files in place (no media copy) — for huge libraries
     const next = argv[i + 1];
     if (next === undefined || next.startsWith("--")) throw new Error(`missing value for ${arg}`);
     i += 1;
@@ -250,7 +258,8 @@ async function main() {
   } else {
     const records = await scanLibrary(a.library);
     const packMeta = await scanPacks(a.library);
-    cards = await buildLibraryCards(records, mediaDir);
+    const libRootEarly = resolve(a.library);
+    cards = await buildLibraryCards(records, { mediaDir, ref: a.ref, libRoot: libRootEarly });
     const pm = new Map(packMeta.map((p) => [p.pack, p]));
     for (const c of cards) { const p = pm.get(c.pack); c.genre = p ? p.genre : []; c.style = p ? p.style : []; }
     const libRoot = resolve(a.library);
@@ -268,7 +277,11 @@ async function main() {
       if (isImg(p.cover)) candidates.push(join(libRoot, p.cover));
       candidates.push(join(libRoot, "previews", p.pack, "cover.png"));
       for (const src of candidates) {
-        if (existsSync(src)) { const dst = `pack__${safeName(p.pack)}.png`; await cp(src, join(mediaDir, dst)); coverImg = `media/${dst}`; break; }
+        if (existsSync(src)) {
+          if (a.ref) coverImg = `lib/${relPosix(libRoot, src)}`;
+          else { const dst = `pack__${safeName(p.pack)}.png`; await cp(src, join(mediaDir, dst)); coverImg = `media/${dst}`; }
+          break;
+        }
       }
       packs.push({ ...p, count: p.count || members.length, covers: thumbs.slice(0, 4), coverImg });
     }

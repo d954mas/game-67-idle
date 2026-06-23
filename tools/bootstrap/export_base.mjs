@@ -85,6 +85,7 @@ const COPY = [
   "tools/asset_review/viewer.css",
   "tools/asset_review/promote.mjs",
   "tools/asset_review/pull.mjs",
+  "tools/asset_review/serve_gallery.mjs",
   "tools/serve_tunnel.mjs",
   "tools/assets/atomic_io.py",
   "tools/assets/atomic_io_test.py",
