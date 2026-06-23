@@ -46,7 +46,9 @@ header h1 { font-size: 15px; margin: 0; white-space: nowrap; }
 .pick { display: flex; align-items: center; gap: 6px; padding: 6px 9px; border-top: 1px solid #20252f; font-size: 11px; }
 
 .detailhead { padding: 14px 16px; border-bottom: 1px solid #262b36; display: flex; gap: 16px; align-items: flex-start; }
-.detailhead .cover { width: 220px; min-width: 220px; aspect-ratio: 1; border: 1px solid #262b36; border-radius: 10px; overflow: hidden; }
+.detailhead .cover { width: 260px; min-width: 260px; height: 200px; border: 1px solid #262b36; border-radius: 10px; overflow: hidden; background: #0b0d12; display: flex; align-items: center; justify-content: center; padding: 8px; }
+.detailhead .cover img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.detailhead .cover .montage { width: 100%; height: 100%; }
 .detailhead .info h2 { margin: 0 0 6px; font-size: 18px; }
 .desc { color: #c4c9d4; font-size: 13px; max-width: 70ch; white-space: pre-wrap; }
 .metaline { color: #9ca3af; font-size: 12px; margin: 8px 0; }

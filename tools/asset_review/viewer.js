@@ -65,14 +65,18 @@
     return a;
   }
 
-  function montage(covers) {
-    if (!covers || !covers.length) return '<div class="thumb"><span class="ph">▦</span></div>';
-    if (covers.length === 1) return '<div class="thumb"><img loading="lazy" src="' + esc(covers[0]) + '"></div>';
-    return '<div class="thumb"><div class="montage">' + covers.slice(0, 4).map((c) => '<img loading="lazy" src="' + esc(c) + '">').join("") + "</div></div>";
+  // inner cover content only (no .thumb wrapper): vendor cover image, else a
+  // montage of member thumbnails, else a placeholder.
+  function coverInner(p) {
+    if (p.coverImg) return '<img loading="lazy" src="' + esc(p.coverImg) + '">';
+    const c = p.covers || [];
+    if (!c.length) return '<span class="ph">▦</span>';
+    if (c.length === 1) return '<img loading="lazy" src="' + esc(c[0]) + '">';
+    return '<div class="montage">' + c.slice(0, 4).map((x) => '<img loading="lazy" src="' + esc(x) + '">').join("") + "</div>";
   }
   function packCard(p) {
     const g = (p.genre || []).concat(p.style || []).slice(0, 3).map((x) => '<span class="gchip" data-facet="genre" data-val="' + esc(x) + '">' + esc(x) + "</span>").join("");
-    return '<div class="card" data-pack="' + esc(p.pack) + '">' + montage(p.covers) +
+    return '<div class="card" data-pack="' + esc(p.pack) + '"><div class="thumb">' + coverInner(p) + "</div>" +
       '<div class="meta"><div class="name">' + esc(p.title || p.pack) + '</div>' +
       '<div class="row"><span class="k">' + (p.count || 0) + " assets · " + esc(p.source) + "</span></div>" +
       '<div class="row">' + (p.license ? '<span class="chip" style="background:#86efac">' + esc(p.license) + "</span>" : "") + g + "</div>" +
@@ -143,7 +147,10 @@
 
   // hover preview: ONE pooled live model-viewer follows the hovered model card,
   // so you can spin a model without opening it (still a single GL context).
-  let hov = null, hovTimer = 0;
+  let hov = null, hovTimer = 0, hideTimer = 0;
+  // isometric camera + flat neutral light so the live 3D matches the isometric
+  // preview thumbnails (Kenney-style), not model-viewer's default studio look.
+  const ISO = { "environment-image": "neutral", exposure: "1", "shadow-intensity": "0.35", "camera-orbit": "45deg 60deg auto", "field-of-view": "22deg" };
   function ensureHov() {
     if (hov) return hov;
     hov = document.createElement("model-viewer");
@@ -151,8 +158,14 @@
     hov.setAttribute("auto-rotate", "");
     hov.setAttribute("auto-rotate-delay", "0");
     hov.setAttribute("interaction-prompt", "none");
-    hov.setAttribute("exposure", "1.1");
-    hov.style.cssText = "position:fixed;z-index:30;display:none;background:#0b0d12;border:1px solid #3b4555;border-radius:10px;pointer-events:none";
+    for (const k in ISO) hov.setAttribute(k, ISO[k]);
+    hov.style.cssText = "position:fixed;z-index:30;display:none;background:#0b0d12;border:1px solid #3b4555;border-radius:10px;pointer-events:auto;cursor:grab";
+    hov.addEventListener("mouseenter", () => clearTimeout(hideTimer));
+    hov.addEventListener("mouseleave", hideHover);
+    // plain click (no drag) opens the modal; press + move rotates (model-viewer).
+    let down = null;
+    hov.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY }; });
+    hov.addEventListener("pointerup", (e) => { if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && hov.dataset.aid) go("#/asset/" + encodeURIComponent(hov.dataset.aid)); down = null; });
     document.body.appendChild(hov);
     return hov;
   }
@@ -160,6 +173,7 @@
     const t = card.querySelector(".thumb"); if (!t) return;
     const r = t.getBoundingClientRect();
     const h = ensureHov();
+    h.dataset.aid = a.id;
     h.style.left = r.left + "px"; h.style.top = r.top + "px"; h.style.width = r.width + "px"; h.style.height = r.height + "px";
     h.setAttribute("src", a.model); h.style.display = "block";
   }
@@ -189,7 +203,7 @@
       const p = packById.get(r.arg);
       const members = DATA.filter((a) => a.pack === r.arg);
       const list = sortList(filterList(members, ASSET_FACETS), "assets");
-      const head = p ? '<div class="detailhead"><div class="cover">' + montage(p.covers) + "</div>" +
+      const head = p ? '<div class="detailhead"><div class="cover">' + coverInner(p) + "</div>" +
         '<div class="info"><h2>' + esc(p.title || p.pack) + "</h2>" +
         '<div class="metaline"><b>' + (p.count || members.length) + "</b> assets · <b>" + esc(p.source) + "</b> · " + esc(p.license) +
         (p.license_url ? ' (<a href="' + esc(p.license_url) + '">license</a>)' : "") + " · origin " + esc(p.origin) + "</div>" +
@@ -236,8 +250,8 @@
         el.onclick = () => go("#/asset/" + encodeURIComponent(el.dataset.asset));
         const a = byId.get(el.dataset.asset);
         if (a && a.model) {
-          el.addEventListener("mouseenter", () => { clearTimeout(hovTimer); hovTimer = setTimeout(() => showHover(el, a), 160); });
-          el.addEventListener("mouseleave", () => { clearTimeout(hovTimer); hideHover(); });
+          el.addEventListener("mouseenter", () => { clearTimeout(hovTimer); clearTimeout(hideTimer); hovTimer = setTimeout(() => showHover(el, a), 160); });
+          el.addEventListener("mouseleave", () => { clearTimeout(hovTimer); hideTimer = setTimeout(hideHover, 140); });
         }
       });
       grid.querySelectorAll("[data-pick]").forEach((cb) => cb.onchange = () => { cb.checked ? picked.add(cb.dataset.pick) : picked.delete(cb.dataset.pick); syncSel(); cb.closest(".card").classList.toggle("sel", cb.checked); });

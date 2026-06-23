@@ -253,14 +253,25 @@ async function main() {
     cards = await buildLibraryCards(records, mediaDir);
     const pm = new Map(packMeta.map((p) => [p.pack, p]));
     for (const c of cards) { const p = pm.get(c.pack); c.genre = p ? p.genre : []; c.style = p ? p.style : []; }
-    packs = packMeta.map((p) => {
+    const libRoot = resolve(a.library);
+    packs = [];
+    for (const p of packMeta) {
       const members = cards.filter((c) => c.pack === p.pack);
       const thumbs = [];
-      const cover = p.cover ? members.find((c) => c.id === p.cover) : null;
-      if (cover && cover.thumb) thumbs.push(cover.thumb);
+      const isImg = (s) => /\.(png|jpg|jpeg|webp)$/i.test(s || "");
+      const coverMember = p.cover && !isImg(p.cover) ? members.find((c) => c.id === p.cover) : null;
+      if (coverMember && coverMember.thumb) thumbs.push(coverMember.thumb);
       for (const c of members) if (c.thumb && !thumbs.includes(c.thumb)) thumbs.push(c.thumb);
-      return { ...p, count: p.count || members.length, covers: thumbs.slice(0, 4) };
-    });
+      // prefer a real vendor pack cover (the kit's "all assets" preview)
+      let coverImg = "";
+      const candidates = [];
+      if (isImg(p.cover)) candidates.push(join(libRoot, p.cover));
+      candidates.push(join(libRoot, "previews", p.pack, "cover.png"));
+      for (const src of candidates) {
+        if (existsSync(src)) { const dst = `pack__${safeName(p.pack)}.png`; await cp(src, join(mediaDir, dst)); coverImg = `media/${dst}`; break; }
+      }
+      packs.push({ ...p, count: p.count || members.length, covers: thumbs.slice(0, 4), coverImg });
+    }
     title = "Asset library";
     meta = `${cards.length} records · ${packs.length} packs · ${cards.filter((c) => c.model).length} 3D models`;
   }
