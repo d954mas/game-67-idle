@@ -14,15 +14,15 @@ ONCE, store in the shared library, reuse many — do not re-prepare per game.
    reuse a library hit, else search free CC0/OFL sources, else generate.
 2. **Prepare** (engine-ready, per type) — see below.
 3. **Transfer to library** — catalog with origin + license + preview.
-4. **Reuse** — in the next game: `find_assets` -> copy into `assets/source/...`
-   (project-local) -> load. Browse via the asset viewer; share via app-tunnel.
+4. **Reuse** — `pull.mjs --ids <library_id> --to <game>/assets`: copies files +
+   writes a game OKF record with `source_id` (linked; library stays canonical).
+   No `source_id` = new/game-local — `promote` it to the library.
 
 ## Prepare by type
 
-- **Models** (obj/fbx -> glb): `"<blender>" --background --python
-  tools/assets/obj_to_glb.py -- <out> <a.obj>`. split-by-material is ON (each
-  material -> its own mesh) because the engine reads one material per mesh; reuse
-  ONE mesh handle per unique part so copies instance. Runtime: see game-3d-models.
+- **Models** (obj/fbx -> glb): `tools/assets/obj_to_glb.py` (Blender;
+  split-by-material — engine reads one material/mesh). PREFER a vendor-shipped glb
+  if it exists (obj winding can break normals). Reuse one handle/part. game-3d-models.
 - **Textures**: dedup a pack's SHARED atlas/colormap — store it ONCE, never a copy
   per model; run the tileable audit. See game-texture-generation.
 - **UI kits**: cut / slice9 / manifests. See generated-game-ui-assets.
@@ -41,9 +41,9 @@ Catalog reusable assets BEFORE copying project-local (see game-asset-pipeline).
 
 ## Review / share
 
-`node tools/asset_review/build_review.mjs --mode library` browses/filters/searches
-the library; `--mode review --game <id>` after a game picks keepers to promote.
-`node tools/serve_tunnel.mjs --dir <out>` to view/pick from a phone (app-tunnel).
+`build_review.mjs` — packs/bundles browser (cover montage, genre/tags, facets,
+search, 3D-in-modal): `--mode library` · `--mode scan --path <dir>` · `--mode
+review --game <id>`. Cards show `linked` vs `new`. `serve_tunnel.mjs` → phone.
 
 ## Rules
 

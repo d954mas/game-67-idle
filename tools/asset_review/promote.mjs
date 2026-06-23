@@ -40,7 +40,7 @@ function parseArgs(argv) {
     manifest: "tmp/asset-review/review-manifest.json",
     ids: "", library: DEFAULT_LIBRARY, repo: process.cwd(),
     source: "", license: "", licenseUrl: "", origin: "sourced", kind: "",
-    pack: "", packTitle: "", packUrl: "",
+    pack: "", packTitle: "", packUrl: "", packGenre: "", packStyle: "", packTags: "", packDesc: "", packCover: "",
     attributionRequired: "", commercialUse: "true", modificationAllowed: "true",
     redistributionAllowed: "true", shippingDecision: "allowed",
     apply: false, overwrite: false,
@@ -64,6 +64,11 @@ function parseArgs(argv) {
     else if (arg === "--pack") a.pack = next;
     else if (arg === "--pack-title") a.packTitle = next;
     else if (arg === "--pack-url") a.packUrl = next;
+    else if (arg === "--pack-genre") a.packGenre = next;
+    else if (arg === "--pack-style") a.packStyle = next;
+    else if (arg === "--pack-tags") a.packTags = next;
+    else if (arg === "--pack-desc") a.packDesc = next;
+    else if (arg === "--pack-cover") a.packCover = next;
     else if (arg === "--attribution-required") a.attributionRequired = next;
     else if (arg === "--commercial-use") a.commercialUse = next;
     else if (arg === "--modification-allowed") a.modificationAllowed = next;
@@ -138,6 +143,7 @@ ${rec.pack ? `pack: ${rec.pack}\n` : ""}---
 }
 
 function packMarkdown(m) {
+  const fmList = (csv) => `[${(csv || "").split(",").map((s) => s.trim()).filter(Boolean).join(", ")}]`;
   return `---
 type: Asset Pack
 title: ${m.title}
@@ -148,7 +154,10 @@ license: ${m.license}
 license_url: ${m.licenseUrl}
 origin: ${m.origin}
 count: ${m.count}
-timestamp: ${m.timestamp}
+genre: ${fmList(m.genre)}
+style: ${fmList(m.style)}
+tags: ${fmList(m.tags)}
+${m.cover ? `cover: ${m.cover}\n` : ""}${m.description ? `description: ${m.description}\n` : ""}timestamp: ${m.timestamp}
 ---
 
 # ${m.title}
@@ -159,10 +168,11 @@ timestamp: ${m.timestamp}
 - License: ${m.license}
 - Assets: ${m.count} (${m.kind})
 - Origin: ${m.origin}
-- Prepared: ${m.timestamp}
+${m.genre ? `- Genre: ${m.genre}\n` : ""}${m.style ? `- Style: ${m.style}\n` : ""}- Prepared: ${m.timestamp}
 
-Reusable pack — assets share an art style and combine. Copy individual assets
-into a project's \`assets/source/...\`; do not load from the library directly.
+${m.description || "Reusable pack — assets share an art style and combine."} Copy
+individual assets into a project's \`assets/source/...\`; do not load from the
+library directly.
 `;
 }
 
@@ -281,6 +291,7 @@ async function main() {
       await writeFile(join(library, "catalog", kindDir, "_pack.md"), packMarkdown({
         title: a.packTitle || a.pack, pack: a.pack, source, kind, license: a.license,
         licenseUrl: a.licenseUrl, origin: a.origin, count: plan.length, timestamp: ts, url: a.packUrl,
+        genre: a.packGenre, style: a.packStyle, tags: a.packTags, description: a.packDesc, cover: a.packCover,
       }), "utf8");
       packsWritten.add(kindDir);
     }

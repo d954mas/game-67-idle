@@ -13,7 +13,7 @@
 //        --decision source+intake --reason "Kenney furniture kit fits the diorama"
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
+import { join, resolve, dirname, basename } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
 // Walk up from this module to the repo root (dir holding AGENTS.md), so tools
@@ -134,6 +134,7 @@ export async function scanLibrary(libraryPath = DEFAULT_LIBRARY) {
       license: fm.license || "",
       origin: ORIGINS.includes(fm.origin) ? fm.origin : "unknown",
       pack: fm.pack || "",
+      source_id: fm.source_id || "",
       tags: Array.isArray(fm.tags) ? fm.tags : fm.tags ? [fm.tags] : [],
       resource: fm.resource || "",
       filesDir: fm.resource ? join(libraryPath, fm.resource) : "",
@@ -142,6 +143,40 @@ export async function scanLibrary(libraryPath = DEFAULT_LIBRARY) {
     });
   }
   return records;
+}
+
+// Read pack unit records (catalog/**/_pack.md) — the bundle metadata that
+// scanLibrary deliberately skips. Powers the packs/bundles overview.
+export async function scanPacks(libraryPath = DEFAULT_LIBRARY) {
+  const catalogDir = join(libraryPath, "catalog");
+  if (!existsSync(catalogDir)) return [];
+  const files = (await walk(catalogDir)).filter((f) => /[\\/]_pack\.md$/i.test(f));
+  const list = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+  const packs = [];
+  for (const f of files) {
+    let text;
+    try { text = await readFile(f, "utf8"); } catch { continue; }
+    const fm = parseFrontmatter(text);
+    const m = text.match(/^﻿?---\r?\n[\s\S]*?\r?\n---\r?\n([\s\S]*)$/);
+    packs.push({
+      pack: fm.pack || basename(dirname(f)),
+      title: fm.title || fm.pack || "",
+      source: fm.source || "",
+      kind: fm.kind || "",
+      license: fm.license || "",
+      license_url: fm.license_url || "",
+      origin: ORIGINS.includes(fm.origin) ? fm.origin : "unknown",
+      count: Number(fm.count) || 0,
+      genre: list(fm.genre),
+      style: list(fm.style),
+      tags: list(fm.tags),
+      cover: fm.cover || "",
+      description: fm.description || "",
+      body: m ? m[1].trim() : "",
+      catalogDir: dirname(f),
+    });
+  }
+  return packs;
 }
 
 function kindMatches(recKind, wanted) {

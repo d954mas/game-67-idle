@@ -29,6 +29,13 @@ for a in argv[1:]:
 os.makedirs(outdir, exist_ok=True)
 
 
+def fix_materials():
+    # backface culling ON -> glTF doubleSided:false (matches clean source kits;
+    # double-sided makes interior/back faces show through as artifacts).
+    for m in bpy.data.materials:
+        m.use_backface_culling = True
+
+
 def split_by_material():
     # separate every imported mesh object into one object per material
     for o in list(bpy.context.scene.objects):
@@ -49,6 +56,7 @@ for obj in objs:
         bpy.ops.wm.obj_import(filepath=obj)  # Blender 4.x
     except AttributeError:
         bpy.ops.import_scene.obj(filepath=obj)  # older Blender
+    fix_materials()
     if split:
         split_by_material()
     name = os.path.splitext(os.path.basename(obj))[0]
