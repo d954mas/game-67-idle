@@ -10,13 +10,15 @@ ONCE, store in the shared library, reuse many — do not re-prepare per game.
 
 ## Lifecycle
 
-1. **Source first** — `node tools/assets/source/find_assets.mjs --kind <k> --tags ...`:
-   reuse a library hit, else search free CC0/OFL sources, else generate.
+1. **Source first** — `node tools/assets/source/find_assets.mjs --kind <k> --genre <g> --tags <t>`
+   (also `--query`, `--json`): reuse a library hit (3700+ ready glb), else search
+   free CC0/OFL sources, else generate.
 2. **Prepare** (engine-ready, per type) — see below.
 3. **Transfer to library** — catalog with origin + license + preview.
-4. **Reuse** — `pull.mjs --ids <library_id> --to <game>/assets`: copies files +
-   writes a game OKF record with `source_id` (linked; library stays canonical).
-   No `source_id` = new/game-local — `promote` it to the library.
+4. **Reuse** — `node tools/asset_review/pull.mjs --ids <library_id> --to assets --apply`
+   (omit `--apply` to dry-run): copies files + writes a game OKF record with
+   `source_id` (linked; library stays canonical). No `source_id` = new/game-local
+   — `promote` it back to the library.
 
 ## Prepare by type
 
@@ -41,13 +43,11 @@ Catalog reusable assets BEFORE copying project-local (see game-asset-pipeline).
 
 ## Review / share
 
-`build_review.mjs` — packs/bundles browser (cover montage, genre/tags, facets,
-search, 3D-in-modal): `--mode library` · `--mode scan --path <dir>` · `--mode
-review --game <id>`. Cards show `linked` vs `new`. `serve_tunnel.mjs` → phone.
+`build_review.mjs` — library/scan/review browser (facets, search, 3D-in-modal);
+cards show `linked` vs `new`. Big library: `--ref` + `serve_gallery.mjs`. Phone: `serve_tunnel.mjs`.
 
 ## Rules
 
-- One prepared, engine-ready copy lives in the library; projects copy FROM it,
-  never load from the library directly.
-- Shared textures: ONE copy in the library, never duplicated per model.
-- Always record origin + license + provenance before a reusable asset is accepted.
+- One prepared, engine-ready copy in the library; projects copy FROM it (never
+  load the library directly). Shared textures: ONE copy, never per-model.
+- Record origin + license + provenance before a reusable asset is accepted.

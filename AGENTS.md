@@ -12,7 +12,8 @@
   `src/game_storage.*`. Game tools: `tools/<game-id>/` (reset removes them).
 - Design: `gamedesign/projects/<game-id>/`; knowledge `gamedesign/knowledge/`;
   sources `gamedesign/sources/`.
-- Asset library: `C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets`.
+- Asset library (3700+ engine-ready glb, OKF; REUSE FIRST — skill `game-3d-models`):
+  `C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets`.
 - Work/status: `tasks/` (rules `tasks/README.md`). Skills: `.codex/skills/`
   (`.claude/skills/` generated). Workflow: `AI_PIPELINE.md`; temp: `tmp/`.
 
@@ -23,9 +24,9 @@
 - Game/world/UI logic is Y-up. Convert Y-down platform/input only at boundary.
 - All text uses the engine text renderer with real fonts. Never write handmade
   pixel/shape text-drawing (`draw_text`) — not even for debug.
-- Source before you generate: search the shared library, then free CC0/OFL
-  sources, then generate (`tools/assets/source/find_assets.mjs` does both and
-  records the call); procedural/shape-renderer is debug-only with a logged reason.
+- Source before you generate: library → free CC0/OFL → generate
+  (`tools/assets/source/find_assets.mjs` does both, records the call);
+  procedural/shape-renderer is debug-only with a logged reason.
 - Downloaded/shared/generated assets need license, provenance, integrity, and
   `origin` (mine|ai|sourced); catalog reusable ones (`tools/assets/intake/`)
   before copying project-local. Runtime uses project-local copies.
@@ -37,8 +38,7 @@
   skip archives, logs, broad design, builds, generated files unless linked.
 - Lead delegates parallelizable read-heavy work to subagents (bounded packets via
   `subagent-packet-template --preset`); owns integration, status, validation.
-  Acceptance gates the output, not the delegation. Method:
-  `docs/ai-pipeline/orchestration-playbook.md`.
+  Method: `docs/ai-pipeline/orchestration-playbook.md`.
 
 ## Game Work
 

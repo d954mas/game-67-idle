@@ -8,3 +8,7 @@ description: "Use when adding, converting, sourcing, or rendering 3D models/mesh
 
 Canonical instructions live in `.codex/skills/game-3d-models/SKILL.md` (single
 source of truth shared by all agent CLIs). Read that file and follow it.
+
+Reference playbooks (load only when the canonical skill says to):
+
+- `.codex/skills/game-3d-models/references/engine-render.md`

@@ -5,42 +5,41 @@ description: "Use when adding, converting, sourcing, or rendering 3D models/mesh
 
 # Game 3D Models
 
-Real meshes for product visuals — not the debug shape renderer. The debug
-`nt_shape_renderer` and geometry baked into a C header are debug debt only.
+Real meshes for product visuals — not the debug shape renderer (`nt_shape_renderer`
+and C-baked geometry are debug debt only).
 
-## Source First
+## Source first (reuse the library)
 
-Search before you create: `node tools/assets/source/find_assets.mjs --kind model`.
-Free glTF/glb model sources: Quaternius, Kenney, Poly Pizza (all CC0). Generate a
-model only if nothing fits. Catalog reusable ones in the shared library with
-license + `origin`, then copy project-local (see game-asset-pipeline).
+3700+ engine-ready glb (CC0/CC-BY, OKF) sit in the shared library, tagged by
+genre/type. Reuse BEFORE sourcing or generating:
+- discover: `node tools/assets/source/find_assets.mjs --kind model --genre <g> --tags <t>` (`--query`, `--json` too).
+- browse: `build_review.mjs --mode library --out tmp/lib-gallery --ref`, then `serve_gallery.mjs --gallery tmp/lib-gallery --lib <library>`.
+- pull into the game: `tools/asset_review/pull.mjs --ids <id> --to assets --apply` (no `--apply` = dry-run).
+
+Only if nothing fits: source free glb (Quaternius/Kenney/Poly Pizza, CC0) or
+generate, then catalog (game-asset-prep) so the next game reuses it.
 
 ## Convert to glb
 
-`tools/assets/obj_to_glb.py` (Blender headless) converts obj(+mtl)/fbx → glb:
+`tools/assets/obj_to_glb.py` (Blender headless): obj(+mtl)/fbx → glb. Prefer a
+vendor-shipped glb (obj winding can break normals). glb is self-contained.
 
-    "<blender>" --background --python tools/assets/obj_to_glb.py -- <outdir> a.obj b.obj
+## Texture dedup
 
-glb is self-contained; the engine + `<model-viewer>` browser preview both read it.
+A pack often shares ONE atlas across all models — keep it ONCE (glTF-separate or a
+single shared texture), never embed a copy per model. Colour-only packs (mtl `Kd`,
+no `map_Kd`) need no texture.
 
-## Texture dedup (important)
+## Render a library glb in-engine
 
-A model pack often shares ONE atlas/colormap across all models. Keep it ONCE:
-prefer glTF-separate (one external texture referenced by every model) or a single
-shared texture — do NOT embed a copy per model (GLB embeds textures, so N models
-become N copies). Color-only packs (mtl `Kd` colors, no `map_Kd`) have no textures
-— glb is fine, no dedup needed (check `map_Kd` in the .mtl / image markers in glb).
-
-## Load real meshes (engine path)
-
-Do NOT use `nt_shape_renderer` or bake vertices into a header for product builds.
-Real path: build the glb into the engine mesh pack (engine builder
-`tools/builder/nt_builder_mesh`), load at runtime with `nt_gfx_activate_mesh(data,
-size)`, draw via `nt_mesh_renderer` (+ `nt_mesh_comp` for entities). Canonical
-example: `external/neotolis-engine/examples/sponza`. Engine is read-only; use its
-public API + cgltf (already a dep).
+Pack-then-load — not `nt_shape_renderer` or baked headers. PACK the glb into
+`src/build_packs.c` with the 2-stream `mesh_inst` layout + a 1x1 white texture;
+LOAD at runtime via `nt_resource_request` + `nt_material_create` + `nt_mesh_renderer`.
+Multi-primitive furniture needs the scene API (engine #248). Templates:
+`examples/atlas` (single + load) and `examples/sponza` (multi-primitive scene).
+Full recipe + exact API calls: `references/engine-render.md`.
 
 ## Report
 
-State source (reused/sourced/generated), glb paths, texture-dedup decision,
-runtime load path (mesh pack + nt_mesh_renderer), and a screenshot of real meshes.
+Source (reused/sourced/generated), glb paths, texture-dedup decision, runtime path
+(mesh pack + nt_mesh_renderer), screenshot of real meshes.
