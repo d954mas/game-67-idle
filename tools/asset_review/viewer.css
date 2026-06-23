@@ -24,6 +24,7 @@ header h1 { font-size: 15px; margin: 0; white-space: nowrap; }
 .fopt input { accent-color: #1f6feb; }
 .fopt .c { color: #6b7280; margin-left: auto; font-size: 11px; }
 .fopt.zero { display: none; }
+.more { font-size: 11px; color: #6b7280; padding: 3px 0 0; font-style: italic; }
 .crumbs { padding: 10px 16px 0; color: #9ca3af; font-size: 12px; }
 .active-bar { display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 16px 0; }
 .active-bar .ac { background: #222834; border: 1px solid #313845; border-radius: 999px; padding: 2px 9px; font-size: 11px; cursor: pointer; }

@@ -80,6 +80,16 @@ const kebab = (s) => String(s || "").toLowerCase().normalize("NFKD").replace(/[^
 // strip it for a stable, human pack name (the og:title parse is unreliable).
 const POLY_ID = /-[A-Za-z0-9]{10}$/;
 const prettyPack = (slug) => slug.replace(POLY_ID, "").replace(/-+/g, " ").trim() || slug;
+
+// Meaningful CONTENT tags from a model name. Structural facets (kind/source/
+// license/pack/author) are dedicated viewer facets, so they stay out of tags.
+const TAG_STOP = new Set(["the", "a", "an", "of", "and", "or", "with", "for", "to", "in", "on", "by",
+  "free", "model", "low", "poly", "lowpoly", "kit", "pack", "set", "mesh", "glb", "prop", "props", "variant", "var"]);
+function contentTags(name) {
+  const toks = String(name).replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase()
+    .split(/[^a-z0-9]+/).filter((t) => t.length >= 2 && !/^\d+$/.test(t) && !TAG_STOP.has(t));
+  return [...new Set(toks)].slice(0, 6);
+}
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
 const decodeEnt = (s) => String(s || "").replace(/&amp;/g, "&").replace(/&#x27;|&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">");
 
@@ -139,7 +149,8 @@ function writeRecord(lib, rec) {
   const { assetId, packDir, fileName, name, author, license, bytes, hash, sourceUrl, ts } = rec;
   const catDir = join(lib, "catalog", "models", packDir);
   mkdirSync(catDir, { recursive: true });
-  const tags = ["model", "polypizza", license.slug, packDir].concat(author ? [kebab(author)] : []);
+  const tags = contentTags(name);
+  if (!tags.length) tags.push(kebab(name));
   const md = `---
 type: Game Asset
 title: ${name}

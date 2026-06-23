@@ -103,18 +103,25 @@
       '<span class="k">' + esc(a.kind) + "</span></div></div>" + foot + "</div>";
   }
 
+  const FACET_CAP = 40; // high-cardinality facets (tags) get capped to the top-N by count
   function facetSidebar(list, facets) {
     let html = '<button class="ghost clear" id="clearF">Clear all filters</button>';
     for (const [key, label] of facets) {
       const m = countsFor(list, facets, key);
       if (!m.size) continue;
-      const opts = [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      let opts = [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      const total = opts.length;
+      if (total > FACET_CAP) {
+        const sel = active[key] || new Set();
+        opts = opts.slice(0, FACET_CAP).concat(opts.slice(FACET_CAP).filter(([v]) => sel.has(v)));
+      }
       html += '<div class="fgroup"><h4>' + esc(label) + "</h4>";
       for (const [val, c] of opts) {
         const on = active[key] && active[key].has(val);
         html += '<label class="fopt"><input type="checkbox" data-fk="' + esc(key) + '" data-fv="' + esc(val) + '"' + (on ? " checked" : "") + ">" +
           "<span>" + esc(val) + '</span><span class="c">' + c + "</span></label>";
       }
+      if (total > FACET_CAP) html += '<div class="more">+' + (total - FACET_CAP) + " more — use search</div>";
       html += "</div>";
     }
     return html;
