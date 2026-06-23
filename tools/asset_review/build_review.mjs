@@ -13,7 +13,8 @@ import { execFileSync } from "node:child_process";
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, dirname, basename, extname, relative } from "node:path";
-import { scanLibrary, DEFAULT_LIBRARY, ORIGINS } from "../assets/source/find_assets.mjs";
+import { pathToFileURL } from "node:url";
+import { scanLibrary, DEFAULT_LIBRARY, ORIGINS, KIND_DIR } from "../assets/source/find_assets.mjs";
 
 const PRIMARY_EXT = {
   image: [".png", ".jpg", ".jpeg", ".webp", ".gif"],
@@ -22,14 +23,24 @@ const PRIMARY_EXT = {
   audio: [".wav", ".mp3", ".ogg"],
 };
 const VENDORS = ["kenney", "quaternius", "polyhaven", "poly-haven", "ambientcg", "poly-pizza", "opengameart"];
+const UI_PATH = /[\\/](ui|icons?|hud|gui|sprites?|buttons?)[\\/]/i;
 
+// broad type by extension (image|model|font|audio|null for sidecars)
 function kindForExt(ext) {
   for (const [kind, exts] of Object.entries(PRIMARY_EXT)) if (exts.includes(ext)) return kind;
   return null;
 }
 
+// Map a discovered file to a real library kind (model|texture|ui|font|audio) so
+// the manifest carries the kind promote.mjs files it under — no remap needed.
+function libraryKind(ext, relPath) {
+  const broad = kindForExt(ext);
+  if (broad === "image") return UI_PATH.test(relPath) ? "ui" : "texture";
+  return broad; // model | font | audio | null
+}
+
 function fileUrl(absPath) {
-  return `file:///${resolve(absPath).replace(/\\/g, "/")}`;
+  return pathToFileURL(resolve(absPath)).href;
 }
 
 async function walk(dir) {
@@ -44,28 +55,32 @@ async function walk(dir) {
   return out;
 }
 
-// origin is recorded at creation time elsewhere; here we infer from on-disk
-// evidence and leave "unknown" rather than guessing mine-vs-ai.
+// origin is recorded at creation time elsewhere; here we infer conservatively
+// from on-disk evidence and leave "unknown" rather than guessing mine-vs-ai.
+// A license file ALONE is not enough for "sourced" (the user's own art may ship
+// with a license); we require a vendor token or a /source/ path to corroborate.
 function detectOrigin(relPath, dirFiles) {
   const lower = relPath.toLowerCase();
-  if (/[\\/](generated|imagegen|ai[-_]?gen|gen)[\\/]/.test(lower) || dirFiles.some((f) => /\.(origin|provenance)\.json$/i.test(f) && /ai/i.test(f))) {
-    return "ai";
-  }
-  const hasLicense = dirFiles.some((f) => /license|licence/i.test(basename(f)));
-  if (/[\\/]source[\\/]/.test(lower) || VENDORS.some((v) => lower.includes(v)) || hasLicense) return "sourced";
+  if (/[\\/](generated|imagegen|ai[-_]?gen|gen)[\\/]/.test(lower)) return "ai";
+  if (/[\\/]source[\\/]/.test(lower) || VENDORS.some((v) => lower.includes(v))) return "sourced";
   return "unknown";
 }
 
 function findLicense(dirFiles) {
-  const lic = dirFiles.find((f) => /license|licence/i.test(basename(f)));
-  return lic || "";
+  return dirFiles.find((f) => /license|licence/i.test(basename(f))) || "";
 }
 
 async function discoverGameAssets({ base, repo }) {
   let names = [];
   try {
-    const out = execFileSync("git", ["diff", "--name-only", `${base}..HEAD`, "--", "assets/"], { cwd: repo, encoding: "utf8" });
-    names = out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    // core.quotepath=false keeps non-ASCII names literal; -z NUL-delimits them;
+    // diff-filter=AR keeps added + renamed-in ("new") assets, drops pure edits.
+    const out = execFileSync(
+      "git",
+      ["-c", "core.quotepath=false", "diff", "-z", "--diff-filter=AR", "--name-only", `${base}..HEAD`, "--", "assets/"],
+      { cwd: repo, encoding: "utf8" },
+    );
+    names = out.split("\0").map((s) => s.trim()).filter(Boolean);
   } catch (e) {
     throw new Error(`git diff ${base}..HEAD failed: ${e.message}`);
   }
@@ -73,16 +88,24 @@ async function discoverGameAssets({ base, repo }) {
   const assets = [];
   for (const rel of names) {
     const ext = extname(rel).toLowerCase();
-    const kind = kindForExt(ext);
+    const kind = libraryKind(ext, rel);
     if (!kind) continue; // skip sidecars: .mtl/.bin/.txt/.glsl/.vert/.frag
     const abs = join(repo, rel);
-    if (!existsSync(abs)) continue; // deleted later
+    if (!existsSync(abs)) continue;
     const dir = dirname(abs);
     if (!dirCache.has(dir)) dirCache.set(dir, await walk(dir));
     const dirFiles = dirCache.get(dir);
-    const origin = detectOrigin(rel, dirFiles);
+    let origin = detectOrigin(rel, dirFiles);
+    const sidecar = dirFiles.find((f) => /\.(origin|provenance)\.json$/i.test(f));
+    if (sidecar) {
+      try {
+        const j = JSON.parse(await readFile(sidecar, "utf8"));
+        if (ORIGINS.includes(j.origin)) origin = j.origin;
+      } catch { /* ignore unreadable sidecar */ }
+    }
     const licenseFile = findLicense(dirFiles);
     const vendor = VENDORS.find((v) => rel.toLowerCase().includes(v)) || (origin === "ai" ? "ai-generated" : "unknown");
+    const broad = kindForExt(ext);
     assets.push({
       id: rel.replace(/[\\/]/g, "__"),
       name: basename(rel),
@@ -94,40 +117,58 @@ async function discoverGameAssets({ base, repo }) {
       source: vendor,
       license: licenseFile ? "see license file" : "unknown",
       licenseFile: licenseFile ? relative(repo, licenseFile).replace(/\\/g, "/") : "",
-      preview: kind === "image" ? fileUrl(abs) : "",
-      fontUrl: kind === "font" ? fileUrl(abs) : "",
-      audioUrl: kind === "audio" ? fileUrl(abs) : "",
+      preview: broad === "image" ? fileUrl(abs) : "",
+      fontUrl: broad === "font" ? fileUrl(abs) : "",
+      audioUrl: broad === "audio" ? fileUrl(abs) : "",
     });
   }
   return assets;
 }
 
-function libraryToCards(records) {
-  return records.map((r) => ({
-    id: r.asset_id,
-    name: r.title,
-    relpath: r.resource,
-    kind: r.kind || "asset",
-    origin: r.origin,
-    source: (r.asset_id.split("__")[0]) || "unknown",
-    license: r.license || "unknown",
-    tags: r.tags,
-    description: r.description,
-    preview: r.preview ? fileUrl(r.preview) : "",
-    catalog: fileUrl(r.catalogPath),
-  }));
+const FONT_EXT = [".ttf", ".otf", ".woff", ".woff2"];
+
+async function libraryToCards(records) {
+  const cards = [];
+  for (const r of records) {
+    let fontUrl = "";
+    if (r.kind === "font" && r.filesDir && existsSync(r.filesDir)) {
+      try {
+        const ff = (await readdir(r.filesDir)).find((n) => FONT_EXT.includes(extname(n).toLowerCase()));
+        if (ff) fontUrl = fileUrl(join(r.filesDir, ff));
+      } catch { /* no files dir */ }
+    }
+    cards.push({
+      id: r.asset_id,
+      name: r.title,
+      relpath: r.resource,
+      kind: r.kind || "asset",
+      origin: r.origin,
+      source: r.asset_id.split("__")[0] || "unknown",
+      license: r.license || "unknown",
+      tags: r.tags,
+      description: r.description,
+      preview: r.preview ? fileUrl(r.preview) : "",
+      fontUrl,
+      catalog: fileUrl(r.catalogPath),
+    });
+  }
+  return cards;
 }
 
 const ORIGIN_COLOR = { mine: "#7dd3fc", ai: "#f0abfc", sourced: "#86efac", unknown: "#9ca3af" };
 
+const escHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Safe to embed inside a <script>: neutralize </script>/<!-- breakout + JS line separators.
+const safeJson = (v) => JSON.stringify(v).replace(/</g, "\\u003c").replace(new RegExp("[\\u2028\\u2029]", "g"), (c) => "\\u" + c.charCodeAt(0).toString(16));
+
 function renderHtml({ mode, title, cards, meta }) {
-  const data = JSON.stringify(cards);
+  const data = safeJson(cards);
   const origins = ORIGINS.filter((o) => cards.some((c) => c.origin === o));
   const kinds = [...new Set(cards.map((c) => c.kind))].sort();
   const review = mode === "review";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title>
+<title>${escHtml(title)}</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -159,12 +200,12 @@ function renderHtml({ mode, title, cards, meta }) {
   .fontsample { font-size:26px; padding:0 8px; text-align:center; }
 </style></head><body>
 <header>
-  <h1>${title}</h1>
-  <div class="sub">${meta}</div>
+  <h1>${escHtml(title)}</h1>
+  <div class="sub">${escHtml(meta)}</div>
   <div class="bar">
     <input type="search" id="q" placeholder="search name / tags / path…">
-    <select id="kind"><option value="">all kinds</option>${kinds.map((k) => `<option>${k}</option>`).join("")}</select>
-    <select id="origin"><option value="">all origins</option>${origins.map((o) => `<option>${o}</option>`).join("")}</select>
+    <select id="kind"><option value="">all kinds</option>${kinds.map((k) => `<option>${escHtml(k)}</option>`).join("")}</select>
+    <select id="origin"><option value="">all origins</option>${origins.map((o) => `<option>${escHtml(o)}</option>`).join("")}</select>
     ${review ? '<button id="selall" style="background:#313845">select shown</button><button id="clr" style="background:#313845">clear</button>' : ""}
     <span class="count" id="count"></span>
   </div>
@@ -178,29 +219,32 @@ function renderHtml({ mode, title, cards, meta }) {
 <script>
 const DATA = ${data};
 const REVIEW = ${review};
-const OC = ${JSON.stringify(ORIGIN_COLOR)};
+const OC = ${safeJson(ORIGIN_COLOR)};
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fam = id => 'f_'+String(id).replace(/[^a-zA-Z0-9_]/g,'_');
 const picked = new Set();
 const grid = document.getElementById('grid');
 function icon(k){ return k==='model'?'◫':k==='font'?'A':k==='audio'?'♪':'▦'; }
 function card(c){
   const sel = picked.has(c.id) ? ' sel' : '';
   let thumb;
-  if (c.preview) thumb = '<div class="thumb"><img loading="lazy" src="'+c.preview+'"></div>';
-  else if (c.kind==='font' && c.fontUrl) thumb = '<div class="thumb"><div class="fontsample" style="font-family:f_'+CSS.escape(c.id)+'">Aa Bb 123</div></div>';
+  if (c.preview) thumb = '<div class="thumb"><img loading="lazy" src="'+esc(c.preview)+'"></div>';
+  else if (c.kind==='font' && c.fontUrl) thumb = '<div class="thumb"><div class="fontsample" style="font-family:'+fam(c.id)+'">Aa Bb 123</div></div>';
+  else if (c.kind==='audio' && c.audioUrl) thumb = '<div class="thumb" style="height:auto;padding:10px"><audio controls preload="none" style="width:100%" src="'+esc(c.audioUrl)+'"></audio></div>';
   else thumb = '<div class="thumb"><span class="ph">'+icon(c.kind)+'</span></div>';
-  const tags = (c.tags&&c.tags.length)?'<div class="k">'+c.tags.join(', ')+'</div>':'';
+  const tags = (c.tags&&c.tags.length)?'<div class="k">'+esc(c.tags.join(', '))+'</div>':'';
   const lic = c.license&&c.license!=='unknown'?c.license:(c.licenseFile?'license file':'license?');
   let foot='';
-  if (REVIEW) foot = '<label class="pick"><input type="checkbox" data-id="'+c.id+'" '+(picked.has(c.id)?'checked':'')+'> keep</label>';
-  else if (c.catalog) foot = '<div class="pick"><a href="'+c.catalog+'">open record</a></div>';
-  return '<div class="card'+sel+'" data-id="'+c.id+'">'+thumb+
-    '<div class="meta"><div class="name">'+c.name+'</div>'+
-    '<div class="row"><span class="chip" style="background:'+(OC[c.origin]||OC.unknown)+'">'+c.origin+'</span>'+
-    '<span class="k">'+c.kind+'</span><span class="k">· '+c.source+'</span><span class="k">· '+lic+'</span></div>'+
-    tags+'<div class="path">'+(c.relpath||'')+'</div></div>'+foot+'</div>';
+  if (REVIEW) foot = '<label class="pick"><input type="checkbox" data-id="'+esc(c.id)+'" '+(picked.has(c.id)?'checked':'')+'> keep</label>';
+  else if (c.catalog) foot = '<div class="pick"><a href="'+esc(c.catalog)+'">open record</a></div>';
+  return '<div class="card'+sel+'" data-id="'+esc(c.id)+'">'+thumb+
+    '<div class="meta"><div class="name">'+esc(c.name)+'</div>'+
+    '<div class="row"><span class="chip" style="background:'+(OC[c.origin]||OC.unknown)+'">'+esc(c.origin)+'</span>'+
+    '<span class="k">'+esc(c.kind)+'</span><span class="k">· '+esc(c.source)+'</span><span class="k">· '+esc(lic)+'</span></div>'+
+    tags+'<div class="path">'+esc(c.relpath||'')+'</div></div>'+foot+'</div>';
 }
 function fontFaces(){
-  const css = DATA.filter(c=>c.kind==='font'&&c.fontUrl).map(c=>'@font-face{font-family:f_'+c.id.replace(/[^a-zA-Z0-9_]/g,'_')+';src:url("'+c.fontUrl+'")}').join('');
+  const css = DATA.filter(c=>(c.kind==='font')&&c.fontUrl).map(c=>'@font-face{font-family:'+fam(c.id)+';src:url("'+c.fontUrl+'")}').join('');
   const s=document.createElement('style'); s.textContent=css; document.head.appendChild(s);
 }
 function render(){
@@ -235,7 +279,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     const next = argv[i + 1];
-    if (next === undefined && arg.startsWith("--")) throw new Error(`missing value for ${arg}`);
+    if (next === undefined || next.startsWith("--")) throw new Error(`missing value for ${arg}`);
     i += 1;
     if (arg === "--mode") a.mode = next;
     else if (arg === "--game") a.game = next;
@@ -259,10 +303,14 @@ async function main() {
     title = `Asset review — ${a.game || "game"}`;
     const byOrigin = ORIGINS.map((o) => `${o}: ${assets.filter((x) => x.origin === o).length}`).filter((s) => !s.endsWith(": 0")).join(" · ");
     meta = `${assets.length} new assets since ${a.base} — ${byOrigin}. Check keepers, send ids to the lead to promote into the library.`;
-    await writeFile(join(outDir, "review-manifest.json"), JSON.stringify({ game: a.game, base: a.base, generated: null, assets }, null, 2), "utf8");
+    await writeFile(
+      join(outDir, "review-manifest.json"),
+      JSON.stringify({ game: a.game, base: a.base, generated: new Date().toISOString(), assets }, null, 2),
+      "utf8",
+    );
   } else {
     const records = await scanLibrary(a.library);
-    cards = libraryToCards(records);
+    cards = await libraryToCards(records);
     title = "Asset library";
     const byOrigin = ORIGINS.map((o) => `${o}: ${cards.filter((x) => x.origin === o).length}`).filter((s) => !s.endsWith(": 0")).join(" · ");
     meta = `${cards.length} catalog records in ${a.library} — ${byOrigin}.`;
@@ -273,8 +321,8 @@ async function main() {
   console.log(JSON.stringify({ mode: a.mode, assets: cards.length, html: indexPath, manifest: a.mode === "review" ? join(outDir, "review-manifest.json") : null }, null, 2));
 }
 
-if (process.argv[1]?.endsWith("build_review.mjs")) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main().catch((e) => { console.error(e.message); process.exit(1); });
 }
 
-export { discoverGameAssets, detectOrigin, kindForExt, libraryToCards, renderHtml };
+export { discoverGameAssets, detectOrigin, kindForExt, libraryKind, libraryToCards, renderHtml, escHtml, safeJson };

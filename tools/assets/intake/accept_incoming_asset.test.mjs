@@ -50,8 +50,10 @@ test("accept_incoming_asset writes catalog, file copy, and license note", async 
     assert.match(catalog, /Source page: https:\/\/example\.test\/tiny-model/);
     assert.match(catalog, /Author\/vendor: Example Vendor/);
     assert.match(catalog, /SHA256:/);
+    assert.match(catalog, /^origin: sourced$/m);
     const license = await readFile(join(library, "licenses", "example__tiny-model__cc0", "license.md"), "utf8");
     assert.match(license, /Commercial use: true/);
+    assert.match(license, /Origin: sourced/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

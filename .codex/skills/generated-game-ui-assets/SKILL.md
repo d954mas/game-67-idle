@@ -1,6 +1,6 @@
 ---
 name: generated-game-ui-assets
-description: "Use when generating, cutting, validating, integrating, or reviewing reusable game UI asset kits from AI art: UI source sheets, icon sheets, slice9 panels/buttons, art bibles, crop manifests, runtime manifests, chroma/alpha cleanup, contact sheets, composition proofs, source-derivation audits, responsive UI layout audits, desktop/portrait screenshot proof, or fixing cropped/fringed generated UI assets. Owns cutting/manifesting reusable runtime UI kits; raw generation is delegated-image-generation, art-direction judgment is game-visual-art-direction, packing/runtime-load is game-asset-pipeline."
+description: "Use when sourcing, generating, cutting, validating, integrating, or reviewing reusable game UI asset kits from sourced or AI art: UI source sheets, icon sheets, slice9 panels/buttons, art bibles, crop manifests, runtime manifests, chroma/alpha cleanup, contact sheets, composition proofs, source-derivation audits, responsive UI layout audits, desktop/portrait screenshot proof, or fixing cropped/fringed generated UI assets. Source first — search the shared library + free CC0 UI kits (Kenney, itch.io) before generating. Owns cutting/manifesting reusable runtime UI kits; raw generation is delegated-image-generation, art-direction judgment is game-visual-art-direction, packing/runtime-load is game-asset-pipeline."
 ---
 
 # Generated Game UI Assets
@@ -16,6 +16,12 @@ Use for production generated runtime UI. Keep this entrypoint as a router.
   source-derived PNGs, desktop/portrait layout, and responsive rules.
 - `game-visual-art-direction`, `game-asset-pipeline`, or
   `game-runtime-automation`: load only for deeper domain work.
+
+## Source First (before generating)
+
+Before creating a UI art job, run `node tools/assets/source/find_assets.mjs --kind
+ui`: reuse a library hit, or search free CC0 UI kits (Kenney, itch.io CC0) and
+intake one. Generate only the gap, and record it with `find_assets --record`.
 
 ## Minimal Workflow
 

@@ -14,6 +14,20 @@
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
+import { pathToFileURL, fileURLToPath } from "node:url";
+
+// Walk up from this module to the repo root (dir holding AGENTS.md), so tools
+// anchor outputs to the repo regardless of the caller's cwd.
+function repoRoot() {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let i = 0; i < 8; i += 1) {
+    if (existsSync(join(dir, "AGENTS.md")) || existsSync(join(dir, "package.json"))) return dir;
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return process.cwd();
+}
 
 export const DEFAULT_LIBRARY = "C:\\Users\\ROG\\YandexDisk\\gamedev\\assets\\ai_pipeline_assets";
 
@@ -105,11 +119,11 @@ export async function scanLibrary(libraryPath = DEFAULT_LIBRARY) {
     const assetId = fm.asset_id || "";
     let preview = "";
     if (assetId) {
-      const previewDir = join(libraryPath, "previews", assetId);
-      if (existsSync(previewDir)) {
-        const pf = (await walk(previewDir)).find((p) => /\.(png|jpg|jpeg|webp|gif)$/i.test(p));
-        if (pf) preview = pf;
-      }
+      try {
+        const dir = join(libraryPath, "previews", assetId);
+        const pf = (await readdir(dir)).find((n) => /\.(png|jpg|jpeg|webp|gif)$/i.test(n));
+        if (pf) preview = join(dir, pf);
+      } catch { /* no previews dir for this asset */ }
     }
     records.push({
       asset_id: assetId,
@@ -147,33 +161,35 @@ export function filterRecords(records, { tags = [], kind = "", origin = "", quer
   });
 }
 
-function parseArgs(argv) {
-  const a = { library: DEFAULT_LIBRARY, tags: "", kind: "", origin: "", query: "", json: false, record: false, family: "", decision: "", reason: "" };
+export function parseArgs(argv) {
+  const a = { library: DEFAULT_LIBRARY, tags: "", kind: "", origin: "", query: "", out: "", json: false, record: false, family: "", decision: "", reason: "" };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--json") { a.json = true; continue; }
     if (arg === "--record") { a.record = true; continue; }
     const next = argv[i + 1];
-    if (next === undefined) throw new Error(`missing value for ${arg}`);
+    if (next === undefined || next.startsWith("--")) throw new Error(`missing value for ${arg}`);
     i += 1;
     if (arg === "--library") a.library = next;
     else if (arg === "--tags") a.tags = next;
     else if (arg === "--kind") a.kind = next;
     else if (arg === "--origin") a.origin = next;
     else if (arg === "--query") a.query = next;
+    else if (arg === "--out") a.out = next;
     else if (arg === "--family") a.family = next;
     else if (arg === "--decision") a.decision = next;
     else if (arg === "--reason") a.reason = next;
     else throw new Error(`unknown option: ${arg}`);
   }
+  if (a.origin && !ORIGINS.includes(a.origin)) throw new Error(`--origin must be one of: ${ORIGINS.join(", ")}`);
   return a;
 }
 
-async function recordDecision(a) {
+export async function recordDecision(a) {
   const decisions = ["reuse", "source+intake", "generate", "procedural-debug"];
   if (!a.family) throw new Error("--record needs --family");
   if (!decisions.includes(a.decision)) throw new Error(`--decision must be one of: ${decisions.join(", ")}`);
-  const out = resolve("tmp/asset_source_decision.json");
+  const out = a.out ? resolve(a.out) : join(repoRoot(), "tmp", "asset_source_decision.json");
   await mkdir(dirname(out), { recursive: true });
   let list = [];
   if (existsSync(out)) {
@@ -220,6 +236,6 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1].replace(/\\/g, "/")}` || process.argv[1]?.endsWith("find_assets.mjs")) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   main().catch((e) => { console.error(e.message); process.exit(1); });
 }

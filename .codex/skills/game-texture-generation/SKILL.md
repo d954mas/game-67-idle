@@ -1,6 +1,6 @@
 ---
 name: game-texture-generation
-description: Use when generating, downloading, adapting, reviewing, or integrating standalone game material textures for world surfaces, ground, terrain, props, assets, armor parts, metal, plastic, painted surfaces, panels, emissive details, decals, normal/roughness maps, stylized studs/baseplate surfaces, stock textures, marketplace/downloaded assets, and texture provenance/licensing decisions. Do not use for atlases, trim sheets, icon sheets, or UI atlases; use the existing generated-game-ui-assets or asset pipeline workflows for those. Pair with game-asset-pipeline when packing or runtime-loading the texture.
+description: Use when sourcing, generating, downloading, adapting, reviewing, or integrating standalone game material textures for world surfaces, ground, terrain, props, assets, armor parts, metal, plastic, painted surfaces, panels, emissive details, decals, normal/roughness maps, stylized studs/baseplate surfaces, stock textures, marketplace/downloaded assets, and texture provenance/licensing decisions. Source first — search the shared library + free CC0/OFL sources (ambientCG, Poly Haven) before generating. Do not use for atlases, trim sheets, icon sheets, or UI atlases; use the existing generated-game-ui-assets or asset pipeline workflows for those. Pair with game-asset-pipeline when packing or runtime-loading the texture.
 ---
 
 # Game Texture Generation
@@ -8,6 +8,13 @@ description: Use when generating, downloading, adapting, reviewing, or integrati
 Use before creating/sourcing standalone material textures for world surfaces,
 props, assets, armor, metal, plastic, paint, panels, emissive details, decals,
 and stylized studs/baseplates.
+
+## Source First (before generating)
+
+Search before you create. Run `node tools/assets/source/find_assets.mjs --kind
+texture` (or `--kind material`): reuse a library hit, or search the printed free
+CC0/OFL sources (ambientCG, Poly Haven) and intake one. Generate only what you
+cannot source, and record it with `find_assets --record`.
 
 ## Workflow
 

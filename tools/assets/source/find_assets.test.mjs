@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseFrontmatter, filterRecords, scanLibrary, FREE_SOURCES, ORIGINS } from "./find_assets.mjs";
+import { parseFrontmatter, filterRecords, scanLibrary, parseArgs, recordDecision, FREE_SOURCES, ORIGINS } from "./find_assets.mjs";
 
 test("parseFrontmatter reads scalars, quoted strings, lists, and BOM", () => {
   const fm = parseFrontmatter('﻿---\nasset_id: kenney__sofa__cc0\nkind: model\norigin: sourced\ntitle: "Lounge Sofa"\ntags: [model, furniture, cc0]\n---\nbody');
@@ -59,4 +59,38 @@ test("free sources + origins are well-formed constants", () => {
   assert.ok(FREE_SOURCES.length >= 5);
   assert.ok(FREE_SOURCES.every((s) => s.name && s.url.startsWith("http")));
   assert.deepEqual(ORIGINS, ["mine", "ai", "sourced", "unknown"]);
+});
+
+test("parseFrontmatter handles CRLF and BOM+CRLF (Windows/YandexDisk store)", () => {
+  const fm = parseFrontmatter("﻿---\r\nasset_id: a__b__cc0\r\nkind: model\r\norigin: sourced\r\ntags: [model, furniture]\r\n---\r\nbody\r\n");
+  assert.equal(fm.asset_id, "a__b__cc0");
+  assert.equal(fm.origin, "sourced");
+  assert.deepEqual(fm.tags, ["model", "furniture"]);
+});
+
+test("parseArgs rejects a flag consumed as a value, and validates --origin", () => {
+  assert.throws(() => parseArgs(["--query", "--json"]), /missing value for --query/);
+  assert.throws(() => parseArgs(["--origin", "nope"]), /--origin must be one of/);
+  const ok = parseArgs(["--tags", "sofa,desk", "--kind", "model", "--origin", "sourced", "--json"]);
+  assert.equal(ok.tags, "sofa,desk");
+  assert.equal(ok.json, true);
+  assert.equal(ok.origin, "sourced");
+});
+
+test("recordDecision writes one entry per family (replaces on repeat)", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "dec-"));
+  const out = join(dir, "decision.json");
+  try {
+    await recordDecision({ family: "room-furniture", decision: "source+intake", reason: "kenney fits", out });
+    let list = JSON.parse(await readFile(out, "utf8"));
+    assert.equal(list.length, 1);
+    assert.equal(list[0].decision, "source+intake");
+    await recordDecision({ family: "room-furniture", decision: "generate", reason: "nothing fit", out });
+    list = JSON.parse(await readFile(out, "utf8"));
+    assert.equal(list.length, 1);
+    assert.equal(list[0].decision, "generate");
+    await assert.rejects(() => recordDecision({ family: "x", decision: "bogus", out }), /--decision must be one of/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

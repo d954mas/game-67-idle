@@ -10,6 +10,7 @@ const KIND_DIR = {
   material: "materials",
   audio: "audio",
   ui: "ui",
+  font: "fonts",
 };
 
 function usage() {
