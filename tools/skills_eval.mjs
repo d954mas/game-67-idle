@@ -600,6 +600,21 @@ const SKILL_CHECKS = [
       "sponza",
     ],
   },
+  {
+    name: "game-asset-prep",
+    frontmatter: [
+      "engine-ready",
+      "shared library",
+      "reuse lifecycle",
+    ],
+    body: [
+      "obj_to_glb.py",
+      "find_assets",
+      "promote.mjs",
+      "Prepare by type",
+      "split-by-material",
+    ],
+  },
 ];
 
 function splitFrontmatter(text) {
