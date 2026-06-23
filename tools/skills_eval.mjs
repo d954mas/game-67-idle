@@ -571,6 +571,35 @@ const SKILL_CHECKS = [
       "Report",
     ],
   },
+  {
+    name: "app-tunnel",
+    frontmatter: [
+      "public URL",
+      "cloudflared",
+      "phone",
+    ],
+    body: [
+      "serve_tunnel.mjs",
+      "TUNNEL_URL",
+      "ephemeral",
+      "Tear down",
+    ],
+  },
+  {
+    name: "game-3d-models",
+    frontmatter: [
+      "glb/gltf/obj/fbx",
+      "model packs",
+      "debug shape-renderer",
+    ],
+    body: [
+      "obj_to_glb.py",
+      "Texture dedup",
+      "map_Kd",
+      "nt_mesh_renderer",
+      "sponza",
+    ],
+  },
 ];
 
 function splitFrontmatter(text) {

@@ -15,3 +15,6 @@ __pycache__/
 assets/runtime/*/_cache/
 assets/packs/
 *.png.ppm
+
+# downloaded tunnel binary (app-tunnel skill)
+tools/bin/
