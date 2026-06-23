@@ -53,6 +53,24 @@ int main(int argc, char **argv) {
                             .resource_name = "little_lives/ui_font",
                         });
 
+    // 3D mesh reuse loop: instanced mesh shaders + a neutral 1x1 white texture
+    // (mesh_inst.frag samples u_texture * v_color; library glbs are untextured,
+    // so colour is delivered per-instance and the texture stays white). The cube
+    // is the single-primitive proving mesh; real furniture uses the scene API.
+    nt_builder_add_shader(ctx, "assets/shaders/mesh_inst.vert", NT_BUILD_SHADER_VERTEX);
+    nt_builder_add_shader(ctx, "assets/shaders/mesh_inst.frag", NT_BUILD_SHADER_FRAGMENT);
+
+    static const uint8_t white_px[4] = {255, 255, 255, 255};
+    nt_tex_opts_t white_opts = nt_tex_opts_defaults();
+    nt_builder_add_texture_raw(ctx, white_px, 1, 1, "little_lives/white", &white_opts);
+
+    NtStreamLayout mesh_layout[] = {
+        {"position", "POSITION", NT_STREAM_FLOAT32, 3, false},
+        {"uv0", "TEXCOORD_0", NT_STREAM_FLOAT32, 2, false},
+    };
+    nt_builder_add_mesh(ctx, "assets/meshes/cube.glb",
+                        &(nt_mesh_opts_t){.layout = mesh_layout, .stream_count = 2, .tangent_mode = NT_TANGENT_NONE});
+
     nt_build_result_t r = nt_builder_finish_pack(ctx);
     nt_builder_free_pack(ctx);
     if (r != NT_BUILD_OK) {
