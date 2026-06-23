@@ -40,6 +40,7 @@ function parseArgs(argv) {
     manifest: "tmp/asset-review/review-manifest.json",
     ids: "", library: DEFAULT_LIBRARY, repo: process.cwd(),
     source: "", license: "", licenseUrl: "", origin: "sourced", kind: "",
+    pack: "", packTitle: "", packUrl: "",
     attributionRequired: "", commercialUse: "true", modificationAllowed: "true",
     redistributionAllowed: "true", shippingDecision: "allowed",
     apply: false, overwrite: false,
@@ -60,6 +61,9 @@ function parseArgs(argv) {
     else if (arg === "--license-url") a.licenseUrl = next;
     else if (arg === "--origin") a.origin = next;
     else if (arg === "--kind") a.kind = next;
+    else if (arg === "--pack") a.pack = next;
+    else if (arg === "--pack-title") a.packTitle = next;
+    else if (arg === "--pack-url") a.packUrl = next;
     else if (arg === "--attribution-required") a.attributionRequired = next;
     else if (arg === "--commercial-use") a.commercialUse = next;
     else if (arg === "--modification-allowed") a.modificationAllowed = next;
@@ -102,7 +106,7 @@ commercial_use: ${rec.commercialUse}
 modification_allowed: ${rec.modificationAllowed}
 redistribution_allowed: ${rec.redistributionAllowed}
 shipping_decision: ${rec.shippingDecision}
----
+${rec.pack ? `pack: ${rec.pack}\n` : ""}---
 
 # ${rec.title}
 
@@ -124,7 +128,7 @@ shipping_decision: ${rec.shippingDecision}
 - Modification allowed: ${rec.modificationAllowed}
 - Redistribution allowed: ${rec.redistributionAllowed}
 - Shipping decision: ${rec.shippingDecision}
-- License file: licenses/${rec.assetId}/license.md
+- License file: licenses/${rec.licenseRef || rec.assetId}/license.md
 
 ## Runtime Notes
 
@@ -133,10 +137,39 @@ shipping_decision: ${rec.shippingDecision}
 `;
 }
 
+function packMarkdown(m) {
+  return `---
+type: Asset Pack
+title: ${m.title}
+pack: ${m.pack}
+source: ${m.source}
+kind: ${m.kind}
+license: ${m.license}
+license_url: ${m.licenseUrl}
+origin: ${m.origin}
+count: ${m.count}
+timestamp: ${m.timestamp}
+---
+
+# ${m.title}
+
+- Source/vendor: ${m.source}
+- Pack: ${m.pack}
+- Source page: ${m.url || "-"}
+- License: ${m.license}
+- Assets: ${m.count} (${m.kind})
+- Origin: ${m.origin}
+- Prepared: ${m.timestamp}
+
+Reusable pack — assets share an art style and combine. Copy individual assets
+into a project's \`assets/source/...\`; do not load from the library directly.
+`;
+}
+
 function licenseMarkdown(rec) {
   return `# License: ${rec.license}
 
-- Asset id: ${rec.assetId}
+- ${rec.pack ? "Pack" : "Asset id"}: ${rec.pack || rec.assetId}
 - Origin: ${rec.origin}
 - License URL: ${rec.licenseUrl}
 - Source/vendor: ${rec.source}
@@ -172,6 +205,7 @@ async function main() {
   const library = resolve(a.library);
   const ts = new Date().toISOString();
   const licenseSlug = kebab(a.license);
+  const packSlug = a.pack ? kebab(a.pack) : "";
 
   // build plan + resolve kinds
   const plan = [];
@@ -186,7 +220,8 @@ async function main() {
     if (!KIND_DIR[kind]) throw new Error(`unsupported kind '${kind}' for ${p.id}`);
     const slug = kebab(basename(p.relpath, extname(p.relpath)));
     const assetId = `${kebab(source)}__${slug}__${licenseSlug}`;
-    plan.push({ pick: p, source, kind, kindDir: KIND_DIR[kind], assetId });
+    const kindDir = packSlug ? `${KIND_DIR[kind]}/${packSlug}` : KIND_DIR[kind];
+    plan.push({ pick: p, source, kind, kindDir, assetId });
   }
 
   // H3: reject duplicate asset_ids within the batch before any write.
@@ -200,7 +235,7 @@ async function main() {
   for (const it of plan) {
     it.filesDir = join(library, "files", it.kindDir, it.assetId);
     it.catalogPath = join(library, "catalog", it.kindDir, `${it.assetId}.md`);
-    it.licenseDir = join(library, "licenses", it.assetId);
+    it.licenseDir = packSlug ? join(library, "licenses", packSlug) : join(library, "licenses", it.assetId);
     it.exists = existsSync(it.catalogPath) || existsSync(it.filesDir);
   }
   const collisions = plan.filter((it) => it.exists);
@@ -208,8 +243,9 @@ async function main() {
     throw new Error(`already in library (pass --overwrite to replace): ${collisions.map((c) => c.assetId).join(", ")}`);
   }
 
-  console.log(`promote ${plan.length} asset(s) -> ${library}  [${a.apply ? "APPLY" : "DRY-RUN"}]`);
+  console.log(`promote ${plan.length} asset(s) -> ${library}${a.pack ? ` [pack ${a.pack}]` : ""}  [${a.apply ? "APPLY" : "DRY-RUN"}]`);
   const written = [];
+  const packsWritten = new Set();
   for (const it of plan) {
     const { pick, source, kind, kindDir, assetId, filesDir, catalogPath, licenseDir } = it;
     const abs = resolve(a.repo, pick.relpath);
@@ -222,25 +258,36 @@ async function main() {
     await mkdir(join(library, "catalog", kindDir), { recursive: true });
     await mkdir(licenseDir, { recursive: true });
     await cp(abs, join(filesDir, basename(abs)), { force: a.overwrite });
-    if (pick.licenseFile) {
-      const licAbs = resolve(a.repo, pick.licenseFile);
-      if (existsSync(licAbs)) await cp(licAbs, join(licenseDir, basename(licAbs)), { force: true });
-    }
     const rec = {
       assetId, title: pick.name, description: `${kind} promoted from ${source}`,
-      resource: `files/${kindDir}/${assetId}/`, tags: [kind, source, licenseSlug].filter(Boolean),
+      resource: `files/${kindDir}/${assetId}/`, tags: [kind, source, licenseSlug, packSlug].filter(Boolean),
       timestamp: ts, kind, origin: a.origin, license: a.license, licenseUrl: a.licenseUrl,
-      source, relpath: pick.relpath, sha, bytes,
+      source, relpath: pick.relpath, sha, bytes, pack: a.pack || "", licenseRef: packSlug || assetId,
       attributionRequired: a.attributionRequired, commercialUse: a.commercialUse,
       modificationAllowed: a.modificationAllowed, redistributionAllowed: a.redistributionAllowed,
       shippingDecision: a.shippingDecision,
     };
     await writeFile(catalogPath, catalogMarkdown(rec), "utf8");
-    await writeFile(join(licenseDir, "license.md"), licenseMarkdown(rec), "utf8");
+    // license: shared once per pack, else per-asset; copy the source license file too
+    if (!packSlug || !packsWritten.has(kindDir)) {
+      await writeFile(join(licenseDir, "license.md"), licenseMarkdown(rec), "utf8");
+      if (pick.licenseFile) {
+        const licAbs = resolve(a.repo, pick.licenseFile);
+        if (existsSync(licAbs)) await cp(licAbs, join(licenseDir, basename(licAbs)), { force: true });
+      }
+    }
+    // pack record (the unit) written once per pack folder
+    if (packSlug && !packsWritten.has(kindDir)) {
+      await writeFile(join(library, "catalog", kindDir, "_pack.md"), packMarkdown({
+        title: a.packTitle || a.pack, pack: a.pack, source, kind, license: a.license,
+        licenseUrl: a.licenseUrl, origin: a.origin, count: plan.length, timestamp: ts, url: a.packUrl,
+      }), "utf8");
+      packsWritten.add(kindDir);
+    }
     // append to log immediately so a partial failure leaves an accurate log
     const logPath = join(library, "log.md");
     if (!existsSync(logPath)) await writeFile(logPath, "# Library Log\n", "utf8");
-    await appendFile(logPath, `- ${ts} promoted ${assetId} (${originOrKind(rec)}) from ${pick.relpath}\n`, "utf8");
+    await appendFile(logPath, `- ${ts} promoted ${assetId} (${originOrKind(rec)})${a.pack ? ` [pack ${a.pack}]` : ""} from ${pick.relpath}\n`, "utf8");
     written.push({ assetId, catalog: catalogPath });
   }
   console.log(a.apply ? `\nwrote ${written.length} catalog record(s).` : `\ndry-run only — pass --apply to write.`);

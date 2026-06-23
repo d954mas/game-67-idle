@@ -34,8 +34,9 @@ Catalog each reusable asset with provenance:
 - downloaded: `tools/assets/intake/download_source_asset.mjs` then
   `tools/assets/intake/accept_incoming_asset.mjs`.
 - project-vendored / freshly prepared: `node tools/asset_review/promote.mjs --ids
-  ... --source <s> --license <L> --origin <mine|ai|sourced>`.
-Record `origin` (mine|ai|sourced) + license + preview; id = `<source>__<slug>__<license>`.
+  ... --source <s> --license <L> --origin <mine|ai|sourced> [--pack <slug>]`.
+A kit -> `--pack`: groups under `catalog/<kind>/<pack>/` + `_pack.md` + one shared license.
+Record `origin` + license + preview; id = `<source>__<slug>__<license>`.
 Catalog reusable assets BEFORE copying project-local (see game-asset-pipeline).
 
 ## Review / share

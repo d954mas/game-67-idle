@@ -104,7 +104,7 @@ export async function scanLibrary(libraryPath = DEFAULT_LIBRARY) {
   const catalogDir = join(libraryPath, "catalog");
   if (!existsSync(catalogDir)) return [];
   const files = (await walk(catalogDir)).filter(
-    (f) => f.endsWith(".md") && !/[\\/](README|index)\.md$/i.test(f),
+    (f) => f.endsWith(".md") && !/[\\/](README|index)\.md$/i.test(f) && !/[\\/]_[^\\/]*\.md$/.test(f),
   );
   const records = [];
   for (const f of files) {
@@ -133,6 +133,7 @@ export async function scanLibrary(libraryPath = DEFAULT_LIBRARY) {
       status: fm.status || "",
       license: fm.license || "",
       origin: ORIGINS.includes(fm.origin) ? fm.origin : "unknown",
+      pack: fm.pack || "",
       tags: Array.isArray(fm.tags) ? fm.tags : fm.tags ? [fm.tags] : [],
       resource: fm.resource || "",
       filesDir: fm.resource ? join(libraryPath, fm.resource) : "",
