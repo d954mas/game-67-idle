@@ -2,47 +2,48 @@
 
 ## Current Goal
 
-Little Lives (little-lives): a 3D Sims-like. The overnight run polished the
-verified M1–M3 game from a flat debug-art monolith into a coherent, stylized
-low-poly "miniature diorama" — one authored art direction, depth, juice.
+No active game concept is selected. This repository is a clean AI-first native
+game seed, ready for the next game.
 
-## Night Run — branch `night/little-lives-polish` (2026-06-23)
+The asset/cutout pipeline was reviewed and optimized this iteration (key_matte
+default, route_cutout auto-picker, dual_plate; the per-asset edge-color audit
+removed; ~4000 lines of legacy/dead code dropped) — see git history.
 
-Plan: `gamedesign/projects/little-lives/night_plan.md`
-Backlog + decisions + telemetry: `gamedesign/projects/little-lives/night_backlog.md`
-master is safe at tag `little-lives-m3-snapshot-2026-06-23` (never touched).
+Mine Cards was a prior pipeline test run; its full game, GDD, and tasks are
+preserved in tag `mine-cards-snapshot-2026-06-18` and removed from the working
+tree so the next game starts clean. Reusable lessons live in
+`AI_PIPELINE_HISTORY.md`.
 
-Shipped — one commit + pre-snapshot tag (`night/<id>-pre`) per slice:
-- A0 `src/ll_art.h` — frozen art contract (sun/ambient/AO/fog/sky/grade/camera).
-- A1 lit surfaces: directional walls, banded gradient sky, distance fog, grade.
-- A2 faceted furniture (per-face sun) + soft AO contact shadows.
-- A3 cohesive HUD palette + consistent buttons (engine font only).
-- A4 juice: `src/ll_fx.{c,h}` (subagent-built, lead-integrated) — particles,
-  screen shake, 0.5s squash-stretch; wired to place/need/work/promotion events.
-- A5 camera life: authored diorama framing + gentle breathing drift.
-- A7 composition: back-wall window (tracks time of day) + wall poster; grade
-  verified consistent noon vs evening.
+Ember Road was closed after visual/UX review. Its full game state is preserved
+in tag `ember-road-snapshot-2026-06-21`; active tasks were dropped/archive-kept,
+and game-specific runtime, assets, project docs, and tools were removed from
+the working tree.
 
-A6 (gameplay depth) folded into A7 — core systems (careers/skills/relationships)
-already built + verified in M1–M3; the night's goal was the art/polish/juice
-transformation, not new mechanics. Parked: none.
+## Current Runtime Surface
 
-Evidence (before/after + per-slice contracts): `tasks/evidence/night-baseline/`
-and `tasks/evidence/night-A1..A7/`. Headline: `night-baseline/00-baseline-live.png`
-vs `night-A7/16-A7-noon.png`.
+Native `game_seed` is the clean seed work surface:
 
-## Build / Run / Validate
-
-```
-cmake --preset native-debug
+```powershell
 cmake --build --preset native-debug --target game_seed
-build/game_seed/native-debug/game_seed.exe --devapi 9123 --window-size 1280x720
-python tmp/ll_smoke.py                                   # gameplay acceptance
-python tools/little-lives/ll_capture.py <out> [wait] [mode] [minutes]
-node tools/ai.mjs validate --full ; node tools/taskboard/cli.mjs validate
+build/game_seed/native-debug/game_seed.exe --devapi 9123
 ```
 
-## Gates (this run, all green)
+Runtime entrypoint: `src/clean_seed_main.c` (362-line debug template).
 
-build green; smoke decay/eat/work/build green; `ai.mjs validate --full` +
-visual invariant guard green; taskboard validate green; skills_eval green.
+The engine submodule at `external/neotolis-engine` is read-only from this repo.
+Reusable sidecar modules, tools, skills, and game code may be edited here.
+
+## Current Gate
+
+Capture the user's game concept (references, audience, platform, no-go
+constraints), then run the Stage 0 prototype startup path and create a fresh
+project wiki plus exactly one scoped task/epic before implementation. Do not
+invent a concept.
+
+## Next Priorities
+
+1. Capture the next game concept, then scaffold a fresh project wiki + one
+   scoped task/epic before implementation.
+2. Keep reusable pipeline/skills/knowledge clean and current between games.
+3. Keep native PC scale/focus + visual/teachability/core-loop proof as early
+   gates for the next playable UI.

@@ -1,11 +1,11 @@
 ---
 id: E007
 title: Little Lives prototype
-status: active
+status: done
 priority: P1
 tags: [prototype, little-lives]
 created: 2026-06-22
-updated: 2026-06-22
+updated: 2026-06-23
 ---
 
 ## Goal

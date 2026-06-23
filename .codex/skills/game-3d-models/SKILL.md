@@ -32,8 +32,9 @@ no `map_Kd`) need no texture.
 
 ## Render a library glb in-engine
 
-Pack-then-load — not `nt_shape_renderer` or baked headers. PACK the glb into
-`src/build_packs.c` with the 2-stream `mesh_inst` layout + a 1x1 white texture;
+Pack-then-load — not `nt_shape_renderer` or baked headers. PACK the glb via a pack
+builder (create `src/build_packs.c` from `examples/atlas/build_packs.c`, wired as a
+CMake custom command) using the 2-stream `mesh_inst` layout + a 1x1 white texture;
 LOAD at runtime via `nt_resource_request` + `nt_material_create` + `nt_mesh_renderer`.
 Multi-primitive furniture needs the scene API (engine #248). Templates:
 `examples/atlas` (single + load) and `examples/sponza` (multi-primitive scene).

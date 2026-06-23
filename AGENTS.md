@@ -70,4 +70,5 @@ When friction repeats, prefer a tool, validator, skill, or source fix.
 
 ## Project
 
-- Active game concept: `Little Lives` (little-lives) — 3D life sim: direct a Sim to meet needs (energy, hunger, fun, hygiene).
+- No active game concept — lead picks the next game; reuse the asset library
+  first (skill `game-3d-models`), then open fresh `tasks/active/` items.

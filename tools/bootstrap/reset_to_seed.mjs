@@ -36,11 +36,15 @@ if (git(["rev-parse", "--verify", "--quiet", seedRef]).status !== 0) {
   process.exit(1);
 }
 
-// Files restored verbatim from the clean seed reference.
-const RESTORE = ["src/clean_seed_main.c", "CMakeLists.txt", "tasks/STATUS.md"];
+// Files/dirs restored verbatim from the clean seed reference. state/ holds the
+// game-state schema the seed main is built against, so it MUST be reset too or
+// the seed won't compile (codegen reads state/game_state.schema.json).
+const RESTORE = ["src/clean_seed_main.c", "CMakeLists.txt", "tasks/STATUS.md", "state"];
 // Whole directories that are always game-specific. Game tooling lives under
-// tools/<game-id>/ by convention, so it is removed wholesale here.
-const REMOVE_DIRS = [`gamedesign/projects/${gameId}`, "assets/runtime", `tools/${gameId}`];
+// tools/<game-id>/ by convention, so it is removed wholesale here. src/generated
+// is a stale checked-out copy of the codegen output (the build regenerates into
+// build/<preset>/generated), so drop it to avoid a stale-state mismatch.
+const REMOVE_DIRS = [`gamedesign/projects/${gameId}`, "assets/runtime", `tools/${gameId}`, "src/generated"];
 // Common game-specific files that historically leaked under generic names and
 // therefore are not caught by the game-id loose-file scan.
 const REMOVE_FILES = ["src/game_actions.c", "src/game_actions.h", "tools/devapi/smoke.py"];

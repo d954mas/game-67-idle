@@ -5,10 +5,11 @@ shape renderer. Engine is read-only — public API only. Working templates:
 `external/neotolis-engine/examples/atlas/{build_packs.c,main.c}` (single mesh +
 runtime load) and `external/neotolis-engine/examples/sponza` (multi-primitive scene).
 
-## 1. PACK (build time, in `src/build_packs.c`)
+## 1. PACK (build time, a native pack-builder)
 
-`src/build_packs.c` is already wired into CMake and re-runs on every build,
-emitting `assets/packs/little_lives.ntpack` + a generated `*_assets.h` of asset ids.
+Create a pack builder — copy `examples/atlas/build_packs.c` to `src/build_packs.c`
+and wire it as a CMake custom command (mirror that example's CMakeLists) so it runs
+on build, emitting `<game>.ntpack` + a generated `*_assets.h` of asset ids.
 
 - Stream layout MUST match the `mesh_inst` shaders (2 streams, no normal):
 
