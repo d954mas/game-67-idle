@@ -1,6 +1,6 @@
 ---
 name: game-visual-art-direction
-description: Use when defining, generating, reviewing, integrating, or improving game visual direction, art assets, UI kits, fake shots, sprites, icon sets, generated visuals, child-friendly visual polish, release-quality presentation, or replacing placeholder/procedural visuals with production-style bitmap assets. Owns visual direction and quality judgment; raster generation is delegated-image-generation, reusable UI-kit cutting is generated-game-ui-assets.
+description: Use when defining, generating, sourcing, reviewing, integrating, or improving game visual direction, art assets, UI kits, fake shots, sprites, icon sets, generated visuals, child-friendly visual polish, release-quality presentation, or replacing placeholder/procedural visuals with real bitmap/model assets. Source first — search the shared asset library and free CC0/OFL sources before generating. Owns visual direction and quality judgment; raster generation is delegated-image-generation, reusable UI-kit cutting is generated-game-ui-assets, sourcing/library is game-asset-pipeline.
 ---
 
 # Game Visual Art Direction
@@ -27,7 +27,11 @@ fake shots, polished builds, or release-quality presentation.
    condition, likely files.
 3. Produce Reference Digest before final art when named refs drive the look;
    include current screenshot-vs-target mismatch.
-4. For multi-asset work, create an art job with `tools/assets/job/new_art_job.mjs`.
+4. Source before you generate: run
+   `node tools/assets/source/find_assets.mjs --tags "<tags>" --kind <kind>` —
+   reuse a shared-library hit, or search the printed free CC0/OFL sources and
+   intake one. Only for what cannot be sourced create an art job with
+   `tools/assets/job/new_art_job.mjs` (record the decision via `find_assets --record`).
 5. Inspect generated outputs before integration; reject weak, unreadable,
    watermarked, fused, or drifting assets.
 6. Validate in primary runtime with screenshot evidence plus product gate; hand

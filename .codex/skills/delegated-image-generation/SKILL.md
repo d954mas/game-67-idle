@@ -1,6 +1,6 @@
 ---
 name: delegated-image-generation
-description: "Use when the agent must GENERATE real raster art: fake shots, icon/source sheets, sprites, or UI art, but has no native image model. Prefer Codex CLI imagegen via `codex exec` and `scripts/codex_imagegen.sh`; use Antigravity/agy CLI only as fallback. Load references for exact commands, real-generation prompts, verify-by-size checks, and dead-ends. Owns raster CREATION only: cutting/manifests go to generated-game-ui-assets; art-direction judgment to game-visual-art-direction."
+description: "Use ONLY after a source-first search (shared asset library + free CC0/OFL sources) finds no fit, to GENERATE real raster art the agent could not source and has no native image model to make: fake shots, icon/source sheets, sprites, or UI art. Generation is the last resort, not the default. Prefer Codex CLI imagegen via `codex exec` and `scripts/codex_imagegen.sh`; use Antigravity/agy CLI only as fallback. Load references for exact commands, real-generation prompts, verify-by-size checks, and dead-ends. Owns raster CREATION only: cutting/manifests go to generated-game-ui-assets; art-direction judgment to game-visual-art-direction."
 ---
 
 # Delegated Image Generation
@@ -17,6 +17,12 @@ model. Delegate generation, verify the PNG, then hand off.
   `NODE_OPTIONS=--use-system-ca`.
 - `references/throughput-and-handoff.md`: batches, source-sheet workflow,
   sidecars, `generated-game-ui-assets` handoff, and visual gate.
+
+## Source First (before generating)
+
+Generation is the last resort. First run `node tools/assets/source/find_assets.mjs`:
+reuse a library hit, or search the printed free CC0/OFL sources and intake one.
+Only generate what you could not source, and record it with `find_assets --record`.
 
 ## Default Route
 

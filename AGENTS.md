@@ -2,51 +2,43 @@
 
 ## Now
 
-- Focus: clean AI-first native game seed.
-- No active game concept; runtime is reset to the clean seed, ready for the next
-  game iteration.
-- Closed prototypes (finished, archived; do not continue unless lead reopens):
-  `Cozy Automation` (cozy-automation, snapshot `cozy-automation-snapshot-2026-06-22`)
-  and `Dragon Grove` (dragon-grove, snapshot `dragon-grove-snapshot-2026-06-22`).
+- Focus: one active game at a time; current concept in `## Project`.
+- Closed prototypes (snapshots are git tags): Cozy Automation, Dragon Grove.
 - Engine: `external/neotolis-engine`; public APIs only.
 
 ## Map
 
-- Game/runtime: `src/`.
-- Infra: `state/`, `tools/state_codegen/`, DevAPI, `src/game_storage.*`.
-- Game tools/scripts: `tools/<game-id>/` only; reset removes them.
-- Design: projects in `gamedesign/projects/<game-id>/`; reusable knowledge:
-  `gamedesign/knowledge/`; source notes in `gamedesign/sources/`.
-- Asset library:
-  `C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets`.
-- Work/status: `tasks/`; rules in `tasks/README.md`.
-- Skills: `.codex/skills/`; `.claude/skills/` is generated.
-- Workflow: `AI_PIPELINE.md`; temp: `tmp/`.
+- Game/runtime: `src/`. Infra: `state/`, `tools/state_codegen/`, DevAPI,
+  `src/game_storage.*`. Game tools: `tools/<game-id>/` (reset removes them).
+- Design: `gamedesign/projects/<game-id>/`; knowledge `gamedesign/knowledge/`;
+  sources `gamedesign/sources/`.
+- Asset library: `C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets`.
+- Work/status: `tasks/` (rules `tasks/README.md`). Skills: `.codex/skills/`
+  (`.claude/skills/` generated). Workflow: `AI_PIPELINE.md`; temp: `tmp/`.
 
 ## Invariants
 
-- Native PC is playable/automation unless lead approves otherwise.
-  Mobile/web informs controls, scale, readability, sessions, performance.
+- Native PC is playable/automation unless lead approves; mobile/web informs
+  controls, scale, readability, sessions, performance.
 - Game/world/UI logic is Y-up. Convert Y-down platform/input only at boundary.
-- Product/playable visuals use engine fonts/text renderer;
-  handmade pixel/shape `draw_text` is debug-only.
-- Active game builds keep the UI font in a generated runtime pack; remove or
-  archive game-specific pack rules when that concept closes.
-- Important visuals use real legal assets early; debug/procedural
-  placeholders are temporary debug only.
-- Downloaded/shared assets need license, provenance, integrity before import.
-  Runtime uses project-local copies.
+- All text uses the engine text renderer with real fonts. Never write handmade
+  pixel/shape text-drawing (`draw_text`) — not even for debug.
+- Source before you generate: search the shared library, then free CC0/OFL
+  sources, then generate (`tools/assets/source/find_assets.mjs` does both and
+  records the call); procedural/shape-renderer is debug-only with a logged reason.
+- Downloaded/shared/generated assets need license, provenance, integrity, and
+  `origin` (mine|ai|sourced); catalog reusable ones (`tools/assets/intake/`)
+  before copying project-local. Runtime uses project-local copies.
 
 ## Context
 
-- Workflow: `AI_PIPELINE.md` and `docs/ai-pipeline/agent-workflow.md`.
-- Substantial work loads taskboard context, one task/evidence file, one skill.
-- Skip archives, logs, broad design, builds, generated files unless linked.
-- Context budget cleanup/validation is request/review-only, not a dev gate.
-- Lead delegates parallelizable read-heavy work to subagents by default (bounded
-  packets via `subagent-packet-template --preset`); owns integration, status, and
-  validation. Acceptance gates the output, not the delegation; `status` shows what
-  ran. Method: `docs/ai-pipeline/orchestration-playbook.md`.
+- Workflow: `AI_PIPELINE.md`, `docs/ai-pipeline/agent-workflow.md`.
+- Substantial work loads taskboard context, one task/evidence file, one skill;
+  skip archives, logs, broad design, builds, generated files unless linked.
+- Lead delegates parallelizable read-heavy work to subagents (bounded packets via
+  `subagent-packet-template --preset`); owns integration, status, validation.
+  Acceptance gates the output, not the delegation. Method:
+  `docs/ai-pipeline/orchestration-playbook.md`.
 
 ## Game Work
 
@@ -68,14 +60,14 @@
 
 - Docs/tasks: `node tools/taskboard/cli.mjs validate`.
 - Skills/process: `node tools/skills_eval.mjs`.
-- Pipeline: `node tools/ai.mjs validate`; add `--review` for context/caps,
-  `--full` for export/runtime.
+- Pipeline: `node tools/ai.mjs validate` (`--review` context/caps, `--full`
+  export/runtime).
 - Product/readability: `node tools/ai.mjs gate` or product gate with screenshots.
-- Native playable changes: smallest proving build/run plus screenshot/video.
-- Playable smoke prints named acceptance checks plus a compact summary.
+- Native playable changes: smallest proving build/run plus screenshot/video;
+  playable smoke prints named checks plus a compact summary.
 
 When friction repeats, prefer a tool, validator, skill, or source fix.
 
 ## Project
 
-- Active game concept: `Little Lives` (little-lives), A tiny 3D life sim: direct a Sim around a room to meet their needs (energy, hunger, fun, hygiene).
+- Active game concept: `Little Lives` (little-lives) — 3D life sim: direct a Sim to meet needs (energy, hunger, fun, hygiene).

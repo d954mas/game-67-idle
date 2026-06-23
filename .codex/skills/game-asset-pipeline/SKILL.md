@@ -1,6 +1,6 @@
 ---
 name: game-asset-pipeline
-description: "Use when adding, converting, packing, referencing, validating, or organizing game assets: textures, sprites, models, fonts, audio, atlases, asset headers, manifests, bundles, pack builders, raw/final asset locations, missing resources, or runtime asset loading failures. Owns runtime asset tracing; UI-kit cutting goes to generated-game-ui-assets, raster generation to delegated-image-generation."
+description: "Use when sourcing, adding, converting, packing, referencing, validating, or organizing game assets: textures, sprites, models, fonts, audio, atlases, asset headers, manifests, bundles, pack builders, raw/final asset locations, missing resources, or runtime asset loading failures. Source first — search the shared library + free CC0/OFL sources before generating; catalog reusable assets with origin (mine|ai|sourced). Owns runtime asset tracing + sourcing/library; UI-kit cutting goes to generated-game-ui-assets, raster generation to delegated-image-generation."
 ---
 
 # Game Asset Pipeline
@@ -26,8 +26,9 @@ Keep source assets, generated outputs, and runtime packs traceable. Pair with
 ## Minimal Workflow
 
 1. Identify source of truth and generated/runtime outputs.
-2. For downloaded/free assets, search Markdown records by tags/resource; record
-   license/integrity before integration.
+2. Source before you generate: run `node tools/assets/source/find_assets.mjs`
+   to search the shared library by tags/resource, then the printed free CC0/OFL
+   sources; record license/integrity/origin.
 3. For generated multi-asset work, create the art job before crop/pack ids.
 4. Record accepted provenance: real workflow data, non-empty workflow JSON, or
    explicit no-seed reason.
@@ -38,6 +39,8 @@ Keep source assets, generated outputs, and runtime packs traceable. Pair with
 ## Always-On Rules
 
 - Keep raw source, shared downloaded assets, and generated runtime assets separate.
+- Catalog reusable free/CC0 assets in the library (record + license + provenance +
+  `origin`) before copying project-local, so the next source-first search finds them.
 - Project code uses project-local copies, not shared library or scratch paths.
 - Generated headers/packs must be reproducible from source plus builder code.
 - Crop rectangles, pivots, trim rules, and slice9 margins belong in manifests.

@@ -17,6 +17,7 @@ function usage() {
 
 Options:
   --library <path>                 Defaults to ${DEFAULT_LIBRARY}
+  --origin <mine|ai|sourced>       who made it; default sourced (downloaded free/CC0)
   --source-page-url <url>          human/audit source page; defaults to intake URL
   --author-vendor <name>           author/vendor; defaults to intake source
   --attribution-required <bool>    default false
@@ -37,6 +38,7 @@ Options:
 function parseArgs(argv) {
   const args = {
     library: DEFAULT_LIBRARY,
+    origin: "sourced",
     attributionRequired: "false",
     commercialUse: "true",
     modificationAllowed: "true",
@@ -62,6 +64,7 @@ function parseArgs(argv) {
     if (!next || next.startsWith("--")) throw new Error(`missing value for ${arg}`);
     index += 1;
     if (arg === "--library") args.library = next;
+    else if (arg === "--origin") args.origin = next;
     else if (arg === "--source") args.source = next;
     else if (arg === "--slug") args.slug = next;
     else if (arg === "--asset-id") args.assetId = next;
@@ -90,6 +93,7 @@ function parseArgs(argv) {
     if (!args[required]) throw new Error(`missing required --${required.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`);
   }
   if (!KIND_DIR[args.kind]) throw new Error(`unsupported --kind ${args.kind}`);
+  if (!["mine", "ai", "sourced"].includes(args.origin)) throw new Error(`--origin must be mine|ai|sourced`);
   return args;
 }
 
@@ -123,6 +127,7 @@ timestamp: ${new Date().toISOString()}
 asset_id: ${args.assetId}
 kind: ${args.kind}
 status: accepted
+origin: ${args.origin}
 license: ${args.licenseName}
 license_url: ${args.licenseUrl}
 attribution_required: ${args.attributionRequired}
@@ -193,6 +198,7 @@ async function main() {
   await writeFile(licensePath, `# License: ${args.licenseName}
 
 - Asset id: ${args.assetId}
+- Origin: ${args.origin}
 - License URL: ${args.licenseUrl}
 - Attribution required: ${args.attributionRequired}
 - Commercial use: ${args.commercialUse}
