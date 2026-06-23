@@ -106,6 +106,9 @@ export async function scanLibrary(libraryPath = DEFAULT_LIBRARY) {
   const files = (await walk(catalogDir)).filter(
     (f) => f.endsWith(".md") && !/[\\/](README|index)\.md$/i.test(f) && !/[\\/]_[^\\/]*\.md$/.test(f),
   );
+  // Pack genre/style live only on the _pack.md unit record; join them onto each
+  // asset so individual assets are discoverable by genre (sci-fi/fantasy/food).
+  const packMeta = new Map((await scanPacks(libraryPath)).map((p) => [p.pack, p]));
   const records = [];
   for (const f of files) {
     let text;
@@ -125,6 +128,7 @@ export async function scanLibrary(libraryPath = DEFAULT_LIBRARY) {
         if (pf) preview = join(dir, pf);
       } catch { /* no previews dir for this asset */ }
     }
+    const pm = packMeta.get(fm.pack || "");
     records.push({
       asset_id: assetId,
       title: fm.title || assetId,
@@ -135,7 +139,10 @@ export async function scanLibrary(libraryPath = DEFAULT_LIBRARY) {
       origin: ORIGINS.includes(fm.origin) ? fm.origin : "unknown",
       pack: fm.pack || "",
       source_id: fm.source_id || "",
+      author: fm.author || "",
       tags: Array.isArray(fm.tags) ? fm.tags : fm.tags ? [fm.tags] : [],
+      genre: pm ? pm.genre : [],
+      style: pm ? pm.style : [],
       resource: fm.resource || "",
       filesDir: fm.resource ? join(libraryPath, fm.resource) : "",
       preview,
@@ -185,12 +192,14 @@ function kindMatches(recKind, wanted) {
   return recKind === w || KIND_DIR[recKind] === w || `${recKind}s` === w;
 }
 
-// OR-match on tags for recall; query is a substring over the searchable text.
-export function filterRecords(records, { tags = [], kind = "", origin = "", query = "" } = {}) {
+// OR-match on tags for recall; query is a substring over the searchable text;
+// genre is an exact (case-insensitive) match against the asset's pack genre.
+export function filterRecords(records, { tags = [], kind = "", origin = "", query = "", genre = "" } = {}) {
   return records.filter((rec) => {
     if (!kindMatches(rec.kind, kind)) return false;
     if (origin && rec.origin !== origin) return false;
-    const hay = `${rec.tags.join(" ")} ${rec.title} ${rec.description} ${rec.asset_id}`.toLowerCase();
+    if (genre && !(rec.genre || []).map((g) => g.toLowerCase()).includes(genre.toLowerCase())) return false;
+    const hay = `${rec.tags.join(" ")} ${(rec.genre || []).join(" ")} ${(rec.style || []).join(" ")} ${rec.title} ${rec.description} ${rec.asset_id} ${rec.pack}`.toLowerCase();
     if (query && !hay.includes(query.toLowerCase())) return false;
     if (tags.length && !tags.some((t) => hay.includes(t.toLowerCase()))) return false;
     return true;
@@ -198,7 +207,7 @@ export function filterRecords(records, { tags = [], kind = "", origin = "", quer
 }
 
 export function parseArgs(argv) {
-  const a = { library: DEFAULT_LIBRARY, tags: "", kind: "", origin: "", query: "", out: "", json: false, record: false, family: "", decision: "", reason: "" };
+  const a = { library: DEFAULT_LIBRARY, tags: "", kind: "", origin: "", query: "", genre: "", out: "", json: false, record: false, family: "", decision: "", reason: "" };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--json") { a.json = true; continue; }
@@ -211,6 +220,7 @@ export function parseArgs(argv) {
     else if (arg === "--kind") a.kind = next;
     else if (arg === "--origin") a.origin = next;
     else if (arg === "--query") a.query = next;
+    else if (arg === "--genre") a.genre = next;
     else if (arg === "--out") a.out = next;
     else if (arg === "--family") a.family = next;
     else if (arg === "--decision") a.decision = next;
@@ -252,11 +262,11 @@ async function main() {
   if (a.record) { await recordDecision(a); return; }
   const tags = a.tags ? a.tags.split(",").map((s) => s.trim()).filter(Boolean) : [];
   const records = await scanLibrary(a.library);
-  const hits = filterRecords(records, { tags, kind: a.kind, origin: a.origin, query: a.query });
+  const hits = filterRecords(records, { tags, kind: a.kind, origin: a.origin, query: a.query, genre: a.genre });
   if (a.json) { console.log(JSON.stringify({ library: a.library, total: records.length, hits }, null, 2)); return; }
 
   console.log(`library: ${a.library}  (catalog records: ${records.length})`);
-  const crit = [tags.length ? `tags=${tags.join("|")}` : "", a.kind ? `kind=${a.kind}` : "", a.origin ? `origin=${a.origin}` : "", a.query ? `query="${a.query}"` : ""].filter(Boolean).join("  ");
+  const crit = [tags.length ? `tags=${tags.join("|")}` : "", a.kind ? `kind=${a.kind}` : "", a.genre ? `genre=${a.genre}` : "", a.origin ? `origin=${a.origin}` : "", a.query ? `query="${a.query}"` : ""].filter(Boolean).join("  ");
   console.log(`search: ${crit || "(all)"}`);
   if (hits.length) {
     console.log(`\n${hits.length} match(es) — reuse before generating:\n`);

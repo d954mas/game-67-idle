@@ -13,14 +13,30 @@ import mathutils
 
 argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 if len(argv) < 3:
-    print("usage: -- <outdir> <size> <a.glb> [b.glb ...]")
+    print("usage: -- <outdir> <size> [--webp] <a.glb|a.glb::stem|@manifest.txt> ...")
     sys.exit(1)
 # Shared studio environment (same file the web model-viewer uses), so the PNG
 # preview and the live 3D are lit by one source. Falls back to suns if missing.
 HDR_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "studio_env.hdr")
+WEBP = "--webp" in argv
+argv = [x for x in argv if x != "--webp"]
 outdir = os.path.abspath(argv[0])
 size = int(argv[1])
-glbs = argv[2:]
+
+# Items may be a glb path, "glb::outstem" (explicit output name — avoids basename
+# collisions when packs reuse names), or "@file" listing such items one per line
+# (avoids the Windows command-line length limit for thousands of models).
+items = []
+for tok in argv[2:]:
+    if tok.startswith("@"):
+        with open(tok[1:], "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    items.append(line)
+    else:
+        items.append(tok)
+glbs = items
 os.makedirs(outdir, exist_ok=True)
 
 engines = [e.identifier for e in bpy.types.RenderSettings.bl_rna.properties["engine"].enum_items]
@@ -33,8 +49,10 @@ def setup_render():
     s.render.resolution_x = size
     s.render.resolution_y = size
     s.render.film_transparent = True
-    s.render.image_settings.file_format = "PNG"
+    s.render.image_settings.file_format = "WEBP" if WEBP else "PNG"
     s.render.image_settings.color_mode = "RGBA"
+    if WEBP:
+        s.render.image_settings.quality = 90  # webp: small but crisp, keeps alpha
     # Blender 4.x defaults to AgX which darkens/desaturates; flat assets want
     # Standard so colours match the source (bright low-poly look).
     try:
@@ -56,7 +74,8 @@ def world_bounds(objs):
 
 
 ok = 0
-for glb in glbs:
+for item in glbs:
+    glb, _, stem = item.partition("::")        # "glb" or "glb::outstem"
     bpy.ops.wm.read_factory_settings(use_empty=True)
     setup_render()
     bpy.ops.import_scene.gltf(filepath=glb)
@@ -110,8 +129,9 @@ for glb in glbs:
         fo.rotation_euler = (math.radians(62), 0, math.radians(215))
         bg.inputs[1].default_value = 0.5
 
-    name = os.path.splitext(os.path.basename(glb))[0]
-    scene.render.filepath = os.path.join(outdir, name + ".png")
+    name = stem or os.path.splitext(os.path.basename(glb))[0]
+    ext = ".webp" if WEBP else ".png"
+    scene.render.filepath = os.path.join(outdir, name + ext)
     bpy.ops.render.render(write_still=True)
     ok += 1
 
