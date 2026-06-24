@@ -11,10 +11,10 @@
 import { readFile, writeFile, mkdir, cp, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, basename, extname } from "node:path";
-import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import { DEFAULT_LIBRARY, KIND_DIR } from "../assets/source/find_assets.mjs";
 import { catalogFrontmatter } from "../lib/asset_catalog.mjs";
+import { isMain } from "../lib/cli.mjs";
 
 // review-kind -> library-kind, for legacy manifests; new manifests already carry
 // a library kind, so this is only a fallback.
@@ -311,7 +311,7 @@ function originOrKind(rec) {
   return `${rec.origin}/${rec.kind}`;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (isMain(import.meta.url)) {
   main().catch((e) => { console.error(e.message); process.exit(1); });
 }
 

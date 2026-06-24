@@ -16,10 +16,10 @@
 // e.g. the Kenney furniture kit already imported directly).
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { join, dirname } from "node:path";
 import { DEFAULT_LIBRARY } from "./find_assets.mjs";
 import { catalogFrontmatter } from "../../lib/asset_catalog.mjs";
+import { isMain } from "../../lib/cli.mjs";
 
 const SITE = "https://poly.pizza";
 const CDN = "https://static.poly.pizza";
@@ -396,7 +396,7 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (isMain(import.meta.url)) {
   main().catch((e) => { console.error("\nFATAL:", e.message); process.exit(1); });
 }
 
