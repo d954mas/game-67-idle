@@ -32,12 +32,14 @@ function repoRoot() {
   return process.cwd();
 }
 
-// assets/source/<kindDir>/<asset-id>/...  -> { kindDir, assetId }
-// assets/previews/<asset-id>/...          -> { assetId }
+// <game>/assets/source/<kindDir>/<asset-id>/...  -> { kindDir, assetId }
+// <game>/assets/previews/<asset-id>/...          -> { assetId }
+// The optional leading game-folder prefix makes this per-game (assets live inside
+// each game folder now, not at repo root).
 export function deriveAssetId(path) {
-  let m = path.match(/^assets\/source\/([^/]+)\/([^/]+)\//);
+  let m = path.match(/(?:^|\/)assets\/source\/([^/]+)\/([^/]+)\//);
   if (m) return { kindDir: m[1], assetId: m[2] };
-  m = path.match(/^assets\/previews\/([^/]+)\//);
+  m = path.match(/(?:^|\/)assets\/previews\/([^/]+)\//);
   if (m) return { assetId: m[1] };
   return {};
 }
@@ -54,12 +56,12 @@ export function auditTrackedAssets(trackedFiles, {
   for (const raw of trackedFiles) {
     const p = String(raw).replace(/\\/g, "/").trim();
     if (!p) continue;
-    if (p.startsWith("assets/restricted/")) {
-      violations.push({ path: p, reason: "tracked file under assets/restricted/ — this root is gitignored; unstage it (git rm --cached)" });
+    if (/(?:^|\/)assets\/restricted\//.test(p)) {
+      violations.push({ path: p, reason: "tracked file under <game>/assets/restricted/ — that root is gitignored; unstage it (git rm --cached)" });
       continue;
     }
     if (!isBinary(p)) continue;
-    if (!/^assets\/(source|previews|meshes)\//.test(p)) continue;
+    if (!/(?:^|\/)assets\/(source|previews|meshes)\//.test(p)) continue;
     if (allowlistPrefixes.some((pre) => p.startsWith(pre))) continue;
     const { assetId } = deriveAssetId(p);
     if (!assetId) {
@@ -90,14 +92,35 @@ function walk(dir) {
   return out;
 }
 
+// Asset roots are per-game: a GAME folder (has CMakeLists.txt) with an assets/ dir
+// — template/ and each <game>/. This deliberately excludes tooling dirs like
+// tools/assets/. Returns repo-relative "<dir>/assets" paths. external/ = engine.
+const SKIP_DIRS = new Set(["external", "build", "node_modules", ".git", "tmp"]);
+function isGameFolder(root, name) {
+  return existsSync(join(root, name, "assets")) && existsSync(join(root, name, "CMakeLists.txt"));
+}
+function assetRoots(root) {
+  const roots = [];
+  let entries;
+  try { entries = readdirSync(root, { withFileTypes: true }); } catch { return roots; }
+  for (const e of entries) {
+    if (!e.isDirectory() || SKIP_DIRS.has(e.name)) continue;
+    if (isGameFolder(root, e.name)) roots.push(`${e.name}/assets`);
+  }
+  // Legacy: a game still living at repo root (pre-template model).
+  if (existsSync(join(root, "assets")) && existsSync(join(root, "CMakeLists.txt"))) roots.push("assets");
+  return roots;
+}
+
 function loadCatalog(root) {
-  const dir = join(root, "assets", "catalog");
   const map = new Map();
-  for (const f of walk(dir)) {
-    if (!f.endsWith(".md") || /[\\/]_[^\\/]*\.md$/.test(f)) continue;
-    let fm;
-    try { fm = parseFrontmatter(readFileSync(f, "utf8")); } catch { continue; }
-    if (fm.asset_id) map.set(fm.asset_id, fm);
+  for (const aroot of assetRoots(root)) {
+    for (const f of walk(join(root, aroot, "catalog"))) {
+      if (!f.endsWith(".md") || /[\\/]_[^\\/]*\.md$/.test(f)) continue;
+      let fm;
+      try { fm = parseFrontmatter(readFileSync(f, "utf8")); } catch { continue; }
+      if (fm.asset_id) map.set(fm.asset_id, fm);
+    }
   }
   return map;
 }
@@ -112,9 +135,11 @@ function loadAllowlist(root) {
 }
 
 function gitTrackedAssets(root) {
-  const r = spawnSync("git", ["ls-files", "assets"], { cwd: root, encoding: "utf8", shell: false });
+  const r = spawnSync("git", ["ls-files"], { cwd: root, encoding: "utf8", shell: false });
   if (r.error || r.status !== 0) return null;
-  return r.stdout.split(/\r?\n/).filter(Boolean);
+  // Only tracked paths under a per-game assets/ root (excludes tooling like tools/assets/).
+  const roots = assetRoots(root);
+  return r.stdout.split(/\r?\n/).filter(Boolean).filter((p) => roots.some((ar) => p === ar || p.startsWith(`${ar}/`)));
 }
 
 function main() {

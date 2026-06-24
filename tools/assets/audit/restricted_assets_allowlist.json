@@ -1,9 +1,6 @@
 {
-  "reason": "Pre-catalog legacy assets verified CC0 / project-owned. They predate the 'every committed asset has a catalog record' rule. Backfill catalog records over time; new assets must be cataloged (or routed to assets/restricted/), NOT added here.",
+  "reason": "Pre-catalog legacy assets verified CC0 / project-owned, allowed without a catalog record. Assets are per-game now (<game>/assets/); prefixes are repo-relative. New assets must be cataloged (or routed to <game>/assets/restricted/), NOT added here. Currently: the template starter cube (Kenney/engine CC0).",
   "prefixes": [
-    "assets/meshes/",
-    "assets/source/models/blockside_city_base/",
-    "assets/source/models/kenney/",
-    "assets/source/models/quaternius/"
+    "template/assets/meshes/"
   ]
 }

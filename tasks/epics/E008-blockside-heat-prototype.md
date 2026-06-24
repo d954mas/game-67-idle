@@ -1,7 +1,7 @@
 ---
 id: E008
 title: Blockside Heat prototype
-status: active
+status: dropped
 priority: P1
 tags: [prototype, blockside-heat]
 created: 2026-06-23

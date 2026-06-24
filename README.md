@@ -1,70 +1,45 @@
-# Game Seed
+# AI game-dev pipeline
 
-Clean AI-first game project base for the next concept.
+The repo root is the **shared pipeline**, not a game: the engine (submodule),
+build/asset/validation tools, AI skills, docs, the taskboard, and reusable design
+knowledge. Each **game is its own folder**, copied from `template/`.
 
-This repository is currently a neutral testbed:
+- Reusable AI workflow: `AI_PIPELINE.md`, `AGENTS.md`, `tasks/`, `.codex/skills/`.
+- Reusable design knowledge: `gamedesign/knowledge/`; sources `gamedesign/sources/`.
+- Engine: git submodule at `external/neotolis-engine` (public APIs only).
+- Shared asset library lives OUTSIDE the repo (private); games pull project-local
+  copies. Paid/licensed binaries never enter git — see the restricted-asset rule
+  in `AGENTS.md` + `tools/assets/restricted.mjs`.
+- Closed prototypes are git tags (e.g. `blockside-heat-snapshot-2026-06-24`).
 
-- no active game concept is selected;
-- old game-specific design, task history, content, assets, and product files
-  are removed;
-- reusable AI workflow lives in `AI_PIPELINE.md`, `AGENTS.md`, `tasks/`, and
-  `.codex/skills/`;
-- reusable design knowledge lives in `gamedesign/knowledge/`;
-- game code starts at `src/main.c`;
-- universal AI runtime support is kept: DevAPI, screenshot capture, state
-  codegen, save/load, migrations, and smoke scenarios.
-
-The engine is connected as a git submodule at `external/neotolis-engine`.
-
-## Build
+## Start a new game
 
 ```powershell
 git submodule update --init --recursive
-cmake --preset native-debug
-cmake --build --preset native-debug
+node tools/bootstrap/new_game.mjs --id <game-id>   # copies template/ -> <game-id>/
 ```
 
-Native executable:
+Then customise the copy and pull assets/systems. The `template/` folder itself is
+the runnable reference (settings UI on nt_ui widgets, coloured + textured mesh
+paths, a movement system, screenshot capture).
 
-```text
-build/game_seed/native-debug/game_seed.exe
-```
-
-## Run
+## Build + run a game (template shown)
 
 ```powershell
-build/game_seed/native-debug/game_seed.exe
+cmake -S template -B template/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
+cmake --build template/build
+template/build/bin/game.exe                                   # window: cubes + text + Settings
+template/build/bin/game.exe --settings --capture tmp/x.ppm    # headless screenshot
 ```
 
-The placeholder screen is intentionally minimal. Click or press `Space` to
-cycle colors. `Esc` quits native builds.
+Layout a game folder teaches by example: `src/main.c` is the conductor; systems in
+`src/systems/`, render in `src/render/`, UI in `src/ui/` (styles in their own
+file), world state in `src/world/`. See `template/CONVENTIONS.md` and
+`tools/bootstrap/TEMPLATE.md`.
 
-## DevAPI
-
-Native debug builds expose the agent command bus:
+## Validate the pipeline
 
 ```powershell
-build/game_seed/native-debug/game_seed.exe --devapi 9123 --fresh-state --disable-autosave
+node tools/taskboard/cli.mjs validate     # docs/tasks
+node tools/ai.mjs validate                # guards + tests + pipeline
 ```
-
-Useful checks:
-
-```powershell
-py -3.12 tools/devapi/smoke.py 9123      # game-agnostic DevAPI smoke (edit GAME for a new game)
-py -3.12 tools/devapi/iterate.py 9123    # build-if-stale -> shot -> ui_readability -> gate command
-```
-
-State schema source: `state/game_state.schema.json`. Generated C files are
-derived from it by `tools/state_codegen/generate_state.py`.
-
-## Web
-
-Use this when the task targets web/mobile behavior.
-
-```powershell
-cmake --preset wasm-debug
-cmake --build --preset wasm-debug
-powershell -ExecutionPolicy Bypass -File scripts/serve-web.ps1 build/game_seed/wasm-debug 8080
-```
-
-Open `http://localhost:8080/index.html`.

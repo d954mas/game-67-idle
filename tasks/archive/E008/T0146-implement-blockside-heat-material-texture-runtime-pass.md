@@ -1,7 +1,7 @@
 ---
 id: T0146
 title: Implement Blockside Heat material texture runtime pass
-status: doing
+status: dropped
 epic: E008
 priority: P0
 tags: [prototype, blockside-heat, visual, assets, materials, lead-rejection]

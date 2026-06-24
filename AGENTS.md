@@ -2,16 +2,16 @@
 
 ## Now
 
-- Focus: one active game at a time; current concept in `## Project`. Closed
-  prototypes are git tags.
-- Engine: `external/neotolis-engine`; public APIs only.
+- One active game at a time; concept in `## Project`. Closed prototypes are git tags.
+- Engine `external/neotolis-engine`, public APIs only.
 
 ## Map
 
-- Game/runtime: `src/`; infra `state/` + `tools/state_codegen/` + DevAPI; game
-  tools `tools/<game-id>/`. Design `gamedesign/projects/<game-id>/`; reusable
-  knowledge+sources `gamedesign/{knowledge,sources}/`.
-- Asset library (3700+ glb, OKF; REUSE FIRST — skill `game-3d-models`):
+- A game is a FOLDER from `template/` (`new_game.mjs`): `<game>/{src,state,assets}/`.
+  Root = shared pipeline (engine + tools + skills + docs + tasks), not a game.
+  Per-game `tools/<game-id>/` + `gamedesign/projects/<game-id>/`; reusable
+  `gamedesign/{knowledge,sources}/`.
+- Asset library (3700+ glb; REUSE FIRST, skill `game-3d-models`):
   `C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets`.
 - Work/status: `tasks/` (rules `tasks/README.md`). Skills: `.codex/skills/`
   (`.claude/skills/` generated). Workflow: `AI_PIPELINE.md`; temp: `tmp/`.
@@ -26,15 +26,14 @@
 - Engine before you hack: use the engine's public API (UI widgets `nt_ui_*`,
   renderers, math) before hand-rolling; custom only when nothing fits, with a logged
   reason. Decompose — styles/theme in their own file.
-- Source before you generate: library → free CC0/OFL → generate
-  (`tools/assets/source/find_assets.mjs` does both, records the call);
-  procedural/shape-renderer is debug-only with a logged reason.
-- Downloaded/shared/generated assets need license, provenance, integrity, and
-  `origin` (mine|ai|sourced); catalog reusable ones (`tools/assets/intake/`)
-  before copying project-local. Runtime uses project-local copies.
+- Source before generate: library → free CC0/OFL → generate
+  (`tools/assets/source/find_assets.mjs`); procedural is debug-only, logged.
+- Downloaded/shared/generated assets need license, provenance, integrity, `origin`
+  (mine|ai|sourced); catalog reusable ones (`tools/assets/intake/`) before copying
+  project-local. Runtime uses project-local copies.
 - Every committed asset records a license; paid/non-redistributable binaries never
-  enter git — they go under gitignored `assets/restricted/` (only the `.md` is
-  committed), enforced by the guard.
+  enter git — they live in each game's gitignored `<game>/assets/restricted/`
+  (only the `.md` committed), enforced by the guard.
 
 ## Context
 
@@ -74,5 +73,6 @@ When friction repeats, prefer a tool, validator, skill, or source fix.
 
 ## Project
 
-- Active game concept: `Blockside Heat` (blockside-heat) — low-poly Roblox-like
-  open-world crime prototype: street jobs, vehicles, NPCs, toy-like city chaos.
+- Active game concept: none — root is the shared pipeline + `template/`.
+- New game: copy `template/` (`node tools/bootstrap/new_game.mjs --id <id>`), then
+  customise + pull assets/systems. Closed prototypes are git tags.

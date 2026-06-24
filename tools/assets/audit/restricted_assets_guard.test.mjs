@@ -56,6 +56,21 @@ test("deriveAssetId handles source and previews layouts", () => {
   assert.deepEqual(deriveAssetId("assets/meshes/flat.glb"), {});
 });
 
+test("game-folder-prefixed paths are audited (per-game asset layout)", () => {
+  assert.equal(auditTrackedAssets([`mygame/assets/source/models/${CC0.asset_id}/car.glb`], { catalogByAssetId: new Map([[CC0.asset_id, CC0]]) }).ok, true);
+  assert.equal(auditTrackedAssets([`mygame/assets/source/models/${PAID.asset_id}/n.glb`], { catalogByAssetId: new Map([[PAID.asset_id, PAID]]) }).ok, false);
+  assert.equal(auditTrackedAssets(["template/assets/restricted/source/x/x.glb"], {}).ok, false, "restricted under a game folder is a violation");
+});
+
+test("deriveAssetId handles a game-folder prefix", () => {
+  assert.deepEqual(deriveAssetId("template/assets/source/models/id3/a.glb"), { kindDir: "models", assetId: "id3" });
+  assert.deepEqual(deriveAssetId("g/assets/previews/id4/p.png"), { assetId: "id4" });
+});
+
+test("per-game allowlist prefix passes (template starter mesh)", () => {
+  assert.equal(auditTrackedAssets(["template/assets/meshes/cube.glb"], { allowlistPrefixes: ["template/assets/meshes/"] }).ok, true);
+});
+
 test("publishability precedence: explicit publish overrides license", () => {
   assert.equal(isPublishable({ license: "CC0-1.0", publish: "false" }), false);
   assert.equal(isPublishable({ license: "Proprietary", redistribution_allowed: "true" }), true);

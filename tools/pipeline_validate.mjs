@@ -353,7 +353,7 @@ console.log("\n== status/runtime contradiction guard");
     const seedLines = readFileSync(seedPath, "utf8").split(/\r?\n/).length;
     if (/no active game concept/i.test(status) && seedLines > SEED_MAX_LINES) {
       console.error(
-        `error: STATUS.md says "no active game concept" but src/clean_seed_main.c is ${seedLines} lines — that is a game, not a clean seed. Reset the runtime (node tools/bootstrap/reset_to_seed.mjs) or correct STATUS.md.`
+        `error: STATUS.md says "no active game concept" but src/clean_seed_main.c is ${seedLines} lines — that is a game, not a clean seed. The active game lives in a game folder now (copied from template/); remove the stray root runtime or correct STATUS.md.`
       );
       process.exit(1);
     }

@@ -19,7 +19,8 @@ assets/packs/
 # Restricted (paid/licensed) asset binaries — never commit to an open repo.
 # Only the catalog/license .md (metadata, no binary) is committed; the binaries
 # live here locally and in the private library. See tools/assets/restricted.mjs.
-assets/restricted/
+# Per-game: matches <game>/assets/restricted/ in any game folder.
+**/assets/restricted/
 
 # downloaded tunnel binary (app-tunnel skill)
 tools/bin/

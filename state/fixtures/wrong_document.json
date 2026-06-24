@@ -1,8 +1,0 @@
-{
-  "schema": "game_seed.state",
-  "document": "player",
-  "version": 1,
-  "state": {
-    "wallet": {"soft": 1, "hard": 0}
-  }
-}

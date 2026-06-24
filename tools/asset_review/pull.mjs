@@ -8,7 +8,9 @@
 //
 // Dry-run by default; pass --apply to write.
 //
-//   node tools/asset_review/pull.mjs --ids kenney__desk__cc0-1-0,kenney__loungesofa__cc0-1-0 --to assets --apply
+// Assets are per-game: --to is the target game's assets dir (e.g. template/assets
+// or <game>/assets), NOT the repo root.
+//   node tools/asset_review/pull.mjs --ids kenney__desk__cc0-1-0 --to mygame/assets --apply
 import { readFile, writeFile, mkdir, cp, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -16,7 +18,7 @@ import { scanLibrary, parseFrontmatter, DEFAULT_LIBRARY, KIND_DIR } from "../ass
 import { isPublishable, RESTRICTED_ROOT } from "../assets/restricted.mjs";
 
 function parseArgs(argv) {
-  const a = { ids: "", library: DEFAULT_LIBRARY, to: "assets", apply: false, overwrite: false };
+  const a = { ids: "", library: DEFAULT_LIBRARY, to: "", apply: false, overwrite: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--apply") { a.apply = true; continue; }
@@ -30,6 +32,7 @@ function parseArgs(argv) {
     else throw new Error(`unknown option: ${arg}`);
   }
   if (!a.ids) throw new Error("missing --ids (comma-separated library asset_id list)");
+  if (!a.to) throw new Error("missing --to (the game's assets dir, e.g. template/assets or <game>/assets)");
   return a;
 }
 
