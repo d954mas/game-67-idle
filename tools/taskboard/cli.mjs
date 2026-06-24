@@ -19,7 +19,7 @@
 
 import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
-  updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
+  updateDoc, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
   subagentPacketTemplate, subagentPacketProblem,
   subagentPacketPresetNames, renderSubagentPacketPreset,
@@ -723,18 +723,40 @@ switch (cmd) {
     break;
   }
   case "validate": {
+    // Orchestration packet checks are ADVISORY at validate-time: validate runs
+    // mid-edit (during work), so a missing delegation packet must NUDGE, not
+    // block. The goal (don't silently skip delegation) is kept as a loud nudge,
+    // and the deliberate checkpoints still gate: `set --status doing/review/done`
+    // (updateDoc) and the explicit `orchestration-check` command both still fail
+    // hard. [REFACTOR_PLAN Phase 1 #2]
+    const ADVISORY_CODES = new Set([
+      "orchestration_start_preflight_missing",
+      "orchestration_evidence_missing",
+    ]);
     const detailedProblems = validateStoreDetailed(root);
+    const blocking = detailedProblems.filter((p) => !ADVISORY_CODES.has(p.code));
+    const advisory = detailedProblems.filter((p) => ADVISORY_CODES.has(p.code));
     if (args.json) {
-      writeJson({ ok: detailedProblems.length === 0, problems: detailedProblems });
-      process.exit(detailedProblems.length ? 1 : 0);
+      writeJson({ ok: blocking.length === 0, problems: blocking, advisories: advisory });
+      process.exit(blocking.length ? 1 : 0);
     }
-    const problems = validateStore(root);
-    if (!problems.length) {
-      console.log("ok: no problems found");
+    for (const p of advisory) {
+      console.log(`nudge: ${p.message}`);
+      const hint = remediationHint(p.message);
+      if (hint) {
+        console.log(`hint: ${hint}`);
+      }
+    }
+    if (!blocking.length) {
+      console.log(
+        advisory.length
+          ? "ok: no blocking problems (orchestration nudges above are advisory)"
+          : "ok: no problems found",
+      );
     } else {
-      for (const p of problems) {
-        console.log(`problem: ${p}`);
-        const hint = remediationHint(p);
+      for (const p of blocking) {
+        console.log(`problem: ${p.message}`);
+        const hint = remediationHint(p.message);
         if (hint) {
           console.log(`hint: ${hint}`);
         }

@@ -939,7 +939,8 @@ test("cli validate prints remediation hints for common failures", (t) => {
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /problem: T0001: actionable task needs/);
   assert.match(result.stdout, /hint: fill `## What` and at least one checkable `## Done when`/);
-  assert.match(result.stdout, /problem: T0002: substantial pipeline\/orchestration task needs orchestration evidence/);
+  // Orchestration is advisory at validate-time: it nudges, does not block [Phase 1 #2].
+  assert.match(result.stdout, /nudge: T0002: substantial pipeline\/orchestration task needs orchestration evidence/);
   assert.match(result.stdout, /missing\/invalid: orchestration: used packet/);
   assert.match(result.stdout, /hint: add a complete packet from `node tools\/taskboard\/cli\.mjs orchestration-template`:/);
   assert.match(result.stdout, /objective: <non-empty>/);
@@ -957,15 +958,18 @@ test("cli validate --json reports parseable orchestration fields", (t) => {
   });
   const cli = join(import.meta.dirname, "cli.mjs");
   const result = spawnSync(process.execPath, [cli, "validate", "--json"], { cwd: root, encoding: "utf8" });
-  assert.notEqual(result.status, 0);
+  // Orchestration alone is advisory: validate passes (exit 0) and reports it under
+  // `advisories`, not blocking `problems` [REFACTOR_PLAN Phase 1 #2].
+  assert.equal(result.status, 0);
   assert.doesNotMatch(result.stdout, /^problem:/m);
   assert.doesNotMatch(result.stdout, /^hint:/m);
   const parsed = JSON.parse(result.stdout);
-  assert.equal(parsed.ok, false);
-  assert.equal(parsed.problems[0].code, "orchestration_evidence_missing");
-  assert.equal(parsed.problems[0].taskId, "T0001");
-  assert.deepEqual(parsed.problems[0].missingFields, ["orchestration: used packet"]);
-  assert.match(parsed.problems[0].template, /objective: <non-empty>/);
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.problems, []);
+  assert.equal(parsed.advisories[0].code, "orchestration_evidence_missing");
+  assert.equal(parsed.advisories[0].taskId, "T0001");
+  assert.deepEqual(parsed.advisories[0].missingFields, ["orchestration: used packet"]);
+  assert.match(parsed.advisories[0].template, /objective: <non-empty>/);
 });
 
 test("cli validate --json reports parseable orchestration start preflight fields", (t) => {
@@ -978,17 +982,19 @@ test("cli validate --json reports parseable orchestration start preflight fields
   }, taskBodyWithLog("- 2026-06-21: Ready to start without packet."));
   const cli = join(import.meta.dirname, "cli.mjs");
   const result = spawnSync(process.execPath, [cli, "validate", "--json"], { cwd: root, encoding: "utf8" });
-  assert.notEqual(result.status, 0);
+  // Start-preflight is advisory at validate-time too [REFACTOR_PLAN Phase 1 #2].
+  assert.equal(result.status, 0);
   assert.doesNotMatch(result.stdout, /^problem:/m);
   assert.doesNotMatch(result.stdout, /^hint:/m);
   const parsed = JSON.parse(result.stdout);
-  assert.equal(parsed.ok, false);
-  assert.equal(parsed.problems[0].code, "orchestration_start_preflight_missing");
-  assert.equal(parsed.problems[0].taskId, "T0078");
-  assert.equal(parsed.problems[0].status, "doing");
-  assert.deepEqual(parsed.problems[0].missingFields, ["orchestration: used packet"]);
-  assert.match(parsed.problems[0].nextAction, /orchestration-template/);
-  assert.match(parsed.problems[0].nextAction, /orchestration-check T0078 --json/);
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.problems, []);
+  assert.equal(parsed.advisories[0].code, "orchestration_start_preflight_missing");
+  assert.equal(parsed.advisories[0].taskId, "T0078");
+  assert.equal(parsed.advisories[0].status, "doing");
+  assert.deepEqual(parsed.advisories[0].missingFields, ["orchestration: used packet"]);
+  assert.match(parsed.advisories[0].nextAction, /orchestration-template/);
+  assert.match(parsed.advisories[0].nextAction, /orchestration-check T0078 --json/);
 });
 
 test("cli set --json reports structured transition failure", (t) => {
