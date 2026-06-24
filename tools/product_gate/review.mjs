@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fail } from "../lib/cli.mjs";
 import { relCwdPosix } from "../lib/paths.mjs";
+import { VISUAL_AXES, isAxisScore } from "./lib/visual_axes.mjs";
 
 function usage() {
   console.error(`usage:
@@ -109,14 +110,6 @@ function hasUsefulAnswer(value) {
   return String(value || "").trim().length >= 8;
 }
 
-const VISUAL_AXES = [
-  "composition",
-  "readability",
-  "ui_controls",
-  "action_direction",
-  "art_quality",
-  "audience_fit",
-];
 const VISUAL_SEVERITIES = new Set(["blocker", "major", "minor"]);
 const VISUAL_PASS_THRESHOLD = 4;
 
@@ -332,7 +325,7 @@ function parseVisualScores(rawScores) {
       errors.push(`unknown visual score axis: ${axis || "(missing)"}`);
       continue;
     }
-    if (!Number.isInteger(score) || score < 1 || score > 5) {
+    if (!isAxisScore(score)) {
       errors.push(`visual score for ${axis} must be an integer 1-5`);
       continue;
     }

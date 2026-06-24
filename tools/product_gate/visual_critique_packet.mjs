@@ -3,15 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fail } from "../lib/cli.mjs";
 import { relCwdPosix } from "../lib/paths.mjs";
-
-const VISUAL_AXES = [
-  "composition",
-  "readability",
-  "ui_controls",
-  "action_direction",
-  "art_quality",
-  "audience_fit",
-];
+import { VISUAL_AXES } from "./lib/visual_axes.mjs";
 
 function usage() {
   console.error(`usage:

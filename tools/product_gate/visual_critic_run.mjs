@@ -19,15 +19,7 @@ import { dirname, basename, extname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fail } from "../lib/cli.mjs";
 import { relCwdPosix } from "../lib/paths.mjs";
-
-const VISUAL_AXES = [
-  "composition",
-  "readability",
-  "ui_controls",
-  "action_direction",
-  "art_quality",
-  "audience_fit",
-];
+import { VISUAL_AXES, isAxisScore } from "./lib/visual_axes.mjs";
 
 function usage() {
   console.error(`usage:
@@ -319,7 +311,7 @@ function validateCritique(critique) {
   else {
     for (const axis of VISUAL_AXES) {
       const score = Number(critique.scores[axis]);
-      if (!Number.isInteger(score) || score < 1 || score > 5) errors.push(`score ${axis} must be an integer 1-5`);
+      if (!isAxisScore(score)) errors.push(`score ${axis} must be an integer 1-5`);
     }
   }
   return errors;
