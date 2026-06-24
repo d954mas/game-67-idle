@@ -33,8 +33,10 @@ ONCE, store in the shared library, reuse many — do not re-prepare per game.
 ## Transfer to library
 
 Catalog each reusable asset with provenance:
-- downloaded: `tools/assets/intake/download_source_asset.mjs` then
+- downloaded (single URL/file): `tools/assets/intake/download_source_asset.mjs` then
   `tools/assets/intake/accept_incoming_asset.mjs`.
+- a ZIP or folder (bulk pack, no direct URL): `tools/assets/intake/ingest_archive.mjs`
+  stages it into `_incoming/<source>/<slug>/` with per-file sha256, then `accept`.
 - paid pack (CGTrader etc.): manual intake `--manual --publish false`; binary
   routes to the gitignored `assets/restricted/`, only the catalog `.md` is
   committed. See game-asset-pipeline `references/restricted-paid-assets.md`.
