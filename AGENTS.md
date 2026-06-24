@@ -13,8 +13,8 @@
   `gamedesign/{knowledge,sources}/`.
 - Asset library (3700+ glb; REUSE FIRST, skill `game-3d-models`):
   `C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets`.
-- Work/status: `tasks/` (rules `tasks/README.md`). Skills: `.codex/skills/`
-  (`.claude/skills/` generated). Workflow: `AI_PIPELINE.md`; temp: `tmp/`.
+- Work/status `tasks/` (`tasks/README.md`); skills `.codex/skills/` (`.claude/skills/`
+  generated via `tools/sync.mjs`); workflow + commands `AI_PIPELINE.md`; temp `tmp/`.
 
 ## Invariants
 
@@ -35,44 +35,30 @@
   enter git — they live in each game's gitignored `<game>/assets/restricted/`
   (only the `.md` committed), enforced by the guard.
 
-## Context
+## Working
 
-- Workflow: `AI_PIPELINE.md`, `docs/ai-pipeline/agent-workflow.md`.
-- Substantial work loads taskboard + one task/evidence + one skill; skip archives/
-  logs/broad-design/builds/generated unless linked.
-- Lead delegates read-heavy work to subagents (`subagent-packet-template --preset`);
-  owns integration/status/validation. `docs/ai-pipeline/orchestration-playbook.md`.
-
-## Game Work
-
-- Start new games with fresh project wiki and `tasks/active/` work items.
-- Prefer small native slices; tests, spikes, prototypes use same gates.
-- First screen: one location, primary path, next action, visible progress, locks.
+- Load only what applies: substantial work loads taskboard + one task/evidence + one
+  skill; skip archives/logs/broad-design/builds/generated unless linked. Match
+  ceremony to change size (`AI_PIPELINE.md` Change-Size Tiers).
+- Lead delegates read-heavy work to subagents (`subagent-packet-template --preset`),
+  owns integration/status/validation. Workflow + delegation:
+  `docs/ai-pipeline/agent-workflow.md`.
+- Game work: prefer small native slices; new games get a fresh project wiki +
+  `tasks/active/` items. First screen = one location, primary path, next action,
+  visible progress, locks.
 
 ## Gates
 
-- Gate taxonomy/defaults: `docs/ai-pipeline/quality-validation.md`.
-- Builds/probes/audits are evidence, not acceptance.
-- Visual work: screenshot evidence + before/after judgment.
-- Lead rejection freezes feature/content expansion until fixed.
+- Gate taxonomy/done-criteria + validate commands:
+  `docs/ai-pipeline/quality-validation.md` and `AI_PIPELINE.md`. Builds/probes/audits
+  are evidence, not acceptance; lead rejection freezes feature/content expansion.
 - 3D model work: `tools/product_gate/visual_material_floor.mjs` must pass —
-  flat-tint/fallback GLB rendering is a product fail.
-- Repeated strict/product failures must change path:
-  `node tools/product_gate/repeated_failure_guard.mjs`.
-
-## Validate
-
-- Docs/tasks: `node tools/taskboard/cli.mjs validate`.
-- Skills/process: `node tools/skills_eval.mjs`.
-- Pipeline: `node tools/ai.mjs validate` (`--full` = export/runtime).
-- Product: `node tools/ai.mjs gate` (with screenshots).
-- Native playable: smallest proving build/run + screenshot; smoke prints named
-  checks + summary.
-
-When friction repeats, prefer a tool, validator, skill, or source fix.
+  flat-tint/fallback GLB rendering is a product fail. Visual work: screenshot +
+  before/after judgment.
+- When friction repeats, prefer a tool, validator, skill, or source fix.
 
 ## Project
 
 - Active game concept: none — root is the shared pipeline + `template/`.
-- New game: copy `template/` (`node tools/bootstrap/new_game.mjs --id <id>`), then
-  customise + pull assets/systems. Closed prototypes are git tags.
+- New game: `node tools/bootstrap/new_game.mjs --id <id>`, then customise + pull
+  assets/systems. Closed prototypes are git tags.
