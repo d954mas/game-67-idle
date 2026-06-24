@@ -15,18 +15,12 @@ import { createHash } from "node:crypto";
 import { DEFAULT_LIBRARY, KIND_DIR } from "../assets/source/find_assets.mjs";
 import { catalogFrontmatter } from "../lib/asset_catalog.mjs";
 import { isMain } from "../lib/cli.mjs";
+import { LICENSE_URLS } from "../lib/licenses.mjs";
 
 // review-kind -> library-kind, for legacy manifests; new manifests already carry
 // a library kind, so this is only a fallback.
 const KIND_FROM_REVIEW = { model: "model", font: "font", audio: "audio", image: "texture", ui: "ui", texture: "texture", material: "material" };
 const FONT_EXT = [".ttf", ".otf", ".woff", ".woff2"];
-
-const LICENSE_URLS = {
-  "CC0-1.0": "https://creativecommons.org/publicdomain/zero/1.0/",
-  "OFL-1.1": "https://openfontlicense.org/open-font-license-official-text/",
-  "CC-BY-4.0": "https://creativecommons.org/licenses/by/4.0/",
-  "CC-BY-SA-4.0": "https://creativecommons.org/licenses/by-sa/4.0/",
-};
 
 function kebab(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");

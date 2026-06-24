@@ -315,6 +315,7 @@ run("hooks sync tests", ["--test", "tools/hooks_sync.test.mjs"]);
 run("asset catalog lib tests", ["--test", "tools/lib/asset_catalog.test.mjs"]);
 run("cli lib tests", ["--test", "tools/lib/cli.test.mjs"]);
 run("json lib tests", ["--test", "tools/lib/json.test.mjs"]);
+run("licenses lib tests", ["--test", "tools/lib/licenses.test.mjs"]);
 // Prose-auditors are advisory: skills_eval is a presence-lint (its own header
 // says it is not a quality eval) and doc_reference_check is link-rot — neither
 // judges output, so they must not block a code/doc edit. Run them under --review
