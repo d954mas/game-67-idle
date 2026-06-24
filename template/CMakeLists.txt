@@ -38,6 +38,10 @@ if(NOT EMSCRIPTEN)
         DEPENDS build_game_packs src/build_packs.c
             assets/shaders/slug_text.vert assets/shaders/slug_text.frag
             assets/shaders/mesh_inst.vert assets/shaders/mesh_inst.frag
+            assets/shaders/mesh_tex.vert assets/shaders/mesh_tex.frag
+            assets/shaders/sprite.vert assets/shaders/sprite.frag
+            assets/ui/panel.png assets/ui/button.png
+            assets/ui/slider_track.png assets/ui/slider_fill.png assets/ui/slider_thumb.png
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         COMMENT "Building game asset pack"
         VERBATIM
@@ -57,6 +61,8 @@ endif()
 add_executable(${GAME_TARGET}
     src/main.c
     src/ui/hud.c
+    src/ui/ui_runtime.c
+    src/ui/theme.c
     src/render/render_mesh.c
     src/render/capture.c
     src/systems/sys_move.c
@@ -70,6 +76,7 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core nt_app nt_input nt_window nt_gfx nt_text_renderer nt_font
     nt_resource nt_material nt_shared nt_render nt_hash nt_fs nt_log nt_math nt_time
     nt_mesh_renderer nt_entity nt_transform_comp nt_mesh_comp nt_material_comp nt_drawable_comp
+    nt_ui nt_sprite_renderer nt_atlas nt_mem_scratch nt_clipboard
     glad stb_image_write
 )
 if(EMSCRIPTEN)

@@ -18,6 +18,11 @@ typedef struct World {
     float player_x, player_z, player_yaw;
     nt_entity_t player_entity;
     bool player_spawned;
+
+    // A static TEXTURED prop next to the player — shows the textured mesh path
+    // (same cube mesh, a uv0 + u_texture material) beside the coloured one.
+    nt_entity_t prop_entity;
+    bool prop_spawned;
 } World;
 
 #endif /* GAME_WORLD_H */

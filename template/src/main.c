@@ -12,6 +12,7 @@
 #include "input/nt_input.h"
 #include "log/nt_log.h"
 #include "material/nt_material.h"
+#include "memory/nt_mem_scratch.h"
 #include "nt_pack_format.h"
 #include "render/nt_render_defs.h"
 #include "renderers/nt_text_renderer.h"
@@ -24,6 +25,7 @@
 #include "systems/sys_move.h"
 #include "systems/sys_settings.h"
 #include "ui/hud.h"
+#include "ui/ui_runtime.h"
 #include "world/world.h"
 
 #include <stdio.h>
@@ -39,6 +41,7 @@ static nt_material_t s_text_material;
 static nt_font_t s_font;
 static nt_resource_t s_text_vs, s_text_fs, s_font_resource;
 static nt_resource_t s_mesh_vs, s_mesh_fs, s_cube;
+static nt_resource_t s_tex_vs, s_tex_fs, s_uv_texture;
 static World s_world;
 static char s_capture_path[260];
 static bool s_capture;
@@ -60,27 +63,33 @@ static void frame(void) {
     nt_material_step();
     s_world.time_seconds += g_nt_app.dt;
 
-    // game systems update the world
+    // game systems update the world (settings logic now lives in its nt_ui build)
     sys_move(&s_world, g_nt_app.dt);
-    sys_settings_update(&s_world, g_nt_app.dt);
 
     nt_gfx_begin_frame();
     if (g_nt_gfx.context_restored) {
         nt_resource_invalidate(NT_ASSET_SHADER_CODE);
         nt_resource_invalidate(NT_ASSET_FONT);
         nt_resource_invalidate(NT_ASSET_MESH);
+        nt_resource_invalidate(NT_ASSET_TEXTURE);
         s_frame_ubo = nt_gfx_make_buffer(&(nt_buffer_desc_t){
             .type = NT_BUFFER_UNIFORM, .usage = NT_USAGE_DYNAMIC,
             .size = sizeof(nt_frame_uniforms_t), .label = "frame_uniforms"});
         nt_text_renderer_restore_gpu();
         render_mesh_restore_gpu();
+        ui_runtime_restore_gpu();
     }
 
     // render systems read the world
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
     render_mesh_draw(&s_world, s_frame_ubo);
     hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
-    sys_settings_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
+
+    // settings UI: real nt_ui widgets (panel + sliders + buttons), built + walked here
+    if (ui_runtime_begin(g_nt_app.dt)) {
+        sys_settings_ui(ui_runtime_ctx(), &s_world);
+        ui_runtime_end();
+    }
     nt_gfx_end_pass();
 
     // --capture: after a few frames (resources loaded + rendered), grab + quit.
@@ -128,6 +137,8 @@ int main(int argc, char **argv) {
     nt_resource_init(&(nt_resource_desc_t){0});
     nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);
     nt_resource_set_activator(NT_ASSET_MESH, nt_gfx_activate_mesh, nt_gfx_deactivate_mesh);
+    nt_resource_set_activator(NT_ASSET_TEXTURE, nt_gfx_activate_texture, nt_gfx_deactivate_texture); // mesh texture + UI atlas page
+    nt_mem_scratch_init((size_t)512U * 1024U); // per-frame arena nt_ui builds element data from
 
     nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
@@ -166,12 +177,20 @@ int main(int argc, char **argv) {
         .type = NT_BUFFER_UNIFORM, .usage = NT_USAGE_DYNAMIC,
         .size = sizeof(nt_frame_uniforms_t), .label = "frame_uniforms"});
 
-    // mesh render system + a sample character cube (coloured mesh path)
+    // mesh render system + two sample cubes: a coloured one (mesh_inst) and a
+    // textured one (mesh_tex, samples the uv_grid texture). Same cube mesh feeds both.
     s_mesh_vs = nt_resource_request(rid("assets/shaders/mesh_inst.vert"), NT_ASSET_SHADER_CODE);
     s_mesh_fs = nt_resource_request(rid("assets/shaders/mesh_inst.frag"), NT_ASSET_SHADER_CODE);
+    s_tex_vs = nt_resource_request(rid("assets/shaders/mesh_tex.vert"), NT_ASSET_SHADER_CODE);
+    s_tex_fs = nt_resource_request(rid("assets/shaders/mesh_tex.frag"), NT_ASSET_SHADER_CODE);
+    s_uv_texture = nt_resource_request(rid("assets/textures/uv_grid"), NT_ASSET_TEXTURE);
     s_cube = nt_resource_request(rid("assets/meshes/cube.glb"), NT_ASSET_MESH);
-    render_mesh_init(s_mesh_vs, s_mesh_fs);
+    render_mesh_init(s_mesh_vs, s_mesh_fs, s_tex_vs, s_tex_fs, s_uv_texture);
     render_mesh_spawn_player(&s_world, s_cube, (float[4]){0.16F, 0.78F, 0.30F, 1.0F});
+    render_mesh_spawn_prop(&s_world, s_cube);
+
+    // engine UI stack (sprite renderer + slice9 atlas + nt_ui ctx); reuses the font + text material
+    ui_runtime_init(s_text_material, s_font, s_font_resource);
 
     if (s_open_settings_on_start) {
         sys_settings_force_open();
@@ -181,6 +200,8 @@ int main(int argc, char **argv) {
     nt_app_run(frame);
 
 #ifndef NT_PLATFORM_WEB
+    ui_runtime_shutdown();
+    nt_mem_scratch_shutdown();
     nt_text_renderer_shutdown();
     nt_font_destroy(s_font);
     nt_font_shutdown();
