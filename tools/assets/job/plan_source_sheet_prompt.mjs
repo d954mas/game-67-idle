@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Build a generator-facing source-sheet prompt packet from an art job contract.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fail } from "../../lib/cli.mjs";
+import { readJson } from "../../lib/json.mjs";
 
 function usage() {
   console.log(`usage:
@@ -32,14 +33,6 @@ function parseArgs(argv) {
     }
   }
   return values;
-}
-
-function readJson(path) {
-  try {
-    return JSON.parse(readFileSync(resolve(path), "utf8"));
-  } catch (error) {
-    fail(`cannot read JSON ${path}: ${error.message}`);
-  }
 }
 
 function hasText(value) {
@@ -225,7 +218,7 @@ function renderLayoutInstruction(layout) {
 
 function keyColorAdviceFromAudit(path) {
   if (!path) return { color: "", action: "", recommendedNextStep: null, blockingReasons: [] };
-  const audit = readJson(path);
+  const audit = readJson(resolve(path), fail);
   const recommendedNextStep = audit.recommended_next_step && typeof audit.recommended_next_step === "object" ? audit.recommended_next_step : null;
   const color = hasText(audit.next_prompt_key_color)
     ? audit.next_prompt_key_color
@@ -419,7 +412,7 @@ for (const key of ["job", "source_family", "output"]) {
   if (!args[key]) fail(`--${key.replaceAll("_", "-")} is required`);
 }
 
-const job = readJson(args.job);
+const job = readJson(resolve(args.job), fail);
 const packet = buildPacket(job, args.source_family, {
   intakeAudit: args.intake_audit,
   keyColor: args.key_color,

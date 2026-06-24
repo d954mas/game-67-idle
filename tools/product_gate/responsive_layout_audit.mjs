@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fail } from "../lib/cli.mjs";
+import { readJson } from "../lib/json.mjs";
 
 function usage() {
   console.error(`usage:
@@ -34,14 +35,6 @@ function parseArgs(argv) {
     }
   }
   return values;
-}
-
-function readJson(path) {
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch (error) {
-    fail(`cannot read JSON ${path}: ${error.message}`);
-  }
 }
 
 function numberArg(values, key, fallback) {

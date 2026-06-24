@@ -6,10 +6,11 @@
 //
 // Use --dry-run to preview without writing files.
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fail } from "../../lib/cli.mjs";
+import { writeJsonFile } from "../../lib/json.mjs";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
@@ -45,19 +46,7 @@ function usage() {
 }
 
 function writeJson(path, data, dryRun) {
-  const fullPath = join(root, path);
-  if (existsSync(fullPath)) {
-    fail(`refusing to overwrite existing file: ${path}`);
-  }
-  const text = `${JSON.stringify(data, null, 2)}\n`;
-  if (dryRun) {
-    console.log(`would write ${path}`);
-    console.log(text);
-    return;
-  }
-  mkdirSync(dirname(fullPath), { recursive: true });
-  writeFileSync(fullPath, text, "utf8");
-  console.log(`wrote ${path}`);
+  return writeJsonFile(path, data, { root, onError: fail, dryRun });
 }
 
 const args = parseArgs(process.argv.slice(2));

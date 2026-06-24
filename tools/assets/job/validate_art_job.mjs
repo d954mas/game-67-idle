@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fail } from "../../lib/cli.mjs";
+import { readJson } from "../../lib/json.mjs";
 
 function usage() {
   console.error(`usage:
@@ -34,14 +35,6 @@ function parseArgs(argv) {
     }
   }
   return values;
-}
-
-function readJson(path) {
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch (error) {
-    fail(`cannot read JSON ${path}: ${error.message}`);
-  }
 }
 
 function readJsonOrProblem(path, problems, label) {
@@ -656,8 +649,8 @@ function validateJob(job, jobPath, options = {}) {
 
   let crop = null;
   let runtime = null;
-  if (existsSync(cropPath)) crop = readJson(cropPath);
-  if (existsSync(runtimePath)) runtime = readJson(runtimePath);
+  if (existsSync(cropPath)) crop = readJson(cropPath, fail);
+  if (existsSync(runtimePath)) runtime = readJson(runtimePath, fail);
   const relJob = jobPath.replaceAll("\\", "/");
   if (crop) {
     if (crop.schema !== "game.art_crop_manifest") problems.push("crop manifest schema must be game.art_crop_manifest");
@@ -780,7 +773,7 @@ if (!values.job) usage();
 const jobPath = values.job.replaceAll("\\", "/");
 const fullJobPath = resolve(values.job);
 if (!existsSync(fullJobPath)) fail(`art job does not exist: ${values.job}`);
-const job = readJson(fullJobPath);
+const job = readJson(fullJobPath, fail);
 const problems = validateJob(job, jobPath, { strict: values.strict === true, finalArt: values.finalArt === true });
 if (problems.length > 0) {
   for (const problem of problems) console.log(`problem: ${problem}`);
