@@ -3,10 +3,11 @@
 //
 //   node tools/pipeline_validate.mjs [--quick] [--full] [--review] [--dry-run]
 
-import { existsSync, readFileSync, rmSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { VALIDATE_EXPORT_PREFIX, listValidateExports, partitionByKeep } from "./lib/tmp_exports.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -23,7 +24,7 @@ function hasActiveConcept() {
 }
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-const exportDir = join(root, "tmp", `pipeline-validate-${stamp}`);
+const exportDir = join(root, "tmp", `${VALIDATE_EXPORT_PREFIX}${stamp}`);
 const args = process.argv.slice(2);
 
 function usage() {
@@ -264,28 +265,12 @@ function fullPythonRequiredModules() {
 
 // Full mode copies the repo into tmp/pipeline-validate-<stamp>/. Left unchecked
 // these accumulate (observed: 126 dirs / 362MB). Prune to the newest N.
+// Listing + retention contract is shared with tmp_sweep via lib/tmp_exports.
 function pruneOldExports(keep) {
   const tmpDir = join(root, "tmp");
-  if (!existsSync(tmpDir)) return;
-  let dirs = [];
-  try {
-    dirs = readdirSync(tmpDir)
-      .filter((name) => name.startsWith("pipeline-validate-"))
-      .map((name) => join(tmpDir, name))
-      .filter((path) => {
-        try {
-          return statSync(path).isDirectory();
-        } catch {
-          return false;
-        }
-      })
-      .sort(); // names are ISO timestamps, so lexical sort == chronological
-  } catch {
-    return;
-  }
-  const stale = dirs.slice(0, Math.max(0, dirs.length - keep));
-  for (const dir of stale) {
-    rmSync(dir, { recursive: true, force: true });
+  const { stale } = partitionByKeep(listValidateExports(tmpDir), keep);
+  for (const name of stale) {
+    rmSync(join(tmpDir, name), { recursive: true, force: true });
   }
   if (stale.length > 0) {
     console.log(`pruned ${stale.length} old tmp/pipeline-validate-* dir(s); kept newest ${keep}`);
@@ -318,6 +303,7 @@ run("json lib tests", ["--test", "tools/lib/json.test.mjs"]);
 run("licenses lib tests", ["--test", "tools/lib/licenses.test.mjs"]);
 run("paths lib tests", ["--test", "tools/lib/paths.test.mjs"]);
 run("mime lib tests", ["--test", "tools/lib/mime.test.mjs"]);
+run("tmp_exports lib tests", ["--test", "tools/lib/tmp_exports.test.mjs"]);
 run("visual axes lib tests", ["--test", "tools/product_gate/lib/visual_axes.test.mjs"]);
 run("art contract lib tests", ["--test", "tools/product_gate/lib/art_contract.test.mjs"]);
 // Prose-auditors are advisory: skills_eval is a presence-lint (its own header

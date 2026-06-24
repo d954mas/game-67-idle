@@ -5,8 +5,10 @@ import { mkdirSync, mkdtempSync, rmSync, existsSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { VALIDATE_EXPORT_PREFIX } from "./lib/tmp_exports.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const P = VALIDATE_EXPORT_PREFIX;
 
 function run(args) {
   return spawnSync(process.execPath, ["tools/tmp_sweep.mjs", ...args], {
@@ -20,10 +22,10 @@ function makeFakeTmp() {
   const dir = mkdtempSync(join(tmpdir(), "tmp-sweep-"));
   const tmp = join(dir, "tmp");
   for (const name of [
-    "pipeline-validate-2026-06-15T01-00-00-000Z",
-    "pipeline-validate-2026-06-15T02-00-00-000Z",
-    "pipeline-validate-2026-06-15T03-00-00-000Z",
-    "pipeline-validate-2026-06-15T04-00-00-000Z",
+    `${P}2026-06-15T01-00-00-000Z`,
+    `${P}2026-06-15T02-00-00-000Z`,
+    `${P}2026-06-15T03-00-00-000Z`,
+    `${P}2026-06-15T04-00-00-000Z`,
     "rune_marches",
     "NanoAlpha",
   ]) {
@@ -41,7 +43,7 @@ test("tmp_sweep --list reports without deleting", () => {
     assert.match(result.stdout, /reclaimable:/);
     // Nothing deleted on a list.
     assert.equal(existsSync(join(tmp, "rune_marches")), true);
-    assert.equal(existsSync(join(tmp, "pipeline-validate-2026-06-15T01-00-00-000Z")), true);
+    assert.equal(existsSync(join(tmp, `${P}2026-06-15T01-00-00-000Z`)), true);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -56,9 +58,9 @@ test("tmp_sweep --all-scratch keeps newest N validate dirs and removes the rest"
     assert.equal(existsSync(join(tmp, "rune_marches")), false);
     assert.equal(existsSync(join(tmp, "NanoAlpha")), false);
     // Oldest validate dir removed, newest 3 kept.
-    assert.equal(existsSync(join(tmp, "pipeline-validate-2026-06-15T01-00-00-000Z")), false);
-    assert.equal(existsSync(join(tmp, "pipeline-validate-2026-06-15T02-00-00-000Z")), true);
-    assert.equal(existsSync(join(tmp, "pipeline-validate-2026-06-15T04-00-00-000Z")), true);
+    assert.equal(existsSync(join(tmp, `${P}2026-06-15T01-00-00-000Z`)), false);
+    assert.equal(existsSync(join(tmp, `${P}2026-06-15T02-00-00-000Z`)), true);
+    assert.equal(existsSync(join(tmp, `${P}2026-06-15T04-00-00-000Z`)), true);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

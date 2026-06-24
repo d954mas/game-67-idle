@@ -12,6 +12,7 @@
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isValidateExportName, partitionByKeep } from "./lib/tmp_exports.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const args = process.argv.slice(2);
@@ -71,8 +72,9 @@ if (!existsSync(tmpDir)) {
 }
 
 const entries = readdirSync(tmpDir).sort();
-const validateDirs = entries.filter((n) => n.startsWith("pipeline-validate-")).sort();
-const keptValidate = new Set(validateDirs.slice(Math.max(0, validateDirs.length - keepValidate)));
+// Prefix + "keep newest N" contract shared with pipeline_validate via lib/tmp_exports.
+const validateDirs = entries.filter(isValidateExportName);
+const keptValidate = new Set(partitionByKeep(validateDirs, keepValidate).kept);
 
 // Scratch = everything except the newest N pipeline-validate dirs we keep.
 const scratch = entries.filter((n) => !keptValidate.has(n));
