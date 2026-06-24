@@ -84,11 +84,15 @@ Claude+Codex; Фаза 1 (prose-аудиторы/оркестрация advisory
    **Пропустить/последним:** `lib/text` (slugify — хвосты разные, низкий ROI), `lib/active_concept`
    (крошечный), `lib/frontmatter` (НЕ плодить — `parseFrontmatter` остаётся в `find_assets`),
    `python_runner` (1 caller — преждевременно).
-3. **`product_gate/lib`**: VISUAL_AXES (×4) + state_matrix-ридер + art_contract-лоадер (twin в
-   `review.mjs`+`visual_critic_run`). Держать `visual_axes` (константы+матем) ОТДЕЛЬНО от
-   `state_matrix` (IO) от `llm_json` (парс) — не в один god-файл. Свернуть `visual_critique_packet`
-   → `visual_critic_run` emit-mode. Проверка: `node tools/ai.mjs gate` (рва `visual_material_floor`/
-   `repeated_failure_guard` не трогать).
+3. **`product_gate/lib`** — ЧАСТИЧНО: ✅ `12455d3` `visual_axes.mjs` (`VISUAL_AXES` ×4 +
+   `isAxisScore` ×2, отдельный лист); ✅ `38ab981` `art_contract.mjs` (`loadArtContract` core,
+   twin review+visual_critic_run, byte-идентичные сообщения). **Состязательно ПРОПУЩЕНО:**
+   `state_matrix`-ридер (только в `review.mjs`, 1 юзер) и `llm_json`/`extractJson` (только в
+   `visual_critic_run`, 1 юзер) — не дубли (правило «похожая форма → оставить»); `defaultContractPath`
+   + `sanitizeToken` оставлены inline (однострочник + дефолт-токен расходится "gate"/"game").
+   **ОСТАЛОСЬ — рискованно:** свернуть `visual_critique_packet` → `visual_critic_run` emit-mode
+   (удаление тула + правка скиллов/доков, смежно с Фазой 4 #14) — отдельный аккуратный заход.
+   Проверка: `node tools/ai.mjs gate` (рва `visual_material_floor`/`repeated_failure_guard` не трогать).
 4. **`devapi/png_io.py`** — вынести триплицированный PNG-кодек (capture_window/devapi_client/
    pixel_health). **НЕ удалять `capture_screen.ps1`** — это ЖИВОЙ не-Windows фоллбэк
    (`devapi_client.py:427-433`). Проверка: pixel_health + capture_window + DevAPI smoke.
