@@ -102,10 +102,18 @@ Claude+Codex; Фаза 1 (prose-аудиторы/оркестрация advisory
 6. **`taskboard/lib.mjs` split** (ПОЗДНО, высокий blast — импортят cli+server+product_gate+
    game_context): task_store + orchestration_policy + subagent_packets; имена экспортов стабильны
    через re-export shim при миграции. Проверка: `taskboard cli validate` + тесты.
-7. **Мелкие слияния:** tmp-housekeeper (`pruneOldExports`+`tmp_sweep`→1); `serve_tunnel`+
-   `serve_gallery` → общий `lib/mime.mjs` ТОЛЬКО (не god static-serve); `ai.mjs` arg-allowlist
-   единый источник. **Доки:** workflow «искать→download/ingest_archive→accept→preview→pull» в
-   game-asset скилле; doc-шаблоны из CLI (`new_prototype`/`export_base`).
+7. ✅ **СДЕЛАНО — 4 инкремента** (по одному, ревью+`validate --full` зелёный на каждом):
+   `01ec3cf` `lib/mime.mjs` (`serve_tunnel`+`serve_gallery` → общая mime-карта ТОЛЬКО; союз
+   двух карт без конфликтов, дельты = gallery теперь отдаёт .otf/.mp3/… корректным типом вместо
+   octet-stream — строгое улучшение; `taskboard/server.mjs` НЕ слит — charset-суффикс = иной
+   контракт); `77eec8e` `lib/tmp_exports.mjs` (контракт `pipeline-validate-<ISO>` дир +
+   keep-newest-N, литерал-префикс был в 3 местах; `pruneOldExports` + `tmp_sweep` делят его, каждый
+   хранит свою точную семантику листинга — байт-идентично); `655d49e` `lib/validate_flags.mjs`
+   (флаг-словарь pipeline_validate, дублировался facade `ai.mjs` ↔ тул; чистый константный лист);
+   `ad70c52` доки — `ingest_archive` в workflow (game-asset-prep + shared-free-asset-library).
+   **Состязательно ПРОПУЩЕНО:** слияние STATUS-шаблонов `export_base` (clean-seed) ↔ `new_prototype`
+   (kickoff) — разные lifecycle-доки, общая только форма заголовков, + ров «bootstrap-scaffolds не
+   сливать»; `ai.mjs` value-splice генерализован по `VALIDATE_VALUE_FLAGS` (2 реальных юзера).
 
 **Жёсткие поправки (иначе ошибка):** `capture_screen.ps1` НЕ мёртвый; libs = много мелких листьев
 не god-`cli.mjs`; whitelist-тулы сохраняют unknown-option guard; `pull` (game-local writer,
