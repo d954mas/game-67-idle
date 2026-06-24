@@ -1,0 +1,17 @@
+{
+  "schema": "game_seed.state",
+  "version": 1,
+  "state": {
+    "shape_index": 1,
+    "render_mode_index": 2,
+    "camera_distance": 5.0,
+    "test_ui_clicks": 2,
+    "test_label_text": "Label: clicked 2",
+    "test_button_text": "Clicked 2",
+    "tutorial": {"done": false},
+    "wallet": {"soft": 0, "hard": 0},
+    "items": {},
+    "inventory": {"item_ids": []},
+    "equipment": {"hand_item_id": null}
+  }
+}
