@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fail } from "../lib/cli.mjs";
+import { relCwdPosix } from "../lib/paths.mjs";
 
 const VISUAL_AXES = [
   "composition",
@@ -33,11 +34,6 @@ function parseArgs(argv) {
     index += 1;
   }
   return values;
-}
-
-function relPath(path) {
-  const absolute = resolve(path);
-  return absolute.startsWith(process.cwd()) ? absolute.slice(process.cwd().length + 1).replaceAll("\\", "/") : path;
 }
 
 function defaultJsonOutput(markdownPath) {
@@ -136,7 +132,7 @@ const record = {
   project: values.project,
   task: values.task,
   surface: values.surface || "desktop",
-  screenshot: relPath(values.screenshot),
+  screenshot: relCwdPosix(values.screenshot),
   target: values.target,
   brief: values.brief || "",
   axes: VISUAL_AXES,

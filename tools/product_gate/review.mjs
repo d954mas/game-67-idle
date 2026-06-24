@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fail } from "../lib/cli.mjs";
+import { relCwdPosix } from "../lib/paths.mjs";
 
 function usage() {
   console.error(`usage:
@@ -258,7 +259,7 @@ function mergeContract(values) {
   if (!contractPath) return values;
   const contract = loadContract(contractPath, { required: explicit });
   if (!contract) return values;
-  const out = { ...values, contract: relPath(contractPath), contractData: contract };
+  const out = { ...values, contract: relCwdPosix(contractPath), contractData: contract };
   const threshold = Number(contract.pass_threshold);
   if (Number.isInteger(threshold) && threshold >= 1 && threshold <= 5) out.passThreshold = threshold;
   return out;
@@ -290,7 +291,7 @@ function mergeCritique(values) {
   const critiquePath = values.critique;
   if (!critiquePath) return values;
   const critique = loadCritique(critiquePath);
-  const out = { ...values, critiqueSource: relPath(critiquePath), visualStrict: true };
+  const out = { ...values, critiqueSource: relCwdPosix(critiquePath), visualStrict: true };
   if (!out.verdict && typeof critique.verdict === "string") out.verdict = critique.verdict.trim();
 
   const seenAxes = new Set((values.visualScores || []).map((entry) => String(entry).split("=")[0].trim()));
@@ -356,10 +357,6 @@ function parseVisualIssues(rawIssues) {
     }
   }
   return { issues, errors };
-}
-
-function relPath(path) {
-  return resolve(path).startsWith(process.cwd()) ? resolve(path).slice(process.cwd().length + 1).replaceAll("\\", "/") : path;
 }
 
 function validate(values) {
@@ -544,7 +541,7 @@ const record = {
   surface,
   verdict: values.verdict,
   timestamp: new Date().toISOString(),
-  screenshot: relPath(values.screenshot),
+  screenshot: relCwdPosix(values.screenshot),
   answers: {
     where: values.where || "",
     action: values.action || "",

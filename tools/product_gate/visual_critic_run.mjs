@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, basename, extname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fail } from "../lib/cli.mjs";
+import { relCwdPosix } from "../lib/paths.mjs";
 
 const VISUAL_AXES = [
   "composition",
@@ -57,11 +58,6 @@ function sanitizeToken(value) {
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "game";
-}
-
-function relPath(path) {
-  const absolute = resolve(path);
-  return absolute.startsWith(process.cwd()) ? absolute.slice(process.cwd().length + 1).replaceAll("\\", "/") : path;
 }
 
 // Paths get interpolated into the --model-cmd shell string, so reject any that
@@ -133,7 +129,7 @@ function parseShots(values) {
     const cleanTag = sanitizeToken(tag);
     if (seen.has(cleanTag)) return;
     if (!existsSync(resolve(path))) fail(`screenshot does not exist: ${path}`);
-    shots.push({ tag: cleanTag, path: relPath(path), abs: resolve(path).replaceAll("\\", "/") });
+    shots.push({ tag: cleanTag, path: relCwdPosix(path), abs: resolve(path).replaceAll("\\", "/") });
     seen.add(cleanTag);
   };
   for (const raw of values.shots) {
@@ -165,7 +161,7 @@ function loadContract(values) {
     return { path: "", data: null };
   }
   try {
-    return { path: relPath(contractPath), data: JSON.parse(readFileSync(resolve(contractPath), "utf8")) };
+    return { path: relCwdPosix(contractPath), data: JSON.parse(readFileSync(resolve(contractPath), "utf8")) };
   } catch (error) {
     fail(`art contract is not valid JSON: ${contractPath}: ${error.message}`);
   }
