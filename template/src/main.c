@@ -19,6 +19,7 @@
 #include "time/nt_time.h"
 #include "window/nt_window.h"
 
+#include "render/capture.h"
 #include "render/render_mesh.h"
 #include "systems/sys_move.h"
 #include "systems/sys_settings.h"
@@ -26,6 +27,7 @@
 #include "world/world.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #ifndef GAME_ASSET_PACK_PATH
 #define GAME_ASSET_PACK_PATH "assets/game.ntpack"
@@ -38,6 +40,10 @@ static nt_font_t s_font;
 static nt_resource_t s_text_vs, s_text_fs, s_font_resource;
 static nt_resource_t s_mesh_vs, s_mesh_fs, s_cube;
 static World s_world;
+static char s_capture_path[260];
+static bool s_capture;
+static bool s_open_settings_on_start;
+static int s_frame_count;
 
 static nt_hash64_t rid(const char *s) { return nt_hash64_str(s); }
 
@@ -76,13 +82,27 @@ static void frame(void) {
     hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
     sys_settings_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
     nt_gfx_end_pass();
+
+    // --capture: after a few frames (resources loaded + rendered), grab + quit.
+    s_frame_count += 1;
+    if (s_capture && s_frame_count >= 10) {
+        capture_write_ppm(s_capture_path);
+        nt_app_quit();
+    }
+
     nt_gfx_end_frame();
     nt_window_swap_buffers();
 }
 
 int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--capture") == 0 && i + 1 < argc) {
+            (void)snprintf(s_capture_path, sizeof(s_capture_path), "%s", argv[++i]);
+            s_capture = true;
+        } else if (strcmp(argv[i], "--settings") == 0) {
+            s_open_settings_on_start = true;
+        }
+    }
     nt_engine_config_t config = {0};
     config.app_name = "Template";
     config.version = 1;
@@ -152,6 +172,10 @@ int main(int argc, char **argv) {
     s_cube = nt_resource_request(rid("assets/meshes/cube.glb"), NT_ASSET_MESH);
     render_mesh_init(s_mesh_vs, s_mesh_fs);
     render_mesh_spawn_player(&s_world, s_cube, (float[4]){0.16F, 0.78F, 0.30F, 1.0F});
+
+    if (s_open_settings_on_start) {
+        sys_settings_force_open();
+    }
 
     g_nt_app.target_dt = 1.0F / 60.0F;
     nt_app_run(frame);

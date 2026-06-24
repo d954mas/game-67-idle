@@ -16,6 +16,7 @@ static float s_master = 0.8F, s_music = 0.7F, s_sfx = 0.9F;
 static int s_drag = -1;
 static float s_reset_hold;
 
+void sys_settings_force_open(void) { s_open = true; }
 float sys_settings_master(void) { return s_master; }
 float sys_settings_music(void) { return s_music; }
 float sys_settings_sfx(void) { return s_sfx; }

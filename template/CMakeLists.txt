@@ -58,6 +58,7 @@ add_executable(${GAME_TARGET}
     src/main.c
     src/ui/hud.c
     src/render/render_mesh.c
+    src/render/capture.c
     src/systems/sys_move.c
     src/systems/sys_settings.c
 )
