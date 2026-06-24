@@ -3,6 +3,16 @@
 How code is structured here. These exist to stop the failure mode where an agent
 dumps a whole game into one file. Keep them.
 
+## Engine first (don't hand-roll)
+
+- Before writing custom code, SEARCH THE ENGINE and use its public API. UI uses the
+  engine widgets (`nt_ui_panel`/`nt_ui_slider_float`/`nt_ui_button`/`nt_ui_label`,
+  see `external/neotolis-engine/examples/ui_showcase`), not hand-drawn text/quads.
+  Same for renderers, math, input, resources. Hand-roll ONLY when the engine has no
+  fit — and say why. (A text-drawn "UI" is a hack; the nt_ui widgets are the way.)
+- Styles/theme (colours, button/slider/panel styles) live in their OWN file
+  (e.g. `ui/theme.{c,h}`), separate from the logic that uses them.
+
 ## Decomposition
 
 - **`main.c` is the conductor, not the game.** It only: init subsystems →
