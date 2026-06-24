@@ -21,6 +21,61 @@ game is a self-contained folder copied from `template/`.
   UNIVERSAL/SEED lists are relative to a template-or-game folder, not the repo root).
 - The asset library is shared and external (YandexDisk); never copied.
 
+## Reuse tiers — what is shared vs copied-and-customized
+
+Two KINDS of reuse, different by nature:
+
+- **Dev pipeline** — `tools/`, `.codex/skills/`, `docs/ai-pipeline`, taskboard, the
+  shared asset library. Shared infra, ONE copy used by every game; improvements are
+  immediately everyone's. (The UNIVERSAL set below; flows both ways.)
+- **Code systems** — gameplay AND the shell (settings, audio, save, UI, terrain,
+  character controller, …). These inherently need PER-GAME tweaks, so they are
+  **COPIED into a game when needed and the game owns/customizes its copy** — the same
+  model as the asset library (pull a copy → edit locally → promote good ones back).
+  NOT a frozen linked core: a single "terrain render" or "character controller" can't
+  fit every game unchanged.
+
+Tiers:
+1. **Engine** — `external/neotolis-engine` (submodule; the ONLY truly linked,
+   fix-once shared core; stable public API).
+2. **Systems showcase** — storage of reusable code systems, each a folder with a
+   runnable example. A game COPIES what it needs and customizes it; good systems are
+   promoted back. (No separate frozen "core" — even shell/terrain/character systems
+   get per-game edits, so copy-then-own, not link.)
+3. **Template** (minimal) — thin `main.c` conductor + `world` + the basic shell as
+   its OWN files (settings, audio, save, UI gear/panel, font, coloured+textured mesh,
+   pack builder) so a new game runs immediately; copying the template brings them, and
+   the game then customizes them. The shell lives in the template, not the showcase.
+4. **Game-only** — a game's own systems, logic, pulled assets, tasks, design.
+
+Trade-off (named honestly, per research): copy-then-customize IS "clone-and-own",
+which needs discipline — keep each system self-contained and PROMOTE improvements
+back so the showcase stays the best version. The engine as the stable linked core
+absorbs the cross-cutting fixes that clone-and-own otherwise can't propagate.
+
+## Systems library — a SHOWCASE of solutions (opt-in code reuse)
+
+Besides the template, a **storage/showcase of solutions** (game systems): browse
+what exists, SEE each one work, pull what you need. Like the asset library, but for
+CODE — and like the engine's `examples/` folder, **each solution demonstrates itself**.
+
+- **Each solution is its own folder with a runnable EXAMPLE.** e.g.
+  `systems_showcase/terrain/` = the system (`terrain.{c,h}`) + `example/` (a tiny
+  main/scene that shows it working, with a screenshot) + a record (what it does;
+  deps = engine + the `World` API + any other systems it pulls; origin). The example
+  is both the **living demo** and the **smoke test**.
+- **Self-contained is the entry rule**: a solution depends only on the engine and
+  the `World` API (and explicitly-listed sibling systems) — never a specific game's
+  globals — so it pulls cleanly into any game.
+- **Pull** a solution into a game (like `pull.mjs` for assets); the example stays in
+  the showcase. **Promote** a game's good system into the showcase when it generalizes.
+- **Browsable** like the asset viewer: an index + per-solution preview + the example
+  you can actually run.
+- The showcase holds the **optional** systems (terrain, inventory, dialogue, …) a game
+  pulls on demand. The always-needed **starter** systems (settings, audio, save, UI
+  shell, font/mesh/pack) are NOT here — they simply live **in the template**, since
+  every game starts with them. No "starter vs optional" tag, no separate "core".
+
 ## UNIVERSAL (flows both ways)
 
 The reusable pipeline: `tools/` (asset library tooling, taskboard, product gate,
