@@ -2,48 +2,46 @@
 
 ## Current Goal
 
-No active game concept is selected. This repository is a clean AI-first native
-game seed, ready for the next game.
+Recover the `Blockside Heat` visual contract before any more feature expansion:
+GLB/GLTF assets must render with source materials/textures or an explicit
+per-primitive material path, not one flat tint/fallback material.
 
-The asset/cutout pipeline was reviewed and optimized this iteration (key_matte
-default, route_cutout auto-picker, dual_plate; the per-asset edge-color audit
-removed; ~4000 lines of legacy/dead code dropped) — see git history.
+## Blocking Work
 
-Mine Cards was a prior pipeline test run; its full game, GDD, and tasks are
-preserved in tag `mine-cards-snapshot-2026-06-18` and removed from the working
-tree so the next game starts clean. Reusable lessons live in
-`AI_PIPELINE_HISTORY.md`.
+- Lead visual rejection: sourced models currently render as flat one-color
+  geometry. `tools/product_gate/visual_material_floor.mjs` must pass before
+  more story, map, traffic, NPC, economy, or weapon work.
 
-Ember Road was closed after visual/UX review. Its full game state is preserved
-in tag `ember-road-snapshot-2026-06-21`; active tasks were dropped/archive-kept,
-and game-specific runtime, assets, project docs, and tools were removed from
-the working tree.
+## Non-blocking Debt
 
-## Current Runtime Surface
-
-Native `game_seed` is the clean seed work surface:
-
-```powershell
-cmake --build --preset native-debug --target game_seed
-build/game_seed/native-debug/game_seed.exe --devapi 9123
-```
-
-Runtime entrypoint: `src/clean_seed_main.c` (362-line debug template).
-
-The engine submodule at `external/neotolis-engine` is read-only from this repo.
-Reusable sidecar modules, tools, skills, and game code may be edited here.
+- Wider world is still sparse beyond the immediate block; latest visual gate
+  records this as minor art-quality debt.
 
 ## Current Gate
 
-Capture the user's game concept (references, audience, platform, no-go
-constraints), then run the Stage 0 prototype startup path and create a fresh
-project wiki plus exactly one scoped task/epic before implementation. Do not
-invent a concept.
+Material floor gate: `node tools/product_gate/visual_material_floor.mjs`.
+Current expected result is FAIL until the runtime proves textured/material GLB
+rendering or an explicit accepted debug-only bypass exists.
+
+## Required Validation
+
+`node tools/taskboard/cli.mjs validate`
+`node tools/ai.mjs validate --review`
+
+## Last Known Good Evidence
+
+- `gamedesign/projects/blockside-heat/concept.md`
+- `gamedesign/projects/blockside-heat/visual/targets/blockside-heat-first-slice-target.png`
+- `gamedesign/projects/blockside-heat/visual/live_state_acceptance_matrix.json`
+- `tools/blockside-heat/capture_states.py`
+- `tmp/blockside-heat/capture-states-report.json`
+- Latest screenshot: `tmp/blockside-heat/repo-tool-cache-latest.png`
+- Latest strict PASS is stale for the new material complaint:
+  `gamedesign/projects/blockside-heat/reviews/product_read_gate_latest.json`
 
 ## Next Priorities
 
-1. Capture the next game concept, then scaffold a fresh project wiki + one
-   scoped task/epic before implementation.
-2. Keep reusable pipeline/skills/knowledge clean and current between games.
-3. Keep native PC scale/focus + visual/teachability/core-loop proof as early
-   gates for the next playable UI.
+1. Run and keep the new material floor guard red on the current failure.
+2. Implement a material/texture rendering pass for at least the main model
+   families before any new gameplay/story content.
+3. Re-capture screenshot evidence and rerun strict product/readability gate.

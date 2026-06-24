@@ -1,0 +1,85 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "blockside-heat",
+  "task": "T0117",
+  "surface": "desktop",
+  "verdict": "pass",
+  "timestamp": "2026-06-23T14:33:37.590Z",
+  "screenshot": "tmp/blockside-heat/repo-drive-latest.png",
+  "answers": {
+    "where": "The player is in the red compact at the street intersection after talking to Rita.",
+    "action": "The next action is to drive to the orange curb marker.",
+    "response": "Entering the car changes state to repo_drive, sets repo_drive_active, and updates the UI tree to JOB: CURB SCOUT.",
+    "reward": "The Rita intro now becomes a playable driving objective while CASH $75 remains visible.",
+    "game_look": "The low-poly Roblox-like city, red car, orange route marker, and engine-font HUD are readable in native 3D."
+  },
+  "visual_critique": {
+    "strict": false,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {},
+    "issues": []
+  },
+  "contract": "",
+  "critique_source": "",
+  "state_coverage": {
+    "required": [
+      "first_screen",
+      "in_car_movement",
+      "vehicle_route_complete",
+      "pursuit_pressure",
+      "pickup_stress",
+      "reward_active",
+      "rita_contact",
+      "repo_drive"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen",
+        "evidence": "tmp/blockside-heat/first-native-screenshot-latest.png"
+      },
+      {
+        "tag": "in_car_movement",
+        "evidence": "tmp/blockside-heat/in-car-movement-latest.png"
+      },
+      {
+        "tag": "vehicle_route_complete",
+        "evidence": "tmp/blockside-heat/vehicle-route-complete-latest.png"
+      },
+      {
+        "tag": "pursuit_pressure",
+        "evidence": "tmp/blockside-heat/pursuit-pressure-latest.png"
+      },
+      {
+        "tag": "pickup_stress",
+        "evidence": "tmp/blockside-heat/pickup-stress-latest.png"
+      },
+      {
+        "tag": "reward_active",
+        "evidence": "tmp/blockside-heat/job-complete-latest.png"
+      },
+      {
+        "tag": "rita_contact",
+        "evidence": "tmp/blockside-heat/rita-contact-latest.png"
+      },
+      {
+        "tag": "repo_drive",
+        "evidence": "tmp/blockside-heat/repo-drive-latest.png"
+      }
+    ],
+    "not_covered": []
+  },
+  "problem": "The repo objective starts and points to a curb target, but reaching/completing that target is still the next slice.",
+  "next": "Implement arrival at the curb scout marker and a small repo-route completion response.",
+  "verification": {
+    "required": false
+  }
+}

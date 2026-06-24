@@ -1,0 +1,37 @@
+{
+  "schema": "game.combat",
+  "project": "blockside-heat",
+  "slice": "pickup-run",
+  "tone": "toy-like, non-gory arcade pressure",
+  "player_tool": {
+    "id": "starter_blaster",
+    "display_name": "Starter Blaster",
+    "range_meters": 8,
+    "cooldown_seconds": 0.6,
+    "effect": "stuns pursuer for 1.5 seconds",
+    "feedback": [
+      "toy pop",
+      "hit flash",
+      "stun pose",
+      "short toast"
+    ]
+  },
+  "enemy": {
+    "id": "block_guard",
+    "hp": 2,
+    "speed": "slower than player sprint, faster than walking",
+    "reaction": "starts chase when package is collected"
+  },
+  "fail_state": {
+    "caught": "restart from package collected checkpoint",
+    "cash_loss": 0,
+    "retry_friction": "immediate"
+  },
+  "out_of_scope": [
+    "weapon inventory",
+    "realistic guns",
+    "gore",
+    "multiple enemy factions",
+    "cover system"
+  ]
+}

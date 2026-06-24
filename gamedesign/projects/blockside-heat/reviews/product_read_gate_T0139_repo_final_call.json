@@ -1,0 +1,119 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "blockside-heat",
+  "task": "T0139",
+  "surface": "desktop",
+  "verdict": "pass",
+  "timestamp": "2026-06-23T17:23:02.595Z",
+  "screenshot": "tmp/blockside-heat/repo-final-call-latest.png",
+  "answers": {
+    "where": "final-call marker after safehouse drop",
+    "action": "move to the call marker and receive Rita's final call",
+    "response": "final-call state starts, cash reaches 500, and next score hook appears",
+    "reward": "cash rises to 500, wanted stays 0, and next job becomes repo_next_score",
+    "game_look": "low-poly city, readable mission HUD, cash, wanted clear, toast, controls, and road/call marker area visible"
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 4,
+      "ui_controls": 4,
+      "action_direction": 4,
+      "art_quality": 4,
+      "audience_fit": 4
+    },
+    "issues": [
+      {
+        "severity": "minor",
+        "axis": "art_quality",
+        "text": "final-call area still uses prototype-simple city set dressing"
+      }
+    ]
+  },
+  "contract": "",
+  "critique_source": "",
+  "state_coverage": {
+    "required": [
+      "first_screen",
+      "hud_visible",
+      "primary_action_ready",
+      "primary_action_feedback",
+      "reward_active",
+      "progression_panel_open",
+      "modal_or_choice_open",
+      "locked_or_disabled_state",
+      "resume_or_reentry_state",
+      "transient_stress_state",
+      "repo_safehouse_drop",
+      "repo_final_call"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen",
+        "evidence": "tmp/blockside-heat/first-native-screenshot-latest.png"
+      },
+      {
+        "tag": "hud_visible",
+        "evidence": "tmp/blockside-heat/repo-final-call-latest.png"
+      },
+      {
+        "tag": "primary_action_ready",
+        "evidence": "tmp/blockside-heat/repo-safehouse-drop-latest.png"
+      },
+      {
+        "tag": "primary_action_feedback",
+        "evidence": "tmp/blockside-heat/repo-final-call-latest.png"
+      },
+      {
+        "tag": "reward_active",
+        "evidence": "tmp/blockside-heat/repo-final-call-latest.png"
+      },
+      {
+        "tag": "transient_stress_state",
+        "evidence": "tmp/blockside-heat/green-coupe-escape-latest.png"
+      },
+      {
+        "tag": "repo_safehouse_drop",
+        "evidence": "tmp/blockside-heat/repo-safehouse-drop-latest.png"
+      },
+      {
+        "tag": "repo_final_call",
+        "evidence": "tmp/blockside-heat/repo-final-call-latest.png"
+      }
+    ],
+    "not_covered": [
+      {
+        "tag": "progression_panel_open",
+        "reason": "not in this narrow final-call slice"
+      },
+      {
+        "tag": "modal_or_choice_open",
+        "reason": "not in this narrow final-call slice"
+      },
+      {
+        "tag": "locked_or_disabled_state",
+        "reason": "not in this narrow final-call slice"
+      },
+      {
+        "tag": "resume_or_reentry_state",
+        "reason": "not in this narrow final-call slice"
+      }
+    ]
+  },
+  "problem": "",
+  "next": "",
+  "verification": {
+    "required": false
+  }
+}

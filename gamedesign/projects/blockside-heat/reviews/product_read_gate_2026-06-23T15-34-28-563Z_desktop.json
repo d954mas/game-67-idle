@@ -1,0 +1,171 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "blockside-heat",
+  "task": "T0126",
+  "surface": "desktop",
+  "verdict": "pass",
+  "timestamp": "2026-06-23T15:34:28.565Z",
+  "screenshot": "tmp/blockside-heat/tail-stop-latest.png",
+  "answers": {
+    "where": "a low-poly city block tailing route where the courier has stopped",
+    "action": "follow the courier from pressure marker to stop marker",
+    "response": "reaching the stop marker advances state to tail_stop, sets tail_stop_resolved, awards , drops wanted pressure to 1, and updates the UI tree to JOB: COURIER STOPPED",
+    "reward": "the courier tail now has a readable payoff and repo target handoff hook",
+    "game_look": "low-poly road, red compact, stopped courier context, engine-font HUD, cash reward, wanted level, and toast are readable in native 3D"
+  },
+  "visual_critique": {
+    "strict": false,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {},
+    "issues": []
+  },
+  "contract": "",
+  "critique_source": "",
+  "state_coverage": {
+    "required": [
+      "first_screen",
+      "hud_visible",
+      "primary_action_ready",
+      "primary_action_feedback",
+      "reward_active",
+      "progression_panel_open",
+      "modal_or_choice_open",
+      "locked_or_disabled_state",
+      "resume_or_reentry_state",
+      "transient_stress_state",
+      "in_car_movement",
+      "vehicle_route_complete",
+      "pursuit_pressure",
+      "pickup_stress",
+      "rita_contact",
+      "repo_drive",
+      "repo_scout_complete",
+      "stash_lead",
+      "van_rumor",
+      "market_watch",
+      "courier_spotted",
+      "tail_route",
+      "tail_turn",
+      "tail_pressure",
+      "tail_stop"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen",
+        "evidence": "tmp/blockside-heat/first-native-screenshot-latest.png"
+      },
+      {
+        "tag": "hud_visible",
+        "evidence": "tmp/blockside-heat/tail-stop-latest.png"
+      },
+      {
+        "tag": "primary_action_ready",
+        "evidence": "tmp/blockside-heat/tail-pressure-latest.png"
+      },
+      {
+        "tag": "primary_action_feedback",
+        "evidence": "tmp/blockside-heat/tail-stop-latest.png"
+      },
+      {
+        "tag": "reward_active",
+        "evidence": "tmp/blockside-heat/tail-stop-latest.png"
+      },
+      {
+        "tag": "transient_stress_state",
+        "evidence": "tmp/blockside-heat/tail-pressure-latest.png"
+      },
+      {
+        "tag": "in_car_movement",
+        "evidence": "tmp/blockside-heat/in-car-movement-latest.png"
+      },
+      {
+        "tag": "vehicle_route_complete",
+        "evidence": "tmp/blockside-heat/vehicle-route-complete-latest.png"
+      },
+      {
+        "tag": "pursuit_pressure",
+        "evidence": "tmp/blockside-heat/pursuit-pressure-latest.png"
+      },
+      {
+        "tag": "pickup_stress",
+        "evidence": "tmp/blockside-heat/pickup-stress-latest.png"
+      },
+      {
+        "tag": "rita_contact",
+        "evidence": "tmp/blockside-heat/rita-contact-latest.png"
+      },
+      {
+        "tag": "repo_drive",
+        "evidence": "tmp/blockside-heat/repo-drive-latest.png"
+      },
+      {
+        "tag": "repo_scout_complete",
+        "evidence": "tmp/blockside-heat/repo-scout-complete-latest.png"
+      },
+      {
+        "tag": "stash_lead",
+        "evidence": "tmp/blockside-heat/stash-lead-latest.png"
+      },
+      {
+        "tag": "van_rumor",
+        "evidence": "tmp/blockside-heat/van-rumor-latest.png"
+      },
+      {
+        "tag": "market_watch",
+        "evidence": "tmp/blockside-heat/market-watch-latest.png"
+      },
+      {
+        "tag": "courier_spotted",
+        "evidence": "tmp/blockside-heat/courier-spotted-latest.png"
+      },
+      {
+        "tag": "tail_route",
+        "evidence": "tmp/blockside-heat/tail-route-latest.png"
+      },
+      {
+        "tag": "tail_turn",
+        "evidence": "tmp/blockside-heat/tail-turn-latest.png"
+      },
+      {
+        "tag": "tail_pressure",
+        "evidence": "tmp/blockside-heat/tail-pressure-latest.png"
+      },
+      {
+        "tag": "tail_stop",
+        "evidence": "tmp/blockside-heat/tail-stop-latest.png"
+      }
+    ],
+    "not_covered": [
+      {
+        "tag": "progression_panel_open",
+        "reason": "not in this narrow tail-stop slice; progression is HUD/state only"
+      },
+      {
+        "tag": "modal_or_choice_open",
+        "reason": "not in this narrow tail-stop slice; no dialog choice is introduced"
+      },
+      {
+        "tag": "locked_or_disabled_state",
+        "reason": "not in this narrow tail-stop slice; no locked action is introduced"
+      },
+      {
+        "tag": "resume_or_reentry_state",
+        "reason": "not in this narrow tail-stop slice; restart coverage remains reset/capture path"
+      }
+    ]
+  },
+  "problem": "The next repo handoff is still only a lead; there is no dialog or target-car handoff interaction yet.",
+  "next": "Implement a small repo target handoff interaction after tail_stop as the next narrow playable slice.",
+  "verification": {
+    "required": false
+  }
+}

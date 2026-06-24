@@ -1,0 +1,52 @@
+{
+  "schema": "game.ui_flow",
+  "project": "blockside-heat",
+  "slice": "pickup-run",
+  "screens": [
+    {
+      "id": "first_screen",
+      "elements": [
+        "job_panel",
+        "cash_counter",
+        "wanted_counter",
+        "vehicle_prompt",
+        "world_marker",
+        "player_status"
+      ],
+      "question_answered": "Where am I and what can I do in the first 5 seconds?"
+    },
+    {
+      "id": "vehicle_ready",
+      "elements": [
+        "enter_car_prompt",
+        "car_highlight",
+        "objective_panel"
+      ],
+      "question_answered": "How do I use the nearby vehicle?"
+    },
+    {
+      "id": "package_collected",
+      "elements": [
+        "wanted_counter",
+        "feedback_toast",
+        "drop_zone_marker",
+        "pursuer_indicator"
+      ],
+      "question_answered": "What changed and where do I go now?"
+    },
+    {
+      "id": "job_complete",
+      "elements": [
+        "cash_counter",
+        "completion_toast",
+        "next_job_locked_hint"
+      ],
+      "question_answered": "What reward did I get and why continue?"
+    }
+  ],
+  "required_text_renderer": "engine_text_renderer",
+  "forbidden_text": [
+    "handmade draw_text",
+    "shape-rendered pixel glyphs"
+  ]
+}

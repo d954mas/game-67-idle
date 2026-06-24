@@ -1,0 +1,80 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "blockside-heat",
+  "task": "T0116",
+  "surface": "desktop",
+  "verdict": "pass",
+  "timestamp": "2026-06-23T14:28:59.931Z",
+  "screenshot": "tmp/blockside-heat/rita-contact-latest.png",
+  "answers": {
+    "where": "The player is at Rita after the first street job, with the car marker visible on the road.",
+    "action": "The next action is clear: get in the red compact and scout the curb.",
+    "response": "Talking to Rita changes state to repo_intro, sets repo_intro_active, and updates the UI tree to JOB: RED COMPACT.",
+    "reward": "The first job now chains into a named repo beat while keeping CASH $75 visible.",
+    "game_look": "The low-poly Roblox-like street, blue contact, red car marker, and engine-font HUD remain readable."
+  },
+  "visual_critique": {
+    "strict": false,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {},
+    "issues": []
+  },
+  "contract": "",
+  "critique_source": "",
+  "state_coverage": {
+    "required": [
+      "first_screen",
+      "in_car_movement",
+      "vehicle_route_complete",
+      "pursuit_pressure",
+      "pickup_stress",
+      "reward_active",
+      "rita_contact"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen",
+        "evidence": "tmp/blockside-heat/first-native-screenshot-latest.png"
+      },
+      {
+        "tag": "in_car_movement",
+        "evidence": "tmp/blockside-heat/in-car-movement-latest.png"
+      },
+      {
+        "tag": "vehicle_route_complete",
+        "evidence": "tmp/blockside-heat/vehicle-route-complete-latest.png"
+      },
+      {
+        "tag": "pursuit_pressure",
+        "evidence": "tmp/blockside-heat/pursuit-pressure-latest.png"
+      },
+      {
+        "tag": "pickup_stress",
+        "evidence": "tmp/blockside-heat/pickup-stress-latest.png"
+      },
+      {
+        "tag": "reward_active",
+        "evidence": "tmp/blockside-heat/job-complete-latest.png"
+      },
+      {
+        "tag": "rita_contact",
+        "evidence": "tmp/blockside-heat/rita-contact-latest.png"
+      }
+    ],
+    "not_covered": []
+  },
+  "problem": "The repo beat is still an intro; the actual repo driving objective is not playable yet.",
+  "next": "Implement the red compact repo driving objective as the next narrow playable slice.",
+  "verification": {
+    "required": false
+  }
+}

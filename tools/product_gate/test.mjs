@@ -184,6 +184,91 @@ test("visual rejection lock records strict visual fail and task evidence", () =>
   }
 });
 
+function writeMaterialFloorFixture(rootDir, { active = true, flat = true, statusResolved = false } = {}) {
+  mkdirSync(join(rootDir, "src"), { recursive: true });
+  mkdirSync(join(rootDir, "assets", "shaders"), { recursive: true });
+  mkdirSync(join(rootDir, "tasks"), { recursive: true });
+  writeFileSync(join(rootDir, "AGENTS.md"), active
+    ? "## Project\n\n- Active game concept: Test Drive (test-drive)\n"
+    : "## Project\n\n- No active game concept\n", "utf8");
+  writeFileSync(join(rootDir, "tasks", "STATUS.md"), statusResolved
+    ? "# Project Status\n\n## Blocking Work\n\n- None. The visual rejection is resolved.\n"
+    : "# Project Status\n\n## Blocking Work\n\n- Material pass pending.\n", "utf8");
+  writeFileSync(join(rootDir, "src", "build_packs.c"), [
+    "static void add_model(void *ctx, const char *path, const char *rid) {}",
+    "void build(void *ctx) {",
+    "  add_model(ctx, \"assets/source/car.glb\", \"game/car\");",
+    "}",
+    "",
+  ].join("\n"), "utf8");
+  if (flat) {
+    writeFileSync(join(rootDir, "src", "main.c"), [
+      "static nt_material_t s_mesh_material;",
+      "void add_object(void *entity) {",
+      "  *nt_material_comp_handle(entity) = s_mesh_material;",
+      "  nt_drawable_comp_set_color(entity, 1.0F, 0.0F, 0.0F, 1.0F);",
+      "  nt_resource_set_placeholder_texture(rid(\"__fallback_checker__\"));",
+      "}",
+      "",
+    ].join("\n"), "utf8");
+    writeFileSync(join(rootDir, "assets", "shaders", "mesh.frag"), [
+      "precision mediump float;",
+      "in vec4 v_color;",
+      "out vec4 frag_color;",
+      "void main() { frag_color = v_color; }",
+      "",
+    ].join("\n"), "utf8");
+  } else {
+    writeFileSync(join(rootDir, "src", "main.c"), [
+      "typedef struct MaterialInfo { int material_count; int texture_count; } MaterialInfo;",
+      "void add_object(void *entity, MaterialInfo *materials) {",
+      "  (void)entity; (void)materials;",
+      "}",
+      "",
+    ].join("\n"), "utf8");
+    writeFileSync(join(rootDir, "assets", "shaders", "mesh.frag"), [
+      "precision mediump float;",
+      "uniform sampler2D u_base_color;",
+      "in vec2 v_uv;",
+      "out vec4 frag_color;",
+      "void main() { frag_color = texture(u_base_color, v_uv); }",
+      "",
+    ].join("\n"), "utf8");
+  }
+}
+
+test("visual material floor rejects GLB assets rendered as one flat tint", () => {
+  const dir = tempDir();
+  try {
+    writeMaterialFloorFixture(dir, { flat: true, statusResolved: true });
+    const result = runRaw([
+      "tools/product_gate/visual_material_floor.mjs",
+      "--root", dir,
+    ]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /GLB\/GLTF assets are present/);
+    assert.match(result.stderr, /color-only shader/);
+    assert.match(result.stderr, /status claims visual rejection is resolved/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("visual material floor passes when the runtime proves a texture material path", () => {
+  const dir = tempDir();
+  try {
+    writeMaterialFloorFixture(dir, { flat: false });
+    const result = runRaw([
+      "tools/product_gate/visual_material_floor.mjs",
+      "--root", dir,
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /visual material floor passed/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 function writeTaskWithBody(rootDir, id, fields, body) {
   const taskDir = join(rootDir, "tasks", "active");
   mkdirSync(taskDir, { recursive: true });

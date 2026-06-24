@@ -54,6 +54,9 @@ endif()
 
 set(GAME_TARGET game_seed)
 set(GAME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/build/${GAME_TARGET}/${NT_PRESET_NAME}")
+set(GAME_PACK_DIR "${CMAKE_SOURCE_DIR}/build/blockside_heat")
+set(GAME_ASSETS_DIR "${GAME_OUTPUT_DIR}/assets")
+set(GAME_ASSETS_HEADER "${CMAKE_SOURCE_DIR}/src/generated/blockside_heat_assets.h")
 
 add_library(game_cjson STATIC
     external/cjson/cJSON.c
@@ -125,12 +128,67 @@ if(NOT EMSCRIPTEN AND SKELETAL_ANIMATION_OZZ_SOURCE_DIR)
 endif()
 
 add_executable(${GAME_TARGET}
+    src/blockside_assets.c
+    src/blockside_assets.h
+    src/blockside_capture.c
+    src/blockside_capture.h
+    src/blockside_game_types.h
+    src/blockside_hud.c
+    src/blockside_hud.h
+    src/blockside_runtime_config.c
+    src/blockside_runtime_config.h
+    src/blockside_story.c
+    src/blockside_story.h
+    src/blockside_vehicle.c
+    src/blockside_vehicle.h
     src/clean_seed_main.c
     src/game_devapi_ui.c
     src/game_devapi_ui.h
     src/game_audio.c
     src/game_audio.h
 )
+if(NOT EMSCRIPTEN)
+    add_executable(build_game_packs src/build_packs.c)
+    target_link_libraries(build_game_packs PRIVATE nt_builder nt_log)
+    target_compile_definitions(build_game_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(build_game_packs PRIVATE -U_DLL)
+    nt_set_warning_flags(build_game_packs)
+    nt_set_sanitizer_flags(build_game_packs)
+    set_target_properties(build_game_packs PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}"
+    )
+
+    add_custom_command(
+        OUTPUT "${GAME_PACK_DIR}/blockside_heat.ntpack" "${GAME_ASSETS_HEADER}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_PACK_DIR}"
+        COMMAND $<TARGET_FILE:build_game_packs> "${GAME_PACK_DIR}"
+        DEPENDS
+            build_game_packs
+            src/build_packs.c
+            assets/source/models/blockside_city_base/blockside-city-base.gltf
+            assets/source/models/polypizza__street-straight-ua4axt3niq__cc0-1-0/street-straight.glb
+            assets/source/models/polypizza__street-t-xexepq3jdr__cc0-1-0/street-t.glb
+            assets/source/models/polypizza__low-building-4ropd9bksx__cc0-1-0/low-building.glb
+            assets/source/models/polypizza__large-building-1bt4yykmuk__cc0-1-0/large-building.glb
+            assets/source/models/polypizza__street-light-0lxf8dl1ju__cc0-1-0/street-light.glb
+            assets/source/models/polypizza__car-cz6ydaucm9__cc0-1-0/car.glb
+            assets/source/models/polypizza__character-soldier-pplf4rt4ah__cc0-1-0/character-soldier.glb
+            assets/source/models/polypizza__cardboard-boxes-zt2wlyypml__cc0-1-0/cardboard-boxes.glb
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Building Blockside Heat asset pack"
+        VERBATIM
+    )
+    add_custom_command(
+        OUTPUT "${GAME_ASSETS_DIR}/blockside_heat.ntpack"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_ASSETS_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GAME_PACK_DIR}/blockside_heat.ntpack" "${GAME_ASSETS_DIR}/blockside_heat.ntpack"
+        DEPENDS "${GAME_PACK_DIR}/blockside_heat.ntpack"
+        COMMENT "Copying blockside_heat.ntpack -> ${NT_PRESET_NAME}/assets/"
+        VERBATIM
+    )
+    add_custom_target(game_asset_packs DEPENDS "${GAME_ASSETS_DIR}/blockside_heat.ntpack" "${GAME_ASSETS_HEADER}")
+    add_dependencies(${GAME_TARGET} game_asset_packs)
+endif()
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core
     nt_app
@@ -176,11 +234,16 @@ else()
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_DIR}"
+    "${CMAKE_SOURCE_DIR}/src/generated"
     src
     external/cjson
     external/neotolis-engine/deps/glfw/deps
 )
-target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=$<BOOL:${GAME_DEVAPI_ENABLED}> _CRT_SECURE_NO_WARNINGS)
+target_compile_definitions(${GAME_TARGET} PRIVATE
+    NT_DEVAPI_ENABLED=$<BOOL:${GAME_DEVAPI_ENABLED}>
+    GAME_ASSET_PACK_PATH="${GAME_ASSETS_DIR}/blockside_heat.ntpack"
+    _CRT_SECURE_NO_WARNINGS
+)
 if(TARGET skeletal_animation_extension)
     target_link_libraries(${GAME_TARGET} PRIVATE skeletal_animation_extension)
     target_compile_definitions(${GAME_TARGET} PRIVATE SKELETAL_ANIMATION_EXTENSION_ENABLED=1)

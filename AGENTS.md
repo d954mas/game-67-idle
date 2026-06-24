@@ -3,7 +3,7 @@
 ## Now
 
 - Focus: one active game at a time; current concept in `## Project`.
-- Closed prototypes (snapshots are git tags): Cozy Automation, Dragon Grove.
+- Closed prototypes (git tags): Cozy Automation, Dragon Grove.
 - Engine: `external/neotolis-engine`; public APIs only.
 
 ## Map
@@ -53,6 +53,9 @@
 - Builds/probes/audits are evidence, not acceptance.
 - Visual work needs screenshot evidence, UI/text zoom, before/after judgment.
 - Lead rejection freezes feature/content expansion until fixed.
+- For 3D sourced/model work, `node tools/product_gate/visual_material_floor.mjs`
+  must pass before calling visuals resolved; flat tint/fallback material rendering
+  of GLB/GLTF assets is a product fail.
 - Repeated strict/product failures must change path:
   `node tools/product_gate/repeated_failure_guard.mjs`.
 
@@ -70,5 +73,5 @@ When friction repeats, prefer a tool, validator, skill, or source fix.
 
 ## Project
 
-- No active game concept — lead picks the next game; reuse the asset library
-  first (skill `game-3d-models`), then open fresh `tasks/active/` items.
+- Active game concept: `Blockside Heat` (blockside-heat) — low-poly Roblox-like
+  open-world crime prototype: street jobs, vehicles, NPCs, toy-like city chaos.

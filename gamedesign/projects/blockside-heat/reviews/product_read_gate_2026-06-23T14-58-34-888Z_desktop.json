@@ -1,0 +1,105 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "blockside-heat",
+  "task": "T0121",
+  "surface": "desktop",
+  "verdict": "pass",
+  "timestamp": "2026-06-23T14:58:34.889Z",
+  "screenshot": "tmp/blockside-heat/market-watch-latest.png",
+  "answers": {
+    "where": "The player has reached the market watch point after confirming the east van rumor.",
+    "action": "The next action is to watch for the courier.",
+    "response": "Starting the stakeout advances state to market_watch, sets market_watch_active, raises wanted level to 1, and updates the UI tree to JOB: COURIER WATCH.",
+    "reward": "The repo chain now has a visible surveillance beat after the van rumor, with higher pressure through WANTED 1.",
+    "game_look": "The low-poly street, orange market building, red compact, engine-font HUD, and confirmation toast remain readable in native 3D."
+  },
+  "visual_critique": {
+    "strict": false,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {},
+    "issues": []
+  },
+  "contract": "",
+  "critique_source": "",
+  "state_coverage": {
+    "required": [
+      "first_screen",
+      "in_car_movement",
+      "vehicle_route_complete",
+      "pursuit_pressure",
+      "pickup_stress",
+      "reward_active",
+      "rita_contact",
+      "repo_drive",
+      "repo_scout_complete",
+      "stash_lead",
+      "van_rumor",
+      "market_watch"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen",
+        "evidence": "tmp/blockside-heat/first-native-screenshot-latest.png"
+      },
+      {
+        "tag": "in_car_movement",
+        "evidence": "tmp/blockside-heat/in-car-movement-latest.png"
+      },
+      {
+        "tag": "vehicle_route_complete",
+        "evidence": "tmp/blockside-heat/vehicle-route-complete-latest.png"
+      },
+      {
+        "tag": "pursuit_pressure",
+        "evidence": "tmp/blockside-heat/pursuit-pressure-latest.png"
+      },
+      {
+        "tag": "pickup_stress",
+        "evidence": "tmp/blockside-heat/pickup-stress-latest.png"
+      },
+      {
+        "tag": "reward_active",
+        "evidence": "tmp/blockside-heat/job-complete-latest.png"
+      },
+      {
+        "tag": "rita_contact",
+        "evidence": "tmp/blockside-heat/rita-contact-latest.png"
+      },
+      {
+        "tag": "repo_drive",
+        "evidence": "tmp/blockside-heat/repo-drive-latest.png"
+      },
+      {
+        "tag": "repo_scout_complete",
+        "evidence": "tmp/blockside-heat/repo-scout-complete-latest.png"
+      },
+      {
+        "tag": "stash_lead",
+        "evidence": "tmp/blockside-heat/stash-lead-latest.png"
+      },
+      {
+        "tag": "van_rumor",
+        "evidence": "tmp/blockside-heat/van-rumor-latest.png"
+      },
+      {
+        "tag": "market_watch",
+        "evidence": "tmp/blockside-heat/market-watch-latest.png"
+      }
+    ],
+    "not_covered": []
+  },
+  "problem": "The courier is still only the next lead; the player cannot yet spot or tail the courier.",
+  "next": "Implement the courier-spotting follow-up as the next narrow playable beat.",
+  "verification": {
+    "required": false
+  }
+}

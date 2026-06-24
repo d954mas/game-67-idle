@@ -331,6 +331,7 @@ run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
 run("doc reference tests", ["--test", "tools/doc_reference_check.test.mjs"]);
 run("bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"]);
 run("repeated product gate failure guard", ["tools/product_gate/repeated_failure_guard.mjs"]);
+run("visual material floor guard", ["tools/product_gate/visual_material_floor.mjs"]);
 run("game workflow guard", ["tools/game_context/workflow_guard.mjs"]);
 run("game workflow guard tests", ["--test", "tools/game_context/workflow_guard.test.mjs"]);
 run("visual invariant guard", ["tools/visual_invariant_guard.mjs"]);

@@ -1,0 +1,95 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "blockside-heat",
+  "task": "T0119",
+  "surface": "desktop",
+  "verdict": "pass",
+  "timestamp": "2026-06-23T14:45:04.863Z",
+  "screenshot": "tmp/blockside-heat/stash-lead-latest.png",
+  "answers": {
+    "where": "The player is at the purple-block stash lead after finishing the repo scout route.",
+    "action": "The next action is to follow the van rumor east.",
+    "response": "Opening the stash lead changes state to stash_lead, sets stash_lead_active, and updates the UI tree to JOB: VAN RUMOR.",
+    "reward": "The repo chain now continues from curb scout into a new visible van-rumor lead.",
+    "game_look": "The low-poly street, purple lead area, van-rumor marker, and engine-font HUD remain readable in native 3D."
+  },
+  "visual_critique": {
+    "strict": false,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {},
+    "issues": []
+  },
+  "contract": "",
+  "critique_source": "",
+  "state_coverage": {
+    "required": [
+      "first_screen",
+      "in_car_movement",
+      "vehicle_route_complete",
+      "pursuit_pressure",
+      "pickup_stress",
+      "reward_active",
+      "rita_contact",
+      "repo_drive",
+      "repo_scout_complete",
+      "stash_lead"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen",
+        "evidence": "tmp/blockside-heat/first-native-screenshot-latest.png"
+      },
+      {
+        "tag": "in_car_movement",
+        "evidence": "tmp/blockside-heat/in-car-movement-latest.png"
+      },
+      {
+        "tag": "vehicle_route_complete",
+        "evidence": "tmp/blockside-heat/vehicle-route-complete-latest.png"
+      },
+      {
+        "tag": "pursuit_pressure",
+        "evidence": "tmp/blockside-heat/pursuit-pressure-latest.png"
+      },
+      {
+        "tag": "pickup_stress",
+        "evidence": "tmp/blockside-heat/pickup-stress-latest.png"
+      },
+      {
+        "tag": "reward_active",
+        "evidence": "tmp/blockside-heat/job-complete-latest.png"
+      },
+      {
+        "tag": "rita_contact",
+        "evidence": "tmp/blockside-heat/rita-contact-latest.png"
+      },
+      {
+        "tag": "repo_drive",
+        "evidence": "tmp/blockside-heat/repo-drive-latest.png"
+      },
+      {
+        "tag": "repo_scout_complete",
+        "evidence": "tmp/blockside-heat/repo-scout-complete-latest.png"
+      },
+      {
+        "tag": "stash_lead",
+        "evidence": "tmp/blockside-heat/stash-lead-latest.png"
+      }
+    ],
+    "not_covered": []
+  },
+  "problem": "The van rumor is still a marker and story hook; following it is the next slice.",
+  "next": "Implement the east van-rumor follow-up as the next narrow playable beat.",
+  "verification": {
+    "required": false
+  }
+}

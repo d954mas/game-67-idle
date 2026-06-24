@@ -1,0 +1,43 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "blockside-heat",
+  "task": "T0115",
+  "surface": "desktop",
+  "verdict": "pass",
+  "timestamp": "2026-06-23T14:17:58.760Z",
+  "screenshot": "tmp/blockside-heat/job-complete-latest.png",
+  "answers": {
+    "where": "The player is at the package drop-off intersection after completing the first route.",
+    "action": "The HUD now gives a new objective: meet Rita by the blue jacket.",
+    "response": "The state changes to second_ready, next_job is rita_repo_tip, and the UI tree exposes JOB: RITA REPO.",
+    "reward": "The player has CASH  and a named follow-up job instead of a dead end.",
+    "game_look": "Low-poly Roblox-like city blocks, readable car, street markers, and bright HUD text remain visible."
+  },
+  "visual_critique": {
+    "strict": false,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {},
+    "issues": []
+  },
+  "contract": "",
+  "critique_source": "",
+  "state_coverage": {
+    "required": [],
+    "covered": [],
+    "not_covered": []
+  },
+  "problem": "City density and the Rita interaction are still prototype-simple.",
+  "next": "Implement the Rita repo interaction as the next narrow playable mission beat.",
+  "verification": {
+    "required": false
+  }
+}

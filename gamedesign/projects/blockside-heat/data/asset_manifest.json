@@ -1,0 +1,145 @@
+{
+  "schema": "game.asset_manifest",
+  "project": "blockside-heat",
+  "source_policy": "library_first_then_cc0_or_ofl_then_generate",
+  "runtime_policy": "project_local_copies_only",
+  "needed_for_first_slice": [
+    {
+      "id": "city_block_kit",
+      "kind": "model",
+      "tags": ["lowpoly", "city", "building", "street", "sidewalk"],
+      "status": "selected",
+      "selected_assets": [
+        {
+          "asset_id": "polypizza__low-building-4ropd9bksx__cc0-1-0",
+          "title": "Low Building",
+          "license": "CC0-1.0",
+          "origin": "sourced",
+          "author": "Kenney",
+          "project_path": "assets/source/models/polypizza__low-building-4ropd9bksx__cc0-1-0/low-building.glb"
+        },
+        {
+          "asset_id": "polypizza__large-building-1bt4yykmuk__cc0-1-0",
+          "title": "Large Building",
+          "license": "CC0-1.0",
+          "origin": "sourced",
+          "author": "Kenney",
+          "project_path": "assets/source/models/polypizza__large-building-1bt4yykmuk__cc0-1-0/large-building.glb"
+        },
+        {
+          "asset_id": "polypizza__street-straight-ua4axt3niq__cc0-1-0",
+          "title": "Street Straight",
+          "license": "CC0-1.0",
+          "origin": "sourced",
+          "author": "Quaternius",
+          "project_path": "assets/source/models/polypizza__street-straight-ua4axt3niq__cc0-1-0/street-straight.glb"
+        },
+        {
+          "asset_id": "polypizza__street-t-xexepq3jdr__cc0-1-0",
+          "title": "Street T",
+          "license": "CC0-1.0",
+          "origin": "sourced",
+          "author": "Quaternius",
+          "project_path": "assets/source/models/polypizza__street-t-xexepq3jdr__cc0-1-0/street-t.glb"
+        },
+        {
+          "asset_id": "blockside_city_base",
+          "title": "Blockside Heat city base",
+          "license": "project-owned",
+          "origin": "mine",
+          "author": "Codex",
+          "project_path": "assets/source/models/blockside_city_base/blockside-city-base.gltf",
+          "note": "Authored after sourced street GLBs failed the first product gate because the world base did not read in the native screenshot."
+        }
+      ]
+    },
+    {
+      "id": "compact_car",
+      "kind": "model",
+      "tags": ["lowpoly", "car", "vehicle"],
+      "status": "selected",
+      "selected_assets": [
+        {
+          "asset_id": "polypizza__car-cz6ydaucm9__cc0-1-0",
+          "title": "Car",
+          "license": "CC0-1.0",
+          "origin": "sourced",
+          "author": "Quaternius",
+          "project_path": "assets/source/models/polypizza__car-cz6ydaucm9__cc0-1-0/car.glb"
+        }
+      ]
+    },
+    {
+      "id": "blocky_player",
+      "kind": "model",
+      "tags": ["lowpoly", "character", "humanoid", "blocky"],
+      "status": "selected_placeholder",
+      "selected_assets": [
+        {
+          "asset_id": "polypizza__character-soldier-pplf4rt4ah__cc0-1-0",
+          "title": "Character Soldier",
+          "license": "CC0-1.0",
+          "origin": "sourced",
+          "author": "Quaternius",
+          "project_path": "assets/source/models/polypizza__character-soldier-pplf4rt4ah__cc0-1-0/character-soldier.glb",
+          "note": "Usable for player/pursuer placeholder. Search later for more civilian/blocky variants."
+        }
+      ]
+    },
+    {
+      "id": "npc_pedestrian",
+      "kind": "model",
+      "tags": ["lowpoly", "npc", "pedestrian", "humanoid"],
+      "status": "selected_placeholder",
+      "selected_assets": [
+        {
+          "asset_id": "polypizza__character-soldier-pplf4rt4ah__cc0-1-0",
+          "title": "Character Soldier",
+          "license": "CC0-1.0",
+          "origin": "sourced",
+          "author": "Quaternius",
+          "project_path": "assets/source/models/polypizza__character-soldier-pplf4rt4ah__cc0-1-0/character-soldier.glb",
+          "note": "Reuse with tint/scale differences for first NPC/pursuer until civilian assets are sourced."
+        }
+      ]
+    },
+    {
+      "id": "package_pickup",
+      "kind": "model",
+      "tags": ["lowpoly", "crate", "package"],
+      "status": "selected",
+      "selected_assets": [
+        {
+          "asset_id": "polypizza__cardboard-boxes-zt2wlyypml__cc0-1-0",
+          "title": "Cardboard Boxes",
+          "license": "CC0-1.0",
+          "origin": "sourced",
+          "author": "Quaternius",
+          "project_path": "assets/source/models/polypizza__cardboard-boxes-zt2wlyypml__cc0-1-0/cardboard-boxes.glb"
+        }
+      ]
+    },
+    {
+      "id": "street_props",
+      "kind": "model",
+      "tags": ["lowpoly", "traffic", "streetlight", "cone", "planter"],
+      "status": "partial",
+      "selected_assets": [
+        {
+          "asset_id": "polypizza__street-light-0lxf8dl1ju__cc0-1-0",
+          "title": "Street Light",
+          "license": "CC0-1.0",
+          "origin": "sourced",
+          "author": "Quaternius",
+          "project_path": "assets/source/models/polypizza__street-light-0lxf8dl1ju__cc0-1-0/street-light.glb"
+        }
+      ],
+      "remaining_need": "traffic cones, planters, and signage can be added after first renderable block if product-read needs more street detail."
+    }
+  ],
+  "search_commands": [
+    "node tools/assets/source/find_assets.mjs --kind model --genre city --tags lowpoly,building,street --json",
+    "node tools/assets/source/find_assets.mjs --kind model --genre urban --tags lowpoly,car,vehicle --json",
+    "node tools/assets/source/find_assets.mjs --kind model --genre urban --tags lowpoly,character,humanoid --json"
+  ]
+}

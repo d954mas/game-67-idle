@@ -26,6 +26,16 @@ node tools/product_gate/repeated_failure_guard.mjs
 Visual rejection first:
 `node tools/product_gate/visual_rejection_lock.mjs --project <id> --task <TID> --screenshot <path> --problem "<why rejected>" --next "<different path>"`.
 
+3D asset material floor:
+`node tools/product_gate/visual_material_floor.mjs`.
+
+For active 3D games that claim sourced/ready GLB or GLTF models, this guard
+fails when model geometry is rendered through a flat color-only shader, one
+fallback material/texture, or object-level tint without proving source
+materials, textures, UVs, or per-primitive material colors. Treat that as a
+product FAIL, not a style preference: stop feature/content expansion and create
+a material/texture pass before more story, economy, map, traffic, or NPC work.
+
 Active game workflow guard:
 
 ```powershell

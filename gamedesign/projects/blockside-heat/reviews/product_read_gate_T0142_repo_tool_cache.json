@@ -1,0 +1,119 @@
+{
+  "schema": "game.product_read_gate",
+  "version": 1,
+  "project": "blockside-heat",
+  "task": "T0142",
+  "surface": "desktop",
+  "verdict": "pass",
+  "timestamp": "2026-06-24T04:21:54.972Z",
+  "screenshot": "tmp/blockside-heat/repo-tool-cache-latest.png",
+  "answers": {
+    "where": "tool cache marker after crew pickup in a denser low-poly city block",
+    "action": "move to the tool cache marker",
+    "response": "tool-cache state starts, cash reaches 530, and score-staging hook appears",
+    "reward": "cash rises to 530, wanted stays 0, and next job becomes repo_score_staging",
+    "game_look": "low-poly city block with visible cars, tinted building details, mission HUD, cash, wanted clear, toast, controls, and road/tool marker area visible"
+  },
+  "visual_critique": {
+    "strict": true,
+    "axes": [
+      "composition",
+      "readability",
+      "ui_controls",
+      "action_direction",
+      "art_quality",
+      "audience_fit"
+    ],
+    "pass_threshold": 4,
+    "scores": {
+      "composition": 4,
+      "readability": 4,
+      "ui_controls": 4,
+      "action_direction": 4,
+      "art_quality": 4,
+      "audience_fit": 4
+    },
+    "issues": [
+      {
+        "severity": "minor",
+        "axis": "art_quality",
+        "text": "visual pass improved density and submesh detail, but wider world still needs sidewalks, signs, traffic props, and pedestrians"
+      }
+    ]
+  },
+  "contract": "",
+  "critique_source": "",
+  "state_coverage": {
+    "required": [
+      "first_screen",
+      "hud_visible",
+      "primary_action_ready",
+      "primary_action_feedback",
+      "reward_active",
+      "progression_panel_open",
+      "modal_or_choice_open",
+      "locked_or_disabled_state",
+      "resume_or_reentry_state",
+      "transient_stress_state",
+      "repo_crew_pickup",
+      "repo_tool_cache"
+    ],
+    "covered": [
+      {
+        "tag": "first_screen",
+        "evidence": "tmp/blockside-heat/first-native-screenshot-latest.png"
+      },
+      {
+        "tag": "hud_visible",
+        "evidence": "tmp/blockside-heat/repo-tool-cache-latest.png"
+      },
+      {
+        "tag": "primary_action_ready",
+        "evidence": "tmp/blockside-heat/repo-crew-pickup-latest.png"
+      },
+      {
+        "tag": "primary_action_feedback",
+        "evidence": "tmp/blockside-heat/repo-tool-cache-latest.png"
+      },
+      {
+        "tag": "reward_active",
+        "evidence": "tmp/blockside-heat/repo-tool-cache-latest.png"
+      },
+      {
+        "tag": "transient_stress_state",
+        "evidence": "tmp/blockside-heat/green-coupe-escape-latest.png"
+      },
+      {
+        "tag": "repo_crew_pickup",
+        "evidence": "tmp/blockside-heat/repo-crew-pickup-latest.png"
+      },
+      {
+        "tag": "repo_tool_cache",
+        "evidence": "tmp/blockside-heat/repo-tool-cache-latest.png"
+      }
+    ],
+    "not_covered": [
+      {
+        "tag": "progression_panel_open",
+        "reason": "not in this narrow tool-cache slice"
+      },
+      {
+        "tag": "modal_or_choice_open",
+        "reason": "not in this narrow tool-cache slice"
+      },
+      {
+        "tag": "locked_or_disabled_state",
+        "reason": "not in this narrow tool-cache slice"
+      },
+      {
+        "tag": "resume_or_reentry_state",
+        "reason": "not in this narrow tool-cache slice"
+      }
+    ]
+  },
+  "problem": "",
+  "next": "",
+  "verification": {
+    "required": false
+  }
+}
