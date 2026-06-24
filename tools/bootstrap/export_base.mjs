@@ -53,6 +53,8 @@ const COPY = [
   "tools/assets/job/validate_art_job.test.mjs",
   "tools/assets/job/audit_project_asset_boundaries.mjs",
   "tools/assets/job/audit_project_asset_boundaries.test.mjs",
+  "tools/assets/pack/atlas_review_labels.py",
+  "tools/assets/pack/atlas_review_labels_test.py",
   "tools/assets/pack/build_ui_atlas_pack.py",
   "tools/assets/pack/build_ui_atlas_pack_test.py",
   "tools/assets/pack/audit_ui_atlas_pack.py",

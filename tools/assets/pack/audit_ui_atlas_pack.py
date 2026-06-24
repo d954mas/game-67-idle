@@ -9,8 +9,6 @@ from typing import Any
 
 import numpy as np
 from PIL import Image
-from PIL import ImageDraw
-from PIL import ImageFont
 
 import sys
 
@@ -19,15 +17,20 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from tools.assets.atomic_io import write_json_atomic, write_text_atomic
+from tools.assets.pack.atlas_review_labels import (
+    DEFAULT_LABEL_FONT_SIZE,
+    LABEL_LINE_GAP_Y,
+    LABEL_OUTER_MARGIN,
+    LABEL_PAD_X,
+    LABEL_PAD_Y,
+    measure_label,
+    review_label_text,
+)
 
 
 ROOT = Path.cwd()
-DEFAULT_LABEL_FONT_SIZE = 18
-LABEL_PAD_X = 4
-LABEL_PAD_Y = 2
-LABEL_LINE_GAP_Y = 2
-LABEL_OUTER_MARGIN = 8
-_LABEL_FONTS: dict[int, ImageFont.ImageFont] = {}
+# Label constants + font/measure helpers + the review-label text format are
+# shared with build_ui_atlas_pack via tools/assets/pack/atlas_review_labels.py.
 
 
 def analysis_engine() -> str:
@@ -170,26 +173,6 @@ def changed_pixels_outside_rects_count(
     return int(np.count_nonzero(changed & ~allowed))
 
 
-def label_font(font_size: int = DEFAULT_LABEL_FONT_SIZE) -> ImageFont.ImageFont:
-    if font_size in _LABEL_FONTS:
-        return _LABEL_FONTS[font_size]
-    for name in ("DejaVuSans.ttf", "Arial.ttf"):
-        try:
-            _LABEL_FONTS[font_size] = ImageFont.truetype(name, font_size)
-            return _LABEL_FONTS[font_size]
-        except OSError:
-            continue
-    _LABEL_FONTS[font_size] = ImageFont.load_default()
-    return _LABEL_FONTS[font_size]
-
-
-def measure_label(label: str, font_size: int = DEFAULT_LABEL_FONT_SIZE) -> tuple[int, int]:
-    probe = Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(probe)
-    bbox = draw.textbbox((0, 0), label, font=label_font(font_size))
-    return int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
-
-
 def check_review_label_lines(entry_id: str, review_label: dict[str, Any], label_rect: tuple[int, int, int, int]) -> list[str]:
     problems: list[str] = []
     _, _, label_width, label_height = label_rect
@@ -221,9 +204,7 @@ def expected_review_label_text(entry_id: str, entries_by_id: dict[str, dict[str,
     for asset_id, asset in expected_assets.items():
         if asset_id != entry_id and asset.get("alias_of") == entry_id:
             alias_ids.add(asset_id)
-    if not alias_ids:
-        return entry_id
-    return f"{entry_id} (+{','.join(sorted(alias_ids))})"
+    return review_label_text(entry_id, alias_ids)
 
 
 def check_labeled_preview_policy(owner: str, value: Any) -> list[str]:

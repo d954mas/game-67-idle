@@ -105,6 +105,7 @@ const SOURCE_SHEET_PREPROCESSING_TESTS = [
 ];
 
 const GENERATED_UI_ASSET_AUDIT_TESTS = [
+  "tools.assets.pack.atlas_review_labels_test",
   "tools.assets.pack.build_ui_atlas_pack_test",
   "tools.assets.pack.audit_ui_atlas_pack_test",
   "tools.assets.crop.plan_runtime_crops_from_intake_test",
