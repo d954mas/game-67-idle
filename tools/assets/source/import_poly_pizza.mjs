@@ -19,6 +19,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DEFAULT_LIBRARY } from "./find_assets.mjs";
+import { catalogFrontmatter } from "../../lib/asset_catalog.mjs";
 
 const SITE = "https://poly.pizza";
 const CDN = "https://static.poly.pizza";
@@ -151,27 +152,26 @@ function writeRecord(lib, rec) {
   mkdirSync(catDir, { recursive: true });
   const tags = contentTags(name);
   if (!tags.length) tags.push(kebab(name));
-  const md = `---
-type: Game Asset
-title: ${name}
-description: model imported from poly.pizza${author ? " by " + author : ""}
-resource: files/models/${packDir}/${assetId}/
-tags: [${tags.join(", ")}]
-timestamp: ${ts}
-asset_id: ${assetId}
-kind: model
-status: accepted
-origin: sourced
-license: ${license.code}
-license_url: ${license.url}
-attribution_required: ${license.attribution}
-commercial_use: true
-modification_allowed: true
-redistribution_allowed: true
-shipping_decision: ${license.attribution ? "allowed-with-attribution" : "allowed"}
-pack: ${packDir}
-author: ${author || "unknown"}
----
+  const frontmatter = catalogFrontmatter({
+    title: name,
+    description: `model imported from poly.pizza${author ? " by " + author : ""}`,
+    resource: `files/models/${packDir}/${assetId}/`,
+    tags,
+    timestamp: ts,
+    assetId,
+    kind: "model",
+    status: "accepted",
+    origin: "sourced",
+    license: license.code,
+    licenseUrl: license.url,
+    attributionRequired: license.attribution,
+    commercialUse: "true",
+    modificationAllowed: "true",
+    redistributionAllowed: "true",
+    publish: "true",
+    shippingDecision: license.attribution ? "allowed-with-attribution" : "allowed",
+  }, `pack: ${packDir}\nauthor: ${author || "unknown"}`);
+  const md = `${frontmatter}
 
 # ${name}
 
