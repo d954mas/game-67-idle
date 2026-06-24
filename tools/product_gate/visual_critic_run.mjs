@@ -20,6 +20,7 @@ import { spawnSync } from "node:child_process";
 import { fail } from "../lib/cli.mjs";
 import { relCwdPosix } from "../lib/paths.mjs";
 import { VISUAL_AXES, isAxisScore } from "./lib/visual_axes.mjs";
+import { loadArtContract } from "./lib/art_contract.mjs";
 
 function usage() {
   console.error(`usage:
@@ -148,15 +149,8 @@ function defaultContractPath(project) {
 function loadContract(values) {
   const explicit = Boolean(values.contract);
   const contractPath = values.contract || defaultContractPath(values.project);
-  if (!existsSync(resolve(contractPath))) {
-    if (explicit) fail(`art contract does not exist: ${contractPath}`);
-    return { path: "", data: null };
-  }
-  try {
-    return { path: relCwdPosix(contractPath), data: JSON.parse(readFileSync(resolve(contractPath), "utf8")) };
-  } catch (error) {
-    fail(`art contract is not valid JSON: ${contractPath}: ${error.message}`);
-  }
+  const data = loadArtContract(contractPath, { required: explicit, onError: fail });
+  return data ? { path: relCwdPosix(contractPath), data } : { path: "", data: null };
 }
 
 function listImages(dir) {

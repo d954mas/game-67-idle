@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { fail } from "../lib/cli.mjs";
 import { relCwdPosix } from "../lib/paths.mjs";
 import { VISUAL_AXES, isAxisScore } from "./lib/visual_axes.mjs";
+import { loadArtContract } from "./lib/art_contract.mjs";
 
 function usage() {
   console.error(`usage:
@@ -229,19 +230,6 @@ function defaultContractPath(project) {
   return `gamedesign/projects/${sanitizeToken(project)}/art/art_contract.json`;
 }
 
-function loadContract(contractPath, { required }) {
-  const fullPath = resolve(contractPath);
-  if (!existsSync(fullPath)) {
-    if (required) fail(`art contract does not exist: ${contractPath}`);
-    return null;
-  }
-  try {
-    return JSON.parse(readFileSync(fullPath, "utf8"));
-  } catch (error) {
-    fail(`art contract is not valid JSON: ${contractPath}: ${error.message}`);
-  }
-}
-
 // The art contract is the per-game taste anchor (the machine form of the visual
 // Style Brief Checklist plus reference banks). The gate reads only structural
 // knobs from it (pass_threshold) and records its path for traceability; the
@@ -250,7 +238,7 @@ function mergeContract(values) {
   const explicit = Boolean(values.contract);
   const contractPath = values.contract || (values.project ? defaultContractPath(values.project) : null);
   if (!contractPath) return values;
-  const contract = loadContract(contractPath, { required: explicit });
+  const contract = loadArtContract(contractPath, { required: explicit, onError: fail });
   if (!contract) return values;
   const out = { ...values, contract: relCwdPosix(contractPath), contractData: contract };
   const threshold = Number(contract.pass_threshold);
