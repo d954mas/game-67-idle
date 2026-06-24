@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createEpic, createTask, findRoot } from "../taskboard/lib.mjs";
+import { fail } from "../lib/cli.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 
@@ -32,11 +33,6 @@ function parseArgs(args) {
     }
   }
   return values;
-}
-
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
 }
 
 function validateGameId(value) {

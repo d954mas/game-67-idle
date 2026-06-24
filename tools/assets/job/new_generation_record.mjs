@@ -4,13 +4,9 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { fail } from "../../lib/cli.mjs";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
-
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
-}
 
 function usage() {
   console.log(`usage:

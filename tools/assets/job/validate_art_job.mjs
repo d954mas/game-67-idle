@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { fail } from "../../lib/cli.mjs";
 
 function usage() {
   console.error(`usage:
@@ -33,11 +34,6 @@ function parseArgs(argv) {
     }
   }
   return values;
-}
-
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
 }
 
 function readJson(path) {

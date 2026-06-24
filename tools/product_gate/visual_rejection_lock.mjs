@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import { fail } from "../lib/cli.mjs";
 
 const VISUAL_AXES = [
   "composition",
@@ -30,11 +31,6 @@ Options:
   --index-output <path>  latest-gate JSON index path
   --verify               request independent re-check after the lock is fixed`);
   process.exit(2);
-}
-
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
 }
 
 function parseArgs(argv) {

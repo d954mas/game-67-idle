@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { fail } from "../lib/cli.mjs";
 
 const VISUAL_AXES = [
   "composition",
@@ -17,11 +18,6 @@ function usage() {
 
 Creates a reusable visual/UI critic packet for a screenshot before product gate closeout.`);
   process.exit(2);
-}
-
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
 }
 
 function parseArgs(argv) {

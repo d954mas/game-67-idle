@@ -3,6 +3,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { fail } from "../../lib/cli.mjs";
 
 function usage() {
   console.log(`usage:
@@ -11,11 +12,6 @@ function usage() {
 Creates a deterministic prompt/negative-prompt/checklist packet for generating
 cuttable game source sheets. The packet is derived from the art job contract,
 not freeform chat.`);
-}
-
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
 }
 
 function parseArgs(argv) {

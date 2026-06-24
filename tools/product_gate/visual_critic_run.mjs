@@ -17,6 +17,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, basename, extname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { fail } from "../lib/cli.mjs";
 
 const VISUAL_AXES = [
   "composition",
@@ -48,11 +49,6 @@ Options:
 Verified vision command on this box (codex CLI, gpt-5.5):
   --model-cmd "codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -i {IMAGES} -"`);
   process.exit(2);
-}
-
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
 }
 
 function sanitizeToken(value) {

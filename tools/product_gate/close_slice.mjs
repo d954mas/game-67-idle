@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { findDoc, findRoot } from "../taskboard/lib.mjs";
+import { fail } from "../lib/cli.mjs";
 
 function usage() {
   console.error(`usage:
@@ -42,11 +43,6 @@ function parseArgs(argv) {
     }
   }
   return values;
-}
-
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
 }
 
 // A single path-like token (no spaces, has a separator and an extension), so a

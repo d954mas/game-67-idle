@@ -30,6 +30,7 @@ import {
 } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
+import { fail } from "../lib/cli.mjs";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
@@ -51,11 +52,6 @@ function parseArgs(args) {
     }
   }
   return out;
-}
-
-function fail(msg) {
-  console.error(`error: ${msg}`);
-  process.exit(1);
 }
 
 function shortRow(d) {
