@@ -61,12 +61,26 @@ Claude+Codex; Фаза 1 (prose-аудиторы/оркестрация advisory
    удалены в `0894234`; 3 выживших python-аудита (`audit_source_sheet_intake`/`build_ui_atlas_pack`/
    `audit_ui_atlas_pack`) — НЕсвязанные standalone-листья (вопрос п.5), не job-evidence. Drift из
    `0894234` (scaffolder seed'ил 2 producerless поля; 3 over-claim в доках) убран в `d65181b`.
-2. **`tools/lib` крошечные листья** (НЕ монолитный `cli.mjs`): `lib/cli.mjs` = `fail(msg)` +
-   `isMain(meta)` (байт-идентичны ×много) + токенизатор с ОПЦИОНАЛЬНЫМ `knownKeys` (8 тулов с
-   whitelist-гардом ДОЛЖНЫ сохранить unknown-option guard — не сажать их на guardless токенайзер);
-   `lib/json.mjs` (readJson/writeJsonFile — root+onError КАК ПАРАМЕТРЫ, копии замыкаются на
-   module-level root/fail); `lib/paths.mjs` (findRepoRoot/toPosix); `lib/licenses.mjs`
-   (LICENSE_URLS). Мигрировать по одному, валидировать между. Импорт `fail()` не должен тянуть токенайзер.
+2. ✅ **СДЕЛАНО — 4 либы** (по одному, ревью+`validate --full` зелёный на каждом):
+   `9958a5b` `lib/cli.mjs` (`fail`+`isMain`, ×12+×4 миграций); `85c94a8` isMain idiom;
+   `af26003` `lib/json.mjs` (`readJson`/`writeJsonFile`, ×6); `a4f670d` `lib/licenses.mjs`
+   (`LICENSE_URLS`); `0e792c1` `lib/paths.mjs` (`toPosix`+`relCwdPosix`, ×3).
+   Каждая либа — крошечный чистый лист (node builtins). Ров на каждом шаге: leak-guard и его
+   цепочка (`find_assets`/`restricted`) проверены cli/json-free; `find_assets` НАМЕРЕННО исключён
+   из isMain-миграции (он на цепочке гварда). **Состязательные правки объёма (по правилу
+   «похожая форма → оставить»):** json — слиты только реальные дубли (2 writeJson РАЗНЫЕ:
+   file-writer vs stdout-printer — НЕ сливать; readJson divergent по resolve/onError); paths —
+   `toPosix` НЕ форс-мигрирован в ~25 bare-сайтов (однострочник в разных контекстах), `findRepoRoot`
+   пропущен (единств. walk-up impls = гвард+`find_assets`, оба inline по рву), слит реальный
+   3-way дубль `relCwdPosix`.
+   **`lib/args.mjs` (токенизатор) — ПРОПУЩЕН** (состязательно): 21 тул с unknown-guard, но парсеры
+   ФУНДАМЕНТАЛЬНО разные модели (`new_art_job` = строгий per-flag whitelist с array-флагами;
+   `validate_art_job` = generic `--key value` принимает любой ключ). Общий тут только тривиальный
+   for-loop; spec (boolean-vs-value/array/aliases/camelCase/defaults) — целиком per-tool. Общий
+   токенизатор = тяжёлая config-spec индирекция на 21 тул + реальный риск сломать unknown-guard на
+   БЛОКИРУЮЩИХ гейтах (close_slice/review/ai) — ровно предупреждение лида. Чистая «похожая форма»,
+   `fail`-разделение уже соблюдено (cli≠args). Если нужен — минимальный opt-in хелпер для НОВЫХ
+   тулов без форс-миграции 21 (форвард, как licenses); решение лида.
    **Пропустить/последним:** `lib/text` (slugify — хвосты разные, низкий ROI), `lib/active_concept`
    (крошечный), `lib/frontmatter` (НЕ плодить — `parseFrontmatter` остаётся в `find_assets`),
    `python_runner` (1 caller — преждевременно).
