@@ -93,9 +93,17 @@ Claude+Codex; Фаза 1 (prose-аудиторы/оркестрация advisory
    **ОСТАЛОСЬ — рискованно:** свернуть `visual_critique_packet` → `visual_critic_run` emit-mode
    (удаление тула + правка скиллов/доков, смежно с Фазой 4 #14) — отдельный аккуратный заход.
    Проверка: `node tools/ai.mjs gate` (рва `visual_material_floor`/`repeated_failure_guard` не трогать).
-4. **`devapi/png_io.py`** — вынести триплицированный PNG-кодек (capture_window/devapi_client/
-   pixel_health). **НЕ удалять `capture_screen.ps1`** — это ЖИВОЙ не-Windows фоллбэк
-   (`devapi_client.py:427-433`). Проверка: pixel_health + capture_window + DevAPI smoke.
+4. ✅ **СДЕЛАНО** (`031484dc`). `tools/devapi/png_io.py` — единый dependency-free PNG-кодек
+   (stdlib zlib+struct): сигнатура/chunk-framing/IHDR `>IIBBBBB` были триплицированы, chunk-builder
+   байт-идентичен в 2 энкодерах. capture_window держит свой BGRA→RGB swap (capture-специфика) →
+   зовёт `write_png_rgb`; devapi_client `convert_ppm_to_png` lazy-import (как сущ. `from pixel_health
+   import`); pixel_health стал чистым анализом, декодер уехал в png_io. **Состязательно поймана и
+   починена регрессия:** `audit_screenshot` ловил только `PixelHealthError` → теперь
+   `(PixelHealthError, PngError)` (иначе сырой PngError утекал из `capture_screenshot(audit=True)`);
+   `main` тоже. Энкод БАЙТ-ИДЕНТИЧЕН старому (проверено по размерам вкл. 1x1/нечёт). Новый
+   `png_io_test.py` (17) = НОВОЕ покрытие декодера (round-trip, 5 фильтров вкл. multi-row paeth,
+   grey/RGBA, error-paths); зарегистрирован в `validate --full`. **`capture_screen.ps1` НЕ тронут**
+   (живой не-Windows фоллбэк). devapi НЕ в export-allowlist → правок export_base не надо.
 5. **Split god-файлов:** `build_ui_atlas_pack` (801 → вынести `atlas_review_labels.py`, общий с
    `audit_ui_atlas_pack` — анти-дрейф контракта меток, делать ВМЕСТЕ со split, не потом);
    `audit_source_sheet_intake` (886 → component-finder/key-color-scorer/report-writer).
