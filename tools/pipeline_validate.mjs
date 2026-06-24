@@ -320,8 +320,9 @@ run("taskboard summary", ["tools/taskboard/cli.mjs", "summary"]);
 run("ai facade syntax", ["--check", "tools/ai.mjs"]);
 run("ai facade tests", ["--test", "tools/ai.test.mjs"]);
 run("skill presence check", ["tools/skills_eval.mjs"]);
-run("skills sync check", ["tools/skills_sync.mjs", "--check"]);
+run("config sync check", ["tools/sync.mjs", "--check"]);
 run("skills sync tests", ["--test", "tools/skills_sync.test.mjs"]);
+run("hooks sync tests", ["--test", "tools/hooks_sync.test.mjs"]);
 if (reviewMode) {
   run("context budget review", ["tools/context_budget.mjs", "--review"]);
 }
