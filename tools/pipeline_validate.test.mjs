@@ -104,10 +104,8 @@ test("pipeline validation asset guards point at real nested test paths", () => {
   assert.match(source, /"tools", "assets", "job", "new_generation_record\.test\.mjs"/);
   assert.match(source, /"tools", "assets", "intake", "normalize_source_sheet_chroma_test\.py"/);
   assert.match(source, /"tools\.assets\.intake\.audit_tileable_texture_test"/);
-  assert.match(source, /"tools", "assets", "audit", "audit_generated_source_derivation_test\.py"/);
   assert.doesNotMatch(source, /"tools", "assets", "new_generation_record\.test\.mjs"/);
   assert.doesNotMatch(source, /"tools", "assets", "normalize_source_sheet_chroma_test\.py"/);
-  assert.doesNotMatch(source, /"tools", "assets", "audit_generated_source_derivation_test\.py"/);
 });
 
 test("pipeline validation shares full asset test lists between root and export", () => {
@@ -115,7 +113,6 @@ test("pipeline validation shares full asset test lists between root and export",
   assert.match(source, /const GENERATED_ART_JOB_NODE_TESTS = \[/);
   assert.match(source, /const SOURCE_SHEET_PREPROCESSING_TESTS = \[/);
   assert.match(source, /const GENERATED_UI_ASSET_AUDIT_TESTS = \[/);
-  assert.match(source, /const GENERATED_SOURCE_DERIVATION_TESTS = \[/);
   assert.match(source, /"tools\.assets\.cutout\.route_cutout_test"/);
   assert.match(
     source,

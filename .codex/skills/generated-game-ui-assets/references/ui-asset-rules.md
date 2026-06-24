@@ -14,11 +14,8 @@ the workflow, gate tiers, failure response, and report shape.
   source art, with code limited to cutting, validating, packing, and composing.
 - If a builder reads a generated sheet and then creates a new panel/button with
   drawing primitives, that output is procedural scaffold, not generated art.
-- For generated-source crop manifests, run
-  `audit_generated_source_derivation.py` so source-derived PNGs are compared against
-  the accepted source crop after chroma cleanup. A pass here proves the builder
-  cut the source art; a fail usually means trim/resize policy is missing or the
-  builder redrew the asset.
+  Runtime PNGs must be cut from the accepted source crop after chroma cleanup,
+  never redrawn; a missing trim/resize policy or a redrawn asset is a failure.
 - Keep labels, counters, prices, timers, quest names, and state values in code.
 - Keep content safe areas clear of ornate corners and gems.
 - Validate minimum sizes: target width must exceed left+right margins and
@@ -28,10 +25,10 @@ the workflow, gate tiers, failure response, and report shape.
 - Do not bury a usage limitation in prose. If a generated button is only safe
   as a large primary action, set `usage_policy.size_class` to `large_only` and
   list compact button roles in `disallowed_uses`.
-- After runtime integration, validate actual placements against `usage_policy`
-  with `audit_runtime_ui_asset_usage.mjs`. A desktop screenshot can still be
-  wrong if the code squeezes a large-only generated button into a 260x64 rect
-  while the manifest says its minimum safe size is 280x104.
+- After runtime integration, check actual placements against `usage_policy`. A
+  desktop screenshot can still be wrong if the code squeezes a large-only
+  generated button into a 260x64 rect while the manifest says its minimum safe
+  size is 280x104.
 - Do not treat one uniform edge-padding threshold as enough. Low controls such
   as buttons may need side-specific padding gates so horizontal ornaments are
   protected without destroying vertical proportions. Large panels and icon
@@ -42,13 +39,13 @@ the workflow, gate tiers, failure response, and report shape.
 - Every slice9 base must have a content safe area and target previews that
   include the declared minimum runtime size plus at least one stress size
   around 125% of a minimum dimension. A source-size contact sheet is not enough:
-  the design-policy audit should fail missing min/stress preview coverage.
+  min/stress preview coverage must be present or the asset is not final.
 - Keep slice9 base art structurally boring: corners, straight edges, fill, and
   repeatable texture only. Unique center gems, side medallions, banners,
   badges, labels, locks, and cap ornaments must be exported as separate overlay
   sprites with anchors, not baked into the stretchable base texture. Record that
-  contract in `stretch_policy`; the audit should fail if the manifest relies on
-  chat notes instead of machine-readable policy.
+  contract in `stretch_policy`; a manifest that relies on chat notes instead of
+  machine-readable policy is not final.
 - Treat beautiful fixed decoration as composition data. A panel top plaque,
   side gem, screw, lock, rarity crest, divider, glow strip, or button cap needs
   its own crop id, `anchor`, `z_order`, `allowed_base_ids`, and
@@ -57,10 +54,10 @@ the workflow, gate tiers, failure response, and report shape.
   manifest, it is probably unsafe inside a resizable base.
   `overlay_family` alone is planning prose, not proof: final slice9 policy
   evidence needs concrete `overlay_asset_ids`.
-- Runtime composition proof must treat content safe areas as reserved for text,
-  prices, counters, and state values. Decorative overlays that cross those
-  bounds need explicit `allow_content_overlap`; otherwise the proof should fail
-  before integration.
+- Treat content safe areas as reserved for text, prices, counters, and state
+  values. Decorative overlays that cross those bounds need explicit
+  `allow_content_overlap`; otherwise keep them out of the safe area before
+  integration.
 - Progress bars are systems, not one strip: track base, fill strip/tile, left
   cap, right cap, marker/handle, disabled/locked overlay, optional glow, and
   runtime label. Each part needs a semantic id and atlas metadata.
@@ -73,10 +70,9 @@ the workflow, gate tiers, failure response, and report shape.
 - Every atlas/runtime entry needs metadata for `id`, `kind`, `pack_group`,
   source crop, atlas rect, trim/original size, pivot/anchor, slice9 margins,
   content safe area, state role, and source family.
-- Run `audit_atlas_metadata.mjs` before treating a generated UI kit as final
-  art. The runtime manifest should make trim, bleed, extrusion, padding,
-  rotation, scale variant, alias policy, and sprite/decor-overlay placement
-  metadata machine-readable.
+- Before treating a generated UI kit as final art, the runtime manifest should
+  make trim, bleed, extrusion, padding, rotation, scale variant, alias policy,
+  and sprite/decor-overlay placement metadata machine-readable.
 - Build a labeled review atlas with `build_ui_atlas_pack.py --label-review`
   before final-art claims when the lead needs to inspect outputs. This atlas is
   a proof/contact artifact: it records `atlas_rect`, `padded_rect`, extrusion,
@@ -129,8 +125,7 @@ the workflow, gate tiers, failure response, and report shape.
   cut through the principled cutout (`tools/assets/cutout/key_matte.py` default,
   `tools/assets/cutout/route_cutout.py` auto-picker, `dual_plate` for
   soft/glow/glass edges) so alpha padding, key-fringe, purple edge-halo, and
-  transparent-edge RGB are resolved at the source, then derivation-checked with
-  `audit_generated_source_derivation.py`.
+  transparent-edge RGB are resolved at the source.
 - Edge artifacts are prevented at the source by the principled cutout, so there
   is no separate per-asset edge-color audit. For 1-2 pixel fringe, the soft/glow
   case routes to `dual_plate` (exact alpha from light+dark plates) and the

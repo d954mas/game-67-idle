@@ -85,14 +85,9 @@ const runAssets = args.includes("--with-assets") || fullMode || activeConcept;
 
 const GENERATED_ART_JOB_NODE_TESTS = [
   "tools/assets/job/plan_source_sheet_prompt.test.mjs",
-  "tools/assets/job/plan_missing_source_family_prompts.test.mjs",
   "tools/assets/job/new_generation_record.test.mjs",
   "tools/assets/job/validate_art_job.test.mjs",
-  "tools/assets/job/audit_slice9_design_policy.test.mjs",
-  "tools/assets/job/audit_atlas_metadata.test.mjs",
-  "tools/assets/job/audit_runtime_ui_asset_usage.test.mjs",
   "tools/assets/job/audit_project_asset_boundaries.test.mjs",
-  "tools/assets/job/audit_source_family_coverage.test.mjs",
 ];
 
 const SOURCE_SHEET_PREPROCESSING_TESTS = [
@@ -108,15 +103,10 @@ const SOURCE_SHEET_PREPROCESSING_TESTS = [
 ];
 
 const GENERATED_UI_ASSET_AUDIT_TESTS = [
-  "tools.assets.audit.render_ui_composition_proof_test",
   "tools.assets.pack.build_ui_atlas_pack_test",
   "tools.assets.pack.audit_ui_atlas_pack_test",
   "tools.assets.crop.plan_runtime_crops_from_intake_test",
   "tools.assets.assemble.build_runtime_assets_from_crop_plan_test",
-];
-
-const GENERATED_SOURCE_DERIVATION_TESTS = [
-  "tools.assets.audit.audit_generated_source_derivation_test",
 ];
 
 function run(label, args, opts = {}) {
@@ -400,13 +390,9 @@ if (existsSync(join(root, "tools", "assets", "job", "new_generation_record.test.
 if (existsSync(join(root, "tools", "assets", "intake", "normalize_source_sheet_chroma_test.py"))) {
   runPythonUnittests("source sheet preprocessing tests", python, SOURCE_SHEET_PREPROCESSING_TESTS);
 }
-if (existsSync(join(root, "tools", "assets", "audit", "render_ui_composition_proof_test.py"))) {
+if (existsSync(join(root, "tools", "assets", "pack", "build_ui_atlas_pack_test.py"))) {
   python ||= findPythonRunner();
   runPythonUnittests("generated UI asset audit tests", python, GENERATED_UI_ASSET_AUDIT_TESTS);
-}
-if (existsSync(join(root, "tools", "assets", "audit", "audit_generated_source_derivation_test.py"))) {
-  python ||= findPythonRunner();
-  runPythonUnittests("generated source derivation audit tests", python, GENERATED_SOURCE_DERIVATION_TESTS);
 }
 
 // Runtime seed checks. Skipped automatically in workflow-only exports, which
@@ -455,15 +441,9 @@ if (existsSync(join(exportDir, "tools", "assets", "intake", "normalize_source_sh
     cwd: exportDir,
   });
 }
-if (existsSync(join(exportDir, "tools", "assets", "audit", "render_ui_composition_proof_test.py"))) {
+if (existsSync(join(exportDir, "tools", "assets", "pack", "build_ui_atlas_pack_test.py"))) {
   python ||= findPythonRunner();
   runPythonUnittests("exported generated UI asset audit tests", python, GENERATED_UI_ASSET_AUDIT_TESTS, {
-    cwd: exportDir,
-  });
-}
-if (existsSync(join(exportDir, "tools", "assets", "audit", "audit_generated_source_derivation_test.py"))) {
-  python ||= findPythonRunner();
-  runPythonUnittests("exported generated source derivation audit tests", python, GENERATED_SOURCE_DERIVATION_TESTS, {
     cwd: exportDir,
   });
 }

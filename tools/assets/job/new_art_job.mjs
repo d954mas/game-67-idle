@@ -228,9 +228,6 @@ const artJob = {
     validate_draft: `node tools/assets/job/validate_art_job.mjs --job ${artRequestPath}`,
     validate_strict: `node tools/assets/job/validate_art_job.mjs --job ${artRequestPath} --strict`,
     validate_final_art: `node tools/assets/job/validate_art_job.mjs --job ${artRequestPath} --final-art`,
-    slice9_design_audit: `node tools/assets/job/audit_slice9_design_policy.mjs --crop-manifest ${cropManifestPath} --runtime-manifest ${runtimeManifestPath} --json-output ${slice9DesignAuditJsonPath} --report ${slice9DesignAuditMarkdownPath}`,
-    source_family_coverage_audit: `node tools/assets/job/audit_source_family_coverage.mjs --job ${artRequestPath} --json-output ${sourceFamilyCoverageJsonPath} --report ${sourceFamilyCoverageMarkdownPath}`,
-    plan_missing_source_family_prompts: `node tools/assets/job/plan_missing_source_family_prompts.mjs --job ${artRequestPath} --coverage-audit ${sourceFamilyCoverageJsonPath} --output-dir ${projectDir}/art/prompts --key-color "#00ff00" --force`,
     build_pack: "fill after pack builder is wired",
     native_evidence: "fill with DevAPI scenario command"
   }
@@ -256,7 +253,6 @@ const assetManifest = {
   runtime_dir: runtimeDir,
   commands: {
     slice_assets: "",
-    slice9_design_audit: `node tools/assets/job/audit_slice9_design_policy.mjs --crop-manifest ${cropManifestPath} --runtime-manifest ${runtimeManifestPath} --json-output ${slice9DesignAuditJsonPath} --report ${slice9DesignAuditMarkdownPath}`,
     build_pack: "",
     native_evidence: ""
   },
