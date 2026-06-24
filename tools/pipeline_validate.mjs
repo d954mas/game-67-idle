@@ -8,6 +8,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { VALIDATE_EXPORT_PREFIX, listValidateExports, partitionByKeep } from "./lib/tmp_exports.mjs";
+import { VALIDATE_BOOLEAN_FLAGS, VALIDATE_VALUE_FLAGS } from "./lib/validate_flags.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -58,19 +59,19 @@ Environment:
 }
 
 // Pull out the optional --keep-exports <n> value before the unknown-arg check.
+// The value-flag set is shared with the ai.mjs facade via lib/validate_flags.
 let keepExports = 3;
-{
-  const idx = args.indexOf("--keep-exports");
-  if (idx !== -1) {
-    const value = Number.parseInt(args[idx + 1], 10);
-    if (!Number.isInteger(value) || value < 0) usage();
-    keepExports = value;
-    args.splice(idx, 2);
-  }
+for (const flag of VALIDATE_VALUE_FLAGS) {
+  const idx = args.indexOf(flag);
+  if (idx === -1) continue;
+  const value = Number.parseInt(args[idx + 1], 10);
+  if (!Number.isInteger(value) || value < 0) usage();
+  keepExports = value;
+  args.splice(idx, 2);
 }
 const prune = !args.includes("--no-prune");
 
-const allowedArgs = new Set(["--quick", "--full", "--review", "--dry-run", "--reexport-tests", "--no-prune", "--with-assets", "--help", "-h"]);
+const allowedArgs = new Set([...VALIDATE_BOOLEAN_FLAGS, "--help", "-h"]);
 for (const arg of args) {
   if (!allowedArgs.has(arg)) usage();
 }
@@ -304,6 +305,7 @@ run("licenses lib tests", ["--test", "tools/lib/licenses.test.mjs"]);
 run("paths lib tests", ["--test", "tools/lib/paths.test.mjs"]);
 run("mime lib tests", ["--test", "tools/lib/mime.test.mjs"]);
 run("tmp_exports lib tests", ["--test", "tools/lib/tmp_exports.test.mjs"]);
+run("validate_flags lib tests", ["--test", "tools/lib/validate_flags.test.mjs"]);
 run("visual axes lib tests", ["--test", "tools/product_gate/lib/visual_axes.test.mjs"]);
 run("art contract lib tests", ["--test", "tools/product_gate/lib/art_contract.test.mjs"]);
 // Prose-auditors are advisory: skills_eval is a presence-lint (its own header

@@ -10,6 +10,7 @@
 // for the agent to perform. Read the captured session with `status`.
 
 import { spawnSync } from "node:child_process";
+import { VALIDATE_BOOLEAN_FLAGS, VALIDATE_VALUE_FLAGS } from "./lib/validate_flags.mjs";
 
 function usage({ exitCode = 2, stream = process.stderr } = {}) {
   stream.write(`usage:
@@ -99,8 +100,8 @@ function maybeImportCodexSession(args) {
 }
 
 function pipelineValidateArgs(args) {
-  const allowedFlags = new Set(["--quick", "--full", "--review", "--dry-run", "--reexport-tests", "--no-prune", "--with-assets"]);
-  const valueFlags = new Set(["--keep-exports"]);
+  const allowedFlags = new Set(VALIDATE_BOOLEAN_FLAGS);
+  const valueFlags = new Set(VALIDATE_VALUE_FLAGS);
   const out = ["tools/pipeline_validate.mjs"];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
