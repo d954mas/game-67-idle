@@ -34,6 +34,66 @@
 
 ---
 
+## 0b. Tools-duplication + UNIX review — оставшаяся работа (для следующей сессии)
+
+**Сделано (ветка `refactor/harness-diet`, всё с ревью + `validate --full` зелёный):** sync
+Claude+Codex; Фаза 1 (prose-аудиторы/оркестрация advisory, бюджет=end-of-iteration,
+3-тировый fast-path); декомпозиция `AGENTS.md` (3651→3214); очистка истории (−170 файлов);
+**удаление мёртвого generated-UI пайплайна (~4.5k LOC, gen-UI audit-гейты + python proof-гейты)**;
+дедуп `DEFAULT_LIBRARY`/`KIND_DIR` (канон `find_assets`); **`ingest_archive`** (zip/папка →
+`_incoming`) + `tools/lib/hash.mjs`; **писатель каталога слит 3/3** (accept/promote/import →
+`tools/lib/asset_catalog.catalogFrontmatter`, дрейф `publish` закрыт). Recovery-теги:
+`pre-asset-refactor-2026-06-24`, `pre-history-cleanup-2026-06-24`.
+
+**UNIX-цель:** 3 слоя — листья «одна задача» · маленькие `tools/lib/*` (НЕ god-утилита) ·
+композиция в фасадах (`ai.mjs`/`sync.mjs`) + скиллах.
+
+**Оставшийся план (по value/risk; поправки состязательной вшиты):**
+1. **Удалить ~400 строк мёртвых** evidence-валидаторов в `validate_art_job.mjs`
+   (validateAuditEvidence/CompositionProofEvidence/AtlasPackEvidence/AtlasPackAuditEvidence +
+   slice9/derivation/runtime cross-validators — проверяют выход удалённых гейтов, 0 продюсеров).
+   Подрезать ~80 связанных мест в 1420-строчном `validate_art_job.test.mjs`. Оставить
+   контракт-спайн (validateRect/Margins/Content/Group/GenerationContract/PromptPacket/
+   GenerationRecord/validateJob). Высокая ценность, тест-файл большой — аккуратно.
+   Проверка: `node --test tools/assets/job/validate_art_job.test.mjs && node tools/ai.mjs validate --full`.
+2. **`tools/lib` крошечные листья** (НЕ монолитный `cli.mjs`): `lib/cli.mjs` = `fail(msg)` +
+   `isMain(meta)` (байт-идентичны ×много) + токенизатор с ОПЦИОНАЛЬНЫМ `knownKeys` (8 тулов с
+   whitelist-гардом ДОЛЖНЫ сохранить unknown-option guard — не сажать их на guardless токенайзер);
+   `lib/json.mjs` (readJson/writeJsonFile — root+onError КАК ПАРАМЕТРЫ, копии замыкаются на
+   module-level root/fail); `lib/paths.mjs` (findRepoRoot/toPosix); `lib/licenses.mjs`
+   (LICENSE_URLS). Мигрировать по одному, валидировать между. Импорт `fail()` не должен тянуть токенайзер.
+   **Пропустить/последним:** `lib/text` (slugify — хвосты разные, низкий ROI), `lib/active_concept`
+   (крошечный), `lib/frontmatter` (НЕ плодить — `parseFrontmatter` остаётся в `find_assets`),
+   `python_runner` (1 caller — преждевременно).
+3. **`product_gate/lib`**: VISUAL_AXES (×4) + state_matrix-ридер + art_contract-лоадер (twin в
+   `review.mjs`+`visual_critic_run`). Держать `visual_axes` (константы+матем) ОТДЕЛЬНО от
+   `state_matrix` (IO) от `llm_json` (парс) — не в один god-файл. Свернуть `visual_critique_packet`
+   → `visual_critic_run` emit-mode. Проверка: `node tools/ai.mjs gate` (рва `visual_material_floor`/
+   `repeated_failure_guard` не трогать).
+4. **`devapi/png_io.py`** — вынести триплицированный PNG-кодек (capture_window/devapi_client/
+   pixel_health). **НЕ удалять `capture_screen.ps1`** — это ЖИВОЙ не-Windows фоллбэк
+   (`devapi_client.py:427-433`). Проверка: pixel_health + capture_window + DevAPI smoke.
+5. **Split god-файлов:** `build_ui_atlas_pack` (801 → вынести `atlas_review_labels.py`, общий с
+   `audit_ui_atlas_pack` — анти-дрейф контракта меток, делать ВМЕСТЕ со split, не потом);
+   `audit_source_sheet_intake` (886 → component-finder/key-color-scorer/report-writer).
+6. **`taskboard/lib.mjs` split** (ПОЗДНО, высокий blast — импортят cli+server+product_gate+
+   game_context): task_store + orchestration_policy + subagent_packets; имена экспортов стабильны
+   через re-export shim при миграции. Проверка: `taskboard cli validate` + тесты.
+7. **Мелкие слияния:** tmp-housekeeper (`pruneOldExports`+`tmp_sweep`→1); `serve_tunnel`+
+   `serve_gallery` → общий `lib/mime.mjs` ТОЛЬКО (не god static-serve); `ai.mjs` arg-allowlist
+   единый источник. **Доки:** workflow «искать→download/ingest_archive→accept→preview→pull» в
+   game-asset скилле; doc-шаблоны из CLI (`new_prototype`/`export_base`).
+
+**Жёсткие поправки (иначе ошибка):** `capture_screen.ps1` НЕ мёртвый; libs = много мелких листьев
+не god-`cli.mjs`; whitelist-тулы сохраняют unknown-option guard; `pull` (game-local writer,
+restricted-routing) и `bootstrap` (template-scaffolds) — НЕ писатели каталога, не сливать;
+leak-guard зависит только от крошечных чистых либ; license-ФАЙЛ = проза (per-caller, оставить),
+каталог-FRONTMATTER = общая схема (слито); chroma scalar/numpy twin — удалять только за
+`chroma_key_alpha_test` + RGBA-фикстур-дифф. **Метод проверки:** байт-дифф (чистый рефактор) /
+parse-check `find_assets.parseFrontmatter` (нормализация) / `validate --full` (реальный ассет-гейт).
+
+---
+
 ## 1. Диагноз (почему мы здесь)
 
 Аддитивная кривая улучшений **насытилась**: первые итерации дали скачки (закодировали ценные
