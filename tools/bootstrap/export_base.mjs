@@ -99,6 +99,8 @@ const COPY = [
   "tools/assets/intake/audit_source_sheet_intake_test.py",
   "tools/assets/intake/download_source_asset.mjs",
   "tools/assets/intake/download_source_asset.test.mjs",
+  "tools/assets/intake/ingest_archive.mjs",
+  "tools/lib/hash.mjs",
   "tools/assets/intake/audit_tileable_texture.py",
   "tools/assets/intake/audit_tileable_texture_test.py",
   "tools/game_context",
