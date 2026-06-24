@@ -42,20 +42,25 @@ Claude+Codex; Фаза 1 (prose-аудиторы/оркестрация advisory
 **удаление мёртвого generated-UI пайплайна (~4.5k LOC, gen-UI audit-гейты + python proof-гейты)**;
 дедуп `DEFAULT_LIBRARY`/`KIND_DIR` (канон `find_assets`); **`ingest_archive`** (zip/папка →
 `_incoming`) + `tools/lib/hash.mjs`; **писатель каталога слит 3/3** (accept/promote/import →
-`tools/lib/asset_catalog.catalogFrontmatter`, дрейф `publish` закрыт). Recovery-теги:
+`tools/lib/asset_catalog.catalogFrontmatter`, дрейф `publish` закрыт);
+**п.1 — мёртвые evidence-валидаторы `validate_art_job` удалены** (`873a8ac` −1099,
+тест 61→29; `d65181b` orphan-cleanup scaffolder+доки). Recovery-теги:
 `pre-asset-refactor-2026-06-24`, `pre-history-cleanup-2026-06-24`.
 
 **UNIX-цель:** 3 слоя — листья «одна задача» · маленькие `tools/lib/*` (НЕ god-утилита) ·
 композиция в фасадах (`ai.mjs`/`sync.mjs`) + скиллах.
 
 **Оставшийся план (по value/risk; поправки состязательной вшиты):**
-1. **Удалить ~400 строк мёртвых** evidence-валидаторов в `validate_art_job.mjs`
-   (validateAuditEvidence/CompositionProofEvidence/AtlasPackEvidence/AtlasPackAuditEvidence +
-   slice9/derivation/runtime cross-validators — проверяют выход удалённых гейтов, 0 продюсеров).
-   Подрезать ~80 связанных мест в 1420-строчном `validate_art_job.test.mjs`. Оставить
-   контракт-спайн (validateRect/Margins/Content/Group/GenerationContract/PromptPacket/
-   GenerationRecord/validateJob). Высокая ценность, тест-файл большой — аккуратно.
-   Проверка: `node --test tools/assets/job/validate_art_job.test.mjs && node tools/ai.mjs validate --full`.
+1. ✅ **СДЕЛАНО** (`873a8ac`+`d65181b`). Удалены 4 evidence-валидатора +
+   helpers (asArrayField/collectCropIds/collectRuntimeAssetIds/REVIEW_ATLAS_PURPOSE) +
+   strict-call/final-art-requirement блоки; 32 теста + 3 фикстур-writer'а; спайн оставлен
+   (Rect/Margins/Content/Group/GenerationContract/PromptPacket/GenerationRecord/validateJob +
+   runtime↔crop matching + final-art provenance readiness). **Поправка состязательной проверки:**
+   формулировка «0 продюсеров» была неточной — продюсеры 5/8 evidence (derivation/composition/
+   atlas_metadata/slice9_design/source_family_coverage) + tier-оркестратор `run_ui_asset_tier`
+   удалены в `0894234`; 3 выживших python-аудита (`audit_source_sheet_intake`/`build_ui_atlas_pack`/
+   `audit_ui_atlas_pack`) — НЕсвязанные standalone-листья (вопрос п.5), не job-evidence. Drift из
+   `0894234` (scaffolder seed'ил 2 producerless поля; 3 over-claim в доках) убран в `d65181b`.
 2. **`tools/lib` крошечные листья** (НЕ монолитный `cli.mjs`): `lib/cli.mjs` = `fail(msg)` +
    `isMain(meta)` (байт-идентичны ×много) + токенизатор с ОПЦИОНАЛЬНЫМ `knownKeys` (8 тулов с
    whitelist-гардом ДОЛЖНЫ сохранить unknown-option guard — не сажать их на guardless токенайзер);
