@@ -13,4 +13,5 @@ Reference playbooks (load only when the canonical skill says to):
 
 - `.codex/skills/game-asset-pipeline/references/asset-source-and-cutout-rules.md`
 - `.codex/skills/game-asset-pipeline/references/pack-builder-rules.md`
+- `.codex/skills/game-asset-pipeline/references/restricted-paid-assets.md`
 - `.codex/skills/game-asset-pipeline/references/shared-free-asset-library.md`

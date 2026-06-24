@@ -18,6 +18,8 @@ Keep source assets, generated outputs, and runtime packs traceable. Pair with
   assets as OKF Markdown records, `download_source_asset.mjs`,
   `accept_incoming_asset.mjs`, license/integrity, `preview_2x2`, `seam_audit`,
   import boundary.
+- `references/restricted-paid-assets.md`: paid/licensed assets — manual intake (no
+  download link), `publish:false`, routing to gitignored `assets/restricted/`, guard.
 - `references/pack-builder-rules.md`: pack builders, measured failure,
   smallest pack build, project-relative outputs, atomic writes, review atlases,
   and Fail loudly behavior.
@@ -41,6 +43,9 @@ Keep source assets, generated outputs, and runtime packs traceable. Pair with
 - Keep raw source, shared downloaded assets, and generated runtime assets separate.
 - Catalog reusable free/CC0 assets in the library (record + license + provenance +
   `origin`) before copying project-local, so the next source-first search finds them.
+- Every committed asset needs a recorded license; paid/non-redistributable assets
+  go to gitignored `assets/restricted/` (only the catalog `.md` committed); the
+  guard blocks paid binaries. See `references/restricted-paid-assets.md`.
 - Project code uses project-local copies, not shared library or scratch paths.
 - Generated headers/packs must be reproducible from source plus builder code.
 - Crop rectangles, pivots, trim rules, and slice9 margins belong in manifests.

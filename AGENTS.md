@@ -32,6 +32,9 @@
 - Downloaded/shared/generated assets need license, provenance, integrity, and
   `origin` (mine|ai|sourced); catalog reusable ones (`tools/assets/intake/`)
   before copying project-local. Runtime uses project-local copies.
+- Every committed asset records a license; paid/non-redistributable binaries never
+  enter git — they go under gitignored `assets/restricted/` (only the `.md` is
+  committed), enforced by the guard.
 
 ## Context
 

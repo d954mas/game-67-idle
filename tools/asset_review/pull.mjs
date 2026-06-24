@@ -13,6 +13,7 @@ import { readFile, writeFile, mkdir, cp, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { scanLibrary, parseFrontmatter, DEFAULT_LIBRARY, KIND_DIR } from "../assets/source/find_assets.mjs";
+import { isPublishable, RESTRICTED_ROOT } from "../assets/restricted.mjs";
 
 function parseArgs(argv) {
   const a = { ids: "", library: DEFAULT_LIBRARY, to: "assets", apply: false, overwrite: false };
@@ -32,7 +33,7 @@ function parseArgs(argv) {
   return a;
 }
 
-function gameRecord(fm, resource, sourceId, ts) {
+function gameRecord(fm, resource, sourceId, ts, publish) {
   return `---
 type: Game Asset
 title: ${fm.title || fm.asset_id}
@@ -47,6 +48,8 @@ origin: ${fm.origin || "sourced"}
 source_id: ${sourceId}
 license: ${fm.license || ""}
 license_url: ${fm.license_url || ""}
+redistribution_allowed: ${fm.redistribution_allowed || (publish ? "true" : "false")}
+publish: ${publish}
 ${fm.pack ? `pack: ${fm.pack}\n` : ""}---
 
 # ${fm.title || fm.asset_id}
@@ -57,6 +60,9 @@ ${fm.pack ? `pack: ${fm.pack}\n` : ""}---
 - Pulled at: ${ts}
 - The library is canonical; re-pull to update this copy.
 - Runtime uses project-local copies; the builder packs \`${resource}\`.
+${publish
+  ? "- Publishable: binary committed under assets/."
+  : "- RESTRICTED (paid/licensed): binary lives under gitignored assets/restricted/; only this .md is committed."}
 `;
 }
 
@@ -83,25 +89,29 @@ async function main() {
   const written = [];
   for (const r of picks) {
     const fm = parseFrontmatter(await readFile(r.catalogPath, "utf8"));
+    const publish = isPublishable(fm);
     const kindDir = KIND_DIR[fm.kind] || fm.kind;
-    const resource = `source/${kindDir}/${fm.asset_id}/`;
+    // Non-publishable (paid/licensed) binaries route to the gitignored restricted
+    // root; the catalog/license .md still go to the committed trees below.
+    const prefix = publish ? "" : `${RESTRICTED_ROOT}/`;
+    const resource = `${prefix}source/${kindDir}/${fm.asset_id}/`;
     const filesSrc = join(library, fm.resource);
     const filesDst = join(to, resource);
     const catalogPath = join(to, "catalog", kindDir, `${fm.asset_id}.md`);
     const exists = existsSync(catalogPath) || existsSync(filesDst);
-    console.log(`  ${fm.asset_id}  (${fm.kind})${exists ? " [exists]" : ""} -> ${resource}`);
+    console.log(`  ${fm.asset_id}  (${fm.kind})${publish ? "" : " [RESTRICTED]"}${exists ? " [exists]" : ""} -> ${resource}`);
     if (exists && !a.overwrite) throw new Error(`already in game (pass --overwrite): ${fm.asset_id}`);
     if (!a.apply) continue;
     if (existsSync(filesSrc)) await copyDir(filesSrc, filesDst);
     if (r.preview && existsSync(r.preview)) {
-      const pdst = join(to, "previews", fm.asset_id);
+      const pdst = join(to, publish ? "" : RESTRICTED_ROOT, "previews", fm.asset_id);
       await mkdir(pdst, { recursive: true });
       await cp(r.preview, join(pdst, "preview.png"), { force: true });
     }
     const licSrc = join(library, "licenses", fm.pack || fm.asset_id);
     if (existsSync(licSrc)) await copyDir(licSrc, join(to, "licenses", fm.asset_id));
     await mkdir(join(to, "catalog", kindDir), { recursive: true });
-    await writeFile(catalogPath, gameRecord(fm, resource, fm.asset_id, ts), "utf8");
+    await writeFile(catalogPath, gameRecord(fm, resource, fm.asset_id, ts, publish), "utf8");
     written.push(fm.asset_id);
   }
   console.log(a.apply ? `\nlinked ${written.length} asset(s) into ${to} (source_id set).` : `\ndry-run only — pass --apply to write.`);

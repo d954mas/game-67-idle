@@ -336,6 +336,8 @@ run("game workflow guard", ["tools/game_context/workflow_guard.mjs"]);
 run("game workflow guard tests", ["--test", "tools/game_context/workflow_guard.test.mjs"]);
 run("visual invariant guard", ["tools/visual_invariant_guard.mjs"]);
 run("visual invariant guard tests", ["--test", "tools/visual_invariant_guard.test.mjs"]);
+run("restricted asset guard", ["tools/assets/audit/restricted_assets_guard.mjs"]);
+run("restricted asset guard tests", ["--test", "tools/assets/audit/restricted_assets_guard.test.mjs"]);
 run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
 
 // Guard: catch a STATUS<->runtime contradiction. A "clean seed" repo must not

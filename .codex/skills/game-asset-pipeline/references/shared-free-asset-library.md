@@ -84,6 +84,11 @@ The helper records size, SHA256, `download-log.md`, and `intake.json`. It does
 not approve the license; the agent still has to perform the license gate before
 moving anything into `catalog/` or a project.
 
+For paid / non-redistributable assets (CGTrader packs, commercial music/fonts),
+use `--manual --source-page-url <page> --publish false` so no download link is
+stored and the asset routes to the gitignored `assets/restricted/`. Full lifecycle:
+`references/restricted-paid-assets.md`.
+
 After the license gate passes, accept the incoming asset with the catalog helper:
 
 ```powershell

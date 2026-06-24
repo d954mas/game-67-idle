@@ -35,6 +35,9 @@ ONCE, store in the shared library, reuse many — do not re-prepare per game.
 Catalog each reusable asset with provenance:
 - downloaded: `tools/assets/intake/download_source_asset.mjs` then
   `tools/assets/intake/accept_incoming_asset.mjs`.
+- paid pack (CGTrader etc.): manual intake `--manual --publish false`; binary
+  routes to the gitignored `assets/restricted/`, only the catalog `.md` is
+  committed. See game-asset-pipeline `references/restricted-paid-assets.md`.
 - project-vendored / freshly prepared: `node tools/asset_review/promote.mjs --ids
   ... --source <s> --license <L> --origin <mine|ai|sourced> [--pack <slug>]`.
 A kit -> `--pack`: groups under `catalog/<kind>/<pack>/` + `_pack.md` + one shared license.

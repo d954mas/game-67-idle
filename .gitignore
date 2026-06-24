@@ -16,6 +16,11 @@ assets/runtime/*/_cache/
 assets/packs/
 *.png.ppm
 
+# Restricted (paid/licensed) asset binaries — never commit to an open repo.
+# Only the catalog/license .md (metadata, no binary) is committed; the binaries
+# live here locally and in the private library. See tools/assets/restricted.mjs.
+assets/restricted/
+
 # downloaded tunnel binary (app-tunnel skill)
 tools/bin/
 template/build/

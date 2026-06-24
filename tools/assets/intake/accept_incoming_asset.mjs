@@ -24,7 +24,10 @@ Options:
   --attribution-required <bool>    default false
   --commercial-use <bool>          default true
   --modification-allowed <bool>    default true
-  --redistribution-allowed <bool>  default true
+  --redistribution-allowed <bool>  default follows --publish (true unless paid)
+  --publish <true|false>           may this asset be committed to an open repo?
+                                   default reads intake.json, else true. Paid packs
+                                   use false -> pull routes the binary to assets/restricted/
   --shipping-decision <value>      default allowed
   --tileable <bool|unknown>        texture metadata
   --wrap-mode <mode>               texture metadata
@@ -43,7 +46,8 @@ function parseArgs(argv) {
     attributionRequired: "false",
     commercialUse: "true",
     modificationAllowed: "true",
-    redistributionAllowed: "true",
+    redistributionAllowed: "",
+    publish: "",
     shippingDecision: "allowed",
     sourcePageUrl: "",
     authorVendor: "",
@@ -81,6 +85,7 @@ function parseArgs(argv) {
     else if (arg === "--commercial-use") args.commercialUse = next;
     else if (arg === "--modification-allowed") args.modificationAllowed = next;
     else if (arg === "--redistribution-allowed") args.redistributionAllowed = next;
+    else if (arg === "--publish") args.publish = next;
     else if (arg === "--shipping-decision") args.shippingDecision = next;
     else if (arg === "--tileable") args.tileable = next;
     else if (arg === "--wrap-mode") args.wrapMode = next;
@@ -95,6 +100,9 @@ function parseArgs(argv) {
   }
   if (!KIND_DIR[args.kind]) throw new Error(`unsupported --kind ${args.kind}`);
   if (!["mine", "ai", "sourced"].includes(args.origin)) throw new Error(`--origin must be mine|ai|sourced`);
+  for (const [name, value] of [["publish", args.publish], ["redistribution-allowed", args.redistributionAllowed]]) {
+    if (value && !["true", "false"].includes(value)) throw new Error(`--${name} must be true or false`);
+  }
   return args;
 }
 
@@ -116,8 +124,9 @@ function extraFrontmatter(args) {
 
 function catalogMarkdown(args, intake, resource) {
   const extra = extraFrontmatter(args);
-  const sourcePage = args.sourcePageUrl || intake.url;
+  const sourcePage = args.sourcePageUrl || intake.source_page_url || intake.url || "-";
   const authorVendor = args.authorVendor || intake.source;
+  const directDownload = intake.manual ? "(manual/account-gated — not stored)" : (intake.url || "-");
   return `---
 type: Game Asset
 title: ${args.title}
@@ -135,6 +144,7 @@ attribution_required: ${args.attributionRequired}
 commercial_use: ${args.commercialUse}
 modification_allowed: ${args.modificationAllowed}
 redistribution_allowed: ${args.redistributionAllowed}
+publish: ${args.publish}
 shipping_decision: ${args.shippingDecision}
 ${extra ? `${extra}\n` : ""}---
 
@@ -143,10 +153,10 @@ ${extra ? `${extra}\n` : ""}---
 ## Provenance
 
 - Source page: ${sourcePage}
-- Direct download: ${intake.url}
+- Direct download: ${directDownload}
 - Author/vendor: ${authorVendor}
 - Downloaded at: ${intake.downloaded_at}
-- Incoming path: ${intake.path}
+- Original filename: ${intake.original_filename || "-"}
 - SHA256: ${intake.sha256}
 - Bytes: ${intake.bytes}
 
@@ -158,6 +168,7 @@ ${extra ? `${extra}\n` : ""}---
 - Commercial use: ${args.commercialUse}
 - Modification allowed: ${args.modificationAllowed}
 - Redistribution allowed: ${args.redistributionAllowed}
+- Publishable (commit to open repo): ${args.publish}
 - Shipping decision: ${args.shippingDecision}
 
 ## Runtime Notes
@@ -176,6 +187,10 @@ async function main() {
   const intakePath = join(incomingDir, "intake.json");
   if (!existsSync(intakePath)) throw new Error(`missing incoming intake: ${intakePath}`);
   const intake = JSON.parse(await readFile(intakePath, "utf8"));
+  // Resolve publishability: explicit flag > intake.json > default true (free/CC0).
+  args.publish = args.publish || intake.publish || "true";
+  // Redistribution defaults to follow publishability unless the lead set it explicitly.
+  args.redistributionAllowed = args.redistributionAllowed || (args.publish === "true" ? "true" : "false");
 
   const filesDir = join(library, "files", kindDir, args.assetId);
   const catalogPath = join(library, "catalog", kindDir, `${args.assetId}.md`);
@@ -205,9 +220,10 @@ async function main() {
 - Commercial use: ${args.commercialUse}
 - Modification allowed: ${args.modificationAllowed}
 - Redistribution allowed: ${args.redistributionAllowed}
+- Publishable (commit to open repo): ${args.publish}
 - Shipping decision: ${args.shippingDecision}
-- Source URL: ${intake.url}
-- Source page: ${args.sourcePageUrl || intake.url}
+- Direct download: ${intake.manual ? "(manual/account-gated — not stored)" : (intake.url || "-")}
+- Source page: ${args.sourcePageUrl || intake.source_page_url || intake.url || "-"}
 - Author/vendor: ${args.authorVendor || intake.source}
 `, "utf8");
 
