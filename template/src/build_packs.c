@@ -50,13 +50,16 @@ int main(int argc, char *argv[]) {
     nt_builder_add_font(ctx, "../external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf",
                         &(nt_font_opts_t){.charset = NT_CHARSET_ASCII, .resource_name = "game/font"});
 
-    // instanced-mesh shell (coloured via per-instance colour + neutral white texture;
-    // a game packs its own meshes/textures on top)
+    // instanced-mesh shell: a coloured mesh path (mesh_inst = position + per-instance
+    // world matrix + colour, no texture) and a starter cube so the mesh path is proven
+    // on copy. A game packs its own meshes/textures on top.
     nt_builder_add_shader(ctx, "assets/shaders/mesh_inst.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/mesh_inst.frag", NT_BUILD_SHADER_FRAGMENT);
-    static const uint8_t white_px[4] = {255, 255, 255, 255};
-    nt_tex_opts_t white_opts = nt_tex_opts_defaults();
-    nt_builder_add_texture_raw(ctx, white_px, 1, 1, "game/white", &white_opts);
+    NtStreamLayout mesh_layout[] = {
+        {"position", "POSITION", NT_STREAM_FLOAT32, 3, false},
+    };
+    nt_builder_add_mesh(ctx, "assets/meshes/cube.glb",
+                        &(nt_mesh_opts_t){.layout = mesh_layout, .stream_count = 1, .tangent_mode = NT_TANGENT_NONE});
 
     nt_build_result_t r = nt_builder_finish_pack(ctx);
     nt_builder_free_pack(ctx);
