@@ -319,14 +319,19 @@ if (fullMode && existsSync(exportDir)) {
 run("taskboard summary", ["tools/taskboard/cli.mjs", "summary"]);
 run("ai facade syntax", ["--check", "tools/ai.mjs"]);
 run("ai facade tests", ["--test", "tools/ai.test.mjs"]);
-run("skill presence check", ["tools/skills_eval.mjs"]);
 run("config sync check", ["tools/sync.mjs", "--check"]);
 run("skills sync tests", ["--test", "tools/skills_sync.test.mjs"]);
 run("hooks sync tests", ["--test", "tools/hooks_sync.test.mjs"]);
+// Prose-auditors are advisory: skills_eval is a presence-lint (its own header
+// says it is not a quality eval) and doc_reference_check is link-rot — neither
+// judges output, so they must not block a code/doc edit. Run them under --review
+// (like context budgets). The real generated-pointer drift check (config sync
+// check, above) stays blocking. [REFACTOR_PLAN Phase 1 #1]
 if (reviewMode) {
+  run("skill presence check", ["tools/skills_eval.mjs"]);
+  run("doc reference check", ["tools/doc_reference_check.mjs"]);
   run("context budget review", ["tools/context_budget.mjs", "--review"]);
 }
-run("doc reference check", ["tools/doc_reference_check.mjs"]);
 run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
 run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
 run("doc reference tests", ["--test", "tools/doc_reference_check.test.mjs"]);

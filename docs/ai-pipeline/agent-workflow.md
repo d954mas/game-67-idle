@@ -34,7 +34,9 @@ Put volatile facts in tasks, status, evidence, or final reports.
 2. Select or create a task only when durable tracking is useful.
 3. Read only files needed for the selected scope.
 4. Make the smallest coherent change.
-5. Run the narrowest validation that proves the change.
+5. Run the narrowest validation that proves the change (match the change-size
+   tier in `AI_PIPELINE.md`; a spike is TIER 1 — one proving command, no
+   packet/report/verdicts).
 6. Record evidence in the task/status/final response when the work changes
    project state.
 

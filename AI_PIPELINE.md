@@ -21,13 +21,20 @@ task/evidence file, one matching skill, and at most one deep reference above.
   tasks, or validators.
 - Profiling is automatic (PostToolUse hook); read a session with `node tools/ai.mjs status`.
 - Make one scoped change, then run the narrowest command that proves it.
-- Do not call a playable/visual slice done from one green gate; product,
-  game-loop, art-source, and technical gates stay separate.
-- If strict/product fails twice for the same major reason, stop local polish and
-  change path: architecture, tooling, source asset, reference, or lead
-  acceptance.
+- Do not call a slice done from one green gate; the gate taxonomy and the
+  fails-twice-change-path rule live in `docs/ai-pipeline/quality-validation.md`.
 - If the lead says a game/prototype is done, stopped, or only a test, stop game
   implementation and follow task/status instructions.
+
+## Change-Size Tiers
+
+Match ceremony to change size; default TIER 1, escalate only on the lead's "keep
+this" or a visual surface.
+
+- TIER 1 spike/trivial: one narrowest proving command + a screenshot for a visible
+  change. No packet/report/four-verdicts/`--strict`/2nd pass.
+- TIER 2 kept slice: the full gate ceremony in `docs/ai-pipeline/quality-validation.md`.
+- TIER 3 visual surface: TIER 2 + the screenshot vision check before close.
 
 ## Common Commands
 
@@ -39,8 +46,7 @@ node tools/ai.mjs validate --review
 node tools/ai.mjs validate --full
 ```
 
-Use quick validation after normal pipeline edits; `--review` when intentionally
-reviewing context/caps; `--full` for export, runtime, or deep asset gates.
-Use `orchestration-check` to preview a subagent packet before launching delegated
-work; it is advisory authoring help, not an acceptance gate. Acceptance gates the
-work product (validation, product gates, lead judgment), not the delegation.
+Quick after normal edits; `--review` for context/caps; `--full` for
+export/runtime/deep-asset gates. `orchestration-check` previews a subagent packet
+(advisory, not an acceptance gate); acceptance gates the work product, not the
+delegation.
