@@ -133,11 +133,13 @@ INTEGRATE, when wiring assets into runtime:
 
 FINAL-ART, only when shipping a reusable kit or claiming completion:
 
-- source-sheet intake evidence recorded in the art job;
+- source-sheet intake audit run (standalone report);
 - strict contract;
-- labeled review atlas build and audit;
+- labeled review atlas build and audit (standalone tools);
 - final generated/artist art gate:
-  `node tools/assets/job/validate_art_job.mjs --job <job> --final-art`;
+  `node tools/assets/job/validate_art_job.mjs --job <job> --final-art`
+  (validates generation provenance + runtime-ready coverage, not the
+  standalone audit reports above);
 - native/runtime screenshots and product gates;
 - `node tools/product_gate/responsive_layout_audit.mjs` when `ui.tree` bounds are available.
 

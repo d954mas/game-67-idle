@@ -179,10 +179,11 @@ For full UI-kit production, use `.codex/skills/generated-game-ui-assets/`.
   state colors, and decorations occupying text/content safe areas.
 - Before slicing, run `normalize_source_sheet_chroma.py` when needed, then
   `audit_source_sheet_intake.py`.
-- Require composition proof, source-derivation audit, and product gate before
-  calling runtime generated UI done.
+- Require a runtime screenshot/product gate before calling runtime generated
+  UI done.
 - `node tools/assets/job/validate_art_job.mjs --job <job> --final-art` must
-  pass before claiming final generated/artist UI art.
+  pass before claiming final generated/artist UI art (it validates generation
+  provenance + runtime-ready coverage).
 
 ## Generated Asset Rules
 

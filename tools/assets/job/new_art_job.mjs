@@ -84,10 +84,6 @@ const artRequestPath = `${projectDir}/art_requests/${args.id}.json`;
 const cropManifestPath = `${projectDir}/data/${args.id}-crop_manifest.json`;
 const runtimeManifestPath = `${projectDir}/data/${args.id}-asset_manifest.json`;
 const runtimeDir = `assets/runtime/${args.id}`;
-const slice9DesignAuditMarkdownPath = `${projectDir}/reviews/${args.id}-slice9_design_policy_audit.md`;
-const slice9DesignAuditJsonPath = `${projectDir}/reviews/${args.id}-slice9_design_policy_audit.json`;
-const sourceFamilyCoverageMarkdownPath = `${projectDir}/reviews/${args.id}-source_family_coverage_audit.md`;
-const sourceFamilyCoverageJsonPath = `${projectDir}/reviews/${args.id}-source_family_coverage_audit.json`;
 
 const artJob = {
   schema: "game.art_job",
@@ -201,8 +197,6 @@ const artJob = {
     crop_manifest: cropManifestPath,
     runtime_manifest: runtimeManifestPath,
     runtime_dir: runtimeDir,
-    slice9_design_audit: [slice9DesignAuditMarkdownPath, slice9DesignAuditJsonPath],
-    source_family_coverage_audit: [sourceFamilyCoverageMarkdownPath, sourceFamilyCoverageJsonPath],
     native_evidence: []
   },
   runtime_composition: {
