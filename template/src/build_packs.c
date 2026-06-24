@@ -41,7 +41,8 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     nt_builder_set_header_dir(ctx, HEADER_DIR);
-    nt_builder_set_cache_dir(ctx, "build/game/_cache");
+    (void)MKDIR("build");
+    nt_builder_set_cache_dir(ctx, "build/_cache");
 
     // text shell
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.vert", NT_BUILD_SHADER_VERTEX);

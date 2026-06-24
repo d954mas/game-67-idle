@@ -18,3 +18,5 @@ assets/packs/
 
 # downloaded tunnel binary (app-tunnel skill)
 tools/bin/
+template/build/
+template/src/generated/

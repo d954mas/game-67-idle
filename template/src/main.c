@@ -12,6 +12,7 @@
 #include "input/nt_input.h"
 #include "log/nt_log.h"
 #include "material/nt_material.h"
+#include "nt_pack_format.h"
 #include "render/nt_render_defs.h"
 #include "renderers/nt_text_renderer.h"
 #include "resource/nt_resource.h"
