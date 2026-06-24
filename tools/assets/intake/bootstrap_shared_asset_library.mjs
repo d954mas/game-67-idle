@@ -2,8 +2,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-
-const DEFAULT_LIBRARY = "C:\\Users\\ROG\\YandexDisk\\gamedev\\assets\\ai_pipeline_assets";
+import { DEFAULT_LIBRARY } from "../source/find_assets.mjs";
 
 function usage() {
   return `usage: node tools/assets/intake/bootstrap_shared_asset_library.mjs [--library <path>] [--force]

@@ -18,8 +18,8 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { DEFAULT_LIBRARY } from "./find_assets.mjs";
 
-const DEFAULT_LIBRARY = "C:\\Users\\ROG\\YandexDisk\\gamedev\\assets\\ai_pipeline_assets";
 const SITE = "https://poly.pizza";
 const CDN = "https://static.poly.pizza";
 const UA = { "user-agent": "Mozilla/5.0 (asset-librarian; +local pipeline)" };

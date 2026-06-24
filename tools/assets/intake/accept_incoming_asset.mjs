@@ -2,16 +2,7 @@
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-
-const DEFAULT_LIBRARY = "C:\\Users\\ROG\\YandexDisk\\gamedev\\assets\\ai_pipeline_assets";
-const KIND_DIR = {
-  model: "models",
-  texture: "textures",
-  material: "materials",
-  audio: "audio",
-  ui: "ui",
-  font: "fonts",
-};
+import { DEFAULT_LIBRARY, KIND_DIR } from "../source/find_assets.mjs";
 
 function usage() {
   return `usage: node tools/assets/intake/accept_incoming_asset.mjs --source <source> --slug <slug> --asset-id <id> --kind <kind> --title <title> --description <text> --license-name <name> --license-url <url> --tags <a,b,c> [options]
