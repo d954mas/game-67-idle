@@ -14,6 +14,7 @@ import { join, resolve, basename, extname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import { DEFAULT_LIBRARY, KIND_DIR } from "../assets/source/find_assets.mjs";
+import { catalogFrontmatter } from "../lib/asset_catalog.mjs";
 
 // review-kind -> library-kind, for legacy manifests; new manifests already carry
 // a library kind, so this is only a fallback.
@@ -93,25 +94,26 @@ async function sha256(file) {
 }
 
 function catalogMarkdown(rec) {
-  return `---
-type: Game Asset
-title: ${rec.title}
-description: ${rec.description}
-resource: ${rec.resource}
-tags: [${rec.tags.join(", ")}]
-timestamp: ${rec.timestamp}
-asset_id: ${rec.assetId}
-kind: ${rec.kind}
-status: accepted
-origin: ${rec.origin}
-license: ${rec.license}
-license_url: ${rec.licenseUrl}
-attribution_required: ${rec.attributionRequired}
-commercial_use: ${rec.commercialUse}
-modification_allowed: ${rec.modificationAllowed}
-redistribution_allowed: ${rec.redistributionAllowed}
-shipping_decision: ${rec.shippingDecision}
-${rec.pack ? `pack: ${rec.pack}\n` : ""}---
+  const frontmatter = catalogFrontmatter({
+    title: rec.title,
+    description: rec.description,
+    resource: rec.resource,
+    tags: rec.tags,
+    timestamp: rec.timestamp,
+    assetId: rec.assetId,
+    kind: rec.kind,
+    status: "accepted",
+    origin: rec.origin,
+    license: rec.license,
+    licenseUrl: rec.licenseUrl,
+    attributionRequired: rec.attributionRequired,
+    commercialUse: rec.commercialUse,
+    modificationAllowed: rec.modificationAllowed,
+    redistributionAllowed: rec.redistributionAllowed,
+    publish: rec.publish,
+    shippingDecision: rec.shippingDecision,
+  }, rec.pack ? `pack: ${rec.pack}` : "");
+  return `${frontmatter}
 
 # ${rec.title}
 
@@ -275,6 +277,7 @@ async function main() {
       source, relpath: pick.relpath, sha, bytes, pack: a.pack || "", licenseRef: packSlug || assetId,
       attributionRequired: a.attributionRequired, commercialUse: a.commercialUse,
       modificationAllowed: a.modificationAllowed, redistributionAllowed: a.redistributionAllowed,
+      publish: "true",
       shippingDecision: a.shippingDecision,
     };
     await writeFile(catalogPath, catalogMarkdown(rec), "utf8");
