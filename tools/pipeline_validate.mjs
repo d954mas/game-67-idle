@@ -317,6 +317,7 @@ run("cli lib tests", ["--test", "tools/lib/cli.test.mjs"]);
 run("json lib tests", ["--test", "tools/lib/json.test.mjs"]);
 run("licenses lib tests", ["--test", "tools/lib/licenses.test.mjs"]);
 run("paths lib tests", ["--test", "tools/lib/paths.test.mjs"]);
+run("mime lib tests", ["--test", "tools/lib/mime.test.mjs"]);
 run("visual axes lib tests", ["--test", "tools/product_gate/lib/visual_axes.test.mjs"]);
 run("art contract lib tests", ["--test", "tools/product_gate/lib/art_contract.test.mjs"]);
 // Prose-auditors are advisory: skills_eval is a presence-lint (its own header

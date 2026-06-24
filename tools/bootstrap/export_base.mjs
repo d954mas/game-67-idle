@@ -109,6 +109,8 @@ const COPY = [
   "tools/lib/licenses.test.mjs",
   "tools/lib/paths.mjs",
   "tools/lib/paths.test.mjs",
+  "tools/lib/mime.mjs",
+  "tools/lib/mime.test.mjs",
   "tools/lib/asset_catalog.mjs",
   "tools/lib/asset_catalog.test.mjs",
   "tools/assets/intake/audit_tileable_texture.py",

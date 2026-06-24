@@ -6,15 +6,8 @@
 //   node tools/asset_review/serve_gallery.mjs --gallery tmp/lib-gallery --lib <libraryRoot> --port 8910
 import { createServer } from "node:http";
 import { createReadStream, existsSync, statSync } from "node:fs";
-import { join, resolve, normalize, extname } from "node:path";
-
-const TYPES = {
-  ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript",
-  ".css": "text/css", ".json": "application/json", ".png": "image/png", ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".svg": "image/svg+xml",
-  ".ico": "image/x-icon", ".ttf": "font/ttf", ".hdr": "application/octet-stream",
-  ".glb": "model/gltf-binary", ".gltf": "model/gltf+json", ".wasm": "application/wasm",
-};
+import { join, resolve, normalize } from "node:path";
+import { mimeType } from "../lib/mime.mjs";
 
 function parseArgs(argv) {
   const a = { gallery: "tmp/lib-gallery", lib: "", port: 8910 };
@@ -50,7 +43,7 @@ const server = createServer((req, res) => {
   if (!file.startsWith(root) || !existsSync(file) || !statSync(file).isFile()) {
     res.writeHead(404); res.end("not found"); return;
   }
-  res.writeHead(200, { "content-type": TYPES[extname(file).toLowerCase()] || "application/octet-stream", "access-control-allow-origin": "*" });
+  res.writeHead(200, { "content-type": mimeType(file), "access-control-allow-origin": "*" });
   createReadStream(file).pipe(res);
 });
 server.listen(a.port, () => {
