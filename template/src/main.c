@@ -19,6 +19,8 @@
 #include "time/nt_time.h"
 #include "window/nt_window.h"
 
+#include "render/render_mesh.h"
+#include "systems/sys_move.h"
 #include "ui/hud.h"
 #include "world/world.h"
 
@@ -33,6 +35,7 @@ static nt_buffer_t s_frame_ubo;
 static nt_material_t s_text_material;
 static nt_font_t s_font;
 static nt_resource_t s_text_vs, s_text_fs, s_font_resource;
+static nt_resource_t s_mesh_vs, s_mesh_fs, s_cube;
 static World s_world;
 
 static nt_hash64_t rid(const char *s) { return nt_hash64_str(s); }
@@ -50,17 +53,24 @@ static void frame(void) {
     nt_material_step();
     s_world.time_seconds += g_nt_app.dt;
 
+    // game systems update the world
+    sys_move(&s_world, g_nt_app.dt);
+
     nt_gfx_begin_frame();
     if (g_nt_gfx.context_restored) {
         nt_resource_invalidate(NT_ASSET_SHADER_CODE);
         nt_resource_invalidate(NT_ASSET_FONT);
+        nt_resource_invalidate(NT_ASSET_MESH);
         s_frame_ubo = nt_gfx_make_buffer(&(nt_buffer_desc_t){
             .type = NT_BUFFER_UNIFORM, .usage = NT_USAGE_DYNAMIC,
             .size = sizeof(nt_frame_uniforms_t), .label = "frame_uniforms"});
         nt_text_renderer_restore_gpu();
+        render_mesh_restore_gpu();
     }
 
+    // render systems read the world
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
+    render_mesh_draw(&s_world, s_frame_ubo);
     hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
     nt_gfx_end_pass();
     nt_gfx_end_frame();
@@ -94,6 +104,7 @@ int main(int argc, char **argv) {
     nt_hash_init(&(nt_hash_desc_t){0});
     nt_resource_init(&(nt_resource_desc_t){0});
     nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);
+    nt_resource_set_activator(NT_ASSET_MESH, nt_gfx_activate_mesh, nt_gfx_deactivate_mesh);
 
     nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
@@ -131,6 +142,13 @@ int main(int argc, char **argv) {
     s_frame_ubo = nt_gfx_make_buffer(&(nt_buffer_desc_t){
         .type = NT_BUFFER_UNIFORM, .usage = NT_USAGE_DYNAMIC,
         .size = sizeof(nt_frame_uniforms_t), .label = "frame_uniforms"});
+
+    // mesh render system + a sample character cube (coloured mesh path)
+    s_mesh_vs = nt_resource_request(rid("assets/shaders/mesh_inst.vert"), NT_ASSET_SHADER_CODE);
+    s_mesh_fs = nt_resource_request(rid("assets/shaders/mesh_inst.frag"), NT_ASSET_SHADER_CODE);
+    s_cube = nt_resource_request(rid("assets/meshes/cube.glb"), NT_ASSET_MESH);
+    render_mesh_init(s_mesh_vs, s_mesh_fs);
+    render_mesh_spawn_player(&s_world, s_cube, (float[4]){0.16F, 0.78F, 0.30F, 1.0F});
 
     g_nt_app.target_dt = 1.0F / 60.0F;
     nt_app_run(frame);

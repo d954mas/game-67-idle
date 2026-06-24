@@ -57,6 +57,8 @@ endif()
 add_executable(${GAME_TARGET}
     src/main.c
     src/ui/hud.c
+    src/render/render_mesh.c
+    src/systems/sys_move.c
 )
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)
@@ -65,6 +67,7 @@ target_include_directories(${GAME_TARGET} PRIVATE src "${ENGINE_DIR}/deps/glfw/d
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core nt_app nt_input nt_window nt_gfx nt_text_renderer nt_font
     nt_resource nt_material nt_shared nt_render nt_hash nt_fs nt_log nt_math nt_time
+    nt_mesh_renderer nt_entity nt_transform_comp nt_mesh_comp nt_material_comp nt_drawable_comp
     glad stb_image_write
 )
 if(EMSCRIPTEN)
