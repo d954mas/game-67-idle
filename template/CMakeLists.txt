@@ -59,6 +59,7 @@ add_executable(${GAME_TARGET}
     src/ui/hud.c
     src/render/render_mesh.c
     src/systems/sys_move.c
+    src/systems/sys_settings.c
 )
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)

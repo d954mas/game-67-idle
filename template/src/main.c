@@ -21,6 +21,7 @@
 
 #include "render/render_mesh.h"
 #include "systems/sys_move.h"
+#include "systems/sys_settings.h"
 #include "ui/hud.h"
 #include "world/world.h"
 
@@ -55,6 +56,7 @@ static void frame(void) {
 
     // game systems update the world
     sys_move(&s_world, g_nt_app.dt);
+    sys_settings_update(&s_world, g_nt_app.dt);
 
     nt_gfx_begin_frame();
     if (g_nt_gfx.context_restored) {
@@ -72,6 +74,7 @@ static void frame(void) {
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
     render_mesh_draw(&s_world, s_frame_ubo);
     hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
+    sys_settings_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
     nt_gfx_end_pass();
     nt_gfx_end_frame();
     nt_window_swap_buffers();
