@@ -390,6 +390,10 @@ if (existsSync(join(root, "tools", "assets", "pack", "build_ui_atlas_pack_test.p
   python ||= findPythonRunner();
   runPythonUnittests("generated UI asset audit tests", python, GENERATED_UI_ASSET_AUDIT_TESTS);
 }
+if (existsSync(join(root, "tools", "devapi", "png_io_test.py"))) {
+  python ||= findPythonRunner();
+  runPythonUnittests("devapi png_io tests", python, ["tools.devapi.png_io_test"]);
+}
 
 // Runtime seed checks. Skipped automatically in workflow-only exports, which
 // have no state schema or CMake presets.

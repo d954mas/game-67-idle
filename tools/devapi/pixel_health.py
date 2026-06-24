@@ -6,12 +6,11 @@ from __future__ import annotations
 import argparse
 import math
 import os
-import struct
-import zlib
+import sys
 from dataclasses import dataclass
 
-
-PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from png_io import PngError, bytes_per_pixel, read_png  # noqa: E402
 
 
 class PixelHealthError(RuntimeError):
@@ -44,109 +43,11 @@ class PixelHealth:
         )
 
 
-def _png_chunks(data: bytes):
-    if not data.startswith(PNG_SIGNATURE):
-        raise PixelHealthError("not a PNG file")
-    offset = len(PNG_SIGNATURE)
-    while offset + 8 <= len(data):
-        length = struct.unpack(">I", data[offset : offset + 4])[0]
-        kind = data[offset + 4 : offset + 8]
-        payload_start = offset + 8
-        payload_end = payload_start + length
-        if payload_end + 4 > len(data):
-            raise PixelHealthError("truncated PNG chunk")
-        yield kind, data[payload_start:payload_end]
-        offset = payload_end + 4
-        if kind == b"IEND":
-            break
-
-
-def _bytes_per_pixel(color_type: int) -> int:
-    if color_type == 0:
-        return 1
-    if color_type == 2:
-        return 3
-    if color_type == 6:
-        return 4
-    raise PixelHealthError(f"unsupported PNG color type: {color_type}")
-
-
-def _paeth(a: int, b: int, c: int) -> int:
-    p = a + b - c
-    pa = abs(p - a)
-    pb = abs(p - b)
-    pc = abs(p - c)
-    if pa <= pb and pa <= pc:
-        return a
-    if pb <= pc:
-        return b
-    return c
-
-
-def _unfilter(raw: bytes, width: int, height: int, bpp: int) -> bytes:
-    row_bytes = width * bpp
-    expected = height * (row_bytes + 1)
-    if len(raw) != expected:
-        raise PixelHealthError(f"bad PNG payload size: {len(raw)} != {expected}")
-    out = bytearray(height * row_bytes)
-    src = 0
-    for y in range(height):
-        filter_type = raw[src]
-        src += 1
-        row = bytearray(raw[src : src + row_bytes])
-        src += row_bytes
-        prior_offset = (y - 1) * row_bytes
-        for x in range(row_bytes):
-            left = row[x - bpp] if x >= bpp else 0
-            up = out[prior_offset + x] if y > 0 else 0
-            up_left = out[prior_offset + x - bpp] if y > 0 and x >= bpp else 0
-            if filter_type == 0:
-                value = row[x]
-            elif filter_type == 1:
-                value = (row[x] + left) & 0xFF
-            elif filter_type == 2:
-                value = (row[x] + up) & 0xFF
-            elif filter_type == 3:
-                value = (row[x] + ((left + up) // 2)) & 0xFF
-            elif filter_type == 4:
-                value = (row[x] + _paeth(left, up, up_left)) & 0xFF
-            else:
-                raise PixelHealthError(f"unsupported PNG filter: {filter_type}")
-            row[x] = value
-        out[y * row_bytes : (y + 1) * row_bytes] = row
-    return bytes(out)
-
-
-def _read_png_rgb(path: str) -> tuple[int, int, int, bytes]:
-    with open(path, "rb") as handle:
-        data = handle.read()
-
-    width = height = bit_depth = color_type = interlace = None
-    compressed = bytearray()
-    for kind, payload in _png_chunks(data):
-        if kind == b"IHDR":
-            width, height, bit_depth, color_type, _compression, _filter, interlace = struct.unpack(">IIBBBBB", payload)
-        elif kind == b"IDAT":
-            compressed.extend(payload)
-
-    if width is None or height is None or bit_depth is None or color_type is None:
-        raise PixelHealthError("PNG missing IHDR")
-    if bit_depth != 8:
-        raise PixelHealthError(f"unsupported PNG bit depth: {bit_depth}")
-    if interlace != 0:
-        raise PixelHealthError("interlaced PNG is not supported")
-
-    bpp = _bytes_per_pixel(color_type)
-    raw = zlib.decompress(bytes(compressed))
-    pixels = _unfilter(raw, width, height, bpp)
-    return width, height, color_type, pixels
-
-
 def analyze_png(path: str, max_samples: int = 50000) -> PixelHealth:
     if not os.path.exists(path) or os.path.getsize(path) <= 0:
         raise PixelHealthError(f"screenshot missing or empty: {path}")
-    width, height, color_type, pixels = _read_png_rgb(path)
-    bpp = _bytes_per_pixel(color_type)
+    width, height, color_type, pixels = read_png(path)
+    bpp = bytes_per_pixel(color_type)
     total_pixels = width * height
     if total_pixels <= 0:
         raise PixelHealthError("screenshot has no pixels")
@@ -234,7 +135,9 @@ def main() -> int:
         )
         print(f"PASS pixel health: {health.summary()}")
         return 0
-    except PixelHealthError as exc:
+    except (PixelHealthError, PngError) as exc:
+        # PngError covers malformed/undecodable PNGs (the decoder now lives in
+        # png_io); the FAIL message text is unchanged from the old in-file codec.
         print(f"FAIL pixel health: {exc}")
         return 1
 
