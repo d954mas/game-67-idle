@@ -599,7 +599,7 @@ function explorerLeafFromSpec(spec, data) {
   const color = spec.color || (module && module.color) || (kind === "tool" ? "#b45309" : "#64748b");
   const title = spec.title || (doc && doc.title) || (tool && tool.path) || itemTitleFromPath(pathValue, spec.id);
   const href = spec.href || (doc && doc.href) || (tool && tool.href) || (pathValue && exists(pathValue) ? hrefFor(pathValue) : "");
-  const description = spec.description || (doc && doc.description) || (tool && tool.description) || "No description yet.";
+  const description = spec.description || "";
   const tags = spec.tags || [];
   return {
     id: spec.id || pathValue || title,
@@ -703,6 +703,16 @@ function generatedExplorerChildren(kind, data) {
   return [];
 }
 
+function validateStudioTreeDescriptions(spec, pathParts = []) {
+  const here = [...pathParts, spec.id || spec.title || "(unnamed)"];
+  if (!String(spec.description || "").trim()) {
+    throw new Error(`Missing description in ${studioTreePath}: ${here.join(" > ")}`);
+  }
+  for (const child of spec.children || []) {
+    validateStudioTreeDescriptions(child, here);
+  }
+}
+
 function resolveExplorerNode(spec, data) {
   const node = explorerLeafFromSpec(spec, data);
   const explicitChildren = (spec.children || []).map((child) => resolveExplorerNode(child, data));
@@ -714,6 +724,7 @@ function resolveExplorerNode(spec, data) {
 function buildStudioTree(data) {
   const sourcePath = repoPath(studioTreePath);
   const source = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
+  validateStudioTreeDescriptions(source.root);
   return resolveExplorerNode(source.root, data);
 }
 
@@ -1818,7 +1829,17 @@ function renderRefactorHtml(data) {
     .module-node.hidden { display: none; }
     .module-node .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
     .module-node .kind { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
-    .module-node .title { font-weight: 750; font-size: 15px; line-height: 1.15; }
+    .module-node .title {
+      display: -webkit-box;
+      font-weight: 750;
+      font-size: 15px;
+      line-height: 1.15;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
     .module-node .desc { color: #465569; font-size: 12px; }
     .module-node .counts { display: flex; flex-wrap: wrap; gap: 5px; }
     .node-sections {
@@ -2443,8 +2464,9 @@ function renderRefactorHtml(data) {
     }
     .drill-graph-node {
       position: absolute;
-      width: 210px;
-      min-height: 92px;
+      width: 260px;
+      height: auto;
+      min-height: 118px;
       transform: translate3d(-50%, -50%, 0);
       border: 1px solid color-mix(in srgb, var(--c) 42%, #cbd5e1);
       border-top: 4px solid var(--c);
@@ -2455,13 +2477,13 @@ function renderRefactorHtml(data) {
       cursor: pointer;
       display: grid;
       gap: 6px;
-      padding: 10px;
+      padding: 12px;
       text-align: left;
       z-index: 2;
     }
     .drill-graph-node.center {
-      width: 260px;
-      min-height: 122px;
+      width: 320px;
+      min-height: 146px;
       border-color: #111827;
       box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 18%, transparent), 0 16px 38px rgba(15, 23, 42, .18);
       z-index: 3;
@@ -2472,7 +2494,7 @@ function renderRefactorHtml(data) {
       cursor: default;
     }
     .drill-graph-node.desc-open {
-      width: 280px;
+      width: 340px;
       z-index: 20;
     }
     .drill-graph-node:hover, .drill-graph-node:focus-visible {
@@ -2490,16 +2512,27 @@ function renderRefactorHtml(data) {
     }
     .drill-node-title {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 7px;
       min-width: 0;
+      width: 100%;
+      font-size: 14px;
       font-weight: 750;
-      line-height: 1.15;
+      line-height: 1.18;
     }
+    .drill-node-title .icon { flex: 0 0 auto; }
+    .drill-graph-node.center .drill-node-title { font-size: 15px; }
+    .drill-graph-node.title-fit-sm .drill-node-title { font-size: 13px; }
+    .drill-graph-node.title-fit-xs .drill-node-title { font-size: 12px; }
+    .drill-graph-node.title-fit-xxs .drill-node-title { font-size: 11px; }
     .drill-node-title span:last-child {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
       overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      overflow-wrap: anywhere;
+      text-overflow: clip;
+      white-space: normal;
     }
     .drill-node-desc {
       color: #465569;
@@ -3308,28 +3341,34 @@ function renderRefactorHtml(data) {
     }
     function renderDescriptionToggle(node, role, hasChildren) {
       const text = node.description || "";
-      const canToggle = text.length > 110 && (!hasChildren || role === "center");
+      const canToggle = text.trim().length > 0;
       return canToggle
         ? '<button type="button" class="drill-node-more" data-toggle-description="1" aria-expanded="false">More</button>'
         : "";
     }
+    function drillTitleFitClass(title) {
+      const text = String(title || "");
+      const longestPart = text.split(/[\s._/\\:-]+/).reduce((max, part) => Math.max(max, part.length), 0);
+      if (text.length > 68 || longestPart > 34) return " title-fit-xxs";
+      if (text.length > 52 || longestPart > 28) return " title-fit-xs";
+      if (text.length > 34 || longestPart > 20) return " title-fit-sm";
+      return "";
+    }
     function renderDrillGraphNode(node, x, y, role) {
       const hasChildren = node.children && node.children.length;
-      const className = "drill-graph-node" + (role === "center" ? " center" : "") + (!hasChildren && role !== "center" ? " leaf" : "");
+      const className = "drill-graph-node" + (role === "center" ? " center" : "") + (!hasChildren && role !== "center" ? " leaf" : "") + drillTitleFitClass(node.title);
       const canOpen = role !== "center" && hasChildren;
-      const tag = canOpen ? "button" : "div";
-      const cardAttr = canOpen ? ' type="button" data-explorer-card="' + esc(node.id) + '"' : "";
+      const tag = "div";
+      const cardAttr = canOpen ? ' role="button" tabindex="0" data-explorer-card="' + esc(node.id) + '"' : "";
       const leafActions = !hasChildren && role !== "center" ? renderLeafActions(node) : "";
       const descToggle = renderDescriptionToggle(node, role, hasChildren);
       return '<' + tag + ' class="' + className + '" style="--c:' + esc(node.color) + '; left:' + Math.round(x) + 'px; top:' + Math.round(y) + 'px" data-drill-id="' + esc(node.id) + '"' + cardAttr + '>' +
         '<div class="drill-node-top">' +
           '<div class="drill-node-title">' + explorerNodeIcon(node) + '<span>' + esc(node.title) + '</span></div>' +
-          '<span class="chip">' + (role === "center" ? "current" : (hasChildren ? "open" : "leaf")) + '</span>' +
         '</div>' +
         (node.subtitle ? '<div class="drill-node-subtitle">' + esc(node.subtitle) + '</div>' : '') +
         '<p class="drill-node-desc">' + esc(node.description || "No description yet.") + '</p>' +
         descToggle +
-        tags((node.tags || []).slice(0, 4)) +
         leafActions +
         '<div class="metrics"><span class="metric"><b>' + (node.children ? node.children.length : 0) + '</b> children</span><span class="metric"><b>' + esc(node.kind) + '</b></span></div>' +
       '</' + tag + '>';
@@ -3704,6 +3743,14 @@ function renderRefactorHtml(data) {
       });
     }
     if (studioExplorerTree) {
+      studioExplorerTree.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        const card = event.target.closest("[data-explorer-card]");
+        if (!card || !studioExplorerTree.contains(card)) return;
+        if (event.target.closest("[data-toggle-description],[data-copy-path],a,button")) return;
+        event.preventDefault();
+        activateExplorerNode(card.dataset.explorerCard);
+      });
       studioExplorerTree.addEventListener("click", (event) => {
         if (suppressExplorerClick) {
           event.preventDefault();

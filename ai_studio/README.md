@@ -27,9 +27,9 @@ is deliberate and the module has a source contract.
 node tools/architecture_map/build_architecture_map.mjs
 ```
 
-The generator enriches tree nodes only for display: when a node has a `path`,
-it can fill missing title, description, and link data from Markdown sources or
-the tool inventory. The hierarchy still comes from `tree.json`.
+Visible node descriptions must be written in `tree.json`. The generator may use
+`path` only to fill mechanical display data such as title and file link. It must
+not invent the working tree's meaning from Markdown or the tool inventory.
 
 ## Migration Rule
 

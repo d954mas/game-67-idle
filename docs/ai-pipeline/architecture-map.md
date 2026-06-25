@@ -17,7 +17,7 @@ old public paths.
 Current source layout for the map:
 
 - `ai_studio/tree.json` owns the visible tree: node ids, hierarchy, manual
-  titles, roles, tags, and explicit child order.
+  descriptions, roles, tags, and explicit child order.
 - `tools/architecture_map/build_architecture_map.mjs` is the generator. It
   reads `tree.json`, scans selected Markdown and tools, then writes the HTML.
 - `docs/ai-pipeline/architecture-map.html` is generated renderer output for the
@@ -25,10 +25,11 @@ Current source layout for the map:
 - `docs/ai-pipeline/architecture-map-full.html` is generated renderer output for
   the full current inventory.
 
-"Enrichment" means display-only metadata. If a tree node has a `path`, the
-generator can fill missing title, description, and file link data from Markdown
-or the tool inventory. It does not infer the hierarchy. Text written directly in
-`tree.json` wins over scanned metadata.
+"Enrichment" is limited to mechanical display data. If a tree node has a
+`path`, the generator can fill title and file link data from Markdown or the
+tool inventory. It does not infer hierarchy or descriptions for the working
+tree. Every visible node description must be written in `tree.json`; missing
+descriptions fail the map build.
 
 ## Visual Graphs
 
