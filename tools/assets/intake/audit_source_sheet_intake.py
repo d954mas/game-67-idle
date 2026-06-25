@@ -72,15 +72,6 @@ def format_color(value: tuple[int, int, int]) -> str:
     return "#{:02x}{:02x}{:02x}".format(*value)
 
 
-def find_components(
-    image: Image.Image,
-    key: tuple[int, int, int],
-    tolerance: int,
-    array: object | None = None,
-) -> list[dict[str, object]]:
-    return find_components_numpy(image, key, tolerance, array)
-
-
 def find_components_numpy(
     image: Image.Image,
     key: tuple[int, int, int],
@@ -209,15 +200,6 @@ def merge_component_pair(a: dict[str, object], b: dict[str, object], merged_id: 
         "area_px": int(a["area_px"]) + int(b["area_px"]),
         "merged_from": [*a.get("merged_from", [a["id"]]), *b.get("merged_from", [b["id"]])],
     }
-    a_offsets = a.get("_pixel_offsets")
-    b_offsets = b.get("_pixel_offsets")
-    if isinstance(a_offsets, list) and isinstance(b_offsets, list):
-        if len(a_offsets) >= len(b_offsets):
-            a_offsets.extend(b_offsets)
-            merged["_pixel_offsets"] = a_offsets
-        else:
-            b_offsets.extend(a_offsets)
-            merged["_pixel_offsets"] = b_offsets
     a_runs = a.get("_pixel_runs")
     b_runs = b.get("_pixel_runs")
     if isinstance(a_runs, list) and isinstance(b_runs, list):
@@ -275,19 +257,6 @@ def merge_small_fragments(
     for index, component in enumerate(merged, start=1):
         component["id"] = f"component_{index}"
     return merged
-
-
-def hue_distance(a: float, b: float) -> float:
-    distance = abs(a - b)
-    return min(distance, 1.0 - distance)
-
-
-def is_generic_key_hue_like(red: int, green: int, blue: int, key: tuple[int, int, int]) -> bool:
-    key_hue, key_sat, key_value = colorsys.rgb_to_hsv(key[0] / 255, key[1] / 255, key[2] / 255)
-    hue, sat, value = colorsys.rgb_to_hsv(red / 255, green / 255, blue / 255)
-    if key_sat < 0.35 or sat < 0.25 or value < 0.12 or key_value < 0.35:
-        return False
-    return hue_distance(hue, key_hue) <= 0.05
 
 
 def hsv_arrays(red: object, green: object, blue: object) -> tuple[object, object, object]:
@@ -370,7 +339,7 @@ def purple_halo_mask(red: object, green: object, blue: object) -> object:
     return purple_halo_only_mask_rgb(red.astype(np.int16), green.astype(np.int16), blue.astype(np.int16))
 
 
-def component_pixels_from_private_runs(array: object, component: dict[str, object], flat: object | None = None) -> object | None:
+def component_pixels_from_private_runs(array: object, component: dict[str, object]) -> object | None:
     pixel_runs = component.get("_pixel_runs")
     if isinstance(pixel_runs, list) and pixel_runs:
         chunks = []
@@ -386,38 +355,7 @@ def component_pixels_from_private_runs(array: object, component: dict[str, objec
             return chunks[0]
         return np.concatenate(chunks, axis=0)
 
-    pixel_offsets = component.get("_pixel_offsets")
-    if isinstance(pixel_offsets, list) and pixel_offsets:
-        flat_array = array.reshape((-1, 4)) if flat is None else flat
-        return flat_array[np.asarray(pixel_offsets, dtype=np.int64)]
     return None
-
-
-def visible_component_arrays(
-    array: object,
-    components: list[dict[str, object]],
-    current_key: tuple[int, int, int],
-    tolerance: int,
-) -> tuple[object, object, object]:
-    chunks = []
-    flat = array.reshape((-1, 4))
-    for component in components:
-        pixels = component_pixels_from_private_runs(array, component, flat)
-        if pixels is not None:
-            visible = (pixels[..., 3] > 12) & ~key_like_mask(pixels, current_key, tolerance)
-            if np.any(visible):
-                chunks.append(pixels[..., :3][visible])
-            continue
-        x, y, width, height = component["bbox"]
-        crop = array[y : y + height, x : x + width]
-        visible = (crop[..., 3] > 12) & ~key_like_mask(crop, current_key, tolerance)
-        if np.any(visible):
-            chunks.append(crop[..., :3][visible])
-    if not chunks:
-        empty = np.array([], dtype=np.uint8)
-        return empty, empty, empty
-    colors = np.concatenate(chunks, axis=0)
-    return colors[:, 0], colors[:, 1], colors[:, 2]
 
 
 def score_candidate_key_colors_from_rgb(
@@ -477,7 +415,6 @@ def add_key_conflict_metrics(
     array: object | None = None,
 ) -> tuple[object, object, object]:
     array = np.asarray(image.convert("RGBA")) if array is None else array
-    flat = array.reshape((-1, 4))
     visible_chunks = []
     for component in components:
         x, y, width, height = component["bbox"]
@@ -493,7 +430,7 @@ def add_key_conflict_metrics(
             exact_key_conflicts = int(np.count_nonzero(exact_candidates & ~crop_border))
         else:
             exact_key_conflicts = 0
-        component_pixels = component_pixels_from_private_runs(array, component, flat)
+        component_pixels = component_pixels_from_private_runs(array, component)
         if component_pixels is not None:
             component_red = component_pixels[..., 0]
             component_green = component_pixels[..., 1]
@@ -549,7 +486,7 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
     image_array = np.asarray(image)
     components = [
         component
-        for component in find_components(image, args.key_color, args.key_tolerance, image_array)
+        for component in find_components_numpy(image, args.key_color, args.key_tolerance, image_array)
         if component["area_px"] >= args.min_area
     ]
     mark_timing("find_components")
