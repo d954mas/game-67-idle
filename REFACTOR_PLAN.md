@@ -119,9 +119,21 @@ Claude+Codex; Фаза 1 (prose-аудиторы/оркестрация advisory
    `decide_next_step()` (audit → 107 строк). **JSON-выход БАЙТ-ИДЕНТИЧЕН** (проверено на pass+fail
    sheets), timing_ms не изменён, 14 тестов зелёные, downstream-контракт цел. 3-way split НЕ делался —
    состязательно признан косметикой (~0 пользы + churn), реальная задача была в срезе лишней сложности.
-6. **`taskboard/lib.mjs` split** (ПОЗДНО, высокий blast — импортят cli+server+product_gate+
-   game_context): task_store + orchestration_policy + subagent_packets; имена экспортов стабильны
-   через re-export shim при миграции. Проверка: `taskboard cli validate` + тесты.
+6. **`taskboard/lib.mjs` — СДЕЛАНО иначе (решение лида):** исследование показало, что план
+   «split на 3» — ХУДШИЙ вариант: чистое перекладывание (0 удалений) + циклическая зависимость
+   (защищённый стор `createTask`/`updateDoc` зовёт orchestration-гарды, гарды зовут `listTasks`/
+   `sectionText` стора) → потребовал бы трогать control-flow стора. ~55% файла (~568 строк) — это
+   orchestration-enforcement + packet-шаблоны, а не стор. Лид спросил «должна ли тут быть
+   оркестрация» → **флип в advisory** (`cd0bada0`): orchestration-гейт БОЛЬШЕ НЕ блокирует в сторе —
+   `createTask`/`updateDoc` зовут `nudgeOrchestration()` (stderr nudge) вместо `throw`; стор всегда
+   сохраняет, развязан от orchestration policy; `validationError` (был только на 4 throw-сайтах) удалён;
+   8 тестов переписаны throw→save+nudge (87 зелёных). НЕ тронуты (остаются блокирующими by design):
+   `repeated_failure_guard`, `close_slice` resolved-rejection, явная команда `orchestration-check`,
+   validate-time advisory. `67d6056c` удалена мёртвая `inferCurrentDoingOrchestrationTaskId` (0 вызовов);
+   3 near-dup парсера оставлены (разные break-условия = «похожая форма, не дубль»). Состязательно
+   проверено (store-integrity + behavior proof). **Побочно (consistent с intent):** server.mjs
+   POST/PATCH теперь сохраняет (201/200) вместо HTTP 400 на неполном пакете, nudge → stderr сервера
+   (опц. follow-up: вынести nudge в JSON-ответ).
 7. ✅ **СДЕЛАНО — 4 инкремента** (по одному, ревью+`validate --full` зелёный на каждом):
    `01ec3cf` `lib/mime.mjs` (`serve_tunnel`+`serve_gallery` → общая mime-карта ТОЛЬКО; союз
    двух карт без конфликтов, дельты = gallery теперь отдаёт .otf/.mp3/… корректным типом вместо
