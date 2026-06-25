@@ -75,6 +75,27 @@
     input { flex: 1 1 300px; min-width: 240px; }
     button { cursor: pointer; background: #1f2937; color: #fff; border-color: #1f2937; }
     button.secondary { background: #fff; color: var(--ink); border-color: var(--line); }
+    .toggle-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: #334155;
+      padding: 0 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .toggle-control input {
+      width: 15px;
+      min-width: 15px;
+      height: 15px;
+      flex: 0 0 auto;
+      padding: 0;
+      margin: 0;
+    }
     .layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
     .graph-only-layout { min-height: calc(100vh - 24px); }
     .graph-card, .panel, .section, .tree-card, .drill-card, .explorer-card, .relation-drawer {
@@ -113,15 +134,26 @@
       align-items: center;
       width: 100%;
     }
+    .graph-titlebar {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      width: 100%;
+    }
     .graph-head {
       display: flex;
       flex-wrap: wrap;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 10px;
-      padding: 12px 14px;
+      gap: 8px;
+      padding: 10px 12px;
       border-bottom: 1px solid var(--line);
-      background: linear-gradient(180deg, #ffffff, #f8fbff);
+      background: #fff;
+    }
+    .graph-head h1 {
+      font-size: 20px;
+      line-height: 1.12;
     }
     .metrics, .legend, .actions { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
     .metric {
@@ -137,6 +169,69 @@
     }
     .metric b { color: var(--ink); font-size: 14px; }
     .swatch { width: 11px; height: 11px; border-radius: 3px; background: var(--c); flex: 0 0 auto; }
+    .type-legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      max-width: 760px;
+    }
+    .type-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 24px;
+      border: 1px solid color-mix(in srgb, var(--c) 34%, #dce5f3);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--c) 8%, #fff);
+      color: #334155;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .type-chip .swatch {
+      width: 10px;
+      height: 10px;
+    }
+    .advanced-controls {
+      position: relative;
+      display: inline-block;
+    }
+    .advanced-controls > summary {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: #334155;
+      padding: 0 10px;
+      cursor: pointer;
+      font-size: 12px;
+      list-style: none;
+    }
+    .advanced-controls > summary::-webkit-details-marker { display: none; }
+    .advanced-controls[open] > summary {
+      border-color: #94a3b8;
+      background: #f8fafc;
+    }
+    .advanced-controls-body {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 30;
+      width: min(640px, calc(100vw - 32px));
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 18px 44px rgba(15, 23, 42, .16);
+      padding: 10px;
+    }
     .chip.ok { color: var(--ok); background: #edf9f0; border-color: #b8e4c2; }
     .chip.warn { color: var(--warn); background: #fff7e9; border-color: #efd1a0; }
     .chip.bad { color: var(--danger); background: #fff0f0; border-color: #efbdbd; }
@@ -926,6 +1021,23 @@
       background: rgba(248, 250, 252, .96);
       cursor: default;
     }
+    .drill-graph-node.hidden-default {
+      border-style: dashed;
+      background: #fbfcfe;
+    }
+    .drill-graph-node.hidden-default .drill-node-title::after {
+      content: "hidden";
+      display: inline-flex;
+      align-items: center;
+      min-height: 18px;
+      border: 1px solid #d8e1ee;
+      border-radius: 999px;
+      color: #64748b;
+      background: #f8fafc;
+      padding: 0 6px;
+      font-size: 10px;
+      font-weight: 700;
+    }
     .drill-graph-node.desc-open {
       width: 340px;
       z-index: 20;
@@ -1091,6 +1203,8 @@
     th { background: #f2f5fb; color: var(--muted); font-size: 12px; font-weight: 600; }
     @media (max-width: 1160px) {
       .layout { grid-template-columns: 1fr; }
+      .graph-titlebar { grid-template-columns: 1fr; }
+      .type-legend { justify-content: flex-start; max-width: none; }
       .drill-graph-layout { grid-template-columns: 1fr; }
       .drill-hierarchy-panel { position: static; max-height: none; }
       .tree-map-stage { grid-template-columns: 1fr; gap: 12px; }
@@ -1117,36 +1231,41 @@
       <div class="layout graph-only-layout">
         <section class="graph-card" aria-labelledby="graphTitle">
         <div class="graph-head">
-          <div>
-            <h1 id="graphTitle">ai_studio/ architecture graph</h1>
-            <p class="muted">Стартовая точка рефакторинга: корень ai_studio, домены, вложенные уровни, source docs, tools, контракты и возврат через панель иерархии.</p>
-          </div>
-          <div class="metrics">
-            <span class="metric"><b id="moduleCount">0</b> modules</span>
-            <span class="metric"><b id="docCount">0</b> md sources</span>
-            <span class="metric"><b id="toolCount">0</b> tools</span>
-            <span class="metric"><b id="contractCount">0</b> contracts</span>
+          <div class="graph-titlebar">
+            <div>
+              <h1 id="graphTitle">ai_studio map</h1>
+              <p class="muted">Refactor tree from <code>ai_studio/tree.json</code>.</p>
+            </div>
+            <div class="type-legend" id="typeLegend" aria-label="Node type color legend"></div>
           </div>
           <div class="graph-controls">
             <input id="search" type="search" placeholder="Поиск по модулю, source, skill, utility, risk">
-            <select id="moduleFilter" aria-label="Module filter"></select>
-            <select id="focusMode" aria-label="Focus mode">
-              <option value="local">Local graph: выбранный модуль + соседи</option>
-              <option value="all">All contracts</option>
-              <option value="inventory">Inventory pressure</option>
-            </select>
+            <label class="toggle-control" title="Show nodes marked hiddenByDefault in ai_studio/tree.json">
+              <input id="showHiddenNodes" type="checkbox">
+              Show hidden
+            </label>
+            <span class="chip info" id="hiddenNodeCount">0 hidden</span>
             <button id="resetBtn" type="button">Reset layout</button>
             <button id="fitBtn" type="button" class="secondary">Fit start</button>
-            <button id="zoomInBtn" type="button" class="secondary">+</button>
-            <button id="zoomOutBtn" type="button" class="secondary">-</button>
-            <span class="chip info" id="zoomLabel">100%</span>
-          </div>
-          <div class="legend" id="legend"></div>
-          <div class="legend">
-            <span class="chip info">color = owner/group</span>
-            <span class="chip info">icon = entity type</span>
-            <span class="chip info">tag = refactor decision</span>
-            <span class="chip info">click opens nested tree in this viewport</span>
+            <details class="advanced-controls">
+              <summary>More</summary>
+              <div class="advanced-controls-body">
+                <select id="moduleFilter" aria-label="Module filter"></select>
+                <select id="focusMode" aria-label="Focus mode">
+                  <option value="local">Local graph: выбранный модуль + соседи</option>
+                  <option value="all">All contracts</option>
+                  <option value="inventory">Inventory pressure</option>
+                </select>
+                <button id="zoomInBtn" type="button" class="secondary">Zoom +</button>
+                <button id="zoomOutBtn" type="button" class="secondary">Zoom -</button>
+                <span class="chip info" id="zoomLabel">100%</span>
+                <span class="metric"><b id="moduleCount">0</b> modules</span>
+                <span class="metric"><b id="docCount">0</b> md sources</span>
+                <span class="metric"><b id="toolCount">0</b> tools</span>
+                <span class="metric"><b id="contractCount">0</b> contracts</span>
+                <div class="legend" id="legend" hidden></div>
+              </div>
+            </details>
           </div>
         </div>
         <div class="boot-error" id="bootError"></div>
@@ -1198,22 +1317,55 @@
       if (node.path) return String(node.path).split(/[\\/]/).pop();
       return node.id || "Untitled";
     }
+    const kindPalette = {
+      root: { label: "Root", color: "#334155" },
+      module: { label: "Module", color: "#2563eb" },
+      group: { label: "Group", color: "#7c3aed" },
+      section: { label: "Group", color: "#7c3aed" },
+      folder: { label: "Folder", color: "#0891b2" },
+      dir: { label: "Folder", color: "#0891b2" },
+      doc: { label: "Doc", color: "#15803d" },
+      tool: { label: "Tool", color: "#b45309" },
+      skill: { label: "Skill", color: "#c026d3" },
+      contract: { label: "Contract", color: "#b91c1c" },
+      backlog: { label: "Backlog", color: "#64748b" },
+      item: { label: "Item", color: "#475569" }
+    };
+    const typeLegendItems = ["module", "group", "doc", "tool", "skill", "dir", "contract", "backlog"];
+    function normalizedKind(kind) {
+      const value = String(kind || "item").toLowerCase();
+      if (kindPalette[value]) return value;
+      if (value.includes("doc")) return "doc";
+      if (value.includes("tool")) return "tool";
+      if (value.includes("skill")) return "skill";
+      if (value.includes("dir") || value.includes("folder")) return "dir";
+      return "item";
+    }
+    function kindMeta(kind) {
+      return kindPalette[normalizedKind(kind)] || kindPalette.item;
+    }
+    function kindColor(kind) {
+      return kindMeta(kind).color;
+    }
     function normalizeStudioTreeNode(node) {
       const embedded = findTreeNode(embeddedStudioTree, node.id);
       const rawChildren = (node.children && node.children.length)
         ? node.children
         : (node.generatedChildren && embedded ? embedded.children || [] : []);
+      const kind = node.kind || (embedded && embedded.kind) || "item";
       const normalized = {
         id: node.id,
         title: defaultTitle(node),
         subtitle: node.subtitle || node.path || node.role || "",
-        kind: node.kind || "item",
-        color: node.color || (embedded && embedded.color) || "#64748b",
+        kind,
+        color: kindColor(kind),
         description: node.description || "",
         path: node.path || "",
         href: node.href || (node.path ? repoHref(node.path) : ""),
         role: node.role || "",
         tags: node.tags || [],
+        hiddenByDefault: Boolean(node.hiddenByDefault || node.hidden),
+        hiddenReason: node.hiddenReason || "",
         moduleId: node.moduleId || (embedded && embedded.moduleId) || "",
         groupId: node.groupId || (embedded && embedded.groupId) || "",
         item: node.item || (embedded && embedded.item) || null,
@@ -1294,6 +1446,8 @@
     const moduleById = new Map(modules.map((m) => [m.id, m]));
     const edgeData = data.moduleEdges.map((e, index) => ({ id: "e" + index, from: e[0], to: e[1], label: e[2], description: e[3] }));
     const search = document.getElementById("search");
+    const showHiddenNodes = document.getElementById("showHiddenNodes");
+    const hiddenNodeCount = document.getElementById("hiddenNodeCount");
     const moduleFilter = document.getElementById("moduleFilter");
     const focusMode = document.getElementById("focusMode");
     const graphLayer = document.getElementById("graphLayer");
@@ -1471,7 +1625,17 @@
       return { x: (event.clientX - rect.left - panX) / zoom, y: (event.clientY - rect.top - panY) / zoom };
     }
     function renderLegend() {
-      document.getElementById("legend").innerHTML = modules.map((m) => '<span class="chip"><span class="swatch" style="--c:' + esc(m.color) + '"></span>' + esc(m.title) + '</span>').join("");
+      const typeLegend = document.getElementById("typeLegend");
+      if (typeLegend) {
+        typeLegend.innerHTML = typeLegendItems.map((kind) => {
+          const meta = kindMeta(kind);
+          return '<span class="type-chip" style="--c:' + esc(meta.color) + '"><span class="swatch"></span>' + esc(meta.label) + '</span>';
+        }).join("");
+      }
+      const moduleLegend = document.getElementById("legend");
+      if (moduleLegend) {
+        moduleLegend.innerHTML = modules.map((m) => '<span class="chip"><span class="swatch" style="--c:' + esc(m.color) + '"></span>' + esc(m.title) + '</span>').join("");
+      }
       moduleFilter.innerHTML = '<option value="">Все модули</option>' + modules.map((m) => '<option value="' + esc(m.id) + '">' + esc(m.title) + '</option>').join("");
     }
     function moduleNodeHtml(m) {
@@ -1641,10 +1805,33 @@
       openExplorerNode("module:" + moduleId, false);
     }
     function cloneStudioTree() {
-      return JSON.parse(JSON.stringify(studioTreeSource));
+      const root = JSON.parse(JSON.stringify(studioTreeSource));
+      return filterHiddenTree(root, showHiddenNodes && showHiddenNodes.checked) || root;
     }
     function buildExplorerRoot() {
       return cloneStudioTree();
+    }
+    function isHiddenNode(node) {
+      return Boolean(node && node.hiddenByDefault);
+    }
+    function filterHiddenTree(node, includeHidden) {
+      if (!node) return null;
+      if (!includeHidden && node.id !== "studio" && isHiddenNode(node)) return null;
+      const next = Object.assign({}, node);
+      next.children = (node.children || [])
+        .map((child) => filterHiddenTree(child, includeHidden))
+        .filter(Boolean);
+      return next;
+    }
+    function countHiddenNodes(node) {
+      if (!node) return 0;
+      return (isHiddenNode(node) ? 1 : 0) + (node.children || []).reduce((sum, child) => sum + countHiddenNodes(child), 0);
+    }
+    function updateHiddenNodeCount() {
+      if (!hiddenNodeCount) return;
+      const count = countHiddenNodes(studioTreeSource);
+      hiddenNodeCount.textContent = count + " hidden";
+      hiddenNodeCount.classList.toggle("warn", count > 0 && !(showHiddenNodes && showHiddenNodes.checked));
     }
     function findExplorerNode(node, id) {
       if (!node) return null;
@@ -1668,6 +1855,7 @@
       if (node.kind === "module") return icon("group");
       if (node.kind === "section") return icon("route");
       if (node.kind === "tool") return icon("tool");
+      if (node.kind === "skill") return icon("agent");
       if (node.kind === "contract") return icon("shield");
       if (node.kind === "doc" || node.kind === "target" || node.kind === "current") return icon("doc");
       return icon("group");
@@ -1850,13 +2038,14 @@
     }
     function renderDrillGraphNode(node, x, y, role) {
       const hasChildren = node.children && node.children.length;
-      const className = "drill-graph-node" + (role === "center" ? " center" : "") + (!hasChildren && role !== "center" ? " leaf" : "") + drillTitleFitClass(node.title);
+      const className = "drill-graph-node" + (role === "center" ? " center" : "") + (!hasChildren && role !== "center" ? " leaf" : "") + (node.hiddenByDefault ? " hidden-default" : "") + drillTitleFitClass(node.title);
       const canOpen = role !== "center" && hasChildren;
       const tag = "div";
       const cardAttr = canOpen ? ' role="button" tabindex="0" data-explorer-card="' + esc(node.id) + '"' : "";
+      const titleAttr = node.hiddenReason ? ' title="' + esc(node.hiddenReason) + '"' : "";
       const leafActions = !hasChildren && role !== "center" ? renderLeafActions(node) : "";
       const descToggle = renderDescriptionToggle(node, role, hasChildren);
-      return '<' + tag + ' class="' + className + '" style="--c:' + esc(node.color) + '; left:' + Math.round(x) + 'px; top:' + Math.round(y) + 'px" data-drill-id="' + esc(node.id) + '"' + cardAttr + '>' +
+      return '<' + tag + ' class="' + className + '" style="--c:' + esc(node.color) + '; left:' + Math.round(x) + 'px; top:' + Math.round(y) + 'px" data-drill-id="' + esc(node.id) + '"' + titleAttr + cardAttr + '>' +
         '<div class="drill-node-top">' +
           '<div class="drill-node-title">' + explorerNodeIcon(node) + '<span>' + esc(node.title) + '</span></div>' +
         '</div>' +
@@ -1944,12 +2133,6 @@
     }
     function renderDrillGraph(current, visibleChildren, totalChildren) {
       const layout = drillGraphLayout(visibleChildren);
-      const center = resolvedDrillPosition(explorerView, current, layout.cx, layout.cy);
-      const edges = visibleChildren.map((child, index) => {
-        const p = layout.placements[index];
-        const childPos = resolvedDrillPosition(explorerView, child, p.x, p.y);
-        return '<path class="drill-edge" data-drill-edge-to="' + esc(child.id) + '" d="M ' + Math.round(center.x) + ' ' + Math.round(center.y) + ' L ' + Math.round(childPos.x) + ' ' + Math.round(childPos.y) + '"></path>';
-      }).join("");
       const childNodes = layout.placements.map((p) => {
         const pos = resolvedDrillPosition(explorerView, p.node, p.x, p.y);
         return renderDrillGraphNode(p.node, pos.x, pos.y, "child");
@@ -1958,8 +2141,7 @@
         ? '<div class="drill-empty" style="position:absolute;left:' + Math.round(layout.cx + 155) + 'px;top:' + Math.round(layout.cy - 18) + 'px">' + (totalChildren ? 'Поиск не нашел внутренних узлов на этом уровне.' : 'У этой ноды нет внутренних узлов.') + '</div>'
         : "";
       return renderDrillViewport(layout, '<div class="drill-graph-canvas" style="width:' + layout.width + 'px; min-height:' + layout.height + 'px">' +
-        '<svg class="drill-edge-layer" viewBox="0 0 ' + layout.width + ' ' + layout.height + '" aria-hidden="true"><defs><marker id="drillArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"></path></marker></defs>' + edges.replaceAll('marker-end: url(#arrow)', '') + '</svg>' +
-        renderDrillGraphNode(current, center.x, center.y, "center") +
+        '<svg class="drill-edge-layer" viewBox="0 0 ' + layout.width + ' ' + layout.height + '" aria-hidden="true"></svg>' +
         childNodes +
         empty +
       '</div>');
@@ -2555,6 +2737,7 @@
       renderDetail();
       renderQueue();
       renderExplorer();
+      updateHiddenNodeCount();
     }
     document.getElementById("resetBtn").addEventListener("click", () => {
       modules.forEach((m) => { m.x = m.homeX; m.y = m.homeY; m.pinned = false; });
@@ -2563,6 +2746,7 @@
       syncDrillToSelected("");
       moduleFilter.value = "";
       search.value = "";
+      if (showHiddenNodes) showHiddenNodes.checked = false;
       focusMode.value = "local";
       expanded.clear();
       explorerHistory.length = 0;
@@ -2596,6 +2780,16 @@
       }
     });
     search.addEventListener("input", updateAll);
+    if (showHiddenNodes) {
+      showHiddenNodes.addEventListener("change", () => {
+        if (!showHiddenNodes.checked) {
+          const root = buildExplorerRoot();
+          if (!findExplorerNode(root, explorerSelected)) explorerSelected = "studio";
+          if (!findExplorerNode(root, explorerView)) explorerView = "studio";
+        }
+        updateAll();
+      });
+    }
     focusMode.addEventListener("change", updateAll);
     moduleFilter.addEventListener("change", () => {
       if (moduleFilter.value) {

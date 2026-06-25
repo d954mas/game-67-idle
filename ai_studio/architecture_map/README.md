@@ -17,6 +17,16 @@ The page must not infer architecture from the repository. New files are not
 silently added to the map. They appear in validation until a human decides
 whether to map, ignore, move to `Not Refactored`, or delete them.
 
+## Display Flags
+
+Nodes in `../tree.json` may use `hiddenByDefault: true` to keep noisy files
+such as tests or root index files out of the default graph view. Hidden nodes
+are still architecture data: they still map files, count in validation, and can
+be shown with the map page's `Show hidden` toggle.
+
+Node card colors are assigned by `kind`, not by owner: module, group, doc, tool,
+skill, folder, contract, and backlog each have a stable color in the page legend.
+
 ## Commands
 
 ```powershell

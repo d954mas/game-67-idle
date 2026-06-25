@@ -76,3 +76,38 @@ test("mapped directories cover their child files", () => {
   assert.equal(report.summary.unmappedInAiStudio, 1, "tree.json is intentionally still outside the test map");
   assert.ok(!report.issues.unmappedInAiStudio.some((item) => item.path.endsWith("public/app.js")));
 });
+
+test("hidden-by-default nodes still map files", () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+  mkdirSync(join(root, "ai_studio"), { recursive: true });
+  write(
+    root,
+    "ai_studio/tree.json",
+    JSON.stringify({
+      schema: 1,
+      root: {
+        id: "studio",
+        title: "studio",
+        children: [
+          { id: "tree", kind: "doc", path: "ai_studio/tree.json", description: "Map source." },
+          {
+            id: "sample-test",
+            kind: "tool",
+            path: "ai_studio/tests/sample.test.mjs",
+            description: "Test file hidden from the default graph view.",
+            hiddenByDefault: true,
+          },
+        ],
+      },
+    }),
+  );
+  write(root, "ai_studio/tests/sample.test.mjs", "import test from 'node:test';");
+
+  const report = createValidationReport({
+    repoRoot: root,
+    scanRoots: ["ai_studio"],
+  });
+
+  assert.equal(report.summary.unmappedInAiStudio, 0);
+  assert.ok(!report.issues.unmappedInAiStudio.some((item) => item.path.endsWith("sample.test.mjs")));
+});
