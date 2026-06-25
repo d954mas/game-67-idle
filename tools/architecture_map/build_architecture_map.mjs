@@ -2302,6 +2302,10 @@ function renderRefactorHtml(data) {
       background: rgba(248, 250, 252, .96);
       cursor: default;
     }
+    .drill-graph-node.desc-open {
+      width: 280px;
+      z-index: 20;
+    }
     .drill-graph-node:hover, .drill-graph-node:focus-visible {
       outline: 0;
       border-color: color-mix(in srgb, var(--c) 65%, #64748b);
@@ -2335,6 +2339,33 @@ function renderRefactorHtml(data) {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
+    }
+    .drill-graph-node.desc-open .drill-node-desc {
+      display: block;
+      max-height: 180px;
+      overflow: auto;
+      -webkit-line-clamp: initial;
+      -webkit-box-orient: initial;
+    }
+    .drill-node-more {
+      align-items: center;
+      background: transparent;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      color: #334155;
+      cursor: pointer;
+      display: inline-flex;
+      font-size: 11px;
+      font-weight: 700;
+      justify-content: center;
+      min-height: 26px;
+      padding: 4px 7px;
+      width: fit-content;
+    }
+    .drill-node-more:hover, .drill-node-more:focus-visible {
+      outline: 0;
+      border-color: color-mix(in srgb, var(--c) 55%, #111827);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 16%, transparent);
     }
     .drill-node-subtitle {
       color: #64748b;
@@ -3412,6 +3443,13 @@ function renderRefactorHtml(data) {
       return (path ? '<div class="drill-node-path" title="' + esc(path) + '">' + esc(path) + '</div>' : '') +
         '<div class="drill-node-actions">' + open + copy + '</div>';
     }
+    function renderDescriptionToggle(node, role, hasChildren) {
+      const text = node.description || "";
+      const canToggle = text.length > 110 && (!hasChildren || role === "center");
+      return canToggle
+        ? '<button type="button" class="drill-node-more" data-toggle-description="1" aria-expanded="false">More</button>'
+        : "";
+    }
     function renderDrillGraphNode(node, x, y, role) {
       const hasChildren = node.children && node.children.length;
       const className = "drill-graph-node" + (role === "center" ? " center" : "") + (!hasChildren && role !== "center" ? " leaf" : "");
@@ -3419,6 +3457,7 @@ function renderRefactorHtml(data) {
       const tag = canOpen ? "button" : "div";
       const cardAttr = canOpen ? ' type="button" data-explorer-card="' + esc(node.id) + '"' : "";
       const leafActions = !hasChildren && role !== "center" ? renderLeafActions(node) : "";
+      const descToggle = renderDescriptionToggle(node, role, hasChildren);
       return '<' + tag + ' class="' + className + '" style="--c:' + esc(node.color) + '; left:' + Math.round(x) + 'px; top:' + Math.round(y) + 'px" data-drill-id="' + esc(node.id) + '"' + cardAttr + '>' +
         '<div class="drill-node-top">' +
           '<div class="drill-node-title">' + explorerNodeIcon(node) + '<span>' + esc(node.title) + '</span></div>' +
@@ -3426,6 +3465,7 @@ function renderRefactorHtml(data) {
         '</div>' +
         (node.subtitle ? '<div class="drill-node-subtitle">' + esc(node.subtitle) + '</div>' : '') +
         '<p class="drill-node-desc">' + esc(node.description || "No description yet.") + '</p>' +
+        descToggle +
         tags((node.tags || []).slice(0, 4)) +
         leafActions +
         '<div class="metrics"><span class="metric"><b>' + (node.children ? node.children.length : 0) + '</b> children</span><span class="metric"><b>' + esc(node.kind) + '</b></span></div>' +
@@ -3779,6 +3819,17 @@ function renderRefactorHtml(data) {
           event.preventDefault();
           event.stopPropagation();
           copyText(copy.dataset.copyPath, copy);
+          return;
+        }
+        const toggleDescription = event.target.closest("[data-toggle-description]");
+        if (toggleDescription) {
+          event.preventDefault();
+          event.stopPropagation();
+          const node = toggleDescription.closest(".drill-graph-node");
+          const expanded = !node.classList.contains("desc-open");
+          node.classList.toggle("desc-open", expanded);
+          toggleDescription.setAttribute("aria-expanded", expanded ? "true" : "false");
+          toggleDescription.textContent = expanded ? "Less" : "More";
           return;
         }
         const card = event.target.closest("[data-explorer-card]");
