@@ -65,7 +65,7 @@ const SKILL_CHECKS = [
       "tools/context_budget.mjs",
       "tools/skills_eval.mjs",
       "tools/skills_sync.mjs --check",
-      "tools/doc_reference_check.mjs",
+      "ai_studio/core_harness/validation/doc_reference_check.mjs",
       "tools/product_gate/repeated_failure_guard.mjs",
       "ai_studio/taskboard/cli.mjs validate",
       "tools/pipeline_validate.mjs",

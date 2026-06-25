@@ -75,7 +75,7 @@ const explicitDocPaths = [
 const exactToolNotes = new Map([
   ["tools/pipeline_validate.mjs", "Validation orchestrator for reusable pipeline checks, review/full modes, export checks, docs, skills, and gates."],
   ["tools/context_budget.mjs", "Checks hot docs and skill entrypoints against context-budget limits."],
-  ["tools/doc_reference_check.mjs", "Finds stale local references, retired commands, and broken Markdown/document links."],
+  ["ai_studio/core_harness/validation/doc_reference_check.mjs", "Finds stale local references, retired commands, and broken Markdown/document links."],
   ["tools/skills_eval.mjs", "Audits skill entrypoints, trigger shape, references, and duplicated procedure risk."],
   ["tools/sync.mjs", "Runs cross-harness sync for generated skills and hooks."],
   ["tools/skills_sync.mjs", "Generates Claude-facing skill pointers from canonical Codex skills."],

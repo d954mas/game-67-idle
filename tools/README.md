@@ -21,7 +21,7 @@ subcommands for exhaustive work.
 Copied by `tools/bootstrap/export_base.mjs`:
 
 - validators: `tools/pipeline_validate.mjs`,
-  `tools/context_budget.mjs`, `tools/doc_reference_check.mjs`,
+  `tools/context_budget.mjs`, `ai_studio/core_harness/validation/doc_reference_check.mjs`,
   `tools/skills_eval.mjs`, `tools/skills_sync.mjs`;
 - workflow state/profiling: `ai_studio/taskboard/`, `tools/ai_profile/`;
 - game startup/runtime proof: `tools/game_context/`, `tools/product_gate/`;

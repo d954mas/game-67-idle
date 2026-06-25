@@ -79,7 +79,7 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.match(studio, /docs\/ai-pipeline\/quality-validation\.md/);
     assert.match(studio, /docs\/ai-pipeline\/profiling-reuse\.md/);
 
-    const docRefs = runInTarget(target, ["tools/doc_reference_check.mjs"]);
+    const docRefs = runInTarget(target, ["ai_studio/core_harness/validation/doc_reference_check.mjs"]);
     assert.equal(docRefs.status, 0, docRefs.stderr);
     assert.match(docRefs.stdout, /markdown file\(s\) checked/);
 

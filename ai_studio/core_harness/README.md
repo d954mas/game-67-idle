@@ -42,6 +42,16 @@ Reviewed orchestration file:
 
 - `ai_studio/core_harness/orchestration/README.md`
 
+## Validation Module
+
+Core Harness validation owns lightweight checks for agent-facing docs and route
+integrity. Product and game acceptance gates stay outside this module.
+
+Reviewed validation files:
+
+- `ai_studio/core_harness/validation/README.md`
+- `ai_studio/core_harness/validation/doc_reference_check.mjs`
+
 ## Tree Shape
 
 During the Core audit, grouping should be added only after ownership,

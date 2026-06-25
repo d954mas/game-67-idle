@@ -8,7 +8,7 @@ const args = process.argv.slice(2);
 
 function usage() {
   console.error(`usage:
-  node tools/doc_reference_check.mjs [--root <dir>]`);
+  node ai_studio/core_harness/validation/doc_reference_check.mjs [--root <dir>]`);
   process.exit(2);
 }
 

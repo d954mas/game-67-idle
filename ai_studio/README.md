@@ -27,6 +27,8 @@ Load only the route that matches the current task:
 - Broad read-heavy work that should be split before loading too much context:
   `ai_studio/core_harness/orchestration/README.md` and
   `node ai_studio/core_harness/orchestration/cli.mjs --help`.
+- Stale Markdown/tool references and retired command routes:
+  `node ai_studio/core_harness/validation/doc_reference_check.mjs`.
 - Done criteria, validation routing, product gates, or repeated failure stops:
   `docs/ai-pipeline/quality-validation.md`.
 - Profiling, prototype closeout, visual/asset routing, or portable export:

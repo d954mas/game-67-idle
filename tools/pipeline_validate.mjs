@@ -314,12 +314,12 @@ run("art contract lib tests", ["--test", "tools/product_gate/lib/art_contract.te
 // check, above) stays blocking. [REFACTOR_PLAN Phase 1 #1]
 if (reviewMode) {
   run("skill presence check", ["tools/skills_eval.mjs"]);
-  run("doc reference check", ["tools/doc_reference_check.mjs"]);
+  run("doc reference check", ["ai_studio/core_harness/validation/doc_reference_check.mjs"]);
   run("context budget review", ["tools/context_budget.mjs", "--review"]);
 }
 run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
 run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
-run("doc reference tests", ["--test", "tools/doc_reference_check.test.mjs"]);
+run("doc reference tests", ["--test", "ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs"]);
 run("bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"]);
 run("repeated product gate failure guard", ["tools/product_gate/repeated_failure_guard.mjs"]);
 run("visual material floor guard", ["tools/product_gate/visual_material_floor.mjs"]);
@@ -410,7 +410,7 @@ if (existsSync(join(root, "CMakePresets.json"))) {
 // invocation, so it is re-run in the export only with --reexport-tests.
 run("portable export", ["tools/bootstrap/export_base.mjs", "--target", exportDir]);
 run("exported skill presence check", ["tools/skills_eval.mjs"], { cwd: exportDir });
-run("exported doc reference check", ["tools/doc_reference_check.mjs"], { cwd: exportDir });
+run("exported doc reference check", ["ai_studio/core_harness/validation/doc_reference_check.mjs"], { cwd: exportDir });
 run("exported taskboard validate", ["ai_studio/taskboard/cli.mjs", "validate"], { cwd: exportDir });
 
 if (!args.includes("--reexport-tests")) {
@@ -420,7 +420,7 @@ if (!args.includes("--reexport-tests")) {
   process.exit(0);
 }
 
-run("exported doc reference tests", ["--test", "tools/doc_reference_check.test.mjs"], { cwd: exportDir });
+run("exported doc reference tests", ["--test", "ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs"], { cwd: exportDir });
 run("exported bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"], { cwd: exportDir });
 run("exported taskboard tests", ["--test", "ai_studio/taskboard/tests/taskboard.test.mjs"], { cwd: exportDir });
 run("exported ai profile tests", ["--test", "tools/ai_profile/test.mjs"], { cwd: exportDir });

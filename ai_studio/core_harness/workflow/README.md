@@ -52,7 +52,7 @@ delegate.
 Workflow docs are checked by:
 
 ```powershell
-node tools/doc_reference_check.mjs
+node ai_studio/core_harness/validation/doc_reference_check.mjs
 node tools/architecture_map/build_architecture_map.mjs
 ```
 

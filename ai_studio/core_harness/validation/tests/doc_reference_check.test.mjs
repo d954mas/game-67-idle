@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const root = resolve(fileURLToPath(new URL("../../../../", import.meta.url)));
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "doc-reference-check-test-"));
@@ -17,7 +17,7 @@ function cleanup(dir) {
 }
 
 function run(args) {
-  return spawnSync(process.execPath, ["tools/doc_reference_check.mjs", ...args], {
+  return spawnSync(process.execPath, ["ai_studio/core_harness/validation/doc_reference_check.mjs", ...args], {
     cwd: root,
     encoding: "utf8",
     stdio: "pipe",
