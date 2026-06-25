@@ -20,7 +20,7 @@ subcommands for exhaustive work.
 
 Copied by `tools/bootstrap/export_base.mjs`:
 
-- validators: `tools/pipeline_validate.mjs`,
+- validators: `ai_studio/core_harness/validation/pipeline_validate.mjs`,
   `tools/context_budget.mjs`, `ai_studio/core_harness/validation/doc_reference_check.mjs`,
   `tools/skills_eval.mjs`, `tools/skills_sync.mjs`;
 - workflow state/profiling: `ai_studio/taskboard/`, `tools/ai_profile/`;
@@ -61,10 +61,10 @@ Generated caches (`__pycache__/`, `*.pyc`) are ignored scratch.
 Validation:
 
 ```powershell
-node tools/pipeline_validate.mjs
-node tools/pipeline_validate.mjs --review
-node tools/pipeline_validate.mjs --full
+node ai_studio/core_harness/validation/pipeline_validate.mjs
+node ai_studio/core_harness/validation/pipeline_validate.mjs --review
+node ai_studio/core_harness/validation/pipeline_validate.mjs --full
 ```
 
-Underlying: `tools/pipeline_validate.mjs`. `--review` adds context/cap review;
+Underlying: `ai_studio/core_harness/validation/pipeline_validate.mjs`. `--review` adds context/cap review;
 `--full` exports to `tmp/pipeline-validate-<stamp>/` and keeps newest 3.

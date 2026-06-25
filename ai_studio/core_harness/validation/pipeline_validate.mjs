@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 // Validate the reusable AI pipeline base.
 //
-//   node tools/pipeline_validate.mjs [--quick] [--full] [--review] [--dry-run]
+//   node ai_studio/core_harness/validation/pipeline_validate.mjs [--quick] [--full] [--review] [--dry-run]
 
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { VALIDATE_EXPORT_PREFIX, listValidateExports, partitionByKeep } from "./lib/tmp_exports.mjs";
-import { VALIDATE_BOOLEAN_FLAGS, VALIDATE_VALUE_FLAGS } from "./lib/validate_flags.mjs";
+import { VALIDATE_EXPORT_PREFIX, listValidateExports, partitionByKeep } from "../../../tools/lib/tmp_exports.mjs";
+import { VALIDATE_BOOLEAN_FLAGS, VALIDATE_VALUE_FLAGS } from "../../../tools/lib/validate_flags.mjs";
 
-const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
 // The product-gate suite is dormant in a clean seed: it only matters once a game
 // with art/runtime is active. STATUS.md is the single signal (same phrase as the
@@ -30,7 +30,7 @@ const args = process.argv.slice(2);
 
 function usage() {
   console.error(`usage:
-  node tools/pipeline_validate.mjs [--quick] [--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune]
+  node ai_studio/core_harness/validation/pipeline_validate.mjs [--quick] [--full] [--review] [--dry-run] [--reexport-tests] [--keep-exports <n>] [--no-prune]
 
 Modes:
   --quick    core workflow validation only (default; use this after narrow edits)
@@ -317,7 +317,7 @@ if (reviewMode) {
   run("doc reference check", ["ai_studio/core_harness/validation/doc_reference_check.mjs"]);
   run("context budget review", ["tools/context_budget.mjs", "--review"]);
 }
-run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
+run("pipeline validation tests", ["--test", "ai_studio/core_harness/validation/tests/pipeline_validate.test.mjs"]);
 run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
 run("doc reference tests", ["--test", "ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs"]);
 run("bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"]);
@@ -366,7 +366,7 @@ if (runAssets && existsSync(join(root, "tools", "product_gate", "test.mjs"))) {
 
 if (!fullMode) {
   console.log(`\nok: reusable pipeline ${reviewMode ? "quick+review" : "quick"} validation passed`);
-  console.log(`hint: run node tools/pipeline_validate.mjs --full for portable export/runtime/deep asset gates`);
+  console.log(`hint: run node ai_studio/core_harness/validation/pipeline_validate.mjs --full for portable export/runtime/deep asset gates`);
   process.exit(0);
 }
 

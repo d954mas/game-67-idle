@@ -37,7 +37,7 @@ const ORCHESTRATION_KEYWORDS = [
   "taskboard",
   "AI_PIPELINE",
   "docs/ai-pipeline",
-  "tools/pipeline_validate",
+  "ai_studio/core_harness/validation/pipeline_validate",
   "tools/skills_eval",
   "tools/skills_sync",
   ".codex/skills",

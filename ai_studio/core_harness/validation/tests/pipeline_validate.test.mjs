@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolve(fileURLToPath(new URL("../../../../", import.meta.url)));
+const pipelineValidatePath = "ai_studio/core_harness/validation/pipeline_validate.mjs";
 
 function run(args = [], env = {}) {
-  return spawnSync(process.execPath, ["tools/pipeline_validate.mjs", ...args], {
+  return spawnSync(process.execPath, [pipelineValidatePath, ...args], {
     cwd: root,
     env: { ...process.env, ...env },
     encoding: "utf8",
@@ -39,7 +40,7 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.doesNotMatch(result.stdout, /== portable export/);
   assert.doesNotMatch(result.stdout, /== exported ai profile tests/);
   assert.match(result.stdout, /reusable pipeline quick validation passed/);
-  assert.match(result.stdout, /node tools\/pipeline_validate\.mjs --full/);
+  assert.match(result.stdout, /node ai_studio\/core_harness\/validation\/pipeline_validate\.mjs --full/);
 });
 
 test("quick validation skips the product-gate suite in a clean seed", () => {
@@ -100,7 +101,7 @@ test("pipeline validation full dry-run runs the minimal export check by default"
 });
 
 test("pipeline validation asset guards point at real nested test paths", () => {
-  const source = readFileSync(resolve(root, "tools/pipeline_validate.mjs"), "utf8");
+  const source = readFileSync(resolve(root, pipelineValidatePath), "utf8");
   assert.match(source, /"tools", "assets", "job", "new_generation_record\.test\.mjs"/);
   assert.match(source, /"tools", "assets", "intake", "normalize_source_sheet_chroma_test\.py"/);
   assert.match(source, /"tools\.assets\.intake\.audit_tileable_texture_test"/);
@@ -109,7 +110,7 @@ test("pipeline validation asset guards point at real nested test paths", () => {
 });
 
 test("pipeline validation shares full asset test lists between root and export", () => {
-  const source = readFileSync(resolve(root, "tools/pipeline_validate.mjs"), "utf8");
+  const source = readFileSync(resolve(root, pipelineValidatePath), "utf8");
   assert.match(source, /const GENERATED_ART_JOB_NODE_TESTS = \[/);
   assert.match(source, /const SOURCE_SHEET_PREPROCESSING_TESTS = \[/);
   assert.match(source, /const GENERATED_UI_ASSET_AUDIT_TESTS = \[/);
@@ -178,14 +179,14 @@ test("pipeline validation preserves Windows Python paths", () => {
 });
 
 test("pipeline validation full Python failure guidance is actionable", () => {
-  const source = readFileSync(resolve(root, "tools/pipeline_validate.mjs"), "utf8");
+  const source = readFileSync(resolve(root, pipelineValidatePath), "utf8");
   assert.match(source, /py -3\.12 -m pip install -r tools\/requirements\/ai-pipeline-full\.txt/);
   assert.match(source, /AI_PIPELINE_PYTHON/);
   assert.match(source, /prepared venv or runner/);
 });
 
 test("pipeline validation probes Python dependency APIs without hidden environment workarounds", () => {
-  const source = readFileSync(resolve(root, "tools/pipeline_validate.mjs"), "utf8");
+  const source = readFileSync(resolve(root, pipelineValidatePath), "utf8");
   assert.doesNotMatch(source, /NUMBA_DISABLE_JIT/);
   assert.doesNotMatch(source, /pythonGateEnv/);
   assert.match(source, /from PIL import Image, ImageDraw/);

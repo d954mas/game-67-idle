@@ -35,8 +35,6 @@ const COPY = [
   "tools/context_budget.test.mjs",
   "ai_studio/core_harness/validation",
   "tools/skills_eval.mjs",
-  "tools/pipeline_validate.mjs",
-  "tools/pipeline_validate.test.mjs",
   "tools/skills_sync.mjs",
   "tools/skills_sync.test.mjs",
   "tools/ai_profile",
@@ -212,7 +210,7 @@ Source: \`ai_studio/taskboard/README.md\`.
 
 \`\`\`powershell
 node ai_studio/taskboard/cli.mjs summary
-node tools/pipeline_validate.mjs --full
+node ai_studio/core_harness/validation/pipeline_validate.mjs --full
 \`\`\`
 
 Sources: \`ai_studio/taskboard/README.md\`, \`ai_studio/README.md\`.

@@ -48,7 +48,7 @@ references are not ready, and oversized `src/clean_seed_main.c` without an
 architecture/decomposition task. Reviews/scores are evidence only; record lead
 acceptance before overriding rejection.
 
-`node tools/pipeline_validate.mjs` runs both. Gate logs may carry
+`node ai_studio/core_harness/validation/pipeline_validate.mjs` runs both. Gate logs may carry
 `[GATE-ID]: PASS|CONCERNS|FAIL`; repeated-failure guard counts total FAILs.
 
 ## Validation Defaults
@@ -58,9 +58,9 @@ acceptance before overriding rejection.
 - Product gate changes: `node --test tools/product_gate/test.mjs`
 - Taskboard changes: `node --test ai_studio/taskboard/tests/taskboard.test.mjs`
 - Profile changes: focused `tools/ai_profile/` tests
-- Reusable pipeline: `node tools/pipeline_validate.mjs`
-- Review-stage context/cap pressure: `node tools/pipeline_validate.mjs --review`
-- Portable/export/runtime gates: `node tools/pipeline_validate.mjs --full`
+- Reusable pipeline: `node ai_studio/core_harness/validation/pipeline_validate.mjs`
+- Review-stage context/cap pressure: `node ai_studio/core_harness/validation/pipeline_validate.mjs --review`
+- Portable/export/runtime gates: `node ai_studio/core_harness/validation/pipeline_validate.mjs --full`
 - Visual/playable changes: native scenario plus screenshot/video/product gate
   evidence
 

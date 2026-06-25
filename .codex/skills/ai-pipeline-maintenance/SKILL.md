@@ -30,7 +30,7 @@ Use for AI workflow/tooling changes, not ordinary playable game work.
    taskboard, product gates, export, or post-review cleanup.
 3. Move repeated procedure behind a reference, skill, task rule, or tool.
 4. Put mandatory rules in validators/tests where practical, then run the
-   narrow proof and `node tools/pipeline_validate.mjs`.
+   narrow proof and `node ai_studio/core_harness/validation/pipeline_validate.mjs`.
 
 ## Placement Rules
 

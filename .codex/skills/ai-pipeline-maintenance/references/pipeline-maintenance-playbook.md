@@ -44,19 +44,19 @@ Common guards:
 - `node tools/skills_sync.mjs --check`
 - `node tools/product_gate/repeated_failure_guard.mjs`
 - `node ai_studio/taskboard/cli.mjs validate`
-- `node tools/pipeline_validate.mjs`
-- `node tools/pipeline_validate.mjs --review` for review-stage context/cap pressure
-- underlying implementation: `tools/pipeline_validate.mjs`
+- `node ai_studio/core_harness/validation/pipeline_validate.mjs`
+- `node ai_studio/core_harness/validation/pipeline_validate.mjs --review` for review-stage context/cap pressure
+- underlying implementation: `ai_studio/core_harness/validation/pipeline_validate.mjs`
 
 ## Validation Matrix
 
 - Hot docs or context budgets: context budget tests, doc reference check,
-  `node tools/pipeline_validate.mjs --review`.
+  `node ai_studio/core_harness/validation/pipeline_validate.mjs --review`.
 - Skill entrypoints/references: `node tools/skills_eval.mjs`,
   `node tools/skills_sync.mjs --check`, context budget, quick pipeline.
 - Product gate/tooling: focused product-gate tests plus quick pipeline.
 - Taskboard/status rules: taskboard tests/validate plus quick pipeline.
-- Portable export or root/export drift: `node tools/pipeline_validate.mjs --full`
+- Portable export or root/export drift: `node ai_studio/core_harness/validation/pipeline_validate.mjs --full`
   or full dry-run when dependencies are unavailable.
 
 ## Report Shape

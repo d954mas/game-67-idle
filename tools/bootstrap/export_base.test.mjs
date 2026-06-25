@@ -86,7 +86,7 @@ test("portable export includes task guides and generated skill pointers", () => 
     // Context budgets are an END-OF-ITERATION check, not a during-work blocker:
     // a budget overage must not fail the quick validate that runs mid-edit (it
     // interferes with the work in flight). The export verifies STRUCTURE here;
-    // budget growth is caught deliberately by `node tools/pipeline_validate.mjs
+    // budget growth is caught deliberately by `node ai_studio/core_harness/validation/pipeline_validate.mjs
     // --review` (context_budget). [REFACTOR_PLAN Phase 1 / lead directive]
     const contextBudget = runInTarget(target, ["tools/context_budget.mjs"]);
     assert.match(contextBudget.stdout, /context budget/);

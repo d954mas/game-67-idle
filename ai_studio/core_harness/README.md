@@ -51,6 +51,7 @@ Reviewed validation files:
 
 - `ai_studio/core_harness/validation/README.md`
 - `ai_studio/core_harness/validation/doc_reference_check.mjs`
+- `ai_studio/core_harness/validation/pipeline_validate.mjs`
 
 ## Tree Shape
 

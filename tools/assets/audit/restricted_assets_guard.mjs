@@ -13,7 +13,7 @@
 //      A missing catalog (no recorded license) or a non-publishable license fails.
 //
 // Pure core (auditTrackedAssets / deriveAssetId) is unit-tested; the CLI wires
-// `git ls-files` + the filesystem. Wired into tools/pipeline_validate.mjs.
+// `git ls-files` + the filesystem. Wired into ai_studio/core_harness/validation/pipeline_validate.mjs.
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -170,7 +170,7 @@ test("hook_record marks full Python dependency failures as environment blocked",
     runHook({
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
-      tool_input: { command: "node tools/pipeline_validate.mjs --full" },
+      tool_input: { command: "node ai_studio/core_harness/validation/pipeline_validate.mjs --full" },
       tool_response: {
         exit_code: 1,
         output: "error: no working Python runner found with required modules: PIL, numpy, scipy\nhint: install full-gate modules into the selected runner: py -3.12 -m pip install -r tools/requirements/ai-pipeline-full.txt",
@@ -273,7 +273,7 @@ test("hook_record_fast keeps parallel JSONL appends valid", {
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
       tool_input: {
-        command: `node tools/pipeline_validate.mjs --parallel-case ${index} ${"x".repeat(180)}`,
+        command: `node ai_studio/core_harness/validation/pipeline_validate.mjs --parallel-case ${index} ${"x".repeat(180)}`,
       },
       tool_response: { exit_code: 0 },
     }));
@@ -480,7 +480,7 @@ test("status command rollup strips shell assignment wrappers", () => {
         result: "pass",
         value: "unknown",
         event_type: "tool_call_result",
-        commands: ["$env:AI_PIPELINE_PYTHON='C:\\Users\\ROG\\.cache\\codex-runtimes\\python\\python.exe'; node tools/pipeline_validate.mjs --full"],
+        commands: ["$env:AI_PIPELINE_PYTHON='C:\\Users\\ROG\\.cache\\codex-runtimes\\python\\python.exe'; node ai_studio/core_harness/validation/pipeline_validate.mjs --full"],
         session_id: "s1",
       },
       {
@@ -491,7 +491,7 @@ test("status command rollup strips shell assignment wrappers", () => {
         result: "pass",
         value: "unknown",
         event_type: "tool_call_result",
-        commands: ["AI_PIPELINE_PYTHON=/tmp/python node tools/pipeline_validate.mjs --review"],
+        commands: ["AI_PIPELINE_PYTHON=/tmp/python node ai_studio/core_harness/validation/pipeline_validate.mjs --review"],
         session_id: "s1",
       },
       {
@@ -569,7 +569,7 @@ test("status separates environment-blocked failures from unresolved failures", (
         result: "fail",
         value: "necessary_overhead",
         event_type: "tool_call_result",
-        commands: ["node tools/pipeline_validate.mjs --full"],
+        commands: ["node ai_studio/core_harness/validation/pipeline_validate.mjs --full"],
         session_id: "s1",
         failure_kind: "environment_blocked",
         blocked_by: "missing full-gate Python modules; install tools/requirements/ai-pipeline-full.txt or set AI_PIPELINE_PYTHON",

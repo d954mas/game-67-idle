@@ -124,5 +124,5 @@ node tools/context_budget.mjs --review
 node tools/skills_eval.mjs
 node tools/skills_sync.mjs --check
 node ai_studio/core_harness/validation/doc_reference_check.mjs
-node tools/pipeline_validate.mjs
+node ai_studio/core_harness/validation/pipeline_validate.mjs
 ```

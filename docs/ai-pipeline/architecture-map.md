@@ -199,7 +199,7 @@ These are the main stable entry points an agent should know first.
 | `.codex/skills/*/SKILL.md` | Workflow routing | One focused procedure per task type; details go to references. |
 | `ai_studio/taskboard/cli.mjs` | Taskboard CLI | Owns task CRUD, context digest, and task-store validation. |
 | `ai_studio/core_harness/orchestration/cli.mjs` | Orchestration CLI | Owns the public route for subagent packet templates/checks and orchestration bootstrap/check. |
-| `tools/pipeline_validate.mjs` | Validation orchestrator | Quick/review/full validation over tools, docs, skills, taskboard, gates, export. |
+| `ai_studio/core_harness/validation/pipeline_validate.mjs` | Validation orchestrator | Quick/review/full validation over tools, docs, skills, taskboard, gates, export. |
 | tools/bootstrap/new_game.mjs | New game folder bootstrap | Copies `template/` into a game folder. |
 | `tools/game_context/new_prototype.mjs` | New prototype kickoff | Creates project wiki/task/status skeleton for a selected concept. |
 | `tools/assets/source/find_assets.mjs` | Asset source-first search | Shared library and free-source decision record. |
@@ -211,7 +211,7 @@ These are the main stable entry points an agent should know first.
 | Domain | Source of truth | Main tools | Main skills | Durable outputs |
 |---|---|---|---|---|
 | AI Studio target structure | `ai_studio/README.md`, `ai_studio/tree.json`, `ai_studio/core_harness/README.md` | tools/architecture_map/build_architecture_map.mjs | `ai-pipeline-maintenance` | Reviewed modules under `ai_studio/`, generated map HTML |
-| Pipeline policy and context | `AGENTS.md`, `ai_studio/README.md`, `docs/ai-pipeline/` | `tools/context_budget.mjs`, `ai_studio/core_harness/validation/doc_reference_check.mjs`, `tools/pipeline_validate.mjs` | `ai-pipeline-maintenance` | Updated docs, validation output |
+| Pipeline policy and context | `AGENTS.md`, `ai_studio/README.md`, `docs/ai-pipeline/` | `tools/context_budget.mjs`, `ai_studio/core_harness/validation/doc_reference_check.mjs`, `ai_studio/core_harness/validation/pipeline_validate.mjs` | `ai-pipeline-maintenance` | Updated docs, validation output |
 | Task state | `ai_studio/taskboard/README.md`, `tasks/STATUS.md`, `tasks/active/`, `tasks/epics/` | `ai_studio/taskboard/cli.mjs`, `ai_studio/taskboard/server.mjs` | `task-manager` | Task files, status index |
 | Core orchestration | `ai_studio/core_harness/orchestration/README.md`, `ai_studio/core_harness/orchestration/lib.mjs` | `ai_studio/core_harness/orchestration/cli.mjs` | none required | Subagent packets, packet validation, compact handoffs |
 | Passive profiling and feedback | `docs/ai-pipeline/profiling-reuse.md` | `tools/ai_profile/*`, tools/hooks_sync.mjs | `chat-session-reflection`, `ai-pipeline-maintenance` | `tmp/session_profiles/` raw logs, promoted lessons |
@@ -351,7 +351,7 @@ justify a reusable wrapper.
    agents to deeper material. They should not become manuals.
 
 2. Each domain needs one public facade.
-   Good examples already exist: `tools/pipeline_validate.mjs`, `ai_studio/taskboard/cli.mjs`,
+   Good examples already exist: `ai_studio/core_harness/validation/pipeline_validate.mjs`, `ai_studio/taskboard/cli.mjs`,
    `tools/assets/source/find_assets.mjs`, and `tools/product_gate/review.mjs`.
    Prefer improving those surfaces over teaching agents to call internal helper
    scripts directly.

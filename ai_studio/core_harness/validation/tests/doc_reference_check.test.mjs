@@ -153,7 +153,7 @@ test("doc reference check allows direct pipeline validator command in docs", () 
     writeMinimalRoot(dir);
     writeFileSync(
       join(dir, "ai_studio", "README.md"),
-      "Old command:\n\n```powershell\nnode tools/pipeline_validate.mjs --review\n```\n",
+      "Old command:\n\n```powershell\nnode ai_studio/core_harness/validation/pipeline_validate.mjs --review\n```\n",
       "utf8",
     );
     const result = run(["--root", dir]);

@@ -466,7 +466,7 @@ state matrix coverage, and blocker/major issue reporting before any pass.
 \`\`\`powershell
 node tools/game_context/iteration_context.mjs
 node ai_studio/taskboard/cli.mjs validate
-node tools/pipeline_validate.mjs
+node ai_studio/core_harness/validation/pipeline_validate.mjs
 \`\`\`
 
 ## Last Known Good Evidence
