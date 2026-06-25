@@ -2214,6 +2214,10 @@ function renderRefactorHtml(data) {
       border-color: #111827;
       background: color-mix(in srgb, var(--c) 7%, #fff);
     }
+    .hierarchy-node.leaf {
+      cursor: default;
+      background: #f8fafc;
+    }
     .hierarchy-node span {
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2296,6 +2300,7 @@ function renderRefactorHtml(data) {
     .drill-graph-node.leaf {
       border-top-style: solid;
       background: rgba(248, 250, 252, .96);
+      cursor: default;
     }
     .drill-graph-node:hover, .drill-graph-node:focus-visible {
       outline: 0;
@@ -2338,6 +2343,48 @@ function renderRefactorHtml(data) {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .drill-node-path {
+      border: 1px solid #dbe5f1;
+      border-radius: 6px;
+      background: #fff;
+      color: #334155;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 10px;
+      overflow: hidden;
+      padding: 5px 6px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .drill-node-actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .drill-node-action {
+      align-items: center;
+      background: #111827;
+      border: 1px solid #111827;
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      display: inline-flex;
+      font-size: 11px;
+      font-weight: 700;
+      justify-content: center;
+      min-height: 28px;
+      padding: 5px 7px;
+      text-decoration: none;
+    }
+    .drill-node-action.secondary {
+      background: #fff;
+      color: #334155;
+      border-color: #cbd5e1;
+    }
+    .drill-node-action:hover, .drill-node-action:focus-visible {
+      outline: 0;
+      border-color: color-mix(in srgb, var(--c) 55%, #111827);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 16%, transparent);
     }
     .explorer-detail-grid {
       display: grid;
@@ -3226,6 +3273,35 @@ function renderRefactorHtml(data) {
     function activateExplorerNode(id) {
       openExplorerNode(id, true);
     }
+    function copyText(value, button) {
+      const text = String(value || "");
+      const done = () => {
+        if (!button) return;
+        const previous = button.textContent;
+        button.textContent = "Copied";
+        window.setTimeout(() => { button.textContent = previous; }, 1100);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(() => {
+          fallbackCopyText(text);
+          done();
+        });
+        return;
+      }
+      fallbackCopyText(text);
+      done();
+    }
+    function fallbackCopyText(value) {
+      const input = document.createElement("textarea");
+      input.value = value;
+      input.setAttribute("readonly", "");
+      input.style.position = "fixed";
+      input.style.left = "-9999px";
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+    }
     function explorerBack() {
       const root = buildExplorerRoot();
       if (explorerHistory.length) {
@@ -3244,12 +3320,15 @@ function renderRefactorHtml(data) {
     }
     function renderHierarchyRow(node, index, currentId) {
       const isCurrent = node.id === currentId;
-      const attrs = isCurrent ? "" : ' data-explorer-card="' + esc(node.id) + '"';
-      return '<button type="button" class="hierarchy-node ' + hierarchyDepthClass(index) + (isCurrent ? ' current' : '') + '" style="--c:' + esc(node.color) + '"' + attrs + '>' +
+      const hasChildren = node.children && node.children.length;
+      const clickable = !isCurrent && hasChildren;
+      const tag = clickable ? "button" : "div";
+      const attrs = clickable ? ' type="button" data-explorer-card="' + esc(node.id) + '"' : "";
+      return '<' + tag + ' class="hierarchy-node ' + hierarchyDepthClass(index) + (isCurrent ? ' current' : '') + (!hasChildren ? ' leaf' : '') + '" style="--c:' + esc(node.color) + '"' + attrs + '>' +
         explorerNodeIcon(node) +
         '<span>' + esc(node.title) + '</span>' +
         '<small>' + esc(node.kind) + '</small>' +
-      '</button>';
+      '</' + tag + '>';
     }
     function breadcrumbTitle(node) {
       return node.id === "studio" ? "ai_studio" : node.title;
@@ -3316,11 +3395,30 @@ function renderRefactorHtml(data) {
       if (!drillPositions.has(key)) drillPositions.set(key, { x, y });
       return drillPositions.get(key);
     }
+    function nodePath(node) {
+      if (node.item && node.item.path) return node.item.path;
+      if (node.href) return node.href;
+      return node.subtitle || node.title || "";
+    }
+    function renderLeafActions(node) {
+      const path = nodePath(node);
+      const open = node.href
+        ? '<a class="drill-node-action" href="' + esc(node.href) + '" target="_blank" rel="noopener">Open file</a>'
+        : "";
+      const copy = path
+        ? '<button type="button" class="drill-node-action secondary" data-copy-path="' + esc(path) + '">Copy path</button>'
+        : "";
+      if (!open && !copy) return "";
+      return (path ? '<div class="drill-node-path" title="' + esc(path) + '">' + esc(path) + '</div>' : '') +
+        '<div class="drill-node-actions">' + open + copy + '</div>';
+    }
     function renderDrillGraphNode(node, x, y, role) {
       const hasChildren = node.children && node.children.length;
       const className = "drill-graph-node" + (role === "center" ? " center" : "") + (!hasChildren && role !== "center" ? " leaf" : "");
-      const tag = role === "center" ? "div" : "button";
-      const cardAttr = role === "center" ? "" : ' data-explorer-card="' + esc(node.id) + '"';
+      const canOpen = role !== "center" && hasChildren;
+      const tag = canOpen ? "button" : "div";
+      const cardAttr = canOpen ? ' type="button" data-explorer-card="' + esc(node.id) + '"' : "";
+      const leafActions = !hasChildren && role !== "center" ? renderLeafActions(node) : "";
       return '<' + tag + ' class="' + className + '" style="--c:' + esc(node.color) + '; left:' + Math.round(x) + 'px; top:' + Math.round(y) + 'px" data-drill-id="' + esc(node.id) + '"' + cardAttr + '>' +
         '<div class="drill-node-top">' +
           '<div class="drill-node-title">' + explorerNodeIcon(node) + '<span>' + esc(node.title) + '</span></div>' +
@@ -3329,6 +3427,7 @@ function renderRefactorHtml(data) {
         (node.subtitle ? '<div class="drill-node-subtitle">' + esc(node.subtitle) + '</div>' : '') +
         '<p class="drill-node-desc">' + esc(node.description || "No description yet.") + '</p>' +
         tags((node.tags || []).slice(0, 4)) +
+        leafActions +
         '<div class="metrics"><span class="metric"><b>' + (node.children ? node.children.length : 0) + '</b> children</span><span class="metric"><b>' + esc(node.kind) + '</b></span></div>' +
       '</' + tag + '>';
     }
@@ -3601,6 +3700,8 @@ function renderRefactorHtml(data) {
       studioExplorerTree.addEventListener("pointerdown", (event) => {
         const node = event.target.closest(".drill-graph-node");
         if (!node || event.button !== 0) return;
+        const interactive = event.target.closest("a,button,input,select,textarea");
+        if (interactive && !interactive.classList.contains("drill-graph-node")) return;
         const canvas = node.closest(".drill-graph-canvas");
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
@@ -3671,6 +3772,13 @@ function renderRefactorHtml(data) {
           event.preventDefault();
           event.stopPropagation();
           explorerBack();
+          return;
+        }
+        const copy = event.target.closest("[data-copy-path]");
+        if (copy) {
+          event.preventDefault();
+          event.stopPropagation();
+          copyText(copy.dataset.copyPath, copy);
           return;
         }
         const card = event.target.closest("[data-explorer-card]");
