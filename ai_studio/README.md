@@ -25,7 +25,8 @@ Load only the route that matches the current task:
 - Agent workflow, context policy, Markdown shape, or multi-agent use:
   `ai_studio/core_harness/workflow/README.md`.
 - Broad read-heavy work that should be split before loading too much context:
-  `ai_studio/core_harness/orchestration/README.md`.
+  `ai_studio/core_harness/orchestration/README.md` and
+  `node ai_studio/core_harness/orchestration/cli.mjs --help`.
 - Done criteria, validation routing, product gates, or repeated failure stops:
   `docs/ai-pipeline/quality-validation.md`.
 - Profiling, prototype closeout, visual/asset routing, or portable export:

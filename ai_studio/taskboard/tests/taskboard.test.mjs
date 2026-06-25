@@ -1,4 +1,4 @@
-// Taskboard core tests. Run: node --test ai_studio/taskboard/tests/taskboard.test.mjs
+﻿// Taskboard core tests. Run: node --test ai_studio/taskboard/tests/taskboard.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, utimesSync } from "node:fs";
@@ -17,6 +17,7 @@ import {
 
 const taskboardDir = dirname(import.meta.dirname);
 const cliPath = join(taskboardDir, "cli.mjs");
+const orchestrationCli = join(dirname(taskboardDir), "core_harness", "orchestration", "cli.mjs");
 
 function tempRoot(t) {
   const dir = mkdtempSync(join(tmpdir(), "taskboard-test-"));
@@ -108,7 +109,7 @@ test("parseDoc tolerates files without frontmatter", () => {
 
 test("slugify handles non-ascii and empty titles", () => {
   assert.equal(slugify("Camp Rest Action!"), "camp-rest-action");
-  assert.equal(slugify("Идея без латиницы"), "item");
+  assert.equal(slugify("РРґРµСЏ Р±РµР· Р»Р°С‚РёРЅРёС†С‹"), "item");
 });
 
 test("createTask allocates sequential ids and createEpic separate sequence", (t) => {
@@ -449,6 +450,14 @@ Run node tools/ai.mjs validate --review after the gameplay smoke.
   assert.doesNotMatch(context.stdout, /pipeline\/tooling-scoped/);
 });
 
+test("taskboard cli does not expose orchestration commands", () => {
+  const result = spawnSync(process.execPath, [cliPath, "orchestration-template"], { encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|new\|set\|validate>/);
+  assert.doesNotMatch(result.stdout, /subagent-packet-template/);
+});
+
 test("updateDoc patches fields, keeps id/created, bumps updated", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Patch me", status: "idea" });
@@ -648,7 +657,7 @@ Broad gameplay/runtime playtest work; coupled single-agent slice.
 - 2026-06-21: Started the coupled gameplay slice; no delegation packet needed.
 `);
 
-  // Plain game/visual/asset slices are coupled single-agent work — not gated.
+  // Plain game/visual/asset slices are coupled single-agent work вЂ” not gated.
   assert.deepEqual(validateStoreDetailed(root), []);
 });
 
@@ -953,7 +962,7 @@ test("cli validate prints remediation hints for common failures", (t) => {
   // Orchestration is advisory at validate-time: it nudges, does not block [Phase 1 #2].
   assert.match(result.stdout, /nudge: T0002: substantial pipeline\/orchestration task needs orchestration evidence/);
   assert.match(result.stdout, /missing\/invalid: orchestration: used packet/);
-  assert.match(result.stdout, /hint: add a complete packet from `node ai_studio\/taskboard\/cli\.mjs orchestration-template`:/);
+  assert.match(result.stdout, /hint: add a complete packet from `node ai_studio\/core_harness\/orchestration\/cli\.mjs orchestration-template`:/);
   assert.match(result.stdout, /objective: <non-empty>/);
   assert.match(result.stdout, /independent reviewer: <non-empty>/);
   assert.match(result.stdout, /problem: tasks\/STATUS\.md exceeds live status budget/);
@@ -1059,7 +1068,7 @@ test("cli orchestration-check passes complete preflight packet without PASS evid
   independent reviewer: reviewed packet scope`),
   });
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /ok: orchestration packet preflight passed/);
 });
@@ -1080,7 +1089,7 @@ test("cli orchestration-check accepts positional task id", (t) => {
   independent reviewer: reviewed packet scope`),
   });
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", task.fields.id], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", task.fields.id], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, new RegExp(`ok: orchestration packet preflight passed for .*${task.fields.id}`));
 });
@@ -1101,7 +1110,7 @@ test("cli orchestration-check --id emits resolved file in json", (t) => {
   independent reviewer: reviewed packet scope`),
   });
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--id", task.fields.id, "--json"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--id", task.fields.id, "--json"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.ok, true);
@@ -1112,16 +1121,16 @@ test("cli orchestration-check --id emits resolved file in json", (t) => {
 test("cli orchestration-check rejects missing or invalid id selectors", (t) => {
   const root = tempRoot(t);
   const cli = cliPath;
-  const missing = spawnSync(process.execPath, [cli, "orchestration-check"], { cwd: root, encoding: "utf8" });
+  const missing = spawnSync(process.execPath, [orchestrationCli, "orchestration-check"], { cwd: root, encoding: "utf8" });
   assert.notEqual(missing.status, 0);
   assert.match(missing.stderr, /usage: orchestration-check <task-id>\|--id <task-id>\|--file <task\.md>/);
 
-  const unknown = spawnSync(process.execPath, [cli, "orchestration-check", "T9999"], { cwd: root, encoding: "utf8" });
+  const unknown = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "T9999"], { cwd: root, encoding: "utf8" });
   assert.notEqual(unknown.status, 0);
   assert.match(unknown.stderr, /no task with id T9999/);
 
   const epic = createEpic(root, { title: "Not a task", status: "active" });
-  const epicResult = spawnSync(process.execPath, [cli, "orchestration-check", epic.fields.id], { cwd: root, encoding: "utf8" });
+  const epicResult = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", epic.fields.id], { cwd: root, encoding: "utf8" });
   assert.notEqual(epicResult.status, 0);
   assert.match(epicResult.stderr, new RegExp(`no task with id ${epic.fields.id}`));
 });
@@ -1142,7 +1151,7 @@ test("cli orchestration-check rejects conflicting selectors", (t) => {
   independent reviewer: reviewed packet scope`),
   });
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", task.fields.id, "--file", task.file], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", task.fields.id, "--file", task.file], { cwd: root, encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /use only one selector/);
 });
@@ -1163,7 +1172,7 @@ test("cli orchestration-check rejects missing tool-use guard while validate stay
 - evidence: PASS \`${command}\``),
   });
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /missing\/invalid: tool-use guard/);
   assert.deepEqual(validateStore(root), []);
@@ -1195,7 +1204,7 @@ test("cli orchestration-check rejects unbounded allowed files", (t) => {
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope`),
     });
-    const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
+    const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
     assert.notEqual(result.status, 0, allowedFiles);
     assert.match(result.stdout, /missing\/invalid: allowed files bounds/, allowedFiles);
   }
@@ -1217,7 +1226,7 @@ test("cli orchestration-check accepts bounded allowed file patterns", (t) => {
   independent reviewer: reviewed packet scope`),
   });
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /ok: orchestration packet preflight passed/);
 });
@@ -1237,7 +1246,7 @@ test("cli orchestration-check rejects placeholder tool-use guard", (t) => {
   independent reviewer: reviewed packet scope`),
   });
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /missing\/invalid: tool-use guard/);
 });
@@ -1281,7 +1290,7 @@ test("cli orchestration-check --file does not use file fallback as task id in ne
   independent reviewer: reviewed packet scope`)), "utf8");
 
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", file, "--json"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--file", file, "--json"], { cwd: root, encoding: "utf8" });
   const parsed = JSON.parse(result.stdout);
 
   assert.notEqual(result.status, 0);
@@ -1307,7 +1316,7 @@ test("cli orchestration-check --current resolves one doing orchestration task", 
   independent reviewer: reviewed packet scope`),
   });
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
@@ -1319,7 +1328,7 @@ test("cli orchestration-check --current resolves one doing orchestration task", 
 test("cli orchestration-check --current rejects no current task", (t) => {
   const root = tempRoot(t);
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
   assert.equal(result.stderr, "");
@@ -1353,7 +1362,7 @@ test("cli orchestration-check --current rejects multiple current tasks", (t) => 
     });
   }
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
   assert.equal(result.stderr, "");
@@ -1372,7 +1381,7 @@ test("cli orchestration-check --current rejects multiple current tasks", (t) => 
 test("cli orchestration-check --current keeps non-json selector failures on stderr", (t) => {
   const root = tempRoot(t);
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--current"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
   assert.equal(result.stdout, "");
@@ -1397,7 +1406,7 @@ test("cli orchestration-check --current keeps non-json ambiguous selector failur
     });
   }
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--current"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
   assert.equal(result.stdout, "");
@@ -1420,7 +1429,7 @@ test("cli orchestration-check --current rejects conflicting selectors", (t) => {
   independent reviewer: reviewed packet scope`),
   });
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-check", task.fields.id, "--current"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", task.fields.id, "--current"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /use only one selector/);
@@ -1428,7 +1437,7 @@ test("cli orchestration-check --current rejects conflicting selectors", (t) => {
 
 test("cli orchestration-template prints accepted packet shape", () => {
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-template"], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-template"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^- orchestration: used/m);
   assert.match(result.stdout, /objective: <non-empty>/);
@@ -1476,7 +1485,7 @@ test("subagent packet check rejects missing handoff subfields", () => {
 
 test("cli subagent-packet-template prints reusable packet", () => {
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "subagent-packet-template"], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "subagent-packet-template"], { encoding: "utf8" });
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /objective:/);
@@ -1517,7 +1526,7 @@ test("cli subagent-packet-template --preset emits a parallel fan-out", () => {
   const cli = cliPath;
   const result = spawnSync(
     process.execPath,
-    [cli, "subagent-packet-template", "--preset", "codebase-map", "--targets", "src/a/**,tools/b/**"],
+    [orchestrationCli, "subagent-packet-template", "--preset", "codebase-map", "--targets", "src/a/**,tools/b/**"],
     { encoding: "utf8" },
   );
   assert.equal(result.status, 0, result.stderr);
@@ -1529,7 +1538,7 @@ test("cli subagent-packet-template --preset emits a parallel fan-out", () => {
 
 test("cli subagent-packet-template --preset with no name lists presets", () => {
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "subagent-packet-template", "--preset"], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "subagent-packet-template", "--preset"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /presets: /);
   assert.match(result.stdout, /asset-intake/);
@@ -1537,7 +1546,7 @@ test("cli subagent-packet-template --preset with no name lists presets", () => {
 
 test("cli subagent-packet-template --preset rejects an unknown name", () => {
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "subagent-packet-template", "--preset", "nope"], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "subagent-packet-template", "--preset", "nope"], { encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /unknown preset: nope/);
 });
@@ -1545,7 +1554,7 @@ test("cli subagent-packet-template --preset rejects an unknown name", () => {
 test("cli subagent-packet-check reports structured failures", (t) => {
   const root = tempRoot(t);
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "subagent-packet-check", "--text", "objective: only this", "--json"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "subagent-packet-check", "--text", "objective: only this", "--json"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
   const parsed = JSON.parse(result.stdout);
@@ -1560,7 +1569,7 @@ test("cli subagent-packet-check accepts file input", (t) => {
   const packet = join(root, "packet.txt");
   writeFileSync(packet, validSubagentPacket());
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "subagent-packet-check", "--file", packet, "--json"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "subagent-packet-check", "--file", packet, "--json"], { cwd: root, encoding: "utf8" });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
@@ -1571,7 +1580,7 @@ test("cli subagent-packet-check accepts file input", (t) => {
 test("cli subagent-packet-check accepts stdin input", (t) => {
   const root = tempRoot(t);
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "subagent-packet-check", "--stdin", "--json"], {
+  const result = spawnSync(process.execPath, [orchestrationCli, "subagent-packet-check", "--stdin", "--json"], {
     cwd: root,
     encoding: "utf8",
     input: validSubagentPacket(),
@@ -1593,7 +1602,7 @@ test("cli subagent-packet-check rejects ambiguous stdin input", (t) => {
     ["subagent-packet-check", "--stdin", "--text", validSubagentPacket(), "--json"],
     ["subagent-packet-check", "--stdin", "--file", packet, "--json"],
   ]) {
-    const result = spawnSync(process.execPath, [cli, ...args], {
+    const result = spawnSync(process.execPath, [orchestrationCli, ...args], {
       cwd: root,
       encoding: "utf8",
       input: validSubagentPacket(),
@@ -1620,21 +1629,20 @@ function bootstrapArgs(overrides = {}) {
 test("cli orchestration-bootstrap --help prints usage without requiring task args", (t) => {
   const root = tempRoot(t);
   const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "orchestration-bootstrap", "--help"], { cwd: root, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [orchestrationCli, "orchestration-bootstrap", "--help"], { cwd: root, encoding: "utf8" });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.equal(result.stderr, "");
-  assert.match(result.stdout, /usage: node ai_studio\/taskboard\/cli\.mjs orchestration-bootstrap/);
+  assert.match(result.stdout, /usage: node ai_studio\/core_harness\/orchestration\/cli\.mjs orchestration-bootstrap/);
   assert.match(result.stdout, /--allowed-files/);
   assert.match(result.stdout, /--evidence-command/);
-  assert.match(result.stdout, /node ai_studio\/taskboard\/cli\.mjs orchestration-check --current --json/);
+  assert.match(result.stdout, /node ai_studio\/core_harness\/orchestration\/cli\.mjs orchestration-check --current --json/);
 });
 
 test("cli orchestration-bootstrap creates a current preflight-valid task", (t) => {
   const root = tempRoot(t);
-  const cli = cliPath;
   const result = spawnSync(process.execPath, [
-    cli,
+    orchestrationCli,
     "orchestration-bootstrap",
     ...bootstrapArgs({ tags: "taskboard" }),
     "--json",
@@ -1654,7 +1662,7 @@ test("cli orchestration-bootstrap creates a current preflight-valid task", (t) =
   assert.ok(doc.body.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
   assert.match(doc.body, /evidence command: node --test ai_studio\/taskboard\/tests\/taskboard\.test\.mjs/);
 
-  const check = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+  const check = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
   assert.equal(check.status, 0, check.stderr || check.stdout);
   assert.equal(JSON.parse(check.stdout).problem, null);
 });
@@ -1664,9 +1672,8 @@ test("cli orchestration-bootstrap creates T0078 current task that passes start p
   for (let i = 0; i < 77; i += 1) {
     createTask(root, { title: `Seed ${i + 1}`, status: "dropped" });
   }
-  const cli = cliPath;
   const result = spawnSync(process.execPath, [
-    cli,
+    orchestrationCli,
     "orchestration-bootstrap",
     ...bootstrapArgs({ tags: "taskboard" }),
     "--json",
@@ -1678,20 +1685,19 @@ test("cli orchestration-bootstrap creates T0078 current task that passes start p
   assert.equal(parsed.doc.id, "T0078");
   assert.equal(parsed.doc.status, "doing");
 
-  const check = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
+  const check = spawnSync(process.execPath, [orchestrationCli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
   assert.equal(check.status, 0, check.stderr || check.stdout);
   assert.equal(JSON.parse(check.stdout).problem, null);
 
-  const validate = spawnSync(process.execPath, [cli, "validate", "--json"], { cwd: root, encoding: "utf8" });
+  const validate = spawnSync(process.execPath, [cliPath, "validate", "--json"], { cwd: root, encoding: "utf8" });
   assert.equal(validate.status, 0, validate.stderr || validate.stdout);
   assert.equal(JSON.parse(validate.stdout).ok, true);
 });
 
 test("cli orchestration-bootstrap rejects missing args without creating tasks", (t) => {
   const root = tempRoot(t);
-  const cli = cliPath;
   const result = spawnSync(process.execPath, [
-    cli,
+    orchestrationCli,
     "orchestration-bootstrap",
     ...bootstrapArgs({ objective: undefined }),
     "--json",
@@ -1708,9 +1714,8 @@ test("cli orchestration-bootstrap rejects missing args without creating tasks", 
 
 test("cli orchestration-bootstrap rejects invalid allowed files without creating tasks", (t) => {
   const root = tempRoot(t);
-  const cli = cliPath;
   const result = spawnSync(process.execPath, [
-    cli,
+    orchestrationCli,
     "orchestration-bootstrap",
     ...bootstrapArgs({ "allowed-files": "tools/**" }),
     "--json",
@@ -1740,9 +1745,8 @@ test("cli orchestration-bootstrap rejects existing current task without creating
   stop condition: preflight passes
   independent reviewer: reviewed current task`),
   });
-  const cli = cliPath;
   const result = spawnSync(process.execPath, [
-    cli,
+    orchestrationCli,
     "orchestration-bootstrap",
     ...bootstrapArgs(),
     "--json",

@@ -199,7 +199,8 @@ These are the main stable entry points an agent should know first.
 | `ai_studio/README.md` | Portable workflow map | Points to deeper docs; should stay short. |
 | `ai_studio/taskboard/README.md` | Task store map | Commands, lifecycle, minimal context, done rules. |
 | `.codex/skills/*/SKILL.md` | Workflow routing | One focused procedure per task type; details go to references. |
-| `ai_studio/taskboard/cli.mjs` | Task and packet CLI | Owns task CRUD, context, subagent packet templates/checks, orchestration bootstrap/check. |
+| `ai_studio/taskboard/cli.mjs` | Taskboard CLI | Owns task CRUD, context digest, and task-store validation. |
+| `ai_studio/core_harness/orchestration/cli.mjs` | Orchestration CLI | Owns the public route for subagent packet templates/checks and orchestration bootstrap/check. |
 | `tools/pipeline_validate.mjs` | Validation orchestrator | Quick/review/full validation over tools, docs, skills, taskboard, gates, export. |
 | tools/bootstrap/new_game.mjs | New game folder bootstrap | Copies `template/` into a game folder. |
 | `tools/game_context/new_prototype.mjs` | New prototype kickoff | Creates project wiki/task/status skeleton for a selected concept. |
@@ -213,7 +214,8 @@ These are the main stable entry points an agent should know first.
 |---|---|---|---|---|
 | AI Studio target structure | `ai_studio/README.md`, `ai_studio/tree.json`, `ai_studio/core_harness/README.md` | tools/architecture_map/build_architecture_map.mjs | `ai-pipeline-maintenance` | Reviewed modules under `ai_studio/`, generated map HTML |
 | Pipeline policy and context | `AGENTS.md`, `ai_studio/README.md`, `docs/ai-pipeline/` | `tools/context_budget.mjs`, `tools/doc_reference_check.mjs`, `tools/pipeline_validate.mjs` | `ai-pipeline-maintenance` | Updated docs, validation output |
-| Task state and orchestration | `ai_studio/taskboard/README.md`, `tasks/STATUS.md`, `tasks/active/`, `tasks/epics/` | `ai_studio/taskboard/cli.mjs`, `ai_studio/taskboard/server.mjs` | `task-manager`, `ai-pipeline-maintenance` | Task files, status index, packet handoffs |
+| Task state | `ai_studio/taskboard/README.md`, `tasks/STATUS.md`, `tasks/active/`, `tasks/epics/` | `ai_studio/taskboard/cli.mjs`, `ai_studio/taskboard/server.mjs` | `task-manager` | Task files, status index |
+| Core orchestration | `ai_studio/core_harness/orchestration/README.md` | `ai_studio/core_harness/orchestration/cli.mjs` | none required | Subagent packets and compact handoffs |
 | Passive profiling and feedback | `docs/ai-pipeline/profiling-reuse.md` | `tools/ai_profile/*`, tools/hooks_sync.mjs | `chat-session-reflection`, `ai-pipeline-maintenance` | `tmp/session_profiles/` raw logs, promoted lessons |
 | Game concept and GDD | `gamedesign/projects/<game-id>/`, `gamedesign/knowledge/` | `tools/game_context/new_prototype.mjs`, `tools/game_context/iteration_context.mjs` | `primary-gdd-pipeline`, `design-source-knowledge` | GDD, project wiki, core loop, reference notes |
 | Reusable design knowledge | `gamedesign/knowledge/`, `gamedesign/sources/` | none as a single facade yet | `design-source-knowledge`, `primary-gdd-pipeline` | Source notes, promoted reusable knowledge |
@@ -230,7 +232,8 @@ These are the main stable entry points an agent should know first.
 | Path | Responsibility | Current shape |
 |---|---|---|
 | `tools/lib/` | Shared small utilities | CLI failure helper, JSON, paths, licenses, MIME, hash, asset catalog, validation flags. |
-| `ai_studio/taskboard/` | Markdown task store and orchestration packet support | CLI, server UI, lib, tests, public web UI. |
+| `ai_studio/taskboard/` | Markdown task store | CLI, server UI, lib, tests, public web UI. |
+| `ai_studio/core_harness/orchestration/` | Delegation and subagent routing | README, public CLI route, focused route tests. |
 | `tools/ai_profile/` | Passive tool/session profiler | Hook recorders, status, Codex import, agent rollup, tests. |
 | `tools/bootstrap/` | Pipeline/game/template export and copy model | `new_game`, `export_base`, template path ownership, tests. |
 | `tools/game_context/` | Active game/prototype context gates | Kickoff skeleton, iteration context, workflow guard, tests. |

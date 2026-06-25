@@ -15,6 +15,7 @@ export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "don
 export const EPIC_STATUSES = ["idea", "active", "done", "dropped"];
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
 export const DEFAULT_ORCHESTRATION_TOOL_USE_GUARD = "verify exact repo paths with rg --files/Test-Path before reads; use Select-Object -Skip/-First for line windows; keep evidence commands read-only";
+const ORCHESTRATION_CLI = "node ai_studio/core_harness/orchestration/cli.mjs";
 
 const ORCHESTRATION_REVIEW_STATUSES = new Set(["review", "done"]);
 // Legacy compatibility thresholds: older tasks predate the lightweight guard and
@@ -82,7 +83,7 @@ handoff:
 
 function orchestrationPreflightNextAction(taskId) {
   const selector = taskId || "<task-id>";
-  return `add a complete orchestration packet from \`node ai_studio/taskboard/cli.mjs orchestration-template\`, then rerun \`node ai_studio/taskboard/cli.mjs orchestration-check ${selector} --json\``;
+  return `add a complete orchestration packet from \`${ORCHESTRATION_CLI} orchestration-template\`, then rerun \`${ORCHESTRATION_CLI} orchestration-check ${selector} --json\``;
 }
 
 export function orchestrationPacketTemplate() {
@@ -151,7 +152,7 @@ function renderSubagentPacket(f) {
 }
 
 const PARALLEL_INTRO =
-  "PARALLEL FAN-OUT: spawn one worker per packet below at the same time (Claude: multiple Agent-tool calls in one turn, or the Workflow tool; Codex: parallel spawn_agent). Each runs read-only in its own context and returns only its handoff; the lead concatenates and integrates. Disjoint scope, so workers cannot conflict. Lint one packet at a time via `node ai_studio/taskboard/cli.mjs subagent-packet-check --stdin`.";
+  `PARALLEL FAN-OUT: spawn one worker per packet below at the same time (Claude: multiple Agent-tool calls in one turn, or the Workflow tool; Codex: parallel spawn_agent). Each runs read-only in its own context and returns only its handoff; the lead concatenates and integrates. Disjoint scope, so workers cannot conflict. Lint one packet at a time via \`${ORCHESTRATION_CLI} subagent-packet-check --stdin\`.`;
 const SINGLE_INTRO =
   "SINGLE WORKER: spawn one subagent (Claude Agent tool / Codex spawn_agent). It returns its handoff; the lead integrates.";
 const SEQUENTIAL_INTRO =

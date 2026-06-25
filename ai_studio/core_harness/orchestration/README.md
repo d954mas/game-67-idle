@@ -61,15 +61,19 @@ Use 2-4 workers for normal fan-out. Do not create recursive subagent trees.
 
 ## Current Tooling
 
-The old prototype commands still live in `ai_studio/taskboard/cli.mjs`:
+Use the Core Harness route for orchestration commands:
+
+```powershell
+node ai_studio/core_harness/orchestration/cli.mjs --help
+```
 
 - `subagent-packet-template`
 - `subagent-packet-check`
 - `orchestration-check`
 - `orchestration-bootstrap`
 
-They are compatibility tooling for now. Later, useful orchestration commands
-should move here, and Taskboard should remain task state/storage only.
+The CLI owns the public command dispatch. Some low-level packet and task lookup
+helpers still live in Taskboard internals until the next extraction slice.
 
 ## Removed
 

@@ -8,11 +8,6 @@
 //   node ai_studio/taskboard/cli.mjs new epic --title "..." [--status active]
 //   node ai_studio/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node ai_studio/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
-//   node ai_studio/taskboard/cli.mjs orchestration-template
-//   node ai_studio/taskboard/cli.mjs subagent-packet-template [--current|--task T0001|--id T0001|--file tasks/active/T0001-example.md]
-//   node ai_studio/taskboard/cli.mjs subagent-packet-check --file packet.txt|--text "..."|--stdin [--json]
-//   node ai_studio/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
-//   node ai_studio/taskboard/cli.mjs orchestration-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
 //   node ai_studio/taskboard/cli.mjs validate [--json]
 //
 // Agents: prefer `new` over hand-writing files so IDs never collide.
@@ -21,19 +16,14 @@ import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
   updateDoc, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
-  subagentPacketTemplate, subagentPacketProblem,
-  subagentPacketPresetNames, renderSubagentPacketPreset,
-  orchestrationPreflightProblem,
-  parseDoc, currentDoingOrchestrationTaskIds,
-  isBoundedOrchestrationAllowedFiles,
-  DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
 } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { join, relative } from "node:path";
 import { fail } from "../../tools/lib/cli.mjs";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
+const ORCHESTRATION_CLI = "node ai_studio/core_harness/orchestration/cli.mjs";
 
 function parseArgs(args) {
   const out = { _: [] };
@@ -78,198 +68,6 @@ function clampText(text, maxChars) {
 
 function writeJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
-}
-
-const CURRENT_PREFLIGHT_NEXT_ACTION = "create or refine exactly one `doing` pipeline/orchestration task, then run `node ai_studio/taskboard/cli.mjs orchestration-check --current --json`";
-const AMBIGUOUS_CURRENT_PREFLIGHT_NEXT_ACTION = "set exactly one pipeline/orchestration task to `doing`, then run `node ai_studio/taskboard/cli.mjs orchestration-check --current --json`";
-const ORCHESTRATION_BOOTSTRAP_REQUIRED_ARGS = [
-  "title",
-  "objective",
-  "allowed-files",
-  "expected-output",
-  "evidence-command",
-  "stop-condition",
-  "independent-reviewer",
-];
-
-function currentSelectorProblem(code, message, ids = [], nextAction = CURRENT_PREFLIGHT_NEXT_ACTION) {
-  return {
-    code,
-    selector: "current",
-    taskIds: ids,
-    message,
-    nextAction,
-  };
-}
-
-function isSelectorProblem(error) {
-  return error && typeof error === "object" && error.selector === "current" && typeof error.message === "string";
-}
-
-function argText(args, key) {
-  const value = args[key];
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function splitTags(value) {
-  return value ? String(value).split(",").map((s) => s.trim()).filter(Boolean) : [];
-}
-
-function uniqueTags(values) {
-  return [...new Set(values.filter(Boolean))];
-}
-
-function missingBootstrapArgs(args) {
-  return ORCHESTRATION_BOOTSTRAP_REQUIRED_ARGS
-    .filter((key) => !argText(args, key))
-    .map((key) => `--${key}`);
-}
-
-function bootstrapMissingProblem(missingArgs) {
-  return {
-    code: "missing_required_argument",
-    missingArgs,
-    message: `orchestration-bootstrap missing required argument(s): ${missingArgs.join(", ")}`,
-  };
-}
-
-function bootstrapCurrentProblem(ids) {
-  return {
-    code: "current_task_exists",
-    taskIds: ids,
-    message: `current doing pipeline/orchestration task already exists: ${ids.join(", ")}; finish or move it before bootstrapping another`,
-  };
-}
-
-function bootstrapAllowedFilesProblem(value) {
-  return {
-    code: "invalid_allowed_files",
-    allowedFiles: value,
-    message: "--allowed-files must be bounded repo-local file paths or final-segment file patterns, separated by comma or semicolon",
-  };
-}
-
-function orchestrationBootstrapUsage() {
-  return `usage: node ai_studio/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
-
-Creates one current \`doing\` pipeline/orchestration task with a complete packet.
-
-Required:
-  --title                 Short task title.
-  --objective             Bounded work objective.
-  --allowed-files         Repo-local files or bounded patterns, separated by comma or semicolon.
-  --expected-output       Concrete output the task must produce.
-  --evidence-command      Read-only command or artifact path proving the work.
-  --stop-condition        Validation and closeout condition.
-  --independent-reviewer  Reviewer/verifier plan.
-
-After creation:
-  node ai_studio/taskboard/cli.mjs orchestration-check --current --json`;
-}
-
-function orchestrationBootstrapBody(args) {
-  return `## What
-
-${argText(args, "objective")}
-
-## Done when
-
-- [ ] ${argText(args, "stop-condition")}
-
-## Open questions
-
-## Log
-
-- orchestration: used
-  objective: ${argText(args, "objective")}
-  allowed files: ${argText(args, "allowed-files")}
-  tool-use guard: ${argText(args, "tool-use-guard") || DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
-  expected output: ${argText(args, "expected-output")}
-  evidence command: ${argText(args, "evidence-command")}
-  stop condition: ${argText(args, "stop-condition")}
-  independent reviewer: ${argText(args, "independent-reviewer")}
-`;
-}
-
-function readTaskFileArg(value) {
-  const requested = value || fail("usage: orchestration-check <task-id>|--id <task-id>|--file <task.md>|--current");
-  const file = isAbsolute(requested) ? resolve(requested) : resolve(root, requested);
-  const rel = relative(root, file);
-  if (rel.startsWith("..") || isAbsolute(rel)) {
-    fail("--file must be inside the repository root");
-  }
-  if (!existsSync(file)) {
-    fail(`no such file: ${requested}`);
-  }
-  const parsed = parseDoc(readFileSync(file, "utf8"));
-  return {
-    ...parsed,
-    kind: "task",
-    file,
-    fields: {
-      ...parsed.fields,
-      display_id: parsed.fields.id || rel,
-    },
-  };
-}
-
-function readSubagentPacketArg(args) {
-  const inputCount = [args.file, args.text, args.stdin].filter(Boolean).length;
-  if (inputCount > 1) fail("use only one subagent-packet-check input: --file, --text, or --stdin");
-  if (typeof args.text === "string") return args.text;
-  if (args.stdin) return readFileSync(0, "utf8");
-  if (args.file) {
-    const requested = args.file;
-    const file = isAbsolute(requested) ? resolve(requested) : resolve(root, requested);
-    const rel = relative(root, file);
-    if (rel.startsWith("..") || isAbsolute(rel)) {
-      fail("--file must be inside the repository root");
-    }
-    if (!existsSync(file)) {
-      fail(`no such file: ${requested}`);
-    }
-    return readFileSync(file, "utf8");
-  }
-  fail("usage: subagent-packet-check --file packet.txt|--text \"...\"|--stdin [--json]");
-}
-
-function readTaskForOrchestrationCheck(args) {
-  const id = args.id || args._[0];
-  const selectors = [Boolean(args.file), Boolean(id), Boolean(args.current)].filter(Boolean).length;
-  if (selectors > 1) {
-    fail("use only one selector: <task-id>, --id, --file, or --current");
-  }
-  if (args.current) {
-    const ids = currentDoingOrchestrationTaskIds(root);
-    if (ids.length === 0) {
-      throw currentSelectorProblem(
-        "current_task_missing",
-        "no current doing pipeline/orchestration task; create or set exactly one task to doing first",
-      );
-    }
-    if (ids.length > 1) {
-      throw currentSelectorProblem(
-        "current_task_ambiguous",
-        `multiple current doing pipeline/orchestration tasks: ${ids.join(", ")}; select one explicitly`,
-        ids,
-        AMBIGUOUS_CURRENT_PREFLIGHT_NEXT_ACTION,
-      );
-    }
-    const doc = findDoc(root, ids[0]);
-    if (!doc || doc.kind !== "task") {
-      throw currentSelectorProblem("current_task_unresolved", `current task ${ids[0]} could not be resolved`, ids);
-    }
-    return doc;
-  }
-  if (args.file) return readTaskFileArg(args.file);
-  if (!id) {
-    fail("usage: orchestration-check <task-id>|--id <task-id>|--file <task.md>|--current");
-  }
-  const doc = findDoc(root, id);
-  if (!doc || doc.kind !== "task") {
-    fail(`no task with id ${id}`);
-  }
-  return doc;
 }
 
 function sectionText(markdown, title) {
@@ -519,148 +317,6 @@ switch (cmd) {
     process.stdout.write(renderContext(root, args));
     break;
   }
-  case "orchestration-template": {
-    console.log(orchestrationPacketTemplate());
-    break;
-  }
-  case "subagent-packet-template": {
-    if (args.preset !== undefined) {
-      if (args.preset === true) {
-        console.log(`presets: ${subagentPacketPresetNames().join(", ")}`);
-        break;
-      }
-      const targets = typeof args.targets === "string"
-        ? args.targets.split(",").map((t) => t.trim()).filter(Boolean)
-        : [];
-      try {
-        console.log(renderSubagentPacketPreset(String(args.preset), targets));
-      } catch (error) {
-        if (error && error.code === "unknown_preset") {
-          fail(`unknown preset: ${args.preset}; available: ${error.presets.join(", ")}`);
-        }
-        throw error;
-      }
-      break;
-    }
-    console.log(subagentPacketTemplate());
-    break;
-  }
-  case "subagent-packet-check": {
-    const problem = subagentPacketProblem(readSubagentPacketArg(args));
-    if (args.json) {
-      writeJson({
-        ok: !problem,
-        problem,
-      });
-      process.exit(problem ? 1 : 0);
-    }
-    if (problem) {
-      console.log(`problem: ${problem.message}`);
-      console.log("hint: start from `node ai_studio/taskboard/cli.mjs subagent-packet-template`");
-      process.exit(1);
-    }
-    console.log("ok: subagent packet passed");
-    break;
-  }
-  case "orchestration-bootstrap": {
-    if (args.help === true || args.h === true) {
-      console.log(orchestrationBootstrapUsage());
-      break;
-    }
-    const missingArgs = missingBootstrapArgs(args);
-    if (missingArgs.length) {
-      const problem = bootstrapMissingProblem(missingArgs);
-      if (args.json) {
-        writeJson({ ok: false, problem });
-        process.exit(1);
-      }
-      fail(problem.message);
-    }
-    if (!isBoundedOrchestrationAllowedFiles(argText(args, "allowed-files"))) {
-      const problem = bootstrapAllowedFilesProblem(argText(args, "allowed-files"));
-      if (args.json) {
-        writeJson({ ok: false, problem });
-        process.exit(1);
-      }
-      fail(problem.message);
-    }
-    const currentIds = currentDoingOrchestrationTaskIds(root);
-    if (currentIds.length) {
-      const problem = bootstrapCurrentProblem(currentIds);
-      if (args.json) {
-        writeJson({ ok: false, problem });
-        process.exit(1);
-      }
-      fail(problem.message);
-    }
-    const tags = uniqueTags([
-      "pipeline",
-      "orchestration",
-      "subagents",
-      ...splitTags(args.tags),
-    ]);
-    const doc = createTask(root, {
-      title: argText(args, "title"),
-      status: "doing",
-      epic: argText(args, "epic"),
-      priority: argText(args, "priority"),
-      tags,
-      body: orchestrationBootstrapBody(args),
-    });
-    const payload = {
-      ok: true,
-      doc: {
-        id: doc.fields.id,
-        status: doc.fields.status,
-        tags: doc.fields.tags || [],
-        file: relative(root, doc.file),
-      },
-      nextAction: "node ai_studio/taskboard/cli.mjs orchestration-check --current --json",
-    };
-    if (args.json) {
-      writeJson(payload);
-    } else {
-      console.log(`created ${doc.fields.id}: ${relative(root, doc.file)}`);
-      console.log(`next: ${payload.nextAction}`);
-    }
-    break;
-  }
-  case "orchestration-check": {
-    let doc;
-    try {
-      doc = readTaskForOrchestrationCheck(args);
-    } catch (error) {
-      if (isSelectorProblem(error)) {
-        if (args.json) {
-          writeJson({
-            ok: false,
-            file: null,
-            problem: error,
-          });
-          process.exit(1);
-        }
-        fail(error.message);
-      }
-      throw error;
-    }
-    const problem = orchestrationPreflightProblem(doc);
-    if (args.json) {
-      writeJson({
-        ok: !problem,
-        file: relative(root, doc.file),
-        problem,
-      });
-      process.exit(problem ? 1 : 0);
-    }
-    if (problem) {
-      console.log(`problem: ${problem.message}`);
-      console.log(`hint: use a complete packet from \`node ai_studio/taskboard/cli.mjs orchestration-template\` before launching subagents:`);
-      console.log(orchestrationPacketTemplate());
-      process.exit(1);
-    }
-    console.log(`ok: orchestration packet preflight passed for ${relative(root, doc.file)}`);
-    break;
-  }
   case "show": {
     const id = args._[0] || fail("usage: show <id>");
     const doc = findDoc(root, id) || fail(`no doc with id ${id}`);
@@ -762,7 +418,7 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("usage: cli.mjs <list|context|show|new|set|orchestration-template|subagent-packet-template|subagent-packet-check|orchestration-bootstrap|orchestration-check|validate> ...  (see header comment)");
+    console.log("usage: cli.mjs <list|context|show|new|set|validate> ...");
     process.exit(cmd ? 1 : 0);
 }
 
@@ -792,7 +448,7 @@ function remediationHint(problem) {
     return "replace inline history with pointers to `tasks/archive/` or `gamedesign/projects/<game-id>/`; keep `STATUS.md` as a current index";
   }
   if (problem.includes("substantial pipeline/orchestration task needs orchestration evidence")) {
-    return `add a complete packet from \`node ai_studio/taskboard/cli.mjs orchestration-template\`:\n${orchestrationPacketTemplate()}\nor record \`orchestration: not needed - small scope: one-file/docs-only/no code ...\``;
+    return `add a complete packet from \`${ORCHESTRATION_CLI} orchestration-template\`:\n${orchestrationPacketTemplate()}\nor record \`orchestration: not needed - small scope: one-file/docs-only/no code ...\``;
   }
   return "";
 }

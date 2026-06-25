@@ -80,7 +80,7 @@ const exactToolNotes = new Map([
   ["tools/sync.mjs", "Runs cross-harness sync for generated skills and hooks."],
   ["tools/skills_sync.mjs", "Generates Claude-facing skill pointers from canonical Codex skills."],
   ["tools/hooks_sync.mjs", "Generates Codex/Claude hook config from one shared source."],
-  ["ai_studio/taskboard/cli.mjs", "Taskboard facade for task context, CRUD, validation, epics, and subagent packet templates."],
+  ["ai_studio/taskboard/cli.mjs", "Taskboard facade for task context, CRUD, validation, and epics."],
   ["ai_studio/taskboard/server.mjs", "Local taskboard web UI server."],
   ["tools/bootstrap/new_game.mjs", "Copies template/ into a new game folder."],
   ["tools/bootstrap/export_base.mjs", "Exports the portable AI pipeline base into another project."],
