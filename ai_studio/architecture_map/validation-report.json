@@ -1,0 +1,676 @@
+{
+  "schema": 1,
+  "generatedAt": "2026-06-25T15:31:16.006Z",
+  "mapPath": "ai_studio/tree.json",
+  "scanRoots": [
+    "ai_studio",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GAME_PROJECT.md",
+    ".codex/skills",
+    "docs/ai-pipeline",
+    "tools",
+    "tasks/STATUS.md",
+    "tasks/active",
+    "tasks/epics"
+  ],
+  "summary": {
+    "mappedPaths": 38,
+    "scannedFiles": 255,
+    "missingInRepo": 0,
+    "duplicateMappings": 0,
+    "unmappedInAiStudio": 0,
+    "unmappedLegacy": 214,
+    "missingDescriptions": 0
+  },
+  "issues": {
+    "missingInRepo": [],
+    "duplicateMappings": [],
+    "unmappedInAiStudio": [],
+    "unmappedLegacy": [
+      {
+        "path": ".codex/skills/ai-pipeline-maintenance/references/pipeline-maintenance-playbook.md"
+      },
+      {
+        "path": ".codex/skills/ai-pipeline-maintenance/references/skill-placement.md"
+      },
+      {
+        "path": ".codex/skills/ai-pipeline-maintenance/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/app-tunnel/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/chat-session-reflection/references/reflection-evidence-intake.md"
+      },
+      {
+        "path": ".codex/skills/chat-session-reflection/references/reflection-output-rules.md"
+      },
+      {
+        "path": ".codex/skills/chat-session-reflection/references/reflection-profiling.md"
+      },
+      {
+        "path": ".codex/skills/chat-session-reflection/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/delegated-image-generation/references/generation-paths.md"
+      },
+      {
+        "path": ".codex/skills/delegated-image-generation/references/throughput-and-handoff.md"
+      },
+      {
+        "path": ".codex/skills/delegated-image-generation/references/verification-and-prompts.md"
+      },
+      {
+        "path": ".codex/skills/delegated-image-generation/scripts/gen_batch.py"
+      },
+      {
+        "path": ".codex/skills/delegated-image-generation/scripts/generate_image.py"
+      },
+      {
+        "path": ".codex/skills/delegated-image-generation/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/design-source-knowledge/references/reference-work-review.md"
+      },
+      {
+        "path": ".codex/skills/design-source-knowledge/references/source-intake-promotion.md"
+      },
+      {
+        "path": ".codex/skills/design-source-knowledge/references/source-routing.md"
+      },
+      {
+        "path": ".codex/skills/design-source-knowledge/references/templates.md"
+      },
+      {
+        "path": ".codex/skills/design-source-knowledge/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/game-3d-models/references/engine-render.md"
+      },
+      {
+        "path": ".codex/skills/game-3d-models/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/game-asset-pipeline/references/asset-source-and-cutout-rules.md"
+      },
+      {
+        "path": ".codex/skills/game-asset-pipeline/references/pack-builder-rules.md"
+      },
+      {
+        "path": ".codex/skills/game-asset-pipeline/references/restricted-paid-assets.md"
+      },
+      {
+        "path": ".codex/skills/game-asset-pipeline/references/shared-free-asset-library.md"
+      },
+      {
+        "path": ".codex/skills/game-asset-pipeline/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/game-asset-prep/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/game-feature-iteration/references/iteration-cycle-playbook.md"
+      },
+      {
+        "path": ".codex/skills/game-feature-iteration/references/playable-feature-gates.md"
+      },
+      {
+        "path": ".codex/skills/game-feature-iteration/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/game-runtime-automation/references/devapi-pattern.md"
+      },
+      {
+        "path": ".codex/skills/game-runtime-automation/references/runtime-workflow-rules.md"
+      },
+      {
+        "path": ".codex/skills/game-runtime-automation/references/visual-qa-checklist.md"
+      },
+      {
+        "path": ".codex/skills/game-runtime-automation/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/game-state-management/references/state-contract.md"
+      },
+      {
+        "path": ".codex/skills/game-state-management/references/state-review-checklist.md"
+      },
+      {
+        "path": ".codex/skills/game-state-management/references/state-workflow-rules.md"
+      },
+      {
+        "path": ".codex/skills/game-state-management/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/game-texture-generation/references/texture-brief-template.md"
+      },
+      {
+        "path": ".codex/skills/game-texture-generation/references/texture-workflow.md"
+      },
+      {
+        "path": ".codex/skills/game-texture-generation/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/game-visual-art-direction/references/visual-workflow-gates.md"
+      },
+      {
+        "path": ".codex/skills/game-visual-art-direction/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/generated-game-ui-assets/references/ui-asset-rules.md"
+      },
+      {
+        "path": ".codex/skills/generated-game-ui-assets/references/ui-workflow-gates.md"
+      },
+      {
+        "path": ".codex/skills/generated-game-ui-assets/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/creative-intake-playbook.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/design-stewardship.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/gameplay-systems-playbook.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/gdd-core-gates.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/implementation-handoff-playbook.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/knowledge-capture-playbook.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/output-templates.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/playbook-map.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/quality-review-playbook.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/reference-research-playbook.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/skill-eval-playbook.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/studio-gdd-patterns.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/visual-proof-playbook.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/references/web-gdd-site-playbook.md"
+      },
+      {
+        "path": ".codex/skills/primary-gdd-pipeline/SKILL.md"
+      },
+      {
+        "path": ".codex/skills/task-manager/references/task-store-protocol.md"
+      },
+      {
+        "path": ".codex/skills/task-manager/SKILL.md"
+      },
+      {
+        "path": "tasks/active/T0151-licensed-paid-asset-gitignore-split-leak-guard-m.md"
+      },
+      {
+        "path": "tasks/epics/E001-pipeline-lean-cleanup.md"
+      },
+      {
+        "path": "tasks/epics/E002-engine-devapi-migration-sidecar-native.md"
+      },
+      {
+        "path": "tasks/epics/E003-ember-road-prototype.md"
+      },
+      {
+        "path": "tasks/epics/E004-dragon-grove-prototype.md"
+      },
+      {
+        "path": "tasks/epics/E006-cozy-automation-prototype.md"
+      },
+      {
+        "path": "tasks/epics/E007-little-lives-prototype.md"
+      },
+      {
+        "path": "tasks/epics/E008-blockside-heat-prototype.md"
+      },
+      {
+        "path": "tasks/epics/E009-game-template-structure-for-future-games.md"
+      },
+      {
+        "path": "tools/ai_profile/agent_rollup.mjs"
+      },
+      {
+        "path": "tools/ai_profile/build_hook_record_fast.mjs"
+      },
+      {
+        "path": "tools/ai_profile/hook_record_fast.c"
+      },
+      {
+        "path": "tools/ai_profile/hook_record.cmd"
+      },
+      {
+        "path": "tools/ai_profile/hook_record.mjs"
+      },
+      {
+        "path": "tools/ai_profile/import_codex_session.mjs"
+      },
+      {
+        "path": "tools/ai_profile/profile_lib.mjs"
+      },
+      {
+        "path": "tools/ai_profile/status.mjs"
+      },
+      {
+        "path": "tools/ai_profile/test.mjs"
+      },
+      {
+        "path": "tools/asset_review/build_review.mjs"
+      },
+      {
+        "path": "tools/asset_review/build_review.test.mjs"
+      },
+      {
+        "path": "tools/asset_review/promote.mjs"
+      },
+      {
+        "path": "tools/asset_review/promote.test.mjs"
+      },
+      {
+        "path": "tools/asset_review/pull.mjs"
+      },
+      {
+        "path": "tools/asset_review/record_gallery.mjs"
+      },
+      {
+        "path": "tools/asset_review/serve_gallery.mjs"
+      },
+      {
+        "path": "tools/asset_review/viewer.css"
+      },
+      {
+        "path": "tools/asset_review/viewer.js"
+      },
+      {
+        "path": "tools/assets/assemble/__init__.py"
+      },
+      {
+        "path": "tools/assets/assemble/build_runtime_assets_from_crop_plan_test.py"
+      },
+      {
+        "path": "tools/assets/assemble/build_runtime_assets_from_crop_plan.py"
+      },
+      {
+        "path": "tools/assets/atomic_io_test.py"
+      },
+      {
+        "path": "tools/assets/atomic_io.py"
+      },
+      {
+        "path": "tools/assets/audit/__init__.py"
+      },
+      {
+        "path": "tools/assets/audit/restricted_assets_allowlist.json"
+      },
+      {
+        "path": "tools/assets/audit/restricted_assets_guard.mjs"
+      },
+      {
+        "path": "tools/assets/audit/restricted_assets_guard.test.mjs"
+      },
+      {
+        "path": "tools/assets/chroma_key_alpha_test.py"
+      },
+      {
+        "path": "tools/assets/chroma_key_alpha.py"
+      },
+      {
+        "path": "tools/assets/crop/__init__.py"
+      },
+      {
+        "path": "tools/assets/crop/plan_runtime_crops_from_intake_test.py"
+      },
+      {
+        "path": "tools/assets/crop/plan_runtime_crops_from_intake.py"
+      },
+      {
+        "path": "tools/assets/cutout/__init__.py"
+      },
+      {
+        "path": "tools/assets/cutout/dual_plate_alpha_test.py"
+      },
+      {
+        "path": "tools/assets/cutout/dual_plate_alpha.py"
+      },
+      {
+        "path": "tools/assets/cutout/dual_plate_pair_gate_test.py"
+      },
+      {
+        "path": "tools/assets/cutout/dual_plate_pair_gate.py"
+      },
+      {
+        "path": "tools/assets/cutout/key_matte_test.py"
+      },
+      {
+        "path": "tools/assets/cutout/key_matte.py"
+      },
+      {
+        "path": "tools/assets/cutout/route_cutout_test.py"
+      },
+      {
+        "path": "tools/assets/cutout/route_cutout.py"
+      },
+      {
+        "path": "tools/assets/intake/__init__.py"
+      },
+      {
+        "path": "tools/assets/intake/accept_incoming_asset.mjs"
+      },
+      {
+        "path": "tools/assets/intake/accept_incoming_asset.test.mjs"
+      },
+      {
+        "path": "tools/assets/intake/audit_source_sheet_intake_test.py"
+      },
+      {
+        "path": "tools/assets/intake/audit_source_sheet_intake.py"
+      },
+      {
+        "path": "tools/assets/intake/audit_tileable_texture_test.py"
+      },
+      {
+        "path": "tools/assets/intake/audit_tileable_texture.py"
+      },
+      {
+        "path": "tools/assets/intake/bootstrap_shared_asset_library.mjs"
+      },
+      {
+        "path": "tools/assets/intake/bootstrap_shared_asset_library.test.mjs"
+      },
+      {
+        "path": "tools/assets/intake/download_source_asset.mjs"
+      },
+      {
+        "path": "tools/assets/intake/download_source_asset.test.mjs"
+      },
+      {
+        "path": "tools/assets/intake/ingest_archive.mjs"
+      },
+      {
+        "path": "tools/assets/intake/normalize_source_sheet_chroma_test.py"
+      },
+      {
+        "path": "tools/assets/intake/normalize_source_sheet_chroma.py"
+      },
+      {
+        "path": "tools/assets/job/audit_project_asset_boundaries.mjs"
+      },
+      {
+        "path": "tools/assets/job/audit_project_asset_boundaries.test.mjs"
+      },
+      {
+        "path": "tools/assets/job/new_art_job.mjs"
+      },
+      {
+        "path": "tools/assets/job/new_generation_record.mjs"
+      },
+      {
+        "path": "tools/assets/job/new_generation_record.test.mjs"
+      },
+      {
+        "path": "tools/assets/job/plan_source_sheet_prompt.mjs"
+      },
+      {
+        "path": "tools/assets/job/plan_source_sheet_prompt.test.mjs"
+      },
+      {
+        "path": "tools/assets/job/validate_art_job.mjs"
+      },
+      {
+        "path": "tools/assets/job/validate_art_job.test.mjs"
+      },
+      {
+        "path": "tools/assets/make_studio_hdr.py"
+      },
+      {
+        "path": "tools/assets/obj_to_glb.py"
+      },
+      {
+        "path": "tools/assets/pack/__init__.py"
+      },
+      {
+        "path": "tools/assets/pack/atlas_review_labels_test.py"
+      },
+      {
+        "path": "tools/assets/pack/atlas_review_labels.py"
+      },
+      {
+        "path": "tools/assets/pack/audit_ui_atlas_pack_test.py"
+      },
+      {
+        "path": "tools/assets/pack/audit_ui_atlas_pack.py"
+      },
+      {
+        "path": "tools/assets/pack/build_ui_atlas_pack_test.py"
+      },
+      {
+        "path": "tools/assets/pack/build_ui_atlas_pack.py"
+      },
+      {
+        "path": "tools/assets/render_library_previews.mjs"
+      },
+      {
+        "path": "tools/assets/render_thumbs.py"
+      },
+      {
+        "path": "tools/assets/restricted.mjs"
+      },
+      {
+        "path": "tools/assets/source/find_assets.mjs"
+      },
+      {
+        "path": "tools/assets/source/find_assets.test.mjs"
+      },
+      {
+        "path": "tools/assets/source/import_poly_pizza.mjs"
+      },
+      {
+        "path": "tools/bootstrap/export_base.mjs"
+      },
+      {
+        "path": "tools/bootstrap/export_base.test.mjs"
+      },
+      {
+        "path": "tools/bootstrap/new_game.mjs"
+      },
+      {
+        "path": "tools/bootstrap/template_paths.mjs"
+      },
+      {
+        "path": "tools/context_budget_config.mjs"
+      },
+      {
+        "path": "tools/context_budget.test.mjs"
+      },
+      {
+        "path": "tools/devapi/capture_screen.ps1"
+      },
+      {
+        "path": "tools/devapi/capture_window.py"
+      },
+      {
+        "path": "tools/devapi/devapi_cli.py"
+      },
+      {
+        "path": "tools/devapi/devapi_client.py"
+      },
+      {
+        "path": "tools/devapi/iterate.py"
+      },
+      {
+        "path": "tools/devapi/pixel_health.py"
+      },
+      {
+        "path": "tools/devapi/png_io_test.py"
+      },
+      {
+        "path": "tools/devapi/png_io.py"
+      },
+      {
+        "path": "tools/devapi/record_screen_ffmpeg.ps1"
+      },
+      {
+        "path": "tools/devapi/state_capture_test.py"
+      },
+      {
+        "path": "tools/devapi/state_capture.py"
+      },
+      {
+        "path": "tools/devapi/ui_readability.py"
+      },
+      {
+        "path": "tools/game_context/iteration_context.mjs"
+      },
+      {
+        "path": "tools/game_context/new_prototype.mjs"
+      },
+      {
+        "path": "tools/game_context/test.mjs"
+      },
+      {
+        "path": "tools/game_context/workflow_guard.mjs"
+      },
+      {
+        "path": "tools/game_context/workflow_guard.test.mjs"
+      },
+      {
+        "path": "tools/hooks_sync.test.mjs"
+      },
+      {
+        "path": "tools/lib/asset_catalog.mjs"
+      },
+      {
+        "path": "tools/lib/asset_catalog.test.mjs"
+      },
+      {
+        "path": "tools/lib/cli.mjs"
+      },
+      {
+        "path": "tools/lib/cli.test.mjs"
+      },
+      {
+        "path": "tools/lib/hash.mjs"
+      },
+      {
+        "path": "tools/lib/json.mjs"
+      },
+      {
+        "path": "tools/lib/json.test.mjs"
+      },
+      {
+        "path": "tools/lib/licenses.mjs"
+      },
+      {
+        "path": "tools/lib/licenses.test.mjs"
+      },
+      {
+        "path": "tools/lib/mime.mjs"
+      },
+      {
+        "path": "tools/lib/mime.test.mjs"
+      },
+      {
+        "path": "tools/lib/paths.mjs"
+      },
+      {
+        "path": "tools/lib/paths.test.mjs"
+      },
+      {
+        "path": "tools/lib/tmp_exports.mjs"
+      },
+      {
+        "path": "tools/lib/tmp_exports.test.mjs"
+      },
+      {
+        "path": "tools/lib/validate_flags.mjs"
+      },
+      {
+        "path": "tools/lib/validate_flags.test.mjs"
+      },
+      {
+        "path": "tools/product_gate/close_slice.mjs"
+      },
+      {
+        "path": "tools/product_gate/lib/art_contract.mjs"
+      },
+      {
+        "path": "tools/product_gate/lib/art_contract.test.mjs"
+      },
+      {
+        "path": "tools/product_gate/lib/visual_axes.mjs"
+      },
+      {
+        "path": "tools/product_gate/lib/visual_axes.test.mjs"
+      },
+      {
+        "path": "tools/product_gate/repeated_failure_guard.mjs"
+      },
+      {
+        "path": "tools/product_gate/responsive_layout_audit.mjs"
+      },
+      {
+        "path": "tools/product_gate/review.mjs"
+      },
+      {
+        "path": "tools/product_gate/slice_hygiene.mjs"
+      },
+      {
+        "path": "tools/product_gate/test.mjs"
+      },
+      {
+        "path": "tools/product_gate/visual_critic_run.mjs"
+      },
+      {
+        "path": "tools/product_gate/visual_material_floor.mjs"
+      },
+      {
+        "path": "tools/product_gate/visual_rejection_lock.mjs"
+      },
+      {
+        "path": "tools/serve_tunnel.mjs"
+      },
+      {
+        "path": "tools/skills_eval.mjs"
+      },
+      {
+        "path": "tools/skills_sync.test.mjs"
+      },
+      {
+        "path": "tools/state_codegen/generate_state_test.py"
+      },
+      {
+        "path": "tools/state_codegen/generate_state.py"
+      },
+      {
+        "path": "tools/tmp_sweep.mjs"
+      },
+      {
+        "path": "tools/tmp_sweep.test.mjs"
+      },
+      {
+        "path": "tools/visual_invariant_guard.mjs"
+      },
+      {
+        "path": "tools/visual_invariant_guard.test.mjs"
+      }
+    ],
+    "missingDescriptions": []
+  }
+}

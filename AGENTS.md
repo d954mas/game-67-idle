@@ -46,6 +46,6 @@ explicitly asks for it.
 - Workflow and commands: `ai_studio/README.md`.
 - Task/status state: `ai_studio/taskboard/README.md` and the taskboard.
 - AI Studio architecture: `ai_studio/README.md`, `ai_studio/tree.json`, and
-  `docs/ai-pipeline/architecture-map.html`.
+  `ai_studio/architecture_map/README.md`.
 - Detailed engine, workflow, validation, subagent, asset, and release procedures:
   load the matching `ai_studio/` module, doc, or skill only when the task needs it.

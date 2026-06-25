@@ -53,7 +53,7 @@ Workflow docs are checked by:
 
 ```powershell
 node ai_studio/core_harness/validation/doc_reference_check.mjs
-node tools/architecture_map/build_architecture_map.mjs
+node ai_studio/architecture_map/validate_map.mjs
 ```
 
 Do not add mandatory proof-of-delegation gates here.

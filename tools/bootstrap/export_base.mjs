@@ -118,7 +118,6 @@ const COPY = [
   "tools/assets/intake/audit_tileable_texture_test.py",
   "tools/game_context",
   "tools/product_gate",
-  "tools/architecture_map",
   "tools/README.md",
   "tools/bootstrap/export_base.mjs",
   "tools/bootstrap/export_base.test.mjs",

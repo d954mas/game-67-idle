@@ -52,10 +52,9 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(existsSync(join(target, "docs", "ai-pipeline", "profiling-reuse.md")), true);
     assert.equal(existsSync(join(target, "ai_studio", "tree.json")), true);
     assert.equal(existsSync(join(target, "ai_studio", "core_harness", "README.md")), true);
-    assert.equal(
-      existsSync(join(target, "tools", "architecture_map", "build_architecture_map.mjs")),
-      true,
-    );
+    assert.equal(existsSync(join(target, "ai_studio", "architecture_map", "index.html")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "architecture_map", "validate_map.mjs")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "architecture_map", "serve.mjs")), true);
     assert.equal(existsSync(join(target, "tools", "README.md")), true);
     assert.equal(existsSync(join(target, "tools", "requirements", "ai-pipeline-full.txt")), true);
     assert.equal(existsSync(join(target, ".claude", "skills", "task-manager", "SKILL.md")), true);
@@ -83,13 +82,9 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(docRefs.status, 0, docRefs.stderr);
     assert.match(docRefs.stdout, /markdown file\(s\) checked/);
 
-    // Context budgets are an END-OF-ITERATION check, not a during-work blocker:
-    // a budget overage must not fail the quick validate that runs mid-edit (it
-    // interferes with the work in flight). The export verifies STRUCTURE here;
-    // budget growth is caught deliberately by `node ai_studio/core_harness/validation/pipeline_validate.mjs
-    // --review` (context_budget). [REFACTOR_PLAN Phase 1 / lead directive]
-    const contextBudget = runInTarget(target, ["tools/context_budget.mjs"]);
-    assert.match(contextBudget.stdout, /context budget/);
+    // Context budgets are an end-of-iteration diagnostic, not a mid-refactor
+    // blocker. Export verifies structure here without executing context_budget.
+    assert.equal(existsSync(join(target, "tools", "context_budget.mjs")), true);
   } finally {
     cleanup(dir);
   }

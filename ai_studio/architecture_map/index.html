@@ -1,0 +1,745 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Studio Architecture Map</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --panel-2: #f9fafb;
+      --ink: #172033;
+      --muted: #5f6b7a;
+      --line: #d9e0ea;
+      --line-strong: #aeb8c7;
+      --accent: #2563eb;
+      --danger: #b91c1c;
+      --warn: #b45309;
+      --ok: #15803d;
+      --shadow: 0 12px 30px rgba(23, 32, 51, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.45 "Inter", "Segoe UI", system-ui, sans-serif;
+    }
+
+    a { color: inherit; }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.92);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      backdrop-filter: blur(12px);
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      font-size: 16px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      font-size: 13px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .button,
+    button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    button:hover,
+    .button:hover {
+      border-color: var(--accent);
+    }
+
+    .primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: minmax(340px, 0.9fr) minmax(520px, 1.3fr);
+      gap: 16px;
+      padding: 16px;
+      min-height: 0;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-2);
+    }
+
+    .panel-body {
+      padding: 14px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .breadcrumbs {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .crumb {
+      border: 0;
+      background: transparent;
+      padding: 2px 4px;
+      min-height: 24px;
+      color: var(--accent);
+    }
+
+    .crumb[aria-current="page"] {
+      color: var(--ink);
+      font-weight: 700;
+      cursor: default;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+    }
+
+    .node-card,
+    .issue-row {
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--node-color, var(--line-strong));
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      text-align: left;
+    }
+
+    .node-card {
+      cursor: pointer;
+    }
+
+    .node-card:focus-visible,
+    .issue-row:focus-within,
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, 0.25);
+      outline-offset: 2px;
+    }
+
+    .node-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .node-title strong {
+      overflow-wrap: anywhere;
+    }
+
+    .icon {
+      flex: 0 0 auto;
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 0 7px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .file-link {
+      overflow-wrap: anywhere;
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .file-link:hover {
+      text-decoration: underline;
+    }
+
+    .graph-wrap {
+      height: 420px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .graph-node {
+      cursor: pointer;
+    }
+
+    .graph-node text {
+      pointer-events: none;
+      font-size: 12px;
+      fill: var(--ink);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .tab[aria-selected="true"] {
+      background: var(--ink);
+      color: #fff;
+      border-color: var(--ink);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(96px, 1fr));
+      gap: 8px;
+    }
+
+    .metric {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+
+    .issue-list {
+      display: grid;
+      gap: 8px;
+      max-height: 440px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .issue-row {
+      border-left-color: var(--issue-color, var(--warn));
+    }
+
+    .issue-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .search-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    input[type="search"] {
+      min-height: 34px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      padding: 0 10px;
+      min-width: 0;
+    }
+
+    .empty,
+    .error {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      padding: 16px;
+    }
+
+    .error {
+      border-color: rgba(185, 28, 28, 0.45);
+      color: var(--danger);
+    }
+
+    @media (max-width: 980px) {
+      header,
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .toolbar {
+        justify-content: flex-start;
+      }
+
+      .summary {
+        grid-template-columns: repeat(2, minmax(120px, 1fr));
+      }
+    }
+
+    @media (max-width: 520px) {
+      .shell {
+        padding: 10px;
+      }
+
+      .grid,
+      .summary {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>AI Studio Architecture Map</h1>
+        <p class="muted">Renderer for <code>ai_studio/tree.json</code> plus map validation report.</p>
+      </div>
+      <div class="toolbar">
+        <a class="button" href="../tree.json" target="_blank" rel="noopener">Open tree.json</a>
+        <a class="button" href="validation-report.json" target="_blank" rel="noopener">Open report</a>
+        <button class="primary" type="button" id="reloadBtn">Reload</button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="panel" aria-labelledby="treeTitle">
+        <div class="panel-head">
+          <div>
+            <h2 id="treeTitle">Explorer</h2>
+            <p class="muted">Click nodes with children to drill into the same board.</p>
+          </div>
+          <button type="button" id="backBtn">Back</button>
+        </div>
+        <div class="panel-body stack">
+          <nav class="breadcrumbs" id="breadcrumbs" aria-label="Hierarchy"></nav>
+          <div id="currentDetail" class="empty">Loading tree...</div>
+          <div class="grid" id="childrenGrid"></div>
+        </div>
+      </section>
+
+      <section class="stack">
+        <section class="panel" aria-labelledby="graphTitle">
+          <div class="panel-head">
+            <div>
+              <h2 id="graphTitle">Current Level Graph</h2>
+              <p class="muted">Parent-child graph for the selected tree level.</p>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="graph-wrap">
+              <svg id="graphSvg" role="img" aria-label="Architecture graph"></svg>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="validationTitle">
+          <div class="panel-head">
+            <div>
+              <h2 id="validationTitle">Validation</h2>
+              <p class="muted">Files that need a map decision are shown here.</p>
+            </div>
+          </div>
+          <div class="panel-body stack">
+            <div class="summary" id="summary"></div>
+            <div class="search-row">
+              <input id="issueSearch" type="search" placeholder="Filter paths or node ids" aria-label="Filter validation issues">
+              <div class="tabs" id="issueTabs" role="tablist" aria-label="Validation issue categories"></div>
+            </div>
+            <div class="issue-list" id="issueList"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const state = {
+      tree: null,
+      report: null,
+      path: [],
+      issueCategory: "unmappedInAiStudio",
+      issueQuery: "",
+    };
+
+    const typeIcon = {
+      root: "R",
+      module: "M",
+      group: "G",
+      doc: "D",
+      tool: "T",
+      backlog: "B",
+      dir: "F",
+    };
+
+    const issueMeta = {
+      unmappedInAiStudio: ["Unmapped AI Studio", "#b45309"],
+      unmappedLegacy: ["Unmapped Legacy", "#64748b"],
+      missingInRepo: ["Missing In Repo", "#b91c1c"],
+      duplicateMappings: ["Duplicates", "#b91c1c"],
+      missingDescriptions: ["Missing Descriptions", "#b45309"],
+    };
+
+    const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    }[char]));
+
+    function nodeLabel(node) {
+      return node.title || node.path || node.id || "Untitled";
+    }
+
+    function nodeColor(node) {
+      return node.color || "#64748b";
+    }
+
+    function nodePathHref(path) {
+      if (!path) return "";
+      return "../../" + path.replace(/^\/+/, "");
+    }
+
+    function currentNode() {
+      let node = state.tree.root;
+      for (const index of state.path) {
+        node = (node.children || [])[index];
+      }
+      return node;
+    }
+
+    function ancestryNodes() {
+      const out = [state.tree.root];
+      let node = state.tree.root;
+      for (const index of state.path) {
+        node = (node.children || [])[index];
+        out.push(node);
+      }
+      return out;
+    }
+
+    function enterChild(index) {
+      const node = currentNode();
+      const child = (node.children || [])[index];
+      if (!child) return;
+      if ((child.children || []).length || child.generatedChildren) {
+        state.path.push(index);
+        render();
+      }
+    }
+
+    async function copyPath(path) {
+      if (!path) return;
+      await navigator.clipboard.writeText(path);
+    }
+
+    function renderBreadcrumbs() {
+      const root = document.getElementById("breadcrumbs");
+      const nodes = ancestryNodes();
+      root.innerHTML = nodes.map((node, index) => {
+        const current = index === nodes.length - 1;
+        return '<button type="button" class="crumb" data-crumb="' + index + '"' + (current ? ' aria-current="page"' : "") + ">" + esc(nodeLabel(node)) + "</button>";
+      }).join('<span class="muted">/</span>');
+      root.querySelectorAll("[data-crumb]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const index = Number(button.dataset.crumb);
+          state.path = state.path.slice(0, Math.max(0, index));
+          render();
+        });
+      });
+    }
+
+    function renderNodeCard(node, index) {
+      const hasChildren = (node.children || []).length > 0 || node.generatedChildren;
+      const path = node.path || "";
+      const tags = (node.tags || []).map((tag) => '<span class="chip">' + esc(tag) + '</span>').join("");
+      const open = path ? '<a class="file-link" href="' + esc(nodePathHref(path)) + '" target="_blank" rel="noopener">' + esc(path) + '</a>' : '<span class="muted">No path</span>';
+      return '<button type="button" class="node-card" style="--node-color:' + esc(nodeColor(node)) + '" data-child="' + index + '">' +
+        '<span class="node-title"><span class="icon">' + esc(typeIcon[node.kind] || "?") + '</span><strong>' + esc(nodeLabel(node)) + '</strong></span>' +
+        '<span class="muted">' + esc(node.role || node.subtitle || node.kind || "") + '</span>' +
+        '<span class="muted">' + esc(node.description || "No description.") + '</span>' +
+        '<span>' + open + '</span>' +
+        '<span class="chips">' + tags + (hasChildren ? '<span class="chip">open</span>' : '<span class="chip">leaf</span>') + '</span>' +
+      '</button>';
+    }
+
+    function renderTree() {
+      const node = currentNode();
+      const detail = document.getElementById("currentDetail");
+      const children = node.children || [];
+      const tags = (node.tags || []).map((tag) => '<span class="chip">' + esc(tag) + '</span>').join("");
+      detail.className = "node-card";
+      detail.style.setProperty("--node-color", nodeColor(node));
+      detail.innerHTML =
+        '<div class="node-title"><span class="icon">' + esc(typeIcon[node.kind] || "?") + '</span><h2>' + esc(nodeLabel(node)) + '</h2></div>' +
+        '<p class="muted">' + esc(node.description || "No description.") + '</p>' +
+        '<div class="chips">' + tags + '<span class="chip">' + children.length + ' children</span></div>' +
+        (node.path ? '<div class="issue-actions"><a class="file-link" href="' + esc(nodePathHref(node.path)) + '" target="_blank" rel="noopener">' + esc(node.path) + '</a><button type="button" data-copy-current>Copy path</button></div>' : "");
+      const copy = detail.querySelector("[data-copy-current]");
+      if (copy) copy.addEventListener("click", () => copyPath(node.path));
+
+      const grid = document.getElementById("childrenGrid");
+      if (!children.length) {
+        grid.innerHTML = '<div class="empty">Leaf node. Open or copy the file path from the current card.</div>';
+        return;
+      }
+      grid.innerHTML = children.map(renderNodeCard).join("");
+      grid.querySelectorAll("[data-child]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          if (event.target.closest("a")) return;
+          enterChild(Number(button.dataset.child));
+        });
+      });
+    }
+
+    function renderGraph() {
+      const svg = document.getElementById("graphSvg");
+      const node = currentNode();
+      const children = node.children || [];
+      const width = 900;
+      const height = 420;
+      const center = { x: width / 2, y: 80 };
+      const radius = Math.min(310, 120 + children.length * 14);
+      svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+      if (!children.length) {
+        svg.innerHTML = '<text x="40" y="60" fill="#5f6b7a">No children at this level.</text>';
+        return;
+      }
+      const step = width / (children.length + 1);
+      const childPoints = children.map((child, index) => ({
+        node: child,
+        x: step * (index + 1),
+        y: Math.min(height - 80, 210 + (index % 2) * 56),
+        index,
+      }));
+      const lines = childPoints.map((point) =>
+        '<line x1="' + center.x + '" y1="' + center.y + '" x2="' + point.x + '" y2="' + point.y + '" stroke="#d9e0ea" stroke-width="2"></line>'
+      ).join("");
+      const parent =
+        '<g class="graph-node">' +
+          '<circle cx="' + center.x + '" cy="' + center.y + '" r="34" fill="' + esc(nodeColor(node)) + '" opacity="0.16"></circle>' +
+          '<circle cx="' + center.x + '" cy="' + center.y + '" r="26" fill="#fff" stroke="' + esc(nodeColor(node)) + '" stroke-width="3"></circle>' +
+          '<text x="' + center.x + '" y="' + (center.y + 52) + '" text-anchor="middle">' + esc(nodeLabel(node)).slice(0, 34) + '</text>' +
+        '</g>';
+      const childNodes = childPoints.map((point) =>
+        '<g class="graph-node" data-child="' + point.index + '">' +
+          '<circle cx="' + point.x + '" cy="' + point.y + '" r="28" fill="#fff" stroke="' + esc(nodeColor(point.node)) + '" stroke-width="3"></circle>' +
+          '<text x="' + point.x + '" y="' + (point.y + 46) + '" text-anchor="middle">' + esc(nodeLabel(point.node)).slice(0, 26) + '</text>' +
+        '</g>'
+      ).join("");
+      svg.innerHTML = lines + parent + childNodes;
+      svg.querySelectorAll("[data-child]").forEach((item) => {
+        item.addEventListener("click", () => enterChild(Number(item.dataset.child)));
+      });
+    }
+
+    function categoryItems(category) {
+      const issues = state.report && state.report.issues ? state.report.issues : {};
+      return issues[category] || [];
+    }
+
+    function issuePath(item) {
+      return item.path || item.id || "";
+    }
+
+    function renderValidation() {
+      const summary = state.report ? state.report.summary : {};
+      document.getElementById("summary").innerHTML = [
+        ["Mapped", summary.mappedPaths || 0],
+        ["Scanned", summary.scannedFiles || 0],
+        ["AI Studio", summary.unmappedInAiStudio || 0],
+        ["Legacy", summary.unmappedLegacy || 0],
+        ["Missing", summary.missingInRepo || 0],
+      ].map(([label, value]) => '<div class="metric"><strong>' + esc(value) + '</strong><span class="muted">' + esc(label) + '</span></div>').join("");
+
+      const tabs = document.getElementById("issueTabs");
+      tabs.innerHTML = Object.entries(issueMeta).map(([key, [label]]) => {
+        const count = categoryItems(key).length;
+        return '<button type="button" class="tab" role="tab" aria-selected="' + (state.issueCategory === key ? "true" : "false") + '" data-category="' + key + '">' + esc(label) + ' <span class="chip">' + count + '</span></button>';
+      }).join("");
+      tabs.querySelectorAll("[data-category]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.issueCategory = button.dataset.category;
+          renderValidation();
+        });
+      });
+
+      const [label, color] = issueMeta[state.issueCategory] || ["Issues", "#b45309"];
+      const q = state.issueQuery.trim().toLowerCase();
+      const items = categoryItems(state.issueCategory).filter((item) => JSON.stringify(item).toLowerCase().includes(q));
+      const list = document.getElementById("issueList");
+      if (!items.length) {
+        list.innerHTML = '<div class="empty">No ' + esc(label.toLowerCase()) + ' issues.</div>';
+        return;
+      }
+      list.innerHTML = items.map((item) => {
+        const path = issuePath(item);
+        const nodes = item.nodes ? '<p class="muted">Nodes: ' + esc(item.nodes.map((node) => node.id || node.title).join(", ")) + '</p>' : "";
+        return '<article class="issue-row" style="--issue-color:' + esc(color) + '">' +
+          '<h3>' + esc(path || item.title || item.id || label) + '</h3>' +
+          nodes +
+          '<div class="issue-actions">' +
+            (path ? '<a class="file-link" href="' + esc(nodePathHref(path)) + '" target="_blank" rel="noopener">Open</a><button type="button" data-copy-path="' + esc(path) + '">Copy path</button>' : "") +
+            '<span class="chip">' + esc(label) + '</span>' +
+          '</div>' +
+        '</article>';
+      }).join("");
+      list.querySelectorAll("[data-copy-path]").forEach((button) => {
+        button.addEventListener("click", () => copyPath(button.dataset.copyPath));
+      });
+    }
+
+    function render() {
+      renderBreadcrumbs();
+      renderTree();
+      renderGraph();
+      renderValidation();
+      document.getElementById("backBtn").disabled = state.path.length === 0;
+    }
+
+    async function loadJson(path, fallback) {
+      const response = await fetch(path, { cache: "no-store" });
+      if (response.status === 404 && fallback !== undefined) return fallback;
+      if (!response.ok) throw new Error(path + " returned " + response.status);
+      return response.json();
+    }
+
+    async function load() {
+      const detail = document.getElementById("currentDetail");
+      detail.className = "empty";
+      detail.textContent = "Loading map data...";
+      try {
+        const [tree, report] = await Promise.all([
+          loadJson("../tree.json"),
+          loadJson("validation-report.json", { summary: {}, issues: {} }),
+        ]);
+        state.tree = tree;
+        state.report = report;
+        state.path = [];
+        render();
+      } catch (error) {
+        detail.className = "error";
+        detail.textContent = "Failed to load architecture map data: " + (error && error.message ? error.message : String(error));
+      }
+    }
+
+    document.getElementById("reloadBtn").addEventListener("click", load);
+    document.getElementById("backBtn").addEventListener("click", () => {
+      state.path.pop();
+      render();
+    });
+    document.getElementById("issueSearch").addEventListener("input", (event) => {
+      state.issueQuery = event.target.value;
+      renderValidation();
+    });
+
+    load();
+  </script>
+</body>
+</html>

@@ -7,6 +7,8 @@ public surface, internals, and validation path.
 ## Current Shape
 
 - `tree.json`: declarative source for the working architecture tree.
+- `architecture_map/`: live architecture map renderer, local server, and
+  validation report for unmapped files.
 - `core_harness/`: reviewed core routing and agent harness docs.
 - `core_harness/orchestration/`: reviewed early split rule for broad read-heavy
   subagent work.
@@ -36,9 +38,11 @@ Load only the route that matches the current task:
 - Durable task state and task commands: `ai_studio/taskboard/README.md` and
   `node ai_studio/taskboard/cli.mjs context`.
 - AI Studio architecture and refactor tree: `ai_studio/tree.json` and
-  `docs/ai-pipeline/architecture-map.html`.
-- Architecture map rebuild:
-  `node tools/architecture_map/build_architecture_map.mjs`.
+  `ai_studio/architecture_map/README.md`.
+- Architecture map browser:
+  `node ai_studio/architecture_map/serve.mjs`.
+- Architecture map validation report:
+  `node ai_studio/architecture_map/validate_map.mjs`.
 
 Detailed procedures belong in owned modules, docs, or skills, not here.
 
@@ -52,14 +56,17 @@ Detailed procedures belong in owned modules, docs, or skills, not here.
 
 ## Map Ownership
 
-`docs/ai-pipeline/architecture-map.html` is generated. Edit `tree.json`, then:
+`ai_studio/tree.json` is the architecture source. The map page is a renderer:
+open it through the local server so it can fetch JSON data.
 
 ```powershell
-node tools/architecture_map/build_architecture_map.mjs
+node ai_studio/architecture_map/validate_map.mjs
+node ai_studio/architecture_map/serve.mjs
 ```
 
-Node descriptions live in `tree.json`; the renderer only fills mechanical file
-data such as title and link.
+The page reads `tree.json` and `architecture_map/validation-report.json`.
+Scanning is validation only: new files appear in the report until a human maps,
+ignores, moves, or deletes them.
 
 ## Migration Rule
 
@@ -72,4 +79,4 @@ helpers, and validation or an explicit no-validator reason.
 2. Decide: move to `ai_studio/`, keep external, or delete.
 3. Create/update the module README after the decision.
 4. Move reviewed source files and update callers.
-5. Rebuild maps and run focused validators.
+5. Refresh the map validation report and run focused validators.
