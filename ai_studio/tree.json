@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "description": "Declarative source for the ai_studio refactor tree. The HTML map is only a renderer; rebuild it with node tools/architecture_map/build_architecture_map.mjs.",
+  "root": {
+    "id": "studio",
+    "title": "ai_studio/",
+    "subtitle": "refactor root",
+    "kind": "root",
+    "color": "#172033",
+    "description": "Clean refactor tree. Start with Core Harness only; promote modules from Not Refactored after review, cleanup, owner assignment, and compatibility checks.",
+    "tags": ["reviewed-only", "no-bulk-move", "core-first"],
+    "children": [
+      {
+        "id": "module:hot",
+        "title": "Core Harness",
+        "subtitle": "ai_studio/core_harness",
+        "kind": "module",
+        "moduleId": "hot",
+        "color": "#172033",
+        "description": "Harness, agent-facing contract, AGENTS.md, short routing docs, and the smallest public entry points needed to start work.",
+        "tags": ["core", "harness", "first-refactor-line"],
+        "children": [
+          { "id": "core-harness:agents", "kind": "doc", "path": "AGENTS.md", "role": "repo-specific agent contract", "tags": ["core", "policy", "source"] },
+          { "id": "core-harness:claude", "kind": "doc", "path": "CLAUDE.md", "role": "generated/parallel harness pointer", "tags": ["generated-surface", "check-drift"] },
+          { "id": "core-harness:root-readme", "kind": "doc", "path": "README.md", "role": "human entry point", "tags": ["overview", "low-procedure"] },
+          { "id": "core-harness:ai-pipeline", "kind": "doc", "path": "AI_PIPELINE.md", "role": "portable routing map", "tags": ["core", "route"] },
+          { "id": "core-harness:agent-workflow", "kind": "doc", "path": "docs/ai-pipeline/agent-workflow.md", "role": "agent work-loop reference", "tags": ["reference", "move-out-detail"] },
+          { "id": "core-harness:tasks-readme", "kind": "doc", "path": "tasks/README.md", "role": "task store route map", "tags": ["core-adjacent", "state-route"] },
+          { "id": "core-harness:ai-tool", "kind": "tool", "path": "tools/ai.mjs", "role": "main agent CLI facade", "tags": ["public-api", "core-entry"] },
+          { "id": "core-harness:taskboard-tool", "kind": "tool", "path": "tools/taskboard/cli.mjs", "role": "task/context CLI facade", "tags": ["public-api", "core-adjacent"] },
+          { "id": "core-harness:tools-readme", "kind": "doc", "path": "tools/README.md", "role": "tool layout contract", "tags": ["source", "facade-map"] },
+          { "id": "core-harness:context-budget", "kind": "tool", "path": "tools/context_budget.mjs", "role": "hot docs and skill budget guard", "tags": ["validator", "context"] },
+          { "id": "core-harness:doc-reference-check", "kind": "tool", "path": "tools/doc_reference_check.mjs", "role": "stale reference guard", "tags": ["validator", "docs"] },
+          { "id": "core-harness:pipeline-validate", "kind": "tool", "path": "tools/pipeline_validate.mjs", "role": "pipeline validation orchestrator", "tags": ["validator", "facade"] },
+          { "id": "core-harness:quality-validation", "kind": "doc", "path": "docs/ai-pipeline/quality-validation.md", "role": "validation source reference", "tags": ["source", "move-out-detail"] },
+          { "id": "core-harness:sync", "kind": "tool", "path": "tools/sync.mjs", "role": "cross-harness sync entry", "tags": ["sync", "public-api"] },
+          { "id": "core-harness:skills-sync", "kind": "tool", "path": "tools/skills_sync.mjs", "role": "generated skill pointers", "tags": ["generated", "check-drift"] },
+          { "id": "core-harness:hooks-sync", "kind": "tool", "path": "tools/hooks_sync.mjs", "role": "generated hook config", "tags": ["generated", "hooks"] },
+          { "id": "core-harness:bootstrap-template", "kind": "doc", "path": "tools/bootstrap/TEMPLATE.md", "role": "portable export template", "tags": ["export", "source"] },
+          { "id": "core-harness:profiling-reuse", "kind": "doc", "path": "docs/ai-pipeline/profiling-reuse.md", "role": "profiling/reuse reference belongs outside Core after review", "tags": ["move-out-candidate"] },
+          { "id": "core-harness:orchestration-playbook", "kind": "doc", "path": "docs/ai-pipeline/orchestration-playbook.md", "role": "orchestration method candidate", "tags": ["move-out-candidate"] },
+          { "id": "core-harness:subagent-protocol", "kind": "doc", "path": "docs/ai-pipeline/subagent-protocol.md", "role": "subagent packet contract candidate", "tags": ["move-out-candidate"] }
+        ]
+      },
+      {
+        "id": "architecture-migration",
+        "title": "Architecture & Migration",
+        "subtitle": "map, generator, and refactor control plane",
+        "kind": "module",
+        "color": "#64748b",
+        "description": "Self-map for this AI Studio refactor tree: generated HTML, full inventory, source report, and the generator that defines nodes, hierarchy, and ownership.",
+        "tags": ["map", "migration", "source-of-truth", "generated"],
+        "children": [
+          { "id": "architecture-map:tree-source", "kind": "doc", "path": "ai_studio/tree.json", "title": "tree.json", "description": "Declarative source for the working ai_studio tree: hierarchy, node ids, manual labels, roles, tags, and explicit child order.", "role": "declarative source of the ai_studio tree", "tags": ["tree-source", "edit-this"] },
+          { "id": "architecture-map:working-html", "kind": "doc", "path": "docs/ai-pipeline/architecture-map.html", "title": "architecture-map.html", "description": "Generated renderer for the working Core-first refactor map. Do not edit this file by hand; rebuild it from tree.json.", "role": "generated renderer for the working Core-first map", "tags": ["working-map", "generated", "do-not-edit-html"] },
+          { "id": "architecture-map:full-html", "kind": "doc", "path": "docs/ai-pipeline/architecture-map-full.html", "title": "architecture-map-full.html", "description": "Generated full inventory graph of current Markdown sources, tools, and inferred links. Use it as reference material.", "role": "generated full inventory graph", "tags": ["full-inventory", "generated", "do-not-edit-html"] },
+          { "id": "architecture-map:source-report", "kind": "doc", "path": "docs/ai-pipeline/architecture-map.md", "title": "architecture-map.md", "role": "human-readable map contract and architecture report", "tags": ["source", "contract"] },
+          { "id": "architecture-map:generator", "kind": "tool", "path": "tools/architecture_map/build_architecture_map.mjs", "title": "build_architecture_map.mjs", "role": "generator for both HTML reports", "tags": ["generator"] }
+        ]
+      },
+      {
+        "id": "not-refactored",
+        "title": "Not Refactored",
+        "subtitle": "current scattered pipeline",
+        "kind": "backlog",
+        "color": "#64748b",
+        "description": "Everything that exists today but has not yet been reviewed, cleaned, assigned an owner, and moved into the main ai_studio tree.",
+        "tags": ["current-state", "do-not-lose", "move-gradually"],
+        "generatedChildren": ["full-inventory", "module-backlog"]
+      }
+    ]
+  }
+}

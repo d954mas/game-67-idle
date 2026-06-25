@@ -11,8 +11,24 @@ handling, validation, and the game starter template.
 
 `ai_studio/` is the target home for the cleaned architecture. Current files do
 not move there automatically. A module enters `ai_studio/` only after it is
-reviewed, refactored, assigned to a domain owner, and given a compatibility
-plan for old public paths.
+reviewed, refactored, assigned to an owner, and given a compatibility plan for
+old public paths.
+
+Current source layout for the map:
+
+- `ai_studio/tree.json` owns the visible tree: node ids, hierarchy, manual
+  titles, roles, tags, and explicit child order.
+- `tools/architecture_map/build_architecture_map.mjs` is the generator. It
+  reads `tree.json`, scans selected Markdown and tools, then writes the HTML.
+- `docs/ai-pipeline/architecture-map.html` is generated renderer output for the
+  working refactor map. Do not edit it by hand.
+- `docs/ai-pipeline/architecture-map-full.html` is generated renderer output for
+  the full current inventory.
+
+"Enrichment" means display-only metadata. If a tree node has a `path`, the
+generator can fill missing title, description, and file link data from Markdown
+or the tool inventory. It does not infer the hierarchy. Text written directly in
+`tree.json` wins over scanned metadata.
 
 ## Visual Graphs
 
@@ -44,8 +60,9 @@ Core map has two layers:
 - the `AI Studio Explorer` is the primary working view. It is a card-tree:
   clicking a card replaces the board with that card's children, and `Back`
   returns one level up;
-- the card-tree starts at `ai_studio/`, then enters target domains, mapped
-  modules, sections, and concrete files/tools/contracts in the same board;
+- the card-tree starts at `ai_studio/`, then enters reviewed nodes such as
+  `Core Harness`, `Architecture & Migration`, `Not Refactored`, and concrete
+  files/tools/contracts in the same board;
 - the graph below the explorer is secondary. Use it to inspect cross-module
   relationships, pan/zoom, and reposition modules.
 
@@ -56,8 +73,8 @@ Core map visual language:
   sync, group, or removal candidate;
 - tag means refactor decision or status, such as `core`, `public-api`,
   `source-of-truth`, `move-out`, `needs-owner`, or `delete-candidate`;
-- entering a card-tree node moves one level deeper: `ai_studio/` -> domain ->
-  module -> section -> file or tool details;
+- entering a card-tree node moves one level deeper: `ai_studio/` -> module or
+  backlog node -> file/tool/contract details;
 - graph expansion is secondary and only mirrors a compact subset inside the
   module card.
 
@@ -194,7 +211,7 @@ These are the main stable entry points an agent should know first.
 
 | Domain | Source of truth | Main tools | Main skills | Durable outputs |
 |---|---|---|---|---|
-| AI Studio target structure | `ai_studio/README.md`, `ai_studio/migration/README.md` | tools/architecture_map/build_architecture_map.mjs | `ai-pipeline-maintenance` | Reviewed modules under `ai_studio/` |
+| AI Studio target structure | `ai_studio/README.md`, `ai_studio/tree.json`, `ai_studio/core_harness/README.md` | tools/architecture_map/build_architecture_map.mjs | `ai-pipeline-maintenance` | Reviewed modules under `ai_studio/`, generated map HTML |
 | Pipeline policy and context | `AGENTS.md`, `AI_PIPELINE.md`, `docs/ai-pipeline/` | `tools/context_budget.mjs`, `tools/doc_reference_check.mjs`, `tools/pipeline_validate.mjs` | `ai-pipeline-maintenance` | Updated docs, validation output |
 | Task state and orchestration | `tasks/README.md`, `tasks/STATUS.md`, `tasks/active/`, `tasks/epics/` | `tools/taskboard/cli.mjs`, `tools/taskboard/server.mjs` | `task-manager`, `ai-pipeline-maintenance` | Task files, status index, packet handoffs |
 | Passive profiling and feedback | `docs/ai-pipeline/profiling-reuse.md` | `tools/ai_profile/*`, tools/hooks_sync.mjs | `chat-session-reflection`, `ai-pipeline-maintenance` | `tmp/session_profiles/` raw logs, promoted lessons |
@@ -386,8 +403,8 @@ justify a reusable wrapper.
   agents do not learn to call internal helpers in the wrong order.
 - `gamedesign/knowledge/` is rich but lacks a single executable/indexed query
   facade. For now, route through the skill and `gamedesign/knowledge/index.md`.
-- The current review budget check reports a pre-existing failure:
-  `.codex/skills/game-asset-prep/SKILL.md` is 3216 chars against a 3200 limit.
+- Current context-budget review passes; keep hot docs and skill entrypoints under
+  their limits as the map grows.
 - `tools/blockside-heat/` looks like stale scratch/cache in this checkout and
   should be confirmed before any cleanup.
 

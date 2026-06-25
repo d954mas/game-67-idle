@@ -12,7 +12,8 @@ this file routes agents to the right workflow source.
 - Profiling, prototype closeout, visual/asset routing, or portable export:
   `docs/ai-pipeline/profiling-reuse.md`
 - Pipeline architecture, domain ownership, tools/skills/agents map, and clean
-  target modules: `docs/ai-pipeline/architecture-map.md`, `ai_studio/README.md`;
+  target tree: `docs/ai-pipeline/architecture-map.md`, `ai_studio/README.md`,
+  `ai_studio/tree.json`, `ai_studio/core_harness/README.md`;
   visuals: `docs/ai-pipeline/architecture-map.html`,
   `docs/ai-pipeline/architecture-map-full.html`; rebuild with
   `node tools/architecture_map/build_architecture_map.mjs`

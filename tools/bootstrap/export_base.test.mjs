@@ -47,6 +47,12 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(existsSync(join(target, "docs", "ai-pipeline", "agent-workflow.md")), true);
     assert.equal(existsSync(join(target, "docs", "ai-pipeline", "quality-validation.md")), true);
     assert.equal(existsSync(join(target, "docs", "ai-pipeline", "profiling-reuse.md")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "tree.json")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "core_harness", "README.md")), true);
+    assert.equal(
+      existsSync(join(target, "tools", "architecture_map", "build_architecture_map.mjs")),
+      true,
+    );
     assert.equal(existsSync(join(target, "tools", "README.md")), true);
     assert.equal(existsSync(join(target, "tools", "requirements", "ai-pipeline-full.txt")), true);
     assert.equal(existsSync(join(target, ".claude", "skills", "task-manager", "SKILL.md")), true);

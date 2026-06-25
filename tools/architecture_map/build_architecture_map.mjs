@@ -5,6 +5,7 @@ import path from "node:path";
 const repoRoot = process.cwd();
 const refactorOutPath = "docs/ai-pipeline/architecture-map.html";
 const fullOutPath = "docs/ai-pipeline/architecture-map-full.html";
+const studioTreePath = "ai_studio/tree.json";
 const outDir = path.posix.dirname(refactorOutPath);
 const graphWidth = 1480;
 const graphHeight = 900;
@@ -42,104 +43,13 @@ const moduleEdges = [
   ["export", "skills", "syncs", "Codex skills are canonical; Claude skills are generated pointers."]
 ];
 
-const aiStudioDomains = [
-  {
-    id: "core",
-    title: "Core",
-    color: "#172033",
-    description: "Harness contract, agent entry policy, root routing, and minimal public surface.",
-    current: ["AGENTS.md", "AI_PIPELINE.md", "CLAUDE.md", "docs/ai-pipeline/"],
-    target: ["ai_studio/core/README.md"]
-  },
-  {
-    id: "agents",
-    title: "Agents",
-    color: "#475569",
-    description: "Lead/worker roles, delegation packets, protocols, handoff rules, and authority boundaries.",
-    current: ["docs/ai-pipeline/agent-workflow.md", "docs/ai-pipeline/subagent-protocol.md", "tools/taskboard/ packet presets"],
-    target: ["ai_studio/agents/README.md"]
-  },
-  {
-    id: "skills",
-    title: "Skills",
-    color: "#0f766e",
-    description: "Reusable agent procedures and thin trigger entrypoints.",
-    current: [".codex/skills/", ".claude/skills/"],
-    target: ["ai_studio/skills/README.md"]
-  },
-  {
-    id: "tools",
-    title: "Tools",
-    color: "#b45309",
-    description: "Stable AI-studio command surfaces, facades, contracts, and implementation ownership.",
-    current: ["tools/ai.mjs", "tools/pipeline_validate.mjs", "tools/*"],
-    target: ["ai_studio/tools/README.md"]
-  },
-  {
-    id: "tasks",
-    title: "Tasks",
-    color: "#6d28d9",
-    description: "Durable work state, orchestration, packet generation, status, and evidence routing.",
-    current: ["tasks/", "tools/taskboard/"],
-    target: ["ai_studio/tasks/README.md"]
-  },
-  {
-    id: "assets",
-    title: "Assets",
-    color: "#0891b2",
-    description: "Source-first asset workflow, provenance, intake, reviews, and generated asset records.",
-    current: ["tools/assets/", "tools/asset_review/", "asset skills"],
-    target: ["ai_studio/assets/README.md"]
-  },
-  {
-    id: "design",
-    title: "Design",
-    color: "#15803d",
-    description: "GDD pipeline, design knowledge, source notes, project wiki routing, and handoff.",
-    current: ["gamedesign/", "tools/game_context/"],
-    target: ["ai_studio/design/README.md"]
-  },
-  {
-    id: "tech",
-    title: "Tech",
-    color: "#1d4ed8",
-    description: "Runtime automation, game template integration, DevAPI, state codegen, and engine boundary.",
-    current: ["template/", "tools/devapi/", "tools/state_codegen/", "external/neotolis-engine/"],
-    target: ["ai_studio/tech/README.md"]
-  },
-  {
-    id: "validation",
-    title: "Validation",
-    color: "#b91c1c",
-    description: "Mechanical quality gates, context/doc guards, product gates, and failure stops.",
-    current: ["docs/ai-pipeline/quality-validation.md", "tools/product_gate/", "tools/context_budget.mjs"],
-    target: ["ai_studio/validation/README.md"]
-  },
-  {
-    id: "export",
-    title: "Export",
-    color: "#16a34a",
-    description: "Portable export, harness sync, generated skills, hooks, and compatibility surfaces.",
-    current: ["tools/bootstrap/", "tools/sync.mjs", "tools/skills_sync.mjs", "tools/hooks_sync.mjs"],
-    target: ["ai_studio/export/README.md"]
-  },
-  {
-    id: "migration",
-    title: "Migration",
-    color: "#64748b",
-    description: "Refactor queue, inspected/mapped/migrating/migrated/delete states, and move records.",
-    current: ["docs/ai-pipeline/architecture-map.md", "docs/ai-pipeline/architecture-map.html"],
-    target: ["ai_studio/migration/README.md"]
-  }
-];
-
 const explicitDocPaths = [
   "README.md",
   "AGENTS.md",
   "CLAUDE.md",
   "AI_PIPELINE.md",
   "ai_studio/README.md",
-  ...aiStudioDomains.map((domain) => `ai_studio/${domain.id}/README.md`),
+  "ai_studio/core_harness/README.md",
   "tools/README.md",
   "tools/bootstrap/TEMPLATE.md",
   "docs/ai-pipeline/architecture-map.md",
@@ -567,6 +477,244 @@ function buildGraph(markdownDocs, tools) {
   }
 
   return { nodes, edges, modules, moduleEdges, markdownDocs, tools, graphWidth, graphHeight, generatedAt: new Date().toISOString() };
+}
+
+function itemTitleFromPath(value, fallback = "") {
+  const raw = value || fallback || "";
+  const parts = raw.split("/");
+  return parts[parts.length - 1] || fallback || raw;
+}
+
+function docItemForPath(docsByPath, rel, role = "module source", tags = []) {
+  const d = docsByPath.get(rel);
+  return {
+    kind: "doc",
+    path: rel,
+    title: d ? d.title : itemTitleFromPath(rel),
+    href: d ? d.href : (exists(rel) ? hrefFor(rel) : ""),
+    description: d ? d.description : "File is not currently indexed as Markdown.",
+    role,
+    tags
+  };
+}
+
+function toolItemForPath(toolsByPath, rel, role = "public tool", tags = []) {
+  const t = toolsByPath.get(rel);
+  return {
+    kind: "tool",
+    path: rel,
+    title: rel,
+    href: t ? t.href : (exists(rel) ? hrefFor(rel) : ""),
+    description: t ? t.description : "Tool file is not currently indexed.",
+    role,
+    tags
+  };
+}
+
+function contractItemForEdge(edge) {
+  return {
+    kind: "contract",
+    path: edge.from + " -> " + edge.to,
+    title: edge.label,
+    href: "",
+    description: edge.description,
+    role: "module contract",
+    tags: ["contract", edge.from, edge.to]
+  };
+}
+
+function buildRefactorGroups(data) {
+  const docsByPath = new Map(data.markdownDocs.map((d) => [d.path, d]));
+  const toolsByPath = new Map(data.tools.map((t) => [t.path, t]));
+  const out = {};
+  for (const module of data.modules) {
+    const docs = data.markdownDocs.filter((d) => d.group === module.id);
+    const skills = docs.filter((d) => d.kind === "skill");
+    const toolsForModule = data.tools.filter((t) => t.group === module.id);
+    const publicTools = toolsForModule.filter((t) => t.surface === "public");
+    const internalTools = toolsForModule.filter((t) => t.surface !== "public");
+    const contracts = data.moduleEdges
+      .map((e) => ({ from: e[0], to: e[1], label: e[2], description: e[3] }))
+      .filter((e) => e.from === module.id || e.to === module.id);
+    out[module.id] = [
+      {
+        id: "source-docs",
+        title: "Source Docs",
+        icon: "doc",
+        color: module.color,
+        description: "Markdown sources currently classified under this module.",
+        tags: ["source", "docs"],
+        items: docs.map((d) => docItemForPath(docsByPath, d.path, "module source", ["source", d.kind]))
+      },
+      {
+        id: "skills",
+        title: "Skills",
+        icon: "agent",
+        color: "#0f766e",
+        description: "Repeatable agent procedures currently classified under this module.",
+        tags: ["skill", "procedure"],
+        items: skills.map((d) => docItemForPath(docsByPath, d.path, "agent procedure", ["skill", "procedure"]))
+      },
+      {
+        id: "public-tools",
+        title: "Public Tools",
+        icon: "tool",
+        color: "#b45309",
+        description: "Agent-callable command surface currently classified under this module.",
+        tags: ["public-api", "tool"],
+        items: publicTools.map((t) => toolItemForPath(toolsByPath, t.path, "public tool", ["public-api", t.type]))
+      },
+      {
+        id: "internal-helpers",
+        title: "Internal Helpers",
+        icon: "group",
+        color: "#64748b",
+        description: "Support files that should stay behind a public surface.",
+        tags: ["internal", "support"],
+        items: internalTools.map((t) => toolItemForPath(toolsByPath, t.path, "internal support", ["internal", t.type]))
+      },
+      {
+        id: "contracts",
+        title: "Contracts",
+        icon: "shield",
+        color: "#b91c1c",
+        description: "Explicit module-level links that refactoring should preserve or change deliberately.",
+        tags: ["contract", "boundary"],
+        items: contracts.map(contractItemForEdge)
+      }
+    ].filter((group) => group.items.length);
+  }
+  return out;
+}
+
+function explorerLeafFromSpec(spec, data) {
+  const docsByPath = new Map(data.markdownDocs.map((d) => [d.path, d]));
+  const toolsByPath = new Map(data.tools.map((t) => [t.path, t]));
+  const moduleById = new Map(data.modules.map((m) => [m.id, m]));
+  const kind = spec.kind || "doc";
+  const pathValue = spec.path || "";
+  const doc = docsByPath.get(pathValue);
+  const tool = toolsByPath.get(pathValue);
+  const module = spec.moduleId ? moduleById.get(spec.moduleId) : null;
+  const color = spec.color || (module && module.color) || (kind === "tool" ? "#b45309" : "#64748b");
+  const title = spec.title || (doc && doc.title) || (tool && tool.path) || itemTitleFromPath(pathValue, spec.id);
+  const href = spec.href || (doc && doc.href) || (tool && tool.href) || (pathValue && exists(pathValue) ? hrefFor(pathValue) : "");
+  const description = spec.description || (doc && doc.description) || (tool && tool.description) || "No description yet.";
+  const tags = spec.tags || [];
+  return {
+    id: spec.id || pathValue || title,
+    title,
+    subtitle: spec.subtitle || pathValue || spec.subtitle || "",
+    kind,
+    color,
+    description,
+    path: pathValue,
+    href,
+    tags,
+    moduleId: spec.moduleId || "",
+    groupId: spec.groupId || "",
+    item: pathValue ? {
+      kind,
+      path: pathValue,
+      title,
+      href,
+      description,
+      role: spec.role || "",
+      tags
+    } : null,
+    children: []
+  };
+}
+
+function explorerGroupNode(moduleId, group) {
+  return {
+    id: "group:" + moduleId + ":" + group.id,
+    title: group.title,
+    subtitle: group.items.length + " items",
+    kind: "section",
+    color: group.color,
+    description: group.description,
+    href: "",
+    tags: group.tags,
+    moduleId,
+    groupId: group.id,
+    children: group.items.map((item, index) => ({
+      id: "item:" + moduleId + ":" + group.id + ":" + index,
+      title: itemTitleFromPath(item.path, item.title),
+      subtitle: item.path || item.title || "",
+      kind: item.kind,
+      color: group.color,
+      description: item.description,
+      path: item.path || "",
+      href: item.href,
+      tags: item.tags || [],
+      moduleId,
+      groupId: group.id,
+      item,
+      children: []
+    }))
+  };
+}
+
+function explorerModuleNode(module, data) {
+  return {
+    id: "module:" + module.id,
+    title: module.title,
+    subtitle: module.kind,
+    kind: "module",
+    color: module.color,
+    description: module.description,
+    href: "",
+    tags: [],
+    moduleId: module.id,
+    children: (data.refactorGroups[module.id] || []).map((group) => explorerGroupNode(module.id, group))
+  };
+}
+
+function generatedExplorerChildren(kind, data) {
+  if (kind === "full-inventory") {
+    return [{
+      id: "not-refactored:full-inventory",
+      title: "Full Current Inventory",
+      subtitle: "architecture-map-full.html",
+      kind: "doc",
+      color: "#64748b",
+      description: "Complete generated map of all current markdown sources, tools, and inferred connections.",
+      href: "architecture-map-full.html",
+      tags: ["reference", "all-current"],
+      children: []
+    }];
+  }
+  if (kind === "module-backlog") {
+    return [{
+      id: "not-refactored:modules",
+      title: "Current Module Backlog",
+      subtitle: "current modules",
+      kind: "folder",
+      color: "#64748b",
+      description: "Raw current modules that still need review before promotion into the main ai_studio tree.",
+      href: "",
+      tags: ["current", "not-migrated"],
+      children: data.modules
+        .filter((module) => module.id !== "hot")
+        .map((module) => explorerModuleNode(module, data))
+    }];
+  }
+  return [];
+}
+
+function resolveExplorerNode(spec, data) {
+  const node = explorerLeafFromSpec(spec, data);
+  const explicitChildren = (spec.children || []).map((child) => resolveExplorerNode(child, data));
+  const generatedChildren = (spec.generatedChildren || []).flatMap((kind) => generatedExplorerChildren(kind, data));
+  node.children = [...explicitChildren, ...generatedChildren];
+  return node;
+}
+
+function buildStudioTree(data) {
+  const sourcePath = repoPath(studioTreePath);
+  const source = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
+  return resolveExplorerNode(source.root, data);
 }
 
 function compactLabel(title, rel) {
@@ -1406,7 +1554,6 @@ function renderFullHtml(data) {
 
 function renderRefactorHtml(data) {
   const dataJson = escapeScriptJson(data);
-  const studioJson = escapeScriptJson(aiStudioDomains);
   return `<!doctype html>
 <html lang="ru">
 <head>
@@ -2555,11 +2702,20 @@ function renderRefactorHtml(data) {
   </div>
 
   <script id="graph-data" type="application/json">${dataJson}</script>
-  <script id="studio-domains" type="application/json">${studioJson}</script>
   <script>
   (() => {
     const data = JSON.parse(document.getElementById("graph-data").textContent);
-    const studioDomains = JSON.parse(document.getElementById("studio-domains").textContent);
+    const studioTreeSource = data.studioTree || {
+      id: "studio",
+      title: "ai_studio/",
+      subtitle: "missing tree source",
+      kind: "root",
+      color: "#172033",
+      description: "ai_studio/tree.json was not embedded in this generated map.",
+      tags: ["missing-source"],
+      children: []
+    };
+    const refactorGroupData = data.refactorGroups || {};
     const refactorMeta = {
       hot: {
         title: "Core Harness",
@@ -2610,8 +2766,6 @@ function renderRefactorHtml(data) {
     });
     const moduleById = new Map(modules.map((m) => [m.id, m]));
     const edgeData = data.moduleEdges.map((e, index) => ({ id: "e" + index, from: e[0], to: e[1], label: e[2], description: e[3] }));
-    const docsByPath = new Map(data.markdownDocs.map((d) => [d.path, d]));
-    const toolsByPath = new Map(data.tools.map((t) => [t.path, t]));
     const search = document.getElementById("search");
     const moduleFilter = document.getElementById("moduleFilter");
     const focusMode = document.getElementById("focusMode");
@@ -2665,41 +2819,6 @@ function renderRefactorHtml(data) {
     function tags(values) {
       return '<div class="tags">' + values.map((v) => '<span class="tag">' + esc(v) + '</span>').join("") + '</div>';
     }
-    function docItem(path, role, tagList) {
-      const d = docsByPath.get(path);
-      return {
-        kind: "doc",
-        path,
-        title: d ? d.title : path,
-        href: d ? d.href : path,
-        description: d ? d.description : "Markdown source is not currently indexed.",
-        role,
-        tags: tagList || []
-      };
-    }
-    function toolItem(path, role, tagList) {
-      const t = toolsByPath.get(path);
-      return {
-        kind: "tool",
-        path,
-        title: path,
-        href: t ? t.href : path,
-        description: t ? t.description : "Tool file is not currently indexed.",
-        role,
-        tags: tagList || []
-      };
-    }
-    function contractItem(edge) {
-      return {
-        kind: "contract",
-        path: edge.from + " -> " + edge.to,
-        title: edge.label,
-        href: "",
-        description: edge.description,
-        role: "module contract",
-        tags: ["contract", edge.from, edge.to]
-      };
-    }
     function inventory(id) {
       const docs = data.markdownDocs.filter((d) => d.group === id);
       const skills = docs.filter((d) => d.kind === "skill");
@@ -2709,144 +2828,8 @@ function renderRefactorHtml(data) {
       const contracts = edgeData.filter((e) => e.from === id || e.to === id);
       return { docs, skills, tools, publicTools, internalTools, contracts };
     }
-    function coreGroups() {
-      return [
-        {
-          id: "agent-contract",
-          title: "Agent Contract",
-          icon: "agent",
-          color: "#172033",
-          description: "Hard repo contract loaded by every agent: boundaries, invariants, and agent role.",
-          tags: ["core", "source-of-truth", "keep-small"],
-          items: [
-            docItem("AGENTS.md", "repo-specific agent contract", ["core", "policy", "source"]),
-            docItem("CLAUDE.md", "generated/parallel harness pointer", ["generated-surface", "check-drift"]),
-            docItem("README.md", "human entry point", ["overview", "low-procedure"])
-          ]
-        },
-        {
-          id: "routing",
-          title: "Routing",
-          icon: "route",
-          color: "#2563eb",
-          description: "Short maps that route work to the right skill, task state, domain, or validator.",
-          tags: ["routing", "hot-doc", "keep-thin"],
-          items: [
-            docItem("AI_PIPELINE.md", "portable routing map", ["core", "route"]),
-            docItem("docs/ai-pipeline/agent-workflow.md", "agent work-loop reference", ["reference", "move-out-detail"]),
-            docItem("tasks/README.md", "task store route map", ["core-adjacent", "state-route"]),
-            docItem("docs/ai-pipeline/architecture-map.md", "architecture/refactor source report", ["refactor-map", "source"])
-          ]
-        },
-        {
-          id: "harness-facade",
-          title: "Harness Facade",
-          icon: "tool",
-          color: "#b45309",
-          description: "Minimal command surface Core points to; heavy behavior belongs behind the facade.",
-          tags: ["public-api", "facade", "agent-callable"],
-          items: [
-            toolItem("tools/ai.mjs", "main agent CLI facade", ["public-api", "core-entry"]),
-            toolItem("tools/taskboard/cli.mjs", "task/context CLI facade", ["public-api", "core-adjacent"]),
-            docItem("tools/README.md", "tool layout contract", ["source", "facade-map"])
-          ]
-        },
-        {
-          id: "core-guards",
-          title: "Core Guards",
-          icon: "shield",
-          color: "#b91c1c",
-          description: "Cheap mechanical checks that keep Core small and catch stale routes.",
-          tags: ["validator", "guard", "mechanical"],
-          items: [
-            toolItem("tools/context_budget.mjs", "hot docs and skill budget guard", ["validator", "context"]),
-            toolItem("tools/doc_reference_check.mjs", "stale reference guard", ["validator", "docs"]),
-            toolItem("tools/pipeline_validate.mjs", "pipeline validation orchestrator", ["validator", "facade"]),
-            docItem("docs/ai-pipeline/quality-validation.md", "validation source reference", ["source", "move-out-detail"])
-          ]
-        },
-        {
-          id: "generated-surface",
-          title: "Generated Surface",
-          icon: "sync",
-          color: "#16a34a",
-          description: "Harness compatibility outputs; Core should know they exist, but not duplicate their internals.",
-          tags: ["generated", "sync", "export"],
-          items: [
-            toolItem("tools/sync.mjs", "cross-harness sync entry", ["sync", "public-api"]),
-            toolItem("tools/skills_sync.mjs", "generated skill pointers", ["generated", "check-drift"]),
-            toolItem("tools/hooks_sync.mjs", "generated hook config", ["generated", "hooks"]),
-            docItem("tools/bootstrap/TEMPLATE.md", "portable export template", ["export", "source"])
-          ]
-        },
-        {
-          id: "move-out",
-          title: "Move Out Candidates",
-          icon: "remove",
-          color: "#64748b",
-          description: "Anything domain-specific that leaks into Core should move to an owned module or be deleted.",
-          tags: ["move-out", "delete-candidate", "needs-owner"],
-          items: [
-            docItem("docs/ai-pipeline/profiling-reuse.md", "profiling/reuse reference belongs to Profile/Export", ["move-to-profile"]),
-            docItem("docs/ai-pipeline/orchestration-playbook.md", "orchestration method belongs to Task & Orchestration", ["move-to-tasks"]),
-            docItem("docs/ai-pipeline/subagent-protocol.md", "subagent packet contract belongs to Task & Orchestration", ["move-to-tasks"])
-          ]
-        }
-      ];
-    }
-    function genericGroups(id) {
-      const inv = inventory(id);
-      const module = moduleById.get(id);
-      return [
-        {
-          id: "source-docs",
-          title: "Source Docs",
-          icon: "doc",
-          color: module.color,
-          description: "Markdown sources currently classified under this module.",
-          tags: ["source", "docs"],
-          items: inv.docs.map((d) => docItem(d.path, "module source", ["source", d.kind]))
-        },
-        {
-          id: "skills",
-          title: "Skills",
-          icon: "agent",
-          color: "#0f766e",
-          description: "Repeatable agent procedures owned by this module.",
-          tags: ["skill", "procedure"],
-          items: inv.skills.map((d) => docItem(d.path, "agent procedure", ["skill", "procedure"]))
-        },
-        {
-          id: "public-tools",
-          title: "Public Tools",
-          icon: "tool",
-          color: "#b45309",
-          description: "Agent-callable command surface for this module.",
-          tags: ["public-api", "tool"],
-          items: inv.publicTools.map((t) => toolItem(t.path, "public tool", ["public-api", t.type]))
-        },
-        {
-          id: "internal-helpers",
-          title: "Internal Helpers",
-          icon: "group",
-          color: "#64748b",
-          description: "Support files that should stay behind the module public surface.",
-          tags: ["internal", "support"],
-          items: inv.internalTools.map((t) => toolItem(t.path, "internal support", ["internal", t.type]))
-        },
-        {
-          id: "contracts",
-          title: "Contracts",
-          icon: "shield",
-          color: "#b91c1c",
-          description: "Explicit module-level links that refactoring should preserve or change deliberately.",
-          tags: ["contract", "boundary"],
-          items: inv.contracts.map(contractItem)
-        }
-      ].filter((g) => g.items.length);
-    }
     function refactorGroups(id) {
-      return id === "hot" ? coreGroups() : genericGroups(id);
+      return refactorGroupData[id] || [];
     }
     function firstGroupId(id) {
       const groups = refactorGroups(id);
@@ -3089,21 +3072,11 @@ function renderRefactorHtml(data) {
         '</section>';
       }).join("") + '</div>';
     }
-    const domainModuleIds = {
-      core: ["hot"],
-      agents: [],
-      skills: ["skills"],
-      tools: ["facade"],
-      tasks: ["tasks"],
-      assets: ["assets", "art"],
-      design: ["design"],
-      tech: ["runtime", "engine"],
-      validation: ["validation"],
-      export: ["export"],
-      migration: ["profile"]
-    };
     function selectExplorerModule(moduleId, groupId) {
-      explorerSelected = groupId ? "group:" + moduleId + ":" + groupId : "module:" + moduleId;
+      const root = buildExplorerRoot();
+      const wanted = groupId ? "group:" + moduleId + ":" + groupId : "module:" + moduleId;
+      const fallback = "module:" + moduleId;
+      explorerSelected = findExplorerNode(root, wanted) ? wanted : fallback;
       explorerView = explorerSelected;
       explorerHistory.length = 0;
     }
@@ -3140,174 +3113,11 @@ function renderRefactorHtml(data) {
       moduleFilter.value = "";
       openExplorerNode("module:" + moduleId, false);
     }
-    function sourceHref(value) {
-      if (!value || value.includes("*") || value.includes(" ") || value.includes("skills")) return "";
-      const clean = value.endsWith("/") ? value.slice(0, -1) : value;
-      return "../../" + clean;
-    }
-    function makeExplorerNode(args) {
-      return Object.assign({
-        id: "",
-        title: "",
-        subtitle: "",
-        kind: "node",
-        color: "#64748b",
-        description: "",
-        href: "",
-        tags: [],
-        children: []
-      }, args);
-    }
-    function itemExplorerNode(moduleId, group, item, index) {
-      return makeExplorerNode({
-        id: "item:" + moduleId + ":" + group.id + ":" + index,
-        title: itemTitle(item),
-        subtitle: item.path || item.title || "",
-        kind: item.kind,
-        color: group.color,
-        description: item.description,
-        href: item.href,
-        tags: item.tags || [],
-        moduleId,
-        groupId: group.id,
-        item
-      });
-    }
-    function coreHarnessChildren() {
-      return refactorGroups("hot").flatMap((group) => group.items.map((item, index) => {
-        const sourceTag = "source:" + group.title;
-        return makeExplorerNode({
-          id: "core-item:" + group.id + ":" + index,
-          title: itemTitle(item),
-          subtitle: item.path || item.title || group.title,
-          kind: item.kind,
-          color: group.color,
-          description: item.description,
-          href: item.href,
-          tags: Array.from(new Set([sourceTag].concat(item.tags || []))),
-          moduleId: "hot",
-          groupId: group.id,
-          item
-        });
-      }));
-    }
-    function groupExplorerNode(moduleId, group) {
-      return makeExplorerNode({
-        id: "group:" + moduleId + ":" + group.id,
-        title: group.title,
-        subtitle: group.items.length + " items",
-        kind: "section",
-        color: group.color,
-        description: group.description,
-        tags: group.tags,
-        moduleId,
-        groupId: group.id,
-        children: group.items.map((item, index) => itemExplorerNode(moduleId, group, item, index))
-      });
-    }
-    function moduleExplorerNode(moduleId) {
-      const module = moduleById.get(moduleId);
-      if (!module) return null;
-      const children = moduleId === "hot"
-        ? coreHarnessChildren()
-        : refactorGroups(moduleId).map((group) => groupExplorerNode(moduleId, group));
-      return makeExplorerNode({
-        id: "module:" + moduleId,
-        title: module.title,
-        subtitle: module.kind,
-        kind: "module",
-        color: module.color,
-        description: module.description,
-        moduleId,
-        children
-      });
-    }
-    function folderNode(id, title, color, description, children) {
-      return makeExplorerNode({ id, title, kind: "folder", color, description, children });
-    }
-    function domainExplorerNode(domain) {
-      const modulesForDomain = (domainModuleIds[domain.id] || []).map(moduleExplorerNode).filter(Boolean);
-      const targetChildren = domain.target.map((target, index) => makeExplorerNode({
-        id: "target:" + domain.id + ":" + index,
-        title: target.split("/").slice(-2).join("/"),
-        subtitle: target,
-        kind: "target",
-        color: domain.color,
-        description: "Clean home for reviewed and refactored parts of this domain.",
-        href: "../../" + target,
-        tags: ["reviewed-only", "domain-contract"]
-      }));
-      const currentChildren = domain.current.map((source, index) => makeExplorerNode({
-        id: "current:" + domain.id + ":" + index,
-        title: source,
-        subtitle: "current source before migration",
-        kind: "current",
-        color: domain.color,
-        description: "Existing location. Move only after review, cleanup, owner assignment, and compatibility plan.",
-        href: sourceHref(source),
-        tags: ["current", "not-migrated"]
-      }));
-      return makeExplorerNode({
-        id: "domain:" + domain.id,
-        title: domain.title,
-        subtitle: "ai_studio/" + domain.id,
-        kind: "domain",
-        color: domain.color,
-        description: domain.description,
-        tags: ["gradual-move"],
-        children: [
-          folderNode("target-folder:" + domain.id, "Target files", domain.color, "Reviewed files that already belong in ai_studio.", targetChildren),
-          folderNode("modules:" + domain.id, "Mapped modules", domain.color, "Current architecture modules that map to this target domain.", modulesForDomain),
-          folderNode("current-folder:" + domain.id, "Current sources", domain.color, "Existing scattered locations before migration.", currentChildren)
-        ]
-      });
-    }
-    function notRefactoredExplorerNode() {
-      const domains = studioDomains
-        .filter((domain) => domain.id !== "core")
-        .map((domain) => domainExplorerNode(Object.assign({}, domain, {
-          description: domain.description + " Current state is preserved here until this domain is reviewed and moved into the clean ai_studio tree."
-        })));
-      const moduleBacklog = modules
-        .filter((module) => module.id !== "hot")
-        .map((module) => moduleExplorerNode(module.id))
-        .filter(Boolean);
-      return makeExplorerNode({
-        id: "not-refactored",
-        title: "Not Refactored",
-        subtitle: "current scattered pipeline",
-        kind: "backlog",
-        color: "#64748b",
-        description: "Everything that exists today but has not yet been reviewed, cleaned, assigned an owner, and moved into the main ai_studio tree.",
-        tags: ["current-state", "do-not-lose", "move-gradually"],
-        children: [
-          makeExplorerNode({
-            id: "not-refactored:full-inventory",
-            title: "Full Current Inventory",
-            subtitle: "architecture-map-full.html",
-            kind: "doc",
-            color: "#64748b",
-            description: "Complete generated map of all current markdown sources, tools, and inferred connections.",
-            href: "architecture-map-full.html",
-            tags: ["reference", "all-current"]
-          }),
-          folderNode("not-refactored:domains", "Current Domains", "#64748b", "Current unrefactored domains grouped by intended future ownership.", domains),
-          folderNode("not-refactored:modules", "Current Module Backlog", "#64748b", "Raw current modules that still need review before promotion into the main ai_studio tree.", moduleBacklog)
-        ]
-      });
+    function cloneStudioTree() {
+      return JSON.parse(JSON.stringify(studioTreeSource));
     }
     function buildExplorerRoot() {
-      const core = moduleExplorerNode("hot");
-      return makeExplorerNode({
-        id: "studio",
-        title: "ai_studio/",
-        subtitle: "main refactor tree",
-        kind: "root",
-        color: "#172033",
-        description: "Clean refactor tree. Start with Core Harness only; promote modules from Not Refactored after review, cleanup, owner assignment, and compatibility checks.",
-        tags: ["reviewed-only", "no-bulk-move", "core-first"],
-        children: [core, notRefactoredExplorerNode()].filter(Boolean)
-      });
+      return cloneStudioTree();
     }
     function findExplorerNode(node, id) {
       if (!node) return null;
@@ -4132,6 +3942,8 @@ function renderRefactorHtml(data) {
 const markdownDocs = collectMarkdownSources();
 const tools = collectTools();
 const data = buildGraph(markdownDocs, tools);
+data.refactorGroups = buildRefactorGroups(data);
+data.studioTree = buildStudioTree(data);
 fs.mkdirSync(path.dirname(repoPath(refactorOutPath)), { recursive: true });
 fs.writeFileSync(repoPath(fullOutPath), renderFullHtml(data), "utf8");
 fs.writeFileSync(repoPath(refactorOutPath), renderRefactorHtml(data), "utf8");
