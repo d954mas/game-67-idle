@@ -138,9 +138,9 @@ For beautiful/casual/generated-UI/fake-shot/child-testable work, use
 at least 4/5 and no blocker/major visual issue. Strict UI passes should also
 include live-state coverage.
 
-When a separate design/UI critic pass would help, first generate a reusable
-critic packet with `node tools/ai.mjs critic`; convert its findings into the
-strict product gate.
+When a separate critic pass would help, run the vision art-lead critic with
+`node tools/ai.mjs critique` (emit a prompt, or run a vision model); feed its
+`game.visual_critique` into the strict product gate (`gate ... --critique`).
 
 ## Reusable UI Gate
 
@@ -179,10 +179,11 @@ For full UI-kit production, use `.codex/skills/generated-game-ui-assets/`.
   state colors, and decorations occupying text/content safe areas.
 - Before slicing, run `normalize_source_sheet_chroma.py` when needed, then
   `audit_source_sheet_intake.py`.
-- Require composition proof, source-derivation audit, and product gate before
-  calling runtime generated UI done.
+- Require a runtime screenshot/product gate before calling runtime generated
+  UI done.
 - `node tools/assets/job/validate_art_job.mjs --job <job> --final-art` must
-  pass before claiming final generated/artist UI art.
+  pass before claiming final generated/artist UI art (it validates generation
+  provenance + runtime-ready coverage).
 
 ## Generated Asset Rules
 

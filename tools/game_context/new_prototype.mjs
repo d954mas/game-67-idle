@@ -4,6 +4,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createEpic, createTask, findRoot } from "../taskboard/lib.mjs";
+import { fail } from "../lib/cli.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 
@@ -32,11 +33,6 @@ function parseArgs(args) {
     }
   }
   return values;
-}
-
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
 }
 
 function validateGameId(value) {
@@ -136,8 +132,8 @@ ${brief}
 - Define the smallest playable loop in \`gdd.md\`.
 - Fill \`reviews/first_slice_visual_gate.md\` before broad runtime work.
 - Fill \`visual/live_state_acceptance_matrix.md\` before any broad UI/visual pass.
-- For visually important slices, create the critic packet named in that gate
-  before writing the strict product gate verdict.
+- For visually important slices, run the optional vision art-lead critic
+  (\`node tools/ai.mjs critique\`) before writing the strict product gate verdict.
 - Capture visual/product proof in \`reviews/\` before expanding content.
 - Product-read gates must use \`visual/live_state_acceptance_matrix.json\`
   with explicit covered or not-covered states.
@@ -182,8 +178,8 @@ Casual players. Progression should be clear; controls and moment-to-moment play 
   meaningful render changes.
 - If the slice depends on beauty, casual readability, generated UI, or a fake
   shot match, one strict visual product gate using \`--visual-strict\`.
-- Optional critic packet from \`tools/product_gate/visual_critique_packet.mjs\`
-  before the strict gate verdict.
+- Optional vision art-lead critic (\`node tools/ai.mjs critique\`) over the state
+  screenshots before the strict gate verdict.
 
 ## Art Direction Stub
 
@@ -382,15 +378,14 @@ not a notes dump.
   - [ ] Visual style/appeal:
   - [ ] Performance or capture blocker:
 
-## Visual Critic Packet
+## Visual Critic (vision art-lead)
 
-- Packet command:
+- Critic command (emit the prompt, or run a vision model with \`--model-cmd\`):
   \`\`\`powershell
-  node tools/ai.mjs critic --project ${gameId} --task <task-id> --surface desktop --screenshot <native-screenshot.png> --target <fake-shot-or-target-path> --brief "<casual audience, core action, target style>" --output gamedesign/projects/${gameId}/reviews/first_slice_visual_critic_packet.md --json-output gamedesign/projects/${gameId}/reviews/first_slice_visual_critic_packet.json
+  node tools/ai.mjs critique --project ${gameId} --shot first_slice:<native-screenshot.png> [--model-cmd "<vision-model-cmd>"]
   \`\`\`
-- Packet Markdown path: \`gamedesign/projects/${gameId}/reviews/first_slice_visual_critic_packet.md\`
-- Packet JSON path: \`gamedesign/projects/${gameId}/reviews/first_slice_visual_critic_packet.json\`
-- Use this packet for a self-review or separate critic pass before writing the strict product gate verdict.
+- Emit mode writes \`critic_instruction.md\`; run mode writes a \`game.visual_critique\` JSON.
+- Feed the critique into the strict gate (\`node tools/ai.mjs gate ... --critique <game.visual_critique.json>\`) before the verdict.
 
 ## Live-State Matrix
 
@@ -479,7 +474,7 @@ node tools/ai.mjs validate
 - \`tmp/prototype_startup_gate_context.json\` after kickoff.
 - \`gamedesign/projects/${gameId}/reviews/first_slice_visual_gate.md\` is the
   first-slice visual/product gate template and must be filled before broad
-  runtime work; it names the optional visual critic packet command.
+  runtime work; it names the optional vision art-lead critic command.
 - \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json\`
   is the machine-readable state coverage matrix for product gates.
 
@@ -493,7 +488,7 @@ node tools/ai.mjs validate
    reset-meta loops unless the lead explicitly chooses that direction.
 3. Fill \`gamedesign/projects/${gameId}/reviews/first_slice_visual_gate.md\`
    with the target, native screenshot/capture plan, mismatch list, gate command,
-   critic packet command, strict visual rubric, state matrix coverage, and
+   vision critic command, strict visual rubric, state matrix coverage, and
    expansion decision.
 4. Review \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.md\`
    and mark any state outside the first slice as explicit not-covered debt in

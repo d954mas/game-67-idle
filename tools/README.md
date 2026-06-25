@@ -28,7 +28,7 @@ Copied by `tools/bootstrap/export_base.mjs`:
 - reusable asset helpers: `tools/assets/`;
 - export helpers: `tools/bootstrap/`.
 
-Product gates route through `node tools/ai.mjs gate`, `critic`, `close-slice`.
+Product gates route through `node tools/ai.mjs gate`, `critique`, `close-slice`.
 Policy: `docs/ai-pipeline/quality-validation.md` and game/visual skills.
 
 ## Runtime Infrastructure

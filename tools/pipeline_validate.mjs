@@ -3,10 +3,12 @@
 //
 //   node tools/pipeline_validate.mjs [--quick] [--full] [--review] [--dry-run]
 
-import { existsSync, readFileSync, rmSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { VALIDATE_EXPORT_PREFIX, listValidateExports, partitionByKeep } from "./lib/tmp_exports.mjs";
+import { VALIDATE_BOOLEAN_FLAGS, VALIDATE_VALUE_FLAGS } from "./lib/validate_flags.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -23,7 +25,7 @@ function hasActiveConcept() {
 }
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-const exportDir = join(root, "tmp", `pipeline-validate-${stamp}`);
+const exportDir = join(root, "tmp", `${VALIDATE_EXPORT_PREFIX}${stamp}`);
 const args = process.argv.slice(2);
 
 function usage() {
@@ -57,19 +59,19 @@ Environment:
 }
 
 // Pull out the optional --keep-exports <n> value before the unknown-arg check.
+// The value-flag set is shared with the ai.mjs facade via lib/validate_flags.
 let keepExports = 3;
-{
-  const idx = args.indexOf("--keep-exports");
-  if (idx !== -1) {
-    const value = Number.parseInt(args[idx + 1], 10);
-    if (!Number.isInteger(value) || value < 0) usage();
-    keepExports = value;
-    args.splice(idx, 2);
-  }
+for (const flag of VALIDATE_VALUE_FLAGS) {
+  const idx = args.indexOf(flag);
+  if (idx === -1) continue;
+  const value = Number.parseInt(args[idx + 1], 10);
+  if (!Number.isInteger(value) || value < 0) usage();
+  keepExports = value;
+  args.splice(idx, 2);
 }
 const prune = !args.includes("--no-prune");
 
-const allowedArgs = new Set(["--quick", "--full", "--review", "--dry-run", "--reexport-tests", "--no-prune", "--with-assets", "--help", "-h"]);
+const allowedArgs = new Set([...VALIDATE_BOOLEAN_FLAGS, "--help", "-h"]);
 for (const arg of args) {
   if (!allowedArgs.has(arg)) usage();
 }
@@ -85,14 +87,9 @@ const runAssets = args.includes("--with-assets") || fullMode || activeConcept;
 
 const GENERATED_ART_JOB_NODE_TESTS = [
   "tools/assets/job/plan_source_sheet_prompt.test.mjs",
-  "tools/assets/job/plan_missing_source_family_prompts.test.mjs",
   "tools/assets/job/new_generation_record.test.mjs",
   "tools/assets/job/validate_art_job.test.mjs",
-  "tools/assets/job/audit_slice9_design_policy.test.mjs",
-  "tools/assets/job/audit_atlas_metadata.test.mjs",
-  "tools/assets/job/audit_runtime_ui_asset_usage.test.mjs",
   "tools/assets/job/audit_project_asset_boundaries.test.mjs",
-  "tools/assets/job/audit_source_family_coverage.test.mjs",
 ];
 
 const SOURCE_SHEET_PREPROCESSING_TESTS = [
@@ -108,15 +105,11 @@ const SOURCE_SHEET_PREPROCESSING_TESTS = [
 ];
 
 const GENERATED_UI_ASSET_AUDIT_TESTS = [
-  "tools.assets.audit.render_ui_composition_proof_test",
+  "tools.assets.pack.atlas_review_labels_test",
   "tools.assets.pack.build_ui_atlas_pack_test",
   "tools.assets.pack.audit_ui_atlas_pack_test",
   "tools.assets.crop.plan_runtime_crops_from_intake_test",
   "tools.assets.assemble.build_runtime_assets_from_crop_plan_test",
-];
-
-const GENERATED_SOURCE_DERIVATION_TESTS = [
-  "tools.assets.audit.audit_generated_source_derivation_test",
 ];
 
 function run(label, args, opts = {}) {
@@ -274,28 +267,12 @@ function fullPythonRequiredModules() {
 
 // Full mode copies the repo into tmp/pipeline-validate-<stamp>/. Left unchecked
 // these accumulate (observed: 126 dirs / 362MB). Prune to the newest N.
+// Listing + retention contract is shared with tmp_sweep via lib/tmp_exports.
 function pruneOldExports(keep) {
   const tmpDir = join(root, "tmp");
-  if (!existsSync(tmpDir)) return;
-  let dirs = [];
-  try {
-    dirs = readdirSync(tmpDir)
-      .filter((name) => name.startsWith("pipeline-validate-"))
-      .map((name) => join(tmpDir, name))
-      .filter((path) => {
-        try {
-          return statSync(path).isDirectory();
-        } catch {
-          return false;
-        }
-      })
-      .sort(); // names are ISO timestamps, so lexical sort == chronological
-  } catch {
-    return;
-  }
-  const stale = dirs.slice(0, Math.max(0, dirs.length - keep));
-  for (const dir of stale) {
-    rmSync(dir, { recursive: true, force: true });
+  const { stale } = partitionByKeep(listValidateExports(tmpDir), keep);
+  for (const name of stale) {
+    rmSync(join(tmpDir, name), { recursive: true, force: true });
   }
   if (stale.length > 0) {
     console.log(`pruned ${stale.length} old tmp/pipeline-validate-* dir(s); kept newest ${keep}`);
@@ -319,13 +296,29 @@ if (fullMode && existsSync(exportDir)) {
 run("taskboard summary", ["tools/taskboard/cli.mjs", "summary"]);
 run("ai facade syntax", ["--check", "tools/ai.mjs"]);
 run("ai facade tests", ["--test", "tools/ai.test.mjs"]);
-run("skill presence check", ["tools/skills_eval.mjs"]);
-run("skills sync check", ["tools/skills_sync.mjs", "--check"]);
+run("config sync check", ["tools/sync.mjs", "--check"]);
 run("skills sync tests", ["--test", "tools/skills_sync.test.mjs"]);
+run("hooks sync tests", ["--test", "tools/hooks_sync.test.mjs"]);
+run("asset catalog lib tests", ["--test", "tools/lib/asset_catalog.test.mjs"]);
+run("cli lib tests", ["--test", "tools/lib/cli.test.mjs"]);
+run("json lib tests", ["--test", "tools/lib/json.test.mjs"]);
+run("licenses lib tests", ["--test", "tools/lib/licenses.test.mjs"]);
+run("paths lib tests", ["--test", "tools/lib/paths.test.mjs"]);
+run("mime lib tests", ["--test", "tools/lib/mime.test.mjs"]);
+run("tmp_exports lib tests", ["--test", "tools/lib/tmp_exports.test.mjs"]);
+run("validate_flags lib tests", ["--test", "tools/lib/validate_flags.test.mjs"]);
+run("visual axes lib tests", ["--test", "tools/product_gate/lib/visual_axes.test.mjs"]);
+run("art contract lib tests", ["--test", "tools/product_gate/lib/art_contract.test.mjs"]);
+// Prose-auditors are advisory: skills_eval is a presence-lint (its own header
+// says it is not a quality eval) and doc_reference_check is link-rot — neither
+// judges output, so they must not block a code/doc edit. Run them under --review
+// (like context budgets). The real generated-pointer drift check (config sync
+// check, above) stays blocking. [REFACTOR_PLAN Phase 1 #1]
 if (reviewMode) {
+  run("skill presence check", ["tools/skills_eval.mjs"]);
+  run("doc reference check", ["tools/doc_reference_check.mjs"]);
   run("context budget review", ["tools/context_budget.mjs", "--review"]);
 }
-run("doc reference check", ["tools/doc_reference_check.mjs"]);
 run("pipeline validation tests", ["--test", "tools/pipeline_validate.test.mjs"]);
 run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
 run("doc reference tests", ["--test", "tools/doc_reference_check.test.mjs"]);
@@ -394,13 +387,13 @@ if (existsSync(join(root, "tools", "assets", "job", "new_generation_record.test.
 if (existsSync(join(root, "tools", "assets", "intake", "normalize_source_sheet_chroma_test.py"))) {
   runPythonUnittests("source sheet preprocessing tests", python, SOURCE_SHEET_PREPROCESSING_TESTS);
 }
-if (existsSync(join(root, "tools", "assets", "audit", "render_ui_composition_proof_test.py"))) {
+if (existsSync(join(root, "tools", "assets", "pack", "build_ui_atlas_pack_test.py"))) {
   python ||= findPythonRunner();
   runPythonUnittests("generated UI asset audit tests", python, GENERATED_UI_ASSET_AUDIT_TESTS);
 }
-if (existsSync(join(root, "tools", "assets", "audit", "audit_generated_source_derivation_test.py"))) {
+if (existsSync(join(root, "tools", "devapi", "png_io_test.py"))) {
   python ||= findPythonRunner();
-  runPythonUnittests("generated source derivation audit tests", python, GENERATED_SOURCE_DERIVATION_TESTS);
+  runPythonUnittests("devapi png_io tests", python, ["tools.devapi.png_io_test"]);
 }
 
 // Runtime seed checks. Skipped automatically in workflow-only exports, which
@@ -449,15 +442,9 @@ if (existsSync(join(exportDir, "tools", "assets", "intake", "normalize_source_sh
     cwd: exportDir,
   });
 }
-if (existsSync(join(exportDir, "tools", "assets", "audit", "render_ui_composition_proof_test.py"))) {
+if (existsSync(join(exportDir, "tools", "assets", "pack", "build_ui_atlas_pack_test.py"))) {
   python ||= findPythonRunner();
   runPythonUnittests("exported generated UI asset audit tests", python, GENERATED_UI_ASSET_AUDIT_TESTS, {
-    cwd: exportDir,
-  });
-}
-if (existsSync(join(exportDir, "tools", "assets", "audit", "audit_generated_source_derivation_test.py"))) {
-  python ||= findPythonRunner();
-  runPythonUnittests("exported generated source derivation audit tests", python, GENERATED_SOURCE_DERIVATION_TESTS, {
     cwd: exportDir,
   });
 }

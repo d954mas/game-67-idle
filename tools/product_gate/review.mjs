@@ -2,6 +2,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { fail } from "../lib/cli.mjs";
+import { relCwdPosix } from "../lib/paths.mjs";
+import { VISUAL_AXES, isAxisScore } from "./lib/visual_axes.mjs";
+import { loadArtContract } from "./lib/art_contract.mjs";
 
 function usage() {
   console.error(`usage:
@@ -82,11 +86,6 @@ function parseArgs(argv) {
   return values;
 }
 
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
-}
-
 function sanitizeToken(value) {
   return String(value || "")
     .toLowerCase()
@@ -112,14 +111,6 @@ function hasUsefulAnswer(value) {
   return String(value || "").trim().length >= 8;
 }
 
-const VISUAL_AXES = [
-  "composition",
-  "readability",
-  "ui_controls",
-  "action_direction",
-  "art_quality",
-  "audience_fit",
-];
 const VISUAL_SEVERITIES = new Set(["blocker", "major", "minor"]);
 const VISUAL_PASS_THRESHOLD = 4;
 
@@ -239,19 +230,6 @@ function defaultContractPath(project) {
   return `gamedesign/projects/${sanitizeToken(project)}/art/art_contract.json`;
 }
 
-function loadContract(contractPath, { required }) {
-  const fullPath = resolve(contractPath);
-  if (!existsSync(fullPath)) {
-    if (required) fail(`art contract does not exist: ${contractPath}`);
-    return null;
-  }
-  try {
-    return JSON.parse(readFileSync(fullPath, "utf8"));
-  } catch (error) {
-    fail(`art contract is not valid JSON: ${contractPath}: ${error.message}`);
-  }
-}
-
 // The art contract is the per-game taste anchor (the machine form of the visual
 // Style Brief Checklist plus reference banks). The gate reads only structural
 // knobs from it (pass_threshold) and records its path for traceability; the
@@ -260,9 +238,9 @@ function mergeContract(values) {
   const explicit = Boolean(values.contract);
   const contractPath = values.contract || (values.project ? defaultContractPath(values.project) : null);
   if (!contractPath) return values;
-  const contract = loadContract(contractPath, { required: explicit });
+  const contract = loadArtContract(contractPath, { required: explicit, onError: fail });
   if (!contract) return values;
-  const out = { ...values, contract: relPath(contractPath), contractData: contract };
+  const out = { ...values, contract: relCwdPosix(contractPath), contractData: contract };
   const threshold = Number(contract.pass_threshold);
   if (Number.isInteger(threshold) && threshold >= 1 && threshold <= 5) out.passThreshold = threshold;
   return out;
@@ -294,7 +272,7 @@ function mergeCritique(values) {
   const critiquePath = values.critique;
   if (!critiquePath) return values;
   const critique = loadCritique(critiquePath);
-  const out = { ...values, critiqueSource: relPath(critiquePath), visualStrict: true };
+  const out = { ...values, critiqueSource: relCwdPosix(critiquePath), visualStrict: true };
   if (!out.verdict && typeof critique.verdict === "string") out.verdict = critique.verdict.trim();
 
   const seenAxes = new Set((values.visualScores || []).map((entry) => String(entry).split("=")[0].trim()));
@@ -335,7 +313,7 @@ function parseVisualScores(rawScores) {
       errors.push(`unknown visual score axis: ${axis || "(missing)"}`);
       continue;
     }
-    if (!Number.isInteger(score) || score < 1 || score > 5) {
+    if (!isAxisScore(score)) {
       errors.push(`visual score for ${axis} must be an integer 1-5`);
       continue;
     }
@@ -360,10 +338,6 @@ function parseVisualIssues(rawIssues) {
     }
   }
   return { issues, errors };
-}
-
-function relPath(path) {
-  return resolve(path).startsWith(process.cwd()) ? resolve(path).slice(process.cwd().length + 1).replaceAll("\\", "/") : path;
 }
 
 function validate(values) {
@@ -548,7 +522,7 @@ const record = {
   surface,
   verdict: values.verdict,
   timestamp: new Date().toISOString(),
-  screenshot: relPath(values.screenshot),
+  screenshot: relCwdPosix(values.screenshot),
   answers: {
     where: values.where || "",
     action: values.action || "",

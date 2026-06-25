@@ -4,8 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-
-const DEFAULT_LIBRARY = "C:\\Users\\ROG\\YandexDisk\\gamedev\\assets\\ai_pipeline_assets";
+import { DEFAULT_LIBRARY } from "../source/find_assets.mjs";
 
 function usage() {
   return `usage: node tools/assets/intake/download_source_asset.mjs --url <url-or-path> --source <source> --slug <asset-slug> [options]

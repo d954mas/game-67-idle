@@ -16,8 +16,9 @@ import { execFileSync } from "node:child_process";
 import { readFile, readdir, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, dirname, basename, extname, relative } from "node:path";
-import { pathToFileURL, fileURLToPath } from "node:url";
+import { fileURLToPath } from "node:url";
 import { scanLibrary, scanPacks, DEFAULT_LIBRARY, ORIGINS, KIND_DIR } from "../assets/source/find_assets.mjs";
+import { isMain } from "../lib/cli.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -300,7 +301,7 @@ async function main() {
   console.log(JSON.stringify({ mode: a.mode, assets: cards.length, html: indexPath, manifest: pickable ? join(outDir, "review-manifest.json") : null }, null, 2));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (isMain(import.meta.url)) {
   main().catch((e) => { console.error(e.message); process.exit(1); });
 }
 

@@ -7,11 +7,9 @@ import json
 import os
 import shutil
 import socket
-import struct
 import subprocess
 import sys
 import time
-import zlib
 import atexit
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -183,10 +181,13 @@ class DevApiClient:
 
     def audit_screenshot(self, path: str) -> Any:
         from pixel_health import PixelHealthError, assert_pixel_health
+        from png_io import PngError
 
         try:
             return assert_pixel_health(path)
-        except PixelHealthError as exc:
+        except (PixelHealthError, PngError) as exc:
+            # PngError = the screenshot did not decode (codec moved to png_io);
+            # surface it as a DevApiError like every other audit failure.
             raise DevApiError(str(exc)) from exc
 
     def capture_framebuffer(self, output: str = "build/captures/screenshot.png") -> str:
@@ -329,31 +330,6 @@ def print_launch_log_tail(path: str | None, lines: int = 160) -> None:
     print(format_launch_log_tail(path, lines=lines), file=sys.stderr)
 
 
-def _png_chunk(kind: bytes, payload: bytes) -> bytes:
-    return (
-        struct.pack(">I", len(payload))
-        + kind
-        + payload
-        + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
-    )
-
-
-def write_png_rgb(path: str, width: int, height: int, rgb: bytes) -> None:
-    stride = width * 3
-    rows = []
-    for y in range(height):
-        rows.append(b"\x00" + rgb[y * stride : (y + 1) * stride])
-    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
-    data = b"".join([
-        b"\x89PNG\r\n\x1a\n",
-        _png_chunk(b"IHDR", ihdr),
-        _png_chunk(b"IDAT", zlib.compress(b"".join(rows), 6)),
-        _png_chunk(b"IEND", b""),
-    ])
-    with open(path, "wb") as handle:
-        handle.write(data)
-
-
 def _ppm_token(data: bytes, offset: int) -> tuple[bytes, int]:
     n = len(data)
     while offset < n and data[offset] in b" \t\r\n":
@@ -369,6 +345,8 @@ def _ppm_token(data: bytes, offset: int) -> tuple[bytes, int]:
 
 
 def convert_ppm_to_png(ppm_path: str, png_path: str) -> None:
+    from png_io import write_png_rgb
+
     with open(ppm_path, "rb") as handle:
         data = handle.read()
     magic, offset = _ppm_token(data, 0)

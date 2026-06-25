@@ -6,9 +6,11 @@
 //
 // Use --dry-run to preview without writing files.
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { fail } from "../../lib/cli.mjs";
+import { writeJsonFile } from "../../lib/json.mjs";
 
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
@@ -39,29 +41,12 @@ function parseArgs(argv) {
   return out;
 }
 
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
-}
-
 function usage() {
   console.log("usage: node tools/assets/job/new_art_job.mjs --id <job-id> --family <asset family> [--concept meme-evolution] [--project-dir gamedesign/projects/meme-evolution] [--target path] [--audience text] [--dry-run]");
 }
 
 function writeJson(path, data, dryRun) {
-  const fullPath = join(root, path);
-  if (existsSync(fullPath)) {
-    fail(`refusing to overwrite existing file: ${path}`);
-  }
-  const text = `${JSON.stringify(data, null, 2)}\n`;
-  if (dryRun) {
-    console.log(`would write ${path}`);
-    console.log(text);
-    return;
-  }
-  mkdirSync(dirname(fullPath), { recursive: true });
-  writeFileSync(fullPath, text, "utf8");
-  console.log(`wrote ${path}`);
+  return writeJsonFile(path, data, { root, onError: fail, dryRun });
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -84,10 +69,6 @@ const artRequestPath = `${projectDir}/art_requests/${args.id}.json`;
 const cropManifestPath = `${projectDir}/data/${args.id}-crop_manifest.json`;
 const runtimeManifestPath = `${projectDir}/data/${args.id}-asset_manifest.json`;
 const runtimeDir = `assets/runtime/${args.id}`;
-const slice9DesignAuditMarkdownPath = `${projectDir}/reviews/${args.id}-slice9_design_policy_audit.md`;
-const slice9DesignAuditJsonPath = `${projectDir}/reviews/${args.id}-slice9_design_policy_audit.json`;
-const sourceFamilyCoverageMarkdownPath = `${projectDir}/reviews/${args.id}-source_family_coverage_audit.md`;
-const sourceFamilyCoverageJsonPath = `${projectDir}/reviews/${args.id}-source_family_coverage_audit.json`;
 
 const artJob = {
   schema: "game.art_job",
@@ -201,8 +182,6 @@ const artJob = {
     crop_manifest: cropManifestPath,
     runtime_manifest: runtimeManifestPath,
     runtime_dir: runtimeDir,
-    slice9_design_audit: [slice9DesignAuditMarkdownPath, slice9DesignAuditJsonPath],
-    source_family_coverage_audit: [sourceFamilyCoverageMarkdownPath, sourceFamilyCoverageJsonPath],
     native_evidence: []
   },
   runtime_composition: {
@@ -228,9 +207,6 @@ const artJob = {
     validate_draft: `node tools/assets/job/validate_art_job.mjs --job ${artRequestPath}`,
     validate_strict: `node tools/assets/job/validate_art_job.mjs --job ${artRequestPath} --strict`,
     validate_final_art: `node tools/assets/job/validate_art_job.mjs --job ${artRequestPath} --final-art`,
-    slice9_design_audit: `node tools/assets/job/audit_slice9_design_policy.mjs --crop-manifest ${cropManifestPath} --runtime-manifest ${runtimeManifestPath} --json-output ${slice9DesignAuditJsonPath} --report ${slice9DesignAuditMarkdownPath}`,
-    source_family_coverage_audit: `node tools/assets/job/audit_source_family_coverage.mjs --job ${artRequestPath} --json-output ${sourceFamilyCoverageJsonPath} --report ${sourceFamilyCoverageMarkdownPath}`,
-    plan_missing_source_family_prompts: `node tools/assets/job/plan_missing_source_family_prompts.mjs --job ${artRequestPath} --coverage-audit ${sourceFamilyCoverageJsonPath} --output-dir ${projectDir}/art/prompts --key-color "#00ff00" --force`,
     build_pack: "fill after pack builder is wired",
     native_evidence: "fill with DevAPI scenario command"
   }
@@ -256,7 +232,6 @@ const assetManifest = {
   runtime_dir: runtimeDir,
   commands: {
     slice_assets: "",
-    slice9_design_audit: `node tools/assets/job/audit_slice9_design_policy.mjs --crop-manifest ${cropManifestPath} --runtime-manifest ${runtimeManifestPath} --json-output ${slice9DesignAuditJsonPath} --report ${slice9DesignAuditMarkdownPath}`,
     build_pack: "",
     native_evidence: ""
   },

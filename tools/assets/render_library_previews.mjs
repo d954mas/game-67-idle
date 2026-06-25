@@ -14,10 +14,9 @@ import { existsSync, readdirSync, mkdirSync, writeFileSync, copyFileSync, rmSync
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { scanLibrary } from "./source/find_assets.mjs";
+import { scanLibrary, DEFAULT_LIBRARY } from "./source/find_assets.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DEFAULT_LIBRARY = "C:\\Users\\ROG\\YandexDisk\\gamedev\\assets\\ai_pipeline_assets";
 const BLENDERS = [
   "C:\\Program Files\\Blender Foundation\\Blender 4.3\\blender.exe",
   "C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe",

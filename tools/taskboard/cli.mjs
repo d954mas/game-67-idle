@@ -19,7 +19,7 @@
 
 import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
-  updateDoc, validateStore, validateStoreDetailed, TASK_STATUSES,
+  updateDoc, validateStoreDetailed, TASK_STATUSES,
   LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
   subagentPacketTemplate, subagentPacketProblem,
   subagentPacketPresetNames, renderSubagentPacketPreset,
@@ -30,6 +30,7 @@ import {
 } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
+import { fail } from "../lib/cli.mjs";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
@@ -51,11 +52,6 @@ function parseArgs(args) {
     }
   }
   return out;
-}
-
-function fail(msg) {
-  console.error(`error: ${msg}`);
-  process.exit(1);
 }
 
 function shortRow(d) {
@@ -723,18 +719,40 @@ switch (cmd) {
     break;
   }
   case "validate": {
+    // Orchestration packet checks are ADVISORY everywhere on the store path:
+    // validate (here) and the store-mutation checkpoints (createTask/updateDoc,
+    // i.e. `new`/`set`) all NUDGE rather than block, so the task store stays
+    // decoupled from orchestration policy. The goal (don't silently skip
+    // delegation) is kept as a loud nudge. Only the EXPLICIT `orchestration-check`
+    // command still fails hard. [REFACTOR_PLAN Phase 1 #2 + p.6 advisory flip]
+    const ADVISORY_CODES = new Set([
+      "orchestration_start_preflight_missing",
+      "orchestration_evidence_missing",
+    ]);
     const detailedProblems = validateStoreDetailed(root);
+    const blocking = detailedProblems.filter((p) => !ADVISORY_CODES.has(p.code));
+    const advisory = detailedProblems.filter((p) => ADVISORY_CODES.has(p.code));
     if (args.json) {
-      writeJson({ ok: detailedProblems.length === 0, problems: detailedProblems });
-      process.exit(detailedProblems.length ? 1 : 0);
+      writeJson({ ok: blocking.length === 0, problems: blocking, advisories: advisory });
+      process.exit(blocking.length ? 1 : 0);
     }
-    const problems = validateStore(root);
-    if (!problems.length) {
-      console.log("ok: no problems found");
+    for (const p of advisory) {
+      console.log(`nudge: ${p.message}`);
+      const hint = remediationHint(p.message);
+      if (hint) {
+        console.log(`hint: ${hint}`);
+      }
+    }
+    if (!blocking.length) {
+      console.log(
+        advisory.length
+          ? "ok: no blocking problems (orchestration nudges above are advisory)"
+          : "ok: no problems found",
+      );
     } else {
-      for (const p of problems) {
-        console.log(`problem: ${p}`);
-        const hint = remediationHint(p);
+      for (const p of blocking) {
+        console.log(`problem: ${p.message}`);
+        const hint = remediationHint(p.message);
         if (hint) {
           console.log(`hint: ${hint}`);
         }

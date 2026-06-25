@@ -924,61 +924,6 @@ test("product read gate visual strict writes fail critique", () => {
   }
 });
 
-test("visual critique packet requires screenshot evidence", () => {
-  const dir = tempDir();
-  try {
-    const result = runRaw([
-      "tools/product_gate/visual_critique_packet.mjs",
-      "--project", "visual-test",
-      "--task", "T0001",
-      "--screenshot", join(dir, "missing.png"),
-      "--target", "gamedesign/projects/visual-test/art/fake.png",
-      "--output", join(dir, "packet.md"),
-    ]);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /screenshot does not exist/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("visual critique packet writes strict rubric and gate command", () => {
-  const dir = tempDir();
-  try {
-    const screenshot = join(dir, "screen.png");
-    const markdown = join(dir, "packet.md");
-    const json = join(dir, "packet.json");
-    writeFileSync(screenshot, "png", "utf8");
-    const result = runRaw([
-      "tools/product_gate/visual_critique_packet.mjs",
-      "--project", "visual-test",
-      "--task", "T0001",
-      "--surface", "desktop",
-      "--screenshot", screenshot,
-      "--target", "gamedesign/projects/visual-test/art/fake.png",
-      "--brief", "Bright casual game screen with readable UI.",
-      "--output", markdown,
-      "--json-output", json,
-    ]);
-    assert.equal(result.status, 0, result.stderr);
-    const md = readFileSync(markdown, "utf8");
-    assert.match(md, /Visual Critic Packet/);
-    assert.match(md, /--visual-strict/);
-    assert.match(md, /composition: score 1-5/);
-    assert.match(md, /readability: score 1-5/);
-    assert.match(md, /ui_controls: score 1-5/);
-    assert.match(md, /action_direction: score 1-5/);
-    assert.match(md, /art_quality: score 1-5/);
-    assert.match(md, /audience_fit: score 1-5/);
-    const report = JSON.parse(readFileSync(json, "utf8"));
-    assert.equal(report.schema, "game.visual_critique_packet");
-    assert.ok(report.axes.includes("readability"));
-    assert.match(report.gate_command, /node tools\/ai\.mjs gate/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("responsive layout audit passes clean portrait action stack", () => {
   const dir = tempDir();
   try {

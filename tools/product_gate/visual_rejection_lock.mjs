@@ -1,14 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-
-const VISUAL_AXES = [
-  "composition",
-  "readability",
-  "ui_controls",
-  "action_direction",
-  "art_quality",
-  "audience_fit",
-];
+import { fail } from "../lib/cli.mjs";
+import { VISUAL_AXES } from "./lib/visual_axes.mjs";
 
 function usage() {
   console.error(`usage:
@@ -30,11 +23,6 @@ Options:
   --index-output <path>  latest-gate JSON index path
   --verify               request independent re-check after the lock is fixed`);
   process.exit(2);
-}
-
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
 }
 
 function parseArgs(argv) {

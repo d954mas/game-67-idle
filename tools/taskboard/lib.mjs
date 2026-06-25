@@ -572,10 +572,7 @@ export function createTask(root, input = {}) {
     updated: todayStamp(),
   };
   const body = input.body || TASK_BODY_TEMPLATE;
-  const problem = orchestrationStartPreflightProblem({ kind: "task", file: "", fields, body });
-  if (problem) {
-    throw validationError(problem);
-  }
+  nudgeOrchestration(orchestrationStartPreflightProblem({ kind: "task", file: "", fields, body }));
   const file = join(dir, `${id}-${slugify(fields.title)}.md`);
   writeFileSync(file, serializeDoc(fields, body));
   return { kind: "task", file, fields, body };
@@ -627,22 +624,13 @@ export function updateDoc(root, id, patch = {}) {
   fields.updated = todayStamp();
   const body = patch.body !== undefined ? patch.body : doc.body;
   if (requiresOrchestrationStartPreflightGuard(doc, fields)) {
-    const problem = orchestrationStartPreflightProblem({ ...doc, fields, body });
-    if (problem) {
-      throw validationError(problem);
-    }
+    nudgeOrchestration(orchestrationStartPreflightProblem({ ...doc, fields, body }));
   }
   if (requiresOrchestrationTransitionGuard(doc, fields)) {
-    const problem = orchestrationEvidenceProblem({ ...doc, fields, body }, root);
-    if (problem) {
-      throw validationError(problem);
-    }
+    nudgeOrchestration(orchestrationEvidenceProblem({ ...doc, fields, body }, root));
   }
   if (requiresOrchestrationCurrentCloseoutGuard(doc, fields, body)) {
-    const problem = orchestrationEvidenceProblem({ ...doc, fields, body }, root);
-    if (problem) {
-      throw validationError(problem);
-    }
+    nudgeOrchestration(orchestrationEvidenceProblem({ ...doc, fields, body }, root));
   }
   writeFileSync(doc.file, serializeDoc(fields, body));
   let file = doc.file;
@@ -820,10 +808,14 @@ function problemMessage(problem) {
   return typeof problem === "string" ? problem : problem.message;
 }
 
-function validationError(problem) {
-  const err = new Error(problemMessage(problem));
-  err.problem = problem;
-  return err;
+function nudgeOrchestration(problem) {
+  // Orchestration packet checks are an advisory NUDGE at the store-mutation
+  // checkpoints (createTask/updateDoc), not a hard gate: the store always saves,
+  // staying decoupled from orchestration policy. The goal stays loud via this
+  // stderr nudge plus the validate-time advisory. [REFACTOR_PLAN p.6 advisory flip]
+  if (problem) {
+    process.stderr.write(`nudge: ${problemMessage(problem)}\n`);
+  }
 }
 
 // The orchestration label guard applies ONLY to genuine pipeline/orchestration
@@ -846,11 +838,6 @@ export function currentDoingOrchestrationTaskIds(root) {
     .filter((task) => isSubstantialOrchestrationTask(task))
     .map((task) => task.fields.id)
     .filter(Boolean);
-}
-
-export function inferCurrentDoingOrchestrationTaskId(root) {
-  const candidates = currentDoingOrchestrationTaskIds(root);
-  return candidates.length === 1 ? candidates[0] : "";
 }
 
 function isArchivedOrchestrationGuardCandidate(doc) {

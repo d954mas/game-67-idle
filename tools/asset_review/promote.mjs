@@ -11,21 +11,16 @@
 import { readFile, writeFile, mkdir, cp, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, basename, extname } from "node:path";
-import { pathToFileURL } from "node:url";
 import { createHash } from "node:crypto";
 import { DEFAULT_LIBRARY, KIND_DIR } from "../assets/source/find_assets.mjs";
+import { catalogFrontmatter } from "../lib/asset_catalog.mjs";
+import { isMain } from "../lib/cli.mjs";
+import { LICENSE_URLS } from "../lib/licenses.mjs";
 
 // review-kind -> library-kind, for legacy manifests; new manifests already carry
 // a library kind, so this is only a fallback.
 const KIND_FROM_REVIEW = { model: "model", font: "font", audio: "audio", image: "texture", ui: "ui", texture: "texture", material: "material" };
 const FONT_EXT = [".ttf", ".otf", ".woff", ".woff2"];
-
-const LICENSE_URLS = {
-  "CC0-1.0": "https://creativecommons.org/publicdomain/zero/1.0/",
-  "OFL-1.1": "https://openfontlicense.org/open-font-license-official-text/",
-  "CC-BY-4.0": "https://creativecommons.org/licenses/by/4.0/",
-  "CC-BY-SA-4.0": "https://creativecommons.org/licenses/by-sa/4.0/",
-};
 
 function kebab(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -93,25 +88,26 @@ async function sha256(file) {
 }
 
 function catalogMarkdown(rec) {
-  return `---
-type: Game Asset
-title: ${rec.title}
-description: ${rec.description}
-resource: ${rec.resource}
-tags: [${rec.tags.join(", ")}]
-timestamp: ${rec.timestamp}
-asset_id: ${rec.assetId}
-kind: ${rec.kind}
-status: accepted
-origin: ${rec.origin}
-license: ${rec.license}
-license_url: ${rec.licenseUrl}
-attribution_required: ${rec.attributionRequired}
-commercial_use: ${rec.commercialUse}
-modification_allowed: ${rec.modificationAllowed}
-redistribution_allowed: ${rec.redistributionAllowed}
-shipping_decision: ${rec.shippingDecision}
-${rec.pack ? `pack: ${rec.pack}\n` : ""}---
+  const frontmatter = catalogFrontmatter({
+    title: rec.title,
+    description: rec.description,
+    resource: rec.resource,
+    tags: rec.tags,
+    timestamp: rec.timestamp,
+    assetId: rec.assetId,
+    kind: rec.kind,
+    status: "accepted",
+    origin: rec.origin,
+    license: rec.license,
+    licenseUrl: rec.licenseUrl,
+    attributionRequired: rec.attributionRequired,
+    commercialUse: rec.commercialUse,
+    modificationAllowed: rec.modificationAllowed,
+    redistributionAllowed: rec.redistributionAllowed,
+    publish: rec.publish,
+    shippingDecision: rec.shippingDecision,
+  }, rec.pack ? `pack: ${rec.pack}` : "");
+  return `${frontmatter}
 
 # ${rec.title}
 
@@ -275,6 +271,7 @@ async function main() {
       source, relpath: pick.relpath, sha, bytes, pack: a.pack || "", licenseRef: packSlug || assetId,
       attributionRequired: a.attributionRequired, commercialUse: a.commercialUse,
       modificationAllowed: a.modificationAllowed, redistributionAllowed: a.redistributionAllowed,
+      publish: "true",
       shippingDecision: a.shippingDecision,
     };
     await writeFile(catalogPath, catalogMarkdown(rec), "utf8");
@@ -308,7 +305,7 @@ function originOrKind(rec) {
   return `${rec.origin}/${rec.kind}`;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (isMain(import.meta.url)) {
   main().catch((e) => { console.error(e.message); process.exit(1); });
 }
 

@@ -200,7 +200,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             self.assertIn("## Recommended Next Step", markdown_text)
             self.assertIn("- action: split_preserve_or_dual_plate_alpha", markdown_text)
 
-    def test_component_pixel_offsets_do_not_leak_to_json_report(self):
+    def test_private_pixel_fields_do_not_leak_to_json_report(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "sheet.png"
             report = Path(tmp) / "report.json"
@@ -243,7 +243,6 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
         components = module.find_components_numpy(image, (255, 0, 255), 0, array)
         self.assertEqual(len(components), 1)
         self.assertIn("_pixel_runs", components[0])
-        self.assertNotIn("_pixel_offsets", components[0])
 
         red, green, blue = module.add_key_conflict_metrics(image, components, (255, 0, 255), 0, array)
         self.assertEqual(int(red.size), 12)
@@ -381,7 +380,6 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
                 "id": "component_1",
                 "bbox": [0, 0, 200, 200],
                 "area_px": 40000,
-                "_pixel_offsets": [0],
             }
         ]
         for index in range(80):
@@ -392,7 +390,6 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
                     "id": f"component_{index + 2}",
                     "bbox": [x, y, 4, 4],
                     "area_px": 16,
-                    "_pixel_offsets": [index + 1],
                 }
             )
 

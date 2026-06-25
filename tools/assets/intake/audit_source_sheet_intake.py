@@ -72,15 +72,6 @@ def format_color(value: tuple[int, int, int]) -> str:
     return "#{:02x}{:02x}{:02x}".format(*value)
 
 
-def find_components(
-    image: Image.Image,
-    key: tuple[int, int, int],
-    tolerance: int,
-    array: object | None = None,
-) -> list[dict[str, object]]:
-    return find_components_numpy(image, key, tolerance, array)
-
-
 def find_components_numpy(
     image: Image.Image,
     key: tuple[int, int, int],
@@ -209,15 +200,6 @@ def merge_component_pair(a: dict[str, object], b: dict[str, object], merged_id: 
         "area_px": int(a["area_px"]) + int(b["area_px"]),
         "merged_from": [*a.get("merged_from", [a["id"]]), *b.get("merged_from", [b["id"]])],
     }
-    a_offsets = a.get("_pixel_offsets")
-    b_offsets = b.get("_pixel_offsets")
-    if isinstance(a_offsets, list) and isinstance(b_offsets, list):
-        if len(a_offsets) >= len(b_offsets):
-            a_offsets.extend(b_offsets)
-            merged["_pixel_offsets"] = a_offsets
-        else:
-            b_offsets.extend(a_offsets)
-            merged["_pixel_offsets"] = b_offsets
     a_runs = a.get("_pixel_runs")
     b_runs = b.get("_pixel_runs")
     if isinstance(a_runs, list) and isinstance(b_runs, list):
@@ -275,19 +257,6 @@ def merge_small_fragments(
     for index, component in enumerate(merged, start=1):
         component["id"] = f"component_{index}"
     return merged
-
-
-def hue_distance(a: float, b: float) -> float:
-    distance = abs(a - b)
-    return min(distance, 1.0 - distance)
-
-
-def is_generic_key_hue_like(red: int, green: int, blue: int, key: tuple[int, int, int]) -> bool:
-    key_hue, key_sat, key_value = colorsys.rgb_to_hsv(key[0] / 255, key[1] / 255, key[2] / 255)
-    hue, sat, value = colorsys.rgb_to_hsv(red / 255, green / 255, blue / 255)
-    if key_sat < 0.35 or sat < 0.25 or value < 0.12 or key_value < 0.35:
-        return False
-    return hue_distance(hue, key_hue) <= 0.05
 
 
 def hsv_arrays(red: object, green: object, blue: object) -> tuple[object, object, object]:
@@ -370,7 +339,7 @@ def purple_halo_mask(red: object, green: object, blue: object) -> object:
     return purple_halo_only_mask_rgb(red.astype(np.int16), green.astype(np.int16), blue.astype(np.int16))
 
 
-def component_pixels_from_private_runs(array: object, component: dict[str, object], flat: object | None = None) -> object | None:
+def component_pixels_from_private_runs(array: object, component: dict[str, object]) -> object | None:
     pixel_runs = component.get("_pixel_runs")
     if isinstance(pixel_runs, list) and pixel_runs:
         chunks = []
@@ -386,38 +355,7 @@ def component_pixels_from_private_runs(array: object, component: dict[str, objec
             return chunks[0]
         return np.concatenate(chunks, axis=0)
 
-    pixel_offsets = component.get("_pixel_offsets")
-    if isinstance(pixel_offsets, list) and pixel_offsets:
-        flat_array = array.reshape((-1, 4)) if flat is None else flat
-        return flat_array[np.asarray(pixel_offsets, dtype=np.int64)]
     return None
-
-
-def visible_component_arrays(
-    array: object,
-    components: list[dict[str, object]],
-    current_key: tuple[int, int, int],
-    tolerance: int,
-) -> tuple[object, object, object]:
-    chunks = []
-    flat = array.reshape((-1, 4))
-    for component in components:
-        pixels = component_pixels_from_private_runs(array, component, flat)
-        if pixels is not None:
-            visible = (pixels[..., 3] > 12) & ~key_like_mask(pixels, current_key, tolerance)
-            if np.any(visible):
-                chunks.append(pixels[..., :3][visible])
-            continue
-        x, y, width, height = component["bbox"]
-        crop = array[y : y + height, x : x + width]
-        visible = (crop[..., 3] > 12) & ~key_like_mask(crop, current_key, tolerance)
-        if np.any(visible):
-            chunks.append(crop[..., :3][visible])
-    if not chunks:
-        empty = np.array([], dtype=np.uint8)
-        return empty, empty, empty
-    colors = np.concatenate(chunks, axis=0)
-    return colors[:, 0], colors[:, 1], colors[:, 2]
 
 
 def score_candidate_key_colors_from_rgb(
@@ -477,7 +415,6 @@ def add_key_conflict_metrics(
     array: object | None = None,
 ) -> tuple[object, object, object]:
     array = np.asarray(image.convert("RGBA")) if array is None else array
-    flat = array.reshape((-1, 4))
     visible_chunks = []
     for component in components:
         x, y, width, height = component["bbox"]
@@ -493,7 +430,7 @@ def add_key_conflict_metrics(
             exact_key_conflicts = int(np.count_nonzero(exact_candidates & ~crop_border))
         else:
             exact_key_conflicts = 0
-        component_pixels = component_pixels_from_private_runs(array, component, flat)
+        component_pixels = component_pixels_from_private_runs(array, component)
         if component_pixels is not None:
             component_red = component_pixels[..., 0]
             component_green = component_pixels[..., 1]
@@ -530,74 +467,19 @@ def add_key_conflict_metrics(
     return visible_colors[:, 0], visible_colors[:, 1], visible_colors[:, 2]
 
 
-def audit(args: argparse.Namespace) -> dict[str, object]:
-    started = perf_counter()
-    phase_started = started
-    timings: dict[str, float] = {}
-
-    def mark_timing(name: str) -> None:
-        nonlocal phase_started
-        if not getattr(args, "profile", False):
-            return
-        now = perf_counter()
-        timings[name] = round((now - phase_started) * 1000, 3)
-        phase_started = now
-
-    image = Image.open(args.source).convert("RGBA")
-    mark_timing("load_image")
-    width, height = image.size
-    image_array = np.asarray(image)
-    components = [
-        component
-        for component in find_components(image, args.key_color, args.key_tolerance, image_array)
-        if component["area_px"] >= args.min_area
-    ]
-    mark_timing("find_components")
-    components = merge_small_fragments(components, args.merge_fragments_distance, args.merge_fragment_area_ratio)
-    mark_timing("merge_fragments")
-    visible_component_rgb = add_key_conflict_metrics(image, components, args.key_color, args.key_tolerance, image_array)
-    mark_timing("key_conflicts")
-    candidate_scores = score_candidate_key_colors_from_rgb(*visible_component_rgb, args.candidate_key_colors)
-    mark_timing("candidate_key_scores")
-    problems: list[str] = []
-    key_color_conflict_count = 0
-    if len(components) < args.min_components:
-        problems.append(f"component_count {len(components)} is below required {args.min_components}")
-
-    for component in components:
-        x, y, w, h = component["bbox"]
-        border_gap = min(x, y, width - (x + w), height - (y + h))
-        component["border_gap_px"] = border_gap
-        if border_gap < args.min_border:
-            problems.append(f"{component['id']} border gap {border_gap}px is below required {args.min_border}px")
-        exact_conflicts = int(component["exact_key_conflict_px"])
-        if exact_conflicts > args.max_exact_key_conflict_px:
-            key_color_conflict_count += 1
-            problems.append(
-                f"{component['id']} contains {exact_conflicts}px of exact key-color-like art "
-                f"> allowed {args.max_exact_key_conflict_px}px"
-            )
-        key_hue_ratio = float(component["key_hue_conflict_ratio"])
-        if key_hue_ratio > args.max_key_hue_conflict_ratio:
-            key_color_conflict_count += 1
-            problems.append(
-                f"{component['id']} key/halo hue conflict ratio {key_hue_ratio:.3f} "
-                f"> allowed {args.max_key_hue_conflict_ratio:.3f}; choose a safer background or split/preserve this art"
-            )
-    mark_timing("component_rules")
-
-    min_gap = None
-    closest_pair = None
-    for index, component in enumerate(components):
-        for other in components[index + 1 :]:
-            gap = gap_between(component, other)
-            if min_gap is None or gap < min_gap:
-                min_gap = gap
-                closest_pair = [component["id"], other["id"]]
-    if min_gap is not None and min_gap < args.min_gutter:
-        problems.append(f"closest component gap {min_gap}px is below required {args.min_gutter}px")
-    mark_timing("gutter_scan")
-
+def decide_next_step(
+    args: argparse.Namespace,
+    components: list[dict[str, object]],
+    key_color_conflict_count: int,
+    min_gap: int | None,
+    closest_pair: list[str] | None,
+    candidate_scores: list[dict[str, object]],
+) -> dict[str, object]:
+    """Turn the analysed component metrics into the audit's decision outputs:
+    the key-color action, the problem summary, the recommended next step, and the
+    machine-readable blocking reasons. Pure function of the already-computed
+    per-component metrics (border_gap_px / exact_key_conflict_px /
+    key_hue_conflict_ratio) plus the gutter scan and candidate key scores."""
     key_color_text = format_color(args.key_color)
     suggested_key_color = candidate_scores[0]["key_color"] if candidate_scores else None
     current_key_score = next((score for score in candidate_scores if score["key_color"] == key_color_text), None)
@@ -715,6 +597,87 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
                 "action": "regenerate_source_sheet_with_more_gutter_and_safe_border",
             }
         )
+    return {
+        "key_color_text": key_color_text,
+        "suggested_key_color": suggested_key_color,
+        "current_key_score": current_key_score,
+        "key_color_action": key_color_action,
+        "next_prompt_key_color": next_prompt_key_color,
+        "problem_summary": problem_summary,
+        "recommended_next_step": recommended_next_step,
+        "blocking_reasons": blocking_reasons,
+    }
+
+
+def audit(args: argparse.Namespace) -> dict[str, object]:
+    started = perf_counter()
+    phase_started = started
+    timings: dict[str, float] = {}
+
+    def mark_timing(name: str) -> None:
+        nonlocal phase_started
+        if not getattr(args, "profile", False):
+            return
+        now = perf_counter()
+        timings[name] = round((now - phase_started) * 1000, 3)
+        phase_started = now
+
+    image = Image.open(args.source).convert("RGBA")
+    mark_timing("load_image")
+    width, height = image.size
+    image_array = np.asarray(image)
+    components = [
+        component
+        for component in find_components_numpy(image, args.key_color, args.key_tolerance, image_array)
+        if component["area_px"] >= args.min_area
+    ]
+    mark_timing("find_components")
+    components = merge_small_fragments(components, args.merge_fragments_distance, args.merge_fragment_area_ratio)
+    mark_timing("merge_fragments")
+    visible_component_rgb = add_key_conflict_metrics(image, components, args.key_color, args.key_tolerance, image_array)
+    mark_timing("key_conflicts")
+    candidate_scores = score_candidate_key_colors_from_rgb(*visible_component_rgb, args.candidate_key_colors)
+    mark_timing("candidate_key_scores")
+    problems: list[str] = []
+    key_color_conflict_count = 0
+    if len(components) < args.min_components:
+        problems.append(f"component_count {len(components)} is below required {args.min_components}")
+
+    for component in components:
+        x, y, w, h = component["bbox"]
+        border_gap = min(x, y, width - (x + w), height - (y + h))
+        component["border_gap_px"] = border_gap
+        if border_gap < args.min_border:
+            problems.append(f"{component['id']} border gap {border_gap}px is below required {args.min_border}px")
+        exact_conflicts = int(component["exact_key_conflict_px"])
+        if exact_conflicts > args.max_exact_key_conflict_px:
+            key_color_conflict_count += 1
+            problems.append(
+                f"{component['id']} contains {exact_conflicts}px of exact key-color-like art "
+                f"> allowed {args.max_exact_key_conflict_px}px"
+            )
+        key_hue_ratio = float(component["key_hue_conflict_ratio"])
+        if key_hue_ratio > args.max_key_hue_conflict_ratio:
+            key_color_conflict_count += 1
+            problems.append(
+                f"{component['id']} key/halo hue conflict ratio {key_hue_ratio:.3f} "
+                f"> allowed {args.max_key_hue_conflict_ratio:.3f}; choose a safer background or split/preserve this art"
+            )
+    mark_timing("component_rules")
+
+    min_gap = None
+    closest_pair = None
+    for index, component in enumerate(components):
+        for other in components[index + 1 :]:
+            gap = gap_between(component, other)
+            if min_gap is None or gap < min_gap:
+                min_gap = gap
+                closest_pair = [component["id"], other["id"]]
+    if min_gap is not None and min_gap < args.min_gutter:
+        problems.append(f"closest component gap {min_gap}px is below required {args.min_gutter}px")
+    mark_timing("gutter_scan")
+
+    decision = decide_next_step(args, components, key_color_conflict_count, min_gap, closest_pair, candidate_scores)
 
     public_components = [{key: value for key, value in component.items() if not str(key).startswith("_")} for component in components]
 
@@ -724,7 +687,7 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
         "source": str(args.source).replace("\\", "/"),
         "analysis_engine": "numpy",
         "size": [width, height],
-        "key_color": key_color_text,
+        "key_color": decision["key_color_text"],
         "key_tolerance": args.key_tolerance,
         "component_count": len(components),
         "min_component_area_px": args.min_area,
@@ -735,14 +698,14 @@ def audit(args: argparse.Namespace) -> dict[str, object]:
         "closest_gap_px": min_gap,
         "closest_pair": closest_pair,
         "candidate_key_scores": candidate_scores,
-        "current_key_score": current_key_score,
-        "suggested_key_color": suggested_key_color,
+        "current_key_score": decision["current_key_score"],
+        "suggested_key_color": decision["suggested_key_color"],
         "key_color_conflict_count": key_color_conflict_count,
-        "key_color_action": key_color_action,
-        "next_prompt_key_color": next_prompt_key_color,
-        "problem_summary": problem_summary,
-        "blocking_reasons": blocking_reasons,
-        "recommended_next_step": recommended_next_step,
+        "key_color_action": decision["key_color_action"],
+        "next_prompt_key_color": decision["next_prompt_key_color"],
+        "problem_summary": decision["problem_summary"],
+        "blocking_reasons": decision["blocking_reasons"],
+        "recommended_next_step": decision["recommended_next_step"],
         "components": public_components,
         "problems": problems,
         "status": "pass" if not problems else "fail",

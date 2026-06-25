@@ -17,15 +17,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, basename, extname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-
-const VISUAL_AXES = [
-  "composition",
-  "readability",
-  "ui_controls",
-  "action_direction",
-  "art_quality",
-  "audience_fit",
-];
+import { fail } from "../lib/cli.mjs";
+import { relCwdPosix } from "../lib/paths.mjs";
+import { VISUAL_AXES, isAxisScore } from "./lib/visual_axes.mjs";
+import { loadArtContract } from "./lib/art_contract.mjs";
 
 function usage() {
   console.error(`usage:
@@ -50,22 +45,12 @@ Verified vision command on this box (codex CLI, gpt-5.5):
   process.exit(2);
 }
 
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
-}
-
 function sanitizeToken(value) {
   return String(value || "")
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "game";
-}
-
-function relPath(path) {
-  const absolute = resolve(path);
-  return absolute.startsWith(process.cwd()) ? absolute.slice(process.cwd().length + 1).replaceAll("\\", "/") : path;
 }
 
 // Paths get interpolated into the --model-cmd shell string, so reject any that
@@ -137,7 +122,7 @@ function parseShots(values) {
     const cleanTag = sanitizeToken(tag);
     if (seen.has(cleanTag)) return;
     if (!existsSync(resolve(path))) fail(`screenshot does not exist: ${path}`);
-    shots.push({ tag: cleanTag, path: relPath(path), abs: resolve(path).replaceAll("\\", "/") });
+    shots.push({ tag: cleanTag, path: relCwdPosix(path), abs: resolve(path).replaceAll("\\", "/") });
     seen.add(cleanTag);
   };
   for (const raw of values.shots) {
@@ -164,15 +149,8 @@ function defaultContractPath(project) {
 function loadContract(values) {
   const explicit = Boolean(values.contract);
   const contractPath = values.contract || defaultContractPath(values.project);
-  if (!existsSync(resolve(contractPath))) {
-    if (explicit) fail(`art contract does not exist: ${contractPath}`);
-    return { path: "", data: null };
-  }
-  try {
-    return { path: relPath(contractPath), data: JSON.parse(readFileSync(resolve(contractPath), "utf8")) };
-  } catch (error) {
-    fail(`art contract is not valid JSON: ${contractPath}: ${error.message}`);
-  }
+  const data = loadArtContract(contractPath, { required: explicit, onError: fail });
+  return data ? { path: relCwdPosix(contractPath), data } : { path: "", data: null };
 }
 
 function listImages(dir) {
@@ -327,7 +305,7 @@ function validateCritique(critique) {
   else {
     for (const axis of VISUAL_AXES) {
       const score = Number(critique.scores[axis]);
-      if (!Number.isInteger(score) || score < 1 || score > 5) errors.push(`score ${axis} must be an integer 1-5`);
+      if (!isAxisScore(score)) errors.push(`score ${axis} must be an integer 1-5`);
     }
   }
   return errors;

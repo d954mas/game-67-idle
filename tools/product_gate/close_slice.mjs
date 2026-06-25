@@ -1,8 +1,10 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { findDoc, findRoot } from "../taskboard/lib.mjs";
+import { fail } from "../lib/cli.mjs";
+import { readJson } from "../lib/json.mjs";
 
 function usage() {
   console.error(`usage:
@@ -44,11 +46,6 @@ function parseArgs(argv) {
   return values;
 }
 
-function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
-}
-
 // A single path-like token (no spaces, has a separator and an extension), so a
 // command line passed as evidence ("node --test tools/x.mjs") is not mistaken
 // for a file path.
@@ -63,10 +60,6 @@ function latestGatePath(project) {
     .replace(/[^a-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return `gamedesign/projects/${safe}/reviews/product_read_gate_latest.json`;
-}
-
-function readJson(path) {
-  return JSON.parse(readFileSync(resolve(path), "utf8"));
 }
 
 function tagsOf(doc) {
@@ -107,7 +100,7 @@ const gatePath = values.gate || latestGatePath(values.project);
 if (!existsSync(resolve(gatePath))) fail(`gate JSON does not exist: ${gatePath}`);
 if (values.evidence.length === 0) fail("--evidence is required");
 
-const gate = readJson(gatePath);
+const gate = readJson(resolve(gatePath));
 if (values.strict && gate.verdict !== "pass" && !values.allowFail) {
   const hint = gate.verdict === "review"
     ? "lead must convert it to pass/fail, or rerun with --allow-fail only for an explicit partial handoff"

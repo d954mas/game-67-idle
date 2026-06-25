@@ -16,10 +16,11 @@
 // e.g. the Kenney furniture kit already imported directly).
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, readdirSync, statSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { join, dirname } from "node:path";
+import { DEFAULT_LIBRARY } from "./find_assets.mjs";
+import { catalogFrontmatter } from "../../lib/asset_catalog.mjs";
+import { isMain } from "../../lib/cli.mjs";
 
-const DEFAULT_LIBRARY = "C:\\Users\\ROG\\YandexDisk\\gamedev\\assets\\ai_pipeline_assets";
 const SITE = "https://poly.pizza";
 const CDN = "https://static.poly.pizza";
 const UA = { "user-agent": "Mozilla/5.0 (asset-librarian; +local pipeline)" };
@@ -151,27 +152,26 @@ function writeRecord(lib, rec) {
   mkdirSync(catDir, { recursive: true });
   const tags = contentTags(name);
   if (!tags.length) tags.push(kebab(name));
-  const md = `---
-type: Game Asset
-title: ${name}
-description: model imported from poly.pizza${author ? " by " + author : ""}
-resource: files/models/${packDir}/${assetId}/
-tags: [${tags.join(", ")}]
-timestamp: ${ts}
-asset_id: ${assetId}
-kind: model
-status: accepted
-origin: sourced
-license: ${license.code}
-license_url: ${license.url}
-attribution_required: ${license.attribution}
-commercial_use: true
-modification_allowed: true
-redistribution_allowed: true
-shipping_decision: ${license.attribution ? "allowed-with-attribution" : "allowed"}
-pack: ${packDir}
-author: ${author || "unknown"}
----
+  const frontmatter = catalogFrontmatter({
+    title: name,
+    description: `model imported from poly.pizza${author ? " by " + author : ""}`,
+    resource: `files/models/${packDir}/${assetId}/`,
+    tags,
+    timestamp: ts,
+    assetId,
+    kind: "model",
+    status: "accepted",
+    origin: "sourced",
+    license: license.code,
+    licenseUrl: license.url,
+    attributionRequired: license.attribution,
+    commercialUse: "true",
+    modificationAllowed: "true",
+    redistributionAllowed: "true",
+    publish: "true",
+    shippingDecision: license.attribution ? "allowed-with-attribution" : "allowed",
+  }, `pack: ${packDir}\nauthor: ${author || "unknown"}`);
+  const md = `${frontmatter}
 
 # ${name}
 
@@ -396,7 +396,7 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (isMain(import.meta.url)) {
   main().catch((e) => { console.error("\nFATAL:", e.message); process.exit(1); });
 }
 

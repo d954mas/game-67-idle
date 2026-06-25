@@ -84,6 +84,17 @@ The helper records size, SHA256, `download-log.md`, and `intake.json`. It does
 not approve the license; the agent still has to perform the license gate before
 moving anything into `catalog/` or a project.
 
+For a ZIP or local FOLDER of assets (a bulk pack rather than a single URL), stage
+it into `_incoming/` with the archive helper instead:
+
+```powershell
+node tools/assets/intake/ingest_archive.mjs --archive <pack.zip|folder> --source <source> --slug <pack-slug> --license-name <license-or-unknown>
+```
+
+It extracts the original tree into `_incoming/<source>/<slug>/` and records
+per-file SHA256/bytes in `intake.json` plus an `ingest-log.md`. Like the download
+helper it does not write the catalog — run the license gate, then accept below.
+
 For paid / non-redistributable assets (CGTrader packs, commercial music/fonts),
 use `--manual --source-page-url <page> --publish false` so no download link is
 stored and the asset routes to the gitignored `assets/restricted/`. Full lifecycle:

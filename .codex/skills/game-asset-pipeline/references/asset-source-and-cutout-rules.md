@@ -123,10 +123,12 @@ The full reusable generated UI checklist lives in
 
 From the general asset pipeline side:
 
-- UI kit final art requires the UI skill's source-sheet intake, slicing, pixel,
-  edge, derivation, slice9 design-policy, source-family coverage, atlas metadata,
-  and review-atlas gates to record passing JSON in the art job's
-  `expected_outputs`, and `validate_art_job.mjs --final-art` to pass.
+- UI kit final art requires the UI skill's source-sheet intake (audit),
+  slicing, and review-atlas steps, plus `validate_art_job.mjs --final-art`.
+  `--final-art` validates generation provenance (real generated/artist source,
+  reproducible workflow, no procedural debug art) and runtime-ready coverage per
+  required source family — it no longer cross-checks separate audit-report JSON
+  in `expected_outputs`.
 - Procedural/programmer-art source is only a recorded debug exception, not a
   closed generated-art task.
 - A full UI kit claim requires runtime-ready assets for every required source

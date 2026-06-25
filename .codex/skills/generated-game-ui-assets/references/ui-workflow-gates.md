@@ -10,14 +10,12 @@ Use one art job as the unit:
 ```text
 accepted target -> art bible -> art job -> source family prompt
 -> selected source sheet -> crop plan -> runtime assets
--> composition proof -> source-derivation audit -> runtime integration
--> screenshot/product gate
+-> runtime integration -> screenshot/product gate
 ```
 
 Before visual-first UI work, write the 5-line session contract: goal, non-goal,
 proof, stop condition, likely files. The proof must name source/runtime
-manifests, composition proof, screenshot/product gate, and runtime integration
-evidence.
+manifests, screenshot/product gate, and runtime integration evidence.
 
 ## Source Families
 
@@ -130,32 +128,20 @@ DRAFT, every normal iteration:
 INTEGRATE, when wiring assets into runtime:
 
 - `node tools/assets/job/validate_art_job.mjs --job <job> --strict`
-- `py -3.12 tools/assets/audit/render_ui_composition_proof.py --asset-manifest <runtime-manifest> --output <proof.png> --json-output <proof.json> --report <proof.md>`
-- `py -3.12 tools/assets/audit/audit_generated_source_derivation.py --crop-manifest <crop-manifest> --json-output <audit.json> --report <audit.md>`
 - runtime screenshot/product gate with `node tools/product_gate/review.mjs` or
   `node tools/ai.mjs gate`.
 
 FINAL-ART, only when shipping a reusable kit or claiming completion:
 
-- source-sheet intake evidence recorded in the art job;
+- source-sheet intake audit run (standalone report);
 - strict contract;
-- slice9 design-policy audit;
-- composition proof;
-- atlas metadata audit;
-- labeled review atlas build and audit;
-- source family coverage audit;
-- generated-source derivation audit proving source-derived PNGs;
-- runtime usage audit;
+- labeled review atlas build and audit (standalone tools);
 - final generated/artist art gate:
-  `node tools/assets/job/validate_art_job.mjs --job <job> --final-art`;
+  `node tools/assets/job/validate_art_job.mjs --job <job> --final-art`
+  (validates generation provenance + runtime-ready coverage, not the
+  standalone audit reports above);
 - native/runtime screenshots and product gates;
 - `node tools/product_gate/responsive_layout_audit.mjs` when `ui.tree` bounds are available.
-
-Use the tier planner to print exact command order without running image tools:
-
-```powershell
-node tools/assets/job/run_ui_asset_tier.mjs --tier draft|integrate|final --plan --job <job> --crop-manifest <crop-manifest> --runtime-manifest <runtime-manifest> --source-sheet <source-sheet>
-```
 
 ## Responsive Runtime Proof
 
@@ -173,8 +159,8 @@ If the lead reports cropped icons, key-color outlines, halo, ugly UI, unclear
 first action, or mobile density:
 
 1. Stop feature/content expansion.
-2. Reopen source sheet, crop manifest, contact sheet, composition proof,
-   source-derivation audit, latest screenshots, and product gate.
+2. Reopen source sheet, crop manifest, contact sheet, latest screenshots, and
+   product gate.
 3. Fix the earliest failed stage.
 4. Do not compensate in runtime code for a bad source sheet or missing manifest
    rule.
@@ -185,5 +171,5 @@ first action, or mobile density:
 ## Report Shape
 
 Report source art, art bible, crop/runtime manifests, preview sheets,
-composition proof, source-derivation audit, responsive layout audit,
-screenshots, product gates, validations run, and the next visual gap.
+responsive layout audit, screenshots, product gates, validations run, and the
+next visual gap.

@@ -10,11 +10,12 @@ from __future__ import annotations
 import argparse
 import ctypes
 import os
-import struct
 import sys
 import time
-import zlib
 from ctypes import wintypes
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from png_io import write_png_rgb  # noqa: E402
 
 
 if os.name != "nt":
@@ -154,38 +155,19 @@ def capture_region(x: int, y: int, width: int, height: int) -> bytes:
         user32.ReleaseDC(None, screen_dc)
 
 
-def png_chunk(kind: bytes, payload: bytes) -> bytes:
-    return (
-        struct.pack(">I", len(payload))
-        + kind
-        + payload
-        + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
-    )
-
-
 def write_png(path: str, width: int, height: int, bgra: bytes) -> None:
-    rows = []
+    # GDI hands back top-down BGRA; convert to packed RGB, then let png_io own
+    # the PNG framing (single source shared with devapi_client/pixel_health).
     stride = width * 4
+    rgb = bytearray(width * height * 3)
     for y in range(height):
         row = bgra[y * stride : (y + 1) * stride]
-        rgb = bytearray(width * 3)
+        base = y * width * 3
         for x in range(width):
-            b = row[x * 4]
-            g = row[x * 4 + 1]
-            r = row[x * 4 + 2]
-            rgb[x * 3 : x * 3 + 3] = bytes((r, g, b))
-        rows.append(b"\x00" + bytes(rgb))
-
-    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
-    data = b"".join([
-        b"\x89PNG\r\n\x1a\n",
-        png_chunk(b"IHDR", ihdr),
-        png_chunk(b"IDAT", zlib.compress(b"".join(rows), 6)),
-        png_chunk(b"IEND", b""),
-    ])
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    with open(path, "wb") as handle:
-        handle.write(data)
+            rgb[base + x * 3] = row[x * 4 + 2]
+            rgb[base + x * 3 + 1] = row[x * 4 + 1]
+            rgb[base + x * 3 + 2] = row[x * 4]
+    write_png_rgb(path, width, height, bytes(rgb))
 
 
 def main() -> int:

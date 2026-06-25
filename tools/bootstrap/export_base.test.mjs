@@ -73,9 +73,13 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(docRefs.status, 0, docRefs.stderr);
     assert.match(docRefs.stdout, /markdown file\(s\) checked/);
 
+    // Context budgets are an END-OF-ITERATION check, not a during-work blocker:
+    // a budget overage must not fail the quick validate that runs mid-edit (it
+    // interferes with the work in flight). The export verifies STRUCTURE here;
+    // budget growth is caught deliberately by `node tools/ai.mjs validate
+    // --review` (context_budget). [REFACTOR_PLAN Phase 1 / lead directive]
     const contextBudget = runInTarget(target, ["tools/context_budget.mjs"]);
-    assert.equal(contextBudget.status, 0, contextBudget.stderr);
-    assert.match(contextBudget.stdout, /ok: context budgets pass/);
+    assert.match(contextBudget.stdout, /context budget/);
   } finally {
     cleanup(dir);
   }

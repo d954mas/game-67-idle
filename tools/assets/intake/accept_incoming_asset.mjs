@@ -2,16 +2,8 @@
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-
-const DEFAULT_LIBRARY = "C:\\Users\\ROG\\YandexDisk\\gamedev\\assets\\ai_pipeline_assets";
-const KIND_DIR = {
-  model: "models",
-  texture: "textures",
-  material: "materials",
-  audio: "audio",
-  ui: "ui",
-  font: "fonts",
-};
+import { DEFAULT_LIBRARY, KIND_DIR } from "../source/find_assets.mjs";
+import { catalogFrontmatter, licenseMarkdown } from "../../lib/asset_catalog.mjs";
 
 function usage() {
   return `usage: node tools/assets/intake/accept_incoming_asset.mjs --source <source> --slug <slug> --asset-id <id> --kind <kind> --title <title> --description <text> --license-name <name> --license-url <url> --tags <a,b,c> [options]
@@ -106,10 +98,6 @@ function parseArgs(argv) {
   return args;
 }
 
-function yamlList(csv) {
-  return `[${csv.split(",").map((tag) => tag.trim()).filter(Boolean).join(", ")}]`;
-}
-
 function extraFrontmatter(args) {
   const lines = [];
   if (args.kind === "texture") {
@@ -127,26 +115,26 @@ function catalogMarkdown(args, intake, resource) {
   const sourcePage = args.sourcePageUrl || intake.source_page_url || intake.url || "-";
   const authorVendor = args.authorVendor || intake.source;
   const directDownload = intake.manual ? "(manual/account-gated — not stored)" : (intake.url || "-");
-  return `---
-type: Game Asset
-title: ${args.title}
-description: ${args.description}
-resource: ${resource}
-tags: ${yamlList(args.tags)}
-timestamp: ${new Date().toISOString()}
-asset_id: ${args.assetId}
-kind: ${args.kind}
-status: accepted
-origin: ${args.origin}
-license: ${args.licenseName}
-license_url: ${args.licenseUrl}
-attribution_required: ${args.attributionRequired}
-commercial_use: ${args.commercialUse}
-modification_allowed: ${args.modificationAllowed}
-redistribution_allowed: ${args.redistributionAllowed}
-publish: ${args.publish}
-shipping_decision: ${args.shippingDecision}
-${extra ? `${extra}\n` : ""}---
+  const frontmatter = catalogFrontmatter({
+    title: args.title,
+    description: args.description,
+    resource,
+    tags: args.tags,
+    timestamp: new Date().toISOString(),
+    assetId: args.assetId,
+    kind: args.kind,
+    status: "accepted",
+    origin: args.origin,
+    license: args.licenseName,
+    licenseUrl: args.licenseUrl,
+    attributionRequired: args.attributionRequired,
+    commercialUse: args.commercialUse,
+    modificationAllowed: args.modificationAllowed,
+    redistributionAllowed: args.redistributionAllowed,
+    publish: args.publish,
+    shippingDecision: args.shippingDecision,
+  }, extra);
+  return `${frontmatter}
 
 # ${args.title}
 
@@ -211,21 +199,21 @@ async function main() {
 
   const resource = `files/${kindDir}/${args.assetId}/`;
   await writeFile(catalogPath, catalogMarkdown(args, intake, resource), "utf8");
-  await writeFile(licensePath, `# License: ${args.licenseName}
-
-- Asset id: ${args.assetId}
-- Origin: ${args.origin}
-- License URL: ${args.licenseUrl}
-- Attribution required: ${args.attributionRequired}
-- Commercial use: ${args.commercialUse}
-- Modification allowed: ${args.modificationAllowed}
-- Redistribution allowed: ${args.redistributionAllowed}
-- Publishable (commit to open repo): ${args.publish}
-- Shipping decision: ${args.shippingDecision}
-- Direct download: ${intake.manual ? "(manual/account-gated — not stored)" : (intake.url || "-")}
-- Source page: ${args.sourcePageUrl || intake.source_page_url || intake.url || "-"}
-- Author/vendor: ${args.authorVendor || intake.source}
-`, "utf8");
+  await writeFile(licensePath, licenseMarkdown({
+    license: args.licenseName,
+    assetId: args.assetId,
+    origin: args.origin,
+    licenseUrl: args.licenseUrl,
+    attributionRequired: args.attributionRequired,
+    commercialUse: args.commercialUse,
+    modificationAllowed: args.modificationAllowed,
+    redistributionAllowed: args.redistributionAllowed,
+    publish: args.publish,
+    shippingDecision: args.shippingDecision,
+    directDownload: intake.manual ? "(manual/account-gated — not stored)" : (intake.url || "-"),
+    sourcePage: args.sourcePageUrl || intake.source_page_url || intake.url || "-",
+    authorVendor: args.authorVendor || intake.source,
+  }), "utf8");
 
   console.log(JSON.stringify({ asset_id: args.assetId, kind: args.kind, catalog: catalogPath, resource, license: licensePath }, null, 2));
 }

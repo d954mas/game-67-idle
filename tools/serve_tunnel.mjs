@@ -16,19 +16,9 @@ import { createServer } from "node:http";
 import { createReadStream, existsSync, mkdirSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
-import { join, resolve, normalize, extname } from "node:path";
+import { join, resolve, normalize } from "node:path";
 import { get } from "node:https";
-
-const TYPES = {
-  ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript",
-  ".css": "text/css", ".json": "application/json", ".wasm": "application/wasm",
-  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
-  ".webp": "image/webp", ".svg": "image/svg+xml", ".ico": "image/x-icon",
-  ".ttf": "font/ttf", ".otf": "font/otf", ".woff": "font/woff", ".woff2": "font/woff2",
-  ".wav": "audio/wav", ".mp3": "audio/mpeg", ".ogg": "audio/ogg",
-  ".glb": "model/gltf-binary", ".gltf": "model/gltf+json", ".obj": "text/plain",
-  ".data": "application/octet-stream", ".mem": "application/octet-stream",
-};
+import { mimeType } from "./lib/mime.mjs";
 
 function parseArgs(argv) {
   const a = { dir: "", port: 0, bin: "" };
@@ -105,7 +95,7 @@ function startServer(dir, port) {
       const st = await stat(full).catch(() => null);
       const target = st && st.isDirectory() ? join(full, "index.html") : full;
       if (!existsSync(target)) { res.writeHead(404); return res.end("not found"); }
-      res.writeHead(200, { "content-type": TYPES[extname(target).toLowerCase()] || "application/octet-stream", "cache-control": "no-cache" });
+      res.writeHead(200, { "content-type": mimeType(target), "cache-control": "no-cache" });
       createReadStream(target).pipe(res);
     } catch (e) {
       res.writeHead(500); res.end(String(e.message));
