@@ -18,6 +18,37 @@ Do not pre-create domain folders such as `assets/`, `tech/`, or `validation/`
 before the corresponding module is reviewed. Create a folder only when the move
 is deliberate and the module has a source contract.
 
+## Task Routing
+
+Load only the route that matches the current task:
+
+- Repository contract and hard invariants: `AGENTS.md`.
+- Current active game context: `GAME_PROJECT.md`.
+- Agent workflow, context policy, Markdown shape, or multi-agent use:
+  `docs/ai-pipeline/agent-workflow.md`.
+- Done criteria, validation routing, product gates, or repeated failure stops:
+  `docs/ai-pipeline/quality-validation.md`.
+- Profiling, prototype closeout, visual/asset routing, or portable export:
+  `docs/ai-pipeline/profiling-reuse.md`.
+- Durable task state and task commands: `tasks/README.md` and
+  `node tools/taskboard/cli.mjs context`.
+- AI Studio architecture and refactor tree: `ai_studio/tree.json` and
+  `docs/ai-pipeline/architecture-map.html`.
+- Architecture map rebuild:
+  `node tools/architecture_map/build_architecture_map.mjs`.
+
+Detailed engine, validation, subagent, asset, release, and game-production
+procedures belong in their own `ai_studio/` modules, docs, or skills. Do not add
+that procedure here.
+
+## Operating Rules
+
+- Make one scoped change, then run the narrowest command that proves it.
+- Do not call a slice done from one green gate; use the validation reference for
+  acceptance rules.
+- If the lead says a game/prototype is done, stopped, or only a test, stop game
+  implementation and follow task/status instructions.
+
 ## Map Ownership
 
 `docs/ai-pipeline/architecture-map.html` is generated output. Edit

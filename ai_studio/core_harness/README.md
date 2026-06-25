@@ -4,13 +4,12 @@
 It owns the smallest always-loaded harness contract:
 
 - agent entry policy;
-- root routing;
-- compatibility rules for `AGENTS.md`, `AI_PIPELINE.md`, and generated harness
-  surfaces;
+- root agent-facing compatibility;
+- compatibility rules for root agent-facing surfaces;
 - the minimal public commands that let an agent start work.
 
-Current files are not moved here yet. The tree lists candidates so each file can
-be inspected, cleaned, and migrated deliberately.
+Files move here only after review. The tree lists candidates so each file can be
+inspected, cleaned, and migrated deliberately.
 
 ## Current Compatibility Surface
 
@@ -22,7 +21,7 @@ them there:
 - `CLAUDE.md`
 
 When their content is migrated, the root files should become thin routing
-facades that point into `ai_studio/core_harness/`.
+facades.
 
 ## Tree Shape
 

@@ -11,19 +11,28 @@
     "tags": ["reviewed-only", "no-bulk-move", "core-first"],
     "children": [
       {
+        "id": "studio-readme",
+        "kind": "doc",
+        "path": "ai_studio/README.md",
+        "title": "ai_studio/README.md",
+        "description": "AI Studio root index: describes available capabilities, task routing, migration rules, map ownership, and where to go for each kind of work.",
+        "role": "AI Studio root capability index and router",
+        "tags": ["source", "router", "migration"]
+      },
+      {
         "id": "module:hot",
         "title": "Core Harness",
         "subtitle": "ai_studio/core_harness",
         "kind": "module",
         "moduleId": "hot",
         "color": "#172033",
-        "description": "Harness, agent-facing contract, AGENTS.md, short routing docs, and the smallest public entry points needed to start work.",
+        "description": "Harness, agent-facing contract, AGENTS.md, root compatibility surfaces, and the smallest public entry points needed to start work.",
         "tags": ["core", "harness", "first-refactor-line"],
         "children": [
-          { "id": "core-harness:agents", "kind": "doc", "path": "AGENTS.md", "description": "Repo-level harness contract loaded by agents: current project scope, invariants, boundaries, and gate policy.", "role": "repo-specific agent contract", "tags": ["core", "policy", "source"] },
+          { "id": "core-harness:agents", "kind": "doc", "path": "AGENTS.md", "description": "Repo-level harness contract loaded by agents: repository role, AI Studio direction, current-game routing, hard invariants, and context routes.", "role": "repo-specific agent contract", "tags": ["core", "policy", "source"] },
           { "id": "core-harness:claude", "kind": "doc", "path": "CLAUDE.md", "description": "Compatibility pointer for Claude-facing harnesses; should stay generated or thin and route back to AGENTS.md.", "role": "generated/parallel harness pointer", "tags": ["generated-surface", "check-drift"] },
+          { "id": "core-harness:game-project", "kind": "doc", "path": "GAME_PROJECT.md", "description": "Current-game routing file. Keeps active game context out of AGENTS.md and points to game design docs, task state, and game folder when a game is active.", "role": "current-game router", "tags": ["core", "game-route", "reviewed"] },
           { "id": "core-harness:root-readme", "kind": "doc", "path": "README.md", "description": "Human entry point for the shared pipeline root; explains repo shape without becoming an agent procedure manual.", "role": "human entry point", "tags": ["overview", "low-procedure"] },
-          { "id": "core-harness:ai-pipeline", "kind": "doc", "path": "AI_PIPELINE.md", "description": "Portable hot routing map that points agents to workflow references, validation, and architecture sources.", "role": "portable routing map", "tags": ["core", "route"] },
           { "id": "core-harness:agent-workflow", "kind": "doc", "path": "docs/ai-pipeline/agent-workflow.md", "description": "Detailed lead-agent work loop and context policy; Core links to it but should not absorb its procedure.", "role": "agent work-loop reference", "tags": ["reference", "move-out-detail"] },
           { "id": "core-harness:tasks-readme", "kind": "doc", "path": "tasks/README.md", "description": "Hot route map for durable task state, task CLI usage, status rules, and done evidence.", "role": "task store route map", "tags": ["core-adjacent", "state-route"] },
           { "id": "core-harness:ai-tool", "kind": "tool", "path": "tools/ai.mjs", "description": "Main public CLI facade for validation, status, gates, orchestration checks, and pipeline closeout.", "role": "main agent CLI facade", "tags": ["public-api", "core-entry"] },
