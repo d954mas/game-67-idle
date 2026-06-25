@@ -840,11 +840,6 @@ export function currentDoingOrchestrationTaskIds(root) {
     .filter(Boolean);
 }
 
-export function inferCurrentDoingOrchestrationTaskId(root) {
-  const candidates = currentDoingOrchestrationTaskIds(root);
-  return candidates.length === 1 ? candidates[0] : "";
-}
-
 function isArchivedOrchestrationGuardCandidate(doc) {
   return taskIdAtLeast(doc, ARCHIVED_ORCHESTRATION_GUARD_MIN_TASK_ID);
 }
