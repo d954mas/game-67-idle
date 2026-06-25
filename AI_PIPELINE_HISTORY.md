@@ -2,9 +2,9 @@
 
 Compact log of durable, still-live process decisions. The dated per-session
 retrospectives were removed in the 2026-06-24 cleanup (recoverable from the git tag
-`pre-history-cleanup-2026-06-24`); their lessons are already encoded in `AGENTS.md`,
-the skills, and `REFACTOR_PLAN.md`. Add a new entry only for a reusable decision
-that is not captured elsewhere.
+`pre-history-cleanup-2026-06-24`); their lessons are already encoded in `AGENTS.md`
+and the skills. Add a new entry only for a reusable decision that is not captured
+elsewhere.
 
 ## Standing rule
 
