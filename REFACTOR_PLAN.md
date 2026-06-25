@@ -109,11 +109,16 @@ Claude+Codex; Фаза 1 (prose-аудиторы/оркестрация advisory
    пишет, audit ревалидирует — дрейф = тихий ложный pass/fail) + байт-идентичные константы +
    `label_font`/`measure_label`. Вынесен `review_label_text(entry_id, alias_ids)` (единый формат) +
    хелперы; оба зовут его (байт-идентично для list/set, 0/1/много/дубль алиасов). Тест пинит
-   list-vs-set эквивалентность. **`audit_source_sheet_intake` (886) split — НЕ начат (решение лида):**
-   это ЧИСТАЯ декомпозиция (нет общего контракта с др. файлом — не дедуп), on-demand код (память
-   pipeline-audit: рез/реструктур on-demand = ~0 фрикции), рабочий+тестируемый гейт, scorer MEDIUM-
-   separability (numpy cross-deps + приватный `_pixel_runs` контракт finder↔scorer). Анти-god-file
-   инвариант ЗА split; аудит-урок ПРОТИВ churn. Ждёт решения лида (full 3-way / консервативный / skip).
+   list-vs-set эквивалентность. **`audit_source_sheet_intake` (886) — СДЕЛАНО иначе (решение лида: «упростить на месте, не
+   механический split»):** исследование показало — файл ЖИВОЙ (downstream `plan_runtime_crops` жёстко
+   читает его JSON-схему; 2 скилла требуют), ядро essential-сложное (union-find/HSV-скоринг/BFS), но
+   сверху налип accidental-слой. `205423e8` срезал мёртвое (подтв. грепом 0 вызовов):
+   `is_generic_key_hue_like`+`hue_distance` (скалярный двойник), `visible_component_arrays` (мёртвый
+   дубль), проброс `find_components`, формат `_pixel_offsets` (продакшн делал только `_pixel_runs`) +
+   vestigial `flat`. `ff98e19c` вынес decision-tree из 220-строчного `audit()` в чистый
+   `decide_next_step()` (audit → 107 строк). **JSON-выход БАЙТ-ИДЕНТИЧЕН** (проверено на pass+fail
+   sheets), timing_ms не изменён, 14 тестов зелёные, downstream-контракт цел. 3-way split НЕ делался —
+   состязательно признан косметикой (~0 пользы + churn), реальная задача была в срезе лишней сложности.
 6. **`taskboard/lib.mjs` split** (ПОЗДНО, высокий blast — импортят cli+server+product_gate+
    game_context): task_store + orchestration_policy + subagent_packets; имена экспортов стабильны
    через re-export shim при миграции. Проверка: `taskboard cli validate` + тесты.
