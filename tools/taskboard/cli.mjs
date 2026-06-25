@@ -719,12 +719,12 @@ switch (cmd) {
     break;
   }
   case "validate": {
-    // Orchestration packet checks are ADVISORY at validate-time: validate runs
-    // mid-edit (during work), so a missing delegation packet must NUDGE, not
-    // block. The goal (don't silently skip delegation) is kept as a loud nudge,
-    // and the deliberate checkpoints still gate: `set --status doing/review/done`
-    // (updateDoc) and the explicit `orchestration-check` command both still fail
-    // hard. [REFACTOR_PLAN Phase 1 #2]
+    // Orchestration packet checks are ADVISORY everywhere on the store path:
+    // validate (here) and the store-mutation checkpoints (createTask/updateDoc,
+    // i.e. `new`/`set`) all NUDGE rather than block, so the task store stays
+    // decoupled from orchestration policy. The goal (don't silently skip
+    // delegation) is kept as a loud nudge. Only the EXPLICIT `orchestration-check`
+    // command still fails hard. [REFACTOR_PLAN Phase 1 #2 + p.6 advisory flip]
     const ADVISORY_CODES = new Set([
       "orchestration_start_preflight_missing",
       "orchestration_evidence_missing",

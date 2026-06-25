@@ -21,6 +21,18 @@ function tempRoot(t) {
   return dir;
 }
 
+// Orchestration checkpoints are advisory: createTask/updateDoc save and emit a
+// `nudge:` to stderr instead of throwing. Capture those lines to assert the
+// nudge fired without the store mutation being blocked. [REFACTOR_PLAN p.6]
+function captureNudges(t) {
+  const lines = [];
+  t.mock.method(process.stderr, "write", (chunk) => {
+    lines.push(String(chunk));
+    return true;
+  });
+  return lines;
+}
+
 function taskBodyWithLog(log) {
   return `## What
 
@@ -449,17 +461,17 @@ test("updateDoc rejects invalid status", (t) => {
   assert.throws(() => updateDoc(root, "T0001", { fields: { status: "nonsense" } }), /Invalid status/);
 });
 
-test("updateDoc rejects substantial pipeline transition without orchestration evidence", (t) => {
+test("updateDoc nudges (advisory) on substantial transition without orchestration evidence", (t) => {
   const root = tempRoot(t);
   createTask(root, {
     title: "Pipeline guard",
     status: "doing",
     body: taskBodyWithLog("- 2026-06-21: Implemented the validator."),
   });
-  assert.throws(
-    () => updateDoc(root, "T0001", { fields: { status: "done" } }),
-    /substantial pipeline\/orchestration task needs orchestration evidence/,
-  );
+  const nudges = captureNudges(t);
+  const updated = updateDoc(root, "T0001", { fields: { status: "done" } });
+  assert.equal(updated.fields.status, "done");
+  assert.match(nudges.join(""), /substantial pipeline\/orchestration task needs orchestration evidence/);
 });
 
 test("updateDoc accepts substantial pipeline transition with orchestration packet and reviewer", (t) => {
@@ -479,7 +491,7 @@ test("updateDoc accepts substantial pipeline transition with orchestration packe
   assert.equal(updated.fields.status, "review");
 });
 
-test("updateDoc rejects orchestration packet labels without meaningful values", (t) => {
+test("updateDoc nudges on orchestration packet labels without meaningful values", (t) => {
   const root = tempRoot(t);
   createTask(root, {
     title: "Pipeline guard",
@@ -492,13 +504,13 @@ test("updateDoc rejects orchestration packet labels without meaningful values", 
   stop condition: unknown
   independent reviewer:`),
   });
-  assert.throws(
-    () => updateDoc(root, "T0001", { fields: { status: "review" } }),
-    /substantial pipeline\/orchestration task needs orchestration evidence/,
-  );
+  const nudges = captureNudges(t);
+  const updated = updateDoc(root, "T0001", { fields: { status: "review" } });
+  assert.equal(updated.fields.status, "review");
+  assert.match(nudges.join(""), /substantial pipeline\/orchestration task needs orchestration evidence/);
 });
 
-test("updateDoc reports missing orchestration packet fields", (t) => {
+test("updateDoc nudges about missing orchestration packet fields", (t) => {
   const root = tempRoot(t);
   createTask(root, {
     title: "Pipeline guard",
@@ -511,26 +523,26 @@ test("updateDoc reports missing orchestration packet fields", (t) => {
   stop condition: taskboard tests pass
   independent reviewers: reviewed by a plural label`),
   });
-  assert.throws(
-    () => updateDoc(root, "T0001", { fields: { status: "review" } }),
-    /missing\/invalid: independent reviewer/,
-  );
+  const nudges = captureNudges(t);
+  const updated = updateDoc(root, "T0001", { fields: { status: "review" } });
+  assert.equal(updated.fields.status, "review");
+  assert.match(nudges.join(""), /missing\/invalid: independent reviewer/);
 });
 
-test("updateDoc reports missing orchestration packet when no block exists", (t) => {
+test("updateDoc nudges about missing orchestration packet when no block exists", (t) => {
   const root = tempRoot(t);
   createTask(root, {
     title: "Subagent pipeline guard",
     status: "doing",
     body: taskBodyWithLog("- 2026-06-21: Closed without packet."),
   });
-  assert.throws(
-    () => updateDoc(root, "T0001", { fields: { status: "review" } }),
-    /missing\/invalid: orchestration: used packet/,
-  );
+  const nudges = captureNudges(t);
+  const updated = updateDoc(root, "T0001", { fields: { status: "review" } });
+  assert.equal(updated.fields.status, "review");
+  assert.match(nudges.join(""), /missing\/invalid: orchestration: used packet/);
 });
 
-test("updateDoc rejects orchestration packet assembled from separate log entries", (t) => {
+test("updateDoc nudges on orchestration packet assembled from separate log entries", (t) => {
   const root = tempRoot(t);
   createTask(root, {
     title: "Pipeline guard",
@@ -543,10 +555,10 @@ test("updateDoc rejects orchestration packet assembled from separate log entries
   independent reviewer: old reviewer
 - 2026-06-21: orchestration: used`),
   });
-  assert.throws(
-    () => updateDoc(root, "T0001", { fields: { status: "review" } }),
-    /substantial pipeline\/orchestration task needs orchestration evidence/,
-  );
+  const nudges = captureNudges(t);
+  const updated = updateDoc(root, "T0001", { fields: { status: "review" } });
+  assert.equal(updated.fields.status, "review");
+  assert.match(nudges.join(""), /substantial pipeline\/orchestration task needs orchestration evidence/);
 });
 
 test("updateDoc accepts substantial task with small-scope orchestration exception", (t) => {
@@ -560,7 +572,7 @@ test("updateDoc accepts substantial task with small-scope orchestration exceptio
   assert.equal(updated.fields.status, "done");
 });
 
-test("updateDoc rejects empty or weak small-scope orchestration exceptions", (t) => {
+test("updateDoc nudges on empty or weak small-scope orchestration exceptions", (t) => {
   const root = tempRoot(t);
   createTask(root, {
     title: "Pipeline guard empty exception",
@@ -577,18 +589,14 @@ test("updateDoc rejects empty or weak small-scope orchestration exceptions", (t)
     status: "doing",
     body: taskBodyWithLog("- orchestration: not needed - small scope: not one-file; touched many files"),
   });
-  assert.throws(
-    () => updateDoc(root, "T0001", { fields: { status: "review" } }),
-    /substantial pipeline\/orchestration task needs orchestration evidence/,
-  );
-  assert.throws(
-    () => updateDoc(root, "T0002", { fields: { status: "review" } }),
-    /substantial pipeline\/orchestration task needs orchestration evidence/,
-  );
-  assert.throws(
-    () => updateDoc(root, "T0003", { fields: { status: "review" } }),
-    /substantial pipeline\/orchestration task needs orchestration evidence/,
-  );
+  const nudges = captureNudges(t);
+  for (const id of ["T0001", "T0002", "T0003"]) {
+    const updated = updateDoc(root, id, { fields: { status: "review" } });
+    assert.equal(updated.fields.status, "review");
+  }
+  // Each weak/empty exception fails to suppress the evidence nudge (3 nudges).
+  const fired = nudges.join("").match(/substantial pipeline\/orchestration task needs orchestration evidence/g) || [];
+  assert.equal(fired.length, 3);
 });
 
 test("updateDoc does not classify gameplay skills tasks as pipeline orchestration", (t) => {
@@ -997,7 +1005,7 @@ test("cli validate --json reports parseable orchestration start preflight fields
   assert.match(parsed.advisories[0].nextAction, /orchestration-check T0078 --json/);
 });
 
-test("cli set --json reports structured transition failure", (t) => {
+test("cli set --json saves substantial transition and nudges on missing orchestration evidence", (t) => {
   const root = tempRoot(t);
   createTask(root, {
     title: "Subagent pipeline guard",
@@ -1006,15 +1014,15 @@ test("cli set --json reports structured transition failure", (t) => {
   });
   const cli = join(import.meta.dirname, "cli.mjs");
   const result = spawnSync(process.execPath, [cli, "set", "T0001", "--status", "review", "--json"], { cwd: root, encoding: "utf8" });
-  assert.notEqual(result.status, 0);
+  // Advisory now: the store mutation succeeds; the nudge goes to stderr.
+  assert.equal(result.status, 0, result.stderr);
   const parsed = JSON.parse(result.stdout);
-  assert.equal(parsed.ok, false);
-  assert.equal(parsed.problem.code, "orchestration_evidence_missing");
-  assert.equal(parsed.problem.taskId, "T0001");
-  assert.deepEqual(parsed.problem.missingFields, ["orchestration: used packet"]);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.doc.status, "review");
+  assert.match(result.stderr, /nudge: T0001: substantial pipeline\/orchestration task needs orchestration evidence/);
 });
 
-test("cli set --json reports structured start preflight transition failure", (t) => {
+test("cli set --json saves start transition and nudges on missing preflight", (t) => {
   const root = tempRoot(t);
   writeTaskDoc(root, {
     id: "T0078",
@@ -1024,14 +1032,12 @@ test("cli set --json reports structured start preflight transition failure", (t)
   }, taskBodyWithLog("- 2026-06-21: Ready to start without packet."));
   const cli = join(import.meta.dirname, "cli.mjs");
   const result = spawnSync(process.execPath, [cli, "set", "T0078", "--status", "doing", "--json"], { cwd: root, encoding: "utf8" });
-  assert.notEqual(result.status, 0);
+  // Advisory now: the start transition succeeds; the nudge goes to stderr.
+  assert.equal(result.status, 0, result.stderr);
   const parsed = JSON.parse(result.stdout);
-  assert.equal(parsed.ok, false);
-  assert.equal(parsed.problem.code, "orchestration_start_preflight_missing");
-  assert.equal(parsed.problem.taskId, "T0078");
-  assert.equal(parsed.problem.status, "doing");
-  assert.deepEqual(parsed.problem.missingFields, ["orchestration: used packet"]);
-  assert.match(parsed.problem.nextAction, /orchestration-check T0078 --json/);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.doc.status, "doing");
+  assert.match(result.stderr, /nudge: T0078: substantial pipeline\/orchestration task needs orchestration preflight before doing/);
 });
 
 test("cli orchestration-check passes complete preflight packet without PASS evidence", (t) => {
