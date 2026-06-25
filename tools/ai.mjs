@@ -24,7 +24,6 @@ function usage({ exitCode = 2, stream = process.stderr } = {}) {
   node tools/ai.mjs orchestration-check <task-id>|--id <task-id>|--file <task.md>|--current [--json]
   node tools/ai.mjs gate --project <game-id> --screenshot <path> --verdict pass|fail|review [gate options]
   node tools/ai.mjs visual-reject --project <game-id> --task <task-id> --screenshot <path> --problem <text> --next <text> [visual rejection options]
-  node tools/ai.mjs critic --project <game-id> --task <task-id> --screenshot <path> --target <path|text> --output <packet.md> [critic options]
   node tools/ai.mjs critique --project <game-id> --shot <tag:path> [--model-cmd <cmd>] [critic-run options]
   node tools/ai.mjs close-slice --task <task-id> --project <game-id> --evidence <text> [--resolved-rejection <text>] [close options]
 
@@ -42,7 +41,6 @@ Commands:
   orchestration-check   preflight-check an orchestration packet before launching subagents
   gate      write a product-read screenshot gate before expanding game content
   visual-reject record a lead visual rejection as a strict visual FAIL gate
-  critic    write a reusable visual/UI critic packet before a strict product gate
   critique  run the vision art-lead critic (critic + refute) over state screenshots into a game.visual_critique JSON
   close-slice require product gate + evidence before handoff/review
 
@@ -142,7 +140,6 @@ const HELPABLE_COMMANDS = new Set([
   "orchestration-check",
   "gate",
   "visual-reject",
-  "critic",
   "critique",
   "close-slice",
 ]);
@@ -175,8 +172,6 @@ if (command === "orchestration-check") run(["tools/taskboard/cli.mjs", "orchestr
 if (command === "gate") run(["tools/product_gate/review.mjs", ...argv]);
 
 if (command === "visual-reject") run(["tools/product_gate/visual_rejection_lock.mjs", ...argv]);
-
-if (command === "critic") run(["tools/product_gate/visual_critique_packet.mjs", ...argv]);
 
 if (command === "critique") run(["tools/product_gate/visual_critic_run.mjs", ...argv]);
 

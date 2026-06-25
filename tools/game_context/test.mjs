@@ -340,10 +340,10 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   assert.match(visualGate, /Fake shot \/ visual target path:/);
   assert.match(visualGate, /Current native screenshot path or capture plan:/);
   assert.match(visualGate, /Screenshot-vs-target mismatch list:/);
-  assert.match(visualGate, /## Visual Critic Packet/);
-  assert.match(visualGate, /node tools\/ai\.mjs critic/);
-  assert.match(visualGate, /first_slice_visual_critic_packet\.md/);
-  assert.match(visualGate, /first_slice_visual_critic_packet\.json/);
+  assert.match(visualGate, /## Visual Critic \(vision art-lead\)/);
+  assert.match(visualGate, /node tools\/ai\.mjs critique/);
+  assert.match(visualGate, /critic_instruction\.md/);
+  assert.match(visualGate, /game\.visual_critique/);
   assert.match(visualGate, /Gate command:/);
   assert.match(visualGate, /--visual-strict/);
   assert.match(visualGate, /--state-matrix gamedesign\/projects\/bubble-bay\/visual\/live_state_acceptance_matrix\.json/);

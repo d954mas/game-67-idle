@@ -138,9 +138,9 @@ For beautiful/casual/generated-UI/fake-shot/child-testable work, use
 at least 4/5 and no blocker/major visual issue. Strict UI passes should also
 include live-state coverage.
 
-When a separate design/UI critic pass would help, first generate a reusable
-critic packet with `node tools/ai.mjs critic`; convert its findings into the
-strict product gate.
+When a separate critic pass would help, run the vision art-lead critic with
+`node tools/ai.mjs critique` (emit a prompt, or run a vision model); feed its
+`game.visual_critique` into the strict product gate (`gate ... --critique`).
 
 ## Reusable UI Gate
 
