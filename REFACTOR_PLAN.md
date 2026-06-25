@@ -90,9 +90,17 @@ Claude+Codex; Фаза 1 (prose-аудиторы/оркестрация advisory
    `state_matrix`-ридер (только в `review.mjs`, 1 юзер) и `llm_json`/`extractJson` (только в
    `visual_critic_run`, 1 юзер) — не дубли (правило «похожая форма → оставить»); `defaultContractPath`
    + `sanitizeToken` оставлены inline (однострочник + дефолт-токен расходится "gate"/"game").
-   **ОСТАЛОСЬ — рискованно:** свернуть `visual_critique_packet` → `visual_critic_run` emit-mode
-   (удаление тула + правка скиллов/доков, смежно с Фазой 4 #14) — отдельный аккуратный заход.
-   Проверка: `node tools/ai.mjs gate` (рва `visual_material_floor`/`repeated_failure_guard` не трогать).
+   **п.3d — СДЕЛАНО иначе (решение лида):** план «свернуть `visual_critique_packet` →
+   `visual_critic_run` emit-mode» состязательно признан НЕВЕРНЫМ — это РАЗНЫЕ артефакты
+   (`visual_critique_packet` = человеческий скелет gate-команды `game.visual_critique_packet`, который
+   НИ ОДИН гейт не ингестит и НИ ОДИН живой workflow не зовёт — vestigial advisory;
+   `visual_critic_run`/`critique` = vision-LLM prompt → `game.visual_critique`, который ингестит
+   `review.mjs --critique`+`close_slice`). Fold = запутывание, не дедуп. Честное упрощение к той же
+   цели «−1 тул» = `d0f5f044` **удалить** `visual_critique_packet` целиком + verb `critic` в ai.mjs +
+   3 теста + проводка new_prototype/скилл (репойнт на `critique`). 0 влияния на гейты (схему никто не
+   читал); `visual_material_floor`/`repeated_failure_guard`/`review.mjs`/`close_slice` не тронуты.
+   ai.test 29, product_gate 51, game_context 7; validate --full зелёный. Phase-4 настоящий vision-гейт
+   (close_slice → visual_critic_run «дебаг/реальный?») — ОТДЕЛЬНАЯ будущая работа на `visual_critic_run`.
 4. ✅ **СДЕЛАНО** (`031484dc`). `tools/devapi/png_io.py` — единый dependency-free PNG-кодек
    (stdlib zlib+struct): сигнатура/chunk-framing/IHDR `>IIBBBBB` были триплицированы, chunk-builder
    байт-идентичен в 2 энкодерах. capture_window держит свой BGRA→RGB swap (capture-специфика) →
