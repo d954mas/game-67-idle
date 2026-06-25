@@ -72,8 +72,9 @@ node ai_studio/core_harness/orchestration/cli.mjs --help
 - `orchestration-check`
 - `orchestration-bootstrap`
 
-The CLI owns the public command dispatch. Some low-level packet and task lookup
-helpers still live in Taskboard internals until the next extraction slice.
+The CLI owns the public command dispatch. Packet templates, packet validation,
+preflight checks, presets, and bounded file-scope checks live in `lib.mjs`.
+Current-task lookup still reads Taskboard state through the Taskboard module.
 
 ## Removed
 

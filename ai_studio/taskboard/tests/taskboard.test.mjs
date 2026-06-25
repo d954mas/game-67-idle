@@ -9,11 +9,15 @@ import vm from "node:vm";
 import {
   parseDoc, serializeDoc, slugify, createTask, createEpic, listTasks,
   listEpics, updateDoc, findDoc, validateStore, validateStoreDetailed,
-  LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate, orchestrationPreflightProblem,
+  LIVE_STATUS_MAX_CHARS,
+} from "../lib.mjs";
+import {
+  DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
+  orchestrationPacketTemplate,
+  orchestrationPreflightProblem,
   subagentPacketTemplate, subagentPacketProblem,
   subagentPacketPreset, subagentPacketPresetNames, renderSubagentPacketPreset,
-  DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
-} from "../lib.mjs";
+} from "../../core_harness/orchestration/lib.mjs";
 
 const taskboardDir = dirname(import.meta.dirname);
 const cliPath = join(taskboardDir, "cli.mjs");

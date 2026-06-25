@@ -22,8 +22,9 @@ Current source layout for the map:
   reads `tree.json`, scans selected Markdown and tools, then writes the HTML.
 - `docs/ai-pipeline/architecture-map.html` is generated renderer output for the
   working refactor map. Do not edit it by hand.
-- `docs/ai-pipeline/architecture-map-full.html` is generated renderer output for
-  the full current inventory.
+- `docs/ai-pipeline/architecture-map-full.html` is a generated debug/reference
+  artifact only. It is not the working architecture source; old modules are
+  represented in the working map under `Not Refactored`.
 
 "Enrichment" is limited to mechanical display data. If a tree node has a
 `path`, the generator can fill title and file link data from Markdown or the
@@ -33,17 +34,14 @@ descriptions fail the map build.
 
 ## Visual Graphs
 
-There are two generated visual reports:
+There is one working visual report:
 
 - `docs/ai-pipeline/architecture-map.html` is the working Core-first refactor
   map. Start there. Core means harness, agent-facing contract, `AGENTS.md`,
   short routing, and the smallest public entry points needed to start work.
-- `docs/ai-pipeline/architecture-map-full.html` is the full inventory graph.
-  Use it when you need every Markdown/tool node, not while making the first
-  refactor decisions.
 
-Both are generated, not hand-maintained. Rebuild them after changing
-architecture docs, skills, or tools:
+It is generated, not hand-maintained. Rebuild it after changing architecture
+docs, skills, or tools:
 
 ```powershell
 node tools/architecture_map/build_architecture_map.mjs
@@ -215,7 +213,7 @@ These are the main stable entry points an agent should know first.
 | AI Studio target structure | `ai_studio/README.md`, `ai_studio/tree.json`, `ai_studio/core_harness/README.md` | tools/architecture_map/build_architecture_map.mjs | `ai-pipeline-maintenance` | Reviewed modules under `ai_studio/`, generated map HTML |
 | Pipeline policy and context | `AGENTS.md`, `ai_studio/README.md`, `docs/ai-pipeline/` | `tools/context_budget.mjs`, `tools/doc_reference_check.mjs`, `tools/pipeline_validate.mjs` | `ai-pipeline-maintenance` | Updated docs, validation output |
 | Task state | `ai_studio/taskboard/README.md`, `tasks/STATUS.md`, `tasks/active/`, `tasks/epics/` | `ai_studio/taskboard/cli.mjs`, `ai_studio/taskboard/server.mjs` | `task-manager` | Task files, status index |
-| Core orchestration | `ai_studio/core_harness/orchestration/README.md` | `ai_studio/core_harness/orchestration/cli.mjs` | none required | Subagent packets and compact handoffs |
+| Core orchestration | `ai_studio/core_harness/orchestration/README.md`, `ai_studio/core_harness/orchestration/lib.mjs` | `ai_studio/core_harness/orchestration/cli.mjs` | none required | Subagent packets, packet validation, compact handoffs |
 | Passive profiling and feedback | `docs/ai-pipeline/profiling-reuse.md` | `tools/ai_profile/*`, tools/hooks_sync.mjs | `chat-session-reflection`, `ai-pipeline-maintenance` | `tmp/session_profiles/` raw logs, promoted lessons |
 | Game concept and GDD | `gamedesign/projects/<game-id>/`, `gamedesign/knowledge/` | `tools/game_context/new_prototype.mjs`, `tools/game_context/iteration_context.mjs` | `primary-gdd-pipeline`, `design-source-knowledge` | GDD, project wiki, core loop, reference notes |
 | Reusable design knowledge | `gamedesign/knowledge/`, `gamedesign/sources/` | none as a single facade yet | `design-source-knowledge`, `primary-gdd-pipeline` | Source notes, promoted reusable knowledge |
@@ -233,7 +231,7 @@ These are the main stable entry points an agent should know first.
 |---|---|---|
 | `tools/lib/` | Shared small utilities | CLI failure helper, JSON, paths, licenses, MIME, hash, asset catalog, validation flags. |
 | `ai_studio/taskboard/` | Markdown task store | CLI, server UI, lib, tests, public web UI. |
-| `ai_studio/core_harness/orchestration/` | Delegation and subagent routing | README, public CLI route, focused route tests. |
+| `ai_studio/core_harness/orchestration/` | Delegation and subagent routing | README, public CLI route, helper lib, focused route tests. |
 | `tools/ai_profile/` | Passive tool/session profiler | Hook recorders, status, Codex import, agent rollup, tests. |
 | `tools/bootstrap/` | Pipeline/game/template export and copy model | `new_game`, `export_base`, template path ownership, tests. |
 | `tools/game_context/` | Active game/prototype context gates | Kickoff skeleton, iteration context, workflow guard, tests. |
@@ -288,7 +286,7 @@ currently protocol-level, not installed worker definitions.
 | Role | Current implementation | Authority |
 |---|---|---|
 | Lead/orchestrator | Main conversation plus `ai_studio/core_harness/orchestration/README.md` when broad work should split early | Owns scope, hot docs, task/status, integration, validation, commits, final report. |
-| Read-only mapper | Packet preset `codebase-map` from `ai_studio/taskboard/lib.mjs` | Reads bounded scopes, returns entry points/data flow/risks. |
+| Read-only mapper | Packet preset `codebase-map` from `ai_studio/core_harness/orchestration/lib.mjs` | Reads bounded scopes, returns entry points/data flow/risks. |
 | Independent reviewer | Packet preset `review` | Reviews one artifact or axis, returns verdict/issues. Verdict is input, not acceptance. |
 | Asset researcher | Packet preset `asset-research` | Finds candidates and licenses, does not import. |
 | Texture/image worker | Packet preset `texture-gen` plus `delegated-image-generation` | Generates isolated raster artifact under `tmp/`, does not wire runtime. |
@@ -381,8 +379,8 @@ justify a reusable wrapper.
 ## Current Strengths
 
 - The old single AI facade has been removed; use the owning module CLI directly.
-- The taskboard has a real Markdown store, CLI, server, orchestration packet
-  templates, validation, and tests.
+- The taskboard has a real Markdown store, CLI, server, validation, and tests.
+- Orchestration packet templates and checks live under Core Harness.
 - The skills are domain-oriented and mostly have clear boundaries.
 - The asset domain is unusually mature for a prototype: source-first rules,
   shared library, provenance, generation records, UI atlas flow, restricted

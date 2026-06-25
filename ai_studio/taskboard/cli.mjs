@@ -15,8 +15,9 @@
 import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
   updateDoc, validateStoreDetailed, TASK_STATUSES,
-  LIVE_STATUS_MAX_CHARS, orchestrationPacketTemplate,
+  LIVE_STATUS_MAX_CHARS,
 } from "./lib.mjs";
+import { orchestrationPacketTemplate } from "../core_harness/orchestration/lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fail } from "../../tools/lib/cli.mjs";

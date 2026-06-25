@@ -6,18 +6,20 @@ import { isAbsolute, relative, resolve } from "node:path";
 import {
   createTask,
   currentDoingOrchestrationTaskIds,
-  DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
   findDoc,
   findRoot,
+  parseDoc,
+} from "../../taskboard/lib.mjs";
+import {
+  DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
   isBoundedOrchestrationAllowedFiles,
   orchestrationPacketTemplate,
   orchestrationPreflightProblem,
-  parseDoc,
   renderSubagentPacketPreset,
   subagentPacketPresetNames,
   subagentPacketProblem,
   subagentPacketTemplate,
-} from "../../taskboard/lib.mjs";
+} from "./lib.mjs";
 import { fail } from "../../../tools/lib/cli.mjs";
 
 const root = findRoot();
