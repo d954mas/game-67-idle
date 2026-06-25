@@ -9,9 +9,9 @@ improvement.
 
 Use durable evidence before memory:
 
-1. `AGENTS.md`, `AI_PIPELINE.md`, `tasks/README.md`.
-2. `node tools/taskboard/cli.mjs summary`; use
-   `node tools/taskboard/cli.mjs context` only if the summary is not enough.
+1. `AGENTS.md`, `ai_studio/README.md`, `ai_studio/taskboard/README.md`.
+2. `node ai_studio/taskboard/cli.mjs summary`; use
+   `node ai_studio/taskboard/cli.mjs context` only if the summary is not enough.
 3. `git status --short` to identify changed durable artifacts without implying
    they were all part of the reflected session.
 4. Relevant task logs, reports, screenshots, package logs, or validation

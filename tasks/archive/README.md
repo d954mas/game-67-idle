@@ -5,8 +5,8 @@ Historical evidence and cleanup notes that should not live in the hot
 
 ## AI Pipeline Evidence Snapshot
 
-Current source-of-truth docs are `AGENTS.md`, `AI_PIPELINE.md`,
-`tasks/README.md`, and `.codex/skills/`.
+Current source-of-truth docs are `AGENTS.md`, `ai_studio/README.md`,
+`ai_studio/taskboard/README.md`, and `.codex/skills/`.
 
 Pipeline cleanup evidence moved out of `tasks/STATUS.md`:
 

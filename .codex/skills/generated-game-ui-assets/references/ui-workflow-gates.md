@@ -129,7 +129,7 @@ INTEGRATE, when wiring assets into runtime:
 
 - `node tools/assets/job/validate_art_job.mjs --job <job> --strict`
 - runtime screenshot/product gate with `node tools/product_gate/review.mjs` or
-  `node tools/ai.mjs gate`.
+  `node tools/product_gate/review.mjs`.
 
 FINAL-ART, only when shipping a reusable kit or claiming completion:
 

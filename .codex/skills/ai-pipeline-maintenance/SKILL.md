@@ -13,7 +13,7 @@ Use for AI workflow/tooling changes, not ordinary playable game work.
   Mechanical Guard Pattern, Validation Matrix, Report Shape.
 - `references/skill-placement.md`: Update Existing Skill, Create New Skill, and
   Keep Hot Docs Thin decisions.
-- `AI_PIPELINE.md`: portable workflow map.
+- `ai_studio/README.md`: portable AI Studio workflow and routing map.
 - `docs/ai-pipeline/agent-workflow.md`: context, Markdown shape, multi-agent use.
 - `docs/ai-pipeline/quality-validation.md`: gates and repeated strict/product
   failure policy.
@@ -22,17 +22,17 @@ Use for AI workflow/tooling changes, not ordinary playable game work.
 ## Default Workflow
 
 1. Inspect with `git status --short --untracked-files=all`,
-   `node tools/taskboard/cli.mjs summary`, and, for review,
+   `node ai_studio/taskboard/cli.mjs summary`, and, for review,
    `node tools/context_budget.mjs --review`.
 2. Pick one scope: hot docs, skill entrypoints, validators, profiling,
    taskboard, product gates, export, or post-review cleanup.
 3. Move repeated procedure behind a reference, skill, task rule, or tool.
 4. Put mandatory rules in validators/tests where practical, then run the
-   narrow proof and `node tools/ai.mjs validate`.
+   narrow proof and `node tools/pipeline_validate.mjs`.
 
 ## Placement Rules
 
-- Policy/boundaries: `AGENTS.md`; portable map: `AI_PIPELINE.md`.
+- Policy/boundaries: `AGENTS.md`; portable map: `ai_studio/README.md`.
 - Reusable method: `docs/ai-pipeline/` or skill `references/`.
 - Repeatable agent behavior: `.codex/skills/<skill>/`.
 - Work state/evidence: `tasks/STATUS.md`, task logs, evidence files.

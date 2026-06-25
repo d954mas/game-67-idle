@@ -10,7 +10,7 @@ test("flag vocabulary is well-formed (all --prefixed, no dupes, no overlap)", ()
 
 test("the vocabulary matches the documented validate contract (regression guard)", () => {
   // If you intentionally add/remove a validate flag, update BOTH this assertion
-  // and tools/ai.mjs help text + tools/pipeline_validate.mjs usage text.
+  // and tools/pipeline_validate.mjs usage text.
   assert.deepEqual(VALIDATE_BOOLEAN_FLAGS, [
     "--quick",
     "--full",

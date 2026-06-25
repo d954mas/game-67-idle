@@ -44,7 +44,7 @@ explicitly asks for it.
 ## Context Routing
 
 - Workflow and commands: `ai_studio/README.md`.
-- Task/status state: `tasks/README.md` and the taskboard.
+- Task/status state: `ai_studio/taskboard/README.md` and the taskboard.
 - AI Studio architecture: `ai_studio/README.md`, `ai_studio/tree.json`, and
   `docs/ai-pipeline/architecture-map.html`.
 - Detailed engine, workflow, validation, subagent, asset, and release procedures:

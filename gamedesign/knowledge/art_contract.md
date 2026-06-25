@@ -140,7 +140,7 @@ box with the codex CLI (gpt-5.5 vision): the instruction is piped on stdin and t
 screenshots are attached with `-i`. `{IMAGES}` expands to the screenshot paths.
 
 ```powershell
-node tools/ai.mjs critique --project <game-id> `
+node tools/product_gate/visual_critic_run.mjs --project <game-id> `
   --shot first_screen:build/captures/state_first_screen.png `
   --shot combat:build/captures/state_combat.png `
   --out gamedesign/projects/<game-id>/art/latest_critique.json `
@@ -153,7 +153,7 @@ another agent can run any vision model manually and save the JSON.
 ## Running The Gate
 
 ```powershell
-node tools/ai.mjs gate `
+node tools/product_gate/review.mjs `
   --project <game-id> `
   --task <task-id> `
   --surface desktop `
@@ -215,10 +215,10 @@ with running_game(fresh_state=True) as game:
 
 ```powershell
 py -3.12 tools/<id>/capture_states.py             # per-state PNGs + state_matrix.json
-node tools/ai.mjs critique --project <id> `
+node tools/product_gate/visual_critic_run.mjs --project <id> `
   --state-matrix gamedesign/projects/<id>/art/state_matrix.json `
   --model-cmd "codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -i {IMAGES} -"
-# then: node tools/ai.mjs gate --project <id> --screenshot <one-state>.png --critique <critique.json>
+# then: node tools/product_gate/review.mjs --project <id> --screenshot <one-state>.png --critique <critique.json>
 ```
 
 ## Links

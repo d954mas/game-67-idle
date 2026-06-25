@@ -356,10 +356,10 @@ if (!values["model-cmd"]) {
   console.log("");
   console.log("No --model-cmd given. Run the critic now with the verified vision path:");
   console.log("");
-  console.log(`  node tools/ai.mjs critique --project ${project} ${shots.map((shot) => `--shot ${shot.tag}:${shot.path}`).join(" ")} \\`);
+  console.log(`  node tools/product_gate/visual_critic_run.mjs --project ${project} ${shots.map((shot) => `--shot ${shot.tag}:${shot.path}`).join(" ")} \\`);
   console.log(`    --out ${out} --model-cmd "${CODEX_MODEL_CMD}"`);
   console.log("");
-  console.log(`Then: node tools/ai.mjs gate --project ${project} --surface ${surface} --screenshot ${shots[0].path} --critique ${out}`);
+  console.log(`Then: node tools/product_gate/review.mjs --project ${project} --surface ${surface} --screenshot ${shots[0].path} --critique ${out}`);
   process.exit(0);
 }
 
@@ -428,4 +428,4 @@ if (refute) console.log(`Refute: ${refute.agree ? "agreed" : `disagreed -> revie
 console.log(`Final verdict: ${critique.verdict}`);
 console.log(`Critique: ${out}`);
 console.log("");
-console.log(`Next: node tools/ai.mjs gate --project ${project} --surface ${surface} --screenshot ${shots[0].path} --critique ${out}`);
+console.log(`Next: node tools/product_gate/review.mjs --project ${project} --surface ${surface} --screenshot ${shots[0].path} --critique ${out}`);

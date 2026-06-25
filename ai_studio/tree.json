@@ -32,23 +32,50 @@
           { "id": "core-harness:agents", "kind": "doc", "path": "AGENTS.md", "description": "Repo-level harness contract loaded by agents: repository role, AI Studio direction, current-game routing, hard invariants, and context routes.", "role": "repo-specific agent contract", "tags": ["core", "policy", "source"] },
           { "id": "core-harness:claude", "kind": "doc", "path": "CLAUDE.md", "description": "Compatibility pointer for Claude-facing harnesses; should stay generated or thin and route back to AGENTS.md.", "role": "generated/parallel harness pointer", "tags": ["generated-surface", "check-drift"] },
           { "id": "core-harness:game-project", "kind": "doc", "path": "GAME_PROJECT.md", "description": "Current-game routing file. Keeps active game context out of AGENTS.md and points to game design docs, task state, and game folder when a game is active.", "role": "current-game router", "tags": ["core", "game-route", "reviewed"] },
-          { "id": "core-harness:root-readme", "kind": "doc", "path": "README.md", "description": "Human entry point for the shared pipeline root; explains repo shape without becoming an agent procedure manual.", "role": "human entry point", "tags": ["overview", "low-procedure"] },
-          { "id": "core-harness:agent-workflow", "kind": "doc", "path": "docs/ai-pipeline/agent-workflow.md", "description": "Detailed lead-agent work loop and context policy; Core links to it but should not absorb its procedure.", "role": "agent work-loop reference", "tags": ["reference", "move-out-detail"] },
-          { "id": "core-harness:tasks-readme", "kind": "doc", "path": "tasks/README.md", "description": "Hot route map for durable task state, task CLI usage, status rules, and done evidence.", "role": "task store route map", "tags": ["core-adjacent", "state-route"] },
-          { "id": "core-harness:ai-tool", "kind": "tool", "path": "tools/ai.mjs", "description": "Main public CLI facade for validation, status, gates, orchestration checks, and pipeline closeout.", "role": "main agent CLI facade", "tags": ["public-api", "core-entry"] },
-          { "id": "core-harness:taskboard-tool", "kind": "tool", "path": "tools/taskboard/cli.mjs", "description": "Public CLI facade for task store, current context, orchestration packets, and task validation.", "role": "task/context CLI facade", "tags": ["public-api", "core-adjacent"] },
+          {
+            "id": "core-harness:workflow",
+            "title": "Workflow",
+            "subtitle": "task execution order",
+            "kind": "group",
+            "color": "#334155",
+            "description": "Core Harness workflow group: context policy, lead-agent work loop, subagent packet contract, and orchestration recipes for solving tasks.",
+            "role": "agent task workflow inside the harness",
+            "tags": ["core", "workflow", "procedure"],
+            "children": [
+              { "id": "core-harness:agent-workflow", "kind": "doc", "path": "docs/ai-pipeline/agent-workflow.md", "description": "Lead-agent work loop, context policy, agent-facing docs, and when to use subagents.", "role": "agent work-loop reference", "tags": ["workflow", "context-policy"] },
+              { "id": "core-harness:subagent-protocol", "kind": "doc", "path": "docs/ai-pipeline/subagent-protocol.md", "description": "Bounded subagent packet contract, return fields, ownership boundaries, and lead verification responsibilities.", "role": "subagent packet contract", "tags": ["workflow", "subagents", "contract"] },
+              { "id": "core-harness:orchestration-playbook", "kind": "doc", "path": "docs/ai-pipeline/orchestration-playbook.md", "description": "Day-to-day orchestration recipes and delegation command patterns used by the lead agent when work should be split.", "role": "orchestration operating guide", "tags": ["workflow", "orchestration", "recipes"] }
+            ]
+          },
           { "id": "core-harness:tools-readme", "kind": "doc", "path": "tools/README.md", "description": "Tool layout contract: public facades, domain helpers, and cleanup or validation routing.", "role": "tool layout contract", "tags": ["source", "facade-map"] },
           { "id": "core-harness:context-budget", "kind": "tool", "path": "tools/context_budget.mjs", "description": "Mechanical guard for hot docs and skill entrypoint size; keeps always-loaded Core context small.", "role": "hot docs and skill budget guard", "tags": ["validator", "context"] },
           { "id": "core-harness:doc-reference-check", "kind": "tool", "path": "tools/doc_reference_check.mjs", "description": "Mechanical guard for stale local references, missing files, and retired commands in Markdown.", "role": "stale reference guard", "tags": ["validator", "docs"] },
-          { "id": "core-harness:pipeline-validate", "kind": "tool", "path": "tools/pipeline_validate.mjs", "description": "Validation orchestrator behind tools/ai.mjs validate modes; collects docs, skills, taskboard, export, and product checks.", "role": "pipeline validation orchestrator", "tags": ["validator", "facade"] },
+          { "id": "core-harness:pipeline-validate", "kind": "tool", "path": "tools/pipeline_validate.mjs", "description": "Validation orchestrator behind tools/pipeline_validate.mjs modes; collects docs, skills, taskboard, export, and product checks.", "role": "pipeline validation orchestrator", "tags": ["validator", "facade"] },
           { "id": "core-harness:quality-validation", "kind": "doc", "path": "docs/ai-pipeline/quality-validation.md", "description": "Gate taxonomy and validation reference; Core should route to it instead of duplicating the rules.", "role": "validation source reference", "tags": ["source", "move-out-detail"] },
           { "id": "core-harness:sync", "kind": "tool", "path": "tools/sync.mjs", "description": "Cross-harness sync entry point; keeps generated skills and hook surfaces aligned.", "role": "cross-harness sync entry", "tags": ["sync", "public-api"] },
           { "id": "core-harness:skills-sync", "kind": "tool", "path": "tools/skills_sync.mjs", "description": "Generates Claude-facing skill pointers from canonical Codex skills.", "role": "generated skill pointers", "tags": ["generated", "check-drift"] },
           { "id": "core-harness:hooks-sync", "kind": "tool", "path": "tools/hooks_sync.mjs", "description": "Generates Codex and Claude hook config from shared hook sources.", "role": "generated hook config", "tags": ["generated", "hooks"] },
           { "id": "core-harness:bootstrap-template", "kind": "doc", "path": "tools/bootstrap/TEMPLATE.md", "description": "Portable export and template contract; explains the reusable pipeline base and game starter copy model.", "role": "portable export template", "tags": ["export", "source"] },
-          { "id": "core-harness:profiling-reuse", "kind": "doc", "path": "docs/ai-pipeline/profiling-reuse.md", "description": "Move-out candidate from Core; owns profiling, reuse, prototype closeout, and export guidance.", "role": "profiling/reuse reference belongs outside Core after review", "tags": ["move-out-candidate"] },
-          { "id": "core-harness:orchestration-playbook", "kind": "doc", "path": "docs/ai-pipeline/orchestration-playbook.md", "description": "Move-out candidate from Core; day-to-day delegation operations and orchestration command recipes.", "role": "orchestration method candidate", "tags": ["move-out-candidate"] },
-          { "id": "core-harness:subagent-protocol", "kind": "doc", "path": "docs/ai-pipeline/subagent-protocol.md", "description": "Move-out candidate from Core; bounded subagent packet contract and lead or worker responsibilities.", "role": "subagent packet contract candidate", "tags": ["move-out-candidate"] }
+          { "id": "core-harness:profiling-reuse", "kind": "doc", "path": "docs/ai-pipeline/profiling-reuse.md", "description": "Move-out candidate from Core; owns profiling, reuse, prototype closeout, and export guidance.", "role": "profiling/reuse reference belongs outside Core after review", "tags": ["move-out-candidate"] }
+        ]
+      },
+      {
+        "id": "module:taskboard",
+        "title": "Taskboard",
+        "subtitle": "tasks/ + ai_studio/taskboard",
+        "kind": "module",
+        "moduleId": "taskboard",
+        "color": "#2563eb",
+        "description": "Durable project work state: tasks, epics, live status, context digest, orchestration labels, and task-store validation.",
+        "tags": ["state", "tasks", "workflow-support"],
+        "children": [
+          { "id": "taskboard:readme", "kind": "doc", "path": "ai_studio/taskboard/README.md", "description": "Taskboard contract for task files, statuses, task lifecycle, durable context, and task CLI usage.", "role": "task store source contract", "tags": ["source", "state"] },
+          { "id": "taskboard:status", "kind": "doc", "path": "tasks/STATUS.md", "description": "Live project status and short current-state digest. It is state, not harness policy.", "role": "live project status", "tags": ["state", "hot"] },
+          { "id": "taskboard:reference", "kind": "doc", "path": "ai_studio/taskboard/task-store-reference.md", "description": "Detailed task-store reference for fields, lifecycle, and maintenance rules.", "role": "task store reference", "tags": ["reference"] },
+          { "id": "taskboard:cli", "kind": "tool", "path": "ai_studio/taskboard/cli.mjs", "description": "Public Taskboard CLI for listing, context digest, task create/update, orchestration packet helpers, and task validation.", "role": "taskboard public CLI", "tags": ["public-api", "cli"] },
+          { "id": "taskboard:lib", "kind": "tool", "path": "ai_studio/taskboard/lib.mjs", "description": "Taskboard implementation library: parsing, validation, context digest, orchestration packet templates, and preflight checks.", "role": "taskboard internal library", "tags": ["internal", "state", "workflow-support"] },
+          { "id": "taskboard:server", "kind": "tool", "path": "ai_studio/taskboard/server.mjs", "description": "Optional local browser UI server for viewing the taskboard.", "role": "taskboard UI server", "tags": ["ui", "optional"] },
+          { "id": "taskboard:test", "kind": "tool", "path": "ai_studio/taskboard/tests/taskboard.test.mjs", "description": "Taskboard regression tests for parsing, commands, context, validation, and orchestration helpers.", "role": "taskboard tests", "tags": ["test"] }
         ]
       },
       {

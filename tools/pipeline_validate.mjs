@@ -59,7 +59,7 @@ Environment:
 }
 
 // Pull out the optional --keep-exports <n> value before the unknown-arg check.
-// The value-flag set is shared with the ai.mjs facade via lib/validate_flags.
+// The value-flag set is shared with tests via lib/validate_flags.
 let keepExports = 3;
 for (const flag of VALIDATE_VALUE_FLAGS) {
   const idx = args.indexOf(flag);
@@ -293,9 +293,7 @@ if (fullMode && existsSync(exportDir)) {
 // after narrow pipeline/tooling edits. Context budgets are review-only here:
 // the budget tool itself stays strict, but normal validation should not block
 // implementation just because hot docs need a future compression pass.
-run("taskboard summary", ["tools/taskboard/cli.mjs", "summary"]);
-run("ai facade syntax", ["--check", "tools/ai.mjs"]);
-run("ai facade tests", ["--test", "tools/ai.test.mjs"]);
+run("taskboard summary", ["ai_studio/taskboard/cli.mjs", "summary"]);
 run("config sync check", ["tools/sync.mjs", "--check"]);
 run("skills sync tests", ["--test", "tools/skills_sync.test.mjs"]);
 run("hooks sync tests", ["--test", "tools/hooks_sync.test.mjs"]);
@@ -331,7 +329,7 @@ run("visual invariant guard", ["tools/visual_invariant_guard.mjs"]);
 run("visual invariant guard tests", ["--test", "tools/visual_invariant_guard.test.mjs"]);
 run("restricted asset guard", ["tools/assets/audit/restricted_assets_guard.mjs"]);
 run("restricted asset guard tests", ["--test", "tools/assets/audit/restricted_assets_guard.test.mjs"]);
-run("taskboard validate", ["tools/taskboard/cli.mjs", "validate"]);
+run("taskboard validate", ["ai_studio/taskboard/cli.mjs", "validate"]);
 
 // Guard: catch a STATUS<->runtime contradiction. A "clean seed" repo must not
 // hide a live game in src/clean_seed_main.c (the exact blocker that let a 1676-
@@ -355,7 +353,7 @@ console.log("\n== status/runtime contradiction guard");
     console.log("ok: no STATUS/seed to compare");
   }
 }
-run("taskboard tests", ["--test", "tools/taskboard/test.mjs"]);
+run("taskboard tests", ["--test", "ai_studio/taskboard/tests/taskboard.test.mjs"]);
 run("ai profile tests", ["--test", "tools/ai_profile/test.mjs"]);
 if (existsSync(join(root, "tools", "game_context", "test.mjs"))) {
   run("game context tests", ["--test", "tools/game_context/test.mjs"]);
@@ -368,7 +366,7 @@ if (runAssets && existsSync(join(root, "tools", "product_gate", "test.mjs"))) {
 
 if (!fullMode) {
   console.log(`\nok: reusable pipeline ${reviewMode ? "quick+review" : "quick"} validation passed`);
-  console.log(`hint: run node tools/ai.mjs validate --full for portable export/runtime/deep asset gates`);
+  console.log(`hint: run node tools/pipeline_validate.mjs --full for portable export/runtime/deep asset gates`);
   process.exit(0);
 }
 
@@ -413,7 +411,7 @@ if (existsSync(join(root, "CMakePresets.json"))) {
 run("portable export", ["tools/bootstrap/export_base.mjs", "--target", exportDir]);
 run("exported skill presence check", ["tools/skills_eval.mjs"], { cwd: exportDir });
 run("exported doc reference check", ["tools/doc_reference_check.mjs"], { cwd: exportDir });
-run("exported taskboard validate", ["tools/taskboard/cli.mjs", "validate"], { cwd: exportDir });
+run("exported taskboard validate", ["ai_studio/taskboard/cli.mjs", "validate"], { cwd: exportDir });
 
 if (!args.includes("--reexport-tests")) {
   console.log(`\nskipped the in-export test battery (suites already ran in-repo); pass --reexport-tests to re-run them in the export`);
@@ -422,10 +420,9 @@ if (!args.includes("--reexport-tests")) {
   process.exit(0);
 }
 
-run("exported ai facade tests", ["--test", "tools/ai.test.mjs"], { cwd: exportDir });
 run("exported doc reference tests", ["--test", "tools/doc_reference_check.test.mjs"], { cwd: exportDir });
 run("exported bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"], { cwd: exportDir });
-run("exported taskboard tests", ["--test", "tools/taskboard/test.mjs"], { cwd: exportDir });
+run("exported taskboard tests", ["--test", "ai_studio/taskboard/tests/taskboard.test.mjs"], { cwd: exportDir });
 run("exported ai profile tests", ["--test", "tools/ai_profile/test.mjs"], { cwd: exportDir });
 if (existsSync(join(exportDir, "tools", "game_context", "test.mjs"))) {
   run("exported game context tests", ["--test", "tools/game_context/test.mjs"], { cwd: exportDir });

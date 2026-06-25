@@ -50,13 +50,13 @@ stop condition: <when the subagent must stop>
 Optionally lint the packet shape before launch (advisory, not a gate):
 
 ```text
-node tools/ai.mjs subagent-packet-template
-node tools/ai.mjs subagent-packet-check --file packet.txt --json
+node ai_studio/taskboard/cli.mjs subagent-packet-template
+node ai_studio/taskboard/cli.mjs subagent-packet-check --file packet.txt --json
 ```
 
 For quick inline prompts, copy the template shape directly. `allowed files`
 should be bounded repo-local paths or patterns (exact files, final-segment globs
-such as `tasks/active/T*.md`, scoped recursive globs such as `tools/taskboard/**`)
+such as `tasks/active/T*.md`, scoped recursive globs such as `ai_studio/taskboard/**`)
 -- not absolute paths, `..`, broad root globs, or prose such as `all files`.
 
 ## Return / Handoff
@@ -79,8 +79,8 @@ records uncertainty instead of merging prose.
 
 ## Ownership
 
-- Subagents do not edit hot files (`AGENTS.md`, `AI_PIPELINE.md`,
-  `tasks/STATUS.md`, `tasks/README.md`, `.codex/skills/*/SKILL.md`). They may
+- Subagents do not edit hot files (`AGENTS.md`, `ai_studio/README.md`,
+  `tasks/STATUS.md`, `ai_studio/taskboard/README.md`, `.codex/skills/*/SKILL.md`). They may
   inspect or propose a patch; the lead applies, integrates, and validates.
 - Parallel writes need disjoint files/modules. Never assign the same task file,
   runtime module, generated pack, or hot doc to multiple agents.
@@ -90,7 +90,7 @@ records uncertainty instead of merging prose.
 
 Acceptance is the work product, never a proof that a subagent ran:
 
-- Routine change: the lead reads the result and `node tools/ai.mjs validate` or
+- Routine change: the lead reads the result and `node tools/pipeline_validate.mjs` or
   focused tests pass.
 - Product / visual / native-playable: product gate with screenshot evidence plus
   fake-shot judgment; lead accept/reject. Lead rejection freezes feature/content
@@ -100,7 +100,7 @@ Acceptance is the work product, never a proof that a subagent ran:
 
 There is no machine evidence that delegation happened, no per-task evidence
 artifact, no workflow manifest, and no required reviewer-PASS block.
-Observability (the passive profiler, `node tools/ai.mjs status`) is advisory
+Observability (the passive profiler, `node tools/ai_profile/status.mjs`) is advisory
 diagnostics the lead inspects and mines for friction -- never an acceptance
 condition.
 
@@ -117,8 +117,8 @@ condition, and independent reviewer. For genuinely small work, record instead:
 
 This is a lightweight label check so the lead has thought about scope and handoff
 before substantial delegation -- not a proof gate.
-`node tools/taskboard/cli.mjs validate` checks the label is present and the
-allowed-files are bounded; `node tools/ai.mjs orchestration-check <task-id>`
+`node ai_studio/taskboard/cli.mjs validate` checks the label is present and the
+allowed-files are bounded; `node ai_studio/taskboard/cli.mjs orchestration-check <task-id>`
 previews the packet. Both are advisory authoring help.
 
 ## Large workflows

@@ -61,7 +61,7 @@ def main() -> int:
         cwd=ROOT,
     )
     print("\nnext: judge the screen against the fake-shot direction:")
-    print(f"  node tools/ai.mjs gate --shot {SHOT}")
+    print(f"  node tools/product_gate/review.mjs --shot {SHOT}")
     return 0
 
 

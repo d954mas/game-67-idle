@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 // Taskboard CLI for humans and agents.
 //
-//   node tools/taskboard/cli.mjs list [--status s] [--epic E001] [--tag t] [--ideas] [--review] [--all] [--archive]
-//   node tools/taskboard/cli.mjs summary [--tasks-limit 5]
-//   node tools/taskboard/cli.mjs show T0001
-//   node tools/taskboard/cli.mjs new task --title "..." [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
-//   node tools/taskboard/cli.mjs new epic --title "..." [--status active]
-//   node tools/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
-//   node tools/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
-//   node tools/taskboard/cli.mjs orchestration-template
-//   node tools/taskboard/cli.mjs subagent-packet-template [--current|--task T0001|--id T0001|--file tasks/active/T0001-example.md]
-//   node tools/taskboard/cli.mjs subagent-packet-check --file packet.txt|--text "..."|--stdin [--json]
-//   node tools/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
-//   node tools/taskboard/cli.mjs orchestration-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
-//   node tools/taskboard/cli.mjs validate [--json]
+//   node ai_studio/taskboard/cli.mjs list [--status s] [--epic E001] [--tag t] [--ideas] [--review] [--all] [--archive]
+//   node ai_studio/taskboard/cli.mjs summary [--tasks-limit 5]
+//   node ai_studio/taskboard/cli.mjs show T0001
+//   node ai_studio/taskboard/cli.mjs new task --title "..." [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
+//   node ai_studio/taskboard/cli.mjs new epic --title "..." [--status active]
+//   node ai_studio/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
+//   node ai_studio/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
+//   node ai_studio/taskboard/cli.mjs orchestration-template
+//   node ai_studio/taskboard/cli.mjs subagent-packet-template [--current|--task T0001|--id T0001|--file tasks/active/T0001-example.md]
+//   node ai_studio/taskboard/cli.mjs subagent-packet-check --file packet.txt|--text "..."|--stdin [--json]
+//   node ai_studio/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
+//   node ai_studio/taskboard/cli.mjs orchestration-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
+//   node ai_studio/taskboard/cli.mjs validate [--json]
 //
 // Agents: prefer `new` over hand-writing files so IDs never collide.
 
@@ -30,7 +30,7 @@ import {
 } from "./lib.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { fail } from "../lib/cli.mjs";
+import { fail } from "../../tools/lib/cli.mjs";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
@@ -80,8 +80,8 @@ function writeJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
-const CURRENT_PREFLIGHT_NEXT_ACTION = "create or refine exactly one `doing` pipeline/orchestration task, then run `node tools/ai.mjs orchestration-check --current --json`";
-const AMBIGUOUS_CURRENT_PREFLIGHT_NEXT_ACTION = "set exactly one pipeline/orchestration task to `doing`, then run `node tools/ai.mjs orchestration-check --current --json`";
+const CURRENT_PREFLIGHT_NEXT_ACTION = "create or refine exactly one `doing` pipeline/orchestration task, then run `node ai_studio/taskboard/cli.mjs orchestration-check --current --json`";
+const AMBIGUOUS_CURRENT_PREFLIGHT_NEXT_ACTION = "set exactly one pipeline/orchestration task to `doing`, then run `node ai_studio/taskboard/cli.mjs orchestration-check --current --json`";
 const ORCHESTRATION_BOOTSTRAP_REQUIRED_ARGS = [
   "title",
   "objective",
@@ -150,7 +150,7 @@ function bootstrapAllowedFilesProblem(value) {
 }
 
 function orchestrationBootstrapUsage() {
-  return `usage: node tools/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
+  return `usage: node ai_studio/taskboard/cli.mjs orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
 
 Creates one current \`doing\` pipeline/orchestration task with a complete packet.
 
@@ -164,7 +164,7 @@ Required:
   --independent-reviewer  Reviewer/verifier plan.
 
 After creation:
-  node tools/ai.mjs orchestration-check --current --json`;
+  node ai_studio/taskboard/cli.mjs orchestration-check --current --json`;
 }
 
 function orchestrationBootstrapBody(args) {
@@ -367,7 +367,7 @@ function renderSummary(root, options) {
   lines.push(`active_task_counts: ${statusCounts(listTasks(root))}`);
   lines.push(`open_actionable_tasks: ${openTasks.length}`);
   lines.push(`review_tasks: ${reviewCount}`);
-  appendCurrentWork(lines, openTasks, tasksLimit, "node tools/taskboard/cli.mjs context");
+  appendCurrentWork(lines, openTasks, tasksLimit, "node ai_studio/taskboard/cli.mjs context");
   const pipelineCurrentWork = hasOnlyPipelineCurrentWork(openTasks);
   const currentGoal = sectionText(status, "Current Goal");
   const blockers = sectionText(status, "Blocking Work") || sectionText(status, "Blockers");
@@ -397,12 +397,12 @@ function renderSummary(root, options) {
     lines.push(`- ${shortRow(task)}`);
   }
   if (openTasks.length > tasksLimit) {
-    lines.push(`- ... ${openTasks.length - tasksLimit} more; run \`node tools/taskboard/cli.mjs context\` or \`list\` only when needed.`);
+    lines.push(`- ... ${openTasks.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs context\` or \`list\` only when needed.`);
   }
   if (openTasks.length === 0) {
     lines.push("- none");
     if (reviewCount > 0) {
-      lines.push(`- ${reviewCount} task(s) are in review; run \`node tools/taskboard/cli.mjs list --review\` only when reviewing or closing old work.`);
+      lines.push(`- ${reviewCount} task(s) are in review; run \`node ai_studio/taskboard/cli.mjs list --review\` only when reviewing or closing old work.`);
     }
   }
   return `${lines.join("\n")}\n`;
@@ -434,7 +434,7 @@ function renderContext(root, options) {
     lines.push(`status_warning: large; digest is capped at ${statusMaxChars} chars`);
   }
   lines.push(`active_task_counts: ${statusCounts(listTasks(root))}`);
-  appendCurrentWork(lines, tasks, tasksLimit, "node tools/taskboard/cli.mjs list");
+  appendCurrentWork(lines, tasks, tasksLimit, "node ai_studio/taskboard/cli.mjs list");
   lines.push("");
 
   const pipelineCurrentWork = hasOnlyPipelineCurrentWork(tasks);
@@ -465,7 +465,7 @@ function renderContext(root, options) {
     lines.push(`- ${shortRow(task)}`);
   }
   if (tasks.length > tasksLimit) {
-    lines.push(`- ... ${tasks.length - tasksLimit} more; run \`node tools/taskboard/cli.mjs list\` or show a specific task only if needed.`);
+    lines.push(`- ... ${tasks.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs list\` or show a specific task only if needed.`);
   }
   if (tasks.length === 0) {
     lines.push("- none");
@@ -556,7 +556,7 @@ switch (cmd) {
     }
     if (problem) {
       console.log(`problem: ${problem.message}`);
-      console.log("hint: start from `node tools/taskboard/cli.mjs subagent-packet-template`");
+      console.log("hint: start from `node ai_studio/taskboard/cli.mjs subagent-packet-template`");
       process.exit(1);
     }
     console.log("ok: subagent packet passed");
@@ -615,7 +615,7 @@ switch (cmd) {
         tags: doc.fields.tags || [],
         file: relative(root, doc.file),
       },
-      nextAction: "node tools/ai.mjs orchestration-check --current --json",
+      nextAction: "node ai_studio/taskboard/cli.mjs orchestration-check --current --json",
     };
     if (args.json) {
       writeJson(payload);
@@ -654,7 +654,7 @@ switch (cmd) {
     }
     if (problem) {
       console.log(`problem: ${problem.message}`);
-      console.log(`hint: use a complete packet from \`node tools/taskboard/cli.mjs orchestration-template\` before launching subagents:`);
+      console.log(`hint: use a complete packet from \`node ai_studio/taskboard/cli.mjs orchestration-template\` before launching subagents:`);
       console.log(orchestrationPacketTemplate());
       process.exit(1);
     }
@@ -768,7 +768,7 @@ switch (cmd) {
 
 function remediationHint(problem) {
   if (problem.includes("missing id")) {
-    return "create or repair the item with `node tools/taskboard/cli.mjs new`, or add a unique id in frontmatter";
+    return "create or repair the item with `node ai_studio/taskboard/cli.mjs new`, or add a unique id in frontmatter";
   }
   if (problem.includes("duplicate id")) {
     return "keep one canonical file for that id; rename or drop the duplicate instead of editing both";
@@ -792,7 +792,7 @@ function remediationHint(problem) {
     return "replace inline history with pointers to `tasks/archive/` or `gamedesign/projects/<game-id>/`; keep `STATUS.md` as a current index";
   }
   if (problem.includes("substantial pipeline/orchestration task needs orchestration evidence")) {
-    return `add a complete packet from \`node tools/taskboard/cli.mjs orchestration-template\`:\n${orchestrationPacketTemplate()}\nor record \`orchestration: not needed - small scope: one-file/docs-only/no code ...\``;
+    return `add a complete packet from \`node ai_studio/taskboard/cli.mjs orchestration-template\`:\n${orchestrationPacketTemplate()}\nor record \`orchestration: not needed - small scope: one-file/docs-only/no code ...\``;
   }
   return "";
 }

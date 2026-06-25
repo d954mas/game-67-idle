@@ -488,7 +488,7 @@ function runTaskLog(record, markdownPath) {
     `screenshot: ${record.screenshot}`,
     `next: ${record.verdict === "pass" ? "continue to the next narrow slice" : (record.next || "fix the screen before adding content")}`,
   ].join("; ");
-  const result = spawnSync(process.execPath, ["tools/taskboard/cli.mjs", "set", record.task, "--log", log], {
+  const result = spawnSync(process.execPath, ["ai_studio/taskboard/cli.mjs", "set", record.task, "--log", log], {
     cwd: process.cwd(),
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],

@@ -6,7 +6,7 @@ taskboard behavior, product gates, or portable export.
 ## Audit Flow
 
 1. Inspect current state, not memory: `git status --short --untracked-files=all`,
-   `node tools/taskboard/cli.mjs summary`, and, for context review,
+   `node ai_studio/taskboard/cli.mjs summary`, and, for context review,
    `node tools/context_budget.mjs --review`.
 2. Identify the repeated failure or duplication: oversized hot doc, duplicated
    rule, root/export drift, stale skill pointer, weak validation routing, or
@@ -14,11 +14,11 @@ taskboard behavior, product gates, or portable export.
 3. Make one coherent change and keep unrelated game/content work out of scope.
 
 Profiling needs no setup: the hook records tool calls automatically; read a
-session with `node tools/ai.mjs status` when reviewing pipeline friction.
+session with `node tools/ai_profile/status.mjs` when reviewing pipeline friction.
 
 ## Split Decisions
 
-- Keep `AGENTS.md`, `AI_PIPELINE.md`, and `tasks/README.md` as hot maps.
+- Keep `AGENTS.md`, `ai_studio/README.md`, and `ai_studio/taskboard/README.md` as hot maps.
 - Move detailed procedure, examples, and historical lessons into
   `docs/ai-pipeline/`, skill `references/`, task guides, or tools.
 - Create or update a skill when the procedure is repeatable agent behavior with
@@ -43,20 +43,20 @@ Common guards:
 - `node tools/skills_eval.mjs`
 - `node tools/skills_sync.mjs --check`
 - `node tools/product_gate/repeated_failure_guard.mjs`
-- `node tools/taskboard/cli.mjs validate`
-- `node tools/ai.mjs validate`
-- `node tools/ai.mjs validate --review` for review-stage context/cap pressure
+- `node ai_studio/taskboard/cli.mjs validate`
+- `node tools/pipeline_validate.mjs`
+- `node tools/pipeline_validate.mjs --review` for review-stage context/cap pressure
 - underlying implementation: `tools/pipeline_validate.mjs`
 
 ## Validation Matrix
 
 - Hot docs or context budgets: context budget tests, doc reference check,
-  `node tools/ai.mjs validate --review`.
+  `node tools/pipeline_validate.mjs --review`.
 - Skill entrypoints/references: `node tools/skills_eval.mjs`,
   `node tools/skills_sync.mjs --check`, context budget, quick pipeline.
 - Product gate/tooling: focused product-gate tests plus quick pipeline.
 - Taskboard/status rules: taskboard tests/validate plus quick pipeline.
-- Portable export or root/export drift: `node tools/ai.mjs validate --full`
+- Portable export or root/export drift: `node tools/pipeline_validate.mjs --full`
   or full dry-run when dependencies are unavailable.
 
 ## Report Shape

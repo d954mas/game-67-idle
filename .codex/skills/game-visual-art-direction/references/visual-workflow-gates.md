@@ -125,11 +125,11 @@ child-testable work.
 
 If the screenshot cannot answer where the player is, what to do, what changed,
 what reward appeared, and why this looks like a game, the visual work is not
-done. Use `node tools/product_gate/review.mjs` or `node tools/ai.mjs gate`, then
-`node tools/ai.mjs close-slice` for handoff evidence.
+done. Use `node tools/product_gate/review.mjs`, then
+`node tools/product_gate/close_slice.mjs` for handoff evidence.
 
 For lead-rejected visual work, tag the task with `lead-rejection` and close only
-with `node tools/ai.mjs close-slice --resolved-rejection "<exact rejected issue
+with `node tools/product_gate/close_slice.mjs --resolved-rejection "<exact rejected issue
 and proof>"`. The closeout tool blocks strict pass without that proof.
 
 For beautiful/casual/generated-UI/fake-shot/child-testable work, use
@@ -139,7 +139,7 @@ at least 4/5 and no blocker/major visual issue. Strict UI passes should also
 include live-state coverage.
 
 When a separate critic pass would help, run the vision art-lead critic with
-`node tools/ai.mjs critique` (emit a prompt, or run a vision model); feed its
+`node tools/product_gate/visual_critic_run.mjs` (emit a prompt, or run a vision model); feed its
 `game.visual_critique` into the strict product gate (`gate ... --critique`).
 
 ## Reusable UI Gate

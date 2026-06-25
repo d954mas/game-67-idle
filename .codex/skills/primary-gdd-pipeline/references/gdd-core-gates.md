@@ -86,7 +86,7 @@ the doc. Full method: `gamedesign/knowledge/reference_deconstruction.md`.
    contract: goal, non-goal, proof, stop condition, likely files. The proof must
    name fake shot/native screenshot/product gate or generated asset audit.
    For beautiful/casual/generated-UI/fake-shot first slices, create the strict
-   visual rubric and plan `node tools/ai.mjs gate ... --visual-strict`.
+   visual rubric and plan `node tools/product_gate/review.mjs ... --visual-strict`.
    Fresh prototypes should also have `visual/live_state_acceptance_matrix.json`;
    product gates should pass it with `--state-matrix` and cover or explicitly
    debt HUD, primary action, feedback, modal/choice, blocked/affordable,

@@ -1,13 +1,13 @@
 // Taskboard core: markdown + frontmatter task store.
 // One task = one task .md file in tasks/active/ or tasks/archive/.
 // One epic = one .md file in tasks/epics/.
-// tasks/README.md and tasks/STATUS.md are operational docs, not board items.
+// ai_studio/taskboard/README.md and tasks/STATUS.md are operational docs, not board items.
 // No external dependencies; frontmatter is a strict YAML subset (key: value,
 // arrays as [a, b]). Keep it strict so agents and humans stay compatible.
 
 import { mkdirSync, readdirSync, readFileSync, writeFileSync, existsSync, statSync, renameSync } from "node:fs";
 import { basename, join, resolve, dirname } from "node:path";
-import { LIVE_STATUS_MAX_CHARS } from "../context_budget_config.mjs";
+import { LIVE_STATUS_MAX_CHARS } from "../../tools/context_budget_config.mjs";
 
 export { LIVE_STATUS_MAX_CHARS };
 
@@ -82,7 +82,7 @@ handoff:
 
 function orchestrationPreflightNextAction(taskId) {
   const selector = taskId || "<task-id>";
-  return `add a complete orchestration packet from \`node tools/ai.mjs orchestration-template\`, then rerun \`node tools/ai.mjs orchestration-check ${selector} --json\``;
+  return `add a complete orchestration packet from \`node ai_studio/taskboard/cli.mjs orchestration-template\`, then rerun \`node ai_studio/taskboard/cli.mjs orchestration-check ${selector} --json\``;
 }
 
 export function orchestrationPacketTemplate() {
@@ -1019,4 +1019,3 @@ function requiresOrchestrationAllowedFilesBounds(doc) {
 function requiresOrchestrationStartPreflight(doc) {
   return taskIdAtLeast(doc, ORCHESTRATION_START_PREFLIGHT_MIN_TASK_ID);
 }
-

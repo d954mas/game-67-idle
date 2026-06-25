@@ -8,7 +8,7 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { findRoot, listTasks } from "../taskboard/lib.mjs";
+import { findRoot, listTasks } from "../../ai_studio/taskboard/lib.mjs";
 
 const DEFAULT_RUNTIME_MAX_LINES = 900;
 

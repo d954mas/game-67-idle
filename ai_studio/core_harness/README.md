@@ -4,6 +4,7 @@
 It owns the smallest always-loaded harness contract:
 
 - agent entry policy;
+- workflow for task execution order;
 - root agent-facing compatibility;
 - compatibility rules for root agent-facing surfaces;
 - the minimal public commands that let an agent start work.
@@ -17,14 +18,23 @@ These files currently stay at the repo root because external harnesses expect
 them there:
 
 - `AGENTS.md`
-- `AI_PIPELINE.md`
 - `CLAUDE.md`
 
-When their content is migrated, the root files should become thin routing
-facades.
+Root compatibility is not a design goal during this refactor. Keep only entry
+files that are still structurally useful.
+
+## Workflow Group
+
+Workflow is part of Core Harness because it defines how an agent turns a request
+into scoped context, work, verification, optional delegation, and closeout.
+
+Current workflow candidates:
+
+- `docs/ai-pipeline/agent-workflow.md`
+- `docs/ai-pipeline/subagent-protocol.md`
+- `docs/ai-pipeline/orchestration-playbook.md`
 
 ## Tree Shape
 
-During the Core audit, `Core Harness` is intentionally ungrouped in the map:
-every current core doc, tool, and candidate is a direct child. Grouping should
-be added only after ownership, boundaries, and compatibility rules are verified.
+During the Core audit, grouping should be added only after ownership,
+boundaries, and compatibility rules are verified.

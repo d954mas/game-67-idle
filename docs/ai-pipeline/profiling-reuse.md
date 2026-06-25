@@ -7,8 +7,8 @@ Portable rules for profiling, visual/asset routing, prototype closeout, and expo
 Profiling is passive telemetry for repeated failures, slow commands, and gaps.
 
 The PostToolUse hook records tool calls automatically. Review a session with
-`node tools/ai.mjs status`; use `--verbose` for coverage gaps. `status` runs
-`node tools/ai.mjs import-codex-session` to recover missed Codex failures.
+`node tools/ai_profile/status.mjs`; use `--verbose` for coverage gaps. `status` runs
+`node tools/ai_profile/import_codex_session.mjs` to recover missed Codex failures.
 Use `--agent-rollup` for subagent diagnostics; pass `--parent-thread-id` or
 `--trace-session` for spawn/wait/close checks. Add
 `--require-agent-rollup-ok` only for closeout; it exits nonzero on incomplete
@@ -52,7 +52,7 @@ The portable AI workflow is exported with:
 node tools/bootstrap/export_base.mjs --target C:\projects\new-game
 ```
 
-Portable by default: skills, taskboard, `tools/ai.mjs`,
+Portable by default: skills, taskboard,
 `tools/pipeline_validate.mjs`, product gates, game-context tools, generated art
 job scaffolding, reusable design knowledge, and starter agent/task files. The
 allowlist lives in `tools/bootstrap/export_base.mjs`.

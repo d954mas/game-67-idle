@@ -57,7 +57,7 @@ humans should use the knowledge base.
   contract (`--contract`, `pass_threshold` override), and accept the `review`
   verdict; `close_slice.mjs` blocks a `review` gate in strict mode (advisory
   otherwise). Six axes stay universal; the contract carries taste only.
-- Added `tools/product_gate/visual_critic_run.mjs` (`node tools/ai.mjs critique`):
+- Added `tools/product_gate/visual_critic_run.mjs` (`node tools/product_gate/visual_critic_run.mjs`):
   the vision art-lead critic that looks at state screenshots with the contract +
   reference banks in context, runs an independent refute pass, and reconciles
   disagreement into `review`. Verified live on this box via codex CLI (gpt-5.5

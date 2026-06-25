@@ -4,7 +4,7 @@
 // acceptance. This catches visual-polish loops while still allowing known debt.
 
 import { relative, resolve } from "node:path";
-import { findRoot, listTasks } from "../taskboard/lib.mjs";
+import { findRoot, listTasks } from "../../ai_studio/taskboard/lib.mjs";
 
 const SUPPORT_WORDS = [
   "architecture",

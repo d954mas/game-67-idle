@@ -12,7 +12,7 @@ Produce a blunt retrospective, not a progress report.
 - `references/reflection-evidence-intake.md`: durable evidence order,
   high-cost context rules, and evidence quality fields.
 - `references/reflection-profiling.md`: passive profiling telemetry and the
-  `tools/ai.mjs` status/import commands.
+  direct `tools/ai_profile/` status/import commands.
 - `references/reflection-output-rules.md`: retrospective shape, `symptom`,
   `cause`, `faster path`, audit areas, Top 10 improvements, durable capture.
 

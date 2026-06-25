@@ -1,5 +1,5 @@
 {
-  "$comment": "Passive profiling: hot path uses native hook_record_fast(.exe); rebuild it from hook_record_fast.c if missing. Pre+PostToolUse record start/result so `status` derives each command's duration_ms (the native hot path keeps overhead ~1-2ms/call); successful read-only plumbing/search commands are skipped. Records append per-session to tmp/session_profiles/sessions/ for `node tools/ai.mjs status`. Mirror config for Codex: .codex/hooks.json.",
+  "$comment": "Passive profiling: hot path uses native hook_record_fast(.exe); rebuild it from hook_record_fast.c if missing. Pre+PostToolUse record start/result so `status` derives each command's duration_ms (the native hot path keeps overhead ~1-2ms/call); successful read-only plumbing/search commands are skipped. Records append per-session to tmp/session_profiles/sessions/ for `node tools/ai_profile/status.mjs`. Mirror config for Codex: .codex/hooks.json.",
   "hooks": {
     "SessionStart": [
       {

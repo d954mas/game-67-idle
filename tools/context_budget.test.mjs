@@ -19,18 +19,19 @@ function cleanup(dir) {
 
 function writeFixture(dir, skillBody = "short skill\n", agentBody = "# AGENTS\n") {
   mkdirSync(join(dir, ".codex", "skills", "sample"), { recursive: true });
+  mkdirSync(join(dir, "ai_studio", "taskboard"), { recursive: true });
   mkdirSync(join(dir, "docs", "ai-pipeline"), { recursive: true });
   mkdirSync(join(dir, "tasks"), { recursive: true });
   writeFileSync(join(dir, ".codex", "skills", "sample", "SKILL.md"), skillBody, "utf8");
   writeFileSync(join(dir, "AGENTS.md"), agentBody, "utf8");
-  writeFileSync(join(dir, "AI_PIPELINE.md"), "# Pipeline\n", "utf8");
+  writeFileSync(join(dir, "ai_studio", "README.md"), "# AI Studio\n", "utf8");
+  writeFileSync(join(dir, "ai_studio", "taskboard", "README.md"), "# Taskboard\n", "utf8");
   writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "# Agent Workflow\n", "utf8");
   writeFileSync(join(dir, "docs", "ai-pipeline", "quality-validation.md"), "# Quality\n", "utf8");
   writeFileSync(join(dir, "docs", "ai-pipeline", "profiling-reuse.md"), "# Profiling\n", "utf8");
   mkdirSync(join(dir, "tools"), { recursive: true });
   writeFileSync(join(dir, "tools", "README.md"), "# Tools\n", "utf8");
   writeFileSync(join(dir, "tasks", "STATUS.md"), "# Status\n", "utf8");
-  writeFileSync(join(dir, "tasks", "README.md"), "# Tasks\n", "utf8");
 }
 
 function run(args) {
@@ -114,23 +115,23 @@ test("context budget applies the task store hot guide cap", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "tasks", "README.md"), "x".repeat(3100), "utf8");
+    writeFileSync(join(dir, "ai_studio", "taskboard", "README.md"), "x".repeat(3100), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /tasks\/README\.md: 3100 chars > 3000/);
+    assert.match(result.stderr, /ai_studio\/taskboard\/README\.md: 3100 chars > 3000/);
   } finally {
     cleanup(dir);
   }
 });
 
-test("context budget applies the split pipeline map cap", () => {
+test("context budget applies the AI Studio map cap", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "AI_PIPELINE.md"), "x".repeat(2300), "utf8");
+    writeFileSync(join(dir, "ai_studio", "README.md"), "x".repeat(2700), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /AI_PIPELINE\.md: 2300 chars > 2200/);
+    assert.match(result.stderr, /ai_studio\/README\.md: 2700 chars > 2600/);
   } finally {
     cleanup(dir);
   }
@@ -191,9 +192,9 @@ test("context budget review mode fails aggregate hot doc growth", () => {
   try {
     writeFixture(dir);
     writeFileSync(join(dir, "AGENTS.md"), "x".repeat(3590), "utf8");
-    writeFileSync(join(dir, "AI_PIPELINE.md"), "x".repeat(2590), "utf8");
+    writeFileSync(join(dir, "ai_studio", "README.md"), "x".repeat(2590), "utf8");
     writeFileSync(join(dir, "tasks", "STATUS.md"), "x".repeat(2390), "utf8");
-    writeFileSync(join(dir, "tasks", "README.md"), "x".repeat(3190), "utf8");
+    writeFileSync(join(dir, "ai_studio", "taskboard", "README.md"), "x".repeat(3190), "utf8");
     writeFileSync(join(dir, "tools", "README.md"), "x".repeat(3190), "utf8");
     writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "x".repeat(3190), "utf8");
     writeFileSync(join(dir, "docs", "ai-pipeline", "quality-validation.md"), "x".repeat(3190), "utf8");

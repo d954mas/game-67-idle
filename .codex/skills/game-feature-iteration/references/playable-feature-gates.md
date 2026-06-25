@@ -47,11 +47,11 @@ locations, quests, systems, or content until the screen answers:
 - why it looks like a game rather than a debug tool.
 
 Write the gate with `node tools/product_gate/review.mjs` or
-`node tools/ai.mjs gate`. For UI/visual/player-read work, define live-state
+`node tools/product_gate/review.mjs`. For UI/visual/player-read work, define live-state
 coverage from `gamedesign/knowledge/live_state_acceptance_matrix.md` and pass
 it with `--state-matrix`, `--require-state`, `--covered-state`, and
 `--not-covered-state`; a pass only proves covered states. Use
-`node tools/ai.mjs close-slice` before handoff when the slice depends on
+`node tools/product_gate/close_slice.mjs` before handoff when the slice depends on
 product-read evidence.
 
 If the task carries `lead-rejection` or lead-rejected wording, strict closeout

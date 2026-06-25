@@ -18,7 +18,7 @@ or type:
 
 Every committed asset MUST have a catalog record with a recorded license. The leak
 guard `tools/assets/audit/restricted_assets_guard.mjs` (wired into
-`node tools/ai.mjs validate`) blocks any tracked binary that has no catalog or a
+`node tools/pipeline_validate.mjs`) blocks any tracked binary that has no catalog or a
 non-publishable license — this catches both a pulled paid asset and one dropped in
 by hand. Publishability is decided by `tools/assets/restricted.mjs`
 (`publish` field → `redistribution_allowed` → license string; unknown = NOT

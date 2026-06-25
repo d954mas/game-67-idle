@@ -4,7 +4,7 @@ The repo root is the **shared pipeline**, not a game: the engine (submodule),
 build/asset/validation tools, AI skills, docs, the taskboard, and reusable design
 knowledge. Each **game is its own folder**, copied from `template/`.
 
-- Reusable AI workflow: `AI_PIPELINE.md`, `AGENTS.md`, `tasks/`, `.codex/skills/`.
+- Reusable AI workflow: `ai_studio/README.md`, `AGENTS.md`, `tasks/`, `.codex/skills/`.
 - Reusable design knowledge: `gamedesign/knowledge/`; sources `gamedesign/sources/`.
 - Engine: git submodule at `external/neotolis-engine` (public APIs only).
 - Shared asset library lives OUTSIDE the repo (private); games pull project-local
@@ -40,6 +40,6 @@ file), world state in `src/world/`. See `template/CONVENTIONS.md` and
 ## Validate the pipeline
 
 ```powershell
-node tools/taskboard/cli.mjs validate     # docs/tasks
-node tools/ai.mjs validate                # guards + tests + pipeline
+node ai_studio/taskboard/cli.mjs validate     # docs/tasks
+node tools/pipeline_validate.mjs                # guards + tests + pipeline
 ```

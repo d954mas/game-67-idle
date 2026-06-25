@@ -2,10 +2,10 @@
 //
 //   node tools/bootstrap/export_base.mjs --target C:\projects\new-game [--force]
 //
-// Copies the reusable pieces (skills, taskboard, skill sync, design knowledge,
-// pipeline doc, task store conventions) and writes starter AGENTS.md /
+// Copies the reusable pieces (skills, AI Studio modules, skill sync, design knowledge,
+// task store conventions) and writes starter AGENTS.md /
 // CLAUDE.md. Existing files in the target are preserved unless --force.
-// See AI_PIPELINE.md and docs/ai-pipeline/profiling-reuse.md for what stays.
+// See ai_studio/README.md and docs/ai-pipeline/profiling-reuse.md for what stays.
 
 import { cpSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join, resolve, basename } from "node:path";
@@ -30,8 +30,6 @@ if (dst === root) {
 
 const COPY = [
   ".codex/skills",
-  "tools/ai.mjs",
-  "tools/ai.test.mjs",
   "tools/context_budget.mjs",
   "tools/context_budget_config.mjs",
   "tools/context_budget.test.mjs",
@@ -125,7 +123,6 @@ const COPY = [
   "tools/product_gate",
   "tools/architecture_map",
   "tools/README.md",
-  "tools/taskboard",
   "tools/bootstrap/export_base.mjs",
   "tools/bootstrap/export_base.test.mjs",
   "gamedesign/README.md",
@@ -133,10 +130,7 @@ const COPY = [
   "gamedesign/sources",
   "ai_studio",
   "docs/ai-pipeline",
-  "AI_PIPELINE.md",
   "AI_PIPELINE_HISTORY.md",
-  "tasks/README.md",
-  "tasks/guides",
 ];
 
 const AGENTS_TEMPLATE = `# AGENTS.md
@@ -153,11 +147,11 @@ const AGENTS_TEMPLATE = `# AGENTS.md
 - Game design lives in \`gamedesign/\`; game code lives in \`src/\`.
 - Universal reusable design knowledge lives in \`gamedesign/knowledge/\`.
 - Reusable project skills live in \`.codex/skills/\`; keep them generic enough to reuse in other games.
-- Work items and live project status live in \`tasks/\`; follow \`tasks/README.md\`.
+- Work items and live project status live in \`tasks/\`; follow \`ai_studio/taskboard/README.md\`.
 - Temporary generation, scripts, rejected images, screenshots, and audit logs go in \`tmp/\` or another ignored temp folder.
 - Final durable docs/data/assets go in their project folder.
 - The shared human/agent process, including AI session profiling, lives in
-  \`AI_PIPELINE.md\`; raw telemetry stays in \`tmp/session_profiles/\`.
+  \`ai_studio/README.md\`; raw telemetry stays in \`tmp/session_profiles/\`.
 - AI workflow history, retrospectives, and the external observability decision
   criteria live in \`AI_PIPELINE_HISTORY.md\`; start local-first and run only
   bounded pilots until a tool proves value.
@@ -177,29 +171,29 @@ const AGENTS_TEMPLATE = `# AGENTS.md
 `;
 
 const CLAUDE_TEMPLATE = `Project rules, direction, and validation policy: @AGENTS.md
-Shared human/agent process: @AI_PIPELINE.md
+Shared human/agent process: @ai_studio/README.md
 
 Work items (tasks, epics, deferred ideas) live in the \`tasks/\` store.
-For status, task format, and workflow rules, follow \`tasks/README.md\`:
+For status, task format, and workflow rules, follow \`ai_studio/taskboard/README.md\`:
 
 - Process: \`.codex/skills/task-manager/SKILL.md\`
-- Conventions: \`tasks/README.md\`
+- Conventions: \`ai_studio/taskboard/README.md\`
 - Live status: \`tasks/STATUS.md\`
-- CLI: \`node tools/taskboard/cli.mjs <list|show|new|set|validate>\`
-- Visual board for the user: \`node tools/taskboard/server.mjs\` -> http://127.0.0.1:8070/
+- CLI: \`node ai_studio/taskboard/cli.mjs <list|show|new|set|validate>\`
+- Visual board for the user: \`node ai_studio/taskboard/server.mjs\` -> http://127.0.0.1:8070/
 `;
 
 const STATUS_TEMPLATE = `# Project Status
 
 Operational project-status index. Rules for this file live in
-\`tasks/README.md\`.
+\`ai_studio/taskboard/README.md\`.
 
 ## Current Goal
 
 No active game concept is selected yet. This is a clean AI-first game project
 base waiting for the user's idea.
 
-Sources: \`AGENTS.md\`, \`AI_PIPELINE.md\`.
+Sources: \`AGENTS.md\`, \`ai_studio/README.md\`.
 
 ## Active Work
 
@@ -213,16 +207,16 @@ Sources: \`AGENTS.md\`.
 Capture the user's game concept and create/refine exactly one scoped task or
 epic before implementation.
 
-Source: \`tasks/README.md\`.
+Source: \`ai_studio/taskboard/README.md\`.
 
 ## Required Validation
 
 \`\`\`powershell
-node tools/taskboard/cli.mjs summary
-node tools/ai.mjs validate --full
+node ai_studio/taskboard/cli.mjs summary
+node tools/pipeline_validate.mjs --full
 \`\`\`
 
-Sources: \`tasks/README.md\`, \`AI_PIPELINE.md\`.
+Sources: \`ai_studio/taskboard/README.md\`, \`ai_studio/README.md\`.
 
 ## Last Known Good Evidence
 
@@ -289,4 +283,4 @@ if (sync.status !== 0) {
 
 console.log(`\nexported AI base to ${dst} (${basename(root)} -> ${basename(dst)})`);
 console.log("next: choose engine/runtime policy when known, ensure tmp/ is ignored, then capture first ideas:");
-console.log("  node tools/taskboard/cli.mjs new task --title \"...\" --status idea");
+console.log("  node ai_studio/taskboard/cli.mjs new task --title \"...\" --status idea");

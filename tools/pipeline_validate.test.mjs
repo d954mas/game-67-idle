@@ -20,7 +20,7 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   const result = run(["--dry-run"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /mode: quick \(dry-run\)/);
-  assert.match(result.stdout, /== ai facade tests/);
+  assert.doesNotMatch(result.stdout, /== removed facade tests/);
   assert.match(result.stdout, /== skills sync tests/);
   assert.doesNotMatch(result.stdout, /== context budget report/);
   assert.doesNotMatch(result.stdout, /== context budget review/);
@@ -39,7 +39,7 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.doesNotMatch(result.stdout, /== portable export/);
   assert.doesNotMatch(result.stdout, /== exported ai profile tests/);
   assert.match(result.stdout, /reusable pipeline quick validation passed/);
-  assert.match(result.stdout, /node tools\/ai\.mjs validate --full/);
+  assert.match(result.stdout, /node tools\/pipeline_validate\.mjs --full/);
 });
 
 test("quick validation skips the product-gate suite in a clean seed", () => {

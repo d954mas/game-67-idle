@@ -19,14 +19,12 @@
 export const UNIVERSAL = [
   // process + skills + docs + knowledge
   ".codex/skills",
-  "AI_PIPELINE.md",
   "AI_PIPELINE_HISTORY.md",
+  "ai_studio",
   "docs/ai-pipeline",
   "gamedesign/README.md",
   "gamedesign/knowledge",
   "gamedesign/sources",
-  "tasks/README.md",
-  "tasks/guides",
   // the whole reusable tool tree (pipeline, asset library tooling, taskboard,
   // product gate, codegen, bootstrap) EXCEPT per-game tool dirs (see GAME_ONLY)
   "tools",

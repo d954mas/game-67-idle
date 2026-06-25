@@ -39,9 +39,10 @@ test("portable export includes task guides and generated skill pointers", () => 
     const result = runExport(target);
     assert.equal(result.status, 0, result.stderr);
 
-    assert.equal(existsSync(join(target, "tasks", "README.md")), true);
     assert.equal(existsSync(join(target, "tasks", "STATUS.md")), true);
-    assert.equal(existsSync(join(target, "tasks", "guides", "task-store-reference.md")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "taskboard", "README.md")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "taskboard", "task-store-reference.md")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "taskboard", "cli.mjs")), true);
     assert.equal(existsSync(join(target, "gamedesign", "README.md")), true);
     assert.equal(existsSync(join(target, "gamedesign", "sources", "README.md")), true);
     assert.equal(existsSync(join(target, "docs", "ai-pipeline", "agent-workflow.md")), true);
@@ -66,14 +67,14 @@ test("portable export includes task guides and generated skill pointers", () => 
       true,
     );
 
-    const readme = readFileSync(join(target, "tasks", "README.md"), "utf8");
-    assert.match(readme, /tasks\/guides\/task-store-reference\.md/);
-    const guide = readFileSync(join(target, "tasks", "guides", "task-store-reference.md"), "utf8");
+    const readme = readFileSync(join(target, "ai_studio", "taskboard", "README.md"), "utf8");
+    assert.match(readme, /ai_studio\/taskboard\/task-store-reference\.md/);
+    const guide = readFileSync(join(target, "ai_studio", "taskboard", "task-store-reference.md"), "utf8");
     assert.match(guide, /Task Store Reference/);
-    const pipeline = readFileSync(join(target, "AI_PIPELINE.md"), "utf8");
-    assert.match(pipeline, /docs\/ai-pipeline\/agent-workflow\.md/);
-    assert.match(pipeline, /docs\/ai-pipeline\/quality-validation\.md/);
-    assert.match(pipeline, /docs\/ai-pipeline\/profiling-reuse\.md/);
+    const studio = readFileSync(join(target, "ai_studio", "README.md"), "utf8");
+    assert.match(studio, /docs\/ai-pipeline\/agent-workflow\.md/);
+    assert.match(studio, /docs\/ai-pipeline\/quality-validation\.md/);
+    assert.match(studio, /docs\/ai-pipeline\/profiling-reuse\.md/);
 
     const docRefs = runInTarget(target, ["tools/doc_reference_check.mjs"]);
     assert.equal(docRefs.status, 0, docRefs.stderr);
@@ -82,7 +83,7 @@ test("portable export includes task guides and generated skill pointers", () => 
     // Context budgets are an END-OF-ITERATION check, not a during-work blocker:
     // a budget overage must not fail the quick validate that runs mid-edit (it
     // interferes with the work in flight). The export verifies STRUCTURE here;
-    // budget growth is caught deliberately by `node tools/ai.mjs validate
+    // budget growth is caught deliberately by `node tools/pipeline_validate.mjs
     // --review` (context_budget). [REFACTOR_PLAN Phase 1 / lead directive]
     const contextBudget = runInTarget(target, ["tools/context_budget.mjs"]);
     assert.match(contextBudget.stdout, /context budget/);

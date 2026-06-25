@@ -1,7 +1,7 @@
 # Task Store
 
 Source of truth for current work. Detailed protocol:
-`tasks/guides/task-store-reference.md`.
+`ai_studio/taskboard/task-store-reference.md`.
 
 - Active: `tasks/active/`; epics: `tasks/epics/`.
 - Review/closed history: `tasks/archive/`.
@@ -12,15 +12,15 @@ cleanup, or user request.
 
 ## Commands
 
-- Orient: `node tools/taskboard/cli.mjs summary` or `context`.
+- Orient: `node ai_studio/taskboard/cli.mjs summary` or `context`.
 - Inspect: `list`, `list --review`, `show T0001`.
 - Change: `new task --title "..." --epic E001 --priority P1`, `set T0001 --status doing`.
-- Validate: `node tools/taskboard/cli.mjs validate`.
-- Orchestrate: `node tools/ai.mjs orchestration-check --current --json` previews
+- Validate: `node ai_studio/taskboard/cli.mjs validate`.
+- Orchestrate: `node ai_studio/taskboard/cli.mjs orchestration-check --current --json` previews
   a subagent packet (advisory). For delegated work, follow the compact operator
   path in `docs/ai-pipeline/agent-workflow.md`. Acceptance gates the work
   product, not the delegation.
-- Board when requested: `node tools/taskboard/server.mjs`.
+- Board when requested: `node ai_studio/taskboard/server.mjs`.
 - New game: `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`.
 
 ## Live Status
@@ -31,7 +31,7 @@ goal, blockers, gates, validation, evidence, or priorities change.
 
 ## Minimal Context
 
-For substantial work: `AGENTS.md` -> `node tools/taskboard/cli.mjs context` ->
+For substantial work: `AGENTS.md` -> `node ai_studio/taskboard/cli.mjs context` ->
 needed task/evidence files -> one matching skill.
 
 Search current scope only. Avoid archives, review queues, P3 ideas, broad design,

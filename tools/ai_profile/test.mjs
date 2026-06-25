@@ -170,7 +170,7 @@ test("hook_record marks full Python dependency failures as environment blocked",
     runHook({
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
-      tool_input: { command: "node tools/ai.mjs validate --full" },
+      tool_input: { command: "node tools/pipeline_validate.mjs --full" },
       tool_response: {
         exit_code: 1,
         output: "error: no working Python runner found with required modules: PIL, numpy, scipy\nhint: install full-gate modules into the selected runner: py -3.12 -m pip install -r tools/requirements/ai-pipeline-full.txt",
@@ -480,7 +480,7 @@ test("status command rollup strips shell assignment wrappers", () => {
         result: "pass",
         value: "unknown",
         event_type: "tool_call_result",
-        commands: ["$env:AI_PIPELINE_PYTHON='C:\\Users\\ROG\\.cache\\codex-runtimes\\python\\python.exe'; node tools/ai.mjs validate --full"],
+        commands: ["$env:AI_PIPELINE_PYTHON='C:\\Users\\ROG\\.cache\\codex-runtimes\\python\\python.exe'; node tools/pipeline_validate.mjs --full"],
         session_id: "s1",
       },
       {
@@ -491,7 +491,7 @@ test("status command rollup strips shell assignment wrappers", () => {
         result: "pass",
         value: "unknown",
         event_type: "tool_call_result",
-        commands: ["AI_PIPELINE_PYTHON=/tmp/python node tools/ai.mjs validate --review"],
+        commands: ["AI_PIPELINE_PYTHON=/tmp/python node tools/pipeline_validate.mjs --review"],
         session_id: "s1",
       },
       {
@@ -521,7 +521,7 @@ test("status command rollup strips shell assignment wrappers", () => {
     run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson]);
     const status = readJson(statusJson);
     const keys = status.command_rollup.by_count.map((entry) => entry.key);
-    assert.deepEqual(keys, ["node ai.mjs", "Get-Content"]);
+    assert.deepEqual(keys, ["node pipeline_validate.mjs", "Get-Content"]);
     assert.equal(status.command_rollup.by_count.find((entry) => entry.key === "Get-Content")?.count, 2);
     assert.ok(!keys.includes("$i=0;"));
   } finally {
@@ -569,7 +569,7 @@ test("status separates environment-blocked failures from unresolved failures", (
         result: "fail",
         value: "necessary_overhead",
         event_type: "tool_call_result",
-        commands: ["node tools/ai.mjs validate --full"],
+        commands: ["node tools/pipeline_validate.mjs --full"],
         session_id: "s1",
         failure_kind: "environment_blocked",
         blocked_by: "missing full-gate Python modules; install tools/requirements/ai-pipeline-full.txt or set AI_PIPELINE_PYTHON",

@@ -25,15 +25,22 @@ function run(args) {
 }
 
 function writeMinimalRoot(dir) {
+  mkdirSync(join(dir, "ai_studio", "taskboard"), { recursive: true });
   mkdirSync(join(dir, "tasks", "guides"), { recursive: true });
   mkdirSync(join(dir, ".codex", "skills", "sample", "references"), { recursive: true });
-  writeFileSync(join(dir, "AGENTS.md"), "# Agents\n\nSee `tasks/README.md`.\n", "utf8");
-  writeFileSync(join(dir, "AI_PIPELINE.md"), "# Pipeline\n", "utf8");
+  writeFileSync(join(dir, "AGENTS.md"), "# Agents\n\nSee `ai_studio/README.md`.\n", "utf8");
+  writeFileSync(join(dir, "ai_studio", "README.md"), "# AI Studio\n\nSee `ai_studio/taskboard/README.md`.\n", "utf8");
+  writeFileSync(
+    join(dir, "ai_studio", "taskboard", "README.md"),
+    "# Taskboard\n\nSee `ai_studio/taskboard/task-store-reference.md`.\n",
+    "utf8",
+  );
+  writeFileSync(join(dir, "ai_studio", "taskboard", "task-store-reference.md"), "# Task Store\n", "utf8");
   writeFileSync(join(dir, "tasks", "README.md"), "See `tasks/guides/protocol.md`.\n", "utf8");
   writeFileSync(join(dir, "tasks", "guides", "protocol.md"), "# Protocol\n", "utf8");
   writeFileSync(
     join(dir, ".codex", "skills", "sample", "SKILL.md"),
-    "See `references/detail.md` and `tasks/README.md`.\n",
+    "See `references/detail.md` and `ai_studio/taskboard/README.md`.\n",
     "utf8",
   );
   writeFileSync(join(dir, ".codex", "skills", "sample", "references", "detail.md"), "# Detail\n", "utf8");
@@ -106,52 +113,51 @@ test("doc reference check ignores historical task archive links", () => {
   }
 });
 
-test("doc reference check rejects retired ai validate file command", () => {
+test("doc reference check rejects retired ai facade command", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
     writeFileSync(
-      join(dir, "AI_PIPELINE.md"),
-      "Old command:\n\n```powershell\nnode tools/ai.mjs validate --file AI_PIPELINE.md\n```\n",
+      join(dir, "ai_studio", "README.md"),
+      "Old command:\n\n```powershell\nnode tools/ai.mjs validate --file AGENTS.md\n```\n",
       "utf8",
     );
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /retired command `node tools\/ai\.mjs validate --file`/);
+    assert.match(result.stderr, /retired command `node tools\/ai\.mjs`/);
   } finally {
     cleanup(dir);
   }
 });
 
-test("doc reference check rejects retired deep reflection command", () => {
+test("doc reference check rejects retired deep reflection facade command", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
     writeFileSync(
-      join(dir, "AI_PIPELINE.md"),
+      join(dir, "ai_studio", "README.md"),
       "Old command:\n\n```powershell\nnode tools/ai.mjs reflect --deep\n```\n",
       "utf8",
     );
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /retired command `node tools\/ai\.mjs reflect --deep`/);
+    assert.match(result.stderr, /retired command `node tools\/ai\.mjs`/);
   } finally {
     cleanup(dir);
   }
 });
 
-test("doc reference check rejects direct pipeline validator command in docs", () => {
+test("doc reference check allows direct pipeline validator command in docs", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
     writeFileSync(
-      join(dir, "AI_PIPELINE.md"),
+      join(dir, "ai_studio", "README.md"),
       "Old command:\n\n```powershell\nnode tools/pipeline_validate.mjs --review\n```\n",
       "utf8",
     );
     const result = run(["--root", dir]);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /internal command `node tools\/pipeline_validate\.mjs`/);
+    assert.equal(result.status, 0, result.stderr);
   } finally {
     cleanup(dir);
   }
@@ -161,7 +167,7 @@ test("doc reference check rejects retired context pressure wording", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
-    writeFileSync(join(dir, "AI_PIPELINE.md"), "Use --review for strict context pressure.\n", "utf8");
+    writeFileSync(join(dir, "ai_studio", "README.md"), "Use --review for strict context pressure.\n", "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /retired phrase `context pressure`/);

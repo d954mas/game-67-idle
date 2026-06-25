@@ -27,7 +27,7 @@ if (args.length > 0) usage();
 
 const roots = [
   "AGENTS.md",
-  "AI_PIPELINE.md",
+  join("ai_studio"),
   join("docs", "ai-pipeline"),
   join("tools", "README.md"),
   join("tasks"),
@@ -93,11 +93,10 @@ function isPathLikeBacktick(ref) {
     ref.startsWith("gamedesign/") ||
     ref.startsWith("tasks/") ||
     ref.startsWith("tools/") ||
+    ref.startsWith("ai_studio/") ||
     ref.startsWith("scripts/") ||
     ref.startsWith("state/") ||
     ref.startsWith("AGENTS.md") ||
-    ref.startsWith("AI_PIPELINE.md") ||
-    ref.startsWith("AI_PIPELINE_HISTORY.md") ||
     ref.startsWith("docs/") ||
     ref.startsWith("README.md")
   );
@@ -117,19 +116,9 @@ const files = roots.flatMap((entry) => walkMarkdown(join(root, entry)));
 const problems = [];
 const retiredCommandPatterns = [
   {
-    pattern: /\bnode\s+tools[\\/]ai\.mjs\s+validate\s+--file\b/i,
+    pattern: /\bnode\s+tools[\\/]ai\.mjs\b/i,
     message:
-      "retired command `node tools/ai.mjs validate --file`; use a focused test or `node tools/ai.mjs validate`",
-  },
-  {
-    pattern: /\bnode\s+tools[\\/]pipeline_validate\.mjs\b/i,
-    message:
-      "internal command `node tools/pipeline_validate.mjs`; use facade `node tools/ai.mjs validate` in agent-facing docs",
-  },
-  {
-    pattern: /\bnode\s+tools[\\/]ai\.mjs\s+reflect\s+--deep\b/i,
-    message:
-      "retired command `node tools/ai.mjs reflect --deep`; use `node tools/ai.mjs status` plus short `node tools/ai.mjs reflect`",
+      "retired command `node tools/ai.mjs`; call the owning CLI directly",
   },
 ];
 const retiredPhrasePatterns = [

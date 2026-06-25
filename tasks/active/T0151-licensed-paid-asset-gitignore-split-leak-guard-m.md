@@ -42,7 +42,7 @@ exist locally at build time — no builder scan change required.
 - [x] Leak guard `tools/assets/audit/restricted_assets_guard.mjs` (+ 9 tests) wired into `pipeline_validate.mjs`; passes on current tree (60 paths), fails on a planted paid leak
 - [x] Manual paid intake (no download URL) + `accept_incoming_asset.mjs` supports `--publish false` and paid license
 - [x] Paid-pack lifecycle documented (NatureGradientPack.zip worked example) in game-asset-pipeline `references/restricted-paid-assets.md` + game-asset-prep pointer
-- [x] AGENTS.md invariant + skill docs updated; my changes pass guard/tests/taskboard/skills/doc-ref/context-budget (`node tools/ai.mjs validate` has PRE-EXISTING reds unrelated to this task — see Log)
+- [x] AGENTS.md invariant + skill docs updated; my changes pass guard/tests/taskboard/skills/doc-ref/context-budget (`node tools/pipeline_validate.mjs` has PRE-EXISTING reds unrelated to this task — see Log)
 
 ## Open questions
 
@@ -56,7 +56,7 @@ exist locally at build time — no builder scan change required.
   allowed files: .gitignore, tools/asset_review/pull.mjs, tools/assets/restricted.mjs, tools/assets/audit/**, tools/assets/intake/**, tools/pipeline_validate.mjs, AGENTS.md, docs/ai-pipeline/**, .codex/skills/**, tasks/active/T0151-licensed-paid-asset-gitignore-split-leak-guard-m.md
   tool-use guard: verify exact repo paths with rg --files/Test-Path before reads; use Select-Object -Skip/-First for line windows; keep evidence commands read-only
   expected output: committed metadata-only catalogs + gitignored assets/restricted/ for paid binaries; guard green on tree and red on a planted leak; intake + skill for CGTrader packs; AGENTS invariant + doc
-  evidence command: node tools/assets/audit/restricted_assets_guard.mjs && node --test tools/assets/audit/restricted_assets_guard.test.mjs && node tools/taskboard/cli.mjs validate
+  evidence command: node tools/assets/audit/restricted_assets_guard.mjs && node --test tools/assets/audit/restricted_assets_guard.test.mjs && node ai_studio/taskboard/cli.mjs validate
   stop condition: guard passes current tree + blocks a planted paid leak; manual intake records sha256+product-page (no download URL) with publish:false; parse skill documented; validate green except the pre-existing quality-validation.md budget overflow
   independent reviewer: lead (d954mas) via /code-review on the branch diff
 - 2026-06-24 Created. Researched current pipeline: binaries currently committed;
@@ -76,6 +76,6 @@ exist locally at build time — no builder scan change required.
   committed only the `.md`. Phase 3: reference `restricted-paid-assets.md` + SKILL/AGENTS
   pointers; skills re-synced. Green: guard+tests, taskboard validate, skills_sync --check,
   skills_eval, doc_reference_check, context_budget, pipeline_validate.test (17), ai.test (30).
-  PRE-EXISTING reds in full `node tools/ai.mjs validate` (NOT this task, unchanged vs HEAD):
+  PRE-EXISTING reds in full `node tools/pipeline_validate.mjs` (NOT this task, unchanged vs HEAD):
   `docs/ai-pipeline/quality-validation.md` 3124>2600 export budget; plus T0146's
   intentionally-red material floor guard. Work uncommitted on master pending lead review.

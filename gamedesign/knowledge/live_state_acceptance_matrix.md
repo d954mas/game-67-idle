@@ -83,7 +83,7 @@ Use `--family key --key-color r,g,b` for exact chroma-key audits.
 
 ## Product Gate Usage
 
-Use `tools/product_gate/review.mjs` or `node tools/ai.mjs gate` with either a
+Use `tools/product_gate/review.mjs` or `node tools/product_gate/review.mjs` with either a
 matrix file or direct state coverage arguments.
 
 Matrix file example:
@@ -108,7 +108,7 @@ Matrix file example:
 Then run:
 
 ```powershell
-node tools/ai.mjs gate `
+node tools/product_gate/review.mjs `
   --project <game-id> `
   --task <task-id> `
   --surface desktop `
@@ -122,7 +122,7 @@ node tools/ai.mjs gate `
 Direct argument example:
 
 ```powershell
-node tools/ai.mjs gate `
+node tools/product_gate/review.mjs `
   --project <game-id> `
   --task <task-id> `
   --surface desktop `

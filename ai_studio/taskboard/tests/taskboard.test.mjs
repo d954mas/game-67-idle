@@ -1,4 +1,4 @@
-// Taskboard core tests. Run: node --test tools/taskboard/test.mjs
+// Taskboard core tests. Run: node --test ai_studio/taskboard/tests/taskboard.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, utimesSync } from "node:fs";
@@ -13,7 +13,10 @@ import {
   subagentPacketTemplate, subagentPacketProblem,
   subagentPacketPreset, subagentPacketPresetNames, renderSubagentPacketPreset,
   DEFAULT_ORCHESTRATION_TOOL_USE_GUARD,
-} from "./lib.mjs";
+} from "../lib.mjs";
+
+const taskboardDir = dirname(import.meta.dirname);
+const cliPath = join(taskboardDir, "cli.mjs");
 
 function tempRoot(t) {
   const dir = mkdtempSync(join(tmpdir(), "taskboard-test-"));
@@ -68,11 +71,11 @@ function writeTaskDoc(root, fields, body) {
 
 function validSubagentPacket() {
   return `objective: Verify the reusable packet shape.
-allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs
+allowed files: ai_studio/taskboard/lib.mjs; ai_studio/taskboard/tests/taskboard.test.mjs
 forbidden files: AGENTS.md; src/clean_seed_main.c
 tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}
 expected output: PASS or CONCERNS with exact evidence.
-evidence command or artifact: node --test --test-name-pattern "subagent packet" tools/taskboard/test.mjs
+evidence command or artifact: node --test --test-name-pattern "subagent packet" ai_studio/taskboard/tests/taskboard.test.mjs
 stop condition: focused packet checks pass or a blocker is found.
 handoff:
   findings: exact findings and verdict
@@ -145,7 +148,7 @@ test("cli list hides ideas by default and shows them explicitly", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Raw idea", status: "idea" });
   createTask(root, { title: "Actionable", status: "backlog" });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const base = { cwd: root, encoding: "utf8" };
   const normal = spawnSync(process.execPath, [cli, "list"], base);
   assert.equal(normal.status, 0, normal.stderr);
@@ -160,7 +163,7 @@ test("cli list hides review by default and shows it explicitly", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Active work", status: "todo" });
   createTask(root, { title: "Old review", status: "review" });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const base = { cwd: root, encoding: "utf8" };
   const normal = spawnSync(process.execPath, [cli, "list"], base);
   assert.equal(normal.status, 0, normal.stderr);
@@ -209,7 +212,7 @@ ${"evidence\n".repeat(300)}
   );
   createTask(root, { title: "Old review", status: "review", priority: "P1" });
   createTask(root, { title: "Current todo", status: "todo", priority: "P1" });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(
     process.execPath,
     [cli, "context", "--status-max-chars", "1200", "--tasks-limit", "1"],
@@ -240,7 +243,7 @@ ${"goal line\n".repeat(400)}
 THIS_SHOULD_BE_BEYOND_DEFAULT_CONTEXT
 `,
   );
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "context"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, new RegExp(`status_warning: large; digest is capped at ${LIVE_STATUS_MAX_CHARS} chars`));
@@ -277,7 +280,7 @@ ${"LARGE_TASK_BODY_SHOULD_NOT_APPEAR\n".repeat(300)}
 ## Log
 `,
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "context"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /T0001 .* Large active task/);
@@ -307,7 +310,7 @@ GAME_GOAL_SHOULD_NOT_APPEAR
     priority: "P1",
     tags: ["pipeline", "orchestration"],
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "context"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /## Current Work/);
@@ -341,7 +344,7 @@ Improve the game quickly.
   createTask(root, { title: "Doing task", status: "doing", priority: "P1" });
   createTask(root, { title: "Review task", status: "review", priority: "P1" });
   createTask(root, { title: "Idea task", status: "idea", priority: "P1" });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(
     process.execPath,
     [cli, "summary", "--tasks-limit", "1"],
@@ -385,7 +388,7 @@ GAME_BLOCKER_SHOULD_NOT_APPEAR
     priority: "P1",
     tags: ["pipeline", "taskboard"],
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "summary"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /## Current Work/);
@@ -431,7 +434,7 @@ Run node tools/ai.mjs validate --review after the gameplay smoke.
 ## Log
 `,
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const summary = spawnSync(process.execPath, [cli, "summary"], { cwd: root, encoding: "utf8" });
   assert.equal(summary.status, 0, summary.stderr);
   assert.match(summary.stdout, /## Current Goal/);
@@ -481,9 +484,9 @@ test("updateDoc accepts substantial pipeline transition with orchestration packe
     status: "doing",
     body: taskBodyWithLog(`- orchestration: used
   objective: verify the transition guard behavior
-  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  allowed files: ai_studio/taskboard/lib.mjs, ai_studio/taskboard/tests/taskboard.test.mjs
   expected output: focused failing/passing taskboard tests
-  evidence command: node --test tools/taskboard/test.mjs
+  evidence command: node --test ai_studio/taskboard/tests/taskboard.test.mjs
   stop condition: requested guard scenarios pass
   independent reviewer: reviewed transition and validateStore cases`),
   });
@@ -517,9 +520,9 @@ test("updateDoc nudges about missing orchestration packet fields", (t) => {
     status: "doing",
     body: taskBodyWithLog(`- orchestration: used
   objective: improve orchestration diagnostics
-  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  allowed files: ai_studio/taskboard/lib.mjs, ai_studio/taskboard/tests/taskboard.test.mjs
   expected output: focused failure details
-  evidence command: node --test tools/taskboard/test.mjs
+  evidence command: node --test ai_studio/taskboard/tests/taskboard.test.mjs
   stop condition: taskboard tests pass
   independent reviewers: reviewed by a plural label`),
   });
@@ -548,7 +551,7 @@ test("updateDoc nudges on orchestration packet assembled from separate log entri
     title: "Pipeline guard",
     status: "doing",
     body: taskBodyWithLog(`- 2026-06-21: objective: old planning note
-  allowed files: tools/taskboard/lib.mjs
+  allowed files: ai_studio/taskboard/lib.mjs
   expected output: old output note
   evidence command: old command
   stop condition: old stop
@@ -825,9 +828,9 @@ test("validateStoreDetailed reports structured orchestration problem", (t) => {
     status: "review",
     body: taskBodyWithLog(`- orchestration: used
   objective: improve orchestration diagnostics
-  allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs
+  allowed files: ai_studio/taskboard/lib.mjs, ai_studio/taskboard/tests/taskboard.test.mjs
   expected output: focused failure details
-  evidence command: node --test tools/taskboard/test.mjs
+  evidence command: node --test ai_studio/taskboard/tests/taskboard.test.mjs
   stop condition: taskboard tests pass
   independent reviewers: reviewed by a plural label`),
   });
@@ -843,9 +846,9 @@ test("orchestration template can be filled and accepted", (t) => {
   const root = tempRoot(t);
   const packet = orchestrationPacketTemplate()
     .replace("objective: <non-empty>", "objective: verify packet template")
-    .replace("allowed files: <non-empty>", "allowed files: tools/taskboard/lib.mjs, tools/taskboard/test.mjs")
+    .replace("allowed files: <non-empty>", "allowed files: ai_studio/taskboard/lib.mjs, ai_studio/taskboard/tests/taskboard.test.mjs")
     .replace("expected output: <non-empty>", "expected output: accepted review transition")
-    .replace("evidence command: <non-empty>", "evidence command: node --test tools/taskboard/test.mjs")
+    .replace("evidence command: <non-empty>", "evidence command: node --test ai_studio/taskboard/tests/taskboard.test.mjs")
     .replace("stop condition: <non-empty>", "stop condition: focused taskboard tests pass")
     .replace("independent reviewer: <non-empty>", "independent reviewer: reviewed JSON output and template drift");
   createTask(root, {
@@ -942,7 +945,7 @@ test("cli validate prints remediation hints for common failures", (t) => {
     status: "review",
     body: taskBodyWithLog("- 2026-06-21: Ready for review."),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "validate"], { cwd: root, encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /problem: T0001: actionable task needs/);
@@ -950,7 +953,7 @@ test("cli validate prints remediation hints for common failures", (t) => {
   // Orchestration is advisory at validate-time: it nudges, does not block [Phase 1 #2].
   assert.match(result.stdout, /nudge: T0002: substantial pipeline\/orchestration task needs orchestration evidence/);
   assert.match(result.stdout, /missing\/invalid: orchestration: used packet/);
-  assert.match(result.stdout, /hint: add a complete packet from `node tools\/taskboard\/cli\.mjs orchestration-template`:/);
+  assert.match(result.stdout, /hint: add a complete packet from `node ai_studio\/taskboard\/cli\.mjs orchestration-template`:/);
   assert.match(result.stdout, /objective: <non-empty>/);
   assert.match(result.stdout, /independent reviewer: <non-empty>/);
   assert.match(result.stdout, /problem: tasks\/STATUS\.md exceeds live status budget/);
@@ -964,7 +967,7 @@ test("cli validate --json reports parseable orchestration fields", (t) => {
     status: "review",
     body: taskBodyWithLog("- 2026-06-21: Ready for review."),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "validate", "--json"], { cwd: root, encoding: "utf8" });
   // Orchestration alone is advisory: validate passes (exit 0) and reports it under
   // `advisories`, not blocking `problems` [REFACTOR_PLAN Phase 1 #2].
@@ -988,7 +991,7 @@ test("cli validate --json reports parseable orchestration start preflight fields
     status: "doing",
     tags: ["pipeline", "orchestration"],
   }, taskBodyWithLog("- 2026-06-21: Ready to start without packet."));
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "validate", "--json"], { cwd: root, encoding: "utf8" });
   // Start-preflight is advisory at validate-time too [REFACTOR_PLAN Phase 1 #2].
   assert.equal(result.status, 0);
@@ -1012,7 +1015,7 @@ test("cli set --json saves substantial transition and nudges on missing orchestr
     status: "doing",
     body: taskBodyWithLog("- 2026-06-21: Ready for review without packet."),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "set", "T0001", "--status", "review", "--json"], { cwd: root, encoding: "utf8" });
   // Advisory now: the store mutation succeeds; the nudge goes to stderr.
   assert.equal(result.status, 0, result.stderr);
@@ -1030,7 +1033,7 @@ test("cli set --json saves start transition and nudges on missing preflight", (t
     status: "todo",
     tags: ["pipeline", "orchestration"],
   }, taskBodyWithLog("- 2026-06-21: Ready to start without packet."));
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "set", "T0078", "--status", "doing", "--json"], { cwd: root, encoding: "utf8" });
   // Advisory now: the start transition succeeds; the nudge goes to stderr.
   assert.equal(result.status, 0, result.stderr);
@@ -1048,14 +1051,14 @@ test("cli orchestration-check passes complete preflight packet without PASS evid
     status: "doing",
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
-  allowed files: tools/taskboard/lib.mjs
+  allowed files: ai_studio/taskboard/lib.mjs
   tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope`),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /ok: orchestration packet preflight passed/);
@@ -1069,14 +1072,14 @@ test("cli orchestration-check accepts positional task id", (t) => {
     status: "doing",
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
-  allowed files: tools/taskboard/cli.mjs
+  allowed files: ai_studio/taskboard/cli.mjs
   tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope`),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", task.fields.id], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, new RegExp(`ok: orchestration packet preflight passed for .*${task.fields.id}`));
@@ -1090,14 +1093,14 @@ test("cli orchestration-check --id emits resolved file in json", (t) => {
     status: "doing",
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
-  allowed files: tools/taskboard/cli.mjs
+  allowed files: ai_studio/taskboard/cli.mjs
   tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope`),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--id", task.fields.id, "--json"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const parsed = JSON.parse(result.stdout);
@@ -1108,7 +1111,7 @@ test("cli orchestration-check --id emits resolved file in json", (t) => {
 
 test("cli orchestration-check rejects missing or invalid id selectors", (t) => {
   const root = tempRoot(t);
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const missing = spawnSync(process.execPath, [cli, "orchestration-check"], { cwd: root, encoding: "utf8" });
   assert.notEqual(missing.status, 0);
   assert.match(missing.stderr, /usage: orchestration-check <task-id>\|--id <task-id>\|--file <task\.md>/);
@@ -1131,14 +1134,14 @@ test("cli orchestration-check rejects conflicting selectors", (t) => {
     status: "doing",
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
-  allowed files: tools/taskboard/cli.mjs
+  allowed files: ai_studio/taskboard/cli.mjs
   tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope`),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", task.fields.id, "--file", task.file], { cwd: root, encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /use only one selector/);
@@ -1152,14 +1155,14 @@ test("cli orchestration-check rejects missing tool-use guard while validate stay
     status: "review",
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
-  allowed files: tools/taskboard/lib.mjs
+  allowed files: ai_studio/taskboard/lib.mjs
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope
 - evidence: PASS \`${command}\``),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /missing\/invalid: tool-use guard/);
@@ -1174,11 +1177,11 @@ test("cli orchestration-check rejects unbounded allowed files", (t) => {
     "tools/**",
     "tools/*",
     "tools/**/test.mjs",
-    "../tools/taskboard/lib.mjs",
+    "../ai_studio/taskboard/lib.mjs",
     "C:\\projects\\game-67-idle\\tools\\taskboard\\lib.mjs",
     "https://example.test/file.md",
   ];
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   for (const [index, allowedFiles] of invalidValues.entries()) {
     const task = createTask(root, {
       title: `Subagent packet preflight ${index}`,
@@ -1206,14 +1209,14 @@ test("cli orchestration-check accepts bounded allowed file patterns", (t) => {
     status: "doing",
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
-  allowed files: tools/taskboard/lib.mjs; tools/taskboard/test.mjs; tasks/active/T*.md; tools/ai*.mjs; tools/taskboard/**; docs/ai-pipeline/**
+  allowed files: ai_studio/taskboard/lib.mjs; ai_studio/taskboard/tests/taskboard.test.mjs; tasks/active/T*.md; tools/ai*.mjs; ai_studio/taskboard/**; docs/ai-pipeline/**
   tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: ${command}
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope`),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /ok: orchestration packet preflight passed/);
@@ -1226,14 +1229,14 @@ test("cli orchestration-check rejects placeholder tool-use guard", (t) => {
     status: "doing",
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
-  allowed files: tools/taskboard/lib.mjs
+  allowed files: ai_studio/taskboard/lib.mjs
   tool-use guard: TBD
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs orchestration-trace --parent-thread-id parent --json-output tmp/trace.json --json
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope`),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", task.file], { cwd: root, encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /missing\/invalid: tool-use guard/);
@@ -1244,9 +1247,9 @@ test("orchestration preflight next action falls back without task id", () => {
     fields: { status: "doing" },
     body: taskBodyWithLog(`- orchestration: used
   objective: verify subagent packet before launch
-  allowed files: tools/taskboard/lib.mjs
+  allowed files: ai_studio/taskboard/lib.mjs
   expected output: packet preflight passes
-  evidence command: node --test tools/taskboard/test.mjs
+  evidence command: node --test ai_studio/taskboard/tests/taskboard.test.mjs
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope`),
   });
@@ -1271,13 +1274,13 @@ test("cli orchestration-check --file does not use file fallback as task id in ne
     updated: "2026-06-21",
   }, taskBodyWithLog(`- orchestration: used
   objective: verify file fallback behavior
-  allowed files: tools/taskboard/lib.mjs
+  allowed files: ai_studio/taskboard/lib.mjs
   expected output: packet preflight passes
-  evidence command: node --test tools/taskboard/test.mjs
+  evidence command: node --test ai_studio/taskboard/tests/taskboard.test.mjs
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope`)), "utf8");
 
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--file", file, "--json"], { cwd: root, encoding: "utf8" });
   const parsed = JSON.parse(result.stdout);
 
@@ -1296,14 +1299,14 @@ test("cli orchestration-check --current resolves one doing orchestration task", 
     tags: ["pipeline", "orchestration"],
     body: taskBodyWithLog(`- orchestration: used
   objective: verify current packet before launch
-  allowed files: tools/taskboard/lib.mjs
+  allowed files: ai_studio/taskboard/lib.mjs
   tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope`),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -1315,7 +1318,7 @@ test("cli orchestration-check --current resolves one doing orchestration task", 
 
 test("cli orchestration-check --current rejects no current task", (t) => {
   const root = tempRoot(t);
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
@@ -1341,7 +1344,7 @@ test("cli orchestration-check --current rejects multiple current tasks", (t) => 
       tags: ["pipeline", "orchestration"],
       body: taskBodyWithLog(`- orchestration: used
   objective: verify current packet before launch
-  allowed files: tools/taskboard/lib.mjs
+  allowed files: ai_studio/taskboard/lib.mjs
   tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
@@ -1349,7 +1352,7 @@ test("cli orchestration-check --current rejects multiple current tasks", (t) => 
   independent reviewer: reviewed packet scope`),
     });
   }
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
@@ -1368,7 +1371,7 @@ test("cli orchestration-check --current rejects multiple current tasks", (t) => 
 
 test("cli orchestration-check --current keeps non-json selector failures on stderr", (t) => {
   const root = tempRoot(t);
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
@@ -1385,7 +1388,7 @@ test("cli orchestration-check --current keeps non-json ambiguous selector failur
       tags: ["pipeline", "orchestration"],
       body: taskBodyWithLog(`- orchestration: used
   objective: verify current packet before launch
-  allowed files: tools/taskboard/lib.mjs
+  allowed files: ai_studio/taskboard/lib.mjs
   tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
@@ -1393,7 +1396,7 @@ test("cli orchestration-check --current keeps non-json ambiguous selector failur
   independent reviewer: reviewed packet scope`),
     });
   }
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", "--current"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
@@ -1409,14 +1412,14 @@ test("cli orchestration-check --current rejects conflicting selectors", (t) => {
     tags: ["pipeline", "orchestration"],
     body: taskBodyWithLog(`- orchestration: used
   objective: verify current packet before launch
-  allowed files: tools/taskboard/lib.mjs
+  allowed files: ai_studio/taskboard/lib.mjs
   tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: packet preflight passes
   evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
   stop condition: preflight reports ok
   independent reviewer: reviewed packet scope`),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-check", task.fields.id, "--current"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
@@ -1424,7 +1427,7 @@ test("cli orchestration-check --current rejects conflicting selectors", (t) => {
 });
 
 test("cli orchestration-template prints accepted packet shape", () => {
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-template"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^- orchestration: used/m);
@@ -1456,7 +1459,7 @@ test("subagent packet check accepts complete packet", () => {
 });
 
 test("subagent packet check rejects unbounded allowed files", () => {
-  const packet = validSubagentPacket().replace("tools/taskboard/lib.mjs; tools/taskboard/test.mjs", "tools/**");
+  const packet = validSubagentPacket().replace("ai_studio/taskboard/lib.mjs; ai_studio/taskboard/tests/taskboard.test.mjs", "tools/**");
   const problem = subagentPacketProblem(packet);
 
   assert.equal(problem.code, "subagent_packet_invalid");
@@ -1472,7 +1475,7 @@ test("subagent packet check rejects missing handoff subfields", () => {
 });
 
 test("cli subagent-packet-template prints reusable packet", () => {
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "subagent-packet-template"], { encoding: "utf8" });
 
   assert.equal(result.status, 0, result.stderr);
@@ -1511,7 +1514,7 @@ test("subagent packet preset rejects an unknown name and lists presets", () => {
 });
 
 test("cli subagent-packet-template --preset emits a parallel fan-out", () => {
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(
     process.execPath,
     [cli, "subagent-packet-template", "--preset", "codebase-map", "--targets", "src/a/**,tools/b/**"],
@@ -1525,7 +1528,7 @@ test("cli subagent-packet-template --preset emits a parallel fan-out", () => {
 });
 
 test("cli subagent-packet-template --preset with no name lists presets", () => {
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "subagent-packet-template", "--preset"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /presets: /);
@@ -1533,7 +1536,7 @@ test("cli subagent-packet-template --preset with no name lists presets", () => {
 });
 
 test("cli subagent-packet-template --preset rejects an unknown name", () => {
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "subagent-packet-template", "--preset", "nope"], { encoding: "utf8" });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /unknown preset: nope/);
@@ -1541,7 +1544,7 @@ test("cli subagent-packet-template --preset rejects an unknown name", () => {
 
 test("cli subagent-packet-check reports structured failures", (t) => {
   const root = tempRoot(t);
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "subagent-packet-check", "--text", "objective: only this", "--json"], { cwd: root, encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
@@ -1556,7 +1559,7 @@ test("cli subagent-packet-check accepts file input", (t) => {
   const root = tempRoot(t);
   const packet = join(root, "packet.txt");
   writeFileSync(packet, validSubagentPacket());
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "subagent-packet-check", "--file", packet, "--json"], { cwd: root, encoding: "utf8" });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -1567,7 +1570,7 @@ test("cli subagent-packet-check accepts file input", (t) => {
 
 test("cli subagent-packet-check accepts stdin input", (t) => {
   const root = tempRoot(t);
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "subagent-packet-check", "--stdin", "--json"], {
     cwd: root,
     encoding: "utf8",
@@ -1584,7 +1587,7 @@ test("cli subagent-packet-check rejects ambiguous stdin input", (t) => {
   const root = tempRoot(t);
   const packet = join(root, "packet.txt");
   writeFileSync(packet, validSubagentPacket());
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
 
   for (const args of [
     ["subagent-packet-check", "--stdin", "--text", validSubagentPacket(), "--json"],
@@ -1604,9 +1607,9 @@ function bootstrapArgs(overrides = {}) {
   const values = {
     title: "Bootstrap orchestration task",
     objective: "verify bootstrap command",
-    "allowed-files": "tools/taskboard/cli.mjs",
+    "allowed-files": "ai_studio/taskboard/cli.mjs",
     "expected-output": "preflight passes",
-    "evidence-command": "node --test tools/taskboard/test.mjs",
+    "evidence-command": "node --test ai_studio/taskboard/tests/taskboard.test.mjs",
     "stop-condition": "current preflight passes",
     "independent-reviewer": "reviewed bootstrap contract",
     ...overrides,
@@ -1616,20 +1619,20 @@ function bootstrapArgs(overrides = {}) {
 
 test("cli orchestration-bootstrap --help prints usage without requiring task args", (t) => {
   const root = tempRoot(t);
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [cli, "orchestration-bootstrap", "--help"], { cwd: root, encoding: "utf8" });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.equal(result.stderr, "");
-  assert.match(result.stdout, /usage: node tools\/taskboard\/cli\.mjs orchestration-bootstrap/);
+  assert.match(result.stdout, /usage: node ai_studio\/taskboard\/cli\.mjs orchestration-bootstrap/);
   assert.match(result.stdout, /--allowed-files/);
   assert.match(result.stdout, /--evidence-command/);
-  assert.match(result.stdout, /node tools\/ai\.mjs orchestration-check --current --json/);
+  assert.match(result.stdout, /node ai_studio\/taskboard\/cli\.mjs orchestration-check --current --json/);
 });
 
 test("cli orchestration-bootstrap creates a current preflight-valid task", (t) => {
   const root = tempRoot(t);
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [
     cli,
     "orchestration-bootstrap",
@@ -1647,9 +1650,9 @@ test("cli orchestration-bootstrap creates a current preflight-valid task", (t) =
   const doc = findDoc(root, parsed.doc.id);
   assert.ok(doc);
   assert.match(doc.body, /objective: verify bootstrap command/);
-  assert.match(doc.body, /allowed files: tools\/taskboard\/cli\.mjs/);
+  assert.match(doc.body, /allowed files: ai_studio\/taskboard\/cli\.mjs/);
   assert.ok(doc.body.includes(`tool-use guard: ${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}`));
-  assert.match(doc.body, /evidence command: node --test tools\/taskboard\/test\.mjs/);
+  assert.match(doc.body, /evidence command: node --test ai_studio\/taskboard\/tests\/taskboard\.test\.mjs/);
 
   const check = spawnSync(process.execPath, [cli, "orchestration-check", "--current", "--json"], { cwd: root, encoding: "utf8" });
   assert.equal(check.status, 0, check.stderr || check.stdout);
@@ -1661,7 +1664,7 @@ test("cli orchestration-bootstrap creates T0078 current task that passes start p
   for (let i = 0; i < 77; i += 1) {
     createTask(root, { title: `Seed ${i + 1}`, status: "dropped" });
   }
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [
     cli,
     "orchestration-bootstrap",
@@ -1686,7 +1689,7 @@ test("cli orchestration-bootstrap creates T0078 current task that passes start p
 
 test("cli orchestration-bootstrap rejects missing args without creating tasks", (t) => {
   const root = tempRoot(t);
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [
     cli,
     "orchestration-bootstrap",
@@ -1705,7 +1708,7 @@ test("cli orchestration-bootstrap rejects missing args without creating tasks", 
 
 test("cli orchestration-bootstrap rejects invalid allowed files without creating tasks", (t) => {
   const root = tempRoot(t);
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [
     cli,
     "orchestration-bootstrap",
@@ -1730,14 +1733,14 @@ test("cli orchestration-bootstrap rejects existing current task without creating
     tags: ["pipeline", "orchestration"],
     body: taskBodyWithLog(`- orchestration: used
   objective: verify existing current
-  allowed files: tools/taskboard/cli.mjs
+  allowed files: ai_studio/taskboard/cli.mjs
   tool-use guard: verify exact repo paths with rg --files/Test-Path before Get-Content/read; use Select-Object -Skip/-First, not Format-Hex -Count or Select-Object -Index, for line windows; use orchestration-evidence --current --run --json or trace/status commands with explicit evidence source and --json-output
   expected output: preflight passes
   evidence command: node tools/ai.mjs status --agent-rollup --require-agent-rollup-ok --parent-thread-id parent
   stop condition: preflight passes
   independent reviewer: reviewed current task`),
   });
-  const cli = join(import.meta.dirname, "cli.mjs");
+  const cli = cliPath;
   const result = spawnSync(process.execPath, [
     cli,
     "orchestration-bootstrap",
@@ -1755,7 +1758,7 @@ test("cli orchestration-bootstrap rejects existing current task without creating
 test("markdown preview renders task syntax and escapes html", () => {
   const sandbox = {};
   sandbox.globalThis = sandbox;
-  const source = readFileSync(join(import.meta.dirname, "public", "markdown_preview.js"), "utf8");
+  const source = readFileSync(join(taskboardDir, "public", "markdown_preview.js"), "utf8");
   vm.runInNewContext(source, sandbox);
   const html = sandbox.TaskboardMarkdown.renderMarkdown(`# Title
 

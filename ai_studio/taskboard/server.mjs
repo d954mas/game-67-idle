@@ -1,7 +1,7 @@
 // Taskboard web UI server. No dependencies.
 //
-//   node tools/taskboard/server.mjs            -> http://127.0.0.1:8070/
-//   PORT=9000 node tools/taskboard/server.mjs
+//   node ai_studio/taskboard/server.mjs            -> http://127.0.0.1:8070/
+//   PORT=9000 node ai_studio/taskboard/server.mjs
 //
 // Serves the kanban UI from public/ and a small JSON API over the markdown
 // task store (tasks/ at the repo root).

@@ -14,16 +14,16 @@ Keep project work captured, refined, and planned in the markdown task store.
 
 ## Fast Commands
 
-- Summary: `node tools/taskboard/cli.mjs summary`.
-- Current-context digest: `node tools/taskboard/cli.mjs context`.
-- CLI: `node tools/taskboard/cli.mjs <summary|list|context|show|new|set|validate>`.
-- Board: `node tools/taskboard/server.mjs` -> `http://127.0.0.1:8070/`.
+- Summary: `node ai_studio/taskboard/cli.mjs summary`.
+- Current-context digest: `node ai_studio/taskboard/cli.mjs context`.
+- CLI: `node ai_studio/taskboard/cli.mjs <summary|list|context|show|new|set|validate>`.
+- Board: `node ai_studio/taskboard/server.mjs` -> `http://127.0.0.1:8070/`.
 
 ## Workflow
 
 1. Start with `cli.mjs summary`; use `cli.mjs context` for long work. Read full
    `tasks/STATUS.md` only when changing it or auditing a linked claim.
-2. Follow `tasks/README.md` and load the task-store protocol when changing
+2. Follow `ai_studio/taskboard/README.md` and load the task-store protocol when changing
    tasks, status, epics, review items, or reporting shape.
 3. Capture anything the user wants that will not be done right now as a task.
    Losing a stated idea is a failure; when in doubt, capture as `status: idea`.

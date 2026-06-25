@@ -35,7 +35,7 @@ fake shots, polished builds, or release-quality presentation.
 5. Inspect generated outputs before integration; reject weak, unreadable,
    watermarked, fused, or drifting assets.
 6. Validate in primary runtime with screenshot evidence plus product gate; hand
-   off with `node tools/ai.mjs close-slice`. For `lead-rejection` tasks, strict
+   off with `node tools/product_gate/close_slice.mjs`. For `lead-rejection` tasks, strict
    close needs `--resolved-rejection` with exact issue and proof.
 
 ## Stop Conditions

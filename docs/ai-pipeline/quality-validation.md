@@ -13,7 +13,7 @@ Separate verdicts:
 
 Do not close from one green gate. Builds/probes/audits are evidence, not
 acceptance. For a contested gate, run one clean verifier on only the named check
-(`node tools/ai.mjs gate ... --verify`): CONFIRM/REFUTE, no self-grading.
+(`node tools/product_gate/review.mjs ... --verify`): CONFIRM/REFUTE, no self-grading.
 
 When strict/product fails twice for the same reason, stop polishing and create
 another path (architecture, tooling, source asset, reference) or record lead
@@ -48,20 +48,19 @@ references are not ready, and oversized `src/clean_seed_main.c` without an
 architecture/decomposition task. Reviews/scores are evidence only; record lead
 acceptance before overriding rejection.
 
-`node tools/ai.mjs validate` runs both. Gate logs may carry
+`node tools/pipeline_validate.mjs` runs both. Gate logs may carry
 `[GATE-ID]: PASS|CONCERNS|FAIL`; repeated-failure guard counts total FAILs.
 
 ## Validation Defaults
 
-- Task/status docs: `node tools/taskboard/cli.mjs validate`
+- Task/status docs: `node ai_studio/taskboard/cli.mjs validate`
 - Skill/process changes: `node tools/skills_eval.mjs`
 - Product gate changes: `node --test tools/product_gate/test.mjs`
-- Taskboard changes: `node --test tools/taskboard/test.mjs`
-- AI facade/profile changes: `node --test tools/ai.test.mjs` + focused profile
-  tests
-- Reusable pipeline: `node tools/ai.mjs validate`
-- Review-stage context/cap pressure: `node tools/ai.mjs validate --review`
-- Portable/export/runtime gates: `node tools/ai.mjs validate --full`
+- Taskboard changes: `node --test ai_studio/taskboard/tests/taskboard.test.mjs`
+- Profile changes: focused `tools/ai_profile/` tests
+- Reusable pipeline: `node tools/pipeline_validate.mjs`
+- Review-stage context/cap pressure: `node tools/pipeline_validate.mjs --review`
+- Portable/export/runtime gates: `node tools/pipeline_validate.mjs --full`
 - Visual/playable changes: native scenario plus screenshot/video/product gate
   evidence
 

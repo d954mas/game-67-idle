@@ -47,7 +47,6 @@ const explicitDocPaths = [
   "README.md",
   "AGENTS.md",
   "CLAUDE.md",
-  "AI_PIPELINE.md",
   "ai_studio/README.md",
   "ai_studio/core_harness/README.md",
   "tools/README.md",
@@ -58,9 +57,9 @@ const explicitDocPaths = [
   "docs/ai-pipeline/profiling-reuse.md",
   "docs/ai-pipeline/subagent-protocol.md",
   "docs/ai-pipeline/orchestration-playbook.md",
-  "tasks/README.md",
+  "ai_studio/taskboard/README.md",
   "tasks/STATUS.md",
-  "tasks/guides/task-store-reference.md",
+  "ai_studio/taskboard/task-store-reference.md",
   "gamedesign/README.md",
   "gamedesign/projects/README.md",
   "gamedesign/sources/README.md",
@@ -75,7 +74,6 @@ const explicitDocPaths = [
 ];
 
 const exactToolNotes = new Map([
-  ["tools/ai.mjs", "Main agent facade: validation, status, orchestration packet checks, product gates, critique, and slice closeout."],
   ["tools/pipeline_validate.mjs", "Validation orchestrator for reusable pipeline checks, review/full modes, export checks, docs, skills, and gates."],
   ["tools/context_budget.mjs", "Checks hot docs and skill entrypoints against context-budget limits."],
   ["tools/doc_reference_check.mjs", "Finds stale local references, retired commands, and broken Markdown/document links."],
@@ -83,8 +81,8 @@ const exactToolNotes = new Map([
   ["tools/sync.mjs", "Runs cross-harness sync for generated skills and hooks."],
   ["tools/skills_sync.mjs", "Generates Claude-facing skill pointers from canonical Codex skills."],
   ["tools/hooks_sync.mjs", "Generates Codex/Claude hook config from one shared source."],
-  ["tools/taskboard/cli.mjs", "Taskboard facade for task context, CRUD, validation, epics, and subagent packet templates."],
-  ["tools/taskboard/server.mjs", "Local taskboard web UI server."],
+  ["ai_studio/taskboard/cli.mjs", "Taskboard facade for task context, CRUD, validation, epics, and subagent packet templates."],
+  ["ai_studio/taskboard/server.mjs", "Local taskboard web UI server."],
   ["tools/bootstrap/new_game.mjs", "Copies template/ into a new game folder."],
   ["tools/bootstrap/export_base.mjs", "Exports the portable AI pipeline base into another project."],
   ["tools/game_context/new_prototype.mjs", "Creates wiki/GDD/task/status scaffolding for a new prototype concept."],
@@ -116,10 +114,10 @@ const exactToolNotes = new Map([
 ]);
 
 const domainNotes = [
-  ["tools/taskboard/", "tasks", "Taskboard support code; source contract: tasks/README.md and task-store-reference.md."],
+  ["ai_studio/taskboard/", "tasks", "Taskboard support code; source contract: ai_studio/taskboard/README.md and task-store-reference.md."],
   ["tools/ai_profile/", "profile", "Passive profiling support; source contract: docs/ai-pipeline/profiling-reuse.md."],
   ["tools/bootstrap/", "export", "Bootstrap/export support; source contract: tools/bootstrap/TEMPLATE.md and tools/README.md."],
-  ["tools/game_context/", "design", "Prototype/game context support; source contract: AI_PIPELINE.md and project wiki routing."],
+  ["tools/game_context/", "design", "Prototype/game context support; source contract: ai_studio/README.md and project wiki routing."],
   ["tools/product_gate/", "validation", "Product/readability/visual gate support; source contract: docs/ai-pipeline/quality-validation.md."],
   ["tools/assets/source/", "assets", "Source-first asset search/import support; source contract: asset pipeline skills and tools/README.md."],
   ["tools/assets/intake/", "assets", "Asset intake/provenance support; source contract: asset pipeline skills and tools/README.md."],
@@ -227,7 +225,7 @@ function headingsFromMarkdown(text) {
 function classifyPath(rel) {
   const lower = rel.toLowerCase();
   if (lower.startsWith(".codex/skills/")) return "skills";
-  if (lower === "agents.md" || lower === "claude.md" || lower === "ai_pipeline.md" || lower === "readme.md") return "hot";
+  if (lower === "agents.md" || lower === "claude.md" || lower === "readme.md") return "hot";
   if (lower.startsWith("tasks/")) return "tasks";
   if (lower.includes("quality-validation") || lower.includes("product_gate") || lower.includes("gate")) return "validation";
   if (lower.includes("profiling") || lower.includes("ai_profile")) return "profile";
@@ -355,9 +353,9 @@ function collectTools() {
 
 function sourceDocForGroup(group) {
   const map = {
-    hot: "AI_PIPELINE.md",
+    hot: "ai_studio/README.md",
     skills: ".codex/skills/ai-pipeline-maintenance/SKILL.md",
-    tasks: "tasks/README.md",
+    tasks: "ai_studio/taskboard/README.md",
     facade: "tools/README.md",
     validation: "docs/ai-pipeline/quality-validation.md",
     design: "gamedesign/README.md",

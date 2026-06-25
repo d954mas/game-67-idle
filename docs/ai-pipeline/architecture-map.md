@@ -157,8 +157,8 @@ skills with stable public entry points, not a pile of scripts and instructions.
   a CLI. Tools should be narrow, testable, and return actionable output.
 - Validator or gate: a tool that enforces a mechanical invariant or records
   acceptance evidence.
-- Hot doc: a small always-nearby map, such as `AGENTS.md`, `AI_PIPELINE.md`, or
-  `tasks/README.md`.
+- Hot doc: a small always-nearby map, such as `AGENTS.md`, `ai_studio/README.md`, or
+  `ai_studio/taskboard/README.md`.
 - Durable state: task files, project wiki files, asset catalog records,
   generated manifests, gate records, and profiler logs. The prompt is not the
   database.
@@ -167,10 +167,10 @@ skills with stable public entry points, not a pile of scripts and instructions.
 
 ```text
 Lead/user request
-  -> AGENTS.md and AI_PIPELINE.md route the work
+  -> AGENTS.md and ai_studio/README.md route the work
   -> one matching skill loads focused procedure
   -> taskboard/project wiki supplies durable state when needed
-  -> tools/ai.mjs or a domain CLI performs action/validation
+  -> the owning domain CLI performs action/validation
   -> domain libraries and validators enforce contracts
   -> evidence is written to task/project/gate artifacts only when durable
 ```
@@ -196,11 +196,10 @@ These are the main stable entry points an agent should know first.
 | Surface | Role | Notes |
 |---|---|---|
 | `AGENTS.md` | Repo policy and hard invariants | Root says there is no active game concept; games are folders copied from `template/`. |
-| `AI_PIPELINE.md` | Portable workflow map | Points to deeper docs; should stay short. |
-| `tasks/README.md` | Task store map | Commands, lifecycle, minimal context, done rules. |
+| `ai_studio/README.md` | Portable workflow map | Points to deeper docs; should stay short. |
+| `ai_studio/taskboard/README.md` | Task store map | Commands, lifecycle, minimal context, done rules. |
 | `.codex/skills/*/SKILL.md` | Workflow routing | One focused procedure per task type; details go to references. |
-| `tools/ai.mjs` | Main facade | Routes validation, profiler status, orchestration packets, gates, critique, close-slice. |
-| `tools/taskboard/cli.mjs` | Task and packet CLI | Owns task CRUD, context, subagent packet templates/checks, orchestration bootstrap/check. |
+| `ai_studio/taskboard/cli.mjs` | Task and packet CLI | Owns task CRUD, context, subagent packet templates/checks, orchestration bootstrap/check. |
 | `tools/pipeline_validate.mjs` | Validation orchestrator | Quick/review/full validation over tools, docs, skills, taskboard, gates, export. |
 | tools/bootstrap/new_game.mjs | New game folder bootstrap | Copies `template/` into a game folder. |
 | `tools/game_context/new_prototype.mjs` | New prototype kickoff | Creates project wiki/task/status skeleton for a selected concept. |
@@ -213,8 +212,8 @@ These are the main stable entry points an agent should know first.
 | Domain | Source of truth | Main tools | Main skills | Durable outputs |
 |---|---|---|---|---|
 | AI Studio target structure | `ai_studio/README.md`, `ai_studio/tree.json`, `ai_studio/core_harness/README.md` | tools/architecture_map/build_architecture_map.mjs | `ai-pipeline-maintenance` | Reviewed modules under `ai_studio/`, generated map HTML |
-| Pipeline policy and context | `AGENTS.md`, `AI_PIPELINE.md`, `docs/ai-pipeline/` | `tools/context_budget.mjs`, `tools/doc_reference_check.mjs`, `tools/pipeline_validate.mjs` | `ai-pipeline-maintenance` | Updated docs, validation output |
-| Task state and orchestration | `tasks/README.md`, `tasks/STATUS.md`, `tasks/active/`, `tasks/epics/` | `tools/taskboard/cli.mjs`, `tools/taskboard/server.mjs` | `task-manager`, `ai-pipeline-maintenance` | Task files, status index, packet handoffs |
+| Pipeline policy and context | `AGENTS.md`, `ai_studio/README.md`, `docs/ai-pipeline/` | `tools/context_budget.mjs`, `tools/doc_reference_check.mjs`, `tools/pipeline_validate.mjs` | `ai-pipeline-maintenance` | Updated docs, validation output |
+| Task state and orchestration | `ai_studio/taskboard/README.md`, `tasks/STATUS.md`, `tasks/active/`, `tasks/epics/` | `ai_studio/taskboard/cli.mjs`, `ai_studio/taskboard/server.mjs` | `task-manager`, `ai-pipeline-maintenance` | Task files, status index, packet handoffs |
 | Passive profiling and feedback | `docs/ai-pipeline/profiling-reuse.md` | `tools/ai_profile/*`, tools/hooks_sync.mjs | `chat-session-reflection`, `ai-pipeline-maintenance` | `tmp/session_profiles/` raw logs, promoted lessons |
 | Game concept and GDD | `gamedesign/projects/<game-id>/`, `gamedesign/knowledge/` | `tools/game_context/new_prototype.mjs`, `tools/game_context/iteration_context.mjs` | `primary-gdd-pipeline`, `design-source-knowledge` | GDD, project wiki, core loop, reference notes |
 | Reusable design knowledge | `gamedesign/knowledge/`, `gamedesign/sources/` | none as a single facade yet | `design-source-knowledge`, `primary-gdd-pipeline` | Source notes, promoted reusable knowledge |
@@ -230,9 +229,8 @@ These are the main stable entry points an agent should know first.
 
 | Path | Responsibility | Current shape |
 |---|---|---|
-| `tools/ai.mjs` | Single facade for agent-facing commands | Thin router into validators, taskboard, profiler, gates. Good public surface. |
 | `tools/lib/` | Shared small utilities | CLI failure helper, JSON, paths, licenses, MIME, hash, asset catalog, validation flags. |
-| `tools/taskboard/` | Markdown task store and orchestration packet support | CLI, server UI, lib, tests, public web UI. |
+| `ai_studio/taskboard/` | Markdown task store and orchestration packet support | CLI, server UI, lib, tests, public web UI. |
 | `tools/ai_profile/` | Passive tool/session profiler | Hook recorders, status, Codex import, agent rollup, tests. |
 | `tools/bootstrap/` | Pipeline/game/template export and copy model | `new_game`, `export_base`, template path ownership, tests. |
 | `tools/game_context/` | Active game/prototype context gates | Kickoff skeleton, iteration context, workflow guard, tests. |
@@ -287,7 +285,7 @@ currently protocol-level, not installed worker definitions.
 | Role | Current implementation | Authority |
 |---|---|---|
 | Lead/orchestrator | Main conversation plus `docs/ai-pipeline/subagent-protocol.md` | Owns scope, hot docs, task/status, integration, validation, commits, final report. |
-| Read-only mapper | Packet preset `codebase-map` from `tools/taskboard/lib.mjs` | Reads bounded scopes, returns entry points/data flow/risks. |
+| Read-only mapper | Packet preset `codebase-map` from `ai_studio/taskboard/lib.mjs` | Reads bounded scopes, returns entry points/data flow/risks. |
 | Independent reviewer | Packet preset `review` | Reviews one artifact or axis, returns verdict/issues. Verdict is input, not acceptance. |
 | Asset researcher | Packet preset `asset-research` | Finds candidates and licenses, does not import. |
 | Texture/image worker | Packet preset `texture-gen` plus `delegated-image-generation` | Generates isolated raster artifact under `tmp/`, does not wire runtime. |
@@ -348,11 +346,11 @@ justify a reusable wrapper.
 ## Ownership Rules
 
 1. Hot maps stay thin.
-   `AGENTS.md`, `AI_PIPELINE.md`, `tasks/README.md`, and skill entrypoints route
+   `AGENTS.md`, `ai_studio/README.md`, `ai_studio/taskboard/README.md`, and skill entrypoints route
    agents to deeper material. They should not become manuals.
 
 2. Each domain needs one public facade.
-   Good examples already exist: `tools/ai.mjs`, `tools/taskboard/cli.mjs`,
+   Good examples already exist: `tools/pipeline_validate.mjs`, `ai_studio/taskboard/cli.mjs`,
    `tools/assets/source/find_assets.mjs`, and `tools/product_gate/review.mjs`.
    Prefer improving those surfaces over teaching agents to call internal helper
    scripts directly.
@@ -379,7 +377,7 @@ justify a reusable wrapper.
 
 ## Current Strengths
 
-- The repo already has a strong thin facade in `tools/ai.mjs`.
+- The old single AI facade has been removed; use the owning module CLI directly.
 - The taskboard has a real Markdown store, CLI, server, orchestration packet
   templates, validation, and tests.
 - The skills are domain-oriented and mostly have clear boundaries.

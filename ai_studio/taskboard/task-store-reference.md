@@ -1,7 +1,7 @@
 # Task Store Reference
 
 Detailed task protocol for work that changes tasks, epics, live status, or
-reporting shape. Start from `tasks/README.md`; load this file only when editing
+reporting shape. Start from `ai_studio/taskboard/README.md`; load this file only when editing
 or auditing the task store.
 
 ## Intent To Scope
@@ -115,5 +115,5 @@ updated: 2026-06-11
 ## Log
 ```
 
-Prefer `node tools/taskboard/cli.mjs new` over hand-created files so IDs do not
-collide. Run `node tools/taskboard/cli.mjs validate` after bulk edits.
+Prefer `node ai_studio/taskboard/cli.mjs new` over hand-created files so IDs do not
+collide. Run `node ai_studio/taskboard/cli.mjs validate` after bulk edits.

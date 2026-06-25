@@ -275,7 +275,7 @@ function classifyFailedRecords(records) {
 
 /* Normalize a command to a tool-level key: strip leading shell assignment
  * wrappers, take the first token's basename, and for interpreters append the
- * script basename (so "node tools/ai.mjs status" -> "node ai.mjs"). */
+ * script basename (so "node tools/ai_profile/status.mjs" -> "node ai.mjs"). */
 function commandKey(cmd) {
   const text = stripLeadingCommandAssignments(cmd);
   const tokens = text.split(/\s+/).filter(Boolean);
@@ -489,7 +489,7 @@ function renderStatus(status, { verbose }) {
   lines.push("");
   lines.push("## Next Action");
   lines.push(`- ${status.next_action}`);
-  if (!verbose) lines.push("- Use `node tools/ai.mjs status --verbose` for coverage gaps and parse errors.");
+  if (!verbose) lines.push("- Use `node tools/ai_profile/status.mjs --verbose` for coverage gaps and parse errors.");
   return `${lines.join("\n")}\n`;
 }
 

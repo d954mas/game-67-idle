@@ -20,15 +20,17 @@ subcommands for exhaustive work.
 
 Copied by `tools/bootstrap/export_base.mjs`:
 
-- agent facade and validators: `tools/ai.mjs`, `tools/pipeline_validate.mjs`,
+- validators: `tools/pipeline_validate.mjs`,
   `tools/context_budget.mjs`, `tools/doc_reference_check.mjs`,
   `tools/skills_eval.mjs`, `tools/skills_sync.mjs`;
-- workflow state/profiling: `tools/taskboard/`, `tools/ai_profile/`;
+- workflow state/profiling: `ai_studio/taskboard/`, `tools/ai_profile/`;
 - game startup/runtime proof: `tools/game_context/`, `tools/product_gate/`;
 - reusable asset helpers: `tools/assets/`;
 - export helpers: `tools/bootstrap/`.
 
-Product gates route through `node tools/ai.mjs gate`, `critique`, `close-slice`.
+Product gates route through `node tools/product_gate/review.mjs`,
+`node tools/product_gate/visual_critic_run.mjs`, and
+`node tools/product_gate/close_slice.mjs`.
 Policy: `docs/ai-pipeline/quality-validation.md` and game/visual skills.
 
 ## Runtime Infrastructure
@@ -59,9 +61,9 @@ Generated caches (`__pycache__/`, `*.pyc`) are ignored scratch.
 Validation:
 
 ```powershell
-node tools/ai.mjs validate
-node tools/ai.mjs validate --review
-node tools/ai.mjs validate --full
+node tools/pipeline_validate.mjs
+node tools/pipeline_validate.mjs --review
+node tools/pipeline_validate.mjs --full
 ```
 
 Underlying: `tools/pipeline_validate.mjs`. `--review` adds context/cap review;

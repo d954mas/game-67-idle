@@ -9,8 +9,8 @@ automatically. There is no manual start/checkpoint/run step. Read the captured
 session with:
 
 ```powershell
-node tools/ai.mjs status
-node tools/ai.mjs status --verbose
+node tools/ai_profile/status.mjs
+node tools/ai_profile/status.mjs --verbose
 ```
 
 `status` reports the record count, unresolved/recovered failures, active
@@ -22,7 +22,7 @@ or failed commands, and uncaptured gaps.
 For long Codex sessions with suspected missing failures, recover them first:
 
 ```powershell
-node tools/ai.mjs import-codex-session
+node tools/ai_profile/import_codex_session.mjs
 ```
 
 `status` runs this automatically unless `--no-import-codex-session` is passed.

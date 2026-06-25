@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { findDoc, findRoot } from "../taskboard/lib.mjs";
+import { findDoc, findRoot } from "../../ai_studio/taskboard/lib.mjs";
 import { fail } from "../lib/cli.mjs";
 import { readJson } from "../lib/json.mjs";
 
@@ -80,7 +80,7 @@ function resolvedRejectionText(values) {
 }
 
 function taskboardSet(task, args) {
-  const result = spawnSync(process.execPath, ["tools/taskboard/cli.mjs", "set", task, ...args], {
+  const result = spawnSync(process.execPath, ["ai_studio/taskboard/cli.mjs", "set", task, ...args], {
     cwd: process.cwd(),
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],

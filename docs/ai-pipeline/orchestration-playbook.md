@@ -1,6 +1,6 @@
 # Subagent Orchestration Playbook (game-67-idle)
 
-Operating principle: **single-agent by default; acceptance gates the work product, not the delegation; the lead is the backstop.** Subtract before you add. This playbook tells the lead how to actually run delegation day-to-day with the lean tools already kept (`subagent-packet-template`, advisory `subagent-packet-check`, `orchestration-template`/`orchestration-check`/`orchestration-bootstrap`, the passive profiler `node tools/ai.mjs status`, and the real OUTPUT gates `validate` / tests / product-gate).
+Operating principle: **single-agent by default; acceptance gates the work product, not the delegation; the lead is the backstop.** Subtract before you add. This playbook tells the lead how to actually run delegation day-to-day with the lean tools already kept (`subagent-packet-template`, advisory `subagent-packet-check`, `orchestration-template`/`orchestration-check`/`orchestration-bootstrap`, the passive profiler `node tools/ai_profile/status.mjs`, and the real OUTPUT gates `validate` / tests / product-gate).
 
 ---
 
@@ -29,7 +29,7 @@ If you can't write a self-contained packet without a sibling's in-flight context
 
 **Bad candidates (keep single-agent):**
 - The first-screen coupled slice from AGENTS.md (one location, primary path, next action, progress, locks) — mechanic+state+UI+render touch the same files and must agree.
-- Any overlapping write to the same task file, runtime module, generated runtime pack, or hot doc (`AGENTS.md`, `AI_PIPELINE.md`, `tasks/STATUS.md`).
+- Any overlapping write to the same task file, runtime module, generated runtime pack, or hot doc (`AGENTS.md`, `ai_studio/README.md`, `tasks/STATUS.md`).
 - Game-state mutation, UI layout, balance changes that must stay consistent. [Most coding tasks have fewer truly parallelizable pieces than research](https://www.anthropic.com/engineering/multi-agent-research-system); forcing parallelism creates integration debt (the "Flappy Bird background on a Mario level" failure, [Cognition](https://cognition.ai/blog/dont-build-multi-agents)).
 
 ---
@@ -44,10 +44,10 @@ SCOPE -> PACKET -> SPAWN -> COMPRESSED RETURN -> INTEGRATE + GATE -> ARCHIVE
 
 2. **Packet.** Generate a ready packet from a preset (§3), or the blank shape, then optionally lint:
    ```bash
-   node tools/ai.mjs subagent-packet-template --preset codebase-map --targets src/world/**,state/world/**
-   node tools/ai.mjs subagent-packet-template --preset asset-research   # or review|texture-gen|asset-intake
-   node tools/ai.mjs subagent-packet-template                            # blank shape
-   node tools/ai.mjs subagent-packet-check --stdin --json               # advisory lint, one packet at a time
+   node ai_studio/taskboard/cli.mjs subagent-packet-template --preset codebase-map --targets src/world/**,state/world/**
+   node ai_studio/taskboard/cli.mjs subagent-packet-template --preset asset-research   # or review|texture-gen|asset-intake
+   node ai_studio/taskboard/cli.mjs subagent-packet-template                            # blank shape
+   node ai_studio/taskboard/cli.mjs subagent-packet-check --stdin --json               # advisory lint, one packet at a time
    ```
    Presets emit bounded, lint-valid, **harness-neutral** packets. Every packet carries the 4 load-bearing slots — **objective / output format / tools-and-sources / boundaries** — without which agents "duplicate work, leave gaps, or fail to find necessary information" ([Anthropic](https://www.anthropic.com/engineering/multi-agent-research-system)). Workers start with **fresh, isolated context in BOTH harnesses** — they don't see your conversation, files, or invoked skills — so restate any rule that matters (e.g. "active concept is `<game-id>`; ignore archived prototypes"; "real raster only, no drawing code").
 
@@ -60,7 +60,7 @@ SCOPE -> PACKET -> SPAWN -> COMPRESSED RETURN -> INTEGRATE + GATE -> ARCHIVE
 4. **Compressed structured return.** The packet must specify the return shape. A non-fork subagent returns **only its final message**; make it the `handoff:` block (findings / files / commands-evidence / risks / owner-action / not-done). For high-volume output, use the artifact pattern: worker writes the full output to a file and returns a lightweight pointer, so heavy tokens never hit the orchestrator ([Anthropic appendix](https://www.anthropic.com/engineering/multi-agent-research-system)).
 
 5. **Integrate + gate the OUTPUT.** The lead verifies current files before copying any subagent claim into task/status/docs. Run the real gate for the work type:
-   - Routine code: `node tools/ai.mjs validate` or focused tests.
+   - Routine code: `node tools/pipeline_validate.mjs` or focused tests.
    - Product/visual/native-playable: product gate with screenshot + fake-shot judgment; lead accept/reject.
    - Risky/irreversible: lead approves before it lands.
    - Fuzzy research/review with no deterministic check: one LLM-judge call against a rubric (accuracy / citations / completeness / source quality) — [Anthropic's most-reliable verifier](https://www.anthropic.com/engineering/multi-agent-research-system). Don't add a judge where a test suffices.
@@ -84,9 +84,9 @@ SCOPE -> PACKET -> SPAWN -> COMPRESSED RETURN -> INTEGRATE + GATE -> ARCHIVE
 | `asset-intake` | sequential | research → generate → verify + propose | — |
 
 ```bash
-node tools/ai.mjs subagent-packet-template --preset codebase-map --targets src/world/**,state/world/**
-node tools/ai.mjs subagent-packet-template --preset texture-gen  --targets hero-idle,coin
-node tools/ai.mjs subagent-packet-template --preset              # list presets
+node ai_studio/taskboard/cli.mjs subagent-packet-template --preset codebase-map --targets src/world/**,state/world/**
+node ai_studio/taskboard/cli.mjs subagent-packet-template --preset texture-gen  --targets hero-idle,coin
+node ai_studio/taskboard/cli.mjs subagent-packet-template --preset              # list presets
 ```
 
 `allowed files` in every emitted packet is bounded (exact files, final-segment globs `dir/*.ext`, or scoped recursive globs `a/b/**` — never absolute paths, `..`, root globs like `src/**`, or "all files"). The return is the `handoff:` block (findings / files / commands-evidence / risks / owner-action / not-done); for bulky output the worker writes a file and returns a pointer. A review verdict is **input to lead judgment, not a gate**. Add a new preset only when you retype the same packet a 3rd time.
@@ -140,8 +140,8 @@ Each tied to a real repeating friction. Add only when the friction actually appe
 
 1. **Packet presets — DONE.** `subagent-packet-template --preset codebase-map|review|asset-research|texture-gen|asset-intake [--targets …]` (§3). Harness-neutral, lint-valid, game-agnostic. Add a new preset only when you retype the same packet a 3rd time.
 2. **Subagent telemetry — DONE (two layers, both advisory).**
-   - *Quick (from the profiler):* new `Agent`/`spawn_agent` PostToolUse matchers route to `tools/ai_profile/hook_record.mjs`, so `node tools/ai.mjs status` shows `Subagents delegated: N (by type)` + a `## Subagents Delegated` list of objectives. (Takes effect next session.)
-   - *Deep (from native transcripts):* `node tools/ai.mjs status --agents` reads the harness's own per-agent transcripts — Claude `…/<session>/subagents/agent-*.jsonl` incl. workflow agents, and Codex subagent rollouts (`thread_source: subagent`, filtered by parent) — and lists, per agent: objective + tool breakdown (e.g. `Edit 70, Read 51, Bash 42, Grep 22`) + duration + tool-error count + `ok`/`incomplete` status, with totals. Reliably linked by agentId/parent_thread_id. `--since <Nm|Nh|Nd|ISO>` filters to recent agents for very long sessions.
+   - *Quick (from the profiler):* new `Agent`/`spawn_agent` PostToolUse matchers route to `tools/ai_profile/hook_record.mjs`, so `node tools/ai_profile/status.mjs` shows `Subagents delegated: N (by type)` + a `## Subagents Delegated` list of objectives. (Takes effect next session.)
+   - *Deep (from native transcripts):* `node tools/ai_profile/status.mjs --agents` reads the harness's own per-agent transcripts — Claude `…/<session>/subagents/agent-*.jsonl` incl. workflow agents, and Codex subagent rollouts (`thread_source: subagent`, filtered by parent) — and lists, per agent: objective + tool breakdown (e.g. `Edit 70, Read 51, Bash 42, Grep 22`) + duration + tool-error count + `ok`/`incomplete` status, with totals. Reliably linked by agentId/parent_thread_id. `--since <Nm|Nh|Nd|ISO>` filters to recent agents for very long sessions.
    **Strictly diagnostic — never an acceptance condition.** This is the lead's "what did I delegate, who used which tools" view; it does not gate anything.
 3. **A saved scripted fan-out (medium) — add when the same read-heavy fan-out recurs.** Claude: save a good `ultracode` run as `/<name>` (`s` in `/workflows`). Codex: a small `spawn_agents_on_csv` or `for … codex exec … & wait` wrapper. Invocable, not a mandatory step. The §3 presets already feed these.
 4. **A reusable read-only researcher worker (tiny) — ONLY after you spawn the same researcher repeatedly.** Claude `.claude/agents/researcher.md` (`tools: Read, Grep, Glob`, `model: haiku`) or Codex `.codex/agents/researcher.toml` (`sandbox_mode = "read-only"`). One-offs stay inline; do not pre-build an agent zoo.
@@ -166,4 +166,4 @@ Rule of thumb: if a new check inspects the *delegation* rather than the *deliver
 
 ---
 
-Operationalizes `docs/ai-pipeline/subagent-protocol.md` (the lean method). Tooling: `tools/taskboard/cli.mjs` (packet/orchestration commands), `tools/ai_profile/status.mjs` + `tools/ai_profile/hook_record.mjs` (passive profiler; the section 5.2 telemetry add-point).
+Operationalizes `docs/ai-pipeline/subagent-protocol.md` (the lean method). Tooling: `ai_studio/taskboard/cli.mjs` (packet/orchestration commands), `tools/ai_profile/status.mjs` + `tools/ai_profile/hook_record.mjs` (passive profiler; the section 5.2 telemetry add-point).

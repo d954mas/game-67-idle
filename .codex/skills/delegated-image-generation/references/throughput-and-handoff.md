@@ -36,7 +36,7 @@ still owns cleanup and runtime integration:
 - `generated-game-ui-assets`: prompt packet, intake, crop, runtime PNGs,
   composition, derivation audits.
 - `game-visual-art-direction`: art direction checks and screen-level critique.
-- `node tools/ai.mjs gate`: product/visual gate for the assembled screen.
+- `node tools/product_gate/review.mjs`: product/visual gate for the assembled screen.
 
 Clean crops prove the pipe, not the screen. Judge the assembled game screen
 against the fake shot or art bible. Keep raw generations in `tmp/` until

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createEpic, createTask, findRoot } from "../taskboard/lib.mjs";
+import { createEpic, createTask, findRoot } from "../../ai_studio/taskboard/lib.mjs";
 import { fail } from "../lib/cli.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -133,7 +133,7 @@ ${brief}
 - Fill \`reviews/first_slice_visual_gate.md\` before broad runtime work.
 - Fill \`visual/live_state_acceptance_matrix.md\` before any broad UI/visual pass.
 - For visually important slices, run the optional vision art-lead critic
-  (\`node tools/ai.mjs critique\`) before writing the strict product gate verdict.
+  (\`node tools/product_gate/visual_critic_run.mjs\`) before writing the strict product gate verdict.
 - Capture visual/product proof in \`reviews/\` before expanding content.
 - Product-read gates must use \`visual/live_state_acceptance_matrix.json\`
   with explicit covered or not-covered states.
@@ -178,7 +178,7 @@ Casual players. Progression should be clear; controls and moment-to-moment play 
   meaningful render changes.
 - If the slice depends on beauty, casual readability, generated UI, or a fake
   shot match, one strict visual product gate using \`--visual-strict\`.
-- Optional vision art-lead critic (\`node tools/ai.mjs critique\`) over the state
+- Optional vision art-lead critic (\`node tools/product_gate/visual_critic_run.mjs\`) over the state
   screenshots before the strict gate verdict.
 
 ## Art Direction Stub
@@ -323,7 +323,7 @@ marked as not-covered debt.
 Use this matrix in the first product-read gate:
 
 \`\`\`powershell
-node tools/ai.mjs gate \`
+node tools/product_gate/review.mjs \`
   --project ${gameId} \`
   --task <task-id> \`
   --surface desktop \`
@@ -382,10 +382,10 @@ not a notes dump.
 
 - Critic command (emit the prompt, or run a vision model with \`--model-cmd\`):
   \`\`\`powershell
-  node tools/ai.mjs critique --project ${gameId} --shot first_slice:<native-screenshot.png> [--model-cmd "<vision-model-cmd>"]
+  node tools/product_gate/visual_critic_run.mjs --project ${gameId} --shot first_slice:<native-screenshot.png> [--model-cmd "<vision-model-cmd>"]
   \`\`\`
 - Emit mode writes \`critic_instruction.md\`; run mode writes a \`game.visual_critique\` JSON.
-- Feed the critique into the strict gate (\`node tools/ai.mjs gate ... --critique <game.visual_critique.json>\`) before the verdict.
+- Feed the critique into the strict gate (\`node tools/product_gate/review.mjs ... --critique <game.visual_critique.json>\`) before the verdict.
 
 ## Live-State Matrix
 
@@ -406,7 +406,7 @@ not a notes dump.
 
 - Gate command:
   \`\`\`powershell
-  node tools/ai.mjs gate --project ${gameId} --task <task-id> --surface desktop --screenshot <native-screenshot.png> --verdict fail --strict --visual-strict --state-matrix gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json --require-state first_screen --covered-state first_screen:<native-screenshot-or-probe> --covered-state hud_visible:<hud-zoom-or-screenshot> --covered-state primary_action_ready:<native-screenshot-or-probe> --not-covered-state modal_or_choice_open:"not in this first slice yet" --not-covered-state resume_or_reentry_state:"not in this first slice yet" --where "<where am I?>" --action "<what can I do?>" --response "<what changed?>" --reward "<why continue?>" --game-look "<why game?>" --problem "<specific visual/player-read problem>" --next "<smallest next visual fix>" --visual-score composition=1 --visual-score readability=1 --visual-score ui_controls=1 --visual-score action_direction=1 --visual-score art_quality=1 --visual-score audience_fit=1 --visual-issue blocker:readability:"<concrete issue>"
+  node tools/product_gate/review.mjs --project ${gameId} --task <task-id> --surface desktop --screenshot <native-screenshot.png> --verdict fail --strict --visual-strict --state-matrix gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json --require-state first_screen --covered-state first_screen:<native-screenshot-or-probe> --covered-state hud_visible:<hud-zoom-or-screenshot> --covered-state primary_action_ready:<native-screenshot-or-probe> --not-covered-state modal_or_choice_open:"not in this first slice yet" --not-covered-state resume_or_reentry_state:"not in this first slice yet" --where "<where am I?>" --action "<what can I do?>" --response "<what changed?>" --reward "<why continue?>" --game-look "<why game?>" --problem "<specific visual/player-read problem>" --next "<smallest next visual fix>" --visual-score composition=1 --visual-score readability=1 --visual-score ui_controls=1 --visual-score action_direction=1 --visual-score art_quality=1 --visual-score audience_fit=1 --visual-issue blocker:readability:"<concrete issue>"
   \`\`\`
 - Gate artifact path:
 - Verdict: pending
@@ -465,8 +465,8 @@ state matrix coverage, and blocker/major issue reporting before any pass.
 
 \`\`\`powershell
 node tools/game_context/iteration_context.mjs
-node tools/taskboard/cli.mjs validate
-node tools/ai.mjs validate
+node ai_studio/taskboard/cli.mjs validate
+node tools/pipeline_validate.mjs
 \`\`\`
 
 ## Last Known Good Evidence

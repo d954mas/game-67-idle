@@ -1,13 +1,13 @@
 # Task Store Protocol
 
-Authoritative store and live-status rules live in `tasks/README.md`; detailed
-lifecycle/evidence/format rules live in `tasks/guides/task-store-reference.md`;
+Authoritative store and live-status rules live in `ai_studio/taskboard/README.md`; detailed
+lifecycle/evidence/format rules live in `ai_studio/taskboard/task-store-reference.md`;
 the live status index is `tasks/STATUS.md`.
 
 ## Orientation
 
-- Start quick orientation with `node tools/taskboard/cli.mjs summary`.
-- Use `node tools/taskboard/cli.mjs context` for long work.
+- Start quick orientation with `node ai_studio/taskboard/cli.mjs summary`.
+- Use `node ai_studio/taskboard/cli.mjs context` for long work.
 - Read full `tasks/STATUS.md` only when changing it or auditing a specific
   linked claim.
 - `list` shows current work only; use `list --review` only for review cleanup.
@@ -45,4 +45,4 @@ lessons in pipeline docs/skills. Never delete task files to hide closed work.
 ## Reporting
 
 When the user asks "where are we" or "what next", follow the reporting rules in
-`tasks/README.md`.
+`ai_studio/taskboard/README.md`.

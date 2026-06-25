@@ -12,8 +12,8 @@ None (no active game). Each game folder runs its own gates.
 
 ## Required Validation
 
-`node tools/taskboard/cli.mjs validate`
-`node tools/ai.mjs validate`
+`node ai_studio/taskboard/cli.mjs validate`
+`node tools/pipeline_validate.mjs`
 
 ## Notes
 

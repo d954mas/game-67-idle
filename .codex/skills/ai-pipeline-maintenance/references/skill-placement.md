@@ -11,7 +11,7 @@ Use the smallest durable home that lets the next agent load only what applies.
 2. Current work state/evidence -> `tasks/STATUS.md`, active task log, or
    evidence file.
 3. Project boundary or hard repo policy -> `AGENTS.md`.
-4. Portable workflow map -> `AI_PIPELINE.md`.
+4. Portable workflow map -> `ai_studio/README.md`.
 5. Repeatable task behavior -> existing `.codex/skills/<skill>/SKILL.md`.
 6. Detailed method, checklist, or examples -> that skill's `references/`.
 7. Cross-project conceptual guidance -> `docs/ai-pipeline/` or
@@ -106,8 +106,8 @@ that belongs in a validator, task log, or project GDD.
 Hot docs should answer "where do I go next?", not teach the whole method.
 
 - `AGENTS.md`: boundaries, source map, hard gates, validation defaults.
-- `AI_PIPELINE.md`: portable routing and operating rules.
-- `tasks/README.md`: task store commands and lifecycle map.
+- `ai_studio/README.md`: portable routing and operating rules.
+- `ai_studio/taskboard/README.md`: task store commands and lifecycle map.
 - `SKILL.md`: trigger, what to load, default procedure, stop conditions.
 
 If a hot file needs an example, a history lesson, a long checklist, or multiple
@@ -124,5 +124,5 @@ node tools/context_budget.mjs --review
 node tools/skills_eval.mjs
 node tools/skills_sync.mjs --check
 node tools/doc_reference_check.mjs
-node tools/ai.mjs validate
+node tools/pipeline_validate.mjs
 ```

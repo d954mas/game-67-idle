@@ -10,8 +10,8 @@ Load when changing context policy, work-loop, multi-agent use, or hot docs.
 ## Agent-Facing Docs
 
 - `AGENTS.md`: project map, hard rules, validation defaults.
-- `AI_PIPELINE.md`: reusable workflow map and context policy.
-- `tasks/README.md`: task store commands and lifecycle.
+- `ai_studio/README.md`: reusable workflow map and context policy.
+- `ai_studio/taskboard/README.md`: task store commands and lifecycle.
 - `.codex/skills/*/SKILL.md`: one focused procedure per task type.
 - Skill `references/` and `gamedesign/knowledge/`: deeper method on need.
 
@@ -21,7 +21,7 @@ stop condition, and no anecdotes.
 ## Context Policy
 
 Default substantial-work context: `AGENTS.md`,
-`node tools/taskboard/cli.mjs context`, one task/evidence file, one skill.
+`node ai_studio/taskboard/cli.mjs context`, one task/evidence file, one skill.
 
 Prefer scoped search and compact output over whole-file dumps. Use archives,
 logs, generated artifacts, and broad design only when task-linked or requested.
@@ -35,12 +35,12 @@ Put volatile facts in tasks, status, evidence, or final reports.
 3. Read only files needed for the selected scope.
 4. Make the smallest coherent change.
 5. Run the narrowest validation that proves the change (match the change-size
-   tier in `AI_PIPELINE.md`; a spike is TIER 1 — one proving command, no
+   tier in `ai_studio/README.md`; a spike is TIER 1 — one proving command, no
    packet/report/verdicts).
 6. Record evidence in the task/status/final response when the work changes
    project state.
 
-Profiling is passive. Review with `node tools/ai.mjs status`.
+Profiling is passive. Review with `node tools/ai_profile/status.mjs`.
 
 ## Subagents
 

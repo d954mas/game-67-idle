@@ -341,7 +341,7 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   assert.match(visualGate, /Current native screenshot path or capture plan:/);
   assert.match(visualGate, /Screenshot-vs-target mismatch list:/);
   assert.match(visualGate, /## Visual Critic \(vision art-lead\)/);
-  assert.match(visualGate, /node tools\/ai\.mjs critique/);
+  assert.match(visualGate, /node tools\/product_gate\/visual_critic_run\.mjs/);
   assert.match(visualGate, /critic_instruction\.md/);
   assert.match(visualGate, /game\.visual_critique/);
   assert.match(visualGate, /Gate command:/);

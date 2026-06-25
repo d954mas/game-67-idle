@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
-const toolRoot = dirname(scriptDir);
+const harnessRoot = resolve(scriptDir, "..", "..");
 
 function usage() {
   console.error(`usage:
@@ -232,7 +232,7 @@ function buildVisualFirstContract({ concept }) {
 
 function runTaskContext(root, maxChars) {
   const result = spawnSync(process.execPath, [
-    join(toolRoot, "taskboard", "cli.mjs"),
+    join(harnessRoot, "ai_studio", "taskboard", "cli.mjs"),
     "context",
     "--status-max-chars",
     String(maxChars),
@@ -394,7 +394,7 @@ function renderMarkdown(context) {
   for (const gate of context.hard_gates) lines.push(`- ${gate}`);
   lines.push("");
   lines.push("## Current Project Gate");
-  lines.push(context.current_gate || "- none found; run `node tools/taskboard/cli.mjs context`.");
+  lines.push(context.current_gate || "- none found; run `node ai_studio/taskboard/cli.mjs context`.");
   lines.push("");
   lines.push("## Prototype Startup Gate");
   lines.push(`- status: ${context.prototype_startup_gate.status}`);
