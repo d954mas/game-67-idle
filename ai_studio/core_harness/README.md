@@ -23,16 +23,24 @@ them there:
 Root compatibility is not a design goal during this refactor. Keep only entry
 files that are still structurally useful.
 
-## Workflow Group
+## Workflow Module
 
 Workflow is part of Core Harness because it defines how an agent turns a request
 into scoped context, work, verification, optional delegation, and closeout.
 
-Current workflow candidates:
+Reviewed workflow file:
 
-- `docs/ai-pipeline/agent-workflow.md`
-- `docs/ai-pipeline/subagent-protocol.md`
-- `docs/ai-pipeline/orchestration-playbook.md`
+- `ai_studio/core_harness/workflow/README.md`
+
+## Orchestration Module
+
+Orchestration is separate from Workflow and Taskboard. It exists to trigger
+early subagent use for broad read-heavy work, with a simple Task / Scope /
+Return / Stop packet.
+
+Reviewed orchestration file:
+
+- `ai_studio/core_harness/orchestration/README.md`
 
 ## Tree Shape
 

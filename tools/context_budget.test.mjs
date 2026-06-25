@@ -19,6 +19,8 @@ function cleanup(dir) {
 
 function writeFixture(dir, skillBody = "short skill\n", agentBody = "# AGENTS\n") {
   mkdirSync(join(dir, ".codex", "skills", "sample"), { recursive: true });
+  mkdirSync(join(dir, "ai_studio", "core_harness", "orchestration"), { recursive: true });
+  mkdirSync(join(dir, "ai_studio", "core_harness", "workflow"), { recursive: true });
   mkdirSync(join(dir, "ai_studio", "taskboard"), { recursive: true });
   mkdirSync(join(dir, "docs", "ai-pipeline"), { recursive: true });
   mkdirSync(join(dir, "tasks"), { recursive: true });
@@ -26,7 +28,8 @@ function writeFixture(dir, skillBody = "short skill\n", agentBody = "# AGENTS\n"
   writeFileSync(join(dir, "AGENTS.md"), agentBody, "utf8");
   writeFileSync(join(dir, "ai_studio", "README.md"), "# AI Studio\n", "utf8");
   writeFileSync(join(dir, "ai_studio", "taskboard", "README.md"), "# Taskboard\n", "utf8");
-  writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "# Agent Workflow\n", "utf8");
+  writeFileSync(join(dir, "ai_studio", "core_harness", "workflow", "README.md"), "# Workflow\n", "utf8");
+  writeFileSync(join(dir, "ai_studio", "core_harness", "orchestration", "README.md"), "# Orchestration\n", "utf8");
   writeFileSync(join(dir, "docs", "ai-pipeline", "quality-validation.md"), "# Quality\n", "utf8");
   writeFileSync(join(dir, "docs", "ai-pipeline", "profiling-reuse.md"), "# Profiling\n", "utf8");
   mkdirSync(join(dir, "tools"), { recursive: true });
@@ -154,10 +157,10 @@ test("context budget applies pipeline reference caps", () => {
   const dir = tempDir();
   try {
     writeFixture(dir);
-    writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "x".repeat(2700), "utf8");
+    writeFileSync(join(dir, "ai_studio", "core_harness", "workflow", "README.md"), "x".repeat(2700), "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /docs\/ai-pipeline\/agent-workflow\.md: 2700 chars > 2600/);
+    assert.match(result.stderr, /ai_studio\/core_harness\/workflow\/README\.md: 2700 chars > 2600/);
   } finally {
     cleanup(dir);
   }
@@ -196,12 +199,13 @@ test("context budget review mode fails aggregate hot doc growth", () => {
     writeFileSync(join(dir, "tasks", "STATUS.md"), "x".repeat(2390), "utf8");
     writeFileSync(join(dir, "ai_studio", "taskboard", "README.md"), "x".repeat(3190), "utf8");
     writeFileSync(join(dir, "tools", "README.md"), "x".repeat(3190), "utf8");
-    writeFileSync(join(dir, "docs", "ai-pipeline", "agent-workflow.md"), "x".repeat(3190), "utf8");
+    writeFileSync(join(dir, "ai_studio", "core_harness", "workflow", "README.md"), "x".repeat(3190), "utf8");
+    writeFileSync(join(dir, "ai_studio", "core_harness", "orchestration", "README.md"), "x".repeat(3190), "utf8");
     writeFileSync(join(dir, "docs", "ai-pipeline", "quality-validation.md"), "x".repeat(3190), "utf8");
     writeFileSync(join(dir, "docs", "ai-pipeline", "profiling-reuse.md"), "x".repeat(3190), "utf8");
     const result = run(["--root", dir, "--review"]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /<hot-doc-total>: 24520 chars > 24000/);
+    assert.match(result.stderr, /<hot-doc-total>: 27710 chars > 24000/);
   } finally {
     cleanup(dir);
   }

@@ -54,7 +54,8 @@ const SKILL_CHECKS = [
     ],
     body: [
       "ai_studio/README.md",
-      "docs/ai-pipeline/agent-workflow.md",
+      "ai_studio/core_harness/workflow/README.md",
+      "ai_studio/core_harness/orchestration/README.md",
       "docs/ai-pipeline/quality-validation.md",
       "docs/ai-pipeline/profiling-reuse.md",
       "pipeline-maintenance-playbook.md",

@@ -49,14 +49,13 @@ const explicitDocPaths = [
   "CLAUDE.md",
   "ai_studio/README.md",
   "ai_studio/core_harness/README.md",
+  "ai_studio/core_harness/workflow/README.md",
+  "ai_studio/core_harness/orchestration/README.md",
   "tools/README.md",
   "tools/bootstrap/TEMPLATE.md",
   "docs/ai-pipeline/architecture-map.md",
-  "docs/ai-pipeline/agent-workflow.md",
   "docs/ai-pipeline/quality-validation.md",
   "docs/ai-pipeline/profiling-reuse.md",
-  "docs/ai-pipeline/subagent-protocol.md",
-  "docs/ai-pipeline/orchestration-playbook.md",
   "ai_studio/taskboard/README.md",
   "tasks/STATUS.md",
   "ai_studio/taskboard/task-store-reference.md",
@@ -239,7 +238,7 @@ function classifyPath(rel) {
   if (lower.startsWith("tools/assets/")) return lower.includes("/job/") || lower.includes("/cutout/") || lower.includes("/pack/") || lower.includes("/crop/") || lower.includes("/assemble/") ? "art" : "assets";
   if (lower.startsWith("tools/asset_review/")) return "assets";
   if (lower.startsWith("tools/devapi/") || lower.startsWith("tools/state_codegen/")) return "runtime";
-  if (lower.startsWith("docs/ai-pipeline/agent-workflow") || lower.startsWith("docs/ai-pipeline/subagent") || lower.startsWith("docs/ai-pipeline/orchestration")) return "tasks";
+  if (lower.startsWith("ai_studio/core_harness/workflow/") || lower.startsWith("ai_studio/core_harness/orchestration/")) return "hot";
   if (lower.startsWith("docs/ai-pipeline/architecture-map")) return "hot";
   if (lower.startsWith("tools/")) return "facade";
   return "hot";

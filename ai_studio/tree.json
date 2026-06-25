@@ -38,13 +38,24 @@
             "subtitle": "task execution order",
             "kind": "group",
             "color": "#334155",
-            "description": "Core Harness workflow group: context policy, lead-agent work loop, subagent packet contract, and orchestration recipes for solving tasks.",
+            "description": "Core Harness workflow group: local process for context loading, work loop, validation handoff, and delegation checkpoint.",
             "role": "agent task workflow inside the harness",
             "tags": ["core", "workflow", "procedure"],
             "children": [
-              { "id": "core-harness:agent-workflow", "kind": "doc", "path": "docs/ai-pipeline/agent-workflow.md", "description": "Lead-agent work loop, context policy, agent-facing docs, and when to use subagents.", "role": "agent work-loop reference", "tags": ["workflow", "context-policy"] },
-              { "id": "core-harness:subagent-protocol", "kind": "doc", "path": "docs/ai-pipeline/subagent-protocol.md", "description": "Bounded subagent packet contract, return fields, ownership boundaries, and lead verification responsibilities.", "role": "subagent packet contract", "tags": ["workflow", "subagents", "contract"] },
-              { "id": "core-harness:orchestration-playbook", "kind": "doc", "path": "docs/ai-pipeline/orchestration-playbook.md", "description": "Day-to-day orchestration recipes and delegation command patterns used by the lead agent when work should be split.", "role": "orchestration operating guide", "tags": ["workflow", "orchestration", "recipes"] }
+              { "id": "core-harness:workflow-readme", "kind": "doc", "path": "ai_studio/core_harness/workflow/README.md", "description": "Canonical Workflow contract: context policy, lead-agent work loop, validation handoff, and delegation checkpoint.", "role": "workflow module entrypoint", "tags": ["workflow", "contract", "entrypoint", "context-policy"] }
+            ]
+          },
+          {
+            "id": "core-harness:orchestration",
+            "title": "Orchestration",
+            "subtitle": "early subagent split",
+            "kind": "group",
+            "color": "#475569",
+            "description": "Simple early-split rule for broad read-heavy work. Keeps subagent use lightweight with Task / Scope / Return / Stop packets.",
+            "role": "subagent delegation trigger and packet shape",
+            "tags": ["core", "orchestration", "subagents"],
+            "children": [
+              { "id": "core-harness:orchestration-readme", "kind": "doc", "path": "ai_studio/core_harness/orchestration/README.md", "description": "Short orchestration contract: when to split work, the simple packet format, lead responsibility, and current compatibility tooling.", "role": "orchestration module entrypoint", "tags": ["orchestration", "contract", "entrypoint"] }
             ]
           },
           { "id": "core-harness:tools-readme", "kind": "doc", "path": "tools/README.md", "description": "Tool layout contract: public facades, domain helpers, and cleanup or validation routing.", "role": "tool layout contract", "tags": ["source", "facade-map"] },
@@ -66,14 +77,14 @@
         "kind": "module",
         "moduleId": "taskboard",
         "color": "#2563eb",
-        "description": "Durable project work state: tasks, epics, live status, context digest, orchestration labels, and task-store validation.",
+        "description": "Durable project work state: tasks, epics, live status, context digest, and task-store validation. Legacy orchestration CLI commands remain pending extraction.",
         "tags": ["state", "tasks", "workflow-support"],
         "children": [
           { "id": "taskboard:readme", "kind": "doc", "path": "ai_studio/taskboard/README.md", "description": "Taskboard contract for task files, statuses, task lifecycle, durable context, and task CLI usage.", "role": "task store source contract", "tags": ["source", "state"] },
           { "id": "taskboard:status", "kind": "doc", "path": "tasks/STATUS.md", "description": "Live project status and short current-state digest. It is state, not harness policy.", "role": "live project status", "tags": ["state", "hot"] },
           { "id": "taskboard:reference", "kind": "doc", "path": "ai_studio/taskboard/task-store-reference.md", "description": "Detailed task-store reference for fields, lifecycle, and maintenance rules.", "role": "task store reference", "tags": ["reference"] },
-          { "id": "taskboard:cli", "kind": "tool", "path": "ai_studio/taskboard/cli.mjs", "description": "Public Taskboard CLI for listing, context digest, task create/update, orchestration packet helpers, and task validation.", "role": "taskboard public CLI", "tags": ["public-api", "cli"] },
-          { "id": "taskboard:lib", "kind": "tool", "path": "ai_studio/taskboard/lib.mjs", "description": "Taskboard implementation library: parsing, validation, context digest, orchestration packet templates, and preflight checks.", "role": "taskboard internal library", "tags": ["internal", "state", "workflow-support"] },
+          { "id": "taskboard:cli", "kind": "tool", "path": "ai_studio/taskboard/cli.mjs", "description": "Public Taskboard CLI for listing, context digest, task create/update, and task-store validation. Legacy orchestration commands remain here until extracted.", "role": "taskboard public CLI", "tags": ["public-api", "cli"] },
+          { "id": "taskboard:lib", "kind": "tool", "path": "ai_studio/taskboard/lib.mjs", "description": "Taskboard implementation library: parsing, validation, context digest, and current legacy orchestration helpers pending extraction.", "role": "taskboard internal library", "tags": ["internal", "state", "workflow-support"] },
           { "id": "taskboard:server", "kind": "tool", "path": "ai_studio/taskboard/server.mjs", "description": "Optional local browser UI server for viewing the taskboard.", "role": "taskboard UI server", "tags": ["ui", "optional"] },
           { "id": "taskboard:test", "kind": "tool", "path": "ai_studio/taskboard/tests/taskboard.test.mjs", "description": "Taskboard regression tests for parsing, commands, context, validation, and orchestration helpers.", "role": "taskboard tests", "tags": ["test"] }
         ]

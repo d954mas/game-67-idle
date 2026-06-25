@@ -24,7 +24,8 @@ export const REVIEW_SKILL_ENTRYPOINT_TOTAL_MAX_CHARS = 38000;
 export const HOT_DOC_BUDGETS = [
   { path: "AGENTS.md", maxChars: AGENTS_MAX_CHARS, reviewMaxChars: AGENTS_REVIEW_MAX_CHARS },
   { path: join("ai_studio", "README.md"), maxChars: PIPELINE_REFERENCE_MAX_CHARS, reviewMaxChars: PIPELINE_REFERENCE_REVIEW_MAX_CHARS },
-  { path: join("docs", "ai-pipeline", "agent-workflow.md"), maxChars: PIPELINE_REFERENCE_MAX_CHARS, reviewMaxChars: PIPELINE_REFERENCE_REVIEW_MAX_CHARS },
+  { path: join("ai_studio", "core_harness", "workflow", "README.md"), maxChars: PIPELINE_REFERENCE_MAX_CHARS, reviewMaxChars: PIPELINE_REFERENCE_REVIEW_MAX_CHARS },
+  { path: join("ai_studio", "core_harness", "orchestration", "README.md"), maxChars: PIPELINE_REFERENCE_MAX_CHARS, reviewMaxChars: PIPELINE_REFERENCE_REVIEW_MAX_CHARS },
   { path: join("docs", "ai-pipeline", "quality-validation.md"), maxChars: PIPELINE_REFERENCE_MAX_CHARS, reviewMaxChars: PIPELINE_REFERENCE_REVIEW_MAX_CHARS },
   { path: join("docs", "ai-pipeline", "profiling-reuse.md"), maxChars: PIPELINE_REFERENCE_MAX_CHARS, reviewMaxChars: PIPELINE_REFERENCE_REVIEW_MAX_CHARS },
   { path: join("tools", "README.md"), maxChars: TOOLS_README_MAX_CHARS, reviewMaxChars: TOOLS_README_REVIEW_MAX_CHARS },

@@ -151,7 +151,7 @@ function renderSubagentPacket(f) {
 }
 
 const PARALLEL_INTRO =
-  "PARALLEL FAN-OUT: spawn one worker per packet below at the same time (Claude: multiple Agent-tool calls in one turn, or the Workflow tool; Codex: parallel spawn_agent). Each runs read-only in its own context and returns only its handoff; the lead concatenates and integrates. Disjoint scope, so workers cannot conflict. Lint one packet at a time via `node tools/ai.mjs subagent-packet-check --stdin`.";
+  "PARALLEL FAN-OUT: spawn one worker per packet below at the same time (Claude: multiple Agent-tool calls in one turn, or the Workflow tool; Codex: parallel spawn_agent). Each runs read-only in its own context and returns only its handoff; the lead concatenates and integrates. Disjoint scope, so workers cannot conflict. Lint one packet at a time via `node ai_studio/taskboard/cli.mjs subagent-packet-check --stdin`.";
 const SINGLE_INTRO =
   "SINGLE WORKER: spawn one subagent (Claude Agent tool / Codex spawn_agent). It returns its handoff; the lead integrates.";
 const SEQUENTIAL_INTRO =

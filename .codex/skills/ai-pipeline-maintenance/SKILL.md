@@ -14,7 +14,9 @@ Use for AI workflow/tooling changes, not ordinary playable game work.
 - `references/skill-placement.md`: Update Existing Skill, Create New Skill, and
   Keep Hot Docs Thin decisions.
 - `ai_studio/README.md`: portable AI Studio workflow and routing map.
-- `docs/ai-pipeline/agent-workflow.md`: context, Markdown shape, multi-agent use.
+- `ai_studio/core_harness/workflow/README.md`: context and work-loop routing.
+- `ai_studio/core_harness/orchestration/README.md`: early split rule for broad
+  read-heavy work.
 - `docs/ai-pipeline/quality-validation.md`: gates and repeated strict/product
   failure policy.
 - `docs/ai-pipeline/profiling-reuse.md`: profiling, closeout, assets, export.

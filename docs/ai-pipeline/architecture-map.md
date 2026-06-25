@@ -284,7 +284,7 @@ currently protocol-level, not installed worker definitions.
 
 | Role | Current implementation | Authority |
 |---|---|---|
-| Lead/orchestrator | Main conversation plus `docs/ai-pipeline/subagent-protocol.md` | Owns scope, hot docs, task/status, integration, validation, commits, final report. |
+| Lead/orchestrator | Main conversation plus `ai_studio/core_harness/orchestration/README.md` when broad work should split early | Owns scope, hot docs, task/status, integration, validation, commits, final report. |
 | Read-only mapper | Packet preset `codebase-map` from `ai_studio/taskboard/lib.mjs` | Reads bounded scopes, returns entry points/data flow/risks. |
 | Independent reviewer | Packet preset `review` | Reviews one artifact or axis, returns verdict/issues. Verdict is input, not acceptance. |
 | Asset researcher | Packet preset `asset-research` | Finds candidates and licenses, does not import. |

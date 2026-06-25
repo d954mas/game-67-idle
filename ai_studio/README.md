@@ -8,7 +8,9 @@ public surface, internals, and validation path.
 
 - `tree.json`: declarative source for the working architecture tree.
 - `core_harness/`: reviewed core routing and agent harness docs.
-- `taskboard/`: reviewed durable task state and orchestration module.
+- `core_harness/orchestration/`: reviewed early split rule for broad read-heavy
+  subagent work.
+- `taskboard/`: reviewed durable task state module.
 - `Not Refactored`: map node for everything not reviewed yet.
 
 Create domain folders such as `assets/`, `tech/`, or `validation/` only when
@@ -21,7 +23,9 @@ Load only the route that matches the current task:
 - Repository contract and hard invariants: `AGENTS.md`.
 - Current active game context: `GAME_PROJECT.md`.
 - Agent workflow, context policy, Markdown shape, or multi-agent use:
-  `docs/ai-pipeline/agent-workflow.md`.
+  `ai_studio/core_harness/workflow/README.md`.
+- Broad read-heavy work that should be split before loading too much context:
+  `ai_studio/core_harness/orchestration/README.md`.
 - Done criteria, validation routing, product gates, or repeated failure stops:
   `docs/ai-pipeline/quality-validation.md`.
 - Profiling, prototype closeout, visual/asset routing, or portable export:

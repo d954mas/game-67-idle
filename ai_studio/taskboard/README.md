@@ -16,10 +16,9 @@ cleanup, or user request.
 - Inspect: `list`, `list --review`, `show T0001`.
 - Change: `new task --title "..." --epic E001 --priority P1`, `set T0001 --status doing`.
 - Validate: `node ai_studio/taskboard/cli.mjs validate`.
-- Orchestrate: `node ai_studio/taskboard/cli.mjs orchestration-check --current --json` previews
-  a subagent packet (advisory). For delegated work, follow the compact operator
-  path in `docs/ai-pipeline/agent-workflow.md`. Acceptance gates the work
-  product, not the delegation.
+- Orchestration compatibility: `orchestration-*` and `subagent-*` commands still
+  live in this CLI, but the rules belong to
+  `ai_studio/core_harness/orchestration/README.md`.
 - Board when requested: `node ai_studio/taskboard/server.mjs`.
 - New game: `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`.
 
