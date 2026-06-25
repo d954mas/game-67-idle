@@ -2022,6 +2022,7 @@ function renderRefactorHtml(data) {
       border-radius: 0;
       background: transparent;
       padding: 14px;
+      overflow: hidden;
     }
     .tree-level { display: grid; gap: 12px; }
     .tree-map-stage {
@@ -2176,6 +2177,27 @@ function renderRefactorHtml(data) {
       gap: 12px;
       align-items: stretch;
       min-height: calc(100% - 58px);
+    }
+    .drill-graph-viewport {
+      position: relative;
+      min-height: 720px;
+      overflow: hidden;
+      border-radius: 8px;
+      background:
+        radial-gradient(circle at 1px 1px, rgba(100, 116, 139, .16) 1px, transparent 0) 0 0 / 24px 24px,
+        linear-gradient(180deg, #fbfdff 0%, #eef5fb 100%);
+      cursor: grab;
+      touch-action: none;
+    }
+    .drill-graph-viewport.panning {
+      cursor: grabbing;
+    }
+    .drill-graph-pan {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-origin: 0 0;
+      will-change: transform;
     }
     .drill-hierarchy-panel {
       position: sticky;
@@ -2608,6 +2630,10 @@ function renderRefactorHtml(data) {
     const explorerHistory = [];
     let drillOpen = true;
     let drillDragging = null;
+    let drillPanning = null;
+    let drillZoom = 1;
+    let drillPanX = 0;
+    let drillPanY = 0;
     let suppressExplorerClick = false;
     const drillPositions = new Map();
     let dragging = null;
@@ -2854,6 +2880,12 @@ function renderRefactorHtml(data) {
       graphLayer.style.transform = "translate(" + panX + "px, " + panY + "px) scale(" + zoom + ")";
       if (zoomLabel) zoomLabel.textContent = Math.round(zoom * 100) + "%";
     }
+    function applyDrillTransform() {
+      const pan = studioExplorerTree ? studioExplorerTree.querySelector(".drill-graph-pan") : null;
+      if (!pan) return;
+      pan.style.transform = "translate(" + drillPanX + "px, " + drillPanY + "px) scale(" + drillZoom + ")";
+      if (zoomLabel) zoomLabel.textContent = Math.round(drillZoom * 100) + "%";
+    }
     function setZoomAt(clientX, clientY, nextZoom) {
       const rect = viewport.getBoundingClientRect();
       const graphX = (clientX - rect.left - panX) / zoom;
@@ -2862,6 +2894,26 @@ function renderRefactorHtml(data) {
       panX = clientX - rect.left - graphX * zoom;
       panY = clientY - rect.top - graphY * zoom;
       applyTransform();
+    }
+    function setDrillZoomAt(clientX, clientY, nextZoom) {
+      const board = studioExplorerTree ? studioExplorerTree.querySelector(".drill-graph-viewport") : null;
+      if (!board) return;
+      const rect = board.getBoundingClientRect();
+      const localX = clientX - rect.left;
+      const localY = clientY - rect.top;
+      const graphX = (localX - drillPanX) / drillZoom;
+      const graphY = (localY - drillPanY) / drillZoom;
+      drillZoom = clampZoom(nextZoom);
+      drillPanX = localX - graphX * drillZoom;
+      drillPanY = localY - graphY * drillZoom;
+      applyDrillTransform();
+    }
+    function drillCanvasPoint(event, canvas) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (event.clientX - rect.left) / drillZoom,
+        y: (event.clientY - rect.top) / drillZoom
+      };
     }
     function fitStart() {
       zoom = 0.88;
@@ -3417,6 +3469,7 @@ function renderRefactorHtml(data) {
             (current.id === "studio" ? renderTopLevelDrillGraph(visibleChildren, children.length) : renderDrillGraph(current, visibleChildren, children.length)) +
           '</div>' +
         '</div>';
+      applyDrillTransform();
     }
     function drillPositionKey(viewId, nodeId) {
       return viewId + "::" + nodeId;
@@ -3524,6 +3577,13 @@ function renderRefactorHtml(data) {
       });
       return { width, height, placements };
     }
+    function renderDrillViewport(layout, canvasHtml) {
+      return '<div class="drill-graph-viewport" data-drill-viewport="1">' +
+        '<div class="drill-graph-pan" style="width:' + layout.width + 'px; min-height:' + layout.height + 'px">' +
+          canvasHtml +
+        '</div>' +
+      '</div>';
+    }
     function renderTopLevelDrillGraph(visibleChildren, totalChildren) {
       const layout = topLevelGraphLayout(visibleChildren);
       const nodes = layout.placements.map((p) => {
@@ -3533,11 +3593,11 @@ function renderRefactorHtml(data) {
       const empty = !visibleChildren.length
         ? '<div class="drill-empty" style="position:absolute;left:32px;top:32px">' + (totalChildren ? 'Поиск не нашел верхних узлов.' : 'Верхний уровень пуст.') + '</div>'
         : "";
-      return '<div class="drill-graph-canvas" style="width:' + layout.width + 'px; min-height:' + layout.height + 'px">' +
+      return renderDrillViewport(layout, '<div class="drill-graph-canvas" style="width:' + layout.width + 'px; min-height:' + layout.height + 'px">' +
         '<svg class="drill-edge-layer" viewBox="0 0 ' + layout.width + ' ' + layout.height + '" aria-hidden="true"><defs><marker id="drillArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"></path></marker></defs></svg>' +
         nodes +
         empty +
-      '</div>';
+      '</div>');
     }
     function renderDrillGraph(current, visibleChildren, totalChildren) {
       const layout = drillGraphLayout(visibleChildren);
@@ -3554,12 +3614,12 @@ function renderRefactorHtml(data) {
       const empty = !visibleChildren.length
         ? '<div class="drill-empty" style="position:absolute;left:' + Math.round(layout.cx + 155) + 'px;top:' + Math.round(layout.cy - 18) + 'px">' + (totalChildren ? 'Поиск не нашел внутренних узлов на этом уровне.' : 'У этой ноды нет внутренних узлов.') + '</div>'
         : "";
-      return '<div class="drill-graph-canvas" style="width:' + layout.width + 'px; min-height:' + layout.height + 'px">' +
+      return renderDrillViewport(layout, '<div class="drill-graph-canvas" style="width:' + layout.width + 'px; min-height:' + layout.height + 'px">' +
         '<svg class="drill-edge-layer" viewBox="0 0 ' + layout.width + ' ' + layout.height + '" aria-hidden="true"><defs><marker id="drillArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"></path></marker></defs>' + edges.replaceAll('marker-end: url(#arrow)', '') + '</svg>' +
         renderDrillGraphNode(current, center.x, center.y, "center") +
         childNodes +
         empty +
-      '</div>';
+      '</div>');
     }
     function updateDrillEdges() {
       const canvas = studioExplorerTree.querySelector(".drill-graph-canvas");
@@ -3695,9 +3755,9 @@ function renderRefactorHtml(data) {
     window.addEventListener("pointermove", (event) => {
       if (drillDragging) {
         const canvas = drillDragging.canvas;
-        const rect = canvas.getBoundingClientRect();
-        const x = event.clientX - rect.left - drillDragging.dx;
-        const y = event.clientY - rect.top - drillDragging.dy;
+        const pointer = drillCanvasPoint(event, canvas);
+        const x = pointer.x - drillDragging.dx;
+        const y = pointer.y - drillDragging.dy;
         if (Math.abs(event.clientX - drillDragging.clientX) > 4 || Math.abs(event.clientY - drillDragging.clientY) > 4) {
           drillDragging.moved = true;
         }
@@ -3705,6 +3765,15 @@ function renderRefactorHtml(data) {
         drillDragging.el.style.top = y + "px";
         drillPositions.set(drillPositionKey(drillDragging.viewId, drillDragging.id), { x, y });
         updateDrillEdges();
+        return;
+      }
+      if (drillPanning) {
+        if (Math.abs(event.clientX - drillPanning.clientX) > 4 || Math.abs(event.clientY - drillPanning.clientY) > 4) {
+          drillPanning.moved = true;
+        }
+        drillPanX = drillPanning.panX + event.clientX - drillPanning.clientX;
+        drillPanY = drillPanning.panY + event.clientY - drillPanning.clientY;
+        applyDrillTransform();
         return;
       }
       if (panning) {
@@ -3728,6 +3797,11 @@ function renderRefactorHtml(data) {
         window.setTimeout(() => { suppressExplorerClick = false; }, 250);
       }
       drillDragging = null;
+      if (drillPanning) {
+        const board = studioExplorerTree ? studioExplorerTree.querySelector(".drill-graph-viewport.panning") : null;
+        if (board) board.classList.remove("panning");
+      }
+      drillPanning = null;
       if (dragging && dragging.moved) {
         suppressGraphClick = true;
         window.setTimeout(() => { suppressGraphClick = false; }, 250);
@@ -3739,27 +3813,55 @@ function renderRefactorHtml(data) {
     if (studioExplorerTree) {
       studioExplorerTree.addEventListener("pointerdown", (event) => {
         const node = event.target.closest(".drill-graph-node");
-        if (!node || event.button !== 0) return;
+        if (node && event.button === 0) {
+          const interactive = event.target.closest("a,button,input,select,textarea");
+          if (interactive && !interactive.classList.contains("drill-graph-node")) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const canvas = node.closest(".drill-graph-canvas");
+          if (!canvas) return;
+          const pointer = drillCanvasPoint(event, canvas);
+          const x = parseFloat(node.style.left) || 0;
+          const y = parseFloat(node.style.top) || 0;
+          drillDragging = {
+            id: node.dataset.drillId,
+            viewId: explorerView,
+            el: node,
+            canvas,
+            dx: pointer.x - x,
+            dy: pointer.y - y,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            moved: false
+          };
+          node.setPointerCapture(event.pointerId);
+          return;
+        }
+        if (event.button !== 0) return;
         const interactive = event.target.closest("a,button,input,select,textarea");
-        if (interactive && !interactive.classList.contains("drill-graph-node")) return;
-        const canvas = node.closest(".drill-graph-canvas");
-        if (!canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const x = parseFloat(node.style.left) || 0;
-        const y = parseFloat(node.style.top) || 0;
-        drillDragging = {
-          id: node.dataset.drillId,
-          viewId: explorerView,
-          el: node,
-          canvas,
-          dx: event.clientX - rect.left - x,
-          dy: event.clientY - rect.top - y,
+        if (interactive) return;
+        const board = event.target.closest(".drill-graph-viewport");
+        if (!board) return;
+        event.preventDefault();
+        drillPanning = {
           clientX: event.clientX,
           clientY: event.clientY,
+          panX: drillPanX,
+          panY: drillPanY,
           moved: false
         };
-        node.setPointerCapture(event.pointerId);
+        board.classList.add("panning");
+        board.setPointerCapture(event.pointerId);
       });
+      studioExplorerTree.addEventListener("wheel", (event) => {
+        if (!drillOpen) return;
+        const board = event.target.closest(".drill-graph-viewport");
+        if (!board) return;
+        if (event.target.closest(".drill-node-desc")) return;
+        event.preventDefault();
+        const factor = Math.exp(-event.deltaY * 0.0012);
+        setDrillZoomAt(event.clientX, event.clientY, drillZoom * factor);
+      }, { passive: false });
     }
     viewport.addEventListener("pointerdown", (event) => {
       if (drillOpen) return;
