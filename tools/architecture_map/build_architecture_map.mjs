@@ -3043,6 +3043,24 @@ function renderRefactorHtml(data) {
         item
       });
     }
+    function coreHarnessChildren() {
+      return refactorGroups("hot").flatMap((group) => group.items.map((item, index) => {
+        const sourceTag = "source:" + group.title;
+        return makeExplorerNode({
+          id: "core-item:" + group.id + ":" + index,
+          title: itemTitle(item),
+          subtitle: item.path || item.title || group.title,
+          kind: item.kind,
+          color: group.color,
+          description: item.description,
+          href: item.href,
+          tags: Array.from(new Set([sourceTag].concat(item.tags || []))),
+          moduleId: "hot",
+          groupId: group.id,
+          item
+        });
+      }));
+    }
     function groupExplorerNode(moduleId, group) {
       return makeExplorerNode({
         id: "group:" + moduleId + ":" + group.id,
@@ -3060,6 +3078,9 @@ function renderRefactorHtml(data) {
     function moduleExplorerNode(moduleId) {
       const module = moduleById.get(moduleId);
       if (!module) return null;
+      const children = moduleId === "hot"
+        ? coreHarnessChildren()
+        : refactorGroups(moduleId).map((group) => groupExplorerNode(moduleId, group));
       return makeExplorerNode({
         id: "module:" + moduleId,
         title: module.title,
@@ -3068,7 +3089,7 @@ function renderRefactorHtml(data) {
         color: module.color,
         description: module.description,
         moduleId,
-        children: refactorGroups(moduleId).map((group) => groupExplorerNode(moduleId, group))
+        children
       });
     }
     function folderNode(id, title, color, description, children) {
@@ -3230,15 +3251,18 @@ function renderRefactorHtml(data) {
         '<small>' + esc(node.kind) + '</small>' +
       '</button>';
     }
+    function breadcrumbTitle(node) {
+      return node.id === "studio" ? "ai_studio" : node.title;
+    }
     function renderHierarchyPanel(current, path, visibleChildren) {
-      const displayPath = path.filter((node) => node.id !== "studio");
+      const displayPath = path.length ? path : [current];
       const rows = displayPath.map((node, index) => renderHierarchyRow(node, index, current.id)).join("");
       const childRows = visibleChildren.slice(0, 18).map((node) => renderHierarchyRow(node, Math.min(3, displayPath.length), "")).join("");
       const more = visibleChildren.length > 18 ? '<p class="muted">+' + (visibleChildren.length - 18) + ' hidden by panel limit; use graph or search.</p>' : "";
       const canBack = current.id !== "studio";
       return '<aside class="drill-hierarchy-panel" aria-label="Hierarchy">' +
         '<div class="actions">' + (canBack ? '<button type="button" class="secondary" data-explorer-back="1">Назад</button>' : '') + '<button type="button" class="secondary" data-explorer-close="1">Граф связей</button></div>' +
-        '<div class="block"><h3>Иерархия</h3><div class="hierarchy-list">' + (rows || '<p class="muted">Верхний уровень дерева.</p>') + '</div></div>' +
+        '<div class="block"><h3>Иерархия</h3><div class="hierarchy-list">' + rows + '</div></div>' +
         '<div class="hierarchy-children"><h3>Внутри уровня</h3>' + (childRows || '<p class="muted">Внутренних узлов нет.</p>') + more + '</div>' +
       '</aside>';
     }
@@ -3269,8 +3293,8 @@ function renderRefactorHtml(data) {
       const query = search.value.trim().toLowerCase();
       const visibleChildren = children.filter((child) => explorerNodeMatches(child, query));
       const path = findExplorerPath(root, current.id, []);
-      const displayPath = path.filter((node) => node.id !== "studio");
-      const pathText = displayPath.length ? displayPath.map((item) => item.title).join(" / ") : "Core Harness + Not Refactored";
+      const displayPath = path.length ? path : [root];
+      const pathText = displayPath.map(breadcrumbTitle).join(" / ");
       const viewTitle = current.id === "studio" ? "Main Refactor Tree" : current.title;
       studioExplorerTree.innerHTML =
         '<div class="drill-graph-shell">' +

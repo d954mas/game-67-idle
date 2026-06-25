@@ -23,3 +23,9 @@ them there:
 When their content is migrated, the root files should become thin routing
 facades that point into `ai_studio/core/`.
 
+## Refactor Map Shape
+
+During the Core audit, the `Core Harness` node is intentionally ungrouped in
+the map: every current core doc, tool, and contract candidate is a direct child.
+Grouping should be added only after ownership, boundaries, and compatibility
+rules are verified.
