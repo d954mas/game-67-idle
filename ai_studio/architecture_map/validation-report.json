@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-06-26T09:28:19.024Z",
+  "generatedAt": "2026-06-26T10:23:00.700Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
@@ -14,12 +14,12 @@
     "tasks/epics"
   ],
   "summary": {
-    "mappedPaths": 57,
-    "scannedFiles": 259,
+    "mappedPaths": 58,
+    "scannedFiles": 256,
     "missingInRepo": 0,
     "duplicateMappings": 0,
     "unmappedInAiStudio": 0,
-    "unmappedLegacy": 204,
+    "unmappedLegacy": 200,
     "missingDescriptions": 0
   },
   "issues": {
@@ -520,9 +520,6 @@
         "path": "tools/game_context/workflow_guard.test.mjs"
       },
       {
-        "path": "tools/hooks_sync.test.mjs"
-      },
-      {
         "path": "tools/lib/asset_catalog.mjs"
       },
       {
@@ -568,12 +565,6 @@
         "path": "tools/lib/tmp_exports.test.mjs"
       },
       {
-        "path": "tools/lib/validate_flags.mjs"
-      },
-      {
-        "path": "tools/lib/validate_flags.test.mjs"
-      },
-      {
         "path": "tools/product_gate/close_slice.mjs"
       },
       {
@@ -617,9 +608,6 @@
       },
       {
         "path": "tools/skills_eval.mjs"
-      },
-      {
-        "path": "tools/skills_sync.test.mjs"
       },
       {
         "path": "tools/state_codegen/generate_state_test.py"

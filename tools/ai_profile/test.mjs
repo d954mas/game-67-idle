@@ -170,7 +170,7 @@ test("hook_record marks full Python dependency failures as environment blocked",
     runHook({
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
-      tool_input: { command: "node ai_studio/core_harness/validation/pipeline_validate.mjs --full" },
+      tool_input: { command: "node --test tools/bootstrap/export_base.test.mjs" },
       tool_response: {
         exit_code: 1,
         output: "error: no working Python runner found with required modules: PIL, numpy, scipy\nhint: install full-gate modules into the selected runner: py -3.12 -m pip install -r tools/requirements/ai-pipeline-full.txt",
@@ -273,7 +273,7 @@ test("hook_record_fast keeps parallel JSONL appends valid", {
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
       tool_input: {
-        command: `node ai_studio/core_harness/validation/pipeline_validate.mjs --parallel-case ${index} ${"x".repeat(180)}`,
+        command: `node ai_studio/core_harness/validation/doc_reference_check.mjs --parallel-case ${index} ${"x".repeat(180)}`,
       },
       tool_response: { exit_code: 0 },
     }));
@@ -480,7 +480,7 @@ test("status command rollup strips shell assignment wrappers", () => {
         result: "pass",
         value: "unknown",
         event_type: "tool_call_result",
-        commands: ["$env:AI_PIPELINE_PYTHON='C:\\Users\\ROG\\.cache\\codex-runtimes\\python\\python.exe'; node ai_studio/core_harness/validation/pipeline_validate.mjs --full"],
+        commands: ["$env:AI_PIPELINE_PYTHON='C:\\Users\\ROG\\.cache\\codex-runtimes\\python\\python.exe'; node --test tools/bootstrap/export_base.test.mjs"],
         session_id: "s1",
       },
       {
@@ -491,7 +491,7 @@ test("status command rollup strips shell assignment wrappers", () => {
         result: "pass",
         value: "unknown",
         event_type: "tool_call_result",
-        commands: ["AI_PIPELINE_PYTHON=/tmp/python node ai_studio/core_harness/validation/pipeline_validate.mjs --review"],
+        commands: ["AI_PIPELINE_PYTHON=/tmp/python node ai_studio/core_harness/validation/doc_reference_check.mjs"],
         session_id: "s1",
       },
       {
@@ -521,7 +521,7 @@ test("status command rollup strips shell assignment wrappers", () => {
     run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson]);
     const status = readJson(statusJson);
     const keys = status.command_rollup.by_count.map((entry) => entry.key);
-    assert.deepEqual(keys, ["node pipeline_validate.mjs", "Get-Content"]);
+    assert.deepEqual(keys, ["Get-Content", "node export_base.test.mjs", "node doc_reference_check.mjs"]);
     assert.equal(status.command_rollup.by_count.find((entry) => entry.key === "Get-Content")?.count, 2);
     assert.ok(!keys.includes("$i=0;"));
   } finally {
@@ -569,7 +569,7 @@ test("status separates environment-blocked failures from unresolved failures", (
         result: "fail",
         value: "necessary_overhead",
         event_type: "tool_call_result",
-        commands: ["node ai_studio/core_harness/validation/pipeline_validate.mjs --full"],
+        commands: ["node --test tools/bootstrap/export_base.test.mjs"],
         session_id: "s1",
         failure_kind: "environment_blocked",
         blocked_by: "missing full-gate Python modules; install tools/requirements/ai-pipeline-full.txt or set AI_PIPELINE_PYTHON",

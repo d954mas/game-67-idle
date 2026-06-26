@@ -120,8 +120,6 @@
               "implementation",
               "shared-shell"
             ],
-            "hiddenByDefault": true,
-            "hiddenReason": "CSS and browser JS internals are implementation details; open this group only when changing the shell UI.",
             "children": [
               {
                 "id": "studio-shell:home-style",
@@ -183,7 +181,7 @@
             "id": "core-harness:readme",
             "kind": "doc",
             "path": "ai_studio/core_harness/README.md",
-            "description": "Core Harness module contract: what belongs in the always-nearby harness, what is only a compatibility surface, and which submodules own workflow, orchestration, and validation.",
+            "description": "Core Harness module contract: what belongs in the always-nearby harness, what is only a compatibility surface, and how Core routes into workflow, orchestration, and validation.",
             "role": "core harness module contract",
             "tags": [
               "core",
@@ -284,25 +282,127 @@
             ]
           },
           {
+            "id": "core-harness:agent-surfaces",
+            "title": "Agent Surfaces",
+            "subtitle": "generated Codex/Claude surfaces",
+            "kind": "group",
+            "color": "#0f766e",
+            "description": "Core Harness module for generated agent-facing compatibility surfaces: Claude skill pointers and Codex/Claude hook configs.",
+            "role": "agent surface generation and drift checks",
+            "tags": [
+              "core",
+              "agent-surfaces",
+              "generated"
+            ],
+            "children": [
+              {
+                "id": "core-harness:agent-surfaces-readme",
+                "kind": "doc",
+                "path": "ai_studio/core_harness/agent_surfaces/README.md",
+                "title": "README.md",
+                "description": "Agent Surfaces contract: canonical sources, generated outputs, command entrypoints, and module boundaries.",
+                "role": "agent surfaces module entrypoint",
+                "tags": [
+                  "contract",
+                  "entrypoint"
+                ]
+              },
+              {
+                "id": "core-harness:agent-surfaces-sync",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/agent_surfaces/sync.mjs",
+                "title": "sync.mjs",
+                "description": "Aggregate command that regenerates or checks all generated agent surfaces.",
+                "role": "agent surfaces sync facade",
+                "tags": [
+                  "public-api",
+                  "sync"
+                ]
+              },
+              {
+                "id": "core-harness:agent-surfaces-skills-sync",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/agent_surfaces/skills_sync.mjs",
+                "title": "skills_sync.mjs",
+                "description": "Generates .claude/skills thin pointers from canonical .codex/skills instructions and removes stale generated pointers.",
+                "role": "generated skill pointer sync",
+                "tags": [
+                  "generated",
+                  "skills"
+                ]
+              },
+              {
+                "id": "core-harness:agent-surfaces-hooks-sync",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/agent_surfaces/hooks_sync.mjs",
+                "title": "hooks_sync.mjs",
+                "description": "Generates .codex/hooks.json and the hooks block of .claude/settings.json from one canonical hook source.",
+                "role": "generated hook config sync",
+                "tags": [
+                  "generated",
+                  "hooks"
+                ]
+              },
+              {
+                "id": "core-harness:agent-surfaces-tests",
+                "title": "Tests",
+                "subtitle": "sync regressions",
+                "kind": "test",
+                "color": "#0f766e",
+                "description": "Regression tests for generated skill pointers and hook config rendering.",
+                "role": "agent surface test files",
+                "tags": [
+                  "test"
+                ],
+                "children": [
+                  {
+                    "id": "core-harness:agent-surfaces-skills-test",
+                    "kind": "test",
+                    "path": "ai_studio/core_harness/agent_surfaces/tests/skills_sync.test.mjs",
+                    "title": "skills_sync.test.mjs",
+                    "description": "Regression tests for generated skill pointer creation, stale pointer detection, and hand-written skill preservation.",
+                    "role": "skills sync tests",
+                    "tags": [
+                      "test",
+                      "skills"
+                    ]
+                  },
+                  {
+                    "id": "core-harness:agent-surfaces-hooks-test",
+                    "kind": "test",
+                    "path": "ai_studio/core_harness/agent_surfaces/tests/hooks_sync.test.mjs",
+                    "title": "hooks_sync.test.mjs",
+                    "description": "Regression tests that hook generation reproduces committed Codex/Claude config and preserves tool-specific matcher vocabularies.",
+                    "role": "hooks sync tests",
+                    "tags": [
+                      "test",
+                      "hooks"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
             "id": "core-harness:validation",
             "title": "Validation",
-            "subtitle": "harness guards",
-            "kind": "group",
+            "subtitle": "fast route checks",
+            "kind": "validation",
             "color": "#7f1d1d",
-            "description": "Core Harness validation group: lightweight checks for agent-facing docs, stale references, and retired command routes.",
-            "role": "agent-facing route and reference guards",
+            "description": "Fast Core Harness validation for agent-facing docs, stale file references, and retired command routes. Module test suites stay with their owning modules.",
+            "role": "core harness route and reference guard",
             "tags": [
               "core",
               "validation",
-              "guards"
+              "fast-check"
             ],
             "children": [
               {
                 "id": "core-harness:validation-readme",
-                "kind": "doc",
+                "kind": "validation",
                 "path": "ai_studio/core_harness/validation/README.md",
-                "description": "Validation module contract: what belongs in Core Harness validation, what stays in product/game gates, and the focused validation commands.",
-                "role": "validation module entrypoint",
+                "description": "Core validation contract: fast mechanical checks only; no global pipeline validation.",
+                "role": "core validation entrypoint",
                 "tags": [
                   "validation",
                   "contract",
@@ -311,7 +411,7 @@
               },
               {
                 "id": "core-harness:doc-reference-check",
-                "kind": "tool",
+                "kind": "validation",
                 "path": "ai_studio/core_harness/validation/doc_reference_check.mjs",
                 "description": "Mechanical guard for stale local references, missing files, and retired commands in agent-facing Markdown.",
                 "role": "stale reference guard",
@@ -323,118 +423,15 @@
               },
               {
                 "id": "core-harness:doc-reference-check-test",
-                "kind": "tool",
+                "kind": "test",
                 "path": "ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs",
-                "description": "Regression tests for the Core Harness stale-reference guard and retired command detection.",
+                "description": "Regression tests for the stale-reference guard and retired command detection.",
                 "role": "stale reference guard tests",
                 "tags": [
                   "test",
                   "docs"
-                ],
-                "hiddenByDefault": true,
-                "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
-              },
-              {
-                "id": "core-harness:pipeline-validate",
-                "kind": "tool",
-                "path": "ai_studio/core_harness/validation/pipeline_validate.mjs",
-                "description": "Validation orchestrator behind Core Harness validation modes; collects docs, skills, taskboard, export, product checks, and focused tests.",
-                "role": "pipeline validation orchestrator",
-                "tags": [
-                  "validator",
-                  "facade",
-                  "public-api"
                 ]
-              },
-              {
-                "id": "core-harness:pipeline-validate-test",
-                "kind": "tool",
-                "path": "ai_studio/core_harness/validation/tests/pipeline_validate.test.mjs",
-                "description": "Regression tests for validation mode routing, dry-run command selection, export checks, and Python dependency guidance.",
-                "role": "pipeline validation tests",
-                "tags": [
-                  "test",
-                  "validation"
-                ],
-                "hiddenByDefault": true,
-                "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
               }
-            ]
-          },
-          {
-            "id": "core-harness:tools-readme",
-            "kind": "doc",
-            "path": "tools/README.md",
-            "description": "Tool layout contract: public facades, domain helpers, and cleanup or validation routing.",
-            "role": "tool layout contract",
-            "tags": [
-              "source",
-              "facade-map"
-            ]
-          },
-          {
-            "id": "core-harness:quality-validation",
-            "kind": "doc",
-            "path": "docs/ai-pipeline/quality-validation.md",
-            "description": "Gate taxonomy and validation reference; Core should route to it instead of duplicating the rules.",
-            "role": "validation source reference",
-            "tags": [
-              "source",
-              "move-out-detail"
-            ]
-          },
-          {
-            "id": "core-harness:sync",
-            "kind": "tool",
-            "path": "tools/sync.mjs",
-            "description": "Cross-harness sync entry point; keeps generated skills and hook surfaces aligned.",
-            "role": "cross-harness sync entry",
-            "tags": [
-              "sync",
-              "public-api"
-            ]
-          },
-          {
-            "id": "core-harness:skills-sync",
-            "kind": "tool",
-            "path": "tools/skills_sync.mjs",
-            "description": "Generates Claude-facing skill pointers from canonical Codex skills.",
-            "role": "generated skill pointers",
-            "tags": [
-              "generated",
-              "check-drift"
-            ]
-          },
-          {
-            "id": "core-harness:hooks-sync",
-            "kind": "tool",
-            "path": "tools/hooks_sync.mjs",
-            "description": "Generates Codex and Claude hook config from shared hook sources.",
-            "role": "generated hook config",
-            "tags": [
-              "generated",
-              "hooks"
-            ]
-          },
-          {
-            "id": "core-harness:bootstrap-template",
-            "kind": "doc",
-            "path": "tools/bootstrap/TEMPLATE.md",
-            "description": "Portable export and template contract; explains the reusable pipeline base and game starter copy model.",
-            "role": "portable export template",
-            "tags": [
-              "export",
-              "source"
-            ]
-          },
-          {
-            "id": "core-harness:profiling-reuse",
-            "kind": "doc",
-            "path": "docs/ai-pipeline/profiling-reuse.md",
-            "description": "Move-out candidate from Core; owns profiling, reuse, prototype closeout, and export guidance.",
-            "role": "profiling/reuse reference belongs outside Core after review",
-            "tags": [
-              "move-out-candidate"
             ]
           }
         ]
@@ -546,8 +543,6 @@
                   "implementation",
                   "static-assets"
                 ],
-                "hiddenByDefault": true,
-                "hiddenReason": "Surface files are implementation details; open this group only when changing the Taskboard browser UI.",
                 "children": [
                   {
                     "id": "taskboard:surface-index",
@@ -604,15 +599,13 @@
           },
           {
             "id": "taskboard:test",
-            "kind": "tool",
+            "kind": "test",
             "path": "ai_studio/taskboard/tests/taskboard.test.mjs",
             "description": "Taskboard regression tests for parsing, commands, context, validation, and task lifecycle behavior.",
             "role": "taskboard tests",
             "tags": [
               "test"
-            ],
-            "hiddenByDefault": true,
-            "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
+            ]
           }
         ]
       },
@@ -750,8 +743,6 @@
                   "implementation",
                   "static-assets"
                 ],
-                "hiddenByDefault": true,
-                "hiddenReason": "Surface files are implementation details; open this group only when changing the Asset Viewer browser UI.",
                 "children": [
                   {
                     "id": "assets:asset-viewer-js",
@@ -785,7 +776,7 @@
                 "id": "assets:asset-viewer-tests",
                 "title": "Tests",
                 "subtitle": "asset viewer regressions",
-                "kind": "group",
+                "kind": "test",
                 "color": "#0891b2",
                 "description": "Regression tests for Asset Viewer generation and promotion behavior.",
                 "role": "asset viewer test files",
@@ -793,12 +784,10 @@
                   "test",
                   "assets"
                 ],
-                "hiddenByDefault": true,
-                "hiddenReason": "Test files are hidden from the default graph to keep module structure readable.",
                 "children": [
                   {
                     "id": "assets:asset-viewer-build-test",
-                    "kind": "tool",
+                    "kind": "test",
                     "path": "ai_studio/assets/asset_viewer/tests/build_review.test.mjs",
                     "title": "build_review.test.mjs",
                     "description": "Regression tests for asset kind classification, origin detection, escaping, and gallery HTML rendering.",
@@ -810,7 +799,7 @@
                   },
                   {
                     "id": "assets:asset-viewer-promote-test",
-                    "kind": "tool",
+                    "kind": "test",
                     "path": "ai_studio/assets/asset_viewer/tests/promote.test.mjs",
                     "title": "promote.test.mjs",
                     "description": "Regression tests for promoting picked assets into the shared library with catalog and license records.",
@@ -879,7 +868,7 @@
           },
           {
             "id": "architecture-map:validator",
-            "kind": "tool",
+            "kind": "validation",
             "path": "ai_studio/architecture_map/validate_map.mjs",
             "title": "validate_map.mjs",
             "description": "Scans known AI Studio and legacy pipeline paths and writes validation-report.json with unmapped, missing, duplicate, and underspecified files.",
@@ -891,7 +880,7 @@
           },
           {
             "id": "architecture-map:validation-report",
-            "kind": "doc",
+            "kind": "validation",
             "path": "ai_studio/architecture_map/validation-report.json",
             "title": "validation-report.json",
             "description": "Generated report displayed by the map page so newly created or unmapped files are visible during refactoring.",
@@ -903,16 +892,14 @@
           },
           {
             "id": "architecture-map:validator-tests",
-            "kind": "tool",
+            "kind": "test",
             "path": "ai_studio/architecture_map/tests/validate_map.test.mjs",
             "title": "validate_map.test.mjs",
             "description": "Regression tests for missing, duplicate, unmapped, and mapped-directory validation behavior.",
             "role": "architecture map validator tests",
             "tags": [
               "test"
-            ],
-            "hiddenByDefault": true,
-            "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
+            ]
           }
         ]
       },
@@ -930,6 +917,72 @@
         ],
         "generatedChildren": [
           "module-backlog"
+        ],
+        "children": [
+          {
+            "id": "not-refactored:legacy-pipeline-routes",
+            "title": "Legacy Pipeline Routes",
+            "subtitle": "known old docs/tools",
+            "kind": "group",
+            "color": "#64748b",
+            "description": "Known pre-refactor pipeline docs and tools. They are intentionally visible as not-refactored until each one is reviewed, moved to an owning module, or deleted.",
+            "role": "known legacy pipeline backlog",
+            "tags": [
+              "not-refactored",
+              "legacy",
+              "pipeline"
+            ],
+            "children": [
+              {
+                "id": "not-refactored:tools-readme",
+                "kind": "doc",
+                "path": "tools/README.md",
+                "title": "tools/README.md",
+                "description": "Legacy tools route map. Keep visible until tool ownership is split across AI Studio modules.",
+                "role": "legacy tool route map",
+                "tags": [
+                  "legacy",
+                  "tools"
+                ]
+              },
+              {
+                "id": "not-refactored:quality-validation",
+                "kind": "validation",
+                "path": "docs/ai-pipeline/quality-validation.md",
+                "title": "quality-validation.md",
+                "description": "Legacy quality and validation reference. Module-owned validation should replace broad pipeline routing over time.",
+                "role": "legacy validation policy doc",
+                "tags": [
+                  "legacy",
+                  "validation"
+                ]
+              },
+              {
+                "id": "not-refactored:profiling-reuse",
+                "kind": "doc",
+                "path": "docs/ai-pipeline/profiling-reuse.md",
+                "title": "profiling-reuse.md",
+                "description": "Legacy profiling, reuse, closeout, and export reference awaiting ownership review.",
+                "role": "legacy profiling/export doc",
+                "tags": [
+                  "legacy",
+                  "profiling"
+                ]
+              },
+              {
+                "id": "not-refactored:bootstrap-template",
+                "kind": "doc",
+                "path": "tools/bootstrap/TEMPLATE.md",
+                "title": "TEMPLATE.md",
+                "description": "Legacy portable export template contract awaiting export-module ownership review.",
+                "role": "legacy export template",
+                "tags": [
+                  "legacy",
+                  "export"
+                ]
+              }
+            ]
+          }
         ]
       }
     ]

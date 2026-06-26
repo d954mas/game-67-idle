@@ -15,11 +15,12 @@ public surface, internals, and validation path.
 - `core_harness/`: reviewed core routing and agent harness docs.
 - `core_harness/workflow/orchestration/`: reviewed early split rule for broad
   read-heavy subagent work.
+- `core_harness/agent_surfaces/`: generated Codex/Claude compatibility surfaces.
 - `taskboard/`: reviewed durable task state module.
 - `Not Refactored`: map node for everything not reviewed yet.
 
-Create domain folders such as `assets/`, `tech/`, or `validation/` only when
-that module is reviewed and ready to move.
+Create domain folders such as `assets/` or `tech/` only when that module is
+reviewed and ready to move.
 
 ## Task Routing
 
@@ -33,6 +34,8 @@ Load only the route that matches the current task:
   `ai_studio/core_harness/workflow/orchestration/README.md`.
 - Stale Markdown/tool references and retired command routes:
   `node ai_studio/core_harness/validation/doc_reference_check.mjs`.
+- Generated Codex/Claude skills and hook surfaces:
+  `node ai_studio/core_harness/agent_surfaces/sync.mjs --check`.
 - Done criteria, validation routing, product gates, or repeated failure stops:
   `docs/ai-pipeline/quality-validation.md`.
 - Profiling, prototype closeout, visual/asset routing, or portable export:

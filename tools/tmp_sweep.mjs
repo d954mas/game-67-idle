@@ -4,7 +4,7 @@
 //   node tools/tmp_sweep.mjs [--list] [--all-scratch] [--keep-validate <n>] [--dry-run] [--root <dir>]
 //
 // tmp/ is gitignored disposable scratch; durable evidence lives under
-// gamedesign/projects/<id>/. pipeline_validate.mjs already prunes its own
+// gamedesign/projects/<id>/. Legacy pipeline validation exports are pruned
 // tmp/pipeline-validate-* dirs (T0043). This sweep is the EXPLICIT, opt-in way
 // to clear the rest (closed-prototype renders, generation pipelines, atlas
 // review dirs) at prototype close. Default is --list (reports, deletes nothing).
@@ -72,7 +72,7 @@ if (!existsSync(tmpDir)) {
 }
 
 const entries = readdirSync(tmpDir).sort();
-// Prefix + "keep newest N" contract shared with pipeline_validate via lib/tmp_exports.
+// Prefix + "keep newest N" contract for old pipeline-validate export dirs.
 const validateDirs = entries.filter(isValidateExportName);
 const keptValidate = new Set(partitionByKeep(validateDirs, keepValidate).kept);
 

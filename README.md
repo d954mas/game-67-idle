@@ -41,5 +41,5 @@ file), world state in `src/world/`. See `template/CONVENTIONS.md` and
 
 ```powershell
 node ai_studio/taskboard/cli.mjs validate     # docs/tasks
-node ai_studio/core_harness/validation/pipeline_validate.mjs                # guards + tests + pipeline
+node ai_studio/core_harness/validation/doc_reference_check.mjs  # agent-facing docs/routes
 ```

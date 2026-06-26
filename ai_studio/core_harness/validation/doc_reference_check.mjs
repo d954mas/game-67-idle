@@ -120,12 +120,17 @@ const retiredCommandPatterns = [
     message:
       "retired command `node tools/ai.mjs`; call the owning CLI directly",
   },
+  {
+    pattern: /\bnode\s+ai_studio[\\/]validation[\\/]pipeline_validate\.mjs\b/i,
+    message:
+      "retired command `node ai_studio/validation/pipeline_validate.mjs`; run the owning module validator directly",
+  },
 ];
 const retiredPhrasePatterns = [
   {
     pattern: /\bcontext pressure\b/i,
     message:
-      "retired phrase `context pressure`; use `context/cap review` so normal validation is not implied to be a budget gate",
+      "retired phrase `context pressure`; use focused docs/skill review checks instead of budget-gate wording",
   },
 ];
 

@@ -264,7 +264,7 @@ Suggested commands:
 ```powershell
 cmake --build --preset native-debug --target game_seed
 node ai_studio/taskboard/cli.mjs validate
-node ai_studio/core_harness/validation/pipeline_validate.mjs --file extensions/skeletal_animation --file tasks/active/T0007-skeletal-extension-cpu-skinned-mesh-renderer-pat.md
+node ai_studio/taskboard/cli.mjs validate
 ```
 
 If a native screenshot changes the player-facing screen, also run the relevant

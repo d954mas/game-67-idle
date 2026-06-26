@@ -1,5 +1,5 @@
 // Single source for the tmp/ export-dir housekeeping contract.
-// pipeline_validate.mjs --full writes its export to tmp/pipeline-validate-<ISO>/.
+// Legacy pipeline validation exports lived in tmp/pipeline-validate-<ISO>/.
 // Two consumers prune around those dirs (pipeline_validate's own --keep-exports
 // auto-prune and tmp_sweep's broad scratch sweep) and must agree on the prefix
 // plus the "keep newest N" rule, or they drift: tmp_sweep would protect or

@@ -58,7 +58,7 @@ Good examples:
 
 Use this map before moving rules out of hot files or creating a new skill:
 
-- Pipeline cleanup, context budgets, file/skill placement, export, validators,
+- Pipeline cleanup, file/skill placement, export, validators,
   and repeated workflow friction -> `ai-pipeline-maintenance`.
 - Long-session review, profiler interpretation, and improvement backlog from a
   completed run -> `chat-session-reflection`.
@@ -119,10 +119,7 @@ route.
 After moving rules between files and skills, run:
 
 ```powershell
-node tools/context_budget.mjs
-node tools/context_budget.mjs --review
 node tools/skills_eval.mjs
-node tools/skills_sync.mjs --check
+node ai_studio/core_harness/agent_surfaces/sync.mjs --check
 node ai_studio/core_harness/validation/doc_reference_check.mjs
-node ai_studio/core_harness/validation/pipeline_validate.mjs
 ```

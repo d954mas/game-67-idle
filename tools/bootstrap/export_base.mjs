@@ -30,13 +30,7 @@ if (dst === root) {
 
 const COPY = [
   ".codex/skills",
-  "tools/context_budget.mjs",
-  "tools/context_budget_config.mjs",
-  "tools/context_budget.test.mjs",
-  "ai_studio/core_harness/validation",
   "tools/skills_eval.mjs",
-  "tools/skills_sync.mjs",
-  "tools/skills_sync.test.mjs",
   "tools/ai_profile",
   "tools/requirements/ai-pipeline-full.txt",
   "tools/assets/job/new_art_job.mjs",
@@ -104,8 +98,6 @@ const COPY = [
   "tools/lib/mime.test.mjs",
   "tools/lib/tmp_exports.mjs",
   "tools/lib/tmp_exports.test.mjs",
-  "tools/lib/validate_flags.mjs",
-  "tools/lib/validate_flags.test.mjs",
   "tools/lib/asset_catalog.mjs",
   "tools/lib/asset_catalog.test.mjs",
   "tools/assets/intake/audit_tileable_texture.py",
@@ -231,12 +223,12 @@ for (const [name, content] of [
   }
 }
 
-const sync = spawnSync(process.execPath, [join(dst, "tools", "skills_sync.mjs")], {
+const sync = spawnSync(process.execPath, [join(dst, "ai_studio", "core_harness", "agent_surfaces", "sync.mjs")], {
   cwd: dst,
   stdio: "inherit",
 });
 if (sync.status !== 0) {
-  console.warn("warn: skills_sync failed in target; run it manually");
+  console.warn("warn: agent surface sync failed in target; run it manually");
 }
 
 console.log(`\nexported AI base to ${dst} (${basename(root)} -> ${basename(dst)})`);

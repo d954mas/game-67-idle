@@ -45,7 +45,7 @@ accepted.
 ## Maintenance
 
 - Canonical skill files live in `.codex/skills/`.
-- Run `node tools/skills_sync.mjs` after edits to regenerate the
+- Run `node ai_studio/core_harness/agent_surfaces/sync.mjs` after edits to regenerate the
   `.claude/skills` pointer.
 - Update the references instead of re-deriving commands when a working recipe
   changes.

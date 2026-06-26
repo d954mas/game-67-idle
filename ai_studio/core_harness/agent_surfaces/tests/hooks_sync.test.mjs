@@ -1,4 +1,4 @@
-// Tests for tools/hooks_sync.mjs: the generator must reproduce the committed
+// Tests for hooks_sync.mjs: the generator must reproduce the committed
 // Codex + Claude config files byte-exact (so it is provably the single source
 // of truth), preserve Claude-only keys, and keep the two matcher vocabularies
 // distinct.
@@ -9,9 +9,9 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { generate, buildHooks, TOOLS } from "./hooks_sync.mjs";
+import { generate, buildHooks, TOOLS } from "../hooks_sync.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 
 test("generator reproduces .codex/hooks.json byte-exact", () => {
   const committed = readFileSync(resolve(root, ".codex/hooks.json"), "utf8");

@@ -246,6 +246,13 @@
       box-shadow: 0 18px 44px rgba(15, 23, 42, .16);
       padding: 10px;
     }
+    .type-filter-body {
+      width: min(520px, calc(100vw - 32px));
+    }
+    .type-filter-body .toggle-control {
+      min-width: 118px;
+      justify-content: flex-start;
+    }
     .chip.ok { color: var(--ok); background: #edf9f0; border-color: #b8e4c2; }
     .chip.warn { color: var(--warn); background: #fff7e9; border-color: #efd1a0; }
     .chip.bad { color: var(--danger); background: #fff0f0; border-color: #efbdbd; }
@@ -1049,23 +1056,6 @@
       background: rgba(248, 250, 252, .96);
       cursor: default;
     }
-    .drill-graph-node.hidden-default {
-      border-style: dashed;
-      background: #fbfcfe;
-    }
-    .drill-graph-node.hidden-default .drill-node-title::after {
-      content: "hidden";
-      display: inline-flex;
-      align-items: center;
-      min-height: 18px;
-      border: 1px solid #d8e1ee;
-      border-radius: 999px;
-      color: #64748b;
-      background: #f8fafc;
-      padding: 0 6px;
-      font-size: 10px;
-      font-weight: 700;
-    }
     .drill-graph-node.desc-open {
       width: 340px;
       z-index: 20;
@@ -1373,11 +1363,10 @@
           </div>
           <div class="graph-controls">
             <input id="search" type="search" placeholder="Поиск по модулю, source, skill, utility, risk">
-            <label class="toggle-control" title="Show nodes marked hiddenByDefault in ai_studio/tree.json">
-              <input id="showHiddenNodes" type="checkbox">
-              Show hidden
-            </label>
-            <span class="chip info" id="hiddenNodeCount">0 hidden</span>
+            <details class="advanced-controls type-filter-controls">
+              <summary id="kindFilterSummary">Types</summary>
+              <div class="advanced-controls-body type-filter-body" id="kindFilterControls" aria-label="Node type filters"></div>
+            </details>
             <button id="resetBtn" type="button">Reset layout</button>
             <button id="fitBtn" type="button" class="secondary">Fit start</button>
             <details class="advanced-controls">
@@ -1447,21 +1436,32 @@
       module: { label: "Module", color: "#2563eb" },
       group: { label: "Group", color: "#7c3aed" },
       section: { label: "Group", color: "#7c3aed" },
+      shell: { label: "Shell", color: "#0f766e" },
       folder: { label: "Folder", color: "#0891b2" },
       dir: { label: "Folder", color: "#0891b2" },
       doc: { label: "Doc", color: "#15803d" },
       tool: { label: "Tool", color: "#b45309" },
+      surface: { label: "Surface", color: "#0284c7" },
+      server: { label: "Server", color: "#0d9488" },
+      "ui-component": { label: "UI", color: "#475569" },
       skill: { label: "Skill", color: "#c026d3" },
+      validation: { label: "Validation", color: "#b91c1c" },
+      test: { label: "Test", color: "#64748b" },
       contract: { label: "Contract", color: "#b91c1c" },
       backlog: { label: "Backlog", color: "#64748b" },
       item: { label: "Item", color: "#475569" }
     };
-    const typeLegendItems = ["module", "group", "doc", "tool", "skill", "dir", "contract", "backlog"];
+    const typeLegendItems = ["module", "shell", "group", "doc", "tool", "surface", "server", "ui-component", "skill", "validation", "test", "backlog"];
+    const defaultHiddenKinds = new Set(["test", "validation"]);
     function normalizedKind(kind) {
       const value = String(kind || "item").toLowerCase();
       if (kindPalette[value]) return value;
+      if (value.includes("validation") || value.includes("validator")) return "validation";
+      if (value.includes("test")) return "test";
       if (value.includes("doc")) return "doc";
       if (value.includes("tool")) return "tool";
+      if (value.includes("surface")) return "surface";
+      if (value.includes("server")) return "server";
       if (value.includes("skill")) return "skill";
       if (value.includes("dir") || value.includes("folder")) return "dir";
       return "item";
@@ -1486,8 +1486,6 @@
         href: node.href || (node.path ? repoHref(node.path) : ""),
         role: node.role || "",
         tags: node.tags || [],
-        hiddenByDefault: Boolean(node.hiddenByDefault || node.hidden),
-        hiddenReason: node.hiddenReason || "",
         moduleId: node.moduleId || "",
         groupId: node.groupId || "",
         item: node.item || null,
@@ -1554,6 +1552,9 @@
       if (kind === "tool") return "Tools";
       if (kind === "surface") return "Surfaces";
       if (kind === "server") return "Servers";
+      if (kind === "ui-component") return "UI";
+      if (kind === "validation") return "Validation";
+      if (kind === "test") return "Tests";
       if (kind === "group" || kind === "dir") return "Groups";
       if (kind === "backlog") return "Backlog";
       return "Items";
@@ -1581,7 +1582,7 @@
           title: groupTitleFor(kind),
           description: "Mapped " + groupTitleFor(kind).toLowerCase() + " owned by " + defaultTitle(moduleNode) + ".",
           color: kindColor(kind),
-          icon: kind === "tool" || kind === "server" ? "tool" : kind === "skill" ? "skill" : kind === "surface" ? "window" : "doc",
+          icon: kind === "tool" || kind === "server" ? "tool" : kind === "skill" ? "skill" : kind === "surface" ? "window" : kind === "validation" ? "shield" : kind === "test" ? "sync" : "doc",
           tags: [kind],
           items
         }));
@@ -1612,7 +1613,7 @@
       const refactorGroups = buildRefactorGroupsFromTree(topNodes);
       const allItems = Object.values(refactorGroups).flatMap((groups) => groups.flatMap((group) => group.items));
       const markdownDocs = allItems.filter((item) => item.kind === "doc" || item.kind === "skill" || /\.md$/i.test(item.path));
-      const tools = allItems.filter((item) => ["tool", "server", "surface"].includes(item.kind) || /\.(mjs|js|py|ps1)$/i.test(item.path));
+      const tools = allItems.filter((item) => ["tool", "server", "surface", "validation"].includes(item.kind) || (item.kind !== "test" && /\.(mjs|js|py|ps1)$/i.test(item.path)));
       const moduleEdges = [];
       if (modules.some((m) => m.id === "studio-shell")) {
         for (const m of modules) {
@@ -1679,8 +1680,8 @@
     const moduleById = new Map(modules.map((m) => [m.id, m]));
     const edgeData = data.moduleEdges.map((e, index) => ({ id: "e" + index, from: e[0], to: e[1], label: e[2], description: e[3] }));
     const search = document.getElementById("search");
-    const showHiddenNodes = document.getElementById("showHiddenNodes");
-    const hiddenNodeCount = document.getElementById("hiddenNodeCount");
+    const kindFilterControls = document.getElementById("kindFilterControls");
+    const kindFilterSummary = document.getElementById("kindFilterSummary");
     const moduleFilter = document.getElementById("moduleFilter");
     const focusMode = document.getElementById("focusMode");
     const graphLayer = document.getElementById("graphLayer");
@@ -1715,6 +1716,7 @@
     const edgeEls = new Map();
     const labelEls = new Map();
     const layoutStorageKey = "ai_studio.architecture_map.layout.v1";
+    let hiddenKinds = new Set(defaultHiddenKinds);
 
     function readSavedLayout() {
       try {
@@ -1868,7 +1870,7 @@
       const boardWidth = board.clientWidth || board.getBoundingClientRect().width;
       const boardHeight = board.clientHeight || board.getBoundingClientRect().height;
       if (!boardWidth || !boardHeight) return;
-      const fitKey = explorerView + "::" + Math.round(boardWidth) + "x" + Math.round(boardHeight) + "::" + search.value + "::" + Boolean(showHiddenNodes && showHiddenNodes.checked);
+      const fitKey = explorerView + "::" + Math.round(boardWidth) + "x" + Math.round(boardHeight) + "::" + search.value + "::" + [...hiddenKinds].sort().join(",");
       if (!force && fitKey === drillFitKey) {
         applyDrillTransform();
         return;
@@ -1965,11 +1967,37 @@
           return '<span class="type-chip" style="--c:' + esc(meta.color) + '"><span class="swatch"></span>' + esc(meta.label) + '</span>';
         }).join("");
       }
+      renderKindFilterControls();
       const moduleLegend = document.getElementById("legend");
       if (moduleLegend) {
         moduleLegend.innerHTML = modules.map((m) => '<span class="chip"><span class="swatch" style="--c:' + esc(m.color) + '"></span>' + esc(m.title) + '</span>').join("");
       }
       moduleFilter.innerHTML = '<option value="">Все модули</option>' + modules.map((m) => '<option value="' + esc(m.id) + '">' + esc(m.title) + '</option>').join("");
+    }
+    function renderKindFilterControls() {
+      if (!kindFilterControls) return;
+      kindFilterControls.innerHTML = typeLegendItems.map((kind) => {
+        const meta = kindMeta(kind);
+        const checked = hiddenKinds.has(kind) ? "" : " checked";
+        return '<label class="toggle-control" style="--c:' + esc(meta.color) + '">' +
+          '<input type="checkbox" data-kind-filter="' + esc(kind) + '"' + checked + '>' +
+          '<span class="swatch" style="--c:' + esc(meta.color) + '"></span>' +
+          esc(meta.label) +
+        '</label>';
+      }).join("");
+      updateKindFilterSummary();
+    }
+    function countFilteredKindNodes(node) {
+      if (!node) return 0;
+      const own = node.id !== "studio" && hiddenKinds.has(normalizedKind(node.kind)) ? 1 : 0;
+      return own + (node.children || []).reduce((sum, child) => sum + countFilteredKindNodes(child), 0);
+    }
+    function updateKindFilterSummary() {
+      if (!kindFilterSummary) return;
+      const hiddenLabels = [...hiddenKinds].map((kind) => kindMeta(kind).label);
+      const count = countFilteredKindNodes(studioTreeSource);
+      kindFilterSummary.textContent = hiddenKinds.size ? "Types: " + hiddenLabels.join(", ") + " off" : "Types: all";
+      kindFilterSummary.title = count ? count + " nodes hidden by type filter" : "All node types visible";
     }
     function moduleNodeHtml(m) {
       const inv = inventory(m.id);
@@ -2139,32 +2167,22 @@
     }
     function cloneStudioTree() {
       const root = JSON.parse(JSON.stringify(studioTreeSource));
-      return filterHiddenTree(root, showHiddenNodes && showHiddenNodes.checked) || root;
+      return filterTreeByKind(root) || root;
     }
     function buildExplorerRoot() {
       return cloneStudioTree();
     }
-    function isHiddenNode(node) {
-      return Boolean(node && node.hiddenByDefault);
+    function isFilteredKindNode(node) {
+      return Boolean(node && hiddenKinds.has(normalizedKind(node.kind)));
     }
-    function filterHiddenTree(node, includeHidden) {
+    function filterTreeByKind(node) {
       if (!node) return null;
-      if (!includeHidden && node.id !== "studio" && isHiddenNode(node)) return null;
+      if (node.id !== "studio" && isFilteredKindNode(node)) return null;
       const next = Object.assign({}, node);
       next.children = (node.children || [])
-        .map((child) => filterHiddenTree(child, includeHidden))
+        .map((child) => filterTreeByKind(child))
         .filter(Boolean);
       return next;
-    }
-    function countHiddenNodes(node) {
-      if (!node) return 0;
-      return (isHiddenNode(node) ? 1 : 0) + (node.children || []).reduce((sum, child) => sum + countHiddenNodes(child), 0);
-    }
-    function updateHiddenNodeCount() {
-      if (!hiddenNodeCount) return;
-      const count = countHiddenNodes(studioTreeSource);
-      hiddenNodeCount.textContent = count + " hidden";
-      hiddenNodeCount.classList.toggle("warn", count > 0 && !(showHiddenNodes && showHiddenNodes.checked));
     }
     function findExplorerNode(node, id) {
       if (!node) return null;
@@ -2188,8 +2206,11 @@
       if (node.kind === "module") return icon("group");
       if (node.kind === "section") return icon("route");
       if (node.kind === "tool") return icon("tool");
+      if (node.kind === "server") return icon("tool");
+      if (node.kind === "surface" || node.kind === "ui-component") return icon("group");
       if (node.kind === "skill") return icon("agent");
-      if (node.kind === "contract") return icon("shield");
+      if (node.kind === "contract" || node.kind === "validation") return icon("shield");
+      if (node.kind === "test") return icon("sync");
       if (node.kind === "doc" || node.kind === "target" || node.kind === "current") return icon("doc");
       return icon("group");
     }
@@ -2380,14 +2401,13 @@
     }
     function renderDrillGraphNode(node, x, y, role) {
       const hasChildren = node.children && node.children.length;
-      const className = "drill-graph-node" + (role === "center" ? " center" : "") + (!hasChildren && role !== "center" ? " leaf" : "") + (node.hiddenByDefault ? " hidden-default" : "") + drillTitleFitClass(node.title);
+      const className = "drill-graph-node" + (role === "center" ? " center" : "") + (!hasChildren && role !== "center" ? " leaf" : "") + drillTitleFitClass(node.title);
       const canOpen = role !== "center" && hasChildren;
       const tag = "div";
       const cardAttr = canOpen ? ' role="button" tabindex="0" data-explorer-card="' + esc(node.id) + '"' : "";
-      const titleAttr = node.hiddenReason ? ' title="' + esc(node.hiddenReason) + '"' : "";
       const leafActions = !hasChildren && role !== "center" ? renderLeafActions(node) : "";
       const descToggle = renderDescriptionToggle(node, role, hasChildren);
-      return '<' + tag + ' class="' + className + '" style="--c:' + esc(node.color) + '; left:' + Math.round(x) + 'px; top:' + Math.round(y) + 'px" data-drill-id="' + esc(node.id) + '"' + titleAttr + cardAttr + '>' +
+      return '<' + tag + ' class="' + className + '" style="--c:' + esc(node.color) + '; left:' + Math.round(x) + 'px; top:' + Math.round(y) + 'px" data-drill-id="' + esc(node.id) + '"' + cardAttr + '>' +
         '<div class="drill-node-top">' +
           '<div class="drill-node-title">' + explorerNodeIcon(node) + '<span>' + esc(node.title) + '</span></div>' +
         '</div>' +
@@ -2823,7 +2843,10 @@
     }
     function itemIcon(kind) {
       if (kind === "tool") return icon("tool");
-      if (kind === "contract") return icon("shield");
+      if (kind === "server") return icon("tool");
+      if (kind === "skill") return icon("agent");
+      if (kind === "contract" || kind === "validation") return icon("shield");
+      if (kind === "test") return icon("sync");
       return icon("doc");
     }
     function renderRefactorItem(item) {
@@ -3081,7 +3104,7 @@
       renderDetail();
       renderQueue();
       renderExplorer();
-      updateHiddenNodeCount();
+      updateKindFilterSummary();
     }
     document.getElementById("resetBtn").addEventListener("click", () => {
       clearSavedLayout();
@@ -3092,7 +3115,8 @@
       syncDrillToSelected("");
       moduleFilter.value = "";
       search.value = "";
-      if (showHiddenNodes) showHiddenNodes.checked = false;
+      hiddenKinds = new Set(defaultHiddenKinds);
+      renderKindFilterControls();
       focusMode.value = "local";
       expanded.clear();
       explorerHistory.length = 0;
@@ -3137,13 +3161,16 @@
       }
     });
     search.addEventListener("input", updateAll);
-    if (showHiddenNodes) {
-      showHiddenNodes.addEventListener("change", () => {
-        if (!showHiddenNodes.checked) {
-          const root = buildExplorerRoot();
-          if (!findExplorerNode(root, explorerSelected)) explorerSelected = "studio";
-          if (!findExplorerNode(root, explorerView)) explorerView = "studio";
-        }
+    if (kindFilterControls) {
+      kindFilterControls.addEventListener("change", (event) => {
+        const input = event.target.closest("[data-kind-filter]");
+        if (!input) return;
+        const kind = input.dataset.kindFilter;
+        if (input.checked) hiddenKinds.delete(kind);
+        else hiddenKinds.add(kind);
+        const root = buildExplorerRoot();
+        if (!findExplorerNode(root, explorerSelected)) explorerSelected = "studio";
+        if (!findExplorerNode(root, explorerView)) explorerView = "studio";
         updateAll();
       });
     }

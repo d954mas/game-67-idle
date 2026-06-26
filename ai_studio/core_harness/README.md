@@ -42,16 +42,28 @@ Reviewed orchestration file:
 
 - `ai_studio/core_harness/workflow/orchestration/README.md`
 
+## Agent Surfaces Module
+
+Agent Surfaces owns generated compatibility files for Codex and Claude. Canonical
+sources stay in one place; generated files are checked or regenerated from them.
+
+Reviewed agent surface files:
+
+- `ai_studio/core_harness/agent_surfaces/README.md`
+- `ai_studio/core_harness/agent_surfaces/sync.mjs`
+- `ai_studio/core_harness/agent_surfaces/skills_sync.mjs`
+- `ai_studio/core_harness/agent_surfaces/hooks_sync.mjs`
+
 ## Validation Module
 
-Core Harness validation owns lightweight checks for agent-facing docs and route
-integrity. Product and game acceptance gates stay outside this module.
+Core Harness validation owns only fast mechanical checks for agent-facing docs
+and routes. It does not run module test suites or validate the whole pipeline.
 
 Reviewed validation files:
 
 - `ai_studio/core_harness/validation/README.md`
 - `ai_studio/core_harness/validation/doc_reference_check.mjs`
-- `ai_studio/core_harness/validation/pipeline_validate.mjs`
+- `ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs`
 
 ## Tree Shape
 

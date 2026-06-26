@@ -147,17 +147,34 @@ test("doc reference check rejects retired deep reflection facade command", () =>
   }
 });
 
-test("doc reference check allows direct pipeline validator command in docs", () => {
+test("doc reference check allows direct core doc reference command in docs", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
     writeFileSync(
       join(dir, "ai_studio", "README.md"),
-      "Old command:\n\n```powershell\nnode ai_studio/core_harness/validation/pipeline_validate.mjs --review\n```\n",
+      "Old command:\n\n```powershell\nnode ai_studio/core_harness/validation/doc_reference_check.mjs --review\n```\n",
       "utf8",
     );
     const result = run(["--root", dir]);
     assert.equal(result.status, 0, result.stderr);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("doc reference check rejects retired global pipeline validator command", () => {
+  const dir = tempDir();
+  try {
+    writeMinimalRoot(dir);
+    writeFileSync(
+      join(dir, "ai_studio", "README.md"),
+      "Old command:\n\n```powershell\nnode ai_studio/validation/pipeline_validate.mjs --full\n```\n",
+      "utf8",
+    );
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /retired command `node ai_studio\/validation\/pipeline_validate\.mjs`/);
   } finally {
     cleanup(dir);
   }

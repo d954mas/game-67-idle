@@ -39,10 +39,10 @@ exist locally at build time — no builder scan change required.
 - [x] `.gitignore` ignores `assets/restricted/`
 - [x] Publishability predicate defined (publish -> redistribution_allowed -> license-string; unknown = NOT publishable) — `tools/assets/restricted.mjs`
 - [x] `pull.mjs` routes non-publishable binaries+previews to `assets/restricted/`, writes `publish:` into the committed catalog record
-- [x] Leak guard `tools/assets/audit/restricted_assets_guard.mjs` (+ 9 tests) wired into `pipeline_validate.mjs`; passes on current tree (60 paths), fails on a planted paid leak
+- [x] Leak guard `tools/assets/audit/restricted_assets_guard.mjs` (+ tests) runs as the asset module validation path; passes on current tree, fails on a planted paid leak
 - [x] Manual paid intake (no download URL) + `accept_incoming_asset.mjs` supports `--publish false` and paid license
 - [x] Paid-pack lifecycle documented (NatureGradientPack.zip worked example) in game-asset-pipeline `references/restricted-paid-assets.md` + game-asset-prep pointer
-- [x] AGENTS.md invariant + skill docs updated; my changes pass guard/tests/taskboard/skills/doc-ref/context-budget (`node ai_studio/core_harness/validation/pipeline_validate.mjs` has PRE-EXISTING reds unrelated to this task — see Log)
+- [x] AGENTS.md invariant + skill docs updated; my changes pass focused guard/tests/taskboard/skills/doc-ref checks
 
 ## Open questions
 
@@ -53,7 +53,7 @@ exist locally at build time — no builder scan change required.
 
 - orchestration: used
   objective: let the project use paid/licensed assets without leaking binaries into the open repo — gitignore split + publishability predicate + leak guard + manual paid intake + parse skill + docs
-  allowed files: .gitignore, ai_studio/assets/asset_viewer/pull.mjs, tools/assets/restricted.mjs, tools/assets/audit/**, tools/assets/intake/**, ai_studio/core_harness/validation/pipeline_validate.mjs, AGENTS.md, docs/ai-pipeline/**, .codex/skills/**, tasks/active/T0151-licensed-paid-asset-gitignore-split-leak-guard-m.md
+  allowed files: .gitignore, ai_studio/assets/asset_viewer/pull.mjs, tools/assets/restricted.mjs, tools/assets/audit/**, tools/assets/intake/**, AGENTS.md, docs/ai-pipeline/**, .codex/skills/**, tasks/active/T0151-licensed-paid-asset-gitignore-split-leak-guard-m.md
   tool-use guard: verify exact repo paths with rg --files/Test-Path before reads; use Select-Object -Skip/-First for line windows; keep evidence commands read-only
   expected output: committed metadata-only catalogs + gitignored assets/restricted/ for paid binaries; guard green on tree and red on a planted leak; intake + skill for CGTrader packs; AGENTS invariant + doc
   evidence command: node tools/assets/audit/restricted_assets_guard.mjs && node --test tools/assets/audit/restricted_assets_guard.test.mjs && node ai_studio/taskboard/cli.mjs validate
@@ -67,15 +67,14 @@ exist locally at build time — no builder scan change required.
   Phase 3 parse skill + docs.
 - 2026-06-24 Implemented all 3 phases. Phase 1: `.gitignore` + `tools/assets/restricted.mjs`
   predicate + `pull.mjs` routing + guard (`tools/assets/audit/restricted_assets_guard.mjs`,
-  9 tests) wired into `pipeline_validate.mjs`. Proven: guard green on tree (60 paths),
+  tests. Proven: guard green on tree (60 paths),
   red on a planted paid binary AND a force-added `assets/restricted/` file; planted
   state reverted clean. Phase 2: `download_source_asset.mjs --manual/--source-page-url/
   --publish` + `accept_incoming_asset.mjs --publish`; end-to-end on the real
   NatureGradientPack.zip into a tmp library -> intake stored product page only (no
   download link), catalog `publish:false`, pull routed the binary to `restricted/` and
   committed only the `.md`. Phase 3: reference `restricted-paid-assets.md` + SKILL/AGENTS
-  pointers; skills re-synced. Green: guard+tests, taskboard validate, skills_sync --check,
-  skills_eval, doc_reference_check, context_budget, pipeline_validate.test (17), ai.test (30).
-  PRE-EXISTING reds in full `node ai_studio/core_harness/validation/pipeline_validate.mjs` (NOT this task, unchanged vs HEAD):
-  `docs/ai-pipeline/quality-validation.md` 3124>2600 export budget; plus T0146's
-  intentionally-red material floor guard. Work uncommitted on master pending lead review.
+  pointers; skills re-synced. Green: guard+tests, taskboard validate, agent surface sync check,
+  skills_eval, doc_reference_check, and focused tests.
+  Broad pipeline validation runner was later removed in favor of module-owned
+  validators. Work uncommitted on master pending lead review.

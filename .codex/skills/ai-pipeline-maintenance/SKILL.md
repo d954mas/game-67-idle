@@ -28,8 +28,8 @@ Use for AI workflow/tooling changes, not ordinary playable game work.
 2. Pick one scope: hot docs, skill entrypoints, validators, profiling,
    taskboard, product gates, export, or post-review cleanup.
 3. Move repeated procedure behind a reference, skill, task rule, or tool.
-4. Put mandatory rules in validators/tests where practical, then run the
-   narrow proof and `node ai_studio/core_harness/validation/pipeline_validate.mjs`.
+4. Put mandatory rules in the owning module's validators/tests where practical,
+   then run the narrow proof for that module.
 
 ## Placement Rules
 
@@ -43,4 +43,4 @@ Use for AI workflow/tooling changes, not ordinary playable game work.
 
 - Do not mark broad pipeline work done from one green check.
 - Do not move project facts into reusable skills/knowledge.
-- After changing `.codex/skills`, run `node tools/skills_sync.mjs` or `--check`.
+- After changing `.codex/skills` or hook config, run `node ai_studio/core_harness/agent_surfaces/sync.mjs --check`.

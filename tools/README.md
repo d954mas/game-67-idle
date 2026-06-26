@@ -20,9 +20,9 @@ subcommands for exhaustive work.
 
 Copied by `tools/bootstrap/export_base.mjs`:
 
-- validators: `ai_studio/core_harness/validation/pipeline_validate.mjs`,
-  `tools/context_budget.mjs`, `ai_studio/core_harness/validation/doc_reference_check.mjs`,
-  `tools/skills_eval.mjs`, `tools/skills_sync.mjs`;
+- validators: `ai_studio/core_harness/validation/doc_reference_check.mjs`,
+  `tools/skills_eval.mjs`;
+- generated agent surfaces: `ai_studio/core_harness/agent_surfaces/`;
 - workflow state/profiling: `ai_studio/taskboard/`, `tools/ai_profile/`;
 - game startup/runtime proof: `tools/game_context/`, `tools/product_gate/`;
 - asset browser/review surface: `ai_studio/assets/asset_viewer/`;
@@ -61,13 +61,11 @@ manifests before final-art claims, and keep timing/debug data out of normal bloc
 
 Generated caches (`__pycache__/`, `*.pyc`) are ignored scratch.
 
-Validation:
+Validation is owned by modules:
 
 ```powershell
-node ai_studio/core_harness/validation/pipeline_validate.mjs
-node ai_studio/core_harness/validation/pipeline_validate.mjs --review
-node ai_studio/core_harness/validation/pipeline_validate.mjs --full
+node ai_studio/core_harness/validation/doc_reference_check.mjs
+node ai_studio/architecture_map/validate_map.mjs
+node ai_studio/taskboard/cli.mjs validate
+node --test tools/bootstrap/export_base.test.mjs
 ```
-
-Underlying: `ai_studio/core_harness/validation/pipeline_validate.mjs`. `--review` adds context/cap review;
-`--full` exports to `tmp/pipeline-validate-<stamp>/` and keeps newest 3.

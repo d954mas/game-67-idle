@@ -1,26 +1,18 @@
-// Canonical cross-harness HOOK config -> generates .codex/hooks.json (Codex
-// format) and the hooks block of .claude/settings.json (Claude format) from ONE
-// source. The single source of truth is HOOK_SOURCE below; both tool files are
-// generated, so they can never drift.
+// Generate Codex and Claude hook config from one canonical hook source.
 //
-//   node tools/hooks_sync.mjs            regenerate both files
-//   node tools/hooks_sync.mjs --check    report drift, write nothing, exit 1 on drift
+//   node ai_studio/core_harness/agent_surfaces/hooks_sync.mjs
+//   node ai_studio/core_harness/agent_surfaces/hooks_sync.mjs --check
 //
-// Why this exists: Codex and Claude use different matcher vocabularies (Codex
-// regex "(?i)(bash|shell|exec)" vs Claude "Bash"; Codex "(?i)spawn_agent" vs
-// Claude "Agent|Task") and tag each recorded event with the agent label
-// (codex|claude). Hand-maintaining the two files drifts. Declare the hooks once
-// here; the generator renders each tool's format. The Claude file is patched
-// SURGICALLY: only its `hooks` key is replaced, so `$comment`, permissions, env
-// and any other Claude-only settings are preserved.
+// Codex and Claude use different matcher vocabularies. Claude settings are
+// patched by replacing only the hooks key.
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isMain } from "./lib/cli.mjs";
+import { isMain } from "../../../tools/lib/cli.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = resolve(here, "..");
+const root = resolve(here, "../../..");
 
 // --- Canonical source: the hooks, tool-agnostic. -------------------------
 // Each event lists hook entries. `match` is a logical matcher key resolved per
@@ -125,14 +117,14 @@ export function syncAll({ check = false } = {}) {
 function main() {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
-    console.log("usage: node tools/hooks_sync.mjs [--check]");
+    console.log("usage: node ai_studio/core_harness/agent_surfaces/hooks_sync.mjs [--check]");
     process.exit(0);
   }
   const check = args.includes("--check");
   const drift = syncAll({ check });
   if (check) {
     if (drift.length) {
-      console.error(`hooks drift: ${drift.join(", ")} — run: node tools/hooks_sync.mjs`);
+      console.error(`hooks drift: ${drift.join(", ")} - run: node ai_studio/core_harness/agent_surfaces/hooks_sync.mjs`);
       process.exit(1);
     }
     console.log("hooks in sync (.codex/hooks.json + .claude/settings.json)");

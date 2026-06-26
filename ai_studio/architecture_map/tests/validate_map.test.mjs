@@ -77,7 +77,7 @@ test("mapped directories cover their child files", () => {
   assert.ok(!report.issues.unmappedInAiStudio.some((item) => item.path.endsWith("public/app.js")));
 });
 
-test("hidden-by-default nodes still map files", () => {
+test("test and validation nodes still map files", () => {
   const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
   mkdirSync(join(root, "ai_studio"), { recursive: true });
   write(
@@ -92,16 +92,22 @@ test("hidden-by-default nodes still map files", () => {
           { id: "tree", kind: "doc", path: "ai_studio/tree.json", description: "Map source." },
           {
             id: "sample-test",
-            kind: "tool",
+            kind: "test",
             path: "ai_studio/tests/sample.test.mjs",
-            description: "Test file hidden from the default graph view.",
-            hiddenByDefault: true,
+            description: "Test file filtered from the default graph view.",
+          },
+          {
+            id: "sample-validator",
+            kind: "validation",
+            path: "ai_studio/validation/sample_check.mjs",
+            description: "Validation file filtered from the default graph view.",
           },
         ],
       },
     }),
   );
   write(root, "ai_studio/tests/sample.test.mjs", "import test from 'node:test';");
+  write(root, "ai_studio/validation/sample_check.mjs", "console.log('validate');");
 
   const report = createValidationReport({
     repoRoot: root,
@@ -110,4 +116,5 @@ test("hidden-by-default nodes still map files", () => {
 
   assert.equal(report.summary.unmappedInAiStudio, 0);
   assert.ok(!report.issues.unmappedInAiStudio.some((item) => item.path.endsWith("sample.test.mjs")));
+  assert.ok(!report.issues.unmappedInAiStudio.some((item) => item.path.endsWith("sample_check.mjs")));
 });
