@@ -21,7 +21,7 @@ subcommands for exhaustive work.
 Copied by `tools/bootstrap/export_base.mjs`:
 
 - validators: `ai_studio/core_harness/validation/doc_reference_check.mjs`,
-  `tools/skills_eval.mjs`;
+  module-owned tests;
 - generated agent surfaces: `ai_studio/core_harness/agent_surfaces/`;
 - workflow state/profiling: `ai_studio/taskboard/`, `ai_studio/core_harness/profiling/`;
 - game startup/runtime proof: `tools/game_context/`, `tools/product_gate/`;

@@ -30,7 +30,6 @@ if (dst === root) {
 
 const COPY = [
   ".codex/skills",
-  "tools/skills_eval.mjs",
   "ai_studio/core_harness/profiling",
   "tools/requirements/ai-pipeline-full.txt",
   "tools/assets/job/new_art_job.mjs",

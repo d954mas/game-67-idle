@@ -69,7 +69,7 @@ function pick(obj, ...keys) {
 
 function inferCategory(cmd) {
   const c = cmd.toLowerCase();
-  if (/\b(node --test|--test |unittest|cmake --build|pipeline_validate|skills_eval|taskboard.*validate|pytest|py -3\.\d+ -m unittest)\b/.test(c)) return "validation";
+  if (/\b(node --test|--test |unittest|cmake --build|pipeline_validate|taskboard.*validate|pytest|py -3\.\d+ -m unittest)\b/.test(c)) return "validation";
   if (/\bgit (commit|add|push|status|log|diff)\b/.test(c)) return "task_status";
   if (/\b(cmake|ninja|gcc|clang|build)\b/.test(c)) return "implementation";
   if (/\b(grep|find|ls|cat|rg|glob)\b/.test(c)) return "research";

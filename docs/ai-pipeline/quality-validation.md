@@ -54,7 +54,8 @@ counts total FAILs.
 ## Validation Defaults
 
 - Task/status docs: `node ai_studio/taskboard/cli.mjs validate`
-- Skill/process changes: `node tools/skills_eval.mjs`
+- Skill/process changes: use the matching skill owner or `skill-creator` /
+  `agents-best-practices` review when quality needs human judgment.
 - Product gate changes: `node --test tools/product_gate/test.mjs`
 - Taskboard changes: `node --test ai_studio/taskboard/tests/taskboard.test.mjs`
 - Profile changes:

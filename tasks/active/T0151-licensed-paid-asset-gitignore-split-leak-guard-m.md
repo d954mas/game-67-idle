@@ -75,6 +75,6 @@ exist locally at build time — no builder scan change required.
   download link), catalog `publish:false`, pull routed the binary to `restricted/` and
   committed only the `.md`. Phase 3: reference `restricted-paid-assets.md` + SKILL/AGENTS
   pointers; skills re-synced. Green: guard+tests, taskboard validate, agent surface sync check,
-  skills_eval, doc_reference_check, and focused tests.
+  doc_reference_check, and focused tests.
   Broad pipeline validation runner was later removed in favor of module-owned
   validators. Work uncommitted on master pending lead review.

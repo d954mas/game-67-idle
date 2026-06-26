@@ -171,7 +171,7 @@ static const char *category_for(const char *cmd) {
     lower_copy(lower, sizeof(lower), cmd);
     if (strstr(lower, "node --test") || strstr(lower, "--test ") || strstr(lower, "unittest") ||
         strstr(lower, "cmake --build") || strstr(lower, "pipeline_validate") ||
-        strstr(lower, "skills_eval") || strstr(lower, "pytest")) {
+        strstr(lower, "pytest")) {
         return "validation";
     }
     if (strstr(lower, "git commit") || strstr(lower, "git add") || strstr(lower, "git push") ||
