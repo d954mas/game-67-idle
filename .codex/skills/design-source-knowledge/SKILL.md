@@ -20,7 +20,8 @@ Operate design knowledge as: source -> note -> conclusion -> index/log -> cited 
 
 ## Default Workflow
 
-1. Read `AGENTS.md` and the relevant `gamedesign/` README/index.
+1. Use the already-loaded root rules and read the relevant `gamedesign/`
+   README/index.
 2. Route before editing: source shelf, reusable knowledge, project wiki,
    `tasks/`, or `tmp/`.
 3. Add source notes before conclusions when external evidence matters.

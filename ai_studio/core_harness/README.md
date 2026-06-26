@@ -32,15 +32,15 @@ Reviewed workflow file:
 
 - `ai_studio/core_harness/workflow/README.md`
 
-## Orchestration Module
+## Workflow Orchestration
 
-Orchestration is separate from Workflow and Taskboard. It exists to trigger
-early subagent use for broad read-heavy work, with a simple Task / Scope /
-Return / Stop packet.
+Orchestration is a child rule inside Workflow, not a sibling module. It exists
+to trigger early subagent use for broad read-heavy work, with a simple
+Task / Scope / Return / Stop packet.
 
 Reviewed orchestration file:
 
-- `ai_studio/core_harness/orchestration/README.md`
+- `ai_studio/core_harness/workflow/orchestration/README.md`
 
 ## Validation Module
 

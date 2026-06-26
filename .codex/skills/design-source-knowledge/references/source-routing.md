@@ -5,7 +5,7 @@ game-design research sources and reusable knowledge.
 
 ## Load First
 
-1. Read `AGENTS.md`.
+1. Use the already-loaded root rules.
 2. Read `gamedesign/README.md`, `gamedesign/knowledge/README.md`,
    `gamedesign/sources/README.md`, and `gamedesign/knowledge/index.md`.
 3. If references guide gameplay, UI, economy, balance, or final art, also read

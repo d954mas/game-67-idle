@@ -13,8 +13,8 @@ public surface, internals, and validation path.
   unmapped files.
 - `assets/`: reviewed asset-facing modules, starting with Asset Viewer.
 - `core_harness/`: reviewed core routing and agent harness docs.
-- `core_harness/orchestration/`: reviewed early split rule for broad read-heavy
-  subagent work.
+- `core_harness/workflow/orchestration/`: reviewed early split rule for broad
+  read-heavy subagent work.
 - `taskboard/`: reviewed durable task state module.
 - `Not Refactored`: map node for everything not reviewed yet.
 
@@ -30,8 +30,7 @@ Load only the route that matches the current task:
 - Agent workflow, context policy, Markdown shape, or multi-agent use:
   `ai_studio/core_harness/workflow/README.md`.
 - Broad read-heavy work that should be split before loading too much context:
-  `ai_studio/core_harness/orchestration/README.md` and
-  `node ai_studio/core_harness/orchestration/cli.mjs --help`.
+  `ai_studio/core_harness/workflow/orchestration/README.md`.
 - Stale Markdown/tool references and retired command routes:
   `node ai_studio/core_harness/validation/doc_reference_check.mjs`.
 - Done criteria, validation routing, product gates, or repeated failure stops:
@@ -43,7 +42,7 @@ Load only the route that matches the current task:
 - AI Studio architecture and refactor tree: `ai_studio/tree.json` and
   `ai_studio/architecture_map/README.md`.
 - AI Studio browser entry point:
-  `node ai_studio/studio_shell/server.mjs`.
+  `node ai_studio/studio_shell/start_site.mjs --open`.
 - Architecture map validation report:
   `node ai_studio/architecture_map/validate_map.mjs`.
 
@@ -64,7 +63,7 @@ open it through the local server so it can fetch JSON data.
 
 ```powershell
 node ai_studio/architecture_map/validate_map.mjs
-node ai_studio/studio_shell/server.mjs
+node ai_studio/studio_shell/start_site.mjs --open
 ```
 
 Open `http://127.0.0.1:8765/`. The map page reads `tree.json` and

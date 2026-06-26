@@ -31,7 +31,7 @@ skill, folder, contract, and backlog each have a stable color in the page legend
 
 ```powershell
 node ai_studio/architecture_map/validate_map.mjs
-node ai_studio/studio_shell/server.mjs
+node ai_studio/studio_shell/start_site.mjs --open
 ```
 
 Default URL:

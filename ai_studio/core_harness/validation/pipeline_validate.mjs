@@ -35,7 +35,7 @@ Modes:
   --quick    core workflow validation only (default; use this after narrow edits)
   --full     quick checks plus deep asset/runtime validation + a minimal export
              self-check (reserve for portable-base/export/runtime/release gates)
-  --review   add review-stage gates, including strict context budgets
+  --review   add advisory review-stage gates for docs and skill presence
   --dry-run  print the selected commands without running them
   --with-assets run the product-gate suite even when GAME_PROJECT has no active game
              concept (auto-on under --full or once a game is active)
@@ -289,9 +289,7 @@ if (fullMode && existsSync(exportDir)) {
 }
 
 // Quick core workflow checks. These are safe as the default validation path
-// after narrow pipeline/tooling edits. Context budgets are review-only here:
-// the budget tool itself stays strict, but normal validation should not block
-// implementation just because hot docs need a future compression pass.
+// after narrow pipeline/tooling edits.
 run("taskboard summary", ["ai_studio/taskboard/cli.mjs", "summary"]);
 run("config sync check", ["tools/sync.mjs", "--check"]);
 run("skills sync tests", ["--test", "tools/skills_sync.test.mjs"]);
@@ -309,15 +307,12 @@ run("art contract lib tests", ["--test", "tools/product_gate/lib/art_contract.te
 // Prose-auditors are advisory: skills_eval is a presence-lint (its own header
 // says it is not a quality eval) and doc_reference_check is link-rot — neither
 // judges output, so they must not block a code/doc edit. Run them under --review
-// (like context budgets). The real generated-pointer drift check (config sync
-// check, above) stays blocking. [REFACTOR_PLAN Phase 1 #1]
+// The real generated-pointer drift check (config sync check, above) stays blocking.
 if (reviewMode) {
   run("skill presence check", ["tools/skills_eval.mjs"]);
   run("doc reference check", ["ai_studio/core_harness/validation/doc_reference_check.mjs"]);
-  run("context budget review", ["tools/context_budget.mjs", "--review"]);
 }
 run("pipeline validation tests", ["--test", "ai_studio/core_harness/validation/tests/pipeline_validate.test.mjs"]);
-run("context budget tests", ["--test", "tools/context_budget.test.mjs"]);
 run("doc reference tests", ["--test", "ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs"]);
 run("bootstrap export tests", ["--test", "tools/bootstrap/export_base.test.mjs"]);
 run("repeated product gate failure guard", ["tools/product_gate/repeated_failure_guard.mjs"]);

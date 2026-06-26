@@ -43,7 +43,7 @@ test("parseDoc tolerates files without frontmatter", () => {
 
 test("slugify handles non-ascii and empty titles", () => {
   assert.equal(slugify("Camp Rest Action!"), "camp-rest-action");
-  assert.equal(slugify("Р ВР Т‘Р ВµРЎРЏ Р В±Р ВµР В· Р В»Р В°РЎвЂљР С‘Р Р…Р С‘РЎвЂ РЎвЂ№"), "item");
+  assert.equal(slugify("\u0418\u0434\u0435\u044f \u0431\u0435\u0437 \u043b\u0430\u0442\u0438\u043d\u0438\u0446\u044b"), "item");
 });
 
 test("createTask allocates sequential ids and createEpic separate sequence", (t) => {
@@ -245,12 +245,12 @@ Detailed body.
   assert.match(showPayload.doc.body, /Detailed body/);
 });
 
-test("taskboard cli does not expose orchestration commands", () => {
-  const result = spawnSync(process.execPath, [cliPath, "orchestration-template"], { encoding: "utf8" });
+test("taskboard cli rejects unrelated core commands", () => {
+  const result = spawnSync(process.execPath, [cliPath, "workflow-run"], { encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|new\|set\|validate>/);
-  assert.doesNotMatch(result.stdout, /subagent-packet-template/);
+  assert.doesNotMatch(result.stdout, /workflow-run/);
 });
 
 test("updateDoc patches fields, keeps id/created, bumps updated", (t) => {

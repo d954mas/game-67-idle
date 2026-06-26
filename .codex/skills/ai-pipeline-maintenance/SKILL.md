@@ -1,6 +1,6 @@
 ---
 name: ai-pipeline-maintenance
-description: "Use when maintaining or improving the reusable AI development pipeline in this repo: reducing hot Markdown/context, splitting agent docs or skills, removing duplicated rules, adding/updating validators, tuning context budgets, fixing skills sync/eval, taskboard/profiling/product-gate workflow, portable export, or implementing post-review pipeline improvements."
+description: "Use when maintaining or improving the reusable AI development pipeline in this repo: reducing hot Markdown/context, splitting agent docs or skills, removing duplicated rules, adding/updating validators, fixing skills sync/eval, taskboard/profiling/product-gate workflow, portable export, or implementing post-review pipeline improvements."
 ---
 
 # AI Pipeline Maintenance
@@ -15,17 +15,16 @@ Use for AI workflow/tooling changes, not ordinary playable game work.
   Keep Hot Docs Thin decisions.
 - `ai_studio/README.md`: portable AI Studio workflow and routing map.
 - `ai_studio/core_harness/workflow/README.md`: context and work-loop routing.
-- `ai_studio/core_harness/orchestration/README.md`: early split rule for broad
-  read-heavy work.
+- `ai_studio/core_harness/workflow/orchestration/README.md`: early split rule
+  for broad read-heavy work.
 - `docs/ai-pipeline/quality-validation.md`: gates and repeated strict/product
   failure policy.
 - `docs/ai-pipeline/profiling-reuse.md`: profiling, closeout, assets, export.
 
 ## Default Workflow
 
-1. Inspect with `git status --short --untracked-files=all`,
-   `node ai_studio/taskboard/cli.mjs summary --json`, and, for review,
-   `node tools/context_budget.mjs --review`.
+1. Inspect with `git status --short --untracked-files=all` and
+   `node ai_studio/taskboard/cli.mjs summary --json`.
 2. Pick one scope: hot docs, skill entrypoints, validators, profiling,
    taskboard, product gates, export, or post-review cleanup.
 3. Move repeated procedure behind a reference, skill, task rule, or tool.

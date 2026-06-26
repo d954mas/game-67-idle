@@ -9,7 +9,7 @@ improvement.
 
 Use durable evidence before memory:
 
-1. `AGENTS.md`, `GAME_PROJECT.md`, `ai_studio/README.md`, `ai_studio/taskboard/README.md`.
+1. `GAME_PROJECT.md`, `ai_studio/README.md`, `ai_studio/taskboard/README.md`.
 2. `node ai_studio/taskboard/cli.mjs summary --json`; use
    `node ai_studio/taskboard/cli.mjs context --json` only if the summary is not enough.
 3. `git status --short` to identify changed durable artifacts without implying

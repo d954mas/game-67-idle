@@ -6,7 +6,7 @@ economy, content plans, and open questions.
 
 ## Workflow
 
-1. Read `AGENTS.md` for project identity and design constraints.
+1. Use the already-loaded root project rules for identity and constraints.
 2. Find the local design source of truth. In this repo, game-specific design
    source of truth lives in `gamedesign/projects/<game-id>/`. Common files
    inside it include `gdd.md`, `concept.md`, `decisions.md`,

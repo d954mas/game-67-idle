@@ -1,7 +1,8 @@
-// Unified AI Studio local server.
+// Unified AI Studio local server. Prefer start_site.mjs for normal use.
 //
-//   node ai_studio/studio_shell/server.mjs        -> http://127.0.0.1:8765/
-//   node ai_studio/studio_shell/server.mjs 8780   -> http://127.0.0.1:8780/
+// Foreground debug:
+//   node ai_studio/studio_shell/server.mjs
+//   node ai_studio/studio_shell/server.mjs 8780
 
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";

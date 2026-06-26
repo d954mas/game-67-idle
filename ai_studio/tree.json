@@ -82,6 +82,32 @@
             ]
           },
           {
+            "id": "studio-shell:launcher",
+            "kind": "tool",
+            "path": "ai_studio/studio_shell/start_site.mjs",
+            "title": "start_site.mjs",
+            "description": "Stable launcher for the AI Studio local site. Starts the server in the background, writes PID and logs, verifies the page, supports --open, --restart, and --port.",
+            "role": "AI Studio site launch helper",
+            "tags": [
+              "tool",
+              "server",
+              "entrypoint"
+            ]
+          },
+          {
+            "id": "studio-shell:windows-launcher",
+            "kind": "tool",
+            "path": "ai_studio/studio_shell/start_site.cmd",
+            "title": "start_site.cmd",
+            "description": "Small Windows wrapper for launching the AI Studio local server as a detached minimized process.",
+            "role": "Windows AI Studio site launch helper",
+            "tags": [
+              "tool",
+              "server",
+              "windows"
+            ]
+          },
+          {
             "id": "studio-shell:implementation",
             "title": "Shared UI Implementation",
             "subtitle": "css/js internals",
@@ -226,97 +252,34 @@
                   "entrypoint",
                   "context-policy"
                 ]
-              }
-            ]
-          },
-          {
-            "id": "core-harness:orchestration",
-            "title": "Orchestration",
-            "subtitle": "early subagent split",
-            "kind": "group",
-            "color": "#475569",
-            "description": "Simple early-split rule for broad read-heavy work. Owns the public orchestration CLI route and keeps subagent use lightweight with Task / Scope / Return / Stop packets.",
-            "role": "subagent delegation trigger and packet shape",
-            "tags": [
-              "core",
-              "orchestration",
-              "subagents"
-            ],
-            "children": [
+              },
               {
-                "id": "core-harness:orchestration-readme",
-                "kind": "doc",
-                "path": "ai_studio/core_harness/orchestration/README.md",
-                "description": "Short orchestration contract: when to split work, the simple packet format, lead responsibility, and current compatibility tooling.",
-                "role": "orchestration module entrypoint",
+                "id": "core-harness:workflow-orchestration",
+                "title": "Orchestration",
+                "subtitle": "early subagent split",
+                "kind": "group",
+                "color": "#475569",
+                "description": "Child rule inside Workflow for broad read-heavy work. Keeps subagent use lightweight with Task / Scope / Return / Stop packets; it is not a product, task store, or public CLI.",
+                "role": "workflow delegation trigger and packet shape",
                 "tags": [
+                  "core",
                   "orchestration",
-                  "contract",
-                  "entrypoint"
-                ]
-              },
-              {
-                "id": "core-harness:orchestration-cli",
-                "kind": "tool",
-                "path": "ai_studio/core_harness/orchestration/cli.mjs",
-                "description": "Public Core Harness orchestration CLI route. Owns command dispatch for subagent packet templates/checks and orchestration bootstrap/check.",
-                "role": "public orchestration CLI",
-                "tags": [
-                  "public-api",
-                  "cli",
-                  "migration-route"
-                ]
-              },
-              {
-                "id": "core-harness:orchestration-lib",
-                "kind": "tool",
-                "path": "ai_studio/core_harness/orchestration/lib.mjs",
-                "description": "Core Harness orchestration helper library: packet templates, packet validation, preflight checks, presets, and bounded file-scope validation.",
-                "role": "orchestration internal helper library",
-                "tags": [
-                  "internal",
-                  "contract",
-                  "validation"
-                ]
-              },
-              {
-                "id": "core-harness:orchestration-taskboard-policy",
-                "kind": "tool",
-                "path": "ai_studio/core_harness/orchestration/taskboard_policy.mjs",
-                "description": "Orchestration policy over Taskboard state: current orchestration task lookup and optional taskboard-audit advisories. Taskboard does not own this policy.",
-                "role": "orchestration taskboard policy adapter",
-                "tags": [
-                  "internal",
-                  "policy",
-                  "taskboard-adapter"
-                ]
-              },
-              {
-                "id": "core-harness:orchestration-tests",
-                "kind": "tool",
-                "path": "ai_studio/core_harness/orchestration/tests/orchestration_cli.test.mjs",
-                "description": "Regression tests for the orchestration CLI route, command surface, delegation, and taskboard-only command rejection.",
-                "role": "orchestration CLI tests",
-                "tags": [
-                  "test",
-                  "route-guard"
+                  "subagents"
                 ],
-                "hiddenByDefault": true,
-                "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
-              },
-              {
-                "id": "core-harness:orchestration-taskboard-policy-test",
-                "kind": "tool",
-                "path": "ai_studio/core_harness/orchestration/tests/taskboard_orchestration_policy.test.mjs",
-                "description": "Regression tests for orchestration-specific interpretation of Taskboard state, current work selection, policy advisories, and packet presets.",
-                "role": "orchestration taskboard policy tests",
-                "tags": [
-                  "test",
-                  "policy",
-                  "taskboard-adapter"
-                ],
-                "hiddenByDefault": true,
-                "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
+                "children": [
+                  {
+                    "id": "core-harness:workflow-orchestration-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/core_harness/workflow/orchestration/README.md",
+                    "description": "Short orchestration contract: when to split work, the simple packet format, lead responsibility, and boundary with Workflow and Taskboard.",
+                    "role": "workflow orchestration entrypoint",
+                    "tags": [
+                      "orchestration",
+                      "contract",
+                      "entrypoint"
+                    ]
+                  }
+                ]
               }
             ]
           },
@@ -407,17 +370,6 @@
             "tags": [
               "source",
               "facade-map"
-            ]
-          },
-          {
-            "id": "core-harness:context-budget",
-            "kind": "tool",
-            "path": "tools/context_budget.mjs",
-            "description": "Mechanical guard for hot docs and skill entrypoint size; keeps always-loaded Core context small.",
-            "role": "hot docs and skill budget guard",
-            "tags": [
-              "validator",
-              "context"
             ]
           },
           {

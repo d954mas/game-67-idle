@@ -76,8 +76,7 @@ the doc. Full method: `gamedesign/knowledge/reference_deconstruction.md`.
 
 ## Start Checklist
 
-1. Read `AGENTS.md`; locate or create the active project wiki. For a fresh
-   concept, prefer:
+1. Locate or create the active project wiki. For a fresh concept, prefer:
    `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`.
 2. Check `git status` and ignore rules for `tmp/` and generation folders.
 3. Write the DoD: what must exist, what is out of scope, what proof is accepted.
@@ -134,10 +133,10 @@ documents.
 
 ## Rehydrate Protocol
 
-For resumed/long sessions, rebuild from files: `AGENTS.md` + this skill ->
-`git status` -> durable state (decision log, `handoff_status.md`,
-implementation plan, GDD sources) -> `tmp/session_state.md` if present. Verify
-volatile state against durable files and restate the active DoD before editing.
+For resumed/long sessions, rebuild from files: this skill -> `git status` ->
+durable state (decision log, `handoff_status.md`, implementation plan, GDD
+sources) -> `tmp/session_state.md` if present. Verify volatile state against
+durable files and restate the active DoD before editing.
 
 ## Minimum Artifact Set
 

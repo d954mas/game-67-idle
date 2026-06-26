@@ -21,7 +21,8 @@ Taskboard data contract here.
 - List rows: `node ai_studio/taskboard/cli.mjs list --json`.
 - Read one item: `node ai_studio/taskboard/cli.mjs show T0001 --json`.
 - Mutate through CLI: `new`, `set`, then `validate --json`.
-- Board: `node ai_studio/studio_shell/server.mjs`, then open `/taskboard/`.
+- Board: `node ai_studio/studio_shell/start_site.mjs --open`, then open
+  `/taskboard/`.
 
 ## Workflow
 

@@ -17,8 +17,9 @@ Use as a thin router for small, verified playable increments.
 
 ## Router Workflow
 
-1. Read `AGENTS.md`, `node tools/game_context/iteration_context.mjs`, relevant
-   docs, and nearby code.
+1. Use the already-loaded root rules, then run
+   `node tools/game_context/iteration_context.mjs` and read relevant docs and
+   nearby code.
 2. Select one task scope and primary runtime harness.
 3. For non-trivial work, load `iteration-cycle-playbook.md`; implement the
    smallest playable slice, validate primary target, capture evidence, commit.

@@ -25,10 +25,10 @@ test("pipeline validation defaults to quick dry-run without export checks", () =
   assert.match(result.stdout, /== skills sync tests/);
   assert.doesNotMatch(result.stdout, /== context budget report/);
   assert.doesNotMatch(result.stdout, /== context budget review/);
-  // Prose-auditors are review-only now (advisory) [REFACTOR_PLAN Phase 1 #1].
+  assert.doesNotMatch(result.stdout, /== context budget tests/);
+  // Prose-auditors are review-only now (advisory).
   assert.doesNotMatch(result.stdout, /== doc reference check/);
   assert.doesNotMatch(result.stdout, /== skill presence check/);
-  assert.match(result.stdout, /== context budget tests/);
   assert.match(result.stdout, /== doc reference tests/);
   assert.match(result.stdout, /== bootstrap export tests/);
   assert.match(result.stdout, /== repeated product gate failure guard/);
@@ -65,14 +65,14 @@ test("quick validation runs the product-gate suite when a game concept is active
   assert.doesNotMatch(result.stdout, /Ember Road/);
 });
 
-test("pipeline validation review dry-run adds strict context budget review", () => {
+test("pipeline validation review dry-run adds advisory doc and skill checks", () => {
   const result = run(["--review", "--dry-run"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /mode: quick\+review \(dry-run\)/);
   assert.doesNotMatch(result.stdout, /== context budget report/);
-  assert.match(result.stdout, /== context budget review/);
-  assert.match(result.stdout, /\$ .*tools\/context_budget\.mjs --review/);
-  // The advisory prose-auditors run under --review [REFACTOR_PLAN Phase 1 #1].
+  assert.doesNotMatch(result.stdout, /== context budget review/);
+  assert.doesNotMatch(result.stdout, /tools\/context_budget\.mjs/);
+  // The advisory prose-auditors run under --review.
   assert.match(result.stdout, /== skill presence check/);
   assert.match(result.stdout, /== doc reference check/);
   assert.doesNotMatch(result.stdout, /== portable export/);

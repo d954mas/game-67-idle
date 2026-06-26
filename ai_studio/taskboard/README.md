@@ -19,7 +19,7 @@ reviewing raw ideas or archive state.
 Run it through Studio Shell:
 
 ```powershell
-node ai_studio/studio_shell/server.mjs
+node ai_studio/studio_shell/start_site.mjs --open
 ```
 
 Open `/taskboard/`.
@@ -40,15 +40,11 @@ The browser board uses `ai_studio/taskboard/api.mjs` for `/api/board`,
 `/api/tasks`, `/api/epics`, and `/api/agent/context`. Studio Shell only mounts
 the API and serves the surface.
 
-Other entry points:
-
-- Orchestration audit: `node ai_studio/core_harness/orchestration/cli.mjs taskboard-audit`.
-- New game: `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`.
-
 ## Minimal Context
 
-For substantial work: `AGENTS.md` / `GAME_PROJECT.md` -> `node ai_studio/taskboard/cli.mjs context --json` ->
-needed task/evidence files -> one matching skill.
+For substantial work: `node ai_studio/taskboard/cli.mjs context --json` ->
+needed task/evidence files -> `GAME_PROJECT.md` only for game-specific work ->
+one matching skill.
 
 Search current scope only. Avoid archives, P3 ideas, broad design, and build
 artifacts unless linked.
@@ -61,5 +57,4 @@ the guide for lifecycle, scope intake, evidence, checkpoints, and manual format.
 Validation by change type: `docs/ai-pipeline/quality-validation.md`.
 Repeated strict/product failures: `node tools/product_gate/repeated_failure_guard.mjs`.
 
-Taskboard validation checks task-store structure only. Orchestration packet
-policy is owned by `ai_studio/core_harness/orchestration/`.
+Taskboard validation checks task-store structure only.

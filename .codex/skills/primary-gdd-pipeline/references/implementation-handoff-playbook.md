@@ -13,13 +13,12 @@ playable slice, exact exclusions, validation commands, and manual proof.
 
 List files in the order the implementation agent should read them:
 
-1. Project rules: `AGENTS.md`.
-2. Current decision log or `handoff_status.md`.
-3. Concept/GDD summary.
-4. Balance/economy JSON.
-5. UI flow/components JSON.
-6. Asset manifest and visual proof.
-7. Runtime/build/test docs.
+1. Current decision log or `handoff_status.md`.
+2. Concept/GDD summary.
+3. Balance/economy JSON.
+4. UI flow/components JSON.
+5. Asset manifest and visual proof.
+6. Runtime/build/test docs.
 
 Mark stale files explicitly. Do not make the implementation agent guess which
 document wins.
@@ -93,7 +92,7 @@ If commands are unknown, write how to discover them and what files to inspect.
 ## Next-Chat Prompt Template
 
 ```markdown
-Use the project rules in AGENTS.md. Implement the first playable slice from:
+Use the already-loaded project rules. Implement the first playable slice from:
 
 1. [source file]
 2. [source file]
