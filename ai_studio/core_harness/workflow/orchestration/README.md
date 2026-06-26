@@ -47,6 +47,9 @@ packet instead of assuming they saw the lead conversation.
 - Subagents return compressed findings, not transcripts.
 - The lead verifies current files before trusting results.
 - The lead integrates changes, runs validation, and owns the final answer.
+- When a durable task exists, the lead records delegated packet results,
+  verification, and integration using the task-log format from
+  `../README.md`.
 - Writes stay serial unless files are clearly disjoint.
 - Use 2-4 workers for normal fan-out.
 - Do not create recursive subagent trees.

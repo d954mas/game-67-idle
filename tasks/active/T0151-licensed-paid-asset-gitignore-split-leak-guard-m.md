@@ -57,7 +57,7 @@ exist locally at build time — no builder scan change required.
   tool-use guard: verify exact repo paths with rg --files/Test-Path before reads; use Select-Object -Skip/-First for line windows; keep evidence commands read-only
   expected output: committed metadata-only catalogs + gitignored assets/restricted/ for paid binaries; guard green on tree and red on a planted leak; intake + skill for CGTrader packs; AGENTS invariant + doc
   evidence command: node tools/assets/audit/restricted_assets_guard.mjs && node --test tools/assets/audit/restricted_assets_guard.test.mjs && node ai_studio/taskboard/cli.mjs validate
-  stop condition: guard passes current tree + blocks a planted paid leak; manual intake records sha256+product-page (no download URL) with publish:false; parse skill documented; validate green except the pre-existing quality-validation.md budget overflow
+  stop condition: guard passes current tree + blocks a planted paid leak; manual intake records sha256+product-page (no download URL) with publish:false; parse skill documented; focused validation green
   independent reviewer: lead (d954mas) via /code-review on the branch diff
 - 2026-06-24 Created. Researched current pipeline: binaries currently committed;
   catalog/license already recorded for polypizza (CC0). Builder uses explicit

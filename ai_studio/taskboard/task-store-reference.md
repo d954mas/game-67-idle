@@ -57,11 +57,11 @@ A backlog task must have:
 
 ## Done And Evidence
 
-A task is done only when `## Done when` boxes are checked and `## Log` contains
+A task is done only when `## Done when` boxes are checked and `## Log` explains
 the evidence that proves them.
 
-Smallest reliable validation by change type lives in one place:
-`docs/ai-pipeline/quality-validation.md`.
+Smallest reliable validation by change type starts from the Quality rules:
+`ai_studio/quality/README.md`.
 
 Repeated strict/product gate failures are validated by:
 
@@ -82,6 +82,7 @@ Record a checkpoint in the task log when:
 - validation evidence changes;
 - work pauses partially complete;
 - another agent/session must continue.
+- delegated work is integrated or rejected.
 
 Where information goes:
 

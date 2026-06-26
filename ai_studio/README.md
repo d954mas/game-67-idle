@@ -18,6 +18,7 @@ public surface, internals, and validation path.
 - `core_harness/agent_surfaces/`: generated Codex/Claude compatibility surfaces.
 - `core_harness/profiling/`: passive profiling, Codex recovery, session status,
   and chat-session reflection ownership.
+- `quality/`: reviewed small quality rules for selecting evidence and checks.
 - `taskboard/`: reviewed durable task state module.
 - `Not Refactored`: map node for everything not reviewed yet.
 
@@ -38,8 +39,8 @@ Load only the route that matches the current task:
   `node ai_studio/core_harness/validation/doc_reference_check.mjs`.
 - Generated Codex/Claude skills and hook surfaces:
   `node ai_studio/core_harness/agent_surfaces/sync.mjs --check`.
-- Done criteria, validation routing, product gates, or repeated failure stops:
-  `docs/ai-pipeline/quality-validation.md`.
+- Quality rule selection, product evidence, visual checks, and repeated failure
+  stops: `ai_studio/quality/README.md`.
 - Profiling, prototype closeout, visual/asset routing, or portable export:
   `ai_studio/core_harness/profiling/README.md`.
 - Durable task state and task commands: `ai_studio/taskboard/README.md` and

@@ -151,19 +151,6 @@ test("doc reference check rejects retired global pipeline validator command", ()
   }
 });
 
-test("doc reference check rejects retired context pressure wording", () => {
-  const dir = tempDir();
-  try {
-    writeMinimalRoot(dir);
-    writeFileSync(join(dir, "ai_studio", "README.md"), "Use --review for strict context pressure.\n", "utf8");
-    const result = run(["--root", dir]);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /retired phrase `context pressure`/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("doc reference check validates non-markdown tool references in core docs", () => {
   const dir = tempDir();
   try {

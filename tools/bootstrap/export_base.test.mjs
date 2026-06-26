@@ -51,7 +51,7 @@ test("portable export includes task guides and generated skill pointers", () => 
       existsSync(join(target, "ai_studio", "core_harness", "workflow", "orchestration", "README.md")),
       true,
     );
-    assert.equal(existsSync(join(target, "docs", "ai-pipeline", "quality-validation.md")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "quality", "README.md")), true);
     assert.equal(existsSync(join(target, "ai_studio", "core_harness", "profiling", "README.md")), true);
     assert.equal(existsSync(join(target, "ai_studio", "tree.json")), true);
     assert.equal(existsSync(join(target, "ai_studio", "core_harness", "README.md")), true);
@@ -80,7 +80,7 @@ test("portable export includes task guides and generated skill pointers", () => 
     const studio = readFileSync(join(target, "ai_studio", "README.md"), "utf8");
     assert.match(studio, /ai_studio\/core_harness\/workflow\/README\.md/);
     assert.match(studio, /ai_studio\/core_harness\/workflow\/orchestration\/README\.md/);
-    assert.match(studio, /docs\/ai-pipeline\/quality-validation\.md/);
+    assert.match(studio, /ai_studio\/quality\/README\.md/);
     assert.match(studio, /ai_studio\/core_harness\/profiling\/README\.md/);
     assert.match(studio, /ai_studio\/studio_shell\/start_site\.mjs/);
 

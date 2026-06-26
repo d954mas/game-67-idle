@@ -168,7 +168,7 @@
         "title": "Core Harness",
         "subtitle": "ai_studio/core_harness",
         "kind": "module",
-        "moduleId": "hot",
+        "moduleId": "core_harness",
         "color": "#172033",
         "description": "Harness, agent-facing contract, AGENTS.md, root compatibility surfaces, passive profiling, and the smallest public entry points needed to start work.",
         "tags": [
@@ -1121,6 +1121,133 @@
         ]
       },
       {
+        "id": "module:quality",
+        "title": "Quality",
+        "subtitle": "small rule set",
+        "kind": "module",
+        "moduleId": "quality",
+        "color": "#b45309",
+        "description": "Reviewed quality rule set. Agents choose the relevant small rules by task type instead of loading one broad validation manual.",
+        "tags": [
+          "quality",
+          "rules",
+          "evidence"
+        ],
+        "children": [
+          {
+            "id": "quality:readme",
+            "kind": "doc",
+            "path": "ai_studio/quality/README.md",
+            "title": "README.md",
+            "description": "Quality module entrypoint: rule selection, boundaries, and current legacy tool locations.",
+            "role": "quality rule router",
+            "tags": [
+              "source",
+              "rules"
+            ]
+          },
+          {
+            "id": "quality:rules",
+            "title": "Rules",
+            "subtitle": "choose by task type",
+            "kind": "group",
+            "color": "#b45309",
+            "description": "Small quality rules selected only when relevant to the current change.",
+            "role": "quality rule files",
+            "tags": [
+              "rules",
+              "evidence"
+            ],
+            "children": [
+              {
+                "id": "quality:technical-runtime",
+                "kind": "doc",
+                "path": "ai_studio/quality/rules/technical-runtime.md",
+                "title": "technical-runtime.md",
+                "description": "Rule for code, build, launch, input, save/load, packaging, and runtime behavior evidence.",
+                "role": "technical runtime quality rule",
+                "tags": [
+                  "technical",
+                  "runtime"
+                ]
+              },
+              {
+                "id": "quality:product-readability",
+                "kind": "doc",
+                "path": "ai_studio/quality/rules/product-readability.md",
+                "title": "product-readability.md",
+                "description": "Rule for player-facing UI, controls, feedback, and screen comprehension.",
+                "role": "product readability quality rule",
+                "tags": [
+                  "product",
+                  "ui"
+                ]
+              },
+              {
+                "id": "quality:game-loop",
+                "kind": "doc",
+                "path": "ai_studio/quality/rules/game-loop.md",
+                "title": "game-loop.md",
+                "description": "Rule for playable loops, rewards, repetition, and reason-to-continue evidence.",
+                "role": "game loop quality rule",
+                "tags": [
+                  "gameplay",
+                  "loop"
+                ]
+              },
+              {
+                "id": "quality:visual-quality",
+                "kind": "doc",
+                "path": "ai_studio/quality/rules/visual-quality.md",
+                "title": "visual-quality.md",
+                "description": "Rule for screenshots, visual presentation, UI layout, readability, and visual rejection handling.",
+                "role": "visual quality rule",
+                "tags": [
+                  "visual",
+                  "ui"
+                ]
+              },
+              {
+                "id": "quality:asset-quality",
+                "kind": "doc",
+                "path": "ai_studio/quality/rules/asset-quality.md",
+                "title": "asset-quality.md",
+                "description": "Rule for asset provenance, license, publishability, integrity, runtime-ready format, and 3D material floor.",
+                "role": "asset quality rule",
+                "tags": [
+                  "assets",
+                  "license"
+                ]
+              },
+              {
+                "id": "quality:repeated-failure",
+                "kind": "doc",
+                "path": "ai_studio/quality/rules/repeated-failure.md",
+                "title": "repeated-failure.md",
+                "description": "Rule for repeated strict/product failures, lead rejection, and changing path instead of polishing the same failure.",
+                "role": "repeated failure quality rule",
+                "tags": [
+                  "failure",
+                  "review"
+                ]
+              },
+              {
+                "id": "quality:active-game-workflow",
+                "kind": "doc",
+                "path": "ai_studio/quality/rules/active-game-workflow.md",
+                "title": "active-game-workflow.md",
+                "description": "Rule for active game feature/content expansion, unresolved rejection, reference readiness, and runtime growth.",
+                "role": "active game workflow quality rule",
+                "tags": [
+                  "game-workflow",
+                  "active-game"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
         "id": "not-refactored",
         "title": "Not Refactored",
         "subtitle": "current scattered pipeline",
@@ -1160,18 +1287,6 @@
                 "tags": [
                   "legacy",
                   "tools"
-                ]
-              },
-              {
-                "id": "not-refactored:quality-validation",
-                "kind": "validation",
-                "path": "docs/ai-pipeline/quality-validation.md",
-                "title": "quality-validation.md",
-                "description": "Legacy quality and validation reference. Module-owned validation should replace broad pipeline routing over time.",
-                "role": "legacy validation policy doc",
-                "tags": [
-                  "legacy",
-                  "validation"
                 ]
               },
               {

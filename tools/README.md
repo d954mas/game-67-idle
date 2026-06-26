@@ -32,7 +32,7 @@ Copied by `tools/bootstrap/export_base.mjs`:
 Product gates route through `node tools/product_gate/review.mjs`,
 `node tools/product_gate/visual_critic_run.mjs`, and
 `node tools/product_gate/close_slice.mjs`.
-Policy: `docs/ai-pipeline/quality-validation.md` and game/visual skills.
+Policy: `ai_studio/quality/README.md` and game/visual skills.
 
 ## Runtime Infrastructure
 

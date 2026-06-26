@@ -51,10 +51,11 @@ artifacts unless linked.
 
 ## Done And Validation
 
-A task is done only when `## Done when` is checked and `## Log` proves it. Use
-the guide for lifecycle, scope intake, evidence, checkpoints, and manual format.
+A task is done only when `## Done when` is checked and `## Log` explains the
+evidence. Use the guide for lifecycle, scope intake, evidence, checkpoints, and
+manual format.
 
-Validation by change type: `docs/ai-pipeline/quality-validation.md`.
+Validation by change type: `ai_studio/quality/README.md`.
 Repeated strict/product failures: `node tools/product_gate/repeated_failure_guard.mjs`.
 
 Taskboard validation checks task-store structure only.

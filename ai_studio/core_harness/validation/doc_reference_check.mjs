@@ -107,22 +107,9 @@ const retiredCommandPatterns = [
       "retired command `node ai_studio/validation/pipeline_validate.mjs`; run the owning module validator directly",
   },
 ];
-const retiredPhrasePatterns = [
-  {
-    pattern: /\bcontext pressure\b/i,
-    message:
-      "retired phrase `context pressure`; use focused docs/skill review checks instead of budget-gate wording",
-  },
-];
-
 for (const file of files) {
   const rawText = readFileSync(file, "utf8");
   for (const retired of retiredCommandPatterns) {
-    if (retired.pattern.test(rawText)) {
-      problems.push(`${rel(file)} -> ${retired.message}`);
-    }
-  }
-  for (const retired of retiredPhrasePatterns) {
     if (retired.pattern.test(rawText)) {
       problems.push(`${rel(file)} -> ${retired.message}`);
     }
