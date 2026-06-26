@@ -57,7 +57,8 @@ counts total FAILs.
 - Skill/process changes: `node tools/skills_eval.mjs`
 - Product gate changes: `node --test tools/product_gate/test.mjs`
 - Taskboard changes: `node --test ai_studio/taskboard/tests/taskboard.test.mjs`
-- Profile changes: focused `tools/ai_profile/` tests
+- Profile changes:
+  `node ai_studio/core_harness/profiling/tests/profiling.test.mjs`
 - Core Harness docs/routes:
   `node ai_studio/core_harness/validation/doc_reference_check.mjs`
 - Architecture map: `node ai_studio/architecture_map/validate_map.mjs`

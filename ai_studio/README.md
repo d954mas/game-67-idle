@@ -16,6 +16,8 @@ public surface, internals, and validation path.
 - `core_harness/workflow/orchestration/`: reviewed early split rule for broad
   read-heavy subagent work.
 - `core_harness/agent_surfaces/`: generated Codex/Claude compatibility surfaces.
+- `core_harness/profiling/`: passive profiling, Codex recovery, session status,
+  and chat-session reflection ownership.
 - `taskboard/`: reviewed durable task state module.
 - `Not Refactored`: map node for everything not reviewed yet.
 
@@ -39,7 +41,7 @@ Load only the route that matches the current task:
 - Done criteria, validation routing, product gates, or repeated failure stops:
   `docs/ai-pipeline/quality-validation.md`.
 - Profiling, prototype closeout, visual/asset routing, or portable export:
-  `docs/ai-pipeline/profiling-reuse.md`.
+  `ai_studio/core_harness/profiling/README.md`.
 - Durable task state and task commands: `ai_studio/taskboard/README.md` and
   `node ai_studio/taskboard/cli.mjs context --json`.
 - AI Studio architecture and refactor tree: `ai_studio/tree.json` and

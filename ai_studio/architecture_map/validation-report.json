@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-06-26T10:35:14.110Z",
+  "generatedAt": "2026-06-26T11:37:38.629Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
@@ -14,12 +14,12 @@
     "tasks/epics"
   ],
   "summary": {
-    "mappedPaths": 61,
-    "scannedFiles": 256,
+    "mappedPaths": 72,
+    "scannedFiles": 250,
     "missingInRepo": 0,
     "duplicateMappings": 0,
     "unmappedInAiStudio": 0,
-    "unmappedLegacy": 200,
+    "unmappedLegacy": 184,
     "missingDescriptions": 0
   },
   "issues": {
@@ -28,28 +28,7 @@
     "unmappedInAiStudio": [],
     "unmappedLegacy": [
       {
-        "path": ".codex/skills/ai-pipeline-maintenance/references/pipeline-maintenance-playbook.md"
-      },
-      {
-        "path": ".codex/skills/ai-pipeline-maintenance/references/skill-placement.md"
-      },
-      {
-        "path": ".codex/skills/ai-pipeline-maintenance/SKILL.md"
-      },
-      {
         "path": ".codex/skills/app-tunnel/SKILL.md"
-      },
-      {
-        "path": ".codex/skills/chat-session-reflection/references/reflection-evidence-intake.md"
-      },
-      {
-        "path": ".codex/skills/chat-session-reflection/references/reflection-output-rules.md"
-      },
-      {
-        "path": ".codex/skills/chat-session-reflection/references/reflection-profiling.md"
-      },
-      {
-        "path": ".codex/skills/chat-session-reflection/SKILL.md"
       },
       {
         "path": ".codex/skills/delegated-image-generation/references/generation-paths.md"
@@ -236,33 +215,6 @@
       },
       {
         "path": "tasks/epics/E009-game-template-structure-for-future-games.md"
-      },
-      {
-        "path": "tools/ai_profile/agent_rollup.mjs"
-      },
-      {
-        "path": "tools/ai_profile/build_hook_record_fast.mjs"
-      },
-      {
-        "path": "tools/ai_profile/hook_record_fast.c"
-      },
-      {
-        "path": "tools/ai_profile/hook_record.cmd"
-      },
-      {
-        "path": "tools/ai_profile/hook_record.mjs"
-      },
-      {
-        "path": "tools/ai_profile/import_codex_session.mjs"
-      },
-      {
-        "path": "tools/ai_profile/profile_lib.mjs"
-      },
-      {
-        "path": "tools/ai_profile/status.mjs"
-      },
-      {
-        "path": "tools/ai_profile/test.mjs"
       },
       {
         "path": "tools/assets/assemble/__init__.py"

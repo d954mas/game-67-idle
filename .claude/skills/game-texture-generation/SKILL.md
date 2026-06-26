@@ -6,10 +6,10 @@ description: "Use when sourcing, generating, downloading, adapting, reviewing, o
 
 # game-texture-generation
 
-Canonical instructions live in `.codex/skills/game-texture-generation/SKILL.md` (single
-source of truth shared by all agent CLIs). Read that file and follow it.
+Codex-discoverable instructions live in `.codex/skills/game-texture-generation/SKILL.md`.
+Read that file and follow it.
 
-Reference playbooks (load only when the canonical skill says to):
+Reference playbooks (load only when the Codex entrypoint says to):
 
 - `.codex/skills/game-texture-generation/references/texture-brief-template.md`
 - `.codex/skills/game-texture-generation/references/texture-workflow.md`

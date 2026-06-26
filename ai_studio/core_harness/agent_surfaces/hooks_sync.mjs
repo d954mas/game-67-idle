@@ -35,13 +35,13 @@ const HOOK_SOURCE = {
 const RECORDERS = {
   fast: (label) => ({
     type: "command",
-    command: `tools/ai_profile/hook_record_fast ${label}`,
-    commandWindows: `tools\\ai_profile\\hook_record_fast.exe ${label}`,
+    command: `ai_studio/core_harness/profiling/hook_record_fast ${label}`,
+    commandWindows: `ai_studio\\core_harness\\profiling\\hook_record_fast.exe ${label}`,
   }),
   node: (label) => ({
     type: "command",
-    command: `node tools/ai_profile/hook_record.mjs ${label}`,
-    commandWindows: `node tools\\ai_profile\\hook_record.mjs ${label}`,
+    command: `node ai_studio/core_harness/profiling/hook_record.mjs ${label}`,
+    commandWindows: `node ai_studio\\core_harness\\profiling\\hook_record.mjs ${label}`,
   }),
 };
 

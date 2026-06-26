@@ -170,7 +170,7 @@
         "kind": "module",
         "moduleId": "hot",
         "color": "#172033",
-        "description": "Harness, agent-facing contract, AGENTS.md, root compatibility surfaces, and the smallest public entry points needed to start work.",
+        "description": "Harness, agent-facing contract, AGENTS.md, root compatibility surfaces, passive profiling, and the smallest public entry points needed to start work.",
         "tags": [
           "core",
           "harness",
@@ -324,7 +324,7 @@
                 "kind": "tool",
                 "path": "ai_studio/core_harness/agent_surfaces/skills_sync.mjs",
                 "title": "skills_sync.mjs",
-                "description": "Generates .claude/skills thin pointers from canonical .codex/skills instructions and removes stale generated pointers.",
+                "description": "Generates .claude/skills thin pointers from Codex-discoverable .codex/skills entrypoints and removes stale generated pointers.",
                 "role": "internal skill pointer generator",
                 "tags": [
                   "generated",
@@ -389,7 +389,7 @@
                     "kind": "config",
                     "path": ".claude/skills",
                     "title": ".claude/skills/",
-                    "description": "Generated Claude skill pointer directory. Each pointer routes back to the canonical .codex/skills source.",
+                    "description": "Generated Claude skill pointer directory. Each pointer routes to the matching Codex-discoverable .codex/skills entrypoint.",
                     "role": "generated Claude skill pointers",
                     "tags": [
                       "generated",
@@ -435,6 +435,167 @@
                       "hooks"
                     ]
                   }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "core-harness:profiling",
+            "title": "Profiling",
+            "subtitle": "passive session telemetry",
+            "kind": "group",
+            "color": "#0369a1",
+            "description": "Core Harness profiling group: passive hook telemetry, Codex session recovery, status reports, subagent diagnostics, and NT chat-session reflection ownership.",
+            "role": "agent execution observability inside the harness",
+            "tags": [
+              "core",
+              "profiling",
+              "telemetry"
+            ],
+            "children": [
+              {
+                "id": "core-harness:profiling-readme",
+                "kind": "doc",
+                "path": "ai_studio/core_harness/profiling/README.md",
+                "title": "README.md",
+                "description": "Profiling module contract: Agent Surfaces owns hook config; Profiling owns recorder commands, status reports, Codex recovery, and reflection skill instructions.",
+                "role": "profiling module entrypoint",
+                "tags": [
+                  "contract",
+                  "entrypoint",
+                  "profiling"
+                ]
+              },
+              {
+                "id": "core-harness:profiling-status",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/profiling/status.mjs",
+                "title": "status.mjs",
+                "description": "Reads per-session profile JSONL and reports command durations, slow work, repeated commands, failures, coverage gaps, and optional subagent diagnostics.",
+                "role": "profiling status report command",
+                "tags": [
+                  "public-api",
+                  "report",
+                  "profiling"
+                ]
+              },
+              {
+                "id": "core-harness:profiling-hook-record",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/profiling/hook_record.mjs",
+                "title": "hook_record.mjs",
+                "description": "JS hook recorder fallback for command results, Codex failure recovery, manual --recover-only import, and subagent spawn telemetry. Called by generated hooks for non-hot-path cases.",
+                "role": "profiling hook recorder fallback",
+                "tags": [
+                  "internal-helper",
+                  "hooks",
+                  "telemetry"
+                ]
+              },
+              {
+                "id": "core-harness:profiling-hook-fast-source",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/profiling/hook_record_fast.c",
+                "title": "hook_record_fast.c",
+                "description": "Native fast hook recorder source for low-overhead SessionStart, PreToolUse, and PostToolUse command telemetry.",
+                "role": "fast hook recorder source",
+                "tags": [
+                  "internal-helper",
+                  "hooks",
+                  "native"
+                ]
+              },
+              {
+                "id": "core-harness:profiling-hook-fast-exe",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/profiling/hook_record_fast.exe",
+                "title": "hook_record_fast.exe",
+                "description": "Built Windows fast hook recorder used by generated Codex and Claude hook configs.",
+                "role": "fast hook recorder binary",
+                "tags": [
+                  "generated",
+                  "hooks",
+                  "windows"
+                ]
+              },
+              {
+                "id": "core-harness:profiling-build-fast",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/profiling/build_hook_record_fast.mjs",
+                "title": "build_hook_record_fast.mjs",
+                "description": "Build helper for the native fast hook recorder.",
+                "role": "fast hook recorder build helper",
+                "tags": [
+                  "internal-helper",
+                  "build",
+                  "native"
+                ]
+              },
+              {
+                "id": "core-harness:profiling-lib",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/profiling/profile_lib.mjs",
+                "title": "profile_lib.mjs",
+                "description": "Shared profile path, JSONL, parsing, timestamp, command, and record helpers used by profiling commands.",
+                "role": "profiling shared library",
+                "tags": [
+                  "internal-helper",
+                  "library"
+                ]
+              },
+              {
+                "id": "core-harness:profiling-agent-rollup",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/profiling/agent_rollup.mjs",
+                "title": "agent_rollup.mjs",
+                "description": "Best-effort subagent transcript diagnostics for Claude and Codex sessions. Diagnostic only, not an acceptance gate.",
+                "role": "subagent transcript diagnostic helper",
+                "tags": [
+                  "internal-helper",
+                  "subagents",
+                  "diagnostic"
+                ]
+              },
+              {
+                "id": "core-harness:profiling-reflection-skill",
+                "title": "NT Chat Session Reflection Skill",
+                "subtitle": "session retrospective instructions",
+                "kind": "skill",
+                "color": "#0e7490",
+                "path": "ai_studio/core_harness/profiling/skills/nt-chat-session-reflection/SKILL.md",
+                "description": "Canonical skill instructions for full retrospective analysis of long AI-assisted sessions using durable evidence, profiling telemetry, and chat/session context.",
+                "role": "profiling-owned full session reflection skill",
+                "tags": [
+                  "skill",
+                  "reflection",
+                  "profiling"
+                ],
+                "children": [
+                  {
+                    "id": "core-harness:profiling-codex-skill-entrypoint",
+                    "kind": "config",
+                    "path": ".codex/skills/nt-chat-session-reflection/SKILL.md",
+                    "title": ".codex skill entrypoint",
+                    "description": "Codex-discoverable compatibility entrypoint that points to the canonical profiling-owned skill instructions.",
+                    "role": "Codex skill compatibility entrypoint",
+                    "tags": [
+                      "compatibility",
+                      "codex",
+                      "skill"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "core-harness:profiling-tests",
+                "kind": "test",
+                "path": "ai_studio/core_harness/profiling/tests/profiling.test.mjs",
+                "title": "profiling.test.mjs",
+                "description": "Focused profiling regression tests for hook records, Codex recovery, status reports, coverage, and subagent rollups.",
+                "role": "profiling regression tests",
+                "tags": [
+                  "test",
+                  "profiling"
                 ]
               }
             ]

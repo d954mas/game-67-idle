@@ -5,9 +5,9 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
-import { claudeAgentRollup, codexAgentRollup, buildAgentToolRollup, parseSince } from "./agent_rollup.mjs";
+import { claudeAgentRollup, codexAgentRollup, buildAgentToolRollup, parseSince } from "../agent_rollup.mjs";
 
-const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const root = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 
 function tempDir() {
   return mkdtempSync(join(tmpdir(), "ai-profile-test-"));
@@ -56,7 +56,7 @@ function writeJsonl(file, records) {
 }
 
 function runHook(payload, profile, harness = "codex", env = {}) {
-  const result = spawnSync(process.execPath, ["tools/ai_profile/hook_record.mjs", harness], {
+  const result = spawnSync(process.execPath, ["ai_studio/core_harness/profiling/hook_record.mjs", harness], {
     cwd: root,
     env: {
       ...process.env,
@@ -77,7 +77,7 @@ function runHook(payload, profile, harness = "codex", env = {}) {
 }
 
 function runFastHook(payload, profile, harness = "codex") {
-  const exe = join(root, "tools", "ai_profile", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast");
+  const exe = join(root, "ai_studio", "core_harness", "profiling", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast");
   const result = spawnSync(exe, [harness], {
     cwd: root,
     env: { ...process.env, AI_PROFILE_FILE: profile },
@@ -89,7 +89,7 @@ function runFastHook(payload, profile, harness = "codex") {
 }
 
 function runFastHookAsync(payload, profile, harness = "codex") {
-  const exe = join(root, "tools", "ai_profile", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast");
+  const exe = join(root, "ai_studio", "core_harness", "profiling", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast");
   return new Promise((resolvePromise, reject) => {
     const child = spawn(exe, [harness], {
       cwd: root,
@@ -120,7 +120,7 @@ test("hook_record logs session start and command start records", () => {
     runHook({
       hook_event_name: "PreToolUse",
       tool_name: "Bash",
-      tool_input: { command: "node --test tools/ai_profile/test.mjs" },
+      tool_input: { command: "node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs" },
     }, profile);
 
     const records = readJsonl(profile);
@@ -134,7 +134,7 @@ test("hook_record logs session start and command start records", () => {
     assert.equal(records[1].result, "unknown");
     assert.equal(records[1].value, "necessary_overhead");
     assert.deepEqual(records[1].tools, ["codex/Bash"]);
-    assert.deepEqual(records[1].commands, ["node --test tools/ai_profile/test.mjs"]);
+    assert.deepEqual(records[1].commands, ["node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs"]);
   } finally {
     cleanup(dir);
   }
@@ -200,7 +200,7 @@ test("hook_record skips successful read-only plumbing commands", () => {
     runHook({
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
-      tool_input: { command: "Get-Content tools\\ai_profile\\hook_record.mjs" },
+      tool_input: { command: "Get-Content ai_studio\\core_harness\\profiling\\hook_record.mjs" },
       tool_response: { exit_code: 0 },
     }, profile);
 
@@ -232,7 +232,7 @@ test("hook_record keeps failed read-only plumbing commands", () => {
 });
 
 test("hook_record_fast records work and skips successful plumbing when built", {
-  skip: !existsSync(join(root, "tools", "ai_profile", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
+  skip: !existsSync(join(root, "ai_studio", "core_harness", "profiling", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
 }, () => {
   const dir = tempDir();
   try {
@@ -248,7 +248,7 @@ test("hook_record_fast records work and skips successful plumbing when built", {
     runFastHook({
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
-      tool_input: { command: "node --test tools/ai_profile/test.mjs" },
+      tool_input: { command: "node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs" },
       tool_response: { exit_code: 0 },
     }, profile);
 
@@ -257,14 +257,14 @@ test("hook_record_fast records work and skips successful plumbing when built", {
     assert.equal(records[0].event_type, "tool_call_result");
     assert.equal(records[0].category, "validation");
     assert.equal(records[0].result, "pass");
-    assert.deepEqual(records[0].commands, ["node --test tools/ai_profile/test.mjs"]);
+    assert.deepEqual(records[0].commands, ["node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs"]);
   } finally {
     cleanup(dir);
   }
 });
 
 test("hook_record_fast keeps parallel JSONL appends valid", {
-  skip: !existsSync(join(root, "tools", "ai_profile", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
+  skip: !existsSync(join(root, "ai_studio", "core_harness", "profiling", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
 }, async () => {
   const dir = tempDir();
   try {
@@ -321,13 +321,13 @@ test("hook_record recovers missed Codex failed shell commands from session trans
     runHook({
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
-      tool_input: { command: "node --test tools/ai_profile/test.mjs" },
+      tool_input: { command: "node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs" },
       tool_response: { exit_code: 0 },
     }, profile, "codex", { CODEX_SESSION_FILE: session });
     runHook({
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
-      tool_input: { command: "node --test tools/ai_profile/test.mjs" },
+      tool_input: { command: "node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs" },
       tool_response: { exit_code: 0 },
     }, profile, "codex", { CODEX_SESSION_FILE: session });
 
@@ -343,7 +343,7 @@ test("hook_record recovers missed Codex failed shell commands from session trans
   }
 });
 
-test("hook_record recover-only imports Codex failed shell commands", () => {
+test("hook_record --recover-only imports Codex failed shell commands", () => {
   const dir = tempDir();
   try {
     const profile = join(dir, "hook-recover-only.jsonl");
@@ -354,7 +354,7 @@ test("hook_record recover-only imports Codex failed shell commands", () => {
         payload: {
           type: "function_call",
           call_id: "call_recover_only",
-          arguments: JSON.stringify({ command: "node --test tools/ai_profile/test.mjs" }),
+          arguments: JSON.stringify({ command: "node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs" }),
         },
       }),
       JSON.stringify({
@@ -367,16 +367,21 @@ test("hook_record recover-only imports Codex failed shell commands", () => {
       }),
     ].join("\n") + "\n", "utf8");
 
-    runHook({}, profile, "codex", {
-      AI_PROFILE_RECOVER_ONLY: "1",
-      CODEX_SESSION_FILE: session,
-    });
+    run([
+      "ai_studio/core_harness/profiling/hook_record.mjs",
+      "codex",
+      "--recover-only",
+      "--profile",
+      profile,
+      "--session",
+      session,
+    ]);
 
     const records = readJsonl(profile);
     assert.equal(records.length, 1);
     assert.equal(records[0].event_type, "tool_call_result_recovered");
     assert.equal(records[0].source_call_id, "call_recover_only");
-    assert.deepEqual(records[0].commands, ["node --test tools/ai_profile/test.mjs"]);
+    assert.deepEqual(records[0].commands, ["node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs"]);
   } finally {
     cleanup(dir);
   }
@@ -451,7 +456,7 @@ test("status reads a session log and reports records, slowest, and rollup", () =
       { ts: "2026-06-13T10:00:06+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node --test tools/x.test.mjs"], session_id: "s1" },
     ]);
 
-    const result = run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    const result = run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson]);
     const status = readJson(statusJson);
     assert.equal(status.schema_version, 2);
     assert.equal(status.records, 2); // start records dropped after pairing
@@ -502,7 +507,7 @@ test("status command rollup strips shell assignment wrappers", () => {
         result: "pass",
         value: "unknown",
         event_type: "tool_call_result",
-        commands: ["$i=0; Get-Content tools/ai_profile/status.mjs | ForEach-Object { $i++; $_ }"],
+        commands: ["$i=0; Get-Content ai_studio/core_harness/profiling/status.mjs | ForEach-Object { $i++; $_ }"],
         session_id: "s1",
       },
       {
@@ -513,12 +518,12 @@ test("status command rollup strips shell assignment wrappers", () => {
         result: "pass",
         value: "unknown",
         event_type: "tool_call_result",
-        commands: ["Get-Content tools/ai_profile/test.mjs"],
+        commands: ["Get-Content ai_studio/core_harness/profiling/tests/profiling.test.mjs"],
         session_id: "s1",
       },
     ]);
 
-    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson]);
     const status = readJson(statusJson);
     const keys = status.command_rollup.by_count.map((entry) => entry.key);
     assert.deepEqual(keys, ["Get-Content", "node export_base.test.mjs", "node doc_reference_check.mjs"]);
@@ -542,7 +547,7 @@ test("status classifies recovered vs unresolved failures", () => {
       { ts: "2026-06-13T10:00:10+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "fail", value: "rework", event_type: "tool_call_result", commands: ["node --test tools/b.test.mjs"], session_id: "s1" },
     ]);
 
-    const result = run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    const result = run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson]);
     const status = readJson(statusJson);
     assert.equal(status.resolved_later_failed_records, 1);
     assert.equal(status.recovered_failed_records, 1);
@@ -576,7 +581,7 @@ test("status separates environment-blocked failures from unresolved failures", (
       },
     ]);
 
-    const result = run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson, "--verbose"]);
+    const result = run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson, "--verbose"]);
     const status = readJson(statusJson);
     assert.equal(status.unresolved_failed_records, 0);
     assert.equal(status.environment_blocked_failed_records, 1);
@@ -601,7 +606,7 @@ test("status flags low wall-clock coverage and gaps in verbose mode", () => {
       { ts: "2026-06-13T10:31:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", duration_ms: 100, commands: ["ls"], session_id: "s1" },
     ]);
 
-    const result = run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson, "--verbose"]);
+    const result = run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson, "--verbose"]);
     const status = readJson(statusJson);
     assert.equal(status.low_profile_coverage, true);
     assert.equal(status.wall_clock_coverage.largest_gaps.length, 1);
@@ -646,11 +651,11 @@ test("status surfaces an advisory subagent rollup", () => {
       { ts: "2026-06-22T10:01:00.000+00:00", phase: "session", category: "delegation", result: "pass", event_type: "subagent_spawn", subagent_type: "Explore", commands: ["map state"] },
       { ts: "2026-06-22T10:02:00.000+00:00", phase: "session", category: "tooling", result: "pass", event_type: "tool_call_result", commands: ["node x"] },
     ]);
-    run(["tools/ai_profile/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson]);
     const status = readJson(statusJson);
     assert.equal(status.subagent_rollup.count, 2);
     assert.equal(status.subagent_rollup.by_type.Explore, 2);
-    const rendered = run(["tools/ai_profile/status.mjs", "--profile", profile]);
+    const rendered = run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile]);
     assert.match(rendered.stdout, /Subagents delegated: 2/);
     assert.match(rendered.stdout, /## Subagents Delegated/);
     assert.match(rendered.stdout, /map src\/world/);
@@ -732,11 +737,11 @@ test("status --agents renders an advisory per-agent rollup", () => {
     const profile = join(dir, "p.jsonl");
     writeJsonl(profile, [{ ts: "2026-06-22T10:00:00.000+00:00", phase: "session", category: "tooling", result: "pass", event_type: "tool_call_result", commands: ["ls"] }]);
     const result = run(
-      ["tools/ai_profile/status.mjs", "--profile", profile, "--agents"],
+      ["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--agents"],
       { env: { AI_AGENT_CLAUDE_PROJECTS: dir, CLAUDE_CODE_SESSION_ID: session, CODEX_SESSION_FILE: "" } },
     );
-    assert.match(result.stdout, /## Agents — Claude/);
-    assert.match(result.stdout, /ccc333 \[Explore\] map runtime — Read 1, Grep 1/);
+    assert.match(result.stdout, /## Agents - Claude/);
+    assert.match(result.stdout, /ccc333 \[Explore\] map runtime - Read 1, Grep 1/);
     assert.match(result.stdout, /Total: 1 agent\(s\), 2 tool call\(s\)/);
   } finally {
     cleanup(dir);
@@ -826,7 +831,7 @@ test("parseSince and --since filter recent agents", () => {
 });
 
 test("hook_record_fast (C) and hook_record.mjs (JS) agree on result + category", {
-  skip: !existsSync(join(root, "tools", "ai_profile", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
+  skip: !existsSync(join(root, "ai_studio", "core_harness", "profiling", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
 }, () => {
   const dir = tempDir();
   try {

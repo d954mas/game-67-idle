@@ -5,7 +5,7 @@
 // Copies the reusable pieces (skills, AI Studio modules, skill sync, design knowledge,
 // task store conventions) and writes starter AGENTS.md /
 // CLAUDE.md. Existing files in the target are preserved unless --force.
-// See ai_studio/README.md and docs/ai-pipeline/profiling-reuse.md for what stays.
+// See ai_studio/README.md and ai_studio/core_harness/profiling/README.md for what stays.
 
 import { cpSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { join, resolve, basename } from "node:path";
@@ -31,7 +31,7 @@ if (dst === root) {
 const COPY = [
   ".codex/skills",
   "tools/skills_eval.mjs",
-  "tools/ai_profile",
+  "ai_studio/core_harness/profiling",
   "tools/requirements/ai-pipeline-full.txt",
   "tools/assets/job/new_art_job.mjs",
   "tools/assets/job/plan_source_sheet_prompt.mjs",

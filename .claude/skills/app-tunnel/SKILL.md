@@ -6,5 +6,5 @@ description: "Use when the lead wants to view, test, pick, or play something fro
 
 # app-tunnel
 
-Canonical instructions live in `.codex/skills/app-tunnel/SKILL.md` (single
-source of truth shared by all agent CLIs). Read that file and follow it.
+Codex-discoverable instructions live in `.codex/skills/app-tunnel/SKILL.md`.
+Read that file and follow it.

@@ -6,9 +6,9 @@ description: "Use when defining, generating, sourcing, reviewing, integrating, o
 
 # game-visual-art-direction
 
-Canonical instructions live in `.codex/skills/game-visual-art-direction/SKILL.md` (single
-source of truth shared by all agent CLIs). Read that file and follow it.
+Codex-discoverable instructions live in `.codex/skills/game-visual-art-direction/SKILL.md`.
+Read that file and follow it.
 
-Reference playbooks (load only when the canonical skill says to):
+Reference playbooks (load only when the Codex entrypoint says to):
 
 - `.codex/skills/game-visual-art-direction/references/visual-workflow-gates.md`

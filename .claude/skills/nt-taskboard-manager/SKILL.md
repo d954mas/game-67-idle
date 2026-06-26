@@ -6,5 +6,5 @@ description: "Use this skill when routing project task work through AI Studio Ta
 
 # nt-taskboard-manager
 
-Canonical instructions live in `.codex/skills/nt-taskboard-manager/SKILL.md` (single
-source of truth shared by all agent CLIs). Read that file and follow it.
+Codex-discoverable instructions live in `.codex/skills/nt-taskboard-manager/SKILL.md`.
+Read that file and follow it.

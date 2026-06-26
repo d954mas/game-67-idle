@@ -6,10 +6,10 @@ description: "Use when sourcing, adding, converting, packing, referencing, valid
 
 # game-asset-pipeline
 
-Canonical instructions live in `.codex/skills/game-asset-pipeline/SKILL.md` (single
-source of truth shared by all agent CLIs). Read that file and follow it.
+Codex-discoverable instructions live in `.codex/skills/game-asset-pipeline/SKILL.md`.
+Read that file and follow it.
 
-Reference playbooks (load only when the canonical skill says to):
+Reference playbooks (load only when the Codex entrypoint says to):
 
 - `.codex/skills/game-asset-pipeline/references/asset-source-and-cutout-rules.md`
 - `.codex/skills/game-asset-pipeline/references/pack-builder-rules.md`

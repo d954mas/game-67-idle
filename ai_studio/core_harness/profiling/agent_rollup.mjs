@@ -3,7 +3,7 @@
 // Answers "how many subagents ran, what each was asked, which tools each used,
 // how long they took, and whether they finished cleanly" by reading the
 // harness's OWN native transcripts (reliably linked by agentId /
-// parent_thread_id) — NOT by guessing or counting sessions as proof. Diagnostic
+// parent_thread_id) - NOT by guessing or counting sessions as proof. Diagnostic
 // observability for the lead to inspect/report; NEVER an acceptance gate.
 // (Distinct from the removed proof layer, which attributed day-cumulative
 // session counts to a TASK as a pass/fail condition.)
@@ -60,7 +60,7 @@ function findClaudeSubagentsDir(sessionId, projectsRoot) {
   for (const project of readdirSync(projectsRoot, { withFileTypes: true })) {
     if (!project.isDirectory()) continue;
     const projectDir = join(projectsRoot, project.name);
-    // Exact session-dir match (full id) — fast path.
+    // Exact session-dir match (full id) - fast path.
     const exact = join(projectDir, sessionId, "subagents");
     if (existsSync(exact)) return exact;
     // Short-id / prefix match: `--session e03c764c` should find dir e03c764c-<rest>.
@@ -261,7 +261,7 @@ function renderSection(title, agents) {
       agent.tool_errors > 0 ? `${agent.tool_errors} tool-err` : null,
       agent.status === "ok" ? "ok" : agent.status,
     ].filter(Boolean).join(", ");
-    lines.push(`- ${agent.id} ${type}${objective} — ${tools} | ${meta}`);
+    lines.push(`- ${agent.id} ${type}${objective} - ${tools} | ${meta}`);
   }
   const totalCalls = agents.reduce((sum, a) => sum + a.tool_total, 0);
   const totalErr = agents.reduce((sum, a) => sum + a.tool_errors, 0);
@@ -273,8 +273,8 @@ export function renderAgentRollup(rollup) {
   const lines = [];
   const sinceNote = rollup.since !== null && rollup.since !== undefined ? " (filtered by --since)" : "";
   if (rollup.claude.length > 0 || rollup.codex.length > 0) {
-    if (rollup.claude.length > 0) lines.push(...renderSection(`Agents — Claude (advisory, from native transcripts)${sinceNote}`, rollup.claude));
-    if (rollup.codex.length > 0) lines.push(...renderSection(`Agents — Codex (advisory, from native transcripts)${sinceNote}`, rollup.codex));
+    if (rollup.claude.length > 0) lines.push(...renderSection(`Agents - Claude (advisory, from native transcripts)${sinceNote}`, rollup.claude));
+    if (rollup.codex.length > 0) lines.push(...renderSection(`Agents - Codex (advisory, from native transcripts)${sinceNote}`, rollup.codex));
   } else {
     lines.push("", "## Agents (advisory)", `- no subagent transcripts found for this session${sinceNote}`);
   }

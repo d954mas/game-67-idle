@@ -23,7 +23,7 @@ Copied by `tools/bootstrap/export_base.mjs`:
 - validators: `ai_studio/core_harness/validation/doc_reference_check.mjs`,
   `tools/skills_eval.mjs`;
 - generated agent surfaces: `ai_studio/core_harness/agent_surfaces/`;
-- workflow state/profiling: `ai_studio/taskboard/`, `tools/ai_profile/`;
+- workflow state/profiling: `ai_studio/taskboard/`, `ai_studio/core_harness/profiling/`;
 - game startup/runtime proof: `tools/game_context/`, `tools/product_gate/`;
 - asset browser/review surface: `ai_studio/assets/asset_viewer/`;
 - reusable asset helpers: `tools/assets/`;

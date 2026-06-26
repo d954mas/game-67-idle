@@ -6,5 +6,5 @@ description: "Use to PREPARE a sourced or made asset into engine-ready form AND 
 
 # game-asset-prep
 
-Canonical instructions live in `.codex/skills/game-asset-prep/SKILL.md` (single
-source of truth shared by all agent CLIs). Read that file and follow it.
+Codex-discoverable instructions live in `.codex/skills/game-asset-prep/SKILL.md`.
+Read that file and follow it.

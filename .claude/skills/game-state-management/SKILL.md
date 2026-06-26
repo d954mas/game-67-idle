@@ -6,10 +6,10 @@ description: "Use when adding, changing, testing, reviewing, or migrating game s
 
 # game-state-management
 
-Canonical instructions live in `.codex/skills/game-state-management/SKILL.md` (single
-source of truth shared by all agent CLIs). Read that file and follow it.
+Codex-discoverable instructions live in `.codex/skills/game-state-management/SKILL.md`.
+Read that file and follow it.
 
-Reference playbooks (load only when the canonical skill says to):
+Reference playbooks (load only when the Codex entrypoint says to):
 
 - `.codex/skills/game-state-management/references/state-contract.md`
 - `.codex/skills/game-state-management/references/state-review-checklist.md`

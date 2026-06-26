@@ -1,4 +1,0 @@
-interface:
-  display_name: "AI Pipeline Maintenance"
-  short_description: "Maintain AI workflow docs, skills, and validators."
-  default_prompt: "Use $ai-pipeline-maintenance to reduce hot context, split skills, and validate the reusable AI pipeline."

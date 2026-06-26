@@ -52,7 +52,7 @@ test("portable export includes task guides and generated skill pointers", () => 
       true,
     );
     assert.equal(existsSync(join(target, "docs", "ai-pipeline", "quality-validation.md")), true);
-    assert.equal(existsSync(join(target, "docs", "ai-pipeline", "profiling-reuse.md")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "core_harness", "profiling", "README.md")), true);
     assert.equal(existsSync(join(target, "ai_studio", "tree.json")), true);
     assert.equal(existsSync(join(target, "ai_studio", "core_harness", "README.md")), true);
     assert.equal(existsSync(join(target, "ai_studio", "architecture_map", "index.html")), true);
@@ -81,7 +81,7 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.match(studio, /ai_studio\/core_harness\/workflow\/README\.md/);
     assert.match(studio, /ai_studio\/core_harness\/workflow\/orchestration\/README\.md/);
     assert.match(studio, /docs\/ai-pipeline\/quality-validation\.md/);
-    assert.match(studio, /docs\/ai-pipeline\/profiling-reuse\.md/);
+    assert.match(studio, /ai_studio\/core_harness\/profiling\/README\.md/);
     assert.match(studio, /ai_studio\/studio_shell\/start_site\.mjs/);
 
     const docRefs = runInTarget(target, ["ai_studio/core_harness/validation/doc_reference_check.mjs"]);

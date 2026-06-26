@@ -14,7 +14,7 @@ import { buildAgentToolRollup, renderAgentRollup } from "./agent_rollup.mjs";
 
 function usage() {
   console.error(`usage:
-  node tools/ai_profile/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--agents] [--since <Nm|Nh|Nd|ISO>] [--json-output <status.json>] [--verbose]
+  node ai_studio/core_harness/profiling/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--agents] [--since <Nm|Nh|Nd|ISO>] [--json-output <status.json>] [--verbose]
 
 Profiling is fully passive: the PostToolUse hook records every tool call to a
 per-session log automatically. This command READS that log and reports the
@@ -275,7 +275,7 @@ function classifyFailedRecords(records) {
 
 /* Normalize a command to a tool-level key: strip leading shell assignment
  * wrappers, take the first token's basename, and for interpreters append the
- * script basename (so "node tools/ai_profile/status.mjs" -> "node ai.mjs"). */
+ * script basename (so "node ai_studio/core_harness/profiling/status.mjs" -> "node ai.mjs"). */
 function commandKey(cmd) {
   const text = stripLeadingCommandAssignments(cmd);
   const tokens = text.split(/\s+/).filter(Boolean);
@@ -489,7 +489,7 @@ function renderStatus(status, { verbose }) {
   lines.push("");
   lines.push("## Next Action");
   lines.push(`- ${status.next_action}`);
-  if (!verbose) lines.push("- Use `node tools/ai_profile/status.mjs --verbose` for coverage gaps and parse errors.");
+  if (!verbose) lines.push("- Use `node ai_studio/core_harness/profiling/status.mjs --verbose` for coverage gaps and parse errors.");
   return `${lines.join("\n")}\n`;
 }
 

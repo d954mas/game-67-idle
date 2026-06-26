@@ -16,7 +16,7 @@ context, so cut hot docs and during-work blocking gates first — not on-demand 
 
 ## External AI Observability Decision Criteria
 
-The project profiles AI sessions with the local `tools/ai_profile/` JSONL profiler
+The project profiles AI sessions with the local `ai_studio/core_harness/profiling/` JSONL profiler
 and stays local-first. Do not add an external tracing/eval platform (LangSmith,
 Phoenix, Langfuse, Braintrust, OpenTelemetry export, etc.) just because reflection
 needs more data. Run a bounded side-by-side external pilot only when a concrete

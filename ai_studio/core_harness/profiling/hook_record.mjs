@@ -17,12 +17,44 @@
 //
 // Hard rule: NEVER break or slow the harness. Any error -> exit 0 silently.
 // Pass the harness name as argv[2] or AI_PROFILE_HARNESS (claude|codex).
+// Manual recovery:
+//   node ai_studio/core_harness/profiling/hook_record.mjs codex --recover-only [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
 
 import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 let profileLibPromise;
+
+function usage() {
+  console.error(`usage:
+  node ai_studio/core_harness/profiling/hook_record.mjs [claude|codex|agent]
+  node ai_studio/core_harness/profiling/hook_record.mjs codex --recover-only [--profile <profile.jsonl>] [--session <codex-session.jsonl>]
+
+Records harness hook payloads from stdin. --recover-only imports missed failed
+Codex shell calls from a Codex session JSONL into the normal profile.`);
+}
+
+function parseCliArgs(args) {
+  const options = { harness: "", recoverOnly: false, profile: "", session: "", help: false };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--help" || arg === "-h") {
+      options.help = true;
+    } else if (arg === "--recover-only") {
+      options.recoverOnly = true;
+    } else if (arg === "--profile") {
+      options.profile = args[index + 1] && !args[index + 1].startsWith("--") ? args[index + 1] : "";
+      if (options.profile) index += 1;
+    } else if (arg === "--session") {
+      options.session = args[index + 1] && !args[index + 1].startsWith("--") ? args[index + 1] : "";
+      if (options.session) index += 1;
+    } else if (!arg.startsWith("--") && !options.harness) {
+      options.harness = arg;
+    }
+  }
+  return options;
+}
 
 function loadProfileLib() {
   profileLibPromise ??= import("./profile_lib.mjs");
@@ -233,11 +265,18 @@ function readStdin() {
 
 (async () => {
   try {
+    const options = parseCliArgs(process.argv.slice(2));
+    if (options.help) {
+      usage();
+      process.exit(0);
+    }
+    if (options.session) process.env.CODEX_SESSION_FILE = options.session;
+
     const raw = await readStdin();
     let payload = {};
     try { payload = JSON.parse(raw || "{}"); } catch { payload = {}; }
 
-    const harness = process.argv[2] || process.env.AI_PROFILE_HARNESS || "agent";
+    const harness = options.harness || process.env.AI_PROFILE_HARNESS || "agent";
     const event = String(pick(payload, "hook_event_name", "hookEventName") || "PostToolUse");
 
     /* Route to the SAME per-session file the native hot path uses, and stamp
@@ -247,11 +286,11 @@ function readStdin() {
     let rawSession = pick(payload, "session_id", "sessionId", "conversation_id") || "";
     if (!rawSession && harness === "codex") rawSession = latestCodexSessionFile();
     const session = deriveSessionId(rawSession);
-    const profilePath = process.env.AI_PROFILE_FILE || (session.short ? sessionProfilePathFor(harness, session.short) : "");
+    const profilePath = options.profile || process.env.AI_PROFILE_FILE || (session.short ? sessionProfilePathFor(harness, session.short) : "");
     const stamp = { harness, cwd: process.cwd() };
     if (session.full) stamp.session_id = session.full;
 
-    if (process.env.AI_PROFILE_RECOVER_ONLY === "1") {
+    if (options.recoverOnly || process.env.AI_PROFILE_RECOVER_ONLY === "1") {
       await recoverCodexFailedCommands(profilePath, harness, stamp);
       process.exit(0);
     }

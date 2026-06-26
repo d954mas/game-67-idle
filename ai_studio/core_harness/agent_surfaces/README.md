@@ -3,17 +3,20 @@
 This Core Harness module owns generated agent-facing compatibility surfaces.
 
 It does not define skill behavior or profiling semantics. It only renders the
-same canonical sources into the file shapes expected by different agent CLIs.
+same discoverable entrypoints and hook sources into the file shapes expected by
+different agent CLIs.
 
 ## Source Of Truth
 
-- `.codex/skills/*/SKILL.md`: canonical skill instructions.
+- `.codex/skills/*/SKILL.md`: Codex-discoverable skill entrypoints. Small
+  skills may keep canonical content there; reviewed module-owned skills may
+  point to canonical instructions inside their owning `ai_studio/` module.
 - `hooks_sync.mjs`: canonical hook event/matcher/recorder source.
 
 ## Generated Outputs
 
-- `.claude/skills/*/SKILL.md`: generated thin pointers to canonical Codex
-  skills.
+- `.claude/skills/*/SKILL.md`: generated thin pointers to Codex-discoverable
+  skill entrypoints.
 - `.codex/hooks.json`: generated Codex hook config.
 - `.claude/settings.json`: generated Claude hook config; Claude-only keys are
   preserved.

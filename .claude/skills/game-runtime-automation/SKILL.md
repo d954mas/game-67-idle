@@ -6,10 +6,10 @@ description: "Use when adding, using, or improving game runtime automation or vi
 
 # game-runtime-automation
 
-Canonical instructions live in `.codex/skills/game-runtime-automation/SKILL.md` (single
-source of truth shared by all agent CLIs). Read that file and follow it.
+Codex-discoverable instructions live in `.codex/skills/game-runtime-automation/SKILL.md`.
+Read that file and follow it.
 
-Reference playbooks (load only when the canonical skill says to):
+Reference playbooks (load only when the Codex entrypoint says to):
 
 - `.codex/skills/game-runtime-automation/references/devapi-pattern.md`
 - `.codex/skills/game-runtime-automation/references/runtime-workflow-rules.md`

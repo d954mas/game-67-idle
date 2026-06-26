@@ -7,15 +7,12 @@ Portable rules for profiling, visual/asset routing, prototype closeout, and expo
 Profiling is passive telemetry for repeated failures, slow commands, and gaps.
 
 The PostToolUse hook records tool calls automatically. Review a session with
-`node tools/ai_profile/status.mjs`; use `--verbose` for coverage gaps. `status` runs
-`node tools/ai_profile/import_codex_session.mjs` to recover missed Codex failures.
-Use `--agent-rollup` for subagent diagnostics; pass `--parent-thread-id` or
-`--trace-session` for spawn/wait/close checks. Add
-`--require-agent-rollup-ok` only for closeout; it exits nonzero on incomplete
-rollups. Agent rollup reports best-effort profile/transcript telemetry; it is
-diagnostic, not a strict gate. Tool-usage failures are orchestration friction,
-not product/gate failures. If matching metadata exists but rollup is
-omitted, `status` prints the command.
+`node ai_studio/core_harness/profiling/status.mjs`; use `--verbose` for coverage
+gaps. Run `node ai_studio/core_harness/profiling/hook_record.mjs codex --recover-only`
+before status when Codex failures are missing from the profile. Use `--agents` for
+subagent diagnostics. Agent rollup reports best-effort profile/transcript
+telemetry; it is diagnostic, not a strict gate. Tool-usage failures are
+orchestration friction, not product/gate failures.
 
 Do not commit raw telemetry from `tmp/session_profiles/`; commit only durable
 lessons, rules, tools, or tasks.

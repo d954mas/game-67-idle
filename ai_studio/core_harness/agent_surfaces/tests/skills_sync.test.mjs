@@ -60,7 +60,7 @@ test("skills sync generates thin pointers and check passes", () => {
     assert.match(generated.stdout, /done: 1 generated, 0 stale removed, 0 skipped/);
 
     const out = readFileSync(join(dir, ".claude", "skills", "sample", "SKILL.md"), "utf8");
-    assert.match(out, /Canonical instructions live in `.codex\/skills\/sample\/SKILL.md`/);
+    assert.match(out, /Codex-discoverable instructions live in `.codex\/skills\/sample\/SKILL.md`/);
 
     const checked = run(["--root", dir, "--check"]);
     assert.equal(checked.status, 0, checked.stderr);
