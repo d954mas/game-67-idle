@@ -32,7 +32,7 @@ Load only the route that matches the current task:
   `ai_studio/core_harness/workflow/README.md`.
 - Broad read-heavy work that should be split before loading too much context:
   `ai_studio/core_harness/workflow/orchestration/README.md`.
-- Stale Markdown/tool references and retired command routes:
+- Core entrypoint/doc references and retired Core-era command routes:
   `node ai_studio/core_harness/validation/doc_reference_check.mjs`.
 - Generated Codex/Claude skills and hook surfaces:
   `node ai_studio/core_harness/agent_surfaces/sync.mjs --check`.

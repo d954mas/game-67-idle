@@ -25,13 +25,12 @@ const root = resolve(takeString("--root", process.cwd()));
 if (args.includes("--help") || args.includes("-h")) usage();
 if (args.length > 0) usage();
 
-const roots = [
+const checkedRoots = [
   "AGENTS.md",
-  join("ai_studio"),
-  join("docs", "ai-pipeline"),
-  join("tools", "README.md"),
-  join("tasks"),
-  join(".codex", "skills"),
+  "CLAUDE.md",
+  "GAME_PROJECT.md",
+  join("ai_studio", "README.md"),
+  join("ai_studio", "core_harness"),
 ];
 
 function walkMarkdown(path) {
@@ -39,8 +38,6 @@ function walkMarkdown(path) {
   const stat = statSync(path);
   if (stat.isFile()) return path.endsWith(".md") ? [path] : [];
   if (!stat.isDirectory()) return [];
-  const relative = rel(path);
-  if (relative === "tasks/archive" || relative.startsWith("tasks/archive/")) return [];
   const out = [];
   for (const name of readdirSync(path)) {
     out.push(...walkMarkdown(join(path, name)));
@@ -67,22 +64,6 @@ function cleanReference(value) {
   if (!/\.(md|mjs|py|sh|json)$/.test(ref)) return null;
   if (/[<>*?]/.test(ref)) return null;
   return ref.replaceAll("\\", "/");
-}
-
-// Game-runtime tooling each project regenerates against its own engine/runtime.
-// The portable export base (tools/bootstrap/export_base.mjs) intentionally omits
-// these whole subsystems, so a reference into one is tolerated ONLY when the
-// subsystem dir itself is absent. A missing file inside a present subsystem is
-// still a real stale/renamed reference and fails.
-const REGENERATED_SUBSYSTEMS = ["tools/devapi", "tools/state_codegen"];
-
-function isOmittedSubsystemReference(ref) {
-  for (const prefix of REGENERATED_SUBSYSTEMS) {
-    if ((ref === prefix || ref.startsWith(`${prefix}/`)) && !existsSync(join(root, prefix))) {
-      return true;
-    }
-  }
-  return false;
 }
 
 function isPathLikeBacktick(ref) {
@@ -112,7 +93,7 @@ function resolveReference(sourceFile, ref) {
   return resolve(root, ref);
 }
 
-const files = roots.flatMap((entry) => walkMarkdown(join(root, entry)));
+const files = checkedRoots.flatMap((entry) => walkMarkdown(join(root, entry)));
 const problems = [];
 const retiredCommandPatterns = [
   {
@@ -162,7 +143,6 @@ for (const file of files) {
     if (candidate.kind === "backtick" && !isPathLikeBacktick(ref)) continue;
     const target = resolveReference(file, ref);
     if (!target.startsWith(root) || !existsSync(target)) {
-      if (isOmittedSubsystemReference(ref)) continue;
       problems.push(`${rel(file)} -> ${candidate.value}`);
     }
   }

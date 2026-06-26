@@ -25,28 +25,20 @@ function run(args) {
 }
 
 function writeMinimalRoot(dir) {
-  mkdirSync(join(dir, "ai_studio", "taskboard"), { recursive: true });
-  mkdirSync(join(dir, "tasks", "guides"), { recursive: true });
-  mkdirSync(join(dir, ".codex", "skills", "sample", "references"), { recursive: true });
-  writeFileSync(join(dir, "AGENTS.md"), "# Agents\n\nSee `ai_studio/README.md`.\n", "utf8");
-  writeFileSync(join(dir, "ai_studio", "README.md"), "# AI Studio\n\nSee `ai_studio/taskboard/README.md`.\n", "utf8");
+  mkdirSync(join(dir, "ai_studio", "core_harness", "workflow"), { recursive: true });
+  writeFileSync(join(dir, "AGENTS.md"), "# Agents\n\nSee `ai_studio/README.md` and `CLAUDE.md`.\n", "utf8");
+  writeFileSync(join(dir, "CLAUDE.md"), "# Claude\n\nSee `AGENTS.md`.\n", "utf8");
+  writeFileSync(join(dir, "GAME_PROJECT.md"), "# Game Project\n\nNo active game.\n", "utf8");
+  writeFileSync(join(dir, "ai_studio", "README.md"), "# AI Studio\n\nSee `ai_studio/core_harness/README.md`.\n", "utf8");
   writeFileSync(
-    join(dir, "ai_studio", "taskboard", "README.md"),
-    "# Taskboard\n\nSee `ai_studio/taskboard/task-store-reference.md`.\n",
+    join(dir, "ai_studio", "core_harness", "README.md"),
+    "# Core Harness\n\nSee `ai_studio/core_harness/workflow/README.md`.\n",
     "utf8",
   );
-  writeFileSync(join(dir, "ai_studio", "taskboard", "task-store-reference.md"), "# Task Store\n", "utf8");
-  writeFileSync(join(dir, "tasks", "README.md"), "See `tasks/guides/protocol.md`.\n", "utf8");
-  writeFileSync(join(dir, "tasks", "guides", "protocol.md"), "# Protocol\n", "utf8");
-  writeFileSync(
-    join(dir, ".codex", "skills", "sample", "SKILL.md"),
-    "See `references/detail.md` and `ai_studio/taskboard/README.md`.\n",
-    "utf8",
-  );
-  writeFileSync(join(dir, ".codex", "skills", "sample", "references", "detail.md"), "# Detail\n", "utf8");
+  writeFileSync(join(dir, "ai_studio", "core_harness", "workflow", "README.md"), "# Workflow\n", "utf8");
 }
 
-test("doc reference check passes existing local markdown references", () => {
+test("doc reference check passes core harness markdown references", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
@@ -58,14 +50,27 @@ test("doc reference check passes existing local markdown references", () => {
   }
 });
 
-test("doc reference check fails missing local markdown references", () => {
+test("doc reference check fails missing core markdown references", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
-    writeFileSync(join(dir, "tasks", "README.md"), "See `tasks/guides/missing.md`.\n", "utf8");
+    writeFileSync(join(dir, "ai_studio", "core_harness", "README.md"), "See `ai_studio/core_harness/missing.md`.\n", "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /tasks\/README\.md -> tasks\/guides\/missing\.md/);
+    assert.match(result.stderr, /ai_studio\/core_harness\/README\.md -> ai_studio\/core_harness\/missing\.md/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("doc reference check ignores non-core module docs", () => {
+  const dir = tempDir();
+  try {
+    writeMinimalRoot(dir);
+    mkdirSync(join(dir, "ai_studio", "taskboard"), { recursive: true });
+    writeFileSync(join(dir, "ai_studio", "taskboard", "README.md"), "See `ai_studio/taskboard/missing.md`.\n", "utf8");
+    const result = run(["--root", dir]);
+    assert.equal(result.status, 0, result.stderr);
   } finally {
     cleanup(dir);
   }
@@ -75,7 +80,7 @@ test("doc reference check ignores bare backticked template names", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
-    writeFileSync(join(dir, "tasks", "README.md"), "Template names: `gdd.md`, `GAME_PROJECT.md`.\n", "utf8");
+    writeFileSync(join(dir, "AGENTS.md"), "Template names: `gdd.md`, `GAME_PROJECT.md`.\n", "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 0, result.stderr);
   } finally {
@@ -83,31 +88,14 @@ test("doc reference check ignores bare backticked template names", () => {
   }
 });
 
-test("doc reference check still fails missing markdown links", () => {
+test("doc reference check fails missing markdown links", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
-    writeFileSync(join(dir, "tasks", "README.md"), "See [missing](tasks/guides/missing.md).\n", "utf8");
+    writeFileSync(join(dir, "AGENTS.md"), "See [missing](ai_studio/core_harness/missing.md).\n", "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /tasks\/README\.md -> tasks\/guides\/missing\.md/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("doc reference check ignores historical task archive links", () => {
-  const dir = tempDir();
-  try {
-    writeMinimalRoot(dir);
-    mkdirSync(join(dir, "tasks", "archive", "E999"), { recursive: true });
-    writeFileSync(
-      join(dir, "tasks", "archive", "E999", "T9999-old-prototype.md"),
-      "Archived task references removed prototype artifact `gamedesign/projects/old-game/gdd.md`.\n",
-      "utf8",
-    );
-    const result = run(["--root", dir]);
-    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stderr, /AGENTS\.md -> ai_studio\/core_harness\/missing\.md/);
   } finally {
     cleanup(dir);
   }
@@ -130,30 +118,13 @@ test("doc reference check rejects retired ai facade command", () => {
   }
 });
 
-test("doc reference check rejects retired deep reflection facade command", () => {
-  const dir = tempDir();
-  try {
-    writeMinimalRoot(dir);
-    writeFileSync(
-      join(dir, "ai_studio", "README.md"),
-      "Old command:\n\n```powershell\nnode tools/ai.mjs reflect --deep\n```\n",
-      "utf8",
-    );
-    const result = run(["--root", dir]);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /retired command `node tools\/ai\.mjs`/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("doc reference check allows direct core doc reference command in docs", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
     writeFileSync(
       join(dir, "ai_studio", "README.md"),
-      "Old command:\n\n```powershell\nnode ai_studio/core_harness/validation/doc_reference_check.mjs --review\n```\n",
+      "Current command:\n\n```powershell\nnode ai_studio/core_harness/validation/doc_reference_check.mjs\n```\n",
       "utf8",
     );
     const result = run(["--root", dir]);
@@ -193,13 +164,13 @@ test("doc reference check rejects retired context pressure wording", () => {
   }
 });
 
-test("doc reference check passes an existing non-markdown tool reference", () => {
+test("doc reference check validates non-markdown tool references in core docs", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
     mkdirSync(join(dir, "tools"), { recursive: true });
     writeFileSync(join(dir, "tools", "sample_tool.mjs"), "// sample\n", "utf8");
-    writeFileSync(join(dir, "tasks", "README.md"), "Run `tools/sample_tool.mjs`.\n", "utf8");
+    writeFileSync(join(dir, "AGENTS.md"), "Run `tools/sample_tool.mjs`.\n", "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 0, result.stderr);
   } finally {
@@ -207,50 +178,14 @@ test("doc reference check passes an existing non-markdown tool reference", () =>
   }
 });
 
-test("doc reference check fails a missing non-markdown tool reference", () => {
+test("doc reference check fails missing non-markdown tool references in core docs", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
-    writeFileSync(join(dir, "tasks", "README.md"), "Run `tools/missing_tool.mjs`.\n", "utf8");
+    writeFileSync(join(dir, "AGENTS.md"), "Run `tools/missing_tool.mjs`.\n", "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /tools\/missing_tool\.mjs/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("doc reference check tolerates an omitted regenerated subsystem", () => {
-  // The portable export base omits tools/devapi + tools/state_codegen; a skill
-  // referencing them must not fail when the whole subsystem dir is absent.
-  const dir = tempDir();
-  try {
-    writeMinimalRoot(dir);
-    writeFileSync(
-      join(dir, ".codex", "skills", "sample", "SKILL.md"),
-      "See `references/detail.md`, `tools/devapi/devapi_client.py`, and `tools/state_codegen/generate_state.py`.\n",
-      "utf8",
-    );
-    const result = run(["--root", dir]);
-    assert.equal(result.status, 0, result.stderr);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("doc reference check still fails a missing file inside a present subsystem", () => {
-  const dir = tempDir();
-  try {
-    writeMinimalRoot(dir);
-    mkdirSync(join(dir, "tools", "devapi"), { recursive: true });
-    writeFileSync(
-      join(dir, ".codex", "skills", "sample", "SKILL.md"),
-      "See `references/detail.md` and `tools/devapi/missing_client.py`.\n",
-      "utf8",
-    );
-    const result = run(["--root", dir]);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /tools\/devapi\/missing_client\.py/);
   } finally {
     cleanup(dir);
   }
