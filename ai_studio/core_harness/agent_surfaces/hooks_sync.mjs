@@ -8,11 +8,14 @@
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { isMain } from "../../../tools/lib/cli.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "../../..");
+
+function isMain(moduleUrl) {
+  return process.argv[1] && moduleUrl === pathToFileURL(process.argv[1]).href;
+}
 
 // --- Canonical source: the hooks, tool-agnostic. -------------------------
 // Each event lists hook entries. `match` is a logical matcher key resolved per
@@ -121,6 +124,11 @@ function main() {
     process.exit(0);
   }
   const check = args.includes("--check");
+  if (check) args.splice(args.indexOf("--check"), 1);
+  if (args.length > 0) {
+    console.error("usage: node ai_studio/core_harness/agent_surfaces/hooks_sync.mjs [--check]");
+    process.exit(2);
+  }
   const drift = syncAll({ check });
   if (check) {
     if (drift.length) {

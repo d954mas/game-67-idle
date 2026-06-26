@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 import { generate, buildHooks, TOOLS } from "../hooks_sync.mjs";
 
@@ -55,4 +56,24 @@ test("committed files actually exist (guards against a moved path)", () => {
   for (const tool of Object.values(TOOLS)) {
     assert.ok(existsSync(resolve(root, tool.file)), `${tool.file} missing`);
   }
+});
+
+test("hooks sync CLI rejects unknown arguments", () => {
+  const result = spawnSync(process.execPath, ["ai_studio/core_harness/agent_surfaces/hooks_sync.mjs", "--wat"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /usage: node ai_studio\/core_harness\/agent_surfaces\/hooks_sync\.mjs/);
+});
+
+test("aggregate sync CLI rejects unknown arguments", () => {
+  const result = spawnSync(process.execPath, ["ai_studio/core_harness/agent_surfaces/sync.mjs", "--wat"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /usage: node ai_studio\/core_harness\/agent_surfaces\/sync\.mjs/);
 });

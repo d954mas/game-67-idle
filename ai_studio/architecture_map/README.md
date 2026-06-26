@@ -24,9 +24,9 @@ use `kind: "test"` and validators or validation docs use `kind: "validation"`.
 The map page's `Types` menu hides `test` and `validation` by default, but they
 remain architecture data: they still map files and count in validation.
 
-Node card colors are assigned by `kind`, not by owner: module, group, doc, tool,
-skill, validation, test, folder, contract, and backlog each have a stable color
-in the page legend.
+Node card colors are assigned by `kind`, not by owner: module, group, doc,
+config, tool, skill, validation, test, folder, contract, and backlog each have a
+stable color in the page legend.
 
 ## Commands
 

@@ -17,11 +17,20 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 
+function usage(stream = console.error) {
+  stream("usage: node ai_studio/core_harness/agent_surfaces/sync.mjs [--check]");
+}
+
 if (args.includes("--help") || args.includes("-h")) {
-  console.log("usage: node ai_studio/core_harness/agent_surfaces/sync.mjs [--check]");
+  usage(console.log);
   process.exit(0);
 }
 const check = args.includes("--check");
+if (check) args.splice(args.indexOf("--check"), 1);
+if (args.length > 0) {
+  usage();
+  process.exit(2);
+}
 
 const STEPS = [
   ["skills", "skills_sync.mjs"],

@@ -1440,6 +1440,7 @@
       folder: { label: "Folder", color: "#0891b2" },
       dir: { label: "Folder", color: "#0891b2" },
       doc: { label: "Doc", color: "#15803d" },
+      config: { label: "Config", color: "#4f46e5" },
       tool: { label: "Tool", color: "#b45309" },
       surface: { label: "Surface", color: "#0284c7" },
       server: { label: "Server", color: "#0d9488" },
@@ -1451,13 +1452,14 @@
       backlog: { label: "Backlog", color: "#64748b" },
       item: { label: "Item", color: "#475569" }
     };
-    const typeLegendItems = ["module", "shell", "group", "doc", "tool", "surface", "server", "ui-component", "skill", "validation", "test", "backlog"];
+    const typeLegendItems = ["module", "shell", "group", "doc", "config", "tool", "surface", "server", "ui-component", "skill", "validation", "test", "backlog"];
     const defaultHiddenKinds = new Set(["test", "validation"]);
     function normalizedKind(kind) {
       const value = String(kind || "item").toLowerCase();
       if (kindPalette[value]) return value;
       if (value.includes("validation") || value.includes("validator")) return "validation";
       if (value.includes("test")) return "test";
+      if (value.includes("config") || value.includes("settings")) return "config";
       if (value.includes("doc")) return "doc";
       if (value.includes("tool")) return "tool";
       if (value.includes("surface")) return "surface";
@@ -1548,6 +1550,7 @@
     }
     function groupTitleFor(kind) {
       if (kind === "doc") return "Docs";
+      if (kind === "config") return "Config";
       if (kind === "skill") return "Skills";
       if (kind === "tool") return "Tools";
       if (kind === "surface") return "Surfaces";
@@ -2211,7 +2214,7 @@
       if (node.kind === "skill") return icon("agent");
       if (node.kind === "contract" || node.kind === "validation") return icon("shield");
       if (node.kind === "test") return icon("sync");
-      if (node.kind === "doc" || node.kind === "target" || node.kind === "current") return icon("doc");
+      if (node.kind === "doc" || node.kind === "config" || node.kind === "target" || node.kind === "current") return icon("doc");
       return icon("group");
     }
     function syncSelectionFromExplorer(node) {
