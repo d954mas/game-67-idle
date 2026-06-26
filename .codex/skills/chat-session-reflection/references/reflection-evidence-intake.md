@@ -9,9 +9,9 @@ improvement.
 
 Use durable evidence before memory:
 
-1. `AGENTS.md`, `ai_studio/README.md`, `ai_studio/taskboard/README.md`.
-2. `node ai_studio/taskboard/cli.mjs summary`; use
-   `node ai_studio/taskboard/cli.mjs context` only if the summary is not enough.
+1. `AGENTS.md`, `GAME_PROJECT.md`, `ai_studio/README.md`, `ai_studio/taskboard/README.md`.
+2. `node ai_studio/taskboard/cli.mjs summary --json`; use
+   `node ai_studio/taskboard/cli.mjs context --json` only if the summary is not enough.
 3. `git status --short` to identify changed durable artifacts without implying
    they were all part of the reflected session.
 4. Relevant task logs, reports, screenshots, package logs, or validation
@@ -19,8 +19,8 @@ Use durable evidence before memory:
 5. Passive profiling telemetry in `tmp/session_profiles/` when present.
 6. Conversation context only after checking durable state.
 
-Avoid high-cost context reads. Treat full `tasks/STATUS.md`, old task logs,
-generated profile reviews, and archived material as optional evidence.
+Avoid high-cost context reads. Treat old task logs, generated profile reviews,
+and archived material as optional evidence.
 
 If the reflection suggests external AI observability/eval tooling, consult the
 External AI Observability Decision Criteria in `AI_PIPELINE_HISTORY.md` first.

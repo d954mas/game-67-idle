@@ -24,7 +24,7 @@ Use for AI workflow/tooling changes, not ordinary playable game work.
 ## Default Workflow
 
 1. Inspect with `git status --short --untracked-files=all`,
-   `node ai_studio/taskboard/cli.mjs summary`, and, for review,
+   `node ai_studio/taskboard/cli.mjs summary --json`, and, for review,
    `node tools/context_budget.mjs --review`.
 2. Pick one scope: hot docs, skill entrypoints, validators, profiling,
    taskboard, product gates, export, or post-review cleanup.
@@ -37,7 +37,7 @@ Use for AI workflow/tooling changes, not ordinary playable game work.
 - Policy/boundaries: `AGENTS.md`; portable map: `ai_studio/README.md`.
 - Reusable method: `docs/ai-pipeline/` or skill `references/`.
 - Repeatable agent behavior: `.codex/skills/<skill>/`.
-- Work state/evidence: `tasks/STATUS.md`, task logs, evidence files.
+- Current game routing: `GAME_PROJECT.md`; work evidence: task logs and evidence files.
 - Mechanical invariants: `tools/*` validators/tests.
 
 ## Stop Conditions

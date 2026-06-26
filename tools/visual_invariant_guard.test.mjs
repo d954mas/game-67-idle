@@ -7,12 +7,13 @@ import test from "node:test";
 
 const root = process.cwd();
 
-function tempRoot(t, status = "Active game concept: Test") {
+function tempRoot(t, active = true) {
   const dir = mkdtempSync(join(tmpdir(), "visual-invariant-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  mkdirSync(join(dir, "tasks"), { recursive: true });
   mkdirSync(join(dir, "src"), { recursive: true });
-  writeFileSync(join(dir, "tasks", "STATUS.md"), `# Status\n\n${status}\n`, "utf8");
+  writeFileSync(join(dir, "GAME_PROJECT.md"), active
+    ? "# GAME_PROJECT\n\n## Active Game\n\nStatus: active\n\n- Game id: `test-game`\n- Game folder: `gamedesign/projects/test-game/`\n"
+    : "# GAME_PROJECT\n\n## Active Game\n\nStatus: none\n\nThere is no active game concept.\n", "utf8");
   return dir;
 }
 
@@ -25,7 +26,7 @@ function runGuard(dir) {
 }
 
 test("skips clean seed without an active concept", (t) => {
-  const dir = tempRoot(t, "No active game concept is selected.");
+  const dir = tempRoot(t, false);
   writeFileSync(join(dir, "src", "clean_seed_main.c"), "void x(){ draw_text(); nt_shape_renderer_rect(); }\n", "utf8");
   const result = runGuard(dir);
   assert.equal(result.status, 0, result.stderr);

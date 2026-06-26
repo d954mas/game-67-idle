@@ -13,15 +13,14 @@ import { VALIDATE_BOOLEAN_FLAGS, VALIDATE_VALUE_FLAGS } from "../../../tools/lib
 const root = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
 // The product-gate suite is dormant in a clean seed: it only matters once a game
-// with art/runtime is active. STATUS.md is the single signal (same phrase as the
-// status/runtime guard below); --with-assets and --full force it on. NT_FORCE_CONCEPT
-// (0/1) overrides for deterministic tests.
+// with art/runtime is active. GAME_PROJECT.md is the active-game routing signal;
+// --with-assets and --full force it on. NT_FORCE_CONCEPT (0/1) overrides tests.
 function hasActiveConcept() {
   if (process.env.NT_FORCE_CONCEPT === "1") return true;
   if (process.env.NT_FORCE_CONCEPT === "0") return false;
-  const statusPath = join(root, "tasks", "STATUS.md");
-  if (!existsSync(statusPath)) return true;
-  return !/no active game concept/i.test(readFileSync(statusPath, "utf8"));
+  const gameProjectPath = join(root, "GAME_PROJECT.md");
+  if (!existsSync(gameProjectPath)) return false;
+  return !/status:\s*none|no active game concept/i.test(readFileSync(gameProjectPath, "utf8"));
 }
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -38,7 +37,7 @@ Modes:
              self-check (reserve for portable-base/export/runtime/release gates)
   --review   add review-stage gates, including strict context budgets
   --dry-run  print the selected commands without running them
-  --with-assets run the product-gate suite even when STATUS has no active game
+  --with-assets run the product-gate suite even when GAME_PROJECT has no active game
              concept (auto-on under --full or once a game is active)
 
 Export depth (with --full):
@@ -330,29 +329,6 @@ run("visual invariant guard tests", ["--test", "tools/visual_invariant_guard.tes
 run("restricted asset guard", ["tools/assets/audit/restricted_assets_guard.mjs"]);
 run("restricted asset guard tests", ["--test", "tools/assets/audit/restricted_assets_guard.test.mjs"]);
 run("taskboard validate", ["ai_studio/taskboard/cli.mjs", "validate"]);
-
-// Guard: catch a STATUS<->runtime contradiction. A "clean seed" repo must not
-// hide a live game in src/clean_seed_main.c (the exact blocker that let a 1676-
-// line Mine Cards game build while STATUS said "no active game"). Fast; runs always.
-console.log("\n== status/runtime contradiction guard");
-{
-  const statusPath = join(root, "tasks", "STATUS.md");
-  const seedPath = join(root, "src", "clean_seed_main.c");
-  const SEED_MAX_LINES = 600; // the clean seed is ~362 lines; a real game is 1000+
-  if (existsSync(statusPath) && existsSync(seedPath)) {
-    const status = readFileSync(statusPath, "utf8");
-    const seedLines = readFileSync(seedPath, "utf8").split(/\r?\n/).length;
-    if (/no active game concept/i.test(status) && seedLines > SEED_MAX_LINES) {
-      console.error(
-        `error: STATUS.md says "no active game concept" but src/clean_seed_main.c is ${seedLines} lines — that is a game, not a clean seed. The active game lives in a game folder now (copied from template/); remove the stray root runtime or correct STATUS.md.`
-      );
-      process.exit(1);
-    }
-    console.log("ok: STATUS and runtime are consistent");
-  } else {
-    console.log("ok: no STATUS/seed to compare");
-  }
-}
 run("taskboard tests", ["--test", "ai_studio/taskboard/tests/taskboard.test.mjs"]);
 run("ai profile tests", ["--test", "tools/ai_profile/test.mjs"]);
 if (existsSync(join(root, "tools", "game_context", "test.mjs"))) {

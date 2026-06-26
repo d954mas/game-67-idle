@@ -76,16 +76,14 @@ function extension(path) {
 }
 
 function activeConcept(root) {
-  const agents = readText(join(root, "AGENTS.md"));
-  const status = readText(join(root, "tasks", "STATUS.md"));
-  const combined = `${agents}\n${status}`;
-  if (/no active game concept|active game concept:\s*(none|no active|not selected)/i.test(combined)) {
+  const gameProject = readText(join(root, "GAME_PROJECT.md"));
+  if (/status:\s*none|no active game concept/i.test(gameProject)) {
     return { active: false, reason: "no active game concept" };
   }
-  if (/active game concept:/i.test(combined) || /gamedesign[\\/]+projects/i.test(combined)) {
+  if (/game id:|game folder:|gamedesign[\\/]+projects/i.test(gameProject)) {
     return { active: true, reason: "active game concept detected" };
   }
-  return { active: true, reason: "no dormant clean-seed marker found" };
+  return { active: false, reason: "no active game concept" };
 }
 
 function lineOf(text, pattern) {
@@ -142,17 +140,6 @@ function flatRuntimeEvidence(root) {
   return hits;
 }
 
-function statusContradiction(root, floorFails) {
-  if (!floorFails) return [];
-  const statusPath = join(root, "tasks", "STATUS.md");
-  const text = readText(statusPath);
-  if (!text) return [];
-  if (/visual rejection is resolved|Blocking Work\s*\n\s*-\s*None/i.test(text)) {
-    return [{ path: "tasks/STATUS.md", line: lineOf(text, /visual rejection is resolved|Blocking Work|-\s*None/i) }];
-  }
-  return [];
-}
-
 function buildReport(root, options) {
   const concept = activeConcept(root);
   if (!concept.active) {
@@ -169,7 +156,6 @@ function buildReport(root, options) {
   const colorOnlyShaders = colorOnlyShaderEvidence(root);
   const flatRuntime = flatRuntimeEvidence(root);
   const materialFloorFails = sourceModels.length > 0 && colorOnlyShaders.length > 0 && flatRuntime.length > 0;
-  const contradictions = statusContradiction(root, materialFloorFails);
   const problems = [];
   const warnings = [];
 
@@ -179,10 +165,6 @@ function buildReport(root, options) {
     problems.push(
       "GLB/GLTF assets are present, but runtime uses a flat color-only mesh path: source materials/textures/UVs are not proven in product rendering."
     );
-  }
-
-  for (const item of contradictions) {
-    problems.push(`status claims visual rejection is resolved/no blocker while material floor fails (${item.path}:${item.line})`);
   }
 
   const verdict = problems.length > 0 ? "fail" : warnings.length > 0 ? "warn" : "pass";
@@ -196,7 +178,6 @@ function buildReport(root, options) {
       source_models: sourceModels,
       color_only_shaders: colorOnlyShaders,
       flat_runtime_paths: flatRuntime,
-      status_contradictions: contradictions,
     },
   };
 }

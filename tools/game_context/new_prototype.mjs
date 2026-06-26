@@ -12,7 +12,7 @@ function usage() {
   console.error(`usage:
   node tools/game_context/new_prototype.mjs --game-id <id> --title <name> --brief <one sentence> [--root <repo>] [--force]
 
-Creates the first project wiki/task/status skeleton for a new native-first game prototype,
+Creates the first project wiki/task/routing skeleton for a new native-first game prototype,
 then runs the prototype startup gate and writes tmp/prototype_startup_gate_context.*.`);
   process.exit(2);
 }
@@ -62,13 +62,8 @@ function activeTaskFiles(root) {
 }
 
 function namesActiveConcept(text) {
-  for (const line of String(text || "").split(/\r?\n/)) {
-    const match = line.match(/^-[ \t]*Active game concept:[ \t]*(.+)$/i);
-    if (match && !/^none\b/i.test(match[1].trim())) {
-      return true;
-    }
-  }
-  return false;
+  return !/status:\s*none|no active game concept/i.test(String(text || "")) &&
+    /game id:\s*`?[a-z0-9][a-z0-9-]{1,48}`?|game folder:\s*`?gamedesign[\\/]+projects[\\/]+[a-z0-9][a-z0-9-]{1,48}`?/i.test(String(text || ""));
 }
 
 function assertCleanKickoffTarget(root, gameId, options) {
@@ -80,30 +75,20 @@ function assertCleanKickoffTarget(root, gameId, options) {
   if (activeTasks.length > 0 && !options.force) {
     fail(`tasks/active already has ${activeTasks.length} task file(s); close or archive current work before kickoff`);
   }
-  const agents = readText(join(root, "AGENTS.md"));
-  if (namesActiveConcept(agents) && !options.force) {
-    fail("AGENTS.md already names an active game concept");
+  const gameProject = readText(join(root, "GAME_PROJECT.md"));
+  if (namesActiveConcept(gameProject) && !options.force) {
+    fail("GAME_PROJECT.md already names an active game concept");
   }
 }
 
-function updateAgents(root, title, gameId, brief) {
-  const path = join(root, "AGENTS.md");
-  const current = readText(path);
-  const line = `- Active game concept: \`${title}\` (${gameId}), ${brief}`;
-  if (!current) {
-    writeNew(path, `# AGENTS.md\n\n## Project\n\n${line}\n`, { root, force: false });
+function updateGameProject(root, title, gameId, brief) {
+  const path = join(root, "GAME_PROJECT.md");
+  const body = gameProjectBody(title, gameId, brief);
+  if (!readText(path)) {
+    writeNew(path, body, { root, force: false });
     return;
   }
-  const replaced = current.replace(
-    /^-[ \t]*(?:No active game concept is selected\..*|Active game concept:[ \t]*none\b.*)$/gm,
-    line,
-  );
-  if (replaced !== current) {
-    writeFileSync(path, replaced, "utf8");
-    return;
-  }
-  const withActive = current.replace(/(## Project\s*\r?\n)/i, `$1\n${line}\n`);
-  writeFileSync(path, withActive === current ? `${current.trimEnd()}\n\n## Project\n\n${line}\n` : withActive, "utf8");
+  writeFileSync(path, body, "utf8");
 }
 
 function projectReadme(title, gameId, brief) {
@@ -432,70 +417,30 @@ not a notes dump.
 `;
 }
 
-function statusBody(title, gameId, taskId) {
-  return `# Project Status
+function gameProjectBody(title, gameId, brief) {
+  return `# GAME_PROJECT
 
-## Current Goal
+## Active Game
 
-Start the \`${title}\` (${gameId}) native-first prototype from a clean Stage 0
-startup gate. Do not expand broad systems until the first fake shot/product-read
-gate, native screenshot proof, and screenshot-vs-target mismatch list are
-named. For beautiful/casual/generated-UI/fake-shot slices, the product gate
-uses \`--visual-strict\`.
+Status: active
 
-## Blocking Work
+${brief}
 
-- No runtime implementation blocker is known yet; the next blocker should come
-  from the first GDD/reference/fake-shot pass.
+- Game id: \`${gameId}\`
+- Game folder: \`gamedesign/projects/${gameId}/\`
+- Design docs: \`gamedesign/projects/${gameId}/gdd.md\`, \`gamedesign/projects/${gameId}/data/core_loop.json\`
+- Task board: taskboard epic and first native playable-slice task
+- Current milestone: Stage 0 startup gate for \`${title}\`
+- Hard game-specific constraints:
+  - Native-first implementation until an explicit web/mobile exception is approved.
+  - Do not expand broad systems until the first fake-shot/product-read/native proof gate is filled.
+  - For visual/product slices, use strict visual product gates with state coverage.
 
-## Non-blocking Debt
+## Detailed Project State
 
-- None recorded for this prototype yet.
-
-## Current Gate
-
-Stage 0 startup gate for ${gameId}: active concept, actionable task ${taskId},
-project wiki, native/runtime harness, and fake shot/product-read/native
-screenshot proof plan must be visible before implementation. For visual work,
-the 5-line session contract and screenshot-vs-target mismatch list are required
-before runtime visual coding. Strict visual product gates require six scores,
-state matrix coverage, and blocker/major issue reporting before any pass.
-
-## Required Validation
-
-\`\`\`powershell
-node tools/game_context/iteration_context.mjs
-node ai_studio/taskboard/cli.mjs validate
-node ai_studio/core_harness/validation/pipeline_validate.mjs
-\`\`\`
-
-## Last Known Good Evidence
-
-- \`tmp/prototype_startup_gate_context.json\` after kickoff.
-- \`gamedesign/projects/${gameId}/reviews/first_slice_visual_gate.md\` is the
-  first-slice visual/product gate template and must be filled before broad
-  runtime work; it names the optional vision art-lead critic command.
-- \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json\`
-  is the machine-readable state coverage matrix for product gates.
-
-## Next Priorities
-
-1. Fill \`gamedesign/projects/${gameId}/gdd.md\` with the first playable loop,
-   references/fake shot target, visual/product proof gate, and stop condition.
-2. Fill \`gamedesign/projects/${gameId}/data/core_loop.json\` with the
-   player verbs, rules, feedback, risk, goals, replay reason, and reference
-   grounding. Do not assume hands-off progression, away-time rewards, or
-   reset-meta loops unless the lead explicitly chooses that direction.
-3. Fill \`gamedesign/projects/${gameId}/reviews/first_slice_visual_gate.md\`
-   with the target, native screenshot/capture plan, mismatch list, gate command,
-   vision critic command, strict visual rubric, state matrix coverage, and
-   expansion decision.
-4. Review \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.md\`
-   and mark any state outside the first slice as explicit not-covered debt in
-   the gate command.
-5. Identify the native build/run command for this prototype.
-6. Capture or plan the first native screenshot, compare it with the accepted
-   target, and record the mismatch list before broad content.
+- GDD and game-specific docs live under \`gamedesign/projects/${gameId}/\`.
+- Work state, evidence, review, and done criteria live in Taskboard task files.
+- Do not put lore, balance, asset lists, or detailed implementation notes in this file.
 `;
 }
 
@@ -530,7 +475,7 @@ const brief = String(args.brief || "").trim() || fail("--brief is required");
 const options = { root, force: args.force === true };
 
 assertCleanKickoffTarget(root, gameId, options);
-updateAgents(root, title, gameId, brief);
+updateGameProject(root, title, gameId, brief);
 
 const projectDir = join(root, "gamedesign", "projects", gameId);
 writeNew(join(projectDir, "README.md"), projectReadme(title, gameId, brief), options);
@@ -575,7 +520,6 @@ const task = createTask(root, {
   body: taskBody(title, gameId),
 });
 
-writeFileSync(join(root, "tasks", "STATUS.md"), statusBody(title, gameId, task.fields.id), "utf8");
 const gate = runStartupGate(root);
 
 console.log(`created project: ${relative(root, projectDir)}`);

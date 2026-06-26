@@ -6,7 +6,7 @@
 //                 gitignored assets/restricted/ root; only the catalog/license .md
 //                 (metadata, no binary) is committed.
 //
-// Used by tools/asset_review/pull.mjs (routing) and the leak guard
+// Used by ai_studio/assets/asset_viewer/pull.mjs (routing) and the leak guard
 // tools/assets/audit/restricted_assets_guard.mjs so both agree on one rule.
 
 // Free/open licenses whose source asset may be redistributed in a public repo.

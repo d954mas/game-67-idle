@@ -10,8 +10,8 @@ The map is data-driven:
   writes `validation-report.json`.
 - `validation-report.json` is displayed by the page so unmapped, missing, or
   duplicated files are visible during refactoring.
-- `serve.mjs` starts a local static server. Open the map through the server so
-  browser `fetch()` can read JSON files.
+- `../studio_shell/server.mjs` hosts the map surface so browser `fetch()` can
+  read JSON files.
 
 The page must not infer architecture from the repository. New files are not
 silently added to the map. They appear in validation until a human decides
@@ -31,13 +31,13 @@ skill, folder, contract, and backlog each have a stable color in the page legend
 
 ```powershell
 node ai_studio/architecture_map/validate_map.mjs
-node ai_studio/architecture_map/serve.mjs
+node ai_studio/studio_shell/server.mjs
 ```
 
 Default URL:
 
 ```text
-http://127.0.0.1:8765/ai_studio/architecture_map/index.html
+http://127.0.0.1:8765/architecture_map/
 ```
 
 ## Validation Categories

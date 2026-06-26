@@ -24,12 +24,43 @@ body {
   flex-direction: column;
 }
 
+.studio-shell {
+  flex: 1;
+  min-height: 100vh;
+}
+
+.taskboard-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
 .topbar {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
+}
+
+.studio-home-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #0d1116;
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.studio-home-link:hover {
+  border-color: var(--accent);
+  text-decoration: none;
 }
 
 .topbar h1 { font-size: 16px; margin: 0 8px 0 0; }
@@ -55,34 +86,6 @@ button.ghost { background: transparent; }
 button:hover { filter: brightness(1.15); }
 
 .toggle { color: var(--muted); display: flex; align-items: center; gap: 5px; user-select: none; }
-
-/* epic rail */
-.epic-rail {
-  display: flex;
-  gap: 8px;
-  padding: 8px 14px;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--border);
-}
-
-.epic-chip {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 10px;
-  min-width: 150px;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-.epic-chip.selected { border-color: var(--accent); }
-.epic-chip .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
-.epic-chip .sub { color: var(--muted); font-size: 12px; display: flex; gap: 6px; align-items: center; }
-.epic-chip .edit { color: var(--muted); float: right; margin-left: 8px; }
-.epic-chip .edit:hover { color: var(--text); }
-
-.progress { background: #0d1116; border-radius: 4px; height: 5px; flex: 1; min-width: 50px; overflow: hidden; }
-.progress > div { background: var(--accent); height: 100%; }
 
 /* board */
 .board {

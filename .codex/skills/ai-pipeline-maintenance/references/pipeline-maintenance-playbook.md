@@ -6,7 +6,7 @@ taskboard behavior, product gates, or portable export.
 ## Audit Flow
 
 1. Inspect current state, not memory: `git status --short --untracked-files=all`,
-   `node ai_studio/taskboard/cli.mjs summary`, and, for context review,
+   `node ai_studio/taskboard/cli.mjs summary --json`, and, for context review,
    `node tools/context_budget.mjs --review`.
 2. Identify the repeated failure or duplication: oversized hot doc, duplicated
    rule, root/export drift, stale skill pointer, weak validation routing, or

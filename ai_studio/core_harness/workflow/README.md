@@ -14,7 +14,7 @@ or hot agent docs.
 Default substantial-work context:
 
 - `AGENTS.md`
-- `node ai_studio/taskboard/cli.mjs context`
+- `node ai_studio/taskboard/cli.mjs context --json`
 - one task/evidence file when durable tracking is useful
 - one matching skill
 

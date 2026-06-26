@@ -184,16 +184,16 @@ test("visual rejection lock records strict visual fail and task evidence", () =>
   }
 });
 
-function writeMaterialFloorFixture(rootDir, { active = true, flat = true, statusResolved = false } = {}) {
+function writeMaterialFloorFixture(rootDir, { active = true, flat = true } = {}) {
   mkdirSync(join(rootDir, "src"), { recursive: true });
   mkdirSync(join(rootDir, "assets", "shaders"), { recursive: true });
   mkdirSync(join(rootDir, "tasks"), { recursive: true });
   writeFileSync(join(rootDir, "AGENTS.md"), active
-    ? "## Project\n\n- Active game concept: Test Drive (test-drive)\n"
-    : "## Project\n\n- No active game concept\n", "utf8");
-  writeFileSync(join(rootDir, "tasks", "STATUS.md"), statusResolved
-    ? "# Project Status\n\n## Blocking Work\n\n- None. The visual rejection is resolved.\n"
-    : "# Project Status\n\n## Blocking Work\n\n- Material pass pending.\n", "utf8");
+    ? "## Project\n\n- Shared AI Studio harness rules.\n"
+    : "## Project\n\n- Shared AI Studio harness rules.\n", "utf8");
+  writeFileSync(join(rootDir, "GAME_PROJECT.md"), active
+    ? "# GAME_PROJECT\n\n## Active Game\n\nStatus: active\n\n- Game id: `test-drive`\n- Game folder: `gamedesign/projects/test-drive/`\n"
+    : "# GAME_PROJECT\n\n## Active Game\n\nStatus: none\n\nThere is no active game concept.\n", "utf8");
   writeFileSync(join(rootDir, "src", "build_packs.c"), [
     "static void add_model(void *ctx, const char *path, const char *rid) {}",
     "void build(void *ctx) {",
@@ -240,7 +240,7 @@ function writeMaterialFloorFixture(rootDir, { active = true, flat = true, status
 test("visual material floor rejects GLB assets rendered as one flat tint", () => {
   const dir = tempDir();
   try {
-    writeMaterialFloorFixture(dir, { flat: true, statusResolved: true });
+    writeMaterialFloorFixture(dir, { flat: true });
     const result = runRaw([
       "tools/product_gate/visual_material_floor.mjs",
       "--root", dir,
@@ -248,7 +248,6 @@ test("visual material floor rejects GLB assets rendered as one flat tint", () =>
     assert.equal(result.status, 1);
     assert.match(result.stderr, /GLB\/GLTF assets are present/);
     assert.match(result.stderr, /color-only shader/);
-    assert.match(result.stderr, /status claims visual rejection is resolved/);
   } finally {
     cleanup(dir);
   }

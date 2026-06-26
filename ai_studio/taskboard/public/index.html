@@ -4,22 +4,53 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Taskboard</title>
+  <link rel="stylesheet" href="/ai_studio/studio_shell/studio_shell.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="topbar">
-    <h1>Taskboard</h1>
-    <input id="search" type="search" placeholder="Search title, id, tag...">
-    <select id="epicFilter"><option value="">All epics</option></select>
-    <label class="toggle"><input type="checkbox" id="showClosed"> done/dropped</label>
-    <span class="spacer"></span>
-    <button id="newEpic" class="ghost">+ Epic</button>
-    <button id="newTask" class="primary">+ Task</button>
-  </header>
+  <div class="studio-shell">
+    <aside class="studio-sidebar" aria-label="AI Studio navigation">
+      <div class="studio-sidebar-brand">
+        <span class="studio-brand-mark">AI</span>
+        <div class="studio-brand-copy">
+          <strong>AI Studio</strong>
+          <span>game pipeline</span>
+        </div>
+        <button class="studio-sidebar-toggle" type="button" data-studio-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true">‹</button>
+      </div>
 
-  <section id="epicRail" class="epic-rail"></section>
+      <nav class="studio-side-nav" aria-label="Primary">
+        <p class="studio-nav-section">Workspace</p>
+        <a class="studio-nav-item" href="/">
+          <span class="studio-nav-icon">S</span>
+          <span class="studio-nav-label">Studio Home</span>
+        </a>
+        <a class="studio-nav-item" href="/architecture_map/">
+          <span class="studio-nav-icon map">M</span>
+          <span class="studio-nav-label">Architecture Map</span>
+        </a>
+        <a class="studio-nav-item is-active" href="/taskboard/">
+          <span class="studio-nav-icon tasks">T</span>
+          <span class="studio-nav-label">Taskboard</span>
+        </a>
 
-  <main id="board" class="board"></main>
+      </nav>
+    </aside>
+
+    <main class="studio-content taskboard-content">
+      <header class="topbar">
+        <h1>Taskboard</h1>
+        <input id="search" type="search" placeholder="Search title, id, tag...">
+        <select id="epicFilter"><option value="">All epics</option></select>
+        <label class="toggle"><input type="checkbox" id="showClosed"> all statuses</label>
+        <span class="spacer"></span>
+        <button id="newEpic" class="ghost">+ Epic</button>
+        <button id="newTask" class="primary">+ Task</button>
+      </header>
+
+      <section id="board" class="board"></section>
+    </main>
+  </div>
 
   <dialog id="editor">
     <form id="editorForm" method="dialog">
@@ -48,5 +79,6 @@
 
   <script src="markdown_preview.js"></script>
   <script src="app.js"></script>
+  <script src="/ai_studio/studio_shell/studio_shell.js"></script>
 </body>
 </html>

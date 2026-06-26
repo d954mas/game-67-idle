@@ -33,9 +33,9 @@ if (args.length > 0) usage();
 function hasActiveConcept() {
   if (process.env.NT_FORCE_CONCEPT === "1") return true;
   if (process.env.NT_FORCE_CONCEPT === "0") return false;
-  const statusPath = join(root, "tasks", "STATUS.md");
-  if (!existsSync(statusPath)) return true;
-  return !/no active game concept/i.test(readFileSync(statusPath, "utf8"));
+  const gameProjectPath = join(root, "GAME_PROJECT.md");
+  if (!existsSync(gameProjectPath)) return false;
+  return !/status:\s*none|no active game concept/i.test(readFileSync(gameProjectPath, "utf8"));
 }
 
 function walkFiles(dir, out = []) {

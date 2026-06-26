@@ -15,7 +15,7 @@ ONCE, store in the shared library, reuse many — do not re-prepare per game.
    free CC0/OFL sources, else generate.
 2. **Prepare** (engine-ready, per type) — see below.
 3. **Transfer to library** — catalog with origin + license + preview.
-4. **Reuse** — `node tools/asset_review/pull.mjs --ids <library_id> --to assets --apply`
+4. **Reuse** — `node ai_studio/assets/asset_viewer/pull.mjs --ids <library_id> --to assets --apply`
    (omit `--apply` to dry-run): copies files + writes a game OKF record with
    `source_id` (linked; library stays canonical). No `source_id` = new/game-local
    — `promote` it back to the library.
@@ -40,7 +40,7 @@ Catalog each reusable asset with provenance:
 - paid pack (CGTrader etc.): manual intake `--manual --publish false`; binary
   routes to the gitignored `assets/restricted/`, only the catalog `.md` is
   committed. See game-asset-pipeline `references/restricted-paid-assets.md`.
-- project-vendored / freshly prepared: `node tools/asset_review/promote.mjs --ids
+- project-vendored / freshly prepared: `node ai_studio/assets/asset_viewer/promote.mjs --ids
   ... --source <s> --license <L> --origin <mine|ai|sourced> [--pack <slug>]`.
 A kit -> `--pack`: groups under `catalog/<kind>/<pack>/` + `_pack.md` + one shared license.
 Record `origin` + license + preview; id = `<source>__<slug>__<license>`.

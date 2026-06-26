@@ -151,7 +151,7 @@ const SUBAGENT_PACKET_PRESETS = {
       text: renderSubagentPacket({
         objective: "Find <N> CC0/CC-BY <asset-type> candidates for <game-id>; report license, provenance, and integrity for each. Do not import anything.",
         allowedFiles: "gamedesign/sources/**;gamedesign/knowledge/**;tmp/<game-id>-asset-candidates.md",
-        forbiddenFiles: "src; state; any runtime pack; hot docs (AGENTS.md, AI_PIPELINE.md, tasks/STATUS.md)",
+        forbiddenFiles: "src; state; any runtime pack; hot docs (AGENTS.md, GAME_PROJECT.md)",
         toolGuard: `${DEFAULT_ORCHESTRATION_TOOL_USE_GUARD}; prefer authoritative sources over SEO content farms; verify each license URL`,
         expectedOutput: "<=5 candidates, each with URL + license + provenance + integrity check",
         evidence: "tmp/<game-id>-asset-candidates.md",

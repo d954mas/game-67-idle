@@ -11,17 +11,28 @@ function tempRoot(t) {
   return dir;
 }
 
+function writeTaskContext(root, body) {
+  mkdirSync(join(root, "tasks", "active"), { recursive: true });
+  writeFileSync(join(root, "tasks", "active", "T0001-context.md"), `---
+id: T0001
+title: Context task
+status: doing
+priority: P1
+tags: [prototype]
+created: 2026-06-26
+updated: 2026-06-26
+---
+
+${body}
+`, "utf8");
+}
+
 function writeStarter(root) {
   mkdirSync(join(root, "tools", "game_context"), { recursive: true });
-  mkdirSync(join(root, "tools", "taskboard"), { recursive: true });
   mkdirSync(join(root, "gamedesign", "meme-evolution", "data"), { recursive: true });
   mkdirSync(join(root, "src"), { recursive: true });
   mkdirSync(join(root, "tasks"), { recursive: true });
   writeFileSync(join(root, "AGENTS.md"), `# AGENTS.md
-
-## Project
-
-- Active game concept: \`67 World\`, child-friendly meme merge/evolution game.
 
 ## Direction
 
@@ -40,7 +51,23 @@ function writeStarter(root) {
   a web prototype/page/app because it seems faster or prettier. Use the native
   PC build first.
 `, "utf8");
-  writeFileSync(join(root, "tasks", "STATUS.md"), `# Project Status
+  writeFileSync(join(root, "GAME_PROJECT.md"), `# GAME_PROJECT
+
+## Active Game
+
+Status: active
+
+67 World, child-friendly meme merge/evolution game.
+
+- Game id: \`meme-evolution\`
+- Game folder: \`gamedesign/meme-evolution/\`
+- Design docs: \`gamedesign/meme-evolution/gdd.md\`, \`gamedesign/meme-evolution/data/core_loop.json\`
+- Current milestone: Native PC review gate.
+- Hard game-specific constraints:
+  - Manual child-test is required.
+  - Native PC review gate.
+`, "utf8");
+  writeTaskContext(root, `# Taskboard Context
 
 ## Current Gate
 
@@ -50,19 +77,11 @@ Native PC review gate.
 
 1. Run child-test acceptance.
 
-## Blocking Work
-
-- Manual child-test is required.
-
 ## Required Validation
 
 \`\`\`powershell
 cmake --build --preset native-debug
 \`\`\`
-`, "utf8");
-  writeFileSync(join(root, "tools", "taskboard", "cli.mjs"), `#!/usr/bin/env node
-import { readFileSync } from "node:fs";
-console.log(readFileSync("tasks/STATUS.md", "utf8"));
 `, "utf8");
   writeFileSync(join(root, "CMakePresets.json"), "{}\n", "utf8");
   writeFileSync(join(root, "src", "main.c"), "int main(void){return 0;}\n", "utf8");
@@ -92,7 +111,7 @@ test("game iteration context preserves wrapped hard gates", (t) => {
   assert.match(result.stdout, /do not create, serve, validate, or pivot to a web prototype/);
   assert.equal(existsSync(json), true);
   const context = JSON.parse(readFileSync(json, "utf8"));
-  assert.equal(context.concept.includes("67 World"), true);
+  assert.equal(context.concept.includes("meme-evolution"), true);
   assert.ok(context.hard_gates.some((gate) => gate.includes("web prototype/page/app")));
   assert.equal(context.prototype_startup_gate.status, "not_ready_for_implementation");
   assert.equal(context.prototype_startup_gate.hard_stop, true);
@@ -117,10 +136,6 @@ test("game iteration context blocks broad coding without active concept", (t) =>
   mkdirSync(join(fixture, "src"), { recursive: true });
   writeFileSync(join(fixture, "AGENTS.md"), `# AGENTS.md
 
-## Project
-
-- No active game concept is selected. Treat this repository as a clean template.
-
 ## Direction
 
 - Current runtime surface: native seed in \`src/main.c\`.
@@ -129,15 +144,13 @@ test("game iteration context blocks broad coding without active concept", (t) =>
 
 - Native desktop/PC is the preferred development harness.
 `, "utf8");
-  writeFileSync(join(fixture, "tasks", "STATUS.md"), `# Project Status
+  writeFileSync(join(fixture, "GAME_PROJECT.md"), `# GAME_PROJECT
 
-## Current Goal
+## Active Game
 
-Pipeline cleanup.
-`, "utf8");
-  writeFileSync(join(fixture, "tools", "taskboard", "cli.mjs"), `#!/usr/bin/env node
-import { readFileSync } from "node:fs";
-console.log(readFileSync("tasks/STATUS.md", "utf8"));
+Status: none
+
+There is no active game concept.
 `, "utf8");
   writeFileSync(join(fixture, "src", "main.c"), "int main(void){return 0;}\n", "utf8");
 
@@ -167,7 +180,6 @@ test("game iteration context omits closed project sources without active concept
   const fixture = tempRoot(t);
   const repoRoot = process.cwd();
   mkdirSync(join(fixture, "tools", "game_context"), { recursive: true });
-  mkdirSync(join(fixture, "tools", "taskboard"), { recursive: true });
   mkdirSync(join(fixture, "tasks"), { recursive: true });
   mkdirSync(join(fixture, "src"), { recursive: true });
   mkdirSync(join(fixture, "state"), { recursive: true });
@@ -188,15 +200,13 @@ test("game iteration context omits closed project sources without active concept
 
 - Native desktop/PC is the preferred development harness.
 `, "utf8");
-  writeFileSync(join(fixture, "tasks", "STATUS.md"), `# Project Status
+  writeFileSync(join(fixture, "GAME_PROJECT.md"), `# GAME_PROJECT
 
-## Current Goal
+## Active Game
 
-Clean template.
-`, "utf8");
-  writeFileSync(join(fixture, "tools", "taskboard", "cli.mjs"), `#!/usr/bin/env node
-import { readFileSync } from "node:fs";
-console.log(readFileSync("tasks/STATUS.md", "utf8"));
+Status: none
+
+There is no active game concept.
 `, "utf8");
   writeFileSync(join(fixture, "gamedesign", "knowledge", "README.md"), "# Knowledge\n", "utf8");
   writeFileSync(join(fixture, "gamedesign", "knowledge", "reference_deconstruction.md"), "# References\n", "utf8");
@@ -255,11 +265,13 @@ function writeKickoffTemplate(root) {
 
 - Native desktop/PC is the preferred development harness.
 `, "utf8");
-  writeFileSync(join(root, "tasks", "STATUS.md"), `# Project Status
+  writeFileSync(join(root, "GAME_PROJECT.md"), `# GAME_PROJECT
 
-## Current Goal
+## Active Game
 
-Clean template.
+Status: none
+
+There is no active game concept.
 `, "utf8");
   writeFileSync(join(root, "src", "main.c"), "int main(void){return 0;}\n", "utf8");
   writeFileSync(join(root, "CMakePresets.json"), "{}\n", "utf8");
@@ -267,20 +279,13 @@ Clean template.
 
 function writeKickoffTemplateWithActiveNone(root) {
   writeKickoffTemplate(root);
-  writeFileSync(join(root, "AGENTS.md"), `# AGENTS
+  writeFileSync(join(root, "GAME_PROJECT.md"), `# GAME_PROJECT
 
-## Now
+## Active Game
 
-- Focus: clean AI-first native game seed.
-- Active game concept: none.
+Status: none
 
-## Project
-
-- Active game concept: none. Focus on the reusable AI-first native game seed.
-
-## Validation
-
-- Native desktop/PC is the preferred development harness.
+There is no active game concept. Focus on the reusable AI-first native game seed.
 `, "utf8");
 }
 
@@ -312,14 +317,11 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   assert.equal(existsSync(join(fixture, "gamedesign", "projects", "bubble-bay", "reviews", "first_slice_visual_gate.md")), true);
   assert.equal(existsSync(join(fixture, "gamedesign", "projects", "bubble-bay", "visual", "live_state_acceptance_matrix.md")), true);
   assert.equal(existsSync(join(fixture, "gamedesign", "projects", "bubble-bay", "visual", "live_state_acceptance_matrix.json")), true);
-  assert.match(readFileSync(join(fixture, "AGENTS.md"), "utf8"), /Active game concept: `Bubble Bay`/);
-  assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /fake shot\/product-read\/native/);
-  assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /first_slice_visual_gate\.md/);
-  assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /screenshot-vs-target mismatch list/);
-  assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /`--visual-strict`/);
-  assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /Strict visual product gates require six scores/);
-  assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /state matrix coverage/);
-  assert.match(readFileSync(join(fixture, "tasks", "STATUS.md"), "utf8"), /live_state_acceptance_matrix\.json/);
+  const gameProject = readFileSync(join(fixture, "GAME_PROJECT.md"), "utf8");
+  assert.match(gameProject, /Status: active/);
+  assert.match(gameProject, /Game id: `bubble-bay`/);
+  assert.match(gameProject, /fake-shot\/product-read\/native proof gate/);
+  assert.match(gameProject, /strict visual product gates with state coverage/);
   assert.match(readFileSync(join(fixture, "gamedesign", "projects", "bubble-bay", "gdd.md"), "utf8"), /visual-first session contract/);
   assert.match(readFileSync(join(fixture, "gamedesign", "projects", "bubble-bay", "gdd.md"), "utf8"), /strict visual product gate using `--visual-strict`/);
   assert.match(readFileSync(join(fixture, "gamedesign", "projects", "bubble-bay", "gdd.md"), "utf8"), /live_state_acceptance_matrix\.json/);
@@ -434,24 +436,23 @@ test("new prototype kickoff accepts active concept none seed wording", (t) => {
   });
 
   assert.equal(result.status, 0, result.stderr);
-  const agents = readFileSync(join(fixture, "AGENTS.md"), "utf8");
-  assert.match(agents, /Active game concept: `Dragon Grove`/);
-  assert.doesNotMatch(agents, /Active game concept: none/);
+  const gameProject = readFileSync(join(fixture, "GAME_PROJECT.md"), "utf8");
+  assert.match(gameProject, /Status: active/);
+  assert.match(gameProject, /Game id: `dragon-grove`/);
 });
 
 test("new prototype kickoff refuses real active concept without force", (t) => {
   const fixture = tempRoot(t);
   const repoRoot = process.cwd();
   writeKickoffTemplateWithActiveNone(fixture);
-  writeFileSync(join(fixture, "AGENTS.md"), `# AGENTS
+  writeFileSync(join(fixture, "GAME_PROJECT.md"), `# GAME_PROJECT
 
-## Project
+## Active Game
 
-- Active game concept: \`Existing Game\` (existing-game), already in progress.
+Status: active
 
-## Validation
-
-- Native desktop/PC is the preferred development harness.
+- Game id: \`existing-game\`
+- Game folder: \`gamedesign/projects/existing-game/\`
 `, "utf8");
 
   const result = spawnSync(process.execPath, [
@@ -471,7 +472,7 @@ test("new prototype kickoff refuses real active concept without force", (t) => {
   });
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /AGENTS\.md already names an active game concept/);
+  assert.match(result.stderr, /GAME_PROJECT\.md already names an active game concept/);
 });
 
 test("new prototype kickoff refuses existing project without force", (t) => {

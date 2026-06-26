@@ -25,6 +25,7 @@ Copied by `tools/bootstrap/export_base.mjs`:
   `tools/skills_eval.mjs`, `tools/skills_sync.mjs`;
 - workflow state/profiling: `ai_studio/taskboard/`, `tools/ai_profile/`;
 - game startup/runtime proof: `tools/game_context/`, `tools/product_gate/`;
+- asset browser/review surface: `ai_studio/assets/asset_viewer/`;
 - reusable asset helpers: `tools/assets/`;
 - export helpers: `tools/bootstrap/`.
 
@@ -47,6 +48,8 @@ Copy/adapt after engine/runtime policy is known.
 
 Do not load this as an asset manual. Use:
 
+- `ai_studio/assets/asset_viewer/` for browsing the shared library, reviewing
+  game-local assets, pulling reusable assets, and promoting selected assets;
 - `.codex/skills/game-asset-pipeline/` for source/provenance/cutout/pack work;
 - `.codex/skills/generated-game-ui-assets/` for UI source sheets, slice9,
   atlases, derivation, composition proof, and responsive UI gates.

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Studio</title>
+  <link rel="stylesheet" href="/ai_studio/studio_shell/studio_shell.css">
+  <link rel="stylesheet" href="/ai_studio/studio_shell/home.css">
+</head>
+<body>
+  <div class="studio-shell">
+    <aside class="studio-sidebar" aria-label="AI Studio navigation">
+      <div class="studio-sidebar-brand">
+        <span class="studio-brand-mark">AI</span>
+        <div class="studio-brand-copy">
+          <strong>AI Studio</strong>
+          <span>game pipeline</span>
+        </div>
+        <button class="studio-sidebar-toggle" type="button" data-studio-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true">‹</button>
+      </div>
+
+      <nav class="studio-side-nav" aria-label="Primary">
+        <p class="studio-nav-section">Workspace</p>
+        <a class="studio-nav-item is-active" href="/">
+          <span class="studio-nav-icon">S</span>
+          <span class="studio-nav-label">Studio Home</span>
+        </a>
+        <a class="studio-nav-item" href="/architecture_map/">
+          <span class="studio-nav-icon map">M</span>
+          <span class="studio-nav-label">Architecture Map</span>
+        </a>
+        <a class="studio-nav-item" href="/taskboard/">
+          <span class="studio-nav-icon tasks">T</span>
+          <span class="studio-nav-label">Taskboard</span>
+        </a>
+
+      </nav>
+    </aside>
+
+    <main class="studio-content home-content">
+      <header class="content-header">
+        <div>
+          <p class="eyebrow">Workspace</p>
+          <h2>AI Studio Console</h2>
+        </div>
+        <div class="status-strip" aria-label="Status summary">
+          <span><b id="taskCount">...</b> tasks</span>
+          <span><b id="epicCount">...</b> epics</span>
+          <span><b id="unmappedCount">...</b> unmapped</span>
+          <span><b id="missingCount">...</b> missing</span>
+        </div>
+      </header>
+
+      <section class="workspace-panel" aria-labelledby="toolsTitle">
+        <div class="panel-head">
+          <h3 id="toolsTitle">Surfaces</h3>
+          <p>Open the active AI Studio tools.</p>
+        </div>
+
+        <div class="surface-list">
+          <article class="surface-row">
+            <span class="type-pill graph">Graph</span>
+            <div class="surface-main">
+              <h4>Architecture Map</h4>
+              <p>Module graph, drill-down tree, hidden files, saved node positions.</p>
+            </div>
+            <a class="open-link" href="/architecture_map/">Open</a>
+          </article>
+
+          <article class="surface-row">
+            <span class="type-pill state">State</span>
+            <div class="surface-main">
+              <h4>Taskboard</h4>
+              <p>Task and epic state from tasks/ with editable work notes.</p>
+            </div>
+            <a class="open-link" href="/taskboard/">Open</a>
+          </article>
+
+          <article class="surface-row">
+            <span class="type-pill source">Source</span>
+            <div class="surface-main">
+              <h4>tree.json</h4>
+              <p>Declarative source for hierarchy, module ownership, paths, and visibility.</p>
+            </div>
+            <a class="open-link secondary" href="/tree.json">View</a>
+          </article>
+
+          <article class="surface-row">
+            <span class="type-pill audit">Audit</span>
+            <div class="surface-main">
+              <h4>Validation report</h4>
+              <p>Generated scanner output for unmapped, missing, duplicate, and weak map entries.</p>
+            </div>
+            <a class="open-link secondary" href="/architecture_map/validation-report.json">View</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="workspace-grid" aria-label="Current state">
+        <article class="info-panel">
+          <h3>Refactor root</h3>
+          <dl>
+            <div><dt>Root</dt><dd>ai_studio/</dd></div>
+            <div><dt>Reviewed</dt><dd>Core Harness, Taskboard, Architecture Map</dd></div>
+            <div><dt>Backlog</dt><dd>Not Refactored node</dd></div>
+          </dl>
+        </article>
+
+        <article class="info-panel">
+          <h3>Contracts</h3>
+          <dl>
+            <div><dt>Map source</dt><dd>ai_studio/tree.json</dd></div>
+            <div><dt>Renderer</dt><dd>ai_studio/architecture_map/index.html</dd></div>
+            <div><dt>Tasks</dt><dd>tasks/ + ai_studio/taskboard/</dd></div>
+          </dl>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const setText = (id, value) => {
+      const node = document.getElementById(id);
+      if (node) node.textContent = value;
+    };
+
+    async function readJson(path) {
+      const response = await fetch(path, { cache: "no-store" });
+      if (!response.ok) throw new Error(path + " returned " + response.status);
+      return response.json();
+    }
+
+    async function loadStatus() {
+      try {
+        const board = await readJson("/api/board");
+        setText("taskCount", board.tasks.length);
+        setText("epicCount", board.epics.length);
+      } catch {
+        setText("taskCount", "offline");
+        setText("epicCount", "offline");
+      }
+
+      try {
+        const report = await readJson("/architecture_map/validation-report.json");
+        const summary = report.summary || {};
+        const unmapped = Number(summary.unmappedInAiStudio || 0) + Number(summary.unmappedLegacy || 0);
+        setText("unmappedCount", unmapped);
+        setText("missingCount", summary.missingInRepo || 0);
+      } catch {
+        setText("unmappedCount", "offline");
+        setText("missingCount", "offline");
+      }
+    }
+
+    loadStatus();
+  </script>
+  <script src="/ai_studio/studio_shell/studio_shell.js"></script>
+</body>
+</html>

@@ -47,22 +47,15 @@ function readText(path) {
 }
 
 function activeConcept(root) {
-  const agents = readText(join(root, "AGENTS.md"));
-  const status = readText(join(root, "tasks", "STATUS.md"));
-  const combined = `${agents}\n${status}`;
-  if (/active game concept:\s*(none|no active|not selected)/i.test(combined)) {
-    return { active: false, id: "", evidence: "AGENTS.md/STATUS.md say no active game concept" };
+  const gameProject = readText(join(root, "GAME_PROJECT.md"));
+  if (/status:\s*none|no active game concept|no active concept is selected/i.test(gameProject)) {
+    return { active: false, id: "", evidence: "GAME_PROJECT.md says no active game concept" };
   }
-  if (/no active game concept|no active concept is selected/i.test(combined)) {
-    return { active: false, id: "", evidence: "AGENTS.md/STATUS.md say no active game concept" };
-  }
-  const line = combined.match(/active game concept:\s*([^\r\n]+)/i)?.[1] || "";
-  const idFromParen = line.match(/\(([a-z0-9][a-z0-9-]{1,64})\)/)?.[1] || "";
-  if (idFromParen) return { active: true, id: idFromParen, evidence: line.trim() };
+  const idFromField = gameProject.match(/game id:\s*`?([a-z0-9][a-z0-9-]{1,64})`?/i)?.[1] || "";
+  if (idFromField) return { active: true, id: idFromField, evidence: `GAME_PROJECT.md game id: ${idFromField}` };
+  const folder = gameProject.match(/gamedesign[\\/]+projects[\\/]+([a-z0-9][a-z0-9-]{1,64})/i)?.[1] || "";
+  if (folder) return { active: true, id: folder, evidence: `GAME_PROJECT.md game folder: ${folder}` };
   const projectDirs = directories(join(root, "gamedesign", "projects"));
-  if (line && !/none/i.test(line)) {
-    return { active: true, id: projectDirs.length === 1 ? projectDirs[0] : "", evidence: line.trim() };
-  }
   return { active: projectDirs.length === 1, id: projectDirs.length === 1 ? projectDirs[0] : "", evidence: projectDirs.join(", ") };
 }
 

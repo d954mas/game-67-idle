@@ -10,7 +10,7 @@ const skillRoot = join(root, ".codex", "skills");
 
 const SKILL_CHECKS = [
   {
-    name: "task-manager",
+    name: "nt-taskboard-manager",
     frontmatter: [
       "capturing",
       "refining",
@@ -25,18 +25,19 @@ const SKILL_CHECKS = [
     ],
     body: [
       "ai_studio/taskboard/README.md",
+      "ai_studio/taskboard/task-store-reference.md",
       "ai_studio/taskboard/cli.mjs",
-      "cli.mjs summary",
-      "cli.mjs context",
-      "tasks/STATUS.md",
-      "Read full",
+      "summary --json",
+      "context --json",
+      "list --json",
+      "show T0001 --json",
+      "validate --json",
       "Done when",
       "## Log",
-      "evidence line",
       "idea",
       "backlog",
       "status: idea",
-      "reporting rules",
+      "GAME_PROJECT.md",
     ],
   },
   {
@@ -464,7 +465,7 @@ const SKILL_CHECKS = [
     body: [
       "AGENTS.md",
       "ai_studio/README.md",
-      "tasks/STATUS.md",
+      "GAME_PROJECT.md",
       "ai_studio/taskboard/cli.mjs summary",
       "ai_studio/taskboard/cli.mjs context",
       "git status --short",

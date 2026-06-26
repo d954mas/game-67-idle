@@ -17,14 +17,14 @@ function writeBase(root, { active = true } = {}) {
   mkdirSync(join(root, "src"), { recursive: true });
   writeFileSync(
     join(root, "AGENTS.md"),
-    active
-      ? "# AGENTS\n\n## Project\n\n- Active game concept: `Ember Test` (ember-test), test game.\n"
-      : "# AGENTS\n\n## Project\n\n- Active game concept: none.\n",
+    "# AGENTS\n\n## Project\n\n- Shared AI Studio harness rules.\n",
     "utf8",
   );
   writeFileSync(
-    join(root, "tasks", "STATUS.md"),
-    active ? "# Project Status\n\n## Current Goal\n\nActive test game.\n" : "# Project Status\n\n## Current Goal\n\nNo active game concept.\n",
+    join(root, "GAME_PROJECT.md"),
+    active
+      ? "# GAME_PROJECT\n\n## Active Game\n\nStatus: active\n\n- Game id: `ember-test`\n- Game folder: `gamedesign/projects/ember-test/`\n"
+      : "# GAME_PROJECT\n\n## Active Game\n\nStatus: none\n\nThere is no active game concept.\n",
     "utf8",
   );
   writeFileSync(join(root, "src", "clean_seed_main.c"), "int main(void){return 0;}\n", "utf8");

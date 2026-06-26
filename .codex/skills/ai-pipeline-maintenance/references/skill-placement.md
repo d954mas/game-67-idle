@@ -8,8 +8,8 @@ entrypoints, skill references, docs, tasks, or a new skill.
 Use the smallest durable home that lets the next agent load only what applies.
 
 1. Mechanical invariant -> `tools/` validator or test.
-2. Current work state/evidence -> `tasks/STATUS.md`, active task log, or
-   evidence file.
+2. Current game routing -> `GAME_PROJECT.md`; work state/evidence -> active
+   task log or evidence file.
 3. Project boundary or hard repo policy -> `AGENTS.md`.
 4. Portable workflow map -> `ai_studio/README.md`.
 5. Repeatable task behavior -> existing `.codex/skills/<skill>/SKILL.md`.
@@ -49,7 +49,7 @@ Prefer an existing skill when:
 Good examples:
 
 - pipeline docs split -> `ai-pipeline-maintenance`;
-- task/status lifecycle -> `task-manager`;
+- task/status lifecycle -> `nt-taskboard-manager`;
 - session postmortem -> `chat-session-reflection`;
 - playable implementation -> `game-feature-iteration`;
 - visual polish or fake shots -> `game-visual-art-direction`.
@@ -63,7 +63,7 @@ Use this map before moving rules out of hot files or creating a new skill:
 - Long-session review, profiler interpretation, and improvement backlog from a
   completed run -> `chat-session-reflection`.
 - Task capture, task splitting, status, active/archive lifecycle, and evidence
-  rules -> `task-manager`.
+  rules -> `nt-taskboard-manager`.
 - New game concept, GDD, reference pack, core-loop model, fake shots, and
   implementation handoff -> `primary-gdd-pipeline`.
 - Playable native feature iteration, build/run proof, slice hygiene, and close

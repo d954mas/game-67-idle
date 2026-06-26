@@ -10,12 +10,12 @@
 //
 // Assets are per-game: --to is the target game's assets dir (e.g. template/assets
 // or <game>/assets), NOT the repo root.
-//   node tools/asset_review/pull.mjs --ids kenney__desk__cc0-1-0 --to mygame/assets --apply
+//   node ai_studio/assets/asset_viewer/pull.mjs --ids kenney__desk__cc0-1-0 --to mygame/assets --apply
 import { readFile, writeFile, mkdir, cp, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { scanLibrary, parseFrontmatter, DEFAULT_LIBRARY, KIND_DIR } from "../assets/source/find_assets.mjs";
-import { isPublishable, RESTRICTED_ROOT } from "../assets/restricted.mjs";
+import { scanLibrary, parseFrontmatter, DEFAULT_LIBRARY, KIND_DIR } from "../../../tools/assets/source/find_assets.mjs";
+import { isPublishable, RESTRICTED_ROOT } from "../../../tools/assets/restricted.mjs";
 
 function parseArgs(argv) {
   const a = { ids: "", library: DEFAULT_LIBRARY, to: "", apply: false, overwrite: false };

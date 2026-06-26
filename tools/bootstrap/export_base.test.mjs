@@ -39,7 +39,8 @@ test("portable export includes task guides and generated skill pointers", () => 
     const result = runExport(target);
     assert.equal(result.status, 0, result.stderr);
 
-    assert.equal(existsSync(join(target, "tasks", "STATUS.md")), true);
+    assert.equal(existsSync(join(target, "GAME_PROJECT.md")), true);
+    assert.equal(existsSync(join(target, "tasks", "STATUS.md")), false);
     assert.equal(existsSync(join(target, "ai_studio", "taskboard", "README.md")), true);
     assert.equal(existsSync(join(target, "ai_studio", "taskboard", "task-store-reference.md")), true);
     assert.equal(existsSync(join(target, "ai_studio", "taskboard", "cli.mjs")), true);
@@ -54,10 +55,13 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(existsSync(join(target, "ai_studio", "core_harness", "README.md")), true);
     assert.equal(existsSync(join(target, "ai_studio", "architecture_map", "index.html")), true);
     assert.equal(existsSync(join(target, "ai_studio", "architecture_map", "validate_map.mjs")), true);
-    assert.equal(existsSync(join(target, "ai_studio", "architecture_map", "serve.mjs")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "studio_shell", "server.mjs")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "assets", "asset_viewer", "build_review.mjs")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "assets", "asset_viewer", "viewer.js")), true);
+    assert.equal(existsSync(join(target, "tools", "asset_review")), false);
     assert.equal(existsSync(join(target, "tools", "README.md")), true);
     assert.equal(existsSync(join(target, "tools", "requirements", "ai-pipeline-full.txt")), true);
-    assert.equal(existsSync(join(target, ".claude", "skills", "task-manager", "SKILL.md")), true);
+    assert.equal(existsSync(join(target, ".claude", "skills", "nt-taskboard-manager", "SKILL.md")), true);
     assert.equal(existsSync(join(target, "tools", "context_budget_config.mjs")), true);
     assert.equal(
       existsSync(join(target, "tools", "assets", "intake", "download_source_asset.mjs")),
@@ -77,6 +81,7 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.match(studio, /ai_studio\/core_harness\/orchestration\/README\.md/);
     assert.match(studio, /docs\/ai-pipeline\/quality-validation\.md/);
     assert.match(studio, /docs\/ai-pipeline\/profiling-reuse\.md/);
+    assert.match(studio, /ai_studio\/studio_shell\/server\.mjs/);
 
     const docRefs = runInTarget(target, ["ai_studio/core_harness/validation/doc_reference_check.mjs"]);
     assert.equal(docRefs.status, 0, docRefs.stderr);

@@ -53,7 +53,7 @@ exist locally at build time — no builder scan change required.
 
 - orchestration: used
   objective: let the project use paid/licensed assets without leaking binaries into the open repo — gitignore split + publishability predicate + leak guard + manual paid intake + parse skill + docs
-  allowed files: .gitignore, tools/asset_review/pull.mjs, tools/assets/restricted.mjs, tools/assets/audit/**, tools/assets/intake/**, ai_studio/core_harness/validation/pipeline_validate.mjs, AGENTS.md, docs/ai-pipeline/**, .codex/skills/**, tasks/active/T0151-licensed-paid-asset-gitignore-split-leak-guard-m.md
+  allowed files: .gitignore, ai_studio/assets/asset_viewer/pull.mjs, tools/assets/restricted.mjs, tools/assets/audit/**, tools/assets/intake/**, ai_studio/core_harness/validation/pipeline_validate.mjs, AGENTS.md, docs/ai-pipeline/**, .codex/skills/**, tasks/active/T0151-licensed-paid-asset-gitignore-split-leak-guard-m.md
   tool-use guard: verify exact repo paths with rg --files/Test-Path before reads; use Select-Object -Skip/-First for line windows; keep evidence commands read-only
   expected output: committed metadata-only catalogs + gitignored assets/restricted/ for paid binaries; guard green on tree and red on a planted leak; intake + skill for CGTrader packs; AGENTS invariant + doc
   evidence command: node tools/assets/audit/restricted_assets_guard.mjs && node --test tools/assets/audit/restricted_assets_guard.test.mjs && node ai_studio/taskboard/cli.mjs validate

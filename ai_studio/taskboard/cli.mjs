@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Taskboard CLI for humans and agents.
 //
-//   node ai_studio/taskboard/cli.mjs list [--status s] [--epic E001] [--tag t] [--ideas] [--review] [--all] [--archive]
-//   node ai_studio/taskboard/cli.mjs summary [--tasks-limit 5]
-//   node ai_studio/taskboard/cli.mjs show T0001
+//   node ai_studio/taskboard/cli.mjs list [--json] [--status s] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
+//   node ai_studio/taskboard/cli.mjs summary [--json] [--tasks-limit 5]
+//   node ai_studio/taskboard/cli.mjs show T0001 [--json]
 //   node ai_studio/taskboard/cli.mjs new task --title "..." [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
 //   node ai_studio/taskboard/cli.mjs new epic --title "..." [--status active]
 //   node ai_studio/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
-//   node ai_studio/taskboard/cli.mjs context [--status-max-chars 2400] [--tasks-limit 25]
+//   node ai_studio/taskboard/cli.mjs context [--json] [--tasks-limit 25]
 //   node ai_studio/taskboard/cli.mjs validate [--json]
 //
 // Agents: prefer `new` over hand-writing files so IDs never collide.
@@ -15,16 +15,13 @@
 import {
   findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
   updateDoc, validateStoreDetailed, TASK_STATUSES,
-  LIVE_STATUS_MAX_CHARS,
 } from "./lib.mjs";
-import { orchestrationPacketTemplate } from "../core_harness/orchestration/lib.mjs";
-import { existsSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { agentContextPayload, agentEpicRow, agentTaskRow } from "./api.mjs";
+import { relative } from "node:path";
 import { fail } from "../../tools/lib/cli.mjs";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
-const ORCHESTRATION_CLI = "node ai_studio/core_harness/orchestration/cli.mjs";
 
 function parseArgs(args) {
   const out = { _: [] };
@@ -58,27 +55,8 @@ function numberArg(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
-function clampText(text, maxChars) {
-  if (text.length <= maxChars) return { text: text.trim(), truncated: false };
-  const clipped = text.slice(0, Math.max(0, maxChars - 80)).replace(/\s+$/, "");
-  return {
-    text: `${clipped}\n\n... truncated ${text.length - clipped.length} chars; inspect tasks/STATUS.md or linked task files only if needed.`,
-    truncated: true,
-  };
-}
-
 function writeJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
-}
-
-function sectionText(markdown, title) {
-  const pattern = new RegExp(`(?:^|\\r?\\n)## ${escapeRegExp(title)}[ \\t]*\\r?\\n([\\s\\S]*?)(?=\\r?\\n##\\s+|$)`, "i");
-  const match = markdown.match(pattern);
-  return match ? match[1].trim() : "";
-}
-
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function statusCounts(tasks) {
@@ -99,38 +77,13 @@ function taskRank(task) {
   return statusRank * 10 + priorityRank(task.fields.priority);
 }
 
-const PIPELINE_CONTEXT_TAGS = new Set([
-  "pipeline",
-  "ai-pipeline",
-  "orchestration",
-  "taskboard",
-  "profiling",
-  "subagent",
-  "subagents",
-  "context",
-  "context-budget",
-  "skills",
-  "skills-eval",
-  "skills-sync",
-  "validation",
-  "tooling",
-]);
-
-function isPipelineContextTask(task) {
-  return (task.fields.tags || []).some((tag) => PIPELINE_CONTEXT_TAGS.has(String(tag).toLowerCase()));
-}
-
-function hasOnlyPipelineCurrentWork(tasks) {
-  return tasks.length > 0 && tasks.every(isPipelineContextTask);
-}
-
 function idNumber(task) {
   const match = String(task.fields.id || "").match(/\d+/);
   return match ? Number(match[0]) : 0;
 }
 
 function currentWorkTasks(root) {
-  const tasks = listTasks(root).filter((task) => ["backlog", "todo", "doing"].includes(task.fields.status));
+  const tasks = listTasks(root).filter((task) => ["backlog", "todo", "doing", "review"].includes(task.fields.status));
   tasks.sort((a, b) => taskRank(a) - taskRank(b) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)));
   return tasks;
 }
@@ -155,8 +108,6 @@ function appendCurrentWork(lines, tasks, limit, overflowCommand) {
 }
 
 function renderSummary(root, options) {
-  const statusFile = join(root, "tasks", "STATUS.md");
-  const status = existsSync(statusFile) ? readFileSync(statusFile, "utf8") : "";
   const tasksLimit = numberArg(options["tasks-limit"], 5);
   const openTasks = currentWorkTasks(root);
   const reviewCount = reviewTasks(root).length;
@@ -164,31 +115,9 @@ function renderSummary(root, options) {
   lines.push("# Taskboard Summary");
   lines.push("");
   lines.push(`active_task_counts: ${statusCounts(listTasks(root))}`);
-  lines.push(`open_actionable_tasks: ${openTasks.length}`);
+  lines.push(`open_work_items: ${openTasks.length}`);
   lines.push(`review_tasks: ${reviewCount}`);
-  appendCurrentWork(lines, openTasks, tasksLimit, "node ai_studio/taskboard/cli.mjs context");
-  const pipelineCurrentWork = hasOnlyPipelineCurrentWork(openTasks);
-  const currentGoal = sectionText(status, "Current Goal");
-  const blockers = sectionText(status, "Blocking Work") || sectionText(status, "Blockers");
-  const nextPriorities = sectionText(status, "Next Priorities");
-  if (pipelineCurrentWork) {
-    lines.push("");
-    lines.push("## Status Context");
-    lines.push("");
-    lines.push("Live game status sections are omitted while current actionable work is pipeline/tooling-scoped.");
-  } else {
-    for (const [title, body, budget] of [
-      ["Current Goal", currentGoal, 500],
-      ["Blocking Work", blockers, 500],
-      ["Next Priorities", nextPriorities, 700],
-    ]) {
-      if (!body) continue;
-      lines.push("");
-      lines.push(`## ${title}`);
-      lines.push("");
-      lines.push(clampText(body, budget).text || "(empty)");
-    }
-  }
+  appendCurrentWork(lines, openTasks, tasksLimit, "node ai_studio/taskboard/cli.mjs context --json");
   lines.push("");
   lines.push("## Top Open Tasks");
   lines.push("");
@@ -196,67 +125,24 @@ function renderSummary(root, options) {
     lines.push(`- ${shortRow(task)}`);
   }
   if (openTasks.length > tasksLimit) {
-    lines.push(`- ... ${openTasks.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs context\` or \`list\` only when needed.`);
+    lines.push(`- ... ${openTasks.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs context --json\` or \`list --json\` only when needed.`);
   }
   if (openTasks.length === 0) {
     lines.push("- none");
-    if (reviewCount > 0) {
-      lines.push(`- ${reviewCount} task(s) are in review; run \`node ai_studio/taskboard/cli.mjs list --review\` only when reviewing or closing old work.`);
-    }
   }
   return `${lines.join("\n")}\n`;
 }
 
 function renderContext(root, options) {
-  const statusFile = join(root, "tasks", "STATUS.md");
-  const status = existsSync(statusFile) ? readFileSync(statusFile, "utf8") : "";
-  const statusMaxChars = numberArg(options["status-max-chars"], LIVE_STATUS_MAX_CHARS);
   const tasksLimit = numberArg(options["tasks-limit"], 25);
-  const sections = [
-    "Current Goal",
-    "Blocking Work",
-    "Non-blocking Debt",
-    "Next Priorities",
-    "Current Gate",
-    "Required Validation",
-    "Last Known Good Evidence",
-  ];
   const tasks = currentWorkTasks(root);
-  const reviewCount = reviewTasks(root).length;
 
   const lines = [];
   lines.push("# Current Context Digest");
   lines.push("");
-  lines.push(`status_file: ${relative(root, statusFile)}`);
-  lines.push(`status_chars: ${status.length}`);
-  if (status.length > statusMaxChars) {
-    lines.push(`status_warning: large; digest is capped at ${statusMaxChars} chars`);
-  }
   lines.push(`active_task_counts: ${statusCounts(listTasks(root))}`);
-  appendCurrentWork(lines, tasks, tasksLimit, "node ai_studio/taskboard/cli.mjs list");
+  appendCurrentWork(lines, tasks, tasksLimit, "node ai_studio/taskboard/cli.mjs list --json");
   lines.push("");
-
-  const pipelineCurrentWork = hasOnlyPipelineCurrentWork(tasks);
-  let remaining = statusMaxChars;
-  if (pipelineCurrentWork) {
-    lines.push("## Status Context");
-    lines.push("");
-    lines.push("Live game status sections are omitted while current actionable work is pipeline/tooling-scoped.");
-    lines.push("");
-  } else {
-    for (const section of sections) {
-      const body = sectionText(status, section);
-      if (!body) continue;
-      const sectionBudget = Math.max(600, Math.min(remaining, 1400));
-      const clipped = clampText(body, sectionBudget);
-      lines.push(`## ${section}`);
-      lines.push("");
-      lines.push(clipped.text || "(empty)");
-      lines.push("");
-      remaining -= Math.min(body.length, sectionBudget);
-      if (remaining <= 0) break;
-    }
-  }
 
   lines.push("## Actionable Tasks");
   lines.push("");
@@ -264,13 +150,10 @@ function renderContext(root, options) {
     lines.push(`- ${shortRow(task)}`);
   }
   if (tasks.length > tasksLimit) {
-    lines.push(`- ... ${tasks.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs list\` or show a specific task only if needed.`);
+    lines.push(`- ... ${tasks.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs list --json\` or show a specific task only if needed.`);
   }
   if (tasks.length === 0) {
     lines.push("- none");
-  }
-  if (reviewCount > 0) {
-    lines.push(`- ${reviewCount} review task(s) hidden from current context; use \`list --review\` for review cleanup.`);
   }
   lines.push("");
   lines.push("Next context step: inspect only the linked task files or evidence paths needed for the current decision.");
@@ -281,7 +164,7 @@ const args = parseArgs(rest);
 
 switch (cmd) {
   case "list": {
-    const hidden = new Set(args.all ? [] : ["idea", "review", "done", "dropped"]);
+    const hidden = new Set(args.all ? [] : ["idea", "done", "dropped"]);
     if (args.ideas) hidden.delete("idea");
     if (args.review) hidden.delete("review");
     if (args.status) hidden.clear();
@@ -296,6 +179,21 @@ switch (cmd) {
     tasks.sort((a, b) =>
       (order.get(a.fields.status) ?? 99) - (order.get(b.fields.status) ?? 99) ||
       String(a.fields.priority).localeCompare(String(b.fields.priority)));
+    if (args.json) {
+      writeJson({
+        schema: "ai_studio.taskboard.list.v1",
+        filters: {
+          status: args.status || "",
+          epic: args.epic || "",
+          tag: args.tag || "",
+          includeArchive: args.archive === true,
+          includeAllStatuses: args.all === true,
+        },
+        tasks: tasks.map((task) => agentTaskRow(root, task)),
+        epics: listEpics(root).map((epic) => agentEpicRow(root, epic)),
+      });
+      break;
+    }
     for (const e of listEpics(root)) {
       if (!args.status && !args.tag && (!args.epic || args.epic === e.fields.id)) {
         if (!args.all && !args.archive && ["done", "dropped"].includes(e.fields.status)) continue;
@@ -311,16 +209,31 @@ switch (cmd) {
     break;
   }
   case "summary": {
+    if (args.json) {
+      writeJson(agentContextPayload(root, { limit: numberArg(args["tasks-limit"], 5) }));
+      break;
+    }
     process.stdout.write(renderSummary(root, args));
     break;
   }
   case "context": {
+    if (args.json) {
+      writeJson(agentContextPayload(root, { limit: numberArg(args["tasks-limit"], 25) }));
+      break;
+    }
     process.stdout.write(renderContext(root, args));
     break;
   }
   case "show": {
     const id = args._[0] || fail("usage: show <id>");
     const doc = findDoc(root, id) || fail(`no doc with id ${id}`);
+    if (args.json) {
+      writeJson({
+        schema: "ai_studio.taskboard.doc.v1",
+        doc: doc.kind === "task" ? agentTaskRow(root, doc, { includeBody: true }) : { ...agentEpicRow(root, doc), body: doc.body },
+      });
+      break;
+    }
     console.log(`file: ${relative(root, doc.file)}`);
     for (const [k, v] of Object.entries(doc.fields)) {
       console.log(`${k}: ${Array.isArray(v) ? v.join(", ") : v}`);
@@ -376,38 +289,15 @@ switch (cmd) {
     break;
   }
   case "validate": {
-    // Orchestration packet checks are ADVISORY everywhere on the store path:
-    // validate (here) and the store-mutation checkpoints (createTask/updateDoc,
-    // i.e. `new`/`set`) all NUDGE rather than block, so the task store stays
-    // decoupled from orchestration policy. The goal (don't silently skip
-    // delegation) is kept as a loud nudge. Only the EXPLICIT `orchestration-check`
-    // command still fails hard. [REFACTOR_PLAN Phase 1 #2 + p.6 advisory flip]
-    const ADVISORY_CODES = new Set([
-      "orchestration_start_preflight_missing",
-      "orchestration_evidence_missing",
-    ]);
     const detailedProblems = validateStoreDetailed(root);
-    const blocking = detailedProblems.filter((p) => !ADVISORY_CODES.has(p.code));
-    const advisory = detailedProblems.filter((p) => ADVISORY_CODES.has(p.code));
     if (args.json) {
-      writeJson({ ok: blocking.length === 0, problems: blocking, advisories: advisory });
-      process.exit(blocking.length ? 1 : 0);
+      writeJson({ ok: detailedProblems.length === 0, problems: detailedProblems });
+      process.exit(detailedProblems.length ? 1 : 0);
     }
-    for (const p of advisory) {
-      console.log(`nudge: ${p.message}`);
-      const hint = remediationHint(p.message);
-      if (hint) {
-        console.log(`hint: ${hint}`);
-      }
-    }
-    if (!blocking.length) {
-      console.log(
-        advisory.length
-          ? "ok: no blocking problems (orchestration nudges above are advisory)"
-          : "ok: no problems found",
-      );
+    if (!detailedProblems.length) {
+      console.log("ok: no problems found");
     } else {
-      for (const p of blocking) {
+      for (const p of detailedProblems) {
         console.log(`problem: ${p.message}`);
         const hint = remediationHint(p.message);
         if (hint) {
@@ -444,12 +334,6 @@ function remediationHint(problem) {
   }
   if (problem.includes("active epic needs")) {
     return "fill `## Goal`, `## In scope`, and `## Out of scope`, or move the epic back to `status: idea`";
-  }
-  if (problem.includes("exceeds live status budget")) {
-    return "replace inline history with pointers to `tasks/archive/` or `gamedesign/projects/<game-id>/`; keep `STATUS.md` as a current index";
-  }
-  if (problem.includes("substantial pipeline/orchestration task needs orchestration evidence")) {
-    return `add a complete packet from \`${ORCHESTRATION_CLI} orchestration-template\`:\n${orchestrationPacketTemplate()}\nor record \`orchestration: not needed - small scope: one-file/docs-only/no code ...\``;
   }
   return "";
 }

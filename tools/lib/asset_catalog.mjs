@@ -1,6 +1,6 @@
 // Canonical on-disk schema for a shared-library catalog record + its license file.
 // The frontmatter field set/order, the tag formatting, and the license layout live
-// HERE so the three writers (accept_incoming_asset, asset_review/promote,
+// HERE so the three writers (accept_incoming_asset, asset_viewer/promote,
 // import_poly_pizza) cannot drift apart on the catalog schema. Callers pass the
 // field VALUES + optional extra frontmatter lines + their own markdown body.
 //

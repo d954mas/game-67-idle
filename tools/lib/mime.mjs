@@ -1,10 +1,8 @@
 // Single source for the static-file MIME types used by the local dev servers
-// (serve_tunnel.mjs, asset_review/serve_gallery.mjs). Just the extension->type
+// (serve_tunnel.mjs, asset_viewer/serve_gallery.mjs). Just the extension->type
 // map + a lookup — each server keeps its own routing/security/tunnel logic.
 // A shared superset is safe: every overlapping extension maps identically, and
 // both servers fall back to application/octet-stream for unknown types.
-// NOT shared by taskboard/server.mjs on purpose — that admin UI uses a different
-// contract (charset-suffixed text/* types for a handful of web assets).
 import { extname } from "node:path";
 
 export const MIME_TYPES = {

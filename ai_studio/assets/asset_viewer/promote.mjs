@@ -6,16 +6,16 @@
 // assets already vendored into a project, computes integrity, copies the file +
 // license, writes the catalog record (with origin + legal flags), appends log.md.
 //
-//   node tools/asset_review/promote.mjs --manifest tmp/asset-review-ll/review-manifest.json \
+//   node ai_studio/assets/asset_viewer/promote.mjs --manifest tmp/asset-review-ll/review-manifest.json \
 //        --ids "a,b,c" --source kenney --license CC0-1.0 --apply
 import { readFile, writeFile, mkdir, cp, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, basename, extname } from "node:path";
 import { createHash } from "node:crypto";
-import { DEFAULT_LIBRARY, KIND_DIR } from "../assets/source/find_assets.mjs";
-import { catalogFrontmatter } from "../lib/asset_catalog.mjs";
-import { isMain } from "../lib/cli.mjs";
-import { LICENSE_URLS } from "../lib/licenses.mjs";
+import { DEFAULT_LIBRARY, KIND_DIR } from "../../../tools/assets/source/find_assets.mjs";
+import { catalogFrontmatter } from "../../../tools/lib/asset_catalog.mjs";
+import { isMain } from "../../../tools/lib/cli.mjs";
+import { LICENSE_URLS } from "../../../tools/lib/licenses.mjs";
 
 // review-kind -> library-kind, for legacy manifests; new manifests already carry
 // a library kind, so this is only a fallback.

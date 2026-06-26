@@ -14,7 +14,7 @@ and C-baked geometry are debug debt only).
 genre/type. Reuse BEFORE sourcing or generating:
 - discover: `node tools/assets/source/find_assets.mjs --kind model --genre <g> --tags <t>` (`--query`, `--json` too).
 - browse: `build_review.mjs --mode library --out tmp/lib-gallery --ref`, then `serve_gallery.mjs --gallery tmp/lib-gallery --lib <library>`.
-- pull into the game: `tools/asset_review/pull.mjs --ids <id> --to assets --apply` (no `--apply` = dry-run).
+- pull into the game: `ai_studio/assets/asset_viewer/pull.mjs --ids <id> --to assets --apply` (no `--apply` = dry-run).
 
 Only if nothing fits: source free glb (Quaternius/Kenney/Poly Pizza, CC0) or
 generate, then catalog (game-asset-prep) so the next game reuses it.

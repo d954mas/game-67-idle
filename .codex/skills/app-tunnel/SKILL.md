@@ -26,7 +26,7 @@ Examples:
 
 ## What to serve
 
-- Asset viewer: `tools/asset_review/build_review.mjs` output dir (pick from phone).
+- Asset viewer: `ai_studio/assets/asset_viewer/build_review.mjs` output dir (pick from phone).
 - A wasm game build dir (self-contained index.html + .wasm/.js/.data) → play remotely.
 - Any self-contained static page.
 

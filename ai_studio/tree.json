@@ -8,7 +8,11 @@
     "kind": "root",
     "color": "#172033",
     "description": "Clean refactor tree. Start with Core Harness only; promote modules from Not Refactored after review, cleanup, owner assignment, and compatibility checks.",
-    "tags": ["reviewed-only", "no-bulk-move", "core-first"],
+    "tags": [
+      "reviewed-only",
+      "no-bulk-move",
+      "core-first"
+    ],
     "children": [
       {
         "id": "studio-readme",
@@ -17,7 +21,123 @@
         "title": "ai_studio/README.md",
         "description": "AI Studio root index: describes available capabilities, task routing, migration rules, map ownership, and where to go for each kind of work.",
         "role": "AI Studio root capability index and router",
-        "tags": ["source", "router", "migration"]
+        "tags": [
+          "source",
+          "router",
+          "migration"
+        ]
+      },
+      {
+        "id": "studio-shell",
+        "title": "Studio Shell",
+        "subtitle": "single UI entry point",
+        "kind": "shell",
+        "moduleId": "studio-shell",
+        "color": "#0f766e",
+        "description": "Shared browser shell for AI Studio surfaces: home, persistent navigation, collapse state, theme, and unified local serving. It hosts surfaces but does not own module domain logic.",
+        "tags": [
+          "ui",
+          "entrypoint",
+          "server",
+          "surface-host"
+        ],
+        "children": [
+          {
+            "id": "studio-shell:readme",
+            "kind": "doc",
+            "path": "ai_studio/studio_shell/README.md",
+            "title": "README.md",
+            "description": "Studio Shell module contract: owns the shared browser shell, defines surface vs module ownership, and lists hosted surfaces.",
+            "role": "Studio Shell contract",
+            "tags": [
+              "source",
+              "contract",
+              "shared-shell"
+            ]
+          },
+          {
+            "id": "studio-shell:home-surface",
+            "kind": "surface",
+            "path": "ai_studio/studio_shell/index.html",
+            "title": "Home Surface",
+            "description": "AI Studio home surface: opens the architecture map, taskboard, tree source, and validation report from one local URL.",
+            "role": "AI Studio browser entry surface",
+            "tags": [
+              "ui",
+              "entrypoint",
+              "surface"
+            ]
+          },
+          {
+            "id": "studio-shell:server",
+            "kind": "server",
+            "path": "ai_studio/studio_shell/server.mjs",
+            "title": "server.mjs",
+            "description": "Unified local server for AI Studio home, Architecture Map surface, Taskboard surface, tree.json, validation report, and Taskboard API routes.",
+            "role": "AI Studio local server",
+            "tags": [
+              "server",
+              "public-api",
+              "ui"
+            ]
+          },
+          {
+            "id": "studio-shell:implementation",
+            "title": "Shared UI Implementation",
+            "subtitle": "css/js internals",
+            "kind": "group",
+            "color": "#0f766e",
+            "description": "Low-level browser files for the shared AI Studio shell. Hidden from the default graph so Studio Shell stays readable as one architectural surface.",
+            "role": "shared shell implementation details",
+            "tags": [
+              "ui",
+              "implementation",
+              "shared-shell"
+            ],
+            "hiddenByDefault": true,
+            "hiddenReason": "CSS and browser JS internals are implementation details; open this group only when changing the shell UI.",
+            "children": [
+              {
+                "id": "studio-shell:home-style",
+                "kind": "ui-component",
+                "path": "ai_studio/studio_shell/home.css",
+                "title": "home.css",
+                "description": "AI Studio home-surface content styling. The shared navigation shell is owned by studio_shell.css and studio_shell.js.",
+                "role": "AI Studio home styling",
+                "tags": [
+                  "ui",
+                  "style"
+                ]
+              },
+              {
+                "id": "studio-shell:shared-style",
+                "kind": "ui-component",
+                "path": "ai_studio/studio_shell/studio_shell.css",
+                "title": "studio_shell.css",
+                "description": "Shared dark AI Studio app shell: persistent left navigation, collapsed navigation state, page content area, and responsive sidebar behavior.",
+                "role": "shared AI Studio shell styling",
+                "tags": [
+                  "ui",
+                  "style",
+                  "shared-shell"
+                ]
+              },
+              {
+                "id": "studio-shell:shared-script",
+                "kind": "ui-component",
+                "path": "ai_studio/studio_shell/studio_shell.js",
+                "title": "studio_shell.js",
+                "description": "Shared browser behavior for the AI Studio left sidebar: collapse and expand toggle with localStorage persistence.",
+                "role": "shared AI Studio shell behavior",
+                "tags": [
+                  "ui",
+                  "browser-js",
+                  "shared-shell"
+                ]
+              }
+            ]
+          }
+        ]
       },
       {
         "id": "module:hot",
@@ -27,12 +147,59 @@
         "moduleId": "hot",
         "color": "#172033",
         "description": "Harness, agent-facing contract, AGENTS.md, root compatibility surfaces, and the smallest public entry points needed to start work.",
-        "tags": ["core", "harness", "first-refactor-line"],
+        "tags": [
+          "core",
+          "harness",
+          "first-refactor-line"
+        ],
         "children": [
-          { "id": "core-harness:readme", "kind": "doc", "path": "ai_studio/core_harness/README.md", "description": "Core Harness module contract: what belongs in the always-nearby harness, what is only a compatibility surface, and which submodules own workflow, orchestration, and validation.", "role": "core harness module contract", "tags": ["core", "source", "contract"] },
-          { "id": "core-harness:agents", "kind": "doc", "path": "AGENTS.md", "description": "Repo-level harness contract loaded by agents: repository role, AI Studio direction, current-game routing, hard invariants, and context routes.", "role": "repo-specific agent contract", "tags": ["core", "policy", "source"] },
-          { "id": "core-harness:claude", "kind": "doc", "path": "CLAUDE.md", "description": "Compatibility pointer for Claude-facing harnesses; should stay generated or thin and route back to AGENTS.md.", "role": "generated/parallel harness pointer", "tags": ["generated-surface", "check-drift"] },
-          { "id": "core-harness:game-project", "kind": "doc", "path": "GAME_PROJECT.md", "description": "Current-game routing file. Keeps active game context out of AGENTS.md and points to game design docs, task state, and game folder when a game is active.", "role": "current-game router", "tags": ["core", "game-route", "reviewed"] },
+          {
+            "id": "core-harness:readme",
+            "kind": "doc",
+            "path": "ai_studio/core_harness/README.md",
+            "description": "Core Harness module contract: what belongs in the always-nearby harness, what is only a compatibility surface, and which submodules own workflow, orchestration, and validation.",
+            "role": "core harness module contract",
+            "tags": [
+              "core",
+              "source",
+              "contract"
+            ]
+          },
+          {
+            "id": "core-harness:agents",
+            "kind": "doc",
+            "path": "AGENTS.md",
+            "description": "Repo-level harness contract loaded by agents: repository role, AI Studio direction, current-game routing, hard invariants, and context routes.",
+            "role": "repo-specific agent contract",
+            "tags": [
+              "core",
+              "policy",
+              "source"
+            ]
+          },
+          {
+            "id": "core-harness:claude",
+            "kind": "doc",
+            "path": "CLAUDE.md",
+            "description": "Compatibility pointer for Claude-facing harnesses; should stay generated or thin and route back to AGENTS.md.",
+            "role": "generated/parallel harness pointer",
+            "tags": [
+              "generated-surface",
+              "check-drift"
+            ]
+          },
+          {
+            "id": "core-harness:game-project",
+            "kind": "doc",
+            "path": "GAME_PROJECT.md",
+            "description": "Current-game routing file. Keeps active game context out of AGENTS.md and points to game design docs, task state, and game folder when a game is active.",
+            "role": "current-game router",
+            "tags": [
+              "core",
+              "game-route",
+              "reviewed"
+            ]
+          },
           {
             "id": "core-harness:workflow",
             "title": "Workflow",
@@ -41,9 +208,25 @@
             "color": "#334155",
             "description": "Core Harness workflow group: local process for context loading, work loop, validation handoff, and delegation checkpoint.",
             "role": "agent task workflow inside the harness",
-            "tags": ["core", "workflow", "procedure"],
+            "tags": [
+              "core",
+              "workflow",
+              "procedure"
+            ],
             "children": [
-              { "id": "core-harness:workflow-readme", "kind": "doc", "path": "ai_studio/core_harness/workflow/README.md", "description": "Canonical Workflow contract: context policy, lead-agent work loop, validation handoff, and delegation checkpoint.", "role": "workflow module entrypoint", "tags": ["workflow", "contract", "entrypoint", "context-policy"] }
+              {
+                "id": "core-harness:workflow-readme",
+                "kind": "doc",
+                "path": "ai_studio/core_harness/workflow/README.md",
+                "description": "Canonical Workflow contract: context policy, lead-agent work loop, validation handoff, and delegation checkpoint.",
+                "role": "workflow module entrypoint",
+                "tags": [
+                  "workflow",
+                  "contract",
+                  "entrypoint",
+                  "context-policy"
+                ]
+              }
             ]
           },
           {
@@ -54,12 +237,87 @@
             "color": "#475569",
             "description": "Simple early-split rule for broad read-heavy work. Owns the public orchestration CLI route and keeps subagent use lightweight with Task / Scope / Return / Stop packets.",
             "role": "subagent delegation trigger and packet shape",
-            "tags": ["core", "orchestration", "subagents"],
+            "tags": [
+              "core",
+              "orchestration",
+              "subagents"
+            ],
             "children": [
-              { "id": "core-harness:orchestration-readme", "kind": "doc", "path": "ai_studio/core_harness/orchestration/README.md", "description": "Short orchestration contract: when to split work, the simple packet format, lead responsibility, and current compatibility tooling.", "role": "orchestration module entrypoint", "tags": ["orchestration", "contract", "entrypoint"] },
-              { "id": "core-harness:orchestration-cli", "kind": "tool", "path": "ai_studio/core_harness/orchestration/cli.mjs", "description": "Public Core Harness orchestration CLI route. Owns command dispatch for subagent packet templates/checks and orchestration bootstrap/check.", "role": "public orchestration CLI", "tags": ["public-api", "cli", "migration-route"] },
-              { "id": "core-harness:orchestration-lib", "kind": "tool", "path": "ai_studio/core_harness/orchestration/lib.mjs", "description": "Core Harness orchestration helper library: packet templates, packet validation, preflight checks, presets, and bounded file-scope validation.", "role": "orchestration internal helper library", "tags": ["internal", "contract", "validation"] },
-              { "id": "core-harness:orchestration-tests", "kind": "tool", "path": "ai_studio/core_harness/orchestration/tests/orchestration_cli.test.mjs", "description": "Regression tests for the orchestration CLI route, command surface, delegation, and taskboard-only command rejection.", "role": "orchestration CLI tests", "tags": ["test", "route-guard"], "hiddenByDefault": true, "hiddenReason": "Test files are hidden from the default graph to keep module structure readable." }
+              {
+                "id": "core-harness:orchestration-readme",
+                "kind": "doc",
+                "path": "ai_studio/core_harness/orchestration/README.md",
+                "description": "Short orchestration contract: when to split work, the simple packet format, lead responsibility, and current compatibility tooling.",
+                "role": "orchestration module entrypoint",
+                "tags": [
+                  "orchestration",
+                  "contract",
+                  "entrypoint"
+                ]
+              },
+              {
+                "id": "core-harness:orchestration-cli",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/orchestration/cli.mjs",
+                "description": "Public Core Harness orchestration CLI route. Owns command dispatch for subagent packet templates/checks and orchestration bootstrap/check.",
+                "role": "public orchestration CLI",
+                "tags": [
+                  "public-api",
+                  "cli",
+                  "migration-route"
+                ]
+              },
+              {
+                "id": "core-harness:orchestration-lib",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/orchestration/lib.mjs",
+                "description": "Core Harness orchestration helper library: packet templates, packet validation, preflight checks, presets, and bounded file-scope validation.",
+                "role": "orchestration internal helper library",
+                "tags": [
+                  "internal",
+                  "contract",
+                  "validation"
+                ]
+              },
+              {
+                "id": "core-harness:orchestration-taskboard-policy",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/orchestration/taskboard_policy.mjs",
+                "description": "Orchestration policy over Taskboard state: current orchestration task lookup and optional taskboard-audit advisories. Taskboard does not own this policy.",
+                "role": "orchestration taskboard policy adapter",
+                "tags": [
+                  "internal",
+                  "policy",
+                  "taskboard-adapter"
+                ]
+              },
+              {
+                "id": "core-harness:orchestration-tests",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/orchestration/tests/orchestration_cli.test.mjs",
+                "description": "Regression tests for the orchestration CLI route, command surface, delegation, and taskboard-only command rejection.",
+                "role": "orchestration CLI tests",
+                "tags": [
+                  "test",
+                  "route-guard"
+                ],
+                "hiddenByDefault": true,
+                "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
+              },
+              {
+                "id": "core-harness:orchestration-taskboard-policy-test",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/orchestration/tests/taskboard_orchestration_policy.test.mjs",
+                "description": "Regression tests for orchestration-specific interpretation of Taskboard state, current work selection, policy advisories, and packet presets.",
+                "role": "orchestration taskboard policy tests",
+                "tags": [
+                  "test",
+                  "policy",
+                  "taskboard-adapter"
+                ],
+                "hiddenByDefault": true,
+                "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
+              }
             ]
           },
           {
@@ -70,23 +328,163 @@
             "color": "#7f1d1d",
             "description": "Core Harness validation group: lightweight checks for agent-facing docs, stale references, and retired command routes.",
             "role": "agent-facing route and reference guards",
-            "tags": ["core", "validation", "guards"],
+            "tags": [
+              "core",
+              "validation",
+              "guards"
+            ],
             "children": [
-              { "id": "core-harness:validation-readme", "kind": "doc", "path": "ai_studio/core_harness/validation/README.md", "description": "Validation module contract: what belongs in Core Harness validation, what stays in product/game gates, and the focused validation commands.", "role": "validation module entrypoint", "tags": ["validation", "contract", "entrypoint"] },
-              { "id": "core-harness:doc-reference-check", "kind": "tool", "path": "ai_studio/core_harness/validation/doc_reference_check.mjs", "description": "Mechanical guard for stale local references, missing files, and retired commands in agent-facing Markdown.", "role": "stale reference guard", "tags": ["validator", "docs", "public-api"] },
-              { "id": "core-harness:doc-reference-check-test", "kind": "tool", "path": "ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs", "description": "Regression tests for the Core Harness stale-reference guard and retired command detection.", "role": "stale reference guard tests", "tags": ["test", "docs"], "hiddenByDefault": true, "hiddenReason": "Test files are hidden from the default graph to keep module structure readable." },
-              { "id": "core-harness:pipeline-validate", "kind": "tool", "path": "ai_studio/core_harness/validation/pipeline_validate.mjs", "description": "Validation orchestrator behind Core Harness validation modes; collects docs, skills, taskboard, export, product checks, and focused tests.", "role": "pipeline validation orchestrator", "tags": ["validator", "facade", "public-api"] },
-              { "id": "core-harness:pipeline-validate-test", "kind": "tool", "path": "ai_studio/core_harness/validation/tests/pipeline_validate.test.mjs", "description": "Regression tests for validation mode routing, dry-run command selection, export checks, and Python dependency guidance.", "role": "pipeline validation tests", "tags": ["test", "validation"], "hiddenByDefault": true, "hiddenReason": "Test files are hidden from the default graph to keep module structure readable." }
+              {
+                "id": "core-harness:validation-readme",
+                "kind": "doc",
+                "path": "ai_studio/core_harness/validation/README.md",
+                "description": "Validation module contract: what belongs in Core Harness validation, what stays in product/game gates, and the focused validation commands.",
+                "role": "validation module entrypoint",
+                "tags": [
+                  "validation",
+                  "contract",
+                  "entrypoint"
+                ]
+              },
+              {
+                "id": "core-harness:doc-reference-check",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/validation/doc_reference_check.mjs",
+                "description": "Mechanical guard for stale local references, missing files, and retired commands in agent-facing Markdown.",
+                "role": "stale reference guard",
+                "tags": [
+                  "validator",
+                  "docs",
+                  "public-api"
+                ]
+              },
+              {
+                "id": "core-harness:doc-reference-check-test",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs",
+                "description": "Regression tests for the Core Harness stale-reference guard and retired command detection.",
+                "role": "stale reference guard tests",
+                "tags": [
+                  "test",
+                  "docs"
+                ],
+                "hiddenByDefault": true,
+                "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
+              },
+              {
+                "id": "core-harness:pipeline-validate",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/validation/pipeline_validate.mjs",
+                "description": "Validation orchestrator behind Core Harness validation modes; collects docs, skills, taskboard, export, product checks, and focused tests.",
+                "role": "pipeline validation orchestrator",
+                "tags": [
+                  "validator",
+                  "facade",
+                  "public-api"
+                ]
+              },
+              {
+                "id": "core-harness:pipeline-validate-test",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/validation/tests/pipeline_validate.test.mjs",
+                "description": "Regression tests for validation mode routing, dry-run command selection, export checks, and Python dependency guidance.",
+                "role": "pipeline validation tests",
+                "tags": [
+                  "test",
+                  "validation"
+                ],
+                "hiddenByDefault": true,
+                "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
+              }
             ]
           },
-          { "id": "core-harness:tools-readme", "kind": "doc", "path": "tools/README.md", "description": "Tool layout contract: public facades, domain helpers, and cleanup or validation routing.", "role": "tool layout contract", "tags": ["source", "facade-map"] },
-          { "id": "core-harness:context-budget", "kind": "tool", "path": "tools/context_budget.mjs", "description": "Mechanical guard for hot docs and skill entrypoint size; keeps always-loaded Core context small.", "role": "hot docs and skill budget guard", "tags": ["validator", "context"] },
-          { "id": "core-harness:quality-validation", "kind": "doc", "path": "docs/ai-pipeline/quality-validation.md", "description": "Gate taxonomy and validation reference; Core should route to it instead of duplicating the rules.", "role": "validation source reference", "tags": ["source", "move-out-detail"] },
-          { "id": "core-harness:sync", "kind": "tool", "path": "tools/sync.mjs", "description": "Cross-harness sync entry point; keeps generated skills and hook surfaces aligned.", "role": "cross-harness sync entry", "tags": ["sync", "public-api"] },
-          { "id": "core-harness:skills-sync", "kind": "tool", "path": "tools/skills_sync.mjs", "description": "Generates Claude-facing skill pointers from canonical Codex skills.", "role": "generated skill pointers", "tags": ["generated", "check-drift"] },
-          { "id": "core-harness:hooks-sync", "kind": "tool", "path": "tools/hooks_sync.mjs", "description": "Generates Codex and Claude hook config from shared hook sources.", "role": "generated hook config", "tags": ["generated", "hooks"] },
-          { "id": "core-harness:bootstrap-template", "kind": "doc", "path": "tools/bootstrap/TEMPLATE.md", "description": "Portable export and template contract; explains the reusable pipeline base and game starter copy model.", "role": "portable export template", "tags": ["export", "source"] },
-          { "id": "core-harness:profiling-reuse", "kind": "doc", "path": "docs/ai-pipeline/profiling-reuse.md", "description": "Move-out candidate from Core; owns profiling, reuse, prototype closeout, and export guidance.", "role": "profiling/reuse reference belongs outside Core after review", "tags": ["move-out-candidate"] }
+          {
+            "id": "core-harness:tools-readme",
+            "kind": "doc",
+            "path": "tools/README.md",
+            "description": "Tool layout contract: public facades, domain helpers, and cleanup or validation routing.",
+            "role": "tool layout contract",
+            "tags": [
+              "source",
+              "facade-map"
+            ]
+          },
+          {
+            "id": "core-harness:context-budget",
+            "kind": "tool",
+            "path": "tools/context_budget.mjs",
+            "description": "Mechanical guard for hot docs and skill entrypoint size; keeps always-loaded Core context small.",
+            "role": "hot docs and skill budget guard",
+            "tags": [
+              "validator",
+              "context"
+            ]
+          },
+          {
+            "id": "core-harness:quality-validation",
+            "kind": "doc",
+            "path": "docs/ai-pipeline/quality-validation.md",
+            "description": "Gate taxonomy and validation reference; Core should route to it instead of duplicating the rules.",
+            "role": "validation source reference",
+            "tags": [
+              "source",
+              "move-out-detail"
+            ]
+          },
+          {
+            "id": "core-harness:sync",
+            "kind": "tool",
+            "path": "tools/sync.mjs",
+            "description": "Cross-harness sync entry point; keeps generated skills and hook surfaces aligned.",
+            "role": "cross-harness sync entry",
+            "tags": [
+              "sync",
+              "public-api"
+            ]
+          },
+          {
+            "id": "core-harness:skills-sync",
+            "kind": "tool",
+            "path": "tools/skills_sync.mjs",
+            "description": "Generates Claude-facing skill pointers from canonical Codex skills.",
+            "role": "generated skill pointers",
+            "tags": [
+              "generated",
+              "check-drift"
+            ]
+          },
+          {
+            "id": "core-harness:hooks-sync",
+            "kind": "tool",
+            "path": "tools/hooks_sync.mjs",
+            "description": "Generates Codex and Claude hook config from shared hook sources.",
+            "role": "generated hook config",
+            "tags": [
+              "generated",
+              "hooks"
+            ]
+          },
+          {
+            "id": "core-harness:bootstrap-template",
+            "kind": "doc",
+            "path": "tools/bootstrap/TEMPLATE.md",
+            "description": "Portable export and template contract; explains the reusable pipeline base and game starter copy model.",
+            "role": "portable export template",
+            "tags": [
+              "export",
+              "source"
+            ]
+          },
+          {
+            "id": "core-harness:profiling-reuse",
+            "kind": "doc",
+            "path": "docs/ai-pipeline/profiling-reuse.md",
+            "description": "Move-out candidate from Core; owns profiling, reuse, prototype closeout, and export guidance.",
+            "role": "profiling/reuse reference belongs outside Core after review",
+            "tags": [
+              "move-out-candidate"
+            ]
+          }
         ]
       },
       {
@@ -96,17 +494,384 @@
         "kind": "module",
         "moduleId": "taskboard",
         "color": "#2563eb",
-        "description": "Durable project work state: tasks, epics, live status, context digest, and task-store validation.",
-        "tags": ["state", "tasks", "workflow-support"],
+        "description": "Durable project work state: tasks, epics, context digest, and task-store validation.",
+        "tags": [
+          "state",
+          "tasks",
+          "workflow-support"
+        ],
         "children": [
-          { "id": "taskboard:readme", "kind": "doc", "path": "ai_studio/taskboard/README.md", "description": "Taskboard contract for task files, statuses, task lifecycle, durable context, and task CLI usage.", "role": "task store source contract", "tags": ["source", "state"] },
-          { "id": "taskboard:status", "kind": "doc", "path": "tasks/STATUS.md", "description": "Live project status and short current-state digest. It is state, not harness policy.", "role": "live project status", "tags": ["state", "hot"] },
-          { "id": "taskboard:reference", "kind": "doc", "path": "ai_studio/taskboard/task-store-reference.md", "description": "Detailed task-store reference for fields, lifecycle, and maintenance rules.", "role": "task store reference", "tags": ["reference"] },
-          { "id": "taskboard:cli", "kind": "tool", "path": "ai_studio/taskboard/cli.mjs", "description": "Public Taskboard CLI for listing, context digest, task create/update, and task-store validation.", "role": "taskboard public CLI", "tags": ["public-api", "cli"] },
-          { "id": "taskboard:lib", "kind": "tool", "path": "ai_studio/taskboard/lib.mjs", "description": "Taskboard implementation library: parsing, validation, context digest, task mutation, and task-state checks used by orchestration.", "role": "taskboard internal library", "tags": ["internal", "state", "workflow-support"] },
-          { "id": "taskboard:server", "kind": "tool", "path": "ai_studio/taskboard/server.mjs", "description": "Optional local browser UI server for viewing the taskboard.", "role": "taskboard UI server", "tags": ["ui", "optional"] },
-          { "id": "taskboard:public-ui", "kind": "dir", "path": "ai_studio/taskboard/public", "description": "Taskboard browser UI static assets served by the optional taskboard local server.", "role": "taskboard browser UI assets", "tags": ["ui", "static-assets"] },
-          { "id": "taskboard:test", "kind": "tool", "path": "ai_studio/taskboard/tests/taskboard.test.mjs", "description": "Taskboard regression tests for parsing, commands, context, validation, and task lifecycle behavior.", "role": "taskboard tests", "tags": ["test"], "hiddenByDefault": true, "hiddenReason": "Test files are hidden from the default graph to keep module structure readable." }
+          {
+            "id": "taskboard:readme",
+            "kind": "doc",
+            "path": "ai_studio/taskboard/README.md",
+            "description": "Taskboard contract for task files, statuses, task lifecycle, durable context, and task CLI usage.",
+            "role": "task store source contract",
+            "tags": [
+              "source",
+              "state"
+            ]
+          },
+          {
+            "id": "taskboard:reference",
+            "kind": "doc",
+            "path": "ai_studio/taskboard/task-store-reference.md",
+            "description": "Detailed task-store reference for fields, lifecycle, and maintenance rules.",
+            "role": "task store reference",
+            "tags": [
+              "reference"
+            ]
+          },
+          {
+            "id": "taskboard:skill",
+            "kind": "skill",
+            "path": ".codex/skills/nt-taskboard-manager/SKILL.md",
+            "title": "nt-taskboard-manager",
+            "description": "Thin Codex skill router for Taskboard work. It activates task capture, planning, reporting, and status updates, then routes agents to the Taskboard product/API contract.",
+            "role": "Taskboard agent skill entrypoint",
+            "tags": [
+              "skill",
+              "router",
+              "agent-facing"
+            ]
+          },
+          {
+            "id": "taskboard:cli",
+            "kind": "tool",
+            "path": "ai_studio/taskboard/cli.mjs",
+            "description": "Public Taskboard CLI for listing, context digest, task create/update, and task-store validation.",
+            "role": "taskboard public CLI",
+            "tags": [
+              "public-api",
+              "cli"
+            ]
+          },
+          {
+            "id": "taskboard:lib",
+            "kind": "tool",
+            "path": "ai_studio/taskboard/lib.mjs",
+            "description": "Taskboard implementation library: parsing, validation, context digest, task mutation, and task-state checks used by orchestration.",
+            "role": "taskboard internal library",
+            "tags": [
+              "internal",
+              "state",
+              "workflow-support"
+            ]
+          },
+          {
+            "id": "taskboard:api",
+            "kind": "tool",
+            "path": "ai_studio/taskboard/api.mjs",
+            "description": "Taskboard HTTP API adapter for board payloads and task/epic CRUD routes. Studio Shell mounts it but does not own the Taskboard domain contract.",
+            "role": "taskboard browser API adapter",
+            "tags": [
+              "internal",
+              "api",
+              "surface-adapter"
+            ]
+          },
+          {
+            "id": "taskboard:surface",
+            "kind": "surface",
+            "path": "ai_studio/taskboard/public",
+            "description": "Taskboard browser surface. Served by Studio Shell; Taskboard owns the surface content, not the shared server.",
+            "role": "taskboard browser surface",
+            "tags": [
+              "ui",
+              "surface"
+            ],
+            "children": [
+              {
+                "id": "taskboard:surface-implementation",
+                "title": "Surface Implementation",
+                "subtitle": "public static files",
+                "kind": "group",
+                "color": "#2563eb",
+                "description": "Static browser files behind the Taskboard surface. Hidden from the default graph so the page is represented as one surface unless implementation details are needed.",
+                "role": "taskboard browser implementation details",
+                "tags": [
+                  "ui",
+                  "implementation",
+                  "static-assets"
+                ],
+                "hiddenByDefault": true,
+                "hiddenReason": "Surface files are implementation details; open this group only when changing the Taskboard browser UI.",
+                "children": [
+                  {
+                    "id": "taskboard:surface-index",
+                    "kind": "ui-component",
+                    "path": "ai_studio/taskboard/public/index.html",
+                    "title": "index.html",
+                    "description": "Taskboard browser document hosted at /taskboard/ by Studio Shell.",
+                    "role": "taskboard page document",
+                    "tags": [
+                      "ui",
+                      "html"
+                    ]
+                  },
+                  {
+                    "id": "taskboard:surface-style",
+                    "kind": "ui-component",
+                    "path": "ai_studio/taskboard/public/style.css",
+                    "title": "style.css",
+                    "description": "Taskboard page-specific styling. Shared navigation styling comes from Studio Shell.",
+                    "role": "taskboard page styling",
+                    "tags": [
+                      "ui",
+                      "style"
+                    ]
+                  },
+                  {
+                    "id": "taskboard:surface-app",
+                    "kind": "ui-component",
+                    "path": "ai_studio/taskboard/public/app.js",
+                    "title": "app.js",
+                    "description": "Taskboard browser behavior for loading, editing, and rendering tasks through the shared Taskboard API.",
+                    "role": "taskboard browser behavior",
+                    "tags": [
+                      "ui",
+                      "browser-js"
+                    ]
+                  },
+                  {
+                    "id": "taskboard:surface-markdown-preview",
+                    "kind": "ui-component",
+                    "path": "ai_studio/taskboard/public/markdown_preview.js",
+                    "title": "markdown_preview.js",
+                    "description": "Small Markdown preview helper used by the Taskboard browser surface.",
+                    "role": "taskboard markdown preview helper",
+                    "tags": [
+                      "ui",
+                      "browser-js",
+                      "preview"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "taskboard:test",
+            "kind": "tool",
+            "path": "ai_studio/taskboard/tests/taskboard.test.mjs",
+            "description": "Taskboard regression tests for parsing, commands, context, validation, and task lifecycle behavior.",
+            "role": "taskboard tests",
+            "tags": [
+              "test"
+            ],
+            "hiddenByDefault": true,
+            "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
+          }
+        ]
+      },
+      {
+        "id": "module:assets",
+        "title": "Assets",
+        "subtitle": "reviewed asset tools",
+        "kind": "module",
+        "moduleId": "assets",
+        "color": "#0891b2",
+        "description": "Reviewed AI Studio asset modules. Starts with Asset Viewer; broader source search, intake, conversion, and gates stay in Not Refactored until separately reviewed.",
+        "tags": [
+          "assets",
+          "surface",
+          "migration"
+        ],
+        "children": [
+          {
+            "id": "assets:readme",
+            "kind": "doc",
+            "path": "ai_studio/assets/README.md",
+            "title": "README.md",
+            "description": "Assets module contract: what has moved into AI Studio and which legacy asset-pipeline areas still need separate review.",
+            "role": "Assets module contract",
+            "tags": [
+              "source",
+              "contract",
+              "assets"
+            ]
+          },
+          {
+            "id": "assets:asset-viewer",
+            "title": "Asset Viewer",
+            "subtitle": "library and review gallery",
+            "kind": "surface",
+            "path": "ai_studio/assets/asset_viewer",
+            "color": "#0891b2",
+            "description": "Browser-facing asset gallery for library browsing, game-asset review, pick manifests, 3D model inspection, promotion, and reuse pulls.",
+            "role": "asset browsing and review surface",
+            "tags": [
+              "assets",
+              "surface",
+              "gallery",
+              "review"
+            ],
+            "children": [
+              {
+                "id": "assets:asset-viewer-readme",
+                "kind": "doc",
+                "path": "ai_studio/assets/asset_viewer/README.md",
+                "title": "README.md",
+                "description": "Asset Viewer module contract: modes, commands, ownership boundaries, and why the gallery server remains separate.",
+                "role": "Asset Viewer contract",
+                "tags": [
+                  "source",
+                  "contract",
+                  "assets"
+                ]
+              },
+              {
+                "id": "assets:asset-viewer-build",
+                "kind": "tool",
+                "path": "ai_studio/assets/asset_viewer/build_review.mjs",
+                "title": "build_review.mjs",
+                "description": "Generates static asset gallery outputs for shared-library browsing, game-asset review, or direct asset-folder scans.",
+                "role": "asset gallery generator",
+                "tags": [
+                  "public-api",
+                  "generator",
+                  "assets"
+                ]
+              },
+              {
+                "id": "assets:asset-viewer-serve",
+                "kind": "server",
+                "path": "ai_studio/assets/asset_viewer/serve_gallery.mjs",
+                "title": "serve_gallery.mjs",
+                "description": "Serves a generated asset gallery and maps a large external asset library at /lib/ so library browsing can avoid copying every media file.",
+                "role": "asset gallery media server",
+                "tags": [
+                  "server",
+                  "gallery",
+                  "assets"
+                ]
+              },
+              {
+                "id": "assets:asset-viewer-promote",
+                "kind": "tool",
+                "path": "ai_studio/assets/asset_viewer/promote.mjs",
+                "title": "promote.mjs",
+                "description": "Promotes selected assets from a review manifest into the shared library with catalog metadata, license records, and integrity data.",
+                "role": "asset promotion command",
+                "tags": [
+                  "public-api",
+                  "catalog",
+                  "assets"
+                ]
+              },
+              {
+                "id": "assets:asset-viewer-pull",
+                "kind": "tool",
+                "path": "ai_studio/assets/asset_viewer/pull.mjs",
+                "title": "pull.mjs",
+                "description": "Copies selected shared-library assets into a game-local asset tree while preserving source_id linkage and restricted-asset routing.",
+                "role": "asset reuse pull command",
+                "tags": [
+                  "public-api",
+                  "reuse",
+                  "assets"
+                ]
+              },
+              {
+                "id": "assets:asset-viewer-record",
+                "kind": "tool",
+                "path": "ai_studio/assets/asset_viewer/record_gallery.mjs",
+                "title": "record_gallery.mjs",
+                "description": "Records a browser session of the asset gallery for review or presentation evidence.",
+                "role": "asset gallery recording command",
+                "tags": [
+                  "tool",
+                  "evidence",
+                  "assets"
+                ]
+              },
+              {
+                "id": "assets:asset-viewer-implementation",
+                "title": "Surface Implementation",
+                "subtitle": "viewer js/css",
+                "kind": "group",
+                "color": "#0891b2",
+                "description": "Static browser files copied into generated gallery outputs. Hidden from the default graph so Asset Viewer remains readable as one surface.",
+                "role": "asset viewer browser implementation details",
+                "tags": [
+                  "ui",
+                  "implementation",
+                  "static-assets"
+                ],
+                "hiddenByDefault": true,
+                "hiddenReason": "Surface files are implementation details; open this group only when changing the Asset Viewer browser UI.",
+                "children": [
+                  {
+                    "id": "assets:asset-viewer-js",
+                    "kind": "ui-component",
+                    "path": "ai_studio/assets/asset_viewer/viewer.js",
+                    "title": "viewer.js",
+                    "description": "Vanilla browser SPA for filters, pack views, asset modal, picking, and model-viewer integration.",
+                    "role": "asset viewer browser behavior",
+                    "tags": [
+                      "ui",
+                      "browser-js",
+                      "assets"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-viewer-css",
+                    "kind": "ui-component",
+                    "path": "ai_studio/assets/asset_viewer/viewer.css",
+                    "title": "viewer.css",
+                    "description": "Asset Viewer page styling for gallery cards, filters, sheets, and model previews.",
+                    "role": "asset viewer styling",
+                    "tags": [
+                      "ui",
+                      "style",
+                      "assets"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "assets:asset-viewer-tests",
+                "title": "Tests",
+                "subtitle": "asset viewer regressions",
+                "kind": "group",
+                "color": "#0891b2",
+                "description": "Regression tests for Asset Viewer generation and promotion behavior.",
+                "role": "asset viewer test files",
+                "tags": [
+                  "test",
+                  "assets"
+                ],
+                "hiddenByDefault": true,
+                "hiddenReason": "Test files are hidden from the default graph to keep module structure readable.",
+                "children": [
+                  {
+                    "id": "assets:asset-viewer-build-test",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/asset_viewer/tests/build_review.test.mjs",
+                    "title": "build_review.test.mjs",
+                    "description": "Regression tests for asset kind classification, origin detection, escaping, and gallery HTML rendering.",
+                    "role": "asset gallery generator tests",
+                    "tags": [
+                      "test",
+                      "assets"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-viewer-promote-test",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/asset_viewer/tests/promote.test.mjs",
+                    "title": "promote.test.mjs",
+                    "description": "Regression tests for promoting picked assets into the shared library with catalog and license records.",
+                    "role": "asset promotion tests",
+                    "tags": [
+                      "test",
+                      "assets"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
         ]
       },
       {
@@ -116,15 +881,87 @@
         "kind": "module",
         "color": "#64748b",
         "description": "Self-map for this AI Studio refactor tree: live HTML renderer, declarative tree data, and validation report for unmapped or stale files.",
-        "tags": ["map", "migration", "source-of-truth", "validation-report"],
+        "tags": [
+          "map",
+          "migration",
+          "source-of-truth",
+          "validation-report"
+        ],
         "children": [
-          { "id": "architecture-map:tree-source", "kind": "doc", "path": "ai_studio/tree.json", "title": "tree.json", "description": "Declarative source for the working ai_studio tree: hierarchy, node ids, manual labels, roles, tags, and explicit child order.", "role": "declarative source of the ai_studio tree", "tags": ["tree-source", "edit-this"] },
-          { "id": "architecture-map:readme", "kind": "doc", "path": "ai_studio/architecture_map/README.md", "title": "README.md", "description": "Architecture Map module contract: tree.json is architecture truth, index.html only renders, validate_map.mjs only audits.", "role": "architecture map module contract", "tags": ["source", "contract"] },
-          { "id": "architecture-map:index", "kind": "doc", "path": "ai_studio/architecture_map/index.html", "title": "index.html", "description": "Browser renderer for tree.json and validation-report.json. It is served locally so it can fetch JSON without embedding data.", "role": "live architecture map renderer", "tags": ["renderer", "ui"] },
-          { "id": "architecture-map:validator", "kind": "tool", "path": "ai_studio/architecture_map/validate_map.mjs", "title": "validate_map.mjs", "description": "Scans known AI Studio and legacy pipeline paths and writes validation-report.json with unmapped, missing, duplicate, and underspecified files.", "role": "architecture map scanner and report writer", "tags": ["validator", "audit"] },
-          { "id": "architecture-map:validation-report", "kind": "doc", "path": "ai_studio/architecture_map/validation-report.json", "title": "validation-report.json", "description": "Generated report displayed by the map page so newly created or unmapped files are visible during refactoring.", "role": "generated validation report", "tags": ["generated", "report"] },
-          { "id": "architecture-map:serve", "kind": "tool", "path": "ai_studio/architecture_map/serve.mjs", "title": "serve.mjs", "description": "Local static server for opening the architecture map with browser fetch enabled.", "role": "local architecture map server", "tags": ["server", "dev-tool"] },
-          { "id": "architecture-map:validator-tests", "kind": "tool", "path": "ai_studio/architecture_map/tests/validate_map.test.mjs", "title": "validate_map.test.mjs", "description": "Regression tests for missing, duplicate, unmapped, and mapped-directory validation behavior.", "role": "architecture map validator tests", "tags": ["test"], "hiddenByDefault": true, "hiddenReason": "Test files are hidden from the default graph to keep module structure readable." }
+          {
+            "id": "architecture-map:tree-source",
+            "kind": "doc",
+            "path": "ai_studio/tree.json",
+            "title": "tree.json",
+            "description": "Declarative source for the working ai_studio tree: hierarchy, node ids, manual labels, roles, tags, and explicit child order.",
+            "role": "declarative source of the ai_studio tree",
+            "tags": [
+              "tree-source",
+              "edit-this"
+            ]
+          },
+          {
+            "id": "architecture-map:readme",
+            "kind": "doc",
+            "path": "ai_studio/architecture_map/README.md",
+            "title": "README.md",
+            "description": "Architecture Map module contract: tree.json is architecture truth, index.html only renders, validate_map.mjs only audits.",
+            "role": "architecture map module contract",
+            "tags": [
+              "source",
+              "contract"
+            ]
+          },
+          {
+            "id": "architecture-map:surface",
+            "kind": "surface",
+            "path": "ai_studio/architecture_map/index.html",
+            "title": "Architecture Map Surface",
+            "description": "Browser surface and renderer for tree.json and validation-report.json. It is hosted by Studio Shell but owned by Architecture Map.",
+            "role": "live architecture map surface",
+            "tags": [
+              "renderer",
+              "ui",
+              "surface"
+            ]
+          },
+          {
+            "id": "architecture-map:validator",
+            "kind": "tool",
+            "path": "ai_studio/architecture_map/validate_map.mjs",
+            "title": "validate_map.mjs",
+            "description": "Scans known AI Studio and legacy pipeline paths and writes validation-report.json with unmapped, missing, duplicate, and underspecified files.",
+            "role": "architecture map scanner and report writer",
+            "tags": [
+              "validator",
+              "audit"
+            ]
+          },
+          {
+            "id": "architecture-map:validation-report",
+            "kind": "doc",
+            "path": "ai_studio/architecture_map/validation-report.json",
+            "title": "validation-report.json",
+            "description": "Generated report displayed by the map page so newly created or unmapped files are visible during refactoring.",
+            "role": "generated validation report",
+            "tags": [
+              "generated",
+              "report"
+            ]
+          },
+          {
+            "id": "architecture-map:validator-tests",
+            "kind": "tool",
+            "path": "ai_studio/architecture_map/tests/validate_map.test.mjs",
+            "title": "validate_map.test.mjs",
+            "description": "Regression tests for missing, duplicate, unmapped, and mapped-directory validation behavior.",
+            "role": "architecture map validator tests",
+            "tags": [
+              "test"
+            ],
+            "hiddenByDefault": true,
+            "hiddenReason": "Test files are hidden from the default graph to keep module structure readable."
+          }
         ]
       },
       {
@@ -134,8 +971,14 @@
         "kind": "backlog",
         "color": "#64748b",
         "description": "Everything that exists today but has not yet been reviewed, cleaned, assigned an owner, and moved into the main ai_studio tree.",
-        "tags": ["current-state", "do-not-lose", "move-gradually"],
-        "generatedChildren": ["module-backlog"]
+        "tags": [
+          "current-state",
+          "do-not-lose",
+          "move-gradually"
+        ],
+        "generatedChildren": [
+          "module-backlog"
+        ]
       }
     ]
   }

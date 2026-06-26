@@ -71,10 +71,12 @@ node ai_studio/core_harness/orchestration/cli.mjs --help
 - `subagent-packet-check`
 - `orchestration-check`
 - `orchestration-bootstrap`
+- `taskboard-audit`
 
 The CLI owns the public command dispatch. Packet templates, packet validation,
 preflight checks, presets, and bounded file-scope checks live in `lib.mjs`.
-Current-task lookup still reads Taskboard state through the Taskboard module.
+Taskboard-specific orchestration policy lives in `taskboard_policy.mjs` so the
+Taskboard module stays a simple task store.
 
 ## Removed
 

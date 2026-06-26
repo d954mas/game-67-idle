@@ -1,0 +1,247 @@
+:root {
+  color-scheme: dark;
+  --studio-bg: #0b0f14;
+  --studio-sidebar: #101720;
+  --studio-sidebar-soft: #182230;
+  --studio-sidebar-line: #263244;
+  --studio-surface: #141b25;
+  --studio-surface-soft: #1b2532;
+  --studio-line: #2b3747;
+  --studio-text: #e6edf5;
+  --studio-muted: #93a2b7;
+  --studio-blue: #6b93f2;
+  --studio-teal: #28b8a5;
+  --studio-amber: #d3933e;
+  --studio-red: #e56a6a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--studio-bg);
+  color: var(--studio-text);
+}
+
+.studio-shell {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  min-height: 100vh;
+  width: 100%;
+  transition: grid-template-columns 160ms ease;
+}
+
+.studio-shell.is-collapsed {
+  grid-template-columns: 68px minmax(0, 1fr);
+}
+
+.studio-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 18px 14px;
+  background: var(--studio-sidebar);
+  color: #e5edf7;
+  border-right: 1px solid var(--studio-sidebar-line);
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+  z-index: 50;
+  font: 14px/1.45 "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: 0;
+}
+
+.studio-sidebar a,
+.studio-sidebar button,
+.studio-sidebar strong,
+.studio-sidebar span,
+.studio-sidebar p {
+  font-family: inherit;
+  letter-spacing: 0;
+}
+
+.studio-sidebar-brand {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 12px;
+  border-bottom: 1px solid var(--studio-sidebar-line);
+}
+
+.studio-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  background: var(--studio-blue);
+  color: #07111f;
+  font-weight: 800;
+}
+
+.studio-brand-copy {
+  min-width: 0;
+}
+
+.studio-brand-copy strong,
+.studio-brand-copy span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-brand-copy strong {
+  font-size: 16px;
+  line-height: 1.15;
+}
+
+.studio-brand-copy span {
+  color: var(--studio-muted);
+  font-size: 12px;
+}
+
+.studio-sidebar-toggle {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--studio-sidebar-line);
+  border-radius: 7px;
+  background: var(--studio-sidebar-soft);
+  color: var(--studio-text);
+  cursor: pointer;
+  font: 18px/1 "Segoe UI", system-ui, sans-serif;
+}
+
+.studio-sidebar-toggle:hover {
+  border-color: var(--studio-blue);
+}
+
+.studio-side-nav {
+  display: grid;
+  gap: 4px;
+}
+
+.studio-nav-section {
+  margin: 14px 8px 5px;
+  color: var(--studio-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.studio-nav-item {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  min-height: 36px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #dce6f2;
+  text-decoration: none;
+}
+
+.studio-nav-item:hover,
+.studio-nav-item.is-active {
+  background: var(--studio-sidebar-soft);
+  border-color: var(--studio-sidebar-line);
+  text-decoration: none;
+}
+
+.studio-nav-item.is-active {
+  box-shadow: inset 3px 0 0 var(--studio-blue);
+}
+
+.studio-nav-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #334155;
+  color: #f8fafc;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.studio-nav-icon.map { background: var(--studio-blue); color: #07111f; }
+.studio-nav-icon.tasks { background: var(--studio-teal); color: #061412; }
+.studio-nav-icon.source { background: var(--studio-amber); color: #180e03; }
+.studio-nav-icon.audit { background: var(--studio-red); color: #170708; }
+.studio-nav-icon.docs { background: #64748b; }
+
+.studio-content {
+  min-width: 0;
+  min-height: 100vh;
+  overflow: auto;
+}
+
+.studio-shell.is-collapsed .studio-brand-copy,
+.studio-shell.is-collapsed .studio-nav-label,
+.studio-shell.is-collapsed .studio-nav-section {
+  display: none;
+}
+
+.studio-shell.is-collapsed .studio-sidebar {
+  padding-inline: 10px;
+  align-items: stretch;
+}
+
+.studio-shell.is-collapsed .studio-sidebar-brand {
+  grid-template-columns: 34px;
+  justify-content: center;
+}
+
+.studio-shell.is-collapsed .studio-sidebar-toggle {
+  position: fixed;
+  left: 50px;
+  top: 18px;
+  width: 28px;
+  height: 28px;
+}
+
+.studio-shell.is-collapsed .studio-nav-item {
+  grid-template-columns: 26px;
+  justify-content: center;
+  padding-inline: 10px;
+}
+
+@media (max-width: 860px) {
+  .studio-shell,
+  .studio-shell.is-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-sidebar {
+    position: static;
+    height: auto;
+  }
+
+  .studio-shell.is-collapsed .studio-brand-copy,
+  .studio-shell.is-collapsed .studio-nav-label,
+  .studio-shell.is-collapsed .studio-nav-section {
+    display: block;
+  }
+
+  .studio-shell.is-collapsed .studio-sidebar-brand {
+    grid-template-columns: 34px minmax(0, 1fr) 32px;
+  }
+
+  .studio-shell.is-collapsed .studio-sidebar-toggle {
+    position: static;
+    width: 32px;
+    height: 32px;
+  }
+
+  .studio-shell.is-collapsed .studio-nav-item {
+    grid-template-columns: 26px minmax(0, 1fr);
+    justify-content: stretch;
+  }
+}

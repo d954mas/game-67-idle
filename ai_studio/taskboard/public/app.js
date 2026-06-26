@@ -12,7 +12,6 @@ const state = {
 
 const els = {
   board: document.getElementById("board"),
-  epicRail: document.getElementById("epicRail"),
   search: document.getElementById("search"),
   epicFilter: document.getElementById("epicFilter"),
   showClosed: document.getElementById("showClosed"),
@@ -58,13 +57,15 @@ async function refresh(force = false) {
 
 // --- rendering ---------------------------------------------------------------
 
-const BOARD_COLUMNS = ["idea", "backlog", "todo", "doing", "review", "done"];
+const ACTIVE_COLUMNS = ["backlog", "todo", "doing", "review"];
+const ALL_COLUMNS = ["idea", "backlog", "todo", "doing", "review", "done", "dropped"];
+const SECONDARY_STATUSES = new Set(["idea", "done", "dropped"]);
 
 function visibleTasks() {
   const q = state.search.trim().toLowerCase();
   return state.board.tasks.filter((t) => {
     const f = t.fields;
-    if (!state.showClosed && f.status === "dropped") return false;
+    if (!state.showClosed && SECONDARY_STATUSES.has(f.status)) return false;
     if (state.filterEpic && f.epic !== state.filterEpic) return false;
     if (q) {
       const hay = `${f.id} ${f.title} ${(f.tags || []).join(" ")} ${f.epic || ""}`.toLowerCase();
@@ -75,52 +76,22 @@ function visibleTasks() {
 }
 
 function render() {
-  renderEpicRail();
   renderEpicSelects();
   renderBoard();
-}
-
-function epicProgress(epicId) {
-  const tasks = state.board.tasks.filter((t) => t.fields.epic === epicId && t.fields.status !== "dropped");
-  const done = tasks.filter((t) => t.fields.status === "done").length;
-  return { done, total: tasks.length };
-}
-
-function renderEpicRail() {
-  els.epicRail.innerHTML = "";
-  const epics = state.board.epics.filter((e) => state.showClosed || !["done", "dropped"].includes(e.fields.status));
-  for (const epic of epics) {
-    const f = epic.fields;
-    const { done, total } = epicProgress(f.id);
-    const chip = document.createElement("div");
-    chip.className = "epic-chip" + (state.filterEpic === f.id ? " selected" : "");
-    chip.innerHTML = `
-      <div class="name"><span class="edit" title="Edit epic">&#9998;</span></div>
-      <div class="sub"><span>${f.id} &middot; ${f.status}</span>
-        <div class="progress"><div style="width:${total ? (100 * done / total) : 0}%"></div></div>
-        <span>${done}/${total}</span></div>`;
-    chip.querySelector(".name").prepend(document.createTextNode(f.title));
-    chip.addEventListener("click", (ev) => {
-      if (ev.target.classList.contains("edit")) {
-        openEditor("epic", f.id);
-      } else {
-        state.filterEpic = state.filterEpic === f.id ? "" : f.id;
-        els.epicFilter.value = state.filterEpic;
-        render();
-      }
-    });
-    els.epicRail.appendChild(chip);
-  }
 }
 
 function renderEpicSelects() {
   const current = state.filterEpic;
   const options = ['<option value="">All epics</option>'];
-  for (const e of state.board.epics) {
+  for (const e of selectableEpics()) {
     options.push(`<option value="${e.fields.id}">${e.fields.id} ${escapeHtml(e.fields.title)}</option>`);
   }
   els.epicFilter.innerHTML = options.join("");
   els.epicFilter.value = current;
+}
+
+function selectableEpics(currentEpicId = "") {
+  return state.board.epics.filter((e) => state.showClosed || e.fields.status === "active" || e.fields.id === currentEpicId);
 }
 
 function escapeHtml(s) {
@@ -134,7 +105,7 @@ function renderBodyPreview() {
 function renderBoard() {
   els.board.innerHTML = "";
   const tasks = visibleTasks();
-  const columns = state.showClosed ? [...BOARD_COLUMNS, "dropped"] : BOARD_COLUMNS;
+  const columns = state.showClosed ? ALL_COLUMNS : ACTIVE_COLUMNS;
   for (const status of columns) {
     const column = document.createElement("section");
     column.className = "column";
@@ -230,7 +201,7 @@ function openEditor(kind, id) {
   els.epicFieldWrap.style.display = isTask ? "" : "none";
   if (isTask) {
     const options = ['<option value="">(none)</option>'];
-    for (const e of state.board.epics) {
+    for (const e of selectableEpics(doc ? doc.fields.epic : state.filterEpic)) {
       options.push(`<option value="${e.fields.id}">${e.fields.id} ${escapeHtml(e.fields.title)}</option>`);
     }
     els.fEpic.innerHTML = options.join("");

@@ -18,6 +18,7 @@ test("orchestration cli exposes the orchestration command surface", () => {
   assert.match(result.stdout, /subagent-packet-check/);
   assert.match(result.stdout, /orchestration-check/);
   assert.match(result.stdout, /orchestration-bootstrap/);
+  assert.match(result.stdout, /taskboard-audit/);
 });
 
 test("orchestration cli prints template output", () => {

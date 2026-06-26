@@ -10,15 +10,15 @@
 // Media (previews + .glb) is copied into <out>/media and referenced RELATIVELY,
 // so the page works opened locally AND served over a tunnel (no file:// refs).
 //
-//   node tools/asset_review/build_review.mjs --mode library
-//   node tools/asset_review/build_review.mjs --mode review --game little-lives --base clean-seed
+//   node ai_studio/assets/asset_viewer/build_review.mjs --mode library
+//   node ai_studio/assets/asset_viewer/build_review.mjs --mode review --game little-lives --base clean-seed
 import { execFileSync } from "node:child_process";
 import { readFile, readdir, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, dirname, basename, extname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scanLibrary, scanPacks, DEFAULT_LIBRARY, ORIGINS, KIND_DIR } from "../assets/source/find_assets.mjs";
-import { isMain } from "../lib/cli.mjs";
+import { scanLibrary, scanPacks, DEFAULT_LIBRARY, ORIGINS, KIND_DIR } from "../../../tools/assets/source/find_assets.mjs";
+import { isMain } from "../../../tools/lib/cli.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -293,7 +293,7 @@ async function main() {
   await cp(join(HERE, "viewer.css"), join(outDir, "viewer.css"));
   // shared studio HDR: model-viewer's environment-image, same source the PNG
   // thumbnails are baked with, so preview and live 3D share one light.
-  const hdr = join(HERE, "..", "assets", "studio_env.hdr");
+  const hdr = join(HERE, "..", "..", "..", "tools", "assets", "studio_env.hdr");
   if (existsSync(hdr)) await cp(hdr, join(outDir, "studio_env.hdr"));
   const indexPath = join(outDir, "index.html");
   await writeFile(indexPath, renderHtml({ mode: a.mode, title, cards, packs }), "utf8");

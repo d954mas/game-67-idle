@@ -75,7 +75,7 @@ test("doc reference check ignores bare backticked template names", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
-    writeFileSync(join(dir, "tasks", "README.md"), "Template names: `gdd.md`, `STATUS.md`.\n", "utf8");
+    writeFileSync(join(dir, "tasks", "README.md"), "Template names: `gdd.md`, `GAME_PROJECT.md`.\n", "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 0, result.stderr);
   } finally {

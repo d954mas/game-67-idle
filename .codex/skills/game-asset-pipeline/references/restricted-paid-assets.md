@@ -70,7 +70,7 @@ records the download as "manual/account-gated — not stored".
 `pull.mjs` routes a non-publishable asset automatically:
 
 ```powershell
-node tools/asset_review/pull.mjs --ids cgtrader__nature-gradient-pack__royalty-free --to assets --apply
+node ai_studio/assets/asset_viewer/pull.mjs --ids cgtrader__nature-gradient-pack__royalty-free --to assets --apply
 ```
 
 - binary → `assets/restricted/source/models/<asset-id>/` (gitignored)

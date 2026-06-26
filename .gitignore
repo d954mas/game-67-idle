@@ -3,6 +3,7 @@ tmp/
 .cache/
 .vs/
 .vscode/.cmake/
+.claude/settings.local.json
 compile_commands.json
 *.user
 *.suo

@@ -7,8 +7,11 @@ public surface, internals, and validation path.
 ## Current Shape
 
 - `tree.json`: declarative source for the working architecture tree.
-- `architecture_map/`: live architecture map renderer, local server, and
-  validation report for unmapped files.
+- `studio_shell/`: one browser entry point, shared collapsible left navigation,
+  theme, and unified local server for AI Studio surfaces.
+- `architecture_map/`: live architecture map renderer and validation report for
+  unmapped files.
+- `assets/`: reviewed asset-facing modules, starting with Asset Viewer.
 - `core_harness/`: reviewed core routing and agent harness docs.
 - `core_harness/orchestration/`: reviewed early split rule for broad read-heavy
   subagent work.
@@ -36,11 +39,11 @@ Load only the route that matches the current task:
 - Profiling, prototype closeout, visual/asset routing, or portable export:
   `docs/ai-pipeline/profiling-reuse.md`.
 - Durable task state and task commands: `ai_studio/taskboard/README.md` and
-  `node ai_studio/taskboard/cli.mjs context`.
+  `node ai_studio/taskboard/cli.mjs context --json`.
 - AI Studio architecture and refactor tree: `ai_studio/tree.json` and
   `ai_studio/architecture_map/README.md`.
-- Architecture map browser:
-  `node ai_studio/architecture_map/serve.mjs`.
+- AI Studio browser entry point:
+  `node ai_studio/studio_shell/server.mjs`.
 - Architecture map validation report:
   `node ai_studio/architecture_map/validate_map.mjs`.
 
@@ -61,12 +64,19 @@ open it through the local server so it can fetch JSON data.
 
 ```powershell
 node ai_studio/architecture_map/validate_map.mjs
-node ai_studio/architecture_map/serve.mjs
+node ai_studio/studio_shell/server.mjs
 ```
 
-The page reads `tree.json` and `architecture_map/validation-report.json`.
+Open `http://127.0.0.1:8765/`. The map page reads `tree.json` and
+`architecture_map/validation-report.json`.
 Scanning is validation only: new files appear in the report until a human maps,
 ignores, moves, or deletes them.
+
+## Browser Surfaces
+
+Use `kind: "surface"` for user-facing browser entries. Use `kind: "module"` for
+domain ownership, data, APIs, and contracts. `studio_shell/` hosts surfaces; it
+does not own Architecture Map or Taskboard domain logic.
 
 ## Migration Rule
 

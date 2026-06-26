@@ -1,14 +1,14 @@
 # Task Archive Notes
 
-Historical evidence and cleanup notes that should not live in the hot
-`tasks/STATUS.md` index.
+Historical evidence and cleanup notes that should not live in hot routing docs
+or active task files.
 
 ## AI Pipeline Evidence Snapshot
 
 Current source-of-truth docs are `AGENTS.md`, `ai_studio/README.md`,
 `ai_studio/taskboard/README.md`, and `.codex/skills/`.
 
-Pipeline cleanup evidence moved out of `tasks/STATUS.md`:
+Pipeline cleanup evidence preserved from earlier taskboard/status resets:
 
 - Closed game/runtime evidence is preserved in git snapshots and should not
   remain in the hot taskboard after a reset-to-seed.

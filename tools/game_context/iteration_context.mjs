@@ -99,7 +99,17 @@ function hasMeaningfulText(text) {
 
 function isActiveConcept(text) {
   const value = String(text || "");
-  return hasMeaningfulText(value) && !/no active|no concept|none selected|clean template/i.test(value);
+  return hasMeaningfulText(value) && !/status:\s*none|no active|no concept|none selected|clean template/i.test(value);
+}
+
+function gameProjectConcept(markdown) {
+  const activeGame = sectionText(markdown, "Active Game");
+  if (!activeGame) return "Status: none";
+  const status = activeGame.match(/status:\s*([^\r\n]+)/i)?.[1]?.trim() || "";
+  if (/^none\b/i.test(status)) return "Status: none";
+  const gameId = activeGame.match(/game id:\s*`?([a-z0-9][a-z0-9-]{1,64})`?/i)?.[1] || "";
+  const summary = activeGame.split(/\r?\n/).find((line) => line.trim() && !/^status:|^-/.test(line.trim()))?.trim() || "";
+  return [`Status: ${status || "active"}`, gameId ? `Game id: ${gameId}` : "", summary].filter(Boolean).join("; ");
 }
 
 function taskContextHasActionableWork(text) {
@@ -289,12 +299,14 @@ function projectDesignSources(root) {
 function buildContext(root, options = {}) {
   const maxStatusChars = Number.isFinite(Number(options.statusMaxChars)) ? Number(options.statusMaxChars) : 5000;
   const agents = readIfExists(join(root, "AGENTS.md"));
+  const gameProject = readIfExists(join(root, "GAME_PROJECT.md"));
+  const activeGame = sectionText(gameProject, "Active Game");
   const project = sectionText(agents, "Project");
   const direction = sectionText(agents, "Direction");
   const validation = sectionText(agents, "Validation");
   const taskContext = runTaskContext(root, Math.max(1200, maxStatusChars));
 
-  const concept = bulletContaining(project, [/No active game concept/i, /No concept selected/i, /Active game concept/i], "No active concept found in AGENTS.md.");
+  const concept = gameProjectConcept(gameProject);
   const activeConcept = isActiveConcept(concept);
   const productTarget = bulletContaining(direction, [/current product target/i, /release-quality/i, /product target/i, /Current runtime surface/i], "");
   const runtimeSurface = bulletContaining(direction, [/current runtime surface/i, /src\/clean_seed_main\.c/i, /src\/main\.c/i, /placeholder/i], "");
@@ -323,8 +335,8 @@ function buildContext(root, options = {}) {
       ];
   const runtimeSources = existing(root, runtimeCandidates);
 
-  const currentGate = sectionText(taskContext, "Current Gate") || sectionText(taskContext, "Current Goal");
-  const nextPriorities = sectionText(taskContext, "Next Priorities");
+  const currentGate = sectionText(taskContext, "Current Gate") || sectionText(taskContext, "Current Goal") || activeGame;
+  const nextPriorities = sectionText(taskContext, "Next Priorities") || activeGame;
   const blockers = sectionText(taskContext, "Blocking Work") || sectionText(taskContext, "Blockers");
   const requiredValidation = sectionText(taskContext, "Required Validation");
 
@@ -394,7 +406,7 @@ function renderMarkdown(context) {
   for (const gate of context.hard_gates) lines.push(`- ${gate}`);
   lines.push("");
   lines.push("## Current Project Gate");
-  lines.push(context.current_gate || "- none found; run `node ai_studio/taskboard/cli.mjs context`.");
+  lines.push(context.current_gate || "- none found; run `node ai_studio/taskboard/cli.mjs context --json`.");
   lines.push("");
   lines.push("## Prototype Startup Gate");
   lines.push(`- status: ${context.prototype_startup_gate.status}`);

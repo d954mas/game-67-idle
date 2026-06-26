@@ -5,7 +5,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import {
   createTask,
-  currentDoingOrchestrationTaskIds,
   findDoc,
   findRoot,
   parseDoc,
@@ -20,6 +19,10 @@ import {
   subagentPacketProblem,
   subagentPacketTemplate,
 } from "./lib.mjs";
+import {
+  currentDoingOrchestrationTaskIds,
+  taskboardOrchestrationProblems,
+} from "./taskboard_policy.mjs";
 import { fail } from "../../../tools/lib/cli.mjs";
 
 const root = findRoot();
@@ -46,6 +49,7 @@ Commands:
   subagent-packet-check --file packet.txt|--text "..."|--stdin [--json]
   orchestration-bootstrap --title "..." --objective "..." --allowed-files "..." --expected-output "..." --evidence-command "..." --stop-condition "..." --independent-reviewer "..." [--tool-use-guard "..."] [--tags a,b] [--json]
   orchestration-check <task-id>|--id <task-id>|--file tasks/active/T0001-example.md|--current [--json]
+  taskboard-audit [--json]
 
 Task state commands stay in:
   node ai_studio/taskboard/cli.mjs
@@ -381,6 +385,21 @@ switch (cmd) {
     }
     console.log(`ok: orchestration packet preflight passed for ${relative(root, doc.file)}`);
     break;
+  }
+  case "taskboard-audit": {
+    const problems = taskboardOrchestrationProblems(root);
+    if (args.json) {
+      writeJson({ ok: problems.length === 0, problems });
+      process.exit(problems.length ? 1 : 0);
+    }
+    if (!problems.length) {
+      console.log("ok: no taskboard orchestration problems found");
+      break;
+    }
+    for (const problem of problems) {
+      console.log(`problem: ${problem.message}`);
+    }
+    process.exit(1);
   }
   default:
     fail(`not an orchestration command: ${cmd}`);

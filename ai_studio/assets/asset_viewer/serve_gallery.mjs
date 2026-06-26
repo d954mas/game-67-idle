@@ -3,11 +3,11 @@
 // and the asset library at /lib/ — so the page references library files in place
 // (no media copy) for huge libraries.
 //
-//   node tools/asset_review/serve_gallery.mjs --gallery tmp/lib-gallery --lib <libraryRoot> --port 8910
+//   node ai_studio/assets/asset_viewer/serve_gallery.mjs --gallery tmp/lib-gallery --lib <libraryRoot> --port 8910
 import { createServer } from "node:http";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { join, resolve, normalize } from "node:path";
-import { mimeType } from "../lib/mime.mjs";
+import { mimeType } from "../../../tools/lib/mime.mjs";
 
 function parseArgs(argv) {
   const a = { gallery: "tmp/lib-gallery", lib: "", port: 8910 };

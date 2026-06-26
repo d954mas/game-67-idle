@@ -1,7 +1,7 @@
 # Task Store Reference
 
-Detailed task protocol for work that changes tasks, epics, live status, or
-reporting shape. Start from `ai_studio/taskboard/README.md`; load this file only when editing
+Detailed task protocol for work that changes tasks, epics, or reporting shape.
+Start from `ai_studio/taskboard/README.md`; load this file only when editing
 or auditing the task store.
 
 ## Intent To Scope
@@ -34,8 +34,8 @@ Epic statuses: `idea -> active -> done`, plus `dropped`.
 - `done`: acceptance criteria checked and evidence logged.
 - `dropped`: intentionally closed; never delete task files to hide work.
 
-Default `list` shows actionable current work only. Use `list --review` only for
-review cleanup, `list --ideas` for raw intake, and `list --archive` for history.
+Default `list --json` shows current work, including `review`. Use
+`list --ideas --json` for raw intake and `list --archive --json` for history.
 
 ## Create Or Refine
 
@@ -76,18 +76,16 @@ reason, record that explicitly. Do not silently mark the task done.
 
 Leave the repo resumable without chat history.
 
-Record a checkpoint when:
+Record a checkpoint in the task log when:
 
 - task status changes;
 - validation evidence changes;
-- current goal/gate/blockers/next priorities change;
 - work pauses partially complete;
 - another agent/session must continue.
 
 Where information goes:
 
 - task `## Log`: detailed evidence, command paths, decisions, unresolved issues;
-- `STATUS.md`: short current index only;
 - final response: concise human summary and validation.
 
 ## Format

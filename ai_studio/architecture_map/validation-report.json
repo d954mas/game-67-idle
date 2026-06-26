@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-06-25T16:44:36.084Z",
+  "generatedAt": "2026-06-26T05:24:18.066Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
@@ -10,17 +10,16 @@
     ".codex/skills",
     "docs/ai-pipeline",
     "tools",
-    "tasks/STATUS.md",
     "tasks/active",
     "tasks/epics"
   ],
   "summary": {
-    "mappedPaths": 38,
-    "scannedFiles": 255,
+    "mappedPaths": 61,
+    "scannedFiles": 262,
     "missingInRepo": 0,
     "duplicateMappings": 0,
     "unmappedInAiStudio": 0,
-    "unmappedLegacy": 214,
+    "unmappedLegacy": 203,
     "missingDescriptions": 0
   },
   "issues": {
@@ -212,12 +211,6 @@
         "path": ".codex/skills/primary-gdd-pipeline/SKILL.md"
       },
       {
-        "path": ".codex/skills/task-manager/references/task-store-protocol.md"
-      },
-      {
-        "path": ".codex/skills/task-manager/SKILL.md"
-      },
-      {
         "path": "tasks/active/T0151-licensed-paid-asset-gitignore-split-leak-guard-m.md"
       },
       {
@@ -270,33 +263,6 @@
       },
       {
         "path": "tools/ai_profile/test.mjs"
-      },
-      {
-        "path": "tools/asset_review/build_review.mjs"
-      },
-      {
-        "path": "tools/asset_review/build_review.test.mjs"
-      },
-      {
-        "path": "tools/asset_review/promote.mjs"
-      },
-      {
-        "path": "tools/asset_review/promote.test.mjs"
-      },
-      {
-        "path": "tools/asset_review/pull.mjs"
-      },
-      {
-        "path": "tools/asset_review/record_gallery.mjs"
-      },
-      {
-        "path": "tools/asset_review/serve_gallery.mjs"
-      },
-      {
-        "path": "tools/asset_review/viewer.css"
-      },
-      {
-        "path": "tools/asset_review/viewer.js"
       },
       {
         "path": "tools/assets/assemble/__init__.py"

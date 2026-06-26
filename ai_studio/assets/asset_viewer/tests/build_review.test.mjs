@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detectOrigin, kindForExt, libraryKind, renderHtml, safeJson, escHtml } from "./build_review.mjs";
+import { detectOrigin, kindForExt, libraryKind, renderHtml, safeJson, escHtml } from "../build_review.mjs";
 
 test("kindForExt maps primary extensions, ignores sidecars", () => {
   assert.equal(kindForExt(".obj"), "model");

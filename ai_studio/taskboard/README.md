@@ -5,33 +5,53 @@ Source of truth for current work. Detailed protocol:
 
 - Active: `tasks/active/`; epics: `tasks/epics/`.
 - Review/closed history: `tasks/archive/`.
-- Live index: `tasks/STATUS.md`.
 
 Archives are history; load only for linked evidence, regression debug, review
 cleanup, or user request.
 
-## Commands
+## Product Surface
 
-- Orient: `node ai_studio/taskboard/cli.mjs summary` or `context`.
-- Inspect: `list`, `list --review`, `show T0001`.
-- Change: `new task --title "..." --epic E001 --priority P1`, `set T0001 --status doing`.
-- Validate: `node ai_studio/taskboard/cli.mjs validate`.
-- Board when requested: `node ai_studio/taskboard/server.mjs`.
+The browser product is a compact task board: active work columns only
+(`backlog`, `todo`, `doing`, `review`) plus search and epic filter. Epics are
+metadata, not a second navigation layer. Enable "all statuses" only when
+reviewing raw ideas or archive state.
+
+Run it through Studio Shell:
+
+```powershell
+node ai_studio/studio_shell/server.mjs
+```
+
+Open `/taskboard/`.
+
+## Agent API
+
+Prefer JSON when an agent needs task state:
+
+- Orient: `node ai_studio/taskboard/cli.mjs summary --json`.
+- Current work: `node ai_studio/taskboard/cli.mjs context --json`.
+- List rows: `node ai_studio/taskboard/cli.mjs list --json`.
+- Read one file: `node ai_studio/taskboard/cli.mjs show T0001 --json`.
+- Change: `node ai_studio/taskboard/cli.mjs new task --title "..." --epic E001 --priority P1`,
+  `node ai_studio/taskboard/cli.mjs set T0001 --status doing --log "..." --json`.
+- Validate store shape: `node ai_studio/taskboard/cli.mjs validate --json`.
+
+The browser board uses `ai_studio/taskboard/api.mjs` for `/api/board`,
+`/api/tasks`, `/api/epics`, and `/api/agent/context`. Studio Shell only mounts
+the API and serves the surface.
+
+Other entry points:
+
+- Orchestration audit: `node ai_studio/core_harness/orchestration/cli.mjs taskboard-audit`.
 - New game: `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`.
-
-## Live Status
-
-`tasks/STATUS.md` is a short index, not a log. Every claim points to a task,
-doc, command, or evidence. Keep history in task logs; update status only when
-goal, blockers, gates, validation, evidence, or priorities change.
 
 ## Minimal Context
 
-For substantial work: `AGENTS.md` -> `node ai_studio/taskboard/cli.mjs context` ->
+For substantial work: `AGENTS.md` / `GAME_PROJECT.md` -> `node ai_studio/taskboard/cli.mjs context --json` ->
 needed task/evidence files -> one matching skill.
 
-Search current scope only. Avoid archives, review queues, P3 ideas, broad design,
-and build artifacts unless linked.
+Search current scope only. Avoid archives, P3 ideas, broad design, and build
+artifacts unless linked.
 
 ## Done And Validation
 
@@ -40,3 +60,6 @@ the guide for lifecycle, scope intake, evidence, checkpoints, and manual format.
 
 Validation by change type: `docs/ai-pipeline/quality-validation.md`.
 Repeated strict/product failures: `node tools/product_gate/repeated_failure_guard.mjs`.
+
+Taskboard validation checks task-store structure only. Orchestration packet
+policy is owned by `ai_studio/core_harness/orchestration/`.

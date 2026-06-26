@@ -71,12 +71,6 @@ const COPY = [
   "tools/assets/studio_env.hdr",
   "tools/assets/intake/accept_incoming_asset.mjs",
   "tools/assets/intake/bootstrap_shared_asset_library.mjs",
-  "tools/asset_review/build_review.mjs",
-  "tools/asset_review/viewer.js",
-  "tools/asset_review/viewer.css",
-  "tools/asset_review/promote.mjs",
-  "tools/asset_review/pull.mjs",
-  "tools/asset_review/serve_gallery.mjs",
   "tools/serve_tunnel.mjs",
   "tools/assets/atomic_io.py",
   "tools/assets/atomic_io_test.py",
@@ -143,7 +137,8 @@ const AGENTS_TEMPLATE = `# AGENTS.md
 - Game design lives in \`gamedesign/\`; game code lives in \`src/\`.
 - Universal reusable design knowledge lives in \`gamedesign/knowledge/\`.
 - Reusable project skills live in \`.codex/skills/\`; keep them generic enough to reuse in other games.
-- Work items and live project status live in \`tasks/\`; follow \`ai_studio/taskboard/README.md\`.
+- Work items live in \`tasks/\`; follow \`ai_studio/taskboard/README.md\`.
+- Current game routing lives in \`GAME_PROJECT.md\`.
 - Temporary generation, scripts, rejected images, screenshots, and audit logs go in \`tmp/\` or another ignored temp folder.
 - Final durable docs/data/assets go in their project folder.
 - The shared human/agent process, including AI session profiling, lives in
@@ -172,67 +167,34 @@ Shared human/agent process: @ai_studio/README.md
 Work items (tasks, epics, deferred ideas) live in the \`tasks/\` store.
 For status, task format, and workflow rules, follow \`ai_studio/taskboard/README.md\`:
 
-- Process: \`.codex/skills/task-manager/SKILL.md\`
+- Process: \`.codex/skills/nt-taskboard-manager/SKILL.md\`
 - Conventions: \`ai_studio/taskboard/README.md\`
-- Live status: \`tasks/STATUS.md\`
+- Current game routing: \`GAME_PROJECT.md\`
 - CLI: \`node ai_studio/taskboard/cli.mjs <list|show|new|set|validate>\`
-- Visual board for the user: \`node ai_studio/taskboard/server.mjs\` -> http://127.0.0.1:8070/
+- Visual board for the user: \`node ai_studio/studio_shell/server.mjs\`, then open \`/taskboard/\`.
 `;
 
-const STATUS_TEMPLATE = `# Project Status
+const GAME_PROJECT_TEMPLATE = `# GAME_PROJECT
 
-Operational project-status index. Rules for this file live in
-\`ai_studio/taskboard/README.md\`.
+## Active Game
 
-## Current Goal
+Status: none
 
-No active game concept is selected yet. This is a clean AI-first game project
-base waiting for the user's idea.
+There is no active game concept right now.
 
-Sources: \`AGENTS.md\`, \`ai_studio/README.md\`.
+## When A Game Is Active
 
-## Active Work
+Keep only routing and current-game summary here:
 
-None. Do not invent a game concept or create GDD/gameplay/content files until
-the user provides the project idea.
+- Game id:
+- Game folder:
+- Design docs:
+- Task board:
+- Current milestone:
+- Hard game-specific constraints:
 
-Sources: \`AGENTS.md\`.
-
-## Current Gate
-
-Capture the user's game concept and create/refine exactly one scoped task or
-epic before implementation.
-
-Source: \`ai_studio/taskboard/README.md\`.
-
-## Required Validation
-
-\`\`\`powershell
-node ai_studio/taskboard/cli.mjs summary
-node ai_studio/core_harness/validation/pipeline_validate.mjs --full
-\`\`\`
-
-Sources: \`ai_studio/taskboard/README.md\`, \`ai_studio/README.md\`.
-
-## Last Known Good Evidence
-
-Fresh export validation should be recorded here after first local setup.
-
-Source: first local validation after project setup.
-
-## Blockers
-
-No user game concept has been provided yet.
-
-## Non-blocking Debt
-
-None.
-
-## Next Priorities
-
-1. Ask the user for the game concept.
-2. Capture the concept as one scoped task or epic.
-3. Start the primary GDD pipeline only after the user provides the concept.
+Full GDD, balance, lore, asset lists, and per-game implementation detail should
+live in \`gamedesign/projects/<game-id>/\`, the game folder, or task files.
 `;
 
 mkdirSync(dst, { recursive: true });
@@ -258,7 +220,7 @@ mkdirSync(join(dst, "tmp"), { recursive: true });
 for (const [name, content] of [
   ["AGENTS.md", AGENTS_TEMPLATE],
   ["CLAUDE.md", CLAUDE_TEMPLATE],
-  ["tasks/STATUS.md", STATUS_TEMPLATE],
+  ["GAME_PROJECT.md", GAME_PROJECT_TEMPLATE],
 ]) {
   const file = join(dst, name);
   if (existsSync(file) && !force) {

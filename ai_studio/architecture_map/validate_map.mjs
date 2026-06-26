@@ -15,7 +15,6 @@ const defaultScanRoots = [
   ".codex/skills",
   "docs/ai-pipeline",
   "tools",
-  "tasks/STATUS.md",
   "tasks/active",
   "tasks/epics",
 ];
