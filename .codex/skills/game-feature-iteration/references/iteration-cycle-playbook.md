@@ -14,7 +14,7 @@ or stability while preserving context and evidence for the next iteration.
 
 A single agent may perform all roles, but the responsibilities stay separate.
 
-- Director: chooses priority, cuts scope, defines done, reviews product quality.
+- Director: chooses priority, cuts scope, defines done, reviews player-facing quality.
 - Developer: implements mechanics, UI, state, integration, build fixes, scripts.
 - Designer: improves assets, layout, feedback, readability, visual consistency.
 - Tester: runs the game, captures evidence, finds bugs, checks first-session clarity.
@@ -158,21 +158,15 @@ Do not store current-game facts in reusable knowledge.
 Commit only intentional files. Prefer path-limited staging in repos with
 submodules, generated files, or large assets.
 
-Before commit or handoff for a prototype slice, run:
-
-```powershell
-node tools/product_gate/slice_hygiene.mjs --strict `
-  --build-evidence "<build command/result>" `
-  --probe-evidence "<probe/scenario result>" `
-  --product-gate "<gate.json>" `
-  --screenshot "<latest screenshot>"
-```
+Before commit or handoff for a prototype slice, record build evidence,
+scenario/probe evidence, screenshot or recording evidence for player-facing
+changes, and selected quality rule outcomes when quality rules applied.
 
 If the normal slice changes more than 30 files, split by phase or rerun with
 `--snapshot` only when the lead explicitly asked for an end-of-experiment
 snapshot. If changed review/audit files still contain fail verdicts, refresh
-them, archive them as historical evidence, or pass `--known-red-gate` and name
-the debt in final notes. Check push/upstream state before promising push.
+them, archive them as historical evidence, or name the accepted debt in final
+notes. Check push/upstream state before promising push.
 
 Good commit boundaries:
 

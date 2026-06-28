@@ -13,8 +13,8 @@ Before coding or integrating art, write a 5-line visual session contract:
 - stop condition
 - likely files
 
-The proof must name a native screenshot/product gate/art audit. The stop
-condition must say that product gate fail or lead rejection freezes
+The proof must name a native screenshot, selected quality checks, or art audit.
+The stop condition must say that blocking quality review or lead rejection freezes
 feature/content expansion unless the lead accepts the debt.
 
 ## Reference-Driven Visual Work
@@ -46,13 +46,12 @@ Full method: `gamedesign/knowledge/reference_deconstruction.md`.
 Before visual runtime changes, compare the current native screenshot or capture
 plan against the accepted target and write a screenshot-vs-target mismatch list.
 After each meaningful render change, capture a new native screenshot, update the
-named mismatch list, and run or record the product-read gate verdict before
-adding more features/content.
+named mismatch list, and record selected quality-rule evidence before adding
+more features/content.
 
 For UI-heavy work, define live-state coverage from
-`gamedesign/knowledge/live_state_acceptance_matrix.md` and pass it to the
-product gate with `--state-matrix`, `--require-state`, `--covered-state`, and
-`--not-covered-state`.
+`gamedesign/knowledge/live_state_acceptance_matrix.md` and use it as evidence
+for existing rules from `ai_studio/quality/README.md`.
 
 ## Fast Art Job Loop
 
@@ -125,22 +124,20 @@ child-testable work.
 
 If the screenshot cannot answer where the player is, what to do, what changed,
 what reward appeared, and why this looks like a game, the visual work is not
-done. Use `node tools/product_gate/review.mjs`, then
-`node tools/product_gate/close_slice.mjs` for handoff evidence.
+done. Select existing player-clarity/art rules from
+`ai_studio/quality/README.md` and record evidence in the task log.
 
 For lead-rejected visual work, tag the task with `lead-rejection` and close only
-with `node tools/product_gate/close_slice.mjs --resolved-rejection "<exact rejected issue
-and proof>"`. The closeout tool blocks strict pass without that proof.
+after recording the exact rejected issue, fix, and proof in the task log.
 
 For beautiful/casual/generated-UI/fake-shot/child-testable work, use
-`--visual-strict` and score `composition`, `readability`, `ui_controls`,
-`action_direction`, `art_quality`, and `audience_fit`. A pass needs every score
-at least 4/5 and no blocker/major visual issue. Strict UI passes should also
-include live-state coverage.
+`QCLR_COMMON`, `QART_COMMON`, and the matching numbered player-clarity/art rules
+from `ai_studio/quality/README.md`. Structured notes may use composition,
+screen clarity, UI controls, action direction, art direction fit, and audience
+fit as evidence axes, but do not create project-local rule IDs.
 
-When a separate critic pass would help, run the vision art-lead critic with
-`node tools/product_gate/visual_critic_run.mjs` (emit a prompt, or run a vision model); feed its
-`game.visual_critique` into the strict product gate (`gate ... --critique`).
+When a separate critic pass would help, run a human/vision critique as evidence
+for the selected quality rules.
 
 ## Reusable UI Gate
 
@@ -179,7 +176,7 @@ For full UI-kit production, use `.codex/skills/generated-game-ui-assets/`.
   state colors, and decorations occupying text/content safe areas.
 - Before slicing, run `normalize_source_sheet_chroma.py` when needed, then
   `audit_source_sheet_intake.py`.
-- Require a runtime screenshot/product gate before calling runtime generated
+- Require a runtime screenshot plus selected quality-rule evidence before calling runtime generated
   UI done.
 - `node tools/assets/job/validate_art_job.mjs --job <job> --final-art` must
   pass before claiming final generated/artist UI art (it validates generation
@@ -211,11 +208,11 @@ Before calling visual work done, check:
 - screenshot has no incoherent overlap or cropped important content;
 - native/runtime evidence exists for playable screens, not only source art;
 - screenshot-vs-target mismatches are updated after the latest render change;
-- strict visual product gates record blocker/major issues instead of relying on
-  generic "looks better" claims.
+- quality notes record blocker/major issues instead of relying on generic
+  "looks better" claims.
 
 ## Report Shape
 
 Report generated/source asset paths, runtime asset paths or integration files,
-screenshot evidence path, product/readability gate evidence, and the remaining
+screenshot evidence path, selected quality-rule evidence, and the remaining
 visual gap before release quality.

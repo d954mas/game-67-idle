@@ -34,7 +34,7 @@ Digest, mismatch audit, and next native proof exist.
 
 Full method: `gamedesign/knowledge/reference_deconstruction.md`.
 
-## Product And Visual Gates
+## Visual Quality Checks
 
 For visual quality, FTUE, feel, audience testing, or a casual product target,
 inspect the first playable screen before broadening scope. Do not add more
@@ -46,16 +46,14 @@ locations, quests, systems, or content until the screen answers:
 - what reward they got;
 - why it looks like a game rather than a debug tool.
 
-Write the gate with `node tools/product_gate/review.mjs` or
-`node tools/product_gate/review.mjs`. For UI/visual/player-read work, define live-state
-coverage from `gamedesign/knowledge/live_state_acceptance_matrix.md` and pass
-it with `--state-matrix`, `--require-state`, `--covered-state`, and
-`--not-covered-state`; a pass only proves covered states. Use
-`node tools/product_gate/close_slice.mjs` before handoff when the slice depends on
-product-read evidence.
+Choose existing rules from `ai_studio/quality/README.md`. For
+UI/visual/player-read work, define live-state coverage from
+`gamedesign/knowledge/live_state_acceptance_matrix.md`; a pass only proves
+covered states. Record the selected rule IDs, evidence paths, and result in the
+task log.
 
 If the task carries `lead-rejection` or lead-rejected wording, strict closeout
-must also pass `--resolved-rejection "<exact rejected issue and proof>"`.
+must record the exact rejected issue, the fix, and proof in the task log.
 
 For visual-first work, write the 5-line session contract: goal, non-goal, proof,
 stop condition, likely files. Before coding, compare the current native
@@ -75,8 +73,8 @@ shot is aspirational inspiration, not a pixel target; judge composition,
 readability, art quality, mood/palette, and "looks like a game", never image
 similarity.
 
-Product gate fail blocks feature/content expansion unless the lead explicitly
-accepts the debt for the current slice.
+Blocking quality review or lead rejection blocks feature/content expansion
+unless the lead explicitly accepts the debt for the current slice.
 
 ## Core-Moment Feel Check
 
@@ -102,7 +100,7 @@ If any fails, the core moment is the next work, not more content.
 - Before writing code, climb the build-less ladder: cut speculative scope; reuse
   existing skill/engine/DevAPI/schema/taskboard/dependency; use stdlib/native
   APIs; make one small edit; only then write minimal new code.
-- Keep product/readability, game-loop/fun, art-source/assets, and
+- Keep quality/readability, game-loop/fun, art-source/assets, and
   technical/build gates separate.
 - Preserve engine/vendor boundaries.
 - Do not silently wire asset-pack generation into every normal game build.
@@ -132,18 +130,15 @@ When the work is about build/launch/release configuration:
 
 ## Slice Handoff
 
-Before committing or handing off a prototype slice, run:
+Before committing or handing off a prototype slice, record:
 
-```powershell
-node tools/product_gate/slice_hygiene.mjs --strict `
-  --build-evidence "<build command/result>" `
-  --probe-evidence "<probe/scenario result>" `
-  --product-gate "<gate.json>" `
-  --screenshot "<latest screenshot>"
-```
+- build evidence;
+- scenario/probe evidence;
+- screenshot or recording evidence when player-facing work changed;
+- selected quality rule IDs and task-log outcomes when quality rules applied.
 
 Split a normal slice over 30 changed files unless the lead explicitly requested
 an end-of-experiment snapshot. Do not promise push until push/upstream state is
 checked. If changed review/audit files still contain fail verdicts, refresh
-them, archive them as historical evidence, or pass `--known-red-gate` and name
-the debt in final notes.
+them, archive them as historical evidence, or name the accepted debt in final
+notes.

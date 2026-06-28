@@ -78,8 +78,8 @@ CODE — and like the engine's `examples/` folder, **each solution demonstrates 
 
 ## UNIVERSAL (flows both ways)
 
-The reusable pipeline: `tools/` (asset library tooling, taskboard, product gate,
-codegen, bootstrap), `.codex/skills/`, `ai_studio/`, `docs/ai-pipeline/`, `AI_PIPELINE_HISTORY.md`,
+The reusable pipeline: `tools/` (asset library tooling, codegen, bootstrap),
+`.codex/skills/`, `ai_studio/`, `docs/ai-pipeline/`, `AI_PIPELINE_HISTORY.md`,
 `gamedesign/knowledge` + `sources`, `tasks/README` + `guides`. Excludes per-game
 `tools/<game-id>/`.
 

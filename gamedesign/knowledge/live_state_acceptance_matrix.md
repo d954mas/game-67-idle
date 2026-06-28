@@ -1,24 +1,24 @@
 ---
 type: Knowledge
 title: Live-State UI Acceptance Matrix
-description: Reusable state-coverage gate for game UI/product-read acceptance across future prototypes.
-tags: [ui, ux, product-gate, visual-gate, validation, reusable]
+description: Reusable state-coverage evidence for game UI, player clarity, and art-direction acceptance across future prototypes.
+tags: [ui, ux, player-clarity, validation, reusable]
 checked: 2026-06-17
 ---
 
 # Live-State UI Acceptance Matrix
 
-Use this before calling a game UI, visual slice, or first playable surface
-accepted. A product gate pass only proves the states it captured. It does not
-prove the whole UI system unless the required state matrix is covered.
+Use this before calling a game UI, player-clarity slice, or first playable surface
+accepted. A quality review only proves the states it captured. It does not prove
+the whole UI system unless the required state matrix is covered.
 
 ## Rule
 
-For visual/UI/FTUE/player-read work, define required states before implementation
-or before the first gate. Each required state needs evidence or an explicit
-`not covered` debt entry.
+For player-clarity/UI/FTUE/player-read work, define required states before implementation
+or before the first acceptance review. Each required state needs evidence or an
+explicit `not covered` debt entry.
 
-Gate language must be scoped:
+Acceptance language must be scoped:
 
 - Correct: `PASS for first_screen, primary_action_ready, reward_active`.
 - Incorrect: `UI pass` when modal, returning-player, disabled, or transient
@@ -81,10 +81,13 @@ py -3.12 tools/assets/audit/audit_runtime_ui_edges.py `
 
 Use `--family key --key-color r,g,b` for exact chroma-key audits.
 
-## Product Gate Usage
+## Quality Review Usage
 
-Use `tools/product_gate/review.mjs` or `node tools/product_gate/review.mjs` with either a
-matrix file or direct state coverage arguments.
+Use the matrix as evidence for existing rules in `ai_studio/quality/rules`, such
+as `QCLR_001`, `QCLR_002`, or `QART_001`.
+
+Game-specific notes may explain state coverage, references, or debt, but they
+must not define new quality rule IDs outside `ai_studio/quality/rules`.
 
 Matrix file example:
 
@@ -105,40 +108,8 @@ Matrix file example:
 }
 ```
 
-Then run:
-
-```powershell
-node tools/product_gate/review.mjs `
-  --project <game-id> `
-  --task <task-id> `
-  --surface desktop `
-  --screenshot <path> `
-  --verdict pass `
-  --strict `
-  --state-matrix gamedesign/projects/<game-id>/visual/live_state_acceptance_matrix.json `
-  --covered-state first_screen:<screenshot-or-probe>
-```
-
-Direct argument example:
-
-```powershell
-node tools/product_gate/review.mjs `
-  --project <game-id> `
-  --task <task-id> `
-  --surface desktop `
-  --screenshot <path> `
-  --verdict pass `
-  --strict `
-  --require-state first_screen `
-  --require-state primary_action_ready `
-  --require-state reward_active `
-  --covered-state first_screen:<screenshot-or-probe> `
-  --covered-state primary_action_ready:<screenshot-or-probe> `
-  --not-covered-state reward_active:"no reward state in this slice yet"
-```
-
 If a required state is neither covered nor explicitly marked not covered, the
-gate must fail.
+quality review must fail.
 
 ## Fixture: Voxelheim Failure
 
@@ -153,4 +124,4 @@ stress state with:
 - generated/chroma-key CTA button visible.
 
 The reusable lesson is not Voxelheim-specific: every game needs the state matrix
-that matches its own loop before a broad UI/product pass can be claimed.
+that matches its own loop before a broad UI quality pass can be claimed.

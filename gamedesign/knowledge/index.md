@@ -51,9 +51,8 @@ right page; it does not replace the pages.
 - [Mobile/Web Platform Design](mobile_web_platform.md) - touch, viewport,
   browser, and resume constraints.
 - [Visual Direction](visual_direction.md) - friendly readable game visuals.
-- [Game Art Contract And Visual Gate](art_contract.md) - per-game taste anchor
-  plus the three-way (pass/review/fail) visual gate that keeps universal checks
-  game-agnostic while the contract carries the taste.
+- [Game Art Contract](art_contract.md) - per-game taste anchor for `QART_001`
+  art direction fit review.
 - [Asset Semantic And Style Gate](asset_semantic_style_gate.md) - reject
   generated assets that cut cleanly but mean the wrong thing or mix icon styles.
 
@@ -62,7 +61,7 @@ right page; it does not replace the pages.
 - [Playtest Validation](playtest_validation.md) - prove first-minute behavior
   with evidence.
 - [Live-State UI Acceptance Matrix](live_state_acceptance_matrix.md) - define
-  which UI/game states a product gate covers before accepting visual/UI work.
+  which UI/game states are covered before accepting visual/UI work.
 - [Telemetry Evidence](telemetry_evidence.md) - capture logs, events, traces,
   screenshots, and proof.
 - [Release Readiness](release_readiness.md) - external-test and release

@@ -47,26 +47,12 @@ humans should use the knowledge base.
 
 ## 2026-06-20
 
-- Added [Game Art Contract And Visual Gate](art_contract.md): the reusable
-  per-game taste anchor (`art_contract.json`) and the three-way
-  (pass/review/fail) visual gate flow (Universal Gate -> Art Contract ->
-  Visual Critic -> Art Lead Judge -> Human Review Queue). Registered in
-  [Index](index.md).
-- Reshaped `tools/product_gate/review.mjs` to consume a machine
-  `game.visual_critique` JSON (`--critique`), auto-resolve a per-game art
-  contract (`--contract`, `pass_threshold` override), and accept the `review`
-  verdict; `close_slice.mjs` blocks a `review` gate in strict mode (advisory
-  otherwise). Six axes stay universal; the contract carries taste only.
-- Added `tools/product_gate/visual_critic_run.mjs` (`node tools/product_gate/visual_critic_run.mjs`):
-  the vision art-lead critic that looks at state screenshots with the contract +
-  reference banks in context, runs an independent refute pass, and reconciles
-  disagreement into `review`. Verified live on this box via codex CLI (gpt-5.5
-  vision): instruction on stdin, screenshots with `-i {IMAGES}`. Emit mode (no
-  `--model-cmd`) writes the instruction for a manual run.
+- Added [Game Art Contract](art_contract.md): reusable per-game taste anchor
+  (`art_contract.json`) for art direction fit review. The old product-gate CLI
+  description was later removed during AI Studio quality-rule refactoring.
 - Added universal multi-state capture: `tools/devapi/state_capture.py`
   (`StateCapture`) captures one screenshot per key state and writes the
-  `game.live_state_acceptance_matrix`; `visual_critic_run.mjs --state-matrix`
-  auto-derives shots from covered states. A new game plugs in one
+  `game.live_state_acceptance_matrix`. A new game plugs in one
   `tools/<id>/capture_states.py` driver (see the "What A New Game Provides"
   section + the template); everything else is universal.
 

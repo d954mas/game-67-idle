@@ -2,7 +2,7 @@
 """One-command visual iteration loop for the native game.
 
   build-if-stale -> launch -> in-process framebuffer screenshot ->
-  ui_readability montage -> print the ai.mjs visual-gate command.
+  ui_readability montage -> print the next quality-review step.
 
 Replaces re-deriving 3-4 manual invocations every session. Game-agnostic (uses
 only the universal framebuffer + ui_readability). Pass --reuse to attach to an
@@ -60,8 +60,8 @@ def main() -> int:
         [sys.executable, str(Path(ROOT, "tools", "devapi", "ui_readability.py")), shot_path],
         cwd=ROOT,
     )
-    print("\nnext: judge the screen against the fake-shot direction:")
-    print(f"  node tools/product_gate/review.mjs --shot {SHOT}")
+    print("\nnext: review the screen against ai_studio/quality/rules/player_clarity and rules/art:")
+    print(f"  screenshot evidence: {SHOT}")
     return 0
 
 

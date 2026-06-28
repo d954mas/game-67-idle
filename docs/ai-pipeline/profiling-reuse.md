@@ -50,7 +50,7 @@ node tools/bootstrap/export_base.mjs --target C:\projects\new-game
 ```
 
 Portable by default: skills, taskboard,
-module-owned validators, product gates, game-context tools, generated art
+module-owned validators, quality rules, game-context tools, generated art
 job scaffolding, reusable design knowledge, and starter agent/task files. The
 allowlist lives in `tools/bootstrap/export_base.mjs`.
 

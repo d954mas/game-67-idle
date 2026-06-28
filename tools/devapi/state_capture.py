@@ -5,8 +5,7 @@ Game-agnostic. A per-game capture script (tools/<game-id>/capture_states.py)
 drives the game with its OWN DevAPI commands and calls `capture(tag)` at each key
 state. This helper owns the universal parts: the capture transport, coverage
 tracking, optional pixel-health, and writing the `game.live_state_acceptance_matrix`
-JSON that the product gate (`review.mjs --state-matrix`) and the visual critic
-(`visual_critic_run.mjs --state-matrix`) already read.
+JSON that quality rules can use as state-coverage evidence.
 
 The taste of WHICH states matter is data (declared in the per-game art contract);
 HOW to reach each state is code (the per-game capture script). This helper is the
@@ -97,6 +96,6 @@ class StateCapture:
             handle.write("\n")
         return path
 
-    def shots_args(self) -> list[str]:
-        """Return ready `--shot tag:path` args for the visual critic runner."""
-        return [f"--shot {entry['tag']}:{entry['evidence']}" for entry in self.covered]
+    def evidence_lines(self) -> list[str]:
+        """Return compact state:evidence lines for quality review notes."""
+        return [f"{entry['tag']}: {entry['evidence']}" for entry in self.covered]

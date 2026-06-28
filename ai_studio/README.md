@@ -39,7 +39,7 @@ Load only the route that matches the current task:
   `node ai_studio/core_harness/validation/doc_reference_check.mjs`.
 - Generated Codex/Claude skills and hook surfaces:
   `node ai_studio/core_harness/agent_surfaces/sync.mjs --check`.
-- Quality rule selection, product evidence, visual checks, and repeated failure
+- Quality rule selection, player-facing evidence, clarity checks, and repeated failure
   stops: `ai_studio/quality/README.md`.
 - Profiling, prototype closeout, visual/asset routing, or portable export:
   `ai_studio/core_harness/profiling/README.md`.

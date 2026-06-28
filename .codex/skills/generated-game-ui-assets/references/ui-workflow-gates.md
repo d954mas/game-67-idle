@@ -10,12 +10,13 @@ Use one art job as the unit:
 ```text
 accepted target -> art bible -> art job -> source family prompt
 -> selected source sheet -> crop plan -> runtime assets
--> runtime integration -> screenshot/product gate
+-> runtime integration -> screenshot and quality evidence
 ```
 
 Before visual-first UI work, write the 5-line session contract: goal, non-goal,
 proof, stop condition, likely files. The proof must name source/runtime
-manifests, screenshot/product gate, and runtime integration evidence.
+manifests, screenshot evidence, selected quality rules, and runtime integration
+evidence.
 
 ## Source Families
 
@@ -128,8 +129,8 @@ DRAFT, every normal iteration:
 INTEGRATE, when wiring assets into runtime:
 
 - `node tools/assets/job/validate_art_job.mjs --job <job> --strict`
-- runtime screenshot/product gate with `node tools/product_gate/review.mjs` or
-  `node tools/product_gate/review.mjs`.
+- runtime screenshot plus selected quality-rule evidence from
+  `ai_studio/quality/README.md`.
 
 FINAL-ART, only when shipping a reusable kit or claiming completion:
 
@@ -140,8 +141,8 @@ FINAL-ART, only when shipping a reusable kit or claiming completion:
   `node tools/assets/job/validate_art_job.mjs --job <job> --final-art`
   (validates generation provenance + runtime-ready coverage, not the
   standalone audit reports above);
-- native/runtime screenshots and product gates;
-- `node tools/product_gate/responsive_layout_audit.mjs` when `ui.tree` bounds are available.
+- native/runtime screenshots and selected quality-rule evidence;
+- layout/readability evidence when `ui.tree` bounds are available.
 
 ## Responsive Runtime Proof
 
@@ -160,7 +161,7 @@ first action, or mobile density:
 
 1. Stop feature/content expansion.
 2. Reopen source sheet, crop manifest, contact sheet, latest screenshots, and
-   product gate.
+   quality evidence.
 3. Fix the earliest failed stage.
 4. Do not compensate in runtime code for a bad source sheet or missing manifest
    rule.
@@ -171,5 +172,5 @@ first action, or mobile density:
 ## Report Shape
 
 Report source art, art bible, crop/runtime manifests, preview sheets,
-responsive layout audit, screenshots, product gates, validations run, and the
-next visual gap.
+responsive layout evidence, screenshots, selected quality rules, validations
+run, and the next visual gap.

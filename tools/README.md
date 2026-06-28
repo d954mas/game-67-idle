@@ -24,15 +24,14 @@ Copied by `tools/bootstrap/export_base.mjs`:
   module-owned tests;
 - generated agent surfaces: `ai_studio/core_harness/agent_surfaces/`;
 - workflow state/profiling: `ai_studio/taskboard/`, `ai_studio/core_harness/profiling/`;
-- game startup/runtime proof: `tools/game_context/`, `tools/product_gate/`;
+- game startup/runtime scaffolding: `tools/game_context/`;
+- quality rules: `ai_studio/quality/`;
 - asset browser/review surface: `ai_studio/assets/asset_viewer/`;
 - reusable asset helpers: `tools/assets/`;
 - export helpers: `tools/bootstrap/`.
 
-Product gates route through `node tools/product_gate/review.mjs`,
-`node tools/product_gate/visual_critic_run.mjs`, and
-`node tools/product_gate/close_slice.mjs`.
-Policy: `ai_studio/quality/README.md` and game/visual skills.
+Quality starts from `ai_studio/quality/README.md`: pick the changed-work group,
+run the group's `COMMON.md`, then apply only the relevant numbered checks.
 
 ## Runtime Infrastructure
 
@@ -52,7 +51,7 @@ Do not load this as an asset manual. Use:
   game-local assets, pulling reusable assets, and promoting selected assets;
 - `.codex/skills/game-asset-pipeline/` for source/provenance/cutout/pack work;
 - `.codex/skills/generated-game-ui-assets/` for UI source sheets, slice9,
-  atlases, derivation, composition proof, and responsive UI gates.
+  atlases, derivation, composition proof, and responsive UI checks.
 
 Short rule: preserve provenance, separate generated/runtime assets, validate
 manifests before final-art claims, and keep timing/debug data out of normal blockers.

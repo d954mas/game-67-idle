@@ -19,7 +19,7 @@ evidence.
 8. Keep the transport and protocol stable even if implementation is temporary.
 9. Add bots as scripts that perform observe -> act -> frame.wait -> observe and
    exit nonzero on failure.
-10. Capture evidence after interactions: screenshots for visual checks and short
+10. Capture evidence after interactions: screenshots for player-clarity checks and short
     recordings for timing or animation issues.
 11. Capture launch stdout/stderr to a known log file whenever automation starts
     the game process. On startup, smoke, capture, or DevAPI failures, read or

@@ -19,12 +19,12 @@ choice, XP/gold progression, and quest claim.
 - GDD/fake-shot/reference setup for ember-road.
 - First native PC playable slice with town, map node, quest, automated combat,
   item reward, leveling progress, and locked next destination.
-- Visual/product proof evidence before content expansion.
+- Visual quality evidence before content expansion.
 
 ## Out of scope
 
 - Web prototypes unless explicitly approved.
-- Broad economy/content expansion before the first proof gate passes.
+- Broad economy/content expansion before the first quality review passes.
 - Copying named-reference IP, exact UI layouts, art, names, or monetization.
 
 ## Log

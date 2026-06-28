@@ -15,7 +15,7 @@ Check current stage gate:
 
 - Concept gate: hook, fantasy, audience, platform, pillars, no-go list.
 - Reference gate: 3-7 refs, source quality, borrow/avoid/copy-risk, synthesis.
-- Visual gate: gameplay fake shot or runtime proof exists and is visible.
+- Visual check: gameplay fake shot or runtime proof exists and is visible.
 - Slice gate: first 30 seconds, first 5 minutes, loop, economy, UI flow.
 - Handoff gate: source order, phases, commands, acceptance gates, next prompt.
 

@@ -124,8 +124,8 @@ function hasLiveStateMatrixSource(sources) {
   return sources.some((source) => /^gamedesign\/projects\/[^/]+\/visual\/live_state_acceptance_matrix\.json$/.test(source));
 }
 
-function mentionsProductProof(text) {
-  return /product[- ]read|product gate|fake shot|visual proof|screenshot proof|native proof|first playable screen/i.test(String(text || ""));
+function mentionsReviewProof(text) {
+  return /review evidence|visual review|review proof|fake shot|visual proof|screenshot proof|native proof|first playable screen/i.test(String(text || ""));
 }
 
 function buildStartupGate({ concept, designSources, runtimeSources, taskContext, currentGate, nextPriorities }) {
@@ -156,10 +156,10 @@ function buildStartupGate({ concept, designSources, runtimeSources, taskContext,
       fix: "Identify the native/runtime harness and validation command.",
     },
     {
-      id: "visual_product_gate_plan",
-      ok: activeConcept && mentionsProductProof(`${currentGate}\n${nextPriorities}`),
-      evidence: activeConcept && mentionsProductProof(`${currentGate}\n${nextPriorities}`) ? "Status names visual/product/native proof for the active concept." : "No active-concept visual/product proof gate found in status.",
-      fix: "Name the first fake shot/product-read/native screenshot proof before broad implementation.",
+      id: "visual_review_plan",
+      ok: activeConcept && mentionsReviewProof(`${currentGate}\n${nextPriorities}`),
+      evidence: activeConcept && mentionsReviewProof(`${currentGate}\n${nextPriorities}`) ? "Status names visual review/native proof for the active concept." : "No active-concept visual review proof found in status.",
+      fix: "Name the first fake shot, review evidence, and native screenshot proof before broad implementation.",
     },
     {
       id: "live_state_acceptance_matrix",
@@ -167,7 +167,7 @@ function buildStartupGate({ concept, designSources, runtimeSources, taskContext,
       evidence: activeConcept && hasLiveStateMatrixSource(designSources)
         ? "Live-state acceptance matrix found for the active concept."
         : "No active-concept live-state acceptance matrix found.",
-      fix: "Create gamedesign/projects/<game-id>/visual/live_state_acceptance_matrix.json and require it in product gates before accepting UI/visual work.",
+      fix: "Create gamedesign/projects/<game-id>/visual/live_state_acceptance_matrix.json and use it as review evidence before accepting UI/visual work.",
     },
     {
       id: "core_loop_model",
@@ -202,11 +202,11 @@ function buildVisualFirstContract({ concept }) {
       },
       {
         id: "proof",
-        prompt: "Native screenshot/product gate/art audit that proves the slice.",
+        prompt: "Native screenshot plus review evidence that proves the slice.",
       },
       {
         id: "stop_condition",
-        prompt: "The red gate that stops expansion, including product gate fail or lead visual rejection.",
+        prompt: "The blocker that stops expansion, including failed review or lead visual rejection.",
       },
       {
         id: "likely_files",
@@ -218,13 +218,13 @@ function buildVisualFirstContract({ concept }) {
       "Current native screenshot path, or the exact native capture command if the runtime does not exist yet.",
       "Screenshot-vs-target mismatch list before runtime/code changes.",
       "One vertical art slice plan: character/world/water/UI focal surface before broad content.",
-      "Product-read gate command/path that can fail the slice.",
+      "Review artifact that can fail the slice.",
       "Live-state acceptance matrix path and required state coverage for HUD, primary action, feedback, modal, blocked, return, and stress states.",
     ],
     after_meaningful_render_change: [
       "Capture a new native screenshot.",
       "Update the screenshot-vs-target mismatch list.",
-      "Run or record the product-read gate verdict before adding features/content.",
+      "Run or record review evidence before adding features/content.",
     ],
     generated_ui_runtime_gate: [
       "Non-empty crop manifest covering every runtime UI asset id.",
@@ -233,7 +233,7 @@ function buildVisualFirstContract({ concept }) {
       "If the review fails, fix source/crop/runtime assets before compensating in code.",
     ],
     stop_conditions: [
-      "Product gate fail blocks feature/content expansion unless the lead explicitly accepts the debt.",
+      "Failed review blocks feature/content expansion unless the lead explicitly accepts the debt.",
       "Lead rejection such as ugly, unclear, unreadable, or not like the fake shot blocks broad implementation.",
       "Procedural/programmer art cannot satisfy generated/final visual work without a recorded exception.",
     ],
@@ -278,7 +278,7 @@ function projectDesignSources(root) {
       `gamedesign/projects/${projectId}/gdd.md`,
       `gamedesign/projects/${projectId}/GDD.md`,
       `gamedesign/projects/${projectId}/art/art_direction.md`,
-      `gamedesign/projects/${projectId}/reviews/first_slice_visual_gate.md`,
+      `gamedesign/projects/${projectId}/reviews/first_slice_review.md`,
       `gamedesign/projects/${projectId}/visual/live_state_acceptance_matrix.md`,
       `gamedesign/projects/${projectId}/visual/live_state_acceptance_matrix.json`,
       `gamedesign/projects/${projectId}/data/core_loop.json`,
@@ -377,8 +377,8 @@ function buildContext(root, options = {}) {
       "Check `prototype_startup_gate.status`; if it is not ready, do not start broad runtime implementation.",
       "Write the 5-line visual session contract when the slice has visual, UI, FTUE, feel, or audience-test risk.",
       "Open exactly one actionable task and one active project wiki before code.",
-      "Name the visual/product proof gate that can stop feature expansion.",
-      "Attach `visual/live_state_acceptance_matrix.json` to product gates and cover or explicitly debt every required state.",
+      "Name the visual review evidence that can stop feature expansion.",
+      "Use `visual/live_state_acceptance_matrix.json` as evidence and cover or explicitly debt every required state.",
       "Compare current native screenshot against the accepted fake shot/target and list mismatches before visual code.",
       "Name the selected runtime harness and why it is allowed.",
       "If reference-driven, cite the durable deconstruction/digest and next native proof.",

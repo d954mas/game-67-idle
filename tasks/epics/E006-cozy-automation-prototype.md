@@ -10,17 +10,17 @@ updated: 2026-06-22
 
 ## Goal
 
-Create the first native playable slice for `Cozy Automation` with a clear product-read proof gate.
+Create the first native playable slice for `Cozy Automation` with clear selected quality evidence.
 
 ## In scope
 
 - GDD/fake-shot/reference setup for cozy-automation.
 - First native PC playable slice.
-- Visual/product proof evidence before content expansion.
+- Visual quality evidence before content expansion.
 
 ## Out of scope
 
 - Web prototypes unless explicitly approved.
-- Broad economy/content expansion before the first proof gate passes.
+- Broad economy/content expansion before the first quality review passes.
 
 ## Log

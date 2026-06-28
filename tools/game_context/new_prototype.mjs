@@ -13,7 +13,7 @@ function usage() {
   node tools/game_context/new_prototype.mjs --game-id <id> --title <name> --brief <one sentence> [--root <repo>] [--force]
 
 Creates the first project wiki/task/routing skeleton for a new native-first game prototype,
-then runs the prototype startup gate and writes tmp/prototype_startup_gate_context.*.`);
+then writes a compact startup context pack in tmp/prototype_startup_gate_context.*.`);
   process.exit(2);
 }
 
@@ -103,24 +103,21 @@ ${brief}
 ## Stage 0 Startup Gate
 
 - Native-first implementation only until an explicit web/mobile exception is approved.
-- First playable slice must name a fake shot, product-read gate, and native screenshot proof before broad runtime work.
+- First playable slice must name a fake shot or visual target and native
+  screenshot proof before broad runtime work.
 - Visual-first session contract is required before runtime visual work: goal,
   non-goal, proof, stop condition, likely files.
 - Before visual/runtime coding, compare current native screenshot or capture
   plan against the accepted fake shot/target and write a mismatch list.
-- Beautiful/casual/generated-UI/fake-shot slices use the strict visual product
-  gate rubric: six visual scores and blocker/major issue reporting.
 - Keep reusable process learnings in \`gamedesign/knowledge/\`; keep project-specific facts here.
 
 ## First Slice
 
 - Define the smallest playable loop in \`gdd.md\`.
-- Fill \`reviews/first_slice_visual_gate.md\` before broad runtime work.
+- Fill \`reviews/first_slice_review.md\` before broad runtime work.
 - Fill \`visual/live_state_acceptance_matrix.md\` before any broad UI/visual pass.
-- For visually important slices, run the optional vision art-lead critic
-  (\`node tools/product_gate/visual_critic_run.mjs\`) before writing the strict product gate verdict.
-- Capture visual/product proof in \`reviews/\` before expanding content.
-- Product-read gates must use \`visual/live_state_acceptance_matrix.json\`
+- Capture visual review evidence in \`reviews/\` before expanding content.
+- Visual review evidence should use \`visual/live_state_acceptance_matrix.json\`
   with explicit covered or not-covered states.
 - Update screenshot-vs-target mismatches after meaningful render changes.
 `;
@@ -149,8 +146,8 @@ Casual players. Progression should be clear; controls and moment-to-moment play 
 - One native PC scene.
 - One clear player action.
 - One feedback moment that proves the action changed the game state.
-- One visual proof screenshot for product-read review.
-- One filled \`reviews/first_slice_visual_gate.md\` before broad runtime work.
+- One visual proof screenshot for review.
+- One filled \`reviews/first_slice_review.md\` before broad runtime work.
 - One filled \`data/core_loop.json\` with player verbs, rules, feedback, risk,
   goals, replay reason, and reference grounding. Do not assume hands-off
   progression, away-time rewards, or reset-meta loops unless the lead
@@ -162,9 +159,7 @@ Casual players. Progression should be clear; controls and moment-to-moment play 
 - One screenshot-vs-target mismatch list before runtime visual code and after
   meaningful render changes.
 - If the slice depends on beauty, casual readability, generated UI, or a fake
-  shot match, one strict visual product gate using \`--visual-strict\`.
-- Optional vision art-lead critic (\`node tools/product_gate/visual_critic_run.mjs\`) over the state
-  screenshots before the strict gate verdict.
+  shot match, record review evidence before expanding content.
 
 ## Art Direction Stub
 
@@ -193,7 +188,7 @@ Build the first native playable slice for \`${title}\` after the Stage 0 startup
 - [ ] Current native screenshot or capture plan is compared against the fake
       shot/target in a mismatch list before visual code expands.
 - [ ] Native PC build/run command is identified and captured in the task log.
-- [ ] First native screenshot/product-read proof is captured before expanding content.
+- [ ] First native screenshot plus review evidence is captured before expanding content.
 
 ## Open questions
 
@@ -284,8 +279,8 @@ Project: \`${gameId}\`
 Reusable rule: \`gamedesign/knowledge/live_state_acceptance_matrix.md\`.
 Machine input: \`visual/live_state_acceptance_matrix.json\`.
 
-Fill this before accepting a broad UI/visual/product pass. A product gate pass
-only proves states explicitly covered by screenshot/probe evidence or explicitly
+Fill this before accepting a broad UI/visual review. A review only
+proves states explicitly covered by screenshot/probe evidence or explicitly
 marked as not-covered debt.
 
 ## Required States
@@ -303,35 +298,18 @@ marked as not-covered debt.
 | \`resume_or_reentry_state\` | Resume, restart, retry, or re-entering this screen, or explicit first-slice debt. | pending |
 | \`transient_stress_state\` | Combat numbers, particles, toasts, timers, or flyouts active over normal UI. | pending |
 
-## Product Gate Pattern
+## Review Pattern
 
-Use this matrix in the first product-read gate:
+Use this matrix as state evidence for the first-slice review. Do not maintain a
+project-specific rule list here.
 
-\`\`\`powershell
-node tools/product_gate/review.mjs \`
-  --project ${gameId} \`
-  --task <task-id> \`
-  --surface desktop \`
-  --screenshot <native-screenshot.png> \`
-  --verdict fail \`
-  --strict \`
-  --visual-strict \`
-  --state-matrix gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json \`
-  --require-state first_screen \`
-  --covered-state first_screen:<native-screenshot-or-probe> \`
-  --covered-state hud_visible:<hud-zoom-or-screenshot> \`
-  --covered-state primary_action_ready:<native-screenshot-or-probe> \`
-  --not-covered-state modal_or_choice_open:"not in this first slice yet" \`
-  --not-covered-state resume_or_reentry_state:"not in this first slice yet"
-\`\`\`
-
-Before a \`pass\`, every required state must be either \`--covered-state\` with
-evidence or \`--not-covered-state\` with a concrete reason.
+Before recording a pass, every required state must be covered with evidence or
+listed as not-covered with a concrete reason.
 `;
 }
 
-function firstSliceVisualGate(title, gameId) {
-  return `# First Slice Visual Gate
+function firstSliceReview(title, gameId) {
+  return `# First Slice Review
 
 Project: \`${gameId}\` / ${title}
 
@@ -363,15 +341,6 @@ not a notes dump.
   - [ ] Visual style/appeal:
   - [ ] Performance or capture blocker:
 
-## Visual Critic (vision art-lead)
-
-- Critic command (emit the prompt, or run a vision model with \`--model-cmd\`):
-  \`\`\`powershell
-  node tools/product_gate/visual_critic_run.mjs --project ${gameId} --shot first_slice:<native-screenshot.png> [--model-cmd "<vision-model-cmd>"]
-  \`\`\`
-- Emit mode writes \`critic_instruction.md\`; run mode writes a \`game.visual_critique\` JSON.
-- Feed the critique into the strict gate (\`node tools/product_gate/review.mjs ... --critique <game.visual_critique.json>\`) before the verdict.
-
 ## Live-State Matrix
 
 - Matrix doc: \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.md\`
@@ -384,30 +353,21 @@ not a notes dump.
   - [ ] \`reward_active\`
   - [ ] \`locked_or_disabled_state\`
   - [ ] \`transient_stress_state\`
-- Any required state not captured by the current screenshot must be passed as
-  \`--not-covered-state <tag>:"<reason>"\`, not silently implied.
+- Any required state not captured by the current screenshot must be listed as
+  not-covered with a concrete reason, not silently implied.
 
-## Product-Read Gate
+## Review Evidence
 
-- Gate command:
-  \`\`\`powershell
-  node tools/product_gate/review.mjs --project ${gameId} --task <task-id> --surface desktop --screenshot <native-screenshot.png> --verdict fail --strict --visual-strict --state-matrix gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json --require-state first_screen --covered-state first_screen:<native-screenshot-or-probe> --covered-state hud_visible:<hud-zoom-or-screenshot> --covered-state primary_action_ready:<native-screenshot-or-probe> --not-covered-state modal_or_choice_open:"not in this first slice yet" --not-covered-state resume_or_reentry_state:"not in this first slice yet" --where "<where am I?>" --action "<what can I do?>" --response "<what changed?>" --reward "<why continue?>" --game-look "<why game?>" --problem "<specific visual/player-read problem>" --next "<smallest next visual fix>" --visual-score composition=1 --visual-score readability=1 --visual-score ui_controls=1 --visual-score action_direction=1 --visual-score art_quality=1 --visual-score audience_fit=1 --visual-issue blocker:readability:"<concrete issue>"
-  \`\`\`
-- Gate artifact path:
+- Review artifact path:
 - Verdict: pending
 - Blocking player-read questions:
   - [ ] What can the player do in the first 5 seconds?
   - [ ] What is the reward/progress feedback?
   - [ ] What looks unclear, ugly, unreadable, or unlike the target?
-- Strict visual rubric:
-  - [ ] composition score 1-5
-  - [ ] readability score 1-5
-  - [ ] ui_controls score 1-5
-  - [ ] action_direction score 1-5
-  - [ ] art_quality score 1-5
-  - [ ] audience_fit score 1-5
-  - [ ] visual issues use severity \`blocker\`, \`major\`, or \`minor\`
-  - [ ] pass requires all six scores >= 4 and no blocker/major issue
+- Problems:
+  - [ ] concrete readability issue, if any
+  - [ ] concrete player-clarity/art mismatch, if any
+  - [ ] smallest next fix is named
 
 ## Expansion Decision
 
@@ -430,11 +390,11 @@ ${brief}
 - Game folder: \`gamedesign/projects/${gameId}/\`
 - Design docs: \`gamedesign/projects/${gameId}/gdd.md\`, \`gamedesign/projects/${gameId}/data/core_loop.json\`
 - Task board: taskboard epic and first native playable-slice task
-- Current milestone: Stage 0 startup gate for \`${title}\`
+- Current milestone: Stage 0 startup review for \`${title}\`
 - Hard game-specific constraints:
   - Native-first implementation until an explicit web/mobile exception is approved.
-  - Do not expand broad systems until the first fake-shot/product-read/native proof gate is filled.
-  - For visual/product slices, use strict visual product gates with state coverage.
+  - Do not expand broad systems until the first fake-shot review and native proof are filled.
+  - For visual slices, use review evidence with state coverage.
 
 ## Detailed Project State
 
@@ -484,7 +444,7 @@ mkdirSync(join(projectDir, "reviews"), { recursive: true });
 mkdirSync(join(projectDir, "art"), { recursive: true });
 mkdirSync(join(projectDir, "data"), { recursive: true });
 mkdirSync(join(projectDir, "visual"), { recursive: true });
-writeNew(join(projectDir, "reviews", "first_slice_visual_gate.md"), firstSliceVisualGate(title, gameId), options);
+writeNew(join(projectDir, "reviews", "first_slice_review.md"), firstSliceReview(title, gameId), options);
 writeNew(join(projectDir, "visual", "live_state_acceptance_matrix.md"), liveStateMatrixDoc(title, gameId), options);
 writeNew(join(projectDir, "visual", "live_state_acceptance_matrix.json"), liveStateMatrixJson(gameId), options);
 
@@ -495,18 +455,18 @@ const epic = createEpic(root, {
   tags: ["prototype", gameId],
   body: `## Goal
 
-Create the first native playable slice for \`${title}\` with a clear product-read proof gate.
+Create the first native playable slice for \`${title}\` with clear visual review evidence.
 
 ## In scope
 
 - GDD/fake-shot/reference setup for ${gameId}.
 - First native PC playable slice.
-- Visual/product proof evidence before content expansion.
+- Visual review evidence before content expansion.
 
 ## Out of scope
 
 - Web prototypes unless explicitly approved.
-- Broad economy/content expansion before the first proof gate passes.
+- Broad economy/content expansion before the first review passes.
 
 ## Log
 `,

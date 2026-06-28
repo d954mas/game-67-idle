@@ -83,17 +83,17 @@ the doc. Full method: `gamedesign/knowledge/reference_deconstruction.md`.
 4. For visual asks, decide the tier up front: reference, fake shot, or runtime
    asset pack. For visual prototype work, also write the 5-line session
    contract: goal, non-goal, proof, stop condition, likely files. The proof must
-   name fake shot/native screenshot/product gate or generated asset audit.
-   For beautiful/casual/generated-UI/fake-shot first slices, create the strict
-   visual rubric and plan `node tools/product_gate/review.mjs ... --visual-strict`.
+   name fake shot, native screenshot, selected quality rules, or generated
+   asset audit.
+   For beautiful/casual/generated-UI/fake-shot first slices, select existing
+   player-clarity/art rules from `ai_studio/quality/README.md`.
    Fresh prototypes should also have `visual/live_state_acceptance_matrix.json`;
-   product gates should pass it with `--state-matrix` and cover or explicitly
-   debt HUD, primary action, feedback, modal/choice, blocked/affordable,
-   re-entry, and transient stress.
+   quality evidence should cover or explicitly debt HUD, primary action,
+   feedback, modal/choice, blocked/affordable, re-entry, and transient stress.
 5. Before implementation handoff or runtime coding, run
    `node tools/game_context/iteration_context.mjs`. If
    `prototype_startup_gate.status` is `not_ready_for_implementation`, repair
-   concept/task/wiki/runtime/proof gate instead of coding.
+   concept/task/wiki/runtime/quality evidence instead of coding.
 
 ## Stage Gates
 

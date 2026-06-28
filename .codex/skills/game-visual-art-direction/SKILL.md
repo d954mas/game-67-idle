@@ -34,9 +34,9 @@ fake shots, polished builds, or release-quality presentation.
    `tools/assets/job/new_art_job.mjs` (record the decision via `find_assets --record`).
 5. Inspect generated outputs before integration; reject weak, unreadable,
    watermarked, fused, or drifting assets.
-6. Validate in primary runtime with screenshot evidence plus product gate; hand
-   off with `node tools/product_gate/close_slice.mjs`. For `lead-rejection` tasks, strict
-   close needs `--resolved-rejection` with exact issue and proof.
+6. Validate in primary runtime with screenshot evidence plus selected
+   `ai_studio/quality` rule outcomes. For `lead-rejection` tasks, record the
+   exact issue, fix, and proof in the task log before closeout.
 
 ## Stop Conditions
 
@@ -44,5 +44,5 @@ fake shots, polished builds, or release-quality presentation.
   cannot solve polished/final/generated-art requests.
 - A technical build/audit pass is not a beauty pass. If the screenshot still
   reads as tooling, the visual task remains open.
-- Product gate fail or lead rejection blocks feature/content expansion unless
-  the lead accepts that debt.
+- Blocking quality review or lead rejection blocks feature/content expansion
+  unless the lead accepts that debt.

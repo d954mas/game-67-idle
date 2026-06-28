@@ -12,7 +12,7 @@ Use as a thin router for small, verified playable increments.
 - `references/iteration-cycle-playbook.md`: iteration loop, task packet,
   evidence, review, state update, anti-patterns, and report format.
 - `references/playable-feature-gates.md`: reference deconstruction,
-  first-60-seconds, visual/product gates, build/release, slice hygiene, promise
+  first-60-seconds, visual/quality checks, build/release, slice hygiene, promise
   push, stale fail audits.
 
 ## Router Workflow
@@ -23,7 +23,7 @@ Use as a thin router for small, verified playable increments.
 2. Select one task scope and primary runtime harness.
 3. For non-trivial work, load `iteration-cycle-playbook.md`; implement the
    smallest playable slice, validate primary target, capture evidence, commit.
-4. For named references, clarity, visual/product feel, native desktop,
+4. For named references, clarity, visual quality/player feel, native desktop,
    build/release, or handoff, load `playable-feature-gates.md` before coding.
 
 ## Always-On Rules
@@ -32,7 +32,8 @@ Use as a thin router for small, verified playable increments.
 - Do not pivot playable work to web without explicit user request or approval.
 - Make one coherent gameplay increment at a time and avoid unrelated refactors.
 - Preserve engine/submodule/vendor boundaries unless explicitly requested.
-- Product gate fail blocks feature/content expansion unless lead accepts debt.
-- `lead-rejection` tasks need `node tools/product_gate/close_slice.mjs --resolved-rejection
-  "<exact rejected issue and proof>"` for strict closeout.
-- Keep product, game-loop, art-source, and technical gates separate.
+- Blocking quality review or lead rejection blocks feature/content expansion
+  unless lead accepts debt.
+- `lead-rejection` tasks need the exact rejected issue, fix, and proof recorded
+  in the task log before closeout.
+- Keep quality, game-loop, art-source, and technical checks separate.

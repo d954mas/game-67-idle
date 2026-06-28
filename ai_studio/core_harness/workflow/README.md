@@ -27,6 +27,35 @@ logs, generated artifacts, and broad design only when task-linked or requested.
 6. Run the narrowest validation that proves the change.
 7. Record evidence in the task log and final response when project state changes.
 
+## Quality Feedback
+
+Quality checks are iterative feedback, not only final acceptance gates.
+
+During substantial work, pause at natural iteration points and ask whether
+quality feedback would reduce risk or rework:
+
+- before expensive implementation;
+- after the first draft;
+- after visible, runtime, design, asset, or document changes;
+- before expanding scope;
+- before closeout.
+
+Use quality feedback when the task changes player-facing output, game design,
+assets, GDD, runtime behavior, or release-facing state. If useful, choose only
+relevant rules from `ai_studio/quality/README.md`.
+
+Do not create project-local quality rules. Tools and templates should capture
+review evidence and acceptance notes, not define or link quality rule IDs.
+
+## Expansion Boundaries
+
+Before expanding active game feature/content work, check current project state.
+Do not expand when lead rejection is unresolved, references are explicitly not
+ready, the runtime is becoming monolithic without an architecture task, or the
+user said the prototype/game is stopped, done, or only a test.
+
+Record any override as explicit lead acceptance, not as an agent decision.
+
 ## Task Log
 
 When a durable task is selected, `## Log` is the handoff record for the lead and

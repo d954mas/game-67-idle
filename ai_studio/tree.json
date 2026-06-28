@@ -1127,7 +1127,7 @@
         "kind": "module",
         "moduleId": "quality",
         "color": "#b45309",
-        "description": "Reviewed quality rule set. Agents choose the relevant small rules by task type instead of loading one broad validation manual.",
+        "description": "Reviewed quality module: grouped COMMON.md plus numbered markdown checks, lightweight quality evidence, and rule-usage profiling.",
         "tags": [
           "quality",
           "rules",
@@ -1139,7 +1139,7 @@
             "kind": "doc",
             "path": "ai_studio/quality/README.md",
             "title": "README.md",
-            "description": "Quality module entrypoint: rule selection, boundaries, and current legacy tool locations.",
+            "description": "Quality module entrypoint: rule selection, boundaries, common checks, numbered checks, and profiling.",
             "role": "quality rule router",
             "tags": [
               "source",
@@ -1148,101 +1148,386 @@
           },
           {
             "id": "quality:rules",
-            "title": "Rules",
-            "subtitle": "choose by task type",
+            "title": "Rule Groups",
+            "subtitle": "common plus numbered checks",
             "kind": "group",
             "color": "#b45309",
-            "description": "Small quality rules selected only when relevant to the current change.",
-            "role": "quality rule files",
+            "description": "Grouped quality rules. Read the matching group README, start with COMMON.md, then only the numbered checks needed for the task.",
+            "role": "quality rule group navigation",
             "tags": [
               "rules",
               "evidence"
             ],
             "children": [
               {
-                "id": "quality:technical-runtime",
-                "kind": "doc",
-                "path": "ai_studio/quality/rules/technical-runtime.md",
-                "title": "technical-runtime.md",
-                "description": "Rule for code, build, launch, input, save/load, packaging, and runtime behavior evidence.",
-                "role": "technical runtime quality rule",
+                "id": "quality:rules-player-clarity",
+                "title": "Player Clarity Rules",
+                "subtitle": "QCLR",
+                "kind": "group",
+                "color": "#b45309",
+                "description": "Rules for UI/UX, HUD, scene clarity, sprites, feedback, interactive elements, responsive layout, and player-facing presentation.",
+                "role": "player clarity rules group",
                 "tags": [
-                  "technical",
-                  "runtime"
+                  "quality",
+                  "rules",
+                  "player-clarity"
+                ],
+                "children": [
+                  {
+                    "id": "quality:rules-player-clarity-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/player_clarity/README.md",
+                    "title": "README.md",
+                    "description": "Player Clarity rule group router: use COMMON first, then QCLR numbered checks.",
+                    "role": "player clarity rules navigation",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "player-clarity"
+                    ]
+                  },
+                  {
+                    "id": "quality:rules-player-clarity-common",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/player_clarity/COMMON.md",
+                    "title": "COMMON.md",
+                    "description": "Fast common player clarity checks for blank output, readable text, visible actions, visible scene objects, overlap, and actual-output proof.",
+                    "role": "player clarity common quality checks",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "common"
+                    ]
+                  },
+                  {
+                    "id": "quality:QCLR_001-screen-clarity",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/player_clarity/checks/QCLR_001_screen_clarity.md",
+                    "title": "QCLR_001 Screen Clarity",
+                    "description": "Check for player-facing screens, gameplay scenes, interactive elements, onboarding, feedback, and task flow.",
+                    "role": "screen clarity quality check",
+                    "tags": [
+                      "quality",
+                      "player-clarity",
+                      "screen-clarity"
+                    ]
+                  },
+                  {
+                    "id": "quality:QCLR_002-responsive-layout",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/player_clarity/checks/QCLR_002_responsive_layout.md",
+                    "title": "QCLR_002 Responsive Layout",
+                    "description": "Check for desktop, portrait, tablet, click/touch target, and responsive layout geometry changes.",
+                    "role": "responsive layout quality check",
+                    "tags": [
+                      "quality",
+                      "player-clarity",
+                      "layout"
+                    ]
+                  },
+                  {
+                    "id": "quality:QCLR_003-player-visible-runtime-invariants",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/player_clarity/checks/QCLR_003_player_visible_runtime_invariants.md",
+                    "title": "QCLR_003 Player-Visible Runtime Invariants",
+                    "description": "Check active game runtime code for handmade player-facing text, debug final visuals, or Y-down drift.",
+                    "role": "player-visible runtime invariant quality check",
+                    "tags": [
+                      "quality",
+                      "player-clarity",
+                      "guard"
+                    ]
+                  }
                 ]
               },
               {
-                "id": "quality:product-readability",
-                "kind": "doc",
-                "path": "ai_studio/quality/rules/product-readability.md",
-                "title": "product-readability.md",
-                "description": "Rule for player-facing UI, controls, feedback, and screen comprehension.",
-                "role": "product readability quality rule",
+                "id": "quality:rules-art",
+                "title": "Art Rules",
+                "subtitle": "QART",
+                "kind": "group",
+                "color": "#b45309",
+                "description": "Rules for art direction, composition, generated art, visual polish, material quality, screenshots as final output, and visual target fit.",
+                "role": "art rules group",
                 "tags": [
-                  "product",
-                  "ui"
+                  "quality",
+                  "rules",
+                  "art"
+                ],
+                "children": [
+                  {
+                    "id": "quality:rules-art-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/art/README.md",
+                    "title": "README.md",
+                    "description": "Art rule group router: use COMMON first, then QART numbered checks.",
+                    "role": "art rules navigation",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "art"
+                    ]
+                  },
+                  {
+                    "id": "quality:rules-art-common",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/art/COMMON.md",
+                    "title": "COMMON.md",
+                    "description": "Fast common art checks for placeholder output, composition, asset breakage, style fit, and actual visual proof.",
+                    "role": "art common quality checks",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "common"
+                    ]
+                  },
+                  {
+                    "id": "quality:QART_001-art-direction-fit",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/art/checks/QART_001_art_direction_fit.md",
+                    "title": "QART_001 Art Direction Fit",
+                    "description": "Check screenshots, composition, art direction, visual target match, polish, and presentation.",
+                    "role": "art quality check",
+                    "tags": [
+                      "quality",
+                      "art",
+                      "visual"
+                    ]
+                  }
                 ]
               },
               {
-                "id": "quality:game-loop",
-                "kind": "doc",
-                "path": "ai_studio/quality/rules/game-loop.md",
-                "title": "game-loop.md",
-                "description": "Rule for playable loops, rewards, repetition, and reason-to-continue evidence.",
-                "role": "game loop quality rule",
+                "id": "quality:rules-gdd",
+                "title": "GDD Rules",
+                "subtitle": "QGDD",
+                "kind": "group",
+                "color": "#b45309",
+                "description": "Rules for GDD structure, clarity, contradictions, requirements, acceptance criteria, and implementation-facing specs.",
+                "role": "gdd rules group",
                 "tags": [
-                  "gameplay",
-                  "loop"
+                  "quality",
+                  "rules",
+                  "gdd"
+                ],
+                "children": [
+                  {
+                    "id": "quality:rules-gdd-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/gdd/README.md",
+                    "title": "README.md",
+                    "description": "GDD rule group router: use COMMON first, then QGDD numbered checks when promoted.",
+                    "role": "gdd rules navigation",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "gdd"
+                    ]
+                  },
+                  {
+                    "id": "quality:rules-gdd-common",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/gdd/COMMON.md",
+                    "title": "COMMON.md",
+                    "description": "Fast common GDD checks for clear target, core loop consistency, unresolved decisions, and acceptance criteria.",
+                    "role": "gdd common quality checks",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "common"
+                    ]
+                  }
                 ]
               },
               {
-                "id": "quality:visual-quality",
-                "kind": "doc",
-                "path": "ai_studio/quality/rules/visual-quality.md",
-                "title": "visual-quality.md",
-                "description": "Rule for screenshots, visual presentation, UI layout, readability, and visual rejection handling.",
-                "role": "visual quality rule",
+                "id": "quality:rules-game-design",
+                "title": "Game Design Rules",
+                "subtitle": "QDES",
+                "kind": "group",
+                "color": "#b45309",
+                "description": "Rules for core loop, player motivation, economy, progression, feature fit, rewards, challenge, and playable-slice strength.",
+                "role": "game design rules group",
                 "tags": [
-                  "visual",
-                  "ui"
+                  "quality",
+                  "rules",
+                  "game-design"
+                ],
+                "children": [
+                  {
+                    "id": "quality:rules-game-design-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/game_design/README.md",
+                    "title": "README.md",
+                    "description": "Game design rule group router: use COMMON first, then QDES numbered checks.",
+                    "role": "game design rules navigation",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "game-design"
+                    ]
+                  },
+                  {
+                    "id": "quality:rules-game-design-common",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/game_design/COMMON.md",
+                    "title": "COMMON.md",
+                    "description": "Fast common game-design checks for action, feedback, repetition, rewards, and feature fit.",
+                    "role": "game design common quality checks",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "common"
+                    ]
+                  },
+                  {
+                    "id": "quality:QDES_001-core-loop",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/game_design/checks/QDES_001_core_loop.md",
+                    "title": "QDES_001 Core Loop",
+                    "description": "Check playable loops, rewards, repetition, and reason-to-continue evidence.",
+                    "role": "core loop quality check",
+                    "tags": [
+                      "quality",
+                      "game-design",
+                      "loop"
+                    ]
+                  }
                 ]
               },
               {
-                "id": "quality:asset-quality",
-                "kind": "doc",
-                "path": "ai_studio/quality/rules/asset-quality.md",
-                "title": "asset-quality.md",
-                "description": "Rule for asset provenance, license, publishability, integrity, runtime-ready format, and 3D material floor.",
-                "role": "asset quality rule",
+                "id": "quality:rules-technical",
+                "title": "Technical Rules",
+                "subtitle": "QTECH",
+                "kind": "group",
+                "color": "#b45309",
+                "description": "Rules for code, scripts, runtime behavior, build/run proof, input, state, save/load, packaging, and automation.",
+                "role": "technical rules group",
                 "tags": [
-                  "assets",
-                  "license"
+                  "quality",
+                  "rules",
+                  "technical"
+                ],
+                "children": [
+                  {
+                    "id": "quality:rules-technical-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/technical/README.md",
+                    "title": "README.md",
+                    "description": "Technical rule group router: use COMMON first, then QTECH numbered checks.",
+                    "role": "technical rules navigation",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "technical"
+                    ]
+                  },
+                  {
+                    "id": "quality:rules-technical-common",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/technical/COMMON.md",
+                    "title": "COMMON.md",
+                    "description": "Fast common technical checks for narrow validation, behavior coverage, logs, parse/load, and player-facing quality overclaiming.",
+                    "role": "technical common quality checks",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "common"
+                    ]
+                  },
+                  {
+                    "id": "quality:QTECH_001-runtime-evidence",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/technical/checks/QTECH_001_runtime_evidence.md",
+                    "title": "QTECH_001 Runtime Evidence",
+                    "description": "Check code, build, launch, input, save/load, packaging, and runtime behavior evidence.",
+                    "role": "runtime evidence quality check",
+                    "tags": [
+                      "quality",
+                      "technical",
+                      "runtime"
+                    ]
+                  }
                 ]
               },
               {
-                "id": "quality:repeated-failure",
-                "kind": "doc",
-                "path": "ai_studio/quality/rules/repeated-failure.md",
-                "title": "repeated-failure.md",
-                "description": "Rule for repeated strict/product failures, lead rejection, and changing path instead of polishing the same failure.",
-                "role": "repeated failure quality rule",
+                "id": "quality:rules-assets",
+                "title": "Asset Rules",
+                "subtitle": "QASSET",
+                "kind": "group",
+                "color": "#b45309",
+                "description": "Rules for sourced, generated, and runtime assets; provenance; licenses; manifests; publishability; and runtime-ready formats.",
+                "role": "asset rules group",
                 "tags": [
-                  "failure",
-                  "review"
-                ]
-              },
-              {
-                "id": "quality:active-game-workflow",
-                "kind": "doc",
-                "path": "ai_studio/quality/rules/active-game-workflow.md",
-                "title": "active-game-workflow.md",
-                "description": "Rule for active game feature/content expansion, unresolved rejection, reference readiness, and runtime growth.",
-                "role": "active game workflow quality rule",
-                "tags": [
-                  "game-workflow",
-                  "active-game"
+                  "quality",
+                  "rules",
+                  "assets"
+                ],
+                "children": [
+                  {
+                    "id": "quality:rules-assets-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/assets/README.md",
+                    "title": "README.md",
+                    "description": "Asset rule group router: use COMMON first, then QASSET numbered checks.",
+                    "role": "assets rules navigation",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "assets"
+                    ]
+                  },
+                  {
+                    "id": "quality:rules-assets-common",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/assets/COMMON.md",
+                    "title": "COMMON.md",
+                    "description": "Fast common asset checks for source, license, runtime path, restricted routing, and load/render proof.",
+                    "role": "assets common quality checks",
+                    "tags": [
+                      "quality",
+                      "rules",
+                      "common"
+                    ]
+                  },
+                  {
+                    "id": "quality:QASSET_001-asset-readiness",
+                    "kind": "doc",
+                    "path": "ai_studio/quality/rules/assets/checks/QASSET_001_asset_readiness.md",
+                    "title": "QASSET_001 Asset Readiness",
+                    "description": "Check asset provenance, license, publishability, integrity, runtime-ready format, and 3D material floor.",
+                    "role": "asset readiness quality check",
+                    "tags": [
+                      "quality",
+                      "assets",
+                      "license"
+                    ]
+                  }
                 ]
               }
+            ]
+          },
+          {
+            "id": "quality:profile",
+            "kind": "tool",
+            "path": "ai_studio/quality/profile.mjs",
+            "title": "profile.mjs",
+            "description": "Scans task logs for Quality rule outcome lines and summarizes rule usage, pass, block, review, and skip counts.",
+            "role": "quality rule usage profiler",
+            "tags": [
+              "quality",
+              "profiling",
+              "task-log"
+            ]
+          },
+          {
+            "id": "quality:profile-test",
+            "kind": "test",
+            "path": "ai_studio/quality/tests/profile.test.mjs",
+            "title": "profile.test.mjs",
+            "description": "Regression tests for quality rule usage profiling from task logs.",
+            "role": "quality profiler tests",
+            "tags": [
+              "quality",
+              "test",
+              "profiling"
             ]
           }
         ]

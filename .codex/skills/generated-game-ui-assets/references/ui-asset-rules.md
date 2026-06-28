@@ -130,9 +130,8 @@ the workflow, gate tiers, failure response, and report shape.
   is no separate per-asset edge-color audit. For 1-2 pixel fringe, the soft/glow
   case routes to `dual_plate` (exact alpha from light+dark plates) and the
   opaque case to `key_matte` (known-key trimap + closed-form matte +
-  decontamination); the human visual gate
-  (`py -3.12 tools/devapi/ui_readability.py <shot>` zoom montage,
-  `node tools/product_gate/review.mjs`) is the backstop at gameplay preview size.
+  decontamination); screenshot/readability review with selected
+  `ai_studio/quality` rules is the backstop at gameplay preview size.
 - Preserve intentional purple/magic colors with explicit manifest policy; do
   not globally delete interior colors because they resemble the key background.
   `preserve_purple_edges` only suppresses intentional purple/magenta edge
@@ -149,7 +148,8 @@ the workflow, gate tiers, failure response, and report shape.
   failures, not acceptable polish noise. The principled cutout must resolve both
   bright magenta fringe and very dark low-saturation halos on the outer alpha
   contour, including near-black purple pixels such as `#26022d` when they touch
-  transparency; the visual gate confirms none survived at preview size.
+  transparency; screenshot/readability review confirms none survived at preview
+  size.
 - Record pivots/anchors before code uses sprites or map markers.
 
 ## Responsive UI Rules
@@ -160,5 +160,5 @@ the workflow, gate tiers, failure response, and report shape.
   secondary actions below, and short journal/objective text.
 - A screenshot that looks acceptable is not enough if clickable geometry is
   wrong. Use `ui.tree` layout audit for action bounds when available.
-- Product pass requires both player-read evidence and no obvious overlap,
+- Quality pass requires both player-read evidence and no obvious overlap,
   clipped text, or unusable touch targets.

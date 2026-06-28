@@ -56,6 +56,7 @@ evidence. Use the guide for lifecycle, scope intake, evidence, checkpoints, and
 manual format.
 
 Validation by change type: `ai_studio/quality/README.md`.
-Repeated strict/product failures: `node tools/product_gate/repeated_failure_guard.mjs`.
+Repeated quality failures should be visible in task logs and summarized with
+`node ai_studio/quality/profile.mjs`.
 
 Taskboard validation checks task-store structure only.

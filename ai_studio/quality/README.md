@@ -1,37 +1,80 @@
-# Quality Rules
+# Quality
 
-Quality is a set of small rules the agent selects by task type. This module is
-not a global validator and does not replace module-owned tests.
+Quality defines how agents decide whether game-development work is good enough
+to accept, continue, reject, or escalate.
+
+This module owns rule navigation, lightweight quality evidence, and rule usage
+profiling. It does not own asset production, task storage, runtime automation,
+or game implementation.
+
+Do not create ad-hoc quality rule IDs in project docs, generated templates,
+tasks, or legacy tools. New reusable rules belong under `ai_studio/quality/rules`
+and must be linked from the matching group README.
+
+## Rule Groups
+
+Open only the group that matches the changed work:
+
+- [Player Clarity](rules/player_clarity/README.md): UI/UX, HUD, scene clarity,
+  sprites, feedback, interactive elements, responsive layout, and player-facing
+  presentation.
+- [Art](rules/art/README.md): art direction, composition, polish, generated
+  art, visual target fit, and final-looking output.
+- [GDD](rules/gdd/README.md): game document structure, clarity,
+  contradictions, requirements, and acceptance criteria.
+- [Game Design](rules/game_design/README.md): core loop, player motivation,
+  economy, progression, feature fit, and playable-slice strength.
+- [Technical](rules/technical/README.md): runtime behavior, build/run proof,
+  input, state, save/load, packaging, and active-game workflow risk.
+- [Assets](rules/assets/README.md): sourced/generated/runtime assets,
+  provenance, licenses, manifests, publishability, and runtime-ready formats.
+
+Each group has:
+
+- `COMMON.md`: short cheap checks that are useful for most work in the group.
+- `checks/Q*_NNN_*.md`: specific checks for a concrete problem.
+
+Agents should read this file, then the relevant group README, then `COMMON.md`
+and only the numbered checks needed for the task.
 
 ## How To Use
 
-Before closing work, choose the rules that match the changed surface:
+Do not run every rule. Pick the group from the changed work.
 
-- `rules/technical-runtime.md`: code, build, launch, runtime, save/load, input.
-- `rules/product-readability.md`: player-facing screens, controls, UI meaning.
-- `rules/game-loop.md`: playable loop, reward, reason to continue.
-- `rules/visual-quality.md`: composition, UI layout, screenshots, presentation.
-- `rules/asset-quality.md`: assets, provenance, licenses, publishability,
-  source materials, runtime-ready formats.
-- `rules/repeated-failure.md`: repeated strict/product failures or lead
-  rejection.
-- `rules/active-game-workflow.md`: active game expansion, references, and
-  monolithic runtime risk.
+Start with the group's `COMMON.md`. Common checks do not prove quality; they
+only catch obvious brokenness quickly. If common checks fail, fix that before
+spending time on specialized review.
 
-Apply only relevant rules. Record applied rules and evidence in the task `## Log`
-or final response when the work changes project state.
+Use numbered checks when the task matches their "Use When" section. If a
+numbered check is not relevant, do not run it.
 
-## Boundary
+Record evidence when the work changes project state: screenshot, runtime
+observation, validator output, source/provenance link, task log entry, or
+another durable artifact.
 
-Quality rules describe when to run checks and what evidence is meaningful. They
-do not own implementation tools. Current tools still live in their legacy
-locations until their modules are reviewed:
+## Profiling
 
-- product gates: `tools/product_gate/`;
-- active game workflow: `tools/game_context/`;
-- module tests: the owning module.
+Record applied rules in task `## Log` using a stable line:
+
+```text
+- YYYY-MM-DD: Quality: QCLR_001=pass; QART_001=block; evidence: <short proof or artifact>.
+```
+
+Allowed outcomes are `pass`, `block`, `review`, and `skip`.
+
+Summarize rule usage with:
+
+```powershell
+node ai_studio/quality/profile.mjs
+node ai_studio/quality/profile.mjs --include-archive --json
+```
+
+The profile is diagnostic. It shows which rules are used often and which ones
+block work, but it is not a global validator.
+
+Module implementation tests stay with the owning module.
 
 ## Principle
 
-One green check is not acceptance. Technical proof, product readability, visual
+One green check is not acceptance. Technical proof, screen readability, visual
 quality, asset provenance, and workflow state can fail independently.

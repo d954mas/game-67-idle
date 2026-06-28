@@ -29,7 +29,7 @@ intake one. Generate only the gap, and record it with `find_assets --record`.
 2. Write the 5-line session contract: source art, manifests, proof, screenshot
    gate, runtime evidence.
 3. Use one art job as the unit: art bible -> source family -> intake ->
-   manifests -> contact sheet -> composition proof -> runtime/product gate.
+   manifests -> contact sheet -> composition proof -> runtime quality evidence.
 4. Keep source families separate; full mockups only as visual targets.
 5. Record provenance; never integrate from an empty crop/runtime manifest.
 
@@ -37,7 +37,7 @@ intake one. Generate only the gap, and record it with `find_assets --record`.
 
 - Reject baked text, fake letters, fused controls, tight gutters, clipping,
   key-color contamination, or weak isolation.
-- Product/readability, lead, or mobile-density fail freezes expansion until the
+- Quality/readability, lead, or mobile-density fail freezes expansion until the
   earliest failed stage is fixed.
 - Technical crop/audit pass is not a beauty pass; judge the assembled screen.
 - Procedural/programmer-art scaffolds are debug debt unless lead-accepted.

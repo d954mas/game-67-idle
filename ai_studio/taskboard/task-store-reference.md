@@ -63,10 +63,10 @@ the evidence that proves them.
 Smallest reliable validation by change type starts from the Quality rules:
 `ai_studio/quality/README.md`.
 
-Repeated strict/product gate failures are validated by:
+Repeated quality failures should be visible in task logs and summarized with:
 
 ```powershell
-node tools/product_gate/repeated_failure_guard.mjs
+node ai_studio/quality/profile.mjs
 ```
 
 If validation is too slow, unavailable, or fails for an unrelated environment

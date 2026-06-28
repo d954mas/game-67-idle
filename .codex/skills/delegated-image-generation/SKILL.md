@@ -16,7 +16,7 @@ model. Delegate generation, verify the PNG, then hand off.
   checks, composable prompts, Dead-ends, gemini CLI, `GEMINI_API_KEY`,
   `NODE_OPTIONS=--use-system-ca`.
 - `references/throughput-and-handoff.md`: batches, source-sheet workflow,
-  sidecars, `generated-game-ui-assets` handoff, and visual gate.
+  sidecars, `generated-game-ui-assets` handoff, and visual quality evidence.
 
 ## Source First (before generating)
 
@@ -43,7 +43,8 @@ Only generate what you could not source, and record it with `find_assets --recor
 - Treat file size only as a fake detector, not as quality proof.
 - Do not retry known dead-ends; use documented wrappers and gotchas.
 - Generate composable runtime parts unless the task asks for a fake shot/review.
-- Clean source images are not enough: assembled screens still need visual gate.
+- Clean source images are not enough: assembled screens still need selected
+  quality-rule evidence.
 
 ## Minimal Report
 
