@@ -31,7 +31,8 @@ Copied by `tools/bootstrap/export_base.mjs`:
 - export helpers: `tools/bootstrap/`.
 
 Quality starts from `ai_studio/quality/README.md`: pick the changed-work group,
-run the group's `COMMON.md`, then apply only the relevant numbered checks.
+start with the group's `001` rule, then apply only the relevant higher-numbered
+checks.
 
 ## Runtime Infrastructure
 

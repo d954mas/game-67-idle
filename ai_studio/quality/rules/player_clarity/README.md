@@ -1,19 +1,11 @@
 # Player Clarity Rules
 
 Use this group when changed work affects whether the player can understand and
-use what is visible on screen: UI/UX, HUD, scene elements, sprites, interactive
-elements, feedback, goals, rewards, danger, or responsive layout.
+act on visible output: UI/UX, HUD, scene elements, sprites, feedback, goals,
+danger, state changes, responsive viewports, or virtual controls.
 
 This group checks player-facing clarity. It does not judge art direction, asset
 readiness, input-system correctness, or game-loop design.
-
-## Use For
-
-- visible player-facing screens and gameplay scenes;
-- HUD, menus, overlays, buttons, and other interactive elements;
-- feedback after player action;
-- visible goals, rewards, danger, state changes, and next action;
-- click/touch target clarity and responsive layout.
 
 ## Not For
 
@@ -24,38 +16,32 @@ readiness, input-system correctness, or game-loop design.
 - core loop, rewards, progression, or motivation: use
   [Game Design](../game_design/README.md).
 
-## Order
-
-1. Start with [COMMON.md](COMMON.md).
-2. Add numbered checks only when their "Use When" section matches the task.
-
 ## Checks
 
-### [QCLR_COMMON - Player Clarity Common](COMMON.md)
-Checks obvious player-facing clarity blockers: blank output, unreadable text,
-hidden actions, invisible important objects, misleading overlap, or no
-actual-output proof.
+### [QCLR_001 - Player Clarity](checks/QCLR_001_player_clarity.md)
 
-Use first for any player-facing output change.
+Checks: changed screen/HUD/feedback/transition/flow does not make the player
+misread state or next action.
 
-### [QCLR_001 - Screen Clarity](checks/QCLR_001_screen_clarity.md)
-Checks whether the player understands the current screen/state and next action.
+Use when: the player could misread what happened, what matters now, or what to
+do next.
 
-Use when a screen, gameplay scene, onboarding step, feedback state, or task flow
-changed.
+### [QCLR_002 - Responsive Viewports](checks/QCLR_002_responsive_viewports.md)
 
-### [QCLR_002 - Responsive Layout](checks/QCLR_002_responsive_layout.md)
-Checks whether layout and click/touch targets stay visible, reachable, and
-non-overlapping.
+Checks: 4:3, 16:9, and tall-phone viewports keep game, HUD, text, and actions
+visible.
 
-Use when viewport, target surface, responsive layout, or click/touch target
-geometry changed.
+Use when: viewport ratio or orientation changes can crop, hide, overlap, or
+misplace player-facing layout.
 
-### [QCLR_003 - Player-Visible Runtime Invariants](checks/QCLR_003_player_visible_runtime_invariants.md)
-Checks hard runtime invariants for player-facing text, rendering, and layout.
+### [QCLR_004 - Virtual Controls](checks/QCLR_004_virtual_controls.md)
 
-Use when runtime visual code changed and could affect text rendering,
-debug/final visual boundaries, or Y-up/Y-down layout boundaries.
+Checks: mobile controls are visible, understandable, reachable, and do not block
+important gameplay or HUD information.
 
-Record applied checks in the task log as `Quality: QCLR_001=pass` or
-`Quality: QCLR_001=block`.
+Use when: virtual buttons, joystick zones, or touch control hints can be hidden,
+too small, overlapping, misleading, or unreachable. If control layout depends on
+orientation, also use QCLR_002.
+
+Record applied checks in the task log using the outcome format from the Quality
+README.

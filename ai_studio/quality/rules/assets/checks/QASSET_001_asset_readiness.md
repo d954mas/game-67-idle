@@ -2,19 +2,22 @@
 id: QASSET_001
 name: Asset Readiness
 group: assets
-description: Use when assets, provenance, licenses, publishability, integrity, runtime-ready format, or visible material proof changed.
+description: Use when an asset is accepted for project use, copied into project-local assets, claimed publishable/restricted, claimed runtime-ready, or used by player-facing content.
 ---
 
 # QASSET_001 Asset Readiness
 
 ## What It Checks
 
-Checks whether an asset is legally/procedurally usable and technically ready for
-runtime use.
+The asset claim is backed by the required record or proof: source/provenance,
+license/publish routing, project-local path, runtime format/path, and
+load/render evidence when the asset is runtime-ready or player-facing.
 
 ## Use When
 
-Adding, moving, generating, converting, sourcing, or claiming assets as ready.
+Use when an asset is accepted for project use, copied into project-local assets,
+claimed publishable or restricted, claimed runtime-ready, or used by
+player-facing content.
 
 ## Do Not Use For
 
@@ -25,29 +28,31 @@ Adding, moving, generating, converting, sourcing, or claiming assets as ready.
 
 ## Check
 
-- license;
-- provenance and source path/page;
-- publishability or restricted routing;
-- integrity where available;
-- runtime-ready path and format;
-- visual/material proof when the asset is visible in-game.
+- accepted/project-use assets record source, provenance, and origin;
+- publishable/restricted assets have license and routing recorded before
+  publishing, redistribution, or git tracking;
+- project code uses project-local asset paths, not shared-library, incoming,
+  scratch, or temp paths;
+- generated, converted, or packed assets can be traced back to their source and
+  builder/manifest record;
+- runtime-ready assets have the expected runtime path, format, manifest entry,
+  or pack entry;
+- player-facing runtime assets have load/render proof.
 
 ## Evidence
 
-Use asset manifest, source/provenance link, license note, source path,
-generation record, integrity hash where available, runtime path, load/render
-proof, or screenshot for visible assets.
-
-## 3D Material Floor
-
-For active 3D games that claim sourced or ready GLB/GLTF models, prove source
-materials, textures, UVs, per-primitive colors, or equivalent material data.
-Flat color-only rendering is not a ready-asset proof.
-
-If the floor fails, stop content expansion and create a material/texture pass.
+Asset record, manifest, source/provenance link, origin, license note,
+publish/restricted routing, project-local path, generation/conversion record,
+builder or pack entry, pipeline hash when available, runtime path/format,
+load/render proof, or screenshot.
 
 ## Not Enough
 
-- A file exists but has no source/provenance.
-- License/provenance exists but runtime path or format is unclear.
-- Visible assets are claimed ready without load/render or material proof.
+- A file exists but has no source, provenance, or origin.
+- A shared-library, incoming, scratch, or temp path is used as a project asset.
+- License exists but publish/restricted routing is unclear.
+- A generated, converted, or packed asset has no source or builder/manifest
+  trace.
+- Runtime-ready is claimed without runtime path, format, manifest/pack entry, or
+  load proof.
+- Player-facing use is claimed without load/render proof.

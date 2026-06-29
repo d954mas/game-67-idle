@@ -48,7 +48,7 @@ function qualityLines(body) {
 function parseQualityLine(line) {
   const entries = [];
   const text = line.replace(/^[-*]\s*/, "");
-  const pattern = /\b(Q(?:CLR|ART|GDD|DES|TECH|ASSET)_(?:COMMON|\d{3}))\s*(?:=|:|\s)\s*(pass|block|review|skip)\b/gi;
+  const pattern = /\b(Q(?:CLR|ART|GDD|DES|TECH|ASSET)_\d{3})\s*(?:=|:|\s)\s*(pass|block|review|skip)\b/gi;
   let match;
   while ((match = pattern.exec(text))) {
     entries.push({
@@ -60,7 +60,7 @@ function parseQualityLine(line) {
 }
 
 function createEmptyRule(rule) {
-  const groupKey = rule.replace(/_(?:COMMON|\d{3})$/, "");
+  const groupKey = rule.replace(/_\d{3}$/, "");
   return {
     rule,
     group: GROUPS[groupKey] || "unknown",

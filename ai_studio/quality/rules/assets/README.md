@@ -1,29 +1,36 @@
 # Asset Rules
 
-Use this group when changed work adds, moves, generates, converts, sources, or
-claims assets as ready.
+Use this group when asset files or records are added, changed, converted, moved
+into project use, claimed publishable, claimed runtime-ready, or used as asset
+dependencies in player-facing output.
 
-## Order
+## Not For
 
-1. Start with [COMMON.md](COMMON.md).
-2. Add numbered checks only when their "Use When" section matches the task.
+- player-facing clarity or layout: use
+  [Player Clarity](../player_clarity/README.md);
+- art direction, composition, or style fit: use [Art](../art/README.md);
+- runtime/build behavior unrelated to assets: use
+  [Technical](../technical/README.md).
 
 ## Checks
 
-### [QASSET_COMMON - Assets Common](COMMON.md)
-Checks obvious asset blockers: missing source/generation path, missing
-license/provenance, unclear runtime path/format, restricted asset misuse, or no
-load/render proof for visible assets.
-
-Use first when assets are added, moved, generated, converted, sourced, or
-claimed as ready.
-
 ### [QASSET_001 - Asset Readiness](checks/QASSET_001_asset_readiness.md)
-Checks whether an asset is legally/procedurally usable and technically ready for
-runtime use.
 
-Use when assets, provenance, licenses, publishability, integrity, runtime-ready
-format, or visible material proof changed.
+Checks: accepted source/provenance, license/publish routing, project-local
+asset path, runtime format/path, and load/render proof for the claim being made.
 
-Record applied checks in the task log as `Quality: QASSET_001=pass` or
-`Quality: QASSET_001=block`.
+Use when: an asset is accepted for project use, copied into project-local
+assets, claimed publishable/restricted, claimed runtime-ready, or used by
+player-facing content.
+
+### [QASSET_002 - Material Readiness](checks/QASSET_002_material_readiness.md)
+
+Checks: material-dependent assets keep intentional textures, UVs, colors,
+material maps, or material assignment for their current stage.
+
+Use when: a material-dependent model, texture, material, prop, surface, or
+material map set can lose material data during source intake, prep, conversion,
+or runtime-ready use.
+
+Record applied checks in the task log using the outcome format from the Quality
+README.

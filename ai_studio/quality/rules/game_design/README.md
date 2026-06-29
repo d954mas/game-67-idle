@@ -1,31 +1,27 @@
 # Game Design Rules
 
 Use this group when changed work affects core loop, player motivation, economy,
-progression, feature fit, rewards, challenge, or playable-slice design.
+progression, feature fit, rewards, challenge, playable-slice design, or design
+data that changes what the player does and why it matters.
 
-## Order
+## Not For
 
-1. Start with [COMMON.md](COMMON.md).
-2. Add numbered checks only when their "Use When" section matches the task.
+- GDD/design-source clarity by itself: use [GDD](../gdd/README.md);
+- player-facing clarity by itself: use
+  [Player Clarity](../player_clarity/README.md);
+- art direction or asset readiness: use [Art](../art/README.md) or
+  [Assets](../assets/README.md);
+- runtime/build behavior: use [Technical](../technical/README.md).
 
 ## Checks
 
-### [QDES_COMMON - Game Design Common](COMMON.md)
-Checks obvious gameplay design blockers: unclear player action, missing feedback
-or progress, weak repetition reason, reward mismatch, or feature-direction
-mismatch.
+### [QDES_001 - Playable Loop](checks/QDES_001_playable_loop.md)
 
-Use first for any gameplay, progression, economy, reward, challenge, or
-playable-slice design change.
+Checks: gameplay model has player action, response, visible progress/reward,
+repeat reason, next hook, and no dead/confusing loop state.
 
-### [QDES_001 - Core Loop](checks/QDES_001_core_loop.md)
-Checks whether a playable slice has a clear action, response, reward/progress,
-reason to repeat, and next reason to continue.
+Use when: gameplay/progression/economy/reward/challenge docs, data, prototype,
+or runtime work changes the player's action loop.
 
-Use when playable loop, prototype readiness, first loop, progression, economy,
-reward, repetition, or live gameplay improvement changed.
-
-GDD document quality lives in [GDD](../gdd/README.md).
-
-Record applied checks in the task log as `Quality: QDES_001=pass` or
-`Quality: QDES_001=block`.
+Record applied checks in the task log using the outcome format from the Quality
+README.

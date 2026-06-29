@@ -1,29 +1,29 @@
 # Technical Rules
 
-Use this group when changed work affects code, scripts, runtime behavior,
-build/run proof, input, state, save/load, packaging, or automation.
+Use this group when changed work affects code, scripts, build files, generated
+data, runtime behavior, build/run proof, input, state, save/load, packaging, or
+automation.
 
-## Order
+## Not For
 
-1. Start with [COMMON.md](COMMON.md).
-2. Add numbered checks only when their "Use When" section matches the task.
+- player-facing clarity by itself: use
+  [Player Clarity](../player_clarity/README.md);
+- art direction or asset readiness: use [Art](../art/README.md) or
+  [Assets](../assets/README.md);
+- game-loop, reward, or progression design: use
+  [Game Design](../game_design/README.md);
+- GDD/design-source clarity: use [GDD](../gdd/README.md).
 
 ## Checks
 
-### [QTECH_COMMON - Technical Common](COMMON.md)
-Checks obvious technical proof blockers: no narrow validation command, command
-does not exercise the change, ignored failing logs, generated data does not
-parse/load, or technical green is overclaimed as player-facing quality.
+### [QTECH_001 - Behavior Evidence](checks/QTECH_001_behavior_evidence.md)
 
-Use first for any code, script, runtime behavior, build, launch, state,
-save/load, input, packaging, or automation change.
+Checks: changed technical claim is named and exercised by the narrowest useful
+proof: test, command, parser/schema check, build/pack command, launch/smoke,
+scenario, log, or generated-output check.
 
-### [QTECH_001 - Runtime Evidence](checks/QTECH_001_runtime_evidence.md)
-Checks whether the changed runtime/system behavior has the narrowest proof that
-actually exercises it.
+Use when: code, scripts, build files, generated data, state, save/load, input,
+packaging, automation, launch behavior, or runtime behavior changed.
 
-Use when code, build, launch, runtime behavior, input, state, save/load,
-packaging, or runtime automation changed.
-
-Record applied checks in the task log as `Quality: QTECH_001=pass` or
-`Quality: QTECH_001=block`.
+Record applied checks in the task log using the outcome format from the Quality
+README.

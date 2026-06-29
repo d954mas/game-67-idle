@@ -16,34 +16,32 @@ and must be linked from the matching group README.
 Open only the group that matches the changed work:
 
 - [Player Clarity](rules/player_clarity/README.md): UI/UX, HUD, scene clarity,
-  sprites, feedback, interactive elements, responsive layout, and player-facing
-  presentation.
+  sprites, feedback, interactive elements, responsive viewports, virtual
+  controls, and player-facing presentation.
 - [Art](rules/art/README.md): art direction, composition, polish, generated
   art, visual target fit, and final-looking output.
-- [GDD](rules/gdd/README.md): game document structure, clarity,
+- [GDD](rules/gdd/README.md): design source packages, source order, file roles,
   contradictions, requirements, and acceptance criteria.
 - [Game Design](rules/game_design/README.md): core loop, player motivation,
-  economy, progression, feature fit, and playable-slice strength.
-- [Technical](rules/technical/README.md): runtime behavior, build/run proof,
-  input, state, save/load, packaging, and active-game workflow risk.
+  economy, progression, feature fit, design data, and playable-slice strength.
+- [Technical](rules/technical/README.md): code, scripts, generated data,
+  runtime behavior, build/run proof, input, state, save/load, packaging, and
+  automation.
 - [Assets](rules/assets/README.md): sourced/generated/runtime assets,
   provenance, licenses, manifests, publishability, and runtime-ready formats.
 
-Each group has:
+Each group has numbered `checks/Q*_NNN_*.md` rules. Rule `001` is the basic
+group check.
 
-- `COMMON.md`: short cheap checks that are useful for most work in the group.
-- `checks/Q*_NNN_*.md`: specific checks for a concrete problem.
-
-Agents should read this file, then the relevant group README, then `COMMON.md`
-and only the numbered checks needed for the task.
+Read this file, then the relevant group README, then only the rules needed for
+the task.
 
 ## How To Use
 
 Do not run every rule. Pick the group from the changed work.
 
-Start with the group's `COMMON.md`. Common checks do not prove quality; they
-only catch obvious brokenness quickly. If common checks fail, fix that before
-spending time on specialized review.
+Start with the group's `001` rule. It catches basic failures quickly. If it
+fails, fix that before spending time on more specialized review.
 
 Use numbered checks when the task matches their "Use When" section. If a
 numbered check is not relevant, do not run it.
@@ -76,5 +74,5 @@ Module implementation tests stay with the owning module.
 
 ## Principle
 
-One green check is not acceptance. Technical proof, screen readability, visual
+One green check is not acceptance. Technical proof, player clarity, visual
 quality, asset provenance, and workflow state can fail independently.

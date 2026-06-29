@@ -50,14 +50,14 @@ function run(root, ...args) {
 test("quality profile counts rule outcomes from task logs", (t) => {
   const root = tempRoot(t);
   writeTask(root, "T0001", "- 2026-06-26: Quality: QCLR_001=pass; QART_001=block; evidence: screenshot.\n");
-  writeTask(root, "T0002", "- 2026-06-26: Quality: QCLR_001 review; QTECH_COMMON=skip; evidence: lead review.\n");
+  writeTask(root, "T0002", "- 2026-06-26: Quality: QCLR_001 review; QTECH_001=skip; evidence: lead review.\n");
 
   const result = run(root, "--json");
   assert.equal(result.status, 0, result.stderr);
   const profile = JSON.parse(result.stdout);
   const clarity001 = profile.rules.find((item) => item.rule === "QCLR_001");
   const art001 = profile.rules.find((item) => item.rule === "QART_001");
-  const techCommon = profile.rules.find((item) => item.rule === "QTECH_COMMON");
+  const tech001 = profile.rules.find((item) => item.rule === "QTECH_001");
 
   assert.equal(profile.entries, 4);
   assert.equal(clarity001.total, 2);
@@ -66,6 +66,6 @@ test("quality profile counts rule outcomes from task logs", (t) => {
   assert.equal(clarity001.outcomes.review, 1);
   assert.deepEqual(clarity001.tasks, ["T0001", "T0002"]);
   assert.equal(art001.outcomes.block, 1);
-  assert.equal(techCommon.group, "technical");
-  assert.equal(techCommon.outcomes.skip, 1);
+  assert.equal(tech001.group, "technical");
+  assert.equal(tech001.outcomes.skip, 1);
 });

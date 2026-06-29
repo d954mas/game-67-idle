@@ -1,24 +1,30 @@
 # GDD Rules
 
-Use this group when changed work affects a GDD, design brief, concept document,
-requirements, acceptance criteria, or implementation-facing game spec.
+Use this group when changed work creates, edits, or promotes a design source
+package: GDD, design brief, concept document, tables, JSON/data contracts,
+requirements, acceptance criteria, visual proof, web-GDD, or
+implementation-facing handoff/spec.
 
-## Order
+## Not For
 
-1. Start with [COMMON.md](COMMON.md).
-2. Add numbered checks only when their "Use When" section matches the task.
+- player-facing clarity: use
+  [Player Clarity](../player_clarity/README.md);
+- art direction or asset readiness: use [Art](../art/README.md) or
+  [Assets](../assets/README.md);
+- runtime/build behavior: use [Technical](../technical/README.md);
+- gameplay-loop quality, economy, or progression validation: use
+  [Game Design](../game_design/README.md).
 
 ## Checks
 
-### [QGDD_COMMON - GDD Common](COMMON.md)
-Checks obvious document blockers: unclear build target, unclear player/use case,
-contradictory loop/controls/success/failure, hidden unresolved design decisions,
-or unverifiable acceptance criteria.
+### [QGDD_001 - Design Source Readiness](checks/QGDD_001_design_source_readiness.md)
 
-Use first for any GDD, design brief, concept document, requirements, or
-implementation-facing spec change.
+Checks: design source package can act as current source of truth: entrypoint,
+source order, file roles, scope, current decisions, open questions,
+cross-file contradictions, and verifiable acceptance/proof.
 
-No numbered GDD checks have been promoted yet.
+Use when: GDD/concept/spec/table/data/handoff material is meant to guide
+implementation, review, continuation, or an explicit lead decision.
 
-Record applied checks in the task log as `Quality: QGDD_COMMON=pass` or
-`Quality: QGDD_COMMON=block`.
+Record applied checks in the task log using the outcome format from the Quality
+README.

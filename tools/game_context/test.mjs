@@ -343,7 +343,7 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   assert.match(visualGate, /Current native screenshot path or capture plan:/);
   assert.match(visualGate, /Screenshot-vs-target mismatch list:/);
   assert.match(visualGate, /## Review Evidence/);
-  assert.doesNotMatch(visualGate, /Quality Rules|Applied rules|ai_studio\/quality|QCLR_COMMON|QCLR_001|QCLR_002|QART_COMMON|QART_001/);
+  assert.doesNotMatch(visualGate, /Quality Rules|Applied rules|ai_studio\/quality|QCLR_001|QCLR_002|QART_001/);
   assert.match(visualGate, /Stop condition:/);
   assert.match(visualGate, /Decision: blocked until filled/);
 

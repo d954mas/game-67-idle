@@ -131,8 +131,8 @@ For lead-rejected visual work, tag the task with `lead-rejection` and close only
 after recording the exact rejected issue, fix, and proof in the task log.
 
 For beautiful/casual/generated-UI/fake-shot/child-testable work, use
-`QCLR_COMMON`, `QART_COMMON`, and the matching numbered player-clarity/art rules
-from `ai_studio/quality/README.md`. Structured notes may use composition,
+`QCLR_001`, `QART_001`, and the matching higher-numbered player-clarity/art
+rules from `ai_studio/quality/README.md`. Structured notes may use composition,
 screen clarity, UI controls, action direction, art direction fit, and audience
 fit as evidence axes, but do not create project-local rule IDs.
 
