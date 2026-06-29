@@ -1152,7 +1152,7 @@
             "subtitle": "numbered checks",
             "kind": "group",
             "color": "#b45309",
-            "description": "Grouped quality rules. Read the matching group README, start with the 001 rule, then only the higher-numbered checks needed for the task.",
+            "description": "Grouped quality rules. Read each matching group README, use the 001 rule when it matches, then only the higher-numbered checks needed for the task.",
             "role": "quality rule group navigation",
             "tags": [
               "rules",
@@ -1165,7 +1165,7 @@
                 "subtitle": "QCLR",
                 "kind": "group",
                 "color": "#b45309",
-                    "description": "Rules for UI/UX, HUD, scene clarity, sprites, feedback, interactive elements, responsive viewports, virtual controls, and player-facing presentation.",
+                    "description": "Rules for UI/UX, HUD, scene clarity, sprite readability/state clarity, feedback, interactive elements, responsive viewports, virtual controls, and player-facing presentation.",
                 "role": "player clarity rules group",
                 "tags": [
                   "quality",
@@ -1234,7 +1234,7 @@
                 "subtitle": "QART",
                 "kind": "group",
                 "color": "#b45309",
-                "description": "Rules for player-facing visuals, generated art, materials, screenshots, visual targets, and avoiding debug/placeholder defaults.",
+                "description": "Rules for player-facing visuals, generated art, screenshots, visual targets, and avoiding debug/placeholder defaults.",
                 "role": "art rules group",
                 "tags": [
                   "quality",
@@ -1247,7 +1247,7 @@
                     "kind": "doc",
                     "path": "ai_studio/quality/rules/art/README.md",
                     "title": "README.md",
-                    "description": "Art rule group router for player-facing visuals, generated art, materials, screenshots, and visual targets.",
+                    "description": "Art rule group router for player-facing visuals, generated art, screenshots, visual targets, and style/appearance fit.",
                     "role": "art rules navigation",
                     "tags": [
                       "quality",
@@ -1428,7 +1428,7 @@
                     "kind": "doc",
                     "path": "ai_studio/quality/rules/assets/checks/QASSET_001_asset_readiness.md",
                     "title": "QASSET_001 Asset Readiness",
-                    "description": "Check accepted/project assets for source/provenance, license/publish routing, project-local paths, runtime format/path, and load/render proof.",
+                    "description": "Check accepted/project assets for source/provenance/origin, committed integrity, license/publish routing, project-local paths, runtime format/path, and load/render proof.",
                     "role": "asset readiness quality check",
                     "tags": [
                       "quality",

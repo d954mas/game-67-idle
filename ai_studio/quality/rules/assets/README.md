@@ -16,8 +16,9 @@ dependencies in player-facing output.
 
 ### [QASSET_001 - Asset Readiness](checks/QASSET_001_asset_readiness.md)
 
-Checks: accepted source/provenance, license/publish routing, project-local
-asset path, runtime format/path, and load/render proof for the claim being made.
+Checks: accepted source/provenance/origin, committed-asset integrity,
+license/publish routing, project-local asset path, runtime format/path, and
+load/render proof for the claim being made.
 
 Use when: an asset is accepted for project use, copied into project-local
 assets, claimed publishable/restricted, claimed runtime-ready, or used by

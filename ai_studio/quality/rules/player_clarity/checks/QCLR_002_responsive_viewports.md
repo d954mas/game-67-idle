@@ -9,8 +9,8 @@ description: Use when 4:3, 16:9, or tall-phone viewport ratios can crop, hide, o
 
 ## What It Checks
 
-Required viewport ratios keep the game, HUD, text, and player-facing actions
-visible and correctly placed.
+Required viewport ratios keep the changed game surface, HUD, text, and
+player-facing actions visible and correctly placed.
 
 ## Use When
 
@@ -36,11 +36,16 @@ If virtual controls affect layout or safe space, also use
 - important HUD, text, state, feedback, or danger are not cropped or pushed off-screen;
 - player-facing actions are not hidden, overlapped, or misplaced.
 
+For a local surface change, check only the affected surface and the supported
+targets that can break. Use the full 4:3, 16:9, and tall-phone 19.5:9
+landscape/portrait matrix when root layout, HUD shell, viewport scaling, safe
+area, or global responsive behavior changed.
+
 ## Evidence
 
-Screenshot or runtime UI bounds for each required ratio/orientation: 4:3, 16:9,
-and tall-phone 19.5:9 in landscape and portrait, unless the project explicitly
-does not support one of them.
+Screenshot or runtime UI bounds for the affected supported targets. Full-matrix
+evidence means 4:3, 16:9, and tall-phone 19.5:9 in landscape and portrait,
+unless the project explicitly does not support one of them.
 
 ## Not Enough
 

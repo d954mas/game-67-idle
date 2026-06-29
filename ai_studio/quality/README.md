@@ -13,11 +13,11 @@ and must be linked from the matching group README.
 
 ## Rule Groups
 
-Open only the group that matches the changed work:
+Open the group or groups that match the changed work:
 
 - [Player Clarity](rules/player_clarity/README.md): UI/UX, HUD, scene clarity,
-  sprites, feedback, interactive elements, responsive viewports, virtual
-  controls, and player-facing presentation.
+  sprite readability/state clarity, feedback, interactive elements, responsive
+  viewports, virtual controls, and player-facing presentation.
 - [Art](rules/art/README.md): art direction, composition, polish, generated
   art, visual target fit, and final-looking output.
 - [GDD](rules/gdd/README.md): design source packages, source order, file roles,
@@ -31,28 +31,32 @@ Open only the group that matches the changed work:
   provenance, licenses, manifests, publishability, and runtime-ready formats.
 
 Each group has numbered `checks/Q*_NNN_*.md` rules. Rule `001` is the basic
-group check.
+group check when it matches the task.
 
 Read this file, then the relevant group README, then only the rules needed for
 the task.
 
 ## How To Use
 
-Do not run every rule. Pick the group from the changed work.
+Do not run every rule. Pick the group or groups from the changed work. A single
+change can need more than one group: for example, a player-facing asset change
+can need Assets for provenance/readiness, Player Clarity for visible
+understanding, and Technical for behavior evidence.
 
-Start with the group's `001` rule. It catches basic failures quickly. If it
-fails, fix that before spending time on more specialized review.
+Start with the group's `001` rule when its "Use When" section matches the task.
+If it does not match, use the more specific rule directly.
 
 Use numbered checks when the task matches their "Use When" section. If a
 numbered check is not relevant, do not run it.
 
-Record evidence when the work changes project state: screenshot, runtime
-observation, validator output, source/provenance link, task log entry, or
-another durable artifact.
+Record evidence when the work changes project state: screenshot, inspected
+runtime state, validator output, source/provenance link, task log entry, final
+report note, PR/review comment, or another durable artifact.
 
 ## Profiling
 
-Record applied rules in task `## Log` using a stable line:
+When a task file exists, record applied rules in task `## Log` using a stable
+line:
 
 ```text
 - YYYY-MM-DD: Quality: QCLR_001=pass; QART_001=block; evidence: <short proof or artifact>.

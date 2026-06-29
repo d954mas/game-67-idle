@@ -39,8 +39,8 @@ the player misread what happened, what matters now, or what to do next.
 
 ## Evidence
 
-Screenshot, running surface, video, runtime capture, or short observation from
-the current player-facing state.
+Screenshot, video, runtime capture, UI bounds/inspected state, or a short
+observation that names the exact current player-facing state inspected.
 
 ## Not Enough
 

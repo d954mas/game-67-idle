@@ -16,8 +16,7 @@ overlays.
 ## Use When
 
 Use when adding, replacing, generating, adapting, or sourcing visual candidates
-for player-facing visuals, materials, sprites, UI art, screenshots, or visual
-targets.
+for player-facing visuals, sprites, UI art, screenshots, or visual targets.
 
 ## Do Not Use For
 
@@ -33,8 +32,9 @@ targets.
 - debug or placeholder visuals are used only after explicit prototype/spike
   request, real source/asset gap after source attempt, or lead approval before
   implementation;
-- if there is any doubt, the agent asks the lead before using debug or
-  placeholder visuals;
+- if the task did not explicitly allow rough prototype/spike output and the
+  agent cannot make, source, or adapt a closer practical visual, the agent asks
+  the lead before using debug or placeholder visuals;
 - actual visual output was inspected, not only code or claims;
 - output is not broken, stretched, cropped, missing, or accidentally flat.
 

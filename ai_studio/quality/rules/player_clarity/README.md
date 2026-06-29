@@ -1,8 +1,9 @@
 # Player Clarity Rules
 
 Use this group when changed work affects whether the player can understand and
-act on visible output: UI/UX, HUD, scene elements, sprites, feedback, goals,
-danger, state changes, responsive viewports, or virtual controls.
+act on visible output: UI/UX, HUD, scene elements, sprite readability or state
+clarity, feedback, goals, danger, state changes, responsive viewports, or
+virtual controls.
 
 This group checks player-facing clarity. It does not judge art direction, asset
 readiness, input-system correctness, or game-loop design.

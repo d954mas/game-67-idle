@@ -38,9 +38,10 @@ If control layout depends on viewport or orientation, also use
 
 ## Evidence
 
-Screenshots, runtime capture, or short observation from supported mobile
-viewport/orientation layouts. Include both mobile portrait and mobile landscape
-unless one is explicitly unsupported.
+Screenshots, runtime capture, UI bounds/inspected state, or a short observation
+that names the exact mobile viewport/orientation and control state inspected.
+Include both mobile portrait and mobile landscape unless one is explicitly
+unsupported.
 
 ## Not Enough
 

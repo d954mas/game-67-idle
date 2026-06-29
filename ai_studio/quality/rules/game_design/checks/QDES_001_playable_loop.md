@@ -37,7 +37,9 @@ changes. It does not require the change to be implemented yet.
 - What is the next hook?
 - What blocked, failure, recovery, or re-entry state keeps the loop from
   becoming confusing or dead?
-- Does the feature fit the current game direction?
+- Does the feature fit the current game direction from `GAME_PROJECT.md`,
+  active concept/GDD/design data, or the task scope? If no active game/direction
+  exists, record that fit is unverified instead of inventing one.
 
 ## Evidence
 

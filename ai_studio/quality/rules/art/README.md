@@ -1,8 +1,7 @@
 # Art Rules
 
 Use this group when changed work affects art direction, composition, generated
-art, visual polish, material quality, screenshots as final output, or a visual
-target.
+art, visual polish, screenshots as final output, or a visual target.
 
 ## Not For
 
@@ -10,6 +9,8 @@ target.
   [Player Clarity](../player_clarity/README.md);
 - asset license, provenance, publishability, or runtime format: use
   [Assets](../assets/README.md);
+- material data, UVs, textures, material maps, assignment, preservation, or
+  conversion: use [Assets](../assets/README.md);
 - runtime/build behavior: use [Technical](../technical/README.md).
 
 ## Checks
