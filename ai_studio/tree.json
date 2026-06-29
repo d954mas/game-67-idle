@@ -1147,6 +1147,19 @@
             ]
           },
           {
+            "id": "quality:skill-nt-quality-checks",
+            "kind": "skill",
+            "path": ".codex/skills/nt-quality-checks/SKILL.md",
+            "title": "nt-quality-checks",
+            "description": "Codex-discoverable quality-check skill that routes agents through AI Studio quality groups, matching rule files, outcome logging, and usage profiling.",
+            "role": "quality check routing skill",
+            "tags": [
+              "quality",
+              "skill",
+              "checks"
+            ]
+          },
+          {
             "id": "quality:rules",
             "title": "Rule Groups",
             "subtitle": "numbered checks",
