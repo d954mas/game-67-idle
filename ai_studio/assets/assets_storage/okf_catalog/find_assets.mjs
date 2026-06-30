@@ -132,10 +132,11 @@ async function previewMap(libraryPath) {
   return map;
 }
 
-async function modelMap(libraryPath) {
+async function modelMap(libraryPath, knownFiles = null) {
   const filesDir = join(libraryPath, "files");
   if (!existsSync(filesDir)) return new Map();
-  const models = (await walk(filesDir)).filter((f) => /\.(glb|gltf)$/i.test(f)).sort();
+  const files = Array.isArray(knownFiles) ? knownFiles : await walk(filesDir);
+  const models = files.filter((f) => /\.(glb|gltf)$/i.test(f)).sort();
   const map = new Map();
   for (const file of models) {
     const dir = dirname(file);
@@ -173,10 +174,10 @@ async function parsePackFiles(files) {
 
 // Read every catalog/**/*.md record into a normalized list (one reader for the
 // search CLI and the library viewer).
-export async function scanLibraryWithPacks(libraryPath = DEFAULT_LIBRARY) {
+export async function scanLibraryWithPacks(libraryPath = DEFAULT_LIBRARY, options = {}) {
   const catalogDir = join(libraryPath, "catalog");
   if (!existsSync(catalogDir)) return { records: [], packs: [] };
-  const catalogFiles = await walk(catalogDir);
+  const catalogFiles = Array.isArray(options.catalogFiles) ? options.catalogFiles : await walk(catalogDir);
   const files = catalogFiles.filter(
     (f) => f.endsWith(".md") && !/[\\/](README|index)\.md$/i.test(f) && !/[\\/]_[^\\/]*\.md$/.test(f),
   );
@@ -186,7 +187,7 @@ export async function scanLibraryWithPacks(libraryPath = DEFAULT_LIBRARY) {
   const packs = await parsePackFiles(packFiles);
   const packMeta = new Map(packs.map((p) => [p.pack, p]));
   const previews = await previewMap(libraryPath);
-  const models = await modelMap(libraryPath);
+  const models = await modelMap(libraryPath, options.assetFiles);
   const records = await mapLimit(files, 64, async (f) => {
     let text;
     try {

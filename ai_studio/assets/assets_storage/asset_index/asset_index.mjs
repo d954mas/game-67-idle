@@ -111,6 +111,18 @@ function sourceKey(source) {
   return `${source.id}|${source.path}|${source.mode}`;
 }
 
+function libraryScanOptionsFromSnapshot(source, snapshot) {
+  if (source.mode !== "library" || !snapshot?.files) return {};
+  return {
+    catalogFiles: snapshot.files
+      .filter((file) => file.scope === "catalog")
+      .map((file) => join(source.path, "catalog", file.rel)),
+    assetFiles: snapshot.files
+      .filter((file) => file.scope === "files")
+      .map((file) => join(source.path, "files", file.rel)),
+  };
+}
+
 export async function summarizeIndexedPreviewStatus(root, source) {
   await ensureAssetIndex(root, source);
   const db = openIndex(root, source);
@@ -666,7 +678,9 @@ export async function rebuildAssetIndex(root, source, options = {}) {
   const snapshot = options.snapshot || buildSourceSnapshot(root, source);
   const signature = sourceSnapshotSignature(snapshot);
   mark("snapshot");
-  const libraryData = source.mode === "library" ? await scanLibraryWithPacks(source.path) : { records: [], packs: [] };
+  const libraryData = source.mode === "library"
+    ? await scanLibraryWithPacks(source.path, libraryScanOptionsFromSnapshot(source, snapshot))
+    : { records: [], packs: [] };
   mark("scan");
   const manifestData = source.mode !== "library" && hasPackManifestSource(source.path)
     ? await scanPackManifestSource(source.path)
