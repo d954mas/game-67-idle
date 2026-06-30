@@ -3254,6 +3254,19 @@
                 ]
               },
               {
+                "id": "assets:asset-viewer-pull-test",
+                "kind": "test",
+                "path": "ai_studio/assets/viewer/tests/pull.test.mjs",
+                "title": "pull.test.mjs",
+                "description": "Regression tests for Asset Viewer pull argument parsing and preservation of publishability metadata in game-local manifest rows.",
+                "role": "asset pull tests",
+                "tags": [
+                  "assets",
+                  "tests",
+                  "license"
+                ]
+              },
+              {
                 "id": "assets:asset-viewer-record",
                 "kind": "tool",
                 "path": "ai_studio/assets/viewer/record_gallery.mjs",

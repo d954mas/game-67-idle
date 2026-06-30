@@ -15,6 +15,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { scanPackManifestSource } from "../storage/manifests/manifest.mjs";
 import { decideLicense, isPublishable } from "../storage/license/restricted.mjs";
 import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
+import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 
 const PULL_PACK = "library-pulls";
 
@@ -85,6 +86,10 @@ function localRecord(record, resource, preview, ts) {
     attribution_required: record.attribution_required || (decision.attributionRequired ? "true" : "false"),
     notice_required: record.notice_required || (decision.noticeRequired ? "true" : "false"),
     credit_text: record.credit_text || "",
+    commercial_use: record.commercial_use || "",
+    modification_allowed: record.modification_allowed || "",
+    redistribution_allowed: record.redistribution_allowed || "",
+    publish: record.publish || "",
     resource,
     preview,
     tags: record.tags || [],
@@ -139,6 +144,8 @@ async function main() {
   console.log(a.apply ? `\nlinked ${written.length} asset(s) into ${to} (source_id set).` : `\ndry-run only - pass --apply to write.`);
 }
 
-main().catch((e) => { console.error(e.message); process.exit(1); });
+if (isMain(import.meta.url)) {
+  main().catch((e) => { console.error(e.message); process.exit(1); });
+}
 
 export { parseArgs, localRecord };
