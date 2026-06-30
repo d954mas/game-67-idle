@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-06-30T13:30:21.672Z",
+  "generatedAt": "2026-06-30T13:36:07.558Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
@@ -14,8 +14,8 @@
     "tasks/epics"
   ],
   "summary": {
-    "mappedPaths": 126,
-    "scannedFiles": 277,
+    "mappedPaths": 128,
+    "scannedFiles": 279,
     "missingInRepo": 0,
     "duplicateMappings": 0,
     "unmappedInAiStudio": 0,

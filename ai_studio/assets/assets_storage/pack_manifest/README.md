@@ -63,3 +63,16 @@ extensions that are present under the source but not covered by `assets.jsonl`
 are still indexed as `origin: unregistered`, `license: unknown`, and tagged
 `unregistered`. This makes forgotten files visible so they can be accepted,
 documented, moved, or deleted intentionally.
+
+## OKF Pack Export
+
+Use the exporter when a reviewed legacy OKF pack is ready to become a
+self-contained Pack Manifest source:
+
+```powershell
+node ai_studio/assets/assets_storage/pack_manifest/export_okf_pack.mjs --pack animated-enemies --out tmp/ai_studio/pack_manifest_exports
+```
+
+The exporter writes `pack.json`, `assets.jsonl`, copied asset files, and copied
+previews under `<out>/packs/<pack-id>/`. The output can be opened by Asset Index
+or Asset Viewer like any other manifest-backed source.
