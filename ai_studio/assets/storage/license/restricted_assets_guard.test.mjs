@@ -119,7 +119,15 @@ test("per-game exception exact starter UI file passes", () => {
 test("publishability precedence: explicit publish overrides license", () => {
   assert.equal(isPublishable({ license: "CC0-1.0", publish: "false" }), false);
   assert.equal(isPublishable({ license: "Proprietary", redistribution_allowed: "true", publish: "true", license_url: "https://example.test/eula" }), false);
-  assert.equal(isPublishable({ license: "Studio Custom", redistribution_allowed: "true", publish: "true", license_url: "https://example.test/license" }), true);
+  assert.equal(isPublishable({ license: "Studio Custom", redistribution_allowed: "true", publish: "true", license_url: "https://example.test/license" }), false);
+  assert.equal(isPublishable({
+    license: "Studio Custom",
+    redistribution_allowed: "true",
+    commercial_use: "true",
+    modification_allowed: "true",
+    publish: "true",
+    license_url: "https://example.test/license",
+  }), true);
   assert.equal(isPublishable({ license: "" }), false);
   assert.equal(isPublishable({ license: "OFL-1.1" }), true);
   assert.equal(requiresNotice({ license: "OFL-1.1" }), true);

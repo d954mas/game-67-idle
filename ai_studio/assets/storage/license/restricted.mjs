@@ -5,12 +5,13 @@ import {
   decideLicense,
   hasAttributionInfo,
   hasNoticeInfo,
+  validateLicenseRecord,
 } from "./registry.mjs";
 
 export { decideLicense, hasAttributionInfo, hasNoticeInfo, validateLicenseRecord } from "./registry.mjs";
 
 export function isPublishable(fm = {}) {
-  return decideLicense(fm).publishable;
+  return validateLicenseRecord(fm, { forPublicBinary: true }).ok;
 }
 
 export function requiresAttribution(fm = {}) {
