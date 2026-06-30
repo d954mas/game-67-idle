@@ -1,22 +1,28 @@
-// Unified AI Studio local server. Prefer start_site.mjs for normal use.
+// Unified AI Studio local server. Prefer start_site_windows.ps1 for browser use on Windows.
 //
 // Foreground debug:
 //   node ai_studio/studio_shell/server.mjs
 //   node ai_studio/studio_shell/server.mjs 8780
 
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTaskboardApi } from "../taskboard/api.mjs";
 import { findRoot } from "../taskboard/lib.mjs";
+import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/asset_viewer/api.mjs";
 
 const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const root = findRoot(repoGuess);
 const aiStudioRoot = join(root, "ai_studio");
 const taskboardPublic = join(aiStudioRoot, "taskboard", "public");
+const assetViewerRoot = join(aiStudioRoot, "assets", "asset_viewer");
+const assetPreviewPipelineRoot = join(aiStudioRoot, "assets", "assets_storage", "preview_pipeline");
 const port = Number.parseInt(process.argv[2] || process.env.AI_STUDIO_PORT || "8765", 10);
 const handleTaskboardApi = createTaskboardApi(root);
+const handleAssetViewerApi = createAssetViewerApi(root);
+const stateDir = join(root, ".tmp", "ai_studio");
+const pidFile = join(stateDir, `studio_shell_${port}.pid`);
 
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -25,6 +31,14 @@ const mime = {
   ".json": "application/json; charset=utf-8",
   ".md": "text/plain; charset=utf-8",
   ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json; charset=utf-8",
+  ".hdr": "image/vnd.radiance",
 };
 
 function safeResolve(base, relativePath) {
@@ -55,6 +69,19 @@ function staticPath(pathname) {
     return safeResolve(taskboardPublic, pathname.slice("/taskboard/".length));
   }
 
+  if (pathname === "/asset_viewer" || pathname === "/asset_viewer/") {
+    return join(assetViewerRoot, "index.html");
+  }
+  if (pathname === "/asset_viewer/studio_env.hdr") {
+    return join(assetPreviewPipelineRoot, "studio_env.hdr");
+  }
+  if (pathname.startsWith("/asset_viewer/gallery/")) {
+    return resolveAssetViewerGalleryPath(root, pathname);
+  }
+  if (pathname.startsWith("/asset_viewer/")) {
+    return safeResolve(assetViewerRoot, pathname.slice("/asset_viewer/".length));
+  }
+
   if (pathname.startsWith("/ai_studio/")) {
     return safeResolve(root, pathname.slice(1));
   }
@@ -76,12 +103,16 @@ function serveStatic(req, res, url) {
 const server = createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   if (url.pathname.startsWith("/api/")) {
-    handleTaskboardApi(req, res, url);
+    handleAssetViewerApi(req, res, url).then((handled) => {
+      if (!handled) handleTaskboardApi(req, res, url);
+    });
   } else {
     serveStatic(req, res, url);
   }
 });
 
 server.listen(port, "127.0.0.1", () => {
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(pidFile, `${process.pid}\n`, "utf8");
   console.log(`ai_studio: http://127.0.0.1:${port}/  (repo: ${root})`);
 });

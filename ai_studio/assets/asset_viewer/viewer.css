@@ -1,14 +1,20 @@
 :root { color-scheme: dark; --col: 150px; }
 * { box-sizing: border-box; }
-body { margin: 0; font: 14px/1.4 system-ui, "Segoe UI", sans-serif; background: #0f1115; color: #e7e9ee; }
+body { margin: 0; background: #0f1115; color: #e7e9ee; }
+.asset-viewer-content { background: #0f1115; color: #e7e9ee; }
+.asset-viewer-root { min-height: 100vh; font: 14px/1.4 system-ui, "Segoe UI", sans-serif; }
 a { color: #7dd3fc; text-decoration: none; }
 button, select, input { font: inherit; }
 input, select { background: #0f1115; color: #e7e9ee; border: 1px solid #313845; border-radius: 6px; padding: 6px 9px; font-size: 13px; }
 button { background: #1f6feb; color: #fff; border: 0; border-radius: 6px; padding: 7px 12px; font-weight: 600; cursor: pointer; }
 button.ghost { background: #222834; }
+button.compact { padding: 6px 9px; font-size: 12px; }
 
 header { position: sticky; top: 0; z-index: 20; background: #161922; border-bottom: 1px solid #262b36; padding: 10px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 header h1 { font-size: 15px; margin: 0; white-space: nowrap; }
+.sourcepick { display: inline-flex; align-items: center; gap: 6px; color: #9ca3af; font-size: 12px; font-weight: 700; }
+.sourcepick select { min-width: 150px; max-width: 220px; }
+.source-status { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #6b7280; font-size: 12px; }
 .tabs { display: flex; gap: 2px; background: #0f1115; border: 1px solid #313845; border-radius: 8px; padding: 2px; }
 .tabs button { background: transparent; color: #9ca3af; padding: 5px 12px; font-weight: 600; }
 .tabs button.on { background: #1f6feb; color: #fff; }
@@ -30,6 +36,8 @@ header h1 { font-size: 15px; margin: 0; white-space: nowrap; }
 .active-bar .ac { background: #222834; border: 1px solid #313845; border-radius: 999px; padding: 2px 9px; font-size: 11px; cursor: pointer; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 190px)); justify-content: start; gap: 12px; padding: 14px 16px; }
+.morebar { padding: 0 16px 24px; }
+.morebar button { min-width: 180px; }
 .card { background: #161922; border: 1px solid #262b36; border-radius: 10px; overflow: hidden; cursor: pointer; content-visibility: auto; contain-intrinsic-size: 1px 200px; }
 .card:hover { border-color: #3b4555; }
 .card.sel { outline: 2px solid #7dd3fc; outline-offset: -2px; }
@@ -71,3 +79,6 @@ textarea { width: 100%; height: 120px; background: #0f1115; color: #86efac; bord
 
 .selbox { position: sticky; bottom: 0; z-index: 15; background: #161922; border-top: 1px solid #262b36; padding: 10px 16px; display: flex; gap: 10px; align-items: center; }
 .selbox textarea { height: 42px; flex: 1; }
+
+.empty-state { padding: 28px 16px; color: #9ca3af; }
+.empty-state.error { color: #e56a6a; }

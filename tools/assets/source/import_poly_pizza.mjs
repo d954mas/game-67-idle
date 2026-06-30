@@ -357,7 +357,7 @@ async function main() {
     writeFileSync(join(filesDir, fileName), glb);
 
     // Per-model previews are rendered with our shared studio HDR (one consistent
-    // look across the whole library) by tools/assets/render_library_previews.mjs,
+    // look across the whole library) by ai_studio/assets/assets_storage/preview_pipeline/render_library_previews.mjs,
     // NOT downloaded from poly.pizza. Pack covers DO use poly's image (--covers-only).
 
     writeRecord(lib, { assetId, packDir: w.packDir, fileName, name: meta.name, author: meta.author, license: meta.license, bytes: glb.length, hash, sourceUrl: SITE + "/m/" + w.id, ts });

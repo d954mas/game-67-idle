@@ -28,7 +28,7 @@ Keep source assets, generated outputs, and runtime packs traceable. Pair with
 ## Minimal Workflow
 
 1. Identify source of truth and generated/runtime outputs.
-2. Source before you generate: run `node tools/assets/source/find_assets.mjs`
+2. Source before you generate: run `node ai_studio/assets/assets_storage/okf_catalog/find_assets.mjs`
    to search the shared library by tags/resource, then the printed free CC0/OFL
    sources; record license/integrity/origin.
 3. For generated multi-asset work, create the art job before crop/pack ids.

@@ -14,7 +14,7 @@
 import { readFile, writeFile, mkdir, cp, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { scanLibrary, parseFrontmatter, DEFAULT_LIBRARY, KIND_DIR } from "../../../tools/assets/source/find_assets.mjs";
+import { scanLibrary, parseFrontmatter, DEFAULT_LIBRARY, KIND_DIR } from "../assets_storage/okf_catalog/find_assets.mjs";
 import { isPublishable, RESTRICTED_ROOT } from "../../../tools/assets/restricted.mjs";
 
 function parseArgs(argv) {

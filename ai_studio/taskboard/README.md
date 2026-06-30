@@ -19,7 +19,7 @@ reviewing raw ideas or archive state.
 Run it through Studio Shell:
 
 ```powershell
-node ai_studio/studio_shell/start_site.mjs --open
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```
 
 Open `/taskboard/`.

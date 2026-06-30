@@ -4,19 +4,20 @@
 // then place one preview.<ext> per asset. Defaults to webp (small, keeps alpha)
 // so thousands of previews stay storage-adequate.
 //
-//   node tools/assets/render_library_previews.mjs --source polypizza
-//   node tools/assets/render_library_previews.mjs --pack survival-kit --png
-//   node tools/assets/render_library_previews.mjs --all --limit 50
+//   node ai_studio/assets/assets_storage/preview_pipeline/render_library_previews.mjs --source polypizza
+//   node ai_studio/assets/assets_storage/preview_pipeline/render_library_previews.mjs --pack survival-kit --png
+//   node ai_studio/assets/assets_storage/preview_pipeline/render_library_previews.mjs --all --limit 50
 //
-// Uses tools/assets/render_thumbs.py with a @manifest (avoids the Windows command
-// line length limit) and glb::assetId stems (avoids basename collisions).
-import { existsSync, readdirSync, mkdirSync, writeFileSync, copyFileSync, rmSync, statSync } from "node:fs";
-import { join, resolve, dirname } from "node:path";
+// Uses render_thumbs.py with a @manifest (avoids the Windows command line
+// length limit) and glb::assetId stems (avoids basename collisions).
+import { existsSync, readdirSync, mkdirSync, writeFileSync, copyFileSync, rmSync } from "node:fs";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { scanLibrary, DEFAULT_LIBRARY } from "./source/find_assets.mjs";
+import { scanLibrary, DEFAULT_LIBRARY } from "../okf_catalog/find_assets.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+const ROOT = resolve(HERE, "..", "..", "..", "..");
 const BLENDERS = [
   "C:\\Program Files\\Blender Foundation\\Blender 4.3\\blender.exe",
   "C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe",
@@ -79,8 +80,8 @@ async function main() {
   // chunk (a single process over thousands of imports can OOM or die on a bad glb)
   // and lets us place results incrementally. The per-asset skip above makes the
   // whole run resumable across invocations too.
-  const outDir = join(HERE, "..", "..", "tmp", "lib_previews_out");
-  const manifest = join(HERE, "..", "..", "tmp", "lib_previews_manifest.txt");
+  const outDir = join(ROOT, "tmp", "lib_previews_out");
+  const manifest = join(ROOT, "tmp", "lib_previews_manifest.txt");
   const CHUNK = 200;
   const chunks = Math.ceil(items.length / CHUNK);
   let placed = 0;

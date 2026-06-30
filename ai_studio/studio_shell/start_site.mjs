@@ -1,4 +1,5 @@
-// Stable launcher for the AI Studio browser site.
+// Cross-platform launcher for the AI Studio browser site.
+// On this Windows/Codex setup, prefer start_site_windows.ps1 for persistent browser use.
 //
 // Usage:
 //   node ai_studio/studio_shell/start_site.mjs
@@ -6,8 +7,8 @@
 //   node ai_studio/studio_shell/start_site.mjs --port 8780
 //   node ai_studio/studio_shell/start_site.mjs --restart
 
-import { spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +26,7 @@ const url = `http://127.0.0.1:${port}/`;
 const pidFile = join(stateDir, `studio_shell_${port}.pid`);
 const outLog = join(stateDir, `studio_shell_${port}.out.log`);
 const errLog = join(stateDir, `studio_shell_${port}.err.log`);
+const runnerCmd = join(stateDir, `studio_shell_${port}.cmd`);
 
 mkdirSync(stateDir, { recursive: true });
 
@@ -42,18 +44,8 @@ if (alreadyRunning.ok) {
   process.exit(0);
 }
 
-const outFd = openSync(outLog, "a");
-const errFd = openSync(errLog, "a");
-const child = spawn(process.execPath, [serverPath, String(port)], {
-  cwd: repoRoot,
-  detached: true,
-  stdio: ["ignore", outFd, errFd],
-  windowsHide: true,
-});
-child.unref();
-closeSync(outFd);
-closeSync(errFd);
-writeFileSync(pidFile, `${child.pid}\n`, "utf8");
+rmIfExists(pidFile);
+const child = startServer();
 
 const started = await waitForServer(url, 5000);
 if (!started.ok) {
@@ -75,7 +67,7 @@ if (!started.ok) {
 
 maybeOpen(url, openBrowser);
 console.log(`AI Studio started: ${url}`);
-console.log(`pid: ${child.pid}`);
+console.log(`pid: ${readRecordedPid(pidFile) || child.pid || "unknown"}`);
 console.log(`logs: ${outLog} | ${errLog}`);
 
 function readPort(values) {
@@ -93,10 +85,71 @@ function stopRecordedProcess(path) {
   const pid = Number.parseInt(readFileSync(path, "utf8"), 10);
   if (!Number.isInteger(pid) || pid <= 0) return;
   try {
+    if (process.platform === "win32") {
+      spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" });
+      return;
+    }
     process.kill(pid);
   } catch {
     // The recorded process is already gone. The new start attempt will verify the port.
   }
+}
+
+function startServer() {
+  if (process.platform === "win32") return startWindowsServer();
+  return startPosixServer();
+}
+
+function startWindowsServer() {
+  writeFileSync(
+    runnerCmd,
+    [
+      "@echo off",
+      `cd /d "${repoRoot}"`,
+      `"${process.execPath}" "${serverPath}" ${port} >> "${outLog}" 2>> "${errLog}"`,
+      "",
+    ].join("\r\n"),
+    "utf8",
+  );
+
+  const command = `start "" /min cmd.exe /d /s /c ""${runnerCmd}""`;
+  const child = spawn("cmd.exe", ["/d", "/s", "/c", command], {
+    cwd: repoRoot,
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  child.unref();
+  return child;
+}
+
+function rmIfExists(path) {
+  try {
+    rmSync(path, { force: true });
+  } catch {
+    // Best effort: startup validation will fail if a stale file matters.
+  }
+}
+
+function startPosixServer() {
+  const outFd = openSync(outLog, "a");
+  const errFd = openSync(errLog, "a");
+  const child = spawn(process.execPath, [serverPath, String(port)], {
+    cwd: repoRoot,
+    detached: true,
+    stdio: ["ignore", outFd, errFd],
+    windowsHide: true,
+  });
+  child.unref();
+  closeSync(outFd);
+  closeSync(errFd);
+  return child;
+}
+
+function readRecordedPid(path) {
+  if (!existsSync(path)) return "";
+  const pid = Number.parseInt(readFileSync(path, "utf8"), 10);
+  return Number.isInteger(pid) && pid > 0 ? String(pid) : "";
 }
 
 function readUrl(targetUrl, timeoutMs = 1000) {

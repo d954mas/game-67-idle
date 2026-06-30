@@ -4,6 +4,7 @@
 
 It is not the owner of the tools it hosts. `architecture_map/` owns the map
 surface and map data. `taskboard/` owns the board surface and task state.
+`assets/asset_viewer/` owns the asset browsing launcher and galleries.
 
 ## Owned Here
 
@@ -13,37 +14,42 @@ surface and map data. `taskboard/` owns the board surface and task state.
 - Shared browser behavior for sidebar collapse: `studio_shell.js`.
 - Unified local server: `server.mjs`.
 - Stable local launcher: `start_site.mjs`.
+- Windows-safe launcher: `start_site_windows.ps1`.
 
 ## Start
 
 Use the launcher instead of starting `server.mjs` by hand:
 
 ```powershell
-node ai_studio/studio_shell/start_site.mjs --open
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
+```
+
+PowerShell 7 also works if `pwsh` is installed:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```
 
 Useful variants:
 
 ```powershell
-node ai_studio/studio_shell/start_site.mjs
-node ai_studio/studio_shell/start_site.mjs --restart
-node ai_studio/studio_shell/start_site.mjs --port 8780 --open
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Port 8780 -Open
 ```
 
 The launcher writes PID and logs to `.tmp/ai_studio/`, checks that the page
 really answers, and reports a clear error if the port is busy or the server
-does not start.
-
-On Windows, a minimal detached start command is also available:
+does not start. The `.cmd` wrapper uses the same Windows-safe launcher:
 
 ```powershell
 ai_studio\studio_shell\start_site.cmd
 ```
 
 Codex managed shell note: background child processes started inside the sandbox
-can be killed when the command finishes. When starting the site for browser use
-from Codex, run the Windows detached command outside the sandbox and then verify
-`http://127.0.0.1:8765/`.
+can be killed when the command finishes. When Codex starts this site for browser
+use, run `start_site_windows.ps1` outside the sandbox, then verify
+`http://127.0.0.1:8765/asset_viewer/` or the needed surface.
 
 ## Surface Rule
 
@@ -56,3 +62,4 @@ Current hosted surfaces:
 - `/` -> Studio Home.
 - `/architecture_map/` -> Architecture Map surface.
 - `/taskboard/` -> Taskboard surface.
+- `/asset_viewer/` -> Asset Viewer launcher.

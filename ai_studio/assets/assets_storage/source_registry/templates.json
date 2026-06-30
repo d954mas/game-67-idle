@@ -1,0 +1,12 @@
+{
+  "schema": "ai_studio.assets.templates.v1",
+  "templates": [
+    {
+      "id": "template",
+      "title": "Template",
+      "folder": "template",
+      "assets": "template/assets",
+      "status": "active"
+    }
+  ]
+}

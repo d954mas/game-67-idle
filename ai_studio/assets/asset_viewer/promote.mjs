@@ -12,7 +12,7 @@ import { readFile, writeFile, mkdir, cp, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, basename, extname } from "node:path";
 import { createHash } from "node:crypto";
-import { DEFAULT_LIBRARY, KIND_DIR } from "../../../tools/assets/source/find_assets.mjs";
+import { DEFAULT_LIBRARY, KIND_DIR } from "../assets_storage/okf_catalog/find_assets.mjs";
 import { catalogFrontmatter } from "../../../tools/lib/asset_catalog.mjs";
 import { isMain } from "../../../tools/lib/cli.mjs";
 import { LICENSE_URLS } from "../../../tools/lib/licenses.mjs";

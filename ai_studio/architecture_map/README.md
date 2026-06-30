@@ -32,7 +32,7 @@ stable color in the page legend.
 
 ```powershell
 node ai_studio/architecture_map/validate_map.mjs
-node ai_studio/studio_shell/start_site.mjs --open
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```
 
 Default URL:

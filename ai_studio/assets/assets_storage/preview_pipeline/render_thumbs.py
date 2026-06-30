@@ -1,6 +1,6 @@
 # Headless GLB -> isometric thumbnail PNG (Blender). Reusable asset-pipeline tool.
 #
-#   "<blender>" --background --python tools/assets/render_thumbs.py -- <outdir> <size> <a.glb> ...
+#   "<blender>" --background --python ai_studio/assets/assets_storage/preview_pipeline/render_thumbs.py -- <outdir> <size> <a.glb> ...
 #
 # Renders each glb from a fixed isometric angle (azimuth 45, elevation 30) with a
 # flat neutral light + transparent background, so library thumbnails are crisp and

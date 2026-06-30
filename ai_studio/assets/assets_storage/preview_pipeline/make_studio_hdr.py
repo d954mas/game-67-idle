@@ -8,16 +8,17 @@
 # ambient floor. Low ambient is what keeps the vertical faces visibly darker
 # than the top, so edges read clearly — the whole point of the preview.
 #
-#   python tools/assets/make_studio_hdr.py [out.hdr]
+#   python ai_studio/assets/assets_storage/preview_pipeline/make_studio_hdr.py [out.hdr]
 #
 # Output is a flat (non-RLE) Radiance RGBE file, read fine by both Blender and
 # three.js' RGBELoader. The ambient floor keeps every pixel's first byte well
 # above 2, so no scanline is misread as RLE.
 import sys
 import math
+import os
 import numpy as np
 
-OUT = sys.argv[1] if len(sys.argv) > 1 else "tools/assets/studio_env.hdr"
+OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "studio_env.hdr")
 W, H = 1024, 512
 
 

@@ -99,8 +99,21 @@
             "kind": "tool",
             "path": "ai_studio/studio_shell/start_site.cmd",
             "title": "start_site.cmd",
-            "description": "Small Windows wrapper for launching the AI Studio local server as a detached minimized process.",
+            "description": "Small Windows wrapper for the Windows-safe AI Studio launcher.",
             "role": "Windows AI Studio site launch helper",
+            "tags": [
+              "tool",
+              "server",
+              "windows"
+            ]
+          },
+          {
+            "id": "studio-shell:windows-safe-launcher",
+            "kind": "tool",
+            "path": "ai_studio/studio_shell/start_site_windows.ps1",
+            "title": "start_site_windows.ps1",
+            "description": "Windows-safe detached launcher for Codex and local browser use. It avoids managed-shell child-process cleanup, writes PID/log files, waits for HTTP readiness, and supports -Restart, -Open, and -Port.",
+            "role": "Windows-safe AI Studio site launch helper",
             "tags": [
               "tool",
               "server",
@@ -833,7 +846,7 @@
         "kind": "module",
         "moduleId": "assets",
         "color": "#0891b2",
-        "description": "Reviewed AI Studio asset modules. Starts with Asset Viewer; broader source search, intake, conversion, and gates stay in Not Refactored until separately reviewed.",
+        "description": "Reviewed AI Studio asset modules: browser viewing surfaces plus the storage layer for source registries, OKF catalog reading, and derived previews.",
         "tags": [
           "assets",
           "surface",
@@ -851,6 +864,334 @@
               "source",
               "contract",
               "assets"
+            ]
+          },
+          {
+            "id": "assets:assets-storage",
+            "title": "Assets Storage",
+            "subtitle": "sources, OKF catalog, previews",
+            "kind": "module",
+            "path": "ai_studio/assets/assets_storage",
+            "color": "#0e7490",
+            "description": "Storage layer for asset source registries, Markdown/OKF catalog reading, and derived preview preparation. The browser viewer consumes this layer but does not own it.",
+            "role": "asset storage and preparation layer",
+            "tags": [
+              "assets",
+              "storage",
+              "catalog",
+              "preview"
+            ],
+            "children": [
+              {
+                "id": "assets:assets-storage-readme",
+                "kind": "doc",
+                "path": "ai_studio/assets/assets_storage/README.md",
+                "title": "README.md",
+                "description": "Assets Storage module contract: source registries, OKF catalog reader, preview preparation, and boundary with Asset Viewer.",
+                "role": "assets storage module entrypoint",
+                "tags": [
+                  "assets",
+                  "storage",
+                  "source"
+                ]
+              },
+              {
+                "id": "assets:source-registry",
+                "title": "Source Registry",
+                "subtitle": "explicit asset roots",
+                "kind": "group",
+                "color": "#0e7490",
+                "description": "Explicit registry for game-local asset folders. Avoids guessing games by scanning the repository root.",
+                "role": "asset source registry",
+                "tags": [
+                  "assets",
+                  "storage",
+                  "registry"
+                ],
+                "children": [
+                  {
+                    "id": "assets:source-registry-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/assets_storage/source_registry/README.md",
+                    "title": "README.md",
+                    "description": "Source Registry contract: why game asset roots are explicit and how new games register asset folders.",
+                    "role": "source registry module entrypoint",
+                    "tags": [
+                      "assets",
+                      "registry",
+                      "source"
+                    ]
+                  },
+                  {
+                    "id": "assets:templates-registry-data",
+                    "kind": "config",
+                    "path": "ai_studio/assets/assets_storage/source_registry/templates.json",
+                    "title": "templates.json",
+                    "description": "Explicit registry of template asset folders shown by Asset Viewer.",
+                    "role": "registered template asset source data",
+                    "tags": [
+                      "assets",
+                      "registry",
+                      "source"
+                    ]
+                  },
+                  {
+                    "id": "assets:templates-registry-helper",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/assets_storage/source_registry/templates_registry.mjs",
+                    "title": "templates_registry.mjs",
+                    "description": "Small helper for reading, listing, and upserting template asset source records.",
+                    "role": "template asset registry helper",
+                    "tags": [
+                      "assets",
+                      "registry"
+                    ]
+                  },
+                  {
+                    "id": "assets:templates-registry-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/assets_storage/source_registry/tests/templates_registry.test.mjs",
+                    "title": "templates_registry.test.mjs",
+                    "description": "Regression tests for default template source listing and template source upserts.",
+                    "role": "template asset registry tests",
+                    "tags": [
+                      "assets",
+                      "test"
+                    ]
+                  },
+                  {
+                    "id": "assets:games-registry-data",
+                    "kind": "config",
+                    "path": "ai_studio/assets/assets_storage/source_registry/games.json",
+                    "title": "games.json",
+                    "description": "Explicit registry of game-local asset folders shown by Asset Viewer. Updated by tools/bootstrap/new_game.mjs.",
+                    "role": "registered game asset source data",
+                    "tags": [
+                      "assets",
+                      "registry",
+                      "source"
+                    ]
+                  },
+                  {
+                    "id": "assets:games-registry-helper",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/assets_storage/source_registry/games_registry.mjs",
+                    "title": "games_registry.mjs",
+                    "description": "Small helper for reading, listing, and upserting game asset source records.",
+                    "role": "game asset registry helper",
+                    "tags": [
+                      "assets",
+                      "registry"
+                    ]
+                  },
+                  {
+                    "id": "assets:games-registry-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/assets_storage/source_registry/tests/games_registry.test.mjs",
+                    "title": "games_registry.test.mjs",
+                    "description": "Regression tests for creating, listing, normalizing, and upserting registered game asset sources.",
+                    "role": "game asset registry tests",
+                    "tags": [
+                      "assets",
+                      "test"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "assets:okf-catalog",
+                "title": "OKF Catalog",
+                "subtitle": "markdown asset records",
+                "kind": "group",
+                "color": "#0e7490",
+                "description": "Markdown/OKF shared library reader and source-first search entrypoint. Binary files and derived previews remain in the asset storage folders referenced by catalog records.",
+                "role": "asset catalog reader and search",
+                "tags": [
+                  "assets",
+                  "storage",
+                  "okf",
+                  "catalog"
+                ],
+                "children": [
+                  {
+                    "id": "assets:okf-catalog-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/assets_storage/okf_catalog/README.md",
+                    "title": "README.md",
+                    "description": "OKF Catalog contract: catalog record reader, shared-library scan, source-first search, and legacy compatibility entrypoint.",
+                    "role": "OKF catalog module entrypoint",
+                    "tags": [
+                      "assets",
+                      "okf",
+                      "catalog"
+                    ]
+                  },
+                  {
+                    "id": "assets:okf-catalog-find-assets",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/assets_storage/okf_catalog/find_assets.mjs",
+                    "title": "find_assets.mjs",
+                    "description": "Reads OKF Markdown catalog records, joins pack metadata, searches the shared asset library, and exports scanLibrary for storage consumers.",
+                    "role": "OKF catalog reader and source-first search command",
+                    "tags": [
+                      "assets",
+                      "okf",
+                      "catalog",
+                      "source-first"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "assets:asset-index",
+                "title": "Asset Index",
+                "subtitle": "sqlite query layer",
+                "kind": "group",
+                "color": "#0e7490",
+                "description": "Local SQLite indexes, one per asset source, built from OKF catalog records or folder scans. Serves fast page, search, filter, pack, and model lookups for Asset Viewer without rescanning sources on each request.",
+                "role": "asset storage query index",
+                "tags": [
+                  "assets",
+                  "storage",
+                  "index",
+                  "sqlite"
+                ],
+                "children": [
+                  {
+                    "id": "assets:asset-index-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/assets_storage/asset_index/README.md",
+                    "title": "README.md",
+                    "description": "Asset Index contract: one generated SQLite database per source, explicit rebuild/refresh, public query API, no watch mode, and boundary with OKF Catalog, folder scans, and Asset Viewer.",
+                    "role": "asset index module entrypoint",
+                    "tags": [
+                      "assets",
+                      "index",
+                      "storage"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-index-tool",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/assets_storage/asset_index/asset_index.mjs",
+                    "title": "asset_index.mjs",
+                    "description": "Builds and queries the local asset SQLite index from OKF catalog records.",
+                    "role": "asset index API and rebuild helper",
+                    "tags": [
+                      "assets",
+                      "index",
+                      "sqlite"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-index-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/assets_storage/asset_index/tests/asset_index.test.mjs",
+                    "title": "asset_index.test.mjs",
+                    "description": "Regression tests for index rebuild, pack summary, search, filters, facets, paging, and model lookup.",
+                    "role": "asset index tests",
+                    "tags": [
+                      "assets",
+                      "index",
+                      "test"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "assets:preview-pipeline",
+                "title": "Preview Pipeline",
+                "subtitle": "derived preview preparation",
+                "kind": "group",
+                "color": "#0e7490",
+                "description": "Local storage preparation for derived asset previews. Currently renders GLB thumbnails through Blender and writes previews back under previews/<asset-id>/.",
+                "role": "asset preview preparation",
+                "tags": [
+                  "assets",
+                  "storage",
+                  "preview"
+                ],
+                "children": [
+                  {
+                    "id": "assets:preview-pipeline-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/assets_storage/preview_pipeline/README.md",
+                    "title": "README.md",
+                    "description": "Preview Pipeline contract: local preparation, Blender thumbnail generation, no watch mode, and viewer boundary.",
+                    "role": "preview pipeline module entrypoint",
+                    "tags": [
+                      "assets",
+                      "preview",
+                      "storage"
+                    ]
+                  },
+                  {
+                    "id": "assets:preview-pipeline-cache",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/assets_storage/preview_pipeline/preview_cache.mjs",
+                    "title": "preview_cache.mjs",
+                    "description": "Source-aware preview cache refresh used by Asset Viewer. Copies image previews, renders model thumbnails when possible, and rebuilds the selected source index.",
+                    "role": "asset preview cache refresher",
+                    "tags": [
+                      "assets",
+                      "preview",
+                      "cache"
+                    ]
+                  },
+                  {
+                    "id": "assets:preview-pipeline-render-library",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/assets_storage/preview_pipeline/render_library_previews.mjs",
+                    "title": "render_library_previews.mjs",
+                    "description": "Selects shared-library model assets and runs Blender thumbnail rendering in resumable chunks.",
+                    "role": "library preview render command",
+                    "tags": [
+                      "assets",
+                      "preview",
+                      "blender"
+                    ]
+                  },
+                  {
+                    "id": "assets:preview-pipeline-render-thumbs",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/assets_storage/preview_pipeline/render_thumbs.py",
+                    "title": "render_thumbs.py",
+                    "description": "Blender script that renders one isometric thumbnail per GLB using the shared studio HDR.",
+                    "role": "Blender GLB thumbnail renderer",
+                    "tags": [
+                      "assets",
+                      "preview",
+                      "blender"
+                    ]
+                  },
+                  {
+                    "id": "assets:preview-pipeline-make-hdr",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/assets_storage/preview_pipeline/make_studio_hdr.py",
+                    "title": "make_studio_hdr.py",
+                    "description": "Rebuilds the shared studio HDR used by Blender thumbnails and browser model-viewer lighting.",
+                    "role": "studio HDR generator",
+                    "tags": [
+                      "assets",
+                      "preview",
+                      "lighting"
+                    ]
+                  },
+                  {
+                    "id": "assets:preview-pipeline-hdr",
+                    "kind": "asset",
+                    "path": "ai_studio/assets/assets_storage/preview_pipeline/studio_env.hdr",
+                    "title": "studio_env.hdr",
+                    "description": "Shared studio environment used by generated model thumbnails and live 3D model previews.",
+                    "role": "shared preview lighting asset",
+                    "tags": [
+                      "assets",
+                      "preview",
+                      "lighting"
+                    ]
+                  }
+                ]
+              }
             ]
           },
           {
@@ -880,6 +1221,46 @@
                   "source",
                   "contract",
                   "assets"
+                ]
+              },
+              {
+                "id": "assets:asset-viewer-launcher",
+                "title": "Gallery Entry",
+                "subtitle": "source picker inside gallery",
+                "kind": "surface",
+                "color": "#0891b2",
+                "description": "Asset Viewer entry hosted at /asset_viewer/. The gallery itself lists available sources and switches between all assets, template assets, and the current game.",
+                "role": "asset viewer gallery entry",
+                "tags": [
+                  "surface",
+                  "assets",
+                  "gallery"
+                ],
+                "children": [
+                  {
+                    "id": "assets:asset-viewer-launcher-index",
+                    "kind": "surface",
+                    "path": "ai_studio/assets/asset_viewer/index.html",
+                    "title": "index.html",
+                    "description": "Asset Viewer browser entry. It loads the existing gallery UI and lets the user choose the displayed asset source from inside the gallery header.",
+                    "role": "asset viewer gallery document",
+                    "tags": [
+                      "surface",
+                      "assets"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-viewer-api",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/asset_viewer/api.mjs",
+                    "title": "api.mjs",
+                    "description": "Studio Shell API adapter for listing asset sources, opening the selected source in the gallery, rebuilding/querying the asset index, and resolving gallery media.",
+                    "role": "asset viewer HTTP API adapter",
+                    "tags": [
+                      "surface-adapter",
+                      "assets"
+                    ]
+                  }
                 ]
               },
               {
@@ -1178,7 +1559,7 @@
                 "subtitle": "QCLR",
                 "kind": "group",
                 "color": "#b45309",
-                    "description": "Rules for UI/UX, HUD, scene clarity, sprite readability/state clarity, feedback, interactive elements, responsive viewports, virtual controls, and player-facing presentation.",
+                "description": "Rules for UI/UX, HUD, scene clarity, sprite readability/state clarity, feedback, interactive elements, responsive viewports, virtual controls, and player-facing presentation.",
                 "role": "player clarity rules group",
                 "tags": [
                   "quality",
@@ -1546,6 +1927,32 @@
                 "tags": [
                   "legacy",
                   "profiling"
+                ]
+              },
+              {
+                "id": "not-refactored:new-game-bootstrap",
+                "kind": "tool",
+                "path": "tools/bootstrap/new_game.mjs",
+                "title": "new_game.mjs",
+                "description": "Legacy game bootstrap command. It copies template/ into a new game folder and now registers the game's asset root in AI Studio.",
+                "role": "legacy game bootstrap command",
+                "tags": [
+                  "legacy",
+                  "bootstrap",
+                  "assets"
+                ]
+              },
+              {
+                "id": "not-refactored:new-game-bootstrap-test",
+                "kind": "test",
+                "path": "tools/bootstrap/new_game.test.mjs",
+                "title": "new_game.test.mjs",
+                "description": "Regression test proving legacy game bootstrap registers game asset roots without touching the real repository.",
+                "role": "legacy game bootstrap test",
+                "tags": [
+                  "legacy",
+                  "bootstrap",
+                  "test"
                 ]
               },
               {

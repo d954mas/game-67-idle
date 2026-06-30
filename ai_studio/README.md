@@ -48,7 +48,9 @@ Load only the route that matches the current task:
 - AI Studio architecture and refactor tree: `ai_studio/tree.json` and
   `ai_studio/architecture_map/README.md`.
 - AI Studio browser entry point:
-  `node ai_studio/studio_shell/start_site.mjs --open`.
+  `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open`.
+- Asset browsing and review:
+  `http://127.0.0.1:8765/asset_viewer/`.
 - Architecture map validation report:
   `node ai_studio/architecture_map/validate_map.mjs`.
 
@@ -69,7 +71,7 @@ open it through the local server so it can fetch JSON data.
 
 ```powershell
 node ai_studio/architecture_map/validate_map.mjs
-node ai_studio/studio_shell/start_site.mjs --open
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```
 
 Open `http://127.0.0.1:8765/`. The map page reads `tree.json` and
