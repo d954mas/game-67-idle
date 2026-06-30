@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-06-30T21:47:25.133Z",
+  "generatedAt": "2026-06-30T22:07:09.756Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
@@ -14,12 +14,12 @@
     "tasks/epics"
   ],
   "summary": {
-    "mappedPaths": 239,
-    "scannedFiles": 272,
+    "mappedPaths": 251,
+    "scannedFiles": 268,
     "missingInRepo": 0,
     "duplicateMappings": 0,
     "unmappedInAiStudio": 0,
-    "unmappedLegacy": 34,
+    "unmappedLegacy": 19,
     "missingDescriptions": 0
   },
   "issues": {
@@ -47,51 +47,6 @@
       },
       {
         "path": ".codex/skills/game-state-management/SKILL.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/creative-intake-playbook.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/design-stewardship.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/gameplay-systems-playbook.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/gdd-core-gates.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/implementation-handoff-playbook.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/knowledge-capture-playbook.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/output-templates.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/playbook-map.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/quality-review-playbook.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/reference-research-playbook.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/skill-eval-playbook.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/studio-gdd-patterns.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/visual-proof-playbook.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/references/web-gdd-site-playbook.md"
-      },
-      {
-        "path": ".codex/skills/primary-gdd-pipeline/SKILL.md"
       },
       {
         "path": "tasks/epics/E001-pipeline-lean-cleanup.md"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "NT Primary GDD"
+  short_description: "Scope game concepts into first playable GDDs."
+  default_prompt: "Use $nt-primary-gdd to turn this game idea into a scoped first playable GDD with gates, proof, and handoff."

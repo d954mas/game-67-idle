@@ -9,5 +9,7 @@ knowledge lives in `gamedesign/knowledge/`; reusable source notes live in
 
 ## Groups
 
+- `gdd/`: primary GDD workflow, concept gates, gameplay loop specs, visual proof,
+  web GDD surfaces, and implementation handoff routing.
 - `knowledge/`: source routing, source intake, reusable knowledge promotion,
   reference-driven work, and templates for design knowledge files.

@@ -29,5 +29,5 @@ node --test ai_studio/game_project/game_project.test.mjs
 
 Use this module when starting or orienting the current playable game project.
 Use `ai_studio/bootstrap/` when copying the reusable template into a new game
-folder. Use `primary-gdd-pipeline` or future design/GDD modules for concept and
+folder. Use `nt-primary-gdd` and `ai_studio/game_design/gdd/` for concept and
 GDD content decisions.
