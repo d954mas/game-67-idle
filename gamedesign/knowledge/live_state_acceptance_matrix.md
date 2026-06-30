@@ -69,17 +69,10 @@ used for buttons, panels, icons, or other readable UI:
 Do not accept "looks fine in one full screenshot" as proof for generated UI
 assets with transparent/chroma edges.
 
-Reusable audit command:
-
-```powershell
-py -3.12 tools/assets/audit/audit_runtime_ui_edges.py `
-  --image <source-or-screenshot.png> `
-  --crop x1,y1,x2,y2 `
-  --family purple `
-  --max-pixels 0
-```
-
-Use `--family key --key-color r,g,b` for exact chroma-key audits.
+Use reviewed AI Studio asset-prep tools for source alpha/cutout evidence and
+Quality rules for player-facing proof. Source-sheet and cutout checks live under
+`ai_studio/assets/prep/`; broad player-facing acceptance lives under
+`ai_studio/quality/rules/player_clarity/` and `ai_studio/quality/rules/assets/`.
 
 ## Quality Review Usage
 

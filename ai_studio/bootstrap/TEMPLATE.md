@@ -180,9 +180,9 @@ one large file.
 
 ## GAME-ONLY (never in the template)
 
-`gamedesign/projects/<id>/`, per-game `tasks/active|epics|archive`, `tools/<id>/`,
-game-local asset source/storage folders, built runtime packs (`*.ntpack`), and
-game src modules (anything in `src/` beyond the seed files).
+`gamedesign/projects/<id>/`, per-game `tasks/active|epics|archive`, game-local
+runtime scripts, game-local asset source/storage folders, built runtime packs
+(`*.ntpack`), and game src modules (anything in `src/` beyond the seed files).
 
 ## Build approach
 

@@ -26,8 +26,8 @@ files, or one-piece screenshot art when the game needs reusable components.
 For any non-trivial generated art pass, treat this as an **art job**, not a
 loose conversation. The job owns the source paths, candidate policy,
 crop/slice9 data, runtime manifest, pack command, and native evidence path.
-Use `tools/assets/new_art_job.mjs` to scaffold the job when no suitable packet
-already exists.
+Use `ai_studio/assets/workflow/art_jobs/new_art_job.mjs` to scaffold the job
+when no suitable packet already exists.
 
 ## What Other Pipelines Suggest
 
@@ -83,7 +83,7 @@ Include:
 Quick scaffold:
 
 ```powershell
-node tools/assets/new_art_job.mjs --id character-lineup-v1 --family "starter character set" --target gamedesign/my-game/visuals/first-lineup-v1.png
+node ai_studio/assets/workflow/art_jobs/new_art_job.mjs --id character-lineup-v1 --family "starter character set" --target gamedesign/my-game/visuals/first-lineup-v1.png
 ```
 
 ## Fast Local Loop

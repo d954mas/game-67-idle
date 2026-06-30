@@ -10,7 +10,7 @@
 // SEED is copied into a new game once and then OWNED by that game (each game
 // customizes its own main/build_packs/shaders) — it is NOT synced back. Only
 // UNIVERSAL flows both ways. Everything matched by GAME_ONLY is never in the
-// template (game logic, pulled assets, per-game tasks/design/tools).
+// template (game logic, pulled assets, per-game tasks/design/runtime scripts).
 //
 // Keep this list authoritative; new_game.mjs, sync_to_template.mjs and
 // export_base.mjs all read it.
@@ -53,7 +53,6 @@ export const ENGINE_SUBMODULE = "external/neotolis-engine";
 export const GAME_ONLY = [
   /(^|[\\/])gamedesign[\\/]projects[\\/]/, // per-game GDD/design
   /(^|[\\/])tasks[\\/](active|epics|archive)[\\/]/, // per-game work items
-  /(^|[\\/])tools[\\/][a-z0-9]+(-[a-z0-9]+)*[\\/]/, // tools/<game-id>/ (reset removes them)
   /(^|[\\/])assets[\\/](source|catalog|licenses|previews|runtime|packs)[\\/]/, // pulled/built game assets
   /(^|[\\/])src[\\/](?!clean_seed_main|build_packs|game_audio|game_devapi_ui|game_storage|generated|devapi)/, // game src modules
   /\.ntpack$/, // built packs

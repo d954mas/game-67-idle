@@ -15,10 +15,10 @@ their own folders. Closed prototypes are git tags.
 harness, agents, skills, tools, architecture maps, asset workflows, technical
 workflows, and future production modules.
 
-Legacy AI/pipeline files may still live in root, `docs/`, `tools/`,
-`.codex/skills/`, `.claude/`, `tasks/`, and other historical locations. During
-refactoring, move only reviewed modules into `ai_studio/`. Do not delete legacy
-surfaces until their replacement and compatibility path are clear.
+Reviewed AI pipeline modules live in `ai_studio/`. Compatibility entrypoints may
+still exist in root, `.codex/skills/`, `.claude/`, and `tasks/`, but new
+AI-pipeline docs/tools should not be added to legacy `docs/` or `tools/`
+locations.
 
 ## Current Game
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Universal multi-state screenshot capture + acceptance-matrix writer.
 
-Game-agnostic. A per-game capture script (tools/<game-id>/capture_states.py)
-drives the game with its OWN DevAPI commands and calls `capture(tag)` at each key
-state. This helper owns the universal parts: the capture transport, coverage
-tracking, optional pixel-health, and writing the `game.live_state_acceptance_matrix`
-JSON that quality rules can use as state-coverage evidence.
+Game-agnostic. A game-owned capture script drives the game with its OWN DevAPI
+commands and calls `capture(tag)` at each key state. This helper owns the
+universal parts: the capture transport, coverage tracking, optional
+pixel-health, and writing the `game.live_state_acceptance_matrix` JSON that
+quality rules can use as state-coverage evidence.
 
 The taste of WHICH states matter is data (declared in the per-game art contract);
 HOW to reach each state is code (the per-game capture script). This helper is the

@@ -53,8 +53,8 @@ humans should use the knowledge base.
 - Added universal multi-state capture: `ai_studio/runtime_automation/state_capture.py`
   (`StateCapture`) captures one screenshot per key state and writes the
   `game.live_state_acceptance_matrix`. A new game plugs in one
-  `tools/<id>/capture_states.py` driver (see the "What A New Game Provides"
-  section + the template); everything else is universal.
+  game-owned capture driver near its project/runtime test harness; everything
+  else is universal.
 
 ## 2026-06-18
 
