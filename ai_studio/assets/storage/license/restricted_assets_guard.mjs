@@ -7,7 +7,7 @@
 // publication:
 //
 //   1. No file under assets/restricted/ is tracked (it is gitignored; catch -f adds).
-//   2. Every tracked binary under assets/packs/*/files/ either
+//   2. Every tracked binary under a game/template assets/ root either
 //      - resolves to a Pack Manifest record whose license is publishable, or
 //      - is on the narrow existing-asset allowlist.
 //      A missing manifest record or a non-publishable license fails.
@@ -47,6 +47,7 @@ export function deriveAssetId(path) {
 // Map<asset_id, manifest record>. allowlistPrefixes: path prefixes to skip.
 export function auditTrackedAssets(trackedFiles, {
   recordsByAssetId = new Map(),
+  recordsByPath = new Map(),
   allowlistPrefixes = [],
   release = false,
   isBinary = isAssetBinary,
@@ -66,14 +67,14 @@ export function auditTrackedAssets(trackedFiles, {
       continue;
     }
     if (!isBinary(p)) continue;
-    if (!/(?:^|\/)assets\/(packs|previews|meshes)\//.test(p)) continue;
+    if (!/(?:^|\/)assets\//.test(p)) continue;
     if (allowlistPrefixes.some((pre) => p.startsWith(pre))) continue;
     const { assetId } = deriveAssetId(p);
-    if (!assetId) {
+    const fm = assetId ? recordsByAssetId.get(assetId) : recordsByPath.get(p);
+    if (!assetId && !fm) {
       violations.push({ path: p, reason: "binary asset with no manifest mapping and not on the legacy allowlist - record a license or move it to assets/restricted/" });
       continue;
     }
-    const fm = recordsByAssetId.get(assetId);
     if (!fm) {
       violations.push({ path: p, reason: `no manifest record for asset_id '${assetId}' - every committed asset needs a recorded license` });
       continue;
@@ -134,16 +135,21 @@ function readJsonl(path) {
 }
 
 function loadManifestRecords(root) {
-  const map = new Map();
+  const byAssetId = new Map();
+  const byPath = new Map();
   for (const aroot of assetRoots(root)) {
     for (const f of walk(join(root, aroot, "packs"))) {
       if (!f.endsWith("assets.jsonl")) continue;
       for (const record of readJsonl(f)) {
-        if (record.asset_id) map.set(record.asset_id, record);
+        if (record.asset_id) byAssetId.set(record.asset_id, record);
+        const resource = String(record.source_resource || record.resource || "").replace(/\\/g, "/").replace(/^\/+/, "");
+        if (resource) byPath.set(`${aroot}/${resource}`, record);
+        const preview = String(record.source_preview || record.preview || "").replace(/\\/g, "/").replace(/^\/+/, "");
+        if (preview) byPath.set(`${aroot}/${preview}`, record);
       }
     }
   }
-  return map;
+  return { byAssetId, byPath };
 }
 
 function loadAllowlist(root) {
@@ -171,8 +177,10 @@ export function main() {
     console.log("ok: restricted asset guard skipped (not a git repo / git unavailable)");
     return;
   }
+  const records = loadManifestRecords(root);
   const { ok, violations, warnings } = auditTrackedAssets(tracked, {
-    recordsByAssetId: loadManifestRecords(root),
+    recordsByAssetId: records.byAssetId,
+    recordsByPath: records.byPath,
     allowlistPrefixes: loadAllowlist(root),
     release,
   });

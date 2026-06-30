@@ -83,14 +83,28 @@ function normalizePack(sourceRoot, packDir, pack) {
   };
 }
 
+function resolveAssetPath(sourceRoot, packDir, value = "", sourceRelative = false) {
+  if (!value) return "";
+  return safeResolve(sourceRelative ? sourceRoot : packDir, value);
+}
+
 function normalizeAsset(sourceRoot, packDir, pack, asset) {
   const packId = pack.pack || basename(packDir);
   const assetId = asset.asset_id || asset.id;
   if (!assetId) throw new Error(`${join(packDir, "assets.jsonl")}: asset row is missing asset_id`);
-  const resourcePath = asset.resource || asset.path || "";
-  const previewPath = asset.preview || "";
+  const resourcePath = asset.source_resource || asset.resource || asset.path || "";
+  const previewPath = asset.source_preview || asset.preview || "";
+  const resourceSourceRelative = Boolean(asset.source_resource);
+  const previewSourceRelative = Boolean(asset.source_preview);
   const modelPath = asset.model || (modelExt.has(extname(resourcePath).toLowerCase()) ? resourcePath : "");
-  const filesDir = resourcePath ? dirname(safeResolve(packDir, resourcePath)) : "";
+  const resolvedResource = resolveAssetPath(sourceRoot, packDir, resourcePath, resourceSourceRelative);
+  const resolvedPreview = resolveAssetPath(sourceRoot, packDir, previewPath, previewSourceRelative);
+  const resolvedModel = asset.source_model
+    ? resolveAssetPath(sourceRoot, packDir, asset.source_model, true)
+    : modelPath
+      ? resolveAssetPath(sourceRoot, packDir, modelPath, resourceSourceRelative)
+      : "";
+  const filesDir = resolvedResource ? dirname(resolvedResource) : "";
   return {
     asset_id: assetId,
     title: asset.title || assetId,
@@ -119,10 +133,10 @@ function normalizeAsset(sourceRoot, packDir, pack, asset) {
     tags: uniqueList(pack.tags, asset.tags),
     genre: uniqueList(pack.genre, asset.genre),
     style: uniqueList(pack.style, asset.style),
-    resource: resourcePath ? relPosix(sourceRoot, safeResolve(packDir, resourcePath)) : "",
+    resource: resolvedResource ? relPosix(sourceRoot, resolvedResource) : "",
     filesDir,
-    modelPath: modelPath ? safeResolve(packDir, modelPath) : "",
-    preview: previewPath ? safeResolve(packDir, previewPath) : "",
+    modelPath: resolvedModel,
+    preview: resolvedPreview,
     metadataPath: join(packDir, "assets.jsonl"),
     sourceName: pack.source || "",
   };

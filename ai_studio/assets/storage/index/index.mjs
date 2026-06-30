@@ -11,7 +11,7 @@ import {
   writeSourceSnapshot,
 } from "../snapshots/snapshots.mjs";
 
-const schemaVersion = 6;
+const schemaVersion = 7;
 const previewCacheVersion = 1;
 const facetKeys = ["kind", "origin", "license", "source", "pack", "genre", "style", "tags"];
 const primaryExt = {
@@ -429,7 +429,7 @@ function scanFolderRecords(root, source, covered = null) {
     .filter((file) => !isCoveredPath(file.path, covered))
     .map((path) => {
       const ext = path.ext;
-      const rel = path.repoRel;
+      const rel = path.sourceRel;
       const kind = path.kind;
       const abs = path.path;
 
@@ -472,7 +472,7 @@ function listSourceAssetFiles(root, source, shouldSkipDir = null) {
       const ext = extname(path).toLowerCase();
       const repoRel = relPosix(root, path);
       const sourceRel = relPosix(source.path, path);
-      const kind = assetKind(ext, repoRel);
+      const kind = assetKind(ext, sourceRel);
       return kind ? { path, repoRel, sourceRel, ext, kind } : null;
     })
     .filter(Boolean);

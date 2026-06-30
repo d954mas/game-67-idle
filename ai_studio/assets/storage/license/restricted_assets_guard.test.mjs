@@ -65,6 +65,19 @@ test("binary with no manifest and not allowlisted is a violation", () => {
   assert.match(r.violations[0].reason, /no manifest record/);
 });
 
+test("unmanifested public UI binary is a violation", () => {
+  const r = auditTrackedAssets(["template/assets/ui/button.png"], { recordsByAssetId: new Map() });
+  assert.equal(r.ok, false);
+  assert.match(r.violations[0].reason, /no manifest mapping/);
+});
+
+test("source-root manifest record allows public UI binary", () => {
+  const r = auditTrackedAssets(["template/assets/ui/button.png"], {
+    recordsByPath: new Map([["template/assets/ui/button.png", CC0]]),
+  });
+  assert.equal(r.ok, true, JSON.stringify(r.violations));
+});
+
 test("legacy allowlist prefix passes", () => {
   const r = auditTrackedAssets(["assets/meshes/foo_cc0.glb"], { allowlistPrefixes: ["assets/meshes/"] });
   assert.equal(r.ok, true, JSON.stringify(r.violations));
@@ -72,7 +85,7 @@ test("legacy allowlist prefix passes", () => {
 
 test("non-asset files are ignored", () => {
   const r = auditTrackedAssets(
-    ["assets/packs/pack/README.md", "assets/shaders/a.frag", "tasks/evidence/shot.png"],
+    ["assets/packs/pack/README.md", "assets/shaders/a.frag", "assets/shaders/a.vert", "tasks/evidence/shot.png"],
     {},
   );
   assert.equal(r.ok, true, JSON.stringify(r.violations));
@@ -97,6 +110,10 @@ test("deriveAssetId handles a game-folder prefix", () => {
 
 test("per-game allowlist prefix passes (template starter mesh)", () => {
   assert.equal(auditTrackedAssets(["template/assets/meshes/cube.glb"], { allowlistPrefixes: ["template/assets/meshes/"] }).ok, true);
+});
+
+test("per-game allowlist exact starter UI file passes", () => {
+  assert.equal(auditTrackedAssets(["template/assets/ui/button.png"], { allowlistPrefixes: ["template/assets/ui/button.png"] }).ok, true);
 });
 
 test("publishability precedence: explicit publish overrides license", () => {

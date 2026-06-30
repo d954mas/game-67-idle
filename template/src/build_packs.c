@@ -70,9 +70,9 @@ int main(int argc, char *argv[]) {
     nt_builder_add_mesh(ctx, "assets/meshes/cube.glb",
                         &(nt_mesh_opts_t){.layout = mesh_layout, .stream_count = 2, .tangent_mode = NT_TANGENT_NONE});
 
-    // UV-grid texture for the textured mesh path. Source-first found no library/CC0
-    // surface texture (find_assets --kind texture: miss; no network), so the template
-    // ships a generated checker test-grid — the canonical textured-mesh teaching asset.
+    // UV-grid texture for the textured mesh path. Source-first search did not find
+    // a better CC0 surface texture for the starter template, so the template ships
+    // a generated checker test-grid - the canonical textured-mesh teaching asset.
     // Swap in a sourced CC0 texture (nt_builder_add_texture) when one is available.
     enum { UV_TEX = 256, UV_CELL = 32 };
     static uint8_t uv_pixels[UV_TEX * UV_TEX * 4];

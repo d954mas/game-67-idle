@@ -40,8 +40,9 @@ dumps a whole game into one file. Keep them.
 
 ## Assets
 
-- Reuse first: the shared asset library has thousands of engine-ready glb. Discover
-  with `find_assets.mjs --genre/--tags`, pull with `pull.mjs --apply`, render via the
-  pack pipeline. See skill `game-3d-models`. Generate only what you can't source.
+- Reuse first: the shared asset library has thousands of reusable game assets.
+  Search with `node ai_studio/assets/storage/search.mjs --query "<need>" --kind <kind> --json`,
+  pull with `node ai_studio/assets/viewer/pull.mjs --ids <asset-id> --to <game>/assets --apply`,
+  then pack from the game-local asset copy. Generate only what you can't source.
 - All on-screen text uses the engine text renderer + a real font — never hand-drawn
   pixel/shape text.

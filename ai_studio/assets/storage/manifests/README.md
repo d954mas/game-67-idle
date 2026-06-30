@@ -64,6 +64,18 @@ Paths in `assets.jsonl` are relative to the pack directory. They must not escape
 the pack directory. Pack metadata is inherited by each asset and asset-level
 fields may refine it.
 
+Template and game-local sources may also describe files that already live in the
+source root because game code loads them from stable local paths. Use explicit
+source-root fields instead of escaping the pack directory:
+
+```jsonl
+{"asset_id":"template__button__cc0","kind":"ui","source_resource":"ui/button.png","source_preview":"ui/button.png"}
+```
+
+`source_resource`, `source_preview`, and `source_model` are relative to the asset
+source root, not the pack directory. Use them only when the file intentionally
+stays in a game/template path such as `ui/`, `meshes/`, `audio/`, or `fonts/`.
+
 For CC-BY or any `attribution_required: true` asset, `credit_text` or
 `author_vendor` plus `source_page` are required before the asset is considered
 ready for project use. For notice-bearing licenses such as OFL, keep

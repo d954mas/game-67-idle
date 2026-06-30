@@ -280,8 +280,29 @@ test("rebuildAssetIndex indexes folder scan sources with the same query API", as
   assert.equal(page.total, 1);
   assert.equal(page.assets[0].kind, "model");
 
-  const model = await resolveIndexedModel(root, src, "template__assets__models__robot.glb");
+  const model = await resolveIndexedModel(root, src, "models__robot.glb");
   assert.equal(model.model, "lib/models/robot.glb");
+});
+
+test("raw unregistered files outside the repo use source-relative paths", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "asset-index-repo-root-"));
+  const external = mkdtempSync(join(tmpdir(), "asset-index-external-source-"));
+  t.after(() => {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(external, { recursive: true, force: true });
+  });
+  mkdirSync(join(external, "_incoming", "sample"), { recursive: true });
+  writeFileSync(join(external, "_incoming", "sample", "Box.glb"), "glb", "utf8");
+
+  const src = { id: "external-library", type: "library", label: "External", path: external };
+  await rebuildAssetIndex(root, src);
+  const page = await queryIndexedAssets(root, src, { q: "Box", offset: 0, limit: 24 });
+
+  assert.equal(page.total, 1);
+  assert.equal(page.assets[0].id, "_incoming__sample__Box.glb");
+  assert.equal(page.assets[0].relpath, "_incoming/sample/Box.glb");
+  const model = await resolveIndexedModel(root, src, "_incoming__sample__Box.glb");
+  assert.equal(model.model, "lib/_incoming/sample/Box.glb");
 });
 
 test("rebuildAssetIndex prefers pack manifests over raw folder scans", async (t) => {

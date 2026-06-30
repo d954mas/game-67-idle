@@ -55,3 +55,35 @@ test("scanPackManifestSource reads pack.json and assets.jsonl records", async (t
   assert.equal(records[0].modelPath, join(packDir, "files", "crate.glb"));
   assert.equal(records[0].preview, join(packDir, "previews", "crate.webp"));
 });
+
+test("scanPackManifestSource can describe source-root template files", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "pack-manifest-source-root-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  mkdirSync(join(root, "ui"), { recursive: true });
+  const packDir = join(root, "packs", "template-ui");
+  mkdirSync(packDir, { recursive: true });
+  writeFileSync(join(root, "ui", "button.png"), "png", "utf8");
+  writeFileSync(join(packDir, "pack.json"), JSON.stringify({
+    pack: "template-ui",
+    title: "Template UI",
+    source: "kenney",
+    kind: "ui",
+    origin: "sourced",
+    license: "CC0-1.0",
+  }, null, 2), "utf8");
+  writeFileSync(join(packDir, "assets.jsonl"), JSON.stringify({
+    asset_id: "kenney-ui__button__cc0-1-0",
+    title: "Button",
+    kind: "ui",
+    source_resource: "ui/button.png",
+    source_preview: "ui/button.png",
+  }) + "\n", "utf8");
+
+  const { records } = await scanPackManifestSource(root);
+
+  assert.equal(records.length, 1);
+  assert.equal(records[0].asset_id, "kenney-ui__button__cc0-1-0");
+  assert.equal(records[0].resource, "ui/button.png");
+  assert.equal(records[0].preview, join(root, "ui", "button.png"));
+});
