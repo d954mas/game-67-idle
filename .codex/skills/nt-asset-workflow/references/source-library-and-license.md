@@ -70,13 +70,18 @@ Use manifest intake for new reviewed asset sources:
 
 ```powershell
 node ai_studio/assets/storage/intake/stage.mjs --source-root <asset-source> --input <file-or-folder> --source <source> --slug <candidate>
-node ai_studio/assets/storage/intake/accept.mjs --source-root <asset-source> --source <source> --slug <candidate> --file <relative-file> --pack <pack-id> --asset-id <id> --kind <kind> --license <license> --license-url <url>
+node ai_studio/assets/storage/intake/accept.mjs --source-root <asset-source> --source <source> --slug <candidate> --file <relative-file> --pack <pack-id> --asset-id <id> --kind <kind> --license <license>
 node ai_studio/assets/storage/intake/reject.mjs --source-root <asset-source> --source <source> --slug <candidate>
 ```
 
 `stage` records provenance and hashes only. `accept` writes Pack Manifest
 metadata under `packs/` or `restricted/packs/` according to the license decision,
 then moves the candidate folder from `_incoming/` to `_accepted/` as audit trail.
+When accepting, record known license/provenance options: `--license-url`,
+`--source-page-url`, `--author-vendor`, and `--license-kind`.
+For custom/private/unknown licenses, pass explicit rights flags when known:
+`--commercial-use`, `--modification-allowed`, `--redistribution-allowed`, and
+`--publish`.
 
 ## License Gate
 

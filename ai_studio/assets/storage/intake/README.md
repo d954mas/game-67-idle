@@ -62,10 +62,14 @@ gitignored root for public game/template sources.
 
 ```powershell
 node ai_studio/assets/storage/intake/stage.mjs --source-root <asset-source> --input <file-or-folder> --source <site-or-owner> --slug <candidate>
-node ai_studio/assets/storage/intake/accept.mjs --source-root <asset-source> --source <site-or-owner> --slug <candidate> --file <relative-file> --pack <pack-id> --asset-id <id> --kind <kind> --license <license> --license-url <url> --title <title> --tags <a,b>
+node ai_studio/assets/storage/intake/accept.mjs --source-root <asset-source> --source <site-or-owner> --slug <candidate> --file <relative-file> --pack <pack-id> --asset-id <id> --kind <kind> --license <license>
 node ai_studio/assets/storage/intake/reject.mjs --source-root <asset-source> --source <site-or-owner> --slug <candidate>
 ```
 
-CC-BY attribution and notice metadata may be completed later during development,
-but `attribution_required` and `notice_required` must be recorded so release
-validation can find the debt.
+When accepting, also record known metadata with `--title`, `--tags`,
+`--license-url`, `--source-page-url`, `--author-vendor`, and `--license-kind`.
+For custom/private/unknown licenses, pass explicit rights flags when known:
+`--commercial-use`, `--modification-allowed`, `--redistribution-allowed`, and
+`--publish`. CC-BY attribution and notice metadata may be completed later during
+development, but source page, author/vendor, `--attribution-required`, and
+`--notice-required` should be recorded so release validation can find the debt.

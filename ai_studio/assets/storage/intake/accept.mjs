@@ -10,7 +10,7 @@ import { KIND_DIR } from "../kinds.mjs";
 import { defaultLibrarySourceRoot } from "../sources/libraries.mjs";
 
 function usage() {
-  return `usage: node ai_studio/assets/storage/intake/accept.mjs --source <source> --slug <slug> --file <relative-file> --pack <pack-id> --asset-id <id> --kind <kind> --license <license> --license-url <url> [options]
+  return `usage: node ai_studio/assets/storage/intake/accept.mjs --source <source> --slug <slug> --file <relative-file> --pack <pack-id> --asset-id <id> --kind <kind> --license <license> [options]
 
 Options:
   --source-root <path>              Asset source root. Defaults to the shared library.
@@ -18,16 +18,17 @@ Options:
   --description <text>
   --tags <a,b,c>
   --origin <mine|ai|sourced>        Default sourced.
-  --source-page-url <url>
-  --author-vendor <name>
-  --license-kind <kind>
-  --attribution-required <bool>
-  --notice-required <bool>
+  --source-page-url <url>           Public source/product page when known.
+  --author-vendor <name>            Author, vendor, or source owner when known.
+  --license-url <url>               License or terms URL when known.
+  --license-kind <kind>             cc|spdx|custom|private|unknown when known.
+  --attribution-required <bool>     Record release credit debt for CC-BY style assets.
+  --notice-required <bool>          Record third-party notice debt for OFL/SPDX style assets.
   --credit-text <text>
-  --commercial-use <bool>
-  --modification-allowed <bool>
-  --redistribution-allowed <bool>
-  --publish <true|false>
+  --commercial-use <bool>           Required before custom assets can be publishable.
+  --modification-allowed <bool>     Required before custom assets can be publishable.
+  --redistribution-allowed <bool>   Required before custom assets can be publishable.
+  --publish <true|false>            Override only when license evidence supports it.
   --overwrite                       Replace existing target file and asset row.`;
 }
 

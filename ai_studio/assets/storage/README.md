@@ -83,7 +83,7 @@ outputs, or sourced downloads:
 
 ```powershell
 node ai_studio/assets/storage/intake/stage.mjs --source-root <asset-source> --input <file-or-folder> --source <source> --slug <candidate>
-node ai_studio/assets/storage/intake/accept.mjs --source-root <asset-source> --source <source> --slug <candidate> --file <relative-file> --pack <pack-id> --asset-id <id> --kind <kind> --license <license> --license-url <url>
+node ai_studio/assets/storage/intake/accept.mjs --source-root <asset-source> --source <source> --slug <candidate> --file <relative-file> --pack <pack-id> --asset-id <id> --kind <kind> --license <license>
 node ai_studio/assets/storage/intake/reject.mjs --source-root <asset-source> --source <source> --slug <candidate>
 ```
 
@@ -92,6 +92,15 @@ node ai_studio/assets/storage/intake/reject.mjs --source-root <asset-source> --s
 visible to Asset Viewer while their binaries stay out of public git. Accepted
 candidate folders move from `_incoming/` to `_accepted/` as audit trail; rejected
 candidates move to `_rejected/`.
+
+When accepting, record known license/provenance options: `--license-url`,
+`--source-page-url`, `--author-vendor`, and `--license-kind`. For
+custom/private/unknown licenses, also pass explicit rights flags when known:
+`--commercial-use`, `--modification-allowed`, `--redistribution-allowed`, and
+`--publish`. CC-BY and notice-bearing assets may enter development without final
+credit text, but keep `--attribution-required`, `--notice-required`, source
+page, and author/vendor metadata so release validation can find the remaining
+credit/notice work.
 
 ## License Guard
 
