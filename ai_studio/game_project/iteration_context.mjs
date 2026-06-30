@@ -325,13 +325,13 @@ function buildContext(root, options = {}) {
         "src/main.c",
         "state/game_state.schema.json",
         "CMakePresets.json",
-        "tools/devapi",
+        "ai_studio/runtime_automation",
       ]
     : [
         existsSync(join(root, "src", "clean_seed_main.c")) ? "src/clean_seed_main.c" : "src/main.c",
         "state/game_state.schema.json",
         "CMakePresets.json",
-        "tools/devapi",
+        "ai_studio/runtime_automation",
       ];
   const runtimeSources = existing(root, runtimeCandidates);
 

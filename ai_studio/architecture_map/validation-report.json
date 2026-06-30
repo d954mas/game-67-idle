@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-06-30T20:40:17.919Z",
+  "generatedAt": "2026-06-30T20:48:24.525Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
@@ -14,12 +14,12 @@
     "tasks/epics"
   ],
   "summary": {
-    "mappedPaths": 196,
-    "scannedFiles": 267,
+    "mappedPaths": 209,
+    "scannedFiles": 268,
     "missingInRepo": 0,
     "duplicateMappings": 0,
     "unmappedInAiStudio": 0,
-    "unmappedLegacy": 68,
+    "unmappedLegacy": 56,
     "missingDescriptions": 0
   },
   "issues": {
@@ -146,42 +146,6 @@
       },
       {
         "path": "tasks/epics/E009-game-template-structure-for-future-games.md"
-      },
-      {
-        "path": "tools/devapi/capture_screen.ps1"
-      },
-      {
-        "path": "tools/devapi/capture_window.py"
-      },
-      {
-        "path": "tools/devapi/devapi_cli.py"
-      },
-      {
-        "path": "tools/devapi/devapi_client.py"
-      },
-      {
-        "path": "tools/devapi/iterate.py"
-      },
-      {
-        "path": "tools/devapi/pixel_health.py"
-      },
-      {
-        "path": "tools/devapi/png_io_test.py"
-      },
-      {
-        "path": "tools/devapi/png_io.py"
-      },
-      {
-        "path": "tools/devapi/record_screen_ffmpeg.ps1"
-      },
-      {
-        "path": "tools/devapi/state_capture_test.py"
-      },
-      {
-        "path": "tools/devapi/state_capture.py"
-      },
-      {
-        "path": "tools/devapi/ui_readability.py"
       },
       {
         "path": "tools/lib/cli.mjs"

@@ -11,7 +11,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ffmpeg = Get-Command ffmpeg -ErrorAction SilentlyContinue
 if ($null -eq $ffmpeg) {
-    throw "ffmpeg is not available in PATH. Install ffmpeg or use tools/devapi/capture_screen.ps1 for still screenshots."
+    throw "ffmpeg is not available in PATH. Install ffmpeg or use ai_studio/runtime_automation/capture_screen.ps1 for still screenshots."
 }
 
 $root = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..\..")

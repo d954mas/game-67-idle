@@ -39,7 +39,7 @@ checks.
 Reusable only with a compatible native/runtime stack:
 
 - `tools/state_codegen/`
-- `tools/devapi/`
+- `ai_studio/runtime_automation/`
 - `tools/perf/`
 
 Copy/adapt after engine/runtime policy is known.

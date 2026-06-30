@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the shared dependency-free PNG codec (tools/devapi/png_io.py)."""
+"""Tests for the shared dependency-free PNG codec."""
 
 from __future__ import annotations
 

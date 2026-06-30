@@ -18,9 +18,10 @@ from typing import Any, Iterable
 HOST = "127.0.0.1"
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 NATIVE_DEBUG_EXE = os.path.join(ROOT, "build", "game_seed", "native-debug", "game_seed.exe")
-CAPTURE_SCREEN_SCRIPT = os.path.join(ROOT, "tools", "devapi", "capture_screen.ps1")
-CAPTURE_WINDOW_SCRIPT = os.path.join(ROOT, "tools", "devapi", "capture_window.py")
-RECORD_SCREEN_SCRIPT = os.path.join(ROOT, "tools", "devapi", "record_screen_ffmpeg.ps1")
+RUNTIME_AUTOMATION_DIR = os.path.join(ROOT, "ai_studio", "runtime_automation")
+CAPTURE_SCREEN_SCRIPT = os.path.join(RUNTIME_AUTOMATION_DIR, "capture_screen.ps1")
+CAPTURE_WINDOW_SCRIPT = os.path.join(RUNTIME_AUTOMATION_DIR, "capture_window.py")
+RECORD_SCREEN_SCRIPT = os.path.join(RUNTIME_AUTOMATION_DIR, "record_screen_ffmpeg.ps1")
 ACTIVE_RECORDINGS: list["DevApiRecording"] = []
 LAUNCH_LOG_DIR = os.path.join(ROOT, "build", "logs")
 

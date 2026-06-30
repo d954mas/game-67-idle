@@ -14,6 +14,8 @@ public surface, internals, and validation path.
 - `assets/`: reviewed asset-facing modules, starting with Asset Viewer.
 - `game_project/`: reviewed active-game routing and prototype kickoff/context
   scaffolding.
+- `runtime_automation/`: reviewed local DevAPI, capture, screenshot health, and
+  UI readability proof helpers.
 - `core_harness/`: reviewed core routing and agent harness docs.
 - `core_harness/workflow/orchestration/`: reviewed early split rule for broad
   read-heavy subagent work.
@@ -48,6 +50,8 @@ Load only the route that matches the current task:
   `ai_studio/core_harness/profiling/README.md`.
 - Durable task state and task commands: `ai_studio/taskboard/README.md` and
   `node ai_studio/taskboard/cli.mjs context --json`.
+- Runtime evidence, DevAPI client, screenshots, pixel health, and UI
+  readability proof: `ai_studio/runtime_automation/README.md`.
 - AI Studio architecture and refactor tree: `ai_studio/tree.json` and
   `ai_studio/architecture_map/README.md`.
 - AI Studio browser entry point:

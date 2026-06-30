@@ -50,7 +50,7 @@ humans should use the knowledge base.
 - Added [Game Art Contract](art_contract.md): reusable per-game taste anchor
   (`art_contract.json`) for art direction fit review. The old product-gate CLI
   description was later removed during AI Studio quality-rule refactoring.
-- Added universal multi-state capture: `tools/devapi/state_capture.py`
+- Added universal multi-state capture: `ai_studio/runtime_automation/state_capture.py`
   (`StateCapture`) captures one screenshot per key state and writes the
   `game.live_state_acceptance_matrix`. A new game plugs in one
   `tools/<id>/capture_states.py` driver (see the "What A New Game Provides"

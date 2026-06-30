@@ -8,7 +8,7 @@ Replaces re-deriving 3-4 manual invocations every session. Game-agnostic (uses
 only the universal framebuffer + ui_readability). Pass --reuse to attach to an
 already-running game and pay the ~1.7s launch only once per session.
 
-Usage: py -3.12 tools/devapi/iterate.py [port] [--reuse]
+Usage: py -3.12 ai_studio/runtime_automation/iterate.py [port] [--reuse]
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ def main() -> int:
     print(f"shot: {shot_path}")
 
     subprocess.run(
-        [sys.executable, str(Path(ROOT, "tools", "devapi", "ui_readability.py")), shot_path],
+        [sys.executable, str(Path(ROOT, "ai_studio", "runtime_automation", "ui_readability.py")), shot_path],
         cwd=ROOT,
     )
     print("\nnext: review the screen against ai_studio/quality/rules/player_clarity and rules/art:")

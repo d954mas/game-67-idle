@@ -99,3 +99,7 @@ class StateCapture:
     def evidence_lines(self) -> list[str]:
         """Return compact state:evidence lines for quality review notes."""
         return [f"{entry['tag']}: {entry['evidence']}" for entry in self.covered]
+
+    def shots_args(self) -> list[str]:
+        """Return `--shot tag:path` arguments for review tools."""
+        return [f"--shot {entry['tag']}:{entry['evidence']}" for entry in self.covered]

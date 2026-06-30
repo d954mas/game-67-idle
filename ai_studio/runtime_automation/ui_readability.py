@@ -10,7 +10,7 @@ background" failure (dark text/outline pixels whose local background is bright =
 no solid plate behind the text -> low contrast).
 
 Usage:
-  py -3.12 tools/devapi/ui_readability.py <screenshot.png> [--out montage.png]
+  py -3.12 ai_studio/runtime_automation/ui_readability.py <screenshot.png> [--out montage.png]
       [--region top=0,0,1,0.30 ...]   (fractions x0,y0,x1,y1; repeatable)
 
 Default regions: a top band (HUD) and a bottom band (panel), full width.
