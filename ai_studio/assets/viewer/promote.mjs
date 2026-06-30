@@ -11,10 +11,10 @@ import { readFile, writeFile, mkdir, cp, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, basename, extname } from "node:path";
 import { createHash } from "node:crypto";
-import { DEFAULT_ASSET_SOURCE_ROOT } from "../storage/defaults.mjs";
 import { KIND_DIR } from "../storage/kinds.mjs";
 import { isMain } from "../../../tools/lib/cli.mjs";
 import { LICENSE_URLS, boolText, decideLicense, validateLicenseRecord } from "../storage/license/registry.mjs";
+import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
 
 // review-kind -> library-kind, for legacy manifests; new manifests already carry
 // a library kind, so this is only a fallback.
@@ -28,7 +28,7 @@ function kebab(s) {
 function parseArgs(argv) {
   const a = {
     manifest: "tmp/asset-review/review-manifest.json",
-    ids: "", library: DEFAULT_ASSET_SOURCE_ROOT, repo: process.cwd(),
+    ids: "", library: defaultLibrarySourceRoot(process.cwd()), repo: process.cwd(),
     source: "", license: "", licenseUrl: "", origin: "sourced", kind: "",
     pack: "", packTitle: "", packUrl: "", packGenre: "", packStyle: "", packTags: "", packDesc: "", packCover: "",
     sourcePageUrl: "", authorVendor: "",

@@ -17,14 +17,25 @@ stage  ->  review  ->  accept | reject  ->  refresh index/previews
 
 - `stage.mjs`: copy a file/folder into `_incoming/<source>/<slug>/` with hashes.
 - `accept.mjs`: move one staged file into `packs/<pack-id>/` or
-  `restricted/packs/<pack-id>/`, then append/update `assets.jsonl`.
+  `restricted/packs/<pack-id>/`, append/update `assets.jsonl`, then move the
+  staged candidate folder to `_accepted/<source>/<slug>/` as an audit trail.
 - `reject.mjs`: move a staged candidate into `_rejected/` or delete it.
+
+`_incoming/` means "not decided yet". Asset Index may show those files as
+`unregistered` so the user can see forgotten local additions. `_accepted/` and
+`_rejected/` are lifecycle/audit folders, not asset sources, and are not shown
+as unregistered assets.
+
+For older storage roots, Asset Index also suppresses `_incoming` files whose
+`intake.json` hash already matches a Pack Manifest record. This keeps accepted
+candidates from appearing twice without deleting external files.
 
 ## Source Layout
 
 ```text
 <asset-source>/
   _incoming/
+  _accepted/
   _rejected/
   packs/
     <pack-id>/

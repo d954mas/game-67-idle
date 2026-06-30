@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { queryIndexedAssets, refreshAssetIndex } from "./index/index.mjs";
-import { DEFAULT_ASSET_SOURCE_ROOT } from "./defaults.mjs";
+import { defaultLibrarySourceRoot } from "./sources/libraries.mjs";
 
 function parseCsv(value = "") {
   return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
@@ -12,7 +12,7 @@ function parseCsv(value = "") {
 function parseArgs(argv) {
   const args = {
     sourceId: "",
-    sourcePath: DEFAULT_ASSET_SOURCE_ROOT,
+    sourcePath: defaultLibrarySourceRoot(process.cwd()),
     type: "library",
     query: "",
     limit: 24,
@@ -55,7 +55,7 @@ function safeSlug(value) {
 }
 
 function sourceFromOptions(options) {
-  const sourcePath = resolve(options.sourcePath || DEFAULT_ASSET_SOURCE_ROOT);
+  const sourcePath = resolve(options.sourcePath || defaultLibrarySourceRoot(process.cwd()));
   const type = options.type || (options.mode === "library" ? "library" : "local");
   const sourceId = options.sourceId || (type === "library" ? "global-library" : `local-${safeSlug(basename(sourcePath))}`);
   return {

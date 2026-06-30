@@ -14,9 +14,10 @@ Current migrated modules:
 - `workflow/`: agent-facing generated-art workflows, prompt packets, generation
   records, and provenance checks.
 
-Asset sources are explicit. Templates are registered in `storage/sources/templates.json`;
-games are registered in `storage/sources/games.json`. Asset Viewer does not
-scan the repository to guess template or game folders.
+Asset sources are explicit. Global libraries are registered in
+`storage/sources/libraries.json`, templates in
+`storage/sources/templates.json`, and games in `storage/sources/games.json`.
+Asset Viewer does not scan the repository to guess source folders.
 
 Asset refresh is explicit. Do not add filesystem watch mode to this module.
 Local additions or edits should become visible through page reload, a manual

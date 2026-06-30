@@ -17,8 +17,8 @@ import { readFile, readdir, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, dirname, basename, extname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_ASSET_SOURCE_ROOT } from "../storage/defaults.mjs";
 import { scanPackManifestSource } from "../storage/manifests/manifest.mjs";
+import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
 import { isMain } from "../../../tools/lib/cli.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -212,7 +212,7 @@ function renderHtml({ mode, title, cards = [], packs = [] }) {
 }
 
 function parseArgs(argv) {
-  const a = { mode: "library", game: "", base: "clean-seed", library: DEFAULT_ASSET_SOURCE_ROOT, repo: process.cwd(), out: "tmp/asset-review", path: "", ref: false };
+  const a = { mode: "library", game: "", base: "clean-seed", library: defaultLibrarySourceRoot(process.cwd()), repo: process.cwd(), out: "tmp/asset-review", path: "", ref: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--ref") { a.ref = true; continue; } // reference library files in place (no media copy) - for huge libraries

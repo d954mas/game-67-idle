@@ -19,7 +19,8 @@ stable public route.
 
 The gallery header lets the user choose which source to display:
 
-- All Assets: the shared manifest-backed asset library.
+- All Assets: the shared manifest-backed asset library from
+  `ai_studio/assets/storage/sources/libraries.json`.
 - Templates: registered template asset roots from
   `ai_studio/assets/storage/sources/templates.json`.
 - Current Game: the active game assets folder from `GAME_PROJECT.md`, when one
@@ -81,6 +82,8 @@ node ai_studio/assets/viewer/pull.mjs --ids <asset-ids> --to <game>/assets
 - `api.mjs` lists available sources, opens the selected source in the gallery,
   rebuilds/queries `../storage/index/`, and maps gallery media back
   into the Studio Shell server.
+- `../storage/sources/libraries.json` is the explicit list of
+  registered global library roots.
 - `../storage/sources/templates.json` is the explicit list of
   registered template asset roots.
 - `../storage/sources/games.json` is the explicit list of

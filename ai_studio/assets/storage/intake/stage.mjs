@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { sha256File, sha256Hex } from "../../../../tools/lib/hash.mjs";
 import { isMain } from "../../../../tools/lib/cli.mjs";
-import { DEFAULT_ASSET_SOURCE_ROOT } from "../defaults.mjs";
+import { defaultLibrarySourceRoot } from "../sources/libraries.mjs";
 
 const ASSET_EXTS = new Set([
   ".glb", ".gltf", ".obj", ".fbx", ".bin", ".mtl",
@@ -42,7 +42,7 @@ export function safeSegment(value, label = "segment") {
 
 function parseArgs(argv) {
   const args = {
-    sourceRoot: DEFAULT_ASSET_SOURCE_ROOT,
+    sourceRoot: defaultLibrarySourceRoot(process.cwd()),
     license: "unknown",
     sourcePageUrl: "",
     manual: false,

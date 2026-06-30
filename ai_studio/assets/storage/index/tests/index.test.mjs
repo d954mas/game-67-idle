@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,6 +19,10 @@ function writeJson(path, data) {
 
 function writeJsonl(path, records) {
   writeFileSync(path, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
+}
+
+function sha256Text(value) {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 function tempLibrary() {
@@ -303,6 +308,55 @@ test("raw unregistered files outside the repo use source-relative paths", async 
   assert.equal(page.assets[0].relpath, "_incoming/sample/Box.glb");
   const model = await resolveIndexedModel(root, src, "_incoming__sample__Box.glb");
   assert.equal(model.model, "lib/_incoming/sample/Box.glb");
+});
+
+test("accepted incoming candidates are not indexed as unregistered duplicates", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "asset-index-accepted-incoming-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const library = join(root, "library");
+  const packDir = join(library, "packs", "legacy-model");
+  const incomingDir = join(library, "_incoming", "khronos", "box-glb");
+  const acceptedDir = join(library, "_accepted", "old-source", "old-slug");
+  mkdirSync(join(packDir, "files", "khronos__box-glb__cc-by-4-0"), { recursive: true });
+  mkdirSync(incomingDir, { recursive: true });
+  mkdirSync(acceptedDir, { recursive: true });
+  const bytes = "same glb bytes";
+  const hash = sha256Text(bytes);
+  writeFileSync(join(packDir, "files", "khronos__box-glb__cc-by-4-0", "Box.glb"), bytes, "utf8");
+  writeFileSync(join(incomingDir, "Box.glb"), bytes, "utf8");
+  writeFileSync(join(acceptedDir, "old.glb"), "accepted audit bytes", "utf8");
+  writeJson(join(incomingDir, "intake.json"), {
+    status: "incoming",
+    source: "khronos",
+    slug: "box-glb",
+    files: [{ path: "Box.glb", sha256: hash }],
+  });
+  writeJson(join(packDir, "pack.json"), {
+    pack: "legacy-model",
+    title: "Legacy Model",
+    source: "khronos",
+    kind: "model",
+    license: "CC-BY-4.0",
+    origin: "sourced",
+  });
+  writeJsonl(join(packDir, "assets.jsonl"), [{
+    asset_id: "khronos__box-glb__cc-by-4-0",
+    title: "Khronos Box GLB",
+    kind: "model",
+    resource: "files/khronos__box-glb__cc-by-4-0/Box.glb",
+    license: "CC-BY-4.0",
+    origin: "sourced",
+  }]);
+
+  const src = source(library);
+  const result = await rebuildAssetIndex(root, src);
+  assert.equal(result.assetCount, 1);
+
+  const unregistered = await queryIndexedAssets(root, src, { filters: { origin: ["unregistered"] }, offset: 0, limit: 24 });
+  assert.equal(unregistered.total, 0);
+  const page = await queryIndexedAssets(root, src, { q: "Khronos", offset: 0, limit: 24 });
+  assert.equal(page.total, 1);
+  assert.equal(page.assets[0].id, "khronos__box-glb__cc-by-4-0");
 });
 
 test("rebuildAssetIndex prefers pack manifests over raw folder scans", async (t) => {

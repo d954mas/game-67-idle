@@ -29,6 +29,7 @@ All reviewed sources should move toward the same layout:
 <asset-source>/
   asset_source.json
   _incoming/
+  _accepted/
   _rejected/
   packs/
     <pack-id>/
@@ -88,7 +89,9 @@ node ai_studio/assets/storage/intake/reject.mjs --source-root <asset-source> --s
 
 `accept.mjs` writes Pack Manifest metadata. Publishable assets go under
 `packs/`; non-publishable assets go under `restricted/packs/` so they remain
-visible to Asset Viewer while their binaries stay out of public git.
+visible to Asset Viewer while their binaries stay out of public git. Accepted
+candidate folders move from `_incoming/` to `_accepted/` as audit trail; rejected
+candidates move to `_rejected/`.
 
 ## License Guard
 
@@ -124,6 +127,8 @@ node ai_studio/assets/storage/search.mjs --source-path template/assets --source-
 node ai_studio/assets/storage/search.mjs --query "metal floor" --license CC0 --json
 ```
 
-`search.mjs` refreshes the selected source index first. Unchanged sources use a
-cheap snapshot check; changed sources rebuild from Pack Manifest metadata or a
-raw folder scan.
+`search.mjs` defaults to active `global-library` from
+`sources/libraries.json`, then refreshes the selected source index first. If
+that source is disabled, it falls back to another active library. Unchanged
+sources use a cheap snapshot check; changed sources rebuild from Pack Manifest
+metadata or a raw folder scan.

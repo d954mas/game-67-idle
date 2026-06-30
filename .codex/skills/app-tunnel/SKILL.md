@@ -27,7 +27,7 @@ Examples:
 ## What to serve
 
 - Asset viewer: `ai_studio/assets/viewer/build_review.mjs` output dir (pick from phone).
-- A wasm game build dir (self-contained index.html + .wasm/.js/.data) в†’ play remotely.
+- A wasm game build dir (self-contained index.html + .wasm/.js/.data) -> play remotely.
 - Any self-contained static page.
 
 ## Rules
@@ -35,7 +35,7 @@ Examples:
 - The URL is PUBLIC and UNAUTHENTICATED while the task runs. Do not serve secrets,
   source, or private data. Quick tunnels are ephemeral (a new URL each run).
 - Serve SELF-CONTAINED content: relative URLs only. `file://` references (e.g. the
-  asset viewer's local previews) will not load on a remote device вЂ” copy media into
+  asset viewer's local previews) will not load on a remote device; copy media into
   the served dir and reference it relatively, or use CDN assets (e.g. model-viewer).
 - Tear down the background task when the lead is done viewing.
 - Cross-harness: run the command as a background process in either harness; read

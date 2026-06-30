@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { isMain } from "../../../../tools/lib/cli.mjs";
 import { safeSegment } from "./stage.mjs";
-import { DEFAULT_ASSET_SOURCE_ROOT } from "../defaults.mjs";
+import { defaultLibrarySourceRoot } from "../sources/libraries.mjs";
 
 function usage() {
   return `usage: node ai_studio/assets/storage/intake/reject.mjs --source <source> --slug <slug> [options]
@@ -17,7 +17,7 @@ Options:
 }
 
 function parseArgs(argv) {
-  const args = { sourceRoot: DEFAULT_ASSET_SOURCE_ROOT, reason: "", delete: false, overwrite: false };
+  const args = { sourceRoot: defaultLibrarySourceRoot(process.cwd()), reason: "", delete: false, overwrite: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--delete") { args.delete = true; continue; }

@@ -5,11 +5,14 @@ Explicit registry of asset source roots used by AI Studio surfaces.
 ## Role
 
 Source Registry stores explicit asset source roots that should appear in Asset
-Viewer. It avoids guessing templates or game folders by scanning the repository
-root.
+Viewer. It avoids guessing libraries, templates, or game folders by scanning the
+repository root.
 
 ## Files
 
+- `libraries.json`: registered global reusable asset library roots.
+- `libraries.mjs`: small helper for listing and upserting library
+  asset sources.
 - `templates.json`: registered template asset roots.
 - `templates.mjs`: small helper for listing and upserting template
   asset sources.

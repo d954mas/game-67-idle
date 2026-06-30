@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-import { appendFile, cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 import { boolText, decideLicense, validateLicenseRecord } from "../license/registry.mjs";
 import { isMain } from "../../../../tools/lib/cli.mjs";
 import { sha256File } from "../../../../tools/lib/hash.mjs";
 import { safeSegment } from "./stage.mjs";
-import { DEFAULT_ASSET_SOURCE_ROOT } from "../defaults.mjs";
 import { KIND_DIR } from "../kinds.mjs";
+import { defaultLibrarySourceRoot } from "../sources/libraries.mjs";
 
 function usage() {
   return `usage: node ai_studio/assets/storage/intake/accept.mjs --source <source> --slug <slug> --file <relative-file> --pack <pack-id> --asset-id <id> --kind <kind> --license <license> --license-url <url> [options]
@@ -33,7 +33,7 @@ Options:
 
 function parseArgs(argv) {
   const args = {
-    sourceRoot: DEFAULT_ASSET_SOURCE_ROOT,
+    sourceRoot: defaultLibrarySourceRoot(process.cwd()),
     origin: "sourced",
     title: "",
     description: "",
@@ -122,6 +122,21 @@ async function readJsonl(path) {
 
 async function writeJsonl(path, rows) {
   await writeFile(path, rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : ""), "utf8");
+}
+
+async function archiveAcceptedCandidate(sourceRoot, source, slug, stagedDir, assetId, overwrite = false) {
+  const acceptedRoot = join(sourceRoot, "_accepted", source);
+  let acceptedDir = join(acceptedRoot, slug);
+  if (existsSync(acceptedDir)) {
+    if (overwrite) await rm(acceptedDir, { recursive: true, force: true });
+    else {
+      const fallbackDir = join(acceptedRoot, `${slug}-${safeSegment(assetId, "asset-id")}`);
+      acceptedDir = existsSync(fallbackDir) ? `${fallbackDir}-${Date.now()}` : fallbackDir;
+    }
+  }
+  await mkdir(acceptedRoot, { recursive: true });
+  await rename(stagedDir, acceptedDir);
+  return acceptedDir;
 }
 
 function licenseMarkdown(record) {
@@ -258,8 +273,9 @@ export async function acceptStagedAsset(argv = process.argv.slice(2)) {
   await writeJsonl(assetsPath, rows);
   await writeFile(join(licensesDir, `${args.assetId}.md`), licenseMarkdown(asset), "utf8");
   await appendFile(join(sourceRoot, "intake-log.md"), `- ${new Date().toISOString()} accepted ${args.assetId} from _incoming/${source}/${slug}/${args.file} -> ${packRootName}/${packId}\n`, "utf8");
+  const acceptedDir = await archiveAcceptedCandidate(sourceRoot, source, slug, stagedDir, args.assetId, args.overwrite);
 
-  return { asset_id: args.assetId, pack: packId, publish, pack_dir: packDir, resource: asset.resource };
+  return { asset_id: args.assetId, pack: packId, publish, pack_dir: packDir, resource: asset.resource, accepted_dir: acceptedDir };
 }
 
 if (isMain(import.meta.url)) {

@@ -23,7 +23,7 @@ Use module owners instead of copying asset procedure into hot docs:
 
 - `nt-asset-workflow`: source search, license/provenance, art jobs, prep,
   storage, viewer, pull/promote, generated-source handoff.
-- `delegated-image-generation`: raster creation only after source-first search.
+- `nt-asset-image-generation`: raster creation only after source-first search.
 - `ai_studio/quality`: player-facing visual/art/asset acceptance rules.
 - `game-runtime-automation`: screenshot/video proof when the running game is the
   claim.

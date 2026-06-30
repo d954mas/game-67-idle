@@ -2,10 +2,10 @@ import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEFAULT_ASSET_SOURCE_ROOT } from "../storage/defaults.mjs";
 import { listIndexedPacks, queryIndexedAssets, refreshAssetIndex, resolveIndexedModel } from "../storage/index/index.mjs";
 import { refreshPreviewCache } from "../storage/previews/cache.mjs";
 import { listRegisteredGames } from "../storage/sources/games.mjs";
+import { listRegisteredLibraries, resolveRegisteredSourcePath } from "../storage/sources/libraries.mjs";
 import { listRegisteredTemplates } from "../storage/sources/templates.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -80,6 +80,22 @@ function registeredGameSources(root) {
   });
 }
 
+function registeredLibrarySources(root) {
+  return listRegisteredLibraries(root)
+    .filter((library) => library.status !== "disabled")
+    .map((library) => {
+      const assetsPath = resolveRegisteredSourcePath(root, library.assets);
+      return {
+        id: library.id,
+        type: "library",
+        label: library.title || library.id,
+        description: "Shared reusable asset storage.",
+        path: assetsPath || "",
+        available: sourceAvailable(assetsPath),
+      };
+    });
+}
+
 function registeredTemplateSources(root) {
   return listRegisteredTemplates(root).map((template) => {
     const assetsPath = safeResolve(root, template.assets);
@@ -96,16 +112,7 @@ function registeredTemplateSources(root) {
 
 export async function listAssetViewerSources(root) {
   const currentGame = readCurrentGameSource(root);
-  const sources = [
-    {
-      id: "global-library",
-      type: "library",
-      label: "All Assets",
-      description: "Shared reusable asset storage.",
-      path: DEFAULT_ASSET_SOURCE_ROOT,
-      available: sourceAvailable(DEFAULT_ASSET_SOURCE_ROOT),
-    },
-  ];
+  const sources = registeredLibrarySources(root);
   sources.push(...registeredTemplateSources(root));
   if (currentGame.available) {
     sources.push({

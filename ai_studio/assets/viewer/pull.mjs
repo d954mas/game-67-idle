@@ -12,9 +12,9 @@
 import { readFile, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { DEFAULT_ASSET_SOURCE_ROOT } from "../storage/defaults.mjs";
 import { scanPackManifestSource } from "../storage/manifests/manifest.mjs";
 import { decideLicense, isPublishable } from "../storage/license/restricted.mjs";
+import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
 
 const PULL_PACK = "library-pulls";
 
@@ -23,7 +23,7 @@ function relPosix(root, abs) {
 }
 
 function parseArgs(argv) {
-  const a = { ids: "", library: DEFAULT_ASSET_SOURCE_ROOT, to: "", apply: false, overwrite: false };
+  const a = { ids: "", library: defaultLibrarySourceRoot(process.cwd()), to: "", apply: false, overwrite: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--apply") { a.apply = true; continue; }

@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { hasPackManifestSource, scanPackManifestSource } from "../manifests/manifest.mjs";
@@ -11,7 +12,7 @@ import {
   writeSourceSnapshot,
 } from "../snapshots/snapshots.mjs";
 
-const schemaVersion = 7;
+const schemaVersion = 8;
 const previewCacheVersion = 1;
 const facetKeys = ["kind", "origin", "license", "source", "pack", "genre", "style", "tags"];
 const primaryExt = {
@@ -424,9 +425,10 @@ function isCoveredPath(path, covered) {
 
 function scanFolderRecords(root, source, covered = null) {
   const dirCache = new Map();
-  const shouldSkipDir = covered ? (path) => covered.dirs.has(resolve(path)) : null;
+  const shouldSkipDir = (path) => isLifecycleAuditDir(path) || Boolean(covered?.dirs?.has(resolve(path)));
   return listSourceAssetFiles(root, source, shouldSkipDir)
     .filter((file) => !isCoveredPath(file.path, covered))
+    .filter((file) => !isAcceptedIncomingFile(source, file, covered))
     .map((path) => {
       const ext = path.ext;
       const rel = path.sourceRel;
@@ -464,10 +466,14 @@ function scanFolderRecords(root, source, covered = null) {
     .filter(Boolean);
 }
 
+function isLifecycleAuditDir(path) {
+  return /(^|[\\/])(_accepted|_rejected)([\\/]|$)/i.test(path);
+}
+
 function listSourceAssetFiles(root, source, shouldSkipDir = null) {
   const scanRoots = [source.path];
   return scanRoots.flatMap((scanRoot) => walkSync(scanRoot, shouldSkipDir))
-    .filter((path) => !/[\\/](catalog|previews|licenses|\.git|node_modules|tmp)[\\/]/i.test(path))
+    .filter((path) => !/[\\/](_accepted|_rejected|catalog|previews|licenses|\.git|node_modules|tmp)[\\/]/i.test(path))
     .map((path) => {
       const ext = extname(path).toLowerCase();
       const repoRel = relPosix(root, path);
@@ -481,6 +487,8 @@ function listSourceAssetFiles(root, source, shouldSkipDir = null) {
 function registeredCoveredPaths(root, source, registeredRecords) {
   const files = new Set();
   const dirs = new Set();
+  const hashes = new Set();
+  const incomingHashesByBasename = incomingIntakeHashesByBasename(source);
   const addFile = (path) => {
     if (!path) return;
     files.add(resolve(path));
@@ -501,8 +509,85 @@ function registeredCoveredPaths(root, source, registeredRecords) {
     addFile(record.metadataPath);
     addResource(source.path, record.resource);
     addResource(root, record.resource);
+    if (record.sha256) hashes.add(String(record.sha256).toLowerCase());
+    else addMatchingResourceHash(root, source, record, incomingHashesByBasename, hashes);
   }
-  return { files, dirs };
+  return { files, dirs, hashes };
+}
+
+function sha256FileSync(path) {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+function addHashByName(map, name, hash) {
+  if (!name || !hash) return;
+  const key = basename(name).toLowerCase();
+  if (!map.has(key)) map.set(key, new Set());
+  map.get(key).add(String(hash).toLowerCase());
+}
+
+function incomingIntakeHashesByBasename(source) {
+  const root = join(source.path, "_incoming");
+  const out = new Map();
+  if (!existsSync(root)) return out;
+  for (const path of walkSync(root).filter((file) => basename(file).toLowerCase() === "intake.json")) {
+    try {
+      const intake = JSON.parse(readFileSync(path, "utf8"));
+      addHashByName(out, intake.path || intake.input || "", intake.sha256);
+      for (const item of intake.files || []) addHashByName(out, item.path, item.sha256);
+    } catch {
+      // Broken intake metadata should not block indexing unrelated assets.
+    }
+  }
+  return out;
+}
+
+function addMatchingResourceHash(root, source, record, incomingHashesByBasename, hashes) {
+  if (!incomingHashesByBasename.size) return;
+  const candidates = uniqueList(
+    record.modelPath,
+    record.metadataPath,
+    record.resource ? resolve(source.path, record.resource) : "",
+    record.resource ? resolve(root, record.resource) : "",
+  ).filter((path) => path && existsSync(path) && kindForExt(extname(path).toLowerCase()));
+  for (const path of candidates) {
+    const expected = incomingHashesByBasename.get(basename(path).toLowerCase());
+    if (!expected?.size) continue;
+    const hash = sha256FileSync(path);
+    if (expected.has(hash)) hashes.add(hash);
+  }
+}
+
+function readIncomingIntake(source, file) {
+  const parts = file.sourceRel.split("/");
+  if (parts[0] !== "_incoming" || parts.length < 4) return null;
+  const candidateDir = join(source.path, parts[0], parts[1], parts[2]);
+  const intakePath = join(candidateDir, "intake.json");
+  if (!existsSync(intakePath)) return null;
+  try {
+    return { candidateRel: parts.slice(3).join("/"), intake: JSON.parse(readFileSync(intakePath, "utf8")) };
+  } catch {
+    return null;
+  }
+}
+
+function incomingIntakeHashes(source, file) {
+  const data = readIncomingIntake(source, file);
+  if (!data) return [];
+  const hashes = [];
+  if (data.intake.sha256) hashes.push(String(data.intake.sha256));
+  for (const item of data.intake.files || []) {
+    if (!item || !item.sha256) continue;
+    if (!item.path || item.path === data.candidateRel || basename(item.path) === basename(file.path)) {
+      hashes.push(String(item.sha256));
+    }
+  }
+  return hashes.map((hash) => hash.toLowerCase());
+}
+
+function isAcceptedIncomingFile(source, file, covered) {
+  if (!covered?.hashes?.size || !file.sourceRel.startsWith("_incoming/")) return false;
+  return incomingIntakeHashes(source, file).some((hash) => covered.hashes.has(hash));
 }
 
 async function readRegisteredSourceData(root, source, snapshot = null) {

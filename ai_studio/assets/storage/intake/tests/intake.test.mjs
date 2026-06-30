@@ -41,6 +41,9 @@ test("stage + accept writes a publishable pack manifest asset", async () => {
 
     assert.equal(result.publish, "true");
     assert.equal(existsSync(join(sourceRoot, "packs", "starter-props", "files", "crate.glb")), true);
+    assert.equal(existsSync(join(sourceRoot, "_incoming", "local-source", "crate")), false);
+    assert.equal(existsSync(join(sourceRoot, "_accepted", "local-source", "crate")), true);
+    assert.match(result.accepted_dir, /_accepted/);
     const assetRows = (await readFile(join(sourceRoot, "packs", "starter-props", "assets.jsonl"), "utf8")).trim().split(/\r?\n/);
     assert.equal(assetRows.length, 1);
     const row = JSON.parse(assetRows[0]);
@@ -78,6 +81,8 @@ test("custom license without publish proof accepts into restricted packs", async
 
     assert.equal(result.publish, "false");
     assert.equal(existsSync(join(sourceRoot, "restricted", "packs", "vendor-pack", "files", "paid.glb")), true);
+    assert.equal(existsSync(join(sourceRoot, "_incoming", "vendor", "paid-model")), false);
+    assert.equal(existsSync(join(sourceRoot, "_accepted", "vendor", "paid-model")), true);
     const { records } = await scanPackManifestSource(sourceRoot);
     assert.equal(records.length, 1);
     assert.equal(records[0].asset_id, "vendor__paid__custom");

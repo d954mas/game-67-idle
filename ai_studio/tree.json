@@ -1253,7 +1253,7 @@
                 "subtitle": "explicit asset roots",
                 "kind": "group",
                 "color": "#0e7490",
-                "description": "Explicit registry for game-local asset folders. Avoids guessing games by scanning the repository root.",
+                "description": "Explicit registry for global libraries, templates, and game-local asset folders. Avoids guessing source folders by scanning roots.",
                 "role": "asset source registry",
                 "tags": [
                   "assets",
@@ -1266,12 +1266,49 @@
                     "kind": "doc",
                     "path": "ai_studio/assets/storage/sources/README.md",
                     "title": "README.md",
-                    "description": "Source Registry contract: why game asset roots are explicit and how new games register asset folders.",
+                    "description": "Source Registry contract: why asset source roots are explicit and how global libraries, templates, and games are registered.",
                     "role": "source registry module entrypoint",
                     "tags": [
                       "assets",
                       "registry",
                       "source"
+                    ]
+                  },
+                  {
+                    "id": "assets:libraries-registry-data",
+                    "kind": "config",
+                    "path": "ai_studio/assets/storage/sources/libraries.json",
+                    "title": "libraries.json",
+                    "description": "Explicit registry of global reusable asset libraries shown by Asset Viewer and used by asset CLI defaults.",
+                    "role": "registered library asset source data",
+                    "tags": [
+                      "assets",
+                      "registry",
+                      "source"
+                    ]
+                  },
+                  {
+                    "id": "assets:libraries-registry-helper",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/storage/sources/libraries.mjs",
+                    "title": "libraries.mjs",
+                    "description": "Small helper for reading, listing, resolving, and upserting global library asset source records.",
+                    "role": "library asset registry helper",
+                    "tags": [
+                      "assets",
+                      "registry"
+                    ]
+                  },
+                  {
+                    "id": "assets:libraries-registry-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/storage/sources/tests/libraries.test.mjs",
+                    "title": "libraries.test.mjs",
+                    "description": "Regression tests for default library source listing, path resolution, and library source upserts.",
+                    "role": "library asset registry tests",
+                    "tags": [
+                      "assets",
+                      "test"
                     ]
                   },
                   {

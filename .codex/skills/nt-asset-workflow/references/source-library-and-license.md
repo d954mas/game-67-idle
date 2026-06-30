@@ -72,7 +72,8 @@ node ai_studio/assets/storage/intake/reject.mjs --source-root <asset-source> --s
 ```
 
 `stage` records provenance and hashes only. `accept` writes Pack Manifest
-metadata under `packs/` or `restricted/packs/` according to the license decision.
+metadata under `packs/` or `restricted/packs/` according to the license decision,
+then moves the candidate folder from `_incoming/` to `_accepted/` as audit trail.
 
 ## License Gate
 

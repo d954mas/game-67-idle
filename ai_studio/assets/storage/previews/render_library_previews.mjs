@@ -14,8 +14,8 @@ import { existsSync, readdirSync, mkdirSync, writeFileSync, copyFileSync, rmSync
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { DEFAULT_ASSET_SOURCE_ROOT } from "../defaults.mjs";
 import { scanPackManifestSource } from "../manifests/manifest.mjs";
+import { defaultLibrarySourceRoot } from "../sources/libraries.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..", "..", "..");
@@ -26,7 +26,7 @@ const BLENDERS = [
 ];
 
 function parseArgs(argv) {
-  const a = { library: DEFAULT_ASSET_SOURCE_ROOT, source: "", pack: "", size: 512, webp: true, all: false, limit: 0, blender: "", force: false };
+  const a = { library: defaultLibrarySourceRoot(process.cwd()), source: "", pack: "", size: 512, webp: true, all: false, limit: 0, blender: "", force: false };
   for (let i = 0; i < argv.length; i += 1) {
     const k = argv[i];
     if (k === "--all") a.all = true;
