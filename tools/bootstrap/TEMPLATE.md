@@ -98,7 +98,7 @@ The template is NOT a bare seed: a new game opens to a working shell and builds 
   - **textured** — a starter glb that ships a texture; pack the texture, bind it as
     `u_texture`, sample it. So games take **textured** meshes from the first run, not
     only flat-coloured ones.
-  Ready to draw library glb: pull → pack → render (skill `game-3d-models`). A small
+  Ready to draw library glb: pull → pack → render (skill `nt-asset-workflow`). A small
   CC0 textured glb is sourced into `assets/meshes/` as the textured example.
 - **State + saves**: base game state (`state/` schema + codegen) and
   `src/game_storage.*` (save/load, autosave).

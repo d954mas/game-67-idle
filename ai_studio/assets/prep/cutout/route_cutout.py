@@ -163,7 +163,7 @@ def _parse_crop(text: str) -> tuple[int, int, int, int]:
 
 
 def _launch_dual_plate(source: Path, name: str, out_dir: Path) -> int:
-    script = ROOT / ".codex" / "skills" / "delegated-image-generation" / "scripts" / "gen_dual_plate.sh"
+    script = ROOT / ".codex" / "skills" / "nt-asset-image-generation" / "scripts" / "gen_dual_plate.sh"
     cmd = ["bash", str(script), "--source", str(source), "--name", name, "--out-dir", str(out_dir)]
     print(">>> auto-trigger:", " ".join(cmd))
     try:

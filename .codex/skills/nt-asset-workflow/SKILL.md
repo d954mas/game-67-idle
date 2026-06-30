@@ -18,10 +18,17 @@ decisions.
 - **Add an asset only to the current game**: place it under the game asset root,
   keep manifest/source metadata, and let storage show unregistered files until
   the metadata is added.
+- **3D models or meshes**: load `references/3d-models.md` for source-first model
+  reuse, conversion, texture dedup, and engine pack/load integration.
+- **Standalone textures or materials**: load `references/textures-and-materials.md`
+  for tiling, material maps, downloaded texture provenance, and seam checks.
 - **Paid or non-redistributable asset**: load
   `references/restricted-assets.md` before moving binaries.
 - **Generated art, source sheets, cutouts, slice9, or atlas crops**: load
   `references/generated-assets-and-cutouts.md`.
+- **Need to create raster source art after source search fails**: use
+  `nt-asset-image-generation`, then return here for prep, storage, license,
+  and project/library handoff.
 - **Library search, license gate, pull/promote commands**: load
   `references/source-library-and-license.md`.
 

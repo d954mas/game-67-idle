@@ -75,5 +75,5 @@ console.log("\nbuild + run:");
 console.log(`  cmake -S ${a.id} -B ${a.id}/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug`);
 console.log(`  cmake --build ${a.id}/build`);
 console.log(`  ${a.id}/build/bin/game.exe`);
-console.log("\nThen: set the title/pack/concept, pull library assets (skill game-3d-models),");
+console.log("\nThen: set the title/pack/concept, pull library assets (skill nt-asset-workflow),");
 console.log("pull systems from systems_showcase/ as needed, and build your game on top.");

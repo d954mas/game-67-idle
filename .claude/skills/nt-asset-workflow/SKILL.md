@@ -11,6 +11,8 @@ Read that file and follow it.
 
 Reference playbooks (load only when the Codex entrypoint says to):
 
-- `.codex/skills/nt-asset-workflow/references/source-library-and-license.md`
-- `.codex/skills/nt-asset-workflow/references/restricted-assets.md`
+- `.codex/skills/nt-asset-workflow/references/3d-models.md`
 - `.codex/skills/nt-asset-workflow/references/generated-assets-and-cutouts.md`
+- `.codex/skills/nt-asset-workflow/references/restricted-assets.md`
+- `.codex/skills/nt-asset-workflow/references/source-library-and-license.md`
+- `.codex/skills/nt-asset-workflow/references/textures-and-materials.md`

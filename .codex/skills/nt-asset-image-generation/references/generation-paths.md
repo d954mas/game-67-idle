@@ -17,7 +17,7 @@ Paths verified on this machine (Windows, 2026-06-17):
 ## Path A: Official Codex Imagegen
 
 ```bash
-bash .codex/skills/delegated-image-generation/scripts/codex_imagegen.sh \
+bash .codex/skills/nt-asset-image-generation/scripts/codex_imagegen.sh \
   --prompt "<DETAILED PROMPT>: real raster game art, thick outline, plain dark slate background" \
   --out tmp/out.png --size 1024x1024
 ```
@@ -53,7 +53,7 @@ stdout; agy can be quiet under non-TTY.
 Use compare mode for important hero art when two model styles are useful.
 
 ```bash
-bash .codex/skills/delegated-image-generation/scripts/gen_both.sh \
+bash .codex/skills/nt-asset-image-generation/scripts/gen_both.sh \
   --prompt "<DETAILED PROMPT>" --name shipicon --out-dir tmp/gen --size 1024x1024
 ```
 
@@ -63,7 +63,7 @@ readability, and style, not by pixel similarity or file size.
 ## Path C: REST Or Codex Backend Alternative
 
 ```bash
-python .codex/skills/delegated-image-generation/scripts/generate_image.py \
+python .codex/skills/nt-asset-image-generation/scripts/generate_image.py \
   --prompt "<PROMPT>" --out tmp/out.png --size 1536x1024 --quality high
 ```
 

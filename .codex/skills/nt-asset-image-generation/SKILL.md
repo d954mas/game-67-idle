@@ -1,12 +1,13 @@
 ﻿---
-name: delegated-image-generation
-description: "Use ONLY after a source-first search (shared asset library + free CC0/OFL sources) finds no fit, to GENERATE real raster art the agent could not source and has no native image model to make: fake shots, icon/source sheets, sprites, UI art, or source images for later asset prep. Generation is the last resort, not the default. Prefer Codex CLI imagegen via `codex exec` and `scripts/codex_imagegen.sh`; use Antigravity/agy CLI only as fallback. Load references for exact commands, real-generation prompts, verify-by-size checks, and dead-ends. Owns raster creation only; asset jobs/prep/storage are owned by nt-asset-workflow and ai_studio/assets, and visual acceptance is owned by ai_studio/quality."
+name: nt-asset-image-generation
+description: "Use ONLY after a source-first search (shared asset library + free CC0/OFL sources) finds no fit, to generate real raster art for AI Studio asset workflows: fake shots, icon/source sheets, sprites, UI art, or source images for later asset prep. Generation is the last resort, not the default. Prefer Codex CLI imagegen via `codex exec` and `scripts/codex_imagegen.sh`; use Antigravity/agy CLI only as fallback. Owns raster creation only; nt-asset-workflow owns asset jobs/prep/storage handoff, and ai_studio/quality owns visual acceptance."
 ---
 
-# Delegated Image Generation
+# NT Asset Image Generation
 
-Use when the agent must create real raster game art but has no native image
-model. Delegate generation, verify the PNG, then hand off.
+Use when the agent must create real raster game art for an asset workflow but
+has no native image model. Generate, verify the PNG, then hand off to
+`nt-asset-workflow`.
 
 ## Load Only What Applies
 

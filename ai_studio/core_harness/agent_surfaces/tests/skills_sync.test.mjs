@@ -25,12 +25,12 @@ function run(args) {
   });
 }
 
-function writeSkill(dir, name, description = "Use when testing skill sync.") {
+function writeSkill(dir, name, description = "Use when testing skill sync.", options = {}) {
   const skillDir = join(dir, ".codex", "skills", name);
   mkdirSync(skillDir, { recursive: true });
   writeFileSync(
     join(skillDir, "SKILL.md"),
-    [
+    `${options.bom ? "\uFEFF" : ""}${[
       "---",
       `name: ${name}`,
       `description: ${description}`,
@@ -40,7 +40,7 @@ function writeSkill(dir, name, description = "Use when testing skill sync.") {
       "",
       "Canonical body.",
       "",
-    ].join("\n"),
+    ].join("\n")}`,
     "utf8",
   );
 }
@@ -88,6 +88,20 @@ test("skills sync check fails on stale generated pointers", () => {
     assert.equal(fixed.status, 0, fixed.stderr);
     assert.match(fixed.stdout, /removed stale generated pointer: old-skill/);
     assert.equal(existsSync(join(dir, ".claude", "skills", "old-skill", "SKILL.md")), false);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("skills sync accepts UTF-8 BOM before skill frontmatter", () => {
+  const dir = tempDir();
+  try {
+    writeSkill(dir, "bom-skill", "Use when testing BOM frontmatter.", { bom: true });
+
+    const generated = run(["--root", dir]);
+    assert.equal(generated.status, 0, generated.stderr);
+    assert.match(generated.stdout, /done: 1 generated, 0 stale removed, 0 skipped/);
+    assert.ok(existsSync(join(dir, ".claude", "skills", "bom-skill", "SKILL.md")));
   } finally {
     cleanup(dir);
   }

@@ -1,6 +1,6 @@
 ﻿---
 name: app-tunnel
-description: "Use when the lead wants to view, test, pick, or play something from a phone or another device: share a local page/app/asset-viewer/game build over a public URL (ngrok-style). Serves a directory and exposes it via a cloudflared quick tunnel. Public + unauthenticated while running вЂ” no secrets."
+description: "Use when the lead wants to view, test, pick, or play something from a phone or another device: share a local page/app/asset-viewer/game build over a public URL (ngrok-style). Serves a directory and exposes it via a cloudflared quick tunnel. Public + unauthenticated while running - no secrets."
 ---
 
 # App Tunnel
