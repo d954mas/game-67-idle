@@ -268,15 +268,26 @@ function openIndex(root, source) {
 
 function resetIndexFiles(root, source) {
   const dbPath = assetIndexPath(root, source);
+  let removed = true;
   for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
-    rmSync(path, { force: true });
+    try {
+      rmSync(path, { force: true });
+    } catch (error) {
+      if (error && ["EBUSY", "EPERM", "EACCES"].includes(error.code)) {
+        removed = false;
+        continue;
+      }
+      throw error;
+    }
   }
+  return removed;
 }
 
 function initSchema(db) {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
+    PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS meta (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL

@@ -84,6 +84,10 @@ Preview folders are intentionally not part of the normal asset refresh
 signature. Use `Refresh previews` when preview files were added, regenerated, or
 became stale.
 
+Rebuild tries to replace the generated SQLite file for speed. On Windows, if the
+site or another tool has the DB open, deletion may be denied; rebuild then falls
+back to clearing and rewriting the existing database.
+
 For rebuild profiling:
 
 ```powershell
