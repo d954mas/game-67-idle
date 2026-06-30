@@ -51,6 +51,8 @@ This folder owns the policy and command surface.
 - `restricted.mjs`: compatibility facade for publishability and restricted-root
   routing.
 - `restricted_assets_guard.mjs`: git-tracked public-repo leak guard.
+- `restricted_assets_exceptions.json`: empty-by-default, repo-relative exception
+  prefixes for already reviewed public binaries that cannot yet be manifested.
 
 ## Commands
 

@@ -59,7 +59,7 @@ test("CC-BY publishable asset missing attribution is dev warning and release vio
   assert.match(release.violations[0].reason, /requires attribution before release/);
 });
 
-test("binary with no manifest and not allowlisted is a violation", () => {
+test("binary with no manifest and no explicit exception is a violation", () => {
   const r = auditTrackedAssets(["assets/packs/mystery/files/mystery/m.glb"], { recordsByAssetId: new Map() });
   assert.equal(r.ok, false);
   assert.match(r.violations[0].reason, /no manifest record/);
@@ -78,8 +78,8 @@ test("source-root manifest record allows public UI binary", () => {
   assert.equal(r.ok, true, JSON.stringify(r.violations));
 });
 
-test("legacy allowlist prefix passes", () => {
-  const r = auditTrackedAssets(["assets/meshes/foo_cc0.glb"], { allowlistPrefixes: ["assets/meshes/"] });
+test("explicit exception prefix passes", () => {
+  const r = auditTrackedAssets(["assets/meshes/foo_cc0.glb"], { exceptionPrefixes: ["assets/meshes/"] });
   assert.equal(r.ok, true, JSON.stringify(r.violations));
 });
 
@@ -108,12 +108,12 @@ test("deriveAssetId handles a game-folder prefix", () => {
   assert.deepEqual(deriveAssetId("g/assets/previews/id4/p.png"), { assetId: "id4" });
 });
 
-test("per-game allowlist prefix passes (template starter mesh)", () => {
-  assert.equal(auditTrackedAssets(["template/assets/meshes/cube.glb"], { allowlistPrefixes: ["template/assets/meshes/"] }).ok, true);
+test("per-game exception prefix passes (template starter mesh)", () => {
+  assert.equal(auditTrackedAssets(["template/assets/meshes/cube.glb"], { exceptionPrefixes: ["template/assets/meshes/"] }).ok, true);
 });
 
-test("per-game allowlist exact starter UI file passes", () => {
-  assert.equal(auditTrackedAssets(["template/assets/ui/button.png"], { allowlistPrefixes: ["template/assets/ui/button.png"] }).ok, true);
+test("per-game exception exact starter UI file passes", () => {
+  assert.equal(auditTrackedAssets(["template/assets/ui/button.png"], { exceptionPrefixes: ["template/assets/ui/button.png"] }).ok, true);
 });
 
 test("publishability precedence: explicit publish overrides license", () => {

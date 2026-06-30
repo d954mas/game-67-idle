@@ -9,7 +9,7 @@
 //   1. No file under assets/restricted/ is tracked (it is gitignored; catch -f adds).
 //   2. Every tracked binary under a game/template assets/ root either
 //      - resolves to a Pack Manifest record whose license is publishable, or
-//      - is on the narrow existing-asset allowlist.
+//      - is on the narrow explicit exception list.
 //      A missing manifest record or a non-publishable license fails.
 //
 // Pure core (auditTrackedAssets / deriveAssetId) is unit-tested; the CLI wires
@@ -44,11 +44,11 @@ export function deriveAssetId(path) {
 }
 
 // Pure auditor. trackedFiles: repo-relative paths (any slash). recordsByAssetId:
-// Map<asset_id, manifest record>. allowlistPrefixes: path prefixes to skip.
+// Map<asset_id, manifest record>. exceptionPrefixes: path prefixes to skip.
 export function auditTrackedAssets(trackedFiles, {
   recordsByAssetId = new Map(),
   recordsByPath = new Map(),
-  allowlistPrefixes = [],
+  exceptionPrefixes = [],
   release = false,
   isBinary = isAssetBinary,
   publishable = isPublishable,
@@ -68,11 +68,11 @@ export function auditTrackedAssets(trackedFiles, {
     }
     if (!isBinary(p)) continue;
     if (!/(?:^|\/)assets\//.test(p)) continue;
-    if (allowlistPrefixes.some((pre) => p.startsWith(pre))) continue;
+    if (exceptionPrefixes.some((pre) => p.startsWith(pre))) continue;
     const { assetId } = deriveAssetId(p);
     const fm = assetId ? recordsByAssetId.get(assetId) : recordsByPath.get(p);
     if (!assetId && !fm) {
-      violations.push({ path: p, reason: "binary asset with no manifest mapping and not on the legacy allowlist - record a license or move it to assets/restricted/" });
+      violations.push({ path: p, reason: "binary asset with no manifest mapping and no explicit license-guard exception - record a license or move it to assets/restricted/" });
       continue;
     }
     if (!fm) {
@@ -152,8 +152,8 @@ function loadManifestRecords(root) {
   return { byAssetId, byPath };
 }
 
-function loadAllowlist(root) {
-  const f = join(root, "ai_studio", "assets", "storage", "license", "restricted_assets_allowlist.json");
+function loadExceptionPrefixes(root) {
+  const f = join(root, "ai_studio", "assets", "storage", "license", "restricted_assets_exceptions.json");
   if (!existsSync(f)) return [];
   try {
     const data = JSON.parse(readFileSync(f, "utf8"));
@@ -181,7 +181,7 @@ export function main() {
   const { ok, violations, warnings } = auditTrackedAssets(tracked, {
     recordsByAssetId: records.byAssetId,
     recordsByPath: records.byPath,
-    allowlistPrefixes: loadAllowlist(root),
+    exceptionPrefixes: loadExceptionPrefixes(root),
     release,
   });
   if (!ok) {

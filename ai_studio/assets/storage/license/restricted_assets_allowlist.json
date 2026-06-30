@@ -1,4 +1,0 @@
-{
-  "reason": "No current allowlist entries. Assets are per-game now (<game>/assets/); prefixes are repo-relative. New assets must be recorded in manifests or routed to <game>/assets/restricted/, NOT added here.",
-  "prefixes": []
-}

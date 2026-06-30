@@ -2461,12 +2461,12 @@
                     ]
                   },
                   {
-                    "id": "assets:license-guard-allowlist",
+                    "id": "assets:license-guard-exceptions",
                     "kind": "config",
-                    "path": "ai_studio/assets/storage/license/restricted_assets_allowlist.json",
-                    "title": "restricted_assets_allowlist.json",
-                    "description": "Narrow allowlist for existing publishable starter assets. New assets should be recorded in manifests instead of added here.",
-                    "role": "asset guard allowlist",
+                    "path": "ai_studio/assets/storage/license/restricted_assets_exceptions.json",
+                    "title": "restricted_assets_exceptions.json",
+                    "description": "Empty-by-default exception list for already reviewed public binaries that cannot yet be manifested. New assets should be recorded in manifests instead of added here.",
+                    "role": "asset guard exceptions",
                     "tags": [
                       "assets",
                       "license",
