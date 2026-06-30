@@ -21,13 +21,9 @@ export const UNIVERSAL = [
   ".codex/skills",
   "AI_PIPELINE_HISTORY.md",
   "ai_studio",
-  "docs/ai-pipeline",
   "gamedesign/README.md",
   "gamedesign/knowledge",
   "gamedesign/sources",
-  // the whole reusable tool tree (pipeline, asset library tooling, codegen,
-  // bootstrap) EXCEPT per-game tool dirs (see GAME_ONLY)
-  "tools",
 ];
 
 // A runnable, game-agnostic starting point. Copied into each new game, then the

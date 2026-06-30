@@ -173,7 +173,7 @@ test("hook_record marks full Python dependency failures as environment blocked",
       tool_input: { command: "node --test ai_studio/bootstrap/export_base.test.mjs" },
       tool_response: {
         exit_code: 1,
-        output: "error: no working Python runner found with required modules: PIL, numpy, scipy\nhint: install full-gate modules into the selected runner: py -3.12 -m pip install -r tools/requirements/ai-pipeline-full.txt",
+        output: "error: no working Python runner found with required modules: PIL, numpy, scipy\nhint: install full-gate modules into the selected runner: py -3.12 -m pip install -r ai_studio/core_harness/profiling/requirements-full.txt",
       },
     }, profile);
 
@@ -577,7 +577,7 @@ test("status separates environment-blocked failures from unresolved failures", (
         commands: ["node --test ai_studio/bootstrap/export_base.test.mjs"],
         session_id: "s1",
         failure_kind: "environment_blocked",
-        blocked_by: "missing full-gate Python modules; install tools/requirements/ai-pipeline-full.txt or set AI_PIPELINE_PYTHON",
+        blocked_by: "missing full-gate Python modules; install ai_studio/core_harness/profiling/requirements-full.txt or set AI_PIPELINE_PYTHON",
       },
     ]);
 

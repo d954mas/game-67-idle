@@ -25,9 +25,10 @@ game is a self-contained folder copied from `template/`.
 
 Two KINDS of reuse, different by nature:
 
-- **Dev pipeline** — `tools/`, `.codex/skills/`, `docs/ai-pipeline`, taskboard, the
-  shared asset library. Shared infra, ONE copy used by every game; improvements are
-  immediately everyone's. (The UNIVERSAL set below; flows both ways.)
+- **Dev pipeline** — `ai_studio/`, `.codex/skills/`, taskboard, reusable design
+  knowledge, and the shared asset library. Shared infra, ONE copy used by every
+  game; improvements are immediately everyone's. (The UNIVERSAL set below; flows
+  both ways.)
 - **Code systems** — gameplay AND the shell (settings, audio, save, UI, terrain,
   character controller, …). These inherently need PER-GAME tweaks, so they are
   **COPIED into a game when needed and the game owns/customizes its copy** — the same
@@ -78,10 +79,8 @@ CODE — and like the engine's `examples/` folder, **each solution demonstrates 
 
 ## UNIVERSAL (flows both ways)
 
-The reusable pipeline: `tools/` (asset library tooling, codegen, bootstrap),
-`.codex/skills/`, `ai_studio/`, `docs/ai-pipeline/`, `AI_PIPELINE_HISTORY.md`,
-`gamedesign/knowledge` + `sources`, `tasks/README` + `guides`. Excludes per-game
-`tools/<game-id>/`.
+The reusable pipeline: `ai_studio/`, `.codex/skills/`,
+`AI_PIPELINE_HISTORY.md`, and `gamedesign/knowledge` + `sources`.
 
 ## SEED — the runnable starter SHELL (copied once, then game-owned)
 

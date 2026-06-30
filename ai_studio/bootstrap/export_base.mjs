@@ -31,13 +31,10 @@ if (dst === root) {
 const COPY = [
   ".codex/skills",
   "ai_studio/core_harness/profiling",
-  "tools/requirements/ai-pipeline-full.txt",
-  "tools/README.md",
   "gamedesign/README.md",
   "gamedesign/knowledge",
   "gamedesign/sources",
   "ai_studio",
-  "docs/ai-pipeline",
   "AI_PIPELINE_HISTORY.md",
 ];
 

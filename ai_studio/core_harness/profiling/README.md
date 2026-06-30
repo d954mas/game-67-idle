@@ -36,6 +36,12 @@ Show subagent transcript diagnostics:
 node ai_studio/core_harness/profiling/status.mjs --agents
 ```
 
+Install optional full-gate Python dependencies only when a module asks for them:
+
+```powershell
+py -3.12 -m pip install -r ai_studio/core_harness/profiling/requirements-full.txt
+```
+
 ## Files
 
 - `hook_record_fast.c` / `hook_record_fast.exe`: fast hook recorder used by the
@@ -45,5 +51,7 @@ node ai_studio/core_harness/profiling/status.mjs --agents
 - `status.mjs`: session report renderer.
 - `agent_rollup.mjs`: optional subagent transcript rollup.
 - `profile_lib.mjs`: shared JSONL/profile helpers.
+- `requirements-full.txt`: pinned optional Python dependencies for full profiling
+  or visual/numeric gates that need Pillow, NumPy, or SciPy.
 - `tests/profiling.test.mjs`: focused profiling tests.
 - `skills/nt-chat-session-reflection/`: canonical reflection skill instructions.

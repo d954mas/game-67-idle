@@ -20,7 +20,7 @@ Not checked here:
 - Taskboard store, API, or UI behavior.
 - Architecture Map ownership coverage.
 - Asset Viewer/gallery behavior.
-- Legacy docs under `docs/ai-pipeline/`.
+- Module-specific docs outside Core Harness.
 - Skills outside the generated Core Harness surfaces.
 
 ## Public Tool

@@ -69,8 +69,12 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(existsSync(join(target, "tools", "assets", "audit", "restricted_assets_guard.mjs")), false);
     assert.equal(existsSync(join(target, "tools", "asset_review")), false);
     assert.equal(existsSync(join(target, "tools", "bootstrap")), false);
-    assert.equal(existsSync(join(target, "tools", "README.md")), true);
-    assert.equal(existsSync(join(target, "tools", "requirements", "ai-pipeline-full.txt")), true);
+    assert.equal(existsSync(join(target, "tools", "README.md")), false);
+    assert.equal(existsSync(join(target, "tools", "requirements", "ai-pipeline-full.txt")), false);
+    assert.equal(
+      existsSync(join(target, "ai_studio", "core_harness", "profiling", "requirements-full.txt")),
+      true,
+    );
     assert.equal(existsSync(join(target, ".codex", "skills", "nt-taskboard-manager", "SKILL.md")), true);
     assert.equal(existsSync(join(target, "ai_studio", "assets", "storage", "intake", "stage.mjs")), true);
     assert.equal(existsSync(join(target, "ai_studio", "assets", "storage", "intake", "accept.mjs")), true);

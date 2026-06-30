@@ -1209,6 +1209,19 @@
                 ]
               },
               {
+                "id": "core-harness:profiling-requirements-full",
+                "kind": "config",
+                "path": "ai_studio/core_harness/profiling/requirements-full.txt",
+                "title": "requirements-full.txt",
+                "description": "Pinned optional Python dependencies for profiling-related full gates that need Pillow, NumPy, or SciPy.",
+                "role": "profiling optional Python dependency pins",
+                "tags": [
+                  "profiling",
+                  "python",
+                  "dependencies"
+                ]
+              },
+              {
                 "id": "core-harness:profiling-reflection-skill",
                 "title": "NT Chat Session Reflection Skill",
                 "subtitle": "session retrospective instructions",
@@ -4071,48 +4084,7 @@
         "generatedChildren": [
           "module-backlog"
         ],
-        "children": [
-          {
-            "id": "not-refactored:legacy-pipeline-routes",
-            "title": "Legacy Pipeline Routes",
-            "subtitle": "known old docs/tools",
-            "kind": "group",
-            "color": "#64748b",
-            "description": "Known pre-refactor pipeline docs and tools. They are intentionally visible as not-refactored until each one is reviewed, moved to an owning module, or deleted.",
-            "role": "known legacy pipeline backlog",
-            "tags": [
-              "not-refactored",
-              "legacy",
-              "pipeline"
-            ],
-            "children": [
-              {
-                "id": "not-refactored:tools-readme",
-                "kind": "doc",
-                "path": "tools/README.md",
-                "title": "tools/README.md",
-                "description": "Legacy tools route map. Keep visible until tool ownership is split across AI Studio modules.",
-                "role": "legacy tool route map",
-                "tags": [
-                  "legacy",
-                  "tools"
-                ]
-              },
-              {
-                "id": "not-refactored:profiling-reuse",
-                "kind": "doc",
-                "path": "docs/ai-pipeline/profiling-reuse.md",
-                "title": "profiling-reuse.md",
-                "description": "Legacy profiling, reuse, closeout, and export reference awaiting ownership review.",
-                "role": "legacy profiling/export doc",
-                "tags": [
-                  "legacy",
-                  "profiling"
-                ]
-              }
-            ]
-          }
-        ]
+        "children": []
       }
     ]
   }
