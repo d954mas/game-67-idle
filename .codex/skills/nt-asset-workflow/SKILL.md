@@ -68,3 +68,6 @@ node ai_studio/assets/viewer/promote.mjs --manifest <review-manifest.json> --ids
 node ai_studio/assets/storage/previews/render_library_previews.mjs --pack <pack>
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```
+
+Add `--refresh` to search only after files or manifests changed and the query
+must include those changes.

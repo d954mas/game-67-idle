@@ -23,6 +23,9 @@ node ai_studio/assets/storage/search.mjs --query "<need>" --kind <model|texture|
 node ai_studio/assets/storage/search.mjs --source-path template/assets --mode scan --query "<need>" --json
 ```
 
+Search reads the generated index. Add `--refresh` only after files or manifests
+changed and the search must include those changes.
+
 Use the site for visual browsing:
 
 ```powershell

@@ -2,7 +2,7 @@
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { queryIndexedAssets, refreshAssetIndex } from "./index/index.mjs";
+import { ensureAssetIndex, queryIndexedAssets, refreshAssetIndex } from "./index/index.mjs";
 import { defaultLibrarySourceRoot } from "./sources/libraries.mjs";
 
 function parseCsv(value = "") {
@@ -19,12 +19,17 @@ function parseArgs(argv) {
     offset: 0,
     sort: "name",
     filters: {},
+    refresh: false,
     json: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--json") {
       args.json = true;
+      continue;
+    }
+    if (arg === "--refresh") {
+      args.refresh = true;
       continue;
     }
     const next = argv[i + 1];
@@ -70,7 +75,8 @@ function sourceFromOptions(options) {
 export async function searchAssets(root, options = {}) {
   const source = sourceFromOptions(options);
   if (!source.available) throw new Error(`asset source is not available: ${source.path}`);
-  await refreshAssetIndex(root, source);
+  if (options.refresh) await refreshAssetIndex(root, source);
+  else await ensureAssetIndex(root, source);
   return queryIndexedAssets(root, source, {
     query: options.query || "",
     pack: options.pack || "",

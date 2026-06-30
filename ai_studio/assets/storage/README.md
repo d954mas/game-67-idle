@@ -128,7 +128,8 @@ node ai_studio/assets/storage/search.mjs --query "metal floor" --license CC0 --j
 ```
 
 `search.mjs` defaults to active `global-library` from
-`sources/libraries.json`, then refreshes the selected source index first. If
-that source is disabled, it falls back to another active library. Unchanged
-sources use a cheap snapshot check; changed sources rebuild from Pack Manifest
-metadata or a raw folder scan.
+`sources/libraries.json` and reads the generated index by default. If that
+source is disabled, it falls back to another active library. Add `--refresh`
+only when local files or manifests changed and the query must update the index
+first. Unchanged sources use a snapshot check; changed sources rebuild from Pack
+Manifest metadata or a raw folder scan.

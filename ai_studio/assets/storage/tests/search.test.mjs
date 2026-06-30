@@ -67,3 +67,31 @@ test("searchAssets derives a local source id when sourcePath is provided without
   assert.equal(result.total, 1);
   assert.equal(result.assets[0].origin, "unregistered");
 });
+
+test("searchAssets uses the existing index until refresh is requested", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "asset-search-refresh-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const assets = join(root, "template", "assets");
+  mkdirSync(join(assets, "ui"), { recursive: true });
+  writeFileSync(join(assets, "ui", "button.png"), "png", "utf8");
+
+  const baseOptions = {
+    sourceId: "template",
+    sourcePath: assets,
+    type: "local",
+    query: "button",
+    limit: 24,
+  };
+
+  const first = await searchAssets(root, baseOptions);
+  assert.equal(first.total, 1);
+
+  writeFileSync(join(assets, "ui", "button-secondary.png"), "png", "utf8");
+
+  const withoutRefresh = await searchAssets(root, baseOptions);
+  assert.equal(withoutRefresh.total, 1);
+
+  const withRefresh = await searchAssets(root, { ...baseOptions, refresh: true });
+  assert.equal(withRefresh.total, 2);
+});
