@@ -12,6 +12,8 @@ public surface, internals, and validation path.
 - `architecture_map/`: live architecture map renderer and validation report for
   unmapped files.
 - `assets/`: reviewed asset-facing modules, starting with Asset Viewer.
+- `game_project/`: reviewed active-game routing and prototype kickoff/context
+  scaffolding.
 - `core_harness/`: reviewed core routing and agent harness docs.
 - `core_harness/workflow/orchestration/`: reviewed early split rule for broad
   read-heavy subagent work.
@@ -30,7 +32,8 @@ reviewed and ready to move.
 Load only the route that matches the current task:
 
 - Repository contract and hard invariants: `AGENTS.md`.
-- Current active game context: `GAME_PROJECT.md`.
+- Current active game context and prototype kickoff:
+  `ai_studio/game_project/README.md` and `GAME_PROJECT.md`.
 - Agent workflow, context policy, Markdown shape, or multi-agent use:
   `ai_studio/core_harness/workflow/README.md`.
 - Broad read-heavy work that should be split before loading too much context:

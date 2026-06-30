@@ -3,14 +3,14 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createEpic, createTask, findRoot } from "../../ai_studio/taskboard/lib.mjs";
-import { fail } from "../lib/cli.mjs";
+import { createEpic, createTask, findRoot } from "../taskboard/lib.mjs";
+import { fail } from "../../tools/lib/cli.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 
 function usage() {
   console.error(`usage:
-  node tools/game_context/new_prototype.mjs --game-id <id> --title <name> --brief <one sentence> [--root <repo>] [--force]
+  node ai_studio/game_project/new_prototype.mjs --game-id <id> --title <name> --brief <one sentence> [--root <repo>] [--force]
 
 Creates the first project wiki/task/routing skeleton for a new native-first game prototype,
 then writes a compact startup context pack in tmp/prototype_startup_gate_context.*.`);

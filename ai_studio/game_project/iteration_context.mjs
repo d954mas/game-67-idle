@@ -9,7 +9,7 @@ const harnessRoot = resolve(scriptDir, "..", "..");
 
 function usage() {
   console.error(`usage:
-  node tools/game_context/iteration_context.mjs [--root <repo>] [--json-output <file>] [--status-max-chars <n>]
+  node ai_studio/game_project/iteration_context.mjs [--root <repo>] [--json-output <file>] [--status-max-chars <n>]
 
 Builds a compact pre-implementation context pack for playable game work.`);
   process.exit(2);

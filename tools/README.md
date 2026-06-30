@@ -24,7 +24,7 @@ Copied by `ai_studio/bootstrap/export_base.mjs`:
   module-owned tests;
 - generated agent surfaces: `ai_studio/core_harness/agent_surfaces/`;
 - workflow state/profiling: `ai_studio/taskboard/`, `ai_studio/core_harness/profiling/`;
-- game startup/runtime scaffolding: `tools/game_context/`;
+- game project kickoff/context scaffolding: `ai_studio/game_project/`;
 - quality rules: `ai_studio/quality/`;
 - asset browser/review surface: `ai_studio/assets/viewer/`;
 - reusable asset storage/prep/workflow: `ai_studio/assets/`;

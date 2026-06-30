@@ -282,6 +282,85 @@
         ]
       },
       {
+        "id": "game-project",
+        "title": "Game Project",
+        "subtitle": "active game context",
+        "kind": "module",
+        "moduleId": "game-project",
+        "color": "#2563eb",
+        "description": "AI Studio module for active game routing, GAME_PROJECT.md orientation, new prototype kickoff, and compact pre-implementation context packs.",
+        "tags": [
+          "game-project",
+          "context",
+          "prototype-kickoff"
+        ],
+        "children": [
+          {
+            "id": "game-project:readme",
+            "kind": "doc",
+            "path": "ai_studio/game_project/README.md",
+            "title": "README.md",
+            "description": "Game Project module contract: active-game routing, prototype kickoff, iteration context, and boundaries against bootstrap, taskboard, assets, and GDD/design ownership.",
+            "role": "game project module entrypoint",
+            "tags": [
+              "game-project",
+              "contract",
+              "source"
+            ]
+          },
+          {
+            "id": "game-project:new-prototype",
+            "kind": "tool",
+            "path": "ai_studio/game_project/new_prototype.mjs",
+            "title": "new_prototype.mjs",
+            "description": "Creates the first project wiki, GAME_PROJECT.md routing, taskboard epic/task, and startup gate context for a new prototype.",
+            "role": "new prototype kickoff command",
+            "tags": [
+              "game-project",
+              "prototype",
+              "taskboard"
+            ]
+          },
+          {
+            "id": "game-project:iteration-context",
+            "kind": "tool",
+            "path": "ai_studio/game_project/iteration_context.mjs",
+            "title": "iteration_context.mjs",
+            "description": "Builds a compact pre-implementation context pack for playable game work from GAME_PROJECT.md, taskboard, project docs, and runtime sources.",
+            "role": "game iteration context command",
+            "tags": [
+              "game-project",
+              "context",
+              "game-work"
+            ]
+          },
+          {
+            "id": "game-project:tests",
+            "kind": "test",
+            "path": "ai_studio/game_project/game_project.test.mjs",
+            "title": "game_project.test.mjs",
+            "description": "Regression tests for new prototype kickoff, active-game detection, startup gates, and generated iteration context packs.",
+            "role": "game project tests",
+            "tags": [
+              "game-project",
+              "test"
+            ]
+          },
+          {
+            "id": "game-project:root-game-project",
+            "kind": "doc",
+            "path": "GAME_PROJECT.md",
+            "title": "GAME_PROJECT.md",
+            "description": "Repository root active-game routing file. Load only for game-specific work; keep lore, balance, GDD detail, and task state elsewhere.",
+            "role": "active game routing entrypoint",
+            "tags": [
+              "game-project",
+              "root-entrypoint"
+            ]
+          }
+        ]
+      },
+      {
         "id": "module:hot",
         "title": "Core Harness",
         "subtitle": "ai_studio/core_harness",
@@ -328,18 +407,6 @@
             "tags": [
               "generated-surface",
               "check-drift"
-            ]
-          },
-          {
-            "id": "core-harness:game-project",
-            "kind": "doc",
-            "path": "GAME_PROJECT.md",
-            "description": "Current-game routing file. Keeps active game context out of AGENTS.md and points to game design docs, task state, and game folder when a game is active.",
-            "role": "current-game router",
-            "tags": [
-              "core",
-              "game-route",
-              "reviewed"
             ]
           },
           {

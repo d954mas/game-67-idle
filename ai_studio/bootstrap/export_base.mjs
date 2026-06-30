@@ -44,7 +44,6 @@ const COPY = [
   "tools/lib/mime.test.mjs",
   "tools/lib/tmp_exports.mjs",
   "tools/lib/tmp_exports.test.mjs",
-  "tools/game_context",
   "tools/README.md",
   "gamedesign/README.md",
   "gamedesign/knowledge",

@@ -28,7 +28,7 @@ ${body}
 }
 
 function writeStarter(root) {
-  mkdirSync(join(root, "tools", "game_context"), { recursive: true });
+  mkdirSync(join(root, "ai_studio", "game_project"), { recursive: true });
   mkdirSync(join(root, "gamedesign", "meme-evolution", "data"), { recursive: true });
   mkdirSync(join(root, "src"), { recursive: true });
   mkdirSync(join(root, "tasks"), { recursive: true });
@@ -95,7 +95,7 @@ test("game iteration context preserves wrapped hard gates", (t) => {
   writeStarter(fixture);
   const json = join(fixture, "tmp", "context.json");
   const result = spawnSync(process.execPath, [
-    join(repoRoot, "tools", "game_context", "iteration_context.mjs"),
+    join(repoRoot, "ai_studio", "game_project", "iteration_context.mjs"),
     "--json-output",
     json,
   ], {
@@ -119,7 +119,8 @@ test("game iteration context preserves wrapped hard gates", (t) => {
   assert.equal(context.visual_first_contract.status, "required_before_visual_runtime_work");
   assert.ok(context.visual_first_contract.session_contract_fields.some((field) => field.id === "stop_condition"));
   assert.ok(context.visual_first_contract.before_coding_required_evidence.some((item) => item.includes("mismatch list")));
-  assert.ok(context.visual_first_contract.generated_ui_runtime_gate.some((item) => item.includes("Non-empty crop manifest")));
+  assert.ok(context.visual_first_contract.generated_ui_runtime_gate.some((item) => item.includes("Non-empty crop plan")));
+  assert.ok(context.visual_first_contract.generated_ui_runtime_gate.some((item) => item.includes("Non-empty prepared asset manifest")));
   assert.ok(context.runtime_sources.includes("src/main.c"));
   assert.ok(context.design_sources.includes("gamedesign/meme-evolution/gdd.md"));
   assert.ok(context.before_coding_checklist.some((item) => item.includes("prototype_startup_gate.status")));
@@ -130,7 +131,7 @@ test("game iteration context preserves wrapped hard gates", (t) => {
 test("game iteration context blocks broad coding without active concept", (t) => {
   const fixture = tempRoot(t);
   const repoRoot = process.cwd();
-  mkdirSync(join(fixture, "tools", "game_context"), { recursive: true });
+  mkdirSync(join(fixture, "ai_studio", "game_project"), { recursive: true });
   mkdirSync(join(fixture, "tools", "taskboard"), { recursive: true });
   mkdirSync(join(fixture, "tasks"), { recursive: true });
   mkdirSync(join(fixture, "src"), { recursive: true });
@@ -156,7 +157,7 @@ There is no active game concept.
 
   const json = join(fixture, "tmp", "context.json");
   const result = spawnSync(process.execPath, [
-    join(repoRoot, "tools", "game_context", "iteration_context.mjs"),
+    join(repoRoot, "ai_studio", "game_project", "iteration_context.mjs"),
     "--json-output",
     json,
   ], {
@@ -221,7 +222,7 @@ There is no active game concept.
 
   const json = join(fixture, "tmp", "context.json");
   const result = spawnSync(process.execPath, [
-    join(repoRoot, "tools", "game_context", "iteration_context.mjs"),
+    join(repoRoot, "ai_studio", "game_project", "iteration_context.mjs"),
     "--json-output",
     json,
   ], {
@@ -295,7 +296,7 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   writeKickoffTemplate(fixture);
 
   const result = spawnSync(process.execPath, [
-    join(repoRoot, "tools", "game_context", "new_prototype.mjs"),
+    join(repoRoot, "ai_studio", "game_project", "new_prototype.mjs"),
     "--root",
     fixture,
     "--game-id",
@@ -365,7 +366,7 @@ test("new prototype kickoff accepts active concept none seed wording", (t) => {
   writeKickoffTemplateWithActiveNone(fixture);
 
   const result = spawnSync(process.execPath, [
-    join(repoRoot, "tools", "game_context", "new_prototype.mjs"),
+    join(repoRoot, "ai_studio", "game_project", "new_prototype.mjs"),
     "--root",
     fixture,
     "--game-id",
@@ -401,7 +402,7 @@ Status: active
 `, "utf8");
 
   const result = spawnSync(process.execPath, [
-    join(repoRoot, "tools", "game_context", "new_prototype.mjs"),
+    join(repoRoot, "ai_studio", "game_project", "new_prototype.mjs"),
     "--root",
     fixture,
     "--game-id",
@@ -427,7 +428,7 @@ test("new prototype kickoff refuses existing project without force", (t) => {
   mkdirSync(join(fixture, "gamedesign", "projects", "bubble-bay"), { recursive: true });
 
   const result = spawnSync(process.execPath, [
-    join(repoRoot, "tools", "game_context", "new_prototype.mjs"),
+    join(repoRoot, "ai_studio", "game_project", "new_prototype.mjs"),
     "--root",
     fixture,
     "--game-id",
