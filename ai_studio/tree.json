@@ -3196,6 +3196,123 @@
         ]
       },
       {
+        "id": "module:game-design",
+        "title": "Game Design",
+        "subtitle": "design knowledge workflows",
+        "kind": "module",
+        "moduleId": "game_design",
+        "color": "#7c3aed",
+        "path": "ai_studio/game_design",
+        "description": "Reviewed AI Studio game-design workflow module. Owns source routing and reusable design knowledge workflow docs; durable design content remains in gamedesign/.",
+        "role": "game-design workflow module",
+        "tags": [
+          "game-design",
+          "knowledge",
+          "workflow"
+        ],
+        "children": [
+          {
+            "id": "game-design:readme",
+            "kind": "doc",
+            "path": "ai_studio/game_design/README.md",
+            "title": "README.md",
+            "description": "Game Design module contract: workflow ownership and boundary with durable gamedesign content.",
+            "role": "game-design module entrypoint",
+            "tags": [
+              "source",
+              "contract"
+            ]
+          },
+          {
+            "id": "game-design:knowledge",
+            "title": "Design Knowledge Workflow",
+            "subtitle": "source routing and promotion",
+            "kind": "workflow",
+            "path": "ai_studio/game_design/knowledge",
+            "description": "Workflow docs for design source routing, source intake, reference-backed work, reusable knowledge promotion, and file templates.",
+            "role": "design knowledge workflow",
+            "tags": [
+              "knowledge",
+              "sources",
+              "workflow"
+            ],
+            "children": [
+              {
+                "id": "game-design:knowledge-readme",
+                "kind": "doc",
+                "path": "ai_studio/game_design/knowledge/README.md",
+                "title": "README.md",
+                "description": "Design Knowledge Workflow contract: data boundaries and file roles.",
+                "role": "design knowledge workflow contract",
+                "tags": [
+                  "source",
+                  "contract"
+                ]
+              },
+              {
+                "id": "game-design:source-routing",
+                "kind": "doc",
+                "path": "ai_studio/game_design/knowledge/source_routing.md",
+                "title": "source_routing.md",
+                "description": "Routing rules for reusable source notes, reusable knowledge, project wiki material, tasks, and temporary scratch data.",
+                "role": "design source routing rules",
+                "tags": [
+                  "sources",
+                  "routing"
+                ]
+              },
+              {
+                "id": "game-design:source-intake-promotion",
+                "kind": "doc",
+                "path": "ai_studio/game_design/knowledge/source_intake_promotion.md",
+                "title": "source_intake_promotion.md",
+                "description": "Source intake and promotion workflow: source quality, evidence labels, and when to update knowledge indexes/logs.",
+                "role": "design source intake workflow",
+                "tags": [
+                  "sources",
+                  "evidence"
+                ]
+              },
+              {
+                "id": "game-design:reference-work-review",
+                "kind": "doc",
+                "path": "ai_studio/game_design/knowledge/reference_work_review.md",
+                "title": "reference_work_review.md",
+                "description": "Reference-driven design work and review checklist for named references that guide gameplay, UI, economy, balance, art, or implementation decisions.",
+                "role": "reference work review workflow",
+                "tags": [
+                  "references",
+                  "review"
+                ]
+              },
+              {
+                "id": "game-design:knowledge-templates",
+                "kind": "doc",
+                "path": "ai_studio/game_design/knowledge/templates.md",
+                "title": "templates.md",
+                "description": "Templates for reusable source notes, reusable knowledge pages, project source notes, and source review reports.",
+                "role": "design knowledge templates",
+                "tags": [
+                  "templates"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "game-design:nt-design-knowledge-skill",
+            "kind": "skill",
+            "path": ".codex/skills/nt-design-knowledge/SKILL.md",
+            "title": "nt-design-knowledge",
+            "description": "Skill surface for routing design sources and reusable game-design knowledge through the AI Studio Game Design workflow.",
+            "role": "design knowledge skill",
+            "tags": [
+              "skill",
+              "knowledge"
+            ]
+          }
+        ]
+      },
+      {
         "id": "module:quality",
         "title": "Quality",
         "subtitle": "small rule set",

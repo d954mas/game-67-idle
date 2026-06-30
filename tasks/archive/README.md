@@ -17,12 +17,9 @@ Pipeline cleanup evidence preserved from earlier taskboard/status resets:
   corrupt `tmp/session_profiles/sessions/*.jsonl`.
 - Hot-doc budget checks and full pipeline validation were retired from active
   routing. Prefer focused module validators and direct module tests.
-- `task-manager`, `generated-game-ui-assets`, `game-visual-art-direction`,
-  `game-feature-iteration`, `nt-asset-workflow`, `primary-gdd-pipeline`,
-  `delegated-image-generation`, `game-state-management`,
-  `game-runtime-automation`, `chat-session-reflection`, and
-  `design-source-knowledge` keep hot `SKILL.md` files as short routers and load
-  detailed procedures from `.codex/skills/*/references/`.
+- Reviewed `nt-*` skills keep hot `SKILL.md` files as short routers. Detailed
+  procedures may live in owned `ai_studio/` module docs instead of skill-local
+  `references/`.
 - `ai_studio/core_harness/agent_surfaces/sync.mjs --check` fails on stale generated `.claude` skill
   pointers; normal sync removes generated orphans and preserves hand-written
   `.claude` skills.
