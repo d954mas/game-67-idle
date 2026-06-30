@@ -88,8 +88,8 @@ node ai_studio/assets/viewer/pull.mjs --ids <asset-ids> --to <game>/assets
   registered template asset roots.
 - `../storage/sources/games.json` is the explicit list of
   registered game asset roots.
-- `../storage/sources/*_registry.mjs` reads and updates those
-  registries.
+- `../storage/sources/libraries.mjs`, `templates.mjs`, and `games.mjs` read
+  and update those registries.
 - `viewer.js` and `viewer.css` are surface implementation details.
 - `serve_gallery.mjs` is kept because library mode can reference a large
   external asset library through `/lib/` instead of copying every model.

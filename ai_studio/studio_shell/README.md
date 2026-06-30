@@ -49,7 +49,7 @@ ai_studio\studio_shell\start_site.cmd
 Codex managed shell note: background child processes started inside the sandbox
 can be killed when the command finishes. When Codex starts this site for browser
 use, run `start_site_windows.ps1` outside the sandbox, then verify
-`http://127.0.0.1:8765/viewer/` or the needed surface.
+`http://127.0.0.1:8765/asset_viewer/` or the needed surface.
 
 ## Surface Rule
 

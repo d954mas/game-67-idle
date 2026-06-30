@@ -57,7 +57,7 @@ Load only the route that matches the current task:
 - AI Studio browser entry point:
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open`.
 - Asset browsing and review:
-  `http://127.0.0.1:8765/viewer/`.
+  `http://127.0.0.1:8765/asset_viewer/`.
 - Architecture map validation report:
   `node ai_studio/architecture_map/validate_map.mjs`.
 

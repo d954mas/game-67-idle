@@ -20,7 +20,7 @@ Use storage search for agent work:
 
 ```powershell
 node ai_studio/assets/storage/search.mjs --query "<need>" --kind <model|texture|material|audio|font|ui> --json
-node ai_studio/assets/storage/search.mjs --source-path template/assets --mode scan --query "<need>" --json
+node ai_studio/assets/storage/search.mjs --source-path template/assets --source-type local --query "<need>" --json
 ```
 
 Search reads the generated index. Add `--refresh` only after files or manifests
@@ -32,7 +32,7 @@ Use the site for visual browsing:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```
 
-Open `http://127.0.0.1:8765/viewer/`.
+Open `http://127.0.0.1:8765/asset_viewer/`.
 
 ## Pull Into A Game
 
