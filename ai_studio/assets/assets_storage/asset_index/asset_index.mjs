@@ -451,25 +451,26 @@ function scanFolderRecords(root, source, covered = null) {
 function registeredCoveredPaths(root, source, registeredRecords) {
   const files = new Set();
   const dirs = new Set();
-  const add = (path) => {
+  const addFile = (path) => {
     if (!path) return;
-    const full = resolve(path);
-    try {
-      const stat = statSync(full);
-      if (stat.isDirectory()) dirs.add(full);
-      else files.add(full);
-    } catch {
-      files.add(full);
-    }
+    files.add(resolve(path));
+  };
+  const addDir = (path) => {
+    if (!path) return;
+    dirs.add(resolve(path));
+  };
+  const addResource = (base, value) => {
+    if (!value) return;
+    const full = resolve(base, value);
+    if (kindForExt(extname(value).toLowerCase())) addFile(full);
+    else addDir(full);
   };
   for (const record of registeredRecords) {
-    for (const path of [record.modelPath, record.preview, record.catalogPath]) {
-      add(path);
-    }
-    if (record.resource) {
-      add(resolve(source.path, record.resource));
-      add(resolve(root, record.resource));
-    }
+    addFile(record.modelPath);
+    addFile(record.preview);
+    addFile(record.catalogPath);
+    addResource(source.path, record.resource);
+    addResource(root, record.resource);
   }
   return { files, dirs };
 }
