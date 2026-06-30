@@ -15,6 +15,11 @@ asset roots
   current game/assets
   registered game assets
         |
+catalog readers
+  OKF Markdown compatibility reader
+  Pack Manifest reader
+  raw folder scanner
+        |
 asset index
   one SQLite database per source
   explicit rebuild / refresh
@@ -45,28 +50,47 @@ tmp/ai_studio/assets/asset_index/game_<game-id>.sqlite
 ```
 
 The database is local cache, not source of truth. The source of truth remains
-the asset storage root: OKF Markdown catalog records for the shared library, or
-the template/game asset folder for folder-backed sources.
+the asset storage root: pack manifests for reviewed sources, OKF Markdown
+catalog records for the legacy shared library, or the template/game asset folder
+for raw folder-backed sources.
 
 ## Public API
 
 - `ensureAssetIndex(root, source)`: create or rebuild a missing index.
+- `refreshAssetIndex(root, source)`: explicit refresh that skips the full
+  rebuild when the source signature is unchanged.
 - `rebuildAssetIndex(root, source)`: full source rebuild.
 - `queryIndexedAssets(root, source, query)`: paged assets, facets, totals.
 - `listIndexedPacks(root, source)`: pack-first summaries for the viewer.
 - `resolveIndexedModel(root, source, assetId)`: model path lookup.
 
-Asset Viewer exposes the full rebuild through its `Refresh` action for every
+Asset Viewer exposes `refreshAssetIndex` through its `Refresh` action for every
 source. Normal browsing should use `queryIndexedAssets` and `listIndexedPacks`.
 
 ## Refresh Policy
 
 No filesystem watch mode. Updates are explicit:
 
-- manual refresh/rebuild;
-- page reload cheap freshness check in a later slice;
-- targeted preview regenerate jobs in a later slice.
+- manual refresh checks source `mtime` and size signatures, then rebuilds only
+  when the catalog or folder changed;
+- forced rebuild remains available through code when the source signature is not
+  enough;
+- targeted preview refresh lives in `../preview_pipeline/`.
 
-Future incremental refresh should compare candidate file `mtime` and size
-against the index, parse only changed Markdown records, and update preview state
-without blocking the browser page.
+The signature is a fast guard, not the source of truth. When it changes, the
+index is rebuilt from OKF Markdown records, pack manifests, or the folder scan.
+
+## Unregistered Files
+
+All source types use the same visibility rule: registered metadata records are
+merged with discovered asset files. A discovered file that is not covered by OKF
+metadata or `assets.jsonl` remains visible in the index as:
+
+```text
+origin: unregistered
+license: unknown
+tags: [unregistered]
+```
+
+This prevents local game/template/global-library files from disappearing just
+because they were not added to metadata yet.

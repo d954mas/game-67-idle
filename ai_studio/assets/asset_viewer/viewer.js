@@ -284,11 +284,12 @@
     const t = a.thumb ? '<div class="thumb"><img loading="lazy" decoding="async" src="' + esc(a.thumb) + '"></div>' : '<div class="thumb"><span class="ph">' + icon(a.kind) + "</span></div>";
     let foot = "";
     if (REVIEW) foot = '<label class="pick" onclick="event.stopPropagation()"><input type="checkbox" data-pick="' + esc(a.id) + '"' + (picked.has(a.id) ? " checked" : "") + "> keep</label>";
+    const multiPack = (a.packs || []).length > 1 ? '<span class="k" title="' + esc((a.packs || []).join(", ")) + '">+' + ((a.packs || []).length - 1) + " packs</span>" : "";
     return '<div class="card' + (picked.has(a.id) ? " sel" : "") + '" data-asset="' + esc(a.id) + '">' + t +
       '<div class="meta"><div class="name">' + esc(a.name) + '</div><div class="row">' +
       '<span class="chip" style="background:' + (OC[a.origin] || OC.unknown) + '">' + esc(a.origin) + "</span>" +
       (a.sourceId ? '<span class="k" title="' + esc(a.sourceId) + '">↗ linked</span>' : (REVIEW ? '<span class="k" style="color:#e0c060">new</span>' : "")) +
-      '<span class="k">' + esc(a.kind) + "</span></div></div>" + foot + "</div>";
+      '<span class="k">' + esc(a.kind) + "</span>" + multiPack + "</div></div>" + foot + "</div>";
   }
 
   const FACET_CAP = 40; // high-cardinality facets (tags) get capped to the top-N by count
@@ -338,6 +339,7 @@
       kv("license", esc(a.license)) +
       kv("source", esc(a.source)) +
       kv("pack", a.pack ? '<a href="#/pack/' + esc(a.pack) + '">' + esc(a.pack) + "</a>" : "") +
+      kv("packs", (a.packs || []).length > 1 ? (a.packs || []).map((pack) => '<a href="#/pack/' + esc(pack) + '">' + esc(pack) + "</a>").join(", ") : "") +
       kv("tags", (a.tags || []).map(esc).join(", ")) +
       kv("path", esc(a.relpath || a.id)) +
       '<div class="row" style="margin-top:10px"><button id="copyId">copy id</button>' +

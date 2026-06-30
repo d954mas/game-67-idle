@@ -1,11 +1,18 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { dirname, extname, join } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assetPreviewCachePath, rebuildAssetIndex } from "../asset_index/asset_index.mjs";
+import {
+  assetPreviewCacheStatus,
+  assetPreviewMetaPath,
+  ensureAssetIndex,
+  rebuildAssetIndex,
+  summarizeIndexedPreviewStatus,
+} from "../asset_index/asset_index.mjs";
 import { scanLibrary } from "../okf_catalog/find_assets.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const previewCacheVersion = 1;
 const imageExt = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
 const modelExt = new Set([".glb", ".gltf"]);
 const blenders = [
@@ -20,6 +27,27 @@ function safeSlug(value) {
 
 function previewDir(root, source, assetId) {
   return join(root, "tmp", "ai_studio", "assets", "previews", safeSlug(source.id), safeSlug(assetId));
+}
+
+function sourceStats(path) {
+  const stat = statSync(path);
+  return {
+    sourcePath: resolve(path).replace(/\\/g, "/"),
+    sourceMtimeMs: Math.round(stat.mtimeMs),
+    sourceSize: stat.size,
+  };
+}
+
+function writePreviewMeta(root, source, assetId, sourcePath, kind, previewFile, size) {
+  const meta = {
+    version: previewCacheVersion,
+    kind,
+    previewFile,
+    previewSize: size,
+    generatedAt: new Date().toISOString(),
+    ...sourceStats(sourcePath),
+  };
+  writeFileSync(assetPreviewMetaPath(root, source, assetId), JSON.stringify(meta, null, 2), "utf8");
 }
 
 function walkSync(dir) {
@@ -64,30 +92,51 @@ function glbIn(dir) {
 async function collectLibraryPreviewTargets(root, source, force) {
   const images = [];
   const models = [];
+  const stats = { skippedImages: 0, skippedModels: 0, staleImages: 0, staleModels: 0 };
   const records = await scanLibrary(source.path);
   for (const record of records) {
     if (!record.asset_id) continue;
-    if (!force && (record.preview || assetPreviewCachePath(root, source, record.asset_id))) continue;
     if (record.kind === "model") {
+      if (record.preview && !force) {
+        stats.skippedModels += 1;
+        continue;
+      }
       const model = glbIn(record.filesDir);
-      if (model) models.push({ assetId: record.asset_id, path: model });
+      if (!model) continue;
+      const status = assetPreviewCacheStatus(root, source, record.asset_id, model);
+      if (!force && status === "clean") {
+        stats.skippedModels += 1;
+        continue;
+      }
+      if (status === "stale") stats.staleModels += 1;
+      models.push({ assetId: record.asset_id, path: model });
     }
   }
-  return { images, models };
+  return { images, models, ...stats };
 }
 
 function collectFolderPreviewTargets(sourceRoot, root, source, force) {
   const images = [];
   const models = [];
+  const stats = { skippedImages: 0, skippedModels: 0, staleImages: 0, staleModels: 0 };
   for (const path of walkSync(sourceRoot)) {
     const ext = extname(path).toLowerCase();
     if (!imageExt.has(ext) && !modelExt.has(ext)) continue;
     const assetId = assetIdFor(root, path);
-    if (!force && assetPreviewCachePath(root, source, assetId)) continue;
+    const status = assetPreviewCacheStatus(root, source, assetId, path);
+    if (!force && status === "clean") {
+      if (imageExt.has(ext)) stats.skippedImages += 1;
+      if (modelExt.has(ext)) stats.skippedModels += 1;
+      continue;
+    }
+    if (status === "stale") {
+      if (imageExt.has(ext)) stats.staleImages += 1;
+      if (modelExt.has(ext)) stats.staleModels += 1;
+    }
     if (imageExt.has(ext)) images.push({ assetId, path, ext });
     if (modelExt.has(ext)) models.push({ assetId, path });
   }
-  return { images, models };
+  return { images, models, ...stats };
 }
 
 function copyImagePreviews(root, source, images) {
@@ -100,6 +149,7 @@ function copyImagePreviews(root, source, images) {
       if (/^preview\.(png|jpg|jpeg|webp|gif)$/i.test(old) && old !== "preview" + ext) rmSync(join(dir, old), { force: true });
     }
     copyFileSync(image.path, join(dir, "preview" + ext));
+    writePreviewMeta(root, source, image.assetId, image.path, "image-copy", "preview" + ext, 0);
     copied += 1;
   }
   return copied;
@@ -128,6 +178,7 @@ function renderModelPreviews(root, source, models, { blender = "", size = 512 } 
     const dir = previewDir(root, source, model.assetId);
     mkdirSync(dir, { recursive: true });
     copyFileSync(renderedPath, join(dir, "preview.webp"));
+    writePreviewMeta(root, source, model.assetId, model.path, "model-render", "preview.webp", size);
     rendered += 1;
   }
   const blenderOutput = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
@@ -143,17 +194,46 @@ function renderModelPreviews(root, source, models, { blender = "", size = 512 } 
 
 export async function refreshPreviewCache(root, source, options = {}) {
   if (!source.available) throw new Error(`asset source is not available: ${source.path}`);
-  const { images, models } = source.mode === "library"
-    ? await collectLibraryPreviewTargets(root, source, Boolean(options.force))
-    : collectFolderPreviewTargets(source.path, root, source, Boolean(options.force));
+  const force = Boolean(options.force);
+  const currentIndex = await ensureAssetIndex(root, source);
+  if (!force) {
+    const previewSummary = await summarizeIndexedPreviewStatus(root, source);
+    if (!previewSummary.missing && !previewSummary.stale) {
+      const cachedImages = (previewSummary.byKind.texture?.clean || 0) + (previewSummary.byKind.ui?.clean || 0);
+      return {
+        sourceId: source.id,
+        copiedImages: 0,
+        renderedModels: 0,
+        skippedImages: 0,
+        skippedModels: 0,
+        cachedImages,
+        cachedModels: previewSummary.byKind.model?.clean || 0,
+        staleImages: 0,
+        staleModels: 0,
+        warning: "",
+        index: currentIndex,
+        previewSummary,
+      };
+    }
+  }
+  const collected = source.mode === "library"
+    ? await collectLibraryPreviewTargets(root, source, force)
+    : collectFolderPreviewTargets(source.path, root, source, force);
+  const { images, models } = collected;
   const copied = copyImagePreviews(root, source, images);
   const modelResult = renderModelPreviews(root, source, models, options);
-  const index = await rebuildAssetIndex(root, source);
+  const changedPreviews = copied > 0 || modelResult.rendered > 0;
+  const index = changedPreviews ? await rebuildAssetIndex(root, source) : currentIndex;
   return {
     sourceId: source.id,
     copiedImages: copied,
     renderedModels: modelResult.rendered,
+    skippedImages: collected.skippedImages,
     skippedModels: modelResult.skipped,
+    cachedImages: collected.skippedImages,
+    cachedModels: collected.skippedModels,
+    staleImages: collected.staleImages,
+    staleModels: collected.staleModels,
     warning: modelResult.reason,
     index,
   };

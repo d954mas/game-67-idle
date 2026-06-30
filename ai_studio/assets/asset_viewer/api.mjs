@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_LIBRARY } from "../assets_storage/okf_catalog/find_assets.mjs";
-import { listIndexedPacks, queryIndexedAssets, rebuildAssetIndex, resolveIndexedModel } from "../assets_storage/asset_index/asset_index.mjs";
+import { listIndexedPacks, queryIndexedAssets, refreshAssetIndex, resolveIndexedModel } from "../assets_storage/asset_index/asset_index.mjs";
 import { refreshPreviewCache } from "../assets_storage/preview_pipeline/preview_cache.mjs";
 import { listRegisteredGames } from "../assets_storage/source_registry/games_registry.mjs";
 import { listRegisteredTemplates } from "../assets_storage/source_registry/templates_registry.mjs";
@@ -313,8 +313,16 @@ export async function reindexAssetViewerSource(root, body) {
   if (!source.available) throw new Error(`asset source is not available: ${source.path}`);
   viewerCache.delete(cacheKeyForSource(source));
 
-  const result = await rebuildAssetIndex(root, source);
-  return { source, refresh: { mode: "index", assetCount: result.assetCount, packCount: result.packCount } };
+  const result = await refreshAssetIndex(root, source);
+  return {
+    source,
+    refresh: {
+      mode: "index",
+      assetCount: result.assetCount,
+      packCount: result.packCount,
+      unchanged: Boolean(result.unchanged),
+    },
+  };
 }
 
 export const refreshAssetViewerSource = reindexAssetViewerSource;
@@ -323,6 +331,7 @@ export async function refreshAssetViewerPreviews(root, body) {
   const { sources } = await listAssetViewerSources(root);
   const source = selectSource(sources, body, root);
   if (!source.available) throw new Error(`asset source is not available: ${source.path}`);
+  await refreshAssetIndex(root, source);
   const result = await refreshPreviewCache(root, source, { force: Boolean(body.force) });
   viewerCache.delete(cacheKeyForSource(source));
   return { source, previews: result };

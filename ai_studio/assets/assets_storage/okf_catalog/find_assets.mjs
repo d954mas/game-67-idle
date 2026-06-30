@@ -13,7 +13,7 @@
 //        --decision source+intake --reason "Kenney furniture kit fits the diorama"
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, resolve, dirname, basename } from "node:path";
+import { join, resolve, dirname, basename, relative } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
 // Walk up from this module to the repo root (dir holding AGENTS.md), so tools
@@ -82,6 +82,14 @@ export function parseFrontmatter(text) {
   return out;
 }
 
+function list(value) {
+  return Array.isArray(value) ? value.filter(Boolean) : value ? [value] : [];
+}
+
+function uniqueList(...values) {
+  return [...new Set(values.flatMap(list).map(String).filter(Boolean))];
+}
+
 async function walk(dir) {
   const out = [];
   let entries;
@@ -98,38 +106,100 @@ async function walk(dir) {
   return out;
 }
 
+async function mapLimit(items, limit, worker) {
+  const out = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      out[index] = await worker(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+async function previewMap(libraryPath) {
+  const previewsDir = join(libraryPath, "previews");
+  if (!existsSync(previewsDir)) return new Map();
+  const media = (await walk(previewsDir)).filter((f) => /\.(png|jpg|jpeg|webp|gif)$/i.test(f)).sort();
+  const map = new Map();
+  for (const file of media) {
+    const [assetId] = relative(previewsDir, file).split(/[\\/]/).filter(Boolean);
+    if (assetId && !map.has(assetId)) map.set(assetId, file);
+  }
+  return map;
+}
+
+async function modelMap(libraryPath) {
+  const filesDir = join(libraryPath, "files");
+  if (!existsSync(filesDir)) return new Map();
+  const models = (await walk(filesDir)).filter((f) => /\.(glb|gltf)$/i.test(f)).sort();
+  const map = new Map();
+  for (const file of models) {
+    const dir = dirname(file);
+    if (!map.has(dir)) map.set(dir, file);
+  }
+  return map;
+}
+
+async function parsePackFiles(files) {
+  const packs = await mapLimit(files, 24, async (f) => {
+    let text;
+    try { text = await readFile(f, "utf8"); } catch { return null; }
+    const fm = parseFrontmatter(text);
+    const m = text.match(/^п»ї?---\r?\n[\s\S]*?\r?\n---\r?\n([\s\S]*)$/);
+    return {
+      pack: fm.pack || basename(dirname(f)),
+      title: fm.title || fm.pack || "",
+      source: fm.source || "",
+      kind: fm.kind || "",
+      license: fm.license || "",
+      license_url: fm.license_url || "",
+      origin: ORIGINS.includes(fm.origin) ? fm.origin : "unknown",
+      count: Number(fm.count) || 0,
+      genre: list(fm.genre),
+      style: list(fm.style),
+      tags: list(fm.tags),
+      cover: fm.cover || "",
+      description: fm.description || "",
+      body: m ? m[1].trim() : "",
+      catalogDir: dirname(f),
+    };
+  });
+  return packs.filter(Boolean);
+}
+
 // Read every catalog/**/*.md record into a normalized list (one reader for the
 // search CLI and the library viewer).
-export async function scanLibrary(libraryPath = DEFAULT_LIBRARY) {
+export async function scanLibraryWithPacks(libraryPath = DEFAULT_LIBRARY) {
   const catalogDir = join(libraryPath, "catalog");
-  if (!existsSync(catalogDir)) return [];
-  const files = (await walk(catalogDir)).filter(
+  if (!existsSync(catalogDir)) return { records: [], packs: [] };
+  const catalogFiles = await walk(catalogDir);
+  const files = catalogFiles.filter(
     (f) => f.endsWith(".md") && !/[\\/](README|index)\.md$/i.test(f) && !/[\\/]_[^\\/]*\.md$/.test(f),
   );
+  const packFiles = catalogFiles.filter((f) => /[\\/]_pack\.md$/i.test(f));
   // Pack genre/style live only on the _pack.md unit record; join them onto each
   // asset so individual assets are discoverable by genre (sci-fi/fantasy/food).
-  const packMeta = new Map((await scanPacks(libraryPath)).map((p) => [p.pack, p]));
-  const records = [];
-  for (const f of files) {
+  const packs = await parsePackFiles(packFiles);
+  const packMeta = new Map(packs.map((p) => [p.pack, p]));
+  const previews = await previewMap(libraryPath);
+  const models = await modelMap(libraryPath);
+  const records = await mapLimit(files, 64, async (f) => {
     let text;
     try {
       text = await readFile(f, "utf8");
     } catch {
-      continue;
+      return null;
     }
     const fm = parseFrontmatter(text);
-    if (!fm.asset_id && !fm.title) continue;
+    if (!fm.asset_id && !fm.title) return null;
     const assetId = fm.asset_id || "";
-    let preview = "";
-    if (assetId) {
-      try {
-        const dir = join(libraryPath, "previews", assetId);
-        const pf = (await readdir(dir)).find((n) => /\.(png|jpg|jpeg|webp|gif)$/i.test(n));
-        if (pf) preview = join(dir, pf);
-      } catch { /* no previews dir for this asset */ }
-    }
+    const filesDir = fm.resource ? join(libraryPath, fm.resource) : "";
     const pm = packMeta.get(fm.pack || "");
-    records.push({
+    return {
       asset_id: assetId,
       title: fm.title || assetId,
       description: fm.description || "",
@@ -140,16 +210,22 @@ export async function scanLibrary(libraryPath = DEFAULT_LIBRARY) {
       pack: fm.pack || "",
       source_id: fm.source_id || "",
       author: fm.author || "",
+      packs: uniqueList(fm.pack, fm.packs, fm.member_of, fm.bundles),
       tags: Array.isArray(fm.tags) ? fm.tags : fm.tags ? [fm.tags] : [],
       genre: pm ? pm.genre : [],
       style: pm ? pm.style : [],
       resource: fm.resource || "",
-      filesDir: fm.resource ? join(libraryPath, fm.resource) : "",
-      preview,
+      filesDir,
+      modelPath: filesDir ? models.get(filesDir) || "" : "",
+      preview: assetId ? previews.get(assetId) || "" : "",
       catalogPath: f,
-    });
-  }
-  return records;
+    };
+  });
+  return { records: records.filter(Boolean), packs };
+}
+
+export async function scanLibrary(libraryPath = DEFAULT_LIBRARY) {
+  return (await scanLibraryWithPacks(libraryPath)).records;
 }
 
 // Read pack unit records (catalog/**/_pack.md) — the bundle metadata that

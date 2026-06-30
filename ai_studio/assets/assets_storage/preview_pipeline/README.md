@@ -12,14 +12,19 @@ Generated previews are cache files:
 
 ```text
 tmp/ai_studio/assets/previews/<source-id>/<asset-id>/preview.<ext>
+tmp/ai_studio/assets/previews/<source-id>/<asset-id>/preview.json
 ```
 
 They are rebuilt on demand and must not be committed.
 
 The viewer uses `preview_cache.mjs` for the normal `Refresh previews` action. It
-copies missing image previews for shared, template, and game sources, renders
-missing GLB/GLTF thumbnails through Blender when possible, then rebuilds that
-source index so cards point at the fresh cache.
+copies missing or stale image previews for template and game sources, renders
+missing or stale GLB/GLTF thumbnails through Blender when possible, then
+refreshes that source index so cards point at the fresh cache.
+
+`preview.json` stores the source path, size, mtime, preview kind, and preview
+size. A preview is stale when that sidecar is missing, from an old preview cache
+version, or no longer matches the source file.
 
 The legacy batch command remains for large shared-library model runs:
 

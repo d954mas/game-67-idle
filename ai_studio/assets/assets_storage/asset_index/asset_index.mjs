@@ -1,9 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
-import { scanLibrary, scanPacks } from "../okf_catalog/find_assets.mjs";
+import { scanLibraryWithPacks } from "../okf_catalog/find_assets.mjs";
+import { hasPackManifestSource, scanPackManifestSource } from "../pack_manifest/pack_manifest.mjs";
 
-const schemaVersion = 1;
+const schemaVersion = 2;
+const previewCacheVersion = 1;
 const facetKeys = ["kind", "origin", "license", "source", "pack", "genre", "style", "tags"];
 const primaryExt = {
   image: [".png", ".jpg", ".jpeg", ".webp", ".gif"],
@@ -11,6 +13,7 @@ const primaryExt = {
   font: [".ttf", ".otf", ".woff", ".woff2"],
   audio: [".wav", ".mp3", ".ogg"],
 };
+const indexedExt = new Set(Object.values(primaryExt).flat());
 const glbExt = new Set([".glb", ".gltf"]);
 const imageExt = new Set(primaryExt.image);
 const vendorNames = ["kenney", "quaternius", "polyhaven", "poly-haven", "ambientcg", "poly-pizza", "opengameart"];
@@ -78,6 +81,14 @@ function parseJsonList(value) {
   }
 }
 
+function list(value) {
+  return Array.isArray(value) ? value.filter(Boolean) : value ? [value] : [];
+}
+
+function uniqueList(...values) {
+  return [...new Set(values.flatMap(list).map(String).filter(Boolean))];
+}
+
 function hashKey(value) {
   let hash = 2166136261;
   for (const ch of String(value || "")) {
@@ -91,6 +102,100 @@ function sourceKey(source) {
   return `${source.id}|${source.path}|${source.mode}`;
 }
 
+function signatureHash(parts) {
+  let hash = 2166136261;
+  for (const part of parts) {
+    for (const ch of String(part)) {
+      hash ^= ch.charCodeAt(0);
+      hash = Math.imul(hash, 16777619);
+    }
+  }
+  return String(hash >>> 0);
+}
+
+function isSignatureFile(source, path) {
+  const ext = extname(path).toLowerCase();
+  if (source.mode === "library" && ext === ".md") return true;
+  if (indexedExt.has(ext)) return true;
+  return /(^|[\\/])licen[cs]e(\.|$)/i.test(path);
+}
+
+function signatureRoots(source) {
+  if (source.mode !== "library") return [{ label: "source", path: source.path }];
+  return [
+    { label: "catalog", path: join(source.path, "catalog") },
+    { label: "files", path: join(source.path, "files") },
+    { label: "previews", path: join(source.path, "previews") },
+  ];
+}
+
+function sourceSignature(root, source) {
+  let count = 0;
+  let totalSize = 0;
+  let maxMtimeMs = 0;
+  const hashParts = [sourceKey(source)];
+  for (const signatureRoot of signatureRoots(source)) {
+    const files = walkSync(signatureRoot.path).filter((path) => isSignatureFile(source, path)).sort();
+    for (const file of files) {
+      let stat;
+      try {
+        stat = statSync(file);
+      } catch {
+        continue;
+      }
+      const mtimeMs = Math.round(stat.mtimeMs);
+      count += 1;
+      totalSize += stat.size;
+      maxMtimeMs = Math.max(maxMtimeMs, mtimeMs);
+      hashParts.push(signatureRoot.label, relPosix(signatureRoot.path, file), stat.size, mtimeMs);
+    }
+  }
+  return {
+    sourceKey: sourceKey(source),
+    mode: source.mode,
+    path: source.path,
+    count,
+    totalSize,
+    maxMtimeMs,
+    hash: signatureHash(hashParts),
+  };
+}
+
+export async function summarizeIndexedPreviewStatus(root, source) {
+  await ensureAssetIndex(root, source);
+  const db = openIndex(root, source);
+  initSchema(db);
+  try {
+    const rows = db.prepare(`
+      SELECT kind, preview_status AS status, COUNT(*) AS count
+      FROM assets
+      WHERE source_id = ?
+      GROUP BY kind, preview_status
+    `).all(source.id);
+    const summary = {
+      sourceId: source.id,
+      total: 0,
+      clean: 0,
+      missing: 0,
+      stale: 0,
+      byKind: {},
+    };
+    for (const row of rows) {
+      const status = row.status || "missing";
+      const kind = row.kind || "asset";
+      const count = Number(row.count) || 0;
+      summary.total += count;
+      summary[status] = (summary[status] || 0) + count;
+      if (!summary.byKind[kind]) summary.byKind[kind] = { clean: 0, missing: 0, stale: 0, total: 0 };
+      summary.byKind[kind][status] = (summary.byKind[kind][status] || 0) + count;
+      summary.byKind[kind].total += count;
+    }
+    return summary;
+  } finally {
+    db.close();
+  }
+}
+
 function indexDir(root) {
   return join(root, "tmp", "ai_studio", "assets", "asset_index");
 }
@@ -99,13 +204,54 @@ function previewCacheDir(root, source) {
   return join(root, "tmp", "ai_studio", "assets", "previews", safeSlug(source.id));
 }
 
+function previewItemDir(root, source, assetId) {
+  return join(previewCacheDir(root, source), safeSlug(assetId));
+}
+
 export function assetPreviewCachePath(root, source, assetId) {
-  const dir = join(previewCacheDir(root, source), safeSlug(assetId));
+  const dir = previewItemDir(root, source, assetId);
   for (const ext of [".webp", ".png", ".jpg", ".jpeg", ".gif"]) {
     const candidate = join(dir, "preview" + ext);
     if (existsSync(candidate)) return candidate;
   }
   return "";
+}
+
+export function assetPreviewMetaPath(root, source, assetId) {
+  return join(previewItemDir(root, source, assetId), "preview.json");
+}
+
+function previewSourceStats(path) {
+  if (!path || !existsSync(path)) return null;
+  const stat = statSync(path);
+  return {
+    sourcePath: resolve(path).replace(/\\/g, "/"),
+    sourceMtimeMs: Math.round(stat.mtimeMs),
+    sourceSize: stat.size,
+  };
+}
+
+function readPreviewMeta(root, source, assetId) {
+  const path = assetPreviewMetaPath(root, source, assetId);
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+export function assetPreviewCacheStatus(root, source, assetId, sourcePath = "") {
+  if (!assetPreviewCachePath(root, source, assetId)) return "missing";
+  const meta = readPreviewMeta(root, source, assetId);
+  if (!meta || meta.version !== previewCacheVersion) return "stale";
+  const stats = previewSourceStats(sourcePath);
+  if (!stats) return "clean";
+  return meta.sourcePath === stats.sourcePath
+    && meta.sourceMtimeMs === stats.sourceMtimeMs
+    && meta.sourceSize === stats.sourceSize
+    ? "clean"
+    : "stale";
 }
 
 export function assetIndexPath(root, source) {
@@ -184,12 +330,60 @@ function initSchema(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_asset_terms_lookup ON asset_terms(source_id, key, value);
     CREATE INDEX IF NOT EXISTS idx_asset_terms_asset ON asset_terms(source_id, asset_id);
+    CREATE TABLE IF NOT EXISTS asset_pack_memberships (
+      source_id TEXT NOT NULL,
+      asset_id TEXT NOT NULL,
+      pack TEXT NOT NULL,
+      is_primary INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (source_id, asset_id, pack)
+    );
+    CREATE INDEX IF NOT EXISTS idx_asset_pack_memberships_pack ON asset_pack_memberships(source_id, pack, asset_id);
+    CREATE INDEX IF NOT EXISTS idx_asset_pack_memberships_asset ON asset_pack_memberships(source_id, asset_id);
     CREATE VIRTUAL TABLE IF NOT EXISTS asset_search_fts USING fts5(
       source_id UNINDEXED,
       asset_id UNINDEXED,
       text
     );
   `);
+}
+
+function dropSecondaryIndexes(db) {
+  db.exec(`
+    DROP INDEX IF EXISTS idx_assets_source_kind;
+    DROP INDEX IF EXISTS idx_assets_source_pack;
+    DROP INDEX IF EXISTS idx_assets_source_origin;
+    DROP INDEX IF EXISTS idx_assets_source_license;
+    DROP INDEX IF EXISTS idx_packs_source;
+    DROP INDEX IF EXISTS idx_asset_terms_lookup;
+    DROP INDEX IF EXISTS idx_asset_terms_asset;
+    DROP INDEX IF EXISTS idx_asset_pack_memberships_pack;
+    DROP INDEX IF EXISTS idx_asset_pack_memberships_asset;
+  `);
+}
+
+function createSecondaryIndexes(db) {
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_assets_source_kind ON assets(source_id, kind);
+    CREATE INDEX IF NOT EXISTS idx_assets_source_pack ON assets(source_id, pack);
+    CREATE INDEX IF NOT EXISTS idx_assets_source_origin ON assets(source_id, origin);
+    CREATE INDEX IF NOT EXISTS idx_assets_source_license ON assets(source_id, license);
+    CREATE INDEX IF NOT EXISTS idx_packs_source ON packs(source_id);
+    CREATE INDEX IF NOT EXISTS idx_asset_terms_lookup ON asset_terms(source_id, key, value);
+    CREATE INDEX IF NOT EXISTS idx_asset_terms_asset ON asset_terms(source_id, asset_id);
+    CREATE INDEX IF NOT EXISTS idx_asset_pack_memberships_pack ON asset_pack_memberships(source_id, pack, asset_id);
+    CREATE INDEX IF NOT EXISTS idx_asset_pack_memberships_asset ON asset_pack_memberships(source_id, asset_id);
+  `);
+}
+
+function readMetaValue(db, key) {
+  return db.prepare("SELECT value FROM meta WHERE key = ?").get(key)?.value || "";
+}
+
+function readIndexCounts(db, source) {
+  return {
+    assetCount: db.prepare("SELECT COUNT(*) AS count FROM assets WHERE source_id = ?").get(source.id)?.count || 0,
+    packCount: db.prepare("SELECT COUNT(*) AS count FROM packs WHERE source_id = ?").get(source.id)?.count || 0,
+  };
 }
 
 function modelPathIn(filesDir) {
@@ -208,6 +402,10 @@ function recordSource(record) {
   return (record.asset_id || "").split("__")[0] || "";
 }
 
+function recordPacks(record) {
+  return uniqueList(record.pack, record.packs, record.member_of, record.bundles);
+}
+
 function recordTerms(record) {
   const terms = [];
   const push = (key, values) => {
@@ -218,7 +416,7 @@ function recordTerms(record) {
   push("origin", record.origin);
   push("license", record.license);
   push("source", record.sourceName || recordSource(record));
-  push("pack", record.pack);
+  push("pack", recordPacks(record));
   push("genre", record.genre);
   push("style", record.style);
   push("tags", record.tags);
@@ -227,7 +425,9 @@ function recordTerms(record) {
 
 function scanFolderRecords(root, source) {
   const dirCache = new Map();
-  return walkSync(source.path)
+  const scanRoots = source.mode === "library" ? [join(source.path, "files")] : [source.path];
+  return scanRoots.flatMap((scanRoot) => walkSync(scanRoot))
+    .filter((path) => !/[\\/](catalog|previews|licenses|\.git|node_modules|tmp)[\\/]/i.test(path))
     .map((path) => {
       const ext = extname(path).toLowerCase();
       const rel = relPosix(root, path);
@@ -265,6 +465,55 @@ function scanFolderRecords(root, source) {
     .filter(Boolean);
 }
 
+function registeredCoveredPaths(root, source, registeredRecords) {
+  const files = new Set();
+  const dirs = new Set();
+  const add = (path) => {
+    if (!path) return;
+    const full = resolve(path);
+    try {
+      const stat = statSync(full);
+      if (stat.isDirectory()) dirs.add(full);
+      else files.add(full);
+    } catch {
+      files.add(full);
+    }
+  };
+  for (const record of registeredRecords) {
+    for (const path of [record.modelPath, record.preview, record.catalogPath]) {
+      add(path);
+    }
+    if (record.resource) {
+      add(resolve(source.path, record.resource));
+      add(resolve(root, record.resource));
+    }
+  }
+  return { files, dirs };
+}
+
+function isCoveredDiscoveredRecord(record, covered) {
+  const path = resolve(record.catalogPath || "");
+  if (covered.files.has(path)) return true;
+  for (const dir of covered.dirs) {
+    if (path === dir || path.startsWith(dir + sep)) return true;
+  }
+  return false;
+}
+
+function mergeRegisteredWithDiscoveredFiles(root, source, registeredRecords) {
+  const covered = registeredCoveredPaths(root, source, registeredRecords);
+  const unregistered = scanFolderRecords(root, source)
+    .filter((record) => !isCoveredDiscoveredRecord(record, covered))
+    .map((record) => ({
+      ...record,
+      origin: "unregistered",
+      license: "unknown",
+      sourceName: "unregistered",
+      tags: [...new Set([...(record.tags || []), "unregistered"])],
+    }));
+  return [...registeredRecords, ...unregistered];
+}
+
 function ftsQuery(value) {
   const terms = String(value || "")
     .toLowerCase()
@@ -286,7 +535,12 @@ function buildWhere({ sourceId, pack = "", query = "", filters = {} } = {}) {
   const clauses = ["a.source_id = ?"];
   const params = [sourceId];
   if (pack) {
-    clauses.push("a.pack = ?");
+    clauses.push(`EXISTS (
+      SELECT 1 FROM asset_pack_memberships apm
+      WHERE apm.source_id = a.source_id
+        AND apm.asset_id = a.id
+        AND apm.pack = ?
+    )`);
     params.push(pack);
   }
 
@@ -330,6 +584,8 @@ function rowToAsset(row, root, sourceRoot) {
     kind: row.kind || "asset",
     origin: row.origin || "",
     pack: row.pack || "",
+    primaryPack: row.pack || "",
+    packs: [],
     source: row.source || "",
     license: row.license || "",
     tags: parseJsonList(row.tags_json),
@@ -342,11 +598,32 @@ function rowToAsset(row, root, sourceRoot) {
   };
 }
 
+function attachPackMemberships(db, assets, sourceId, activePack = "") {
+  if (!assets.length) return assets;
+  const membership = db.prepare(`
+    SELECT pack FROM asset_pack_memberships
+    WHERE source_id = ? AND asset_id = ?
+    ORDER BY is_primary DESC, pack COLLATE NOCASE
+  `);
+  for (const asset of assets) {
+    const packs = membership.all(sourceId, asset.id).map((row) => row.pack).filter(Boolean);
+    asset.packs = packs;
+    asset.primaryPack = asset.pack || packs[0] || "";
+    if (activePack && packs.includes(activePack)) asset.pack = activePack;
+  }
+  return assets;
+}
+
 function packRowToCard(db, row, root, sourceRoot, sourceId) {
   const coverRows = db.prepare(`
-    SELECT preview_path FROM assets
-    WHERE source_id = ? AND pack = ? AND preview_path != ''
-    ORDER BY random_key ASC
+    SELECT a.preview_path FROM assets a
+    JOIN asset_pack_memberships apm
+      ON apm.source_id = a.source_id
+     AND apm.asset_id = a.id
+    WHERE a.source_id = ?
+      AND apm.pack = ?
+      AND a.preview_path != ''
+    ORDER BY a.random_key ASC
     LIMIT 4
   `).all(sourceId, row.id);
   return {
@@ -373,14 +650,25 @@ export async function rebuildAssetIndex(root, source) {
   const db = openIndex(root, source);
   initSchema(db);
   const now = new Date().toISOString();
-  const records = source.mode === "library" ? await scanLibrary(source.path) : scanFolderRecords(root, source);
-  const packs = source.mode === "library" ? await scanPacks(source.path) : [];
+  const signature = sourceSignature(root, source);
+  const libraryData = source.mode === "library" ? await scanLibraryWithPacks(source.path) : { records: [], packs: [] };
+  const manifestData = source.mode !== "library" && hasPackManifestSource(source.path)
+    ? await scanPackManifestSource(source.path)
+    : null;
+  const records = source.mode === "library"
+    ? mergeRegisteredWithDiscoveredFiles(root, source, libraryData.records)
+    : manifestData
+      ? mergeRegisteredWithDiscoveredFiles(root, source, manifestData.records)
+      : mergeRegisteredWithDiscoveredFiles(root, source, []);
+  const packs = source.mode === "library" ? libraryData.packs : manifestData ? manifestData.packs : [];
 
   db.exec("BEGIN");
   try {
+    dropSecondaryIndexes(db);
     db.prepare("DELETE FROM assets WHERE source_id = ?").run(source.id);
     db.prepare("DELETE FROM packs WHERE source_id = ?").run(source.id);
     db.prepare("DELETE FROM asset_terms WHERE source_id = ?").run(source.id);
+    db.prepare("DELETE FROM asset_pack_memberships WHERE source_id = ?").run(source.id);
     db.prepare("DELETE FROM asset_search_fts WHERE source_id = ?").run(source.id);
 
     const insertAsset = db.prepare(`
@@ -392,14 +680,28 @@ export async function rebuildAssetIndex(root, source) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertTerm = db.prepare("INSERT INTO asset_terms (source_id, asset_id, key, value) VALUES (?, ?, ?, ?)");
+    const insertPackMembership = db.prepare("INSERT OR IGNORE INTO asset_pack_memberships (source_id, asset_id, pack, is_primary) VALUES (?, ?, ?, ?)");
     const insertFts = db.prepare("INSERT INTO asset_search_fts (source_id, asset_id, text) VALUES (?, ?, ?)");
     for (const record of records) {
       if (!record.asset_id) continue;
       const modelPath = record.modelPath || modelPathIn(record.filesDir);
       const stats = catalogStats(record.catalogPath);
       const sourceName = record.sourceName || recordSource(record);
-      const previewPath = record.preview || assetPreviewCachePath(root, source, record.asset_id);
-      const previewStatus = previewPath ? "clean" : "missing";
+      const cachedPreview = source.mode === "library" && record.preview
+        ? ""
+        : assetPreviewCachePath(root, source, record.asset_id);
+      const previewPath = record.preview || cachedPreview;
+      const generatedSourcePath = modelPath || record.catalogPath || "";
+      const recordExt = extname(record.catalogPath || record.resource || "").toLowerCase();
+      const previewStatus = record.preview && record.preview !== cachedPreview
+        ? (source.mode === "library" ? "clean" : "missing")
+        : previewPath === cachedPreview
+          ? assetPreviewCacheStatus(root, source, record.asset_id, generatedSourcePath)
+          : previewPath && source.mode === "library"
+            ? "clean"
+            : previewPath && !imageExt.has(recordExt)
+              ? "clean"
+            : "missing";
       insertAsset.run(
         source.id,
         record.asset_id,
@@ -426,11 +728,13 @@ export async function rebuildAssetIndex(root, source) {
         previewStatus,
       );
       for (const [key, value] of recordTerms(record)) insertTerm.run(source.id, record.asset_id, key, value);
+      for (const pack of recordPacks(record)) insertPackMembership.run(source.id, record.asset_id, pack, pack === record.pack ? 1 : 0);
       insertFts.run(source.id, record.asset_id, [
         record.title,
         record.asset_id,
         record.description,
         record.pack,
+        recordPacks(record).join(" "),
         record.kind,
         record.license,
         record.origin,
@@ -443,8 +747,9 @@ export async function rebuildAssetIndex(root, source) {
 
     const countByPack = new Map();
     for (const record of records) {
-      if (!record.pack) continue;
-      countByPack.set(record.pack, (countByPack.get(record.pack) || 0) + 1);
+      for (const pack of recordPacks(record)) {
+        countByPack.set(pack, (countByPack.get(pack) || 0) + 1);
+      }
     }
 
     const insertPack = db.prepare(`
@@ -486,8 +791,10 @@ export async function rebuildAssetIndex(root, source) {
 
     db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run("schema", String(schemaVersion));
     db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run("sourceKey", sourceKey(source));
+    db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run("sourceSignature", JSON.stringify(signature));
     db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run("rebuiltAt", now);
     db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run("assetCount", String(records.length));
+    createSecondaryIndexes(db);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -499,6 +806,43 @@ export async function rebuildAssetIndex(root, source) {
   return { sourceId: source.id, rebuiltAt: now, assetCount: records.length, packCount: packs.length, path: assetIndexPath(root, source) };
 }
 
+export async function refreshAssetIndex(root, source) {
+  const dbPath = assetIndexPath(root, source);
+  if (!existsSync(dbPath)) return rebuildAssetIndex(root, source);
+
+  const db = openIndex(root, source);
+  initSchema(db);
+  let closed = false;
+  try {
+    const schema = readMetaValue(db, "schema");
+    const key = readMetaValue(db, "sourceKey");
+    const previousSignature = readMetaValue(db, "sourceSignature");
+    const rebuiltAt = readMetaValue(db, "rebuiltAt");
+    const counts = readIndexCounts(db, source);
+    const currentSignature = sourceSignature(root, source);
+    if (
+      schema === String(schemaVersion)
+      && key === sourceKey(source)
+      && counts.assetCount
+      && previousSignature === JSON.stringify(currentSignature)
+    ) {
+      return {
+        sourceId: source.id,
+        rebuiltAt,
+        assetCount: counts.assetCount,
+        packCount: counts.packCount,
+        path: dbPath,
+        unchanged: true,
+      };
+    }
+    db.close();
+    closed = true;
+    return rebuildAssetIndex(root, source);
+  } finally {
+    if (!closed) db.close();
+  }
+}
+
 export async function ensureAssetIndex(root, source) {
   const dbPath = assetIndexPath(root, source);
   if (!existsSync(dbPath)) return rebuildAssetIndex(root, source);
@@ -506,15 +850,15 @@ export async function ensureAssetIndex(root, source) {
   initSchema(db);
   let closed = false;
   try {
-    const schema = db.prepare("SELECT value FROM meta WHERE key = ?").get("schema")?.value;
-    const key = db.prepare("SELECT value FROM meta WHERE key = ?").get("sourceKey")?.value;
+    const schema = readMetaValue(db, "schema");
+    const key = readMetaValue(db, "sourceKey");
     const count = db.prepare("SELECT COUNT(*) AS count FROM assets WHERE source_id = ?").get(source.id)?.count || 0;
     if (schema !== String(schemaVersion) || key !== sourceKey(source) || !count) {
       db.close();
       closed = true;
       return rebuildAssetIndex(root, source);
     }
-    const rebuiltAt = db.prepare("SELECT value FROM meta WHERE key = ?").get("rebuiltAt")?.value || "";
+    const rebuiltAt = readMetaValue(db, "rebuiltAt");
     return { sourceId: source.id, rebuiltAt, assetCount: count, path: dbPath };
   } finally {
     if (!closed) db.close();
@@ -538,7 +882,7 @@ export async function queryIndexedAssets(root, source, options = {}) {
   const db = openIndex(root, source);
   initSchema(db);
   const offset = Math.max(0, Number.parseInt(String(options.offset || 0), 10) || 0);
-  const limit = Math.min(500, Math.max(24, Number.parseInt(String(options.limit || 240), 10) || 240));
+  const limit = Math.min(500, Math.max(1, Number.parseInt(String(options.limit || 240), 10) || 240));
   const query = options.query ?? options.q ?? "";
   const { where, params } = buildWhere({ sourceId: source.id, ...options, query });
   const order = options.sort === "origin"
@@ -550,7 +894,7 @@ export async function queryIndexedAssets(root, source, options = {}) {
   try {
     const total = db.prepare(`SELECT COUNT(*) AS count FROM assets a WHERE ${where}`).get(...params)?.count || 0;
     const rows = db.prepare(`SELECT a.* FROM assets a WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...params, limit, offset);
-    const assets = rows.map((row) => rowToAsset(row, root, source.path));
+    const assets = attachPackMemberships(db, rows.map((row) => rowToAsset(row, root, source.path)), source.id, options.pack || "");
 
     const facets = {};
     for (const key of facetKeys) {

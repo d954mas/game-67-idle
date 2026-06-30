@@ -32,17 +32,17 @@ registered automatically as `<game-id>/assets`. Asset Viewer does not scan root
 folders to guess games.
 
 Asset Viewer does not run filesystem watch mode. When assets are added or
-changed locally, use the `Refresh` button. For the shared library it rebuilds
-the asset index; for template/game folders it clears the source cache and
-rescans the folder. This keeps the viewer predictable and avoids background
-watcher state.
+changed locally, use the `Refresh` button. It checks the selected source
+signature and only rebuilds the generated SQLite index when the catalog or
+folder changed. This keeps the viewer predictable and avoids background watcher
+state.
 
 Asset Viewer does not own Blender preview rendering. Prepared preview images
 come from `../assets_storage/preview_pipeline/`. Use `Refresh previews` after
-adding or changing assets; it creates missing preview cache files for the
-selected source, renders model thumbnails when Blender can process the model,
-and then rebuilds that source index. Generated previews live under `tmp/` and
-are not committed.
+adding or changing assets; it creates or replaces only missing/stale preview
+cache files for the selected source, renders model thumbnails when Blender can
+process the model, and then refreshes that source index. Generated previews and
+their `preview.json` sidecars live under `tmp/` and are not committed.
 
 Large library views are paged by the server. `All Assets` can contain thousands
 or tens of thousands of items, so the browser asks the local API for the current
