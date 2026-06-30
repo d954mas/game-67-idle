@@ -15,6 +15,7 @@ surface and map data. `taskboard/` owns the board surface and task state.
 - Unified local server: `server.mjs`.
 - Stable local launcher: `start_site.mjs`.
 - Windows-safe launcher: `start_site_windows.ps1`.
+- Temporary public tunnel helper: `tunnel/`.
 
 ## Start
 
@@ -62,4 +63,4 @@ Current hosted surfaces:
 - `/` -> Studio Home.
 - `/architecture_map/` -> Architecture Map surface.
 - `/taskboard/` -> Taskboard surface.
-- `/viewer/` -> Asset Viewer launcher.
+- `/asset_viewer/` -> Asset Viewer launcher.

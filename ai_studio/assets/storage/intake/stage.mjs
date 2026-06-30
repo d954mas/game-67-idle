@@ -5,8 +5,8 @@ import { basename, dirname, extname, join, relative, resolve, sep } from "node:p
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { sha256File, sha256Hex } from "../../../../tools/lib/hash.mjs";
-import { isMain } from "../../../../tools/lib/cli.mjs";
+import { sha256File, sha256Hex } from "../../../core_harness/tool_lib/hash.mjs";
+import { isMain } from "../../../core_harness/tool_lib/cli.mjs";
 import { defaultLibrarySourceRoot } from "../sources/libraries.mjs";
 
 const ASSET_EXTS = new Set([

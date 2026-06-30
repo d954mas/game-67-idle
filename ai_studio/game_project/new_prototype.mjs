@@ -4,7 +4,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createEpic, createTask, findRoot } from "../taskboard/lib.mjs";
-import { fail } from "../../tools/lib/cli.mjs";
+import { fail } from "../core_harness/tool_lib/cli.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 

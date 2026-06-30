@@ -9,8 +9,8 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fail } from "../../../../tools/lib/cli.mjs";
-import { writeJsonFile } from "../../../../tools/lib/json.mjs";
+import { fail } from "../../../core_harness/tool_lib/cli.mjs";
+import { writeJsonFile } from "../../../core_harness/tool_lib/json.mjs";
 
 const root = resolve(fileURLToPath(new URL("../../../../", import.meta.url)));
 

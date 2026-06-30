@@ -2,7 +2,7 @@
 import { mkdir, rm, rename } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { isMain } from "../../../../tools/lib/cli.mjs";
+import { isMain } from "../../../core_harness/tool_lib/cli.mjs";
 import { safeSegment } from "./stage.mjs";
 import { defaultLibrarySourceRoot } from "../sources/libraries.mjs";
 

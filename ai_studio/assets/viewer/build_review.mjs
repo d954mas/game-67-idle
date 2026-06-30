@@ -19,7 +19,7 @@ import { join, resolve, dirname, basename, extname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanPackManifestSource } from "../storage/manifests/manifest.mjs";
 import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
-import { isMain } from "../../../tools/lib/cli.mjs";
+import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 

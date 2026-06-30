@@ -6,8 +6,8 @@
 // once ready, then stays alive holding the tunnel. Stop the background task to
 // tear it down (kills cloudflared + closes the server).
 //
-//   node tools/serve_tunnel.mjs --dir tmp/asset-review-ll
-//   node tools/serve_tunnel.mjs --dir build/game_seed/wasm-debug --port 8910
+//   node ai_studio/studio_shell/tunnel/serve_tunnel.mjs --dir tmp/asset-review-ll
+//   node ai_studio/studio_shell/tunnel/serve_tunnel.mjs --dir build/game_seed/wasm-debug --port 8910
 //
 // Caveats: the URL is PUBLIC and unauthenticated while running — do not expose
 // secrets. Quick tunnels are ephemeral (new URL each run). Serve self-contained
@@ -18,7 +18,7 @@ import { stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { join, resolve, normalize } from "node:path";
 import { get } from "node:https";
-import { mimeType } from "./lib/mime.mjs";
+import { mimeType } from "../../core_harness/tool_lib/mime.mjs";
 
 function parseArgs(argv) {
   const a = { dir: "", port: 0, bin: "" };
@@ -69,7 +69,7 @@ function download(url, dest, redirects = 0) {
 async function ensureCloudflared(binArg) {
   if (binArg && existsSync(binArg)) return binArg;
   const { name, url } = cloudflaredTarget();
-  const binDir = resolve("tools/bin");
+  const binDir = resolve(".tmp", "ai_studio", "studio_shell", "tunnel", "bin");
   const dest = join(binDir, name);
   if (existsSync(dest)) return dest;
   // fall back to a tmp copy from an earlier manual download if present

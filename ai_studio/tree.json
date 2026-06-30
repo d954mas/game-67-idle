@@ -173,6 +173,58 @@
                 ]
               }
             ]
+          },
+          {
+            "id": "studio-shell:tunnel",
+            "title": "App Tunnel",
+            "subtitle": "temporary public URL",
+            "kind": "tool",
+            "path": "ai_studio/studio_shell/tunnel",
+            "description": "Studio Shell helper for serving a self-contained local directory and exposing it through a temporary public cloudflared quick tunnel for phone or external-device review.",
+            "role": "temporary public tunnel helper",
+            "tags": [
+              "studio-shell",
+              "tunnel",
+              "surface-share"
+            ],
+            "children": [
+              {
+                "id": "studio-shell:tunnel-readme",
+                "kind": "doc",
+                "path": "ai_studio/studio_shell/tunnel/README.md",
+                "title": "README.md",
+                "description": "App Tunnel contract: what may be served, public URL risks, and generated cloudflared cache location.",
+                "role": "app tunnel contract",
+                "tags": [
+                  "source",
+                  "contract"
+                ]
+              },
+              {
+                "id": "studio-shell:tunnel-serve",
+                "kind": "tool",
+                "path": "ai_studio/studio_shell/tunnel/serve_tunnel.mjs",
+                "title": "serve_tunnel.mjs",
+                "description": "Command that starts a local static server, runs a cloudflared quick tunnel, and prints a temporary public URL.",
+                "role": "public tunnel command",
+                "tags": [
+                  "tool",
+                  "tunnel"
+                ]
+              },
+              {
+                "id": "studio-shell:nt-app-tunnel-skill",
+                "kind": "skill",
+                "path": ".codex/skills/nt-app-tunnel/SKILL.md",
+                "title": "nt-app-tunnel",
+                "description": "Skill surface for sharing local AI Studio surfaces, asset viewer exports, static pages, or wasm builds through a temporary public tunnel.",
+                "role": "app tunnel skill",
+                "tags": [
+                  "skill",
+                  "tunnel"
+                ]
+              }
+            ]
           }
         ]
       },
@@ -1055,6 +1107,166 @@
                 "tags": [
                   "test",
                   "docs"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "core-harness:tool-lib",
+            "title": "Tool Lib",
+            "subtitle": "shared command helpers",
+            "kind": "library",
+            "path": "ai_studio/core_harness/tool_lib",
+            "description": "Core Harness helper library for low-level AI Studio command-line tools: CLI failure paths, JSON IO, hashing, MIME lookup, path display, and temporary export copying. It is intentionally policy-free.",
+            "role": "shared AI Studio tool helper library",
+            "tags": [
+              "core-harness",
+              "tooling",
+              "helpers"
+            ],
+            "children": [
+              {
+                "id": "core-harness:tool-lib-readme",
+                "kind": "doc",
+                "path": "ai_studio/core_harness/tool_lib/README.md",
+                "title": "README.md",
+                "description": "Tool Lib contract: low-level helper ownership, boundaries, and what must not live in this shared layer.",
+                "role": "tool helper library contract",
+                "tags": [
+                  "source",
+                  "contract"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-cli",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/tool_lib/cli.mjs",
+                "title": "cli.mjs",
+                "description": "Shared low-level cli helper used by AI Studio command-line modules.",
+                "role": "shared cli helper",
+                "tags": [
+                  "core-harness",
+                  "helper"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-cli-test",
+                "kind": "test",
+                "path": "ai_studio/core_harness/tool_lib/cli.test.mjs",
+                "title": "cli.test.mjs",
+                "description": "Regression tests for the shared cli helper.",
+                "role": "shared cli helper tests",
+                "tags": [
+                  "core-harness",
+                  "test"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-hash",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/tool_lib/hash.mjs",
+                "title": "hash.mjs",
+                "description": "Shared low-level hash helper used by AI Studio command-line modules.",
+                "role": "shared hash helper",
+                "tags": [
+                  "core-harness",
+                  "helper"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-json",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/tool_lib/json.mjs",
+                "title": "json.mjs",
+                "description": "Shared low-level json helper used by AI Studio command-line modules.",
+                "role": "shared json helper",
+                "tags": [
+                  "core-harness",
+                  "helper"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-json-test",
+                "kind": "test",
+                "path": "ai_studio/core_harness/tool_lib/json.test.mjs",
+                "title": "json.test.mjs",
+                "description": "Regression tests for the shared json helper.",
+                "role": "shared json helper tests",
+                "tags": [
+                  "core-harness",
+                  "test"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-mime",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/tool_lib/mime.mjs",
+                "title": "mime.mjs",
+                "description": "Shared low-level mime helper used by AI Studio command-line modules.",
+                "role": "shared mime helper",
+                "tags": [
+                  "core-harness",
+                  "helper"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-mime-test",
+                "kind": "test",
+                "path": "ai_studio/core_harness/tool_lib/mime.test.mjs",
+                "title": "mime.test.mjs",
+                "description": "Regression tests for the shared mime helper.",
+                "role": "shared mime helper tests",
+                "tags": [
+                  "core-harness",
+                  "test"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-paths",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/tool_lib/paths.mjs",
+                "title": "paths.mjs",
+                "description": "Shared low-level paths helper used by AI Studio command-line modules.",
+                "role": "shared paths helper",
+                "tags": [
+                  "core-harness",
+                  "helper"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-paths-test",
+                "kind": "test",
+                "path": "ai_studio/core_harness/tool_lib/paths.test.mjs",
+                "title": "paths.test.mjs",
+                "description": "Regression tests for the shared paths helper.",
+                "role": "shared paths helper tests",
+                "tags": [
+                  "core-harness",
+                  "test"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-tmp-exports",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/tool_lib/tmp_exports.mjs",
+                "title": "tmp_exports.mjs",
+                "description": "Shared low-level tmp_exports helper used by AI Studio command-line modules.",
+                "role": "shared tmp_exports helper",
+                "tags": [
+                  "core-harness",
+                  "helper"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-tmp-exports-test",
+                "kind": "test",
+                "path": "ai_studio/core_harness/tool_lib/tmp_exports.test.mjs",
+                "title": "tmp_exports.test.mjs",
+                "description": "Regression tests for the shared tmp_exports helper.",
+                "role": "shared tmp_exports helper tests",
+                "tags": [
+                  "core-harness",
+                  "test"
                 ]
               }
             ]

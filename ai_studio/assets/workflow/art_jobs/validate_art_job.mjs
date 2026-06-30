@@ -1,8 +1,8 @@
 ﻿#!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { fail } from "../../../../tools/lib/cli.mjs";
-import { readJson } from "../../../../tools/lib/json.mjs";
+import { fail } from "../../../core_harness/tool_lib/cli.mjs";
+import { readJson } from "../../../core_harness/tool_lib/json.mjs";
 
 function usage() {
   console.error(`usage:

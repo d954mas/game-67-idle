@@ -12,7 +12,7 @@ import { existsSync } from "node:fs";
 import { join, resolve, basename, extname } from "node:path";
 import { createHash } from "node:crypto";
 import { KIND_DIR } from "../storage/kinds.mjs";
-import { isMain } from "../../../tools/lib/cli.mjs";
+import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 import { LICENSE_URLS, boolText, decideLicense, validateLicenseRecord } from "../storage/license/registry.mjs";
 import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
 

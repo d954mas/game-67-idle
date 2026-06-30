@@ -26,7 +26,5 @@ assets/packs/
 **/assets/_incoming/
 **/assets/_rejected/
 
-# downloaded tunnel binary (app-tunnel skill)
-tools/bin/
 template/build/
 template/src/generated/

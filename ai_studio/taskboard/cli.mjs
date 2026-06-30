@@ -18,7 +18,7 @@ import {
 } from "./lib.mjs";
 import { agentContextPayload, agentEpicRow, agentTaskRow } from "./api.mjs";
 import { relative } from "node:path";
-import { fail } from "../../tools/lib/cli.mjs";
+import { fail } from "../core_harness/tool_lib/cli.mjs";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);

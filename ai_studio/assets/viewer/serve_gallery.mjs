@@ -7,7 +7,7 @@
 import { createServer } from "node:http";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { join, resolve, normalize } from "node:path";
-import { mimeType } from "../../../tools/lib/mime.mjs";
+import { mimeType } from "../../core_harness/tool_lib/mime.mjs";
 
 function parseArgs(argv) {
   const a = { gallery: "tmp/lib-gallery", lib: "", port: 8910 };

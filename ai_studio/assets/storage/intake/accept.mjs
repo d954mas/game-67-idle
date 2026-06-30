@@ -3,8 +3,8 @@ import { appendFile, cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/
 import { existsSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 import { boolText, decideLicense, validateLicenseRecord } from "../license/registry.mjs";
-import { isMain } from "../../../../tools/lib/cli.mjs";
-import { sha256File } from "../../../../tools/lib/hash.mjs";
+import { isMain } from "../../../core_harness/tool_lib/cli.mjs";
+import { sha256File } from "../../../core_harness/tool_lib/hash.mjs";
 import { safeSegment } from "./stage.mjs";
 import { KIND_DIR } from "../kinds.mjs";
 import { defaultLibrarySourceRoot } from "../sources/libraries.mjs";
