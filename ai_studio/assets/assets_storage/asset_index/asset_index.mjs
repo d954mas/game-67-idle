@@ -578,13 +578,21 @@ function rowToAsset(row, root, sourceRoot) {
 
 function attachPackMemberships(db, assets, sourceId, activePack = "") {
   if (!assets.length) return assets;
-  const membership = db.prepare(`
-    SELECT pack FROM asset_pack_memberships
-    WHERE source_id = ? AND asset_id = ?
-    ORDER BY is_primary DESC, pack COLLATE NOCASE
-  `);
+  const ids = assets.map((asset) => asset.id).filter(Boolean);
+  if (!ids.length) return assets;
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = db.prepare(`
+    SELECT asset_id, pack FROM asset_pack_memberships
+    WHERE source_id = ? AND asset_id IN (${placeholders})
+    ORDER BY asset_id, is_primary DESC, pack COLLATE NOCASE
+  `).all(sourceId, ...ids);
+  const memberships = new Map();
+  for (const row of rows) {
+    if (!memberships.has(row.asset_id)) memberships.set(row.asset_id, []);
+    memberships.get(row.asset_id).push(row.pack);
+  }
   for (const asset of assets) {
-    const packs = membership.all(sourceId, asset.id).map((row) => row.pack).filter(Boolean);
+    const packs = memberships.get(asset.id) || [];
     asset.packs = packs;
     asset.primaryPack = asset.pack || packs[0] || "";
     if (activePack && packs.includes(activePack)) asset.pack = activePack;
