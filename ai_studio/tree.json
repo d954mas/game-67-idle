@@ -1127,6 +1127,62 @@
                 ]
               },
               {
+                "id": "assets:source-snapshots",
+                "title": "Source Snapshots",
+                "subtitle": "generated file diff layer",
+                "kind": "group",
+                "color": "#0e7490",
+                "description": "Generated file snapshot layer for asset refresh. Tracks added, changed, and deleted source files under tmp so Asset Index can skip unchanged rebuilds and later support incremental row updates.",
+                "role": "asset source change detection",
+                "tags": [
+                  "assets",
+                  "storage",
+                  "snapshot",
+                  "refresh"
+                ],
+                "children": [
+                  {
+                    "id": "assets:source-snapshots-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/assets_storage/source_snapshots/README.md",
+                    "title": "README.md",
+                    "description": "Source Snapshots contract: generated snapshot location, tracked files, refresh consumers, and boundary with preview refresh.",
+                    "role": "source snapshots module entrypoint",
+                    "tags": [
+                      "assets",
+                      "snapshot",
+                      "refresh"
+                    ]
+                  },
+                  {
+                    "id": "assets:source-snapshots-tool",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/assets_storage/source_snapshots/source_snapshots.mjs",
+                    "title": "source_snapshots.mjs",
+                    "description": "Builds source file snapshots, compact signatures, persisted generated snapshots, and added/changed/deleted diffs for asset refresh.",
+                    "role": "source snapshot API",
+                    "tags": [
+                      "assets",
+                      "snapshot",
+                      "generated"
+                    ]
+                  },
+                  {
+                    "id": "assets:source-snapshots-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/assets_storage/source_snapshots/tests/source_snapshots.test.mjs",
+                    "title": "source_snapshots.test.mjs",
+                    "description": "Regression tests for source snapshot diffing and generated snapshot persistence.",
+                    "role": "source snapshot tests",
+                    "tags": [
+                      "assets",
+                      "snapshot",
+                      "test"
+                    ]
+                  }
+                ]
+              },
+              {
                 "id": "assets:asset-index",
                 "title": "Asset Index",
                 "subtitle": "sqlite query layer",

@@ -18,6 +18,9 @@ not own the browser gallery UI.
 - `okf_catalog/`: Markdown/OKF-style shared library reader and source-first
   search entrypoint. This remains as a compatibility reader while the shared
   library is migrated pack by pack.
+- `source_snapshots/`: generated file snapshots for refresh change detection.
+  It records added/changed/deleted tracked files and catches manifest metadata
+  changes without parsing the full catalog first.
 - `asset_index/`: local SQLite indexes, one per source, built from OKF records
   pack manifests, or folder scans for fast page, search, filter, pack, and model
   lookups.
@@ -77,14 +80,15 @@ or game work.
 Generated fast data stays outside git:
 
 ```text
-tmp/ai_studio/assets/source_snapshots/<source-id>.sqlite
+tmp/ai_studio/assets/source_snapshots/<source-id>.json
 tmp/ai_studio/assets/asset_index/<source-id>.sqlite
 tmp/ai_studio/assets/previews/<source-id>/
 ```
 
-The current implemented query layer is `asset_index/`. The next storage slice is
-`source_snapshots/`: incremental added/changed/deleted detection so refresh does
-not need full rebuilds for large 100k+ asset libraries.
+The current implemented query layer is `asset_index/`. `source_snapshots/`
+feeds it with durable added/changed/deleted file detection. Changed snapshots
+still trigger a full index rebuild in this slice; incremental row updates are a
+later optimization once pack manifest migration makes record ownership simpler.
 
 ## Agent Search
 

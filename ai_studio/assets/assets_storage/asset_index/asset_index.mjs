@@ -3,6 +3,13 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } fr
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { scanLibraryWithPacks } from "../okf_catalog/find_assets.mjs";
 import { hasPackManifestSource, scanPackManifestSource } from "../pack_manifest/pack_manifest.mjs";
+import {
+  buildSourceSnapshot,
+  diffSourceSnapshots,
+  readSourceSnapshot,
+  sourceSnapshotSignature,
+  writeSourceSnapshot,
+} from "../source_snapshots/source_snapshots.mjs";
 
 const schemaVersion = 2;
 const previewCacheVersion = 1;
@@ -13,7 +20,6 @@ const primaryExt = {
   font: [".ttf", ".otf", ".woff", ".woff2"],
   audio: [".wav", ".mp3", ".ogg"],
 };
-const indexedExt = new Set(Object.values(primaryExt).flat());
 const glbExt = new Set([".glb", ".gltf"]);
 const imageExt = new Set(primaryExt.image);
 const vendorNames = ["kenney", "quaternius", "polyhaven", "poly-haven", "ambientcg", "poly-pizza", "opengameart"];
@@ -103,64 +109,6 @@ function hashKey(value) {
 
 function sourceKey(source) {
   return `${source.id}|${source.path}|${source.mode}`;
-}
-
-function signatureHash(parts) {
-  let hash = 2166136261;
-  for (const part of parts) {
-    for (const ch of String(part)) {
-      hash ^= ch.charCodeAt(0);
-      hash = Math.imul(hash, 16777619);
-    }
-  }
-  return String(hash >>> 0);
-}
-
-function isSignatureFile(source, path) {
-  const ext = extname(path).toLowerCase();
-  if (source.mode === "library" && ext === ".md") return true;
-  if (indexedExt.has(ext)) return true;
-  return /(^|[\\/])licen[cs]e(\.|$)/i.test(path);
-}
-
-function signatureRoots(source) {
-  if (source.mode !== "library") return [{ label: "source", path: source.path }];
-  return [
-    { label: "catalog", path: join(source.path, "catalog") },
-    { label: "files", path: join(source.path, "files") },
-  ];
-}
-
-function sourceSignature(root, source) {
-  let count = 0;
-  let totalSize = 0;
-  let maxMtimeMs = 0;
-  const hashParts = [sourceKey(source)];
-  for (const signatureRoot of signatureRoots(source)) {
-    const files = walkSync(signatureRoot.path).filter((path) => isSignatureFile(source, path)).sort();
-    for (const file of files) {
-      let stat;
-      try {
-        stat = statSync(file);
-      } catch {
-        continue;
-      }
-      const mtimeMs = Math.round(stat.mtimeMs);
-      count += 1;
-      totalSize += stat.size;
-      maxMtimeMs = Math.max(maxMtimeMs, mtimeMs);
-      hashParts.push(signatureRoot.label, relPosix(signatureRoot.path, file), stat.size, mtimeMs);
-    }
-  }
-  return {
-    sourceKey: sourceKey(source),
-    mode: source.mode,
-    path: source.path,
-    count,
-    totalSize,
-    maxMtimeMs,
-    hash: signatureHash(hashParts),
-  };
 }
 
 export async function summarizeIndexedPreviewStatus(root, source) {
@@ -675,7 +623,7 @@ function packRowToCard(db, row, root, sourceRoot, sourceId) {
   };
 }
 
-export async function rebuildAssetIndex(root, source) {
+export async function rebuildAssetIndex(root, source, options = {}) {
   const profile = process.env.AI_STUDIO_ASSET_INDEX_PROFILE === "1";
   const timings = [];
   let lastTiming = Date.now();
@@ -689,8 +637,9 @@ export async function rebuildAssetIndex(root, source) {
   const db = openIndex(root, source);
   initSchema(db);
   const now = new Date().toISOString();
-  const signature = sourceSignature(root, source);
-  mark("signature");
+  const snapshot = options.snapshot || buildSourceSnapshot(root, source);
+  const signature = sourceSnapshotSignature(snapshot);
+  mark("snapshot");
   const libraryData = source.mode === "library" ? await scanLibraryWithPacks(source.path) : { records: [], packs: [] };
   mark("scan");
   const manifestData = source.mode !== "library" && hasPackManifestSource(source.path)
@@ -845,9 +794,17 @@ export async function rebuildAssetIndex(root, source) {
   } finally {
     db.close();
   }
+  writeSourceSnapshot(root, source, snapshot);
   if (profile) console.error(`[asset-index profile] ${JSON.stringify(timings)}`);
 
-  return { sourceId: source.id, rebuiltAt: now, assetCount: records.length, packCount: packs.length, path: assetIndexPath(root, source) };
+  return {
+    sourceId: source.id,
+    rebuiltAt: now,
+    assetCount: records.length,
+    packCount: packs.length,
+    path: assetIndexPath(root, source),
+    snapshotDiff: options.snapshotDiff || null,
+  };
 }
 
 export async function refreshAssetIndex(root, source) {
@@ -863,13 +820,16 @@ export async function refreshAssetIndex(root, source) {
     const previousSignature = readMetaValue(db, "sourceSignature");
     const rebuiltAt = readMetaValue(db, "rebuiltAt");
     const counts = readIndexCounts(db, source);
-    const currentSignature = sourceSignature(root, source);
+    const previousSnapshot = readSourceSnapshot(root, source);
+    const currentSnapshot = buildSourceSnapshot(root, source);
+    const currentSignature = sourceSnapshotSignature(currentSnapshot);
     if (
       schema === String(schemaVersion)
       && key === sourceKey(source)
       && counts.assetCount
       && previousSignature === JSON.stringify(currentSignature)
     ) {
+      if (!previousSnapshot) writeSourceSnapshot(root, source, currentSnapshot);
       return {
         sourceId: source.id,
         rebuiltAt,
@@ -881,7 +841,10 @@ export async function refreshAssetIndex(root, source) {
     }
     db.close();
     closed = true;
-    return rebuildAssetIndex(root, source);
+    return rebuildAssetIndex(root, source, {
+      snapshot: currentSnapshot,
+      snapshotDiff: diffSourceSnapshots(previousSnapshot, currentSnapshot),
+    });
   } finally {
     if (!closed) db.close();
   }

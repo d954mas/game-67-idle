@@ -58,7 +58,7 @@ for raw folder-backed sources.
 
 - `ensureAssetIndex(root, source)`: create or rebuild a missing index.
 - `refreshAssetIndex(root, source)`: explicit refresh that skips the full
-  rebuild when the source signature is unchanged.
+  rebuild when the source snapshot signature is unchanged.
 - `rebuildAssetIndex(root, source)`: full source rebuild.
 - `queryIndexedAssets(root, source, query)`: paged assets, facets, totals.
 - `listIndexedPacks(root, source)`: pack-first summaries for the viewer.
@@ -71,15 +71,18 @@ source. Normal browsing should use `queryIndexedAssets` and `listIndexedPacks`.
 
 No filesystem watch mode. Updates are explicit:
 
-- manual refresh checks catalog and asset-file `mtime`/size signatures, then
+- manual refresh checks `../source_snapshots/` catalog and asset-file
+  `mtime`/size signatures, then
   rebuilds only when metadata or asset files changed;
 - forced rebuild remains available through code when the source signature is not
   enough;
 - targeted preview refresh lives in `../preview_pipeline/` and owns preview
   changes.
 
-The signature is a fast guard, not the source of truth. When it changes, the
-index is rebuilt from OKF Markdown records, pack manifests, or the folder scan.
+The snapshot signature is a fast guard, not the source of truth. When it
+changes, the index is rebuilt from OKF Markdown records, pack manifests, or the
+folder scan. The stored snapshot also records added/changed/deleted files for
+future incremental row updates.
 Preview folders are intentionally not part of the normal asset refresh
 signature. Use `Refresh previews` when preview files were added, regenerated, or
 became stale.

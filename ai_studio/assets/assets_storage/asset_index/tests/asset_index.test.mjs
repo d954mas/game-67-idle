@@ -285,6 +285,45 @@ test("rebuildAssetIndex prefers pack manifests over raw folder scans", async (t)
   assert.equal(model.model, "lib/packs/starter-props/files/crate.glb");
 });
 
+test("refreshAssetIndex rebuilds when pack manifest metadata changes", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "asset-index-manifest-refresh-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const assets = join(root, "template", "assets");
+  const packDir = join(assets, "packs", "starter-props");
+  const assetsJsonl = join(packDir, "assets.jsonl");
+  mkdirSync(join(packDir, "files"), { recursive: true });
+  writeFileSync(join(packDir, "files", "crate.glb"), "glb", "utf8");
+  writeFileSync(join(packDir, "pack.json"), JSON.stringify({
+    pack: "starter-props",
+    title: "Starter Props",
+    kind: "model",
+    origin: "mine",
+    license: "CC0",
+  }, null, 2), "utf8");
+  writeFileSync(assetsJsonl, JSON.stringify({
+    asset_id: "starter__crate__cc0",
+    title: "Crate",
+    kind: "model",
+    resource: "files/crate.glb",
+  }) + "\n", "utf8");
+
+  const src = scanSource(assets);
+  await rebuildAssetIndex(root, src);
+  assert.equal((await queryIndexedAssets(root, src, { q: "big", offset: 0, limit: 24 })).total, 0);
+
+  writeFileSync(assetsJsonl, JSON.stringify({
+    asset_id: "starter__crate__cc0",
+    title: "Big Crate",
+    kind: "model",
+    resource: "files/crate.glb",
+  }) + "\n", "utf8");
+
+  const refreshed = await refreshAssetIndex(root, src);
+  assert.equal(Boolean(refreshed.unchanged), false);
+  assert.ok(refreshed.snapshotDiff.changed.some((file) => file.rel === "packs/starter-props/assets.jsonl"));
+  assert.equal((await queryIndexedAssets(root, src, { q: "big", offset: 0, limit: 24 })).total, 1);
+});
+
 test("rebuildAssetIndex keeps unregistered files visible for manifest sources", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "asset-index-unregistered-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
