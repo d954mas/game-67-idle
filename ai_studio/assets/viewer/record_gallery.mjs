@@ -70,6 +70,16 @@ async function cdp() {
 const A = parseArgs(process.argv.slice(2));
 const PORT = A.port;
 const FRAMES = resolve("tmp/rec_frames");
+let spawnedChrome = null;
+
+function stopSpawnedChrome() {
+  if (!spawnedChrome?.pid) return;
+  try {
+    spawnSync("taskkill", ["/PID", String(spawnedChrome.pid), "/T", "/F"], { stdio: "ignore" });
+  } catch {
+    /* ignore cleanup failure */
+  }
+}
 
 async function main() {
   const { pack, asset } = pickHero(resolve(A.gallery), A.pack, A.asset);
@@ -80,7 +90,7 @@ async function main() {
 
   const userDir = resolve("tmp/chrome_rec_profile");
   rmSync(userDir, { recursive: true, force: true });
-  const chrome = spawn(A.chrome, [
+  spawnedChrome = spawn(A.chrome, [
     `--remote-debugging-port=${PORT}`, `--user-data-dir=${userDir}`,
     "--no-first-run", "--no-default-browser-check", "--new-window",
     `--window-size=${A.w},${A.h}`, "--window-position=40,40", "--hide-scrollbars",
@@ -137,7 +147,7 @@ async function main() {
   c.close();
   // Kill ONLY the chrome instance we spawned (its own PID tree) - never the
   // user's Chrome, which is showing the gallery.
-  try { spawnSync("taskkill", ["/PID", String(chrome.pid), "/T", "/F"], { stdio: "ignore" }); } catch { /* ignore */ }
+  stopSpawnedChrome();
 
   console.log("captured frames:", frames.length);
   if (frames.length < 5) throw new Error("too few frames captured");
@@ -162,4 +172,8 @@ async function main() {
   console.log("wrote", out, "(", (frames[frames.length - 1].ts - t0).toFixed(1), "s )");
 }
 
-main().catch((e) => { console.error("FATAL:", e.message); try { spawnSync("taskkill", ["/IM", "chrome.exe", "/F", "/T"], { stdio: "ignore" }); } catch {} process.exit(1); });
+main().catch((e) => {
+  console.error("FATAL:", e.message);
+  stopSpawnedChrome();
+  process.exit(1);
+});
