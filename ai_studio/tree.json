@@ -3090,6 +3090,19 @@
                     ]
                   },
                   {
+                    "id": "assets:workflow-art-jobs-new-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/workflow/art_jobs/new_art_job.test.mjs",
+                    "title": "new_art_job.test.mjs",
+                    "description": "Regression tests for generated-art job scaffold routing and explicit project-dir overrides.",
+                    "role": "art job scaffold tests",
+                    "tags": [
+                      "assets",
+                      "workflow",
+                      "test"
+                    ]
+                  },
+                  {
                     "id": "assets:workflow-art-jobs-generation-record",
                     "kind": "tool",
                     "path": "ai_studio/assets/workflow/art_jobs/new_generation_record.mjs",

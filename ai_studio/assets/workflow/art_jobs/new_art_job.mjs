@@ -6,8 +6,7 @@
 //
 // Use --dry-run to preview without writing files.
 
-import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fail } from "../../../core_harness/tool_lib/cli.mjs";
 import { writeJsonFile } from "../../../core_harness/tool_lib/json.mjs";
@@ -63,8 +62,7 @@ if (!args.family) fail("--family is required");
 const concept = args.concept || "meme-evolution";
 const explicitProjectDir = args.projectDir ? args.projectDir.replaceAll("\\", "/").replace(/\/+$/g, "") : "";
 const conceptProjectDir = `gamedesign/projects/${concept}`;
-const legacyConceptDir = `gamedesign/${concept}`;
-const projectDir = explicitProjectDir || (existsSync(join(root, conceptProjectDir)) ? conceptProjectDir : legacyConceptDir);
+const projectDir = explicitProjectDir || conceptProjectDir;
 const artRequestPath = `${projectDir}/art_requests/${args.id}.json`;
 const cropPlanPath = `${projectDir}/data/${args.id}-crop_plan.json`;
 const preparedAssetsPath = `${projectDir}/data/${args.id}-prepared_assets.json`;
