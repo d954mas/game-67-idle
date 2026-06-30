@@ -666,18 +666,8 @@ function readPrecomputedFacets(db, sourceId) {
   return facets;
 }
 
-function packRowToCard(db, row, root, sourceRoot, sourceId) {
-  const coverRows = db.prepare(`
-    SELECT a.preview_path FROM assets a
-    JOIN asset_pack_memberships apm
-      ON apm.source_id = a.source_id
-     AND apm.asset_id = a.id
-    WHERE a.source_id = ?
-      AND apm.pack = ?
-      AND a.preview_path != ''
-    ORDER BY a.random_key ASC
-    LIMIT 4
-  `).all(sourceId, row.id);
+function packRowToCard(row, root, sourceRoot, coversByPack = new Map()) {
+  const covers = coversByPack.get(row.id) || [];
   return {
     pack: row.id,
     title: row.title || row.id,
@@ -694,8 +684,37 @@ function packRowToCard(db, row, root, sourceRoot, sourceId) {
     description: row.description || "",
     body: row.body || "",
     coverImg: mediaRef(root, sourceRoot, row.cover_img),
-    covers: coverRows.map((cover) => mediaRef(root, sourceRoot, cover.preview_path)).filter(Boolean),
+    covers,
   };
+}
+
+function readPackCovers(db, rows, root, sourceRoot, sourceId) {
+  const packIds = rows.map((row) => row.id).filter(Boolean);
+  if (!packIds.length) return new Map();
+  const placeholders = packIds.map(() => "?").join(", ");
+  const coverRows = db.prepare(`
+    SELECT pack, preview_path FROM (
+      SELECT
+        apm.pack AS pack,
+        a.preview_path AS preview_path,
+        ROW_NUMBER() OVER (PARTITION BY apm.pack ORDER BY a.random_key ASC) AS rn
+      FROM asset_pack_memberships apm
+      JOIN assets a
+        ON a.source_id = apm.source_id
+       AND a.id = apm.asset_id
+      WHERE a.source_id = ?
+        AND apm.pack IN (${placeholders})
+        AND a.preview_path != ''
+    )
+    WHERE rn <= 4
+    ORDER BY pack COLLATE NOCASE, rn
+  `).all(sourceId, ...packIds);
+  const coversByPack = new Map();
+  for (const row of coverRows) {
+    if (!coversByPack.has(row.pack)) coversByPack.set(row.pack, []);
+    coversByPack.get(row.pack).push(mediaRef(root, sourceRoot, row.preview_path));
+  }
+  return coversByPack;
 }
 
 export async function rebuildAssetIndex(root, source, options = {}) {
@@ -964,7 +983,8 @@ export async function listIndexedPacks(root, source) {
   initSchema(db);
   try {
     const rows = db.prepare("SELECT * FROM packs WHERE source_id = ? ORDER BY title COLLATE NOCASE").all(source.id);
-    return rows.map((row) => packRowToCard(db, row, root, source.path, source.id));
+    const coversByPack = readPackCovers(db, rows, root, source.path, source.id);
+    return rows.map((row) => packRowToCard(row, root, source.path, coversByPack));
   } finally {
     db.close();
   }
