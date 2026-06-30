@@ -280,16 +280,28 @@
       '<div class="row">' + (p.license ? '<span class="chip" style="background:#86efac">' + esc(p.license) + "</span>" : "") + g + "</div>" +
       "</div></div>";
   }
+  function packHref(pack) {
+    return "#/pack/" + encodeURIComponent(pack);
+  }
+  function packChips(a) {
+    const packs = a.packs && a.packs.length ? a.packs : (a.pack ? [a.pack] : []);
+    if (!packs.length) return "";
+    return '<div class="packchips" aria-label="Asset pack memberships">' + packs.map((pack) => {
+      const primary = pack === a.primaryPack;
+      const current = pack === a.pack;
+      const title = current ? "Current pack" : (primary ? "Primary pack" : "Also in pack");
+      return '<a class="packchip' + (primary ? " primary" : "") + (current ? " current" : "") + '" data-pack-link="' + esc(pack) + '" title="' + title + ': ' + esc(pack) + '" href="' + packHref(pack) + '">' + esc(pack) + "</a>";
+    }).join("") + "</div>";
+  }
   function assetCard(a) {
     const t = a.thumb ? '<div class="thumb"><img loading="lazy" decoding="async" src="' + esc(a.thumb) + '"></div>' : '<div class="thumb"><span class="ph">' + icon(a.kind) + "</span></div>";
     let foot = "";
     if (REVIEW) foot = '<label class="pick" onclick="event.stopPropagation()"><input type="checkbox" data-pick="' + esc(a.id) + '"' + (picked.has(a.id) ? " checked" : "") + "> keep</label>";
-    const multiPack = (a.packs || []).length > 1 ? '<span class="k" title="' + esc((a.packs || []).join(", ")) + '">+' + ((a.packs || []).length - 1) + " packs</span>" : "";
     return '<div class="card' + (picked.has(a.id) ? " sel" : "") + '" data-asset="' + esc(a.id) + '">' + t +
       '<div class="meta"><div class="name">' + esc(a.name) + '</div><div class="row">' +
       '<span class="chip" style="background:' + (OC[a.origin] || OC.unknown) + '">' + esc(a.origin) + "</span>" +
       (a.sourceId ? '<span class="k" title="' + esc(a.sourceId) + '">↗ linked</span>' : (REVIEW ? '<span class="k" style="color:#e0c060">new</span>' : "")) +
-      '<span class="k">' + esc(a.kind) + "</span>" + multiPack + "</div></div>" + foot + "</div>";
+      '<span class="k">' + esc(a.kind) + "</span></div>" + packChips(a) + "</div>" + foot + "</div>";
   }
 
   const FACET_CAP = 40; // high-cardinality facets (tags) get capped to the top-N by count
@@ -338,8 +350,8 @@
       kv("status", a.sourceId ? "↗ linked — " + esc(a.sourceId) : (REVIEW ? "new (game-local)" : "")) +
       kv("license", esc(a.license)) +
       kv("source", esc(a.source)) +
-      kv("pack", a.pack ? '<a href="#/pack/' + esc(a.pack) + '">' + esc(a.pack) + "</a>" : "") +
-      kv("packs", (a.packs || []).length > 1 ? (a.packs || []).map((pack) => '<a href="#/pack/' + esc(pack) + '">' + esc(pack) + "</a>").join(", ") : "") +
+      kv("pack", a.pack ? '<a href="' + packHref(a.pack) + '">' + esc(a.pack) + "</a>" : "") +
+      kv("packs", (a.packs || []).length > 1 ? (a.packs || []).map((pack) => '<a href="' + packHref(pack) + '">' + esc(pack) + "</a>").join(", ") : "") +
       kv("tags", (a.tags || []).map(esc).join(", ")) +
       kv("path", esc(a.relpath || a.id)) +
       '<div class="row" style="margin-top:10px"><button id="copyId">copy id</button>' +
@@ -500,10 +512,14 @@
       const members = isLoose ? DATA.filter((a) => !a.pack) : DATA.filter((a) => a.pack === r.arg);
       const list = OPTS.assetsLazy && !isLoose ? members : sortList(filterList(members, ASSET_FACETS), "assets");
       const visible = OPTS.assetsLazy && !isLoose ? list : limitList(list);
+      const linkedCount = isLoose ? 0 : members.filter((a) => a.primaryPack && a.primaryPack !== r.arg && (a.packs || []).includes(r.arg)).length;
+      const directCount = Math.max(0, members.length - linkedCount);
+      const membershipLine = linkedCount ? '<div class="metaline">' + directCount + " primary / " + linkedCount + " linked from other packs</div>" : "";
       const head = p ? '<div class="detailhead"><div class="cover">' + coverInner(p) + "</div>" +
         '<div class="info"><h2>' + esc(p.title || p.pack) + "</h2>" +
         '<div class="metaline"><b>' + (p.count || members.length) + "</b> assets · <b>" + esc(p.source) + "</b> · " + esc(p.license) +
         (p.license_url ? ' (<a href="' + esc(p.license_url) + '">license</a>)' : "") + " · origin " + esc(p.origin) + "</div>" +
+        membershipLine +
         ((p.genre || []).concat(p.style || []).length ? '<div class="row">' + (p.genre || []).concat(p.style || []).map((x) => '<span class="gchip" data-facet="genre" data-val="' + esc(x) + '">' + esc(x) + "</span>").join("") + "</div>" : "") +
         '<div class="desc">' + esc(p.description || p.body || "") + "</div>" +
         '<div class="row" style="margin-top:8px"><button class="ghost" id="viewPackRecord" type="button" aria-expanded="false">View pack record</button></div>' +
@@ -567,6 +583,7 @@
     const grid = $("grid");
     if (grid) {
       grid.querySelectorAll("[data-pack]").forEach((el) => el.onclick = (e) => { if (e.target.classList.contains("gchip")) { toggleFacet(e.target.dataset.facet, e.target.dataset.val); return; } go("#/pack/" + encodeURIComponent(el.dataset.pack)); });
+      grid.querySelectorAll("[data-pack-link]").forEach((el) => el.onclick = (e) => { e.stopPropagation(); });
       grid.querySelectorAll("[data-asset]").forEach((el) => {
         el.onclick = () => go("#/asset/" + encodeURIComponent(el.dataset.asset));
         const a = byId.get(el.dataset.asset);
