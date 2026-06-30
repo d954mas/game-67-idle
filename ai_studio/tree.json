@@ -388,6 +388,56 @@
             ]
           },
           {
+            "id": "runtime-automation:skill",
+            "kind": "skill",
+            "path": ".codex/skills/nt-runtime-automation/SKILL.md",
+            "title": "nt-runtime-automation",
+            "description": "Runtime Automation skill router for DevAPI discovery, native iteration, screenshots, recordings, pixel health, UI readability, and live-state evidence collection.",
+            "role": "runtime automation skill entrypoint",
+            "tags": [
+              "runtime-automation",
+              "skill"
+            ],
+            "children": [
+              {
+                "id": "runtime-automation:skill-runtime-workflow-rules",
+                "kind": "doc",
+                "path": ".codex/skills/nt-runtime-automation/references/runtime-workflow-rules.md",
+                "title": "runtime-workflow-rules.md",
+                "description": "Reference for runtime launch/reuse rhythm, evidence paths, shared AI Studio runtime helpers, and module boundaries.",
+                "role": "runtime automation workflow reference",
+                "tags": [
+                  "runtime-automation",
+                  "skill-reference"
+                ]
+              },
+              {
+                "id": "runtime-automation:skill-devapi-pattern",
+                "kind": "doc",
+                "path": ".codex/skills/nt-runtime-automation/references/devapi-pattern.md",
+                "title": "devapi-pattern.md",
+                "description": "Reference for DevAPI discovery, command metadata, UI/input, frame.wait sequencing, shared client usage, capture flow, and release gate boundaries.",
+                "role": "DevAPI skill reference",
+                "tags": [
+                  "runtime-automation",
+                  "skill-reference"
+                ]
+              },
+              {
+                "id": "runtime-automation:skill-visual-evidence",
+                "kind": "doc",
+                "path": ".codex/skills/nt-runtime-automation/references/visual-qa-checklist.md",
+                "title": "visual-qa-checklist.md",
+                "description": "Reference for collecting visual runtime evidence with screenshots, recordings, pixel health, readability checks, and stable-frame proof.",
+                "role": "runtime visual evidence reference",
+                "tags": [
+                  "runtime-automation",
+                  "skill-reference"
+                ]
+              }
+            ]
+          },
+          {
             "id": "runtime-automation:devapi-client",
             "kind": "tool",
             "path": "ai_studio/runtime_automation/devapi_client.py",

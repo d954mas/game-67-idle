@@ -22,7 +22,7 @@ sidecar until the engine path builds green and smoke.py passes).
 - Rewire seed + state codegen + python client + CMake onto the engine bus.
 - Re-register the game-owned vocabulary (ui.*/entity.list/game.*/game.state.*) as
   group="game" on the engine bus (the engine deliberately omits these).
-- Repoint the game-runtime-automation skill at the engine DevAPI spec.
+- Keep `nt-runtime-automation` aligned with the engine DevAPI spec.
 
 ## Out of scope
 

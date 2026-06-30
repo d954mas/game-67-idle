@@ -1,0 +1,4 @@
+interface:
+  display_name: "NT Runtime Automation"
+  short_description: "Collect runtime proof with DevAPI, screenshots, recordings, and visual health helpers."
+  default_prompt: "Use $nt-runtime-automation to collect runtime evidence from a running game through AI Studio helpers."

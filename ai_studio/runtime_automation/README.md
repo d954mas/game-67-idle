@@ -30,6 +30,11 @@ py -3.12 ai_studio/runtime_automation/ui_readability.py build/captures/screensho
 py -3.12 ai_studio/runtime_automation/pixel_health.py build/captures/screenshot.png
 ```
 
+## Skill
+
+Use `nt-runtime-automation` when an agent needs to collect runtime evidence,
+drive DevAPI, capture screenshots/recordings, or change this module's helpers.
+
 ## Boundaries
 
 Use this module when the agent needs local runtime evidence: state snapshots,
