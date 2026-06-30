@@ -41,5 +41,5 @@ Use this module when the agent needs local runtime evidence: state snapshots,
 screenshots, visual health checks, readability zooms, or repeatable native
 iteration probes.
 
-Use `ai_studio/game_project/` for active game context and startup gates. Use
-`tools/state_codegen/` for state code generation until that module is reviewed.
+Use `ai_studio/game_project/` for active game context, startup gates, feature
+iteration, and state-code generation workflow.

@@ -15,6 +15,8 @@ harness and one current game project:
   playable game work.
 - `feature_iteration/`: small playable-increment workflow for implementing,
   validating, reviewing, and handing off current-game feature work.
+- `state_management/`: schema-first game state workflow and generator for
+  `GameState` C APIs, save/load, migrations, and DevAPI state commands.
 
 This module does not own game lore, balance, runtime implementation, GDD
 quality rules, asset storage, or task state. Those belong to the current game
@@ -35,4 +37,6 @@ Use this module when starting or orienting the current playable game project.
 Use `ai_studio/bootstrap/` when copying the reusable template into a new game
 folder. Use `nt-primary-gdd` and `ai_studio/game_design/gdd/` for concept and
 GDD content decisions. Use `nt-game-feature-iteration` and
-`feature_iteration/` for current-game playable implementation slices.
+`feature_iteration/` for current-game playable implementation slices. Use
+`nt-game-state-management` and `state_management/` for state schema, generated
+state API, save/load, migration, and DevAPI state work.

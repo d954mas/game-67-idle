@@ -1,0 +1,4 @@
+interface:
+  display_name: "NT Game State Management"
+  short_description: "Work with schema-first game state, actions, and migrations."
+  default_prompt: "Use $nt-game-state-management to inspect schemas, generated state APIs, migrations, DevAPI state commands, and fixtures before changing game state."

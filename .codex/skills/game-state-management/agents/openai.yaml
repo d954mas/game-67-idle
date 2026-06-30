@@ -1,4 +1,0 @@
-interface:
-  display_name: "Game State Management"
-  short_description: "Work with schema-first game state, actions, and migrations."
-  default_prompt: "Use the project game-state-management skill to inspect schemas, generated state API, domain actions, migrations, DevAPI state commands, and validation fixtures before changing game state."

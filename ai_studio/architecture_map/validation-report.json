@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-06-30T22:15:11.251Z",
+  "generatedAt": "2026-06-30T22:27:22.562Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
@@ -14,12 +14,12 @@
     "tasks/epics"
   ],
   "summary": {
-    "mappedPaths": 256,
-    "scannedFiles": 269,
+    "mappedPaths": 265,
+    "scannedFiles": 270,
     "missingInRepo": 0,
     "duplicateMappings": 0,
     "unmappedInAiStudio": 0,
-    "unmappedLegacy": 16,
+    "unmappedLegacy": 10,
     "missingDescriptions": 0
   },
   "issues": {
@@ -27,18 +27,6 @@
     "duplicateMappings": [],
     "unmappedInAiStudio": [],
     "unmappedLegacy": [
-      {
-        "path": ".codex/skills/game-state-management/references/state-contract.md"
-      },
-      {
-        "path": ".codex/skills/game-state-management/references/state-review-checklist.md"
-      },
-      {
-        "path": ".codex/skills/game-state-management/references/state-workflow-rules.md"
-      },
-      {
-        "path": ".codex/skills/game-state-management/SKILL.md"
-      },
       {
         "path": "tasks/epics/E001-pipeline-lean-cleanup.md"
       },
@@ -62,12 +50,6 @@
       },
       {
         "path": "tasks/epics/E009-game-template-structure-for-future-games.md"
-      },
-      {
-        "path": "tools/state_codegen/generate_state_test.py"
-      },
-      {
-        "path": "tools/state_codegen/generate_state.py"
       },
       {
         "path": "tools/tmp_sweep.mjs"

@@ -25,6 +25,7 @@ Copied by `ai_studio/bootstrap/export_base.mjs`:
 - generated agent surfaces: `ai_studio/core_harness/agent_surfaces/`;
 - workflow state/profiling: `ai_studio/taskboard/`, `ai_studio/core_harness/profiling/`;
 - game project kickoff/context scaffolding: `ai_studio/game_project/`;
+- game state generator/workflow: `ai_studio/game_project/state_management/`;
 - quality rules: `ai_studio/quality/`;
 - asset browser/review surface: `ai_studio/assets/viewer/`;
 - reusable asset storage/prep/workflow: `ai_studio/assets/`;
@@ -38,7 +39,7 @@ checks.
 
 Reusable only with a compatible native/runtime stack:
 
-- `tools/state_codegen/`
+- `ai_studio/game_project/state_management/`
 - `ai_studio/runtime_automation/`
 - `tools/perf/`
 

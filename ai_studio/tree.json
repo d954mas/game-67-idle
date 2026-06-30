@@ -340,12 +340,13 @@
         "kind": "module",
         "moduleId": "game-project",
         "color": "#2563eb",
-        "description": "AI Studio module for active game routing, GAME_PROJECT.md orientation, new prototype kickoff, compact pre-implementation context packs, and playable feature iteration workflow.",
+        "description": "AI Studio module for active game routing, GAME_PROJECT.md orientation, new prototype kickoff, compact pre-implementation context packs, playable feature iteration, and schema-first game state workflow.",
         "tags": [
           "game-project",
           "context",
           "prototype-kickoff",
-          "feature-iteration"
+          "feature-iteration",
+          "state-management"
         ],
         "children": [
           {
@@ -444,6 +445,114 @@
             ]
           },
           {
+            "id": "game-project:state-management",
+            "title": "State Management",
+            "subtitle": "schema-first game state",
+            "kind": "workflow",
+            "path": "ai_studio/game_project/state_management",
+            "description": "Workflow and generator for schema-first game state, generated C GameState APIs, JSON save/load, versioned migrations, fixtures, and DevAPI state commands.",
+            "role": "game state workflow and generator",
+            "tags": [
+              "game-project",
+              "state-management",
+              "workflow",
+              "tool"
+            ],
+            "children": [
+              {
+                "id": "game-project:state-management-readme",
+                "kind": "doc",
+                "path": "ai_studio/game_project/state_management/README.md",
+                "title": "README.md",
+                "description": "State Management module contract: use cases, files, commands, default schema/output routing, and skill surface.",
+                "role": "state management entrypoint",
+                "tags": [
+                  "game-project",
+                  "state-management",
+                  "contract"
+                ]
+              },
+              {
+                "id": "game-project:state-contract",
+                "kind": "doc",
+                "path": "ai_studio/game_project/state_management/contract.md",
+                "title": "contract.md",
+                "description": "State contract for documents, save envelope, logical storage keys, generated API, dirty/autosave behavior, migrations, and domain actions.",
+                "role": "state contract",
+                "tags": [
+                  "game-project",
+                  "state-management",
+                  "contract"
+                ]
+              },
+              {
+                "id": "game-project:state-workflow",
+                "kind": "doc",
+                "path": "ai_studio/game_project/state_management/workflow.md",
+                "title": "workflow.md",
+                "description": "Schema-first state change workflow: inspect schema, change generator/template, regenerate, add fixtures/migrations, and prove save/load behavior.",
+                "role": "state workflow",
+                "tags": [
+                  "game-project",
+                  "state-management",
+                  "workflow"
+                ]
+              },
+              {
+                "id": "game-project:state-review",
+                "kind": "doc",
+                "path": "ai_studio/game_project/state_management/review.md",
+                "title": "review.md",
+                "description": "State management review checklist and failure signals for schema, generated API, migrations, DevAPI, fixtures, and saves.",
+                "role": "state review checklist",
+                "tags": [
+                  "game-project",
+                  "state-management",
+                  "review"
+                ]
+              },
+              {
+                "id": "game-project:state-generator",
+                "kind": "tool",
+                "path": "ai_studio/game_project/state_management/generate_state.py",
+                "title": "generate_state.py",
+                "description": "Generates C GameState headers/sources and DevAPI glue from a versioned JSON state schema.",
+                "role": "state code generator",
+                "tags": [
+                  "game-project",
+                  "state-management",
+                  "generator"
+                ]
+              },
+              {
+                "id": "game-project:state-generator-template",
+                "kind": "doc",
+                "path": "ai_studio/game_project/state_management/game_state.c.in",
+                "title": "game_state.c.in",
+                "description": "Template used by the state generator for generated `game_state.c` source output.",
+                "role": "state generator template",
+                "tags": [
+                  "game-project",
+                  "state-management",
+                  "template"
+                ]
+              },
+              {
+                "id": "game-project:state-generator-test",
+                "kind": "test",
+                "path": "ai_studio/game_project/state_management/generate_state_test.py",
+                "title": "generate_state_test.py",
+                "description": "Regression tests for the state generator's schema-to-C output, id stability, reserved fields, and variants.",
+                "role": "state generator tests",
+                "tags": [
+                  "game-project",
+                  "state-management",
+                  "test"
+                ]
+              }
+            ]
+          },
+          {
             "id": "game-project:nt-game-feature-iteration-skill",
             "kind": "skill",
             "path": ".codex/skills/nt-game-feature-iteration/SKILL.md",
@@ -454,6 +563,19 @@
               "skill",
               "game-project",
               "feature-iteration"
+            ]
+          },
+          {
+            "id": "game-project:nt-game-state-management-skill",
+            "kind": "skill",
+            "path": ".codex/skills/nt-game-state-management/SKILL.md",
+            "title": "nt-game-state-management",
+            "description": "Skill surface for schema-first game state work: generated GameState APIs, save/load, migrations, DevAPI state commands, fixtures, and state review.",
+            "role": "state management skill",
+            "tags": [
+              "skill",
+              "game-project",
+              "state-management"
             ]
           },
           {

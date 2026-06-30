@@ -2,10 +2,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.state_codegen import generate_state
+from ai_studio.game_project.state_management import generate_state
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 CLOSED_TOKENS = ("rune_", "fishing_", "Rune", "Fishing", "rune.", "fishing.")
 
 
@@ -13,7 +13,7 @@ def generate_variant(schema_name: str, out_dir: Path) -> str:
     rc = generate_state.main(
         [
             "--schema",
-            str(ROOT / "state" / schema_name),
+            str(ROOT / "template" / "state" / schema_name),
             "--out-dir",
             str(out_dir),
         ]
