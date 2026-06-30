@@ -1,7 +1,7 @@
 ---
 id: T0152
 title: Asset index uses source-relative paths for external unregistered files
-status: review
+status: done
 epic: E001
 priority: P1
 tags: [assets, index, viewer]
@@ -30,3 +30,4 @@ source, not paths relative to the git repository. External libraries such as
 - 2026-06-30: Start: fix external unregistered file paths to use asset-source-relative paths instead of repo-relative ../../Users paths.
 - 2026-06-30: Fixed raw/unregistered asset scanner to use source-relative paths. Evidence: node --test ai_studio/assets/storage/index/tests/index.test.mjs; full asset JS tests 101/101; Python prep tests 61/61.
 - 2026-06-30: Review fix: bumped asset index schemaVersion to force existing SQLite caches to rebuild after raw asset id/path normalization changed.
+- 2026-06-30: 2026-07-01: Review closeout passed on current state: asset JS tests 112/112, Python prep tests 65/65, restricted asset guard dev/release green, architecture map validation clean, taskboard validation clean, doc reference check clean, skills sync clean.

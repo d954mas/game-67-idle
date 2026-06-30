@@ -1,12 +1,12 @@
 ---
 id: T0151
 title: Licensed/paid asset gitignore split + leak guard + manual paid intake
-status: review
+status: done
 epic: E001
 priority: P1
 tags: [pipeline, assets, licensing, git, guard]
 created: 2026-06-24
-updated: 2026-06-24
+updated: 2026-06-30
 ---
 
 ## What
@@ -78,3 +78,4 @@ exist locally at build time - no builder scan change required.
   doc_reference_check, and focused tests.
   Broad pipeline validation runner was later removed in favor of module-owned
   validators. Work uncommitted on master pending lead review.
+- 2026-06-30: 2026-07-01: Review closeout passed on current state: asset JS tests 112/112, Python prep tests 65/65, restricted asset guard dev/release green, architecture map validation clean, taskboard validation clean, doc reference check clean, skills sync clean.

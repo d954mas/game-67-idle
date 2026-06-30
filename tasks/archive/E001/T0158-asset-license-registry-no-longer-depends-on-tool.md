@@ -1,7 +1,7 @@
 ---
 id: T0158
 title: Asset license registry no longer depends on tools shim
-status: review
+status: done
 epic: E001
 priority: P2
 tags: [assets, licensing, legacy]
@@ -32,3 +32,4 @@ export base.
 - 2026-07-01: Found `ai_studio/assets/viewer/promote.mjs` importing license URLs through `tools/lib/licenses.mjs`; this kept a legacy tools shim in the asset module.
 - 2026-07-01: Removed the shim and switched `promote.mjs` to import directly from `ai_studio/assets/storage/license/registry.mjs`.
 - 2026-07-01: Validation: `promote.test.mjs` 9/9, `export_base.test.mjs` 1/1, taskboard validate, and architecture map validate passed. No current code/docs reference the removed shim outside this task's historical notes.
+- 2026-06-30: 2026-07-01: Review closeout passed on current state: asset JS tests 112/112, Python prep tests 65/65, restricted asset guard dev/release green, architecture map validation clean, taskboard validation clean, doc reference check clean, skills sync clean.

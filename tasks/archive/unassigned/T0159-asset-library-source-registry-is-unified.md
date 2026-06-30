@@ -1,7 +1,7 @@
 ---
 id: T0159
 title: Asset library source registry is unified
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [assets, storage, refactor]
@@ -45,3 +45,4 @@ remaining asset-related legacy surfaces.
   non-asset module docs.
 - 2026-06-30: Unified global library source registry; validated asset source tests 30/30, architecture map, taskboard, skills sync, and Asset Viewer source API.
 - 2026-06-30: Review correction: defaultLibrarySourceRoot now prefers active global-library before falling back to another active library; asset tests 31/31 and source API smoke passed.
+- 2026-06-30: 2026-07-01: Review closeout passed on current state: asset JS tests 112/112, Python prep tests 65/65, restricted asset guard dev/release green, architecture map validation clean, taskboard validation clean, doc reference check clean, skills sync clean.

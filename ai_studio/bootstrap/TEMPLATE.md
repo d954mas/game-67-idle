@@ -176,19 +176,19 @@ SEPARATE modules from day one so a copied game keeps them apart:
 Engine-owned pieces stay engine-side (public API): `nt_mesh_renderer`,
 `nt_text_renderer`, `nt_devapi`, ECS comps, `nt_resource`. Seed infra files
 (`game_storage.*`, `game_audio.*`, `state/`) stay as-is. A new game adds a system
-by dropping `systems/sys_<thing>.{c,h}` and registering it in `main` — never by
-growing one file.
+by dropping `systems/sys_<thing>.{c,h}` and registering it in `main`; do not grow
+one large file.
 
 ## GAME-ONLY (never in the template)
 
 `gamedesign/projects/<id>/`, per-game `tasks/active|epics|archive`, `tools/<id>/`,
-pulled/built assets (`assets/source|catalog|licenses|previews|runtime|packs`,
-`*.ntpack`), and game src modules (anything in `src/` beyond the seed files).
+game-local asset source/storage folders, built runtime packs (`*.ntpack`), and
+game src modules (anything in `src/` beyond the seed files).
 
 ## Build approach
 
 Most of the shell already exists as working code in the current Blockside Heat
 runtime (pack pipeline, text, meshes, state, storage, audio). The template is
-**distilled** from it: genericize names (`blockside_*` → generic), strip game
+**distilled** from it: genericize names (`blockside_*` to generic), strip game
 logic, keep the shell. The settings screen + GUI art + long-press reset are added
 on top, sourcing the panel/button kit from the shared library (Kenney UI, CC0).

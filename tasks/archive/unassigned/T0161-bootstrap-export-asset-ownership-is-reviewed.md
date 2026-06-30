@@ -1,12 +1,12 @@
 ---
 id: T0161
 title: Bootstrap export asset ownership is reviewed
-status: review
+status: done
 epic: ""
 priority: P2
 tags: [assets, bootstrap, legacy]
 created: 2026-06-30
-updated: 2026-07-01
+updated: 2026-06-30
 ---
 
 ## What
@@ -40,3 +40,4 @@ as the owner of asset registries.
   bootstrap from the Not Refactored map.
 - 2026-07-01: Validation passed: bootstrap node tests, architecture map
   validation, taskboard validation, doc reference check, and skills sync check.
+- 2026-06-30: 2026-07-01: Review closeout passed on current state: asset JS tests 112/112, Python prep tests 65/65, restricted asset guard dev/release green, architecture map validation clean, taskboard validation clean, doc reference check clean, skills sync clean.

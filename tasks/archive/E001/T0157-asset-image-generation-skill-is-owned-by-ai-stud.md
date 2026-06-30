@@ -1,7 +1,7 @@
 ---
 id: T0157
 title: Asset image generation skill is owned by AI Studio assets
-status: review
+status: done
 epic: E001
 priority: P1
 tags: [assets, skills, generation]
@@ -32,3 +32,4 @@ provenance, and quality evidence.
 - 2026-07-01: Renamed skill to `nt-asset-image-generation`, updated generation paths, updated `route_cutout.py` auto-dual script path, added skill/scripts to `ai_studio/tree.json`, and linked it from `nt-asset-workflow`.
 - 2026-07-01: Fixed `skills_sync.mjs` to accept UTF-8 BOM before skill frontmatter; regenerated `.claude/skills` pointers and added a regression test.
 - 2026-07-01: Validation: `skills_sync --check`, `skills_sync.test.mjs` 4/4, taskboard validate, architecture map validate, and focused asset JS tests 33/33 passed. Old asset skill names are absent from current `.codex`, `.claude`, `ai_studio`, `template`, and `tools` surfaces.
+- 2026-06-30: 2026-07-01: Review closeout passed on current state: asset JS tests 112/112, Python prep tests 65/65, restricted asset guard dev/release green, architecture map validation clean, taskboard validation clean, doc reference check clean, skills sync clean.

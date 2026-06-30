@@ -1,7 +1,7 @@
 ---
 id: T0154
 title: Asset license guard covers all public asset binaries
-status: review
+status: done
 epic: E001
 priority: P1
 tags: [assets, licensing, guard]
@@ -32,3 +32,4 @@ explicit allowlist.
 - 2026-06-30: Start: broaden public git asset license guard from packs/previews/meshes-only to all binary files under game/template assets roots.
 - 2026-06-30: Guard now audits every asset binary under `assets/`; added regression for `template/assets/ui/button.png` leak and shader ignore; narrowed allowlist to exact current template starter files. Evidence: guard unit tests 15/15, current-tree guard green, release guard green, full asset JS tests 103/103, taskboard validate ok, architecture map validate ok.
 - 2026-06-30: Start: broaden public git asset license guard from packs/previews/meshes-only to all binary files under game/template assets roots.
+- 2026-06-30: 2026-07-01: Review closeout passed on current state: asset JS tests 112/112, Python prep tests 65/65, restricted asset guard dev/release green, architecture map validation clean, taskboard validation clean, doc reference check clean, skills sync clean.

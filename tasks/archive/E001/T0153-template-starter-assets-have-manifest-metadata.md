@@ -1,7 +1,7 @@
 ---
 id: T0153
 title: Template starter assets have manifest metadata
-status: review
+status: done
 epic: E001
 priority: P1
 tags: [assets, template, licensing]
@@ -32,3 +32,4 @@ the viewer, search, and license guard see explicit provenance.
 - 2026-06-30: Start: add Pack Manifest metadata for template starter assets and remove temporary allowlist coverage where manifest records can own provenance.
 - 2026-06-30: Added template Pack Manifest records for `meshes/cube.glb` and the Kenney CC0 starter UI PNG files using source-root `source_resource/source_preview` paths, removed current allowlist entries, and verified template index shows 6 known CC0 assets instead of `unregistered/unknown`. Evidence: manifest tests 2/2, guard tests 16/16, current guard green, release guard green, full asset JS tests 105/105, Python prep tests 61/61, taskboard validate ok, architecture map validate ok.
 - 2026-06-30: Start: add Pack Manifest metadata for template starter assets and remove temporary allowlist coverage where manifest records can own provenance.
+- 2026-06-30: 2026-07-01: Review closeout passed on current state: asset JS tests 112/112, Python prep tests 65/65, restricted asset guard dev/release green, architecture map validation clean, taskboard validation clean, doc reference check clean, skills sync clean.

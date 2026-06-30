@@ -1,7 +1,7 @@
 ---
 id: T0160
 title: Accepted asset intake files are not shown as unregistered
-status: review
+status: done
 epic: ""
 priority: P1
 tags: [assets, storage, intake]
@@ -43,3 +43,4 @@ as unregistered unknown-license assets.
   returns `total: 0` for `--origin unregistered` and `--license unknown`.
 - 2026-06-30: Started intake lifecycle fix: accept should archive staged candidates and index should avoid showing already-accepted incoming files as unregistered.
 - 2026-06-30: Validated: asset storage tests 66/66, architecture map validate ok, taskboard validate ok, skills sync ok, global-library unregistered search total 0.
+- 2026-06-30: 2026-07-01: Review closeout passed on current state: asset JS tests 112/112, Python prep tests 65/65, restricted asset guard dev/release green, architecture map validation clean, taskboard validation clean, doc reference check clean, skills sync clean.

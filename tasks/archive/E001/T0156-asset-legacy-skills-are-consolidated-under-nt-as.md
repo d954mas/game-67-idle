@@ -1,7 +1,7 @@
 ---
 id: T0156
 title: Asset legacy skills are consolidated under nt-asset-workflow
-status: review
+status: done
 epic: E001
 priority: P1
 tags: [assets, skills, legacy]
@@ -36,3 +36,4 @@ remove stale entrypoints and update references.
 - 2026-07-01: Validation: old asset skill names only remain in this task's historical notes; `node ai_studio/architecture_map/validate_map.mjs`, `node ai_studio/taskboard/cli.mjs validate --json`, and focused asset JS tests passed.
 - 2026-06-30: Moved legacy asset skill content into nt-asset-workflow references; old entrypoints removed; validation passed.
 - 2026-06-30: Review adjustment: restored concrete 3D engine integration checklist and minimum texture source-record fields inside nt-asset-workflow references; validation re-run passed.
+- 2026-06-30: 2026-07-01: Review closeout passed on current state: asset JS tests 112/112, Python prep tests 65/65, restricted asset guard dev/release green, architecture map validation clean, taskboard validation clean, doc reference check clean, skills sync clean.

@@ -1,7 +1,7 @@
 ---
 id: T0155
 title: External asset library root docs match pack manifest structure
-status: review
+status: done
 epic: E001
 priority: P2
 tags: [assets, library, docs]
@@ -31,3 +31,4 @@ from the real pack-manifest structure.
 - 2026-06-30: Start: update external shared asset library root docs from old OKF/catalog wording to Pack Manifest source-of-truth structure.
 - 2026-07-01: Updated external library README/index/asset_source.json to Pack Manifest source-of-truth docs and replaced current repo docs that still referenced old find_assets/OKF navigation.
 - 2026-07-01: Verified external asset_source.json parses without BOM, asset JS tests pass 105/105, taskboard validate is clean, and architecture map validation is clean.
+- 2026-06-30: 2026-07-01: Review closeout passed on current state: asset JS tests 112/112, Python prep tests 65/65, restricted asset guard dev/release green, architecture map validation clean, taskboard validation clean, doc reference check clean, skills sync clean.
