@@ -49,13 +49,13 @@ skills, or tools.
 The portable AI workflow is exported with:
 
 ```powershell
-node tools/bootstrap/export_base.mjs --target C:\projects\new-game
+node ai_studio/bootstrap/export_base.mjs --target C:\projects\new-game
 ```
 
 Portable by default: skills, taskboard,
 module-owned validators, quality rules, game-context tools, generated art
 job scaffolding, reusable design knowledge, and starter agent/task files. The
-allowlist lives in `tools/bootstrap/export_base.mjs`.
+allowlist lives in `ai_studio/bootstrap/export_base.mjs`.
 
 Runtime seed files (`src/`, `state/`, DevAPI, CMake presets) move only when the
 exporter/runtime template explicitly supports that target.

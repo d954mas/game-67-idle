@@ -20,4 +20,4 @@ repository root.
 - `games.mjs`: small helper for listing and upserting game asset
   sources.
 
-New games created through `tools/bootstrap/new_game.mjs` are registered here.
+New games created through `ai_studio/bootstrap/new_game.mjs` are registered here.

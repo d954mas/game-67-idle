@@ -17,7 +17,7 @@ function cleanup(dir) {
 }
 
 function runExport(target) {
-  return spawnSync(process.execPath, ["tools/bootstrap/export_base.mjs", "--target", target], {
+  return spawnSync(process.execPath, ["ai_studio/bootstrap/export_base.mjs", "--target", target], {
     cwd: root,
     encoding: "utf8",
     stdio: "pipe",
@@ -58,6 +58,8 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(existsSync(join(target, "ai_studio", "architecture_map", "index.html")), true);
     assert.equal(existsSync(join(target, "ai_studio", "architecture_map", "validate_map.mjs")), true);
     assert.equal(existsSync(join(target, "ai_studio", "studio_shell", "server.mjs")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "bootstrap", "export_base.mjs")), true);
+    assert.equal(existsSync(join(target, "ai_studio", "bootstrap", "new_game.mjs")), true);
     assert.equal(existsSync(join(target, "ai_studio", "assets", "viewer", "build_review.mjs")), true);
     assert.equal(existsSync(join(target, "ai_studio", "assets", "viewer", "viewer.js")), true);
     assert.equal(existsSync(join(target, "ai_studio", "assets", "storage", "license", "README.md")), true);
@@ -66,6 +68,7 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(existsSync(join(target, "tools", "assets", "restricted.mjs")), false);
     assert.equal(existsSync(join(target, "tools", "assets", "audit", "restricted_assets_guard.mjs")), false);
     assert.equal(existsSync(join(target, "tools", "asset_review")), false);
+    assert.equal(existsSync(join(target, "tools", "bootstrap")), false);
     assert.equal(existsSync(join(target, "tools", "README.md")), true);
     assert.equal(existsSync(join(target, "tools", "requirements", "ai-pipeline-full.txt")), true);
     assert.equal(existsSync(join(target, ".codex", "skills", "nt-taskboard-manager", "SKILL.md")), true);

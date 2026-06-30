@@ -16,7 +16,7 @@ knowledge. Each **game is its own folder**, copied from `template/`.
 
 ```powershell
 git submodule update --init --recursive
-node tools/bootstrap/new_game.mjs --id <game-id>   # copies template/ -> <game-id>/
+node ai_studio/bootstrap/new_game.mjs --id <game-id>   # copies template/ -> <game-id>/
 ```
 
 Then customise the copy and pull assets/systems. The `template/` folder itself is
@@ -35,7 +35,7 @@ template/build/bin/game.exe --settings --capture tmp/x.ppm    # headless screens
 Layout a game folder teaches by example: `src/main.c` is the conductor; systems in
 `src/systems/`, render in `src/render/`, UI in `src/ui/` (styles in their own
 file), world state in `src/world/`. See `template/CONVENTIONS.md` and
-`tools/bootstrap/TEMPLATE.md`.
+`ai_studio/bootstrap/TEMPLATE.md`.
 
 ## Validate the pipeline
 

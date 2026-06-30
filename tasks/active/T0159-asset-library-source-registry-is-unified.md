@@ -25,8 +25,7 @@ remaining asset-related legacy surfaces.
 
 ## Open questions
 
-- Should `tools/bootstrap/` move into a future AI Studio bootstrap/export module,
-  or stay in legacy until the next game-creation pass? Tracked by T0161.
+- Resolved by T0161: bootstrap/export moved to `ai_studio/bootstrap/`.
 
 ## Log
 

@@ -3,7 +3,7 @@
 A storage of **optional, reusable game systems** — the code analog of the shared
 asset library. Browse what exists, see each one work, copy the ones you need into a
 game, customize your copy, and promote good systems back. See the model in
-`tools/bootstrap/TEMPLATE.md`.
+`ai_studio/bootstrap/TEMPLATE.md`.
 
 Not in the minimal template: the always-needed starter shell (settings, audio, save,
 UI, text, mesh) lives in `template/`. The showcase is for the rest — terrain,

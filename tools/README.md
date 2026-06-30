@@ -18,7 +18,7 @@ subcommands for exhaustive work.
 
 ## Portable AI Pipeline
 
-Copied by `tools/bootstrap/export_base.mjs`:
+Copied by `ai_studio/bootstrap/export_base.mjs`:
 
 - validators: `ai_studio/core_harness/validation/doc_reference_check.mjs`,
   module-owned tests;
@@ -28,7 +28,7 @@ Copied by `tools/bootstrap/export_base.mjs`:
 - quality rules: `ai_studio/quality/`;
 - asset browser/review surface: `ai_studio/assets/viewer/`;
 - reusable asset storage/prep/workflow: `ai_studio/assets/`;
-- export helpers: `tools/bootstrap/`.
+- bootstrap/export helpers: `ai_studio/bootstrap/`.
 
 Quality starts from `ai_studio/quality/README.md`: pick the changed-work group,
 start with the group's `001` rule, then apply only the relevant higher-numbered
@@ -68,5 +68,5 @@ Validation is owned by modules:
 node ai_studio/core_harness/validation/doc_reference_check.mjs
 node ai_studio/architecture_map/validate_map.mjs
 node ai_studio/taskboard/cli.mjs validate
-node --test tools/bootstrap/export_base.test.mjs
+node --test ai_studio/bootstrap/export_base.test.mjs
 ```

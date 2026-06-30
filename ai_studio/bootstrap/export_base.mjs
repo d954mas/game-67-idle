@@ -1,6 +1,6 @@
 // Export the portable AI pipeline base into a new game project.
 //
-//   node tools/bootstrap/export_base.mjs --target C:\projects\new-game [--force]
+//   node ai_studio/bootstrap/export_base.mjs --target C:\projects\new-game [--force]
 //
 // Copies the reusable pieces (skills, AI Studio modules, skill sync, design knowledge,
 // task store conventions) and writes starter AGENTS.md /
@@ -19,7 +19,7 @@ const force = args.includes("--force");
 const targetIndex = args.indexOf("--target");
 const target = targetIndex !== -1 ? args[targetIndex + 1] : null;
 if (!target) {
-  console.error("usage: node tools/bootstrap/export_base.mjs --target <dir> [--force]");
+  console.error("usage: node ai_studio/bootstrap/export_base.mjs --target <dir> [--force]");
   process.exit(1);
 }
 const dst = resolve(target);
@@ -46,8 +46,6 @@ const COPY = [
   "tools/lib/tmp_exports.test.mjs",
   "tools/game_context",
   "tools/README.md",
-  "tools/bootstrap/export_base.mjs",
-  "tools/bootstrap/export_base.test.mjs",
   "gamedesign/README.md",
   "gamedesign/knowledge",
   "gamedesign/sources",

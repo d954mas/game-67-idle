@@ -3,9 +3,9 @@
 // repo root (sibling to external/ and template/, so its CMake's ../external/...
 // reference resolves the same way). The game then owns and customizes its copy.
 //
-//   node tools/bootstrap/new_game.mjs --id mygame
-//   node tools/bootstrap/new_game.mjs --id mygame --from template --force
-//   node tools/bootstrap/new_game.mjs --root <repo> --id mygame
+//   node ai_studio/bootstrap/new_game.mjs --id mygame
+//   node ai_studio/bootstrap/new_game.mjs --id mygame --from template --force
+//   node ai_studio/bootstrap/new_game.mjs --root <repo> --id mygame
 //
 // Build/run the new game:
 //   cmake -S mygame -B mygame/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
@@ -14,7 +14,7 @@
 import { existsSync, mkdirSync, readdirSync, copyFileSync, statSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gameRegistryPath, registerGameAssetSource } from "../../ai_studio/assets/storage/sources/games.mjs";
+import { gameRegistryPath, registerGameAssetSource } from "../assets/storage/sources/games.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -46,7 +46,7 @@ function copyDir(src, dst) {
 
 const a = parseArgs(process.argv.slice(2));
 if (!a.id || !/^[a-z][a-z0-9-]*$/.test(a.id)) {
-  console.error("usage: node tools/bootstrap/new_game.mjs [--root <repo>] --id <game-id>  (lowercase, kebab)");
+  console.error("usage: node ai_studio/bootstrap/new_game.mjs [--root <repo>] --id <game-id>  (lowercase, kebab)");
   process.exit(1);
 }
 const repoRoot = a.root ? resolve(a.root) : defaultRepoRoot;

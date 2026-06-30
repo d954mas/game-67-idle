@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
 
-const script = resolve("tools/bootstrap/new_game.mjs");
+const script = resolve("ai_studio/bootstrap/new_game.mjs");
 
 function tempRepo() {
   const root = mkdtempSync(join(tmpdir(), "new-game-bootstrap-"));

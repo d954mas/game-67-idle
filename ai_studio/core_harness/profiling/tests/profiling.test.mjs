@@ -170,7 +170,7 @@ test("hook_record marks full Python dependency failures as environment blocked",
     runHook({
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
-      tool_input: { command: "node --test tools/bootstrap/export_base.test.mjs" },
+      tool_input: { command: "node --test ai_studio/bootstrap/export_base.test.mjs" },
       tool_response: {
         exit_code: 1,
         output: "error: no working Python runner found with required modules: PIL, numpy, scipy\nhint: install full-gate modules into the selected runner: py -3.12 -m pip install -r tools/requirements/ai-pipeline-full.txt",
@@ -485,7 +485,7 @@ test("status command rollup strips shell assignment wrappers", () => {
         result: "pass",
         value: "unknown",
         event_type: "tool_call_result",
-        commands: ["$env:AI_PIPELINE_PYTHON='C:\\Users\\ROG\\.cache\\codex-runtimes\\python\\python.exe'; node --test tools/bootstrap/export_base.test.mjs"],
+        commands: ["$env:AI_PIPELINE_PYTHON='C:\\Users\\ROG\\.cache\\codex-runtimes\\python\\python.exe'; node --test ai_studio/bootstrap/export_base.test.mjs"],
         session_id: "s1",
       },
       {
@@ -574,7 +574,7 @@ test("status separates environment-blocked failures from unresolved failures", (
         result: "fail",
         value: "necessary_overhead",
         event_type: "tool_call_result",
-        commands: ["node --test tools/bootstrap/export_base.test.mjs"],
+        commands: ["node --test ai_studio/bootstrap/export_base.test.mjs"],
         session_id: "s1",
         failure_kind: "environment_blocked",
         blocked_by: "missing full-gate Python modules; install tools/requirements/ai-pipeline-full.txt or set AI_PIPELINE_PYTHON",

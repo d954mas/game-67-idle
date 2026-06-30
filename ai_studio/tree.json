@@ -177,6 +177,111 @@
         ]
       },
       {
+        "id": "bootstrap",
+        "title": "Bootstrap",
+        "subtitle": "project and game creation",
+        "kind": "module",
+        "moduleId": "bootstrap",
+        "color": "#475569",
+        "description": "AI Studio bootstrap module for copying the template into a new game, exporting the reusable AI Studio base, and documenting the template copy model. It may call Asset Storage registries but does not own asset manifests or license policy.",
+        "tags": [
+          "bootstrap",
+          "export",
+          "game-creation"
+        ],
+        "children": [
+          {
+            "id": "bootstrap:readme",
+            "kind": "doc",
+            "path": "ai_studio/bootstrap/README.md",
+            "title": "README.md",
+            "description": "Bootstrap module contract: role, commands, boundaries, and why bootstrap is not asset storage.",
+            "role": "bootstrap module entrypoint",
+            "tags": [
+              "bootstrap",
+              "contract",
+              "source"
+            ]
+          },
+          {
+            "id": "bootstrap:new-game",
+            "kind": "tool",
+            "path": "ai_studio/bootstrap/new_game.mjs",
+            "title": "new_game.mjs",
+            "description": "Copies template/ into a new game folder and registers that game asset root through Asset Storage.",
+            "role": "new game creation command",
+            "tags": [
+              "bootstrap",
+              "game-creation",
+              "assets"
+            ]
+          },
+          {
+            "id": "bootstrap:new-game-test",
+            "kind": "test",
+            "path": "ai_studio/bootstrap/new_game.test.mjs",
+            "title": "new_game.test.mjs",
+            "description": "Regression tests proving new_game copies template files and registers game asset roots without touching the real repository.",
+            "role": "new game creation tests",
+            "tags": [
+              "bootstrap",
+              "test"
+            ]
+          },
+          {
+            "id": "bootstrap:export-base",
+            "kind": "tool",
+            "path": "ai_studio/bootstrap/export_base.mjs",
+            "title": "export_base.mjs",
+            "description": "Exports the reusable AI Studio base into another project and regenerates agent surfaces in the target.",
+            "role": "portable AI Studio export command",
+            "tags": [
+              "bootstrap",
+              "export"
+            ]
+          },
+          {
+            "id": "bootstrap:export-base-test",
+            "kind": "test",
+            "path": "ai_studio/bootstrap/export_base.test.mjs",
+            "title": "export_base.test.mjs",
+            "description": "Regression test proving portable export includes AI Studio, taskboard, quality, asset modules, skills, and generated agent-surface checks.",
+            "role": "portable export tests",
+            "tags": [
+              "bootstrap",
+              "export",
+              "test"
+            ]
+          },
+          {
+            "id": "bootstrap:template-paths",
+            "kind": "doc",
+            "path": "ai_studio/bootstrap/template_paths.mjs",
+            "title": "template_paths.mjs",
+            "description": "Declarative template copy model notes and path groups for universal, seed, shared-library, and game-only files.",
+            "role": "template copy model source",
+            "tags": [
+              "bootstrap",
+              "template",
+              "paths"
+            ]
+          },
+          {
+            "id": "bootstrap:template-doc",
+            "kind": "doc",
+            "path": "ai_studio/bootstrap/TEMPLATE.md",
+            "title": "TEMPLATE.md",
+            "description": "Human explanation of the template copy model, reuse tiers, systems showcase, seed shell, and game-only boundaries.",
+            "role": "template copy model documentation",
+            "tags": [
+              "bootstrap",
+              "template",
+              "docs"
+            ]
+          }
+        ]
+      },
+      {
         "id": "module:hot",
         "title": "Core Harness",
         "subtitle": "ai_studio/core_harness",
@@ -1353,7 +1458,7 @@
                     "kind": "config",
                     "path": "ai_studio/assets/storage/sources/games.json",
                     "title": "games.json",
-                    "description": "Explicit registry of game-local asset folders shown by Asset Viewer. Updated by tools/bootstrap/new_game.mjs.",
+                    "description": "Explicit registry of game-local asset folders shown by Asset Viewer. Updated by ai_studio/bootstrap/new_game.mjs.",
                     "role": "registered game asset source data",
                     "tags": [
                       "assets",
@@ -3014,44 +3119,6 @@
                 "tags": [
                   "legacy",
                   "profiling"
-                ]
-              },
-              {
-                "id": "not-refactored:new-game-bootstrap",
-                "kind": "tool",
-                "path": "tools/bootstrap/new_game.mjs",
-                "title": "new_game.mjs",
-                "description": "Legacy game bootstrap command. It copies template/ into a new game folder and now registers the game's asset root in AI Studio.",
-                "role": "legacy game bootstrap command",
-                "tags": [
-                  "legacy",
-                  "bootstrap",
-                  "assets"
-                ]
-              },
-              {
-                "id": "not-refactored:new-game-bootstrap-test",
-                "kind": "test",
-                "path": "tools/bootstrap/new_game.test.mjs",
-                "title": "new_game.test.mjs",
-                "description": "Regression test proving legacy game bootstrap registers game asset roots without touching the real repository.",
-                "role": "legacy game bootstrap test",
-                "tags": [
-                  "legacy",
-                  "bootstrap",
-                  "test"
-                ]
-              },
-              {
-                "id": "not-refactored:bootstrap-template",
-                "kind": "doc",
-                "path": "tools/bootstrap/TEMPLATE.md",
-                "title": "TEMPLATE.md",
-                "description": "Legacy portable export template contract awaiting export-module ownership review.",
-                "role": "legacy export template",
-                "tags": [
-                  "legacy",
-                  "export"
                 ]
               }
             ]
