@@ -1,0 +1,4 @@
+interface:
+  display_name: "NT Game Feature Iteration"
+  short_description: "Implement small playable game changes with validation."
+  default_prompt: "Use $nt-game-feature-iteration to implement one focused playable game change with validation and evidence."

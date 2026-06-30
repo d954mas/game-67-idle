@@ -336,15 +336,16 @@
       {
         "id": "game-project",
         "title": "Game Project",
-        "subtitle": "active game context",
+        "subtitle": "active game and playable iteration",
         "kind": "module",
         "moduleId": "game-project",
         "color": "#2563eb",
-        "description": "AI Studio module for active game routing, GAME_PROJECT.md orientation, new prototype kickoff, and compact pre-implementation context packs.",
+        "description": "AI Studio module for active game routing, GAME_PROJECT.md orientation, new prototype kickoff, compact pre-implementation context packs, and playable feature iteration workflow.",
         "tags": [
           "game-project",
           "context",
-          "prototype-kickoff"
+          "prototype-kickoff",
+          "feature-iteration"
         ],
         "children": [
           {
@@ -384,6 +385,75 @@
               "game-project",
               "context",
               "game-work"
+            ]
+          },
+          {
+            "id": "game-project:feature-iteration",
+            "title": "Feature Iteration Workflow",
+            "subtitle": "small playable slices",
+            "kind": "workflow",
+            "path": "ai_studio/game_project/feature_iteration",
+            "description": "Workflow docs for implementing, validating, reviewing, and handing off small current-game playable feature increments.",
+            "role": "playable feature iteration workflow",
+            "tags": [
+              "game-project",
+              "feature-iteration",
+              "playable",
+              "workflow"
+            ],
+            "children": [
+              {
+                "id": "game-project:feature-iteration-readme",
+                "kind": "doc",
+                "path": "ai_studio/game_project/feature_iteration/README.md",
+                "title": "README.md",
+                "description": "Feature Iteration Workflow contract: use cases, flow, files, and module boundaries.",
+                "role": "feature iteration workflow entrypoint",
+                "tags": [
+                  "game-project",
+                  "feature-iteration",
+                  "contract"
+                ]
+              },
+              {
+                "id": "game-project:feature-iteration-cycle",
+                "kind": "doc",
+                "path": "ai_studio/game_project/feature_iteration/iteration_cycle.md",
+                "title": "iteration_cycle.md",
+                "description": "Playable iteration cycle: orient, choose one goal, write task packet, implement, validate, capture evidence, review, update state, and commit.",
+                "role": "playable iteration cycle",
+                "tags": [
+                  "game-project",
+                  "feature-iteration",
+                  "cycle"
+                ]
+              },
+              {
+                "id": "game-project:feature-iteration-gates",
+                "kind": "doc",
+                "path": "ai_studio/game_project/feature_iteration/playable_gates.md",
+                "title": "playable_gates.md",
+                "description": "Routing for reference-driven work, quality checks, runtime proof, build/release tasks, and prototype handoff evidence.",
+                "role": "playable feature gates",
+                "tags": [
+                  "game-project",
+                  "feature-iteration",
+                  "gates"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "game-project:nt-game-feature-iteration-skill",
+            "kind": "skill",
+            "path": ".codex/skills/nt-game-feature-iteration/SKILL.md",
+            "title": "nt-game-feature-iteration",
+            "description": "Skill surface for implementing one focused playable game feature change with validation and evidence.",
+            "role": "playable feature iteration skill",
+            "tags": [
+              "skill",
+              "game-project",
+              "feature-iteration"
             ]
           },
           {

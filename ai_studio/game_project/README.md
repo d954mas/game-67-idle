@@ -1,6 +1,7 @@
 # Game Project
 
-AI Studio module for active game routing and first-slice startup context.
+AI Studio module for active game routing, first-slice startup context, and
+playable feature iteration.
 
 ## Role
 
@@ -12,10 +13,13 @@ harness and one current game project:
   startup context pack for a new prototype.
 - `iteration_context.mjs`: builds a compact pre-implementation context pack for
   playable game work.
+- `feature_iteration/`: small playable-increment workflow for implementing,
+  validating, reviewing, and handing off current-game feature work.
 
 This module does not own game lore, balance, runtime implementation, GDD
 quality rules, asset storage, or task state. Those belong to the current game
 folder, `ai_studio/quality/`, `ai_studio/assets/`, and `ai_studio/taskboard/`.
+Runtime proof helpers belong to `ai_studio/runtime_automation/`.
 
 ## Commands
 
@@ -30,4 +34,5 @@ node --test ai_studio/game_project/game_project.test.mjs
 Use this module when starting or orienting the current playable game project.
 Use `ai_studio/bootstrap/` when copying the reusable template into a new game
 folder. Use `nt-primary-gdd` and `ai_studio/game_design/gdd/` for concept and
-GDD content decisions.
+GDD content decisions. Use `nt-game-feature-iteration` and
+`feature_iteration/` for current-game playable implementation slices.

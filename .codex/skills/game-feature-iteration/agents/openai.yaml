@@ -1,4 +1,0 @@
-interface:
-  display_name: "Game Feature Iteration"
-  short_description: "Implement small playable game changes with validation."
-  default_prompt: "Use this skill to implement a focused game feature, validate it, and keep the project workflow clean."
