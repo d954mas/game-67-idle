@@ -92,6 +92,74 @@ test("custom license without publish proof accepts into restricted packs", async
   }
 });
 
+test("custom publishable asset records provenance, rights, and release-debt metadata", async () => {
+  const root = await mkdtemp(join(tmpdir(), "asset-intake-custom-publish-"));
+  try {
+    const sourceRoot = join(root, "source");
+    const input = join(root, "tree.glb");
+    await writeFile(input, "tree bytes");
+    await stageAsset([
+      "--source-root", sourceRoot,
+      "--input", input,
+      "--source", "Studio Vendor",
+      "--slug", "Tree Model",
+      "--license", "Studio Custom",
+      "--source-page-url", "https://example.test/tree",
+    ]);
+
+    const result = await acceptStagedAsset([
+      "--source-root", sourceRoot,
+      "--source", "studio-vendor",
+      "--slug", "tree-model",
+      "--file", "tree.glb",
+      "--pack", "studio-nature",
+      "--asset-id", "studio__tree__custom",
+      "--kind", "model",
+      "--license", "Studio Custom",
+      "--license-url", "https://example.test/license",
+      "--license-kind", "custom",
+      "--source-page-url", "https://example.test/tree",
+      "--author-vendor", "Studio Vendor",
+      "--attribution-required", "true",
+      "--notice-required", "true",
+      "--credit-text", "Tree by Studio Vendor",
+      "--commercial-use", "true",
+      "--modification-allowed", "true",
+      "--redistribution-allowed", "true",
+      "--publish", "true",
+    ]);
+
+    assert.equal(result.publish, "true");
+    assert.equal(existsSync(join(sourceRoot, "packs", "studio-nature", "files", "tree.glb")), true);
+    assert.equal(existsSync(join(sourceRoot, "restricted", "packs", "studio-nature", "files", "tree.glb")), false);
+    const assetRows = (await readFile(join(sourceRoot, "packs", "studio-nature", "assets.jsonl"), "utf8")).trim().split(/\r?\n/);
+    assert.equal(assetRows.length, 1);
+    const row = JSON.parse(assetRows[0]);
+    assert.equal(row.asset_id, "studio__tree__custom");
+    assert.equal(row.license_kind, "custom");
+    assert.equal(row.source_page, "https://example.test/tree");
+    assert.equal(row.author_vendor, "Studio Vendor");
+    assert.equal(row.attribution_required, "true");
+    assert.equal(row.notice_required, "true");
+    assert.equal(row.credit_text, "Tree by Studio Vendor");
+    assert.equal(row.commercial_use, "true");
+    assert.equal(row.modification_allowed, "true");
+    assert.equal(row.redistribution_allowed, "true");
+    assert.equal(row.publish, "true");
+
+    const { records } = await scanPackManifestSource(sourceRoot);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].asset_id, "studio__tree__custom");
+    assert.equal(records[0].license_kind, "custom");
+    assert.equal(records[0].source_page, "https://example.test/tree");
+    assert.equal(records[0].author_vendor, "Studio Vendor");
+    assert.equal(records[0].publish, "true");
+    assert.match(records[0].resource, /packs\/studio-nature\/files\/tree\.glb$/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("reject moves staged item out of _incoming", async () => {
   const root = await mkdtemp(join(tmpdir(), "asset-intake-reject-"));
   try {
