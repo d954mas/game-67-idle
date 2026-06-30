@@ -15,8 +15,6 @@ const defaultScanRoots = [
   ".codex/skills",
   "docs/ai-pipeline",
   "tools",
-  "tasks/active",
-  "tasks/epics",
 ];
 
 const ignoredPrefixes = [

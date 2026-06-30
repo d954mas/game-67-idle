@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-06-30T22:33:14.587Z",
+  "generatedAt": "2026-06-30T22:38:02.819Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
@@ -9,49 +9,22 @@
     "GAME_PROJECT.md",
     ".codex/skills",
     "docs/ai-pipeline",
-    "tools",
-    "tasks/active",
-    "tasks/epics"
+    "tools"
   ],
   "summary": {
     "mappedPaths": 267,
-    "scannedFiles": 270,
+    "scannedFiles": 262,
     "missingInRepo": 0,
     "duplicateMappings": 0,
     "unmappedInAiStudio": 0,
-    "unmappedLegacy": 8,
+    "unmappedLegacy": 0,
     "missingDescriptions": 0
   },
   "issues": {
     "missingInRepo": [],
     "duplicateMappings": [],
     "unmappedInAiStudio": [],
-    "unmappedLegacy": [
-      {
-        "path": "tasks/epics/E001-pipeline-lean-cleanup.md"
-      },
-      {
-        "path": "tasks/epics/E002-engine-devapi-migration-sidecar-native.md"
-      },
-      {
-        "path": "tasks/epics/E003-ember-road-prototype.md"
-      },
-      {
-        "path": "tasks/epics/E004-dragon-grove-prototype.md"
-      },
-      {
-        "path": "tasks/epics/E006-cozy-automation-prototype.md"
-      },
-      {
-        "path": "tasks/epics/E007-little-lives-prototype.md"
-      },
-      {
-        "path": "tasks/epics/E008-blockside-heat-prototype.md"
-      },
-      {
-        "path": "tasks/epics/E009-game-template-structure-for-future-games.md"
-      }
-    ],
+    "unmappedLegacy": [],
     "missingDescriptions": []
   }
 }
