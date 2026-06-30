@@ -231,7 +231,7 @@ function resetIndexFiles(root, source) {
   return removed;
 }
 
-function initSchema(db) {
+function initSchema(db, { indexes = true } = {}) {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
@@ -266,10 +266,6 @@ function initSchema(db) {
       preview_status TEXT,
       PRIMARY KEY (source_id, id)
     );
-    CREATE INDEX IF NOT EXISTS idx_assets_source_kind ON assets(source_id, kind);
-    CREATE INDEX IF NOT EXISTS idx_assets_source_pack ON assets(source_id, pack);
-    CREATE INDEX IF NOT EXISTS idx_assets_source_origin ON assets(source_id, origin);
-    CREATE INDEX IF NOT EXISTS idx_assets_source_license ON assets(source_id, license);
     CREATE TABLE IF NOT EXISTS packs (
       source_id TEXT NOT NULL,
       id TEXT NOT NULL,
@@ -289,15 +285,12 @@ function initSchema(db) {
       style_json TEXT,
       PRIMARY KEY (source_id, id)
     );
-    CREATE INDEX IF NOT EXISTS idx_packs_source ON packs(source_id);
     CREATE TABLE IF NOT EXISTS asset_terms (
       source_id TEXT NOT NULL,
       asset_id TEXT NOT NULL,
       key TEXT NOT NULL,
       value TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_asset_terms_lookup ON asset_terms(source_id, key, value);
-    CREATE INDEX IF NOT EXISTS idx_asset_terms_asset ON asset_terms(source_id, asset_id);
     CREATE TABLE IF NOT EXISTS asset_pack_memberships (
       source_id TEXT NOT NULL,
       asset_id TEXT NOT NULL,
@@ -305,14 +298,13 @@ function initSchema(db) {
       is_primary INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (source_id, asset_id, pack)
     );
-    CREATE INDEX IF NOT EXISTS idx_asset_pack_memberships_pack ON asset_pack_memberships(source_id, pack, asset_id);
-    CREATE INDEX IF NOT EXISTS idx_asset_pack_memberships_asset ON asset_pack_memberships(source_id, asset_id);
     CREATE VIRTUAL TABLE IF NOT EXISTS asset_search_fts USING fts5(
       source_id UNINDEXED,
       asset_id UNINDEXED,
       text
     );
   `);
+  if (indexes) createSecondaryIndexes(db);
 }
 
 function dropSecondaryIndexes(db) {
@@ -667,9 +659,9 @@ export async function rebuildAssetIndex(root, source, options = {}) {
     timings.push({ label, ms: now - lastTiming });
     lastTiming = now;
   };
-  resetIndexFiles(root, source);
+  const removedIndexFiles = resetIndexFiles(root, source);
   const db = openIndex(root, source);
-  initSchema(db);
+  initSchema(db, { indexes: false });
   const now = new Date().toISOString();
   const snapshot = options.snapshot || buildSourceSnapshot(root, source);
   const signature = sourceSnapshotSignature(snapshot);
@@ -689,7 +681,7 @@ export async function rebuildAssetIndex(root, source, options = {}) {
 
   db.exec("BEGIN");
   try {
-    dropSecondaryIndexes(db);
+    if (!removedIndexFiles) dropSecondaryIndexes(db);
     db.prepare("DELETE FROM assets WHERE source_id = ?").run(source.id);
     db.prepare("DELETE FROM packs WHERE source_id = ?").run(source.id);
     db.prepare("DELETE FROM asset_terms WHERE source_id = ?").run(source.id);
