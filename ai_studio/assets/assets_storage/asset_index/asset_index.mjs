@@ -600,6 +600,31 @@ function attachPackMemberships(db, assets, sourceId, activePack = "") {
   return assets;
 }
 
+function assetFacetValues(asset, key) {
+  if (key === "pack") return uniqueList(asset.pack, asset.packs);
+  if (key === "tags") return list(asset.tags);
+  if (key === "genre") return list(asset.genre);
+  if (key === "style") return list(asset.style);
+  return list(asset[key]);
+}
+
+function facetsFromAssets(assets) {
+  const facets = {};
+  for (const key of facetKeys) {
+    const counts = new Map();
+    for (const asset of assets) {
+      for (const value of assetFacetValues(asset, key)) {
+        counts.set(value, (counts.get(value) || 0) + 1);
+      }
+    }
+    facets[key] = [...counts.entries()]
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .slice(0, 80)
+      .map(([value, count]) => ({ value, count }));
+  }
+  return facets;
+}
+
 function packRowToCard(db, row, root, sourceRoot, sourceId) {
   const coverRows = db.prepare(`
     SELECT a.preview_path FROM assets a
@@ -912,18 +937,20 @@ export async function queryIndexedAssets(root, source, options = {}) {
     const rows = db.prepare(`SELECT a.* FROM assets a WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...params, limit, offset);
     const assets = attachPackMemberships(db, rows.map((row) => rowToAsset(row, root, source.path)), source.id, options.pack || "");
 
-    const facets = {};
-    for (const key of facetKeys) {
-      facets[key] = db.prepare(`
-        SELECT t.value AS value, COUNT(*) AS count
-        FROM asset_terms t
-        WHERE t.source_id = ?
-          AND t.key = ?
-          AND t.asset_id IN (SELECT a.id FROM assets a WHERE ${where})
-        GROUP BY t.value
-        ORDER BY count DESC, value COLLATE NOCASE
-        LIMIT 80
-      `).all(source.id, key, ...params).map((row) => ({ value: row.value, count: row.count }));
+    const facets = total <= limit && offset === 0 ? facetsFromAssets(assets) : {};
+    if (!Object.keys(facets).length) {
+      for (const key of facetKeys) {
+        facets[key] = db.prepare(`
+          SELECT t.value AS value, COUNT(*) AS count
+          FROM asset_terms t
+          WHERE t.source_id = ?
+            AND t.key = ?
+            AND t.asset_id IN (SELECT a.id FROM assets a WHERE ${where})
+          GROUP BY t.value
+          ORDER BY count DESC, value COLLATE NOCASE
+          LIMIT 80
+        `).all(source.id, key, ...params).map((row) => ({ value: row.value, count: row.count }));
+      }
     }
 
     return {
