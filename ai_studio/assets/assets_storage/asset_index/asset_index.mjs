@@ -11,7 +11,7 @@ import {
   writeSourceSnapshot,
 } from "../source_snapshots/source_snapshots.mjs";
 
-const schemaVersion = 2;
+const schemaVersion = 3;
 const previewCacheVersion = 1;
 const facetKeys = ["kind", "origin", "license", "source", "pack", "genre", "style", "tags"];
 const primaryExt = {
@@ -303,6 +303,13 @@ function initSchema(db, { indexes = true } = {}) {
       key TEXT NOT NULL,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS asset_facet_counts (
+      source_id TEXT NOT NULL,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      count INTEGER NOT NULL,
+      PRIMARY KEY (source_id, key, value)
+    );
     CREATE TABLE IF NOT EXISTS asset_pack_memberships (
       source_id TEXT NOT NULL,
       asset_id TEXT NOT NULL,
@@ -328,6 +335,7 @@ function dropSecondaryIndexes(db) {
     DROP INDEX IF EXISTS idx_packs_source;
     DROP INDEX IF EXISTS idx_asset_terms_lookup;
     DROP INDEX IF EXISTS idx_asset_terms_asset;
+    DROP INDEX IF EXISTS idx_asset_facet_counts_lookup;
     DROP INDEX IF EXISTS idx_asset_pack_memberships_pack;
     DROP INDEX IF EXISTS idx_asset_pack_memberships_asset;
   `);
@@ -342,6 +350,7 @@ function createSecondaryIndexes(db) {
     CREATE INDEX IF NOT EXISTS idx_packs_source ON packs(source_id);
     CREATE INDEX IF NOT EXISTS idx_asset_terms_lookup ON asset_terms(source_id, key, value);
     CREATE INDEX IF NOT EXISTS idx_asset_terms_asset ON asset_terms(source_id, asset_id);
+    CREATE INDEX IF NOT EXISTS idx_asset_facet_counts_lookup ON asset_facet_counts(source_id, key);
     CREATE INDEX IF NOT EXISTS idx_asset_pack_memberships_pack ON asset_pack_memberships(source_id, pack, asset_id);
     CREATE INDEX IF NOT EXISTS idx_asset_pack_memberships_asset ON asset_pack_memberships(source_id, asset_id);
   `);
@@ -393,6 +402,16 @@ function recordTerms(record) {
   push("style", record.style);
   push("tags", record.tags);
   return terms;
+}
+
+function addFacetCounts(counts, terms) {
+  for (const [key, value] of terms) {
+    if (!key || !value) continue;
+    const id = `${key}\0${value}`;
+    const current = counts.get(id);
+    if (current) current.count += 1;
+    else counts.set(id, { key, value, count: 1 });
+  }
 }
 
 function isCoveredPath(path, covered) {
@@ -629,6 +648,24 @@ function facetsFromAssets(assets) {
   return facets;
 }
 
+function canUsePrecomputedFacets({ pack = "", query = "", filters = {}, offset = 0 } = {}) {
+  return !pack && !query && offset === 0 && filterParams(filters).length === 0;
+}
+
+function readPrecomputedFacets(db, sourceId) {
+  const facets = {};
+  for (const key of facetKeys) {
+    facets[key] = db.prepare(`
+      SELECT value, count
+      FROM asset_facet_counts
+      WHERE source_id = ? AND key = ?
+      ORDER BY count DESC, value COLLATE NOCASE
+      LIMIT 80
+    `).all(sourceId, key).map((row) => ({ value: row.value, count: row.count }));
+  }
+  return facets;
+}
+
 function packRowToCard(db, row, root, sourceRoot, sourceId) {
   const coverRows = db.prepare(`
     SELECT a.preview_path FROM assets a
@@ -699,6 +736,7 @@ export async function rebuildAssetIndex(root, source, options = {}) {
     db.prepare("DELETE FROM assets WHERE source_id = ?").run(source.id);
     db.prepare("DELETE FROM packs WHERE source_id = ?").run(source.id);
     db.prepare("DELETE FROM asset_terms WHERE source_id = ?").run(source.id);
+    db.prepare("DELETE FROM asset_facet_counts WHERE source_id = ?").run(source.id);
     db.prepare("DELETE FROM asset_pack_memberships WHERE source_id = ?").run(source.id);
     db.prepare("DELETE FROM asset_search_fts WHERE source_id = ?").run(source.id);
 
@@ -711,6 +749,7 @@ export async function rebuildAssetIndex(root, source, options = {}) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertTerm = db.prepare("INSERT INTO asset_terms (source_id, asset_id, key, value) VALUES (?, ?, ?, ?)");
+    const facetCounts = new Map();
     const insertPackMembership = db.prepare("INSERT OR IGNORE INTO asset_pack_memberships (source_id, asset_id, pack, is_primary) VALUES (?, ?, ?, ?)");
     const insertFts = db.prepare("INSERT INTO asset_search_fts (source_id, asset_id, text) VALUES (?, ?, ?)");
     for (const record of records) {
@@ -758,7 +797,9 @@ export async function rebuildAssetIndex(root, source, options = {}) {
         now,
         previewStatus,
       );
-      for (const [key, value] of recordTerms(record)) insertTerm.run(source.id, record.asset_id, key, value);
+      const terms = recordTerms(record);
+      addFacetCounts(facetCounts, terms);
+      for (const [key, value] of terms) insertTerm.run(source.id, record.asset_id, key, value);
       for (const pack of recordPacks(record)) insertPackMembership.run(source.id, record.asset_id, pack, pack === record.pack ? 1 : 0);
       insertFts.run(source.id, record.asset_id, [
         record.title,
@@ -774,6 +815,11 @@ export async function rebuildAssetIndex(root, source, options = {}) {
         (record.genre || []).join(" "),
         (record.style || []).join(" "),
       ].join(" "));
+    }
+
+    const insertFacetCount = db.prepare("INSERT INTO asset_facet_counts (source_id, key, value, count) VALUES (?, ?, ?, ?)");
+    for (const facet of facetCounts.values()) {
+      insertFacetCount.run(source.id, facet.key, facet.value, facet.count);
     }
 
     const countByPack = new Map();
@@ -943,7 +989,11 @@ export async function queryIndexedAssets(root, source, options = {}) {
     const rows = db.prepare(`SELECT a.* FROM assets a WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...params, limit, offset);
     const assets = attachPackMemberships(db, rows.map((row) => rowToAsset(row, root, source.path)), source.id, options.pack || "");
 
-    const facets = total <= limit && offset === 0 ? facetsFromAssets(assets) : {};
+    const facets = canUsePrecomputedFacets({ ...options, query, offset })
+      ? readPrecomputedFacets(db, source.id)
+      : total <= limit && offset === 0
+        ? facetsFromAssets(assets)
+        : {};
     if (!Object.keys(facets).length) {
       for (const key of facetKeys) {
         facets[key] = db.prepare(`

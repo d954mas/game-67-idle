@@ -144,6 +144,27 @@ test("queryIndexedAssets supports paging, search, filters, facets, and model loo
   assert.equal(model.model, "lib/files/models/furniture/kenney__red-sofa__cc0/sofa.glb");
 });
 
+test("queryIndexedAssets returns global facets and narrowed facets", async (t) => {
+  const { root, library } = tempLibrary();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  await rebuildAssetIndex(root, source(library));
+
+  const all = await queryIndexedAssets(root, source(library), { offset: 0, limit: 24 });
+  assert.equal(all.total, 2);
+  assert.ok(all.facets.tags.some((facet) => facet.value === "furniture" && facet.count === 2));
+  assert.ok(all.facets.tags.some((facet) => facet.value === "sofa" && facet.count === 1));
+  assert.ok(all.facets.tags.some((facet) => facet.value === "chair" && facet.count === 1));
+
+  const filtered = await queryIndexedAssets(root, source(library), {
+    q: "sofa",
+    offset: 0,
+    limit: 24,
+  });
+  assert.equal(filtered.total, 1);
+  assert.ok(filtered.facets.tags.some((facet) => facet.value === "sofa" && facet.count === 1));
+  assert.equal(filtered.facets.tags.some((facet) => facet.value === "chair"), false);
+});
+
 test("queryIndexedAssets resolves secondary pack memberships", async (t) => {
   const { root, library } = tempLibrary();
   t.after(() => rmSync(root, { recursive: true, force: true }));

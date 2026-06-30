@@ -67,6 +67,11 @@ for raw folder-backed sources.
 Asset Viewer exposes `refreshAssetIndex` through its `Refresh` action for every
 source. Normal browsing should use `queryIndexedAssets` and `listIndexedPacks`.
 
+Unfiltered global facets are stored as generated counts during rebuild so the
+first All Assets page does not need broad `GROUP BY` queries. Filtered,
+searched, and pack-scoped facets are still computed from indexed rows at query
+time.
+
 ## Refresh Policy
 
 No filesystem watch mode. Updates are explicit:
