@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Housekeeping for the ignored tmp/ scratch folder.
 //
-//   node tools/tmp_sweep.mjs [--list] [--all-scratch] [--keep-validate <n>] [--dry-run] [--root <dir>]
+//   node ai_studio/core_harness/tool_lib/tmp_sweep.mjs [--list] [--all-scratch] [--keep-validate <n>] [--dry-run] [--root <dir>]
 //
 // tmp/ is gitignored disposable scratch; durable evidence lives under
 // gamedesign/projects/<id>/. Legacy pipeline validation exports are pruned
@@ -12,9 +12,9 @@
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isValidateExportName, partitionByKeep } from "./lib/tmp_exports.mjs";
+import { isValidateExportName, partitionByKeep } from "./tmp_exports.mjs";
 
-const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const args = process.argv.slice(2);
 
 function flagValue(name, fallback) {
@@ -33,7 +33,7 @@ for (let i = 0; i < args.length; i += 1) {
   }
 }
 if (args.includes("--help") || args.includes("-h")) {
-  console.log("usage: node tools/tmp_sweep.mjs [--list] [--all-scratch] [--keep-validate <n>] [--dry-run] [--root <dir>]");
+  console.log("usage: node ai_studio/core_harness/tool_lib/tmp_sweep.mjs [--list] [--all-scratch] [--keep-validate <n>] [--dry-run] [--root <dir>]");
   process.exit(0);
 }
 

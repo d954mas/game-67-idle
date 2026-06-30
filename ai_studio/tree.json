@@ -1460,6 +1460,32 @@
                   "core-harness",
                   "test"
                 ]
+              },
+              {
+                "id": "core-harness:tool-lib-tmp-sweep",
+                "kind": "tool",
+                "path": "ai_studio/core_harness/tool_lib/tmp_sweep.mjs",
+                "title": "tmp_sweep.mjs",
+                "description": "Opt-in housekeeping command for reporting or deleting ignored `tmp/` scratch data while keeping the newest pipeline validation exports.",
+                "role": "tmp scratch cleanup command",
+                "tags": [
+                  "core-harness",
+                  "helper",
+                  "tmp"
+                ]
+              },
+              {
+                "id": "core-harness:tool-lib-tmp-sweep-test",
+                "kind": "test",
+                "path": "ai_studio/core_harness/tool_lib/tmp_sweep.test.mjs",
+                "title": "tmp_sweep.test.mjs",
+                "description": "Regression tests for tmp scratch reporting, dry-run behavior, deletion guardrails, and validation export retention.",
+                "role": "tmp scratch cleanup command tests",
+                "tags": [
+                  "core-harness",
+                  "test",
+                  "tmp"
+                ]
               }
             ]
           }

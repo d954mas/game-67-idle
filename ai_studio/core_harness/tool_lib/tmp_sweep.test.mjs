@@ -5,13 +5,13 @@ import { mkdirSync, mkdtempSync, rmSync, existsSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { VALIDATE_EXPORT_PREFIX } from "./lib/tmp_exports.mjs";
+import { VALIDATE_EXPORT_PREFIX } from "./tmp_exports.mjs";
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const P = VALIDATE_EXPORT_PREFIX;
 
 function run(args) {
-  return spawnSync(process.execPath, ["tools/tmp_sweep.mjs", ...args], {
+  return spawnSync(process.execPath, ["ai_studio/core_harness/tool_lib/tmp_sweep.mjs", ...args], {
     cwd: repoRoot,
     encoding: "utf8",
     stdio: "pipe",
