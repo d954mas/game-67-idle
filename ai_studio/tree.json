@@ -1123,6 +1123,34 @@
                       "catalog",
                       "source-first"
                     ]
+                  },
+                  {
+                    "id": "assets:okf-catalog-poly-pizza-audit",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/assets_storage/okf_catalog/poly_pizza_audit.mjs",
+                    "title": "poly_pizza_audit.mjs",
+                    "description": "Audits legacy Poly Pizza OKF records for declared-count mismatches, duplicate ids/source pages, missing metadata, and assets that belong to multiple packs.",
+                    "role": "Poly Pizza OKF catalog audit",
+                    "tags": [
+                      "assets",
+                      "okf",
+                      "audit",
+                      "poly-pizza"
+                    ]
+                  },
+                  {
+                    "id": "assets:okf-catalog-poly-pizza-audit-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/assets_storage/okf_catalog/tests/poly_pizza_audit.test.mjs",
+                    "title": "poly_pizza_audit.test.mjs",
+                    "description": "Regression test for Poly Pizza bundle count mismatch and secondary membership audit reporting.",
+                    "role": "Poly Pizza audit tests",
+                    "tags": [
+                      "assets",
+                      "okf",
+                      "audit",
+                      "test"
+                    ]
                   }
                 ]
               },
