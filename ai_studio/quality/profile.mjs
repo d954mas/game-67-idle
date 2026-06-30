@@ -2,7 +2,7 @@
 import { resolve } from "node:path";
 import { findRoot, listTasks } from "../taskboard/lib.mjs";
 
-const OUTCOMES = ["pass", "block", "review", "skip"];
+const OUTCOMES = ["pass", "block", "review", "skip", "unverified"];
 const GROUPS = {
   QCLR: "player_clarity",
   QART: "art",
@@ -17,7 +17,7 @@ function usage() {
   node ai_studio/quality/profile.mjs [--root <repo>] [--include-archive] [--json]
 
 Scans task logs for lines like:
-  Quality: QCLR_001=pass; QART_001=block; evidence: screenshot + visual target mismatch`);
+  Quality: QCLR_001=pass; QART_001=block; QTECH_001=unverified; evidence: screenshot + visual target mismatch`);
   process.exit(2);
 }
 
@@ -48,7 +48,7 @@ function qualityLines(body) {
 function parseQualityLine(line) {
   const entries = [];
   const text = line.replace(/^[-*]\s*/, "");
-  const pattern = /\b(Q(?:CLR|ART|GDD|DES|TECH|ASSET)_\d{3})\s*(?:=|:|\s)\s*(pass|block|review|skip)\b/gi;
+  const pattern = /\b(Q(?:CLR|ART|GDD|DES|TECH|ASSET)_\d{3})\s*(?:=|:|\s)\s*(pass|block|review|skip|unverified)\b/gi;
   let match;
   while ((match = pattern.exec(text))) {
     entries.push({
@@ -116,11 +116,11 @@ function renderText(profile) {
     lines.push("No quality rule usage found.");
     return `${lines.join("\n")}\n`;
   }
-  lines.push("| Rule | Group | Total | Pass | Block | Review | Skip | Tasks |");
-  lines.push("| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |");
+  lines.push("| Rule | Group | Total | Pass | Block | Review | Skip | Unverified | Tasks |");
+  lines.push("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |");
   for (const item of profile.rules) {
     lines.push(
-      `| ${item.rule} | ${item.group} | ${item.total} | ${item.outcomes.pass} | ${item.outcomes.block} | ${item.outcomes.review} | ${item.outcomes.skip} | ${item.tasks.join(", ")} |`
+      `| ${item.rule} | ${item.group} | ${item.total} | ${item.outcomes.pass} | ${item.outcomes.block} | ${item.outcomes.review} | ${item.outcomes.skip} | ${item.outcomes.unverified} | ${item.tasks.join(", ")} |`
     );
   }
   return `${lines.join("\n")}\n`;

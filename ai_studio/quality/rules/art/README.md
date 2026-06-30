@@ -22,8 +22,7 @@ final direction instead of defaulting to debug shapes, placeholder art, or
 temporary overlays.
 
 Use when: adding, replacing, generating, adapting, or sourcing visual candidates
-for player-facing visuals, materials, sprites, UI art, screenshots, or visual
-targets.
+for player-facing visuals, sprites, UI art, screenshots, or visual targets.
 
 Record applied checks in the task log using the outcome format from the Quality
 README.

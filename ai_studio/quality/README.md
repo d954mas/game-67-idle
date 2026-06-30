@@ -62,7 +62,7 @@ line:
 - YYYY-MM-DD: Quality: QCLR_001=pass; QART_001=block; evidence: <short proof or artifact>.
 ```
 
-Allowed outcomes are `pass`, `block`, `review`, and `skip`.
+Allowed outcomes are `pass`, `block`, `review`, `skip`, and `unverified`.
 
 Summarize rule usage with:
 
@@ -71,8 +71,11 @@ node ai_studio/quality/profile.mjs
 node ai_studio/quality/profile.mjs --include-archive --json
 ```
 
+The profile scans task logs only. It does not count quality outcomes recorded
+only in final responses, PR/review comments, or other non-task artifacts.
+
 The profile is diagnostic. It shows which rules are used often and which ones
-block work, but it is not a global validator.
+block or remain unverified, but it is not a global validator.
 
 Module implementation tests stay with the owning module.
 

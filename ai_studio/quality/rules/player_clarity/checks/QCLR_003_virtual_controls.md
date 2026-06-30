@@ -1,11 +1,11 @@
 ---
-id: QCLR_004
+id: QCLR_003
 name: Virtual Controls
 group: player_clarity
 description: Use when mobile/touch controls, virtual buttons, joystick zones, or control hints can be hidden, too small, overlapping, misleading, or unreachable.
 ---
 
-# QCLR_004 Virtual Controls
+# QCLR_003 Virtual Controls
 
 ## What It Checks
 

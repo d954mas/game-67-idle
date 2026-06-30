@@ -17,7 +17,7 @@ player-facing actions visible and correctly placed.
 Use when viewport ratio, orientation, player-facing layout placement, or
 responsive sizing can crop, hide, overlap, or misplace player-facing layout.
 If virtual controls affect layout or safe space, also use
-[QCLR_004](QCLR_004_virtual_controls.md).
+[QCLR_003](QCLR_003_virtual_controls.md).
 
 ## Do Not Use For
 

@@ -27,7 +27,7 @@ claim that needs evidence.
 4. Open only rule files whose `Use When` section matches the task.
 5. Use a group's `001` rule only when its `Use When` matches.
 6. Gather the evidence requested by the selected rule files.
-7. Record `pass`, `block`, `review`, or `skip` where the work is reported.
+7. Record `pass`, `block`, `review`, `skip`, or `unverified` where the work is reported.
 
 Do not run every rule. A single change can need multiple groups, but one green
 rule is not acceptance for unrelated quality dimensions.
@@ -66,7 +66,9 @@ quality logging.
 - Profiler tests: `node --test ai_studio/quality/tests/profile.test.mjs`.
 
 Profiling only summarizes recorded quality-check usage. It does not prove that
-the current work passed a quality check.
+the current work passed a quality check. It scans task logs only; outcomes
+recorded only in final responses, PR/review comments, or other non-task
+artifacts are not counted.
 
 ## Maintenance Commands
 

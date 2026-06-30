@@ -35,7 +35,7 @@ visible.
 Use when: viewport ratio or orientation changes can crop, hide, overlap, or
 misplace player-facing layout.
 
-### [QCLR_004 - Virtual Controls](checks/QCLR_004_virtual_controls.md)
+### [QCLR_003 - Virtual Controls](checks/QCLR_003_virtual_controls.md)
 
 Checks: mobile controls are visible, understandable, reachable, and do not block
 important gameplay or HUD information.

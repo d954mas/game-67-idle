@@ -50,7 +50,7 @@ function run(root, ...args) {
 test("quality profile counts rule outcomes from task logs", (t) => {
   const root = tempRoot(t);
   writeTask(root, "T0001", "- 2026-06-26: Quality: QCLR_001=pass; QART_001=block; evidence: screenshot.\n");
-  writeTask(root, "T0002", "- 2026-06-26: Quality: QCLR_001 review; QTECH_001=skip; evidence: lead review.\n");
+  writeTask(root, "T0002", "- 2026-06-26: Quality: QCLR_001 review; QTECH_001=skip; QTECH_001=unverified; evidence: lead review.\n");
 
   const result = run(root, "--json");
   assert.equal(result.status, 0, result.stderr);
@@ -59,7 +59,7 @@ test("quality profile counts rule outcomes from task logs", (t) => {
   const art001 = profile.rules.find((item) => item.rule === "QART_001");
   const tech001 = profile.rules.find((item) => item.rule === "QTECH_001");
 
-  assert.equal(profile.entries, 4);
+  assert.equal(profile.entries, 5);
   assert.equal(clarity001.total, 2);
   assert.equal(clarity001.group, "player_clarity");
   assert.equal(clarity001.outcomes.pass, 1);
@@ -68,4 +68,5 @@ test("quality profile counts rule outcomes from task logs", (t) => {
   assert.equal(art001.outcomes.block, 1);
   assert.equal(tech001.group, "technical");
   assert.equal(tech001.outcomes.skip, 1);
+  assert.equal(tech001.outcomes.unverified, 1);
 });

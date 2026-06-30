@@ -1226,10 +1226,10 @@
                     ]
                   },
                   {
-                    "id": "quality:QCLR_004-virtual-controls",
+                    "id": "quality:QCLR_003-virtual-controls",
                     "kind": "doc",
-                    "path": "ai_studio/quality/rules/player_clarity/checks/QCLR_004_virtual_controls.md",
-                    "title": "QCLR_004 Virtual Controls",
+                    "path": "ai_studio/quality/rules/player_clarity/checks/QCLR_003_virtual_controls.md",
+                    "title": "QCLR_003 Virtual Controls",
                     "description": "Check mobile/touch controls, virtual buttons, joystick zones, and control hints for visibility, reachability, overlap, and clarity.",
                     "role": "virtual controls quality check",
                     "tags": [
@@ -1386,7 +1386,7 @@
                     "kind": "doc",
                     "path": "ai_studio/quality/rules/technical/README.md",
                     "title": "README.md",
-                    "description": "Technical rule group router: start with QTECH_001, then use higher-numbered checks when needed.",
+                    "description": "Technical rule group router for QTECH_001 behavior evidence.",
                     "role": "technical rules navigation",
                     "tags": [
                       "quality",
