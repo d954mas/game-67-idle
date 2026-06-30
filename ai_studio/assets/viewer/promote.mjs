@@ -16,8 +16,8 @@ import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 import { LICENSE_URLS, boolText, decideLicense, validateLicenseRecord } from "../storage/license/registry.mjs";
 import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
 
-// review-kind -> library-kind, for legacy manifests; new manifests already carry
-// a library kind, so this is only a fallback.
+// review-kind -> library-kind fallback for review manifests that do not yet
+// carry a storage kind.
 const KIND_FROM_REVIEW = { model: "model", font: "font", audio: "audio", image: "texture", ui: "ui", texture: "texture", material: "material" };
 const FONT_EXT = [".ttf", ".otf", ".woff", ".woff2"];
 

@@ -26,9 +26,10 @@ stage  ->  review  ->  accept | reject  ->  refresh index/previews
 `_rejected/` are lifecycle/audit folders, not asset sources, and are not shown
 as unregistered assets.
 
-For older storage roots, Asset Index also suppresses `_incoming` files whose
-`intake.json` hash already matches a Pack Manifest record. This keeps accepted
-candidates from appearing twice without deleting external files.
+For storage roots with retained intake audit folders, Asset Index also
+suppresses `_incoming` files whose `intake.json` hash already matches a Pack
+Manifest record. This keeps accepted candidates from appearing twice without
+deleting external files.
 
 ## Source Layout
 

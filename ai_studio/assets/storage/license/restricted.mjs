@@ -1,5 +1,6 @@
 // Public-git routing helpers for asset binaries. The deeper license decision
-// lives in registry.mjs; this file keeps the old public API used by pull/guard.
+// lives in registry.mjs; this file exposes the small helper surface used by
+// pull/guard.
 import {
   decideLicense,
   hasAttributionInfo,

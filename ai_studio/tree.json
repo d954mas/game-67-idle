@@ -1696,7 +1696,7 @@
             "kind": "doc",
             "path": "ai_studio/assets/README.md",
             "title": "README.md",
-            "description": "Assets module contract: what has moved into AI Studio and which legacy asset-pipeline areas still need separate review.",
+            "description": "Assets module contract: current reviewed ownership for viewer, storage, prep, workflow, source registration, preview cache, and license guard.",
             "role": "Assets module contract",
             "tags": [
               "source",
@@ -1982,7 +1982,7 @@
                 "kind": "tool",
                 "path": "ai_studio/assets/storage/kinds.mjs",
                 "title": "kinds.mjs",
-                "description": "Canonical mapping from asset kind to storage directory names for manifest-first and legacy readers.",
+                "description": "Canonical mapping from asset kind to storage directory names used by manifests, viewer promotion, and storage/index readers.",
                 "role": "asset kind directory map",
                 "tags": [
                   "assets",
