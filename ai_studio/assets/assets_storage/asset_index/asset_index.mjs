@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { scanLibraryWithPacks } from "../okf_catalog/find_assets.mjs";
 import { hasPackManifestSource, scanPackManifestSource } from "../pack_manifest/pack_manifest.mjs";
@@ -27,7 +27,7 @@ function relPosix(root, abs) {
   return relative(root, abs).replace(/\\/g, "/");
 }
 
-function walkSync(dir) {
+function walkSync(dir, shouldSkipDir = null) {
   const out = [];
   let entries = [];
   try {
@@ -37,7 +37,10 @@ function walkSync(dir) {
   }
   for (const entry of entries) {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...walkSync(path));
+    if (entry.isDirectory()) {
+      if (shouldSkipDir && shouldSkipDir(path)) continue;
+      out.push(...walkSync(path, shouldSkipDir));
+    }
     else out.push(path);
   }
   return out;
@@ -125,7 +128,6 @@ function signatureRoots(source) {
   return [
     { label: "catalog", path: join(source.path, "catalog") },
     { label: "files", path: join(source.path, "files") },
-    { label: "previews", path: join(source.path, "previews") },
   ];
 }
 
@@ -262,6 +264,13 @@ function openIndex(root, source) {
   const dbPath = assetIndexPath(root, source);
   mkdirSync(dirname(dbPath), { recursive: true });
   return new DatabaseSync(dbPath);
+}
+
+function resetIndexFiles(root, source) {
+  const dbPath = assetIndexPath(root, source);
+  for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
+    rmSync(path, { force: true });
+  }
 }
 
 function initSchema(db) {
@@ -423,11 +432,26 @@ function recordTerms(record) {
   return terms;
 }
 
-function scanFolderRecords(root, source) {
+function isCoveredPath(path, covered) {
+  if (!covered) return false;
+  const full = resolve(path);
+  if (covered.files.has(full)) return true;
+  let current = full;
+  while (true) {
+    if (covered.dirs.has(current)) return true;
+    const parent = dirname(current);
+    if (parent === current) return false;
+    current = parent;
+  }
+}
+
+function scanFolderRecords(root, source, covered = null) {
   const dirCache = new Map();
   const scanRoots = source.mode === "library" ? [join(source.path, "files")] : [source.path];
-  return scanRoots.flatMap((scanRoot) => walkSync(scanRoot))
+  const shouldSkipDir = covered ? (path) => covered.dirs.has(resolve(path)) : null;
+  return scanRoots.flatMap((scanRoot) => walkSync(scanRoot, shouldSkipDir))
     .filter((path) => !/[\\/](catalog|previews|licenses|\.git|node_modules|tmp)[\\/]/i.test(path))
+    .filter((path) => !isCoveredPath(path, covered))
     .map((path) => {
       const ext = extname(path).toLowerCase();
       const rel = relPosix(root, path);
@@ -492,18 +516,12 @@ function registeredCoveredPaths(root, source, registeredRecords) {
 }
 
 function isCoveredDiscoveredRecord(record, covered) {
-  const path = resolve(record.catalogPath || "");
-  if (covered.files.has(path)) return true;
-  for (const dir of covered.dirs) {
-    if (path === dir || path.startsWith(dir + sep)) return true;
-  }
-  return false;
+  return isCoveredPath(record.catalogPath || "", covered);
 }
 
 function mergeRegisteredWithDiscoveredFiles(root, source, registeredRecords) {
   const covered = registeredCoveredPaths(root, source, registeredRecords);
-  const unregistered = scanFolderRecords(root, source)
-    .filter((record) => !isCoveredDiscoveredRecord(record, covered))
+  const unregistered = scanFolderRecords(root, source, covered)
     .map((record) => ({
       ...record,
       origin: "unregistered",
@@ -647,11 +665,23 @@ function packRowToCard(db, row, root, sourceRoot, sourceId) {
 }
 
 export async function rebuildAssetIndex(root, source) {
+  const profile = process.env.AI_STUDIO_ASSET_INDEX_PROFILE === "1";
+  const timings = [];
+  let lastTiming = Date.now();
+  const mark = (label) => {
+    if (!profile) return;
+    const now = Date.now();
+    timings.push({ label, ms: now - lastTiming });
+    lastTiming = now;
+  };
+  resetIndexFiles(root, source);
   const db = openIndex(root, source);
   initSchema(db);
   const now = new Date().toISOString();
   const signature = sourceSignature(root, source);
+  mark("signature");
   const libraryData = source.mode === "library" ? await scanLibraryWithPacks(source.path) : { records: [], packs: [] };
+  mark("scan");
   const manifestData = source.mode !== "library" && hasPackManifestSource(source.path)
     ? await scanPackManifestSource(source.path)
     : null;
@@ -661,6 +691,7 @@ export async function rebuildAssetIndex(root, source) {
       ? mergeRegisteredWithDiscoveredFiles(root, source, manifestData.records)
       : mergeRegisteredWithDiscoveredFiles(root, source, []);
   const packs = source.mode === "library" ? libraryData.packs : manifestData ? manifestData.packs : [];
+  mark("merge");
 
   db.exec("BEGIN");
   try {
@@ -796,12 +827,14 @@ export async function rebuildAssetIndex(root, source) {
     db.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)").run("assetCount", String(records.length));
     createSecondaryIndexes(db);
     db.exec("COMMIT");
+    mark("sqlite");
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
   } finally {
     db.close();
   }
+  if (profile) console.error(`[asset-index profile] ${JSON.stringify(timings)}`);
 
   return { sourceId: source.id, rebuiltAt: now, assetCount: records.length, packCount: packs.length, path: assetIndexPath(root, source) };
 }

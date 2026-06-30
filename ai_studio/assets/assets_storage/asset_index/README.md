@@ -71,14 +71,26 @@ source. Normal browsing should use `queryIndexedAssets` and `listIndexedPacks`.
 
 No filesystem watch mode. Updates are explicit:
 
-- manual refresh checks source `mtime` and size signatures, then rebuilds only
-  when the catalog or folder changed;
+- manual refresh checks catalog and asset-file `mtime`/size signatures, then
+  rebuilds only when metadata or asset files changed;
 - forced rebuild remains available through code when the source signature is not
   enough;
-- targeted preview refresh lives in `../preview_pipeline/`.
+- targeted preview refresh lives in `../preview_pipeline/` and owns preview
+  changes.
 
 The signature is a fast guard, not the source of truth. When it changes, the
 index is rebuilt from OKF Markdown records, pack manifests, or the folder scan.
+Preview folders are intentionally not part of the normal asset refresh
+signature. Use `Refresh previews` when preview files were added, regenerated, or
+became stale.
+
+For rebuild profiling:
+
+```powershell
+$env:AI_STUDIO_ASSET_INDEX_PROFILE='1'
+node ai_studio/assets/assets_storage/search_assets.mjs --query crate
+Remove-Item Env:\AI_STUDIO_ASSET_INDEX_PROFILE
+```
 
 ## Unregistered Files
 
@@ -94,3 +106,7 @@ tags: [unregistered]
 
 This prevents local game/template/global-library files from disappearing just
 because they were not added to metadata yet.
+
+The unregistered-file scan skips directories already covered by metadata before
+building raw records. That keeps large libraries from paying per-file work for
+assets already described by OKF records or pack manifests.

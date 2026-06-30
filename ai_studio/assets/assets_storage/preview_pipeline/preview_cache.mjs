@@ -196,8 +196,9 @@ export async function refreshPreviewCache(root, source, options = {}) {
   if (!source.available) throw new Error(`asset source is not available: ${source.path}`);
   const force = Boolean(options.force);
   const currentIndex = await ensureAssetIndex(root, source);
+  let previewSummary = null;
   if (!force) {
-    const previewSummary = await summarizeIndexedPreviewStatus(root, source);
+    previewSummary = await summarizeIndexedPreviewStatus(root, source);
     if (!previewSummary.missing && !previewSummary.stale) {
       const cachedImages = (previewSummary.byKind.texture?.clean || 0) + (previewSummary.byKind.ui?.clean || 0);
       return {
@@ -223,7 +224,9 @@ export async function refreshPreviewCache(root, source, options = {}) {
   const copied = copyImagePreviews(root, source, images);
   const modelResult = renderModelPreviews(root, source, models, options);
   const changedPreviews = copied > 0 || modelResult.rendered > 0;
-  const index = changedPreviews ? await rebuildAssetIndex(root, source) : currentIndex;
+  const foundLibrarySourcePreviews = source.mode === "library" && collected.skippedModels > 0;
+  const staleLibraryPreviewIndex = foundLibrarySourcePreviews && previewSummary && (previewSummary.missing || previewSummary.stale);
+  const index = changedPreviews || staleLibraryPreviewIndex ? await rebuildAssetIndex(root, source) : currentIndex;
   return {
     sourceId: source.id,
     copiedImages: copied,

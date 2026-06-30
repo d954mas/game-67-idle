@@ -22,6 +22,11 @@ copies missing or stale image previews for template and game sources, renders
 missing or stale GLB/GLTF thumbnails through Blender when possible, then
 refreshes that source index so cards point at the fresh cache.
 
+For shared-library sources, existing source previews under the library
+`previews/` folder are also treated as preview changes. If the current index
+still marks those assets as missing or stale, `Refresh previews` rebuilds the
+index so the viewer picks up the source preview paths.
+
 `preview.json` stores the source path, size, mtime, preview kind, and preview
 size. A preview is stale when that sidecar is missing, from an old preview cache
 version, or no longer matches the source file.
