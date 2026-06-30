@@ -14,8 +14,7 @@ import { createHash } from "node:crypto";
 import { DEFAULT_ASSET_SOURCE_ROOT } from "../storage/defaults.mjs";
 import { KIND_DIR } from "../storage/kinds.mjs";
 import { isMain } from "../../../tools/lib/cli.mjs";
-import { LICENSE_URLS } from "../../../tools/lib/licenses.mjs";
-import { boolText, decideLicense, validateLicenseRecord } from "../storage/license/registry.mjs";
+import { LICENSE_URLS, boolText, decideLicense, validateLicenseRecord } from "../storage/license/registry.mjs";
 
 // review-kind -> library-kind, for legacy manifests; new manifests already carry
 // a library kind, so this is only a fallback.

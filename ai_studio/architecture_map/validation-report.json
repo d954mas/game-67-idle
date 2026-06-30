@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-06-30T19:49:53.558Z",
+  "generatedAt": "2026-06-30T19:53:34.934Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
@@ -15,11 +15,11 @@
   ],
   "summary": {
     "mappedPaths": 185,
-    "scannedFiles": 271,
+    "scannedFiles": 270,
     "missingInRepo": 0,
     "duplicateMappings": 0,
     "unmappedInAiStudio": 0,
-    "unmappedLegacy": 83,
+    "unmappedLegacy": 82,
     "missingDescriptions": 0
   },
   "issues": {
@@ -145,6 +145,9 @@
         "path": "tasks/active/T0157-asset-image-generation-skill-is-owned-by-ai-stud.md"
       },
       {
+        "path": "tasks/active/T0158-asset-license-registry-no-longer-depends-on-tool.md"
+      },
+      {
         "path": "tasks/epics/E001-pipeline-lean-cleanup.md"
       },
       {
@@ -236,12 +239,6 @@
       },
       {
         "path": "tools/lib/json.test.mjs"
-      },
-      {
-        "path": "tools/lib/licenses.mjs"
-      },
-      {
-        "path": "tools/lib/licenses.test.mjs"
       },
       {
         "path": "tools/lib/mime.mjs"
