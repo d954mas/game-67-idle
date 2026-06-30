@@ -1,4 +1,4 @@
-# Design Stewardship
+﻿# Design Stewardship
 
 Keeping existing design docs coherent after the first GDD exists: edits,
 reviews, reconciliation with implemented gameplay, balance rules, lore,

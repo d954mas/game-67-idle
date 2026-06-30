@@ -1,4 +1,4 @@
-﻿// Taskboard core tests. Run: node --test ai_studio/taskboard/tests/taskboard.test.mjs
+// Taskboard core tests. Run: node --test ai_studio/taskboard/tests/taskboard.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, utimesSync } from "node:fs";

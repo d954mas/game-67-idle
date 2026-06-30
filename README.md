@@ -9,7 +9,7 @@ knowledge. Each **game is its own folder**, copied from `template/`.
 - Engine: git submodule at `external/neotolis-engine` (public APIs only).
 - Shared asset library lives OUTSIDE the repo (private); games pull project-local
   copies. Paid/licensed binaries never enter git — see the restricted-asset rule
-  in `AGENTS.md` + `tools/assets/restricted.mjs`.
+  in `AGENTS.md` + `ai_studio/assets/storage/license/`.
 - Closed prototypes are git tags (e.g. `blockside-heat-snapshot-2026-06-24`).
 
 ## Start a new game

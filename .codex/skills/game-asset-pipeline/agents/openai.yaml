@@ -1,4 +1,0 @@
-interface:
-  display_name: "Game Asset Pipeline"
-  short_description: "Manage game assets, packs, and generated asset code."
-  default_prompt: "Use this skill to add assets, update pack builders, regenerate packs, and validate asset loading."

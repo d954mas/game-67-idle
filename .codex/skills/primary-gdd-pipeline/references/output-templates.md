@@ -1,4 +1,4 @@
-# Output Templates
+﻿# Output Templates
 
 Load this file only when writing repeated GDD pipeline artifacts. Keep outputs
 short and replace placeholders with concrete project details.

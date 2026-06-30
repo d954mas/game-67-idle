@@ -1,4 +1,4 @@
-# GDD Core Gates
+﻿# GDD Core Gates
 
 Load this reference when starting or revising a game concept, first GDD, fake
 shot, visual/runtime evidence plan, implementation handoff, or source-of-truth
@@ -16,7 +16,8 @@ design docs.
   project-specific sources there.
 - Use `gamedesign/sources/` only for raw sources that support reusable
   `knowledge/` pages. Project sources belong in the active project folder.
-- Separate `reference`, `fake shot`, `runtime asset`, and `implementation plan`;
+- Separate `reference`, `fake shot`, `prepared/game-use asset`, and
+  `implementation plan`;
   never relabel one as another.
 - Temp generation, rejected images, screenshots, audit logs go to `tmp/`; only
   durable outputs go in the design folder.
@@ -80,8 +81,8 @@ the doc. Full method: `gamedesign/knowledge/reference_deconstruction.md`.
    `node tools/game_context/new_prototype.mjs --game-id <id> --title "<name>" --brief "<one sentence>"`.
 2. Check `git status` and ignore rules for `tmp/` and generation folders.
 3. Write the DoD: what must exist, what is out of scope, what proof is accepted.
-4. For visual asks, decide the tier up front: reference, fake shot, or runtime
-   asset pack. For visual prototype work, also write the 5-line session
+4. For visual asks, decide the tier up front: reference, fake shot, or prepared
+   asset proof. For visual prototype work, also write the 5-line session
    contract: goal, non-goal, proof, stop condition, likely files. The proof must
    name fake shot, native screenshot, selected quality rules, or generated
    asset audit.
@@ -117,8 +118,8 @@ documents.
    It proves one loop, not the whole game. First challenge/combat needs concrete
    numbers, fail state, and recovery.
 3. Make visual proof when the user needs to see the game: one gameplay fake
-   shot, then progression image, then runtime asset pack only if implementation
-   is next. Use `imagegen` for raster art; move final images into the project.
+   shot, then progression image, then prepared/game-use asset proof only if
+   implementation is next. Use `imagegen` for raster art; move final images into the project.
    After the first shot, stop with a review packet. Runtime implementation
    starts from current native screenshot/capture plan compared against accepted
    fake shot/target; record mismatch audit before coding.

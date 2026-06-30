@@ -1,4 +1,4 @@
-# Implementation Handoff Playbook
+﻿# Implementation Handoff Playbook
 
 Load this file only when preparing a GDD-to-implementation handoff, next-chat
 prompt, first playable slice packet, or production-ready task list.

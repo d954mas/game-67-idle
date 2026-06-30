@@ -1,7 +1,7 @@
-# Visual Proof Playbook
+﻿# Visual Proof Playbook
 
 Load this file only when producing visual GDD deliverables, fake gameplay
-screens, generated art, runtime asset packs, or review packets.
+screens, generated art, prepared asset proofs, or review packets.
 
 ## Visual Tier Decision
 

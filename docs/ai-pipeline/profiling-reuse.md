@@ -19,19 +19,22 @@ lessons, rules, tools, or tasks.
 
 ## Assets And Visual Work
 
-Use skills instead of copying asset procedure into hot docs. Common route:
-`primary-gdd-pipeline` -> `game-visual-art-direction` ->
-`generated-game-ui-assets` / `game-asset-pipeline` ->
-`game-feature-iteration` / `game-runtime-automation`; load only the matching
-skill.
+Use module owners instead of copying asset procedure into hot docs:
 
-For downloaded/free source assets, use
-`C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets` through
-`game-asset-pipeline`. It is an OKF-style provenance catalog, not a runtime path:
-search `catalog/**/*.md`, then copy selected files into project-local assets.
+- `nt-asset-workflow`: source search, license/provenance, art jobs, prep,
+  storage, viewer, pull/promote, generated-source handoff.
+- `delegated-image-generation`: raster creation only after source-first search.
+- `ai_studio/quality`: player-facing visual/art/asset acceptance rules.
+- `game-runtime-automation`: screenshot/video proof when the running game is the
+  claim.
 
-Generated/free art is allowed only as runtime-ready art that reaches the target.
-Debug/procedural placeholders prove geometry, not final-art quality.
+For downloaded/free source assets, use Asset Storage through
+`ai_studio/assets/storage/` and `nt-asset-workflow`. The global library is not a
+game runtime path; projects use local copies with source/license metadata.
+
+Generated/free art is accepted only when it reaches the target quality for the
+current stage. Debug/procedural placeholders prove geometry, not final-art
+quality.
 
 ## Prototype Pause Or Close
 

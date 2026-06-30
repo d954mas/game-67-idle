@@ -10,14 +10,14 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTaskboardApi } from "../taskboard/api.mjs";
 import { findRoot } from "../taskboard/lib.mjs";
-import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/asset_viewer/api.mjs";
+import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/viewer/api.mjs";
 
 const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const root = findRoot(repoGuess);
 const aiStudioRoot = join(root, "ai_studio");
 const taskboardPublic = join(aiStudioRoot, "taskboard", "public");
-const assetViewerRoot = join(aiStudioRoot, "assets", "asset_viewer");
-const assetPreviewPipelineRoot = join(aiStudioRoot, "assets", "assets_storage", "preview_pipeline");
+const assetViewerRoot = join(aiStudioRoot, "assets", "viewer");
+const assetPreviewRoot = join(aiStudioRoot, "assets", "storage", "previews");
 const port = Number.parseInt(process.argv[2] || process.env.AI_STUDIO_PORT || "8765", 10);
 const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
@@ -69,17 +69,20 @@ function staticPath(pathname) {
     return safeResolve(taskboardPublic, pathname.slice("/taskboard/".length));
   }
 
-  if (pathname === "/asset_viewer" || pathname === "/asset_viewer/") {
+  if (pathname === "/asset_viewer" || pathname === "/asset_viewer/" || pathname === "/viewer" || pathname === "/viewer/") {
     return join(assetViewerRoot, "index.html");
   }
-  if (pathname === "/asset_viewer/studio_env.hdr") {
-    return join(assetPreviewPipelineRoot, "studio_env.hdr");
+  if (pathname === "/asset_viewer/studio_env.hdr" || pathname === "/viewer/studio_env.hdr") {
+    return join(assetPreviewRoot, "studio_env.hdr");
   }
-  if (pathname.startsWith("/asset_viewer/gallery/")) {
+  if (pathname.startsWith("/asset_viewer/gallery/") || pathname.startsWith("/viewer/gallery/")) {
     return resolveAssetViewerGalleryPath(root, pathname);
   }
   if (pathname.startsWith("/asset_viewer/")) {
     return safeResolve(assetViewerRoot, pathname.slice("/asset_viewer/".length));
+  }
+  if (pathname.startsWith("/viewer/")) {
+    return safeResolve(assetViewerRoot, pathname.slice("/viewer/".length));
   }
 
   if (pathname.startsWith("/ai_studio/")) {

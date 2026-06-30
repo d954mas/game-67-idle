@@ -1,14 +1,14 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # Generate a REAL image via the OFFICIAL codex CLI imagegen tool (gpt-image-2),
 # headless, on the ChatGPT subscription. Sanctioned path (codex's own documented
-# image feature) — no backend spoofing, no ToS gray zone, free on the plan.
+# image feature) вЂ” no backend spoofing, no ToS gray zone, free on the plan.
 #
 # The crux is the PROMPT: with a weak prompt codex is lazy and FAKES the image by
 # drawing it with code/SVG/PIL (programmer-art, ~tens of KB) while claiming it used
 # imagegen. This wrapper bakes in the forcing language that makes it actually call
-# the tool, then VERIFIES by file size (real gpt-image-2 ≈ MBs; a code-drawn fake is
+# the tool, then VERIFIES by file size (real gpt-image-2 в‰€ MBs; a code-drawn fake is
 # tiny). NOTE: in `codex exec` the image is returned INLINE and codex self-decodes
-# it to the file, so ~/.codex/generated_images does NOT grow — size + eyeball are
+# it to the file, so ~/.codex/generated_images does NOT grow вЂ” size + eyeball are
 # the real check, never codex's own "done, verified" text.
 #
 # Usage: codex_imagegen.sh --prompt "<DETAILED PROMPT>" --out tmp/out.png [--size 1024x1024] [--min-kb 200]
@@ -46,20 +46,20 @@ codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -C "
 
 # The FILE is ground truth. Do NOT trust the transcript: codex echoes the rule
 # text ("IMAGEGEN UNAVAILABLE") and its own "done, verified" claims even when it
-# faked — only believe size + your own eyeballs.
+# faked вЂ” only believe size + your own eyeballs.
 rc=1
 if [ -f "$ABS" ]; then
   KB=$(( $(stat -c%s "$ABS") / 1024 ))
   if [ "$KB" -lt "$MINKB" ]; then
-    echo "RESULT: SUSPECT FAKE — $ABS is ${KB}KB (< ${MINKB}KB); codex likely code-drew it. Read the PNG to confirm before using." >&2
+    echo "RESULT: SUSPECT FAKE вЂ” $ABS is ${KB}KB (< ${MINKB}KB); codex likely code-drew it. Read the PNG to confirm before using." >&2
   else
-    echo "OK wrote $ABS (${KB} KB) via official codex imagegen — eyeball it to confirm."
+    echo "OK wrote $ABS (${KB} KB) via official codex imagegen вЂ” eyeball it to confirm."
     rc=0
   fi
 elif grep -q "IMAGEGEN UNAVAILABLE" "$LOG"; then
   echo "RESULT: no file, and codex said imagegen is UNAVAILABLE in this context." >&2
 else
-  echo "RESULT: FAILED — no file written at $ABS" >&2
+  echo "RESULT: FAILED вЂ” no file written at $ABS" >&2
 fi
 rm -f "$LOG"
 exit $rc

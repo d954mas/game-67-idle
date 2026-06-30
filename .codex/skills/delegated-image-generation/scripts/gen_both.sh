@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # Compare mode: generate the SAME prompt via BOTH engines in PARALLEL, so you can
 # pick the best. codex/gpt-image-2 = higher fidelity + cleaner text; agy/Antigravity
-# = often more "game-y" / blocky-plastic. "Best" is a VISUAL judgment — Read both
+# = often more "game-y" / blocky-plastic. "Best" is a VISUAL judgment вЂ” Read both
 # PNGs and judge against the brief / fake-shot direction. NEVER a pixel metric.
 #
 # Usage:

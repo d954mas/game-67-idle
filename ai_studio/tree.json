@@ -846,7 +846,7 @@
         "kind": "module",
         "moduleId": "assets",
         "color": "#0891b2",
-        "description": "Reviewed AI Studio asset modules: browser viewing surfaces plus the storage layer for source registries, OKF catalog reading, and derived previews.",
+        "description": "Reviewed AI Studio asset modules: browser viewing surfaces, source preparation, storage manifests, indexes, previews, and license routing.",
         "tags": [
           "assets",
           "surface",
@@ -867,25 +867,81 @@
             ]
           },
           {
+            "id": "assets:nt-asset-workflow-skill",
+            "kind": "skill",
+            "path": ".codex/skills/nt-asset-workflow/SKILL.md",
+            "title": "nt-asset-workflow",
+            "description": "Main AI Studio skill for asset source search, license/provenance routing, adding assets to games, promoting assets to the global library, restricted assets, previews, generated art jobs, and prepared asset validation.",
+            "role": "asset workflow skill",
+            "tags": [
+              "assets",
+              "skill",
+              "license",
+              "provenance",
+              "storage"
+            ],
+            "children": [
+              {
+                "id": "assets:nt-asset-workflow-source-license",
+                "kind": "doc",
+                "path": ".codex/skills/nt-asset-workflow/references/source-library-and-license.md",
+                "title": "source-library-and-license.md",
+                "description": "Reference for searching the asset library, pulling assets into games, promoting assets into the global library, and applying the license gate.",
+                "role": "asset library and license reference",
+                "tags": [
+                  "assets",
+                  "skill-reference",
+                  "license"
+                ]
+              },
+              {
+                "id": "assets:nt-asset-workflow-restricted",
+                "kind": "doc",
+                "path": ".codex/skills/nt-asset-workflow/references/restricted-assets.md",
+                "title": "restricted-assets.md",
+                "description": "Reference for paid, account-gated, unknown-license, and non-redistributable assets that must not commit binaries.",
+                "role": "restricted asset reference",
+                "tags": [
+                  "assets",
+                  "skill-reference",
+                  "restricted"
+                ]
+              },
+              {
+                "id": "assets:nt-asset-workflow-generated",
+                "kind": "doc",
+                "path": ".codex/skills/nt-asset-workflow/references/generated-assets-and-cutouts.md",
+                "title": "generated-assets-and-cutouts.md",
+                "description": "Reference for generated source art, cutout/chroma cleanup, crop plans, slice9 metadata, and final-art boundaries.",
+                "role": "generated asset reference",
+                "tags": [
+                  "assets",
+                  "skill-reference",
+                  "generated-art"
+                ]
+              }
+            ]
+          },
+          {
             "id": "assets:assets-storage",
             "title": "Assets Storage",
             "subtitle": "sources, manifests, indexes, previews",
             "kind": "module",
-            "path": "ai_studio/assets/assets_storage",
+            "path": "ai_studio/assets/storage",
             "color": "#0e7490",
-            "description": "Storage layer for asset source registries, editable pack manifests, legacy OKF catalog reading, generated SQLite indexes, agent search, and derived preview preparation. The browser viewer consumes this layer but does not own it.",
+            "description": "Storage layer for asset source registries, editable pack manifests, generated SQLite indexes, agent search, license routing, and derived preview preparation. The browser viewer consumes this layer but does not own it.",
             "role": "asset storage and preparation layer",
             "tags": [
               "assets",
               "storage",
-              "catalog",
+              "manifest",
               "preview"
             ],
             "children": [
               {
                 "id": "assets:assets-storage-readme",
                 "kind": "doc",
-                "path": "ai_studio/assets/assets_storage/README.md",
+                "path": "ai_studio/assets/storage/README.md",
                 "title": "README.md",
                 "description": "Assets Storage module contract: source registries, pack manifests, generated SQLite indexes, preview preparation, agent search, and boundary with Asset Viewer.",
                 "role": "assets storage module entrypoint",
@@ -898,8 +954,8 @@
               {
                 "id": "assets:storage-search",
                 "kind": "tool",
-                "path": "ai_studio/assets/assets_storage/search_assets.mjs",
-                "title": "search_assets.mjs",
+                "path": "ai_studio/assets/storage/search.mjs",
+                "title": "search.mjs",
                 "description": "Agent-facing asset search command over generated SQLite indexes. Supports query, kind, tags, origin, license, pack, JSON output, and custom source paths.",
                 "role": "asset storage search CLI",
                 "tags": [
@@ -910,10 +966,36 @@
                 ]
               },
               {
+                "id": "assets:storage-defaults",
+                "kind": "tool",
+                "path": "ai_studio/assets/storage/defaults.mjs",
+                "title": "defaults.mjs",
+                "description": "Shared Asset Storage defaults such as the global asset source root.",
+                "role": "asset storage defaults",
+                "tags": [
+                  "assets",
+                  "storage",
+                  "config"
+                ]
+              },
+              {
+                "id": "assets:storage-kinds",
+                "kind": "tool",
+                "path": "ai_studio/assets/storage/kinds.mjs",
+                "title": "kinds.mjs",
+                "description": "Canonical mapping from asset kind to storage directory names for manifest-first and legacy readers.",
+                "role": "asset kind directory map",
+                "tags": [
+                  "assets",
+                  "storage",
+                  "schema"
+                ]
+              },
+              {
                 "id": "assets:storage-search-test",
                 "kind": "test",
-                "path": "ai_studio/assets/assets_storage/tests/search_assets.test.mjs",
-                "title": "search_assets.test.mjs",
+                "path": "ai_studio/assets/storage/tests/search.test.mjs",
+                "title": "search.test.mjs",
                 "description": "Regression test proving agent asset search uses the generated index for a pack manifest source.",
                 "role": "asset storage search tests",
                 "tags": [
@@ -921,6 +1003,87 @@
                   "storage",
                   "search",
                   "test"
+                ]
+              },
+              {
+                "id": "assets:intake",
+                "title": "Asset Intake",
+                "subtitle": "stage, accept, reject",
+                "kind": "group",
+                "color": "#0e7490",
+                "description": "Manifest-first intake for new asset candidates. Stages files with provenance, accepts selected files into packs or restricted packs, and rejects staged candidates without writing alternate metadata records.",
+                "role": "asset intake workflow",
+                "tags": [
+                  "assets",
+                  "storage",
+                  "intake"
+                ],
+                "children": [
+                  {
+                    "id": "assets:intake-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/storage/intake/README.md",
+                    "title": "README.md",
+                    "description": "Asset Intake contract: stage, review, accept or reject, Pack Manifest output, restricted-pack routing, and command examples.",
+                    "role": "asset intake module entrypoint",
+                    "tags": [
+                      "assets",
+                      "intake",
+                      "source"
+                    ]
+                  },
+                  {
+                    "id": "assets:intake-stage",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/storage/intake/stage.mjs",
+                    "title": "stage.mjs",
+                    "description": "Stages a file, folder, zip, or URL into _incoming with hashes, source page, license hint, and provenance log.",
+                    "role": "asset intake staging command",
+                    "tags": [
+                      "assets",
+                      "intake",
+                      "provenance"
+                    ]
+                  },
+                  {
+                    "id": "assets:intake-accept",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/storage/intake/accept.mjs",
+                    "title": "accept.mjs",
+                    "description": "Accepts one staged file into Pack Manifest layout, routing publishable assets to packs and non-publishable assets to restricted/packs.",
+                    "role": "asset intake accept command",
+                    "tags": [
+                      "assets",
+                      "intake",
+                      "manifest",
+                      "license"
+                    ]
+                  },
+                  {
+                    "id": "assets:intake-reject",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/storage/intake/reject.mjs",
+                    "title": "reject.mjs",
+                    "description": "Rejects a staged candidate by moving it into _rejected or deleting it explicitly.",
+                    "role": "asset intake rejection command",
+                    "tags": [
+                      "assets",
+                      "intake"
+                    ]
+                  },
+                  {
+                    "id": "assets:intake-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/storage/intake/tests/intake.test.mjs",
+                    "title": "intake.test.mjs",
+                    "description": "Regression tests for staging, manifest accept, restricted accept, and reject behavior.",
+                    "role": "asset intake tests",
+                    "tags": [
+                      "assets",
+                      "intake",
+                      "test"
+                    ]
+                  }
                 ]
               },
               {
@@ -940,7 +1103,7 @@
                   {
                     "id": "assets:source-registry-readme",
                     "kind": "doc",
-                    "path": "ai_studio/assets/assets_storage/source_registry/README.md",
+                    "path": "ai_studio/assets/storage/sources/README.md",
                     "title": "README.md",
                     "description": "Source Registry contract: why game asset roots are explicit and how new games register asset folders.",
                     "role": "source registry module entrypoint",
@@ -953,7 +1116,7 @@
                   {
                     "id": "assets:templates-registry-data",
                     "kind": "config",
-                    "path": "ai_studio/assets/assets_storage/source_registry/templates.json",
+                    "path": "ai_studio/assets/storage/sources/templates.json",
                     "title": "templates.json",
                     "description": "Explicit registry of template asset folders shown by Asset Viewer.",
                     "role": "registered template asset source data",
@@ -966,8 +1129,8 @@
                   {
                     "id": "assets:templates-registry-helper",
                     "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/source_registry/templates_registry.mjs",
-                    "title": "templates_registry.mjs",
+                    "path": "ai_studio/assets/storage/sources/templates.mjs",
+                    "title": "templates.mjs",
                     "description": "Small helper for reading, listing, and upserting template asset source records.",
                     "role": "template asset registry helper",
                     "tags": [
@@ -978,8 +1141,8 @@
                   {
                     "id": "assets:templates-registry-test",
                     "kind": "test",
-                    "path": "ai_studio/assets/assets_storage/source_registry/tests/templates_registry.test.mjs",
-                    "title": "templates_registry.test.mjs",
+                    "path": "ai_studio/assets/storage/sources/tests/templates.test.mjs",
+                    "title": "templates.test.mjs",
                     "description": "Regression tests for default template source listing and template source upserts.",
                     "role": "template asset registry tests",
                     "tags": [
@@ -990,7 +1153,7 @@
                   {
                     "id": "assets:games-registry-data",
                     "kind": "config",
-                    "path": "ai_studio/assets/assets_storage/source_registry/games.json",
+                    "path": "ai_studio/assets/storage/sources/games.json",
                     "title": "games.json",
                     "description": "Explicit registry of game-local asset folders shown by Asset Viewer. Updated by tools/bootstrap/new_game.mjs.",
                     "role": "registered game asset source data",
@@ -1003,8 +1166,8 @@
                   {
                     "id": "assets:games-registry-helper",
                     "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/source_registry/games_registry.mjs",
-                    "title": "games_registry.mjs",
+                    "path": "ai_studio/assets/storage/sources/games.mjs",
+                    "title": "games.mjs",
                     "description": "Small helper for reading, listing, and upserting game asset source records.",
                     "role": "game asset registry helper",
                     "tags": [
@@ -1015,8 +1178,8 @@
                   {
                     "id": "assets:games-registry-test",
                     "kind": "test",
-                    "path": "ai_studio/assets/assets_storage/source_registry/tests/games_registry.test.mjs",
-                    "title": "games_registry.test.mjs",
+                    "path": "ai_studio/assets/storage/sources/tests/games.test.mjs",
+                    "title": "games.test.mjs",
                     "description": "Regression tests for creating, listing, normalizing, and upserting registered game asset sources.",
                     "role": "game asset registry tests",
                     "tags": [
@@ -1038,27 +1201,27 @@
                   "assets",
                   "storage",
                   "manifest",
-                  "catalog"
+                  "manifest"
                 ],
                 "children": [
                   {
                     "id": "assets:pack-manifest-readme",
                     "kind": "doc",
-                    "path": "ai_studio/assets/assets_storage/pack_manifest/README.md",
+                    "path": "ai_studio/assets/storage/manifests/README.md",
                     "title": "README.md",
                     "description": "Pack Manifest contract: layout, pack.json fields, assets.jsonl rows, path boundary, and current Asset Index integration.",
                     "role": "pack manifest module entrypoint",
                     "tags": [
                       "assets",
                       "manifest",
-                      "catalog"
+                      "manifest"
                     ]
                   },
                   {
                     "id": "assets:pack-manifest-tool",
                     "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/pack_manifest/pack_manifest.mjs",
-                    "title": "pack_manifest.mjs",
+                    "path": "ai_studio/assets/storage/manifests/manifest.mjs",
+                    "title": "manifest.mjs",
                     "description": "Reads packs/<pack-id>/pack.json and assets.jsonl into normalized asset records and pack summaries for Asset Index.",
                     "role": "pack manifest reader",
                     "tags": [
@@ -1068,115 +1231,15 @@
                     ]
                   },
                   {
-                    "id": "assets:pack-manifest-export-okf",
-                    "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/pack_manifest/export_okf_pack.mjs",
-                    "title": "export_okf_pack.mjs",
-                    "description": "Exports one reviewed legacy OKF pack into the new self-contained Pack Manifest layout with pack.json, assets.jsonl, copied files, and copied previews.",
-                    "role": "legacy OKF pack migration helper",
-                    "tags": [
-                      "assets",
-                      "manifest",
-                      "okf",
-                      "migration"
-                    ]
-                  },
-                  {
                     "id": "assets:pack-manifest-test",
                     "kind": "test",
-                    "path": "ai_studio/assets/assets_storage/pack_manifest/tests/pack_manifest.test.mjs",
-                    "title": "pack_manifest.test.mjs",
+                    "path": "ai_studio/assets/storage/manifests/tests/manifest.test.mjs",
+                    "title": "manifest.test.mjs",
                     "description": "Regression tests for pack.json/assets.jsonl reading, inherited pack metadata, relative paths, previews, and model paths.",
                     "role": "pack manifest reader tests",
                     "tags": [
                       "assets",
                       "manifest",
-                      "test"
-                    ]
-                  },
-                  {
-                    "id": "assets:pack-manifest-export-okf-test",
-                    "kind": "test",
-                    "path": "ai_studio/assets/assets_storage/pack_manifest/tests/export_okf_pack.test.mjs",
-                    "title": "export_okf_pack.test.mjs",
-                    "description": "Regression test for exporting a legacy OKF pack into Pack Manifest and reading the exported source back through the manifest scanner.",
-                    "role": "legacy OKF pack export tests",
-                    "tags": [
-                      "assets",
-                      "manifest",
-                      "okf",
-                      "test"
-                    ]
-                  }
-                ]
-              },
-              {
-                "id": "assets:okf-catalog",
-                "title": "OKF Catalog",
-                "subtitle": "markdown asset records",
-                "kind": "group",
-                "color": "#0e7490",
-                "description": "Markdown/OKF shared library reader and source-first search entrypoint. Binary files and derived previews remain in the asset storage folders referenced by catalog records.",
-                "role": "asset catalog reader and search",
-                "tags": [
-                  "assets",
-                  "storage",
-                  "okf",
-                  "catalog"
-                ],
-                "children": [
-                  {
-                    "id": "assets:okf-catalog-readme",
-                    "kind": "doc",
-                    "path": "ai_studio/assets/assets_storage/okf_catalog/README.md",
-                    "title": "README.md",
-                    "description": "OKF Catalog contract: catalog record reader, shared-library scan, source-first search, and legacy compatibility entrypoint.",
-                    "role": "OKF catalog module entrypoint",
-                    "tags": [
-                      "assets",
-                      "okf",
-                      "catalog"
-                    ]
-                  },
-                  {
-                    "id": "assets:okf-catalog-find-assets",
-                    "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/okf_catalog/find_assets.mjs",
-                    "title": "find_assets.mjs",
-                    "description": "Reads OKF Markdown catalog records, joins pack metadata, searches the shared asset library, and exports scanLibrary for storage consumers.",
-                    "role": "OKF catalog reader and source-first search command",
-                    "tags": [
-                      "assets",
-                      "okf",
-                      "catalog",
-                      "source-first"
-                    ]
-                  },
-                  {
-                    "id": "assets:okf-catalog-poly-pizza-audit",
-                    "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/okf_catalog/poly_pizza_audit.mjs",
-                    "title": "poly_pizza_audit.mjs",
-                    "description": "Audits legacy Poly Pizza OKF records for declared-count mismatches, duplicate ids/source pages, missing metadata, and assets that belong to multiple packs.",
-                    "role": "Poly Pizza OKF catalog audit",
-                    "tags": [
-                      "assets",
-                      "okf",
-                      "audit",
-                      "poly-pizza"
-                    ]
-                  },
-                  {
-                    "id": "assets:okf-catalog-poly-pizza-audit-test",
-                    "kind": "test",
-                    "path": "ai_studio/assets/assets_storage/okf_catalog/tests/poly_pizza_audit.test.mjs",
-                    "title": "poly_pizza_audit.test.mjs",
-                    "description": "Regression test for Poly Pizza bundle count mismatch and secondary membership audit reporting.",
-                    "role": "Poly Pizza audit tests",
-                    "tags": [
-                      "assets",
-                      "okf",
-                      "audit",
                       "test"
                     ]
                   }
@@ -1200,7 +1263,7 @@
                   {
                     "id": "assets:source-snapshots-readme",
                     "kind": "doc",
-                    "path": "ai_studio/assets/assets_storage/source_snapshots/README.md",
+                    "path": "ai_studio/assets/storage/snapshots/README.md",
                     "title": "README.md",
                     "description": "Source Snapshots contract: generated snapshot location, tracked files, refresh consumers, and boundary with preview refresh.",
                     "role": "source snapshots module entrypoint",
@@ -1213,8 +1276,8 @@
                   {
                     "id": "assets:source-snapshots-tool",
                     "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/source_snapshots/source_snapshots.mjs",
-                    "title": "source_snapshots.mjs",
+                    "path": "ai_studio/assets/storage/snapshots/snapshots.mjs",
+                    "title": "snapshots.mjs",
                     "description": "Builds source file snapshots, compact signatures, persisted generated snapshots, and added/changed/deleted diffs for asset refresh.",
                     "role": "source snapshot API",
                     "tags": [
@@ -1226,8 +1289,8 @@
                   {
                     "id": "assets:source-snapshots-test",
                     "kind": "test",
-                    "path": "ai_studio/assets/assets_storage/source_snapshots/tests/source_snapshots.test.mjs",
-                    "title": "source_snapshots.test.mjs",
+                    "path": "ai_studio/assets/storage/snapshots/tests/snapshots.test.mjs",
+                    "title": "snapshots.test.mjs",
                     "description": "Regression tests for source snapshot diffing and generated snapshot persistence.",
                     "role": "source snapshot tests",
                     "tags": [
@@ -1244,7 +1307,7 @@
                 "subtitle": "sqlite query layer",
                 "kind": "group",
                 "color": "#0e7490",
-                "description": "Local SQLite indexes, one per asset source, built from OKF catalog records, pack manifests, or folder scans. Serves fast page, search, filter, pack, and model lookups for Asset Viewer and agent search without rescanning sources on each request.",
+                "description": "Local SQLite indexes, one per asset source, built from pack manifests or folder scans. Serves fast page, search, filter, pack, and model lookups for Asset Viewer and agent search without rescanning sources on each request.",
                 "role": "asset storage query index",
                 "tags": [
                   "assets",
@@ -1256,9 +1319,9 @@
                   {
                     "id": "assets:asset-index-readme",
                     "kind": "doc",
-                    "path": "ai_studio/assets/assets_storage/asset_index/README.md",
+                    "path": "ai_studio/assets/storage/index/README.md",
                     "title": "README.md",
-                    "description": "Asset Index contract: one generated SQLite database per source, explicit rebuild/refresh, public query API, no watch mode, and boundary with OKF Catalog, Pack Manifest, folder scans, and Asset Viewer.",
+                    "description": "Asset Index contract: one generated SQLite database per source, explicit rebuild/refresh, public query API, no watch mode, and boundary with Pack Manifest, folder scans, and Asset Viewer.",
                     "role": "asset index module entrypoint",
                     "tags": [
                       "assets",
@@ -1269,9 +1332,9 @@
                   {
                     "id": "assets:asset-index-tool",
                     "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/asset_index/asset_index.mjs",
-                    "title": "asset_index.mjs",
-                    "description": "Builds and queries the local asset SQLite index from OKF catalog records, pack manifests, or folder scans.",
+                    "path": "ai_studio/assets/storage/index/index.mjs",
+                    "title": "index.mjs",
+                    "description": "Builds and queries the local asset SQLite index from pack manifests or folder scans.",
                     "role": "asset index API and rebuild helper",
                     "tags": [
                       "assets",
@@ -1282,13 +1345,108 @@
                   {
                     "id": "assets:asset-index-test",
                     "kind": "test",
-                    "path": "ai_studio/assets/assets_storage/asset_index/tests/asset_index.test.mjs",
-                    "title": "asset_index.test.mjs",
+                    "path": "ai_studio/assets/storage/index/tests/index.test.mjs",
+                    "title": "index.test.mjs",
                     "description": "Regression tests for index rebuild, pack summary, search, filters, facets, paging, and model lookup.",
                     "role": "asset index tests",
                     "tags": [
                       "assets",
                       "index",
+                      "test"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "assets:license-guard",
+                "title": "License Guard",
+                "subtitle": "public repo safety",
+                "kind": "group",
+                "color": "#991b1b",
+                "description": "Public-repository guard for paid, private, unknown-license, non-redistributable, and attribution-bearing asset binaries. Unknown licenses fail closed; described restricted assets remain local under assets/restricted/.",
+                "role": "asset license and publishability guard",
+                "tags": [
+                  "assets",
+                  "storage",
+                  "license",
+                  "validation"
+                ],
+                "children": [
+                  {
+                    "id": "assets:license-guard-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/storage/license/README.md",
+                    "title": "README.md",
+                    "description": "License Guard contract: publishable vs restricted binaries, CC-BY attribution metadata, public-repo scope, and validation commands.",
+                    "role": "license guard module entrypoint",
+                    "tags": [
+                      "assets",
+                      "license",
+                      "source"
+                    ]
+                  },
+                  {
+                    "id": "assets:license-guard-policy",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/storage/license/restricted.mjs",
+                    "title": "restricted.mjs",
+                    "description": "Compatibility policy facade used by pull and guard: publishability, restricted root, attribution/notice requirement checks, and binary extension classification.",
+                    "role": "restricted asset policy",
+                    "tags": [
+                      "assets",
+                      "license",
+                      "policy"
+                    ]
+                  },
+                  {
+                    "id": "assets:license-registry",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/storage/license/registry.mjs",
+                    "title": "registry.mjs",
+                    "description": "Canonical license decision registry for asset publishing: known licenses, custom-license defaults, attribution/notice requirements, and validation of publish decisions.",
+                    "role": "license decision registry",
+                    "tags": [
+                      "assets",
+                      "license",
+                      "policy"
+                    ]
+                  },
+                  {
+                    "id": "assets:license-guard-cli",
+                    "kind": "validation",
+                    "path": "ai_studio/assets/storage/license/restricted_assets_guard.mjs",
+                    "title": "restricted_assets_guard.mjs",
+                    "description": "Validates git-tracked game/template asset binaries against manifest publishability and attribution metadata.",
+                    "role": "asset license validation command",
+                    "tags": [
+                      "assets",
+                      "license",
+                      "validation"
+                    ]
+                  },
+                  {
+                    "id": "assets:license-guard-allowlist",
+                    "kind": "config",
+                    "path": "ai_studio/assets/storage/license/restricted_assets_allowlist.json",
+                    "title": "restricted_assets_allowlist.json",
+                    "description": "Narrow allowlist for existing publishable starter assets. New assets should be recorded in manifests instead of added here.",
+                    "role": "asset guard allowlist",
+                    "tags": [
+                      "assets",
+                      "license",
+                      "config"
+                    ]
+                  },
+                  {
+                    "id": "assets:license-guard-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/storage/license/restricted_assets_guard.test.mjs",
+                    "title": "restricted_assets_guard.test.mjs",
+                    "description": "Regression tests for publishable assets, restricted routing, unregistered binaries, per-game paths, and CC-BY attribution metadata.",
+                    "role": "license guard tests",
+                    "tags": [
+                      "assets",
+                      "license",
                       "test"
                     ]
                   }
@@ -1311,7 +1469,7 @@
                   {
                     "id": "assets:preview-pipeline-readme",
                     "kind": "doc",
-                    "path": "ai_studio/assets/assets_storage/preview_pipeline/README.md",
+                    "path": "ai_studio/assets/storage/previews/README.md",
                     "title": "README.md",
                     "description": "Preview Pipeline contract: local preparation, Blender thumbnail generation, no watch mode, and viewer boundary.",
                     "role": "preview pipeline module entrypoint",
@@ -1324,8 +1482,8 @@
                   {
                     "id": "assets:preview-pipeline-cache",
                     "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/preview_pipeline/preview_cache.mjs",
-                    "title": "preview_cache.mjs",
+                    "path": "ai_studio/assets/storage/previews/cache.mjs",
+                    "title": "cache.mjs",
                     "description": "Source-aware preview cache refresh used by Asset Viewer. Copies or renders only missing/stale previews and refreshes the selected source index.",
                     "role": "asset preview cache refresher",
                     "tags": [
@@ -1337,7 +1495,7 @@
                   {
                     "id": "assets:preview-pipeline-render-library",
                     "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/preview_pipeline/render_library_previews.mjs",
+                    "path": "ai_studio/assets/storage/previews/render_library_previews.mjs",
                     "title": "render_library_previews.mjs",
                     "description": "Selects shared-library model assets and runs Blender thumbnail rendering in resumable chunks.",
                     "role": "library preview render command",
@@ -1350,7 +1508,7 @@
                   {
                     "id": "assets:preview-pipeline-render-thumbs",
                     "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/preview_pipeline/render_thumbs.py",
+                    "path": "ai_studio/assets/storage/previews/render_thumbs.py",
                     "title": "render_thumbs.py",
                     "description": "Blender script that renders one isometric thumbnail per GLB using the shared studio HDR.",
                     "role": "Blender GLB thumbnail renderer",
@@ -1363,7 +1521,7 @@
                   {
                     "id": "assets:preview-pipeline-make-hdr",
                     "kind": "tool",
-                    "path": "ai_studio/assets/assets_storage/preview_pipeline/make_studio_hdr.py",
+                    "path": "ai_studio/assets/storage/previews/make_studio_hdr.py",
                     "title": "make_studio_hdr.py",
                     "description": "Rebuilds the shared studio HDR used by Blender thumbnails and browser model-viewer lighting.",
                     "role": "studio HDR generator",
@@ -1376,7 +1534,7 @@
                   {
                     "id": "assets:preview-pipeline-hdr",
                     "kind": "asset",
-                    "path": "ai_studio/assets/assets_storage/preview_pipeline/studio_env.hdr",
+                    "path": "ai_studio/assets/storage/previews/studio_env.hdr",
                     "title": "studio_env.hdr",
                     "description": "Shared studio environment used by generated model thumbnails and live 3D model previews.",
                     "role": "shared preview lighting asset",
@@ -1389,8 +1547,8 @@
                   {
                     "id": "assets:preview-pipeline-cache-test",
                     "kind": "test",
-                    "path": "ai_studio/assets/assets_storage/preview_pipeline/tests/preview_cache.test.mjs",
-                    "title": "preview_cache.test.mjs",
+                    "path": "ai_studio/assets/storage/previews/tests/cache.test.mjs",
+                    "title": "cache.test.mjs",
                     "description": "Regression tests for missing, cached, and stale source-aware preview refresh.",
                     "role": "preview cache tests",
                     "tags": [
@@ -1404,11 +1562,533 @@
             ]
           },
           {
+            "id": "assets:prep",
+            "title": "Asset Prep",
+            "subtitle": "source preparation before storage/project use",
+            "kind": "module",
+            "path": "ai_studio/assets/prep",
+            "color": "#0d9488",
+            "description": "Preparation tools for asset source files before they enter storage, templates, or game projects: source-sheet checks, crop plans, cutout/alpha cleanup, review atlases, and texture previews.",
+            "role": "asset source preparation tools",
+            "tags": [
+              "assets",
+              "prep",
+              "quality"
+            ],
+            "children": [
+              {
+                "id": "assets:prep-readme",
+                "kind": "doc",
+                "path": "ai_studio/assets/prep/README.md",
+                "title": "README.md",
+                "description": "Asset Prep contract: what preparation tools own, what they do not own, and the current source-sheet, crop, cutout, review-atlas, and texture groups.",
+                "role": "asset prep module entrypoint",
+                "tags": [
+                  "assets",
+                  "prep",
+                  "source"
+                ]
+              },
+              {
+                "id": "assets:prep-lib",
+                "title": "Prep Library",
+                "subtitle": "shared python helpers",
+                "kind": "group",
+                "path": "ai_studio/assets/prep/lib",
+                "color": "#0d9488",
+                "description": "Low-level Python helpers shared by asset preparation tools. Not a public workflow surface.",
+                "role": "asset prep helper library",
+                "tags": [
+                  "assets",
+                  "prep",
+                  "lib"
+                ],
+                "children": [
+                  {
+                    "id": "assets:prep-lib-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/prep/lib/README.md",
+                    "title": "README.md",
+                    "description": "Prep Library contract: small shared helpers for prep tools only.",
+                    "role": "prep helper guide",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "lib"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-lib-atomic-io",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/prep/lib/atomic_io.py",
+                    "title": "atomic_io.py",
+                    "description": "Atomic text, JSON, file-copy, and image-save helpers used by Python asset prep tools.",
+                    "role": "atomic output helper",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "lib"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "assets:prep-conversion",
+                "title": "Conversion Prep",
+                "subtitle": "format conversion",
+                "kind": "group",
+                "path": "ai_studio/assets/prep/conversion",
+                "color": "#0d9488",
+                "description": "Conversion utilities that normalize source assets into inspectable or importable formats.",
+                "role": "asset format conversion",
+                "tags": [
+                  "assets",
+                  "prep",
+                  "conversion"
+                ],
+                "children": [
+                  {
+                    "id": "assets:prep-conversion-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/prep/conversion/README.md",
+                    "title": "README.md",
+                    "description": "Conversion Prep contract: file conversion without license, storage, or runtime-loading decisions.",
+                    "role": "conversion prep guide",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "conversion"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-conversion-obj-to-glb",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/prep/conversion/obj_to_glb.py",
+                    "title": "obj_to_glb.py",
+                    "description": "Blender headless OBJ/MTL to GLB converter with split-by-material output for engine-friendly meshes.",
+                    "role": "OBJ to GLB converter",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "conversion",
+                      "model"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "assets:prep-source-sheets",
+                "title": "Source Sheet Prep",
+                "subtitle": "chroma and component audit",
+                "kind": "group",
+                "color": "#0d9488",
+                "description": "Tools for generated UI/icon/sprite/decor source sheets: normalize border-connected chroma background and audit component count, gutters, borders, and key-color conflicts before cropping.",
+                "role": "source sheet preparation",
+                "tags": [
+                  "assets",
+                  "prep",
+                  "source-sheets"
+                ],
+                "children": [
+                  {
+                    "id": "assets:prep-source-sheets-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/prep/source_sheets/README.md",
+                    "title": "README.md",
+                    "description": "Source Sheet Prep command guide for normalize_chroma.py and audit_intake.py.",
+                    "role": "source sheet prep guide",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "source-sheets"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-source-sheets-normalize",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/prep/source_sheets/normalize_chroma.py",
+                    "title": "normalize_chroma.py",
+                    "description": "Normalizes border-connected chroma background pixels in generated source sheets without changing interior key-colored art.",
+                    "role": "source sheet chroma normalization",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "source-sheets"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-source-sheets-audit",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/prep/source_sheets/audit_intake.py",
+                    "title": "audit_intake.py",
+                    "description": "Audits a source sheet for component separation, unsafe borders/gutters, and key-color conflicts before crop planning.",
+                    "role": "source sheet intake audit",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "source-sheets"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-source-sheets-tests",
+                    "kind": "test",
+                    "path": "ai_studio/assets/prep/source_sheets/tests",
+                    "title": "source_sheets/tests",
+                    "description": "Regression tests for source-sheet chroma normalization and intake audit behavior.",
+                    "role": "source sheet prep tests",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "test"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "assets:prep-crop",
+                "title": "Crop Prep",
+                "subtitle": "source-sheet split plans",
+                "kind": "group",
+                "path": "ai_studio/assets/prep/crop",
+                "color": "#0d9488",
+                "description": "Tools for splitting source sheets into named asset regions and future manual crop-boundary editing.",
+                "role": "crop planning and crop-boundary editing",
+                "tags": [
+                  "assets",
+                  "prep",
+                  "crop"
+                ],
+                "children": [
+                  {
+                    "id": "assets:prep-crop-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/prep/crop/README.md",
+                    "title": "README.md",
+                    "description": "Crop Prep contract: crop plans and future boundary-editing ownership.",
+                    "role": "crop prep guide",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "crop"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-crop-plan",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/prep/crop/plan_prepared_crops_from_intake.py",
+                    "title": "plan_prepared_crops_from_intake.py",
+                    "description": "Creates named crop-plan entries from a passing source-sheet intake audit.",
+                    "role": "crop plan generator",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "crop"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-crop-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/prep/crop/plan_prepared_crops_from_intake_test.py",
+                    "title": "plan_prepared_crops_from_intake_test.py",
+                    "description": "Regression tests for named crop-plan generation.",
+                    "role": "crop prep tests",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "test"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "assets:prep-cutout",
+                "title": "Cutout / Alpha Prep",
+                "subtitle": "key matte and dual plate",
+                "kind": "group",
+                "path": "ai_studio/assets/prep/cutout",
+                "color": "#0d9488",
+                "description": "Tools for alpha extraction, key-matte cleanup, dual-plate extraction, trim support, and transparent-edge hygiene.",
+                "role": "cutout and alpha cleanup",
+                "tags": [
+                  "assets",
+                  "prep",
+                  "cutout",
+                  "alpha"
+                ],
+                "children": [
+                  {
+                    "id": "assets:prep-cutout-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/prep/cutout/README.md",
+                    "title": "README.md",
+                    "description": "Cutout Prep contract: alpha extraction, key matte, dual plate, and edge cleanup ownership.",
+                    "role": "cutout prep guide",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "cutout"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-cutout-key-matte",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/prep/cutout/key_matte.py",
+                    "title": "key_matte.py",
+                    "description": "Single-background known-key cutout for opaque art and flat-key holes.",
+                    "role": "key-matte cutout",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "cutout"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-cutout-dual-plate",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/prep/cutout/dual_plate_alpha.py",
+                    "title": "dual_plate_alpha.py",
+                    "description": "Extracts RGBA from aligned light/dark plate pairs for soft alpha, glow, glass, and shadow cases.",
+                    "role": "dual-plate alpha extraction",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "cutout",
+                      "alpha"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-cutout-route",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/prep/cutout/route_cutout.py",
+                    "title": "route_cutout.py",
+                    "description": "Chooses key-matte vs dual-plate path for a crop based on soft-alpha risk metrics.",
+                    "role": "cutout route helper",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "cutout"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "assets:prep-review-atlas",
+                "title": "Review Atlas",
+                "subtitle": "visual contact sheets",
+                "kind": "group",
+                "path": "ai_studio/assets/prep/review_atlas",
+                "color": "#0d9488",
+                "description": "Tools for building and auditing visual contact sheets used for source review. This is not engine integration output.",
+                "role": "review atlas preparation",
+                "tags": [
+                  "assets",
+                  "prep",
+                  "review-atlas"
+                ],
+                "children": [
+                  {
+                    "id": "assets:prep-review-atlas-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/prep/review_atlas/README.md",
+                    "title": "README.md",
+                    "description": "Review Atlas contract: visual contact sheets for inspection, not engine integration output.",
+                    "role": "review atlas guide",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "review-atlas"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-review-atlas-build",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/prep/review_atlas/build_review_atlas.py",
+                    "title": "build_review_atlas.py",
+                    "description": "Builds a labeled review atlas/contact sheet for prepared UI, icon, or sprite outputs.",
+                    "role": "review atlas builder",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "review-atlas"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-review-atlas-audit",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/prep/review_atlas/audit_review_atlas.py",
+                    "title": "audit_review_atlas.py",
+                    "description": "Audits review-atlas layout, labels, and source coverage.",
+                    "role": "review atlas audit",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "review-atlas"
+                    ]
+                  }
+                ]
+              },
+              {
+                "id": "assets:prep-textures",
+                "title": "Texture Prep",
+                "subtitle": "tile preview and seam metrics",
+                "kind": "group",
+                "color": "#0d9488",
+                "description": "Tools for standalone material textures: generate 2x2 repeat previews and measure obvious edge mismatches before accepting a texture as tileable.",
+                "role": "texture preparation",
+                "tags": [
+                  "assets",
+                  "prep",
+                  "textures"
+                ],
+                "children": [
+                  {
+                    "id": "assets:prep-textures-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/prep/textures/README.md",
+                    "title": "README.md",
+                    "description": "Texture Prep command guide for tileable texture seam audits and preview generation.",
+                    "role": "texture prep guide",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "textures"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-textures-audit",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/prep/textures/audit_tileable_texture.py",
+                    "title": "audit_tileable_texture.py",
+                    "description": "Writes a 2x2 texture preview and reports mean/max edge deltas for repeat-texture candidates.",
+                    "role": "tileable texture audit",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "textures"
+                    ]
+                  },
+                  {
+                    "id": "assets:prep-textures-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/prep/textures/tests/audit_tileable_texture.test.py",
+                    "title": "audit_tileable_texture.test.py",
+                    "description": "Regression tests for tileable texture preview output and seam failure reporting.",
+                    "role": "texture prep tests",
+                    "tags": [
+                      "assets",
+                      "prep",
+                      "test"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "assets:workflow",
+            "title": "Asset Workflow",
+            "subtitle": "agent-facing asset work",
+            "kind": "module",
+            "path": "ai_studio/assets/workflow",
+            "color": "#0f766e",
+            "description": "Agent-facing workflows for asset creation and review. Coordinates provenance and generation records but does not own storage, prep, previews, or browser UI.",
+            "role": "asset workflow coordination",
+            "tags": [
+              "assets",
+              "workflow",
+              "provenance"
+            ],
+            "children": [
+              {
+                "id": "assets:workflow-readme",
+                "kind": "doc",
+                "path": "ai_studio/assets/workflow/README.md",
+                "title": "README.md",
+                "description": "Asset Workflow contract: workflow tools coordinate asset work and provenance while storage/prep own their own domains.",
+                "role": "asset workflow module entrypoint",
+                "tags": [
+                  "assets",
+                  "workflow",
+                  "source"
+                ]
+              },
+              {
+                "id": "assets:workflow-art-jobs",
+                "title": "Art Jobs",
+                "subtitle": "generated-art provenance",
+                "kind": "group",
+                "path": "ai_studio/assets/workflow/art_jobs",
+                "color": "#0f766e",
+                "description": "Generated-art job scaffolding, generation records, source-family prompt packets, and generated-art contract validation.",
+                "role": "generated-art workflow tools",
+                "tags": [
+                  "assets",
+                  "workflow",
+                  "art-jobs"
+                ],
+                "children": [
+                  {
+                    "id": "assets:workflow-art-jobs-readme",
+                    "kind": "doc",
+                    "path": "ai_studio/assets/workflow/art_jobs/README.md",
+                    "title": "README.md",
+                    "description": "Art Jobs contract: generated-art tasks, prompt packets, generation records, provenance, and validation boundaries.",
+                    "role": "art jobs guide",
+                    "tags": [
+                      "assets",
+                      "workflow",
+                      "art-jobs"
+                    ]
+                  },
+                  {
+                    "id": "assets:workflow-art-jobs-new",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/workflow/art_jobs/new_art_job.mjs",
+                    "title": "new_art_job.mjs",
+                    "description": "Scaffolds a structured generated-art job for agent-readable iteration.",
+                    "role": "art job scaffold tool",
+                    "tags": [
+                      "assets",
+                      "workflow",
+                      "art-jobs"
+                    ]
+                  },
+                  {
+                    "id": "assets:workflow-art-jobs-generation-record",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/workflow/art_jobs/new_generation_record.mjs",
+                    "title": "new_generation_record.mjs",
+                    "description": "Writes reproducible generation/provenance records for accepted source art.",
+                    "role": "generation record tool",
+                    "tags": [
+                      "assets",
+                      "workflow",
+                      "provenance"
+                    ]
+                  },
+                  {
+                    "id": "assets:workflow-art-jobs-validate",
+                    "kind": "tool",
+                    "path": "ai_studio/assets/workflow/art_jobs/validate_art_job.mjs",
+                    "title": "validate_art_job.mjs",
+                    "description": "Validates generated-art job contracts before claiming accepted/final art.",
+                    "role": "art job validation tool",
+                    "tags": [
+                      "assets",
+                      "workflow",
+                      "validation"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
             "id": "assets:asset-viewer",
             "title": "Asset Viewer",
             "subtitle": "library and review gallery",
             "kind": "surface",
-            "path": "ai_studio/assets/asset_viewer",
+            "path": "ai_studio/assets/viewer",
             "color": "#0891b2",
             "description": "Browser-facing asset gallery for library browsing, game-asset review, pick manifests, 3D model inspection, promotion, and reuse pulls.",
             "role": "asset browsing and review surface",
@@ -1422,7 +2102,7 @@
               {
                 "id": "assets:asset-viewer-readme",
                 "kind": "doc",
-                "path": "ai_studio/assets/asset_viewer/README.md",
+                "path": "ai_studio/assets/viewer/README.md",
                 "title": "README.md",
                 "description": "Asset Viewer module contract: modes, commands, ownership boundaries, and why the gallery server remains separate.",
                 "role": "Asset Viewer contract",
@@ -1438,7 +2118,7 @@
                 "subtitle": "source picker inside gallery",
                 "kind": "surface",
                 "color": "#0891b2",
-                "description": "Asset Viewer entry hosted at /asset_viewer/. The gallery itself lists available sources and switches between all assets, template assets, and the current game.",
+                "description": "Asset Viewer entry hosted at /viewer/. The gallery itself lists available sources and switches between all assets, template assets, and the current game.",
                 "role": "asset viewer gallery entry",
                 "tags": [
                   "surface",
@@ -1449,7 +2129,7 @@
                   {
                     "id": "assets:asset-viewer-launcher-index",
                     "kind": "surface",
-                    "path": "ai_studio/assets/asset_viewer/index.html",
+                    "path": "ai_studio/assets/viewer/index.html",
                     "title": "index.html",
                     "description": "Asset Viewer browser entry. It loads the existing gallery UI and lets the user choose the displayed asset source from inside the gallery header.",
                     "role": "asset viewer gallery document",
@@ -1461,7 +2141,7 @@
                   {
                     "id": "assets:asset-viewer-api",
                     "kind": "tool",
-                    "path": "ai_studio/assets/asset_viewer/api.mjs",
+                    "path": "ai_studio/assets/viewer/api.mjs",
                     "title": "api.mjs",
                     "description": "Studio Shell API adapter for listing asset sources, opening the selected source in the gallery, rebuilding/querying the asset index, and resolving gallery media.",
                     "role": "asset viewer HTTP API adapter",
@@ -1475,7 +2155,7 @@
               {
                 "id": "assets:asset-viewer-build",
                 "kind": "tool",
-                "path": "ai_studio/assets/asset_viewer/build_review.mjs",
+                "path": "ai_studio/assets/viewer/build_review.mjs",
                 "title": "build_review.mjs",
                 "description": "Generates static asset gallery outputs for shared-library browsing, game-asset review, or direct asset-folder scans.",
                 "role": "asset gallery generator",
@@ -1488,7 +2168,7 @@
               {
                 "id": "assets:asset-viewer-serve",
                 "kind": "server",
-                "path": "ai_studio/assets/asset_viewer/serve_gallery.mjs",
+                "path": "ai_studio/assets/viewer/serve_gallery.mjs",
                 "title": "serve_gallery.mjs",
                 "description": "Serves a generated asset gallery and maps a large external asset library at /lib/ so library browsing can avoid copying every media file.",
                 "role": "asset gallery media server",
@@ -1501,20 +2181,20 @@
               {
                 "id": "assets:asset-viewer-promote",
                 "kind": "tool",
-                "path": "ai_studio/assets/asset_viewer/promote.mjs",
+                "path": "ai_studio/assets/viewer/promote.mjs",
                 "title": "promote.mjs",
-                "description": "Promotes selected assets from a review manifest into the shared library with catalog metadata, license records, and integrity data.",
-                "role": "asset promotion command",
+                "description": "Promotes selected assets from a review manifest into Pack Manifest storage with license records and integrity data.",
+                "role": "asset manifest promotion command",
                 "tags": [
                   "public-api",
-                  "catalog",
+                  "manifest",
                   "assets"
                 ]
               },
               {
                 "id": "assets:asset-viewer-pull",
                 "kind": "tool",
-                "path": "ai_studio/assets/asset_viewer/pull.mjs",
+                "path": "ai_studio/assets/viewer/pull.mjs",
                 "title": "pull.mjs",
                 "description": "Copies selected shared-library assets into a game-local asset tree while preserving source_id linkage and restricted-asset routing.",
                 "role": "asset reuse pull command",
@@ -1527,7 +2207,7 @@
               {
                 "id": "assets:asset-viewer-record",
                 "kind": "tool",
-                "path": "ai_studio/assets/asset_viewer/record_gallery.mjs",
+                "path": "ai_studio/assets/viewer/record_gallery.mjs",
                 "title": "record_gallery.mjs",
                 "description": "Records a browser session of the asset gallery for review or presentation evidence.",
                 "role": "asset gallery recording command",
@@ -1554,7 +2234,7 @@
                   {
                     "id": "assets:asset-viewer-js",
                     "kind": "ui-component",
-                    "path": "ai_studio/assets/asset_viewer/viewer.js",
+                    "path": "ai_studio/assets/viewer/viewer.js",
                     "title": "viewer.js",
                     "description": "Vanilla browser SPA for filters, pack views, asset modal, picking, and model-viewer integration.",
                     "role": "asset viewer browser behavior",
@@ -1567,7 +2247,7 @@
                   {
                     "id": "assets:asset-viewer-css",
                     "kind": "ui-component",
-                    "path": "ai_studio/assets/asset_viewer/viewer.css",
+                    "path": "ai_studio/assets/viewer/viewer.css",
                     "title": "viewer.css",
                     "description": "Asset Viewer page styling for gallery cards, filters, sheets, and model previews.",
                     "role": "asset viewer styling",
@@ -1595,7 +2275,7 @@
                   {
                     "id": "assets:asset-viewer-build-test",
                     "kind": "test",
-                    "path": "ai_studio/assets/asset_viewer/tests/build_review.test.mjs",
+                    "path": "ai_studio/assets/viewer/tests/build_review.test.mjs",
                     "title": "build_review.test.mjs",
                     "description": "Regression tests for asset kind classification, origin detection, escaping, and gallery HTML rendering.",
                     "role": "asset gallery generator tests",
@@ -1607,9 +2287,9 @@
                   {
                     "id": "assets:asset-viewer-promote-test",
                     "kind": "test",
-                    "path": "ai_studio/assets/asset_viewer/tests/promote.test.mjs",
+                    "path": "ai_studio/assets/viewer/tests/promote.test.mjs",
                     "title": "promote.test.mjs",
-                    "description": "Regression tests for promoting picked assets into the shared library with catalog and license records.",
+                    "description": "Regression tests for promoting picked assets into Pack Manifest storage with license and integrity records.",
                     "role": "asset promotion tests",
                     "tags": [
                       "test",
@@ -2005,7 +2685,7 @@
                 "subtitle": "QASSET",
                 "kind": "group",
                 "color": "#b45309",
-                "description": "Rules for sourced, generated, and runtime assets; provenance; licenses; manifests; publishability; runtime-ready formats; and material readiness.",
+                "description": "Rules for sourced, generated, and prepared assets; provenance; licenses; manifests; publishability; game-use-ready formats; and material readiness.",
                 "role": "asset rules group",
                 "tags": [
                   "quality",
@@ -2018,7 +2698,7 @@
                     "kind": "doc",
                     "path": "ai_studio/quality/rules/assets/README.md",
                     "title": "README.md",
-                    "description": "Asset rule group router for added/changed assets, project-use, publishability, runtime-ready, player-facing, and material-dependent claims.",
+                    "description": "Asset rule group router for added/changed assets, project-use, publishability, game-use-ready, player-facing, and material-dependent claims.",
                     "role": "assets rules navigation",
                     "tags": [
                       "quality",

@@ -1,4 +1,4 @@
-# Web GDD Site Playbook
+﻿# Web GDD Site Playbook
 
 Load this file only when creating or revising a visual GDD website, local design
 server, editor surface, or web-based art bible.
@@ -32,7 +32,7 @@ Keep sections short and connected:
 - Progression/economy, if used: resources, stats, sources, sinks, first unlock.
 - Activities: actions, unlocks, blocked states.
 - UI/UX map: main screen, panels, actions, feedback, navigation.
-- Visual proof: fake shot, progression shot, runtime asset proof if available.
+- Visual proof: fake shot, progression shot, prepared asset proof if available.
 - References: compact borrow/avoid/copy-risk.
 - Risks: top gates and smallest tests.
 - Handoff: first playable scope, commands, next prompt.
@@ -43,8 +43,8 @@ The site must include actual images when visuals are in scope:
 
 - gameplay fake shot;
 - progression image;
-- art bible or runtime asset preview;
-- composed runtime proof if claiming runtime-ready assets.
+- art bible or prepared asset preview;
+- composed running-game proof if claiming game-use-ready assets.
 
 Text descriptions alone are not enough. A site with no game screen is not a
 visual GDD.

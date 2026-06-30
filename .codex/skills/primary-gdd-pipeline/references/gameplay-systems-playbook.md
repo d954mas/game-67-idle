@@ -1,4 +1,4 @@
-# Gameplay Systems Playbook
+﻿# Gameplay Systems Playbook
 
 Load this file only when defining gameplay, player verbs, rules, feedback,
 risks, goals, stats, activities, UI flow, structured core-loop data, or the

@@ -1,4 +1,4 @@
----
+﻿---
 name: game-runtime-automation
 description: "Use when adding, using, or improving game runtime automation or visual QA for a running build: DevAPI command buses, endpoints/command.describe contracts, ui.tree/ui.click, frame.wait, synthetic input, gameplay bots, smoke tests, screenshots, recordings, native PC validation, and nonblank/readable/playable scene checks."
 ---

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # Generate a dual-plate white/black PAIR by CHAINING edits, then gate the pair.
 #
 # Why a chain: dual-plate alpha is exact only when the two plates show the SAME
@@ -6,11 +6,11 @@
 # model redraw the subject -> ghosting. Instead we generate the white plate from
 # the source, then generate the black plate as an EDIT OF THE WHITE PLATE, so the
 # subject is already final and only the background fill changes. Then the
-# acceptance gate (tools/assets/cutout/dual_plate_pair_gate.py) checks the pair really is
+# acceptance gate (ai_studio/assets/prep/cutout/dual_plate_pair_gate.py) checks the pair really is
 # consistent before you spend an extraction on it.
 #
 # Path: generate_image.py edit mode (codex OAuth backend, gpt-image-2, --input-image).
-# Transparency is NOT requested (the codex backend rejects it) — that is the whole
+# Transparency is NOT requested (the codex backend rejects it) вЂ” that is the whole
 # point of dual-plate: recover alpha from the pair instead of from the model.
 #
 # Usage:
@@ -42,7 +42,7 @@ LOCK="Keep the subject EXACTLY as in the input image: same position, same scale,
 flatbg() { echo "Fill the ENTIRE canvas edge-to-edge with solid flat $1. No gradient, no vignette, no texture, no noise, no lighting falloff, no reflection, and do NOT add any new shadow on the background."; }
 
 WHITE_PROMPT="Edit the input image: replace its background with solid flat white #ffffff. $(flatbg 'white #ffffff') ${LOCK} Output the same subject on pure white #ffffff."
-# Frame the black plate as a pure background recolour, not a redraw — this is what
+# Frame the black plate as a pure background recolour, not a redraw вЂ” this is what
 # keeps a glow/soft-alpha subject consistent enough to pass the pair gate.
 BLACK_PROMPT="This is a BACKGROUND-COLOR SWAP only, not a redraw. The subject is final. Output the EXACT same image pixel-for-pixel, with the ONLY change being the flat background recoloured to solid black #000000. $(flatbg 'black #000000') ${LOCK} Do NOT re-render or re-light the subject for the dark background. Output the same subject on pure black #000000."
 
@@ -54,7 +54,7 @@ python "$GEN" --input-image "$SOURCE" --prompt "$WHITE_PROMPT" --out "$WHITE" --
 # so the black plate often drifts. Retry it (always editing the SAME white plate)
 # until the pair gate PASSES, keeping the most-consistent attempt.
 ATTEMPTS="${DUAL_PLATE_ATTEMPTS:-4}"
-GATE="$REPO_ROOT/tools/assets/cutout/dual_plate_pair_gate.py"
+GATE="$REPO_ROOT/ai_studio/assets/prep/cutout/dual_plate_pair_gate.py"
 echo ">>> [2/3] black plate: edit the white plate -> black, retry until gate PASSES (max $ATTEMPTS)"
 best_frac=101; best_file=""
 for try in $(seq 1 "$ATTEMPTS"); do
@@ -78,7 +78,7 @@ echo "================= RESULT ================="
 echo "white: $WHITE"
 echo "black: $BLACK"
 if [ "$GATE_RC" -eq 0 ]; then
-  echo "PAIR OK -> extract: py -3.12 tools/assets/cutout/dual_plate_alpha.py --light '$WHITE' --dark '$BLACK' --output '$OUTDIR/${NAME}_rgba.png' --alpha-combine proj"
+  echo "PAIR OK -> extract: py -3.12 ai_studio/assets/prep/cutout/dual_plate_alpha.py --light '$WHITE' --dark '$BLACK' --output '$OUTDIR/${NAME}_rgba.png' --alpha-combine proj"
 else
   echo "PAIR REJECTED (see gate above) -> re-run gen_dual_plate.sh to regenerate; do NOT matte this pair."
 fi

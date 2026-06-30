@@ -1,13 +1,13 @@
-# Render a library glb in-engine (pack → load)
+﻿# Render a library glb in-engine (pack в†’ load)
 
 Concrete recipe for putting a real library model on screen instead of the debug
-shape renderer. Engine is read-only — public API only. Working templates:
+shape renderer. Engine is read-only вЂ” public API only. Working templates:
 `external/neotolis-engine/examples/atlas/{build_packs.c,main.c}` (single mesh +
 runtime load) and `external/neotolis-engine/examples/sponza` (multi-primitive scene).
 
 ## 1. PACK (build time, a native pack-builder)
 
-Create a pack builder — copy `examples/atlas/build_packs.c` to `src/build_packs.c`
+Create a pack builder вЂ” copy `examples/atlas/build_packs.c` to `src/build_packs.c`
 and wire it as a CMake custom command (mirror that example's CMakeLists) so it runs
 on build, emitting `<game>.ntpack` + a generated `*_assets.h` of asset ids.
 
@@ -25,7 +25,7 @@ on build, emitting `<game>.ntpack` + a generated `*_assets.h` of asset ids.
   The frag is `texture(u_texture, v_uv) * v_color`; library glbs are untextured,
   so colour is delivered per-instance and the texture stays white.
 - Single-primitive glb: `nt_builder_add_mesh(ctx, "assets/meshes/x.glb", &(nt_mesh_opts_t){.layout=layout, .stream_count=2, .tangent_mode=NT_TANGENT_NONE})`.
-- Multi-primitive glb (most furniture — engine issue #248: scene import reads only
+- Multi-primitive glb (most furniture вЂ” engine issue #248: scene import reads only
   `primitives[0]`'s material): use the scene API instead of `add_mesh`:
 
       nt_glb_scene_t sc; nt_builder_parse_glb_scene(&sc, "assets/meshes/bed.glb");
@@ -35,7 +35,7 @@ on build, emitting `<game>.ntpack` + a generated `*_assets.h` of asset ids.
         // record sc.materials[sc.meshes[mi].material_index].base_color[4] for rid
       nt_builder_free_glb_scene(&sc);
 
-## 2. LOAD (runtime, in the game — e.g. `src/clean_seed_main.c`)
+## 2. LOAD (runtime, in the game вЂ” e.g. `src/clean_seed_main.c`)
 
 The required engine libs are already linked. Mirror `examples/atlas/main.c`.
 
@@ -47,7 +47,7 @@ The required engine libs are already linked. Mirror `examples/atlas/main.c`.
   `nt_resource_request(ASSET_MESH_..., NT_ASSET_MESH)`, the two `mesh_inst` shaders,
   and the white texture.
 - Create the material: `nt_material_create` with vs/fs = mesh_inst, texture
-  `u_texture` = white, `attr_map` position→0 / uv0→1, `color_mode = NT_COLOR_MODE_FLOAT4`.
+  `u_texture` = white, `attr_map` positionв†’0 / uv0в†’1, `color_mode = NT_COLOR_MODE_FLOAT4`.
 - Create one entity per mesh (per primitive for multi-material): add transform +
   mesh + material + drawable comps; set per-instance colour via
   `nt_drawable_comp_set_color(ent, r, g, b, a)` (use the recorded baseColorFactor).

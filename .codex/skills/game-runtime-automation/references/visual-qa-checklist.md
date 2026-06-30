@@ -1,4 +1,4 @@
-# Visual QA Checklist
+﻿# Visual QA Checklist
 
 Load this reference when the task is to verify what the player actually sees,
 whether a scene is readable/playable, or whether a runtime visual change is

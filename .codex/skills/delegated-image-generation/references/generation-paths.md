@@ -1,4 +1,4 @@
-# Generation Paths
+﻿# Generation Paths
 
 Load this reference when you need exact image-generation commands or must choose
 between codex, agy, compare mode, or REST/backend alternatives.

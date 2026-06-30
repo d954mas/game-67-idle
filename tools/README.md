@@ -26,8 +26,8 @@ Copied by `tools/bootstrap/export_base.mjs`:
 - workflow state/profiling: `ai_studio/taskboard/`, `ai_studio/core_harness/profiling/`;
 - game startup/runtime scaffolding: `tools/game_context/`;
 - quality rules: `ai_studio/quality/`;
-- asset browser/review surface: `ai_studio/assets/asset_viewer/`;
-- reusable asset helpers: `tools/assets/`;
+- asset browser/review surface: `ai_studio/assets/viewer/`;
+- reusable asset storage/prep/workflow: `ai_studio/assets/`;
 - export helpers: `tools/bootstrap/`.
 
 Quality starts from `ai_studio/quality/README.md`: pick the changed-work group,
@@ -48,13 +48,14 @@ Copy/adapt after engine/runtime policy is known.
 
 Do not load this as an asset manual. Use:
 
-- `ai_studio/assets/asset_viewer/` for browsing the shared library, reviewing
+- `ai_studio/assets/viewer/` for browsing the shared library, reviewing
   game-local assets, pulling reusable assets, and promoting selected assets;
-- `.codex/skills/game-asset-pipeline/` for source/provenance/cutout/pack work;
-- `.codex/skills/generated-game-ui-assets/` for UI source sheets, slice9,
-  atlases, derivation, composition proof, and responsive UI checks.
+- `.codex/skills/nt-asset-workflow/` for source/provenance/license/pull/promote,
+  generated art jobs, source sheets, slice9, cutout, review atlas, and prepared
+  asset work;
+- `ai_studio/quality/` for visual/player-facing acceptance checks.
 
-Short rule: preserve provenance, separate generated/runtime assets, validate
+Short rule: preserve provenance, separate source/generated/prepared assets, validate
 manifests before final-art claims, and keep timing/debug data out of normal blockers.
 
 ## Cleanup And Validation

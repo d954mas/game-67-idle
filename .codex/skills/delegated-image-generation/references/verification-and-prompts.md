@@ -1,7 +1,7 @@
-# Verification And Prompts
+﻿# Verification And Prompts
 
 Load this reference before retrying a failed generation, writing prompts for
-runtime assets, or diagnosing fake/code-drawn output.
+game-use assets, or diagnosing fake/code-drawn output.
 
 ## Force Real Generation
 
@@ -33,9 +33,9 @@ Rules:
   can arrive inline and be decoded to the requested file.
 - File size is a fake detector only. It does not prove art quality.
 
-## Prompt Runtime Assets As Composable Parts
+## Prompt Game-Use Assets As Composable Parts
 
-For runtime art, generate composable parts, not baked composites:
+For game-use art, generate composable parts, not baked composites:
 
 - Chroma-keyed characters: use a flat key colour up to the outline and say
   `NO drop/contact shadow` to avoid cutout fringes.

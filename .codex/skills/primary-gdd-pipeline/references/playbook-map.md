@@ -1,4 +1,4 @@
-# Primary GDD Playbook Map
+﻿# Primary GDD Playbook Map
 
 Load this when the entrypoint says to choose a focused deep playbook. Load only
 the playbook needed for the current gate.

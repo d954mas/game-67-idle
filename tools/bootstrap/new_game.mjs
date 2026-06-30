@@ -14,7 +14,7 @@
 import { existsSync, mkdirSync, readdirSync, copyFileSync, statSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gameRegistryPath, registerGameAssetSource } from "../../ai_studio/assets/assets_storage/source_registry/games_registry.mjs";
+import { gameRegistryPath, registerGameAssetSource } from "../../ai_studio/assets/storage/sources/games.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 

@@ -1,4 +1,4 @@
-# Quality Review Playbook
+﻿# Quality Review Playbook
 
 Load this file before claiming a primary GDD pipeline task is done, especially
 after visual, website, data, art, reference, or handoff changes.
@@ -15,7 +15,7 @@ Check current stage gate:
 
 - Concept gate: hook, fantasy, audience, platform, pillars, no-go list.
 - Reference gate: 3-7 refs, source quality, borrow/avoid/copy-risk, synthesis.
-- Visual check: gameplay fake shot or runtime proof exists and is visible.
+- Visual check: gameplay fake shot or running-game proof exists and is visible.
 - Slice gate: first 30 seconds, first 5 minutes, loop, economy, UI flow.
 - Handoff gate: source order, phases, commands, acceptance gates, next prompt.
 
@@ -51,8 +51,8 @@ For visual deliverables:
 
 - fake shot includes avatar/object, currencies/stats, primary action, upgrade,
   next goal, feedback, and environment/status state;
-- runtime asset pack has separate assets, manifest, dimensions, transparency
-  expectations, and composed proof;
+- prepared/game-use asset proof has separate assets, manifest, dimensions,
+  transparency expectations, and composed proof;
 - web GDD shows the current fake shots and gameplay/economy data;
 - desktop and mobile portrait are readable when web is in scope.
 

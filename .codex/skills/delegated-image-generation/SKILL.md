@@ -1,6 +1,6 @@
----
+﻿---
 name: delegated-image-generation
-description: "Use ONLY after a source-first search (shared asset library + free CC0/OFL sources) finds no fit, to GENERATE real raster art the agent could not source and has no native image model to make: fake shots, icon/source sheets, sprites, or UI art. Generation is the last resort, not the default. Prefer Codex CLI imagegen via `codex exec` and `scripts/codex_imagegen.sh`; use Antigravity/agy CLI only as fallback. Load references for exact commands, real-generation prompts, verify-by-size checks, and dead-ends. Owns raster CREATION only: cutting/manifests go to generated-game-ui-assets; art-direction judgment to game-visual-art-direction."
+description: "Use ONLY after a source-first search (shared asset library + free CC0/OFL sources) finds no fit, to GENERATE real raster art the agent could not source and has no native image model to make: fake shots, icon/source sheets, sprites, UI art, or source images for later asset prep. Generation is the last resort, not the default. Prefer Codex CLI imagegen via `codex exec` and `scripts/codex_imagegen.sh`; use Antigravity/agy CLI only as fallback. Load references for exact commands, real-generation prompts, verify-by-size checks, and dead-ends. Owns raster creation only; asset jobs/prep/storage are owned by nt-asset-workflow and ai_studio/assets, and visual acceptance is owned by ai_studio/quality."
 ---
 
 # Delegated Image Generation
@@ -16,13 +16,14 @@ model. Delegate generation, verify the PNG, then hand off.
   checks, composable prompts, Dead-ends, gemini CLI, `GEMINI_API_KEY`,
   `NODE_OPTIONS=--use-system-ca`.
 - `references/throughput-and-handoff.md`: batches, source-sheet workflow,
-  sidecars, `generated-game-ui-assets` handoff, and visual quality evidence.
+  sidecars, `nt-asset-workflow` handoff, and quality evidence.
 
 ## Source First (before generating)
 
-Generation is the last resort. First run `node tools/assets/source/find_assets.mjs`:
-reuse a library hit, or search the printed free CC0/OFL sources and intake one.
-Only generate what you could not source, and record it with `find_assets --record`.
+Generation is the last resort. First run
+`node ai_studio/assets/storage/search.mjs --query <need>`: reuse a library hit,
+or search free CC0/OFL sources and intake one. Only generate what you could not
+source, and record the source decision in the task or art job.
 
 ## Default Route
 

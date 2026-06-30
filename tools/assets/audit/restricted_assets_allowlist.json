@@ -1,6 +1,0 @@
-{
-  "reason": "Pre-catalog legacy assets verified CC0 / project-owned, allowed without a catalog record. Assets are per-game now (<game>/assets/); prefixes are repo-relative. New assets must be cataloged (or routed to <game>/assets/restricted/), NOT added here. Currently: the template starter cube (Kenney/engine CC0).",
-  "prefixes": [
-    "template/assets/meshes/"
-  ]
-}

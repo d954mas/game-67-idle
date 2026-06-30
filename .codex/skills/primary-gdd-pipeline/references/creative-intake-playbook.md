@@ -1,4 +1,4 @@
-# Creative Intake Playbook
+﻿# Creative Intake Playbook
 
 Load this file only when the user's taste, meme anchor, visual target, gameplay
 fantasy, or acceptance criteria are unclear.
@@ -55,7 +55,7 @@ Translate vague feedback into production constraints:
 - "more life sim" -> show city/home/work, stats, job action, lifestyle upgrade.
 - "more gameplay" -> add primary action, currencies, upgrade, next goal, feedback.
 - "more meme" -> put the meme symbol/gesture in UI, animation, result, or progression.
-- "not art for game" -> separate fake shot from runtime assets and compose proof.
+- "not art for game" -> separate fake shot from prepared/game-use assets and composed proof.
 - "not my style" -> ask for closest/avoid refs and regenerate only after restating delta.
 
 ## Review Packet Question

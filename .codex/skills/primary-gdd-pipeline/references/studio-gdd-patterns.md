@@ -1,4 +1,4 @@
-# Studio GDD Patterns
+﻿# Studio GDD Patterns
 
 Load this reference only when a task asks for deeper GDD methodology, studio
 practice, market research, AI-assisted preproduction, or process improvement.
@@ -23,7 +23,7 @@ practice, market research, AI-assisted preproduction, or process improvement.
 - Add risk gates before implementation: fun, UX, production, technical,
   content pipeline, and licensing/source risk.
 - Use AI generation as a fast preproduction tool, but label outputs as
-  reference, placeholder, fake shot, or runtime-ready. Runtime-ready requires
+  reference, placeholder, fake shot, or game-use-ready. Game-use-ready requires
   separate assets, dimensions, transparency checks, manifest, and composed proof.
 - Validate with playtests or runnable slices. Documents and validators only
   prove alignment; they do not prove that the game works.
@@ -66,7 +66,7 @@ stage gates plus the sources above.
 4. First loop: input, wait, reward, upgrade, visual/status change.
 5. Economy: currencies, sources, sinks, pacing, unlocks.
 6. UX map: screens, tabs, primary CTA, blocked states, feedback.
-7. Visual proof: fake shot first, runtime asset pack only when needed.
+7. Visual proof: fake shot first, prepared/game-use asset proof only when needed.
 8. Ref pack: 3-7 refs with borrow/avoid/copy-risk.
 9. Risk gates: fun, UX, production, tech, asset/legal.
 10. Handoff: file order, commands, test plan, next implementation prompt.

@@ -1,4 +1,4 @@
-# Source Intake And Promotion
+﻿# Source Intake And Promotion
 
 Load this reference when parsing articles, videos, reference packets, store
 pages, gameplay footage, talks, or other game-design research sources.

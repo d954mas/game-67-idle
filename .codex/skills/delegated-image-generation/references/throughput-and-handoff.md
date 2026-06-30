@@ -1,7 +1,7 @@
-# Throughput And Handoff
+﻿# Throughput And Handoff
 
 Load this reference when generating many assets, re-running changed jobs, or
-connecting generated art to the deterministic asset pipeline.
+connecting generated art to `nt-asset-workflow` and `ai_studio/assets`.
 
 ## Whole-Game Art Runs
 
@@ -21,25 +21,24 @@ Use:
 ## Source-Sheet First
 
 For bulk opaque families such as UI icons, generate one source sheet and crop N
-assets through intake, crop, and assemble. This is usually much cheaper than one
-generation per asset.
+assets through intake, crop, cutout, and review-atlas prep. This is usually much
+cheaper than one generation per asset.
 
 Reserve per-asset dual-plate generation for a few genuinely soft hero effects.
-Use route warnings from the asset pipeline to decide where the extra generation
-cost is justified.
+Use route warnings from the asset prep tools to decide where the extra
+generation cost is justified.
 
-## Handoff To The Asset Pipeline
+## Handoff To Asset Workflow
 
-All generation paths produce raw source images only. The deterministic pipeline
-still owns cleanup and runtime integration:
+All generation paths produce raw source images only. The deterministic asset
+workflow still owns cleanup, metadata, and project/library acceptance:
 
-- `generated-game-ui-assets`: prompt packet, intake, crop, runtime PNGs,
-  composition, derivation audits.
-- `game-visual-art-direction`: art direction checks and screen-level critique.
+- `nt-asset-workflow`: prompt packet/art job, intake, crop, prepared outputs,
+  provenance, license routing, storage, and project/library handoff.
 - `ai_studio/quality/README.md`: select existing player-clarity/art rules for the
   assembled screen and record evidence.
 
-Clean crops prove the pipe, not the screen. Judge the assembled game screen
+Clean crops prove the preparation step, not the screen. Judge the assembled game screen
 against the fake shot or art bible. Keep raw generations in `tmp/` until
 accepted.
 

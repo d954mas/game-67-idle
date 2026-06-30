@@ -4,7 +4,7 @@
 
 It is not the owner of the tools it hosts. `architecture_map/` owns the map
 surface and map data. `taskboard/` owns the board surface and task state.
-`assets/asset_viewer/` owns the asset browsing launcher and galleries.
+`assets/viewer/` owns the asset browsing launcher and galleries.
 
 ## Owned Here
 
@@ -49,7 +49,7 @@ ai_studio\studio_shell\start_site.cmd
 Codex managed shell note: background child processes started inside the sandbox
 can be killed when the command finishes. When Codex starts this site for browser
 use, run `start_site_windows.ps1` outside the sandbox, then verify
-`http://127.0.0.1:8765/asset_viewer/` or the needed surface.
+`http://127.0.0.1:8765/viewer/` or the needed surface.
 
 ## Surface Rule
 
@@ -62,4 +62,4 @@ Current hosted surfaces:
 - `/` -> Studio Home.
 - `/architecture_map/` -> Architecture Map surface.
 - `/taskboard/` -> Taskboard surface.
-- `/asset_viewer/` -> Asset Viewer launcher.
+- `/viewer/` -> Asset Viewer launcher.

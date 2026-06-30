@@ -227,10 +227,10 @@ function buildVisualFirstContract({ concept }) {
       "Run or record review evidence before adding features/content.",
     ],
     generated_ui_runtime_gate: [
-      "Non-empty crop manifest covering every runtime UI asset id.",
-      "Non-empty runtime manifest matching crop ids and output PNGs.",
-      "Passing visual review of the assembled screen before runtime integration claims.",
-      "If the review fails, fix source/crop/runtime assets before compensating in code.",
+      "Non-empty crop plan covering every prepared UI asset id.",
+      "Non-empty prepared asset manifest matching crop ids and output files.",
+      "Passing visual review of the assembled screen before game integration claims.",
+      "If the review fails, fix source/crop/prepared assets before compensating in code.",
     ],
     stop_conditions: [
       "Failed review blocks feature/content expansion unless the lead explicitly accepts the debt.",
@@ -313,7 +313,7 @@ function buildContext(root, options = {}) {
   const nativeGate = bulletContaining(validation, [/Native desktop\/PC/i, /native PC/i, /preferred development/i], "");
   const webGate = bulletContaining(validation, [/web prototype/i, /web server/i, /localhost/i, /browser\/frontend/i], "");
   const referenceGate = bulletContaining(direction, [/Reference study is a hard implementation gate/i, /Reference Lock/i], "");
-  const visualGate = bulletContaining(direction, [/generated-art/i, /visual work/i, /game-visual-art-direction/i], "");
+  const visualGate = bulletContaining(direction, [/generated-art/i, /visual work/i, /quality/i], "");
 
   const designSources = existing(root, [
     "gamedesign/knowledge/README.md",
@@ -344,7 +344,7 @@ function buildContext(root, options = {}) {
     nativeGate || "Use the primary native/game runtime first; discover local build/run rules before implementation.",
     webGate || "Do not use web/browser work unless the current user request explicitly allows it.",
     referenceGate || "If a named reference drives gameplay/art/balance, create or update a durable reference deconstruction before implementation.",
-    visualGate || "For polished/generated visual work, use an art target/job and reusable runtime assets before code polish.",
+    visualGate || "For polished/generated visual work, use an art target/job, prepared assets, and quality evidence before code polish.",
   ];
 
   const startupGate = buildStartupGate({
@@ -382,7 +382,7 @@ function buildContext(root, options = {}) {
       "Compare current native screenshot against the accepted fake shot/target and list mismatches before visual code.",
       "Name the selected runtime harness and why it is allowed.",
       "If reference-driven, cite the durable deconstruction/digest and next native proof.",
-      "If generated UI work, prove non-empty crop/runtime manifests and a visual review before runtime integration claims.",
+      "If generated UI work, prove non-empty crop/prepared manifests and a visual review before game integration claims.",
       "If visual/UI work, cite the accepted target or art request and reusable asset strategy.",
       "Name the smallest playable slice and the native screenshot/scenario that will prove it.",
       "Use passive AI profiling only for long or risky work where stall evidence would help.",

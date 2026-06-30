@@ -4,10 +4,9 @@
 // in varied contexts (command strings, trailing-slash strips, one-off refs) —
 // that is a one-liner, not a shared contract, so it is deliberately LEFT INLINE
 // rather than force-importing toPosix everywhere (coupling without benefit).
-// `findRepoRoot` is likewise NOT here: the only walk-up implementations live in
-// the leak guard and its dependency chain (find_assets), which must stay
-// self-contained. What IS shared is relCwdPosix (repeated verbatim in 3 product
-// gate tools), with toPosix as its primitive + the plan's named helper.
+// `findRepoRoot` is likewise NOT here: walk-up behavior is command-specific.
+// What IS shared is relCwdPosix (repeated verbatim in 3 product gate tools),
+// with toPosix as its primitive + the plan's named helper.
 import { resolve } from "node:path";
 
 // Forward slashes for display/serialization (Windows "\" -> "/").

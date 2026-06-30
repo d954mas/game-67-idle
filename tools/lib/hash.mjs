@@ -1,7 +1,6 @@
 // Single-purpose shared leaf: content hashing. No orchestration, no I/O policy —
 // just bytes -> hex, so every tool that records asset provenance uses ONE sha256
-// instead of re-implementing createHash (it was copy-pasted in download_source,
-// import_poly_pizza, accept_incoming). Compose it; do not bolt logic on.
+// instead of re-implementing createHash. Compose it; do not bolt logic on.
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 

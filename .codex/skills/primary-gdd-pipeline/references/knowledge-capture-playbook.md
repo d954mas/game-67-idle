@@ -1,4 +1,4 @@
-# Knowledge Capture Playbook
+﻿# Knowledge Capture Playbook
 
 Load this file only when a GDD session produces reusable knowledge: a user
 preference, workflow rule, design lesson, validation pattern, or repeated

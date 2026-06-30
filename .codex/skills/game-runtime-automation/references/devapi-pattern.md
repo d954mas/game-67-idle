@@ -1,7 +1,7 @@
-# DevAPI Pattern
+﻿# DevAPI Pattern
 
 The engine now ships a **native** DevAPI. This file is no longer a "how to build
-one" design spec — it points at the engine source of truth and records the
+one" design spec вЂ” it points at the engine source of truth and records the
 game-side deltas a bot must follow. When the live runtime disagrees with this
 file, the runtime wins: discover via `endpoints` + `command.describe`.
 
@@ -9,12 +9,12 @@ file, the runtime wins: discover via `endpoints` + `command.describe`.
 
 - Engine bus + transport (read these, don't re-describe):
   `external/neotolis-engine/engine/devapi/nt_devapi.h` (init/register/submit/poll),
-  `…/nt_devapi_types.h` (descriptor + handler ABI),
-  `…/nt_devapi_net.h` (loopback-TCP transport).
+  `вЂ¦/nt_devapi_types.h` (descriptor + handler ABI),
+  `вЂ¦/nt_devapi_net.h` (loopback-TCP transport).
 - Game-owned commands the engine deliberately omits: `src/game_devapi_ui.c`
   (`ui.tree`/`ui.element`/`ui.click`/`entity.list`) and the generated
   `game.state.*` (from `tools/state_codegen/generate_state.py`).
-- Live discovery: `endpoints` then `command.describe` — always authoritative.
+- Live discovery: `endpoints` then `command.describe` вЂ” always authoritative.
 
 ## Handler ABI (engine)
 
@@ -28,8 +28,8 @@ typedef struct nt_devapi_command_desc {
     const char *summary;
     const char *params_shape;
     const char *result_shape;
-    const char *frame_behavior;  /* "immediate" / "next-frame" / …          */
-    const char *side_effects;    /* "none" / "injects input" / …            */
+    const char *frame_behavior;  /* "immediate" / "next-frame" / вЂ¦          */
+    const char *side_effects;    /* "none" / "injects input" / вЂ¦            */
 } nt_devapi_command_desc;
 
 /* Fill result_obj (pre-created) and return true; or fill err and return false. */
@@ -43,21 +43,21 @@ Note: the field is `group` (not the old `layer`). Game commands register with
 ## Wire Shape
 
 JSON-lines over the loopback TCP transport. One request object per line; one
-response line back. Request: `{"request_id":1,"method":"ui.click","params":{…}}`.
-Response: `{"ok":true,"result":{…}}` or `{"ok":false,"error":{"code","message"}}`.
+response line back. Request: `{"request_id":1,"method":"ui.click","params":{вЂ¦}}`.
+Response: `{"ok":true,"result":{вЂ¦}}` or `{"ok":false,"error":{"code","message"}}`.
 `request_id` is for correlation only; echoed unchanged (number or string).
 
 Current result shapes that differ from the old sidecar (bots must follow):
 
-- `endpoints` -> `{"commands":[{"method","group","summary",…}]}` (not a bare list).
+- `endpoints` -> `{"commands":[{"method","group","summary",вЂ¦}]}` (not a bare list).
 - `game.state.get` -> `{"path","value"}` (a path value can be any JSON, so wrapped).
-- `ui.tree` -> `{"nodes":[…]}`; each node has `id,parent_id,role,label,text,
+- `ui.tree` -> `{"nodes":[вЂ¦]}`; each node has `id,parent_id,role,label,text,
   x,y,w,h,center_x,center_y,visible,enabled`.
-- `entity.list` -> `{"entities":[…]}`.
+- `entity.list` -> `{"entities":[вЂ¦]}`.
 - The seed `game.state` view exposes `shape` (name) + `test_ui_clicks`; the
   generated `game.state.*` view serializes the full schema (incl `shape_index`).
 
-## Frame Sync — NO deferred command inside a batch
+## Frame Sync вЂ” NO deferred command inside a batch
 
 The engine **rejects** deferred commands (`frame.wait`) inside a batch array
 (it returns a `bad_params` error entry: a batch is one ordered immediate
@@ -72,7 +72,7 @@ Batches are still fine for *immediate* commands only. Cap wait/gesture frame
 counts; long waits fail fast rather than block the queue.
 
 `ui.click` injects a synthetic pointer DOWN+UP at the node center via the engine
-input layer; it drains on the **next** sim-advance — always step a frame (or a
+input layer; it drains on the **next** sim-advance вЂ” always step a frame (or a
 few) before observing, never sleep.
 
 ## UI / Input
@@ -122,5 +122,5 @@ a context manager with hard `max_seconds`/`max_megabytes` limits.
 
 The whole layer is dev-only: `GAME_DEVAPI_ENABLED` (ON for native Debug, OFF for
 Release/WASM) forwards to the engine's `NT_DEVAPI_ENABLED`. With the gate off the
-`#if NT_DEVAPI_ENABLED` guards compile every command out — shipping builds link
+`#if NT_DEVAPI_ENABLED` guards compile every command out вЂ” shipping builds link
 zero `nt_devapi_*` symbols.

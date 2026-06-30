@@ -1,4 +1,4 @@
-# Playable Feature Gates And Build Reference
+﻿# Playable Feature Gates And Build Reference
 
 Load this reference when a game feature touches product feel, visual quality,
 named references, build/launch/release configuration, or prototype handoff.

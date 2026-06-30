@@ -1,6 +1,6 @@
----
+﻿---
 name: game-texture-generation
-description: Use when sourcing, generating, downloading, adapting, reviewing, or integrating standalone game material textures for world surfaces, ground, terrain, props, assets, armor parts, metal, plastic, painted surfaces, panels, emissive details, decals, normal/roughness maps, stylized studs/baseplate surfaces, stock textures, marketplace/downloaded assets, and texture provenance/licensing decisions. Source first — search the shared library + free CC0/OFL sources (ambientCG, Poly Haven) before generating. Do not use for atlases, trim sheets, icon sheets, or UI atlases; use the existing generated-game-ui-assets or asset pipeline workflows for those. Pair with game-asset-pipeline when packing or runtime-loading the texture.
+description: Use when sourcing, generating, downloading, adapting, or reviewing standalone game material textures for world surfaces, ground, terrain, props, assets, armor parts, metal, plastic, painted surfaces, panels, emissive details, decals, normal/roughness maps, stylized studs/baseplate surfaces, stock textures, marketplace/downloaded assets, and texture provenance/licensing decisions. Source first: search the shared library and free CC0/OFL sources before generating. Do not use for atlases, trim sheets, icon sheets, or UI atlases; use nt-asset-workflow for those asset workflows, storage, licensing, and project handoff.
 ---
 
 # Game Texture Generation
@@ -11,10 +11,11 @@ and stylized studs/baseplates.
 
 ## Source First (before generating)
 
-Search before you create. Run `node tools/assets/source/find_assets.mjs --kind
-texture` (or `--kind material`): reuse a library hit, or search the printed free
-CC0/OFL sources (ambientCG, Poly Haven) and intake one. Generate only what you
-cannot source, and record it with `find_assets --record`.
+Search before you create. Run
+`node ai_studio/assets/storage/search.mjs --kind texture --query <need>` (or
+`--kind material`): reuse a library hit, or search free CC0/OFL sources
+(ambientCG, Poly Haven) and intake one. Generate only what you cannot source,
+and record the source decision in the task or art job.
 
 ## Workflow
 
@@ -25,14 +26,14 @@ cannot source, and record it with `find_assets --record`.
 3. Record source route and provenance: generated, downloaded, stock,
    marketplace, hand-authored, or procedural.
 4. For repeat textures, create a 2x2 preview and seam audit with
-   `tools/assets/intake/audit_tileable_texture.py`.
-5. Verify scale, seams, mips/zoom, style fit, and runtime path before claiming
-   integration.
-6. Use `game-asset-pipeline` for pack/runtime integration after the source is
-   stable.
+   `ai_studio/assets/prep/textures/audit_tileable_texture.py`.
+5. Verify scale, seams, mips/zoom, style fit, and game-use evidence before
+   claiming integration.
+6. Use `nt-asset-workflow` for storage, license/provenance, previews, and
+   project handoff after the source is stable.
 
 If the work is an atlas, sprite sheet, icon sheet, UI atlas, UV atlas, or trim
-sheet, stop: use UI/icon asset workflow or general asset pipeline.
+sheet, stop and use `nt-asset-workflow`.
 
 ## References
 

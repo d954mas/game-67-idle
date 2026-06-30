@@ -1,4 +1,4 @@
-# Reference Work And Review
+﻿# Reference Work And Review
 
 Load this reference when a named reference guides gameplay, UI, economy,
 balance, final art, or implementation decisions, or when auditing

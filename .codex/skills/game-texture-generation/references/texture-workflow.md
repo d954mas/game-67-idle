@@ -1,4 +1,4 @@
-# Texture Workflow
+﻿# Texture Workflow
 
 ## Usage Classes
 
@@ -64,7 +64,7 @@ create a replacement source.
 For repeat textures, run the tile audit helper:
 
 ```powershell
-py -3.12 tools/assets/intake/audit_tileable_texture.py --source <texture.png> --preview <texture_2x2.png> --json-output <audit.json> --report <audit.md>
+py -3.12 ai_studio/assets/prep/textures/audit_tileable_texture.py --source <texture.png> --preview <texture_2x2.png> --json-output <audit.json> --report <audit.md>
 ```
 
 Use `--max-mean-edge-delta` and `--max-edge-delta` when a texture claims strict

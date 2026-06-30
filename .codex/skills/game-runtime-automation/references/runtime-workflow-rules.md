@@ -1,4 +1,4 @@
-# Runtime Workflow Rules
+﻿# Runtime Workflow Rules
 
 Load this reference when adding automation, writing bots/smoke tests, launching
 a build through DevAPI, replacing temporary adapters, or collecting runtime

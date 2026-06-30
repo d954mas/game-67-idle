@@ -1,4 +1,4 @@
-# Game Iteration Cycle Playbook
+﻿# Game Iteration Cycle Playbook
 
 Reusable workflow for fast AI-assisted game iterations.
 

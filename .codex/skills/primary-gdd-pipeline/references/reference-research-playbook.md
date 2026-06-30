@@ -1,4 +1,4 @@
-# Reference Research Playbook
+﻿# Reference Research Playbook
 
 Load this file only when researching comparable games, ads, memes, stores,
 screenshots, UI patterns, or market positioning for a GDD.

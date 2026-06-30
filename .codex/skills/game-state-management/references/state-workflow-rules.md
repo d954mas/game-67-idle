@@ -1,4 +1,4 @@
-# State Workflow Rules
+﻿# State Workflow Rules
 
 Load this reference when adding or changing state fields, generated APIs,
 migrations, runtime actions, DevAPI state commands, fixtures, or save behavior.

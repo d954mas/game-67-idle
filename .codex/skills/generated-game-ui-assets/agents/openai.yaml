@@ -1,4 +1,0 @@
-interface:
-  display_name: "Generated Game UI Assets"
-  short_description: "Reusable AI game UI asset kits"
-  default_prompt: "Create a reusable generated game UI kit with an art bible, slice9 manifests, composition proof, responsive layout audit, and runtime proof."

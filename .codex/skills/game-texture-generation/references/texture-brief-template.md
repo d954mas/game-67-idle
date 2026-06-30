@@ -1,4 +1,4 @@
-# Texture Brief Template
+﻿# Texture Brief Template
 
 Use this as the minimum source record for generated or downloaded textures.
 

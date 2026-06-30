@@ -1,4 +1,4 @@
-# Design Source Knowledge Templates
+﻿# Design Source Knowledge Templates
 
 Load this file only when creating or substantially rewriting source notes,
 knowledge pages, or source-review reports.

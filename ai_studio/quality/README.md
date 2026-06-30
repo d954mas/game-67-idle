@@ -27,8 +27,8 @@ Open the group or groups that match the changed work:
 - [Technical](rules/technical/README.md): code, scripts, generated data,
   runtime behavior, build/run proof, input, state, save/load, packaging, and
   automation.
-- [Assets](rules/assets/README.md): sourced/generated/runtime assets,
-  provenance, licenses, manifests, publishability, and runtime-ready formats.
+- [Assets](rules/assets/README.md): sourced/generated/prepared assets,
+  provenance, licenses, manifests, publishability, and game-use-ready formats.
 
 Each group has numbered `checks/Q*_NNN_*.md` rules. Rule `001` is the basic
 group check when it matches the task.

@@ -1,4 +1,4 @@
-# State Review Checklist
+﻿# State Review Checklist
 
 Load this reference when reviewing game-state changes, migrations, generated
 files, DevAPI state behavior, fixtures, inventory/equipment refs, or save/load

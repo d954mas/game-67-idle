@@ -1,0 +1,6 @@
+{
+  "reason": "Existing verified CC0 / project-owned starter assets allowed without a manifest record. Assets are per-game now (<game>/assets/); prefixes are repo-relative. New assets must be recorded in manifests or routed to <game>/assets/restricted/, NOT added here. Currently: the template starter cube (Kenney/engine CC0).",
+  "prefixes": [
+    "template/assets/meshes/"
+  ]
+}
