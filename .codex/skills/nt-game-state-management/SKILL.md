@@ -5,24 +5,28 @@ description: "Use when adding, changing, testing, reviewing, or migrating game s
 
 # NT Game State Management
 
-Use this skill to keep game state explicit, typed, migratable, and
-agent-legible.
+Use this skill as the agent-facing router for the reusable Game State feature
+pack in `features/game-state/`. Keep canonical scripts and references in the
+feature pack, not in this skill folder.
 
 ## Start
 
-1. Inspect the relevant schema before call sites:
+1. Read `features/game-state/README.md`.
+2. For install, copy, enable/disable, or template wiring work, read
+   `features/game-state/INSTALL.md`.
+3. Inspect the relevant schema before call sites:
    `state/*.schema.json` in a game project, or `template/state/*.schema.json`
    in this AI Studio repository.
-2. Inspect `scripts/generate_state.py` before
+4. Inspect `features/game-state/scripts/generate_state.py` before
    editing generated state APIs.
-3. Change schema/generator/template, then regenerate. Do not hand-edit generated
+5. Change schema/generator/template, then regenerate. Do not hand-edit generated
    `game_state.*` files.
 
 ## Commands
 
 ```powershell
-py -3.12 .codex/skills/nt-game-state-management/scripts/generate_state.py
-py -3.12 .codex/skills/nt-game-state-management/scripts/generate_state_test.py
+py -3.12 features/game-state/scripts/generate_state.py
+py -3.12 features/game-state/scripts/generate_state_test.py
 ```
 
 Use `--schema` and `--out-dir` for game variants or build-local outputs.
@@ -30,12 +34,14 @@ Use `--schema` and `--out-dir` for game variants or build-local outputs.
 ## Routing
 
 - For state contracts, documents, save envelopes, DevAPI shape, and domain
-  actions, read `references/contract.md`.
+  actions, read `features/game-state/references/contract.md`.
 - For schema-first change workflow, migrations, generated code, and runtime
-  access rules, read `references/workflow.md`.
-- For review, read `references/review.md`.
+  access rules, read `features/game-state/references/workflow.md`.
+- For review, read `features/game-state/references/review.md`.
 - For runtime DevAPI proof, use `nt-runtime-automation`.
-- For playable feature changes that consume state, use `nt-game-feature-iteration`.
+- For playable feature changes that consume state, keep schema/state work here;
+  use `nt-runtime-automation` for live proof and `nt-quality-checks` for
+  acceptance evidence.
 
 ## Rules
 

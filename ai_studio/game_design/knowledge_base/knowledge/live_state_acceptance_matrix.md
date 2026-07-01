@@ -1,4 +1,4 @@
----
+﻿---
 type: Knowledge
 title: Live-State UI Acceptance Matrix
 description: Reusable state-coverage evidence for game UI, player clarity, and art-direction acceptance across future prototypes.
@@ -71,7 +71,7 @@ assets with transparent/chroma edges.
 
 Use reviewed AI Studio asset-prep tools for source alpha/cutout evidence and
 Quality rules for player-facing proof. Source-sheet and cutout checks live under
-`ai_studio/assets/prep/`; broad player-facing acceptance lives under
+`ai_studio/assets/tools/`; broad player-facing acceptance lives under
 `ai_studio/quality/rules/player_clarity/` and `ai_studio/quality/rules/assets/`.
 
 ## Quality Review Usage

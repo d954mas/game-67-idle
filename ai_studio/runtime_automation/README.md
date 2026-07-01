@@ -46,6 +46,5 @@ Use this module when the agent needs local runtime evidence: state snapshots,
 screenshots, visual health checks, readability zooms, or repeatable native
 iteration probes.
 
-Game-specific context, startup gates, and feature iteration belong inside
-`games/<game-id>/` or the matching skill. State-code generation lives inside
-`.codex/skills/nt-game-state-management/`.
+Game-specific context and startup gates belong inside `games/<game-id>/`.
+State-code generation lives inside `features/game-state/`.

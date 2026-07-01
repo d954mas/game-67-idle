@@ -40,7 +40,6 @@
 #endif
 #endif
 
-#include "devapi/game_state_devapi.h"
 #include "render/capture.h"
 #include "render/render_mesh.h"
 #include "systems/sys_move.h"
@@ -48,6 +47,9 @@
 #include "ui/hud.h"
 #include "ui/ui_runtime.h"
 #include "world/world.h"
+#if FEATURE_GAME_STATE
+#include "game_state.h"
+#endif
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -139,7 +141,9 @@ static bool devapi_start(void) {
     fprintf(stderr, "DevAPI listening on 127.0.0.1:%u\n", (unsigned)s_devapi_port);
 #endif
     nt_devapi_register_default();
-    game_state_devapi_register(&s_world);
+#if FEATURE_GAME_STATE
+    game_state_register_devapi();
+#endif
 #ifdef NT_DEVAPI_GROUP_UI
     nt_devapi_ui_register_context("hud", ui_runtime_ctx());
 #endif
@@ -332,6 +336,9 @@ int main(int argc, char **argv) {
     nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
     nt_text_renderer_init();
+#if FEATURE_GAME_STATE
+    game_state_init();
+#endif
 
     s_pack_id = nt_hash32_str("game");
     nt_resource_mount(s_pack_id, 100);

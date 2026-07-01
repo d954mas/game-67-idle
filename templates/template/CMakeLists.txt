@@ -17,6 +17,9 @@ if(NOT DEFINED GAME_DEVAPI_ENABLED)
         set(GAME_DEVAPI_ENABLED ON CACHE BOOL "Build the template with engine DevAPI automation support." FORCE)
     endif()
 endif()
+if(NOT DEFINED FEATURE_GAME_STATE)
+    set(FEATURE_GAME_STATE ON CACHE BOOL "Build the installed game-state feature." FORCE)
+endif()
 
 if(GAME_DEVAPI_ENABLED)
     set(NT_DEVAPI_ENABLED ON CACHE BOOL "Build the engine DevAPI command layer." FORCE)
@@ -46,6 +49,7 @@ set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
 set(GAME_PACK_DIR "${CMAKE_BINARY_DIR}/pack")
 set(GAME_ASSETS_DIR "${GAME_OUTPUT_DIR}/assets")
+set(GAME_SOURCE_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/generated")
 
 # --- asset pack builder (runs at build time -> game.ntpack + asset-id header) ---
 if(NOT EMSCRIPTEN)
@@ -84,7 +88,6 @@ endif()
 # --- game executable (the conductor + systems) ---
 add_executable(${GAME_TARGET}
     src/main.c
-    src/devapi/game_state_devapi.c
     src/ui/hud.c
     src/ui/ui_runtime.c
     src/ui/theme.c
@@ -96,7 +99,49 @@ add_executable(${GAME_TARGET}
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)
 endif()
-target_include_directories(${GAME_TARGET} PRIVATE src "${ENGINE_DIR}/deps/glfw/deps")
+if(FEATURE_GAME_STATE)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
+    set(GAME_STATE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/generate_state.py")
+    set(GAME_STATE_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/game_state.c.in")
+    set(GAME_STATE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state")
+    set(GAME_STATE_GENERATED_HEADER "${GAME_STATE_GENERATED_DIR}/game_state.h")
+    set(GAME_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state.c")
+    set(GAME_STATE_GENERATED_SCHEMA "${GAME_STATE_GENERATED_DIR}/game_state_schema.gen.h")
+    set(GAME_STATE_GENERATED_DEVAPI "${GAME_STATE_GENERATED_DIR}/game_state_devapi.c")
+    add_custom_command(
+        OUTPUT
+            "${GAME_STATE_GENERATED_HEADER}"
+            "${GAME_STATE_GENERATED_SOURCE}"
+            "${GAME_STATE_GENERATED_SCHEMA}"
+            "${GAME_STATE_GENERATED_DEVAPI}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
+        COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
+            --schema "${GAME_STATE_SCHEMA}"
+            --out-dir "${GAME_STATE_GENERATED_DIR}"
+        DEPENDS
+            "${GAME_STATE_SCHEMA}"
+            "${GAME_STATE_GENERATOR}"
+            "${GAME_STATE_TEMPLATE}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        COMMENT "Generating installed game-state feature sources"
+        VERBATIM
+    )
+    target_sources(${GAME_TARGET} PRIVATE
+        "${GAME_STATE_GENERATED_SOURCE}"
+        src/game_storage.c
+        state/migrations/v0_to_v1.c
+    )
+    target_link_libraries(${GAME_TARGET} PRIVATE cjson)
+    target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=1)
+    target_include_directories(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DIR}")
+    if(GAME_DEVAPI_ENABLED)
+        target_sources(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DEVAPI}")
+    endif()
+else()
+    target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=0)
+endif()
+target_include_directories(${GAME_TARGET} PRIVATE src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core nt_app nt_input nt_window nt_gfx nt_text_renderer nt_font
     nt_resource nt_material nt_shared nt_render nt_hash nt_fs nt_log nt_math nt_time

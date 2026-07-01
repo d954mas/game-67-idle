@@ -30,9 +30,23 @@ are in progress — see epic E009.
 Debug builds enable the engine DevAPI path by default (`GAME_DEVAPI_ENABLED=ON`):
 `--devapi <port>` starts the engine TCP transport and exposes engine-owned
 `endpoints`, `command.describe`, `frame/time`, `input`, `ui`, `obs`, and
-`capture.*` groups, plus the template-owned `game.state` snapshot registered from
-`src/devapi/game_state_devapi.c`. Release builds default this off. Game-specific
-commands belong under `src/devapi/` when a copied game needs them.
+`capture.*` groups. The installed `game-state` feature also registers
+`game.state.schema`, `game.state.get`, `game.state.set`, `game.state.patch`,
+`game.state.save`, `game.state.load`, and `game.state.reset` from generated
+sources when both `FEATURE_GAME_STATE` and `GAME_DEVAPI_ENABLED` are on. Release
+builds default DevAPI off, so those command registrations do not ship.
+Game-specific commands belong under `src/devapi/` when a copied game needs them.
+
+Feature flags:
+
+- `FEATURE_GAME_STATE=ON` builds the installed game-state runtime code.
+- `FEATURE_GAME_STATE=OFF` removes generated state runtime sources from the
+  target.
+- `GAME_DEVAPI_ENABLED=ON` enables engine DevAPI groups; generated state DevAPI
+  commands appear only when `FEATURE_GAME_STATE` is also on.
+
+The state schema and migrations live in source under `state/`; CMake generates
+`game_state.*` into `build/<config>/generated/game-state/` before compiling.
 
 Runtime bots and smoke scenarios live under top-level `devapi/`. Start with:
 
@@ -54,5 +68,5 @@ cmake --build build/devapi-debug --target quality_responsive
 
 Bots can import `devapi/responsive_viewports.py` or pass
 `--scenario path.py:prepare_state` to capture the same viewport matrix after a
-specific game moment. Use `game.result("game.state")` or `observe="game.state"`
-when a scenario needs the live World/settings snapshot after an action.
+specific game moment. Use `game.result("game.state.get", {"path": ""})` or a
+semantic game command when a scenario needs state after an action.

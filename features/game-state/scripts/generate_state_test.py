@@ -5,7 +5,7 @@ from pathlib import Path
 import generate_state
 
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[3]
 CLOSED_TOKENS = ("rune_", "fishing_", "Rune", "Fishing", "rune.", "fishing.")
 
 
@@ -35,6 +35,11 @@ def generate_variant(schema_name: str, out_dir: Path) -> str:
 
 
 class StateCodegenTests(unittest.TestCase):
+    def test_default_template_out_dir_uses_build_generated_folder(self):
+        schema = ROOT / "templates" / "template" / "state" / "game_state.schema.json"
+        expected = ROOT / "templates" / "template" / "build" / "generated" / "game-state"
+        self.assertEqual(generate_state.default_out_dir(schema), expected)
+
     def test_clean_schema_excludes_closed_prototype_fields(self):
         with tempfile.TemporaryDirectory() as tmp:
             text = generate_variant("game_state.schema.json", Path(tmp) / "clean")

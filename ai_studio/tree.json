@@ -162,6 +162,183 @@
                   "workspace",
                   "docs"
                 ]
+              },
+              {
+                "id": "features:game-state",
+                "kind": "feature",
+                "path": "features/game-state",
+                "title": "game-state/",
+                "description": "Reusable schema-first game-state feature pack with code generation scripts, state contract references, migration rules, and DevAPI adapter generation.",
+                "role": "copyable game-state feature pack",
+                "tags": [
+                  "features",
+                  "game-state",
+                  "schema",
+                  "codegen"
+                ],
+                "children": [
+                  {
+                    "id": "features:game-state-readme",
+                    "kind": "doc",
+                    "path": "features/game-state/README.md",
+                    "title": "README.md",
+                    "description": "Game State feature entrypoint: purpose, contents, integration model, commands, boundaries, and feature-pack example rules.",
+                    "role": "game-state feature contract",
+                    "tags": [
+                      "features",
+                      "game-state",
+                      "docs"
+                    ]
+                  },
+                  {
+                    "id": "features:game-state-install",
+                    "kind": "doc",
+                    "path": "features/game-state/INSTALL.md",
+                    "title": "INSTALL.md",
+                    "description": "Install manual for adding, enabling, disabling, verifying, and uninstalling the Game State feature in templates and games.",
+                    "role": "game-state install manual",
+                    "tags": [
+                      "features",
+                      "game-state",
+                      "install"
+                    ]
+                  },
+                  {
+                    "id": "features:game-state-manifest",
+                    "kind": "config",
+                    "path": "features/game-state/feature.json",
+                    "title": "feature.json",
+                    "description": "Feature metadata for the reusable Game State pack: status, copy model, dependencies, commands, and generated outputs.",
+                    "role": "game-state feature metadata",
+                    "tags": [
+                      "features",
+                      "game-state",
+                      "metadata"
+                    ]
+                  },
+                  {
+                    "id": "features:game-state-skill",
+                    "kind": "skill",
+                    "path": ".codex/skills/nt-game-state-management",
+                    "title": "nt-game-state-management",
+                    "description": "Agent-facing skill router for the Game State feature pack. Canonical scripts and references live in features/game-state/.",
+                    "role": "game-state agent router",
+                    "tags": [
+                      "features",
+                      "game-state",
+                      "skill",
+                      "agent-facing"
+                    ]
+                  },
+                  {
+                    "id": "features:game-state-references",
+                    "kind": "group",
+                    "path": "features/game-state/references",
+                    "title": "References",
+                    "description": "State contract, workflow, and review references for schema-first game-state work.",
+                    "role": "game-state reference group",
+                    "tags": [
+                      "features",
+                      "game-state",
+                      "reference"
+                    ],
+                    "children": [
+                      {
+                        "id": "features:game-state-contract",
+                        "kind": "doc",
+                        "path": "features/game-state/references/contract.md",
+                        "title": "contract.md",
+                        "description": "Reference for state documents, save envelopes, storage keys, codegen, dirty/autosave behavior, migrations, and domain actions.",
+                        "role": "game-state contract reference",
+                        "tags": [
+                          "features",
+                          "game-state",
+                          "contract"
+                        ]
+                      },
+                      {
+                        "id": "features:game-state-workflow",
+                        "kind": "doc",
+                        "path": "features/game-state/references/workflow.md",
+                        "title": "workflow.md",
+                        "description": "Workflow for schema edits, generator/template changes, migrations, generated APIs, domain actions, and DevAPI state commands.",
+                        "role": "game-state workflow reference",
+                        "tags": [
+                          "features",
+                          "game-state",
+                          "workflow"
+                        ]
+                      },
+                      {
+                        "id": "features:game-state-review",
+                        "kind": "doc",
+                        "path": "features/game-state/references/review.md",
+                        "title": "review.md",
+                        "description": "Review checklist for state schemas, migrations, generated files, DevAPI state behavior, fixtures, and save/load behavior.",
+                        "role": "game-state review reference",
+                        "tags": [
+                          "features",
+                          "game-state",
+                          "review"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "id": "features:game-state-scripts",
+                    "kind": "group",
+                    "path": "features/game-state/scripts",
+                    "title": "Scripts",
+                    "description": "Game State code generator, C source template, and generator tests.",
+                    "role": "game-state codegen scripts",
+                    "tags": [
+                      "features",
+                      "game-state",
+                      "codegen"
+                    ],
+                    "children": [
+                      {
+                        "id": "features:game-state-generator",
+                        "kind": "tool",
+                        "path": "features/game-state/scripts/generate_state.py",
+                        "title": "generate_state.py",
+                        "description": "Generates game_state.h, game_state.c, game_state_devapi.c, and game_state_schema.gen.h from a supported state schema.",
+                        "role": "game-state generator",
+                        "tags": [
+                          "features",
+                          "game-state",
+                          "codegen"
+                        ]
+                      },
+                      {
+                        "id": "features:game-state-generator-test",
+                        "kind": "test",
+                        "path": "features/game-state/scripts/generate_state_test.py",
+                        "title": "generate_state_test.py",
+                        "description": "Generator regression tests for clean template schema output and required generated files.",
+                        "role": "game-state generator tests",
+                        "tags": [
+                          "features",
+                          "game-state",
+                          "test"
+                        ]
+                      },
+                      {
+                        "id": "features:game-state-c-template",
+                        "kind": "template",
+                        "path": "features/game-state/scripts/game_state.c.in",
+                        "title": "game_state.c.in",
+                        "description": "C source template used by the schema-first Game State generator.",
+                        "role": "game-state C source template",
+                        "tags": [
+                          "features",
+                          "game-state",
+                          "template"
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           },

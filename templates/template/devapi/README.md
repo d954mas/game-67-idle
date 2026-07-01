@@ -31,8 +31,9 @@ The bot:
 4. waits for `ui.tree`;
 5. verifies the stable `settings/gear` UI id is visible;
 6. toggles the engine render gate with `render.set_enabled`;
-7. captures a PNG proof image.
-8. reads `game.state`, the template-owned live snapshot of World/settings state.
+7. captures a PNG proof image;
+8. reads `game.state.schema` and `game.state.get` from the installed
+   `game-state` feature.
 
 Use it as the pattern for real game bots:
 
@@ -40,7 +41,8 @@ Use it as the pattern for real game bots:
 - put game-specific actions in this folder;
 - use stable UI ids from `ui.tree`, not labels or array indexes;
 - follow observe -> act -> `frame.wait` -> observe;
-- use `game.state` as the default place for game-owned assertions;
+- use `game.state.get` as the default raw-state assertion point, or a semantic
+  `game.action.*` command when the scenario checks gameplay rules;
 - write screenshots or JSON summaries to ignored `tmp/` paths.
 
 ## Responsive Viewport Evidence

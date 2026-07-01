@@ -45,7 +45,8 @@ REQUIRED_METHODS = {
     "ui.tree",
     "ui.click",
     "capture.frame",
-    "game.state",
+    "game.state.schema",
+    "game.state.get",
 }
 
 
@@ -100,17 +101,29 @@ def find_ui_node(tree: Any, element_id: str) -> dict[str, Any] | None:
     return None
 
 
+def validate_game_state_schema(schema: Any) -> dict[str, Any]:
+    if not isinstance(schema, dict):
+        raise DevApiError(f"game.state.schema returned {type(schema).__name__}, expected object")
+    if schema.get("schema") != "game_seed.state":
+        raise DevApiError(f"unexpected game.state.schema id: {schema.get('schema')!r}")
+    if schema.get("document") != "game":
+        raise DevApiError(f"unexpected game.state.schema document: {schema.get('document')!r}")
+    if not isinstance(schema.get("fields"), list):
+        raise DevApiError("game.state.schema missing fields array")
+    return schema
+
+
 def validate_game_state(state: Any) -> dict[str, Any]:
     if not isinstance(state, dict):
-        raise DevApiError(f"game.state returned {type(state).__name__}, expected object")
-    if state.get("schema") != "template.game_state.snapshot.v1":
-        raise DevApiError(f"unexpected game.state schema: {state.get('schema')!r}")
-    live_state = state.get("state")
-    if not isinstance(live_state, dict):
-        raise DevApiError("game.state missing state object")
-    for key in ("player", "settings"):
-        if not isinstance(live_state.get(key), dict):
-            raise DevApiError(f"game.state missing state.{key} object")
+        raise DevApiError(f"game.state.get returned {type(state).__name__}, expected object")
+    if state.get("path") != "":
+        raise DevApiError(f"unexpected game.state.get path: {state.get('path')!r}")
+    value = state.get("value")
+    if not isinstance(value, dict):
+        raise DevApiError("game.state.get missing value object")
+    for key in ("settings", "tutorial", "inventory"):
+        if not isinstance(value.get(key), dict):
+            raise DevApiError(f"game.state.get missing value.{key} object")
     return state
 
 
@@ -140,11 +153,12 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
 
     described = {
         method: game.result("command.describe", {"method": method})
-        for method in ("render.set_enabled", "ui.click", "capture.frame", "game.state")
+        for method in ("render.set_enabled", "ui.click", "capture.frame", "game.state.schema", "game.state.get")
     }
 
     closed_tree = wait_for_ui_id(game, "settings/gear")
-    state_before = validate_game_state(game.result("game.state"))
+    state_schema = validate_game_state_schema(game.result("game.state.schema"))
+    state_before = validate_game_state(game.result("game.state.get", {"path": ""}))
     render_before = game.result("render.info")
     game.result("render.set_enabled", {"enabled": False})
     game.wait_frames(2)
@@ -165,6 +179,7 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
         "described_methods": sorted(described.keys()),
         "ui_tree_nodes": len(ui_nodes(closed_tree)),
         "stable_ui_id": "settings/gear",
+        "game_state_schema": state_schema,
         "game_state": state_before,
         "render_before": render_before,
         "render_disabled": render_disabled,

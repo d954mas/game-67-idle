@@ -9,8 +9,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parents[4]
-TOOL_LABEL = ".codex/skills/nt-game-state-management/scripts/generate_state.py"
+ROOT = Path(__file__).resolve().parents[3]
+TOOL_LABEL = "features/game-state/scripts/generate_state.py"
 
 
 def default_schema_path() -> Path:
@@ -21,10 +21,16 @@ def default_schema_path() -> Path:
 
 
 def default_out_dir(schema_path: Path | None = None) -> Path:
-    schema = schema_path or default_schema_path()
-    if schema.as_posix().endswith("templates/template/state/game_state.schema.json"):
-        return ROOT / "templates" / "template" / "src" / "generated"
-    return ROOT / "src" / "generated"
+    schema = (schema_path or default_schema_path()).resolve()
+    try:
+        parts = schema.relative_to(ROOT).parts
+    except ValueError:
+        return schema.parent.parent / "build" / "generated" / "game-state"
+    if len(parts) >= 4 and parts[0] in {"templates", "games"} and parts[2] == "state":
+        return ROOT / parts[0] / parts[1] / "build" / "generated" / "game-state"
+    if len(parts) >= 2 and parts[0] == "state":
+        return ROOT / "build" / "generated" / "game-state"
+    return schema.parent.parent / "build" / "generated" / "game-state"
 
 
 SCHEMA_PATH = default_schema_path()

@@ -28,12 +28,15 @@ class FakeGame:
         if method == "ui.tree":
             nodes = [{"id_string": "settings/gear"}]
             return {"nodes": nodes}
-        if method == "game.state":
+        if method == "game.state.schema":
+            return {"schema": "game_seed.state", "document": "game", "fields": []}
+        if method == "game.state.get":
             return {
-                "schema": "template.game_state.snapshot.v1",
-                "state": {
-                    "player": {"x": 0, "z": 0, "yaw": 0, "spawned": True},
-                    "settings": {"master_volume": 0.8, "music_volume": 0.7, "sfx_volume": 0.9},
+                "path": params.get("path", "") if params else "",
+                "value": {
+                    "settings": {"master_volume": 0.8, "sfx_volume": 0.9},
+                    "tutorial": {"done": False},
+                    "inventory": {"item_ids": []},
                 },
             }
         if method == "frame.current":
@@ -70,10 +73,16 @@ class SmokeBotTest(unittest.TestCase):
         self.assertEqual(smoke_bot.find_ui_node(tree, "settings/gear"), tree["nodes"][0])
 
     def test_validate_game_state_requires_template_snapshot_shape(self):
-        state = {"schema": "template.game_state.snapshot.v1", "state": {"player": {}, "settings": {}}}
+        state = {"path": "", "value": {"settings": {}, "tutorial": {}, "inventory": {}}}
         self.assertIs(smoke_bot.validate_game_state(state), state)
         with self.assertRaises(smoke_bot.DevApiError):
-            smoke_bot.validate_game_state({"schema": "wrong"})
+            smoke_bot.validate_game_state({"path": "", "value": {"settings": {}}})
+
+    def test_validate_game_state_schema_requires_template_schema(self):
+        schema = {"schema": "game_seed.state", "document": "game", "fields": []}
+        self.assertIs(smoke_bot.validate_game_state_schema(schema), schema)
+        with self.assertRaises(smoke_bot.DevApiError):
+            smoke_bot.validate_game_state_schema({"schema": "wrong"})
 
     def test_default_executable_uses_ai_studio_game_exe_override(self):
         old = os.environ.get("AI_STUDIO_GAME_EXE")
@@ -92,7 +101,8 @@ class SmokeBotTest(unittest.TestCase):
             summary = smoke_bot.run_smoke(game, Path(tmp), audit=False)
             self.assertEqual(summary["stable_ui_id"], "settings/gear")
             self.assertEqual(summary["action"], "render.set_enabled false -> true")
-            self.assertEqual(summary["game_state"]["schema"], "template.game_state.snapshot.v1")
+            self.assertEqual(summary["game_state_schema"]["schema"], "game_seed.state")
+            self.assertEqual(summary["game_state"]["path"], "")
             self.assertTrue(summary["render_enabled"]["enabled"])
             self.assertTrue(Path(summary["summary"]).exists())
             self.assertTrue(Path(summary["screenshot"]).exists())

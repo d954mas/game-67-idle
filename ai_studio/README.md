@@ -53,14 +53,16 @@ Load only the route that matches the current task:
   `node ai_studio/taskboard/cli.mjs context --json`.
 - Runtime evidence, DevAPI client, screenshots, pixel health, and UI
   readability proof: `ai_studio/runtime_automation/README.md`.
-- Schema-first game-state generation:
-  `.codex/skills/nt-game-state-management/SKILL.md`.
+- Reusable schema-first game-state feature:
+  `features/game-state/README.md`.
 - AI Studio architecture and refactor tree: `ai_studio/tree.json` and
   `ai_studio/architecture_map/README.md`.
 - AI Studio browser entry point:
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open`.
 - Asset browsing and review:
   `http://127.0.0.1:8765/asset_viewer/`.
+- Manual image slicing and alpha prep:
+  `http://127.0.0.1:8765/asset_prep/`.
 - Architecture map validation report:
   `node ai_studio/architecture_map/validate_map.mjs`.
 
