@@ -2,7 +2,8 @@
 
 The repo root is the **shared pipeline**, not a game: the engine (submodule),
 build/asset/validation tools, AI skills, docs, the taskboard, and reusable design
-knowledge. Templates live under `templates/`; each **game is its own folder** under `games/`, copied from a template.
+knowledge. Templates live under `templates/`; reusable feature packs live under
+`features/`; each **game is its own folder** under `games/`, copied from a template.
 
 - Reusable AI workflow: `ai_studio/README.md`, `AGENTS.md`, `tasks/`, `.codex/skills/`.
 - Reusable design knowledge: `gamedesign/knowledge/`; sources `gamedesign/sources/`.
@@ -10,6 +11,7 @@ knowledge. Templates live under `templates/`; each **game is its own folder** un
 - Shared asset library lives OUTSIDE the repo (private); games pull project-local
   copies. Paid/licensed binaries never enter git - see the restricted-asset rule
   in `AGENTS.md` + `ai_studio/assets/storage/license/`.
+- Reusable feature packs: `features/` (copy into a template or game, then customize).
 - Closed prototypes are preserved as git tags.
 
 ## Start a new game
@@ -19,7 +21,7 @@ git submodule update --init --recursive
 node ai_studio/bootstrap/new_game.mjs --id <game-id>   # copies templates/template/ -> games/<game-id>/
 ```
 
-Then customise the copy and pull assets/systems. The `templates/template/` folder itself is
+Then customise the copy and pull assets/features. The `templates/template/` folder itself is
 the runnable reference (settings UI on nt_ui widgets, coloured + textured mesh
 paths, a movement system, screenshot capture).
 

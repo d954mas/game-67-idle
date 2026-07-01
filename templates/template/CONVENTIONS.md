@@ -34,8 +34,8 @@ dumps a whole game into one file. Keep them.
 - **God-struct:** one fat `Entity`/struct every system reads (AoS). Use per-system
   SoA; an entity is a handle indexing into system data.
 - **Clone-and-own as a strategy:** don't copy a previous game and mutate it. Start
-  from `templates/template/`, pull reusable systems from `systems_showcase/`, and promote good
-  systems back so the shared versions stay best. Engine fixes come from the one
+  from `templates/template/`, pull reusable feature packs from `features/`, and promote good
+  features back so the shared versions stay best. Engine fixes come from the one
   shared `external/neotolis-engine`.
 
 ## Assets

@@ -18,12 +18,12 @@ The page must not infer architecture from the repository. New files are not
 silently added to the map. They appear in validation until a human decides
 whether to map, ignore, assign to the review backlog, or delete them.
 
-`templates/` and `games/` are shown as workspace containers. They use
+`templates/`, `features/`, and `games/` are shown as workspace containers. They use
 `coverage: "self"` so the container path is checked without automatically
 covering every child folder. Validation scans immediate child directories under
-those roots; new `templates/<id>` or `games/<id>` folders appear as unmapped
+those roots; new `templates/<id>`, `features/<id>`, or `games/<id>` folders appear as unmapped
 outside-AI-Studio paths until they are intentionally added to `tree.json`.
-Files inside each game or template folder are not listed in the architecture
+Files inside each game, template, or feature folder are not listed in the architecture
 map.
 
 Taskboard data is not architecture map data. `tasks/active/`, `tasks/archive/`,
@@ -63,7 +63,7 @@ http://127.0.0.1:8765/architecture_map/
 - `unmappedInAiStudio`: a file exists under `ai_studio/`, but is not listed or
   covered by a mapped directory in `tree.json`.
 - `unmappedOutsideAiStudio`: a scanned path exists outside `ai_studio/` and is
-  not explicitly mapped. For `templates/` and `games/`, scanned paths are
+  not explicitly mapped. For `templates/`, `features/`, and `games/`, scanned paths are
   immediate child directories, not files inside those directories.
 - `missingDescriptions`: a visible node lacks a useful description.
 

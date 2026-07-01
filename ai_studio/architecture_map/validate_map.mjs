@@ -14,6 +14,7 @@ const defaultScanRoots = [
   "GAME_PROJECT.md",
   ".codex/skills",
   { path: "templates", mode: "child-directories" },
+  { path: "features", mode: "child-directories" },
   { path: "games", mode: "child-directories" },
 ];
 

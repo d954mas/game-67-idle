@@ -12,3 +12,6 @@ assets alongside template and library sources.
 
 `games/games.json` is not a record of which template a game came from. Template
 choice is only used at creation time because the template is copied.
+
+Reusable feature packs can be copied from `features/`, but after copying the
+game owns and may customize its local feature code, assets, and state.

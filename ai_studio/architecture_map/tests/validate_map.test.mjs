@@ -202,7 +202,7 @@ test("child-directory scan roots report new folders without scanning their files
   assert.deepEqual(report.issues.unmappedOutsideAiStudio, [{ path: "templates/new-template" }]);
 });
 
-test("repo tree maps game and template folders without listing their files", () => {
+test("repo tree maps game, template, and feature folders without listing their files", () => {
   const nodes = collectNodes(loadRepoTreeRoot());
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const paths = nodes.map((node) => node.path).filter(Boolean);
@@ -210,9 +210,13 @@ test("repo tree maps game and template folders without listing their files", () 
   assert.equal(byId.get("workspace:templates")?.path, "templates");
   assert.equal(byId.get("workspace:templates")?.coverage, "self");
   assert.equal(byId.get("workspace:template:template")?.path, "templates/template");
+  assert.equal(byId.get("workspace:features")?.path, "features");
+  assert.equal(byId.get("workspace:features")?.coverage, "self");
+  assert.equal(byId.get("workspace:features-readme")?.path, "features/README.md");
   assert.equal(byId.get("workspace:games")?.path, "games");
   assert.equal(byId.get("workspace:games")?.coverage, "self");
 
   assert.deepEqual(paths.filter((path) => path.startsWith("templates/template/")), []);
+  assert.deepEqual(paths.filter((path) => path.startsWith("features/") && path.split("/").length > 2), []);
   assert.deepEqual(paths.filter((path) => path.startsWith("games/") && path.split("/").length > 2), []);
 });

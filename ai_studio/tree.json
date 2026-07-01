@@ -7,7 +7,7 @@
     "subtitle": "repo roots",
     "kind": "root",
     "color": "#172033",
-    "description": "Clean AI Studio architecture tree. Reviewed modules live under ai_studio/, while game and template workspace folders are shown as shallow roots.",
+    "description": "Clean AI Studio architecture tree. Reviewed modules live under ai_studio/, while game, feature, and template workspace folders are shown as shallow roots.",
     "tags": [
       "reviewed-only",
       "workspace-roots",
@@ -30,14 +30,15 @@
       {
         "id": "workspace-folders",
         "title": "Workspace Folders",
-        "subtitle": "games and templates",
+        "subtitle": "games, templates, and features",
         "kind": "group",
         "color": "#64748b",
-        "description": "Repository workspace roots for reusable templates and independent game folders. The map shows folder ownership boundaries here, not files inside games or templates.",
-        "role": "game and template workspace roots",
+        "description": "Repository workspace roots for reusable templates, copyable feature packs, and independent game folders. The map shows folder ownership boundaries here, not implementation files inside games, templates, or features.",
+        "role": "game, template, and feature workspace roots",
         "tags": [
           "workspace",
           "templates",
+          "features",
           "games"
         ],
         "children": [
@@ -64,6 +65,33 @@
                 "tags": [
                   "template",
                   "game-template"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "workspace:features",
+            "kind": "dir",
+            "path": "features",
+            "coverage": "self",
+            "title": "features/",
+            "description": "Container for reusable feature pack folders. Immediate child folders are explicit map nodes; files inside each feature remain feature-owned implementation detail.",
+            "role": "feature pack root folder",
+            "tags": [
+              "features",
+              "workspace"
+            ],
+            "children": [
+              {
+                "id": "workspace:features-readme",
+                "kind": "doc",
+                "path": "features/README.md",
+                "title": "README.md",
+                "description": "Defines the feature pack copy model, expected folder shape, and rules for copyable game capabilities.",
+                "role": "feature pack contract",
+                "tags": [
+                  "features",
+                  "contract"
                 ]
               }
             ]
@@ -367,7 +395,7 @@
             "kind": "doc",
             "path": "ai_studio/bootstrap/TEMPLATE.md",
             "title": "TEMPLATE.md",
-            "description": "Human explanation of the template copy model, reuse tiers, systems showcase, seed shell, and game-only boundaries.",
+            "description": "Human explanation of the template copy model, reuse tiers, feature packs, seed shell, and game-only boundaries.",
             "role": "template copy model documentation",
             "tags": [
               "bootstrap",

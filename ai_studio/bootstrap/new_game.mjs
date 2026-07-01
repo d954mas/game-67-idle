@@ -88,4 +88,4 @@ console.log(`  cmake -S games/${a.id} -B games/${a.id}/build -G Ninja -DCMAKE_C_
 console.log(`  cmake --build games/${a.id}/build`);
 console.log(`  games/${a.id}/build/bin/game.exe`);
 console.log("\nThen: set the title/pack/concept, pull library assets (skill nt-asset-workflow),");
-console.log("pull systems from systems_showcase/ as needed, and build your game on top.");
+console.log("copy feature packs from features/ as needed, and build your game on top.");

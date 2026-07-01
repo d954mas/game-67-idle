@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-07-01T05:27:32.435Z",
+  "generatedAt": "2026-07-01T07:14:58.745Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
@@ -13,12 +13,16 @@
       "mode": "child-directories"
     },
     {
+      "path": "features",
+      "mode": "child-directories"
+    },
+    {
       "path": "games",
       "mode": "child-directories"
     }
   ],
   "summary": {
-    "mappedPaths": 272,
+    "mappedPaths": 274,
     "scannedPaths": 262,
     "missingInRepo": 0,
     "duplicateMappings": 0,
