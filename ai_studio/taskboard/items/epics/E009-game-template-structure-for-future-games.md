@@ -2,11 +2,11 @@
 id: E009
 title: Game template + structure for future games
 status: idea
-project: P002
+project: P001
 priority: P2
-tags: []
+tags: [template]
 created: 2026-06-24
-updated: 2026-06-24
+updated: 2026-07-01
 ---
 
 ## Goal
@@ -16,3 +16,6 @@ updated: 2026-06-24
 ## Out of scope
 
 ## Log
+
+- 2026-07-01: moved from the dropped shared Game Projects bucket to AI Studio;
+  this is reusable template/workflow planning, not a concrete game project.

@@ -24,15 +24,16 @@ owns acceptance rules; `ai_studio/taskboard/` owns durable work state.
 
 ```powershell
 py -3.12 -m pytest ai_studio/runtime_automation
-py -3.12 ai_studio/runtime_automation/devapi_cli.py 9123 endpoints
-py -3.12 ai_studio/runtime_automation/iterate.py 9123 --reuse
+py -3.12 ai_studio/runtime_automation/devapi_cli.py 17890 endpoints
+py -3.12 ai_studio/runtime_automation/iterate.py 17890 --reuse
 py -3.12 ai_studio/runtime_automation/ui_readability.py tmp/captures/screenshot.png
 py -3.12 ai_studio/runtime_automation/pixel_health.py tmp/captures/screenshot.png
 ```
 
 Set `AI_STUDIO_GAME_EXE` when driving a specific game build. Without it, the
 DevAPI launcher looks for the template executable at
-`templates/template/tmp/bin/game.exe`.
+`templates/template/build/bin/game.exe`. The default port follows the engine
+default `17890`; override with `AI_STUDIO_DEVAPI_PORT` or `NT_DEVAPI_PORT`.
 
 ## Skill
 

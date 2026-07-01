@@ -7,7 +7,8 @@ or changing the local automation helpers.
 
 1. Read `ai_studio/runtime_automation/README.md`.
 2. Find the active game's normal launch/runbook before creating ad hoc scripts.
-3. Start or reuse the native debug build with DevAPI enabled.
+3. Start or reuse the native debug build with DevAPI enabled; the engine default
+   native port is `17890` unless the game runbook overrides it.
 4. Capture launch stdout/stderr to an ignored log path such as `build/logs/`.
 5. Discover `endpoints`; use `command.describe` before unfamiliar commands.
 6. Use observe -> act -> `frame.wait` -> observe.
@@ -18,7 +19,8 @@ or changing the local automation helpers.
 ## Shared Helpers
 
 - `ai_studio/runtime_automation/devapi_client.py`: Python client, launch/reuse,
-  frame waits, screenshots, recordings, and convenience helpers.
+  frame waits, engine-native screenshot capture, recordings, and convenience
+  helpers.
 - `ai_studio/runtime_automation/devapi_cli.py`: one-shot JSON command client.
 - `ai_studio/runtime_automation/iterate.py`: native visual iteration loop.
 - `ai_studio/runtime_automation/state_capture.py`: multi-state screenshot

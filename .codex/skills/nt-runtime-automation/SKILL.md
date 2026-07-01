@@ -6,7 +6,9 @@ description: "Use when working with AI Studio runtime automation for a running g
 # NT Runtime Automation
 
 Use this skill to collect runtime evidence or change the local runtime proof
-helpers owned by `ai_studio/runtime_automation/`.
+helpers owned by `ai_studio/runtime_automation/`. The skill is the workflow
+entrypoint; reusable Python clients, capture helpers, and proof tooling stay in
+the reviewed AI Studio module.
 
 ## Load Only What Applies
 

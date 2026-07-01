@@ -1,10 +1,10 @@
 ---
 id: P002
 title: Game Projects
-status: active
+status: dropped
 kind: game
 target: games
-priority: P1
+priority: P3
 tags: [games, prototypes]
 created: 2026-07-01
 updated: 2026-07-01
@@ -12,22 +12,23 @@ updated: 2026-07-01
 
 ## Goal
 
-Track game-specific prototype and template work without mixing it into reusable
-AI Studio pipeline ownership.
+Legacy shared game bucket retained only as closed history. Active game work is
+tracked by one project per concrete `games/<game-id>` folder.
 
 ## In scope
 
-- Future folders under `games/<game-id>/`.
-- Game template structure, playable prototype kickoff, and first-slice task
-  routing.
-- Per-game epics and tasks created by the Game Project module.
+- None for active planning.
 
 ## Out of scope
 
-- Reusable AI Studio workflow changes unless they are moved to the AI Studio
-  project.
-- Closed prototype history unless linked from active work.
+- Concrete game work; create or use the matching `games/<game-id>` Taskboard
+  project instead.
+- Reusable template or AI Studio workflow changes; keep those under the AI
+  Studio project until a concrete template/game owner exists.
 
 ## Log
 
 - 2026-07-01: created as the top-level Taskboard project for game/prototype work.
+- 2026-07-01: dropped because Taskboard should not have a shared "Game
+  Projects" owner; each active game gets its own project when
+  `games/new_game.mjs` creates `games/<game-id>`.

@@ -4,7 +4,7 @@
 import json
 import sys
 
-from devapi_client import DevApiClient
+from devapi_client import DEFAULT_DEVAPI_PORT, DevApiClient
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -20,7 +20,7 @@ def parse_params(args):
 
 
 def main() -> int:
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 9123
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_DEVAPI_PORT
     client = DevApiClient(port)
     args = sys.argv[2:]
     if args:

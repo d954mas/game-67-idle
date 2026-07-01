@@ -21,6 +21,7 @@ static bool s_open;
 static float s_master = 0.8F, s_music = 0.7F, s_sfx = 0.9F;
 
 void sys_settings_force_open(void) { s_open = true; }
+bool sys_settings_is_open(void) { return s_open; }
 float sys_settings_master(void) { return s_master; }
 float sys_settings_music(void) { return s_music; }
 float sys_settings_sfx(void) { return s_sfx; }
@@ -40,12 +41,15 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
     // Root: full screen; gear button parked top-right.
     CLAY({.id = CLAY_ID("settings_root"),
           .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childAlignment = {CLAY_ALIGN_X_RIGHT, CLAY_ALIGN_Y_TOP}}}) {
-        const uint32_t gear_id = nt_ui_id("settings/gear");
-        nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), gear_id, &g_theme.button,
-                           &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(150), CLAY_SIZING_FIXED(48)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}, true, NULL);
-        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Settings", &g_theme.button_label);
-        if (nt_ui_button_end(ctx)) {
-            s_open = !s_open;
+        CLAY({.id = CLAY_ID("settings/gear"), .layout = {.sizing = {CLAY_SIZING_FIXED(150), CLAY_SIZING_FIXED(48)}}}) {
+            const uint32_t gear_id = nt_ui_id("settings/gear/button");
+            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), gear_id, &g_theme.button,
+                               &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
+                               true, NULL);
+            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Settings", &g_theme.button_label);
+            if (nt_ui_button_end(ctx)) {
+                s_open = !s_open;
+            }
         }
     }
 
@@ -70,32 +74,38 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
 
     // Action row: hold-to-reset (long press) + close.
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_LEFT_TO_RIGHT, .childGap = 12, .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
-        const uint32_t reset_id = nt_ui_id("settings/reset");
-        const nt_ui_events_cfg_t hold = {.long_press_secs = RESET_HOLD_SECONDS, .double_click = false};
-        nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), reset_id, &g_theme.button_danger,
-                           &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(48)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}, true, &hold);
-        const nt_ui_events_t re = nt_ui_query_events(ctx, reset_id);
-        char rlabel[48];
-        if (re.hold_progress > 0.0F && re.hold_progress < 1.0F) {
-            (void)snprintf(rlabel, sizeof rlabel, "Hold to reset  %d%%", (int)(re.hold_progress * 100.0F));
-        } else {
-            (void)snprintf(rlabel, sizeof rlabel, "Hold to reset");
-        }
-        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), rlabel, &g_theme.label);
-        (void)nt_ui_button_end(ctx);
-        if (re.long_pressed) {
-            w->player_x = 0.0F;
-            w->player_z = 0.0F;
-            w->player_yaw = 0.0F;
-            s_open = false;
+        CLAY({.id = CLAY_ID("settings/reset"), .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(48)}}}) {
+            const uint32_t reset_id = nt_ui_id("settings/reset/button");
+            const nt_ui_events_cfg_t hold = {.long_press_secs = RESET_HOLD_SECONDS, .double_click = false};
+            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), reset_id, &g_theme.button_danger,
+                               &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
+                               true, &hold);
+            const nt_ui_events_t re = nt_ui_query_events(ctx, reset_id);
+            char rlabel[48];
+            if (re.hold_progress > 0.0F && re.hold_progress < 1.0F) {
+                (void)snprintf(rlabel, sizeof rlabel, "Hold to reset  %d%%", (int)(re.hold_progress * 100.0F));
+            } else {
+                (void)snprintf(rlabel, sizeof rlabel, "Hold to reset");
+            }
+            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), rlabel, &g_theme.label);
+            (void)nt_ui_button_end(ctx);
+            if (re.long_pressed) {
+                w->player_x = 0.0F;
+                w->player_z = 0.0F;
+                w->player_yaw = 0.0F;
+                s_open = false;
+            }
         }
 
-        const uint32_t close_id = nt_ui_id("settings/close");
-        nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), close_id, &g_theme.button,
-                           &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(120), CLAY_SIZING_FIXED(48)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}, true, NULL);
-        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Close", &g_theme.button_label);
-        if (nt_ui_button_end(ctx)) {
-            s_open = false;
+        CLAY({.id = CLAY_ID("settings/close"), .layout = {.sizing = {CLAY_SIZING_FIXED(120), CLAY_SIZING_FIXED(48)}}}) {
+            const uint32_t close_id = nt_ui_id("settings/close/button");
+            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), close_id, &g_theme.button,
+                               &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
+                               true, NULL);
+            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Close", &g_theme.button_label);
+            if (nt_ui_button_end(ctx)) {
+                s_open = false;
+            }
         }
     }
     nt_ui_panel_end(ctx);

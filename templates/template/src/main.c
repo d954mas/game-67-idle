@@ -4,6 +4,7 @@
 // frame(); it never grows this file with gameplay rules.
 #include "app/nt_app.h"
 #include "core/nt_core.h"
+#include "core/nt_platform.h"
 #include "font/nt_font.h"
 #include "fs/nt_fs.h"
 #include "graphics/nt_gfx.h"
@@ -20,6 +21,26 @@
 #include "time/nt_time.h"
 #include "window/nt_window.h"
 
+#if NT_DEVAPI_ENABLED
+#include "devapi/nt_devapi.h"
+#ifdef NT_PLATFORM_WEB
+#include "devapi/nt_devapi_web.h"
+#else
+#include "devapi/nt_devapi_net.h"
+#endif
+#ifdef NT_DEVAPI_GROUP_CAPTURE
+#include "devapi/nt_devapi_capture.h"
+#endif
+#ifdef NT_DEVAPI_GROUP_OBS
+#include "log/nt_log_ring.h"
+#include "metrics/nt_metrics.h"
+#endif
+#ifndef NT_DEVAPI_DEFAULT_PORT
+#define NT_DEVAPI_DEFAULT_PORT 17890
+#endif
+#endif
+
+#include "devapi/game_state_devapi.h"
 #include "render/capture.h"
 #include "render/render_mesh.h"
 #include "systems/sys_move.h"
@@ -28,7 +49,10 @@
 #include "ui/ui_runtime.h"
 #include "world/world.h"
 
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifndef GAME_ASSET_PACK_PATH
@@ -46,13 +70,158 @@ static World s_world;
 static char s_capture_path[260];
 static bool s_capture;
 static bool s_open_settings_on_start;
+static int s_window_width = 1280;
+static int s_window_height = 720;
 static int s_frame_count;
+
+#if NT_DEVAPI_ENABLED
+static bool s_devapi_requested;
+static bool s_devapi_running;
+static uint16_t s_devapi_port = NT_DEVAPI_DEFAULT_PORT;
+#endif
 
 static nt_hash64_t rid(const char *s) { return nt_hash64_str(s); }
 
+static bool parse_window_size_arg(const char *raw, int *out_w, int *out_h) {
+    const char *sep = raw ? strchr(raw, 'x') : NULL;
+    if (!sep) {
+        sep = raw ? strchr(raw, 'X') : NULL;
+    }
+    if (!sep) {
+        return false;
+    }
+    char *end = NULL;
+    long w = strtol(raw, &end, 10);
+    if (end != sep) {
+        return false;
+    }
+    long h = strtol(sep + 1, &end, 10);
+    if (*end != '\0' || w <= 0 || h <= 0 || w > 16384 || h > 16384) {
+        return false;
+    }
+    *out_w = (int)w;
+    *out_h = (int)h;
+    return true;
+}
+
+#if NT_DEVAPI_ENABLED
+static bool parse_devapi_port(const char *raw, uint16_t *out) {
+    char *end = NULL;
+    long v = strtol(raw ? raw : "", &end, 10);
+    if (end == raw || *end != '\0' || v < 1 || v > 65535) {
+        return false;
+    }
+    *out = (uint16_t)v;
+    return true;
+}
+
+static bool devapi_start(void) {
+    if (!s_devapi_requested) {
+        return true;
+    }
+#ifdef NT_DEVAPI_GROUP_OBS
+    nt_log_ring_init();
+    nt_log_add_sink(nt_log_ring_sink, NULL);
+    nt_metrics_init();
+#endif
+    if (nt_devapi_init() != NT_OK) {
+        fprintf(stderr, "failed to initialize DevAPI\n");
+        return false;
+    }
+    s_devapi_running = true;
+#ifndef NT_PLATFORM_WEB
+    if (!nt_devapi_net_start(s_devapi_port)) {
+        fprintf(stderr, "failed to start DevAPI TCP transport on 127.0.0.1:%u\n", (unsigned)s_devapi_port);
+        nt_devapi_shutdown();
+        s_devapi_running = false;
+        return false;
+    }
+    fprintf(stderr, "DevAPI listening on 127.0.0.1:%u\n", (unsigned)s_devapi_port);
+#endif
+    nt_devapi_register_default();
+    game_state_devapi_register(&s_world);
+#ifdef NT_DEVAPI_GROUP_UI
+    nt_devapi_ui_register_context("hud", ui_runtime_ctx());
+#endif
+#ifdef NT_PLATFORM_WEB
+    nt_devapi_web_install_shim();
+#endif
+#ifdef NT_DEVAPI_GROUP_CAPTURE
+    nt_devapi_capture_install_seam();
+#endif
+#ifndef NT_PLATFORM_WEB
+    (void)nt_devapi_net_wait_for_client(2000);
+#endif
+    return true;
+}
+
+static void devapi_update_frame(void) {
+    if (!s_devapi_running) {
+        return;
+    }
+    nt_devapi_update();
+#ifndef NT_PLATFORM_WEB
+    static bool was_connected;
+    bool now_connected = nt_devapi_net_has_client();
+    if (was_connected && !now_connected) {
+        g_nt_app.mode = NT_APP_MODE_RUN;
+        g_nt_app.paused = false;
+        g_nt_app.pending_steps = 0;
+    }
+    was_connected = now_connected;
+#endif
+}
+
+static void devapi_sample_metrics(double frame_begin) {
+#ifdef NT_DEVAPI_GROUP_OBS
+    if (!s_devapi_running) {
+        return;
+    }
+    static double last_frame_begin;
+    static uint64_t mem_used;
+    static uint32_t mem_tick;
+    const float frame_ms = last_frame_begin > 0.0 ? (float)((frame_begin - last_frame_begin) * 1000.0) : -1.0F;
+    last_frame_begin = frame_begin;
+    if ((mem_tick++ % 30U) == 0U) {
+        mem_used = (uint64_t)nt_platform_memory_usage().used;
+    }
+    nt_metrics_frame_t frame = {
+        .frame_ms = frame_ms,
+        .cpu_ms = (float)((nt_time_now() - frame_begin) * 1000.0),
+        .gpu_ms = -1.0F,
+        .draw_calls = nt_gfx_get_frame_draw_calls(),
+        .mem_used = mem_used,
+        .scratch_hwm = (uint32_t)nt_mem_scratch_high_water_mark(),
+        .scratch_used = (uint32_t)nt_mem_scratch_used(),
+    };
+    nt_metrics_sample(&frame);
+#else
+    (void)frame_begin;
+#endif
+}
+
+static void devapi_shutdown_runtime(void) {
+    if (!s_devapi_running) {
+        return;
+    }
+#ifndef NT_PLATFORM_WEB
+    nt_devapi_net_stop();
+#endif
+    nt_devapi_shutdown();
+    s_devapi_running = false;
+}
+#else
+static bool devapi_start(void) { return true; }
+static void devapi_update_frame(void) {}
+static void devapi_sample_metrics(double frame_begin) { (void)frame_begin; }
+static void devapi_shutdown_runtime(void) {}
+#endif
+
 // The frame loop: poll, advance the world, render. Calls subsystems only.
 static void frame(void) {
+    const double frame_begin = nt_time_now();
     nt_window_poll();
+    devapi_update_frame();
     nt_input_poll();
 #ifndef NT_PLATFORM_WEB
     if (nt_window_should_close() || nt_input_key_is_pressed(NT_KEY_ESCAPE)) {
@@ -101,6 +270,7 @@ static void frame(void) {
 
     nt_gfx_end_frame();
     nt_window_swap_buffers();
+    devapi_sample_metrics(frame_begin);
 }
 
 int main(int argc, char **argv) {
@@ -110,6 +280,25 @@ int main(int argc, char **argv) {
             s_capture = true;
         } else if (strcmp(argv[i], "--settings") == 0) {
             s_open_settings_on_start = true;
+        } else if (strcmp(argv[i], "--window-size") == 0 && i + 1 < argc) {
+            if (!parse_window_size_arg(argv[++i], &s_window_width, &s_window_height)) {
+                fprintf(stderr, "invalid --window-size, expected WIDTHxHEIGHT\n");
+                return 2;
+            }
+        } else if (strcmp(argv[i], "--fresh-state") == 0 || strcmp(argv[i], "--disable-autosave") == 0) {
+            /* Accepted for shared runtime automation launch compatibility; the template has no save flow yet. */
+#if NT_DEVAPI_ENABLED
+        } else if (strcmp(argv[i], "--devapi") == 0 && i + 1 < argc) {
+            s_devapi_requested = true;
+            if (!parse_devapi_port(argv[++i], &s_devapi_port)) {
+                fprintf(stderr, "invalid --devapi port, expected 1..65535\n");
+                return 2;
+            }
+#else
+        } else if (strcmp(argv[i], "--devapi") == 0) {
+            fprintf(stderr, "--devapi requires configuring with GAME_DEVAPI_ENABLED=ON\n");
+            return 2;
+#endif
         }
     }
     nt_engine_config_t config = {0};
@@ -120,8 +309,8 @@ int main(int argc, char **argv) {
     }
 
     g_nt_window.title = "Template";
-    g_nt_window.width = 1280;
-    g_nt_window.height = 720;
+    g_nt_window.width = (uint32_t)s_window_width;
+    g_nt_window.height = (uint32_t)s_window_height;
     nt_window_init();
     nt_input_init();
 
@@ -192,6 +381,10 @@ int main(int argc, char **argv) {
     // engine UI stack (sprite renderer + slice9 atlas + nt_ui ctx); reuses the font + text material
     ui_runtime_init(s_text_material, s_font, s_font_resource);
 
+    if (!devapi_start()) {
+        return 1;
+    }
+
     if (s_open_settings_on_start) {
         sys_settings_force_open();
     }
@@ -200,6 +393,7 @@ int main(int argc, char **argv) {
     nt_app_run(frame);
 
 #ifndef NT_PLATFORM_WEB
+    devapi_shutdown_runtime();
     ui_runtime_shutdown();
     nt_mem_scratch_shutdown();
     nt_text_renderer_shutdown();

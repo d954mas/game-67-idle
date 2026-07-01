@@ -10,6 +10,30 @@ else()
     set(NT_PRESET_NAME "native-debug")
 endif()
 
+if(NOT DEFINED GAME_DEVAPI_ENABLED)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(GAME_DEVAPI_ENABLED OFF CACHE BOOL "Build the template with engine DevAPI automation support." FORCE)
+    else()
+        set(GAME_DEVAPI_ENABLED ON CACHE BOOL "Build the template with engine DevAPI automation support." FORCE)
+    endif()
+endif()
+
+if(GAME_DEVAPI_ENABLED)
+    set(NT_DEVAPI_ENABLED ON CACHE BOOL "Build the engine DevAPI command layer." FORCE)
+    set(NT_UI_DEBUG_TOOLS ON CACHE BOOL "Build UI probe data for engine DevAPI ui.* commands." FORCE)
+    set(NT_LOG_RING_ENABLED ON CACHE BOOL "Build log ring data for engine DevAPI obs commands." FORCE)
+    set(NT_METRICS_ENABLED ON CACHE BOOL "Build metrics data for engine DevAPI obs commands." FORCE)
+    set(NT_INTROSPECT_ENABLED ON CACHE BOOL "Build entity introspection for engine DevAPI obs commands." FORCE)
+    set(NT_DEVAPI_GROUP_UI ON CACHE BOOL "Build engine DevAPI ui.* commands." FORCE)
+    set(NT_DEVAPI_GROUP_OBS ON CACHE BOOL "Build engine DevAPI log/perf/entity/resource commands." FORCE)
+    set(NT_DEVAPI_GROUP_CAPTURE ON CACHE BOOL "Build engine DevAPI capture.frame/capture.region commands." FORCE)
+else()
+    set(NT_DEVAPI_ENABLED OFF CACHE BOOL "Build the engine DevAPI command layer." FORCE)
+    foreach(_grp CORE TIME INPUT DISCOVERY UI OBS ENTITY_WRITE CAPTURE)
+        set(NT_DEVAPI_GROUP_${_grp} OFF CACHE BOOL "Disabled with GAME_DEVAPI_ENABLED=OFF." FORCE)
+    endforeach()
+endif()
+
 # Shared engine (one copy, referenced not copied). Templates and games live one
 # folder below the repo groups, so the engine is two levels up.
 set(ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/neotolis-engine")
@@ -60,6 +84,7 @@ endif()
 # --- game executable (the conductor + systems) ---
 add_executable(${GAME_TARGET}
     src/main.c
+    src/devapi/game_state_devapi.c
     src/ui/hud.c
     src/ui/ui_runtime.c
     src/ui/theme.c
@@ -84,13 +109,59 @@ if(EMSCRIPTEN)
 else()
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub)
 endif()
+if(GAME_DEVAPI_ENABLED)
+    if(EMSCRIPTEN)
+        set(GAME_DEVAPI_TRANSPORT nt_devapi_web nt_platform_web)
+    else()
+        set(GAME_DEVAPI_TRANSPORT nt_devapi_net)
+    endif()
+    target_link_libraries(${GAME_TARGET} PRIVATE
+        ${GAME_DEVAPI_TRANSPORT}
+        nt_devapi_default
+        nt_platform
+        nt_metrics
+        nt_log_ring
+    )
+endif()
 if(WIN32 AND NOT EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE winmm)
 endif()
 target_compile_definitions(${GAME_TARGET} PRIVATE
-    NT_DEVAPI_ENABLED=0
     GAME_ASSET_PACK_PATH="${GAME_ASSETS_DIR}/game.ntpack"
+    NT_INTROSPECT_ENABLED=$<BOOL:${NT_INTROSPECT_ENABLED}>
+    NT_INTROSPECT_WRITE_ENABLED=$<BOOL:${NT_INTROSPECT_WRITE_ENABLED}>
     _CRT_SECURE_NO_WARNINGS
 )
+if(NOT GAME_DEVAPI_ENABLED)
+    target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=0)
+endif()
 nt_set_warning_flags(${GAME_TARGET})
 set_target_properties(${GAME_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}")
+
+if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_custom_target(devapi_smoke
+            COMMAND ${CMAKE_COMMAND} -E env
+                "AI_STUDIO_GAME_EXE=$<TARGET_FILE:${GAME_TARGET}>"
+                "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/devapi/smoke_bot.py"
+                "--exe" "$<TARGET_FILE:${GAME_TARGET}>"
+            DEPENDS ${GAME_TARGET}
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+            COMMENT "Running template DevAPI smoke bot"
+            VERBATIM
+        )
+        add_custom_target(quality_responsive
+            COMMAND ${CMAKE_COMMAND} -E env
+                "AI_STUDIO_GAME_EXE=$<TARGET_FILE:${GAME_TARGET}>"
+                "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/devapi/responsive_viewports.py"
+                "--exe" "$<TARGET_FILE:${GAME_TARGET}>"
+            DEPENDS ${GAME_TARGET}
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+            COMMENT "Capturing QCLR_002 responsive viewport evidence"
+            VERBATIM
+        )
+    endif()
+endif()

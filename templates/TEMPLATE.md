@@ -105,7 +105,7 @@ The template is NOT a bare seed: a new game opens to a working shell and builds 
 - **Startup UX**: the template opens to an **empty scene** with a **settings
   (gear) button in the top-right** of the GUI. Settings are NOT shown on launch вЂ”
   pressing the gear opens the panel below.
-- **Settings panel** (`src/game_devapi_ui.*` / a settings module):
+- **Settings panel** (`src/systems/sys_settings.*` + `src/ui/*`):
   - volume sliders (master / music / SFX),
   - a **Close** button,
   - a **Reset** button that **resets the game state on a long-press** (hold to
@@ -166,17 +166,25 @@ modules from day one so a copied game keeps them apart:
         render_character.{c,h}  draw the character (separate from its movement)
       ui/
         hud.{c,h}               the HUD/UI tree (panels/buttons, the top-right gear)
-        ui_devapi.{c,h}         UI-driving DevAPI (register_ui_devapi)
       devapi/
-        game_devapi.{c,h}       state_json, emit_state, endpoint registration; the
-                                game's ep_* commands live here, NOT in main
+        game_state_devapi.{c,h} game-owned `game.state` snapshot; add scenario
+                                helpers beside it. Engine-owned DevAPI groups
+                                (ui.*, input.*, frame/time, obs, capture.*) are
+                                wired from the engine, NOT duplicated here
       build_packs.c           pack builder (font + shaders + white + textured sample)
+    devapi/
+      smoke_bot.py            game-local Python runtime bot: launch via DevAPI,
+                              discover commands, click a stable UI id, capture
+                              evidence; copy this pattern for scenario tests
+      responsive_viewports.py reusable QCLR_002 helper: relaunch each viewport,
+                              let a bot prepare a state, then capture screenshots
+                              plus ui.tree bounds for responsive-layout review
 
 Engine-owned pieces stay engine-side (public API): `nt_mesh_renderer`,
-`nt_text_renderer`, `nt_devapi`, ECS comps, `nt_resource`. Seed infra files
-(`game_storage.*`, `game_audio.*`, `state/`) stay as-is. A new game adds a system
-by dropping `systems/sys_<thing>.{c,h}` and registering it in `main`; do not grow
-one large file.
+`nt_text_renderer`, `nt_devapi`, `cjson`, ECS comps, `nt_resource`. Seed infra
+files (`game_storage.*`, `game_audio.*`, `state/`) stay as-is. A new game adds a
+system by dropping `systems/sys_<thing>.{c,h}` and registering it in `main`; do
+not grow one large file.
 
 ## GAME-ONLY
 

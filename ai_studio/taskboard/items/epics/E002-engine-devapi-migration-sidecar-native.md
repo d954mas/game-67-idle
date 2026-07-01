@@ -6,7 +6,7 @@ project: P001
 priority: P2
 tags: []
 created: 2026-06-19
-updated: 2026-06-19
+updated: 2026-07-01
 ---
 
 ## Goal
@@ -36,3 +36,18 @@ sidecar until the engine path builds green and smoke.py passes).
 - 2026-06-19: opened after pulling engine to 8ec758b7 (native modular DevAPI +
   synthetic input). Full delete/rewire/keep plan + 12 steps + risks from the dedup
   analysis workflow; captured in T0012.
+- 2026-07-01: updated `external/neotolis-engine` to 4d6dcc42, where cJSON and
+  the default DevAPI groups are engine-owned. Rewired the seed template to link
+  engine DevAPI/debug groups in Debug builds, keep Release automation-free, and
+  removed stale sidecar UI files. Runtime Automation now uses the engine default
+  native port 17890 and engine-native PNG capture when available.
+- 2026-07-01: added a copied template DevAPI smoke bot under
+  `templates/template/devapi/`, plus a `devapi_smoke` CMake target. The example
+  launches the game, discovers endpoints, checks `command.describe`, waits for
+  `ui.tree`, toggles `render.set_enabled`, and captures PNG evidence.
+- 2026-07-01: Quality: QCLR_002=review; QTECH_001=pass; evidence:
+  `quality_responsive` captures the 4:3/16:9/tall-phone landscape+portrait
+  screenshot matrix plus `ui.tree` bounds under `tmp/quality/qclr_002_responsive/`.
+- 2026-07-01: Re-added the template-owned `game.state` endpoint on the engine
+  DevAPI bus under `templates/template/src/devapi/`, and made the copied smoke
+  bot assert it as the default game snapshot surface.

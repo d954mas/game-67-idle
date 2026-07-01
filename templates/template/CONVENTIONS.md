@@ -24,8 +24,18 @@ dumps a whole game into one file. Keep them.
 - **The World is the source of truth.** Systems read/write the `World`
   (`world/world.{c,h}`): entity handles + per-system SoA state. Systems do not own
   entities and do not call into each other's internals — they go through the World.
-- **DevAPI commands live in `devapi/`**, the HUD/UI tree in `ui/`, render + material
+- **Game-owned C DevAPI commands live in `src/devapi/`**. Engine-owned groups (`ui.*`,
+  input/time/frame, obs, capture) stay wired through `nt_devapi`; do not duplicate
+  them in the template. The HUD/UI tree lives in `ui/`, render + material
   setup in `render/` — never inline in `main.c`.
+  `game.state` is the default read-only game snapshot; extend it with real
+  World/game-state fields as the game grows, and add separate explicit write
+  commands only for dev-editable fields.
+
+- **Game-owned DevAPI bots live in top-level `devapi/`**. Import the shared
+  `ai_studio/runtime_automation` client there, then add semantic scenarios for
+  the game. Follow observe -> act -> `frame.wait` -> observe and use stable
+  `ui.tree` ids.
 
 ## Anti-patterns (do NOT do)
 

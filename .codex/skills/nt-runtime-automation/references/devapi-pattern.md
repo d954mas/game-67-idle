@@ -51,16 +51,19 @@ selectors. Never rely on tree array indices as stable selectors.
 Use:
 
 ```powershell
-py -3.12 ai_studio/runtime_automation/devapi_cli.py 9123 endpoints
-py -3.12 ai_studio/runtime_automation/iterate.py 9123 --reuse
+py -3.12 ai_studio/runtime_automation/devapi_cli.py 17890 endpoints
+py -3.12 ai_studio/runtime_automation/iterate.py 17890 --reuse
 ```
 
 Python helpers live in `ai_studio/runtime_automation/devapi_client.py`.
 
 ## Capture
 
-Capture stays external unless the active game/engine exposes native framebuffer
-capture. Use the same observe/act/wait rhythm before:
+Use engine-native `capture.frame` / `capture.region` when available; current
+engine captures return base64 PNG payloads with width, height, and format
+metadata. External capture is a fallback for games without native capture.
+
+Use the same observe/act/wait rhythm before:
 
 - screenshots;
 - screen recordings;

@@ -13,9 +13,10 @@ Usage: py -3.12 ai_studio/runtime_automation/iterate.py [port] [--reuse]
 from __future__ import annotations
 
 import sys
+import subprocess
 from pathlib import Path
 
-from devapi_client import NATIVE_DEBUG_EXE, ROOT, running_game
+from devapi_client import DEFAULT_DEVAPI_PORT, NATIVE_DEBUG_EXE, ROOT, running_game
 
 SHOT = "tmp/captures/iterate.png"
 
@@ -33,7 +34,7 @@ def main() -> int:
     argv = sys.argv[1:]
     reuse = "--reuse" in argv
     ports = [a for a in argv if a.isdigit()]
-    port = int(ports[0]) if ports else 9123
+    port = int(ports[0]) if ports else DEFAULT_DEVAPI_PORT
 
     if not reuse and not build_if_stale():
         print("build failed", file=sys.stderr)
