@@ -175,3 +175,39 @@ test("reject moves staged item out of _incoming", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("accept rejects staged file paths that escape into same-prefix sibling folders", async () => {
+  const root = await mkdtemp(join(tmpdir(), "asset-intake-boundary-"));
+  try {
+    const sourceRoot = join(root, "source");
+    const input = join(root, "crate.glb");
+    await writeFile(input, "crate bytes");
+    await stageAsset([
+      "--source-root", sourceRoot,
+      "--input", input,
+      "--source", "Local Source",
+      "--slug", "Crate",
+      "--license", "CC0-1.0",
+    ]);
+
+    const sibling = join(sourceRoot, "_incoming", "local-source", "crate2");
+    await mkdir(sibling, { recursive: true });
+    await writeFile(join(sibling, "outside.glb"), "outside bytes");
+
+    await assert.rejects(
+      acceptStagedAsset([
+        "--source-root", sourceRoot,
+        "--source", "local-source",
+        "--slug", "crate",
+        "--file", "../crate2/outside.glb",
+        "--pack", "starter-props",
+        "--asset-id", "local__outside__cc0",
+        "--kind", "model",
+        "--license", "CC0-1.0",
+      ]),
+      /escapes staged directory/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

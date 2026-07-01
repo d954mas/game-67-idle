@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { appendFile, cp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { basename, extname, join, resolve } from "node:path";
+import { basename, extname, join, resolve, sep } from "node:path";
 import { boolText, decideLicense, validateLicenseRecord } from "../license/registry.mjs";
 import { isMain } from "../../../core_harness/tool_lib/cli.mjs";
 import { sha256File } from "../../../core_harness/tool_lib/hash.mjs";
@@ -125,6 +125,12 @@ async function writeJsonl(path, rows) {
   await writeFile(path, rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : ""), "utf8");
 }
 
+function isInside(base, file) {
+  const resolvedBase = resolve(base);
+  const resolvedFile = resolve(file);
+  return resolvedFile === resolvedBase || resolvedFile.startsWith(resolvedBase + sep);
+}
+
 async function archiveAcceptedCandidate(sourceRoot, source, slug, stagedDir, assetId, overwrite = false) {
   const acceptedRoot = join(sourceRoot, "_accepted", source);
   let acceptedDir = join(acceptedRoot, slug);
@@ -168,7 +174,7 @@ export async function acceptStagedAsset(argv = process.argv.slice(2)) {
   const intakePath = join(stagedDir, "intake.json");
   if (!existsSync(intakePath)) throw new Error(`missing staged intake: ${intakePath}`);
   const stagedFile = resolve(stagedDir, args.file);
-  if (!stagedFile.startsWith(resolve(stagedDir))) throw new Error(`--file escapes staged directory: ${args.file}`);
+  if (!isInside(stagedDir, stagedFile)) throw new Error(`--file escapes staged directory: ${args.file}`);
   if (!existsSync(stagedFile)) throw new Error(`staged file not found: ${args.file}`);
   const intake = await readJson(intakePath, {});
 
