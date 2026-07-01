@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { parseArgs, pickHero } from "../record_gallery.mjs";
+import { parseArgs, pickHero, screencastOptions } from "../record_gallery.mjs";
 
 function gallery(payload) {
   const dir = mkdtempSync(join(tmpdir(), "record-gallery-"));
@@ -50,6 +50,16 @@ test("pickHero uses requested pack and requested asset when available", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("screencastOptions uses parsed recorder dimensions", () => {
+  assert.deepEqual(screencastOptions({ w: 1024, h: 640 }), {
+    format: "jpeg",
+    quality: 75,
+    maxWidth: 1024,
+    maxHeight: 640,
+    everyNthFrame: 1,
+  });
 });
 
 test("pickHero falls back to a strong pack and model asset", () => {

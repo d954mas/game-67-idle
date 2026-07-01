@@ -53,6 +53,10 @@ function pickHero(galleryDir, wantPack, wantAsset) {
   return { pack, asset };
 }
 
+function screencastOptions(a) {
+  return { format: "jpeg", quality: 75, maxWidth: a.w, maxHeight: a.h, everyNthFrame: 1 };
+}
+
 async function cdp(port) {
   // resolve the page websocket target
   let targets;
@@ -123,7 +127,7 @@ async function main(argv = process.argv.slice(2)) {
   const evalJs = (expr) => c.send("Runtime.evaluate", { expression: expr });
   // give the grid a moment to lay out, then start the continuous capture
   await sleep(1500);
-  await c.send("Page.startScreencast", { format: "jpeg", quality: 75, maxWidth: A.w, maxHeight: A.h, everyNthFrame: 1 });
+  await c.send("Page.startScreencast", screencastOptions(a));
 
   // 1) packs grid - a gentle scroll for life
   await sleep(2200);
@@ -185,4 +189,4 @@ if (isMain(import.meta.url)) {
   });
 }
 
-export { main, parseArgs, pickHero };
+export { main, parseArgs, pickHero, screencastOptions };
