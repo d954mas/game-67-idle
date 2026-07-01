@@ -15,7 +15,7 @@
 import { execFileSync } from "node:child_process";
 import { readFile, readdir, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, resolve, dirname, basename, extname, relative } from "node:path";
+import { join, resolve, dirname, basename, extname, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scanPackManifestSource } from "../storage/manifests/manifest.mjs";
 import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
@@ -115,6 +115,18 @@ const GLB_EXT = [".glb", ".gltf"];
 const IMG_EXT = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
 
 const relPosix = (root, abs) => relative(root, abs).replace(/\\/g, "/");
+
+function isInside(root, file) {
+  const rel = relative(root, file);
+  return rel === "" || (rel && !rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function resolveScanRoot(repo, scanPath = "") {
+  const repoRoot = resolve(repo);
+  const root = scanPath ? resolve(repoRoot, scanPath) : join(repoRoot, "assets");
+  if (!isInside(repoRoot, root)) throw new Error("--path for scan mode must stay inside --repo");
+  return root;
+}
 
 // Build display cards + their media URLs. Default: COPY media into <mediaDir>
 // (self-contained, tunnel-safe). ref mode: REFERENCE library files in place via
@@ -248,7 +260,7 @@ async function main(argv = process.argv.slice(2)) {
     meta = `${cards.length} new assets since ${a.base} - ${byOrigin}. Check keepers, send ids to the lead to export.`;
     await writeFile(join(outDir, "review-manifest.json"), JSON.stringify({ game: a.game, base: a.base, generated: new Date().toISOString(), assets }, null, 2), "utf8");
   } else if (a.mode === "scan") {
-    const root = resolve(a.path || join(a.repo, "assets"));
+    const root = resolveScanRoot(a.repo, a.path);
     const { cards: c, assets } = await buildScanCards(root, mediaDir, resolve(a.repo));
     cards = c;
     title = `Game assets - ${a.game || basename(root)}`;
@@ -303,4 +315,4 @@ if (isMain(import.meta.url)) {
   main().catch((e) => { console.error(e.message); process.exit(1); });
 }
 
-export { discoverGameAssets, detectOrigin, kindForExt, libraryKind, buildLibraryCards, buildReviewCards, buildScanCards, main, parseArgs, renderHtml, escHtml, safeJson };
+export { discoverGameAssets, detectOrigin, kindForExt, libraryKind, buildLibraryCards, buildReviewCards, buildScanCards, main, parseArgs, renderHtml, escHtml, safeJson, resolveScanRoot };

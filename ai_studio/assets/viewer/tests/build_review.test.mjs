@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detectOrigin, kindForExt, libraryKind, parseArgs, renderHtml, safeJson, escHtml } from "../build_review.mjs";
+import { resolve } from "node:path";
+import { detectOrigin, kindForExt, libraryKind, parseArgs, renderHtml, safeJson, escHtml, resolveScanRoot } from "../build_review.mjs";
 
 test("kindForExt maps primary extensions, ignores sidecars", () => {
   assert.equal(kindForExt(".obj"), "model");
@@ -76,4 +77,14 @@ test("parseArgs covers gallery builder CLI contract", () => {
   assert.throws(() => parseArgs(["--mode"]), /missing value/);
   assert.throws(() => parseArgs(["--bad", "x"]), /unknown option/);
   assert.throws(() => parseArgs(["--mode", "broken"]), /unknown mode/);
+});
+
+test("resolveScanRoot keeps scan mode inside the repository", () => {
+  const repo = resolve("C:/repo");
+
+  assert.equal(resolveScanRoot(repo), resolve(repo, "assets"));
+  assert.equal(resolveScanRoot(repo, "template/assets"), resolve(repo, "template/assets"));
+  assert.equal(resolveScanRoot(repo, resolve(repo, "games/demo/assets")), resolve(repo, "games/demo/assets"));
+  assert.throws(() => resolveScanRoot(repo, "../outside/assets"), /inside --repo/);
+  assert.throws(() => resolveScanRoot(repo, "C:/outside/assets"), /inside --repo/);
 });
