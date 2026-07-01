@@ -260,7 +260,7 @@
             "kind": "tool",
             "path": "ai_studio/bootstrap/new_game.mjs",
             "title": "new_game.mjs",
-            "description": "Copies template/ into a new game folder and registers that game asset root through Asset Storage.",
+            "description": "Copies templates/template/ into games/<game-id>/ and registers that game asset root through Asset Storage.",
             "role": "new game creation command",
             "tags": [
               "bootstrap",

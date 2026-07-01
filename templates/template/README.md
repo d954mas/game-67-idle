@@ -20,6 +20,6 @@ Layout (decomposition the template teaches by example — no god-file):
     state/              game-state schema (codegen source).
 
 Status: starter shell (empty scene + text). Build wiring (`CMakeLists.txt` referencing
-`../external/neotolis-engine`) and the full shell (settings panel + sliders + long-press
+`../../external/neotolis-engine`) and the full shell (settings panel + sliders + long-press
 reset + GUI art, coloured + textured mesh examples, a character-walks example system)
 are in progress — see epic E009.

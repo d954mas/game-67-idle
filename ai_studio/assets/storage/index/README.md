@@ -1,4 +1,4 @@
-# Asset Index
+﻿# Asset Index
 
 SQLite-backed local index for AI Studio asset browsing.
 
@@ -11,7 +11,7 @@ and fast UI/API queries.
 ```text
 asset roots
   global library
-  template/assets
+  templates/template/assets
   current game/assets
   registered game assets
         |

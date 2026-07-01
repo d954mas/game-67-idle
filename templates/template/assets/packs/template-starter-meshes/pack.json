@@ -1,4 +1,4 @@
-{
+﻿{
   "pack": "template-starter-meshes",
   "title": "Template Starter Meshes",
   "source": "project",
@@ -13,7 +13,7 @@
   "redistribution_allowed": "true",
   "commercial_use": "true",
   "modification_allowed": "true",
-  "source_page": "template/assets/meshes/cube.glb",
+  "source_page": "templates/template/assets/meshes/cube.glb",
   "author_vendor": "Neotolis template",
   "tags": ["template", "starter", "mesh"],
   "genre": ["template"],

@@ -9,9 +9,9 @@ const script = resolve("ai_studio/bootstrap/new_game.mjs");
 
 function tempRepo() {
   const root = mkdtempSync(join(tmpdir(), "new-game-bootstrap-"));
-  mkdirSync(join(root, "template", "assets"), { recursive: true });
-  writeFileSync(join(root, "template", "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.20)\n", "utf8");
-  writeFileSync(join(root, "template", "assets", "readme.txt"), "asset\n", "utf8");
+  mkdirSync(join(root, "templates", "template", "assets"), { recursive: true });
+  writeFileSync(join(root, "templates", "template", "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.20)\n", "utf8");
+  writeFileSync(join(root, "templates", "template", "assets", "readme.txt"), "asset\n", "utf8");
   return root;
 }
 
@@ -22,9 +22,9 @@ test("new_game copies template and registers game assets in AI Studio", (t) => {
   const output = execFileSync(process.execPath, [script, "--root", root, "--id", "test-game"], { encoding: "utf8" });
 
   assert.match(output, /new game 'test-game' created/);
-  assert.match(output, /registered assets: ai_studio\/assets\/storage\/sources\/games\.json -> test-game\/assets/);
-  assert.equal(existsSync(join(root, "test-game", "CMakeLists.txt")), true);
-  assert.equal(existsSync(join(root, "test-game", "assets", "readme.txt")), true);
+  assert.match(output, /registered assets: ai_studio\/assets\/storage\/sources\/games\.json -> games\/test-game\/assets/);
+  assert.equal(existsSync(join(root, "games", "test-game", "CMakeLists.txt")), true);
+  assert.equal(existsSync(join(root, "games", "test-game", "assets", "readme.txt")), true);
 
   const registryPath = join(root, "ai_studio", "assets", "storage", "sources", "games.json");
   assert.equal(existsSync(registryPath), true);
@@ -32,8 +32,8 @@ test("new_game copies template and registers game assets in AI Studio", (t) => {
   assert.deepEqual(registry.games, [{
     id: "test-game",
     title: "test-game",
-    folder: "test-game",
-    assets: "test-game/assets",
+    folder: "games/test-game",
+    assets: "games/test-game/assets",
     status: "active",
   }]);
 });
@@ -53,8 +53,8 @@ test("new_game --force updates the same registry entry", (t) => {
   assert.deepEqual(registry.games, [{
     id: "test-game",
     title: "test-game",
-    folder: "test-game",
-    assets: "test-game/assets",
+    folder: "games/test-game",
+    assets: "games/test-game/assets",
     status: "active",
   }]);
 });

@@ -4,8 +4,8 @@ AI Studio bootstrap owns project/game creation and portable AI Studio export.
 
 ## Role
 
-- `new_game.mjs`: copy `template/` into a new game folder and register that
-  game's asset root through Asset Storage.
+- `new_game.mjs`: copy `templates/<template-id>/` into `games/<game-id>/` and
+  register that game's asset root through Asset Storage.
 - `export_base.mjs`: copy the reusable AI Studio base into another project.
 - `template_paths.mjs`: document the template copy model and reusable/seed/game-only
   path groups.

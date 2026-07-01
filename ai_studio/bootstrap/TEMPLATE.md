@@ -11,12 +11,12 @@ the AI building them) follow the template's structure instead of inventing one o
 piling everything into one file. Investing in the template's architecture pays off
 in every game after it.
 
-**Layout: in THIS repo, as folders** — `template/`, `game1/`, `game2/`, … . Each
-game is a self-contained folder copied from `template/`.
+**Layout: in THIS repo, as folders** - `templates/<template-id>/` and
+`games/<game-id>/`. Each game is a self-contained folder copied from a template.
 
-- `new_game.mjs` — copy `template/` → `gameN/` (UNIVERSAL + SEED; engine submodule
+- `new_game.mjs` - copy `templates/template/` -> `games/gameN/` (UNIVERSAL + SEED; engine submodule
   + shared asset library are referenced, not copied).
-- `sync_to_template.mjs` — copy UNIVERSAL from `gameN/` → `template/`.
+- `sync_to_template.mjs` - copy UNIVERSAL from `games/gameN/` -> `templates/template/`.
 - Paths are defined in `template_paths.mjs` (the single source of truth; the
   UNIVERSAL/SEED lists are relative to a template-or-game folder, not the repo root).
 - The asset library is shared and external (YandexDisk); never copied.

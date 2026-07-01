@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -18,7 +18,7 @@ function mkTemp(prefix) {
 test("safeResolve keeps paths inside the selected base", () => {
   const root = resolve("C:/repo");
   assert.equal(safeResolve(root, "game/assets"), resolve(root, "game/assets"));
-  assert.equal(safeResolve(root, "game/../template/assets"), resolve(root, "template/assets"));
+  assert.equal(safeResolve(root, "games/demo/../demo/assets"), resolve(root, "games/demo/assets"));
   assert.equal(safeResolve(root, "../outside"), null);
   assert.equal(safeResolve(root, "C:/outside/assets"), null);
 });
@@ -29,7 +29,7 @@ test("selectSource returns registered source or confined custom game source", ()
     id: "template",
     type: "template",
     label: "Template",
-    path: resolve(root, "template/assets"),
+    path: resolve(root, "templates/template/assets"),
     available: true,
   }];
 
@@ -62,8 +62,8 @@ test("resolveAssetViewerGalleryPath confines gallery, library, and repo routes",
       join(libraryRoot, "packs", "kit", "model.glb"),
     );
     assert.equal(
-      resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/repo/template/assets/cube.glb"),
-      join(root, "template", "assets", "cube.glb"),
+      resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/repo/templates/template/assets/cube.glb"),
+      join(root, "templates", "template", "assets", "cube.glb"),
     );
 
     assert.equal(resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/../secret.txt"), null);

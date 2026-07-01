@@ -1,4 +1,4 @@
-# State Contract
+﻿# State Contract
 
 Load this when deciding state document shape, save/load behavior, DevAPI state
 shape, generated state API boundaries, dirty/autosave behavior, migrations, or
@@ -48,7 +48,7 @@ Use `unsafe_path` only for explicit debug fixtures and migration tests.
 ## Codegen
 
 Project schemas in `state/*.schema.json` are source of truth. The AI Studio
-template schema lives in `template/state/game_state.schema.json`.
+template schema lives in `templates/template/state/game_state.schema.json`.
 
 Run:
 

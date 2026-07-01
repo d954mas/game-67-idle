@@ -10,9 +10,9 @@ else()
     set(NT_PRESET_NAME "native-debug")
 endif()
 
-# Shared engine (one copy, referenced not copied). The game folder sits next to
-# external/ in the repo, so the engine is one level up.
-set(ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../external/neotolis-engine")
+# Shared engine (one copy, referenced not copied). Templates and games live one
+# folder below the repo groups, so the engine is two levels up.
+set(ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/neotolis-engine")
 add_subdirectory("${ENGINE_DIR}" "${CMAKE_BINARY_DIR}/_engine")
 if(NOT EMSCRIPTEN AND NOT TARGET nt_builder)
     add_subdirectory("${ENGINE_DIR}/tools/builder" "${CMAKE_BINARY_DIR}/_builder")

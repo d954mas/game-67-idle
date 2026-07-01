@@ -1,16 +1,15 @@
 #!/usr/bin/env node
-// Start a new game by COPYING the template/ folder into a new game folder at the
-// repo root (sibling to external/ and template/, so its CMake's ../external/...
-// reference resolves the same way). The game then owns and customizes its copy.
+// Start a new game by COPYING a templates/<template-id>/ folder into
+// games/<game-id>/. The game then owns and customizes its copy.
 //
 //   node ai_studio/bootstrap/new_game.mjs --id mygame
-//   node ai_studio/bootstrap/new_game.mjs --id mygame --from template --force
+//   node ai_studio/bootstrap/new_game.mjs --id mygame --from templates/template --force
 //   node ai_studio/bootstrap/new_game.mjs --root <repo> --id mygame
 //
 // Build/run the new game:
-//   cmake -S mygame -B mygame/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
-//   cmake --build mygame/build
-//   ./mygame/build/bin/game.exe
+//   cmake -S games/mygame -B games/mygame/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
+//   cmake --build games/mygame/build
+//   ./games/mygame/build/bin/game.exe
 import { existsSync, mkdirSync, readdirSync, copyFileSync, statSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,7 +18,7 @@ import { gameRegistryPath, registerGameAssetSource } from "../assets/storage/sou
 const defaultRepoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 function parseArgs(argv) {
-  const a = { id: "", from: "template", root: "", force: false };
+  const a = { id: "", from: "templates/template", root: "", force: false };
   for (let i = 0; i < argv.length; i += 1) {
     const k = argv[i];
     if (k === "--force") a.force = true;
@@ -51,7 +50,7 @@ if (!a.id || !/^[a-z][a-z0-9-]*$/.test(a.id)) {
 }
 const repoRoot = a.root ? resolve(a.root) : defaultRepoRoot;
 const fromDir = join(repoRoot, a.from);
-const toDir = join(repoRoot, a.id);
+const toDir = join(repoRoot, "games", a.id);
 if (!existsSync(join(fromDir, "CMakeLists.txt"))) {
   console.error(`error: template not found at ${fromDir}`);
   process.exit(1);
@@ -65,15 +64,15 @@ copyDir(fromDir, toDir);
 const registered = registerGameAssetSource(repoRoot, {
   id: a.id,
   title: a.id,
-  folder: a.id,
-  assets: `${a.id}/assets`,
+  folder: `games/${a.id}`,
+  assets: `games/${a.id}/assets`,
   status: "active",
 });
-console.log(`new game '${a.id}' created from ${a.from}/ -> ${a.id}/`);
+console.log(`new game '${a.id}' created from ${a.from}/ -> games/${a.id}/`);
 console.log(`registered assets: ${gameRegistryPath(repoRoot)} -> ${registered.assets}`);
 console.log("\nbuild + run:");
-console.log(`  cmake -S ${a.id} -B ${a.id}/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug`);
-console.log(`  cmake --build ${a.id}/build`);
-console.log(`  ${a.id}/build/bin/game.exe`);
+console.log(`  cmake -S games/${a.id} -B games/${a.id}/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug`);
+console.log(`  cmake --build games/${a.id}/build`);
+console.log(`  games/${a.id}/build/bin/game.exe`);
 console.log("\nThen: set the title/pack/concept, pull library assets (skill nt-asset-workflow),");
 console.log("pull systems from systems_showcase/ as needed, and build your game on top.");

@@ -1,19 +1,19 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { localRecord, parseArgs, resolvePullTarget } from "../pull.mjs";
 import { isPublishable } from "../../storage/license/restricted.mjs";
 
 test("parseArgs requires ids and target asset root", () => {
-  assert.throws(() => parseArgs(["--to", "template/assets"]), /missing --ids/);
+  assert.throws(() => parseArgs(["--to", "templates/template/assets"]), /missing --ids/);
   assert.throws(() => parseArgs(["--ids", "crate"]), /missing --to/);
-  assert.deepEqual(parseArgs(["--ids", "crate", "--to", "template/assets"]).ids, "crate");
+  assert.deepEqual(parseArgs(["--ids", "crate", "--to", "templates/template/assets"]).ids, "crate");
 });
 
 test("resolvePullTarget keeps game/template asset targets inside the repository", () => {
   const root = resolve("C:/repo");
 
-  assert.equal(resolvePullTarget(root, "template/assets"), resolve(root, "template/assets"));
+  assert.equal(resolvePullTarget(root, "templates/template/assets"), resolve(root, "templates/template/assets"));
   assert.equal(resolvePullTarget(root, resolve(root, "games/demo/assets")), resolve(root, "games/demo/assets"));
   assert.throws(() => resolvePullTarget(root, "../outside/assets"), /inside the repository/);
   assert.throws(() => resolvePullTarget(root, "C:/outside/assets"), /inside the repository/);

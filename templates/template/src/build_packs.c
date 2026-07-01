@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
     // text shell
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.frag", NT_BUILD_SHADER_FRAGMENT);
-    nt_builder_add_font(ctx, "../external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf",
+    nt_builder_add_font(ctx, "../../external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf",
                         &(nt_font_opts_t){.charset = NT_CHARSET_ASCII, .resource_name = "game/font"});
 
     // instanced-mesh shell: TWO mesh paths a game learns from. The COLOURED path

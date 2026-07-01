@@ -6,8 +6,8 @@ This repository is an AI Studio for game development: a shared agent/tooling
 pipeline for creating game concepts, GDDs, assets, prototypes, release builds,
 and liveops support.
 
-The repository root is not a game. Games are created from `template/` into
-their own folders. Closed prototypes are git tags.
+The repository root is not a game. Templates live under `templates/`; games are
+created under `games/`. Closed prototypes are git tags.
 
 ## AI Studio
 

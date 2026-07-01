@@ -1,4 +1,4 @@
-# Asset Storage
+﻿# Asset Storage
 
 Reviewed storage layer for AI Studio asset sources.
 
@@ -132,7 +132,7 @@ Refresh is explicit. No filesystem watch mode belongs here.
 
 ```powershell
 node ai_studio/assets/storage/search.mjs --query "wooden crate" --kind model
-node ai_studio/assets/storage/search.mjs --source-path template/assets --source-type local --tags ui,button
+node ai_studio/assets/storage/search.mjs --source-path templates/template/assets --source-type local --tags ui,button
 node ai_studio/assets/storage/search.mjs --query "metal floor" --license CC0 --json
 ```
 

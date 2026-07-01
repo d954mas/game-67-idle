@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,8 +16,8 @@ test("listRegisteredTemplates falls back to the repository template source", (t)
   assert.deepEqual(listRegisteredTemplates(root), [{
     id: "template",
     title: "Template",
-    folder: "template",
-    assets: "template/assets",
+    folder: "templates/template",
+    assets: "templates/template/assets",
     status: "active",
   }]);
 });
@@ -28,21 +28,21 @@ test("registerTemplateAssetSource creates and lists a template asset source", (t
 
   const registered = registerTemplateAssetSource(root, { id: "mobile-template", title: "Mobile Template" });
 
-  assert.equal(registered.assets, "mobile-template/assets");
+  assert.equal(registered.assets, "templates/mobile-template/assets");
   assert.equal(templateRegistryPath(root), "ai_studio/assets/storage/sources/templates.json");
   assert.deepEqual(listRegisteredTemplates(root), [
     {
       id: "mobile-template",
       title: "Mobile Template",
-      folder: "mobile-template",
-      assets: "mobile-template/assets",
+      folder: "templates/mobile-template",
+      assets: "templates/mobile-template/assets",
       status: "active",
     },
     {
       id: "template",
       title: "Template",
-      folder: "template",
-      assets: "template/assets",
+      folder: "templates/template",
+      assets: "templates/template/assets",
       status: "active",
     },
   ]);

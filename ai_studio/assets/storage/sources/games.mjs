@@ -55,7 +55,7 @@ export function registerGameAssetSource(root, { id, title = "", folder = "", ass
     throw new Error("game id must be lowercase kebab-case");
   }
 
-  const relFolder = normalizeRelPath(folder || gameId, "folder");
+  const relFolder = normalizeRelPath(folder || `games/${gameId}`, "folder");
   const relAssets = normalizeRelPath(assets || `${relFolder}/assets`, "assets");
   const registry = readRegistry(root);
   const next = {

@@ -22,8 +22,8 @@ def default_schema_path() -> Path:
 
 def default_out_dir(schema_path: Path | None = None) -> Path:
     schema = schema_path or default_schema_path()
-    if schema.as_posix().endswith("template/state/game_state.schema.json"):
-        return ROOT / "template" / "src" / "generated"
+    if schema.as_posix().endswith("templates/template/state/game_state.schema.json"):
+        return ROOT / "templates" / "template" / "src" / "generated"
     return ROOT / "src" / "generated"
 
 

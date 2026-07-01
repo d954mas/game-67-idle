@@ -66,14 +66,14 @@ test("binary with no manifest and no explicit exception is a violation", () => {
 });
 
 test("unmanifested public UI binary is a violation", () => {
-  const r = auditTrackedAssets(["template/assets/ui/button.png"], { recordsByAssetId: new Map() });
+  const r = auditTrackedAssets(["templates/template/assets/ui/button.png"], { recordsByAssetId: new Map() });
   assert.equal(r.ok, false);
   assert.match(r.violations[0].reason, /no manifest mapping/);
 });
 
 test("source-root manifest record allows public UI binary", () => {
-  const r = auditTrackedAssets(["template/assets/ui/button.png"], {
-    recordsByPath: new Map([["template/assets/ui/button.png", CC0]]),
+  const r = auditTrackedAssets(["templates/template/assets/ui/button.png"], {
+    recordsByPath: new Map([["templates/template/assets/ui/button.png", CC0]]),
   });
   assert.equal(r.ok, true, JSON.stringify(r.violations));
 });
@@ -100,20 +100,20 @@ test("deriveAssetId handles pack and previews layouts", () => {
 test("game-folder-prefixed paths are audited (per-game asset layout)", () => {
   assert.equal(auditTrackedAssets([`mygame/assets/packs/vehicles/files/${CC0.asset_id}/car.glb`], { recordsByAssetId: new Map([[CC0.asset_id, CC0]]) }).ok, true);
   assert.equal(auditTrackedAssets([`mygame/assets/packs/nature/files/${PAID.asset_id}/n.glb`], { recordsByAssetId: new Map([[PAID.asset_id, PAID]]) }).ok, false);
-  assert.equal(auditTrackedAssets(["template/assets/restricted/source/x/x.glb"], {}).ok, false, "restricted under a game folder is a violation");
+  assert.equal(auditTrackedAssets(["templates/template/assets/restricted/source/x/x.glb"], {}).ok, false, "restricted under a game folder is a violation");
 });
 
 test("deriveAssetId handles a game-folder prefix", () => {
-  assert.deepEqual(deriveAssetId("template/assets/packs/props/files/id3/a.glb"), { pack: "props", assetId: "id3" });
+  assert.deepEqual(deriveAssetId("templates/template/assets/packs/props/files/id3/a.glb"), { pack: "props", assetId: "id3" });
   assert.deepEqual(deriveAssetId("g/assets/previews/id4/p.png"), { assetId: "id4" });
 });
 
 test("per-game exception prefix passes (template starter mesh)", () => {
-  assert.equal(auditTrackedAssets(["template/assets/meshes/cube.glb"], { exceptionPrefixes: ["template/assets/meshes/"] }).ok, true);
+  assert.equal(auditTrackedAssets(["templates/template/assets/meshes/cube.glb"], { exceptionPrefixes: ["templates/template/assets/meshes/"] }).ok, true);
 });
 
 test("per-game exception exact starter UI file passes", () => {
-  assert.equal(auditTrackedAssets(["template/assets/ui/button.png"], { exceptionPrefixes: ["template/assets/ui/button.png"] }).ok, true);
+  assert.equal(auditTrackedAssets(["templates/template/assets/ui/button.png"], { exceptionPrefixes: ["templates/template/assets/ui/button.png"] }).ok, true);
 });
 
 test("publishability precedence: explicit publish overrides license", () => {

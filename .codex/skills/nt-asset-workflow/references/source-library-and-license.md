@@ -20,7 +20,7 @@ Use storage search for agent work:
 
 ```powershell
 node ai_studio/assets/storage/search.mjs --query "<need>" --kind <model|texture|material|audio|font|ui> --json
-node ai_studio/assets/storage/search.mjs --source-path template/assets --source-type local --query "<need>" --json
+node ai_studio/assets/storage/search.mjs --source-path templates/template/assets --source-type local --query "<need>" --json
 ```
 
 Search reads the generated index. Add `--refresh` only after files or manifests

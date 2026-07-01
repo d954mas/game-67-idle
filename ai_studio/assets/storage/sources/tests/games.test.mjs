@@ -15,13 +15,13 @@ test("registerGameAssetSource creates and lists a game asset source", (t) => {
 
   const registered = registerGameAssetSource(root, { id: "test-game", title: "Test Game" });
 
-  assert.equal(registered.assets, "test-game/assets");
+  assert.equal(registered.assets, "games/test-game/assets");
   assert.equal(gameRegistryPath(root), "ai_studio/assets/storage/sources/games.json");
   assert.deepEqual(listRegisteredGames(root), [{
     id: "test-game",
     title: "Test Game",
-    folder: "test-game",
-    assets: "test-game/assets",
+    folder: "games/test-game",
+    assets: "games/test-game/assets",
     status: "active",
   }]);
 });

@@ -107,7 +107,7 @@ function walk(dir) {
 }
 
 // Asset roots are per-game: a GAME folder (has CMakeLists.txt) with an assets/ dir
-// - template/ and each <game>/. This deliberately excludes tooling and AI Studio
+// - templates/<template-id>/ and games/<game-id>/. This deliberately excludes tooling and AI Studio
 // module dirs. Returns repo-relative "<dir>/assets" paths. external/ = engine.
 const SKIP_DIRS = new Set(["external", "build", "node_modules", ".git", "tmp"]);
 function isGameFolder(root, name) {

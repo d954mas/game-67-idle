@@ -6,9 +6,9 @@
 //
 // Dry-run by default; pass --apply to write.
 //
-// Assets are per-game: --to is the target game's assets dir (e.g. template/assets
-// or <game>/assets), NOT the repo root.
-//   node ai_studio/assets/viewer/pull.mjs --ids kenney__desk__cc0-1-0 --to mygame/assets --apply
+// Assets are per-game or per-template: --to is the target assets dir (e.g.
+// templates/template/assets or games/<game>/assets), NOT the repo root.
+//   node ai_studio/assets/viewer/pull.mjs --ids kenney__desk__cc0-1-0 --to games/mygame/assets --apply
 import { readFile, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -50,7 +50,7 @@ function parseArgs(argv) {
     else throw new Error(`unknown option: ${arg}`);
   }
   if (!a.ids) throw new Error("missing --ids (comma-separated library asset_id list)");
-  if (!a.to) throw new Error("missing --to (the game's assets dir, e.g. template/assets or <game>/assets)");
+  if (!a.to) throw new Error("missing --to (the game/template assets dir, e.g. templates/template/assets or games/<game>/assets)");
   return a;
 }
 

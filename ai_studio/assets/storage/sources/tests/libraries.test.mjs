@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -78,7 +78,7 @@ test("resolveRegisteredSourcePath keeps absolute paths and resolves relative pat
   const root = tempRoot();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  assert.equal(resolveRegisteredSourcePath(root, "template/assets"), join(root, "template", "assets"));
+  assert.equal(resolveRegisteredSourcePath(root, "templates/template/assets"), join(root, "templates", "template", "assets"));
   assert.equal(resolveRegisteredSourcePath(root, "C:/assets/library"), "C:/assets/library");
 });
 

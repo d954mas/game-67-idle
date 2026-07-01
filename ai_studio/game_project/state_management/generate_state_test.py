@@ -13,7 +13,7 @@ def generate_variant(schema_name: str, out_dir: Path) -> str:
     rc = generate_state.main(
         [
             "--schema",
-            str(ROOT / "template" / "state" / schema_name),
+            str(ROOT / "templates" / "template" / "state" / schema_name),
             "--out-dir",
             str(out_dir),
         ]

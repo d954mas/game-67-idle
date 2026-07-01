@@ -26,5 +26,7 @@ assets/packs/
 **/assets/_incoming/
 **/assets/_rejected/
 
-template/build/
-template/src/generated/
+templates/*/build/
+templates/*/src/generated/
+games/*/build/
+games/*/src/generated/

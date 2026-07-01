@@ -2,13 +2,13 @@
 
 The repo root is the **shared pipeline**, not a game: the engine (submodule),
 build/asset/validation tools, AI skills, docs, the taskboard, and reusable design
-knowledge. Each **game is its own folder**, copied from `template/`.
+knowledge. Templates live under `templates/`; each **game is its own folder** under `games/`, copied from a template.
 
 - Reusable AI workflow: `ai_studio/README.md`, `AGENTS.md`, `tasks/`, `.codex/skills/`.
 - Reusable design knowledge: `gamedesign/knowledge/`; sources `gamedesign/sources/`.
 - Engine: git submodule at `external/neotolis-engine` (public APIs only).
 - Shared asset library lives OUTSIDE the repo (private); games pull project-local
-  copies. Paid/licensed binaries never enter git — see the restricted-asset rule
+  copies. Paid/licensed binaries never enter git - see the restricted-asset rule
   in `AGENTS.md` + `ai_studio/assets/storage/license/`.
 - Closed prototypes are git tags (e.g. `blockside-heat-snapshot-2026-06-24`).
 
@@ -16,25 +16,25 @@ knowledge. Each **game is its own folder**, copied from `template/`.
 
 ```powershell
 git submodule update --init --recursive
-node ai_studio/bootstrap/new_game.mjs --id <game-id>   # copies template/ -> <game-id>/
+node ai_studio/bootstrap/new_game.mjs --id <game-id>   # copies templates/template/ -> games/<game-id>/
 ```
 
-Then customise the copy and pull assets/systems. The `template/` folder itself is
+Then customise the copy and pull assets/systems. The `templates/template/` folder itself is
 the runnable reference (settings UI on nt_ui widgets, coloured + textured mesh
 paths, a movement system, screenshot capture).
 
 ## Build + run a game (template shown)
 
 ```powershell
-cmake -S template -B template/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
-cmake --build template/build
-template/build/bin/game.exe                                   # window: cubes + text + Settings
-template/build/bin/game.exe --settings --capture tmp/x.ppm    # headless screenshot
+cmake -S templates/template -B templates/template/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
+cmake --build templates/template/build
+templates/template/build/bin/game.exe                                   # window: cubes + text + Settings
+templates/template/build/bin/game.exe --settings --capture tmp/x.ppm    # headless screenshot
 ```
 
 Layout a game folder teaches by example: `src/main.c` is the conductor; systems in
 `src/systems/`, render in `src/render/`, UI in `src/ui/` (styles in their own
-file), world state in `src/world/`. See `template/CONVENTIONS.md` and
+file), world state in `src/world/`. See `templates/template/CONVENTIONS.md` and
 `ai_studio/bootstrap/TEMPLATE.md`.
 
 ## Validate the pipeline

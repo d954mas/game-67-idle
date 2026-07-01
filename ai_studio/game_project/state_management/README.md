@@ -1,17 +1,17 @@
-# State Management
+﻿# State Management
 
 State Management owns schema-first game state workflow and the generator that
 emits the C `GameState` API.
 
 It belongs to Game Project because state schemas are game-owned. AI Studio keeps
 the reusable workflow and generator here; current game data belongs in
-`state/`, while the reusable template state lives in `template/state/`.
+`state/`, while the reusable template state lives in `templates/template/state/`.
 
 ## Use
 
 Use this group when work touches:
 
-- `state/*.schema.json` or `template/state/*.schema.json`;
+- `state/*.schema.json` or `templates/template/state/*.schema.json`;
 - generated `game_state.h`, `game_state.c`, `game_state_devapi.c`, or
   `game_state_schema.gen.h`;
 - JSON save/load envelopes;
@@ -42,7 +42,7 @@ Default behavior:
 
 - inside a created game with `state/game_state.schema.json`, generate to
   `src/generated/`;
-- inside this AI Studio root, use `template/state/game_state.schema.json` and
-  generate to `template/src/generated/`.
+- inside this AI Studio root, use `templates/template/state/game_state.schema.json` and
+  generate to `templates/template/src/generated/`.
 
 Use `nt-game-state-management` as the skill surface for this workflow.

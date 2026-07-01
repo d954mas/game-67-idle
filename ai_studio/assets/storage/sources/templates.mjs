@@ -6,8 +6,8 @@ const defaultRegistry = {
   templates: [{
     id: "template",
     title: "Template",
-    folder: "template",
-    assets: "template/assets",
+    folder: "templates/template",
+    assets: "templates/template/assets",
     status: "active",
   }],
 };
@@ -61,7 +61,7 @@ export function registerTemplateAssetSource(root, { id, title = "", folder = "",
     throw new Error("template id must be lowercase kebab-case");
   }
 
-  const relFolder = normalizeRelPath(folder || templateId, "folder");
+  const relFolder = normalizeRelPath(folder || `templates/${templateId}`, "folder");
   const relAssets = normalizeRelPath(assets || `${relFolder}/assets`, "assets");
   const registry = readRegistry(root);
   const next = {
