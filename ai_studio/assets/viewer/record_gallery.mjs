@@ -14,6 +14,11 @@ import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 function parseArgs(argv) {
   const a = { url: "http://localhost:8910", out: "tmp/gallery.mp4", port: 9222, gallery: "tmp/lib-gallery",
     chrome: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", pack: "", asset: "", w: 1280, h: 800 };
+  const readPositiveNumber = (value, label) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`${label} must be a positive number`);
+    return parsed;
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const k = argv[i];
     const next = argv[i + 1];
@@ -26,6 +31,8 @@ function parseArgs(argv) {
     else if (k === "--chrome") a.chrome = next;
     else if (k === "--pack") a.pack = next;
     else if (k === "--asset") a.asset = next;
+    else if (k === "--w") a.w = readPositiveNumber(next, "--w");
+    else if (k === "--h") a.h = readPositiveNumber(next, "--h");
     else throw new Error(`unknown option: ${k}`);
   }
   return a;

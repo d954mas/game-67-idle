@@ -27,6 +27,8 @@ test("parseArgs rejects unknown and missing-value options", () => {
     "--chrome", "C:/Chrome/chrome.exe",
     "--pack", "food-kit",
     "--asset", "chair",
+    "--w", "1024",
+    "--h", "640",
   ]);
 
   assert.equal(args.url, "http://127.0.0.1:8910");
@@ -36,6 +38,11 @@ test("parseArgs rejects unknown and missing-value options", () => {
   assert.equal(args.chrome, "C:/Chrome/chrome.exe");
   assert.equal(args.pack, "food-kit");
   assert.equal(args.asset, "chair");
+  assert.equal(args.w, 1024);
+  assert.equal(args.h, 640);
+
+  assert.throws(() => parseArgs(["--w", "0"]), /--w must be a positive number/);
+  assert.throws(() => parseArgs(["--h", "nope"]), /--h must be a positive number/);
 });
 
 test("pickHero uses requested pack and requested asset when available", () => {
