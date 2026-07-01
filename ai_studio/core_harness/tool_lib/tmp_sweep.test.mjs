@@ -5,10 +5,9 @@ import { mkdirSync, mkdtempSync, rmSync, existsSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { VALIDATE_EXPORT_PREFIX } from "./tmp_exports.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-const P = VALIDATE_EXPORT_PREFIX;
+const P = "pipeline-validate-";
 
 function run(args) {
   return spawnSync(process.execPath, ["ai_studio/core_harness/tool_lib/tmp_sweep.mjs", ...args], {
@@ -73,6 +72,25 @@ test("tmp_sweep --all-scratch --dry-run deletes nothing", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /would free/);
     assert.equal(existsSync(join(tmp, "rune_marches")), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("tmp_sweep only protects pipeline-validate directories", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tmp-sweep-"));
+  const tmp = join(dir, "tmp");
+  const oldDir = `${P}2026-06-15T01-00-00-000Z`;
+  const prefixedFile = `${P}2026-06-15T02-00-00-000Z`;
+  try {
+    mkdirSync(join(tmp, oldDir), { recursive: true });
+    writeFileSync(join(tmp, oldDir, "f.txt"), "x", "utf8");
+    writeFileSync(join(tmp, prefixedFile), "not an export dir", "utf8");
+
+    const result = run(["--all-scratch", "--root", dir, "--keep-validate", "1"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(existsSync(join(tmp, oldDir)), true);
+    assert.equal(existsSync(join(tmp, prefixedFile)), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -12,9 +12,9 @@
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isValidateExportName, partitionByKeep } from "./tmp_exports.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+const VALIDATE_EXPORT_PREFIX = "pipeline-validate-";
 const args = process.argv.slice(2);
 
 function flagValue(name, fallback) {
@@ -59,6 +59,15 @@ function dirSizeBytes(path) {
   return total;
 }
 
+function isValidateExportDir(tmpDir, name) {
+  if (!name.startsWith(VALIDATE_EXPORT_PREFIX)) return false;
+  try {
+    return statSync(join(tmpDir, name)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 function human(bytes) {
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)}G`;
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}M`;
@@ -72,9 +81,9 @@ if (!existsSync(tmpDir)) {
 }
 
 const entries = readdirSync(tmpDir).sort();
-// Prefix + "keep newest N" contract for old pipeline-validate export dirs.
-const validateDirs = entries.filter(isValidateExportName);
-const keptValidate = new Set(partitionByKeep(validateDirs, keepValidate).kept);
+const validateDirs = entries.filter((name) => isValidateExportDir(tmpDir, name));
+const keepStart = Math.max(0, validateDirs.length - keepValidate);
+const keptValidate = new Set(validateDirs.slice(keepStart));
 
 // Scratch = everything except the newest N pipeline-validate dirs we keep.
 const scratch = entries.filter((n) => !keptValidate.has(n));
